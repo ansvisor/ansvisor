@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script>
+/* Ansvisor demo: follow the app's light/dark theme. Inside the app's frame, read the parent page's <html class="dark">
+   (same origin) and keep watching it; opened on its own, follow the system setting. Dark sets <html data-theme="dark">. */
+(function(){var d=document.documentElement,p=null,mq=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');
+try{if(window.parent!==window)p=window.parent.document.documentElement}catch(e){p=null}
+function apply(){var dark=p?p.classList.contains('dark'):!!(mq&&mq.matches);if(dark)d.setAttribute('data-theme','dark');else d.removeAttribute('data-theme')}
+apply();
+if(p&&window.MutationObserver)new MutationObserver(apply).observe(p,{attributes:true,attributeFilter:['class']});
+else if(mq)(mq.addEventListener?mq.addEventListener('change',apply):mq.addListener(apply))})();
+</script>
+<title>Chat v2 · Mockups</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0a0a0a;--mut:#737373;--line:#e5e5e5;--soft:#f7f7f6}
+/* Ansvisor demo: theme tokens (light values are the originals) and the dark theme, close to the app's .dark palette */
+:root{--bg:#fff;--card:#fff;--onink:#fff}
+html[data-theme="dark"]{color-scheme:dark;--ink:#ececec;--mut:#a3a3a3;--line:#2e2e2e;--soft:#242424;--bg:#121212;--card:#1a1a1a;--onink:#141414}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);background:var(--bg);font-size:14px;line-height:20px}
+.wrap{max-width:1080px;margin:0 auto;padding:40px 24px 64px}
+h1{font-size:24px;font-weight:700;letter-spacing:-.6px;margin:0 0 4px}
+.sub{color:var(--mut);margin:0 0 28px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.card{border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--card)}
+.card h2{font-size:15px;font-weight:600;margin:0 0 2px}
+.card p{margin:0 0 12px;color:var(--mut);font-size:12px}
+.card a.open{display:inline-flex;align-items:center;height:32px;padding:0 10px;border-radius:10px;background:var(--ink);color:var(--onink);text-decoration:none;font-weight:500;margin-bottom:12px}
+.card a.open:focus-visible,.card li a:focus-visible{outline:2px solid #16a34a;outline-offset:2px}
+ul{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+li{border-bottom:1px solid var(--line)}
+li a{display:flex;justify-content:space-between;padding:8px 2px;color:var(--ink);text-decoration:none;font-size:13px}
+li a:hover{background:var(--soft)}
+li a span{color:var(--mut);font-size:12px}
+.docs{margin-top:28px}
+.docs h2{font-size:15px;font-weight:600;margin:0 0 8px}
+.docs ul{display:grid;grid-template-columns:repeat(2,1fr);border-top:0;gap:0 24px}
+.docs li a{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.tag{display:inline-block;font-size:11px;font-weight:500;border:1px solid var(--line);border-radius:999px;padding:0 8px;margin-left:6px;color:var(--mut)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Chat v2</h1>
+<p class="sub">Mockups for review · 26 Oct 2026 · v1 files are unchanged in the parent folder</p>
+
+<div class="grid">
+<div class="card">
+<h2>Core Chat</h2>
+<p>All review fixes</p>
+<a class="open" href="CHAT-mockup-v2.html">Open</a>
+<ul>
+<li><a href="CHAT-mockup-v2.html#s-home">Home <span>#s-home</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-inbox">Inbox <span>#s-inbox · New</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-plan">Plan &amp; approvals <span>#s-plan</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-work">Agents at work <span>#s-work</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-need">Needs you <span>#s-need</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-done">Done <span>#s-done</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-panel-app">Side panel on an app page<span class="tag">New</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-followup">Follow-up checks<span class="tag">New</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-limits">Limits, trial, Starter<span class="tag">New</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-viewer">Analyst (read-only)<span class="tag">New</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-denied">Out-of-permission answer<span class="tag">New</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-failed">Failed run<span class="tag">New</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-memory">Memory<span class="tag">New</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-sched">Scheduled <span>#s-sched</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-skills">Skills <span>#s-skills</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-skill-new">Create a skill in chat <span>#s-skill-new · New</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-skill-review/url">Review an imported skill <span>#s-skill-review · New</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-conns">Connections <span>#s-conns</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-files">Files <span>#s-files</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-allchats/archived">All chats · Archived <span>#s-allchats/archived · New</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-help">Help <span>#s-help</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-dept">Choose your focus <span>#s-dept · New</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-pdans">Product and buyer needs answer <span>#s-pdans · New</span></a></li>
+<li><a href="CHAT-mockup-v2.html#s-bdans">Markets and partners answer <span>#s-bdans · New</span></a></li>
+</ul>
+</div>
+
+<div class="card">
+<h2>Governance &amp; agents</h2>
+<p>Roles, permissions, access, agents</p>
+<a class="open" href="CHAT-mockup-v2-governance.html">Open</a>
+<ul>
+<li><a href="CHAT-mockup-v2-governance.html#g-roles">Roles &amp; access <span>#g-roles</span></a></li>
+<li><a href="CHAT-mockup-v2-governance.html#g-my-access">Your access<span class="tag">New</span></a></li>
+<li><a href="CHAT-mockup-v2-governance.html#g-policy">Tool policy &amp; precedence <span>#g-policy</span></a></li>
+<li><a href="CHAT-mockup-v2-governance.html#g-capabilities">What Chat can do <span>#g-capabilities</span></a></li>
+<li><a href="CHAT-mockup-v2-governance.html#g-agents">Agents <span>#g-agents</span></a></li>
+<li><a href="CHAT-mockup-v2-governance.html#g-agent">Agent detail <span>#g-agent</span></a></li>
+<li><a href="CHAT-mockup-v2-governance.html#g-agent-new">New agent <span>#g-agent-new</span></a></li>
+<li><a href="CHAT-mockup-v2-governance.html#g-run-agent">Run agent from an action <span>#g-run-agent</span></a></li>
+<li><a href="CHAT-mockup-v2-governance.html#g-activity">Activity log &amp; undo <span>#g-activity</span></a></li>
+</ul>
+</div>
+
+<div class="card">
+<h2>Signature features</h2>
+<p>The five approved features</p>
+<a class="open" href="CHAT-mockup-v2-signature.html">Open</a>
+<ul>
+<li><a href="CHAT-mockup-v2-signature.html#f-why">Why did it move <span>#f-why</span></a></li>
+<li><a href="CHAT-mockup-v2-signature.html#f-win">One win · which citations <span>#f-win · New</span></a></li>
+<li><a href="CHAT-mockup-v2-signature.html#f-impact">Impact ledger <span>#f-impact</span></a></li>
+<li><a href="CHAT-mockup-v2-signature.html#f-mcp">Ansvisor everywhere (MCP) <span>#f-mcp</span></a></li>
+<li><a href="CHAT-mockup-v2-signature.html#f-pr">Ship as a pull request <span>#f-pr</span></a></li>
+<li><a href="CHAT-mockup-v2-signature.html#f-watch">Watch rules <span>#f-watch</span></a></li>
+<li><a href="CHAT-mockup-v2-signature.html#f-brief">Morning brief <span>#f-brief</span></a></li>
+</ul>
+</div>
+</div>
+
+<div class="docs">
+<h2>Specs</h2>
+<ul>
+<li><a href="DECISIONS-2026-10-26.md">DECISIONS-2026-10-26.md</a></li>
+<li><a href="CHAT-20-capability-map-tool-registry.md">CHAT-20-capability-map-tool-registry.md</a></li>
+<li><a href="CHAT-21-agents.md">CHAT-21-agents.md</a></li>
+<li><a href="CHAT-22-signature-features.md">CHAT-22-signature-features.md</a></li>
+<li><a href="CHAT-23-ui-interactions.md">CHAT-23-ui-interactions.md <span>New · data-action ids</span></a></li>
+<li><a href="CHAT-24-focus-areas.md">CHAT-24-focus-areas.md <span>New · focus areas</span></a></li>
+<li><a href="_archive/v2-changelogs/CHANGES-specs.md">CHANGES-specs.md</a></li>
+<li><a href="_archive/v2-changelogs/CHANGES-core-mockup.md">CHANGES-core-mockup.md</a></li>
+</ul>
+</div>
+</div>
+</body>
+</html>

@@ -43049,6 +43049,140 @@ comment on function public.catalog_suggestion_categories(uuid, integer, integer)
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00372_cms_wix.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00372: Wix for Send to CMS (#1331, phase 2)
+-- ============================================================================
+-- After Webflow (00283, 00284), WordPress (00294) and Framer (00295), a brand
+-- connects its Wix site: the site's id and an API key its owner made in Wix's
+-- API Keys Manager, with the Wix Blog permissions. Pages go to the site's
+-- Blog through Wix's REST API as draft posts.
+--
+--   * brand_cms_connections takes provider 'wix'. A Wix connection keeps the
+--     site's id (`site_id`), its name (`site_name`) and the member who owns
+--     the posts it writes (`account`: a Wix member id; Wix's Blog needs an
+--     owner for a post).
+--   * The API key is kept in brand_cms_credentials, sealed as WordPress's
+--     sign-in is (00294); the table itself doesn't change.
+--   * content_draft_deliveries.target takes 'wix'. `target_collection` keeps
+--     the site's id the post was written to, as it keeps WordPress's site.
+--   * reserve_content_deliveries: as 00295, a page already queued for the
+--     same CMS (Webflow, WordPress, Framer or Wix) isn't sent there again
+--     meanwhile.
+
+alter table public.brand_cms_connections
+  drop constraint if exists brand_cms_connections_provider_check,
+  add constraint brand_cms_connections_provider_check
+    check (provider in ('webflow', 'wordpress', 'framer', 'wix'));
+
+alter table public.brand_cms_connections
+  drop constraint if exists brand_cms_connections_provider_fields,
+  add constraint brand_cms_connections_provider_fields check (
+    case provider
+      when 'webflow' then composio_account_id is not null and composio_entity_id is not null
+      when 'wordpress' then site_url is not null and account is not null
+      when 'framer' then site_id is not null
+      when 'wix' then site_id is not null and account is not null
+      else false
+    end
+  );
+
+comment on column public.brand_cms_connections.site_id is
+  'Webflow: the site pages go to (00283). Framer (00295): the project''s id, as Framer connects to it. Wix (00372): the site''s id.';
+comment on column public.brand_cms_connections.site_name is
+  'The site''s name (Webflow, WordPress, Wix (00372): its display name, when the API key may read it), or the Framer project''s (00295).';
+comment on column public.brand_cms_connections.account is
+  'WordPress (00294): the user the connection signs in as, with an Application Password. Framer (00295): the user the API key acts as. Both kept in brand_cms_credentials. Wix (00372): the member who owns the posts it writes.';
+
+comment on table public.brand_cms_credentials is
+  'Send to CMS (#1331, 00294, 00295, 00372): a CMS connection''s sign-in (WordPress: the user and the Application Password; Framer: the project''s API key; Wix: the site owner''s API key), encrypted by the API (AES-256-GCM, bound to the connection id). Service role only; removed with its connection.';
+
+alter table public.content_draft_deliveries
+  drop constraint if exists content_draft_deliveries_target_check,
+  add constraint content_draft_deliveries_target_check
+    check (target in ('webhook', 'webflow', 'wordpress', 'framer', 'wix'));
+
+comment on column public.content_draft_deliveries.target is
+  'Where the page was sent (00284, 00294, 00295, 00372): the brand''s webhook, its Webflow collection, its WordPress site, its Framer collection or its Wix site''s Blog (00283).';
+comment on column public.content_draft_deliveries.target_collection is
+  'The Webflow or Framer collection (00284, 00295), the WordPress site''s address (00294) or the Wix site''s id (00372) the page''s item or post was written to; its id is external_id.';
+
+-- ----------------------------------------------------------------------------
+-- As 00295, with Wix among the CMSs a page isn't sent to twice at once.
+-- ----------------------------------------------------------------------------
+create or replace function public.reserve_content_deliveries(
+  p_organization_id uuid,
+  p_brand_id uuid,
+  p_sent_by uuid,
+  p_batch_id uuid,
+  p_items jsonb,
+  p_limit integer,
+  p_target text default 'webhook'
+)
+returns setof public.content_draft_deliveries
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  used integer;
+  room integer;
+begin
+  perform pg_advisory_xact_lock(hashtext('content_deliveries:' || p_organization_id::text));
+
+  -- sent_at stays empty: it was never sent, and its time stays its own.
+  update public.content_draft_deliveries
+  set status = 'failed', error = 'Not sent: interrupted'
+  where organization_id = p_organization_id
+    and status = 'queued'
+    and created_at < now() - interval '30 minutes';
+
+  select count(*) into used
+  from public.content_draft_deliveries
+  where organization_id = p_organization_id
+    and created_at > now() - interval '24 hours';
+
+  room := greatest(0, p_limit - used);
+  if room = 0 or jsonb_typeof(p_items) <> 'array' then
+    return;
+  end if;
+
+  -- Under the lock, so two sends of one page can't both pass: both would
+  -- make an item (Webflow refuses the second on its slug) or a post.
+  if p_target in ('webflow', 'wordpress', 'framer', 'wix') and exists (
+    select 1
+    from public.content_draft_deliveries d
+    join jsonb_array_elements(p_items) as items(item)
+      on d.draft_id = (item ->> 'draft_id')::uuid
+    where d.organization_id = p_organization_id
+      and d.target = p_target
+      and d.status = 'queued'
+  ) then
+    raise exception 'delivery_in_progress' using errcode = 'P0001';
+  end if;
+
+  return query
+  insert into public.content_draft_deliveries
+    (organization_id, brand_id, draft_id, sent_by, batch_id, title, slug, target)
+  select p_organization_id, p_brand_id, (item ->> 'draft_id')::uuid, p_sent_by, p_batch_id,
+         left(item ->> 'title', 300), nullif(left(item ->> 'slug', 200), ''),
+         coalesce(p_target, 'webhook')
+  from jsonb_array_elements(p_items) with ordinality as items(item, position)
+  order by position
+  limit room
+  returning *;
+end;
+$$;
+
+revoke all on function public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer, text)
+  from public, anon, authenticated;
+grant execute on function public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer, text)
+  to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00373_basket_positive_sentiment.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -43884,6 +44018,369 @@ grant execute on function public.fanout_coverage_by_platform(timestamptz, timest
 
 comment on function public.fanout_coverage_by_platform(timestamptz, timestamptz) is
   'Answers and answers with observed query fan-out per platform in [p_since, p_until), across all brands but demo ones (00140, 00380). Read by the daily health report.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00381_demo_brand_writes.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00381: people can't write the demo brand's data (demo-guard)
+-- ============================================================================
+-- The demo brand (00380) is sample data the server writes (server/src/lib/
+-- demo) with the service role. People explore it, but nothing of theirs may
+-- change it: the API refuses its writes (402 demo_brand, server/src/
+-- middleware/demo-brand.js) and so does the web app's lock, but members can
+-- also write a brand's rows straight through Supabase, under RLS. This
+-- refuses those writes in the database.
+--
+-- refuse_demo_brand_writes() is a BEFORE INSERT/UPDATE/DELETE row trigger:
+--   * a role that bypasses RLS (the service role the server and the demo
+--     generator use, migrations, the table owner behind a cascade) passes,
+--     as in the other server-column guards (00204, 00228). Not, though, a
+--     SECURITY DEFINER function a person calls (approve_action_task_review,
+--     content_draft_restore, override_mention_sentiment, seed_kpi_presets):
+--     it runs as its owner, who bypasses RLS, but the write is the person's.
+--     So the session's own role decides (the one PostgREST sets per request:
+--     authenticated or anon is a person), unless the write comes from inside
+--     another trigger (a cascade, or a trigger of the server's);
+--   * otherwise, a row of a demo brand is refused with SQLSTATE 42501 and
+--     the message 'demo_brand' (an update is checked on its old and new row,
+--     so a row can't be moved into or out of the demo brand either).
+-- With no arguments, the row's brand is its own brand_id. A table without a
+-- brand_id names the way to it: (column, table) pairs, each table's row found
+-- by its id, the last one's brand_id being the brand, e.g. prompt_notes:
+-- prompt_id → prompts, prompt_set_id → prompt_sets.
+--
+-- It is attached to every table people can write under RLS (an insert,
+-- update, delete or all policy for a role other than service_role) that
+-- belongs to a brand. server/src/lib/demo/write-guard.test.js reads the
+-- migrations and fails on such a table without it: a new one attaches it in
+-- its own migration.
+--
+-- It reads the brand (and a parent row) as the person, under RLS: a row of a
+-- brand they can't see is refused by RLS itself. The brands themselves are
+-- guarded by their own policies (00380).
+
+create or replace function public.refuse_demo_brand_writes()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_keys text[] := '{}';
+  v_key text;
+  v_column text;
+  i integer;
+begin
+  -- A role that bypasses RLS is server-side (service role, migrations), unless
+  -- it is the owner of a SECURITY DEFINER function a person called directly.
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user)
+    and (
+      pg_catalog.pg_trigger_depth() > 1
+      or coalesce(pg_catalog.current_setting('role', true), 'none')
+        not in ('authenticated', 'anon')
+    )
+  then
+    if tg_op = 'DELETE' then
+      return old;
+    end if;
+    return new;
+  end if;
+
+  if tg_nargs = 0 then
+    if tg_op <> 'INSERT' then
+      v_keys := v_keys || old.brand_id::text;
+    end if;
+    if tg_op <> 'DELETE' then
+      v_keys := v_keys || new.brand_id::text;
+    end if;
+  else
+    if tg_op <> 'INSERT' then
+      execute format('select ($1).%I::text', tg_argv[0]) into v_key using old;
+      v_keys := v_keys || v_key;
+    end if;
+    if tg_op <> 'DELETE' then
+      execute format('select ($1).%I::text', tg_argv[0]) into v_key using new;
+      v_keys := v_keys || v_key;
+    end if;
+    -- From each table on the way to the next one's id, the last one's brand_id.
+    i := 1;
+    while i < tg_nargs loop
+      v_column := case when i + 1 < tg_nargs then tg_argv[i + 1] else 'brand_id' end;
+      execute format(
+        'select coalesce(array_agg(distinct t.%I::text), ''{}'') '
+          || 'from public.%I t where t.id = any ($1::uuid[])',
+        v_column,
+        tg_argv[i]
+      ) into v_keys using v_keys;
+      i := i + 2;
+    end loop;
+  end if;
+
+  if exists (
+    select 1 from public.brands b
+    where b.id = any (v_keys::uuid[])
+      and b.is_demo
+  ) then
+    raise exception 'demo_brand'
+      using errcode = '42501',
+            detail = 'The demo brand holds sample data and can''t be changed.',
+            hint = 'Choose a plan to do this for your own brand.';
+  end if;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$;
+
+comment on function public.refuse_demo_brand_writes() is
+  'Demo brand (00381): refuses a write to a demo brand''s row (42501, ''demo_brand'') unless the role bypasses RLS (the server, which writes the demo''s sample data) and isn''t a person''s SECURITY DEFINER call. No arguments: the row''s brand_id; else (column, table) pairs leading to the brand.';
+
+-- ─── Tables with a brand_id ────────────────────────────────────────────────
+
+create or replace trigger actions_refuse_demo_brand_writes
+  before insert or update or delete on public.actions
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger agent_conversations_refuse_demo_brand_writes
+  before insert or update or delete on public.agent_conversations
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger brand_domains_refuse_demo_brand_writes
+  before insert or update or delete on public.brand_domains
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger brand_facts_refuse_demo_brand_writes
+  before insert or update or delete on public.brand_facts
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger brand_platforms_refuse_demo_brand_writes
+  before insert or update or delete on public.brand_platforms
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger catalog_sources_refuse_demo_brand_writes
+  before insert or update or delete on public.catalog_sources
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger competitors_refuse_demo_brand_writes
+  before insert or update or delete on public.competitors
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger content_author_defaults_refuse_demo_brand_writes
+  before insert or update or delete on public.content_author_defaults
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger content_drafts_refuse_demo_brand_writes
+  before insert or update or delete on public.content_drafts
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger content_opportunities_refuse_demo_brand_writes
+  before insert or update or delete on public.content_opportunities
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger content_plan_marks_refuse_demo_brand_writes
+  before insert or update or delete on public.content_plan_marks
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger getting_started_refuse_demo_brand_writes
+  before insert or update or delete on public.getting_started
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger getting_started_steps_refuse_demo_brand_writes
+  before insert or update or delete on public.getting_started_steps
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger kpi_definitions_refuse_demo_brand_writes
+  before insert or update or delete on public.kpi_definitions
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger prompt_sets_refuse_demo_brand_writes
+  before insert or update or delete on public.prompt_sets
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger prompt_suggestions_refuse_demo_brand_writes
+  before insert or update or delete on public.prompt_suggestions
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger pulse_settings_refuse_demo_brand_writes
+  before insert or update or delete on public.pulse_settings
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger reports_refuse_demo_brand_writes
+  before insert or update or delete on public.reports
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger sentiment_overrides_refuse_demo_brand_writes
+  before insert or update or delete on public.sentiment_overrides
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger signals_refuse_demo_brand_writes
+  before insert or update or delete on public.signals
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger site_audits_refuse_demo_brand_writes
+  before insert or update or delete on public.site_audits
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger topic_suggestions_refuse_demo_brand_writes
+  before insert or update or delete on public.topic_suggestions
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger topics_refuse_demo_brand_writes
+  before insert or update or delete on public.topics
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger webhook_configs_refuse_demo_brand_writes
+  before insert or update or delete on public.webhook_configs
+  for each row execute function public.refuse_demo_brand_writes();
+
+-- ─── Tables that reach their brand through another row ────────────────────
+
+create or replace trigger action_events_refuse_demo_brand_writes
+  before insert or update or delete on public.action_events
+  for each row execute function public.refuse_demo_brand_writes('action_id', 'actions');
+
+create or replace trigger action_task_reviews_refuse_demo_brand_writes
+  before insert or update or delete on public.action_task_reviews
+  for each row execute function public.refuse_demo_brand_writes('action_id', 'actions');
+
+create or replace trigger action_tasks_refuse_demo_brand_writes
+  before insert or update or delete on public.action_tasks
+  for each row execute function public.refuse_demo_brand_writes('action_id', 'actions');
+
+create or replace trigger agent_messages_refuse_demo_brand_writes
+  before insert or update or delete on public.agent_messages
+  for each row execute function public.refuse_demo_brand_writes('conversation_id', 'agent_conversations');
+
+create or replace trigger audit_signal_results_refuse_demo_brand_writes
+  before insert or update or delete on public.audit_signal_results
+  for each row execute function public.refuse_demo_brand_writes('audit_id', 'site_audits');
+
+create or replace trigger content_draft_confirmations_refuse_demo_brand_writes
+  before insert or update or delete on public.content_draft_confirmations
+  for each row execute function public.refuse_demo_brand_writes('draft_id', 'content_drafts');
+
+create or replace trigger content_draft_inputs_refuse_demo_brand_writes
+  before insert or update or delete on public.content_draft_inputs
+  for each row execute function public.refuse_demo_brand_writes('draft_id', 'content_drafts');
+
+create or replace trigger content_draft_own_images_refuse_demo_brand_writes
+  before insert or update or delete on public.content_draft_own_images
+  for each row execute function public.refuse_demo_brand_writes('draft_id', 'content_drafts');
+
+create or replace trigger content_draft_ready_log_refuse_demo_brand_writes
+  before insert or update or delete on public.content_draft_ready_log
+  for each row execute function public.refuse_demo_brand_writes('draft_id', 'content_drafts');
+
+create or replace trigger content_draft_sources_refuse_demo_brand_writes
+  before insert or update or delete on public.content_draft_sources
+  for each row execute function public.refuse_demo_brand_writes('draft_id', 'content_drafts');
+
+create or replace trigger prompts_refuse_demo_brand_writes
+  before insert or update or delete on public.prompts
+  for each row execute function public.refuse_demo_brand_writes('prompt_set_id', 'prompt_sets');
+
+create or replace trigger prompt_notes_refuse_demo_brand_writes
+  before insert or update or delete on public.prompt_notes
+  for each row execute function public.refuse_demo_brand_writes('prompt_id', 'prompts', 'prompt_set_id', 'prompt_sets');
+
+create or replace trigger prompt_target_urls_refuse_demo_brand_writes
+  before insert or update or delete on public.prompt_target_urls
+  for each row execute function public.refuse_demo_brand_writes('prompt_id', 'prompts', 'prompt_set_id', 'prompt_sets');
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00382_topics_manager_writes.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00382: topic changes are an admin's or a manager's
+-- ============================================================================
+-- The app already keeps adding, renaming and deleting topics, and accepting
+-- or dismissing topic suggestions, to admins and managers (the Topics page,
+-- the API and the MCP check the role). The rows' rules now say the same:
+--
+--   * topics: every member of the brand's organization reads them; an admin
+--     or a manager of that organization adds, changes and deletes them.
+--   * topic_suggestions: every member reads them; an admin or a manager
+--     updates them (accept, dismiss). Nothing else changes: the server
+--     writes new suggestions with the service role, which these rules don't
+--     apply to.
+--
+-- Setting up a brand keeps working: a new organization's first person is
+-- its admin, and only admins and managers add brands.
+
+-- ── topics ──────────────────────────────────────────────────────────────────
+
+drop policy if exists "topics: member insert" on public.topics;
+drop policy if exists "topics: member update" on public.topics;
+drop policy if exists "topics: member delete" on public.topics;
+
+drop policy if exists "topics: admin/manager insert" on public.topics;
+create policy "topics: admin/manager insert" on public.topics
+  for insert
+  with check (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  );
+
+drop policy if exists "topics: admin/manager update" on public.topics;
+create policy "topics: admin/manager update" on public.topics
+  for update
+  using (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  )
+  with check (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  );
+
+drop policy if exists "topics: admin/manager delete" on public.topics;
+create policy "topics: admin/manager delete" on public.topics
+  for delete
+  using (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  );
+
+-- ── topic_suggestions ───────────────────────────────────────────────────────
+
+drop policy if exists "topic_suggestions: admin/manager/analyst update" on public.topic_suggestions;
+
+drop policy if exists "topic_suggestions: admin/manager update" on public.topic_suggestions;
+create policy "topic_suggestions: admin/manager update" on public.topic_suggestions
+  for update
+  using (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  )
+  with check (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  );
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00400_chat_core.sql

@@ -5,7 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * POST /api/stripe/checkout: a Stripe Checkout for a new subscription, from
  * onboarding's plan step (monthly, back to the step on cancel) or from
  * Billing once a plan has ended (either period, back to Billing on cancel).
- * Admins only, and never beside a subscription that is still there.
+ * Admins only, and never beside a subscription that is still there. Two ways
+ * to start, both with a card: buy now (the first-month offer on a monthly
+ * plan, no trial), or the free trial (no offer), for a first subscription.
  */
 
 let role: string;
@@ -46,13 +48,15 @@ vi.mock('@/lib/stripe', () => ({
 
 const { POST } = await import('./route');
 
-const post = (body: unknown) =>
+/** A checkout request; buying now unless it says otherwise. */
+const send = (body: unknown) =>
   POST(
     new Request('http://localhost/api/stripe/checkout', {
       method: 'POST',
       body: JSON.stringify(body),
     }) as unknown as NextRequest,
   );
+const post = (body: Record<string, unknown>) => send({ mode: 'buy', ...body });
 
 /** What Checkout was asked for. */
 const session = () => stripeApi.createSession.mock.calls[0][0];
@@ -103,6 +107,15 @@ describe('POST /api/stripe/checkout', () => {
     expect(session().line_items).toEqual([{ price: 'price_starter_month', quantity: 1 }]);
     expect(session().cancel_url).toBe('http://localhost:3000/dashboard/onboarding');
     expect(session().subscription_data.trial_period_days).toBeUndefined();
+    expect(session().payment_method_collection).toBe('always');
+  });
+
+  it('asks how the subscription starts', async () => {
+    expect((await send({ planId: 'starter', organizationId: 'org1' })).status).toBe(400);
+    expect((await send({ planId: 'starter', organizationId: 'org1', mode: 'later' })).status).toBe(
+      400,
+    );
+    expect(stripeApi.createSession).not.toHaveBeenCalled();
   });
 
   it('bills a year up front and returns to Billing, for a plan chosen there', async () => {
@@ -209,10 +222,27 @@ describe('POST /api/stripe/checkout', () => {
   });
 
   it('refuses a code kept for another customer', async () => {
-    stripeApi.listCodes.mockResolvedValue({ data: [{ ...save50, customer: 'cus_other' }] });
-    const res = await post({ planId: 'starter', organizationId: 'org1', promotionCode: 'SAVE50' });
+    stripeApi.listCodes.mockResolvedValue({
+      data: [{ ...save50, code: 'WELCOME10', customer: 'cus_other' }],
+    });
+    const res = await post({
+      planId: 'starter',
+      organizationId: 'org1',
+      promotionCode: 'WELCOME10',
+    });
     expect(res.status).toBe(400);
     expect(stripeApi.createSession).not.toHaveBeenCalled();
+  });
+
+  it("buys at the plan's price, with Checkout's code box, once Stripe no longer takes the offer's code", async () => {
+    stripeApi.listCodes.mockResolvedValue({ data: [] });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = await post({ planId: 'starter', organizationId: 'org1', promotionCode: 'SAVE50' });
+    expect(res.status).toBe(200);
+    expect(session().discounts).toBeUndefined();
+    expect(session().allow_promotion_codes).toBe(true);
+    expect(session().subscription_data.trial_period_days).toBeUndefined();
+    warn.mockRestore();
   });
 
   it('keeps a code to monthly plans: a year has its own discount', async () => {
@@ -241,5 +271,86 @@ describe('POST /api/stripe/checkout', () => {
     const res = await post({ planId: 'growth', organizationId: 'org1', interval: 'year' });
     expect(res.status).toBe(400);
     expect(stripeApi.createSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/stripe/checkout, the two ways to start', () => {
+  beforeEach(() => {
+    // A new account: no subscription, and none on its Stripe customer.
+    org = { stripe_customer_id: 'cus_1', stripe_subscription_id: null, subscription_status: null };
+    stripeApi.listSubscriptions.mockResolvedValue({ data: [] });
+  });
+
+  it('buys now with the first-month offer: the code applied, no trial, a card', async () => {
+    const res = await post({ planId: 'growth', organizationId: 'org1', promotionCode: 'SAVE50' });
+    expect(res.status).toBe(200);
+    expect(session().discounts).toEqual([{ promotion_code: 'promo_save50' }]);
+    expect(session().subscription_data.trial_period_days).toBeUndefined();
+    expect(session().payment_method_collection).toBe('always');
+  });
+
+  it('buys a year at its price: no offer, no trial', async () => {
+    const res = await post({ planId: 'growth', organizationId: 'org1', interval: 'year' });
+    expect(res.status).toBe(200);
+    expect(session().line_items).toEqual([{ price: 'price_growth_year', quantity: 1 }]);
+    expect(session().discounts).toBeUndefined();
+    expect(session().subscription_data.trial_period_days).toBeUndefined();
+  });
+
+  it('starts the free trial with no code at all, a card taken', async () => {
+    const res = await post({ planId: 'starter', organizationId: 'org1', mode: 'trial' });
+    expect(res.status).toBe(200);
+    expect(session().subscription_data.trial_period_days).toBe(14);
+    expect(session().payment_method_collection).toBe('always');
+    expect(session().discounts).toBeUndefined();
+    expect(session().allow_promotion_codes).toBeUndefined();
+    expect(stripeApi.listCodes).not.toHaveBeenCalled();
+  });
+
+  it('starts the trial on a year too', async () => {
+    const res = await post({
+      planId: 'growth',
+      organizationId: 'org1',
+      mode: 'trial',
+      interval: 'year',
+    });
+    expect(res.status).toBe(200);
+    expect(session().line_items).toEqual([{ price: 'price_growth_year', quantity: 1 }]);
+    expect(session().subscription_data.trial_period_days).toBe(14);
+  });
+
+  it('refuses a code with the trial', async () => {
+    const res = await post({
+      planId: 'starter',
+      organizationId: 'org1',
+      mode: 'trial',
+      promotionCode: 'SAVE50',
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: 'promo_with_trial' });
+    expect(stripeApi.createSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses the trial to an organization that had a subscription', async () => {
+    org = {
+      stripe_customer_id: 'cus_1',
+      stripe_subscription_id: 'sub_old',
+      subscription_status: 'canceled',
+    };
+    let res = await post({ planId: 'starter', organizationId: 'org1', mode: 'trial' });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'trial_unavailable' });
+
+    // Or whose Stripe customer had one (a trial taken and canceled).
+    org = { stripe_customer_id: 'cus_1', stripe_subscription_id: null, subscription_status: null };
+    stripeApi.listSubscriptions.mockResolvedValue({ data: [{ id: 'sub_old' }] });
+    res = await post({ planId: 'starter', organizationId: 'org1', mode: 'trial' });
+    expect(res.status).toBe(409);
+    expect(stripeApi.createSession).not.toHaveBeenCalled();
+  });
+
+  it('never gives a trial with buying now, even to a first subscription', async () => {
+    await post({ planId: 'starter', organizationId: 'org1' });
+    expect(session().subscription_data.trial_period_days).toBeUndefined();
   });
 });

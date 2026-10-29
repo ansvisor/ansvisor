@@ -22,6 +22,18 @@ export const SKIPPED = {
     "A person's saved Tracked Prompts columns (00363): the demo brand starts on the default ones.",
   sentiment_overrides:
     "A person's sentiment corrections on Mentions: the demo's answers carry their own.",
+
+  // demo-site
+  brand_cms_connections:
+    "A CMS connection holds a Composio account's ids, which reach a real CMS account; the demo's Webflow shows as connected from the web's own list (web lib/demo/integrations.ts), and nothing is ever sent.",
+  content_draft_deliveries:
+    "Drafts sent to a webhook or a CMS: a demo brand never sends anything out (its drafts are the Content module's).",
+  catalog_images:
+    'Product images: the demo shows none, so no page of it ever loads an image from outside.',
+  catalog_item_issues:
+    "Merchant Center's item issues: the demo's catalog comes from a product feed, and Merchant Center shows as Soon in the demo.",
+
+  // demo-workflows
   action_candidates:
     "The nightly engine's queue of findings not yet raised as actions: no page reads it, and the engine never runs for a demo brand.",
   action_task_runs:
@@ -36,42 +48,13 @@ export const SKIPPED = {
     "A person's request to their Admins for a Chat change (00403): theirs, not sample data, and a demo brand's refusal offers no Ask your Admin.",
 };
 
-const SITE = 'demo-site (PR 3): Site Audit, AI traffic, integrations, Product Visibility';
+const FOLLOW_UP =
+  'demo follow-up (PR 7): a draft with product links, checked against the demo catalog';
 const CHAT = 'demo Chat, once Chat ships (the demo shows Chat as Soon until then)';
 
 /** Tables a later demo PR builds; listed so the gap stays visible until then. */
 export const PENDING = {
-  site_audits: SITE,
-  site_pages: SITE,
-  site_trust: SITE,
-  site_audit_brand_settings: SITE,
-  site_audit_page_prefs: SITE,
-  brand_facts: SITE,
-  brand_fact_pages: SITE,
-  ai_traffic_logs: SITE,
-  ai_traffic_events: SITE,
-  ai_bot_connections: SITE,
-  ai_bot_daily: SITE,
-  ai_bot_events: SITE,
-  ga_ai_traffic_stats: SITE,
-  ga_channel_stats: SITE,
-  ga_item_stats: SITE,
-  ga_page_stats: SITE,
-  gsc_page_stats: SITE,
-  gsc_query_stats: SITE,
-  page_opportunities: SITE,
-  brand_cms_connections: SITE,
-  content_draft_deliveries: SITE,
-  // A draft's shopping path check reads the products it links to: the catalog demo-site builds.
-  content_shopping_checks: SITE,
-  catalog_sources: SITE,
-  catalog_products: SITE,
-  catalog_variants: SITE,
-  catalog_images: SITE,
-  catalog_categories: SITE,
-  catalog_product_categories: SITE,
-  catalog_category_pages: SITE,
-  catalog_item_issues: SITE,
+  content_shopping_checks: FOLLOW_UP,
 
   cited_page_features:
     "demo follow-up (PR 7): what the pages a demo answer cites have (learning C1, 00369); never read for a demo brand, whose tasks don't run",

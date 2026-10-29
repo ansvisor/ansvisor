@@ -40,6 +40,19 @@ describe('evaluateSubscriptionAccess', () => {
     expect(from).not.toHaveBeenCalled();
   });
 
+  it('lets an admin who never subscribed explore the demo brand, read-only', async () => {
+    const { client, from } = fakeSupabase(null);
+    expect(
+      await evaluateSubscriptionAccess(client, 'org', 'admin', null, false, { hasDemoBrand: true }),
+    ).toEqual({ state: 'read_only', adminName: null });
+    expect(
+      await evaluateSubscriptionAccess(client, 'org', 'admin', 'incomplete', false, {
+        hasDemoBrand: false,
+      }),
+    ).toEqual({ state: 'choose_plan' });
+    expect(from).not.toHaveBeenCalled();
+  });
+
   it('lets an admin whose plan ended into the dashboard, read-only', async () => {
     const { client, from } = fakeSupabase(null);
     expect(await evaluateSubscriptionAccess(client, 'org', 'admin', 'canceled', true)).toEqual({

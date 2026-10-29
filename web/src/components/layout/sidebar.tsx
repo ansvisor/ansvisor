@@ -12,10 +12,12 @@ import { dashboardNav } from '@/config/dashboard';
 import {
   activeChildHref,
   childLinkHref,
+  dashboardNavBadge,
   getDashboardNavLabel,
   getDashboardNavGroupLabel,
   shouldShowDashboardNavItem,
 } from '@/lib/dashboard-navigation';
+import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { useSidebarStore } from '@/stores/use-sidebar-store';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
@@ -144,6 +146,10 @@ export function Sidebar() {
   // Returns 'configured' immediately on self-host (no network call).
   const agentKeyStatus = useAgentKeyStatus(isCloud);
   const agentKeyMissing = isCloud && agentKeyStatus === 'missing';
+  // On the demo brand, Chat says it comes next week (its page is the preview).
+  const { isDemo } = useDemoBrand();
+  const tDemo = useTranslations('demo.chat');
+  const chatSoon = isDemo ? tDemo('soon') : null;
   // Brand-scoped gates follow the active brand, not the org. Selecting the
   // derived brand keeps this reactive: switching brands via BrandSwitcher or
   // toggling the flag in Brand Settings flips the gate without a route change.
@@ -368,10 +374,9 @@ export function Sidebar() {
                       : pathname.startsWith(item.href);
                   const label = getDashboardNavLabel(item.title, t);
 
-                  // Dynamic badge override: show "Set up" on the Agent item
-                  // when the org has no provider key for Chat (cloud only).
-                  const effectiveBadge =
-                    item.href === '/dashboard/agent' && agentKeyMissing ? 'Set up' : item.badge;
+                  // Chat's own badge: "Soon (next week)" on the demo brand,
+                  // "Set up" when the org has no provider key for it (cloud only).
+                  const effectiveBadge = dashboardNavBadge(item, { chatSoon, agentKeyMissing });
 
                   const isLocked =
                     isCloud && item.requiredFeature != null && !canUse(item.requiredFeature);

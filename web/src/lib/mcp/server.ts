@@ -188,7 +188,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Brands',
       description:
-        'List the brands the authenticated user can access. Returns one row per brand with id, name, slug, industry, region, and creation date. Always call this first to resolve a brand id before using other tools.',
+        'List the brands the authenticated user can access. Returns one row per brand with id, name, slug, industry, region, creation date and is_demo. A brand with is_demo true is the demo brand: sample data for exploring Ansvisor, read like any brand, but nothing on it can be changed, run or generated (those tools answer demo_brand); say so when you report on it. Always call this first to resolve a brand id before using other tools.',
       inputSchema: {},
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -1757,7 +1757,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Content drafts',
       description:
-        "List a brand's Content Editor drafts, the latest changed first (up to 100): title, status (draft, in_review, ready, published), method (create or optimize), page type, author (user or agent), the live page it optimizes, how many agent suggestions wait for review, and the editor path. Also `last_send` (its last Send to CMS: status queued, sent, failed or published, target webhook, webflow, wordpress or framer, when, the webhook's HTTP status, the error, and where the CMS says it went live; null when never sent) and `shopping_links` (on a shop's page with a shopping path: whether its links still sell — state ok or attention, the category pages and products linked, and the linked products that no longer sell: sold out, refused by Merchant Center or gone; none or unchecked otherwise).",
+        "List a brand's Content Editor drafts, the latest changed first (up to 100): title, status (draft, in_review, ready, published), method (create or optimize), page type, author (user or agent), the live page it optimizes, how many agent suggestions wait for review, and the editor path. Also `last_send` (its last Send to CMS: status queued, sent, failed or published, target webhook, webflow, wordpress, framer or wix, when, the webhook's HTTP status, the error, and where the CMS says it went live; null when never sent) and `shopping_links` (on a shop's page with a shopping path: whether its links still sell — state ok or attention, the category pages and products linked, and the linked products that no longer sell: sold out, refused by Merchant Center or gone; none or unchecked otherwise).",
       inputSchema: listDraftsShape,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },

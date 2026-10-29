@@ -47,6 +47,8 @@ const {
   MAX_CACHED_ANSWERS,
   activeBrandFilter,
   activeOrgFilter,
+  brandStopReason,
+  brandStopReasons,
   clearCachedAnswers,
   isBrandActive,
   isBrandActiveCached,
@@ -156,6 +158,32 @@ describe('cloud', () => {
       'organizations read: statement timeout',
     );
     await expect(activeBrandFilter(['b-active'])).rejects.toThrow('brands read: statement timeout');
+  });
+});
+
+describe('brandStopReasons and brandStopReason', () => {
+  it('says why no work may start: demo_brand before an ended plan, null when it may', async () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    const reasonFor = await brandStopReasons(['b-active', 'b-canceled', 'b-orphan', 'b-demo']);
+    expect(['b-active', 'b-canceled', 'b-orphan', 'b-demo', 'b-missing'].map(reasonFor)).toEqual([
+      null,
+      'subscription_inactive',
+      'subscription_inactive',
+      'demo_brand',
+      'subscription_inactive',
+    ]);
+    expect(reads).toHaveLength(1);
+  });
+
+  it('self-hosted, stops only a demo brand', async () => {
+    vi.stubEnv('IS_CLOUD', 'false');
+    expect(await brandStopReason('b-canceled')).toBe(null);
+    expect(await brandStopReason('b-demo')).toBe('demo_brand');
+  });
+
+  it('reads nothing for no ids', async () => {
+    expect((await brandStopReasons([]))('b-active')).toBe('subscription_inactive');
+    expect(reads).toHaveLength(0);
   });
 });
 

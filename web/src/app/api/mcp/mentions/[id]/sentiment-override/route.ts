@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
+import { demoBrandRefusal } from '@/lib/mcp/demo-gate';
 import { isMentionSentiment, overrideMentionSentimentFor } from '@/lib/mcp/mentions';
 
 const STATUS = { forbidden: 403, invalid: 400, missing: 404 } as const;
@@ -38,6 +39,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   try {
+    // Nothing written on the demo brand's sample data, as the tool refuses it.
+    const refused = await demoBrandRefusal('override_mention_sentiment', auth.organizationId, {
+      id,
+    });
+    if (refused) return refused;
     const result = await overrideMentionSentimentFor(auth, id, body.sentiment, body.note);
     if ('error' in result) {
       return NextResponse.json({ error: result.message }, { status: STATUS[result.error] });

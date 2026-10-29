@@ -59,6 +59,7 @@
     "banner": {
       "ended": "Your workspace is read-only. You can look around; adding, running and AI need a plan.",
       "payment_failed": "Your last payment didn't go through, so your workspace is read-only. You can look around; adding, running and AI need the payment method updated.",
+      "trial": "Your brand isn't tracked yet. {offer, select, both {Start a {days}-day free trial, or get 50% off your first month.} other {Start a {days}-day free trial.}}",
       "seePlans": "See plans"
     },
     "dialog": {
@@ -78,39 +79,37 @@
       "ended": "Ask your admin to choose a plan.",
       "endedNamed": "Ask {name}, your workspace admin, to choose a plan.",
       "payment_failed": "Ask your workspace admin to update the payment method.",
-      "payment_failedNamed": "Ask {name}, your workspace admin, to update the payment method."
+      "payment_failedNamed": "Ask {name}, your workspace admin, to update the payment method.",
+      "demo": "Ask your admin to choose a plan.",
+      "demoNamed": "Ask {name}, your workspace admin, to choose a plan.",
+      "trial": "Ask your admin to choose a plan.",
+      "trialNamed": "Ask {name}, your workspace admin, to choose a plan."
     },
     "choosePlan": "Choose a plan",
     "updatePayment": "Update payment method",
     "portalFailed": "Couldn't open the billing page. Try again.",
-    "plans": {
-      "perMonthBilledYearly": "{price} a month, billed yearly",
-      "chooseToday": "Choose {plan} · {price} today",
-      "openingCheckout": "Opening checkout…",
-      "payByCard": "You'll pay by card on Stripe's checkout.",
-      "askAdmin": "Ask your admin to choose a plan",
-      "customName": "Custom",
-      "customTagline": "For large companies and agencies managing AI visibility at scale.",
-      "startingAt": "Starting at",
-      "customAiUsage": "Custom AI usage, from {count}x",
-      "contactUs": "Contact us",
-      "pricesInUsd": "Prices in USD.",
-      "promo": {
-        "apply": "Apply",
-        "checking": "Checking…",
-        "remove": "Remove the code",
-        "applied": "{code} · {discount} off {duration, select, once {your first month} repeating {your first {months, plural, one {month} other {# months}}} other {every month}}",
-        "deal": "{code}: {duration, select, once {first month} repeating {first {months, plural, one {month} other {# months}}} other {every month}} {discount} off",
-        "per": "{duration, select, once {first month} repeating {/mo for {months, plural, one {# month} other {# months}}} other {/mo}}",
-        "then": "then {price}/mo",
-        "appliedNote": "{duration, select, once {Code applied. You pay {discount} less for the first month, then the plan’s usual price each month.} repeating {Code applied. You pay {discount} less for the first {months, plural, one {month} other {# months}}, then the plan’s usual price each month.} other {Code applied. You pay {discount} less every month.}}",
-        "monthlyOnly": "{code} is for monthly plans: {discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}.",
-        "switchToMonthly": "Switch to Monthly",
-        "invalid": "“{code}” isn’t a valid code.",
-        "failed": "Couldn't check the code. Try again."
-      }
-    },
     "noPlan": "No active plan",
+    "demo": {
+      "dialog": {
+        "title": "Use Ansvisor for your own brand",
+        "titleFor": "Use Ansvisor for {brand}",
+        "body": "This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for your own brand.",
+        "bodyFor": "This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for {brand}.",
+        "action": "{action} works on your own brand",
+        "label": "This is a demo brand with sample data"
+      },
+      "ownBrand": {
+        "title": "This is a demo brand",
+        "body": "It shows Ansvisor with sample data, so nothing here runs. Switch to your own brand to do this."
+      },
+      "switchToOwnBrand": "Switch to your brand"
+    },
+    "trialOffer": {
+      "title": "Choose how to start",
+      "body": "Everything you set up is here. Pick a plan and Ansvisor starts tracking, writing and fixing for your brand.",
+      "bodyFor": "Everything you set up for {brand} is here. Pick a plan and Ansvisor starts tracking, writing and fixing for it.",
+      "label": "Your brand isn't tracked yet"
+    },
     "actions": {
       "addPrompts": "Adding prompts needs a plan",
       "removeLocations": "Removing locations needs a plan",
@@ -249,7 +248,110 @@
       "removeAuthors": "Removing authors needs a plan",
       "setDefaultAuthor": "Setting a default author needs a plan",
       "setByline": "Changing the byline setting needs a plan",
-      "changeContentSettings": "Changing content settings needs a plan"
+      "changeContentSettings": "Changing content settings needs a plan",
+      "disconnectIntegrations": "Disconnecting an integration needs a plan"
+    },
+    "plans": {
+      "perMonthBilledYearly": "{price} a month, billed yearly",
+      "openingCheckout": "Opening checkout…",
+      "askAdmin": "Ask your admin to choose a plan",
+      "customName": "Custom",
+      "customTagline": "For large companies and agencies managing AI visibility at scale.",
+      "startingAt": "Starting at",
+      "customAiUsage": "Custom AI usage, from {count}x",
+      "contactUs": "Contact us",
+      "pricesInUsd": "Prices in USD.",
+      "promo": {
+        "apply": "Apply",
+        "checking": "Checking…",
+        "remove": "Remove the code",
+        "applied": "{code} · {discount} off {duration, select, once {your first month} repeating {your first {months, plural, one {month} other {# months}}} other {every month}}",
+        "deal": "{code}: {duration, select, once {first month} repeating {first {months, plural, one {month} other {# months}}} other {every month}} {discount} off",
+        "per": "{duration, select, once {first month} repeating {/mo for {months, plural, one {# month} other {# months}}} other {/mo}}",
+        "then": "then {price}/mo",
+        "appliedNote": "{duration, select, once {Code applied. You pay {discount} less for the first month, then the plan’s usual price each month.} repeating {Code applied. You pay {discount} less for the first {months, plural, one {month} other {# months}}, then the plan’s usual price each month.} other {Code applied. You pay {discount} less every month.}}",
+        "monthlyOnly": "{code} is for buying monthly: {discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}.",
+        "switchToMonthly": "Switch to Monthly",
+        "invalid": "“{code}” isn’t a valid code.",
+        "failed": "Couldn't check the code. Try again."
+      }
+    }
+  },
+  "planOffer": {
+    "buyNow": "Buy now",
+    "startTrial": "Start {days}-day free trial",
+    "fullPlan": "Full plan from day one",
+    "limitedAi": "Limited AI usage for {days} days",
+    "cardNote": "{both, select, yes {Card required for both.} other {Card required.}}",
+    "limitedOffer": "Limited offer",
+    "trialUsed": "This workspace's free trial has been used. Buy now to start the plan.",
+    "chooseHowToStart": "Choose how to start",
+    "choosePlan": "Choose Your Plan",
+    "choice": {
+      "label": "How to start",
+      "trial": "{days}-day trial",
+      "month": "Monthly",
+      "monthOffer": "{discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}",
+      "year": "Yearly"
+    },
+    "dueToday": "Due today",
+    "freeUntil": "Free until {date}, then {price}/month",
+    "trustLine": "<part>Secure checkout with Stripe</part> · <part>Cancel any time</part>",
+    "haveCode": "Have a code?",
+    "showDetails": "Show plan details",
+    "hideDetails": "Hide plan details",
+    "readyToTrack": "Ready to track for <b>{brand}</b>: {prompts, plural, one {# prompt} other {# prompts}} · {topics, plural, one {# topic} other {# topics}} · {competitors, plural, one {# competitor} other {# competitors}}"
+  },
+  "demo": {
+    "band": {
+      "text": "You're exploring <b>{brand}</b>, a demo brand with sample data. {offer, select, both {Start a {days}-day free trial, or get 50% off your first month.} trial {Start a {days}-day free trial.} discount {Get 50% off your first month.} other {Pick a plan to use it for your own brand.}}",
+      "textFor": "You're exploring <b>{brand}</b>, a demo brand with sample data. {offer, select, both {Start tracking <b>{ownBrand}</b> with a {days}-day free trial, or get 50% off your first month.} trial {Start tracking <b>{ownBrand}</b> with a {days}-day free trial.} discount {Get 50% off your first month of tracking <b>{ownBrand}</b>.} other {Pick a plan to track <b>{ownBrand}</b>.}}",
+      "textPlanActive": "You're exploring <b>{brand}</b>, a demo brand with sample data. Nothing here runs or uses AI.",
+      "switchToOwnBrand": "Switch to your brand",
+      "switchToBrand": "Switch to {brand}"
+    },
+    "switcher": {
+      "sampleData": "Demo · sample data",
+      "notTracked": "Not tracked yet",
+      "show": "Show the demo brand",
+      "hide": "Hide the demo brand",
+      "failed": "Couldn't change the demo brand. Try again."
+    },
+    "explore": {
+      "failed": "Couldn't open the demo brand. Try again."
+    },
+    "onboarding": {
+      "title": "Not ready to add a card? Explore a demo brand",
+      "body": "See Ansvisor with sample data: prompts, AI answers, content and reports. No card needed. {brand} stays saved, and tracking starts when you pick a plan.",
+      "yourBrand": "Your brand",
+      "cta": "Explore the demo"
+    },
+    "seeTheDemo": "See the demo",
+    "settingUp": "Setting up the demo…",
+    "setup": {
+      "title": "Preparing your demo",
+      "body": "{brand} is a made-up coffee brand with a month of sample data. Nothing here runs or costs anything.",
+      "steps": {
+        "brand": "Setting up {brand}",
+        "answers": "Preparing sample AI answers from {platforms} platforms",
+        "citations": "Adding the sources they cite",
+        "mentions": "Scoring mentions and sentiment",
+        "audit": "Auditing the site's pages",
+        "actions": "Building the Action Center",
+        "content": "Finding content opportunities",
+        "reports": "Preparing reports"
+      },
+      "usual": "This takes a few seconds the first time.",
+      "slow": "This is taking longer than usual.",
+      "ready": "Ready. Opening the Action Center…",
+      "failed": "Couldn't prepare the demo. Check your connection and try again.",
+      "retry": "Try again",
+      "close": "Close"
+    },
+    "chat": {
+      "soon": "Soon (next week)",
+      "note": "Chat arrives next week. This is a preview of it.",
+      "frameTitle": "Chat preview"
     }
   },
   "managersOnly": {
@@ -4566,6 +4668,12 @@
           "failed": "The last send to WordPress failed, {when}",
           "published": "Published {when}"
         },
+        "wix": {
+          "queued": "Sending to Wix since {when}",
+          "sent": "In Wix as a draft post since {when}",
+          "failed": "The last send to Wix failed, {when}",
+          "published": "Published {when}"
+        },
         "framer": {
           "queued": "Sending to Framer since {when}",
           "sent": "In Framer as a draft item since {when}",
@@ -4584,6 +4692,7 @@
         "description": "Each page goes to the brand's webhook as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
         "descriptionWebflow": "Each page goes to {collection} in Webflow as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
         "descriptionWordPress": "Each page goes to {site} in WordPress as a draft post, as it is ready to publish, with the slug and meta description (as its excerpt) of its last send, else the page's. Open a page in the editor to change them. A page whose post is already published or scheduled goes as a new draft post. The meta title and JSON-LD aren't sent: set them in your SEO plugin.",
+        "descriptionWix": "Each page goes to {site}'s Wix Blog as a draft post, as it is ready to publish, with its slug, meta title, meta description and JSON-LD as the post's SEO settings. Images aren't sent: add them in Wix. A page whose post is already published updates its draft there; you publish the changes in Wix.",
         "descriptionFramer": "Each page goes to {collection} in Framer as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them. A page whose item isn't a draft is updated there: the change goes live with your next publish of the site. Images aren't sent yet.",
         "readFailed": "Couldn't read the pages. Try again.",
         "retry": "Try again",
@@ -4616,6 +4725,7 @@
         "skipped": "{count, plural, one {# page wasn't sent} other {# pages weren't sent}}: the workspace has sent 200 pages in the last 24 hours. Try again later.",
         "inProgress": "A page is already on its way to Webflow. Wait for it, then send again.",
         "inProgressWordPress": "A page is already on its way to WordPress. Wait for it, then send again.",
+        "inProgressWix": "A page is already on its way to Wix. Wait for it, then send again.",
         "inProgressFramer": "A page is already on its way to Framer. Wait for it, then send again.",
         "close": "Close",
         "cancel": "Cancel",
@@ -5712,11 +5822,12 @@
       },
       "send": {
         "button": "Send to CMS",
-        "hint": "Send the page to your CMS: Webflow, WordPress, Framer, or your workflow through the brand's webhook",
+        "hint": "Send the page to your CMS: Webflow, WordPress, Framer, Wix, or your workflow through the brand's webhook",
         "title": "Send to CMS",
         "description": "The page goes to the brand's webhook, for your workflow tool (Zapier, Make, n8n) to publish it in your CMS.",
         "descriptionWebflow": "The page goes to {collection} in Webflow as a draft item, with its slug and meta. You publish it in Webflow.",
         "descriptionWordPress": "The page goes to {site} in WordPress as a draft post, with its slug, and its meta description as the excerpt. The meta title isn't sent: set it in your SEO plugin. You publish it in WordPress.",
+        "descriptionWix": "The page goes to {site}'s Wix Blog as a draft post, with its slug, and its meta title, meta description and JSON-LD as the post's SEO settings. You publish it in Wix.",
         "descriptionFramer": "The page goes to {collection} in Framer as a draft item, with its slug and meta. Images aren't sent yet. You publish it in Framer.",
         "descriptionReading": "The page goes to your CMS with its slug and meta, kept on the page.",
         "target": {
@@ -5738,12 +5849,18 @@
             "collection": "your collection",
             "notReady": "Not ready: connect it again or pick its collection and fields in Settings › Integrations"
           },
+          "wix": {
+            "title": "Wix",
+            "hint": "A draft post on {site}'s Blog",
+            "notReady": "API key refused: connect Wix again in Settings › Integrations"
+          },
           "webhook": {
             "title": "Your workflow",
             "hint": "The brand's webhook (Zapier, Make, n8n)"
           },
           "unchecked": "Couldn't check Webflow just now, so this send goes to your workflow.",
           "uncheckedWordPress": "Couldn't check WordPress just now, so this send goes to your workflow.",
+          "uncheckedWix": "Couldn't check Wix just now, so this send goes to your workflow.",
           "uncheckedFramer": "Couldn't check Framer just now, so this send goes to your workflow.",
           "retry": "Try again"
         },
@@ -5786,6 +5903,12 @@
           "failed": "The last send to WordPress failed, {when}.",
           "published": "Published {when}."
         },
+        "lastWix": {
+          "queued": "Last sent to Wix {when}, still on its way.",
+          "sent": "In Wix as a draft post since {when}.",
+          "failed": "The last send to Wix failed, {when}.",
+          "published": "Published {when}."
+        },
         "lastFramer": {
           "queued": "Last sent to Framer {when}, still on its way.",
           "sent": "In Framer as a draft item since {when}.",
@@ -5812,11 +5935,17 @@
           "in_progress": "This page is already on its way to Webflow. Wait for it, then send again.",
           "no_webhookWebflow": "This brand's Webflow isn't ready, and it has no webhook. Connect Webflow again or pick its collection in Settings › Integrations.",
           "wordpressFailed": "WordPress didn't take the page: {reason}",
+          "wixFailed": "Wix didn't take the page: {reason}",
           "wordpress_not_configured": "WordPress isn't set up on this server. Send to your workflow instead.",
           "no_wordpress": "Connect WordPress in Settings › Integrations first.",
           "wordpress_refused": "WordPress refused the sign-in. Connect it again in Settings › Integrations.",
+          "wix_not_configured": "Wix isn't set up on this server. Send to your workflow instead.",
+          "no_wix": "Connect Wix in Settings › Integrations first.",
+          "wix_refused": "Wix refused the API key. Connect it again in Settings › Integrations.",
           "in_progressWordPress": "This page is already on its way to WordPress. Wait for it, then send again.",
+          "in_progressWix": "This page is already on its way to Wix. Wait for it, then send again.",
           "no_webhookWordPress": "This brand's WordPress refused the sign-in, and it has no webhook. Connect WordPress again in Settings › Integrations.",
+          "no_webhookWix": "This brand's Wix refused the API key, and it has no webhook. Connect Wix again in Settings › Integrations.",
           "framerFailed": "Framer didn't take the page: {reason}",
           "framer_not_configured": "Framer isn't set up on this server. Send to your workflow instead.",
           "no_framer": "Connect Framer in Settings › Integrations first.",
@@ -5839,7 +5968,10 @@
         "sentFramer": "Sent to Framer as a draft item",
         "sentFramerUpdated": "Updated in Framer",
         "framerImages": "{images, plural, one {# image wasn't sent: add it in Framer.} other {# images weren't sent: add them in Framer.}}",
-        "framerLive": "The item isn't a draft in Framer, so the change goes live with your next publish of the site."
+        "framerLive": "The item isn't a draft in Framer, so the change goes live with your next publish of the site.",
+        "sentWix": "Sent to Wix as a draft post",
+        "sentWixUpdated": "Draft post updated in Wix",
+        "wixImages": "{images, plural, one {# image wasn't sent: add it in Wix.} other {# images weren't sent: add them in Wix.}}"
       },
       "rulesChip": "Rules {met}/{total}",
       "rulesChipReading": "Rules · reading",
@@ -9600,6 +9732,8 @@
     "signOut": "Sign out",
     "billingDescription": "Manage your subscription and billing details.",
     "currentPlan": "Current Plan",
+    "noPlanYet": "No plan yet",
+    "noPlanYetHint": "Your brands are saved. Tracking starts once you choose a plan below.",
     "month": "mo",
     "year": "yr",
     "renewsOn": "Renews on {date}",
@@ -9642,6 +9776,7 @@
     "choosePlanTitle": "Choose a plan",
     "choosePlanFor": "Choose {plan}",
     "planEnded": "Your plan isn't active. Choose one to start it again; you'll pay on Stripe's secure checkout.",
+    "planNotStarted": "Buy a plan now, or try one free for {days} days first. Either way you add a card on Stripe's secure checkout.",
     "checkoutFailed": "Couldn't open the checkout. Try again.",
     "planAdminOnly": "Only admins can buy or change the plan. Ask an admin in your organization.",
     "seeAllPlanFeatures": "See everything each plan includes",
@@ -10198,8 +10333,71 @@
         "failed": "Couldn't reach Framer. Try again later."
       }
     },
+    "wix": {
+      "title": "Wix",
+      "description": "Send to CMS puts {brand}'s pages on its Wix site's Blog as draft posts. You publish them in Wix.",
+      "noBrand": "Pick a brand to connect its Wix site.",
+      "unavailable": "Couldn't read the Wix connection right now.",
+      "notConfigured": "Wix isn't set up on this server yet.",
+      "connected": "Connected",
+      "refused": "API key refused",
+      "site": "Site: {site}",
+      "notConnectedMember": "Not connected. Admins and managers can connect Wix.",
+      "refusedMember": "Wix refused the API key. Pages can't go there until an admin or manager connects it again.",
+      "pagesGoTo": "Pages go to {site}'s Blog as draft posts.",
+      "siteLabel": "Site id",
+      "sitePlaceholder": "The site's id, or its dashboard address",
+      "keyLabel": "API key",
+      "keyPlaceholder": "Paste the API key",
+      "keyHint": "In Wix, the site's owner makes it: Account Settings › API Keys Manager › Generate API Key, with this site picked and the Manage Blog (Wix Blog) and Manage Ricos Document (Ricos) permissions. The site id is the long code after manage.wix.com/dashboard/ in the dashboard's address. The key is kept encrypted by our API, never shown again. Ansvisor writes drafts only.",
+      "connect": "Connect",
+      "connecting": "Checking the site…",
+      "connectedToast": "Wix connected",
+      "refusedNote": "Wix refused the saved API key. Connect it again to send pages.",
+      "replace": "Change API key",
+      "cancel": "Cancel",
+      "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect Wix?",
+      "disconnectDescription": "Pages stop going to Wix and its API key is deleted here. Posts already sent stay in Wix. To end the key itself, delete it in Wix's API Keys Manager.",
+      "disconnected": "Wix disconnected. Delete the API key in Wix's API Keys Manager too.",
+      "errors": {
+        "not_configured": "Wix isn't set up on this server yet.",
+        "invalid": "Check the site id (it's in the dashboard's address) and that you pasted the whole API key.",
+        "forbidden": "Only admins and managers can change the Wix connection.",
+        "auth_failed": "Wix refused the API key. Check it and try again.",
+        "no_access": "The API key isn't allowed to write the site's Blog. Give it the Wix Blog permissions in the API Keys Manager.",
+        "no_ricos_permission": "The key needs the Ricos permission (Manage Ricos Document) too: Wix uses it to turn pages into posts. Add it to the key in the API Keys Manager, then connect again.",
+        "no_blog": "This site has no Wix Blog. Add the Blog to the site first.",
+        "no_member": "Wix needs a site member to own the posts. Write one post on the Blog as the site's owner, then connect again.",
+        "unreachable": "Wix couldn't be reached. Try again later.",
+        "session": "Your session expired. Sign in again.",
+        "workspace": "This brand isn't in your workspace.",
+        "busy": "Too many requests. Wait a few minutes.",
+        "failed": "Couldn't reach Wix. Try again later."
+      }
+    },
     "integrations_connected": "Connected",
     "integrations_notConfigured": "Not configured",
+    "integrations_comingSoon": "Coming soon",
+    "demoIntegrations": {
+      "sampleData": "Sample data",
+      "shopify": {
+        "label": "Shopify",
+        "description": "Your Shopify store's products, for Product Visibility and its pages."
+      },
+      "wordpress": {
+        "label": "WordPress",
+        "description": "Where Send to CMS puts a brand's pages on your WordPress site."
+      },
+      "framer": {
+        "label": "Framer",
+        "description": "Where Send to CMS puts a brand's pages on your Framer site."
+      },
+      "wix": {
+        "label": "Wix",
+        "description": "Where Send to CMS puts a brand's pages on your Wix site."
+      }
+    },
     "integrations_disconnect": "Disconnect",
     "integrations_disconnectDescription": "The stored connection is removed for the whole organization. You can reconnect at any time.",
     "removeMember": "Remove team member",
@@ -10396,6 +10594,7 @@
       "deleteButton": "Delete Brand Permanently",
       "managersOnlyEdit": "Only admins and managers can change these settings.",
       "adminsOnlyDelete": "Only admins can delete a brand.",
+      "demoCantDelete": "The demo brand can't be deleted; hide it from the brand menu instead.",
       "conversions": {
         "title": "Conversions from AI visits",
         "description": "Follow visitors who came from an AI assistant to a signup, a demo form or an order, so the Content Editor shows what each page earns.",

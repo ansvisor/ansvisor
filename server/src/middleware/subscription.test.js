@@ -161,6 +161,7 @@ describe('requireActiveSubscription', () => {
       ['DELETE', '/cms/brands/b1/webflow'],
       ['DELETE', '/cms/brands/b1/wordpress'],
       ['DELETE', '/cms/brands/b1/framer'],
+      ['DELETE', '/cms/brands/b1/wix'],
       ['DELETE', '/bots/connections/b1/c1'],
       // A store's sign-in is revoked at the store as it is removed.
       ['DELETE', '/catalog/sources/9b2c1e40-0000-4000-8000-000000000003'],
@@ -190,6 +191,8 @@ describe('requireActiveSubscription', () => {
       ['POST', '/cms/brands/b1/framer'],
       ['PUT', '/cms/brands/b1/framer'],
       ['DELETE', '/cms/brands/b1/framer/collections'],
+      ['POST', '/cms/brands/b1/wix'],
+      ['DELETE', '/cms/brands/b1/wix/extra'],
       ['POST', '/bots/connections/b1'],
       ['DELETE', '/bots/connections/b1'],
       ['POST', '/catalog/sources'],
@@ -203,7 +206,7 @@ describe('requireActiveSubscription', () => {
       expect(res.status).toHaveBeenCalledWith(402);
     }
     // Both Google disconnects are one route.
-    expect(COST_STOPPING).toHaveLength(8);
+    expect(COST_STOPPING).toHaveLength(9);
   });
 
   it('lets an organization off a plan delete a brand, and nothing near it', async () => {
@@ -529,19 +532,28 @@ describe('when the check cannot be read', () => {
 
 /**
  * server.js can't be imported here (it listens and starts the crons), so its
- * mount is read: the API's routes are reached only through decodeToken and
- * then this middleware, and the webhooks are mounted outside /api.
+ * mount is read: the API's routes are reached only through decodeToken, the
+ * demo brand's check (demo-brand.js) and then this middleware, and the
+ * webhooks are mounted outside /api.
  */
 describe("server.js's mount", () => {
-  it('puts every API route behind the person and then the plan', async () => {
+  it('puts every API route behind the person, the demo brand and then the plan', async () => {
     const source = await readFile(new URL('../server.js', import.meta.url), 'utf8');
-    const mounts = source
+    // One call per line, however Prettier wraps it.
+    const flat = source
+      .replace(/\(\s+/g, '(')
+      .replace(/,\s+/g, ', ')
+      .replace(/,?\s+\)/g, ')');
+    const mounts = flat
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => /^app\.use\(.*\broutes\);$/.test(line));
     expect(mounts).toEqual([
-      "app.use('/api', Middleware.decodeToken.bind(Middleware), requireActiveSubscription, routes);",
+      "app.use('/api', Middleware.decodeToken.bind(Middleware), refuseDemoBrandWrites, requireActiveSubscription, routes);",
     ]);
+    expect(source).toMatch(
+      /import \{[^}]*\brefuseDemoBrandWrites\b[^}]*\} from '\.\/middleware\/demo-brand\.js';/,
+    );
     expect(source).toMatch(
       /import \{ requireActiveSubscription \} from '\.\/middleware\/subscription\.js';/,
     );
