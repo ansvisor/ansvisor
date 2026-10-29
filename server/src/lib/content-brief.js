@@ -23,7 +23,9 @@ import {
 } from './content-runs.js';
 import { citedPagesLength } from './content-cited-length.js';
 import { guardPeople, knownPeople, peopleEdits } from './content-people.js';
+import { sentenceSpans } from './content-research.js';
 import {
+  NUMBER_PLACEHOLDER,
   addedNumbers,
   knownNumbers,
   numberSources,
@@ -968,12 +970,38 @@ export function briefNumbered(sources, inputs = []) {
 }
 
 /**
+ * A brief's words with no figure left for anyone to find (2026-10-30): the
+ * number guard's placeholder goes, in a heading on its own ("The best
+ * machines under $500"), else with its sentence. A fact the page needs is
+ * named in words ("how far forecasts drift, from a study"), and the
+ * Content Agent looks it up as it writes (content-research.js).
+ */
+export function withoutFigures(text, heading = false) {
+  const s = String(text ?? '');
+  if (!s.includes(NUMBER_PLACEHOLDER)) return s;
+  if (heading) {
+    return s
+      .split(NUMBER_PLACEHOLDER)
+      .join(' ')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/\s+([,.;:!?])/g, '$1')
+      .trim();
+  }
+  return sentenceSpans(s)
+    .map(({ start, end }) => s.slice(start, end))
+    .filter((sentence) => !sentence.includes(NUMBER_PLACEHOLDER))
+    .join(' ');
+}
+
+/**
  * What a brief may say without a placeholder: the numbers (CE-033), names
  * and quotes (CE-044) of what it was built from — the brand, the page, the
  * prompts, searches, queries and headings kept, the length asked for — and
  * today's year. The writer reads a brief as something it was given, so a
  * figure or a person made up in one would pass the writer's own guard.
- * `text` and `heading` put each one added as a placeholder, as a written
+ * `text` and `heading` take each figure added out (withoutFigures: nobody
+ * is left a figure to find, the writer looks up what the brief names in
+ * words) and put each person or quote added as a placeholder, as a written
  * page's are, a question in quotes aside; `keeps` drops a keyword that adds
  * one, as a placeholder can't be searched for; `found` lists what a text
  * adds, read the same way (the brief eval's gate).
@@ -995,7 +1023,7 @@ export function briefGuard({ brand, draft, prompts, sources, rules, inputs, comp
   };
   const text = (words, heading = false) => {
     const numbered = placeholderNumbers(words ?? '', known);
-    return guardPeople(numbered, askedIn(numbered), { heading }).text;
+    return withoutFigures(guardPeople(numbered, askedIn(numbered), { heading }).text, heading);
   };
   return {
     text,
