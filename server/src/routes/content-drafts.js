@@ -50,7 +50,7 @@ async function assertSender(userId) {
 
 /**
  * POST /api/content-drafts/send
- * Body: { brandId, target?: 'webhook' | 'webflow' | 'wordpress' | 'framer', pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }] }
+ * Body: { brandId, target?: 'webhook' | 'webflow' | 'wordpress' | 'framer' | 'wix', pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }] }
  * One page is sent before this answers: { deliveries: [{ id, status, http_status, error }] };
  * more (up to 25) go on in the background: { batchId, deliveries: queued, skipped }.
  */
