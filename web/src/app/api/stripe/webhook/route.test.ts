@@ -188,6 +188,22 @@ describe('customer.subscription.updated, the first run', () => {
     expect(db.update.mock.invocationCallOrder[0]).toBeLessThan(api.mock.invocationCallOrder[0]);
   });
 
+  it('aligns the prompts to the plan before the run, when it comes before the checkout', async () => {
+    // Same plan as the organization already has, so no plan change aligns.
+    const samePlan = { ...paidLater('active'), metadata: { plan_id: 'starter' } };
+    await deliver('customer.subscription.updated', samePlan, { status: 'incomplete' });
+
+    expect(align).toHaveBeenCalledTimes(1);
+    expect(align).toHaveBeenCalledWith('org1', 'starter');
+    expect(align.mock.invocationCallOrder[0]).toBeLessThan(api.mock.invocationCallOrder[0]);
+  });
+
+  it('aligns once when the plan changed too', async () => {
+    await deliver('customer.subscription.updated', paidLater('active'), { status: 'incomplete' });
+    expect(align).toHaveBeenCalledTimes(1);
+    expect(align).toHaveBeenCalledWith('org1', 'growth');
+  });
+
   it('starts nothing on a renewal, or other changes of an active subscription', async () => {
     await deliver('customer.subscription.updated', paidLater('active'), {
       current_period_end: 1_700_000_000,

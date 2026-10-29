@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { periodEndIso } from '@/lib/billing/period-end';
 import { startFirstTrackingRun } from '@/lib/billing/first-run';
+import { isSubscriptionActive } from '@/config/plans';
 import type Stripe from 'stripe';
 
 /**
@@ -147,7 +148,8 @@ export async function POST(req: NextRequest) {
             .update(updates)
             .eq('stripe_customer_id', customerId);
 
-          if (orgBefore && newPlanId && newPlanId !== orgBefore.plan) {
+          const planChanged = Boolean(orgBefore && newPlanId && newPlanId !== orgBefore.plan);
+          if (orgBefore && planChanged) {
             // Plan changed — re-align prompts. Handles both expansion
             // (Starter → Growth: 2 → 8 engines) and contraction
             // (Growth → Starter: 8 → 2 engines). Issue #79.
@@ -161,6 +163,16 @@ export async function POST(req: NextRequest) {
             | Partial<Stripe.Subscription>
             | undefined;
           if (orgBefore && previous?.status === 'incomplete') {
+            // Stripe doesn't order its events: this one can come before the
+            // checkout's, whose alignment then hasn't run. Align here too, so
+            // the run tracks only the plan's engines. Idempotent.
+            if (!planChanged && isSubscriptionActive(subscription.status)) {
+              await alignPromptsSafe(
+                orgBefore.id,
+                newPlanId || orgBefore.plan || 'starter',
+                'subscription.updated',
+              );
+            }
             await startFirstTrackingRun({
               orgId: orgBefore.id,
               subscriptionStatus: subscription.status,
