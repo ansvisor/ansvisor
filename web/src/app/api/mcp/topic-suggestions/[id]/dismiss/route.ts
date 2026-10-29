@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
 import { dismissTopicSuggestionFor } from '@/lib/mcp/data';
+import { failedCallResponse } from '@/lib/mcp/subscription-gate';
 
 /**
  * POST /api/mcp/topic-suggestions/[id]/dismiss
  *
  * Parallel REST surface for the `dismiss_topic_suggestion` MCP tool — same
- * data-layer function, same ownership guarantee.
+ * data-layer function, same ownership guarantee. 403 unless the key's user
+ * is an admin or a manager.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await authenticateMcpRequest(req);
@@ -28,7 +30,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
     return NextResponse.json(result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return failedCallResponse(err);
   }
 }
