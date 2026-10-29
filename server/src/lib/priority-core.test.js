@@ -47,8 +47,12 @@ describe('logScale', () => {
     expect(logScale(10000, 10000)).toBe(1);
     expect(logScale(1_000_000, 10000)).toBe(1);
     expect(logScale(100, 10000)).toBeCloseTo(0.5, 2);
-    // A negative count is no count.
+    // A negative count is no count; so is what isn't a number, and a count
+    // past any end is full.
     expect(logScale(-3, 10000)).toBe(0);
+    expect(logScale(Number.NaN, 10000)).toBe(0);
+    expect(logScale(undefined, 10000)).toBe(0);
+    expect(logScale(Number.POSITIVE_INFINITY, 10000)).toBe(1);
   });
 });
 
