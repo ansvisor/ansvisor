@@ -5,24 +5,39 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
-/** Each provider's status as the API answers it: an Error is a failed read. */
-const statuses: Record<string, string | Error> = {};
-const cloud = { on: false };
-vi.mock('@/config/plans', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/config/plans')>()),
-  isCloud: () => cloud.on,
+/**
+ * Each provider's status as the API answers it: a failure is a read that
+ * didn't come back (timed out or failed), a promise one still on its way.
+ */
+type StatusAnswer =
+  | string
+  | { ok: false; reason: 'timeout' | 'failed' }
+  | Promise<{ ok: true; value: string }>;
+const statuses: Record<string, StatusAnswer> = {};
+/** The server's config: whether it offers Merchant Center, null when it can't be read. */
+const config = vi.hoisted(() => ({
+  answer: { googleMerchantCenter: true } as
+    | { googleMerchantCenter: boolean }
+    | null
+    | Promise<{ googleMerchantCenter: boolean } | null>,
 }));
 const integrations = vi.hoisted(() => ({
-  getIntegrationStatus: vi.fn(),
   disconnectIntegration: vi.fn(),
-  getGscProperties: vi.fn(),
   getGscBrandMappings: vi.fn(),
   setBrandGscProperty: vi.fn(),
-  getGaProperties: vi.fn(),
   getGaBrandMappings: vi.fn(),
   setBrandGaProperty: vi.fn(),
 }));
 vi.mock('@/lib/actions/integrations', () => integrations);
+const client = vi.hoisted(() => ({
+  readIntegrationStatus: vi.fn(),
+  readIntegrationsConfig: vi.fn(),
+  readGscProperties: vi.fn(),
+  readGaProperties: vi.fn(),
+  withReadTimeout: <T,>(promise: Promise<T>) => promise,
+  isTimeout: (err: unknown) => (err as { name?: string })?.name === 'TimeoutError',
+}));
+vi.mock('@/lib/integrations-client', () => client);
 vi.mock('@/hooks/use-integration-connect', () => ({
   useIntegrationConnect: () => ({ connecting: false, connect: vi.fn() }),
 }));
@@ -61,11 +76,12 @@ const openUpgrade = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
   for (const key of Object.keys(statuses)) delete statuses[key];
-  cloud.on = false;
-  integrations.getIntegrationStatus.mockImplementation(async (provider: string) => {
+  config.answer = { googleMerchantCenter: true };
+  client.readIntegrationsConfig.mockImplementation(async () => config.answer);
+  client.readIntegrationStatus.mockImplementation(async (provider: string) => {
     const status = statuses[provider] ?? 'not_connected';
-    if (status instanceof Error) throw status;
-    return { status };
+    if (typeof status === 'string') return { ok: true, value: status };
+    return status;
   });
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -103,8 +119,14 @@ function groupOf(element: Element | null) {
 }
 const byText = (text: string) =>
   [...container.querySelectorAll('p')].find((p) => p.textContent === text) ?? null;
-/** Merchant Center's card: its row and the lines under it. */
-const merchantCenter = () => byText('Google Merchant Center')?.closest('.space-y-4') ?? null;
+/** A card by its name: its row and the lines under it. */
+const cardOf = (label: string) => byText(label)?.closest('.space-y-4') ?? null;
+const merchantCenter = () => cardOf('Google Merchant Center');
+/** A group's section, by its heading. */
+const groupNamed = (title: string) =>
+  headings()
+    .find((h) => h.textContent === title)
+    ?.closest('section') ?? null;
 /** The badges a card shows, by their words. */
 const badges = (card: Element) =>
   [...card.querySelectorAll('[class*="group/badge"]')].map((b) => b.textContent);
@@ -135,56 +157,92 @@ describe('IntegrationsSection', () => {
     expect(groupOf(byText('Google Analytics'))).toBeNull();
   });
 
-  it("keeps Merchant Center's card hidden while its status can't be read, without a toast", async () => {
-    statuses['google-merchant-center'] = new Error('Unknown integration provider.');
-    vi.mocked(toast.error).mockClear();
+  it("hides Merchant Center's card where the server doesn't offer it, with no Coming soon", async () => {
+    config.answer = { googleMerchantCenter: false };
     await render();
     expect(byText('Google Merchant Center')).toBeNull();
-    expect(toast.error).not.toHaveBeenCalled();
-    // The other cards are there.
+    expect(container.textContent).not.toContain('Coming soon');
+    expect(container.textContent).not.toContain('COMPOSIO_GMC_AUTH_CONFIG_ID');
+    // Its status isn't read at all.
+    expect(client.readIntegrationStatus).not.toHaveBeenCalledWith('google-merchant-center');
+    // The group keeps its heading, with the product catalog alone in it.
+    const stores = groupNamed('Stores and marketplaces')!;
+    expect(stores.querySelector('[data-card="catalog"]')).not.toBeNull();
+    expect(stores.querySelector('[data-slot="skeleton"]')).toBeNull();
+  });
+
+  it("hides Merchant Center's card when the config can't be read: an older API offers nothing", async () => {
+    config.answer = null;
+    await render();
+    expect(byText('Google Merchant Center')).toBeNull();
     expect(byText('Google Search Console')).not.toBeNull();
     expect(container.querySelector('[data-card="catalog"]')).not.toBeNull();
   });
 
-  it('says Coming soon on the cloud while it is not set up there, with nothing to connect', async () => {
-    statuses['google-merchant-center'] = 'not_configured';
-    cloud.on = true;
+  it("shows no skeleton for Merchant Center while the config is read, and doesn't wait on a status", async () => {
+    let offer!: (answer: { googleMerchantCenter: boolean }) => void;
+    config.answer = new Promise((resolve) => (offer = resolve));
+    // Search Console's status still on its way: the config doesn't wait for it.
+    statuses['google-search-console'] = new Promise(() => {});
     await render();
-    const card = merchantCenter()!;
-    expect(card).not.toBeNull();
-    expect(badges(card)).toEqual(['Coming soon']);
-    expect(card.textContent).toContain(
-      "Until it's available, add your products with a feed URL or a file upload in Product catalog below.",
-    );
-    expect(card.querySelector('button')).toBeNull();
-    // Not the self-hosted set-up line, nor its badge.
-    expect(card.textContent).not.toContain('Not configured');
-    expect(card.textContent).not.toContain('COMPOSIO_GMC_AUTH_CONFIG_ID');
+    const stores = groupNamed('Stores and marketplaces')!;
+    expect(byText('Google Merchant Center')).toBeNull();
+    expect(stores.querySelector('[data-slot="skeleton"]')).toBeNull();
+    expect(stores.querySelector('[data-card="catalog"]')).not.toBeNull();
+
+    await act(async () => offer({ googleMerchantCenter: true }));
+    expect(groupOf(byText('Google Merchant Center'))).toBe('Stores and marketplaces');
+    expect(cardOf('Google Search Console')!.querySelector('[data-slot="skeleton"]')).not.toBeNull();
   });
 
-  it('keeps the set-up line on a self-hosted server that is not set up for it', async () => {
-    statuses['google-merchant-center'] = 'not_configured';
-    cloud.on = false;
-    await render();
-    const card = merchantCenter()!;
-    expect(card).not.toBeNull();
-    expect(badges(card)).toEqual(['Not configured']);
-    expect(card.textContent).toContain('COMPOSIO_GMC_AUTH_CONFIG_ID');
-    expect(card.textContent).not.toContain('Coming soon');
-    expect(card.textContent).not.toContain('Until it');
-
-    // A provider without it keeps the set-up line.
+  it('keeps the set-up line on a server without credentials for a provider', async () => {
     statuses['google-search-console'] = 'not_configured';
-    act(() => root.unmount());
-    root = createRoot(container);
     await render();
-    const gsc = byText('Google Search Console')!.closest('.space-y-4')!;
-    expect(gsc.textContent).toContain('Not configured');
+    const gsc = cardOf('Google Search Console')!;
+    expect(badges(gsc)).toEqual(['Not configured']);
     expect(gsc.textContent).toContain('COMPOSIO_GSC_AUTH_CONFIG_ID');
-    expect(gsc.textContent).not.toContain('Coming soon');
   });
 
-  it('connects Merchant Center as before once the server is set up for it', async () => {
+  it('reads each card on its own: a status that hangs leaves the others ready', async () => {
+    statuses['google-analytics'] = new Promise(() => {});
+    await render();
+    // Analytics waits on its own skeleton…
+    expect(cardOf('Google Analytics')!.querySelector('[data-slot="skeleton"]')).not.toBeNull();
+    // …while Search Console and Merchant Center can connect, and the catalog is there.
+    for (const label of ['Google Search Console', 'Google Merchant Center']) {
+      expect([...cardOf(label)!.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+        'Connect',
+      ]);
+    }
+    expect(container.querySelector('[data-card="catalog"]')).not.toBeNull();
+  });
+
+  it.each([
+    ['timeout', 'Checking Google Analytics took too long. Try again in a moment.'],
+    ['failed', "Couldn't check whether Google Analytics is connected. Try again in a moment."],
+  ] as const)(
+    "says a status that %s couldn't be checked, with Try again in place of the skeleton",
+    async (reason, message) => {
+      statuses['google-analytics'] = { ok: false, reason };
+      await render();
+      const ga = cardOf('Google Analytics')!;
+      expect(ga.querySelector('[data-slot="skeleton"]')).toBeNull();
+      expect(ga.querySelector('[role="status"]')?.textContent).toBe(message);
+      // Not a Connect that may not be needed, nor a toast.
+      const retry = [...ga.querySelectorAll('button')];
+      expect(retry.map((b) => b.textContent)).toEqual(['Try again']);
+      expect(toast.error).not.toHaveBeenCalled();
+
+      // Try again reads it again.
+      statuses['google-analytics'] = 'not_connected';
+      await act(async () => retry[0].click());
+      expect(client.readIntegrationStatus).toHaveBeenLastCalledWith('google-analytics');
+      expect([...ga.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Connect']);
+      expect(ga.querySelector('[role="status"]')).toBeNull();
+    },
+  );
+
+  it('connects Merchant Center as before where the server offers it', async () => {
     statuses['google-merchant-center'] = 'not_connected';
     await render();
     const card = merchantCenter()!;
@@ -250,14 +308,17 @@ async function pick(row: number, label: string) {
  */
 describe('IntegrationsSection property mapping', () => {
   beforeEach(() => {
-    integrations.getIntegrationStatus.mockImplementation(async (provider: string) => ({
-      configured: provider === 'google-search-console',
-      status: provider === 'google-search-console' ? 'connected' : 'not_configured',
+    client.readIntegrationStatus.mockImplementation(async (provider: string) => ({
+      ok: true,
+      value: provider === 'google-search-console' ? 'connected' : 'not_configured',
     }));
-    integrations.getGscProperties.mockResolvedValue([
-      { siteUrl: 'https://acme.com/', permissionLevel: 'siteOwner' },
-      { siteUrl: 'https://other.example/', permissionLevel: 'siteOwner' },
-    ]);
+    client.readGscProperties.mockResolvedValue({
+      ok: true,
+      value: [
+        { siteUrl: 'https://acme.com/', permissionLevel: 'siteOwner' },
+        { siteUrl: 'https://other.example/', permissionLevel: 'siteOwner' },
+      ],
+    });
     // Acme matches one property by its domain; Beta matches none.
     integrations.getGscBrandMappings.mockResolvedValue([
       { brandId: 'b1', brandName: 'Acme', gscProperty: null, domains: ['acme.com'] },
@@ -289,5 +350,19 @@ describe('IntegrationsSection property mapping', () => {
       'https://other.example/',
     );
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+
+  it('says the properties took too long, and reads them again on Try again', async () => {
+    client.readGscProperties.mockResolvedValueOnce({ ok: false, reason: 'timeout' });
+    await render(false);
+    expect(container.textContent).toContain("Couldn't load Search Console properties.");
+    expect(container.textContent).toContain(
+      'Reading the properties took too long. Try again in a moment.',
+    );
+    const retry = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Try again',
+    )!;
+    await act(async () => retry.click());
+    expect(container.querySelectorAll('[role="combobox"]')).toHaveLength(2);
   });
 });
