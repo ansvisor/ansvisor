@@ -54,6 +54,7 @@ vi.mock('@/lib/mcp/data', () => ({ brandInOrg }));
 const {
   createContentDraftFor,
   getContentDraftFor,
+  listContentDraftsFor,
   getContentImpactFor,
   setContentDraftReadyFor,
   suggestContentChangesFor,
@@ -408,5 +409,171 @@ describe('getContentImpactFor', () => {
     db.rows.content_drafts = draftRow({ published_url: 'https://acme.example/moved' });
     await getContentImpactFor(auth, 'd1', 30);
     expect(db.rpcCalls[0][1]).toMatchObject({ p_page: 'https://acme.example/moved' });
+  });
+});
+
+describe('where a draft went, and its shopping links (B5)', () => {
+  const CHECK = {
+    read_from: 'page',
+    checked_at: '2026-10-27T03:00:00Z',
+    categories: 2,
+    categories_linked: 1,
+    products: 4,
+    products_linked: 3,
+    bad: [{ id: 'p9', title: 'Trail boots', state: 'sold_out' }],
+  };
+
+  it('lists each draft’s last send and whether its shopping links still sell', async () => {
+    db.rows.content_drafts = [
+      {
+        ...draftRow(),
+        shopping_built: '2026-10-20T10:00:00Z',
+        content_shopping_checks: CHECK,
+      },
+      { ...draftRow({ id: 'd2' }), shopping_built: null, content_shopping_checks: null },
+    ];
+    db.rows.content_draft_suggestions = [];
+    db.rpc.content_draft_last_deliveries = [
+      {
+        draft_id: 'd1',
+        status: 'published',
+        target: 'webflow',
+        created_at: '2026-10-25T09:00:00Z',
+        sent_at: '2026-10-25T09:00:05Z',
+        published_at: '2026-10-25T09:30:00Z',
+        error: null,
+        http_status: 200,
+        published_url: 'https://acme.example/blog/forecasting',
+      },
+    ];
+
+    const drafts = (await listContentDraftsFor(auth, 'b1'))!;
+
+    expect(db.rpcCalls).toContainEqual([
+      'content_draft_last_deliveries',
+      { p_draft_ids: ['d1', 'd2'] },
+    ]);
+    expect(drafts[0]).toMatchObject({
+      last_send: {
+        status: 'published',
+        target: 'webflow',
+        at: '2026-10-25T09:30:00Z',
+        http_status: 200,
+        error: null,
+        published_url: 'https://acme.example/blog/forecasting',
+      },
+      shopping_links: {
+        state: 'attention',
+        read_from: 'page',
+        products: 4,
+        products_linked: 3,
+        bad: [{ id: 'p9', title: 'Trail boots', state: 'sold_out' }],
+      },
+    });
+    // The embeds are the draft's own fields, not the list's.
+    expect(drafts[0]).not.toHaveProperty('content_shopping_checks');
+    expect(drafts[1]).toMatchObject({ last_send: null, shopping_links: { state: 'none' } });
+  });
+
+  it('reads a send left queued for long as failed, interrupted', async () => {
+    db.rows.content_drafts = [
+      { ...draftRow(), shopping_built: null, content_shopping_checks: null },
+    ];
+    db.rows.content_draft_suggestions = [];
+    db.rpc.content_draft_last_deliveries = [
+      {
+        draft_id: 'd1',
+        status: 'queued',
+        target: 'webhook',
+        created_at: '2026-10-01T09:00:00Z',
+        sent_at: null,
+        published_at: null,
+        error: null,
+        http_status: null,
+        published_url: null,
+      },
+    ];
+    const [draft] = (await listContentDraftsFor(auth, 'b1'))!;
+    expect(draft.last_send).toMatchObject({ status: 'failed', error: 'Not sent: interrupted' });
+  });
+
+  it.each(['wordpress', 'framer'])('names a send to %s as such', async (target) => {
+    db.rows.content_drafts = [
+      { ...draftRow(), shopping_built: null, content_shopping_checks: null },
+    ];
+    db.rows.content_draft_suggestions = [];
+    db.rpc.content_draft_last_deliveries = [
+      {
+        draft_id: 'd1',
+        status: 'sent',
+        target,
+        created_at: '2026-10-25T09:00:00Z',
+        sent_at: '2026-10-25T09:00:04Z',
+        published_at: null,
+        error: null,
+        http_status: 201,
+        published_url: null,
+      },
+    ];
+    const [draft] = (await listContentDraftsFor(auth, 'b1'))!;
+    expect(draft.last_send).toMatchObject({
+      status: 'sent',
+      target,
+      at: '2026-10-25T09:00:04Z',
+    });
+  });
+
+  it('gives one draft its shopping path, as its Brief tab shows it', async () => {
+    db.rows.content_drafts = draftRow({
+      shopping_built: '2026-10-20T10:00:00Z',
+      content_shopping_checks: null,
+      shopping_path: {
+        version: 1,
+        builtAt: '2026-10-20T10:00:00Z',
+        savedAt: null,
+        pageType: 'buying_guide',
+        categories: [{ name: 'Boots', url: 'https://acme.example/boots', title: 'Boots' }],
+        products: [
+          {
+            id: 'p1',
+            title: 'Trail boots',
+            url: 'https://acme.example/p/trail',
+            price: 120,
+            salePrice: null,
+            currency: 'USD',
+            availability: 'In Stock',
+            image: null,
+            issues: [],
+            score: 0.9,
+          },
+        ],
+        leftOut: [{ id: 'p9', title: 'Old boots', reason: 'sold_out' }],
+        locked: [],
+        removed: [],
+        added: [],
+      },
+    });
+
+    const draft = (await getContentDraftFor(auth, 'd1'))!;
+
+    expect(draft.last_send).toBeNull();
+    expect(draft.shopping_links).toEqual({ state: 'unchecked' });
+    expect(draft.shopping_path).toEqual({
+      built_at: '2026-10-20T10:00:00Z',
+      page_type: 'buying_guide',
+      categories: [{ name: 'Boots', url: 'https://acme.example/boots' }],
+      products: [
+        {
+          id: 'p1',
+          title: 'Trail boots',
+          url: 'https://acme.example/p/trail',
+          price: 120,
+          sale_price: null,
+          currency: 'USD',
+          availability: 'in_stock',
+        },
+      ],
+      left_out: [{ id: 'p9', title: 'Old boots', reason: 'sold_out' }],
+    });
   });
 });
