@@ -28,6 +28,12 @@ export const CATALOG_URL = 'https://openrouter.ai/api/v1/models';
 
 /** Fewer models than this in a read means a broken one: nothing is written. */
 const MIN_MODELS = 50;
+/** More models than this is a broken read too (the catalog lists a few hundred). */
+const MAX_MODELS = 5000;
+/** The most of the catalog's answer read (it is a few MB); a longer one is refused. */
+export const MAX_CATALOG_BYTES = 32 * 1024 * 1024;
+/** Rows one read of chat_model_prices gets (PostgREST's default cap is 1000). */
+const LOAD_PAGE = 1000;
 /** Rows one upsert writes. */
 const CHUNK = 200;
 const FETCH_TIMEOUT_MS = 20_000;
@@ -82,6 +88,33 @@ export function rowsOf(catalog, syncedAt) {
 }
 
 /**
+ * The catalog's answer as JSON, read up to MAX_CATALOG_BYTES: a longer one
+ * (by its Content-Length, or as it streams) throws before it is all in memory.
+ *
+ * @param {Response} res
+ * @param {number} [maxBytes]
+ */
+export async function readCatalog(res, maxBytes = MAX_CATALOG_BYTES) {
+  const declared = Number(res.headers?.get?.('content-length'));
+  if (Number.isFinite(declared) && declared > maxBytes) throw new Error('catalog too large');
+  if (!res.body?.getReader) throw new Error('catalog unreadable');
+  const reader = res.body.getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel().catch(() => {});
+      throw new Error('catalog too large');
+    }
+    chunks.push(value);
+  }
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+/**
  * Reads the catalog and upserts every model it lists, then loads the rows
  * into the process. A read that fails, or lists fewer than MIN_MODELS, writes
  * nothing: the last good prices stay (CHAT-16 item 4).
@@ -97,7 +130,7 @@ export async function syncModelPrices({
   try {
     const res = await fetcher(CATALOG_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`catalog answered ${res.status}`);
-    catalog = await res.json();
+    catalog = await readCatalog(res);
   } catch (err) {
     logger.warn({ err: err.message }, '[model-prices] catalog unread; last prices kept');
     return { ok: false, models: 0, error: err.message };
@@ -107,6 +140,10 @@ export async function syncModelPrices({
   if (rows.length < MIN_MODELS) {
     logger.warn({ models: rows.length }, '[model-prices] catalog too short; last prices kept');
     return { ok: false, models: rows.length, error: 'too_few_models' };
+  }
+  if (rows.length > MAX_MODELS) {
+    logger.warn({ models: rows.length }, '[model-prices] catalog too long; last prices kept');
+    return { ok: false, models: rows.length, error: 'too_many_models' };
   }
   for (let i = 0; i < rows.length; i += CHUNK) {
     const { error } = await db
@@ -123,18 +160,27 @@ export async function syncModelPrices({
 }
 
 /**
- * Loads every synced row into the process, and says when the last sync was
- * (the newest synced_at); null with none. A failed read keeps what the
- * process holds.
+ * Loads every synced row into the process, LOAD_PAGE rows a read, and says
+ * when the last sync was (the newest synced_at); null with none. A failed
+ * read keeps what the process holds.
  */
 export async function loadModelPrices({ db = supabaseAdmin } = {}) {
-  const { data, error } = await db.from('chat_model_prices').select('*');
-  if (error) {
-    logger.warn({ err: error.message }, '[model-prices] rows unread');
-    return null;
+  const data = [];
+  for (let from = 0; from < MAX_MODELS * 2; from += LOAD_PAGE) {
+    const { data: page, error } = await db
+      .from('chat_model_prices')
+      .select('*')
+      .order('model_id')
+      .range(from, from + LOAD_PAGE - 1);
+    if (error) {
+      logger.warn({ err: error.message }, '[model-prices] rows unread');
+      return null;
+    }
+    data.push(...(page ?? []));
+    if (!page || page.length < LOAD_PAGE) break;
   }
-  setSyncedPrices(data ?? []);
-  const newest = (data ?? []).reduce((max, r) => (r.synced_at > max ? r.synced_at : max), '');
+  setSyncedPrices(data);
+  const newest = data.reduce((max, r) => (r.synced_at > max ? r.synced_at : max), '');
   return newest || null;
 }
 

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const { Response, ReadableStream } = globalThis;
+
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 vi.mock('./logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('node-cron', () => ({ default: { schedule: vi.fn() } }));
@@ -90,9 +92,11 @@ describe('rowOf', () => {
 function fakeDb({ upsertError = null } = {}) {
   const table = new Map();
   const upserts = [];
+  const reads = [];
   return {
     table,
     upserts,
+    reads,
     from: () => ({
       upsert: async (rows, opts) => {
         upserts.push({ count: rows.length, opts });
@@ -100,15 +104,23 @@ function fakeDb({ upsertError = null } = {}) {
         for (const r of rows) table.set(r.model_id, r);
         return { error: null };
       },
-      select: async () => ({ data: [...table.values()], error: null }),
+      select: () => ({
+        order: () => ({
+          range: async (from, to) => {
+            reads.push([from, to]);
+            const rows = [...table.values()].sort((x, y) => (x.model_id < y.model_id ? -1 : 1));
+            return { data: rows.slice(from, to + 1), error: null };
+          },
+        }),
+      }),
     }),
   };
 }
 const catalog = (n) => ({
   data: Array.from({ length: n }, (_, i) => model(`p/model-${i}`, '0.000001', '0.000002')),
 });
-const answer = (body, ok = true, status = 200) =>
-  vi.fn(async () => ({ ok, status, json: async () => body }));
+const answer = (body, status = 200) =>
+  vi.fn(async () => new Response(JSON.stringify(body), { status }));
 
 describe('syncModelPrices', () => {
   it('reads the public catalog with no key, upserts every model in chunks and loads them', async () => {
@@ -132,7 +144,7 @@ describe('syncModelPrices', () => {
       vi.fn(async () => {
         throw new Error('timeout');
       }),
-      answer({}, false, 503),
+      answer({}, 503),
       answer(catalog(12)),
     ]) {
       const db = fakeDb();
@@ -140,6 +152,49 @@ describe('syncModelPrices', () => {
       expect(result.ok).toBe(false);
       expect(db.upserts).toEqual([]);
     }
+  });
+
+  it('writes nothing for a catalog over the size cap or with too many models', async () => {
+    const big = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream({
+            pull(controller) {
+              controller.enqueue(new Uint8Array(1024 * 1024).fill(32));
+            },
+          }),
+        ),
+    );
+    const db = fakeDb();
+    const result = await syncModelPrices({ fetcher: big, db, now: NOW });
+    expect(result).toMatchObject({ ok: false, error: 'catalog too large' });
+    expect(db.upserts).toEqual([]);
+
+    const declared = vi.fn(
+      async () => new Response('{}', { headers: { 'content-length': String(64 * 1024 * 1024) } }),
+    );
+    expect(await syncModelPrices({ fetcher: declared, db, now: NOW })).toMatchObject({
+      ok: false,
+      error: 'catalog too large',
+    });
+
+    expect(await syncModelPrices({ fetcher: answer(catalog(5001)), db, now: NOW })).toMatchObject({
+      ok: false,
+      error: 'too_many_models',
+    });
+    expect(db.upserts).toEqual([]);
+  });
+
+  it('loads more rows than one read gives, a page at a time', async () => {
+    const db = fakeDb();
+    const result = await syncModelPrices({ fetcher: answer(catalog(2500)), db, now: NOW });
+    expect(result.ok).toBe(true);
+    expect(db.reads).toEqual([
+      [0, 999],
+      [1000, 1999],
+      [2000, 2999],
+    ]);
+    expect(syncedCount()).toBe(2500);
   });
 
   it('stops at an upsert that fails, keeping the prices it already had', async () => {
@@ -190,9 +245,13 @@ describe('startModelPriceSync', () => {
   it('keeps the daily sync scheduled when the start throws', async () => {
     const db = {
       from: () => ({
-        select: async () => {
-          throw new Error('connection reset');
-        },
+        select: () => ({
+          order: () => ({
+            range: async () => {
+              throw new Error('connection reset');
+            },
+          }),
+        }),
       }),
     };
     await expect(startModelPriceSync({ db, fetcher: answer(catalog(60)) })).rejects.toThrow(
