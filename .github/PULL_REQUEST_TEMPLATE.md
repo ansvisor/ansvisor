@@ -27,3 +27,4 @@
 - [ ] `yarn typecheck` passes (run from `web/`)
 - [ ] `yarn format:check` passes (run from `web/`)
 - [ ] Changes are focused — one concern per PR
+- [ ] Help article updated under `help/` (or no user-visible change) — see [help/README.md](https://github.com/ansvisor/ansvisor/blob/main/help/README.md)
