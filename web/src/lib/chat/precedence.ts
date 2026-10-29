@@ -26,8 +26,9 @@ import {
  *      spends (402); the demo brand's sample data the same; a tool an Admin
  *      set to Never is refused; an EXECUTE is at most a click and an
  *      always_card WRITE at most a card, in every mode.
- *   2. Plan gates (§7): the tool's own; Full auto and "Don't ask again" are
- *      Growth and up, paid. None on self-hosted.
+ *   2. Plan gates (§7): the tool's own; Full auto, "Don't ask again" and an
+ *      Admin's Always are Growth and up, paid (below it they ask, as Ask
+ *      does). None on self-hosted.
  *   3. The live role (§4), against the row's minRole and the roles it
  *      leaves out. The roles follow the role model of 2026-10-29: daily work
  *      (drafts, tasks, audits, reports) open to every role; settings,
@@ -35,8 +36,8 @@ import {
  *      Agency partners act as Analysts until brand sharing (Wave 2), except
  *      where a row leaves them out as the server does.
  *   4. The Admin's policy: the tool's level (Ask, Ask with auto in Full
- *      auto, Always), Full auto for people other than Admins, and the go-live
- *      groups switched off for Managers.
+ *      auto, Always), Full auto for people other than Admins (which Always
+ *      doesn't need), and the go-live groups switched off for Managers.
  *   5. The run mode: Ask me first shows a card for every WRITE. Auto shows
  *      one too, except for a tool whose policy is Always, which runs in Auto
  *      and Full auto alike. Full auto also runs "Ask (auto allowed in Full
@@ -187,6 +188,19 @@ export function policyChoices(tool: ChatTool): AdminPolicy[] {
 }
 
 /**
+ * Why Settings › Chat shows a policy locked on this plan, or null when it
+ * may be picked: below Growth (Starter, the trial) Always and "Ask (auto
+ * allowed in Full auto)" only act as Ask, since both run without a card
+ * only where Full auto is open (CHAT-23 policy.toggleAutoInFullAuto). The
+ * same reason the precedence gives a call: full_auto_locked.
+ */
+export function policyChoiceLock(plan: PlanFacts, policy: AdminPolicy): 'full_auto_locked' | null {
+  return !plan.fullAuto && (policy === 'always' || policy === 'ask_full_auto')
+    ? 'full_auto_locked'
+    : null;
+}
+
+/**
  * A row's policy in this workspace: the Admin's choice where the row offers
  * it, else the row's default. A choice past the row's maximum is held at the
  * maximum, so a stored "Always" never lifts an always_card WRITE.
@@ -279,8 +293,12 @@ function decideWrite(
   if (tool.flags.alwaysCard) return ask('always_card');
   // 5. The person asked to be asked first: their mode wins over every policy.
   if (ctx.mode === 'ask_first') return ask('mode');
-  // 4–5. Set to Always by an Admin: runs in Auto and Full auto, on any plan (see the header).
+  // 4–5. Set to Always by an Admin: runs in Auto and Full auto (see the header).
   if (policy === 'always') {
+    // 2. Under Full auto's plan lock: Always mustn't get past the plan difference (Starter, trial).
+    if (!ctx.plan.fullAuto) return ask('full_auto_locked');
+    // Not under "Full auto for members": Always is the Admin's own choice for this one tool,
+    // so it runs for every role it allows even with that switch off.
     if (ctx.surface === 'mcp') return ask('mcp');
     if (tainted) return ask('tainted');
     return { kind: 'run', via: 'always' };

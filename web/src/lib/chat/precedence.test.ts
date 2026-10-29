@@ -11,6 +11,7 @@ import {
   decideToolCall,
   effectivePolicy,
   parseTeamRole,
+  policyChoiceLock,
   policyChoices,
   roleAllowed,
   type AdminPolicy,
@@ -272,9 +273,38 @@ const TABLE: [string, ChatTool, PrecedenceContext, ToolCall, ToolDecision][] = [
     ask('mode'),
   ],
   [
-    'Always runs on Starter, where Full auto is locked',
+    "Always asks on Starter, under Full auto's plan lock",
     ROWS.addPrompts,
     ctx({ planKey: 'starter', settings: settings({ toolPolicies: { addPrompts: 'always' } }) }),
+    call(),
+    ask('full_auto_locked'),
+  ],
+  [
+    'Always asks in the trial',
+    ROWS.addPrompts,
+    ctx({
+      planKey: 'trial',
+      mode: 'full_auto',
+      settings: settings({ toolPolicies: { addPrompts: 'always' } }),
+    }),
+    call(),
+    ask('full_auto_locked'),
+  ],
+  [
+    'the plan lock comes before MCP for an Always write',
+    ROWS.addPrompts,
+    ctx({
+      planKey: 'starter',
+      surface: 'mcp',
+      settings: settings({ toolPolicies: { addPrompts: 'always' } }),
+    }),
+    call(),
+    ask('full_auto_locked'),
+  ],
+  [
+    'Always runs on self-hosted',
+    ROWS.addPrompts,
+    ctx({ planKey: 'selfHosted', settings: settings({ toolPolicies: { addPrompts: 'always' } }) }),
     call(),
     { kind: 'run', via: 'always' },
   ],
@@ -800,16 +830,20 @@ describe('CHAT-20 §21 acceptance criteria', () => {
 
   it('locks Full auto and "Don\'t ask again" on Starter and in the trial', () => {
     const locked = (d: Decided) => d.ctx.plan.planId === 'starter' || d.ctx.plan.isTrial;
-    // Only an Admin's Always runs a change there; Full auto and the ticks don't.
+    // Nothing runs a change there without a card: not Full auto, a tick or an Admin's Always.
     expect(
-      failures(
-        (d) =>
-          locked(d) &&
-          d.tool.class === 'write' &&
-          d.decision.kind === 'run' &&
-          d.decision.via !== 'always',
-      ),
+      failures((d) => locked(d) && d.tool.class === 'write' && d.decision.kind === 'run'),
     ).toEqual([]);
+    // Settings › Chat shows Always and auto-in-Full-auto locked there, for the same reason.
+    for (const key of ['starter', 'trial'] as const) {
+      expect(policyChoiceLock(PLAN[key], 'always')).toBe('full_auto_locked');
+      expect(policyChoiceLock(PLAN[key], 'ask_full_auto')).toBe('full_auto_locked');
+      expect(policyChoiceLock(PLAN[key], 'ask')).toBeNull();
+      expect(policyChoiceLock(PLAN[key], 'never')).toBeNull();
+    }
+    for (const key of ['growth', 'enterprise', 'selfHosted'] as const) {
+      expect(policyChoiceLock(PLAN[key], 'always')).toBeNull();
+    }
     expect(
       failures((d) => locked(d) && d.decision.kind === 'ask' && d.decision.offerDontAskAgain),
     ).toEqual([]);
@@ -977,15 +1011,37 @@ describe('the rest of the precedence', () => {
           (!always(d) || d.ctx.mode === 'ask_first' || d.ctx.surface === 'mcp' || d.call.tainted),
       ),
     ).toEqual([]);
-    // Wherever nothing else stops it, it runs: a card only for the person's mode, MCP or taint.
+    // Wherever nothing else stops it, it runs: a card only for the person's mode, the plan
+    // lock, MCP or taint. "Full auto for members" off doesn't stop it: the Admin chose Always.
     expect(
       failures(
         (d) =>
           always(d) &&
           d.ctx.mode !== 'ask_first' &&
+          d.ctx.plan.fullAuto &&
           d.ctx.surface === 'chat' &&
           !d.call.tainted &&
           d.decision.kind === 'ask',
+      ),
+    ).toEqual([]);
+    expect(
+      DECIDED.some(
+        (d) =>
+          !d.ctx.settings.fullAutoForMembers &&
+          d.ctx.role !== 'admin' &&
+          d.decision.kind === 'run' &&
+          d.decision.via === 'always',
+      ),
+    ).toBe(true);
+    // Below Growth it asks as Ask does, for the plan.
+    expect(
+      failures(
+        (d) =>
+          always(d) &&
+          !d.ctx.plan.fullAuto &&
+          d.ctx.mode !== 'ask_first' &&
+          d.decision.kind !== 'deny' &&
+          !(d.decision.kind === 'ask' && d.decision.reason === 'full_auto_locked'),
       ),
     ).toEqual([]);
     expect(
