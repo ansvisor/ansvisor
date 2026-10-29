@@ -20,6 +20,10 @@ let canManageMenus = false;
 vi.mock('@/components/providers/menu-access-provider', () => ({
   useCanManageMenus: () => canManageMenus,
 }));
+let chatAgentic = false;
+vi.mock('@/components/providers/chat-agentic-provider', () => ({
+  useChatAgentic: () => chatAgentic,
+}));
 vi.mock('@/lib/actions/organization', () => ({ updateAccountName: vi.fn() }));
 vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -36,6 +40,8 @@ for (const [path, name] of [
   ['@/components/settings/organization-section', 'OrganizationSection'],
   ['@/components/settings/menu-access-section', 'MenuAccessSection'],
   ['@/components/settings/work-areas-card', 'WorkAreasCard'],
+  ['@/components/chat-access/roles-access-section', 'RolesAccessSection'],
+  ['@/components/chat-access/your-access-card', 'YourAccessSlot'],
 ]) {
   vi.doMock(path, () => ({ [name]: () => null }));
 }
@@ -80,5 +86,13 @@ describe('SettingsView', () => {
     const list = await sections();
     expect(list).toContain('Team');
     expect(list.some((s) => s?.startsWith('Menu access'))).toBe(false);
+  });
+
+  it('lists Roles & access, after Team, only while the new Chat is on', async () => {
+    chatAgentic = true;
+    const list = await sections();
+    expect(list.indexOf('Roles & access')).toBe(list.indexOf('Team') + 1);
+    chatAgentic = false;
+    expect(await sections()).not.toContain('Roles & access');
   });
 });
