@@ -1029,6 +1029,8 @@ export async function generateBriefFor(
   opportunityId: string,
 ): Promise<GeneratedBrief | null> {
   if (!auth.organizationId) return null;
+  // Generating costs AI: an admin's or a manager's, as in the dashboard.
+  requireManager(auth);
 
   // Ownership check first — wrong-org or missing id returns null with no
   // outbound call, so no LLM cost or data leak for an attacker probing ids.
@@ -3549,6 +3551,8 @@ export async function createImproveActionFor(
   input: CreateImproveActionInput,
 ): Promise<CreatedImproveAction | null> {
   if (!auth.organizationId) return null;
+  // Improve costs AI: an admin's or a manager's, as in the dashboard.
+  requireManager(auth);
 
   const { data: ownership } = await supabaseAdmin
     .from('prompts')

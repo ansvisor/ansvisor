@@ -312,6 +312,7 @@ describe('SuggestionsCard by role', () => {
   it('shows an analyst Dismiss and Clear All, but no way to add a prompt', async () => {
     viewer.role = 'analyst';
     await render(2);
+    expect(labels()).not.toContain('New');
     expect(labels()).not.toContain('Add All');
     expect(labels()).not.toContain('Add to tracked prompts');
     expect(labels()).toContain('Clear All');
@@ -327,10 +328,31 @@ describe('SuggestionsCard by role', () => {
     }
   });
 
+  it('tells an analyst who generates suggestions, instead of Generate Suggestions', async () => {
+    viewer.role = 'analyst';
+    await render(0);
+    expect(labels()).not.toContain('Generate Suggestions');
+    expect(container.textContent).toContain(
+      'Ask an admin or a manager to generate prompt suggestions.',
+    );
+  });
+
+  it('offers a manager Generate Suggestions on an empty list', async () => {
+    viewer.role = 'manager';
+    await render(0);
+    expect(labels()).toContain('Generate Suggestions');
+  });
+
   it('shows a manager every action', async () => {
     viewer.role = 'manager';
     await render(1);
-    for (const label of ['Add All', 'Clear All', 'Add to tracked prompts', 'Dismiss suggestion']) {
+    for (const label of [
+      'New',
+      'Add All',
+      'Clear All',
+      'Add to tracked prompts',
+      'Dismiss suggestion',
+    ]) {
       expect(labels(), label).toContain(label);
     }
   });

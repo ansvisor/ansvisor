@@ -138,6 +138,46 @@ describe('the tools only an admin or a manager may call', () => {
   });
 });
 
+describe('the tools that cost AI: generate_content_brief and create_improve_action', () => {
+  const improveArgs = {
+    prompt_id: ID,
+    range: { preset: '7d', from: '2026-10-21T00:00:00.000Z' },
+    idempotency_key: 'key-000001',
+    suggestions: [{ id: 's1', platform: 'perplexity-web', title: 'Publish a comparison page' }],
+  };
+  const call = (client: Client) =>
+    Promise.all([
+      client.callTool({ name: 'generate_content_brief', arguments: { opportunity_id: ID } }),
+      client.callTool({ name: 'create_improve_action', arguments: improveArgs }),
+    ]);
+
+  for (const role of ['analyst', 'agency_partner'] as const) {
+    it(`refuse an ${role} before anything is read or generated`, async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        const client = await connect(role);
+        for (const result of await call(client)) {
+          expect(result.isError).toBe(true);
+          expect(text(result)).toMatch(/^Only an admin or a manager can do this/);
+        }
+        expect(calls).toEqual([]);
+        expect(fetchMock).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+  }
+
+  it('let a manager through to the opportunity and the prompt', async () => {
+    const client = await connect('manager');
+    const [brief, improve] = await call(client);
+    expect(text(brief)).not.toMatch(/^Only an admin/);
+    expect(text(improve)).toBe('Prompt not found');
+    expect(calls.map((c) => c.table)).toEqual(['content_opportunities', 'prompts']);
+  });
+});
+
 describe('dismiss_prompt_suggestion', () => {
   it('refuses an agency partner', async () => {
     const client = await connect('agency_partner');
