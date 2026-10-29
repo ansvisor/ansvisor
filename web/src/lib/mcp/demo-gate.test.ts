@@ -61,7 +61,13 @@ const { isReadTool } = await import('./subscription-gate');
 const { WRITE_TOOL_BRANDS, DemoBrandError } = await import('./demo-gate');
 const { listBrandsFor, generateBriefFor } = await import('./data');
 
-const AUTH = { userId: 'user-1', email: null, organizationId: ORG, apiKeyId: 'key-1' };
+const AUTH = {
+  userId: 'user-1',
+  email: null,
+  organizationId: ORG,
+  apiKeyId: 'key-1',
+  role: 'admin' as const,
+};
 
 /** Each tool's arguments for a call on the demo brand. */
 const ON_DEMO: Record<string, Record<string, unknown>> = {
@@ -79,6 +85,9 @@ const ON_DEMO: Record<string, Record<string, unknown>> = {
   add_content_source: { draft_id: 'draft-1', kind: 'url', ref: 'https://brewline.example/' },
   suggest_content_changes: { draft_id: 'draft-1', suggestions: [] },
   set_content_draft_ready: { draft_id: 'draft-1' },
+  mark_content_draft_published: { draft_id: 'draft-1', url: 'https://brewline.example/blog/' },
+  approve_task_review: { review_id: 'review-1' },
+  dismiss_task_review: { review_id: 'review-1' },
 };
 
 /** The handlers the SDK calls once a call's arguments are checked. */
@@ -108,6 +117,7 @@ beforeEach(() => {
     prompt_suggestions: { 'prompt-suggestion-1': { brand_id: 'demo-brand' } },
     content_opportunities: { 'opportunity-1': { brand_id: 'demo-brand' } },
     action_tasks: { 'task-1': { action_id: 'action-1' } },
+    action_task_reviews: { 'review-1': { action_id: 'action-1' } },
     actions: { 'action-1': { brand_id: 'demo-brand' } },
     prompts: { 'prompt-1': { prompt_set_id: 'set-1' } },
     prompt_sets: { 'set-1': { brand_id: 'demo-brand' } },

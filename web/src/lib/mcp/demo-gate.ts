@@ -38,6 +38,14 @@ const brandOfRow =
   (args) =>
     columnOf(table, idIn(args, key), 'brand_id');
 
+/** A task waiting for review (00293) belongs to its action's brand. */
+const brandOfTaskReview: BrandOf = async (args) =>
+  columnOf(
+    'actions',
+    await columnOf('action_task_reviews', idIn(args, 'review_id'), 'action_id'),
+    'brand_id',
+  );
+
 /**
  * Every MCP tool that writes, runs or spends, and how it finds its brand.
  * Its test fails on a tool missing here, so a new one can't skip the demo
@@ -68,6 +76,9 @@ export const WRITE_TOOL_BRANDS: Record<string, BrandOf> = {
   add_content_source: brandOfRow('content_drafts', 'draft_id'),
   suggest_content_changes: brandOfRow('content_drafts', 'draft_id'),
   set_content_draft_ready: brandOfRow('content_drafts', 'draft_id'),
+  mark_content_draft_published: brandOfRow('content_drafts', 'draft_id'),
+  approve_task_review: brandOfTaskReview,
+  dismiss_task_review: brandOfTaskReview,
 };
 
 /**
