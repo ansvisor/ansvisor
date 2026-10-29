@@ -3046,6 +3046,99 @@
       "step": "Dismissed prompt suggestion"
     }
   },
+  "agentic": {
+    "avatar": {
+      "idle": "Agent · idle",
+      "working": "Agent · working",
+      "waiting": "Agent · needs you",
+      "done": "Agent · done",
+      "failed": "Agent · failed"
+    },
+    "status": {
+      "working": "Working",
+      "answering": "Answering",
+      "needsYou": "Needs you",
+      "done": "Done",
+      "answered": "Answered",
+      "ready": "Ready",
+      "planReady": "Plan ready",
+      "draft": "Draft",
+      "failed": "Failed"
+    },
+    "approval": {
+      "auto": "Auto",
+      "asks": "Asks you",
+      "logged": "Auto · logged",
+      "loggedTip": "Runs without a card in Full auto. Logged in the Activity log, with Undo.",
+      "click": "Needs your click",
+      "clickTip": "Goes live or leaves the workspace. Always needs your click, in every mode.",
+      "done": "Done"
+    },
+    "step": {
+      "label": "Step {number} · {state}",
+      "pending": "Not started",
+      "current": "Running",
+      "waiting": "Needs you",
+      "failed": "Failed",
+      "done": "Done"
+    },
+    "dot": {
+      "running": "Running",
+      "needsYou": "Needs you",
+      "done": "Done",
+      "failed": "Stopped or failed",
+      "idle": "Idle",
+      "paused": "Paused",
+      "progress": "Progress",
+      "legend": {
+        "title": "What the dots mean",
+        "running": "The agent is working. The thin line shows progress.",
+        "needsYou": "Waiting for your OK or click. Nothing moves until you reply.",
+        "done": "Finished. Bold until you open the result.",
+        "failed": "You stopped it, or a step failed. Open it to retry.",
+        "idle": "A normal chat. Nothing is running."
+      }
+    },
+    "newPill": "New",
+    "attention": {
+      "needsYou": "{count, plural, one {# needs you} other {# need you}}",
+      "items": "{count, plural, one {# item} other {# items}}",
+      "itemsNeedYou": "{count, plural, one {# item} other {# items}} · {needsYou}"
+    },
+    "tick": "Done",
+    "preview": {
+      "title": "Chat pieces",
+      "description": "The agent's shared pieces in every state, for design sign-off. Nothing here runs.",
+      "motion": "With Reduce motion on, nothing moves.",
+      "sections": {
+        "avatar": "Agent avatar",
+        "avatarList": "Agent avatar in the Agents list",
+        "statusPill": "Status pill",
+        "approvalPill": "Approval pills",
+        "steps": "Step states",
+        "dots": "List dots",
+        "newPill": "New pill",
+        "attention": "Attention badge",
+        "tick": "Done tick"
+      },
+      "avatarStates": {
+        "idle": "Idle",
+        "working": "Working",
+        "waiting": "Needs you",
+        "done": "Done",
+        "failed": "Failed"
+      },
+      "avatarListNote": "Still, at 30 px: grey when idle, paused or stopped",
+      "avatarSizes": "30, 26 and 22 px",
+      "size": "{size} px",
+      "progress": "Progress line",
+      "legend": "Legend",
+      "onIcon": "On a menu icon",
+      "countNeedsYou": "Count, 1 needs you",
+      "countNone": "Count, nothing needs you",
+      "tickPop": "Pops in once"
+    }
+  },
   "audit": {
     "title": "Site Audit",
     "description": "Score any page against the 48-signal AEO/GEO",
