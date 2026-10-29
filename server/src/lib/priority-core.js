@@ -30,10 +30,13 @@ export function round(n, digits = 2) {
 /**
  * A count on a log scale: 0 → 0, `fullAt` and above → 1. Demand, sessions
  * and conversions all grow by orders of magnitude, and on a straight scale
- * the few largest would flatten the rest to 0.
+ * the few largest would flatten the rest to 0. What isn't a number counts as
+ * nothing: a score never turns NaN.
  */
 export function logScale(value, fullAt) {
-  return clamp(Math.log10(1 + Math.max(0, value)) / Math.log10(1 + fullAt));
+  const count = Number(value);
+  if (Number.isNaN(count)) return 0;
+  return clamp(Math.log10(1 + Math.max(0, count)) / Math.log10(1 + fullAt));
 }
 
 /** How commercial a search is, by its intent: comparing and choosing above learning. */

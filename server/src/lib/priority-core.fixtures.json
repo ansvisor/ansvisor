@@ -65,6 +65,16 @@
       "value": 45000,
       "fullAt": 1000000,
       "result": 0.7755369713075567
+    },
+    {
+      "value": null,
+      "fullAt": 10000,
+      "result": 0
+    },
+    {
+      "value": "not a number",
+      "fullAt": 10000,
+      "result": 0
     }
   ],
   "round": [
