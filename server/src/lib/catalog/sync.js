@@ -120,6 +120,7 @@ export function catalogRecords(items) {
         product_external_id: product.external_id,
         external_id: clip(item.id, 300),
         title: clip(item.title, 1000),
+        sku: clip(item.sku, 300),
         gtin: clip(item.gtin, 50),
         mpn: clip(item.mpn, 300),
         url: httpUrl(item.link),
