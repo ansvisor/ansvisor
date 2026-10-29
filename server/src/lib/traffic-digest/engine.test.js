@@ -29,7 +29,10 @@ vi.mock('../../config/supabase.js', () => {
       from: (table) => ({
         select: () => {
           const chain = {
-            eq: () => chain,
+            eq: (column, value) => {
+              if (table === 'brands') state.brandFilters.push([column, value]);
+              return chain;
+            },
             single: async () => ({
               data:
                 table === 'brands'
@@ -122,6 +125,7 @@ beforeEach(() => {
     rpcFailures: 0,
     updateFailures: 0,
     listBrands: null,
+    brandFilters: [],
     rpc: {
       ai_traffic_merged: (p) =>
         p.p_from === '2026-10-12T00:00:00.000Z'
@@ -361,6 +365,15 @@ describe('sendTrafficDigests', () => {
     });
     cloud = false;
     expect(await sendTrafficDigests({ now: MONDAY })).toEqual({ skipped: 'self_hosted' });
+  });
+
+  it('never mails about a demo brand (00380)', async () => {
+    state.listBrands = [];
+    await sendTrafficDigests({ now: MONDAY });
+    expect(state.brandFilters).toEqual([
+      ['is_active', true],
+      ['is_demo', false],
+    ]);
   });
 
   it("sends every active brand's digest and counts them", async () => {

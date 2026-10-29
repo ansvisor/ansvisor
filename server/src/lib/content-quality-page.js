@@ -4,6 +4,7 @@ import * as cheerio from 'cheerio';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
+import { CONTENT_READ_MAX_TOKENS } from './content-brief.js';
 import { SITE_TYPE_MEANINGS, SITE_TYPE_NAMES, pageTypeFormat } from './content-page-types.js';
 import {
   PAGE_READS_PER_DAY,
@@ -14,6 +15,7 @@ import { fold, ownText, paragraphHash, plain } from './content-quality-claims.js
 import { SOURCE_READS_PER_DAY, sourceClassModelId } from './content-source-class.js';
 import { logger } from './logger.js';
 import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
+import { objectOptions } from './structured-output.js';
 
 /**
  * A page's visual proof spots and proof asks (Content Editor Quality spec
@@ -695,7 +697,7 @@ async function readOnce({
   try {
     const generated = await generateObject({
       model: resolveModel(modelId),
-      schema: answerSchema,
+      ...objectOptions(modelId, answerSchema, { maxOutputTokens: CONTENT_READ_MAX_TOKENS }),
       system: SYSTEM_PROMPT,
       prompt: buildPagePrompt({ outline, siteType, pageType, brandName, facts }),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),

@@ -453,14 +453,16 @@ describe('detectPageOpportunitiesInWindow', () => {
  * leaves its brands out: nothing new is found for it.
  */
 describe('runPageOpportunityDetection', () => {
+  const brandFilters = [];
   const brandsRead = (rows) => {
     const tables = [];
+    brandFilters.length = 0;
     db.rpc.mockReset();
     db.from.mockReset().mockImplementation((table) => {
       tables.push(table);
       const chain = {
         select: () => chain,
-        eq: () => chain,
+        eq: (column, value) => (brandFilters.push([column, value]), chain),
         not: () => chain,
         then: (resolve) => resolve({ data: table === 'brands' ? rows : [], error: null }),
       };
@@ -497,5 +499,7 @@ describe('runPageOpportunityDetection', () => {
 
     expect(result.scanned).toBe(1);
     expect(result.results.map((r) => r.brandId)).toEqual(['b-paying']);
+    // Never a demo brand (00380).
+    expect(brandFilters).toContainEqual(['is_demo', false]);
   });
 });

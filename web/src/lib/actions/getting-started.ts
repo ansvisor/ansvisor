@@ -48,7 +48,7 @@ export async function markGettingStartedPageOpened(
 
 /** Skip an optional step (Search Console, Analytics). It counts as complete. */
 export async function skipGettingStartedStep(brandId: string, step: string): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   if (!GETTING_STARTED_STEPS.some((s) => s.key === step && s.optional)) {
     throw new Error('not an optional step');
   }
@@ -69,7 +69,7 @@ export async function skipGettingStartedStep(brandId: string, step: string): Pro
  * steps finished meanwhile still count.
  */
 export async function startGettingStarted(brandId: string): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const { error } = await supabase
     .from('getting_started')
@@ -85,7 +85,7 @@ export async function startGettingStarted(brandId: string): Promise<void> {
  * already done stay done, and Start brings it back.
  */
 export async function skipGettingStarted(brandId: string): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('getting_started')

@@ -609,7 +609,8 @@ const EVIDENCE = {
   },
 };
 
-// Signals about one competitor, which get its positions and winning sources.
+// Signals about one competitor, which get its positions, winning sources and
+// page events.
 const COMPETITOR_KINDS = new Set([
   'competitor_leads',
   'competitor_momentum',
@@ -619,7 +620,10 @@ const COMPETITOR_KINDS = new Set([
   'competitor_citation_gap',
 ]);
 for (const kind of COMPETITOR_KINDS) {
-  EVIDENCE[kind] = { marker: 'positions', fields: ['positions', 'winningSources'] };
+  EVIDENCE[kind] = {
+    marker: 'positions',
+    fields: ['positions', 'winningSources', 'pageEvents', 'pageEventDays'],
+  };
 }
 EVIDENCE.uncited_mentions = { marker: 'mentions', fields: ['mentions'] };
 
@@ -773,8 +777,9 @@ function competitorOf(candidate) {
 /**
  * Competitor signals arrive naming the competitor and one number. Before they
  * are written they get what the drawer shows (AC-001): per prompt and
- * platform, the competitor's position against the brand's, and the sources
- * behind its wins. Best effort, like the lost-citation evidence.
+ * platform, the competitor's position against the brand's, the sources
+ * behind its wins, and what happened to its pages lately (learning C3).
+ * Best effort, like the lost-citation evidence.
  */
 export async function attachCompetitorEvidence(brandId, candidates, now) {
   const about = candidates

@@ -1095,7 +1095,9 @@ function DangerTab({
   const [confirmValue, setConfirmValue] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   // Delete stays open on a read-only workspace (plan not active): it only
-  // removes what the person gave us (Ansvisor, 2026-10-27).
+  // removes what the person gave us (Ansvisor, 2026-10-27). The demo brand
+  // is never deleted, only hidden from the brand menu.
+  const demo = brand.isDemo === true;
 
   const canDelete = confirmValue === brand.name;
 
@@ -1124,20 +1126,26 @@ function DangerTab({
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Only an admin deletes a brand (the server's rule). */}
-        <fieldset disabled={!canAdmin} className="min-w-0 space-y-4">
-          <div className="space-y-2">
-            <Label className="text-sm">
-              {t('settings.confirmDelete')} <span className="font-semibold">{brand.name}</span>
-            </Label>
-            <Input
-              placeholder={t('settings.deleteConfirmPlaceholder')}
-              value={confirmValue}
-              onChange={(e) => setConfirmValue(e.target.value)}
-            />
-          </div>
+        <fieldset disabled={!canAdmin || demo} className="min-w-0 space-y-4">
+          {demo ? (
+            <p data-slot="demo-cant-delete" className="text-sm text-muted-foreground">
+              {t('settings.demoCantDelete')}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <Label className="text-sm">
+                {t('settings.confirmDelete')} <span className="font-semibold">{brand.name}</span>
+              </Label>
+              <Input
+                placeholder={t('settings.deleteConfirmPlaceholder')}
+                value={confirmValue}
+                onChange={(e) => setConfirmValue(e.target.value)}
+              />
+            </div>
+          )}
           <Button
             variant="destructive"
-            disabled={!canDelete || isDeleting}
+            disabled={demo || !canDelete || isDeleting}
             onClick={handleDelete}
             className="gap-2"
           >
@@ -1149,7 +1157,7 @@ function DangerTab({
             {t('settings.deleteButton')}
           </Button>
         </fieldset>
-        {!canAdmin && (
+        {!canAdmin && !demo && (
           <p className="text-xs text-muted-foreground">{t('settings.adminsOnlyDelete')}</p>
         )}
       </CardContent>

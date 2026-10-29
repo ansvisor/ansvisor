@@ -781,7 +781,7 @@ export async function createReport(
     sections?: ReportSection[];
   },
 ): Promise<{ id: string }> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const {
     data: { session },

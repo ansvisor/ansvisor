@@ -67,7 +67,9 @@ const openUpgrade = vi.fn();
 
 async function render(count: number, planId: 'starter' | 'growth' = 'starter') {
   actions.getPromptSuggestions.mockResolvedValue({
+    ok: true,
     suggestions: Array.from({ length: count }, (_, i) => suggestion(i + 1)),
+    stale: false,
   });
   await act(async () => {
     root.render(
@@ -245,7 +247,9 @@ describe('SuggestionsCard — Add All', () => {
 describe('SuggestionsCard — estimated volume', () => {
   it("shows an AI's guess as a grey range, never a bare number", async () => {
     actions.getPromptSuggestions.mockResolvedValue({
+      ok: true,
       suggestions: [{ ...suggestion(1), estVolume: 1200 }],
+      stale: false,
     });
     await act(async () => {
       root.render(
@@ -375,7 +379,11 @@ describe('SuggestionsCard — shopping questions from the catalog (ECOM-003)', (
 
   async function show(search = '') {
     window.history.replaceState(null, '', `/dashboard/prompts${search}`);
-    actions.getPromptSuggestions.mockResolvedValue({ suggestions: [suggestion(1), fromCatalog] });
+    actions.getPromptSuggestions.mockResolvedValue({
+      ok: true,
+      suggestions: [suggestion(1), fromCatalog],
+      stale: false,
+    });
     await act(async () => {
       root.render(
         <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -401,5 +409,85 @@ describe('SuggestionsCard — shopping questions from the catalog (ECOM-003)', (
       expect.stringContaining('best hiking backpacks under $150'),
     ]);
     expect(container.textContent).toContain('Shopping');
+  });
+});
+
+describe('SuggestionsCard — a failed read', () => {
+  async function mount() {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <SuggestionsCard brandId="b1" onAccepted={onAccepted} sourceStates={null} />
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+  const retryButton = () =>
+    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Retry');
+
+  afterEach(() => vi.useRealTimers());
+
+  it('tries once more by itself when the API did not answer, and lists what comes back', async () => {
+    vi.useFakeTimers();
+    actions.getPromptSuggestions
+      .mockResolvedValueOnce({ ok: false, failure: 'failed', retryable: true })
+      .mockResolvedValueOnce({ ok: true, suggestions: [suggestion(1)], stale: false });
+    await mount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(actions.getPromptSuggestions).toHaveBeenCalledTimes(2);
+    expect(rows()).toHaveLength(1);
+    expect(container.textContent).not.toContain("Couldn't load suggestions");
+  });
+
+  it("says the API is not answering in plain words, never React's hidden message, and Retry reads again", async () => {
+    vi.useFakeTimers();
+    actions.getPromptSuggestions.mockResolvedValue({
+      ok: false,
+      failure: 'failed',
+      retryable: true,
+    });
+    await mount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(actions.getPromptSuggestions).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("Couldn't load suggestions");
+    expect(container.textContent).toContain("Ansvisor isn't answering right now.");
+    expect(container.textContent).not.toContain('Minified React error');
+
+    actions.getPromptSuggestions.mockResolvedValue({
+      ok: true,
+      suggestions: [suggestion(1), suggestion(2)],
+      stale: false,
+    });
+    await act(async () => {
+      retryButton()!.click();
+    });
+    expect(rows()).toHaveLength(2);
+  });
+
+  it('says why when trying again would not help, without retrying by itself', async () => {
+    actions.getPromptSuggestions.mockResolvedValue({
+      ok: false,
+      failure: 'workspace',
+      retryable: false,
+    });
+    await mount();
+    expect(actions.getPromptSuggestions).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("This brand isn't in your workspace.");
+    expect(retryButton()).toBeDefined();
+  });
+
+  it('reads a server action that threw on its way as no answer', async () => {
+    vi.useFakeTimers();
+    actions.getPromptSuggestions.mockRejectedValue(new Error('Minified React error #441'));
+    await mount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(container.textContent).toContain("Ansvisor isn't answering right now.");
+    expect(container.textContent).not.toContain('Minified React error');
   });
 });

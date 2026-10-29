@@ -14,6 +14,9 @@ let profile: { organization_id: string | null } | null;
 let profileError: { message: string } | null;
 /** The profile's organization, as the embed reads it (null when RLS hides it). */
 let org: { subscription_status: string | null; stripe_subscription_id: string | null } | null;
+/** The brand an action names, as the person's session reads it (null when RLS hides it). */
+let brand: { is_demo: boolean } | null;
+let brandError: { message: string } | null;
 let reads: string[];
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -25,22 +28,33 @@ vi.mock('@/lib/supabase/server', () => ({
           reads.push(`${table}: ${columns}`);
           return query;
         },
-        eq: () => query,
-        maybeSingle: async () => ({
-          data: profile && {
-            ...profile,
-            organizations: profile.organization_id ? org : null,
-          },
-          error: profileError,
-        }),
+        eq: (column: string, value: unknown) => {
+          if (table === 'brands') reads.push(`brands: ${column} = ${String(value)}`);
+          return query;
+        },
+        maybeSingle: async () =>
+          table === 'brands'
+            ? { data: brand, error: brandError }
+            : {
+                data: profile && {
+                  ...profile,
+                  organizations: profile.organization_id ? org : null,
+                },
+                error: profileError,
+              },
       };
       return query;
     },
   })),
 }));
 
-const { assertWritable, SubscriptionInactiveError, writeRefusal } =
-  await import('./subscription-guard');
+const {
+  assertWritable,
+  DemoBrandError,
+  SubscriptionInactiveError,
+  failedCallResponse,
+  writeRefusal,
+} = await import('./subscription-guard');
 
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
@@ -48,6 +62,8 @@ beforeEach(() => {
   profile = { organization_id: 'org-1' };
   profileError = null;
   org = { subscription_status: 'canceled', stripe_subscription_id: 'sub_1' };
+  brand = { is_demo: false };
+  brandError = null;
   reads = [];
 });
 
@@ -124,6 +140,67 @@ describe('assertWritable', () => {
     const err = new SubscriptionInactiveError();
     expect(err.digest).toBe('subscription_inactive');
     expect(err.code).toBe('subscription_inactive');
+  });
+});
+
+describe('assertWritable and the demo brand', () => {
+  beforeEach(() => {
+    org = { subscription_status: 'active', stripe_subscription_id: 'sub_1' };
+  });
+
+  it('refuses a write on the demo brand, whatever the plan', async () => {
+    brand = { is_demo: true };
+    const failure = await assertWritable({ brandId: 'demo-1' }).catch((err: unknown) => err);
+    expect(failure).toBeInstanceOf(DemoBrandError);
+    // The digest production keeps, for the browser's plan dialog.
+    expect((failure as InstanceType<typeof DemoBrandError>).digest).toBe('demo_brand');
+    // Setup's writes, and a plan that ended, refuse it the same way.
+    await expect(assertWritable({ onboarding: true, brandId: 'demo-1' })).rejects.toBeInstanceOf(
+      DemoBrandError,
+    );
+    org = { subscription_status: 'canceled', stripe_subscription_id: 'sub_1' };
+    await expect(assertWritable({ brandId: 'demo-1' })).rejects.toBeInstanceOf(DemoBrandError);
+  });
+
+  it('reads the brand beside the plan, and lets another brand write', async () => {
+    await expect(assertWritable({ brandId: 'brand-1' })).resolves.toBeUndefined();
+    expect(reads).toEqual([
+      'profiles: organization_id, organizations!profiles_organization_id_fkey(subscription_status, stripe_subscription_id)',
+      'brands: is_demo',
+      'brands: id = brand-1',
+    ]);
+  });
+
+  it('reads no brand when the action names none', async () => {
+    brand = { is_demo: true };
+    await expect(assertWritable()).resolves.toBeUndefined();
+    expect(reads.some((read) => read.startsWith('brands'))).toBe(false);
+  });
+
+  it("leaves a brand the person can't read to the write's own row-level security", async () => {
+    brand = null;
+    await expect(assertWritable({ brandId: 'elsewhere' })).resolves.toBeUndefined();
+  });
+
+  it("refuses when the brand can't be read, without calling it the demo", async () => {
+    brandError = { message: 'connection reset' };
+    const failure = await assertWritable({ brandId: 'brand-1' }).catch((err: unknown) => err);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).not.toBeInstanceOf(DemoBrandError);
+    expect((failure as Error).message).toContain('connection reset');
+  });
+
+  it('reads nothing self-hosted', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    brand = { is_demo: true };
+    await expect(assertWritable({ brandId: 'demo-1' })).resolves.toBeUndefined();
+    expect(reads).toEqual([]);
+  });
+
+  it("answers a route's refusal with 402 demo_brand", async () => {
+    const res = failedCallResponse(new DemoBrandError());
+    expect(res.status).toBe(402);
+    expect(await res.json()).toMatchObject({ error: 'demo_brand', code: 'demo_brand' });
   });
 });
 

@@ -505,7 +505,10 @@ describe('sweepTaskExecution', () => {
           if (sweep) asked.select = columns;
           return builder;
         },
-        eq: () => builder,
+        eq: (column, value) => {
+          if (sweep) asked.filters.push([column, value]);
+          return builder;
+        },
         in: (column, values) => {
           if (sweep) asked.filters.push([column, values]);
           return builder;
@@ -569,7 +572,7 @@ describe('sweepTaskExecution', () => {
       const summary = await sweepTaskExecution({ now: NOW });
 
       expect(asked.select).toContain(
-        'actions!inner(status, brands!inner(organizations!inner(subscription_status)))',
+        'actions!inner(status, brands!inner(is_demo, organizations!inner(subscription_status)))',
       );
       expect(asked.filters).toContainEqual([
         'actions.brands.organizations.subscription_status',
@@ -589,13 +592,27 @@ describe('sweepTaskExecution', () => {
       const asked = mockPlanSweep(lapsedThenPaying());
       await sweepTaskExecution({ now: NOW });
       expect(asked.select).toBe(
-        'id, task_key, action_id, retry_after:output->>retryAfter, actions!inner(status)',
+        'id, task_key, action_id, retry_after:output->>retryAfter, actions!inner(status, brands!inner(is_demo))',
       );
       expect(asked.filters.map(([column]) => column)).not.toContain(
         'actions.brands.organizations.subscription_status',
       );
     } finally {
       vi.unstubAllEnvs();
+    }
+  });
+
+  it("never reads a demo brand's tasks (00380), on the cloud or self-hosted", async () => {
+    for (const cloud of ['true', 'false']) {
+      vi.stubEnv('IS_CLOUD', cloud);
+      try {
+        const asked = mockPlanSweep([]);
+        await sweepTaskExecution({ now: NOW });
+        expect(asked.select).toContain('brands!inner(is_demo');
+        expect(asked.filters).toContainEqual(['actions.brands.is_demo', false]);
+      } finally {
+        vi.unstubAllEnvs();
+      }
     }
   });
 });
