@@ -434,6 +434,28 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     minPages: 2,
     retryDays: 7,
   }),
+
+  /**
+   * What the "Analyze your winning pages" task compares (learning C4): at
+   * most `perAction` of the action's winning pages (G14's landing pages, or
+   * G10's own pages its prompts' answers cite) with the brand's other pages
+   * that have a completed Site Audit from the last `auditDays`, at most
+   * `others` of them, the newest audit first. Those are read from their
+   * audits, never fetched. A winning page without one is read like a cited
+   * page (competitorPages' reader): within the same `perBrandPerDay` reads
+   * and reused while `freshDays` old. Fewer than `minOthers` other pages and
+   * nothing is compared: the task stays a person's and tries again after
+   * `retryDays`. The `missingPages` other pages missing the most of what the
+   * winners have are listed.
+   */
+  winningPages: Object.freeze({
+    perAction: 3,
+    auditDays: 90,
+    others: 30,
+    minOthers: 3,
+    missingPages: 5,
+    retryDays: 7,
+  }),
 });
 
 /**

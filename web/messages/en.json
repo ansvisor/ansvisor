@@ -1647,6 +1647,25 @@
               "none_cited": "In the last two weeks, AI answers for these prompts cited no competitor page, and no page in answers that don't name your brand.",
               "unreadable": "The pages cited couldn't be read: they may block readers."
             }
+          },
+          "winning": {
+            "title": "What sets your winning pages apart",
+            "pattern": "— winning pages {winners} of {ofWinners}, your other pages {others} of {ofOthers}",
+            "noPattern": "Your other audited pages pass the same Site Audit checks your winning pages pass: none sets the winners apart.",
+            "winners": "{count, plural, one {Your winning page} other {Your # winning pages}}",
+            "fromAudit": "from its Site Audit",
+            "fromRead": "read for this task",
+            "words": "{count, plural, one {# word} other {{words} words}}",
+            "compared": "Compared with {count, plural, one {# other page} other {# other pages}} of yours that Site Audit checked in the last 90 days.",
+            "missing": "Pages of yours missing the most of it",
+            "missingLine": "missing {checks}",
+            "note": "From Site Audit's checks; a winning page without a recent audit is read from its public address, and only what the checks found is kept.",
+            "unreadable": "{count, plural, one {# winning page} other {# winning pages}} couldn't be read.",
+            "reasons": {
+              "no_winner": "There's no winning page to compare: none of your pages is named for this action, or cited in its prompts' answers in the last two weeks.",
+              "too_few_audited": "Fewer than three of your other pages have a Site Audit from the last 90 days. Audit more of your pages to compare them with your winning ones.",
+              "winner_unreadable": "Your winning pages couldn't be read: they may block readers. A Site Audit of them works too."
+            }
           }
         },
         "noSignalsOpportunity": "This action was sent from Content Optimization. Its evidence is the opportunity on the Overview tab, not detection signals.",
@@ -2609,6 +2628,8 @@
       "analyze_ga4_outcomes_target": "Inspect engagement and key events on {targets}",
       "analyze_site_audit": "Review Site Audit findings",
       "analyze_site_audit_target": "Review Site Audit findings on {targets}",
+      "analyze_winning_pages": "Find what sets your winning pages apart",
+      "analyze_winning_pages_target": "Find what sets your winning pages apart, across {targets}",
       "analyze_entity_signals": "Audit entity consistency and coverage",
       "analyze_entity_signals_target": "Audit entity signals on {targets}",
       "analyze_internal_links": "Inspect internal linking",

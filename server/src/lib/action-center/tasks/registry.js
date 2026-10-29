@@ -2,7 +2,8 @@
  * The task registry (#818).
  *
  * The shared Task Library of the V1 specification: sixty-two primitives with
- * stable ids, which every definition builds its plan from. An action tells the
+ * stable ids, which every definition builds its plan from, and one added
+ * since (learning C4's analyze_winning_pages). An action tells the
  * user what to achieve; its tasks say how, and a task is one of these.
  *
  * Each primitive declares, in the specification's terms:
@@ -170,6 +171,13 @@ export const TASKS = Object.freeze({
   analyze_site_audit: system('analyze_site_audit', {
     requires: ['site_audits'],
     outputs: ['failingSignals'],
+  }),
+  // Learning C4: what the brand's winning pages have that its other audited
+  // pages don't, read by Ansvisor overnight.
+  analyze_winning_pages: system('analyze_winning_pages', {
+    requires: ['site_audits'],
+    outputs: ['patterns', 'missingPages'],
+    tool: 'winning_page_features',
   }),
   analyze_entity_signals: agent('analyze_entity_signals', { outputs: ['findings'] }),
   analyze_internal_links: system('analyze_internal_links', {

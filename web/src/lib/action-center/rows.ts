@@ -20,6 +20,7 @@ import {
   type EntityCountRow,
 } from '@/lib/action-center/entity-counts';
 import { COMPETITOR_TASK_KEY, parseCompetitorFindings } from './competitor-findings';
+import { WINNING_TASK_KEY, parseWinningFindings } from './winning-findings';
 
 /**
  * Action Center rows → the shapes the dashboard reads, shared by its server
@@ -108,6 +109,8 @@ export function taskFromRow(task: Record<string, unknown>): ActionTask {
     // What Analyze competitor content found, once it ran (learning C1).
     competitorFindings:
       task.task_key === COMPETITOR_TASK_KEY ? parseCompetitorFindings(task.output) : null,
+    // What Find what sets your winning pages apart found (learning C4).
+    winningFindings: task.task_key === WINNING_TASK_KEY ? parseWinningFindings(task.output) : null,
   };
 }
 

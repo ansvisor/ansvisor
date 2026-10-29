@@ -61,6 +61,7 @@ import {
 } from '@/lib/action-center/task-details';
 import type { PriorityLevel, PriorityReason } from '@/lib/action-center/priority';
 import type { CompetitorFindings } from '@/lib/action-center/competitor-findings';
+import type { WinningFindings } from '@/lib/action-center/winning-findings';
 import { assertWritable } from '@/lib/subscription-guard';
 
 export interface ActionAssignee {
@@ -178,6 +179,8 @@ export interface ActionTask {
   details: ActionTaskDetails | null;
   /** What Analyze competitor content found, once it ran (learning C1). */
   competitorFindings?: CompetitorFindings | null;
+  /** What Find what sets your winning pages apart found, once it ran (learning C4). */
+  winningFindings?: WinningFindings | null;
 }
 
 export interface ActionEvent {
