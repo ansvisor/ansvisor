@@ -66,6 +66,7 @@ const ONBOARDING = [
   ['POST', '/topics/suggest'],
   ['POST', '/prompts/from-topics'],
   ['POST', '/competitors/suggest'],
+  ['POST', '/brands/b1/detect-site-type'],
 ];
 
 beforeEach(() => {
@@ -245,6 +246,8 @@ describe('requireActiveSubscription', () => {
       ['POST', '/brand-facts/fetch'],
       ['PUT', '/topics/suggest'],
       ['POST', '/topics/suggest/extra'],
+      ['POST', '/brands/b1/detect-site-type/again'],
+      ['PATCH', '/brands/b1'],
     ]) {
       const { res, next } = await run({ method, path });
       expect(next, `${method} ${path}`).not.toHaveBeenCalled();
@@ -261,7 +264,7 @@ describe('requireActiveSubscription', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-27T18:00:00Z'));
     org = neverSubscribed;
-    // The three routes share one count.
+    // The routes share one count.
     for (let i = 0; i < ONBOARDING_DAILY_CALLS; i++) {
       const [method, path] = ONBOARDING[i % ONBOARDING.length];
       expect((await run({ method, path })).next).toHaveBeenCalledOnce();

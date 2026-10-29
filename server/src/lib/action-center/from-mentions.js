@@ -21,6 +21,15 @@ export const MENTION_ACTION_KIND = 'mention_review';
 
 const ACTIVE = ['new', 'in_progress', 'on_hold'];
 const KPI_KEYS = ['mentions', 'ai_visibility', 'positive_sentiment'];
+
+/**
+ * Its success metrics, its aim first (validate.js judges it by the first):
+ * answers sent with negative ones in them are Protect work, to turn how the
+ * brand is spoken of (learning D1); others, to be named more.
+ */
+export function mentionKpiKeys(negative) {
+  return negative > 0 ? ['positive_sentiment', 'mentions', 'ai_visibility'] : KPI_KEYS;
+}
 /** At most a page of the Mentions table at once. */
 export const MAX_MENTIONS = 100;
 /** The answers quoted on the action. */
@@ -163,7 +172,7 @@ export async function sendMentionsToActionCenter(brandId, { resultIds, excerpts 
       definition_version: 1,
       impact,
       payload,
-      kpi_keys: KPI_KEYS,
+      kpi_keys: mentionKpiKeys(negative),
       baseline: mentionBaseline(answers),
       dedup_key: dedupKey,
     })

@@ -1,13 +1,20 @@
 'use client';
 
-import { Lightbulb, Loader2, Pause, Play, Trash2, X } from 'lucide-react';
+import { ChevronDown, Lightbulb, Loader2, MapPin, Pause, Play, Trash2, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 /**
  * The prompts table's bulk action bar (PROMPT-006): shown while rows are
  * selected, with the row menu's own actions for all of them at once. Pause
- * and Resume each show only when some selected prompt can take them. While a
+ * and Resume each show only when some selected prompt can take them;
+ * Locations adds locations to them or stops some (PROMPT-015). While a
  * bulk delete runs, a few prompts per call, it shows how far it has got, even
  * with nothing selected.
  */
@@ -21,6 +28,8 @@ export function BulkActionBar({
   onPause,
   onResume,
   onSuggestContent,
+  onAddLocations,
+  onRemoveLocations,
   onDelete,
   onClear,
 }: {
@@ -37,10 +46,14 @@ export function BulkActionBar({
   onPause: () => void;
   onResume: () => void;
   onSuggestContent: () => void;
+  /** Open the locations dialog on the selection, to add or to stop some. */
+  onAddLocations: () => void;
+  onRemoveLocations: () => void;
   onDelete: () => void;
   onClear: () => void;
 }) {
   const t = useTranslations('prompts.bulkDelete');
+  const tLocations = useTranslations('prompts.addLocations');
   const pausedCount = count - activeCount;
   const progress = deleting && (
     <span role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -85,6 +98,22 @@ export function BulkActionBar({
             Resume{activeCount > 0 ? ` ${pausedCount}` : ''}
           </Button>
         )}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" />}
+            disabled={busy}
+          >
+            <MapPin className="h-3 w-3" />
+            {tLocations('bulkButton')}
+            <ChevronDown className="h-3 w-3" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onClick={onAddLocations}>{tLocations('bulkAdd')}</DropdownMenuItem>
+            <DropdownMenuItem onClick={onRemoveLocations}>
+              {tLocations('bulkRemove')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         {suggestBlockedReason && !suggesting && (
           <span className="px-1 text-[11px] text-muted-foreground">{suggestBlockedReason}</span>
         )}

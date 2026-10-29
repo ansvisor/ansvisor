@@ -52,6 +52,7 @@ vi.mock('./sources.js', () => ({ resolveBrandSources: async () => new Set(['trac
 const {
   MENTION_REVIEW_TASKS,
   mentionActionWeight,
+  mentionKpiKeys,
   mentionBaseline,
   mentionDedupKey,
   sendMentionsToActionCenter,
@@ -101,7 +102,8 @@ describe('sendMentionsToActionCenter', () => {
       category: 'protect',
       kind: 'mention_review',
       impact: 'medium',
-      kpi_keys: ['mentions', 'ai_visibility', 'positive_sentiment'],
+      // Negative answers in it: judged by its sentiment first (learning D1).
+      kpi_keys: ['positive_sentiment', 'mentions', 'ai_visibility'],
       baseline: { mentions: 3, positive: 1, negative: 1, netSentiment: 0 },
       // r4 isn't a mention, so it doesn't change which action these answers find.
       dedup_key: mentionDedupKey(['r1', 'r2', 'r3']),
@@ -175,5 +177,13 @@ describe('the action’s weight and baseline', () => {
   it('keys the same answers the same way, in any order', () => {
     expect(mentionDedupKey(['b', 'a', 'a'])).toBe(mentionDedupKey(['a', 'b']));
     expect(mentionDedupKey(['a'])).not.toBe(mentionDedupKey(['a', 'b']));
+  });
+});
+
+/** Its aim first (learning D1): sentiment when it carries negative answers, else mentions. */
+describe('mentionKpiKeys', () => {
+  it('judges answers with negative ones by their sentiment, the others by mentions', () => {
+    expect(mentionKpiKeys(2)[0]).toBe('positive_sentiment');
+    expect(mentionKpiKeys(0)).toEqual(['mentions', 'ai_visibility', 'positive_sentiment']);
   });
 });
