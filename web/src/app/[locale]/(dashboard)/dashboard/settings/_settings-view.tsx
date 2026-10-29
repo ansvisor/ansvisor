@@ -26,6 +26,7 @@ import { useCanManageMenus } from '@/components/providers/menu-access-provider';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { RolesAccessSection } from '@/components/chat-access/roles-access-section';
 import { YourAccessSlot } from '@/components/chat-access/your-access-card';
+import { countPendingAccessRequests } from '@/lib/actions/chat-access-requests';
 import { Badge } from '@/components/ui/badge';
 import { updateAccountName } from '@/lib/actions/organization';
 import { Loader2 } from 'lucide-react';
@@ -50,6 +51,21 @@ export function SettingsView({ section }: { section: SettingsSection }) {
   const { isCloud } = usePlanContext();
   const canManageMenus = useCanManageMenus();
   const chatAgentic = useChatAgentic();
+  // Ask your Admin requests waiting for an Admin: the count on Roles & access.
+  const [pendingRequests, setPendingRequests] = useState(0);
+  const [requestsRead, setRequestsRead] = useState(0);
+  useEffect(() => {
+    if (!chatAgentic) return;
+    let live = true;
+    countPendingAccessRequests()
+      .then((count) => {
+        if (live) setPendingRequests(count);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [chatAgentic, requestsRead]);
   // Roles & access is Chat's: with Chat off, its address opens Account.
   const [active, setActive] = useState<SettingsSection>(
     section === 'roles-access' && !chatAgentic ? 'account' : section,
@@ -141,6 +157,11 @@ export function SettingsView({ section }: { section: SettingsSection }) {
               )}
             >
               {item.label}
+              {item.id === 'roles-access' && pendingRequests > 0 && (
+                <Badge className="ml-2 px-1.5 py-0 text-[10px] tabular-nums">
+                  {pendingRequests}
+                </Badge>
+              )}
               {item.id === 'menu-access' && (
                 <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[10px]">
                   {t('menuAccess.new')}
@@ -212,7 +233,9 @@ export function SettingsView({ section }: { section: SettingsSection }) {
           {/* Team */}
           {active === 'team' && <TeamSection />}
 
-          {active === 'roles-access' && chatAgentic && <RolesAccessSection />}
+          {active === 'roles-access' && chatAgentic && (
+            <RolesAccessSection onRequestsChanged={() => setRequestsRead((n) => n + 1)} />
+          )}
 
           {active === 'menu-access' && <MenuAccessSection />}
 

@@ -9,17 +9,19 @@ import { percentLabel } from '@/lib/billing/ai-usage';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import type { PlanCard, PlanChip } from '@/lib/chat/access';
 import { cn } from '@/lib/utils';
+import { AskAdminButton } from './ask-admin-button';
 
 const BILLING = '/dashboard/settings/billing';
 
 /**
  * "Your plan" (CHAT-20 §7a, mockup .planstrip): the plan and its price,
  * what it includes, AI usage as a percentage, and what the next plan would
- * add. No upsell on Enterprise. Admins get Upgrade; the others see the same
- * card without it (Ask your Admin comes with access requests).
+ * add. No upsell on Enterprise. Admins get Upgrade; the others Ask your
+ * Admin in its place.
  */
 export function YourPlanCard({ plan, isAdmin }: { plan: PlanCard; isAdmin: boolean }) {
   const t = useTranslations('chatAccess.plan');
+  const tAsk = useTranslations('chatAccess.askAdmin');
   const format = useFormatter();
   const { usage } = useAiUsage();
   const money = (value: number) =>
@@ -118,10 +120,16 @@ export function YourPlanCard({ plan, isAdmin }: { plan: PlanCard; isAdmin: boole
                 ? t('priceDiff', { price: money(next.priceDiff) })
                 : t('customPrice')}
           </span>
-          {isAdmin && (
+          {isAdmin ? (
             <Link href={BILLING} className={cn(buttonVariants({ size: 'sm' }), 'shrink-0')}>
               {next.afterTrial ? t('choosePlan') : t('upgrade')}
             </Link>
+          ) : (
+            <AskAdminButton
+              asked={tAsk('defaults.plan', { plan: next.planName })}
+              ruleKind="plan"
+              ruleDetail={tAsk('planDetail', { plan: next.planName, current: plan.planName })}
+            />
           )}
         </div>
       )}

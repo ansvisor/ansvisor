@@ -3101,7 +3101,8 @@
     "dismissSuggestion": {
       "name": "Dismiss prompt suggestions",
       "step": "Dismissed prompt suggestion"
-    }
+    },
+    "askAdmin": { "name": "Ask your Admin", "step": "Sent to your Admins" }
   },
   "agentic": {
     "avatar": {
@@ -3387,6 +3388,48 @@
         }
       }
     },
+    "askAdmin": {
+      "button": "Ask your Admin",
+      "title": "Ask your Admin",
+      "lead": "Your Admins get this in Settings › Team › Roles & access. They can change your role, or make the change themselves.",
+      "label": "What do you need?",
+      "send": "Send",
+      "cancel": "Cancel",
+      "sent": "Sent to your Admins",
+      "tooMany": "You have {count} requests waiting. Withdraw one, or wait for your Admins.",
+      "dailyLimit": "You've sent {count} requests today. Try again tomorrow.",
+      "alreadyToday": "You already asked for this today.",
+      "failed": "Couldn't send it. Try again.",
+      "defaults": {
+        "role": "Change my role so I can make changes in this workspace",
+        "plan": "Upgrade to {plan}"
+      },
+      "roleDetail": "Your role is {role}.",
+      "planDetail": "Needs {plan} · you're on {current}"
+    },
+    "requests": {
+      "title": "Requests",
+      "yours": "Your requests",
+      "lead": "Ask your Admin requests from Chat and Settings. The first Admin who acts decides it.",
+      "leadYours": "What you asked your Admins for, and what they decided.",
+      "empty": "No requests.",
+      "emptyYours": "You haven't asked for anything.",
+      "from": "From {name}",
+      "approve": "Approve",
+      "dismiss": "Dismiss",
+      "withdraw": "Withdraw",
+      "approved": "Approved. Change their role in Members, or make the change yourself.",
+      "dismissed": "Dismissed",
+      "withdrawn": "Withdrawn",
+      "alreadyDecided": "Another Admin already decided it.",
+      "failed": "Couldn't update it. Try again.",
+      "status": {
+        "pending": "Waiting",
+        "approved": "Approved",
+        "rejected": "Dismissed",
+        "withdrawn": "Withdrawn"
+      }
+    },
     "yourAccess": {
       "title": "Your access",
       "brands": "Brands",
@@ -3465,6 +3508,8 @@
       "opportunityStatusUndo": "Put the opportunity “{title}” back as it was",
       "dismissSuggestion": "Dismissed the prompt suggestion “{text}”",
       "dismissSuggestionUndo": "Brought back the prompt suggestion “{text}”",
+      "askAdmin": "Asked your Admins: “{asked}”",
+      "askAdminUndo": "Withdrew the request “{asked}”",
       "accessDenied": "Not allowed: {tool}"
     },
     "undo": {

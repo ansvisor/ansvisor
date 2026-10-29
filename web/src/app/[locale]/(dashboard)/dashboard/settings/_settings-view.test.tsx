@@ -25,6 +25,10 @@ vi.mock('@/components/providers/chat-agentic-provider', () => ({
   useChatAgentic: () => chatAgentic,
 }));
 vi.mock('@/lib/actions/organization', () => ({ updateAccountName: vi.fn() }));
+let pendingRequests = 0;
+vi.mock('@/lib/actions/chat-access-requests', () => ({
+  countPendingAccessRequests: async () => pendingRequests,
+}));
 vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -94,5 +98,13 @@ describe('SettingsView', () => {
     expect(list.indexOf('Roles & access')).toBe(list.indexOf('Team') + 1);
     chatAgentic = false;
     expect(await sections()).not.toContain('Roles & access');
+  });
+
+  it("counts an Admin's waiting access requests on Roles & access", async () => {
+    chatAgentic = true;
+    pendingRequests = 2;
+    expect(await sections()).toContain('Roles & access2');
+    chatAgentic = false;
+    pendingRequests = 0;
   });
 });
