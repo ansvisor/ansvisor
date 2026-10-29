@@ -5,37 +5,33 @@ description: "How Ansvisor computes a 0–100 visibility score per brand, prompt
 
 ## The score in one sentence
 
-Visibility score is the percentage of tracked AI responses that mention your brand by name, weighted by mention prominence and citation strength.
+The **AI Visibility Score** (0–100) blends three things over the answers in your date range and filters: how many answers name your brand, how many cite a page of yours, and how early you're named.
 
-A score of **0** means your brand never appears. **100** means it's mentioned in every response, prominently, with at least one citation. Most brands sit between 15–60% in healthy categories, so don't be alarmed if you start low.
+A score of **0** means no answer names or cites you. **100** means every answer names you first and cites you.
 
-## How a single response is scored
-
-Each time a prompt runs against an AI engine (e.g. "best CRM for small business" against ChatGPT), Ansvisor parses the response and computes a per-response score from three components:
+## How it's computed
 
 <Steps>
-  <Step title="Mention count (50% weight)">
-    How many times your brand is named in the response. Capped at 5 to prevent spammy responses from skewing the score.
+  <Step title="Mention rate (60%)">
+    The share of answers that name your brand.
   </Step>
-  <Step title="Position bonus (25% weight)">
-    Where in the response your brand appears. First mention in the answer counts more than a brand listed eighth in a long alternatives section.
+  <Step title="Citation rate (25%)">
+    The share of answers that cite a page of yours.
   </Step>
-  <Step title="Citation presence (25% weight)">
-    Whether the response includes a citation URL pointing to a domain you own or a third-party source that mentions you alongside the citation.
+  <Step title="Position (15%)">
+    How early you're named, in the answers that name you: being named first counts 1, second ½, third ⅓, and so on, averaged. While only a few answers name you, this part counts for less, so one lucky first place can't lift the score on its own.
   </Step>
 </Steps>
 
-The result is a 0–100 number per `(prompt, platform, run)` triple.
+The score is 100 × (0.6 × mention rate + 0.25 × citation rate + 0.15 × position), to one decimal. All three parts read the same answers, so the filters you set apply to each of them.
 
-## Aggregation
+## A single answer's score
 
-Dashboard visibility scores aggregate across multiple dimensions:
+Each answer also gets its own 0–100 score, shown with that answer: up to 40 points for naming you (10 per mention), up to 30 for citing you (15 per citation), up to 15 for your share of the answer's citations, and up to 15 for its tone (15 when positive, 7 when neutral and you're named).
 
-- **Per prompt**: average score across all platforms over the last 7 days
-- **Per platform**: average across all prompts on that platform over the last 7 days
-- **Brand-level**: weighted average across all prompts and platforms in the active set
+## Comparing periods
 
-Trend deltas (the green/red `+12%` you see on cards) compare the most recent 7-day window against the previous 7 days, on identical prompt sets, so the number is apples-to-apples.
+The change shown beside a score (green or red) compares your date range with the period before it, **vs previous period**, on the prompts answered in both, so the comparison is like for like.
 
 ## What moves your score
 
@@ -59,10 +55,9 @@ Trend deltas (the green/red `+12%` you see on cards) compare the most recent 7-d
 
 ## Where to see it
 
-- **Insights**: brand-level score with sparkline + delta
-- **Topics**: average score per topic cluster
-- **Prompts**: per-prompt score with platform breakdown
-- **Brands page**: card-level score for cross-brand comparison
+- **Brand Visibility**: the brand's score, its trend and the change vs the previous period
+- **Prompts › Tracked Prompts**: each prompt's score
+- **Competitors**: each tracked competitor's score beside yours
 
 <Card title="Continue: Topics and Prompts" icon="arrow-right" href="/concepts/topics-and-prompts">
   How prompts cluster into topics and why that matters.
