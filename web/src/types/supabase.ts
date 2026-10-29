@@ -1710,6 +1710,60 @@ export type Database = {
           },
         ]
       }
+      competitor_page_events: {
+        Row: {
+          at: string
+          brand_id: string
+          competitor_id: string
+          created_at: string
+          detail: Json
+          domain: string
+          id: string
+          kind: string
+          page_key: string
+          url: string
+        }
+        Insert: {
+          at: string
+          brand_id: string
+          competitor_id: string
+          created_at?: string
+          detail?: Json
+          domain: string
+          id?: string
+          kind: string
+          page_key: string
+          url: string
+        }
+        Update: {
+          at?: string
+          brand_id?: string
+          competitor_id?: string
+          created_at?: string
+          detail?: Json
+          domain?: string
+          id?: string
+          kind?: string
+          page_key?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_page_events_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competitor_page_events_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       competitors: {
         Row: {
           brand_id: string
