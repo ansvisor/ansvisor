@@ -59,7 +59,9 @@ interface Option {
  * "+ New" (CONTENT-003): generate opportunities now, optionally around a
  * topic, a prompt or a free-text idea. The count is capped by `max` — the
  * plan's per-request limit, never more than what is left of the month — and
- * the dialog says what the request will use before it is sent.
+ * the dialog says what the request will use before it is sent. A prompt
+ * belongs to one prompt group, which gets one opportunity, so a request for
+ * a prompt asks for one.
  */
 export function NewOpportunitiesDialog({
   open,
@@ -104,7 +106,7 @@ function NewOpportunitiesForm({
   const [topicId, setTopicId] = useState('');
   const [prompt, setPrompt] = useState<Option | null>(null);
   const [idea, setIdea] = useState('');
-  const [count, setCount] = useState(() => Math.max(1, Math.min(DEFAULT_COUNT, max)));
+  const [chosenCount, setCount] = useState(() => Math.max(1, Math.min(DEFAULT_COUNT, max)));
   const [submitting, setSubmitting] = useState(false);
   const [topics, setTopics] = useState<Option[]>([]);
   const [prompts, setPrompts] = useState<Option[]>([]);
@@ -128,9 +130,13 @@ function NewOpportunitiesForm({
     };
   }, [brandId]);
 
+  const cap = focus === 'prompt' ? Math.min(1, max) : max;
+  // Kept as chosen, so leaving the prompt focus brings the count back.
+  const count = Math.min(chosenCount, Math.max(1, cap));
+
   const focusReady =
     focus === 'auto' || (focus === 'topic' && !!topicId) || (focus === 'prompt' && !!prompt);
-  const canSubmit = max > 0 && count >= 1 && count <= max && focusReady && !submitting;
+  const canSubmit = max > 0 && count >= 1 && count <= cap && focusReady && !submitting;
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -239,7 +245,7 @@ function NewOpportunitiesForm({
                 size="icon-sm"
                 aria-label={t('fewer')}
                 disabled={count <= 1}
-                onClick={() => setCount((n) => Math.max(1, n - 1))}
+                onClick={() => setCount(Math.max(1, count - 1))}
               >
                 <Minus className="h-3.5 w-3.5" />
               </Button>
@@ -249,13 +255,15 @@ function NewOpportunitiesForm({
                 variant="ghost"
                 size="icon-sm"
                 aria-label={t('more')}
-                disabled={count >= max}
-                onClick={() => setCount((n) => Math.min(max, n + 1))}
+                disabled={count >= cap}
+                onClick={() => setCount(Math.min(cap, count + 1))}
               >
                 <Plus className="h-3.5 w-3.5" />
               </Button>
             </div>
-            <span className="text-xs text-muted-foreground">{t('max', { max })}</span>
+            <span className="text-xs text-muted-foreground">
+              {focus === 'prompt' ? t('promptOne') : t('max', { max })}
+            </span>
           </div>
         </div>
 
