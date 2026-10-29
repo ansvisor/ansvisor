@@ -4,7 +4,7 @@ import * as cheerio from 'cheerio';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
-import { contentBriefModelId, rebuildSources } from './content-brief.js';
+import { CONTENT_WRITE_MAX_TOKENS, contentWriteModelId, rebuildSources } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
 import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { shoppingGiven, shoppingPathFor, withShopping } from './shopping-links.js';
@@ -52,6 +52,7 @@ import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
 import { carefulLine, carefulRules } from './content-suggestion-stats.js';
 import { livePageLine, readLivePage } from './content-live-page.js';
 import { logger } from './logger.js';
+import { objectOptions } from './structured-output.js';
 
 /**
  * Fix open rules with agent (Content Editor CE-018, spec §8): the Content
@@ -1360,7 +1361,7 @@ async function fixWithRun({
   run,
   handoff = false,
 }) {
-  const modelId = contentBriefModelId();
+  const modelId = contentWriteModelId();
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
   // The rules here people at the brand mostly reject its changes for
@@ -1496,7 +1497,7 @@ async function fixWithRun({
     const generated = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
       generateObject({
         model: resolveModel(modelId),
-        schema: suggestionsSchema,
+        ...objectOptions(modelId, suggestionsSchema, { maxOutputTokens: CONTENT_WRITE_MAX_TOKENS }),
         system: SYSTEM_PROMPT,
         prompt: buildFixPrompt({
           brand,
