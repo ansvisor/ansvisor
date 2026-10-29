@@ -49,6 +49,11 @@ const OPEN_ACTIONS: Record<string, string> = {
     'a column layout: costs nothing, and read-only shows the data the same way',
   'menu-access.ts:setMyWorkAreas':
     'the person\'s own profile; it answers "What do you work on?", which /dashboard/welcome waits on',
+  'chat-access-requests.ts:requestAccess':
+    'asking an Admin costs nothing, and a read-only workspace is one of the things to ask about',
+  'chat-access-requests.ts:withdrawAccessRequest': 'takes back a request, never gives access',
+  'chat-access-requests.ts:decideAccessRequest':
+    "marks a request decided; it changes no one's access",
 };
 
 /** Write routes that stay open while read-only: path:METHOD → why. */
