@@ -6,7 +6,9 @@
  * them, by calling the `refresh_insights_daily` SQL function. Two callers:
  *
  *   - tracking-worker, the moment a run's ledger row is stamped — so a day
- *     enters the rollups only once its run completed, never mid-stream
+ *     enters the rollups only once its run completed, never mid-stream; a
+ *     brand's first run, which has no complete day to keep, also while its
+ *     answers land (first-run-rollups.js)
  *   - the daily sweep, which re-refreshes the trailing days for every brand
  *     as a backstop: runs that never stamped (partial, crashed, ghost tasks)
  *     and out-of-run writes (a prompt analyzed the moment it was added, #754)
@@ -55,17 +57,23 @@ export async function refreshInsightsDaily(brandId, dayFrom, dayTo) {
 }
 
 /**
- * Refresh the days a completed tracking run touched: from the run's start
- * day through today (a run crossing UTC midnight lands rows on two days).
- * The Citations (00118) and Mentions (00157) rollups are refreshed for the
- * same days.
+ * Refresh the days a tracking run touched: from the run's start day through
+ * today (a run crossing UTC midnight lands rows on two days). The Citations
+ * (00118) and Mentions (00157) rollups are refreshed for the same days.
+ * Resolves to whether the Insights refresh succeeded; never throws.
  */
-export async function refreshForCompletedRun(brandId, runStartedAtIso) {
+export async function refreshRunDays(brandId, runStartedAtIso) {
   const dayFrom = utcDay(runStartedAtIso);
   const dayTo = utcDay();
   const ok = await refreshInsightsDaily(brandId, dayFrom, dayTo);
   await refreshCitationsDaily(brandId, dayFrom, dayTo);
   await refreshMentionsDaily(brandId, dayFrom, dayTo);
+  return ok;
+}
+
+/** refreshRunDays for a run that has just stamped, then the Perception views. */
+export async function refreshForCompletedRun(brandId, runStartedAtIso) {
+  const ok = await refreshRunDays(brandId, runStartedAtIso);
   // The Perception tab's default view (00241) follows the rollups as they
   // now are. Not waited for: it never throws, and the run's stamp shouldn't
   // wait on three more reads.

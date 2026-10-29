@@ -210,6 +210,9 @@ IMPORTANT: Generate all topic names in ${langName}.`;
     .filter((topic) => topic.name);
 }
 
+/** Generating topic ideas costs AI: admins and managers start it (2026-10-29). */
+const SUGGEST_TOPICS_REFUSAL = 'Only admins and managers can generate topic suggestions.';
+
 /**
  * POST /api/topics/suggest
  * Body: { brandName, industry, description?, website?, language? }
@@ -222,6 +225,7 @@ router.post('/suggest', async (req, res) => {
       return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
     }
     const { brandName, industry, description, website, language } = parsed.data;
+    await assertRole(req.user.id, MANAGER_ROLES, SUGGEST_TOPICS_REFUSAL);
 
     const topics = await generateTopicIdeas({
       brandName,
@@ -232,6 +236,9 @@ router.post('/suggest', async (req, res) => {
     });
     return res.json({ topics });
   } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
     req.log.error({ err: error }, 'topic suggestion error');
     return res.status(500).json({
       error: 'Failed to generate topic suggestions',
@@ -276,6 +283,7 @@ router.post(
     try {
       const brandId = req.params.brandId;
       await assertBrandAccess(brandId, req.user.id);
+      await assertRole(req.user.id, MANAGER_ROLES, SUGGEST_TOPICS_REFUSAL);
 
       const { data: brand } = await supabaseAdmin
         .from('brands')

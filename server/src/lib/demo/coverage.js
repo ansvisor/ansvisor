@@ -22,6 +22,10 @@ export const SKIPPED = {
     "A person's saved Tracked Prompts columns (00363): the demo brand starts on the default ones.",
   sentiment_overrides:
     "A person's sentiment corrections on Mentions: the demo's answers carry their own.",
+  chat_activity_log:
+    "Chat's log of the changes it made (00402): Chat's precedence refuses every change on a demo brand, so none is logged.",
+  chat_access_requests:
+    "A person's request to their Admins for a Chat change (00403): theirs, not sample data, and a demo brand's refusal offers no Ask your Admin.",
 };
 
 const WORKFLOWS = 'demo-workflows (PR 2): Action Center, Content, suggestions, reports';
