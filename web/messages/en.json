@@ -3439,7 +3439,7 @@
       "trackedPrompts": "Tracked prompts",
       "trackedPromptsTip": "Prompts answered in this period. The bar is your plan: {used} of {limit} prompt locations in use, shared by every brand in your workspace. A prompt counts once per location it tracks; paused prompts don't count.",
       "trackedPromptsTipUnlimited": "Prompts answered in this period. Your plan has no prompt location limit.",
-      "slotsLeft": "{count, plural, other {# prompts/locations left to add}}",
+      "slotsLeft": "{count, plural, one {# prompt/location left to add} other {# prompts/locations left to add}}",
       "limitReached": "Plan limit reached",
       "overLimit": "{count, plural, other {# over your plan limit}}",
       "unlimited": "{count, plural, one {# active location} other {# active locations}} · Unlimited",
@@ -7569,6 +7569,7 @@
       "noAnswers": "No answers here in this period",
       "pending": "Within 24h",
       "pendingTip": "Tracked in {location} from the next daily run: its first results come within 24 hours.",
+      "promptPendingTip": "This prompt's first results come with the next daily run, within 24 hours.",
       "paused": "Paused",
       "pausedTip": "This prompt is paused, so it isn't asked anywhere until you resume it.",
       "noEngine": "No engine here",
@@ -8297,7 +8298,7 @@
           "unknown": "Shops without it can be left out of results. How OpenAI grants it isn't public yet; a direct feed is the best bet."
         },
         "firstWords": {
-          "title": "First 40 words of descriptions{count, plural, =0 {} other { · # products}}",
+          "title": "First 40 words of descriptions{count, plural, =0 {} one { · # product} other { · # products}}",
           "pass": "Every description says what the product is in its first 40 words.",
           "warn": "ChatGPT reads about 40 words. These don't say what the product is in them.",
           "fail": "ChatGPT reads about 40 words. These don't say what the product is in them.",
@@ -8316,12 +8317,12 @@
           "fail": "Without it, ChatGPT Shopping sales can't be told apart from other AI visits. Add utm_source=chatgpt.com&utm_medium=feed to your feed's product links."
         },
         "wrongPrice": {
-          "title": "{count, plural, =0 {Prices in AI answers match yours} other {Wrong price in AI answers · # products}}",
+          "title": "{count, plural, =0 {Prices in AI answers match yours} one {Wrong price in AI answers · # product} other {Wrong price in AI answers · # products}}",
           "pass": "Every price AI showed for your products matches your catalog.",
           "fail": "AI shows {seen} for {product}, your price is {yours}."
         },
         "resellerCheaper": {
-          "title": "{count, plural, =0 {No reseller cheaper than you} other {Reseller cheaper than you · # products}}",
+          "title": "{count, plural, =0 {No reseller cheaper than you} one {Reseller cheaper than you · # product} other {Reseller cheaper than you · # products}}",
           "pass": "AI links to no reseller selling your products for less.",
           "fail": "AI links to a reseller selling your product for less. See Shelf › Where AI sends shoppers."
         },
@@ -9507,6 +9508,7 @@
       "unavailable": "Couldn't read the Framer connection right now.",
       "notConfigured": "Framer isn't set up on this server yet.",
       "connected": "Connected",
+      "setupNotFinished": "Setup not finished",
       "refused": "Key refused",
       "project": "Project: {project}",
       "published": "published at {url}",
@@ -9514,7 +9516,7 @@
       "notConnectedMember": "Not connected. Admins and managers can connect Framer.",
       "refusedMember": "Framer refused the API key. Pages can't go there until an admin or manager connects it again.",
       "pagesGoTo": "Pages go to {collection} as draft items.",
-      "noCollection": "No collection picked yet.",
+      "noCollection": "No collection picked yet. Pages can't go to Framer until an admin or manager finishes the setup.",
       "projectLabel": "Project address",
       "projectPlaceholder": "https://framer.com/projects/…",
       "keyLabel": "API key",
@@ -9524,6 +9526,7 @@
       "connect": "Connect",
       "connecting": "Checking the project…",
       "connectedToast": "Framer connected",
+      "connectedSetupToast": "Framer connected. Now pick a collection and save.",
       "refusedNote": "Framer refused the saved API key. Make a new one in the project and connect again to send pages.",
       "replace": "Replace key",
       "cancel": "Cancel",
@@ -9532,6 +9535,7 @@
       "disconnectDescription": "Pages stop going to Framer. Items already sent stay in Framer. Framer doesn't let us revoke the API key: delete it in the project's Site Settings › General.",
       "disconnected": "Framer disconnected",
       "disconnectedNotRevoked": "Framer disconnected. Delete its API key in Framer too, in the project's Site Settings › General.",
+      "setupStep": "Last step: pick the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Framer until then.",
       "collectionLabel": "Collection",
       "collectionPlaceholder": "Pick a collection",
       "collectionBlocked": "{name} (needs fields we can't fill)",

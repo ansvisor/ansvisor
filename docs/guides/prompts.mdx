@@ -36,6 +36,8 @@ Each row in **Tracked Prompts** has a status:
 - **Active** — tracked on its schedule.
 - **Paused** — kept, but not tracked.
 
+A new prompt has no results until it's first asked. **Add prompt** and **Bulk import** start analyzing new prompts right away when they can; a prompt added from Prompt Suggestions, or one whose analysis couldn't start, gets its first results with the next daily run. Until then, for its first two days, the row says **Within 24h** in its first figure column, such as Visibility (**Paused** for a paused prompt when the Status column is hidden). An older prompt with no results in the range, such as days without a run, shows a dash, as does a range that ended before today.
+
 The table opens on Active + New. The **Status** filter, or the cards above the table, show one status or all of them. The **Added** column shows when each prompt was added; click it to sort by it. **Track** on a suggestion in the Brand Visibility page's Opportunities opens Tracked Prompts in a new tab, with the new prompts on top.
 
 Click a prompt's text to open its own page, with its visibility, mentions, citations and per-platform results.
@@ -66,6 +68,8 @@ Click a cell to open the prompt's Positions panel for that location. A location 
 1. Pick one or more countries, US states or cities (50 major cities). The countries are the ones the AI engines answer from, read from the tracking provider every day: a country one engine doesn't answer from says so ("not on Copilot"), and that engine is skipped there while the others run.
 2. Choose which prompts to ask there: the one you clicked, the selected ones, a topic, or every prompt shown.
 3. Check **Plan usage**. Every prompt in every location counts once on your plan's prompt locations; for example, 50 prompts in two more places use 100 more. Paused prompts don't count.
+
+**US states** are asked by every engine from the state itself: ChatGPT, Perplexity, Copilot and Gemini through the provider's state setting, Google AI Mode and Google AI Overview by the state's name as Google knows it ("California, United States"), and the API models (OpenAI, Claude) by its region. Google's engines asked a state country-wide until October 2026: their answers from before then stay in the country's column.
 
 **Cities** are asked by the engines that can answer from a city: Google AI Mode, Google AI Overview and the API models (OpenAI, Claude). ChatGPT, Perplexity, Copilot, Gemini and Grok answer per country, so they skip a city, and their answers stay in the country's column; track the country too to see them. A city column in the Locations view says *AI Mode · AIO · APIs*. A city counts as one location on your plan, like a country, on every plan. If none of the chosen prompts runs one of those engines, the dialog says so and adds nothing.
 

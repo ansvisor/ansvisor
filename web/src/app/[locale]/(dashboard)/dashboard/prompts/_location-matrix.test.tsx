@@ -13,7 +13,7 @@ const getTrackingCountries = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/tracking-countries', () => ({ getTrackingCountries }));
 
 const { clearTrackingCountries } = await import('@/lib/use-tracking-countries');
-const { LocationMatrix, clearLocationMatrixCache, loadLocationMatrix } =
+const { LocationMatrix, LocationPending, clearLocationMatrixCache, loadLocationMatrix } =
   await import('./_location-matrix');
 
 /** Tracked Prompts' Locations view (PROMPT-015b). */
@@ -328,14 +328,14 @@ describe('a location with no answers yet', () => {
     );
   });
 
-  it("says no engine answers from a US state when only Google's, run country-wide, would", async () => {
+  it("waits for Google's engines in a US state: they ask from the state now", async () => {
     getTrackingCountries.mockResolvedValue([{ code: 'US', models: ['aimode', 'aioverview'] }]);
     getPromptLocationMatrix.mockResolvedValue({ p1: { US: cell(62) } });
     await renderRows([
       prompt('p1', 'google only', ['US', 'US-CA'], 'Coffee', { platforms: ['google-aio'] }),
     ]);
-    // US, then US-CA.
-    expect(bodyRows()[1].slice(2, 4)).toEqual(['62', 'No engine here']);
+    // US, then US-CA: answers elsewhere in the window, so the state's come with the next run.
+    expect(bodyRows()[1].slice(2, 4)).toEqual(['62', 'Within 24h']);
   });
 
   it('shows Limit reached instead of + Track once the plan’s locations are used up', async () => {
@@ -356,6 +356,94 @@ describe('a location with no answers yet', () => {
     );
     limit.click();
     expect(onTrack).toHaveBeenCalledWith(rows[1], 'TR');
+  });
+});
+
+describe('a prompt with no answers yet, in the Table view', () => {
+  async function renderPending(
+    p: Prompt,
+    region?: string,
+    window: { to?: string } = {},
+    awaiting = true,
+  ): Promise<{ shown: string; tip: string | null }> {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <LocationPending prompt={p} region={region} window={window} awaiting={awaiting} />
+        </NextIntlClientProvider>,
+      );
+    });
+    const label = container.querySelector('button');
+    const described = label?.getAttribute('aria-describedby');
+    const shown = container.cloneNode(true) as HTMLElement;
+    shown.querySelectorAll('.sr-only').forEach((el) => el.remove());
+    return {
+      shown: shown.textContent ?? '',
+      tip: described ? (document.getElementById(described)?.textContent ?? null) : null,
+    };
+  }
+
+  it('says its first results come with the next daily run, for the keyboard and screen readers too', async () => {
+    const { shown, tip } = await renderPending(prompt('p1', 'new prompt', ['US']));
+    expect(shown).toBe('Within 24h');
+    expect(tip).toBe("This prompt's first results come with the next daily run, within 24 hours.");
+  });
+
+  it('says when the prompt is paused', async () => {
+    const { shown, tip } = await renderPending(
+      prompt('p1', 'paused prompt', ['US'], 'Coffee', { isActive: false }),
+    );
+    expect(shown).toBe('Paused');
+    expect(tip).toBe("This prompt is paused, so it isn't asked anywhere until you resume it.");
+  });
+
+  it("shows the plain dash for an older prompt with no answers in the range: it isn't waiting", async () => {
+    const { shown, tip } = await renderPending(
+      prompt('p1', 'older prompt', ['US']),
+      undefined,
+      {},
+      false,
+    );
+    expect(shown).toBe('—');
+    expect(tip).toBeNull();
+    // With a location picked, the dash says there were no answers there.
+    await renderPending(prompt('p1', 'older prompt', ['US']), 'US', {}, false);
+    expect(container.querySelector('span[title="No answers here in this period"]')).not.toBeNull();
+  });
+
+  it('says Paused, or No engine here, whatever its age', async () => {
+    // Copilot answers from Türkiye, not Kenya.
+    getTrackingCountries.mockResolvedValue([
+      { code: 'TR', models: ['chatgpt', 'copilot'] },
+      { code: 'KE', models: ['chatgpt'] },
+    ]);
+    const paused = prompt('p1', 'paused prompt', ['US'], 'Coffee', { isActive: false });
+    expect((await renderPending(paused, undefined, {}, false)).shown).toBe('Paused');
+    const copilot = prompt('p2', 'copilot only', ['KE'], 'Coffee', { platforms: ['copilot-web'] });
+    expect((await renderPending(copilot, 'KE', {}, false)).shown).toBe('No engine here');
+  });
+
+  it('shows the plain dash for a custom range that ended before today', async () => {
+    const { shown, tip } = await renderPending(prompt('p1', 'new prompt', ['US']), undefined, {
+      to: '2026-09-07T23:59:59Z',
+    });
+    expect(shown).toBe('—');
+    expect(tip).toBeNull();
+    expect(container.querySelector('span[title]')).toBeNull();
+  });
+
+  it('with a location picked, says it for that location', async () => {
+    getTrackingCountries.mockResolvedValue([
+      { code: 'TR', models: ['chatgpt', 'copilot'] },
+      { code: 'KE', models: ['chatgpt'] },
+    ]);
+    expect(await renderPending(prompt('p1', 'new prompt', ['US', 'TR']), 'TR')).toEqual({
+      shown: 'Within 24h',
+      tip: 'Tracked in Türkiye from the next daily run: its first results come within 24 hours.',
+    });
+    // None of its engines answers from there: no answers will come.
+    const copilot = prompt('p2', 'copilot only', ['KE'], 'Coffee', { platforms: ['copilot-web'] });
+    expect((await renderPending(copilot, 'KE')).shown).toBe('No engine here');
   });
 });
 
