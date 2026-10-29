@@ -16,7 +16,10 @@
  *   → 200: the hold went (nothing was billed). Safe to repeat.
  * A step a Stop aborted calls neither: its hold stays as its cost.
  *
- * Dollars never leave the server: no answer carries one.
+ * Dollars never leave the server: no answer carries one. Calls with the
+ * secret aren't counted by the API's per-IP limiter (isInternalChatBudgetCall
+ * in middleware/rate-limiter.js): each step makes two, from the web's few
+ * shared addresses.
  */
 
 import { Router } from 'express';

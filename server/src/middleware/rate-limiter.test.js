@@ -1,11 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import express from 'express';
 import {
+  apiLimiter,
   apiLimiterKey,
   botIngestKey,
   catalogCategoryLimiter,
   catalogLimiter,
   cmsLimiter,
+  isInternalChatBudgetCall,
   isJourneyBeacon,
   journeyEventKey,
   shoppingPathLimiter,
@@ -194,6 +196,79 @@ describe('rate-limiter – shopping path builds', () => {
       expect(builds.at(-1)).toBe(429);
       // The other buckets keep theirs.
       expect(await statuses('/cms', 1)).toEqual([200]);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+});
+
+describe('rate-limiter – the Chat engine’s budget calls', () => {
+  beforeEach(() => vi.stubEnv('CRON_SECRET', 'chat-secret'));
+  afterEach(() => vi.unstubAllEnvs());
+
+  const req = (path, authorization) => ({
+    baseUrl: '/api',
+    path,
+    headers: authorization ? { authorization } : {},
+  });
+
+  it('exempts only the budget path, and only with the internal secret', () => {
+    expect(
+      isInternalChatBudgetCall(req('/internal/chat/budget/reserve', 'Bearer chat-secret')),
+    ).toBe(true);
+    expect(
+      isInternalChatBudgetCall(req('/internal/chat/budget/charge', 'Bearer chat-secret')),
+    ).toBe(true);
+    // Without it, with another, or with the secret on any other path: counted.
+    expect(isInternalChatBudgetCall(req('/internal/chat/budget/reserve'))).toBe(false);
+    expect(isInternalChatBudgetCall(req('/internal/chat/budget/reserve', 'Bearer nope'))).toBe(
+      false,
+    );
+    expect(isInternalChatBudgetCall(req('/internal/chat/budget/reserve', 'chat-secret'))).toBe(
+      false,
+    );
+    expect(isInternalChatBudgetCall(req('/internal/ai-usage', 'Bearer chat-secret'))).toBe(false);
+    expect(isInternalChatBudgetCall(req('/internal/chat/budgetx', 'Bearer chat-secret'))).toBe(
+      false,
+    );
+    // No secret configured: nothing is exempt.
+    vi.stubEnv('CRON_SECRET', '');
+    expect(isInternalChatBudgetCall(req('/internal/chat/budget/reserve', 'Bearer '))).toBe(false);
+  });
+
+  it('never stops the secret’s budget calls, and still limits everything else from that address', async () => {
+    const app = express();
+    app.use('/api', apiLimiter);
+    app.post('/api/internal/chat/budget/reserve', (_req, res) => res.json({}));
+    app.get('/api/internal/ai-usage', (_req, res) => res.json({}));
+    const server = await new Promise((resolve) => {
+      const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+    });
+    const base = `http://127.0.0.1:${server.address().port}/api`;
+    const call = (method, path, secret) =>
+      fetch(base + path, {
+        method,
+        headers: secret ? { Authorization: `Bearer ${secret}` } : {},
+      }).then((r) => r.status);
+    try {
+      // Past the address's 250 a quarter-hour: none counted, none stopped.
+      const budget = [];
+      for (let i = 0; i < 260; i += 1) {
+        budget.push(await call('POST', '/internal/chat/budget/reserve', 'chat-secret'));
+      }
+      expect(new Set(budget)).toEqual(new Set([200]));
+
+      // The same address without the secret still gets its 250…
+      const plain = [];
+      for (let i = 0; i < 250; i += 1) plain.push(await call('GET', '/internal/ai-usage'));
+      expect(new Set(plain)).toEqual(new Set([200]));
+      // …then is stopped, on the budget path without the secret, with a wrong
+      // one, and on another internal path with the right one.
+      expect(await call('POST', '/internal/chat/budget/reserve')).toBe(429);
+      expect(await call('POST', '/internal/chat/budget/reserve', 'nope')).toBe(429);
+      expect(await call('GET', '/internal/ai-usage', 'chat-secret')).toBe(429);
+      // The secret's budget calls go on.
+      expect(await call('POST', '/internal/chat/budget/reserve', 'chat-secret')).toBe(200);
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }
