@@ -79,7 +79,8 @@ const onDomain = (host, domain) => host === domain || host.endsWith(`.${domain}`
 /**
  * The pages to read from the answers: the competitors' most cited first, then
  * the most cited in answers that don't name the brand, at most `perAction`;
- * and the brand's own page most cited there.
+ * and the brand's own page most cited there (`yours`), with all its own pages
+ * cited, the most cited first (`own`: learning C4's winning pages).
  *
  * @param {Array<{ mention_count?: number, citations?: Array<{ url?: string }> }>} answers
  * @param {{ ownDomains: string[], competitorDomains: string[], perAction?: number }} options
@@ -112,7 +113,8 @@ export function citedPages(answers, { ownDomains, competitorDomains, perAction =
   const ranked = (map) =>
     [...map.values()].sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
   const competitors = [...ranked(tally.rival), ...ranked(tally.other)].slice(0, perAction);
-  return { competitors, yours: ranked(tally.own)[0] ?? null };
+  const ownPages = ranked(tally.own);
+  return { competitors, yours: ownPages[0] ?? null, own: ownPages };
 }
 
 const passing = (checks) => FEATURE_CHECKS.filter((key) => checks?.[key] === 'pass');
@@ -182,6 +184,91 @@ export async function scopePromptIds(brandId, payload) {
 }
 
 /**
+ * Each page's features, set on it as `features` when it could be read: one
+ * read (or found unreadable) within `freshDays` is reused, the rest are read
+ * now, unless their site's robots.txt shuts the reader out, and kept
+ * (cited_page_features) with what the checks found, never the text. All of
+ * the pages are read the same night, or none: ReadLaterError when the
+ * brand's reads left today (`perBrandPerDay`, shared by every task that
+ * reads pages: C1's and C4's) can't cover them.
+ *
+ * @param {{ brandId: string,
+ *   pages: Array<{ key: string, url: string, domain: string, own?: boolean, features?: object }>,
+ *   now: Date, read: typeof fetchPage }} input
+ */
+export async function readPages({ brandId, pages, now, read = fetchPage }) {
+  if (pages.length === 0) return;
+  const [knownRes, todayRes] = await Promise.all([
+    supabaseAdmin
+      .from('cited_page_features')
+      .select('page_key, features, read_at')
+      .eq('brand_id', brandId)
+      .in(
+        'page_key',
+        pages.map((page) => page.key),
+      ),
+    supabaseAdmin
+      .from('cited_page_features')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', brandId)
+      .gte('read_at', `${now.toISOString().slice(0, 10)}T00:00:00.000Z`),
+  ]);
+  if (knownRes.error) throw new Error(knownRes.error.message);
+  if (todayRes.error) throw new Error(todayRes.error.message);
+  const freshSince = now.getTime() - C.freshDays * DAY_MS;
+  const fresh = new Map(
+    (knownRes.data ?? [])
+      .filter((row) => Date.parse(row.read_at) >= freshSince)
+      .map((row) => [row.page_key, row.features ?? {}]),
+  );
+  // A run that read some would compare a part, and its task wouldn't run again.
+  const toRead = pages.filter((page) => !fresh.has(page.key)).length;
+  if (toRead > C.perBrandPerDay - (todayRes.count ?? 0)) {
+    throw new ReadLaterError("the brand's page reads for today can't cover this action's");
+  }
+
+  const allowed = new Map();
+  for (const page of pages) {
+    if (fresh.has(page.key)) {
+      const known = fresh.get(page.key);
+      if (!known.unreadable) page.features = known;
+      continue;
+    }
+    let features = null;
+    let disallowed = false;
+    try {
+      const origin = new URL(page.url).origin;
+      if (!allowed.has(origin)) allowed.set(origin, await robotsAllow(page.url, read));
+      disallowed = !allowed.get(origin);
+      if (!disallowed) {
+        const fetched = await read(page.url, { timeoutMs: READ_TIMEOUT_MS });
+        features = await pageFeatures(fetched.url, fetched.html, now.getTime());
+      }
+    } catch {
+      // A page that blocks the reader, or isn't one: unreadable, not a failure.
+    }
+    if (features) page.features = features;
+    // An unreadable page is kept too: it counts against the day's reads and
+    // isn't tried again while it would be fresh.
+    const { error } = await supabaseAdmin.from('cited_page_features').upsert(
+      {
+        brand_id: brandId,
+        page_key: page.key,
+        url: page.url,
+        domain: page.domain,
+        own: Boolean(page.own),
+        features: features ?? { unreadable: true, ...(disallowed ? { disallowed: true } : {}) },
+        read_at: now.toISOString(),
+      },
+      { onConflict: 'brand_id,page_key' },
+    );
+    if (error) {
+      logger.warn({ err: error, brandId, page: page.key }, '[competitor-pages] read not kept');
+    }
+  }
+}
+
+/**
  * The "Analyze competitor content" task's result: the competitor pages read,
  * the brand's, and the checks the first pass that the second doesn't.
  *
@@ -240,77 +327,8 @@ export async function analyzeCompetitorPages({
     throw nothing('none_cited', 'no competitor page cited for these prompts lately');
   }
 
-  // What was read lately is reused, a page found unreadable too.
   const pages = [...picked.competitors, ...(picked.yours ? [{ ...picked.yours, own: true }] : [])];
-  const [knownRes, todayRes] = await Promise.all([
-    supabaseAdmin
-      .from('cited_page_features')
-      .select('page_key, features, read_at')
-      .eq('brand_id', brandId)
-      .in(
-        'page_key',
-        pages.map((page) => page.key),
-      ),
-    supabaseAdmin
-      .from('cited_page_features')
-      .select('id', { count: 'exact', head: true })
-      .eq('brand_id', brandId)
-      .gte('read_at', `${now.toISOString().slice(0, 10)}T00:00:00.000Z`),
-  ]);
-  if (knownRes.error) throw new Error(knownRes.error.message);
-  if (todayRes.error) throw new Error(todayRes.error.message);
-  const freshSince = now.getTime() - C.freshDays * DAY_MS;
-  const fresh = new Map(
-    (knownRes.data ?? [])
-      .filter((row) => Date.parse(row.read_at) >= freshSince)
-      .map((row) => [row.page_key, row.features ?? {}]),
-  );
-  // All of an action's pages are read the same night, or none: a run that
-  // read some would compare a part, and its task wouldn't run again.
-  const toRead = pages.filter((page) => !fresh.has(page.key)).length;
-  if (toRead > C.perBrandPerDay - (todayRes.count ?? 0)) {
-    throw new ReadLaterError("the brand's page reads for today can't cover this action's");
-  }
-
-  const allowed = new Map();
-  for (const page of pages) {
-    if (fresh.has(page.key)) {
-      const known = fresh.get(page.key);
-      if (!known.unreadable) page.features = known;
-      continue;
-    }
-    let features = null;
-    let disallowed = false;
-    try {
-      const origin = new URL(page.url).origin;
-      if (!allowed.has(origin)) allowed.set(origin, await robotsAllow(page.url, read));
-      disallowed = !allowed.get(origin);
-      if (!disallowed) {
-        const fetched = await read(page.url, { timeoutMs: READ_TIMEOUT_MS });
-        features = await pageFeatures(fetched.url, fetched.html, now.getTime());
-      }
-    } catch {
-      // A page that blocks the reader, or isn't one: unreadable, not a failure.
-    }
-    if (features) page.features = features;
-    // An unreadable page is kept too: it counts against the day's reads and
-    // isn't tried again while it would be fresh.
-    const { error } = await supabaseAdmin.from('cited_page_features').upsert(
-      {
-        brand_id: brandId,
-        page_key: page.key,
-        url: page.url,
-        domain: page.domain,
-        own: Boolean(page.own),
-        features: features ?? { unreadable: true, ...(disallowed ? { disallowed: true } : {}) },
-        read_at: now.toISOString(),
-      },
-      { onConflict: 'brand_id,page_key' },
-    );
-    if (error) {
-      logger.warn({ err: error, brandId, page: page.key }, '[competitor-pages] read not kept');
-    }
-  }
+  await readPages({ brandId, pages, now, read });
 
   const unreadable = pages.filter((page) => !page.features).length;
   const competitorPages = pages

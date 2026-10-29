@@ -182,8 +182,13 @@ describe('planTasks', () => {
 });
 
 describe('the task registry', () => {
-  it('holds the specification’s sixty-two task primitives', () => {
-    expect(libraryTasks()).toHaveLength(62);
+  it('holds the specification’s sixty-two task primitives, and learning C4’s', () => {
+    expect(libraryTasks()).toHaveLength(63);
+    expect(TASKS.analyze_winning_pages).toMatchObject({
+      mode: 'system',
+      requires: ['site_audits'],
+      tool: 'winning_page_features',
+    });
   });
 
   it.each(listTasks().map((entry) => [entry.id, entry]))('%s is well formed', (_id, entry) => {

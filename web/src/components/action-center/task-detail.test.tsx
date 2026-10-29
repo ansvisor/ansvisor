@@ -469,3 +469,74 @@ describe('TaskDetailView with competitor findings', () => {
     expect(text).toContain('FAQ schema — on 2 of 2 of their pages');
   });
 });
+
+/** What Find what sets your winning pages apart found (learning C4), shown on the task. */
+describe('TaskDetailView with winning-page findings', () => {
+  const findings = {
+    winningPages: [
+      {
+        url: 'https://acme.com/kettles/',
+        source: 'audit' as const,
+        words: null,
+        passes: ['tables'],
+      },
+      { url: 'https://acme.com/guide', source: 'read' as const, words: 1400, passes: [] },
+    ],
+    others: 12,
+    patterns: [
+      { key: 'faq-schema', label: 'FAQ schema', winners: 2, ofWinners: 2, others: 1, ofOthers: 12 },
+      { key: 'tables', label: 'Tables', winners: 1, ofWinners: 2, others: 0, ofOthers: 12 },
+    ],
+    missingPages: [{ url: 'https://acme.com/tea', missing: ['faq-schema', 'tables'] }],
+    unreadable: 0,
+    reason: null,
+  };
+
+  it('says which checks set the winning pages apart, and the pages that miss them', () => {
+    render(<TaskDetailView details={null} disabled={false} onEdit={() => {}} winning={findings} />);
+    const text = container.textContent!;
+    expect(text).toContain('What sets your winning pages apart');
+    expect(text).toContain('FAQ schema — winning pages 2 of 2, your other pages 1 of 12');
+    expect(text).toContain('Your 2 winning pages');
+    expect(text).toContain('acme.com/kettlesfrom its Site Audit');
+    expect(text).toContain('acme.com/guideread for this task · 1,400 words');
+    expect(text).toContain('acme.com/teamissing FAQ schema, Tables');
+    expect(text).toContain(
+      'Compared with 12 other pages of yours that Site Audit checked in the last 90 days.',
+    );
+    expect(container.querySelector('a[href="https://acme.com/tea"]')).not.toBeNull();
+  });
+
+  it('says when nothing sets them apart, and why nothing was compared', () => {
+    render(
+      <TaskDetailView
+        details={null}
+        disabled={false}
+        onEdit={() => {}}
+        winning={{ ...findings, patterns: [], missingPages: [] }}
+      />,
+    );
+    expect(container.textContent).toContain(
+      'Your other audited pages pass the same Site Audit checks your winning pages pass',
+    );
+    render(
+      <TaskDetailView
+        details={null}
+        disabled={false}
+        onEdit={() => {}}
+        winning={{
+          ...findings,
+          winningPages: [],
+          patterns: [],
+          missingPages: [],
+          others: 2,
+          reason: 'too_few_audited',
+        }}
+      />,
+    );
+    expect(container.textContent).toContain(
+      'Fewer than three of your other pages have a Site Audit from the last 90 days.',
+    );
+    expect(container.textContent).not.toContain('Compared with');
+  });
+});

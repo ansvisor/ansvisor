@@ -1051,6 +1051,7 @@ function TaskRow({
             check={check}
             draftWork={draftWork}
             competitor={task.competitorFindings}
+            winning={task.winningFindings}
           />
         ))}
 
