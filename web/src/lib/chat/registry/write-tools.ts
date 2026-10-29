@@ -17,7 +17,8 @@ import { FIXTURE_IDS, defineTool } from './define-tool';
  *
  * minRole follows the role model of 2026-10-29: daily work (drafts, tasks,
  * audits, reports) is open to every role; settings, deleting, adding prompts
- * and costly work stay with Admins and Managers.
+ * and costly work stay with Admins and Managers. Where the server leaves a
+ * role out of daily work, excludeRoles says so.
  */
 
 const BRAND = FIXTURE_IDS.brand;
@@ -89,6 +90,7 @@ export const WRITE_TOOLS = [
       'Mark a content opportunity reviewed, or dismiss it, optionally saying why (not relevant, or the wrong angle).',
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
+    // Dismissing is Admin and Manager work, as the server's content routes and RLS have it.
     minRole: 'manager',
     planGate: null,
     costClass: 'C0',
@@ -120,7 +122,9 @@ export const WRITE_TOOLS = [
       'Dismiss a pending prompt suggestion so it leaves the suggestion list. Only when the user asked for that suggestion to go.',
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
-    minRole: 'manager',
+    // Admins, Managers and Analysts, as the server (#1763), MCP (#1762) and RLS allow.
+    minRole: 'analyst',
+    excludeRoles: ['agency_partner'],
     planGate: null,
     costClass: 'C0',
     labelKey: 'dismissSuggestion',

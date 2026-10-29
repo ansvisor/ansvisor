@@ -12,6 +12,7 @@ import {
   effectivePolicy,
   parseTeamRole,
   policyChoices,
+  roleAllowed,
   type AdminPolicy,
   type ChatSettings,
   type PrecedenceContext,
@@ -59,6 +60,13 @@ const ROWS = {
   draft: row('draft', {
     class: 'write',
     costClass: 'C2',
+    defaultPolicy: 'ask_full_auto',
+    maxPolicy: 'always',
+  }),
+  // Daily work the server refuses Agency partners (#1762, #1763).
+  dismiss: row('dismiss', {
+    class: 'write',
+    excludeRoles: ['agency_partner'],
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
   }),
@@ -223,7 +231,7 @@ const TABLE: [string, ChatTool, PrecedenceContext, ToolCall, ToolDecision][] = [
     ROWS.readSpends,
     ctx({ role: 'analyst' }),
     call(),
-    deny({ code: 'forbidden_role', role: 'analyst', minRole: 'manager' }),
+    deny({ code: 'forbidden_role', role: 'analyst', roles: ['admin', 'manager'] }),
   ],
   // Writes: modes
   ['Auto asks before a change, offering the tick', ROWS.draft, ctx(), call(), ask('mode', true)],
@@ -241,19 +249,57 @@ const TABLE: [string, ChatTool, PrecedenceContext, ToolCall, ToolDecision][] = [
     call(),
     { kind: 'run', via: 'full_auto' },
   ],
+  // Always (decision of 2026-10-29): no card in Auto or Full auto; Ask me first still asks.
   [
     'Full auto runs a policy Always change',
     ROWS.addPrompts,
     ctx({ mode: 'full_auto', settings: settings({ toolPolicies: { addPrompts: 'always' } }) }),
     call(),
-    { kind: 'run', via: 'full_auto' },
+    { kind: 'run', via: 'always' },
   ],
   [
-    'Auto still asks for a policy Always change',
+    'Auto runs a policy Always change without a card',
     ROWS.addPrompts,
     ctx({ settings: settings({ toolPolicies: { addPrompts: 'always' } }) }),
     call(),
-    ask('mode', true),
+    { kind: 'run', via: 'always' },
+  ],
+  [
+    'Ask me first asks even for a policy Always change',
+    ROWS.addPrompts,
+    ctx({ mode: 'ask_first', settings: settings({ toolPolicies: { addPrompts: 'always' } }) }),
+    call(),
+    ask('mode'),
+  ],
+  [
+    'Always runs on Starter, where Full auto is locked',
+    ROWS.addPrompts,
+    ctx({ planKey: 'starter', settings: settings({ toolPolicies: { addPrompts: 'always' } }) }),
+    call(),
+    { kind: 'run', via: 'always' },
+  ],
+  [
+    'Always runs for a Manager with Full auto off for members',
+    ROWS.addPrompts,
+    ctx({
+      settings: settings({ toolPolicies: { addPrompts: 'always' }, fullAutoForMembers: false }),
+    }),
+    call(),
+    { kind: 'run', via: 'always' },
+  ],
+  [
+    'an MCP write set to Always asks',
+    ROWS.addPrompts,
+    ctx({ surface: 'mcp', settings: settings({ toolPolicies: { addPrompts: 'always' } }) }),
+    call(),
+    ask('mcp'),
+  ],
+  [
+    'a tainted write set to Always asks',
+    ROWS.addPrompts,
+    ctx({ settings: settings({ toolPolicies: { addPrompts: 'always' } }) }),
+    call({ tainted: true }),
+    ask('tainted'),
   ],
   [
     "Full auto asks where the Admin's policy is Ask",
@@ -403,25 +449,43 @@ const TABLE: [string, ChatTool, PrecedenceContext, ToolCall, ToolDecision][] = [
     ask('mode', true),
   ],
   [
+    'an Analyst may dismiss a prompt suggestion',
+    ROWS.dismiss,
+    ctx({ role: 'analyst' }),
+    call(),
+    ask('mode', true),
+  ],
+  [
+    "an Agency partner's dismissal is forbidden_role, as the server has it",
+    ROWS.dismiss,
+    ctx({ role: 'agency_partner', mode: 'full_auto' }),
+    call(),
+    deny({
+      code: 'forbidden_role',
+      role: 'agency_partner',
+      roles: ['admin', 'manager', 'analyst'],
+    }),
+  ],
+  [
     "an Analyst's prompt change is forbidden_role (§5a example 3)",
     ROWS.addPrompts,
     ctx({ role: 'analyst' }),
     call(),
-    deny({ code: 'forbidden_role', role: 'analyst', minRole: 'manager' }),
+    deny({ code: 'forbidden_role', role: 'analyst', roles: ['admin', 'manager'] }),
   ],
   [
     "an Agency partner's prompt change is forbidden_role",
     ROWS.addPrompts,
     ctx({ role: 'agency_partner', mode: 'full_auto' }),
     call(),
-    deny({ code: 'forbidden_role', role: 'agency_partner', minRole: 'manager' }),
+    deny({ code: 'forbidden_role', role: 'agency_partner', roles: ['admin', 'manager'] }),
   ],
   [
     "a Manager's workspace memory is forbidden_role",
     ROWS.workspaceMemory,
     ctx(),
     call(),
-    deny({ code: 'forbidden_role', role: 'manager', minRole: 'admin' }),
+    deny({ code: 'forbidden_role', role: 'manager', roles: ['admin'] }),
   ],
   [
     'a Growth write is locked on Starter',
@@ -520,7 +584,7 @@ const TABLE: [string, ChatTool, PrecedenceContext, ToolCall, ToolDecision][] = [
     ROWS.publish,
     ctx({ role: 'analyst' }),
     call(),
-    deny({ code: 'forbidden_role', role: 'analyst', minRole: 'manager' }),
+    deny({ code: 'forbidden_role', role: 'analyst', roles: ['admin', 'manager'] }),
   ],
   [
     'opening a pull request is locked on Starter (§5a example 3b)',
@@ -668,7 +732,7 @@ describe('CHAT-20 §21 acceptance criteria', () => {
       allowedTools(ALL_ROWS, ctx({ role: 'analyst', planKey: 'starter' }), call()).map(
         (t) => t.name,
       ),
-    ).toEqual(['read', 'readOff', 'readPlatforms', 'draft']);
+    ).toEqual(['read', 'readOff', 'readPlatforms', 'draft', 'dismiss']);
     expect(
       allowedTools(ALL_ROWS, ctx({ role: 'manager', planKey: 'growth' }), call()).map(
         (t) => t.name,
@@ -682,12 +746,14 @@ describe('CHAT-20 §21 acceptance criteria', () => {
       expect(parseTeamRole(old)).toBeNull();
     }
     for (const role of TEAM_ROLES) expect(parseTeamRole(role)).toBe(role);
-    // An Agency partner is decided as an Analyst (P0), wherever the two meet the same row.
+    // An Agency partner is decided as an Analyst (P0), except on a row that leaves them out.
     const as = (role: TeamRole) =>
-      DECIDED.filter((d) => d.ctx.role === role).map((d) =>
+      DECIDED.filter((d) => d.ctx.role === role && d.tool.excludeRoles.length === 0).map((d) =>
         JSON.stringify(d.decision).replace(role, '·'),
       );
     expect(as('agency_partner')).toEqual(as('analyst'));
+    expect(roleAllowed(ROWS.dismiss, 'analyst')).toBe(true);
+    expect(roleAllowed(ROWS.dismiss, 'agency_partner')).toBe(false);
     // The role a call is decided with is the context's, nothing kept: a changed role counts at once.
     expect(decideToolCall(ROWS.addPrompts, ctx({ role: 'manager' }), call()).kind).toBe('ask');
     expect(decideToolCall(ROWS.addPrompts, ctx({ role: 'analyst' }), call()).kind).toBe('deny');
@@ -734,8 +800,15 @@ describe('CHAT-20 §21 acceptance criteria', () => {
 
   it('locks Full auto and "Don\'t ask again" on Starter and in the trial', () => {
     const locked = (d: Decided) => d.ctx.plan.planId === 'starter' || d.ctx.plan.isTrial;
+    // Only an Admin's Always runs a change there; Full auto and the ticks don't.
     expect(
-      failures((d) => locked(d) && d.tool.class === 'write' && d.decision.kind === 'run'),
+      failures(
+        (d) =>
+          locked(d) &&
+          d.tool.class === 'write' &&
+          d.decision.kind === 'run' &&
+          d.decision.via !== 'always',
+      ),
     ).toEqual([]);
     expect(
       failures((d) => locked(d) && d.decision.kind === 'ask' && d.decision.offerDontAskAgain),
@@ -748,7 +821,7 @@ describe('CHAT-20 §21 acceptance criteria', () => {
     const readOnlyRoles = (d: Decided) =>
       (d.ctx.role === 'analyst' || d.ctx.role === 'agency_partner') &&
       d.tool.class !== 'read' &&
-      d.tool.minRole !== 'analyst';
+      !roleAllowed(d.tool, d.ctx.role);
     // Never a card, a click or a run: the refusal, or an earlier hard rule's.
     expect(failures((d) => readOnlyRoles(d) && d.decision.kind !== 'deny')).toEqual([]);
     const refusals = DECIDED.filter(readOnlyRoles).map((d) =>
@@ -764,7 +837,7 @@ describe('CHAT-20 §21 acceptance criteria', () => {
       ]),
     );
     expect(decideToolCall(ROWS.addPrompts, ctx({ role: 'analyst' }), call())).toEqual(
-      deny({ code: 'forbidden_role', role: 'analyst', minRole: 'manager' }),
+      deny({ code: 'forbidden_role', role: 'analyst', roles: ['admin', 'manager'] }),
     );
   });
 
@@ -864,13 +937,17 @@ describe('CHAT-20 §21 acceptance criteria', () => {
 });
 
 describe('the rest of the precedence', () => {
-  it('runs a WRITE without a card only in Full auto or under a counted tick', () => {
+  it('runs a WRITE without a card only under Always, in Full auto or under a counted tick', () => {
     expect(
       failures(
         (d) =>
           d.decision.kind === 'run' &&
           d.tool.class === 'write' &&
-          !(d.ctx.mode === 'full_auto' || (d.ctx.mode === 'auto' && d.ticked)),
+          !(
+            d.ctx.mode === 'full_auto' ||
+            (d.ctx.mode === 'auto' && d.ticked) ||
+            (d.ctx.mode === 'auto' && effectivePolicy(d.tool, d.ctx.settings) === 'always')
+          ),
       ),
     ).toEqual([]);
     // A tick counts only where Full auto could run the change, and the option is on.
@@ -882,11 +959,40 @@ describe('the rest of the precedence', () => {
           !(
             d.ctx.plan.fullAuto &&
             d.ctx.settings.dontAskAgain &&
-            effectivePolicy(d.tool, d.ctx.settings) !== 'ask' &&
+            effectivePolicy(d.tool, d.ctx.settings) === 'ask_full_auto' &&
             !d.tool.flags.alwaysCard
           ),
       ),
     ).toEqual([]);
+  });
+
+  it('runs an Always change in Auto and Full auto, and never in Ask me first, over MCP or tainted', () => {
+    const always = (d: Decided) =>
+      d.tool.class === 'write' && effectivePolicy(d.tool, d.ctx.settings) === 'always';
+    expect(
+      failures(
+        (d) =>
+          d.decision.kind === 'run' &&
+          d.decision.via === 'always' &&
+          (!always(d) || d.ctx.mode === 'ask_first' || d.ctx.surface === 'mcp' || d.call.tainted),
+      ),
+    ).toEqual([]);
+    // Wherever nothing else stops it, it runs: a card only for the person's mode, MCP or taint.
+    expect(
+      failures(
+        (d) =>
+          always(d) &&
+          d.ctx.mode !== 'ask_first' &&
+          d.ctx.surface === 'chat' &&
+          !d.call.tainted &&
+          d.decision.kind === 'ask',
+      ),
+    ).toEqual([]);
+    expect(
+      DECIDED.some(
+        (d) => d.ctx.mode === 'auto' && d.decision.kind === 'run' && d.decision.via === 'always',
+      ),
+    ).toBe(true);
   });
 
   it('offers the tick only on a card in Auto that the tick would lift', () => {

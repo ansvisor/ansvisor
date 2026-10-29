@@ -86,14 +86,14 @@ const ALL_DENIALS: ToolDenial[] = [
   { code: 'demo_brand' },
   { code: 'policy_never' },
   { code: 'plan_locked', needs: 'growth' },
-  { code: 'forbidden_role', role: 'analyst', minRole: 'manager' },
+  { code: 'forbidden_role', role: 'analyst', roles: ['admin', 'manager'] },
   { code: 'execute_off', group: 'publishing' },
 ];
 
 describe('buildDenial', () => {
   it("answers an Analyst's change with all four parts (§21: forbidden_role)", () => {
     expect(
-      build({ code: 'forbidden_role', role: 'analyst', minRole: 'manager' }, 'analyst', {
+      build({ code: 'forbidden_role', role: 'analyst', roles: ['admin', 'manager'] }, 'analyst', {
         target: 'Pricing prompts',
       }),
     ).toEqual({
@@ -110,7 +110,7 @@ describe('buildDenial', () => {
       nextActions: ['ask_admin', 'see_access'],
     });
     const partner = build(
-      { code: 'forbidden_role', role: 'agency_partner', minRole: 'manager' },
+      { code: 'forbidden_role', role: 'agency_partner', roles: ['admin', 'manager'] },
       'agency_partner',
     );
     expect(partner.rule.detail).toBe(
@@ -119,8 +119,17 @@ describe('buildDenial', () => {
     expect(partner.asked).toBe('You asked: Dismiss prompt suggestions.');
   });
 
+  it('names the roles a row allows, when it leaves one out', () => {
+    const denial = build(
+      { code: 'forbidden_role', role: 'agency_partner', roles: ['admin', 'manager', 'analyst'] },
+      'agency_partner',
+    );
+    expect(denial.whoCanRoles).toEqual(['admin', 'manager', 'analyst']);
+    expect(denial.whoCan).toBe('Admins, Managers, and Analysts can do this.');
+  });
+
   it('names Admins alone for an Admin-only change', () => {
-    const denial = build({ code: 'forbidden_role', role: 'manager', minRole: 'admin' }, 'manager', {
+    const denial = build({ code: 'forbidden_role', role: 'manager', roles: ['admin'] }, 'manager', {
       tool: memory,
     });
     expect(denial.whoCanRoles).toEqual(['admin']);

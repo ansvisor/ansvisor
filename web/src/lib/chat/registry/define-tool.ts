@@ -99,6 +99,12 @@ interface ToolFields<S extends z.ZodObject> {
   description: string;
   /** The lowest role that may call it: `analyst` means every role (CHAT-20 §20). */
   minRole: TeamRole;
+  /**
+   * Roles left out of a row open to every role, where the server and the
+   * database refuse them (an Agency partner dismissing a prompt suggestion).
+   * Never an Admin.
+   */
+  excludeRoles?: readonly TeamRole[];
   planGate: PlanGate | null;
   costClass: CostClass;
   /**
@@ -135,7 +141,9 @@ type ClassFields =
 
 export type ToolDefinition<S extends z.ZodObject> = ToolFields<S> & ClassFields;
 
-export type ChatTool<S extends z.ZodObject = z.ZodObject> = ToolFields<S> & {
+export type ChatTool<S extends z.ZodObject = z.ZodObject> = Omit<ToolFields<S>, 'excludeRoles'> & {
+  /** Roles left out of the row; empty for most. */
+  excludeRoles: readonly TeamRole[];
   class: ToolClass;
   defaultPolicy: ToolPolicy;
   maxPolicy: ToolPolicy;
@@ -164,9 +172,20 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     adminMayTurnOff: false,
     ...def.flags,
   };
+  const excludeRoles = [...(def.excludeRoles ?? [])];
+  if (excludeRoles.length > 0 && (def.minRole !== 'analyst' || excludeRoles.includes('admin'))) {
+    throw new Error(`${def.name}: only a row open to every role leaves roles out, never an Admin`);
+  }
   if (def.class === 'read') {
     if (flags.alwaysCard) throw new Error(`${def.name}: a read has no approval card`);
-    return { ...def, defaultPolicy: 'on', maxPolicy: 'on', flags, executeGroup: null };
+    return {
+      ...def,
+      defaultPolicy: 'on',
+      maxPolicy: 'on',
+      flags,
+      excludeRoles,
+      executeGroup: null,
+    };
   }
   if (flags.adminMayTurnOff) throw new Error(`${def.name}: only a read is switched off`);
   if (def.class === 'execute') {
@@ -181,7 +200,7 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     if (!EXECUTE_GROUPS.includes(def.executeGroup)) {
       throw new Error(`${def.name}: an execute belongs to a go-live group`);
     }
-    return { ...def, defaultPolicy: 'click', maxPolicy: 'click', flags };
+    return { ...def, defaultPolicy: 'click', maxPolicy: 'click', flags, excludeRoles };
   }
   if (def.class !== 'write') throw new Error('A tool is a read, a write or an execute');
   if (!WRITE_POLICIES.includes(def.defaultPolicy) || !WRITE_POLICIES.includes(def.maxPolicy)) {
@@ -193,5 +212,5 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
   if (flags.alwaysCard && def.maxPolicy !== 'ask') {
     throw new Error(`${def.name}: an always_card write never runs without a card`);
   }
-  return { ...def, flags, executeGroup: null };
+  return { ...def, flags, excludeRoles, executeGroup: null };
 }

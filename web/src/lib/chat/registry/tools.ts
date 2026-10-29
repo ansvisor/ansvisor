@@ -1,3 +1,4 @@
+import type { TeamRole } from '@/components/providers/role-provider';
 import type { ChatTool, PlanGate, ToolFlags } from './define-tool';
 import { READ_TOOLS } from './read-tools';
 import { WRITE_TOOLS } from './write-tools';
@@ -36,6 +37,8 @@ export type ToolCatalogEntry = Pick<
   key: string;
   flags: ToolFlags;
   planGate: PlanGate | null;
+  /** Roles left out of a row open to every role. */
+  excludeRoles: TeamRole[];
 };
 
 /**
@@ -56,6 +59,7 @@ export function registryCatalog(tools: readonly ChatTool[] = CHAT_TOOLS): ToolCa
     maxPolicy: tool.maxPolicy,
     flags: { ...tool.flags },
     minRole: tool.minRole,
+    excludeRoles: [...tool.excludeRoles],
     planGate: tool.planGate ? { ...tool.planGate } : null,
     costClass: tool.costClass,
     route: tool.route,

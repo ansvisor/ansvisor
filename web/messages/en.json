@@ -3056,7 +3056,13 @@
       "execute_off": "An Admin turned {group, select, publishing {publishing} email_outreach {email and outreach} code_prs {pull requests} other {feed pushes}} off for Managers.",
       "plan_locked": "This needs the {needs} plan. You're on {current}.",
       "plan_locked_trial": "This isn't in the trial. It needs the {needs} plan.",
-      "forbidden_role": "Your role is {roleName}, and {role, select, manager {Managers} analyst {Analysts} agency_partner {Agency Partners} other {Admins}} can't do this."
+      "forbidden_role": "Your role is {roleName}, and {rolePlural} can't do this."
+    },
+    "rolesPlural": {
+      "admin": "Admins",
+      "manager": "Managers",
+      "analyst": "Analysts",
+      "agency_partner": "Agency Partners"
     },
     "source": {
       "roles": "Settings › Team › Roles & access",
@@ -3064,8 +3070,7 @@
       "billing": "Settings › Billing"
     },
     "whoCan": {
-      "admins": "Admins can do this.",
-      "adminsManagers": "Admins and Managers can do this.",
+      "roles": "{roles} can do this.",
       "brands": "Admins can share more brands with you.",
       "choosePlan": "Admins can choose a plan.",
       "demo": "No one: the demo brand keeps its sample data."

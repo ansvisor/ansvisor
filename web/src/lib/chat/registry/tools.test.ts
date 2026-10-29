@@ -60,7 +60,7 @@ vi.mock('@/lib/actions/prompt-suggestions', () => ({
 
 const { CHAT_TOOLS, chatTool, chatToolByKey, registryCatalog } = await import('./tools');
 const { FIXTURE_IDS, defineTool } = await import('./define-tool');
-const { DEFAULT_CHAT_SETTINGS, allowedTools } = await import('../precedence');
+const { DEFAULT_CHAT_SETTINGS, allowedRoles, allowedTools } = await import('../precedence');
 const { planFactsFromOrgRow } = await import('../plan-facts');
 
 const ctx = { userId: 'user-1', email: null, organizationId: 'org-1', apiKeyId: 'agent-internal' };
@@ -266,12 +266,28 @@ describe('approval policies', () => {
   });
 
   it('opens daily work to every role and keeps the rest with Admins and Managers', () => {
-    // The role model of 2026-10-29: drafts are daily work; the other writes here stay closed.
-    const openToAll = CHAT_TOOLS.filter((t) => t.class !== 'read' && t.minRole === 'analyst');
-    expect(openToAll.map((t) => t.name)).toEqual(['create_draft']);
-    for (const tool of CHAT_TOOLS.filter((t) => t.class !== 'read' && t.minRole !== 'analyst')) {
-      expect(tool.minRole).toBe('manager');
+    // The role model of 2026-10-29, as the server (#1763), MCP (#1762) and RLS have each write.
+    const writes = CHAT_TOOLS.filter((t) => t.class !== 'read');
+    expect(Object.fromEntries(writes.map((t) => [t.name, allowedRoles(t)]))).toEqual({
+      create_draft: ['admin', 'manager', 'analyst', 'agency_partner'],
+      update_opportunity: ['admin', 'manager'],
+      dismiss_prompt_suggestion: ['admin', 'manager', 'analyst'],
+    });
+    for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
+      expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);
     }
+  });
+
+  it('leaves roles out only of a row open to every role, and never an Admin', () => {
+    const write = { ...readRow, class: 'write' as const, defaultPolicy: 'ask', maxPolicy: 'ask' };
+    expect(
+      defineTool({ ...write, excludeRoles: ['agency_partner'] } as never).excludeRoles,
+    ).toEqual(['agency_partner']);
+    expect(defineTool(readRow).excludeRoles).toEqual([]);
+    expect(() =>
+      defineTool({ ...write, minRole: 'manager', excludeRoles: ['analyst'] } as never),
+    ).toThrow(/every role/);
+    expect(() => defineTool({ ...write, excludeRoles: ['admin'] } as never)).toThrow(/Admin/);
   });
 
   it('keeps every execute at a click', () => {
@@ -333,6 +349,7 @@ describe('registryCatalog', () => {
           'class',
           'costClass',
           'defaultPolicy',
+          'excludeRoles',
           'flags',
           'key',
           'maxPolicy',
@@ -416,12 +433,20 @@ describe("the model's tool list on the registry's rows", () => {
   const growth = facts({ plan: 'growth', subscription_status: 'active' });
   const withoutShopping = reads.filter((name) => name !== 'get_shopping_visibility');
 
-  it('gives every role the reads its plan opens, and Analysts daily work only', () => {
-    expect(list('analyst', starter)).toEqual([...withoutShopping, 'create_draft']);
+  it('gives every role the reads its plan opens, and Analysts and Agency partners daily work only', () => {
+    expect(list('analyst', starter)).toEqual([
+      ...withoutShopping,
+      'create_draft',
+      'dismiss_prompt_suggestion',
+    ]);
     expect(list('agency_partner', growth)).toEqual([...reads, 'create_draft']);
     expect(list('manager', starter)).toEqual([...withoutShopping, ...writes]);
     expect(list('admin', growth)).toEqual([...reads, ...writes]);
-    expect(list('analyst', facts(null, false))).toEqual([...reads, 'create_draft']);
+    expect(list('analyst', facts(null, false))).toEqual([
+      ...reads,
+      'create_draft',
+      'dismiss_prompt_suggestion',
+    ]);
   });
 
   it('lists reads only on a read-only workspace and on the demo brand', () => {

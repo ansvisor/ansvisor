@@ -28,16 +28,23 @@ import {
  *      always_card WRITE at most a card, in every mode.
  *   2. Plan gates (§7): the tool's own; Full auto and "Don't ask again" are
  *      Growth and up, paid. None on self-hosted.
- *   3. The live role (§4), against the row's minRole. The roles follow the
- *      role model of 2026-10-29: daily work (drafts, tasks, audits, reports)
- *      open to every role; settings, deleting, adding prompts and costly
- *      work to Admins and Managers. Agency partners act as Analysts until
- *      brand sharing (Wave 2).
+ *   3. The live role (§4), against the row's minRole and the roles it
+ *      leaves out. The roles follow the role model of 2026-10-29: daily work
+ *      (drafts, tasks, audits, reports) open to every role; settings,
+ *      deleting, adding prompts and costly work to Admins and Managers.
+ *      Agency partners act as Analysts until brand sharing (Wave 2), except
+ *      where a row leaves them out as the server does.
  *   4. The Admin's policy: the tool's level (Ask, Ask with auto in Full
  *      auto, Always), Full auto for people other than Admins, and the go-live
  *      groups switched off for Managers.
- *   5. The run mode: Ask me first and Auto show a card for every WRITE; Full
- *      auto runs one its policy allows. No Full auto over MCP in v1.
+ *   5. The run mode: Ask me first shows a card for every WRITE. Auto shows
+ *      one too, except for a tool whose policy is Always, which runs in Auto
+ *      and Full auto alike. Full auto also runs "Ask (auto allowed in Full
+ *      auto)". No WRITE runs by itself over MCP in v1.
+ *      Differs from §5 step 5 as written ("Auto: each WRITE shows a card"),
+ *      by decision of 2026-10-29: otherwise Always and "Ask (auto allowed in
+ *      Full auto)" would do the same. Step 5's card in Auto holds for every
+ *      tool not set to Always; EXECUTE and always_card rows can't be Always.
  *   6. "Don't ask again": in Auto, the person's tick runs that WRITE as Full
  *      auto would, and only where Full auto could.
  *   7. Taint (§16a): a WRITE whose target or text came from untrusted content
@@ -60,14 +67,19 @@ export function parseTeamRole(value: unknown): TeamRole | null {
 // Analyst and Agency partner rank the same: "Analyst" in a row's minRole means every role (§20).
 const ROLE_RANK: Record<TeamRole, number> = { admin: 2, manager: 1, analyst: 0, agency_partner: 0 };
 
-/** Whether a role may call a row whose lowest role is minRole. */
+/** Whether a role is at or above minRole. */
 export function roleMeets(role: TeamRole, minRole: TeamRole): boolean {
   return ROLE_RANK[role] >= ROLE_RANK[minRole];
 }
 
+/** Whether a role may call a row: at or above its minRole, and not one it leaves out. */
+export function roleAllowed(tool: Pick<ChatTool, 'minRole' | 'excludeRoles'>, role: TeamRole) {
+  return roleMeets(role, tool.minRole) && !tool.excludeRoles.includes(role);
+}
+
 /** The roles that may call a row: a denial's "who can", by role, never by person (§4c). */
-export function rolesFor(minRole: TeamRole): TeamRole[] {
-  return TEAM_ROLES.filter((role) => roleMeets(role, minRole));
+export function allowedRoles(tool: Pick<ChatTool, 'minRole' | 'excludeRoles'>): TeamRole[] {
+  return TEAM_ROLES.filter((role) => roleAllowed(tool, role));
 }
 
 /** The run modes of the composer (CHAT-02): Ask me first · Auto, ask before changes · Full auto. */
@@ -135,7 +147,8 @@ export type ToolDenial =
   | { code: 'demo_brand' }
   | { code: 'policy_never' }
   | { code: 'plan_locked'; needs: PlanId }
-  | { code: 'forbidden_role'; role: TeamRole; minRole: TeamRole }
+  /** roles: the ones that may call it. */
+  | { code: 'forbidden_role'; role: TeamRole; roles: TeamRole[] }
   | { code: 'execute_off'; group: ExecuteGroup };
 
 /** Why a WRITE stops at a card: the first step that kept it from running by itself. */
@@ -150,8 +163,8 @@ export type AskReason =
   | 'tainted';
 
 export type ToolDecision =
-  /** It runs now: a READ, or a WRITE in Full auto or under the person's "Don't ask again". */
-  | { kind: 'run'; via: 'read' | 'full_auto' | 'dont_ask_again' }
+  /** It runs now: a READ, or a WRITE set to Always, in Full auto, or under the person's tick. */
+  | { kind: 'run'; via: 'read' | 'always' | 'full_auto' | 'dont_ask_again' }
   /** An approval card; offerDontAskAgain: the card may offer the tick (§6). */
   | { kind: 'ask'; reason: AskReason; offerDontAskAgain: boolean }
   /** An EXECUTE: only the person's click runs it. */
@@ -228,8 +241,8 @@ export function decideToolCall(
   }
 
   // 3. The live role.
-  if (!roleMeets(ctx.role, tool.minRole)) {
-    return deny({ code: 'forbidden_role', role: ctx.role, minRole: tool.minRole });
+  if (!roleAllowed(tool, ctx.role)) {
+    return deny({ code: 'forbidden_role', role: ctx.role, roles: allowedRoles(tool) });
   }
 
   if (tool.class === 'read') return { kind: 'run', via: 'read' };
@@ -246,7 +259,7 @@ export function decideToolCall(
   return decideWrite(tool, ctx, call, policy as WritePolicy);
 }
 
-/** Steps 1 and 4–7 for a WRITE the plan and the role allow. */
+/** Steps 1 and 2, 4–7 for a WRITE the plan and the role allow. */
 function decideWrite(
   tool: ChatTool,
   ctx: PrecedenceContext,
@@ -264,11 +277,19 @@ function decideWrite(
 
   // 1. A card in every mode.
   if (tool.flags.alwaysCard) return ask('always_card');
+  // 5. The person asked to be asked first: their mode wins over every policy.
+  if (ctx.mode === 'ask_first') return ask('mode');
+  // 4–5. Set to Always by an Admin: runs in Auto and Full auto, on any plan (see the header).
+  if (policy === 'always') {
+    if (ctx.surface === 'mcp') return ask('mcp');
+    if (tainted) return ask('tainted');
+    return { kind: 'run', via: 'always' };
+  }
   // 5–6. What the person asked for: Full auto, or in Auto their tick on this tool.
   const via =
     ctx.mode === 'full_auto'
       ? 'full_auto'
-      : ctx.mode === 'auto' && ctx.autoChoices.has(tool.labelKey)
+      : ctx.autoChoices.has(tool.labelKey)
         ? 'dont_ask_again'
         : null;
   if (!via) return ask('mode');
@@ -286,12 +307,15 @@ function decideWrite(
   return { kind: 'run', via };
 }
 
-/** Whether a "Don't ask again" tick would run this WRITE: where Full auto could, with the option on. */
+/**
+ * Whether a "Don't ask again" tick would run this WRITE: where Full auto
+ * could, with the option on. An Always tool runs without one.
+ */
 function tickWouldCount(tool: ChatTool, ctx: PrecedenceContext, policy: WritePolicy): boolean {
   return (
     !tool.flags.alwaysCard &&
     ctx.plan.fullAuto &&
-    policy !== 'ask' &&
+    policy === 'ask_full_auto' &&
     (ctx.role === 'admin' || ctx.settings.fullAutoForMembers) &&
     ctx.surface === 'chat' &&
     ctx.settings.dontAskAgain

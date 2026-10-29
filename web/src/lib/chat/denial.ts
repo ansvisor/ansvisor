@@ -3,7 +3,7 @@ import messages from '../../../messages/en.json';
 import type { TeamRole } from '@/components/providers/role-provider';
 import { PLANS, type PlanId } from '@/config/plans';
 import type { NextPlan, PlanFacts } from './plan-facts';
-import { rolesFor, type ToolDenial } from './precedence';
+import type { ToolDenial } from './precedence';
 import type { ChatTool } from './registry/define-tool';
 
 /**
@@ -68,9 +68,11 @@ const planName = (id: PlanId) => PLANS[id].name;
 const askOrOwn = (role: TeamRole, own: DenialNextAction[]): DenialNextAction[] =>
   role === 'admin' ? own : ['ask_admin', ...own];
 
+const roleList = new Intl.ListFormat('en-US', { type: 'conjunction' });
+
+/** "Admins can do this.", "Admins and Managers can do this." */
 function whoCanText(roles: TeamRole[]): string {
-  if (roles.length === 1 && roles[0] === 'admin') return t('whoCan.admins');
-  return t('whoCan.adminsManagers');
+  return t('whoCan.roles', { roles: roleList.format(roles.map((r) => t(`rolesPlural.${r}`))) });
 }
 
 /** The four parts of a denial, for the person whose call it refused. */
@@ -125,7 +127,7 @@ export function buildDenial(denial: ToolDenial, input: DenialInput): ChatDenial 
           source: t('source.chat'),
         },
         whoCanRoles: ['admin'],
-        whoCan: t('whoCan.admins'),
+        whoCan: whoCanText(['admin']),
         nextActions: role === 'admin' ? ['open_policy'] : ['ask_admin', 'see_access'],
       };
     case 'execute_off':
@@ -138,7 +140,7 @@ export function buildDenial(denial: ToolDenial, input: DenialInput): ChatDenial 
           source: t('source.chat'),
         },
         whoCanRoles: ['admin'],
-        whoCan: t('whoCan.admins'),
+        whoCan: whoCanText(['admin']),
         nextActions: askOrOwn(role, ['see_access']),
       };
     case 'plan_locked': {
@@ -154,7 +156,7 @@ export function buildDenial(denial: ToolDenial, input: DenialInput): ChatDenial 
           source: t('source.billing'),
         },
         whoCanRoles: ['admin'],
-        whoCan: t('whoCan.admins'),
+        whoCan: whoCanText(['admin']),
         nextActions: askOrOwn(role, [
           ...(role === 'admin'
             ? [plan.isTrial ? ('choose_plan' as const) : ('upgrade' as const)]
@@ -170,13 +172,16 @@ export function buildDenial(denial: ToolDenial, input: DenialInput): ChatDenial 
       };
     }
     case 'forbidden_role': {
-      const whoCanRoles = rolesFor(denial.minRole);
+      const whoCanRoles = [...denial.roles];
       return {
         ...base,
         status: 403,
         rule: {
           kind: 'role',
-          detail: t('rule.forbidden_role', { role: denial.role, roleName: roleName(denial.role) }),
+          detail: t('rule.forbidden_role', {
+            roleName: roleName(denial.role),
+            rolePlural: t(`rolesPlural.${denial.role}`),
+          }),
           source: t('source.roles'),
         },
         whoCanRoles,

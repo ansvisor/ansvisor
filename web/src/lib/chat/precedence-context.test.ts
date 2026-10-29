@@ -103,7 +103,7 @@ describe('readPrecedenceContext', () => {
       decideToolCall(addPrompts, next!, { brandId: null, brandIsDemo: false, tainted: false }),
     ).toEqual({
       kind: 'deny',
-      denial: { code: 'forbidden_role', role: 'analyst', minRole: 'manager' },
+      denial: { code: 'forbidden_role', role: 'analyst', roles: ['admin', 'manager'] },
     });
     // From the profile, by the person's id, each time.
     const profileReads = db.reads.filter((read) => read.table === 'profiles');
