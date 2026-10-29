@@ -132,6 +132,9 @@ export async function getSuggestionSourceStates(brandId: string): Promise<Sugges
     fetch(`${API_BASE_URL}/api/integrations/config`, {
       headers: await authHeaders(),
       cache: 'no-store',
+      // The Suggestions tab sends this before the list's own read, and Next
+      // runs server actions one at a time: a hung API must not hold the list.
+      signal: AbortSignal.timeout(15_000),
     })
       .then((r) => (r.ok ? (r.json() as Promise<ConfigBody>) : ({} as ConfigBody)))
       .catch(() => ({}) as ConfigBody),
