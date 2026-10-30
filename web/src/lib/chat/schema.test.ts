@@ -5,10 +5,10 @@ import { describe, expect, it } from 'vitest';
 import { CHAT_MODES } from './precedence';
 
 /**
- * Chat's Wave 1 tables (00407–00413) as the migrations leave them: who reads
- * them, what stays with the server, and the limits the specs set. Read from
- * the SQL, as events.test.ts reads the step kinds: the repository has no
- * database tests.
+ * Chat's Wave 1 (00407–00413) and Wave 2 (00417–00422) tables as the
+ * migrations leave them: who reads them, what stays with the server, and the
+ * limits the specs set. Read from the SQL, as events.test.ts reads the step
+ * kinds: the repository has no database tests.
  */
 
 const dir = fileURLToPath(new URL('../../../../supabase/migrations', import.meta.url));
@@ -55,8 +55,8 @@ function bucket(id: string) {
 }
 
 /** A policy's text, from its name to the end of its statement. */
-function policy(name: string): string {
-  const m = sql.match(new RegExp(`create policy "${name}"[^;]*;`));
+function policy(name: string, from = sql): string {
+  const m = from.match(new RegExp(`create policy "${name}"[^;]*;`));
   if (!m) throw new Error(`No policy ${name}`);
   return m[0].replace(/\s+/g, ' ');
 }
@@ -237,5 +237,262 @@ describe('add-on packs', () => {
     expect(migration('00413')).toMatch(
       /alter table public\.prompt_improve_usage\s+add column if not exists grant_id uuid\s+references public\.ai_credit_grants\(id\) on delete set null/,
     );
+  });
+});
+
+const WAVE_2 = ['00417', '00418', '00419', '00420', '00421', '00422'];
+const wave2 = WAVE_2.map(migration).join('\n');
+
+/** The tables Wave 2 creates. */
+const created2 = [...wave2.matchAll(/create table if not exists public\.(\w+)/g)].map((m) => m[1]);
+
+/** A table's create statement, from its name to its closing parenthesis. */
+function table(name: string): string {
+  const m = wave2.match(
+    new RegExp(`create table if not exists public\\.${name} \\(([\\s\\S]*?)\\n\\);`),
+  );
+  if (!m) throw new Error(`No table ${name}`);
+  return m[1];
+}
+
+/** The values a column's check allows, in order. */
+function allowed(text: string, column: string): string[] {
+  const m = text.match(new RegExp(`\\b${column} in \\(([^)]*)\\)`));
+  if (!m) throw new Error(`No check on ${column}`);
+  return [...m[1].matchAll(/'([a-z0-9_]+)'/g)].map((v) => v[1]);
+}
+
+/** The one outcome vocabulary (decision 13, CHAT-22 shared rule 3). */
+const OUTCOMES = ['pending', 'improved', 'no_meaningful_change', 'declined', 'not_measurable'];
+
+describe('Wave 2 tables', () => {
+  it('creates the tables the plan lists', () => {
+    expect(created2.sort()).toEqual(
+      [
+        'chat_asks',
+        'chat_next_moves',
+        'chat_task_state',
+        'chat_agents',
+        'chat_agent_versions',
+        'chat_agent_triggers',
+        'chat_agent_runs',
+        'chat_why_analyses',
+        'ship_events',
+        'impact_measurements',
+        'impact_control_sets',
+        'chat_suggestion_feeds',
+        'chat_suggestions',
+      ].sort(),
+    );
+  });
+
+  it('turns row level security on for each of them', () => {
+    for (const name of created2) {
+      expect(wave2, name).toMatch(
+        new RegExp(`alter table public\\.${name} enable row level security`),
+      );
+    }
+  });
+
+  it('lets members read at most: every write is the server’s', () => {
+    expect(wave2).not.toMatch(/grant (insert|update|delete|all)[^;]*to authenticated/);
+    expect(wave2).not.toMatch(/create policy[^;]*for (insert|update|delete|all)\b/);
+  });
+
+  it('keeps the agent queue, the holds and the agents’ shares with the server', () => {
+    for (const fn of [
+      'chat_start_next_agent_run',
+      'reserve_chat_ai_usage',
+      'chat_agent_usage_shares',
+    ]) {
+      expect(wave2, fn).toMatch(
+        new RegExp(
+          `revoke all on function public\\.${fn}\\([^)]*\\)\\s+from public, anon, authenticated`,
+        ),
+      );
+      expect(wave2, fn).not.toMatch(
+        new RegExp(`grant execute on function public\\.${fn}\\([^)]*\\)\\s+to authenticated`),
+      );
+    }
+  });
+});
+
+describe('questions and next moves', () => {
+  const asks = table('chat_asks');
+  const moves = table('chat_next_moves');
+
+  it('ask at most 4 questions a run, in order', () => {
+    expect(asks).toMatch(/position smallint not null check \(position between 1 and 4\)/);
+    expect(asks).toMatch(/unique \(run_id, position\)/);
+  });
+
+  it('give each question 2–4 options with exactly one Recommended', () => {
+    const fn = migration('00417');
+    expect(fn).toMatch(/jsonb_array_length\(p_options\) not between 2 and 4 then false/);
+    expect(fn).toMatch(/count\(\*\) filter \(where o -> 'recommended' = 'true'::jsonb\) = 1/);
+    expect(asks).toMatch(/public\.chat_ask_options_valid\(options_json\)/);
+  });
+
+  it('rank 2–4 moves whose prompts fit as ghost text, each with its action class', () => {
+    expect(moves).toMatch(/rank smallint not null check \(rank between 1 and 4\)/);
+    expect(moves).toMatch(/prompt text not null check \(char_length\(prompt\) between 1 and 80\)/);
+    expect(allowed(moves, 'class')).toEqual(['read', 'write', 'execute']);
+  });
+
+  it('keep the shortcut on the person’s message only', () => {
+    expect(migration('00417')).toMatch(/check \(shortcut_id is null or role = 'user'\)/);
+  });
+});
+
+describe('the task strip', () => {
+  it('holds Chat’s own status, never the task’s Action Center one', () => {
+    const strip = table('chat_task_state');
+    expect(allowed(strip, 'chat_status')).toEqual([
+      'queued',
+      'writing',
+      'ready_for_review',
+      'done',
+    ]);
+    expect(migration('00418')).not.toMatch(/alter table public\.action_tasks/);
+  });
+});
+
+describe('agents', () => {
+  const agents = table('chat_agents');
+  const versions = table('chat_agent_versions');
+  const runs = table('chat_agent_runs');
+  const agentSql = migration('00419');
+
+  it('go draft, active, paused, archived, with a reason when paused', () => {
+    expect(allowed(agents, 'status')).toEqual(['draft', 'active', 'paused', 'archived']);
+    expect(allowed(agents, 'paused_reason')).toEqual([
+      'cap',
+      'connection',
+      'skill_off',
+      'failures',
+      'owner_role',
+      'plan',
+      'brand_gone',
+      'manual',
+    ]);
+    expect(agents).toMatch(/check \(\(status = 'paused'\) = \(paused_reason is not null\)\)/);
+  });
+
+  it('run in one of the composer’s modes, with 1–3 skills and no key', () => {
+    expect(allowed(versions, 'mode')).toEqual([...CHAT_MODES]);
+    expect(versions).toMatch(/cardinality\(skill_ids\) between 1 and 3/);
+    expect(`${agents}\n${versions}`).not.toMatch(/key_encrypted|api_key/);
+  });
+
+  it('cap a run at 10% of the AI limit by default, 1–50%', () => {
+    expect(agents).toMatch(
+      /max_run_share numeric\(3, 2\) not null default 0\.10 check \(max_run_share between 0\.01 and 0\.50\)/,
+    );
+    expect(agentSql).toMatch(
+      /agent_run_share_default numeric\(3, 2\) not null default 0\.10\s+check \(agent_run_share_default between 0\.01 and 0\.50\)/,
+    );
+  });
+
+  it('keep CHAT-21’s run statuses, queued and skipped included', () => {
+    expect(allowed(runs, 'status')).toEqual([
+      'queued',
+      'running',
+      'needs_you',
+      'done',
+      'failed',
+      'stopped',
+      'skipped',
+      'paused_cap',
+    ]);
+    expect(allowed(runs, 'outcome')).toEqual(OUTCOMES);
+  });
+
+  it('run one at a time per agent and brand', () => {
+    expect(agentSql).toMatch(
+      /on public\.chat_agent_runs \(agent_id, brand_id\)\s+where status in \('running', 'needs_you'\)/,
+    );
+  });
+
+  it('show a run’s chat to whoever reads the run, never once deleted', () => {
+    const text = policy('chat_conversations: agent run select', agentSql);
+    expect(text).toContain('agent_run_id in (select r.id from public.chat_agent_runs r)');
+    expect(text).toContain('deleted_at is null');
+  });
+
+  it('show a private agent to its owner and the Admins only', () => {
+    const text = policy('chat_agents: member select', agentSql);
+    expect(text).toContain("p.role = 'admin'");
+    expect(text).toContain("chat_agents.visibility = 'workspace'");
+    expect(text).toContain('chat_agents.owner_id = auth.uid()');
+  });
+
+  it('give a subtask no message of its own, one level deep', () => {
+    expect(agentSql).toMatch(/\(parent_run_id is null\) = \(message_id is not null\)/);
+    expect(agentSql).toMatch(/and p\.parent_run_id is null/);
+    expect(agentSql).toMatch(/\) >= 10 then/);
+  });
+
+  it('keep the server’s hold arguments, adding the agent run and its cap', () => {
+    const fn = agentSql.match(
+      /create or replace function public\.reserve_chat_ai_usage\(([^)]*)\)/,
+    )?.[1];
+    const names = [...(fn ?? '').matchAll(/(p_\w+)/g)].map((m) => m[1]);
+    expect(names).toEqual([
+      'p_organization_id',
+      'p_chat_run_id',
+      'p_chat_run_step_id',
+      'p_feature',
+      'p_model',
+      'p_cost',
+      'p_own_key',
+      'p_since',
+      'p_budget',
+      'p_agent_run_id',
+      'p_run_cap',
+    ]);
+    expect(fn).toMatch(/p_agent_run_id\s+uuid default null/);
+    expect(fn).toMatch(/p_run_cap\s+numeric default null/);
+  });
+
+  it('give each agent’s spend as shares, never as costs', () => {
+    expect(agentSql).toMatch(
+      /returns table \(agent_id uuid, share numeric, own_key_share numeric, runs integer\)/,
+    );
+  });
+});
+
+describe('the impact ledger', () => {
+  const measurements = table('impact_measurements');
+
+  it('measures each ship event once, in the one outcome vocabulary', () => {
+    expect(measurements).toMatch(
+      /ship_event_id uuid not null unique references public\.ship_events\(id\)/,
+    );
+    expect(allowed(measurements, 'outcome')).toEqual(OUTCOMES);
+    expect(allowed(measurements, 'confidence')).toEqual(['low', 'medium', 'high']);
+  });
+
+  it('checks at 7, 14, 30 and 90 days', () => {
+    for (const name of ['impact_measurements', 'impact_control_sets']) {
+      expect(allowed(table(name), 'checkpoint'), name).toEqual(['d7', 'd14', 'd30', 'd90']);
+    }
+  });
+
+  it('is read by every member of the workspace', () => {
+    expect(policy('ship_events: member select', wave2)).toContain(
+      'organization_id in ( select p.organization_id from public.profiles p where p.id = auth.uid() )',
+    );
+  });
+});
+
+describe('daily suggestions', () => {
+  it('send at most one a day per person and brand', () => {
+    expect(table('chat_suggestions')).toMatch(/unique \(user_id, brand_id, sent_on\)/);
+  });
+
+  it('show a person only their own', () => {
+    for (const name of ['chat_suggestions: own select', 'chat_suggestion_feeds: own select']) {
+      expect(policy(name, wave2)).toContain('user_id = auth.uid()');
+    }
   });
 });
