@@ -41,6 +41,12 @@ import { MODEL_GROUPS, ALL_MODELS, SCRAPER_GROUPS, ALL_SCRAPERS } from '@/config
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import {
+  AddTopicLink,
+  TopicFirstNotice,
+  useTopicFirstDialog,
+} from '@/components/prompts/topic-first';
+import { isNoTopics } from '@/lib/topics-required';
 import { PLANS } from '@/config/plans';
 import { saveTrackingJob } from '@/lib/tracking-job-store';
 import { useRouter } from '@/i18n/navigation';
@@ -97,6 +103,10 @@ export default function PromptsPage() {
   // the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  // Prompts go under topics: with none, adding a prompt asks for a topic first,
+  // on this brand's own Topics page (the active brand may be another).
+  const addTopicHref = `/dashboard/brands/${brandId}/topics#add-topic`;
+  const topicFirst = useTopicFirstDialog({ href: addTopicHref });
   const allowedScraperIds = useMemo(() => {
     const allowed = PLANS[planId].limits.allowedScrapers;
     const ids = allowed ? [...allowed] : ALL_SCRAPERS.map((s) => s.id);
@@ -281,7 +291,8 @@ export default function PromptsPage() {
         );
         const failed = results.find((r) => 'error' in r);
         if (failed && 'error' in failed) {
-          toast.error(failed.error);
+          if (isNoTopics(failed)) topicFirst.show();
+          else toast.error(failed.error);
           // Some prompts may have saved before the failure — refresh so the
           // list reflects what actually landed.
           await loadData();
@@ -301,6 +312,10 @@ export default function PromptsPage() {
 
   const handleAddManualPrompt = async () => {
     if (!manualText.trim()) return;
+    if (topics.length === 0) {
+      topicFirst.show();
+      return;
+    }
 
     setIsAddingManual(true);
     try {
@@ -319,7 +334,8 @@ export default function PromptsPage() {
           ...promptData,
         });
         if ('error' in result) {
-          toast.error(result.error);
+          if (isNoTopics(result)) topicFirst.show();
+          else toast.error(result.error);
           return;
         }
       } else {
@@ -673,9 +689,10 @@ export default function PromptsPage() {
                         </SelectContent>
                       </Select>
                     ) : (
-                      <p className="text-xs text-muted-foreground py-2">
-                        No topics defined yet. Add topics in brand settings.
-                      </p>
+                      <div className="space-y-2">
+                        <TopicFirstNotice />
+                        <AddTopicLink href={addTopicHref} />
+                      </div>
                     )}
                   </div>
 
@@ -864,9 +881,10 @@ export default function PromptsPage() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground py-2">
-                    No topics defined yet. Add topics in brand settings first.
-                  </p>
+                  <div className="space-y-2">
+                    <TopicFirstNotice />
+                    <AddTopicLink href={addTopicHref} />
+                  </div>
                 )}
                 <Button
                   onClick={guard(handleGenerate, { action: tActions('generatePrompts') })}
@@ -1293,6 +1311,7 @@ export default function PromptsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {topicFirst.dialog}
     </div>
   );
 }

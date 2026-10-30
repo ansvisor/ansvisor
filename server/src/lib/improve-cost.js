@@ -90,6 +90,19 @@ export function generationCostUsd(modelId, usage, { synced = false } = {}) {
   return (input * price.input + output * price.output) / 1_000_000;
 }
 
+/**
+ * One web search a call's provider runs (the Content Agent looking a fact
+ * up: content-research.js), billed on top of its tokens: Anthropic's list
+ * price, $10 per 1,000 searches. Other providers' searches are charged the
+ * same.
+ */
+export const WEB_SEARCH_USD = 0.01;
+
+/** USD cost of `searches` web searches. */
+export function searchCostUsd(searches) {
+  return Math.max(0, Number(searches) || 0) * WEB_SEARCH_USD;
+}
+
 export function typicalCostUsd(modelId) {
   return generationCostUsd(modelId, {
     inputTokens: TYPICAL_TOKENS.input,
