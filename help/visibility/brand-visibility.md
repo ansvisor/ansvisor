@@ -74,7 +74,7 @@ Click a row, or **Full breakdown**, to open the **Visibility Breakdown** panel.
 - A topic has **Track N**, which tracks all its suggested prompts, and **Send action**, which opens a Growth action in the Action Center.
 - A prompt has **Track**, and **Suggest content**, which writes a content suggestion for its topic from your monthly content allowance.
 
-Tracking stops when your plan's prompt locations are full. **Track** and **Suggest content** are for admins and managers. **See all** opens **Prompt Suggestions** under **Prompts**.
+Tracking stops when your plan's prompt locations are full. **Track**, **Track N** and **Suggest content** are for admins and managers. **See all** opens **Prompt Suggestions** under **Prompts**.
 
 ## Volumes on Opportunities
 

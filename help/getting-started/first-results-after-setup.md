@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: false
 sources: [docs/guides/add-your-first-brand.mdx]
 ---
-When you finish setting up a brand, the first round of questions to the AI engines starts on its own and the dashboard opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step: while a free trial is on offer, that step starts the trial, and without one your plan starts the same day.
+When you finish setting up a brand, the first round of questions to the AI engines starts on its own and the dashboard opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step, whether you start a free trial there or buy the plan.
 
 ## How long the first run takes
 
@@ -29,7 +29,7 @@ While you wait:
 
 ## Add another brand
 
-To add another brand, pick **Add Brand** in the brand switcher. It walks through the same first five steps as your first brand: brand basics, region and language, topics, prompts and competitors. Its first run starts when you finish. Your plan sets how many brands you can have.
+To add another brand, admins and managers pick **Add Brand** in the brand switcher. It walks through the same first five steps as your first brand: brand basics, region and language, topics, prompts and competitors. Its first run starts when you finish. Your plan sets how many brands you can have.
 
 ## Add the tracking snippet
 

@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: false
 sources: [docs/concepts/visibility-scoring.mdx, docs/guides/answer-engine-insights.mdx, docs/guides/competitors.mdx]
 ---
-The **AI Visibility Score** is a score from 0 to 100, not a percentage. It blends three things over the answers in your date range and filters: how many answers name your brand, how many cite a page of yours, and how early you're named. A score of 0 means no answer names or cites you; 100 means every answer names you first and cites you. **Formulas** on **Brand Visibility** shows the exact formula.
+The **AI Visibility Score** is a score from 0 to 100, not a percentage. It blends three things over the answers in your date range and filters: how many answers name your brand, how many cite a page of yours, and how early you're named. A score of 0 means no answer names or cites you; the closer every answer comes to naming you first and citing you, the closer the score gets to 100. **Formulas** on **Brand Visibility** shows the exact formula.
 
 ## The three parts
 

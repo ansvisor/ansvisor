@@ -96,4 +96,4 @@ Click **Ready** in the header to move the page back to **In review**. A task tha
 
 Once the page is live, tell Ansvisor where with **Mark published**, in the Library's **Status** menu or, with Quality on, under the header's **Next step** once the page is ready. It asks for the live address, starting from the page it optimizes or your site with the page's slug, and **Live page** measures that address from then. If the draft came from the Action Center, its Publish task is completed once all the action's work is live.
 
-On a published page, the header's **Published** button changes the address. A page your CMS reports live, or one published in Webflow, WordPress or Framer, gets its address on its own. An archived page is restored first.
+On a published page, the header's **Published** button changes the address. A page your CMS reports live, or one published in Webflow, WordPress, Framer or Wix, gets its address on its own. Restore an archived page in the Library first.

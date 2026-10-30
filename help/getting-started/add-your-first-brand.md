@@ -73,10 +73,10 @@ A self-hosted install asks the same the first time you open the dashboard.
 
 The final step picks your plan, **Starter** or **Growth**, and starts checkout.
 
-While a free trial is on offer, this step starts the trial: you enter card details, nothing is charged until the trial ends, and the step tells you the day of the first charge. The trial comes with an organization's first subscription only. Without a trial, the plan starts the same day.
+While a free trial is on offer, **Choose how to start** lets you pick the trial, **Monthly** or **Yearly**. With the trial you enter card details, nothing is charged until the trial ends, and the step tells you the day of the first charge. The trial comes with an organization's first subscription only. **Buy now**, or a plan without a trial, starts the plan the same day.
 
 A self-hosted install skips this step.
 
 ## Add another brand later
 
-To add another brand, pick **Add Brand** in the brand switcher. It walks through the same first five steps. Your plan sets how many brands you can have.
+To add another brand, admins and managers pick **Add Brand** in the brand switcher. It walks through the same first five steps. Your plan sets how many brands you can have.
