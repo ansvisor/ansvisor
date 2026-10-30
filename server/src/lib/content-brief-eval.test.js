@@ -89,8 +89,8 @@ describe('the checks anyone can repeat', () => {
       longHeadings: 0,
       extraKeywords: 0,
       fanoutCoverage: 1,
-      // Its own placeholder for a fact to find.
-      placeholders: 1,
+      // A fact to find, named in words: no placeholder.
+      placeholders: 0,
       invented: { figures: [], people: [], urls: [] },
     });
     expect(passesGate(checks)).toBe(true);
@@ -98,17 +98,19 @@ describe('the checks anyone can repeat', () => {
 
   it('find what the guard put as placeholders, an address no one gave, and a thin outline', () => {
     const brief = shapeBrief(BAD, FIRST);
+    // A figure it wasn't given goes with its sentence; a person is the brand's to name.
     expect(brief.outline[0].keyPoints).toEqual([
-      `${NUMBER_PLACEHOLDER} of CFOs say forecasts fail, per https://made-up.example/report.`,
+      'Read the CFO survey at https://made-up.example/report.',
       `${NAME_PLACEHOLDER} recommends Ledgerly.`,
     ]);
+    expect(JSON.stringify(brief)).not.toContain(NUMBER_PLACEHOLDER);
     const checks = briefChecks(brief, FIRST);
     expect(checks).toMatchObject({
       sections: 2,
       sectionsInRange: false,
       emptySections: 1,
       fanoutCoverage: 0.25,
-      placeholders: 2,
+      placeholders: 1,
       invented: { figures: [], people: [], urls: ['https://made-up.example/report'] },
     });
     expect(passesGate(checks)).toBe(false);
@@ -309,7 +311,7 @@ describe('a judge’s answer as kept', () => {
       gateFailures: 1,
       sectionsInRange: 1,
       fanoutCoverage: 0.63,
-      placeholders: 3,
+      placeholders: 1,
       unquoted: 1,
       tokens: { input: 3500, output: 1500 },
     });

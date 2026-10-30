@@ -363,6 +363,15 @@
       "frameTitle": "Chat preview"
     }
   },
+  "firstRun": {
+    "arriving": "Your first answers are arriving",
+    "queued": "Your first tracking starts as soon as a slot opens",
+    "count": "({current} of {total})",
+    "minutesLeft": "~{minutes} min",
+    "hoursLeft": "{hours, plural, one {~# hour} other {~# hours}}",
+    "fillsIn": "This fills in when tracking finishes.",
+    "ready": "Your first results are ready"
+  },
   "managersOnly": {
     "suggestPrompts": "Ask an admin or a manager to generate prompt suggestions.",
     "suggestTopics": "Ask an admin or a manager to generate topic suggestions.",
@@ -484,11 +493,12 @@
       "history": "History"
     },
     "firstRun": {
-      "running": "First analysis running",
-      "queued": "First analysis queued",
+      "running": "First tracking running",
+      "queued": "First tracking queued",
       "progress": "{current} of {total} checks",
-      "minutesLeft": "about {minutes} min left",
-      "hoursLeft": "{hours, plural, one {about # hour left} other {about # hours left}}",
+      "minutesLeft": "~{minutes} min left",
+      "hoursLeft": "{hours, plural, one {~# hour left} other {~# hours left}}",
+      "details": "Details",
       "runningBody": "AI assistants are answering your prompts for the first time. Actions, signals and KPIs fill in once it finishes: a few minutes, or an hour or two at busy times. You can leave this page.",
       "queuedBody": "Another analysis is running right now. Yours starts the moment a slot opens, and keeps going in the background.",
       "link": "Follow it on Brand Visibility"
@@ -1959,10 +1969,12 @@
         "skipped": "Skipped"
       },
       "optional": "Optional",
+      "readyNow": "Ready now",
       "everyone": "Everyone in the workspace",
       "readyWhen": {
+        "arriving": "Arriving now",
         "setup": "Now",
-        "explore": "First answers · ~3h",
+        "explore": "First answers · ~1h",
         "dataPrompts": "24h after Search Console or Analytics",
         "act": "Suggestions · ~24h",
         "ready": "After the steps above"
@@ -3204,6 +3216,7 @@
     "drafts": { "name": "Read the Content Library", "step": "Read Library" },
     "draft": { "name": "Read a draft", "step": "Read draft" },
     "reports": { "name": "Read reports", "step": "Read Reports" },
+    "goToPage": { "name": "Go to a page", "step": "Opened a page" },
     "saveDraft": { "name": "Save drafts in Content", "step": "Saved draft in Content" },
     "opportunityStatus": {
       "name": "Review or dismiss opportunities",
@@ -3473,6 +3486,19 @@
           "trayLive": "Live: your runs and this brand’s"
         }
       }
+    }
+  },
+  "chatNavigation": {
+    "filtersSet": "Filters set for you. This chat stays open in the side panel.",
+    "noFilters": "This chat stays open in the side panel.",
+    "navigationOnly": "Navigation only · no AI usage",
+    "goToPage": "Go to page",
+    "ranges": {
+      "24h": "Last 24 hours",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "90d": "Last 90 days",
+      "all": "All time"
     }
   },
   "chatDenial": {
@@ -3997,7 +4023,8 @@
         "site_audit": "Site Audit",
         "action_center": "Action Center",
         "content": "Content",
-        "reports": "Reports"
+        "reports": "Reports",
+        "navigation": "Navigation"
       }
     }
   },
@@ -4326,7 +4353,8 @@
     "copyFailed": "Copy failed",
     "copyDraft": "Copy draft",
     "copyCode": "Copy code",
-    "placeholderNote": "Replace placeholders in [brackets] with your real data before publishing.",
+    "placeholderNote": "Your input needed: replace each highlighted [bracket] with your own details before you publish.",
+    "inputNeeded": "Your input needed",
     "finding": "Finding",
     "why": "Why",
     "recommendedFix": "Recommended fix",
@@ -5100,7 +5128,7 @@
           "longTitle": "Title over 300 characters",
           "empty": "Nothing to publish yet",
           "tooLong": "Over a million characters",
-          "placeholders": "Placeholders to fill",
+          "placeholders": "Your input needed",
           "slug": "Needs a slug",
           "metaTitle": "Meta title over 300 characters",
           "metaDescription": "Meta description over 500 characters"
@@ -5449,7 +5477,7 @@
           "rulesAny": "Keeping to the rules",
           "sources": "Drawing on {count, plural, one {# source} other {# sources}}",
           "sourcesAny": "Drawing on your sources",
-          "placeholders": "Adding a [placeholder] for facts it lacks"
+          "placeholders": "Looking up facts it lacks, with their sources"
         }
       },
       "agentFailed": {
@@ -5488,7 +5516,7 @@
         "breaks": "would break {names}",
         "runFailed": "Content Agent couldn't finish",
         "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
-        "placeholders": "{count, plural, one {# placeholder} other {# placeholders}} to fill",
+        "placeholders": "{count, plural, one {# fact needs your input} other {# facts need your input}}",
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
         "gain": "Rules {met, number} → {after, number} of {total, number}",
         "review": "Review",
@@ -6597,11 +6625,11 @@
         "cancel": "Cancel"
       },
       "placeholders": {
-        "label": "Placeholders to fill",
-        "left": "{count, plural, =0 {No placeholders left to fill} one {# placeholder to fill} other {# placeholders to fill}}",
-        "onOf": "Placeholder {on} of {count}",
-        "previous": "Previous placeholder",
-        "next": "Next placeholder",
+        "label": "Your input needed",
+        "left": "{count, plural, =0 {No input needed} one {Your input needed: #} other {Your input needed: #}}",
+        "onOf": "Your input {on} of {count}",
+        "previous": "Previous input needed",
+        "next": "Next input needed",
         "showHidden": "Show in HTML",
         "hiddenHint": "In an image's alt text, the JSON-LD or an HTML block: the page doesn't show them.",
         "inHtmlView": "This placeholder is in an image's alt text, the JSON-LD or an HTML block. It's selected in the HTML view ({html}): type over it, then apply."
@@ -8693,6 +8721,8 @@
       "pending": "Within 24h",
       "pendingTip": "Tracked in {location} from the next daily run: its first results come within 24 hours.",
       "promptPendingTip": "This prompt's first results come with the next daily run, within 24 hours.",
+      "arriving": "Arriving now",
+      "arrivingTip": "Your first tracking is asking this now. Its results come in as it goes, and all of them when it finishes.",
       "paused": "Paused",
       "pausedTip": "This prompt is paused, so it isn't asked anywhere until you resume it.",
       "noEngine": "No engine here",
@@ -9967,7 +9997,7 @@
     "account": "Account",
     "accountDescription": "Your profile and sign-in details.",
     "general": "General",
-    "apiKeys": "API Keys",
+    "apiKeys": "MCP & API Keys",
     "team": "Team",
     "rolesAccess": "Roles & access",
     "chatSettings": "Chat",

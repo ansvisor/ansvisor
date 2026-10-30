@@ -2,6 +2,7 @@ import type { TeamRole } from '@/components/providers/role-provider';
 import type { ChatTool, PlanGate, ToolFlags } from './define-tool';
 import { READ_TOOLS } from './read-tools';
 import { WRITE_TOOLS } from './write-tools';
+import { NAVIGATION_READS } from './navigation';
 
 /**
  * Every tool Chat may call (CHAT-20 §9). One without a row here isn't
@@ -9,7 +10,7 @@ import { WRITE_TOOLS } from './write-tools';
  * the server: the approval checks, the run steps' `tool` column and the MCP
  * parity read them here. What a browser gets is registryCatalog().
  */
-export const CHAT_TOOLS: readonly ChatTool[] = [...READ_TOOLS, ...WRITE_TOOLS];
+export const CHAT_TOOLS: readonly ChatTool[] = [...READ_TOOLS, ...NAVIGATION_READS, ...WRITE_TOOLS];
 
 /** The row of a tool, by its internal name; undefined for a name with no row. */
 export function chatTool(name: string): ChatTool | undefined {

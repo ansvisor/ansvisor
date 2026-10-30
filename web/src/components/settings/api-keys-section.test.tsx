@@ -6,7 +6,7 @@ import messages from '../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /**
- * Settings › API keys on a read-only workspace (plan not active): the keys
+ * Settings › MCP & API Keys on a read-only workspace (plan not active): the keys
  * show and both New key and revoking stay open. A key costs nothing, and the
  * MCP surface it opens only reads for such a workspace.
  */
@@ -75,6 +75,12 @@ const button = (text: string) =>
   [...document.body.querySelectorAll('button')].find((b) => b.textContent?.trim() === text);
 
 describe('ApiKeysSection', () => {
+  it('is titled MCP & API Keys, as the Settings menu names it', async () => {
+    await render(false);
+    expect(container.querySelector('[data-slot="card-title"]')?.textContent).toBe('MCP & API Keys');
+    expect(messages.settings.apiKeys).toBe('MCP & API Keys');
+  });
+
   it('creates and revokes keys on a read-only workspace', async () => {
     await render(true);
     expect(container.textContent).toContain('MCP — laptop');

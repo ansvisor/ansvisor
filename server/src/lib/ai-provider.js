@@ -124,10 +124,16 @@ export function getGoogleProvider() {
  * and drops the second argument, so "Search the web" prompts were answered
  * from the model's memory alone. Search is a tool now, attached per call.
  *
+ * Anthropic's is the basic web_search_20250305, the version every Claude
+ * model takes (Claude Haiku 5.5 among them; the dynamic-filtering
+ * web_search_20260209 is for Sonnet and Opus only), with at most `maxUses`
+ * searches a call.
+ *
  * @param {string} modelString
+ * @param {{ maxUses?: number }} [options]
  * @returns {Record<string, unknown> | null}
  */
-export function webSearchTools(modelString) {
+export function webSearchTools(modelString, { maxUses = 5 } = {}) {
   const [providerName] = (modelString || '').split('/');
   if (providerName === 'google' && googleProvider) {
     return { google_search: googleProvider.tools.googleSearch({}) };
@@ -136,7 +142,7 @@ export function webSearchTools(modelString) {
     return { web_search: openaiProvider.tools.webSearch({}) };
   }
   if (providerName === 'anthropic' && providers.anthropic) {
-    return { web_search: providers.anthropic.tools.webSearch_20250305({ maxUses: 5 }) };
+    return { web_search: providers.anthropic.tools.webSearch_20250305({ maxUses }) };
   }
   return null;
 }
