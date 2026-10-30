@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
+import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -36,7 +37,10 @@ export function TrendCard({
   return (
     <Card className={className}>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-2">
-        <CardTitle className="text-sm font-medium">{t('title')}</CardTitle>
+        <div className="flex items-center gap-1">
+          <CardTitle className="text-sm font-medium">{t('title')}</CardTitle>
+          <AskAboutThis reference={{ type: 'chart', id: 'mentions-trend', label: t('title') }} />
+        </div>
         {drawable && (
           <div
             className="flex overflow-hidden rounded-md border"

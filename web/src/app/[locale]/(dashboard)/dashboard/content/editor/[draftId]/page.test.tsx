@@ -8,6 +8,7 @@ import { RoleProvider, type TeamRole } from '@/components/providers/role-provide
 import { PlanProvider } from '@/components/providers/plan-provider';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
@@ -290,13 +291,15 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
 let container: HTMLDivElement;
 let root: Root;
 
-async function renderPage(role: TeamRole = 'admin') {
+async function renderPage(role: TeamRole = 'admin', { chatOn = false } = {}) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <RoleProvider role={role}>
-          <ContentEditorPage />
-        </RoleProvider>
+        <ChatAgenticProvider enabled={chatOn}>
+          <RoleProvider role={role}>
+            <ContentEditorPage />
+          </RoleProvider>
+        </ChatAgenticProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -996,7 +999,7 @@ describe('the content editor', () => {
           said.push(status.textContent!);
           await act(async () => void (await vi.advanceTimersByTimeAsync(4_000)));
         }
-        expect(said.join(' ')).toContain('Adding a [placeholder] for facts it lacks');
+        expect(said.join(' ')).toContain('Looking up facts it lacks, with their sources');
         expect(said.join(' ')).not.toMatch(/Keeping to|Drawing on/);
       } finally {
         vi.useRealTimers();
@@ -6426,7 +6429,7 @@ describe('the side panel', () => {
       );
       await renderPage();
       // The toolbar counts it, though the page doesn't show it.
-      expect(container.textContent).toContain('1 placeholder to fill');
+      expect(container.textContent).toContain('Your input needed: 1');
       expect(button('Show in HTML')).toBeTruthy();
       await act(async () => button('Export')!.click());
       expect(dialog()!.textContent).toContain('1 placeholder is still open');
@@ -6455,7 +6458,7 @@ describe('the side panel', () => {
         }),
       );
       await renderPage();
-      expect(container.textContent).toContain('6 placeholders to fill');
+      expect(container.textContent).toContain('Your input needed: 6');
       await act(async () => button('Show in HTML')!.click());
       const area = [...container.querySelectorAll('textarea')].find((a) =>
         a.value.includes('[photo of the founder]'),
@@ -6476,7 +6479,7 @@ describe('the side panel', () => {
         }),
       );
       await renderPage();
-      expect(container.textContent).toContain('1 placeholder to fill');
+      expect(container.textContent).toContain('Your input needed: 1');
       expect(button('Show in HTML')).toBeFalsy();
     });
 
@@ -6774,7 +6777,8 @@ describe('the side panel', () => {
       expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Fix open rules');
     });
 
-    it('says "1 running" while Fix open rules works, and opens the basket on it', async () => {
+    /** A page whose next step is Fix open rules, the agent's run left under way. */
+    function fixUnderWay() {
       getDraftSources.mockResolvedValue({
         data: {
           prompts: [],
@@ -6810,14 +6814,61 @@ describe('the side panel', () => {
         }),
       );
       fixDraftRules.mockReturnValue(new Promise(() => {}));
-      await renderPage();
-      expect(button('1 running')).toBeUndefined();
+    }
+    const runFix = async () => {
       await act(async () => nextButton()!.click());
       await act(async () => inBasket('Fix open rules')!.click());
       await act(async () => {});
-      expect(basket()).toBeNull();
-      await act(async () => button('1 running')!.click());
-      expect(basket()!.textContent).toContain('Content Agent is working');
+    };
+    const pill = () => container.querySelector<HTMLElement>('header [data-slot="status-pill"]');
+    const trayCalls = (fetch: ReturnType<typeof vi.fn>) =>
+      fetch.mock.calls.filter(([url]) => String(url).startsWith('/api/chat/runs/tray'));
+
+    it('says "1 running" while Fix open rules works, and opens the basket on it', async () => {
+      const fetch = vi.fn(async () => new Response('{}'));
+      vi.stubGlobal('fetch', fetch);
+      try {
+        fixUnderWay();
+        await renderPage();
+        expect(button('1 running')).toBeUndefined();
+        // Chat off: no page pill, and no runs tray or its read.
+        expect(pill()).toBeNull();
+        expect(container.querySelector('[data-action="runs.toggleTray"]')).toBeNull();
+        await runFix();
+        expect(basket()).toBeNull();
+        expect(pill()).toBeNull();
+        expect(container.textContent).not.toContain('You can leave this page');
+        await act(async () => button('1 running')!.click());
+        expect(basket()!.textContent).toContain('Content Agent is working');
+        expect(trayCalls(fetch)).toEqual([]);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('with the new Chat on, shows the page’s pill and the runs tray in place of "1 running"', async () => {
+      const fetch = vi.fn(
+        async () => new Response(JSON.stringify({ ok: true, runs: [], running: 0, needsYou: 0 })),
+      );
+      vi.stubGlobal('fetch', fetch);
+      try {
+        fixUnderWay();
+        await renderPage('admin', { chatOn: true });
+        // In review: the agent wrote it, and the person's OK is next.
+        expect(pill()!.dataset.state).toBe('needsYou');
+        expect(container.querySelector('header [data-action="runs.toggleTray"]')).not.toBeNull();
+        expect(trayCalls(fetch).map(([url]) => url)).toContain('/api/chat/runs/tray?brand=b1');
+        const readsBefore = trayCalls(fetch).length;
+        await runFix();
+        expect(pill()!.dataset.state).toBe('working');
+        // The tray reads again as Fix starts: its run shows without waiting for the next poll.
+        expect(trayCalls(fetch).length).toBeGreaterThan(readsBefore);
+        expect(button('1 running')).toBeUndefined();
+        // Fix is the server's now: the page can be left.
+        expect(container.textContent).toContain("You can leave this page. I'll keep going.");
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
 
     describe('once the agent took Fix open rules (editor test 2026-10-26)', () => {

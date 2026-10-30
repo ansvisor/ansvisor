@@ -60,8 +60,9 @@ const requestSchema = z.object({
     .string()
     .regex(/^[a-z][A-Za-z0-9]{1,63}$/)
     .nullish(),
-  brandId: z.string().uuid().nullish(),
-  conversationId: z.string().uuid().nullish(),
+  // guid, not uuid: ids made by hand (the demo brand's) aren't RFC 4122 ones.
+  brandId: z.guid().nullish(),
+  conversationId: z.guid().nullish(),
   draftedChange: z
     .record(z.string(), z.unknown())
     .nullish()
@@ -122,6 +123,7 @@ export async function requestAccess(input: AccessRequestInput): Promise<RequestA
           .eq('id', req.conversationId)
           .eq('user_id', who.userId)
           .eq('organization_id', who.organizationId)
+          .is('deleted_at', null)
           .maybeSingle()
       : null,
   ]);
@@ -158,7 +160,7 @@ export async function requestAccess(input: AccessRequestInput): Promise<RequestA
 /** Withdraws the person's own pending request. False when it isn't one any more. */
 export async function withdrawAccessRequest(id: string): Promise<boolean> {
   const who = await member();
-  if (!who || !z.string().uuid().safeParse(id).success) return false;
+  if (!who || !z.guid().safeParse(id).success) return false;
   const { data, error } = await supabaseAdmin
     .from('chat_access_requests')
     .update({ status: 'withdrawn', decided_by: who.userId, decided_at: new Date().toISOString() })
@@ -181,7 +183,7 @@ export async function decideAccessRequest(
 ): Promise<boolean> {
   const who = await member();
   if (!who || who.role !== 'admin') throw new Error('Only Admins decide access requests');
-  if (!z.string().uuid().safeParse(id).success || !['approved', 'rejected'].includes(decision)) {
+  if (!z.guid().safeParse(id).success || !['approved', 'rejected'].includes(decision)) {
     return false;
   }
   const { data, error } = await supabaseAdmin

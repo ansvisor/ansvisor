@@ -6,10 +6,20 @@ import { MobileNav } from '@/components/layout/mobile-nav';
 import { AuthProvider } from '@/components/providers/auth-provider';
 import { PlanProvider } from '@/components/providers/plan-provider';
 import { AiUsageProvider } from '@/components/providers/ai-usage-provider';
+import { GetMoreProvider } from '@/components/ai-usage/get-more';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import { MenuAccessProvider } from '@/components/providers/menu-access-provider';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
+import { firstNameOf } from '@/lib/chat/home';
+import { importLegacyChats } from '@/lib/chat/legacy-import';
+import { panelSizeOf } from '@/lib/chat/panel';
+import { planFactsFromOrgRow } from '@/lib/chat/plan-facts';
+import { DEFAULT_CHAT_SETTINGS, parseTeamRole } from '@/lib/chat/precedence';
+import { composerSetupOf } from '@/lib/chat/composer-setup';
+import { chatRunsOnOwnKey } from '@/lib/chat/key';
+import { ChatPanelPage, ChatPanelProvider } from '@/components/chat/panel/chat-panel-provider';
+import { ChatSidePanelSlot } from '@/components/chat/panel/chat-side-panel-slot';
 import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { GettingStartedPageOpened } from '@/components/getting-started/page-opened';
@@ -21,7 +31,9 @@ import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-pro
 import { DemoBrandProvider } from '@/components/providers/demo-brand-provider';
 import { ReadOnlyBanner } from '@/components/billing/read-only-banner';
 import { DemoBanner } from '@/components/billing/demo-banner';
+import { PlanEndsBanner } from '@/components/billing/plan-ends-banner';
 import { TrackingJobHandoff } from '@/components/layout/tracking-job-handoff';
+import { FirstRunReady } from '@/components/layout/first-run-ready';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -36,7 +48,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: profile } = await supabase
     .from('profiles')
     .select(
-      'organization_id, onboarding_completed, role, work_areas, work_areas_asked_at, menu_shown, menu_hidden, can_manage_menus',
+      'organization_id, onboarding_completed, role, full_name, work_areas, work_areas_asked_at, menu_shown, menu_hidden, can_manage_menus',
     )
     .eq('id', user.id)
     .single();
@@ -46,17 +58,59 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const role = (profile.role ?? 'analyst') as TeamRole;
+  const chatOn = chatAgenticEnabled(profile.organization_id);
 
-  const [{ data: org, error: orgError }, brands, roleHidden] = await Promise.all([
+  const [
+    { data: org, error: orgError },
+    brands,
+    roleHidden,
+    chatPrefsRead,
+    chatSettingsRead,
+    chatOnOwnKey,
+  ] = await Promise.all([
     supabase
       .from('organizations')
-      .select('plan, subscription_status, plan_overrides, stripe_subscription_id')
+      .select(
+        'plan, subscription_status, plan_overrides, stripe_subscription_id, subscription_ends_at, cancel_at_period_end',
+      )
       .eq('id', profile.organization_id)
       .single(),
     getBrands(profile.organization_id),
     // The sections the viewer's role leaves out (menu access); no read for admins.
     readRoleHidden(supabase, profile.organization_id, role),
+    // Chat's side panel on every page (CHAT-01 items 13–24): the person's choices for it.
+    chatOn
+      ? supabase
+          .from('chat_user_prefs')
+          .select(
+            'panel_on_pages, panel_size, default_mode, usage_notice_period, legacy_imported_at',
+          )
+          .eq('user_id', user.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    // The panel's composer is set up as Chat's pages set theirs up
+    // (chatComposerSetup): the Admin's "Full auto for members" (CHAT-23), so
+    // Full auto shows open only where the server runs it, and whether Chat
+    // runs on the workspace's own key, so the AI limit doesn't pause it there.
+    chatOn
+      ? supabase
+          .from('chat_settings')
+          .select('full_auto_for_members')
+          .eq('organization_id', profile.organization_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    chatOn ? chatRunsOnOwnKey(profile.organization_id).catch(() => false) : false,
   ]);
+  const chatPrefs = chatPrefsRead.data;
+  // The side panel is Chat too: the person's Agent Chat conversations come
+  // over on their first visit with it, as they do on Chat's pages (W1-02).
+  if (chatOn && !chatPrefsRead.error && !chatPrefs?.legacy_imported_at) {
+    await importLegacyChats({
+      userId: user.id,
+      email: user.email ?? null,
+      organizationId: profile.organization_id,
+    });
+  }
   const menu = menuOfProfile({ ...profile, role }, roleHidden);
 
   // The organization's demo brand (sample data, 00380), shown or hidden: the
@@ -116,6 +170,36 @@ export default async function DashboardLayout({ children }: { children: React.Re
     allowedModelIds = effective ? [...effective] : null;
   }
 
+  // The facts chatComposerSetup reads: the live role, the plan and the
+  // members switch; any of them unread, the careful setup.
+  const teamRole = parseTeamRole(profile.role);
+  const composerModes = composerSetupOf(
+    chatPrefs?.default_mode,
+    org && !chatSettingsRead.error && teamRole
+      ? {
+          role: teamRole,
+          plan: planFactsFromOrgRow(org),
+          settings: {
+            ...DEFAULT_CHAT_SETTINGS,
+            fullAutoForMembers:
+              chatSettingsRead.data?.full_auto_for_members ??
+              DEFAULT_CHAT_SETTINGS.fullAutoForMembers,
+          },
+        }
+      : null,
+  );
+  const metadataName = (user.user_metadata as { full_name?: unknown } | null)?.full_name;
+  const chatPanel = {
+    enabled: chatOn && chatPrefs?.panel_on_pages !== false,
+    size: panelSizeOf(chatPrefs?.panel_size),
+    firstName: firstNameOf(
+      profile.full_name ?? (typeof metadataName === 'string' ? metadataName : null),
+    ),
+    ...composerModes,
+    usageNoticeSeen: chatPrefs?.usage_notice_period ?? null,
+    onOwnKey: chatOnOwnKey,
+  };
+
   return (
     <>
       <AuthProvider user={user} />
@@ -125,9 +209,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
         allowedModelIds={allowedModelIds}
         subscriptionActive={subscriptionActive}
         subscriptionStatus={subscriptionStatus}
+        planEndsAt={org?.cancel_at_period_end ? (org.subscription_ends_at as string | null) : null}
       >
         <RoleProvider role={role}>
-          <ChatAgenticProvider enabled={chatAgenticEnabled(profile.organization_id)}>
+          <ChatAgenticProvider enabled={chatOn}>
             <DemoBrandProvider
               demoBrand={
                 demoBrand ? { id: demoBrand.id, hidden: Boolean(demoBrand.demoHiddenAt) } : null
@@ -139,27 +224,35 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 <GettingStartedPageOpened />
                 <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
                   <AiUsageProvider>
-                    <div className="flex h-screen overflow-hidden">
-                      {/* Desktop sidebar */}
-                      <div className="relative hidden md:flex md:flex-shrink-0">
-                        <SidebarErrorBoundary>
-                          <Sidebar />
-                        </SidebarErrorBoundary>
-                      </div>
+                    {/* The Get more window, for every limit on the page (CHAT-18 §B item 6). */}
+                    <GetMoreProvider>
+                      <ChatPanelProvider setup={chatPanel}>
+                        <div className="flex h-screen overflow-hidden">
+                          {/* Desktop sidebar */}
+                          <div className="relative hidden md:flex md:flex-shrink-0">
+                            <SidebarErrorBoundary>
+                              <Sidebar />
+                            </SidebarErrorBoundary>
+                          </div>
 
-                      {/* Main area */}
-                      <div className="flex flex-1 flex-col overflow-hidden">
-                        <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
-                          <MobileNav />
+                          {/* Main area, beside Chat's side panel when it is open */}
+                          <ChatPanelPage className="flex flex-1 flex-col overflow-hidden">
+                            <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
+                              <MobileNav />
+                            </div>
+                            <ReadOnlyBanner />
+                            <PlanEndsBanner />
+                            <DemoBanner />
+                            <main className="flex-1 overflow-y-auto bg-background p-6">
+                              <BrandGuard>{children}</BrandGuard>
+                            </main>
+                            <TrackingJobHandoff />
+                            <FirstRunReady />
+                          </ChatPanelPage>
                         </div>
-                        <ReadOnlyBanner />
-                        <DemoBanner />
-                        <main className="flex-1 overflow-y-auto bg-background p-6">
-                          <BrandGuard>{children}</BrandGuard>
-                        </main>
-                        <TrackingJobHandoff />
-                      </div>
-                    </div>
+                        {chatPanel.enabled && <ChatSidePanelSlot />}
+                      </ChatPanelProvider>
+                    </GetMoreProvider>
                   </AiUsageProvider>
                 </MenuAccessProvider>
               </UpgradeDialogProvider>

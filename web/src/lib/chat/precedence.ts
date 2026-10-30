@@ -93,6 +93,16 @@ export function allowedRoles(tool: Pick<ChatTool, 'minRole' | 'excludeRoles'>): 
 export const CHAT_MODES = ['ask_first', 'auto', 'full_auto'] as const;
 export type ChatMode = (typeof CHAT_MODES)[number];
 
+/**
+ * The mode a new chat's composer starts in: the person's saved default
+ * (chat_user_prefs.default_mode), Auto, ask before changes, when none; a
+ * saved Full auto the plan no longer opens starts as Auto too.
+ */
+export function chatDefaultModeOf(saved: unknown, fullAutoOpen: boolean): ChatMode {
+  const mode = CHAT_MODES.find((m) => m === saved) ?? 'auto';
+  return mode === 'full_auto' && !fullAutoOpen ? 'auto' : mode;
+}
+
 /** Where a call comes from. MCP has no Full auto and no "Don't ask again" in v1 (§17). */
 export const CHAT_SURFACES = ['chat', 'mcp'] as const;
 export type ChatSurface = (typeof CHAT_SURFACES)[number];
@@ -152,6 +162,8 @@ export interface ToolCall {
   brandIsDemo: boolean;
   /** Its target or text came from untrusted content in this run: a page, an upload, an AI answer… */
   tainted: boolean;
+  /** More items than its row runs without a card (§9 row 22: "> 5 prompts: Ask"). */
+  overBatch?: boolean;
 }
 
 /** Why a call is refused, with what the denial says (denial.ts). Codes as §11a's where it has one. */
@@ -351,8 +363,8 @@ function decideWrite(
       reason === 'mode' && mode === 'auto' && !tainted && tickWouldCount(tool, ctx, policy),
   });
 
-  // 1. A card in every mode.
-  if (tool.flags.alwaysCard) return ask('always_card');
+  // 1. A card in every mode: the row's, or a batch past its row's size (§9 row 22).
+  if (tool.flags.alwaysCard || call.overBatch) return ask('always_card');
   // 5. The person asked to be asked first: their mode wins over every policy.
   if (mode === 'ask_first') return ask('mode');
   // 4–5. Set to Always by an Admin: runs in Auto and Full auto (see the header).

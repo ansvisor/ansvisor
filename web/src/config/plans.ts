@@ -94,6 +94,15 @@ export interface PlanLimits {
    * stops adding products past it.
    */
   maxCatalogProducts: number;
+  /**
+   * GB of Files a workspace keeps (CHAT-06 item 26, STORAGE-COSTS.md):
+   * Starter 5, Growth 25, Enterprise from the contract (1% of it at
+   * $0.05 a GB: $499 → 99 GB), set per customer via
+   * organizations.plan_overrides.maxStorageGb; storage packs add to it.
+   * The free trial keeps TRIAL_STORAGE_GB whatever its plan. -1 = no cap
+   * (self-host).
+   */
+  maxStorageGb: number;
   maxDailyOnDemand: number;
   onDemandCooldownMinutes: number;
   features: readonly Feature[];
@@ -121,6 +130,9 @@ export interface Plan {
   highlighted?: boolean;
 }
 
+/** GB of Files a workspace keeps in its free trial, whatever its plan (STORAGE-COSTS.md). */
+export const TRIAL_STORAGE_GB = 1;
+
 export const PLANS: Record<PlanId, Plan> = {
   self_hosted: {
     id: 'self_hosted',
@@ -143,6 +155,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxBotEventsPerMonth: -1,
       maxBotRawRecordsPerMonth: -1,
       maxCatalogProducts: -1,
+      maxStorageGb: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
       features: [
@@ -189,6 +202,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxBotEventsPerMonth: 0,
       maxBotRawRecordsPerMonth: 0,
       maxCatalogProducts: 5_000,
+      maxStorageGb: 5,
       maxDailyOnDemand: 3,
       onDemandCooldownMinutes: 15,
       allowedScrapers: ['chatgpt-web', 'copilot-web'],
@@ -238,6 +252,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxBotEventsPerMonth: 2_000_000,
       maxBotRawRecordsPerMonth: 20_000_000,
       maxCatalogProducts: 50_000,
+      maxStorageGb: 25,
       maxDailyOnDemand: 10,
       onDemandCooldownMinutes: 5,
       // API-model tracking (Claude) is not part of Growth — scraper engines
@@ -287,6 +302,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxBotEventsPerMonth: 20_000_000,
       maxBotRawRecordsPerMonth: 200_000_000,
       maxCatalogProducts: -1,
+      maxStorageGb: 99,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
       // API-model tracking (Claude) is a per-customer opt-in on Enterprise:

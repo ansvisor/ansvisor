@@ -39,9 +39,11 @@ import {
 } from '@/components/ui/table';
 import {
   AgentStateBadge,
+  AgentStateLine,
   DraftMethodBadge,
   DraftStatusBadge,
 } from '@/components/content/draft-badges';
+import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { assigneeLabel, labelInitials } from '@/lib/action-center/display';
 import {
   DRAFT_STATUSES,
@@ -109,6 +111,7 @@ export function LibraryTable({
 }) {
   const t = useTranslations('contentEditor.library');
   const tTypes = useTranslations('contentEditor.pageTypes');
+  const chatOn = useChatAgentic();
 
   if (drafts.length === 0) {
     return tab === 'all' ? (
@@ -191,11 +194,16 @@ export function LibraryTable({
               </TableCell>
               <TableCell>
                 {/* The agent works on drafts only: its state says more than "Draft".
-                    One marked ready by hand since reads Ready. */}
+                    One marked ready by hand since reads Ready. With the new Chat on,
+                    it reads as Chat lists a run: its dot and the line. */}
                 <span className="flex items-center gap-1.5">
                   {draft.agentState &&
                   (draft.status === 'draft' || draft.status === 'in_review') ? (
-                    <AgentStateBadge state={draft.agentState} />
+                    chatOn ? (
+                      <AgentStateLine state={draft.agentState} />
+                    ) : (
+                      <AgentStateBadge state={draft.agentState} />
+                    )
                   ) : (
                     <DraftStatusBadge status={draft.status} />
                   )}
