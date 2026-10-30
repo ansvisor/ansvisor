@@ -72,6 +72,8 @@ beforeEach(() => {
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example.com');
+  // A deployment with Stripe (the mock above); add-ons-without-stripe.test.ts has none.
+  vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_x');
   auth.user = { id: 'u_admin', email: 'a@example.com' };
   db.failures = {};
   db.log = [];

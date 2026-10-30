@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type Stripe from 'stripe';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FakeSupabase } from '@/lib/chat/testing/fake-supabase';
 
 /**
@@ -58,6 +58,8 @@ const purchase = (id: string, product_id: string, over: Record<string, unknown> 
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The webhook's deployment has Stripe (mocked above).
+  vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_x');
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
   db.failures = {};
@@ -92,6 +94,10 @@ beforeEach(() => {
     ai_credit_grants: [],
     storage_grants: [],
   };
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 const event = (type: string, object: unknown, created = PAID_AT) =>

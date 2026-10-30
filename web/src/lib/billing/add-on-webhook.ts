@@ -1,7 +1,6 @@
 import type Stripe from 'stripe';
-import { stripe } from '@/lib/stripe';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { addMonthsUtc, purchaseIdOf } from './add-ons';
+import { addMonthsUtc, loadStripe, purchaseIdOf } from './add-ons';
 
 /**
  * The Stripe webhook's part for add-on packs (CHAT-18 §E items 15–18): the
@@ -26,6 +25,13 @@ import { addMonthsUtc, purchaseIdOf } from './add-ons';
  * storage item not yet written down is found by its pack's price. A
  * failure throws, so the webhook answers 500 and Stripe sends it again.
  */
+
+/** Stripe for the webhook's few lookups; its route has the key (it checked the signature with it). */
+async function stripeClient() {
+  const stripe = await loadStripe();
+  if (!stripe) throw new Error('Stripe is not configured');
+  return stripe;
+}
 
 type StripeRef = string | { id: string } | null | undefined;
 const idOf = (ref: StripeRef): string | null => (typeof ref === 'string' ? ref : (ref?.id ?? null));
@@ -170,7 +176,7 @@ const priceOf = (line: Line) => idOf(line.pricing?.price_details?.price);
 async function linesOf(invoice: Stripe.Invoice): Promise<Line[]> {
   const lines = invoice.lines?.data ?? [];
   if (!invoice.lines?.has_more || !invoice.id) return lines;
-  return stripe.invoices
+  return (await stripeClient()).invoices
     .listLineItems(invoice.id, { limit: 100 })
     .autoPagingToArray({ limit: 1000 });
 }
@@ -352,6 +358,7 @@ async function purchaseOfCharge(charge: Stripe.Charge): Promise<string | null> {
   if (named) return named;
   const intentId = idOf(charge.payment_intent);
   if (!intentId) return null;
+  const stripe = await stripeClient();
   const intent = await stripe.paymentIntents.retrieve(intentId);
   const onIntent = purchaseIdOf(intent.metadata);
   if (onIntent) return onIntent;
