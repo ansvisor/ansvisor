@@ -79,6 +79,8 @@ const setup = (over: Partial<ChatPanelSetup> = {}): ChatPanelSetup => ({
   firstName: 'Sam',
   defaultMode: 'auto',
   fullAutoOpen: false,
+  fullAutoOffByAdmin: false,
+  onOwnKey: false,
   usageNoticeSeen: null,
   ...over,
 });

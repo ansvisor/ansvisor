@@ -358,6 +358,8 @@ export function ChatSidePanel() {
               variant="panel"
               defaultMode={setup.defaultMode}
               fullAutoOpen={setup.fullAutoOpen}
+              fullAutoOffByAdmin={setup.fullAutoOffByAdmin}
+              onOwnKey={setup.onOwnKey}
               usageNoticeSeen={setup.usageNoticeSeen}
               onConversation={remember}
               empty={
