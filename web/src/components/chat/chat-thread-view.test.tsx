@@ -35,6 +35,13 @@ vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (s: { activeBrandId: string }) => unknown) =>
     selector({ activeBrandId: '22222222-2222-4222-8222-222222222222' }),
 }));
+const aiUsage = vi.hoisted(() => ({
+  usage: null as Record<string, unknown> | null,
+  refresh: vi.fn(),
+}));
+vi.mock('@/components/providers/ai-usage-provider', () => ({
+  useAiUsage: () => ({ usage: aiUsage.usage, refresh: aiUsage.refresh }),
+}));
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 
@@ -118,6 +125,8 @@ async function enter() {
 }
 
 beforeEach(() => {
+  aiUsage.usage = null;
+  aiUsage.refresh.mockClear();
   calls = [];
   fetchMock.mockReset();
   fetchMock.mockImplementation(answerFetch);
@@ -262,5 +271,52 @@ describe('ChatThreadView', () => {
       'A teammate shared this chat with you: you can read it, not add to it.',
     );
     expect(container.querySelector('a')!.getAttribute('href')).toBe('/dashboard/chat');
+  });
+
+  it('pauses at the AI limit: the composer is off and says why', async () => {
+    aiUsage.usage = {
+      plan: 'growth',
+      planName: 'Growth',
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      unlimited: false,
+      percentUsed: 100,
+      features: [],
+      chatMetered: true,
+    };
+    await render();
+    expect(box().disabled).toBe(true);
+    expect(box().placeholder).toBe('AI limit reached · models on your own key still work');
+    expect(container.textContent).toContain("You've used this month's AI limit.");
+
+    aiUsage.usage = { ...aiUsage.usage, trial: true };
+    await render();
+    expect(box().placeholder).toBe('Your trial AI limit is used up');
+  });
+
+  it('keeps the composer on at the limit when Chat runs on the workspace’s own key', async () => {
+    aiUsage.usage = {
+      plan: 'enterprise',
+      planName: 'Enterprise',
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      unlimited: false,
+      percentUsed: 100,
+      features: [],
+      chatMetered: true,
+    };
+    await render({ onOwnKey: true });
+    expect(box().disabled).toBe(false);
+    expect(box().placeholder).not.toBe('AI limit reached · models on your own key still work');
+  });
+
+  it('reads the AI usage again once a run stops working, not before', async () => {
+    await render();
+    expect(aiUsage.refresh).not.toHaveBeenCalled();
+    await type('What changed this week?');
+    await enter();
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(container.textContent).toContain('Two pages lost most of it.');
+    expect(aiUsage.refresh).toHaveBeenCalledTimes(1);
   });
 });

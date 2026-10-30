@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { ApprovalCard } from '@/components/agentic/approval-card';
 import { DenialCard } from '@/components/agentic/denial-card';
+import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { searchChatReferences } from '@/lib/actions/chat-references';
@@ -22,6 +23,7 @@ import { dropChatUpload, uploadChatFile } from '@/lib/chat/upload-client';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { ChatComposer, type ComposerSend, type ComposerVariant } from './composer/chat-composer';
 import { RunAnswer } from './run/run-answer';
+import { ChatUsageNotice, ComposerUsageMeter, chatAtCap } from './chat-usage';
 
 interface Turn {
   key: string;
@@ -79,16 +81,26 @@ export function ChatThreadView({
   defaultMode,
   fullAutoOpen,
   fullAutoOffByAdmin = false,
+  usageNoticeSeen = null,
+  onOwnKey = false,
 }: {
   thread: ChatThread | null;
   variant: ComposerVariant;
   defaultMode: ChatMode;
   fullAutoOpen: boolean;
   fullAutoOffByAdmin?: boolean;
+  /** The AI usage period whose 80% line the person already saw. */
+  usageNoticeSeen?: string | null;
+  /** Chat runs on the workspace's own key: a used-up allowance doesn't pause it. */
+  onOwnKey?: boolean;
 }) {
   const t = useTranslations('chatPage');
+  const tLimit = useTranslations('chatComposer.limit');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const { isLocked, openUpgrade } = useUpgradeGate();
+  // At the AI limit, Chat pauses: the composer is off (CHAT-04 item 17).
+  const { usage, refresh: refreshUsage } = useAiUsage();
+  const atCap = chatAtCap(usage, onOwnKey);
   const [turns, setTurns] = useState<Turn[]>(() => turnsOf(thread));
   const [conversationId, setConversationId] = useState<string | null>(
     thread?.conversationId ?? null,
@@ -107,6 +119,14 @@ export function ChatThreadView({
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [working]);
+
+  // A run that stopped working spent some of the AI usage: the meter, the 80%
+  // line and the pause read it again, once per run, not on a timer.
+  const wasWorking = useRef(working);
+  useEffect(() => {
+    if (wasWorking.current && !working) refreshUsage();
+    wasWorking.current = working;
+  }, [working, refreshUsage]);
 
   const updateRun = useCallback((key: string, fn: (turn: Turn) => Turn) => {
     setTurns((all) => all.map((turn) => (turn.key === key ? fn(turn) : turn)));
@@ -282,7 +302,14 @@ export function ChatThreadView({
           )}
         </ol>
       )}
-      <div className={variant === 'home' ? undefined : 'sticky bottom-0 bg-background pt-1 pb-2'}>
+      <div
+        className={
+          variant === 'home'
+            ? 'flex flex-col gap-2'
+            : 'sticky bottom-0 flex flex-col gap-2 bg-background pt-1 pb-2'
+        }
+      >
+        {(!thread || thread.mine) && <ChatUsageNotice seenPeriod={usageNoticeSeen} />}
         <ChatComposer
           variant={variant}
           mode={mode}
@@ -291,6 +318,9 @@ export function ChatThreadView({
           fullAutoOffByAdmin={fullAutoOffByAdmin}
           running={working}
           sharedReadOnly={!!thread && !thread.mine}
+          disabled={atCap}
+          placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : undefined}
+          usage={<ComposerUsageMeter />}
           onSend={send}
           onStop={() => void stop()}
           onSteer={async (message, sent) => {

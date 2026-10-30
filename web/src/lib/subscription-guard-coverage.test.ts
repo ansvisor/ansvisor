@@ -44,6 +44,8 @@ const OPEN_ACTIONS: Record<string, string> = {
   'chat-prefs.ts:saveChatRailOpen': "the person's own Chat layout, no cost",
   'chat-prefs.ts:saveChatGeneralSettings':
     "the person's own Chat settings, no cost; a run they start is checked by the engine",
+  'chat-prefs.ts:saveUsageNoticePeriod':
+    "the person's own record of a notice seen, nothing that costs",
   'team.ts:acceptInvitation': "the invited person's own account joins",
   'team.ts:revokeInvitation': 'takes back access, never gives it',
   'team.ts:removeMember': 'takes back access, never gives it',

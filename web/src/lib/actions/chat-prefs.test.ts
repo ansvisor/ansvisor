@@ -47,7 +47,7 @@ vi.mock('@/lib/chat/general-settings', async (original) => ({
   readChatGeneral: vi.fn(async () => (db.access ? { settings: {}, access: db.access } : null)),
 }));
 
-const { saveChatGeneralSettings, saveChatMenuOpen, saveChatRailOpen } =
+const { saveChatGeneralSettings, saveChatMenuOpen, saveChatRailOpen, saveUsageNoticePeriod } =
   await import('./chat-prefs');
 const { readChatGeneral } = await import('@/lib/chat/general-settings');
 
@@ -162,5 +162,23 @@ describe('saveChatGeneralSettings', () => {
     vi.mocked(readChatGeneral).mockRejectedValueOnce(new Error('down'));
     db.throws = false;
     expect(await saveChatGeneralSettings({ showThought: true })).toEqual({ ok: false });
+  });
+});
+
+describe('saveUsageNoticePeriod', () => {
+  it('keeps the period whose 80% line the person saw on their own row', async () => {
+    expect(await saveUsageNoticePeriod('2026-10-01')).toEqual({ ok: true });
+    expect(db.upserts).toEqual([
+      {
+        row: { user_id: 'user-1', usage_notice_period: '2026-10-01' },
+        options: { onConflict: 'user_id' },
+      },
+    ]);
+  });
+
+  it('keeps nothing that is not a day', async () => {
+    expect(await saveUsageNoticePeriod('2026-10-01T00:00:00Z')).toEqual({ ok: false });
+    expect(await saveUsageNoticePeriod(7 as unknown as string)).toEqual({ ok: false });
+    expect(db.upserts).toEqual([]);
   });
 });

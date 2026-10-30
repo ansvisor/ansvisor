@@ -16,6 +16,8 @@ const facts = vi.hoisted(() => ({
   savedMode: null as string | null,
   ctx: null as Pick<PrecedenceContext, 'role' | 'plan' | 'settings'> | null,
   fail: false,
+  notice: null as string | null,
+  ownKey: false as boolean | 'throws',
 }));
 
 const db = vi.hoisted(() => ({
@@ -39,7 +41,11 @@ vi.mock('@/lib/supabase/server', () => ({
             table === 'profiles'
               ? { data: { organization_id: 'org-1' }, error: null }
               : {
-                  data: db.prefs ?? (facts.savedMode ? { default_mode: facts.savedMode } : null),
+                  data:
+                    db.prefs ??
+                    (facts.savedMode || facts.notice
+                      ? { default_mode: facts.savedMode, usage_notice_period: facts.notice }
+                      : null),
                   error: db.prefsError,
                 },
         }),
@@ -55,6 +61,13 @@ vi.mock('@/lib/chat/precedence-context', () => ({
 }));
 vi.mock('@/lib/chat/legacy-import', () => ({
   importLegacyChats: vi.fn(async () => ({ ok: false })),
+}));
+
+vi.mock('@/lib/chat/key', () => ({
+  chatRunsOnOwnKey: vi.fn(async () => {
+    if (facts.ownKey === 'throws') throw new Error('no answer');
+    return facts.ownKey;
+  }),
 }));
 
 const { importLegacyChats } = await import('@/lib/chat/legacy-import');
@@ -80,6 +93,8 @@ beforeEach(() => {
   db.prefs = null;
   db.prefsError = null;
   vi.mocked(importLegacyChats).mockClear();
+  facts.notice = null;
+  facts.ownKey = false;
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -90,6 +105,8 @@ describe('chatComposerSetup', () => {
       defaultMode: 'auto',
       fullAutoOpen: false,
       fullAutoOffByAdmin: true,
+      usageNoticeSeen: null,
+      onOwnKey: false,
     });
   });
 
@@ -99,6 +116,8 @@ describe('chatComposerSetup', () => {
       defaultMode: 'full_auto',
       fullAutoOpen: true,
       fullAutoOffByAdmin: false,
+      usageNoticeSeen: null,
+      onOwnKey: false,
     });
   });
 
@@ -113,6 +132,8 @@ describe('chatComposerSetup', () => {
       defaultMode: 'auto',
       fullAutoOpen: false,
       fullAutoOffByAdmin: false,
+      usageNoticeSeen: null,
+      onOwnKey: false,
     });
   });
 
@@ -122,7 +143,22 @@ describe('chatComposerSetup', () => {
       defaultMode: 'auto',
       fullAutoOpen: false,
       fullAutoOffByAdmin: false,
+      usageNoticeSeen: null,
+      onOwnKey: false,
     });
+  });
+
+  it('passes on the period whose 80% line was seen, and whether Chat runs on its own key', async () => {
+    facts.ctx = ctxOf('admin', true, false);
+    facts.notice = '2026-10-01';
+    facts.ownKey = true;
+    const setup = await chatComposerSetup();
+    expect(setup.usageNoticeSeen).toBe('2026-10-01');
+    expect(setup.onOwnKey).toBe(true);
+
+    // A key that can't be read: the careful answer, and the server's hold still decides.
+    facts.ownKey = 'throws';
+    expect((await chatComposerSetup()).onOwnKey).toBe(false);
   });
 });
 

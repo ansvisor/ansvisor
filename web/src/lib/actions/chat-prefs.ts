@@ -107,3 +107,36 @@ export async function saveChatGeneralSettings(patch: unknown): Promise<ChatPrefR
     return { ok: false };
   }
 }
+
+/**
+ * The AI usage period whose 80% line above the composer the person saw
+ * (CHAT-04 item 16; chat_user_prefs.usage_notice_period, its first day),
+ * so the line shows once per person per period, on every device.
+ */
+export async function saveUsageNoticePeriod(period: string): Promise<ChatPrefResult> {
+  try {
+    if (typeof period !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(period)) return { ok: false };
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false };
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (!chatAgenticEnabled(profile?.organization_id ?? null)) return { ok: false };
+    const { error } = await supabase
+      .from('chat_user_prefs')
+      .upsert({ user_id: user.id, usage_notice_period: period }, { onConflict: 'user_id' });
+    if (error) {
+      console.error('[chat-prefs] could not keep the usage notice:', error.message);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error('[chat-prefs] could not keep the usage notice:', error);
+    return { ok: false };
+  }
+}

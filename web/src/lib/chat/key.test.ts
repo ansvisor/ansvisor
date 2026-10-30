@@ -47,7 +47,8 @@ vi.mock('@/lib/agent/key-encryption', () => ({
   decryptApiKey: (envelope: string) => `plain(${envelope})`,
 }));
 
-const { ownKeyAllowed, ownKeyAccess, resolveChatModelKey } = await import('./key');
+const { chatRunsOnOwnKey, ownKeyAllowed, ownKeyAccess, resolveChatModelKey } =
+  await import('./key');
 
 const CUSTOMER = {
   provider: 'openai',
@@ -201,5 +202,47 @@ describe('resolveChatModelKey, Chat off', () => {
     vi.stubEnv('CHAT_AGENTIC', 'true');
     vi.stubEnv('CHAT_AGENTIC_ORGS', '33333333-3333-4333-8333-333333333333');
     expect(await resolveChatModelKey(ORG)).toBeNull();
+  });
+});
+
+describe('chatRunsOnOwnKey', () => {
+  it('says yes only where resolveChatModelKey would pick the workspace’s own key', async () => {
+    org = { plan: 'enterprise', legacy_key_grandfathered: false, legacy_key_until: null };
+    ownKey = CUSTOMER;
+    expect(await chatRunsOnOwnKey(ORG)).toBe(true);
+
+    // No key saved, or the plan leaves it aside: Ansvisor's key, on the budget.
+    ownKey = null;
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    ownKey = CUSTOMER;
+    org = { plan: 'growth', legacy_key_grandfathered: false, legacy_key_until: null };
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    org = { plan: 'starter', legacy_key_grandfathered: false, legacy_key_until: null };
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+
+    // A kept key, for its 30 days only.
+    org = {
+      plan: 'growth',
+      legacy_key_grandfathered: true,
+      legacy_key_until: new Date(Date.now() + DAY).toISOString(),
+    };
+    expect(await chatRunsOnOwnKey(ORG)).toBe(true);
+    org = {
+      plan: 'growth',
+      legacy_key_grandfathered: true,
+      legacy_key_until: new Date(Date.now() - DAY).toISOString(),
+    };
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+  });
+
+  it('is no with Chat off or self-hosted, where nothing is metered', async () => {
+    org = { plan: 'enterprise', legacy_key_grandfathered: false, legacy_key_until: null };
+    ownKey = CUSTOMER;
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    expect(reads).toEqual([]);
   });
 });
