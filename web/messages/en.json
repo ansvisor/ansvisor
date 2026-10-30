@@ -6045,6 +6045,7 @@
         "byYou": "only you can take this step",
         "allSteps": "All steps",
         "working": "Content Agent is working",
+        "leavePage": "You can leave this page. I'll keep going.",
         "builtFrom": "built from {count, number} of your sources",
         "seeSources": "See sources",
         "stop": "Stop",

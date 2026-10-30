@@ -26,6 +26,9 @@ import {
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { AiUsageBanner } from '@/components/ai-usage/ai-usage-banner';
 import { AiUsageMeter } from '@/components/ai-usage/ai-usage-meter';
+import { RunsTray } from '@/components/agentic/runs-tray';
+import { StatusPill, type StatusPillState } from '@/components/agentic/status-pill';
+import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -431,6 +434,8 @@ export function DraftEditor({
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(pageReadTimer.current), []);
   const [status, setStatus] = useState(draft.status);
+  // With the new Chat on, the header speaks Chat's language: the page's pill and the runs tray.
+  const chatOn = useChatAgentic();
   // Where the page is live (CE-013), and Mark published open.
   const [liveUrl, setLiveUrl] = useState(draft.publishedUrl);
   const [askLive, setAskLive] = useState(false);
@@ -2679,6 +2684,16 @@ export function DraftEditor({
   // The agent at work from this page: Fix open rules, or the brief. Its run,
   // step by step, and Stop (CE-027/035).
   const agentWorking = fixing || briefRebuilding;
+  /** The page's pill beside its title, with Chat on (Chat agentic plan §2): as Chat's own. */
+  const pagePill: StatusPillState = agentWorking
+    ? 'working'
+    : openSuggestions > 0
+      ? 'needsYou'
+      : status === 'published'
+        ? 'done'
+        : status === 'ready'
+          ? 'ready'
+          : 'draft';
   // Any run the card follows (Fix, a hand-off, the brief): a failed one before it is behind it.
   useEffect(() => {
     if (agentWorking) setLastRunFailed(false);
@@ -3768,6 +3783,7 @@ export function DraftEditor({
                 {title.trim() || t('untitled')}
               </button>
             </h1>
+            {chatOn && <StatusPill state={pagePill} />}
             <span className="shrink-0">
               <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
             </span>
@@ -3798,9 +3814,12 @@ export function DraftEditor({
                 }
               />
             )}
+            {/* With Chat on, every run of the workspace, this page's agent's among them (Chat
+                agentic plan §2–3): the same tray as Chat's header. */}
+            {chatOn && <RunsTray brandId={draft.brandId} />}
             {/* The agent at work on this page: a click opens the basket, with its steps and Stop. */}
             {/* Fix open rules or the brief at work: the basket shows their steps and Stop. */}
-            {qualityOn && agentWorking && (
+            {!chatOn && qualityOn && agentWorking && (
               <HeaderTip label={t('header.running', { count: 1 })} hint={t('header.runningHint')}>
                 <button
                   type="button"
