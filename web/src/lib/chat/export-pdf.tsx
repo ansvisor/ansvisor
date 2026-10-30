@@ -171,16 +171,62 @@ function Block({ block }: { block: DraftBlock }) {
   }
 }
 
+/**
+ * The most table rows and other blocks one PDF lays out. react-pdf's time
+ * grows with the square of the length (about 14 s for 1,000 table rows,
+ * 60 s for 2,000), and an exported chat can hold many 200,000-character
+ * answers: past this, the PDF stops with a line saying so, and the
+ * Markdown and Word files keep all of it.
+ */
+export const PDF_BLOCK_LIMIT = 1_000;
+
+/** The blocks a PDF lays out, `limit` at most (a table's rows each count), and whether any were left out. */
+export function pdfBlocks(
+  blocks: DraftBlock[],
+  limit: number = PDF_BLOCK_LIMIT,
+): { blocks: DraftBlock[]; cut: boolean } {
+  let left = limit;
+  let cut = false;
+  const take = (list: DraftBlock[]): DraftBlock[] => {
+    const kept: DraftBlock[] = [];
+    for (const block of list) {
+      if (left <= 0) {
+        cut = true;
+        break;
+      }
+      if (block.kind === 'table') {
+        if (block.rows.length > left) cut = true;
+        kept.push({ ...block, rows: block.rows.slice(0, left) });
+        left -= Math.min(left, block.rows.length);
+      } else if (block.kind === 'html') {
+        kept.push({ ...block, blocks: take(block.blocks) });
+      } else {
+        kept.push(block);
+        left -= 1;
+      }
+    }
+    return kept;
+  };
+  return { blocks: take(blocks), cut };
+}
+
 export function AnswerPdfDocument({ answer }: { answer: ExportAnswer }) {
+  const { blocks, cut } = pdfBlocks(answerDocumentBlocks(answer));
   return (
     <Document title={answerTitle(answer) || undefined}>
       <Page size="A4" style={styles.page}>
         <Text fixed style={styles.header}>
           {answer.stamp}
         </Text>
-        {answerDocumentBlocks(answer).map((block, i) => (
+        {blocks.map((block, i) => (
           <Block key={i} block={block} />
         ))}
+        {cut && (
+          <Text style={[styles.paragraph, styles.muted]}>
+            The PDF stops here: it is too long for one. The Markdown and Word downloads have all of
+            it.
+          </Text>
+        )}
         <View fixed style={styles.footer}>
           <Text>{answer.stamp}</Text>
           <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />

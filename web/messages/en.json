@@ -3656,8 +3656,7 @@
     "preview": {
       "title": "Live answer",
       "note": "Play runs the mockup's answer a step at a time; nothing is read or sent.",
-      "play": "Play",
-      "footer": "Next moves and the answer's actions fade in here once it is done."
+      "play": "Play"
     }
   },
   "chatComposer": {
@@ -3769,7 +3768,30 @@
     "deniedTitle": "I can't do this for you",
     "sendFailed": "Couldn't send that. Try again.",
     "answerFailed": "Couldn't save your answer. Try again.",
-    "pausedCap": "You've used this month's AI limit, so Chat stopped here."
+    "pausedCap": "You've used this month's AI limit, so Chat stopped here.",
+    "untitledExport": "Chat"
+  },
+  "chatAnswer": {
+    "label": "Answer actions",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Couldn't copy that. Try again.",
+    "download": "Download",
+    "downloadTip": "Download · {formats}",
+    "downloaded": "Downloaded {name}",
+    "downloadFailed": "Couldn't download that. Try again.",
+    "formats": {
+      "md": "Markdown .md",
+      "docx": "Word .docx",
+      "pdf": "PDF .pdf",
+      "csv": "CSV .csv",
+      "xlsx": "Excel .xlsx"
+    },
+    "save": "Save to Files",
+    "saved": "Saved to Files",
+    "inFiles": "In Files",
+    "storageFull": "Not saved to Files · Storage is full",
+    "saveFailed": "Couldn't save that to Files. Try again."
   },
   "chatPanel": {
     "label": "Chat side panel",
@@ -3907,7 +3929,13 @@
       "delete": "Delete",
       "settings": "Chat settings",
       "export": "Export chat",
-      "exportSoon": "Coming soon",
+      "exportAs": {
+        "md": "Markdown .md",
+        "docx": "Word .docx",
+        "pdf": "PDF .pdf"
+      },
+      "exported": "Downloaded {name}",
+      "exportFailed": "Couldn't export the chat. Try again.",
       "activity": "Activity log",
       "pinned": "Pinned",
       "unpinned": "Unpinned",

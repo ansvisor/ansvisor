@@ -3,9 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
+import { AnswerActions } from '@/components/chat/run/answer-actions';
 import { RunAnswer } from '@/components/chat/run/run-answer';
 import type { ChatStep } from '@/lib/chat/events';
 import { emptyRun, type ClientRun } from '@/lib/chat/run-state';
+
+/** The sample run's handle: no such run, so its downloads say they couldn't. */
+const PREVIEW_RUN = '00000000-0000-4000-8000-0000000000aa';
 
 /** The mockup's answer (#s-ask): what the pretend run reads, opens and checks. */
 const READ: ChatStep = {
@@ -107,7 +111,15 @@ export function RunPreview() {
         <RunAnswer
           run={current}
           workingMs={tick * 700}
-          footer={<p className="text-xs text-muted-foreground">{t('footer')}</p>}
+          footer={
+            // The answer's actions as they show (W1-25); a sample answer has no file to download.
+            <AnswerActions
+              runId={PREVIEW_RUN}
+              markdown={current.text}
+              filed={false}
+              onFiled={() => undefined}
+            />
+          }
         />
       </div>
     </section>
