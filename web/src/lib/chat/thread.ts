@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import type { ChatDeliverable, ChatStep } from './events';
+import { maskIds, type ChatDeliverable, type ChatStep } from './events';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
 
 /**
@@ -111,7 +111,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
     madeByRun.set(f.run_id, [
       ...(madeByRun.get(f.run_id) ?? []),
       {
-        title: f.title,
+        title: maskIds(f.title),
         type: f.type,
         formats: f.formats,
         status: f.status,

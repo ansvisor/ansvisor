@@ -308,7 +308,13 @@ describe('zipChatFiles', () => {
     if (!zip.ok) throw new Error(zip.failure);
     expect(zip.count).toBe(2);
     expect(zip.fileName).toMatch(/^files-\d{4}-\d{2}-\d{2}\.zip$/);
-    const names = Object.keys(unzipSync(zip.body));
+    // Streamed to its end: a whole .zip, with each file in it.
+    const body = new Uint8Array(await new Response(zip.stream).arrayBuffer());
+    const files = unzipSync(body);
+    expect(new TextDecoder().decode(files['why-citations-dropped-2026-10-30.md'])).toContain(
+      'Second.',
+    );
+    const names = Object.keys(files);
     expect(names).toEqual([
       'why-citations-dropped-2026-10-30.md',
       'why-citations-dropped-2026-10-30 (2).md',
