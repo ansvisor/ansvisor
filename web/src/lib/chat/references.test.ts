@@ -9,6 +9,9 @@ describe('references', () => {
   it('reads a search as words, without what PostgREST filters read', () => {
     expect(referenceQuery('  50% off_(pricing), page\\ ')).toBe('50 off pricing page');
     expect(referenceQuery('x'.repeat(150))).toHaveLength(100);
+    // PostgREST reads * as % in like and ilike: "*" alone would match every row.
+    expect(referenceQuery('*')).toBe('');
+    expect(referenceQuery('price*list')).toBe('price list');
   });
 
   it('takes each source in turn, once each, up to eight', () => {

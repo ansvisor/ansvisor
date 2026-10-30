@@ -280,6 +280,34 @@ describe('Run now', () => {
     });
   });
 
+  it('stops the run of a click whose agent was archived after its checks, as Archive does', async () => {
+    const id = await agentOf(PEOPLE.manager, { scope: { brand_ids: [BRAND] } });
+    const ctx = await ctxOf(PEOPLE.manager);
+    // Archive lands between the click's checks and its insert: its stop of the queue has
+    // already run, with this run not in it yet.
+    const from = db.from.bind(db);
+    const spy = vi.spyOn(db, 'from').mockImplementation((table: string) => {
+      const builder = from(table);
+      if (table === 'chat_agent_runs') {
+        const insert = builder.insert.bind(builder);
+        builder.insert = (rows) => {
+          db.tables.chat_agents.find((a) => a.id === id)!.status = 'archived';
+          return insert(rows);
+        };
+      }
+      return builder;
+    });
+    const result = await runs.runAgentNow(ctx, id, {}, NOW, null);
+    spy.mockRestore();
+    expect(result).toMatchObject({ ok: true, value: { runs: [{ status: 'stopped' }] } });
+    expect(runRows()).toEqual([
+      expect.objectContaining({ agent_id: id, status: 'stopped', stop_reason: 'user' }),
+    ]);
+    expect(
+      db.tables.chat_activity_log.filter((r) => r.summary_key === 'agentRunQueued'),
+    ).toHaveLength(0);
+  });
+
   it('refuses a Full auto agent on a plan without it, before anything is queued', async () => {
     const id = await agentOf(PEOPLE.admin, { mode: 'full_auto' });
     db.tables.organizations[0].plan = 'starter';

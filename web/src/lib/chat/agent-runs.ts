@@ -227,6 +227,24 @@ async function queueRun(
     await supabaseAdmin.from('chat_agent_runs').delete().eq('id', runId).eq('status', 'queued');
     return { runId: after[MAX_QUEUED_PER_BRAND - 1].id, kind: 'coalesced' };
   }
+  // An Archive between this click's checks and its insert has already stopped the queue
+  // without this run: read the agent again, and stop the run as Archive does. Archive
+  // changes the state before it stops the queue, so one of the two always sees the other.
+  const { data: current, error: currentError } = await supabaseAdmin
+    .from('chat_agents')
+    .select('status')
+    .eq('id', row.id)
+    .maybeSingle();
+  if (currentError) throw new Error(`Could not read the agent: ${currentError.message}`);
+  if (!current || (current as { status: string }).status === 'archived') {
+    const { error: stopError } = await supabaseAdmin
+      .from('chat_agent_runs')
+      .update({ status: 'stopped', stop_reason: 'user', finished_at: now.toISOString() })
+      .eq('id', runId)
+      .eq('status', 'queued');
+    if (stopError) throw new Error(`Could not stop the agent's run: ${stopError.message}`);
+    return { runId, kind: 'queued' };
+  }
   await logAgentChange(ctx, row, 'agentRunQueued', {
     params: { brand: brand.name },
     brandId: brand.id,

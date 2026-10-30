@@ -1266,10 +1266,17 @@ export async function updateAgent(
   const visibilityChanged = patch.visibility !== undefined && patch.visibility !== row.visibility;
   const monthChanged =
     patch.maxMonthShare !== undefined && patch.maxMonthShare !== row.max_month_share;
+  // An Admin's change to someone else's agent that is on (or paused, to come back) is held to
+  // the mode its owner may use too: its triggered runs act as the owner, as Resume checks.
+  const ownerRole =
+    next && row.status !== 'draft' && row.owner_id && row.owner_id !== ctx.actor.userId
+      ? await ownerRoleOf(ctx.actor.organizationId, row)
+      : null;
   const denial = await firstDenial(ctx, [
     visibilityChanged ? visibilityDenial(patch.visibility!, ctx.viewer, ctx.settings) : null,
     monthChanged ? monthCapDenial(ctx.viewer) : null,
     next ? modeDenial(result.mode, ctx.plan, ctx.settings, ctx.viewer.role) : null,
+    ownerRole ? modeDenial(result.mode, ctx.plan, ctx.settings, ownerRole) : null,
     next || patch.triggers ? enginesDenial(ctx.plan, enginesNamed(result.scope, triggers)) : null,
   ]);
   if (denial) return denial;
