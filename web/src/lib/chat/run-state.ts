@@ -1,6 +1,7 @@
 import type {
   ChatAsk,
   ChatConfirm,
+  ChatNextMove,
   ChatDeliverable,
   ChatDenialCard,
   ChatEvent,
@@ -36,6 +37,8 @@ export interface ClientRun {
   confirm: ChatConfirm | null;
   /** The question card the run waits on (CHAT-07); null when none. */
   question: ChatAsk | null;
+  /** What could come next, once it finished (CHAT-07 §C): best first. */
+  nextMoves: ChatNextMove[];
   /** Out-of-permission answers, in order. */
   denials: ChatDenialCard[];
   /** What it made, in order (CHAT-06 item 1): the n-th is the run's file n. */
@@ -56,6 +59,7 @@ export function emptyRun(status: ClientRunStatus = 'running'): ClientRun {
     text: '',
     confirm: null,
     question: null,
+    nextMoves: [],
     denials: [],
     deliverables: [],
     summary: null,
@@ -112,6 +116,9 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
       return next;
     case 'deliverable.created':
       next.deliverables = [...run.deliverables, event.data];
+      return next;
+    case 'next_moves':
+      next.nextMoves = event.data.moves;
       return next;
     case 'access.denied':
       next.denials = [...run.denials, event.data];

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
-import { maskIds, type ChatDeliverable, type ChatStep } from './events';
+import { maskIds, type ChatDeliverable, type ChatNextMove, type ChatStep } from './events';
+import { clientMove } from './next-moves';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
 
 /**
@@ -8,6 +9,7 @@ import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from '.
  * tool, no debug record). Read as the person, so the chat's policy holds: a
  * chat is its author's only (CHAT-20 §16c). A run still under way is rebuilt
  * by the page from its events (`…/events?after=0`), and keeps streaming.
+ * A finished run's next moves come back from chat_next_moves.
  */
 
 export interface ThreadRun {
@@ -19,6 +21,8 @@ export interface ThreadRun {
   fileId: string | null;
   /** What it made, as filed (CHAT-06 item 1), in the order it made them. */
   deliverables: ChatDeliverable[];
+  /** What could come next once it finished (CHAT-07 §C), best first. */
+  nextMoves: ChatNextMove[];
 }
 
 export interface ThreadMessage {
@@ -51,6 +55,15 @@ interface FileRow {
   content_draft_id: string | null;
 }
 
+/** A finished run's next move, as the thread reads it. */
+interface NextMoveRow {
+  run_id: string;
+  rank: number;
+  label: string;
+  prompt: string;
+  ghost_ok: boolean;
+}
+
 /** The person's chat with its messages and runs; null when it isn't theirs or isn't there. */
 export async function loadChatThread(conversationId: string): Promise<ChatThread | null> {
   const supabase = await createClient();
@@ -80,7 +93,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   if (runs.error) throw new Error(`Could not read the chat's runs: ${runs.error.message}`);
 
   const runIds = (runs.data ?? []).map((run) => run.id);
-  const [steps, files] = runIds.length
+  const [steps, files, moves] = runIds.length
     ? await Promise.all([
         supabase
           .from('chat_run_steps')
@@ -92,13 +105,25 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
           .select('id, run_id, message_id, title, type, formats, status, content_draft_id')
           .in('run_id', runIds)
           .order('created_at', { ascending: true }),
+        supabase
+          .from('chat_next_moves')
+          .select('run_id, rank, label, prompt, ghost_ok')
+          .in('run_id', runIds)
+          .order('rank', { ascending: true }),
       ])
     : [
+        { data: [], error: null },
         { data: [], error: null },
         { data: [], error: null },
       ];
   if (steps.error) throw new Error(`Could not read the chat's steps: ${steps.error.message}`);
   if (files.error) throw new Error(`Could not read the chat's files: ${files.error.message}`);
+  if (moves.error) throw new Error(`Could not read the chat's next moves: ${moves.error.message}`);
+  const movesByRun = new Map<string, ChatNextMove[]>();
+  for (const m of (moves.data ?? []) as NextMoveRow[]) {
+    const move = clientMove({ label: m.label, prompt: m.prompt, ghostOk: m.ghost_ok });
+    movesByRun.set(m.run_id, [...(movesByRun.get(m.run_id) ?? []), move]);
+  }
   // An answer saved to Files names its message; what a run made doesn't.
   const fileByRun = new Map<string, string>();
   const madeByRun = new Map<string, ChatDeliverable[]>();
@@ -134,6 +159,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         steps: stepsByRun.get(run.id) ?? [],
         fileId: fileByRun.get(run.id) ?? null,
         deliverables: madeByRun.get(run.id) ?? [],
+        nextMoves: movesByRun.get(run.id) ?? [],
       },
     ]),
   );

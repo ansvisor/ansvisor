@@ -184,10 +184,17 @@ export interface ChatDeliverable {
   filed?: 'in_files' | 'storage_full' | 'failed';
 }
 
-/** A next move: a chip that fills the composer (CHAT-07). In rank order. */
+/**
+ * A next move (CHAT-07 §C): a card under the latest answer whose click sends
+ * its prompt. In rank order; never its class or a tool.
+ */
 export interface ChatNextMove {
+  /** "Do the same for /features" */
   label: string;
+  /** What a click sends as the person's next message. */
   prompt: string;
+  /** It continues this run's object: the first one shows as the composer's ghost text. */
+  ghost?: boolean;
 }
 
 /** The workspace's monthly AI usage, as a percent of its limit (CHAT-04, DECISIONS R). */

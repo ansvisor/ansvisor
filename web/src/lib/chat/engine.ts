@@ -50,6 +50,7 @@ import {
   type AskAnswer,
   type AskToolInput,
 } from './asks';
+import { NEXT_MOVES_TOOL, clientMove, nextMovesInput, pickNextMoves } from './next-moves';
 import { requestHash } from './idempotency';
 import {
   CHAT_MODES,
@@ -752,6 +753,11 @@ async function modelLoop(rc: RunContext): Promise<void> {
 
     rc.messages.push(...step.responseMessages);
     if (step.toolCalls.length === 0) return finish(rc);
+    // Only next moves: the answer is done, without another model step (CHAT-07 §C item 6).
+    if (step.toolCalls.every((call) => call.toolName === NEXT_MOVES_TOOL)) {
+      if (calls.length > 0 && (await handleCalls(rc, calls, 0, [])) !== 'continue') return;
+      return finish(rc);
+    }
     const outcome = await handleCalls(rc, calls, 0, []);
     if (outcome !== 'continue') return;
     await saveState(rc.run.id, { messages: rc.messages, progress: rc.progress });
@@ -905,6 +911,14 @@ function toolSet(rc: RunContext, phase: ChatPhase): ToolSet {
       inputSchema: askToolInput,
     });
   }
+  // Next moves (CHAT-07 §C): with the final answer, in the same model step.
+  if (phase === 'write') {
+    set[NEXT_MOVES_TOOL] = aiTool({
+      description:
+        'With your final answer, in the same reply: 2–3 things the person could do next, best first. A click sends the prompt as their next message.',
+      inputSchema: nextMovesInput,
+    });
+  }
   if (phase === 'write' && rc.refused.length > 0) {
     const keys = rc.refused.map((r) => r.tool.labelKey) as [string, ...string[]];
     set[EXPLAIN_TOOL] = aiTool({
@@ -957,6 +971,7 @@ function systemPrompt(rc: RunContext, phase: ChatPhase): string {
         "To make a change, call its tool: the app asks the person first when it should. Don't ask for permission in text, and don't say a change is made until its tool returned ok.",
         'A result with code "skipped": the person said no, so don\'t make that change. Codes forbidden_role, plan_locked, policy_never, subscription_inactive, demo_brand, brand_scope, execute_off, no_access: the person already sees a card saying why; say it in one short sentence and don\'t try again.',
         "Never show ids, tool names, JSON or code to the person. Answer in the person's language, in short Markdown.",
+        `When your answer is complete, call ${NEXT_MOVES_TOOL} once in that same reply, after the text: 2–3 next moves, best first, at most one per kind (continue, deepen, act, repeat, reuse). The label names the real page, task or prompt; the prompt is what the person would type, under 80 characters. Mark continues_this_run when the move continues an object of this answer. Only moves Ansvisor can do on this plan; never an outside tool. Not while a question or a change waits on the person.`,
         `Ask with ${ASK_TOOL} only when the answer changes what you make and isn't in the data, the page or an earlier answer; never ask what the data can answer, never for a password or a key, and never to approve a change (its own tool asks). At most 2 questions for one piece of work, asked together before it starts, and ${MAX_ASKS_PER_RUN} in a run; past that, use the recommended option and say so. An answer with skipped: true: use the recommended option and say so in one line.`,
       ].join('\n'),
     );
@@ -1102,6 +1117,7 @@ async function handleCall(
 ): Promise<CallOutcome> {
   if (call.toolName === EXPLAIN_TOOL && phase === 'write') return explainUnavailable(rc, call);
   if (call.toolName === ASK_TOOL && phase === 'write') return askQuestion(rc, call);
+  if (call.toolName === NEXT_MOVES_TOOL && phase === 'write') return keepNextMoves(rc, call);
   const tool = rc.offered.get(call.toolName);
   if (!tool || (phase === 'read' && tool.class !== 'read')) {
     return result(call, { code: 'not_available' }, true);
@@ -1336,6 +1352,17 @@ async function askQuestion(rc: RunContext, call: PendingCall): Promise<CallOutco
       offerDontAskAgain: false,
     },
   };
+}
+
+/**
+ * The next moves the model suggested (CHAT-07 §C): kept for the run's end,
+ * where they are picked for the person and shown. The last ones win.
+ */
+function keepNextMoves(rc: RunContext, call: PendingCall): CallOutcome {
+  const parsed = nextMovesInput.safeParse(call.input);
+  if (!parsed.success) return result(call, { code: 'invalid_input' }, true);
+  rc.progress.nextMoves = parsed.data.moves;
+  return result(call, { ok: true });
 }
 
 /**
@@ -2114,11 +2141,43 @@ async function finish(rc: RunContext): Promise<void> {
     workingMs,
     pending: null,
   });
+  await offerNextMoves(rc);
   rc.sink.emit('run.finished', {
     ...summaryOf(rc.progress, workingMs),
     generatedAt,
     dataAsOf: rc.progress.dataAsOf,
   });
+}
+
+/**
+ * A finished run's next moves (CHAT-07 §C): the model's, picked for the
+ * person's role and plan as they are now, kept in chat_next_moves so they
+ * come back after a reload, and sent before run.finished. None after an
+ * error, a pause at the cap or a Stop. A failure here loses the moves only.
+ */
+async function offerNextMoves(rc: RunContext): Promise<void> {
+  const moves = rc.progress.nextMoves;
+  if (!moves?.length) return;
+  try {
+    const ctx = await contextFor(rc);
+    if (!ctx) return;
+    const picked = pickNextMoves(moves, { role: ctx.role, writable: ctx.plan.writable });
+    if (picked.length === 0) return;
+    const { error } = await supabaseAdmin.from('chat_next_moves').insert(
+      picked.map((move, i) => ({
+        run_id: rc.run.id,
+        rank: i + 1,
+        label: move.label,
+        prompt: move.prompt,
+        class: move.class,
+        ghost_ok: move.ghostOk,
+      })),
+    );
+    if (error) throw new Error(error.message);
+    rc.sink.emit('next_moves', { moves: picked.map(clientMove) });
+  } catch (err) {
+    console.error('[chat/engine] could not keep the next moves:', err);
+  }
 }
 
 /** The month's AI limit is used (CHAT-04 item 17): the next step doesn't start; what's done stays. */
