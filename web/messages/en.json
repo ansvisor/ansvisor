@@ -363,6 +363,15 @@
       "frameTitle": "Chat preview"
     }
   },
+  "firstRun": {
+    "arriving": "Your first answers are arriving",
+    "queued": "Your first tracking starts as soon as a slot opens",
+    "count": "({current} of {total})",
+    "minutesLeft": "~{minutes} min",
+    "hoursLeft": "{hours, plural, one {~# hour} other {~# hours}}",
+    "fillsIn": "This fills in when tracking finishes.",
+    "ready": "Your first results are ready"
+  },
   "managersOnly": {
     "suggestPrompts": "Ask an admin or a manager to generate prompt suggestions.",
     "suggestTopics": "Ask an admin or a manager to generate topic suggestions.",
@@ -484,11 +493,12 @@
       "history": "History"
     },
     "firstRun": {
-      "running": "First analysis running",
-      "queued": "First analysis queued",
+      "running": "First tracking running",
+      "queued": "First tracking queued",
       "progress": "{current} of {total} checks",
-      "minutesLeft": "about {minutes} min left",
-      "hoursLeft": "{hours, plural, one {about # hour left} other {about # hours left}}",
+      "minutesLeft": "~{minutes} min left",
+      "hoursLeft": "{hours, plural, one {~# hour left} other {~# hours left}}",
+      "details": "Details",
       "runningBody": "AI assistants are answering your prompts for the first time. Actions, signals and KPIs fill in once it finishes: a few minutes, or an hour or two at busy times. You can leave this page.",
       "queuedBody": "Another analysis is running right now. Yours starts the moment a slot opens, and keeps going in the background.",
       "link": "Follow it on Brand Visibility"
@@ -1959,10 +1969,12 @@
         "skipped": "Skipped"
       },
       "optional": "Optional",
+      "readyNow": "Ready now",
       "everyone": "Everyone in the workspace",
       "readyWhen": {
+        "arriving": "Arriving now",
         "setup": "Now",
-        "explore": "First answers · ~3h",
+        "explore": "First answers · ~1h",
         "dataPrompts": "24h after Search Console or Analytics",
         "act": "Suggestions · ~24h",
         "ready": "After the steps above"
@@ -4327,7 +4339,8 @@
     "copyFailed": "Copy failed",
     "copyDraft": "Copy draft",
     "copyCode": "Copy code",
-    "placeholderNote": "Replace placeholders in [brackets] with your real data before publishing.",
+    "placeholderNote": "Your input needed: replace each highlighted [bracket] with your own details before you publish.",
+    "inputNeeded": "Your input needed",
     "finding": "Finding",
     "why": "Why",
     "recommendedFix": "Recommended fix",
@@ -8694,6 +8707,8 @@
       "pending": "Within 24h",
       "pendingTip": "Tracked in {location} from the next daily run: its first results come within 24 hours.",
       "promptPendingTip": "This prompt's first results come with the next daily run, within 24 hours.",
+      "arriving": "Arriving now",
+      "arrivingTip": "Your first tracking is asking this now. Its results come in as it goes, and all of them when it finishes.",
       "paused": "Paused",
       "pausedTip": "This prompt is paused, so it isn't asked anywhere until you resume it.",
       "noEngine": "No engine here",
@@ -9968,7 +9983,7 @@
     "account": "Account",
     "accountDescription": "Your profile and sign-in details.",
     "general": "General",
-    "apiKeys": "API Keys",
+    "apiKeys": "MCP & API Keys",
     "team": "Team",
     "rolesAccess": "Roles & access",
     "chatSettings": "Chat",
