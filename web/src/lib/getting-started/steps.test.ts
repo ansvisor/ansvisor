@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   GETTING_STARTED_STEPS,
   buildGettingStarted,
+  firstRunOrder,
   isPageOpenedStep,
+  needsFirstAnswers,
+  needsTrackingData,
   pageOpenedStep,
   parseGettingStartedFacts,
   type GettingStartedFacts,
@@ -283,6 +286,66 @@ describe('buildGettingStarted', () => {
     ]) {
       expect(buildGettingStarted(facts({ ...complete, ...gap })).needsSetup).toBe(true);
     }
+  });
+});
+
+/**
+ * While the brand's first tracking run goes on, the steps that need none of
+ * its data come first, "Ready now"; the rest wait for it.
+ */
+describe('the first run', () => {
+  it('needs the first answers for the explore pages and the suggestions for the act steps', () => {
+    expect(GETTING_STARTED_STEPS.filter(needsFirstAnswers).map((s) => s.key)).toEqual([
+      'visibility',
+      'answers',
+      'mentions',
+      'citations',
+      'traffic',
+    ]);
+    const needs = GETTING_STARTED_STEPS.filter(needsTrackingData).map((s) => s.key);
+    expect(needs).toEqual([
+      'visibility',
+      'answers',
+      'mentions',
+      'citations',
+      'traffic',
+      'pick_content',
+      'create_content',
+      'optimize_page',
+    ]);
+  });
+
+  it('lists the steps ready now first, then the rest, each in their usual order', () => {
+    // Competitors, topics and prompts set in onboarding; Search Console
+    // suggestions in; an early answer already opened Brand Visibility.
+    const { steps } = buildGettingStarted(
+      facts({
+        competitors: 3,
+        topicPrompts: [3, 3, 3],
+        gsc: true,
+        dataSuggestions: 4,
+        firstAnswer: true,
+      }),
+    );
+    expect(firstRunOrder(steps).map((s) => s.key)).toEqual([
+      'kpis',
+      'ga',
+      'snippet',
+      'data_prompts',
+      'competitors',
+      'topics',
+      'prompts',
+      'gsc',
+      'visibility',
+      'answers',
+      'mentions',
+      'citations',
+      'traffic',
+      'pick_content',
+      'create_content',
+      'optimize_page',
+      'ready',
+    ]);
   });
 });
 

@@ -40,8 +40,11 @@ function table(name) {
       return { data: brand, error: null };
     }
     if (name === 'profiles') return { data: { organization_id: 'o1', role: 'admin' }, error: null };
-    // The topic lookup for each suggestion finds one; the topic list is empty.
-    if (name === 'topics') return { data: single ? { id: 't1' } : [], error: null };
+    // The topic lookup for each suggestion finds one (none for a brand
+    // without topics); the topic list is empty.
+    if (name === 'topics') {
+      return { data: single && !db.noTopics ? { id: 't1' } : single ? null : [], error: null };
+    }
     return { data: [], error: null };
   };
   const chain = new Proxy(
@@ -139,7 +142,7 @@ const modelEnv = process.env.PROMPT_SUGGESTION_MODEL;
 beforeEach(async () => {
   vi.clearAllMocks();
   delete process.env.PROMPT_SUGGESTION_MODEL;
-  db = { inserts: [], updates: [], deletes: [], current: [], insertError: null };
+  db = { inserts: [], updates: [], deletes: [], current: [], insertError: null, noTopics: false };
   reserveRelevanceAllowance.mockResolvedValue({ unlimited: false, id: 'r1' });
   getCatalogSuggestionCandidates.mockResolvedValue([]);
   settleRelevanceUsage.mockResolvedValue();
@@ -291,6 +294,22 @@ describe('suggestion refresh from the catalog (ECOM-003)', () => {
     const { system, prompt } = generateObject.mock.calls[0][0];
     expect(system).not.toContain('WHAT THE BRAND SELLS');
     expect(prompt).not.toContain('product catalog categories');
+  });
+});
+
+describe('suggestion refresh for a brand without topics', () => {
+  it('asks for a topic first, before anything is generated, reserved or written', async () => {
+    db.noTopics = true;
+    const res = await refresh();
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error: 'Add a topic first: prompts are grouped under topics.',
+      code: 'no_topics',
+    });
+    expect(generateObject).not.toHaveBeenCalled();
+    expect(reserveRelevanceAllowance).not.toHaveBeenCalled();
+    expect(db.inserts).toEqual([]);
   });
 });
 
