@@ -12,6 +12,14 @@ import { etaParts, minutesLeft, withSample, type ProgressSample } from '@/lib/tr
  */
 export const FIRST_RUN_POLL_MS = 12_000;
 
+/**
+ * After this many reads in a row with no run going (a brand never tracked,
+ * or a run that failed before the ledger had it), read only every
+ * FIRST_RUN_IDLE_POLL_MS: the pages that show the run are open for long.
+ */
+export const FIRST_RUN_IDLE_READS = 5;
+export const FIRST_RUN_IDLE_POLL_MS = 60_000;
+
 /** A saved job the worker hasn't finished: queued, delayed or running. */
 const LIVE_JOB = new Set<TrackingJobStatus['status']>(['waiting', 'delayed', 'active']);
 
@@ -35,6 +43,10 @@ interface Watch {
   listeners: Set<() => void>;
   /** False once nobody watches, or the brand has a completed run. */
   live: boolean;
+  /** Reads in a row that found no run going. */
+  idle: number;
+  /** The next read waits for the tab to be shown again. */
+  paused: boolean;
   timer?: ReturnType<typeof setTimeout>;
 }
 
@@ -45,6 +57,37 @@ const finishedListeners = new Set<(brandId: string) => void>();
 
 function emit(watch: Watch) {
   for (const listener of watch.listeners) listener();
+}
+
+const tabHidden = () => typeof document !== 'undefined' && document.hidden;
+
+let resumeListening = false;
+// A hidden tab reads nothing; shown again, every paused watch reads at once.
+function resumeOnShow() {
+  if (resumeListening || typeof document === 'undefined') return;
+  resumeListening = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    for (const [brandId, watch] of watches) {
+      if (!watch.paused || !watch.live) continue;
+      watch.paused = false;
+      void tick(brandId, watch);
+    }
+  });
+}
+
+/** The next read: later while nothing goes on, and not while the tab is hidden. */
+function schedule(brandId: string, watch: Watch) {
+  const wait = watch.idle >= FIRST_RUN_IDLE_READS ? FIRST_RUN_IDLE_POLL_MS : FIRST_RUN_POLL_MS;
+  watch.timer = setTimeout(() => {
+    if (!watch.live) return;
+    if (tabHidden()) {
+      watch.paused = true;
+      resumeOnShow();
+      return;
+    }
+    void tick(brandId, watch);
+  }, wait);
 }
 
 /**
@@ -86,15 +129,24 @@ async function tick(brandId: string, watch: Watch) {
           }
         : null;
     if (watch.run) watch.seen = true;
+    watch.idle = watch.run ? 0 : watch.idle + 1;
     emit(watch);
   }
-  watch.timer = setTimeout(() => void tick(brandId, watch), FIRST_RUN_POLL_MS);
+  schedule(brandId, watch);
 }
 
 function watchFirstRun(brandId: string, listener: () => void) {
   let watch = watches.get(brandId);
   if (!watch) {
-    watch = { run: null, seen: false, pace: [], listeners: new Set(), live: true };
+    watch = {
+      run: null,
+      seen: false,
+      pace: [],
+      listeners: new Set(),
+      live: true,
+      idle: 0,
+      paused: false,
+    };
     watches.set(brandId, watch);
     void tick(brandId, watch);
   }
