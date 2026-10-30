@@ -80,12 +80,35 @@ function serverOnlyPath(start: string): string[] | null {
 }
 
 describe('client components and the server Supabase client', () => {
-  it('never reach lib/supabase/server.ts', () => {
+  // Walks every source file: past the default 5 s on a busy machine.
+  it('never reach lib/supabase/server.ts', { timeout: 30_000 }, () => {
     const reached = files(SRC)
       .filter((path) => isDirective(path, 'use client'))
       .map(serverOnlyPath)
       .filter((chain): chain is string[] => chain !== null)
       .map((chain) => chain.map((p) => p.slice(SRC.length + 1)).join(' → '));
+    expect(reached).toEqual([]);
+  });
+});
+
+/**
+ * The other way round: on the server, a 'use client' module's exports are
+ * client references, not its values, so a shared module (src/lib,
+ * src/config) that reads a value from one breaks every server path through
+ * it, as Chat's route registry did with the date range control's presets.
+ * Type-only imports are erased and fine.
+ */
+describe('shared modules and client components', () => {
+  // Walks every source file: past the default 5 s on a busy machine.
+  it('read no value from a client component', { timeout: 30_000 }, () => {
+    const shared = ['lib', 'config']
+      .flatMap((dir) => files(join(SRC, dir)))
+      .filter((path) => !isDirective(path, 'use client'));
+    const reached = shared.flatMap((path) =>
+      runtimeImports(path)
+        .filter((target) => isDirective(target, 'use client'))
+        .map((target) => `${path.slice(SRC.length + 1)} → ${target.slice(SRC.length + 1)}`),
+    );
     expect(reached).toEqual([]);
   });
 });

@@ -7,6 +7,7 @@ import {
   generationCostUsd,
   medianCost,
   priceFor,
+  searchCostUsd,
   typicalCostUsd,
 } from './improve-cost.js';
 
@@ -34,6 +35,13 @@ describe('generationCostUsd', () => {
     expect(priceFor('openrouter/google/gemini-3-flash-preview')).toBe(
       MODEL_PRICES['google/gemini-3-flash-preview'],
     );
+  });
+
+  it('prices web searches at $10 per 1,000, and none as nothing', () => {
+    expect(searchCostUsd(5)).toBeCloseTo(0.05, 6);
+    expect(searchCostUsd(0)).toBe(0);
+    expect(searchCostUsd(undefined)).toBe(0);
+    expect(searchCostUsd(-2)).toBe(0);
   });
 
   it('treats missing usage as zero tokens', () => {
@@ -68,6 +76,28 @@ describe('generationCostUsd', () => {
     expect(
       generationCostUsd('anthropic/claude-sonnet-5-5', { inputTokens: 200_000, outputTokens: 0 }),
     ).toBe(0.4);
+  });
+});
+
+describe("the table's prompt-cache read rates", () => {
+  it("price a Claude model's cache read at a tenth of its input, as Anthropic does", () => {
+    // Chat's models with no synced price (the table is what prices them then).
+    for (const id of [
+      'anthropic/claude-haiku-4-5',
+      'anthropic/claude-haiku-5-5',
+      'anthropic/claude-sonnet-5-5',
+    ]) {
+      const price = MODEL_PRICES[id];
+      expect(price.cacheRead).toBeCloseTo(price.input / 10, 12);
+    }
+    // Chat's writer, by the id it's charged under: 1M tokens read from the cache cost $0.20.
+    expect(
+      generationCostUsd('anthropic/claude-sonnet-5.5', {
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 1_000_000,
+      }),
+    ).toBeCloseTo(0.2, 12);
   });
 });
 

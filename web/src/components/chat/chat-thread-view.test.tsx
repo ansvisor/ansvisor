@@ -321,6 +321,314 @@ describe('ChatThreadView', () => {
     });
   });
 
+  it('after a reload, still says why a run failed, and Retry sends the question again (W1-15)', async () => {
+    const reason = "Chat couldn't check your AI usage just now, so it didn't start this step.";
+    const thread = {
+      conversationId: CHAT,
+      title: 'Citations',
+      brandId: null,
+      mine: true,
+      messages: [
+        { role: 'user', text: 'Find the drop', generatedAt: null, dataAsOf: null, timezone: null },
+        {
+          role: 'assistant',
+          text: '',
+          generatedAt: null,
+          dataAsOf: null,
+          timezone: 'UTC',
+          run: {
+            runId: RUN,
+            status: 'error',
+            steps: [],
+            fileId: null,
+            deliverables: [],
+            summary: { workingMs: 3000, stepCount: 0, sources: [] },
+            errorReason: reason,
+          },
+        },
+      ],
+    } as unknown as ChatThread;
+    await render({ thread, variant: 'dock' });
+    const box = container.querySelector('[data-slot="run-error"]')!;
+    expect(box.textContent).toContain('Stopped: something went wrong');
+    expect(box.textContent).toContain(reason);
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-action="run.retry"]')!.click(),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const sent = calls.find((c) => c.url === '/api/chat/runs')!;
+    expect(JSON.parse(String(sent.init!.body))).toMatchObject({
+      message: 'Find the drop',
+      conversationId: CHAT,
+    });
+    expect(container.textContent).toContain('Two pages lost most of it.');
+    // Retry is on the latest answer only: the failed one has none now.
+    expect(container.querySelector('[data-slot="run-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-action="run.retry"]')).toBeNull();
+
+    // A teammate's shared chat only reads: no Retry.
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render({ thread: { ...thread, mine: false }, variant: 'dock' });
+    expect(container.querySelector('[data-action="run.retry"]')).toBeNull();
+
+    // A question sent with files or a page scope can't go again as it was: no Retry.
+    const scoped = {
+      ...thread,
+      messages: [{ ...thread.messages[0], resendable: false }, thread.messages[1]],
+    } as ChatThread;
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render({ thread: scoped, variant: 'dock' });
+    expect(container.querySelector('[data-slot="run-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-action="run.retry"]')).toBeNull();
+
+    // Paused at the AI limit, the composer is off, and so is Retry.
+    aiUsage.usage = {
+      plan: 'growth',
+      planName: 'Growth',
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      unlimited: false,
+      percentUsed: 100,
+      features: [],
+      chatMetered: true,
+    };
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render({ thread, variant: 'dock' });
+    expect(container.querySelector('[data-slot="run-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-action="run.retry"]')).toBeNull();
+  });
+
+  it('retries a question with the page chips and @ objects it was sent with', async () => {
+    const chart = { type: 'chart' as const, id: 'mentions-trend', label: 'Mentions over time' };
+    const chips = [
+      { key: 'page', label: 'Mentions & Sentiment' },
+      { key: 'filter:platform', label: 'ChatGPT', value: 'chatgpt-web' },
+    ];
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(
+        stream([
+          chatEvent('run.error', 1, {
+            workingMs: 1000,
+            stepCount: 0,
+            sources: [],
+            code: 'failed',
+            reason: 'Something went wrong, so Chat stopped here.',
+          }),
+        ]),
+        { status: 200, headers: { 'x-chat-conversation': CHAT, 'x-chat-run': RUN } },
+      );
+    });
+    await render({
+      variant: 'panel',
+      onConversation: vi.fn(),
+      chips,
+      pageRoute: '/dashboard/mentions',
+      draft: { nonce: 1, reference: chart },
+    });
+    await type('Why the drop?');
+    await enter();
+    const retry = container.querySelector<HTMLButtonElement>('[data-action="run.retry"]')!;
+    await act(async () => retry.click());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const sent = calls.filter((c) => c.url === '/api/chat/runs');
+    expect(sent).toHaveLength(2);
+    const [first, again] = sent.map((c) => JSON.parse(String(c.init!.body)));
+    expect(again).toMatchObject({
+      message: 'Why the drop?',
+      conversationId: CHAT,
+      context: { route: '/dashboard/mentions', chips },
+      references: [chart],
+    });
+    expect(again.context).toEqual(first.context);
+    expect(again.references).toEqual(first.references);
+    expect(again.attachmentIds).toBeUndefined();
+  });
+
+  it('stops following a run once the view goes: no reconnect, no warning', async () => {
+    const thread = {
+      conversationId: CHAT,
+      title: 'Citations',
+      brandId: null,
+      mine: true,
+      messages: [
+        { role: 'user', text: 'Find the drop', generatedAt: null, dataAsOf: null, timezone: null },
+        {
+          role: 'assistant',
+          text: '',
+          generatedAt: null,
+          dataAsOf: null,
+          timezone: 'UTC',
+          run: { runId: RUN, status: 'running', steps: [], fileId: null, deliverables: [] },
+        },
+      ],
+    } as unknown as ChatThread;
+    // The stream ends with no end: the view would reconnect after a second.
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(stream([]), { status: 200 });
+    });
+    await render({ thread, variant: 'dock' });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(container.textContent).toContain('Reconnecting…');
+    await act(async () => root.unmount());
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    expect(calls.filter((c) => c.url.includes('/events'))).toHaveLength(1);
+    expect(toast.error).not.toHaveBeenCalled();
+    root = createRoot(container);
+  });
+
+  it('cancels a stream still open once the view goes', async () => {
+    const thread = {
+      conversationId: CHAT,
+      title: 'Citations',
+      brandId: null,
+      mine: true,
+      messages: [
+        { role: 'user', text: 'Find the drop', generatedAt: null, dataAsOf: null, timezone: null },
+        {
+          role: 'assistant',
+          text: '',
+          generatedAt: null,
+          dataAsOf: null,
+          timezone: 'UTC',
+          run: { runId: RUN, status: 'running', steps: [], fileId: null, deliverables: [] },
+        },
+      ],
+    } as unknown as ChatThread;
+    const cancel = vi.fn();
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(new ReadableStream({ start: () => {}, cancel }), { status: 200 });
+    });
+    await render({ thread, variant: 'dock' });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(cancel).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(cancel).toHaveBeenCalled();
+    root = createRoot(container);
+  });
+
+  it('says "Reconnecting…" when the stream drops, and resumes after the last event', async () => {
+    const started = chatEvent('step.started', 1, {
+      step: { n: 1, kind: 'read', label: 'Read Citations', status: 'running' },
+    });
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      // The connection breaks after the first events, with no end.
+      const text = [started, chatEvent('text.delta', 2, { text: 'Two pages ' })]
+        .map((e) => `id: ${e.seq}\nevent: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`)
+        .join('');
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(text));
+          setTimeout(() => controller.error(new TypeError('network error')), 0);
+        },
+      });
+      return new Response(body, {
+        status: 200,
+        headers: { 'x-chat-conversation': CHAT, 'x-chat-run': RUN },
+      });
+    });
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(
+        stream([
+          chatEvent('step.finished', 3, {
+            step: { n: 1, kind: 'read', label: 'Read Citations', status: 'done', rowCount: 18 },
+          }),
+          chatEvent('text.delta', 4, { text: 'lost most of it.' }),
+          chatEvent('run.finished', 5, {
+            workingMs: 8000,
+            stepCount: 1,
+            sources: [{ label: 'Citations', count: 18 }],
+            generatedAt: '2026-10-30T09:14:00.000Z',
+            dataAsOf: null,
+          }),
+        ]),
+        { status: 200 },
+      );
+    });
+    await render();
+    await type('Why did citations drop?');
+    await enter();
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    const header = () => container.querySelector('[data-action="answer.toggleSteps"]')!;
+    expect(header().textContent).toContain('Reconnecting…');
+    expect(container.textContent).toContain('Two pages');
+
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 1100)));
+    expect(calls.map((c) => c.url)).toContain(`/api/chat/runs/${RUN}/events?after=2`);
+    expect(container.textContent).not.toContain('Reconnecting…');
+    expect(container.textContent).toContain('Two pages lost most of it.');
+    expect(header().textContent).toContain('Read Citations');
+  });
+
+  it('after a reload, shows the kept steps and keeps streaming from the run’s events', async () => {
+    const thread = {
+      conversationId: CHAT,
+      title: 'Citations',
+      brandId: null,
+      mine: true,
+      messages: [
+        { role: 'user', text: 'Find the drop', generatedAt: null, dataAsOf: null, timezone: null },
+        {
+          role: 'assistant',
+          text: '',
+          generatedAt: null,
+          dataAsOf: null,
+          timezone: 'UTC',
+          run: {
+            runId: RUN,
+            status: 'running',
+            steps: [{ n: 1, kind: 'read', label: 'Read Citations', status: 'running' }],
+            fileId: null,
+            deliverables: [],
+            summary: null,
+            errorReason: null,
+          },
+        },
+      ],
+    } as unknown as ChatThread;
+    let open: ReadableStreamDefaultController<Uint8Array> | null = null;
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            open = controller;
+          },
+        }),
+        { status: 200 },
+      );
+    });
+    await render({ thread, variant: 'dock' });
+    // The kept step shows while the events come.
+    expect(container.textContent).toContain('Read Citations');
+    expect(calls.map((c) => c.url)).toContain(`/api/chat/runs/${RUN}/events?after=0`);
+    const frame = (e: ChatEvent) =>
+      new TextEncoder().encode(`id: ${e.seq}\nevent: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
+    await act(async () => {
+      open!.enqueue(
+        frame(
+          chatEvent('step.started', 1, {
+            step: { n: 1, kind: 'read', label: 'Read Citations', status: 'running' },
+          }),
+        ),
+      );
+      open!.enqueue(frame(chatEvent('text.delta', 2, { text: 'Two pages lost most of it.' })));
+      open!.enqueue(frame({ ...finished[1], seq: 3 }));
+      open!.close();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(container.textContent).toContain('Two pages lost most of it.');
+    expect(container.textContent).toContain('Generated Oct 30, 2026');
+  });
+
   describe('a question card (CHAT-07)', () => {
     /** Its place among the questions asked together, when there are more. */
     let batch: { at: number; of: number } | undefined;

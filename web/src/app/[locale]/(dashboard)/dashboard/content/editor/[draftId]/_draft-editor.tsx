@@ -26,6 +26,9 @@ import {
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { AiUsageBanner } from '@/components/ai-usage/ai-usage-banner';
 import { AiUsageMeter } from '@/components/ai-usage/ai-usage-meter';
+import { RunsTray } from '@/components/agentic/runs-tray';
+import { StatusPill } from '@/components/agentic/status-pill';
+import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -228,6 +231,7 @@ import { ExportDialog, type ExportDestination } from './_export-dialog';
 import { ExportMenu } from './_export-menu';
 import { sourceDetail } from './_sources-tab';
 import { HistoryMenu } from './_history-menu';
+import { pagePillOf } from './_page-pill';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { NextNudge, useNextNudge } from './_next-nudge';
@@ -431,6 +435,8 @@ export function DraftEditor({
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(pageReadTimer.current), []);
   const [status, setStatus] = useState(draft.status);
+  // With the new Chat on, the header speaks Chat's language: the page's pill and the runs tray.
+  const chatOn = useChatAgentic();
   // Where the page is live (CE-013), and Mark published open.
   const [liveUrl, setLiveUrl] = useState(draft.publishedUrl);
   const [askLive, setAskLive] = useState(false);
@@ -519,6 +525,9 @@ export function DraftEditor({
   const [fixing, setFixing] = useState(false);
   // The brief the agent writes from the side panel: the card shows it working too.
   const [briefRebuilding, setBriefRebuilding] = useState(false);
+  // Fix (or the brief) is the server's now: the card says the page can be left (Chat on).
+  const [fixOnServer, setFixOnServer] = useState(false);
+  const [briefOnServer, setBriefOnServer] = useState(false);
   // The run Stop was pressed for: the card waits for it to end (CE-027). Another
   // run under way (one a restarted server left was shown first) can be stopped.
   const [stoppingRun, setStoppingRun] = useState<string | null>(null);
@@ -2525,6 +2534,7 @@ export function DraftEditor({
       await autosave.settle();
       // The run there was before this one: one whose answer is lost is the next.
       const before = (await readAgentRun(draft.id, FIX_RUNS).catch(() => null))?.id ?? null;
+      setFixOnServer(true);
       const result = await send().catch((err) => {
         // The call itself gave up (a timeout on the way): the agent may still finish.
         console.error('Failed to hear back from the Content Agent:', err);
@@ -2610,6 +2620,7 @@ export function DraftEditor({
       failed('suggestions.fixErrors.failed', 'failed');
     } finally {
       setFixing(false);
+      setFixOnServer(false);
       setStoppingRun(null);
       stopSent.current = null;
     }
@@ -2679,6 +2690,7 @@ export function DraftEditor({
   // The agent at work from this page: Fix open rules, or the brief. Its run,
   // step by step, and Stop (CE-027/035).
   const agentWorking = fixing || briefRebuilding;
+  const pagePill = pagePillOf({ working: agentWorking, openSuggestions, status });
   // Any run the card follows (Fix, a hand-off, the brief): a failed one before it is behind it.
   useEffect(() => {
     if (agentWorking) setLastRunFailed(false);
@@ -2702,7 +2714,7 @@ export function DraftEditor({
       setStoppingRun(null);
     }
   };
-  const onBriefRebuilding = useCallback((on: boolean) => {
+  const onBriefRebuilding = useCallback((on: boolean, onServer: boolean) => {
     // Only the brief's end clears its Stop: the panel says "not rebuilding" as
     // it opens and closes, while Fix may be the one stopping.
     if (briefNow.current && !on) {
@@ -2711,6 +2723,7 @@ export function DraftEditor({
     }
     briefNow.current = on;
     setBriefRebuilding(on);
+    setBriefOnServer(on && onServer);
   }, []);
   // One agent run at a time from this page: the others wait for it.
   const agentBusy = fixing || starting || rewriting || briefRebuilding;
@@ -3768,6 +3781,7 @@ export function DraftEditor({
                 {title.trim() || t('untitled')}
               </button>
             </h1>
+            {chatOn && <StatusPill state={pagePill} />}
             <span className="shrink-0">
               <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
             </span>
@@ -3798,9 +3812,18 @@ export function DraftEditor({
                 }
               />
             )}
+            {/* With Chat on, the person's own Chat runs and this brand's Content Agent runs,
+                this page's among them (Chat agentic plan §2–3): the same tray as Chat's header. */}
+            {chatOn && (
+              <RunsTray
+                brandId={draft.brandId}
+                // Read again as the page's agent starts, its run is on the server, and it ends.
+                readAgain={`${agentWorking}:${agentRun?.id ?? ''}`}
+              />
+            )}
             {/* The agent at work on this page: a click opens the basket, with its steps and Stop. */}
             {/* Fix open rules or the brief at work: the basket shows their steps and Stop. */}
-            {qualityOn && agentWorking && (
+            {!chatOn && qualityOn && agentWorking && (
               <HeaderTip label={t('header.running', { count: 1 })} hint={t('header.runningHint')}>
                 <button
                   type="button"
@@ -4125,6 +4148,7 @@ export function DraftEditor({
               // Not while the HTML view holds the page: it would write over it.
               busy={deciding || restoring || htmlSource !== null}
               working={agentWorking}
+              onServer={(fixing && fixOnServer) || (briefRebuilding && briefOnServer)}
               run={agentRun}
               lastRunFailed={lastRunFailed}
               onStop={() => void stopAgent()}

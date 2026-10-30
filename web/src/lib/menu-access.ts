@@ -33,7 +33,15 @@ export const MENU_SECTIONS: string[] = dashboardNav
 export const WORK_AREAS = [
   {
     id: 'leaders',
-    sections: ['action-center', 'agent', 'insights', 'mentions', 'traffic', 'reports'],
+    sections: [
+      'action-center',
+      'agent',
+      'insights',
+      'competitors',
+      'mentions',
+      'traffic',
+      'reports',
+    ],
   },
   {
     id: 'aeo',
@@ -45,11 +53,28 @@ export const WORK_AREAS = [
   },
   {
     id: 'brand',
-    sections: ['action-center', 'agent', 'insights', 'mentions', 'citations', 'reports'],
+    sections: [
+      'action-center',
+      'agent',
+      'insights',
+      'competitors',
+      'mentions',
+      'citations',
+      'reports',
+    ],
   },
   {
     id: 'growth',
-    sections: ['action-center', 'agent', 'insights', 'prompts', 'citations', 'traffic', 'reports'],
+    sections: [
+      'action-center',
+      'agent',
+      'insights',
+      'competitors',
+      'prompts',
+      'citations',
+      'traffic',
+      'reports',
+    ],
   },
   {
     id: 'product',
@@ -57,7 +82,16 @@ export const WORK_AREAS = [
   },
   {
     id: 'bizdev',
-    sections: ['action-center', 'agent', 'insights', 'prompts', 'mentions', 'citations', 'reports'],
+    sections: [
+      'action-center',
+      'agent',
+      'insights',
+      'competitors',
+      'prompts',
+      'mentions',
+      'citations',
+      'reports',
+    ],
   },
   {
     id: 'developers',
@@ -68,6 +102,7 @@ export const WORK_AREAS = [
     sections: [
       'action-center',
       'insights',
+      'competitors',
       'prompts',
       'mentions',
       'citations',

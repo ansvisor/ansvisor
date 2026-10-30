@@ -8,6 +8,8 @@ import { READ_TOOLS } from './read-tools';
 import { REPORT_TOOLS } from './report-tools';
 import { TOPIC_TOOLS } from './topic-tools';
 import { WRITE_TOOLS } from './write-tools';
+import { AREA_READS } from './areas';
+import { NAVIGATION_READS } from './navigation';
 
 /**
  * Every tool Chat may call (CHAT-20 §9). One without a row here isn't
@@ -17,6 +19,8 @@ import { WRITE_TOOLS } from './write-tools';
  */
 export const CHAT_TOOLS: readonly ChatTool[] = [
   ...READ_TOOLS,
+  ...AREA_READS,
+  ...NAVIGATION_READS,
   ...WRITE_TOOLS,
   ...PROMPT_TOOLS,
   ...TOPIC_TOOLS,

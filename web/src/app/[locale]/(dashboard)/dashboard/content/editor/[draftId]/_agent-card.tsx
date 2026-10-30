@@ -4,6 +4,8 @@ import { useId, useMemo, useState } from 'react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { Check, ChevronRight, User, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
+import { AgentAvatar } from '@/components/agentic/agent-avatar';
+import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { Button } from '@/components/ui/button';
 import {
   AGENT_RUN_MAX,
@@ -240,6 +242,7 @@ export function AgentCard({
   rules,
   busy,
   working,
+  onServer = false,
   onAcceptAll,
   onRejectAll,
   onUndoAll,
@@ -265,6 +268,11 @@ export function AgentCard({
   busy: boolean;
   /** The agent is working from this page (Apply rules with Agent). */
   working: boolean;
+  /**
+   * Its run is on the server now, so the page can be left: not while the
+   * browser still gathers what it sends (the brief's prompts and sources).
+   */
+  onServer?: boolean;
   onAcceptAll: () => void;
   onRejectAll: () => void;
   onUndoAll: () => void;
@@ -322,6 +330,7 @@ export function AgentCard({
   } | null;
 }) {
   const t = useTranslations('contentEditor.editor.agentCard');
+  const chatOn = useChatAgentic();
   const locale = useLocale();
   const tSuggestions = useTranslations('contentEditor.editor.suggestions');
   const tRewrite = useTranslations('contentEditor.editor.rewrite');
@@ -422,6 +431,8 @@ export function AgentCard({
     );
     line = (
       <>
+        {/* As Chat says it: the run goes on without the page open, once it is on the server. */}
+        {chatOn && onServer && <span className="block">{t('leavePage')}</span>}
         {/* Its real steps, as the run says them; none until its first is read. */}
         {run && <RunSteps run={run} />}
         <span
@@ -592,9 +603,12 @@ export function AgentCard({
       aria-busy={working}
       className="mx-4 mt-3 mb-1 flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-2xl border bg-muted px-3.5 py-3 shadow-xs"
     >
-      {/* The person's tile only with nothing of the agent's to decide: its count stays in sight. */}
+      {/* The person's tile only with nothing of the agent's to decide: its count stays in sight.
+          With Chat on, the agent at work is Chat's own avatar (Chat agentic plan §2–3). */}
       {stepHead?.actor === 'you' && open === 0 && page?.status !== 'open' ? (
         <PersonTile />
+      ) : working && chatOn ? (
+        <AgentAvatar state="working" decorative />
       ) : (
         <AgentTile tone={tone} count={working ? 0 : open} />
       )}
