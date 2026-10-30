@@ -674,7 +674,7 @@ describe('the tracking setup, by role and mode (W2-06, CHAT-20 §9 rows 20–32)
 });
 
 describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 rows 37–64)', () => {
-  const OUTPUT = ['update_draft', 'push_cms_draft', 'build_report'];
+  const OUTPUT = ['update_draft', 'build_report'];
   async function decide(
     userId: string,
     name: string,
@@ -708,6 +708,36 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
       }
     },
   );
+
+  it('sends a draft to a CMS only from a card, in every mode, even under an Admin Always (no Undo)', async () => {
+    const tool = chatTool('push_cms_draft')!;
+    expect(tool).toMatchObject({ maxPolicy: 'ask', flags: { alwaysCard: true } });
+    // An Admin's stored Always is held to the row's maximum.
+    db.tables.chat_settings = [
+      {
+        organization_id: ORG,
+        tool_policies: { [tool.labelKey]: 'always' },
+        full_auto_for_members: true,
+        dont_ask_again: true,
+        manager_execute_off: [],
+      },
+    ];
+    for (const userId of [PEOPLE.admin, PEOPLE.manager]) {
+      for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+        expect(await decide(userId, 'push_cms_draft', mode), `${userId} ${mode}`).toMatchObject({
+          kind: 'ask',
+          reason: 'always_card',
+          offerDontAskAgain: false,
+        });
+      }
+    }
+    for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+      expect(await decide(PEOPLE.analyst, 'push_cms_draft', mode)).toMatchObject({
+        kind: 'deny',
+        denial: { code: 'forbidden_role', roles: ['admin', 'manager'] },
+      });
+    }
+  });
 
   it('an Analyst still saves a draft (DECISIONS T), but changes none', async () => {
     expect(await decide(PEOPLE.analyst, 'create_draft', 'full_auto')).toMatchObject({
@@ -766,7 +796,7 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
     });
   });
 
-  it.each([...OUTPUT, 'run_site_audit'])(
+  it.each([...OUTPUT, 'push_cms_draft', 'run_site_audit'])(
     '%s: refused on another workspace’s brand or draft, and on a read-only workspace',
     async (name) => {
       db.tables.brands.push({ id: 'b-elsewhere', organization_id: OTHER_ORG });

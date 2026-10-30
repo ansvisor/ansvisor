@@ -71,8 +71,12 @@ export const CONTENT_TOOLS = [
     area: 'content',
     description:
       "Send a Library draft to the brand's connected CMS as a draft there (Webflow, WordPress, Framer or Wix): nothing goes live. A page that is live already, or a send to the brand's webhook, goes from the Content Editor. Its slug and meta are what it kept from its last send, else the page's. Only when the person asked for this page to go to that CMS.",
-    defaultPolicy: 'ask_full_auto',
-    maxPolicy: 'always',
+    // It leaves Ansvisor and has no Undo (a CMS item can't be taken back from here; an
+    // item updated in Framer or Webflow goes live with the site's next publish): a card in
+    // every mode, Full auto included, and no Admin "Always" lifts it.
+    defaultPolicy: 'ask',
+    maxPolicy: 'ask',
+    flags: { alwaysCard: true },
     minRole: 'manager',
     // A connection, not a plan: the API says when the brand hasn't one (not_connected).
     planGate: null,

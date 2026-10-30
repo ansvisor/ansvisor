@@ -94,20 +94,55 @@ export async function draftPage(
   return data ? { title: String(data.title ?? ''), bodyHtml: String(data.body_html ?? '') } : null;
 }
 
+/**
+ * Each `open` match with the text up to its `</name>` close, found by
+ * searches that only go forward: a page full of unclosed tags stays linear
+ * (a lazy `[\s\S]*?` up to a close that never comes is quadratic).
+ */
+function* closedBlocks(html: string, open: RegExp, name: (match: RegExpExecArray) => string) {
+  const lower = html.toLowerCase();
+  const unclosed = new Set<string>();
+  open.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = open.exec(html))) {
+    const tag = name(match).toLowerCase();
+    if (unclosed.has(tag)) continue;
+    const close = lower.indexOf(`</${tag}>`, open.lastIndex);
+    if (close === -1) {
+      unclosed.add(tag);
+      continue;
+    }
+    yield {
+      start: match.index,
+      inner: html.slice(open.lastIndex, close),
+      end: close + tag.length + 3,
+    };
+    open.lastIndex = close + tag.length + 3;
+  }
+}
+
 /** HTML's text, roughly: its tags and entities dropped, its spaces folded. No DOM on the server. */
-const plainText = (html: string) =>
-  html
-    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<[^>]*>/g, ' ')
+function plainText(html: string): string {
+  let kept = '';
+  let at = 0;
+  for (const block of closedBlocks(html, /<(script|style)\b/gi, (match) => match[1])) {
+    kept += `${html.slice(at, block.start)} `;
+    at = block.end;
+  }
+  kept += html.slice(at);
+  return kept
+    .replace(/<[^<>]*>/g, ' ')
     .replace(/&[a-z0-9#]+;/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
 
 /** A page's words and its H1–H3 headings' texts, from its HTML. */
 function pageShape(html: string): { words: number; headings: string[] } {
   const text = plainText(html);
-  const headings = Array.from(html.matchAll(/<h([1-3])\b[^>]*>([\s\S]*?)<\/h\1>/gi), (match) =>
-    plainText(match[2]),
+  const headings = Array.from(
+    closedBlocks(html, /<h([1-3])\b[^<>]*>/gi, (match) => `h${match[1]}`),
+    (block) => plainText(block.inner),
   ).filter(Boolean);
   return { words: text ? text.split(' ').length : 0, headings };
 }
