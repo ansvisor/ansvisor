@@ -27,7 +27,7 @@ import { LoadingDots } from '@/components/ui/loading-dots';
 import { AiUsageBanner } from '@/components/ai-usage/ai-usage-banner';
 import { AiUsageMeter } from '@/components/ai-usage/ai-usage-meter';
 import { RunsTray } from '@/components/agentic/runs-tray';
-import { StatusPill, type StatusPillState } from '@/components/agentic/status-pill';
+import { StatusPill } from '@/components/agentic/status-pill';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -231,6 +231,7 @@ import { ExportDialog, type ExportDestination } from './_export-dialog';
 import { ExportMenu } from './_export-menu';
 import { sourceDetail } from './_sources-tab';
 import { HistoryMenu } from './_history-menu';
+import { pagePillOf } from './_page-pill';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { OwnCopies, ownCopyHtml } from './_own-copies';
 import { NextNudge, useNextNudge } from './_next-nudge';
@@ -2684,16 +2685,7 @@ export function DraftEditor({
   // The agent at work from this page: Fix open rules, or the brief. Its run,
   // step by step, and Stop (CE-027/035).
   const agentWorking = fixing || briefRebuilding;
-  /** The page's pill beside its title, with Chat on (Chat agentic plan §2): as Chat's own. */
-  const pagePill: StatusPillState = agentWorking
-    ? 'working'
-    : openSuggestions > 0
-      ? 'needsYou'
-      : status === 'published'
-        ? 'done'
-        : status === 'ready'
-          ? 'ready'
-          : 'draft';
+  const pagePill = pagePillOf({ working: agentWorking, openSuggestions, status });
   // Any run the card follows (Fix, a hand-off, the brief): a failed one before it is behind it.
   useEffect(() => {
     if (agentWorking) setLastRunFailed(false);

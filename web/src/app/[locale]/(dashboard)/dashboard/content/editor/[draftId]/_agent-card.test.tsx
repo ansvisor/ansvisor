@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRun } from '@/lib/content/agent-runs';
 import messages from '../../../../../../../../messages/en.json';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
+import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import { AgentCard, rulesAfter, type CardRules } from './_agent-card';
 
 vi.mock('@/i18n/navigation', () => ({
@@ -228,6 +229,28 @@ describe('AgentCard', () => {
       'Content Agent rewrote the page to its rules37 → 12 characters · cut to the Length',
     );
     expect(buttons()).toEqual(['Compare', 'Reject', 'Accept']);
+  });
+
+  it('works under Chat’s avatar and says the page can be left, with the new Chat on only', async () => {
+    const working = (chatOn: boolean) =>
+      act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages}>
+            <ChatAgenticProvider enabled={chatOn}>
+              <AgentCard suggestions={[]} rules={rules} busy={false} working {...handlers} />
+            </ChatAgenticProvider>
+          </NextIntlClientProvider>,
+        );
+      });
+    await working(true);
+    expect(container.querySelector('[data-slot="agent-avatar"]')?.getAttribute('data-state')).toBe(
+      'working',
+    );
+    expect(container.textContent).toContain("You can leave this page. I'll keep going.");
+    // Chat off: the card as it was.
+    await working(false);
+    expect(container.querySelector('[data-slot="agent-avatar"]')).toBeNull();
+    expect(container.textContent).not.toContain('You can leave this page');
   });
 
   it('says how many placeholders the result leaves to fill', async () => {
