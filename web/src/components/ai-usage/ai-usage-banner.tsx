@@ -9,7 +9,7 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { AiUsageGetMore } from './ai-usage-get-more';
+import { AiUsageGetMore, ownKeyOffered } from './ai-usage-get-more';
 import { StartPlanNow } from './start-plan-now';
 
 /**
@@ -72,11 +72,21 @@ export function AiUsageBanner({ className }: { className?: string }) {
           : resets
             ? t('banner.exhausted', { date: resets })
             : t('banner.exhaustedNoDate')}
-        {!canAdmin && <> {t(usage.trial ? 'askAdminStart' : 'askAdmin')}</>}
+        {!canAdmin && (
+          <>
+            {' '}
+            {t(usage.trial ? 'askAdminStart' : ownKeyOffered(usage) ? 'askAdmin' : 'askAdminNoKey')}
+          </>
+        )}
       </p>
       {canAdmin && (
         <div className="flex flex-wrap gap-1.5">
-          <AiUsageGetMore plan={usage.plan} trial={usage.trial} primary />
+          <AiUsageGetMore
+            plan={usage.plan}
+            trial={usage.trial}
+            chatMetered={usage.chatMetered}
+            primary
+          />
         </div>
       )}
     </div>

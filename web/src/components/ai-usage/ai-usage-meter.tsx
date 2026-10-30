@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { AiUsageBanner } from './ai-usage-banner';
-import { AiUsageGetMore } from './ai-usage-get-more';
+import { AiUsageGetMore, ownKeyOffered } from './ai-usage-get-more';
 import { StartPlanNowDialog } from './start-plan-now';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { LoadingDots } from '@/components/ui/loading-dots';
@@ -327,13 +327,14 @@ export function AiUsageMeter({
 
           {!canAdmin && (
             <p className="mt-3 text-xs text-muted-foreground">
-              {t(trial ? 'askAdminStart' : 'askAdmin')}
+              {t(trial ? 'askAdminStart' : ownKeyOffered(usage) ? 'askAdmin' : 'askAdminNoKey')}
             </p>
           )}
           <div className="mt-4 flex flex-wrap gap-1.5">
             <AiUsageGetMore
               plan={usage.plan}
               trial={usage.trial}
+              chatMetered={usage.chatMetered}
               primary={pressing}
               onFollow={close}
               onStartPlan={() => {
