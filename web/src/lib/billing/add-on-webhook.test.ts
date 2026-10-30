@@ -18,12 +18,14 @@ const stripeApi = vi.hoisted(() => ({
   retrieveIntent: vi.fn(),
   listInvoicePayments: vi.fn(),
   listLineItems: vi.fn(),
+  deleteItem: vi.fn(),
 }));
 vi.mock('@/lib/stripe', () => ({
   stripe: {
     paymentIntents: { retrieve: stripeApi.retrieveIntent },
     invoicePayments: { list: stripeApi.listInvoicePayments },
     invoices: { listLineItems: stripeApi.listLineItems },
+    subscriptionItems: { del: stripeApi.deleteItem },
   },
 }));
 
@@ -200,6 +202,19 @@ describe('AI credits', () => {
     expect(grantsOf('ai_credit_grants', AI_PURCHASE)).toEqual([]);
   });
 
+  it('are never granted for a Checkout that needed no payment', async () => {
+    await expect(
+      handleAddOnEvent(
+        event(
+          'checkout.session.completed',
+          checkout({ payment_status: 'no_payment_required', amount_total: 0 }),
+        ),
+      ),
+    ).resolves.toBe(true);
+    expect(grantsOf('ai_credit_grants', AI_PURCHASE)).toEqual([]);
+    expect(row('add_on_purchases', AI_PURCHASE).status).toBe('pending');
+  });
+
   it('are granted by the delayed payment once it succeeds', async () => {
     await handleAddOnEvent(event('checkout.session.async_payment_succeeded', checkout()));
     expect(grantsOf('ai_credit_grants', AI_PURCHASE)).toHaveLength(1);
@@ -348,6 +363,8 @@ describe('a refund', () => {
     expect(grantsOf('storage_grants', STORAGE_PURCHASE)[0].active_until).toBe(
       '2026-10-30T11:00:00.000Z',
     );
+    // Its item comes off the plan's subscription: no more monthly charges for it.
+    expect(stripeApi.deleteItem).toHaveBeenCalledWith('si_pack', { proration_behavior: 'none' });
 
     await handleAddOnEvent(
       event(
@@ -358,6 +375,42 @@ describe('a refund', () => {
     expect(grantsOf('storage_grants', STORAGE_PURCHASE)[0].active_until).toBe(
       '2026-10-30T11:00:00.000Z',
     );
+  });
+
+  it('of a storage pack whose item is already gone still settles, once', async () => {
+    await handleAddOnEvent(
+      event('invoice.paid', invoice('in_prorated', [line('si_pack', 'price_st25', 350)])),
+    );
+    stripeApi.retrieveIntent.mockResolvedValue({ id: 'pi_1', metadata: {} });
+    stripeApi.listInvoicePayments.mockResolvedValue({ data: [{ invoice: 'in_prorated' }] });
+    stripeApi.deleteItem.mockRejectedValueOnce(
+      Object.assign(new Error('No such subscription item'), {
+        code: 'resource_missing',
+        statusCode: 404,
+      }),
+    );
+    const refunded = event('charge.refunded', charge(), PAID_AT + 3600);
+    await expect(handleAddOnEvent(refunded)).resolves.toBe(true);
+    expect(row('add_on_purchases', STORAGE_PURCHASE).status).toBe('refunded');
+    await handleAddOnEvent(refunded);
+    expect(stripeApi.deleteItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('of a storage pack whose item Stripe can’t remove now is sent again', async () => {
+    await handleAddOnEvent(
+      event('invoice.paid', invoice('in_prorated', [line('si_pack', 'price_st25', 350)])),
+    );
+    stripeApi.retrieveIntent.mockResolvedValue({ id: 'pi_1', metadata: {} });
+    stripeApi.listInvoicePayments.mockResolvedValue({ data: [{ invoice: 'in_prorated' }] });
+    stripeApi.deleteItem.mockRejectedValueOnce(
+      Object.assign(new Error('down'), { statusCode: 500 }),
+    );
+    const refunded = event('charge.refunded', charge(), PAID_AT + 3600);
+    await expect(handleAddOnEvent(refunded)).rejects.toThrow('down');
+    expect(row('add_on_purchases', STORAGE_PURCHASE).status).toBe('paid');
+    stripeApi.deleteItem.mockResolvedValueOnce({ id: 'si_pack', deleted: true });
+    await handleAddOnEvent(refunded);
+    expect(row('add_on_purchases', STORAGE_PURCHASE).status).toBe('refunded');
   });
 
   it('before the payment’s own event: nothing is granted, then or later', async () => {
