@@ -7,6 +7,8 @@ import { chatAgenticEnabled } from '@/lib/chat/flag';
 import {
   CHAT_UPLOAD_BUCKET,
   MAX_UPLOAD_BYTES,
+  SNIFF_BYTES,
+  contentMatchesType,
   isUploadType,
   type ChatUploadType,
 } from '@/lib/chat/uploads';
@@ -135,7 +137,7 @@ async function ownDraft(id: string) {
   const { supabaseAdmin } = await import('@/lib/supabase/admin');
   const { data } = await supabaseAdmin
     .from('chat_uploads')
-    .select('id, storage_path, status, size_bytes')
+    .select('id, storage_path, status, size_bytes, mime_type')
     .eq('id', id)
     .eq('user_id', me.userId)
     .is('message_id', null)
@@ -143,7 +145,47 @@ async function ownDraft(id: string) {
   return { me, row: data, supabaseAdmin };
 }
 
-/** The file arrived: ready for a message, or failed when it isn't there. */
+/** What firstBytes needs of the bucket: a short-lived address to read from. */
+interface SignsUrls {
+  createSignedUrl: (
+    path: string,
+    expiresIn: number,
+  ) => Promise<{ data: { signedUrl: string } | null; error: unknown }>;
+}
+
+/** How long the server waits for a file's first bytes. */
+const SNIFF_TIMEOUT_MS = 10_000;
+
+/** The first SNIFF_BYTES of an object in chat-uploads, or null when they can't be read. */
+async function firstBytes(bucket: SignsUrls, path: string): Promise<Uint8Array | null> {
+  const { data, error } = await bucket.createSignedUrl(path, 60);
+  if (error || !data?.signedUrl) return null;
+  const res = await fetch(data.signedUrl, {
+    headers: { Range: `bytes=0-${SNIFF_BYTES - 1}` },
+    signal: AbortSignal.timeout(SNIFF_TIMEOUT_MS),
+    cache: 'no-store',
+  });
+  if (!res.ok || !res.body) return null;
+  // A server that ignores Range sends the whole file: read only the start.
+  const reader = res.body.getReader();
+  const head = new Uint8Array(SNIFF_BYTES);
+  let got = 0;
+  while (got < SNIFF_BYTES) {
+    const { done, value } = await reader.read();
+    if (done || !value) break;
+    const take = Math.min(value.length, SNIFF_BYTES - got);
+    head.set(value.subarray(0, take), got);
+    got += take;
+  }
+  await reader.cancel().catch(() => null);
+  return head.subarray(0, got);
+}
+
+/**
+ * The file arrived: ready for a message once the object is there with the
+ * type it was prepared for, at most 10 MB, and its first bytes are that
+ * type's; else failed, and a file that isn't what it said goes at once.
+ */
 export async function finishChatUpload(
   id: string,
 ): Promise<{ ok: true } | { ok: false; failure: ChatUploadFailure }> {
@@ -151,16 +193,29 @@ export async function finishChatUpload(
     const { me, row, supabaseAdmin } = await ownDraft(id);
     if (!me) return { ok: false, failure: 'session' };
     if (!row || !supabaseAdmin) return { ok: false, failure: 'not_found' };
+    const bucket = supabaseAdmin.storage.from(CHAT_UPLOAD_BUCKET);
     const [folder, name] = row.storage_path.split('/');
-    const { data: found, error } = await supabaseAdmin.storage
-      .from(CHAT_UPLOAD_BUCKET)
-      .list(folder, { search: name, limit: 1 });
-    const there = !error && (found ?? []).some((file) => file.name === name);
+    const { data: found, error } = await bucket.list(folder, { search: name, limit: 1 });
+    const object = error ? undefined : (found ?? []).find((file) => file.name === name);
+    let size: number | null = null;
+    let ready = false;
+    if (object) {
+      const meta = (object.metadata ?? {}) as { size?: unknown; mimetype?: unknown };
+      size = typeof meta.size === 'number' ? meta.size : null;
+      const fits = size !== null && Number.isInteger(size) && size >= 1 && size <= MAX_UPLOAD_BYTES;
+      const type = row.mime_type as ChatUploadType;
+      if (fits && meta.mimetype === type && isUploadType(type)) {
+        const head = await firstBytes(bucket, row.storage_path).catch(() => null);
+        ready = head !== null && contentMatchesType(type, head);
+      }
+      // Not what it said it is: it doesn't wait 90 days for the sweep.
+      if (!ready) await bucket.remove([row.storage_path]).catch(() => null);
+    }
     await supabaseAdmin
       .from('chat_uploads')
-      .update({ status: there ? 'ready' : 'failed' })
+      .update(ready && size !== null ? { status: 'ready', size_bytes: size } : { status: 'failed' })
       .eq('id', id);
-    return there ? { ok: true } : { ok: false, failure: 'failed' };
+    return ready ? { ok: true } : { ok: false, failure: 'failed' };
   } catch (error) {
     console.error('[chat-uploads] finish failed:', error);
     return { ok: false, failure: 'failed' };
