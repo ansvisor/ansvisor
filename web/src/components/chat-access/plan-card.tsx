@@ -34,7 +34,7 @@ export function YourPlanCard({ plan, isAdmin }: { plan: PlanCard; isAdmin: boole
       case 'platforms':
         return t('chips.platforms', { count: chip.count });
       case 'mcp':
-        return t('chips.mcp', { access: chip.access ?? 'none' });
+        return t('chips.mcp', { access: chip.access });
       default:
         return t(`chips.${chip.key}`);
     }

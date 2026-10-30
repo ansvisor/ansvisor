@@ -226,6 +226,24 @@ describe('the billing period', () => {
     expect(growth.textContent).toContain('$2,390/yr');
   });
 
+  it('marks the period shown, filled dark, and only that one', async () => {
+    await render('starter', { status: 'trialing' });
+    const pressed = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')]
+        .filter((b) => b.getAttribute('aria-pressed') === 'true')
+        .map((b) => [b.textContent, b.classList.contains('bg-primary')]);
+    const filled = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')].filter((b) =>
+        b.classList.contains('bg-primary'),
+      );
+
+    expect(pressed()).toEqual([['Monthly', true]]);
+    expect(filled()).toHaveLength(1);
+    await click('AnnualSave 20%');
+    expect(pressed()).toEqual([['AnnualSave 20%', true]]);
+    expect(filled()).toHaveLength(1);
+  });
+
   it('moves a paid plan to annual billing from its own card', async () => {
     await render('starter');
     expect(button('Switch to annual billing')).toBeUndefined();
@@ -508,6 +526,38 @@ describe('choosing a plan once the old one has ended', () => {
       returnTo: 'billing',
       mode: 'trial',
     });
+  });
+
+  it('marks the chosen way to start, filled dark, and only that one', async () => {
+    await render('starter', { status: 'incomplete', trialOffered: true });
+    const choices = () => [...container.querySelectorAll<HTMLButtonElement>('[data-choice]')];
+    const chosen = () =>
+      choices()
+        .filter((b) => b.getAttribute('aria-pressed') === 'true')
+        .map((b) => b.dataset.choice);
+    const filled = () =>
+      choices()
+        .filter((b) => b.classList.contains('bg-primary'))
+        .map((b) => b.dataset.choice);
+
+    // Monthly at first, where the first-month offer is.
+    expect(choices().map((b) => b.dataset.choice)).toEqual(['trial', 'month', 'year']);
+    expect(chosen()).toEqual(['month']);
+    expect(filled()).toEqual(['month']);
+    expect(container.querySelector('[data-choice="month"]')!.className).toContain(
+      'text-primary-foreground',
+    );
+
+    for (const choice of ['trial', 'year'] as const) {
+      await choose(choice);
+      expect(chosen()).toEqual([choice]);
+      expect(filled()).toEqual([choice]);
+      expect(
+        choices()
+          .filter((b) => b.dataset.choice !== choice)
+          .every((b) => b.className.includes('text-muted-foreground')),
+      ).toBe(true);
+    }
   });
 
   it('says so when Stripe turns the code down at Checkout, and shows the plain prices', async () => {

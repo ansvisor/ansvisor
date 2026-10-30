@@ -15,7 +15,7 @@ sources: [docs/guides/send-to-cms.mdx, docs/guides/content-editor.mdx]
 
 ## Send one page
 
-In the editor, click the paper-plane icon in the header. **Before you publish** opens first when it has something to ask about, such as a missing author, open placeholders, missing alt text or broken links. Check it and click **Continue to send**. From the Library, open a row's **…** menu and pick **Send to CMS**.
+In the editor, click the paper-plane icon in the header. With Quality on, **Before you publish** opens first when it has something to ask about, such as a missing author, open placeholders, missing alt text or broken links. Check it and click **Continue to send**. From the Library, open a row's **…** menu and pick **Send to CMS**.
 
 The dialog fills the **Slug**, **Meta title** and **Meta description** from the page; change them before sending if you like. What you send is kept on the draft, so the next send starts from it.
 
