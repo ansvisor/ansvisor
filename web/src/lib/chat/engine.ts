@@ -65,6 +65,7 @@ import {
   type ReadBudget,
 } from './run-limits';
 import { runLoggedWrite } from './write';
+import { originPageSchema } from './origin';
 import { CHAT_REFERENCE_TYPES, MAX_REFERENCES } from './references';
 import { MAX_UPLOADS } from './uploads';
 
@@ -233,6 +234,13 @@ export const startRunInput = z.object({
         .max(MAX_CONTEXT_CHIPS),
     })
     .optional(),
+  /**
+   * Where a new chat starts (CHAT-01 data notes): Chat's own page, or the
+   * side panel on an app page, which it names.
+   */
+  origin: z.enum(['page', 'panel']).optional(),
+  // A page it can't name is left out; the message still goes.
+  originPage: originPageSchema.optional().catch(undefined),
   /** The data referenced with @ or Ask about this (CHAT-02 items 15–17). */
   references: z
     .array(
@@ -382,8 +390,9 @@ export async function startChatRun(actor: ChatActor, raw: unknown): Promise<Star
         user_id: actor.userId,
         brand_id: brandId,
         title: titleOf(input.message),
-        origin: 'page',
-        origin_page: '/dashboard/chat',
+        ...(input.origin === 'panel'
+          ? { origin: 'panel', origin_page: input.originPage ?? null }
+          : { origin: 'page', origin_page: '/dashboard/chat' }),
       },
       'start a chat',
     );

@@ -195,6 +195,8 @@ describe('ChatThreadView', () => {
     const sent = calls.find((c) => c.url === '/api/chat/runs')!;
     expect(JSON.parse(String(sent.init!.body))).toMatchObject({
       message: 'Why the drop?',
+      origin: 'panel',
+      originPage: '/dashboard/mentions',
       context: {
         route: '/dashboard/mentions',
         chips: [

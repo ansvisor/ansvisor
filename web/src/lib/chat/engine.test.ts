@@ -977,6 +977,34 @@ describe('starting', () => {
     }
   });
 
+  it('names the app page a side panel chat started on (CHAT-01 origin, origin_page)', async () => {
+    useModels([READY], [text('Hi.')]);
+    const panel = await engine.startChatRun(ADMIN, {
+      message: 'From the panel',
+      brandId: BRAND,
+      origin: 'panel',
+      originPage: '/dashboard/mentions',
+    });
+    const page = await engine.startChatRun(ADMIN, { message: 'From Chat', brandId: BRAND });
+    const odd = await engine.startChatRun(ADMIN, {
+      message: 'Odd page',
+      brandId: BRAND,
+      origin: 'panel',
+      originPage: 'https://example.com/x',
+    });
+    if (!panel.ok || !page.ok || !odd.ok) throw new Error('not started');
+    const row = (id: string) => db.tables.chat_conversations.find((c) => c.id === id)!;
+    expect(row(panel.conversationId)).toMatchObject({
+      origin: 'panel',
+      origin_page: '/dashboard/mentions',
+    });
+    expect(row(page.conversationId)).toMatchObject({
+      origin: 'page',
+      origin_page: '/dashboard/chat',
+    });
+    expect(row(odd.conversationId)).toMatchObject({ origin: 'panel', origin_page: null });
+  });
+
   it('keeps no scope on a message without one', async () => {
     const { haiku } = useModels([READY], [text('Hi.')]);
     const started = await engine.startChatRun(ADMIN, {

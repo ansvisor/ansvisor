@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { createClient } from '@/lib/supabase/server';
 import type { ListDotState } from '@/components/agentic/list-dot';
 import { stopChatRun, type ChatActor } from './engine';
+import { originPageSchema } from './origin';
 import { OPEN_RUN_STATUSES } from './engine-store';
 import { maskIds } from './events';
 import { chatTrayState } from './runs-tray';
@@ -107,11 +108,7 @@ export const createInput = z.object({
   brandId: z.string().uuid().optional(),
   origin: z.enum(['page', 'panel']).default('page'),
   /** The app page it started on: a path, never a full address. */
-  originPage: z
-    .string()
-    .max(500)
-    .regex(/^\/dashboard(\/[\w\-.~%]*)*$/)
-    .optional(),
+  originPage: originPageSchema.optional(),
 });
 export type CreateInput = z.infer<typeof createInput>;
 

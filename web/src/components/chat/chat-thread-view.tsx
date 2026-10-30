@@ -219,6 +219,10 @@ export function ChatThreadView({
         mode,
         conversationId: conversationId ?? undefined,
         brandId: conversationId ? undefined : (brandId ?? undefined),
+        // A chat the side panel starts names the page it started on.
+        ...(!conversationId && variant === 'panel' && pageRoute
+          ? { origin: 'panel', originPage: pageRoute }
+          : {}),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(sent.attachments.length > 0 ? { attachmentIds: sent.attachments } : {}),
         ...(sent.context.length > 0 ? { context: { route: pageRoute, chips: sent.context } } : {}),
