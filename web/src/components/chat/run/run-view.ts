@@ -6,8 +6,14 @@ import type { ChatStep } from '@/lib/chat/events';
  * done, and the "Data used" chips.
  */
 
-/** "Read Citations" → "Citations": what a read step read. */
-export const readSource = (label: string) => label.replace(/^Read\s+/, '');
+const READ = /^Read\s+/;
+
+/**
+ * "Read Citations" → "Citations": what a read step read. A read whose words
+ * aren't "Read …" ("Opened a page", "Worked on a step") read no source: null.
+ */
+export const readSource = (label: string): string | null =>
+  READ.test(label) ? label.replace(READ, '') : null;
 
 /** "Opened ansvisor.com/pricing" → "ansvisor.com/pricing": the page a step opened. */
 export const openedPage = (label: string) => label.replace(/^Opened\s+/, '');
@@ -25,8 +31,8 @@ export function statusLine(
   if (!running || running.kind === 'thinking') {
     return { key: streaming ? 'writing' : 'thinking' };
   }
-  if (running.kind === 'read')
-    return { key: 'read', values: { source: readSource(running.label) } };
+  const source = running.kind === 'read' ? readSource(running.label) : null;
+  if (source !== null) return { key: 'read', values: { source } };
   if (running.kind === 'open_page') {
     return { key: 'openPage', values: { page: openedPage(running.label) } };
   }
@@ -48,7 +54,8 @@ export interface DataUsedChip {
 /**
  * "Data used" (items 13–14): one chip per source a read step read, and per
  * page a step opened, in the order first read; a source read twice is one
- * chip, with its largest count. Skills, thinking and checks are no source.
+ * chip, with its largest count. Skills, thinking and checks are no source,
+ * nor a read whose words aren't "Read …" (a page of the app it went to).
  */
 export function dataUsed(steps: readonly ChatStep[]): DataUsedChip[] {
   const chips = new Map<string, DataUsedChip>();
@@ -61,6 +68,7 @@ export function dataUsed(steps: readonly ChatStep[]): DataUsedChip[] {
     }
     if (step.kind !== 'read') continue;
     const source = readSource(step.label);
+    if (source === null) continue;
     const key = `read:${source}`;
     const seen = chips.get(key);
     const rows =

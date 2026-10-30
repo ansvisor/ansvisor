@@ -14,9 +14,11 @@ import { firstNameOf } from '@/lib/chat/home';
 import { importLegacyChats } from '@/lib/chat/legacy-import';
 import { panelSizeOf } from '@/lib/chat/panel';
 import { planFactsFromOrgRow } from '@/lib/chat/plan-facts';
-import { chatDefaultModeOf } from '@/lib/chat/precedence';
+import { DEFAULT_CHAT_SETTINGS, parseTeamRole } from '@/lib/chat/precedence';
+import { composerSetupOf } from '@/lib/chat/composer-setup';
+import { chatRunsOnOwnKey } from '@/lib/chat/key';
 import { ChatPanelPage, ChatPanelProvider } from '@/components/chat/panel/chat-panel-provider';
-import { ChatSidePanel } from '@/components/chat/panel/chat-side-panel';
+import { ChatSidePanelSlot } from '@/components/chat/panel/chat-side-panel-slot';
 import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { GettingStartedPageOpened } from '@/components/getting-started/page-opened';
@@ -55,7 +57,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const role = (profile.role ?? 'analyst') as TeamRole;
   const chatOn = chatAgenticEnabled(profile.organization_id);
 
-  const [{ data: org, error: orgError }, brands, roleHidden, chatPrefsRead] = await Promise.all([
+  const [
+    { data: org, error: orgError },
+    brands,
+    roleHidden,
+    chatPrefsRead,
+    chatSettingsRead,
+    chatOnOwnKey,
+  ] = await Promise.all([
     supabase
       .from('organizations')
       .select('plan, subscription_status, plan_overrides, stripe_subscription_id')
@@ -74,6 +83,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
           .eq('user_id', user.id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    // The panel's composer is set up as Chat's pages set theirs up
+    // (chatComposerSetup): the Admin's "Full auto for members" (CHAT-23), so
+    // Full auto shows open only where the server runs it, and whether Chat
+    // runs on the workspace's own key, so the AI limit doesn't pause it there.
+    chatOn
+      ? supabase
+          .from('chat_settings')
+          .select('full_auto_for_members')
+          .eq('organization_id', profile.organization_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    chatOn ? chatRunsOnOwnKey(profile.organization_id).catch(() => false) : false,
   ]);
   const chatPrefs = chatPrefsRead.data;
   // The side panel is Chat too: the person's Agent Chat conversations come
@@ -144,7 +165,24 @@ export default async function DashboardLayout({ children }: { children: React.Re
     allowedModelIds = effective ? [...effective] : null;
   }
 
-  const fullAutoOpen = org ? planFactsFromOrgRow(org).fullAuto : false;
+  // The facts chatComposerSetup reads: the live role, the plan and the
+  // members switch; any of them unread, the careful setup.
+  const teamRole = parseTeamRole(profile.role);
+  const composerModes = composerSetupOf(
+    chatPrefs?.default_mode,
+    org && !chatSettingsRead.error && teamRole
+      ? {
+          role: teamRole,
+          plan: planFactsFromOrgRow(org),
+          settings: {
+            ...DEFAULT_CHAT_SETTINGS,
+            fullAutoForMembers:
+              chatSettingsRead.data?.full_auto_for_members ??
+              DEFAULT_CHAT_SETTINGS.fullAutoForMembers,
+          },
+        }
+      : null,
+  );
   const metadataName = (user.user_metadata as { full_name?: unknown } | null)?.full_name;
   const chatPanel = {
     enabled: chatOn && chatPrefs?.panel_on_pages !== false,
@@ -152,9 +190,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
     firstName: firstNameOf(
       profile.full_name ?? (typeof metadataName === 'string' ? metadataName : null),
     ),
-    defaultMode: chatDefaultModeOf(chatPrefs?.default_mode, fullAutoOpen),
-    fullAutoOpen,
+    ...composerModes,
     usageNoticeSeen: chatPrefs?.usage_notice_period ?? null,
+    onOwnKey: chatOnOwnKey,
   };
 
   return (
@@ -202,7 +240,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                           <TrackingJobHandoff />
                         </ChatPanelPage>
                       </div>
-                      {chatPanel.enabled && <ChatSidePanel />}
+                      {chatPanel.enabled && <ChatSidePanelSlot />}
                     </ChatPanelProvider>
                   </AiUsageProvider>
                 </MenuAccessProvider>

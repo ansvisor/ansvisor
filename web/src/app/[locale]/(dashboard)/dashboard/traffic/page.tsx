@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getPlatformFilterItems } from './_charts';
-import { getPlatformName, platformTableRows } from '@/lib/traffic-platforms';
+import { getPlatformName, movedPlatformOf, platformTableRows } from '@/lib/traffic-platforms';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 const ReferralTrendChart = dynamic(() => import('./_charts').then((m) => m.ReferralTrendChart), {
@@ -21,7 +21,7 @@ import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
-import { largestMove, rangeChipLabel } from '@/lib/chat/page-context';
+import { rangeChipLabel } from '@/lib/chat/page-context';
 import type { Brand } from '@/types';
 import {
   type TrafficSources,
@@ -700,12 +700,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
 
   // Chat's side panel sees the page (W1-08): its range and platform, the
   // platform whose visits moved most, and the two tables to ask about.
-  const movedPlatform = largestMove(
-    (summary?.platformBreakdown ?? []).map((row) => ({
-      name: getPlatformName(row.platform),
-      change: row.visits - row.visitsPrev,
-    })),
-  );
+  const movedPlatform = movedPlatformOf(summary);
   useChatPageContext({
     dateRange: {
       from: datePreset === 'custom' ? customFrom : datePreset,
