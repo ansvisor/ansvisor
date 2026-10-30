@@ -3771,6 +3771,54 @@
     "unavailable": {
       "title": "This chat isn't available.",
       "newChat": "New chat"
+    },
+    "menu": {
+      "label": "Chat menu",
+      "strip": "Chat menu shortcuts",
+      "hide": "Hide chat menu",
+      "show": "Show chat menu",
+      "hideTip": "Hide menu · {keys}",
+      "showTip": "Show menu · {keys}",
+      "newChat": "New chat",
+      "newChatTip": "New chat · {keys}",
+      "menu": "Menu",
+      "toggleMenu": "Show or hide the Menu section",
+      "home": "Home",
+      "governance": "Governance",
+      "activity": "Activity",
+      "capabilities": "What Chat can do",
+      "policy": "Tool policy",
+      "atWork": "Agents at work",
+      "toggleAtWork": "Show or hide agents at work",
+      "seeAll": "See all · {count}",
+      "showLess": "Show less ▴",
+      "chats": "Chats",
+      "toggleChats": "Show or hide chats",
+      "loadFailed": "Couldn't load your chats.",
+      "retry": "Retry",
+      "empty": "No chats yet.",
+      "untitled": "New chat",
+      "sharedBy": "Shared by {initials}",
+      "groups": {
+        "pinned": "Pinned",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "week": "Previous 7 days",
+        "month": "Previous 30 days"
+      },
+      "line": {
+        "needsYou": "Needs your OK",
+        "needsYouStep": "Needs your OK · step {step} of {total}",
+        "running": "Working",
+        "runningCount": "Step {step} of {total}",
+        "runningStep": "Step {step} of {total} · {label}",
+        "paused": "Paused",
+        "pausedStep": "Paused · step {step} of {total}",
+        "done": "Done",
+        "doneAt": "Done · {time}",
+        "failed": "Stopped",
+        "failedAt": "Stopped · {time}"
+      }
     }
   },
   "chatAccess": {

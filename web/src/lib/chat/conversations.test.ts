@@ -175,7 +175,12 @@ describe('listChats', () => {
     expect(byId.get(CHAT(2))).toMatchObject({ state: 'needsYou', step: 'Add 3 prompts' });
     // Read since it finished: idle, not bold.
     expect(byId.get(CHAT(3))).toMatchObject({ state: 'idle', unread: false, step: null });
-    expect(byId.get(CHAT(4))).toMatchObject({ state: 'failed', unread: true });
+    expect(byId.get(CHAT(4))).toMatchObject({
+      state: 'failed',
+      unread: true,
+      finishedAt: '2026-10-20T10:01:00.000Z',
+    });
+    expect(byId.get(CHAT(1))?.finishedAt).toBeNull();
   });
 
   it("shows a teammate's shared chat unpinned and read, as pin and read are its author's", async () => {

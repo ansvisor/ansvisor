@@ -49,6 +49,8 @@ export interface ChatListItem {
   step: string | null;
   /** How far it is: steps done of steps so far, while it works or waits. */
   progress: { done: number; total: number } | null;
+  /** When its newest run ended, ISO ("Done · 08:02"); null while it runs or with none. */
+  finishedAt: string | null;
 }
 
 export interface ChatListResult {
@@ -253,6 +255,7 @@ async function itemsOf(reader: Reader, actor: ChatActor, chats: ChatRow[]) {
       unread,
       state: chatState(run, unread),
       ...stepOf(run, run ? (stepsByRun.get(run.id) ?? []) : []),
+      finishedAt: run && !isOpen(run.status) ? run.finished_at : null,
     };
   });
 }
