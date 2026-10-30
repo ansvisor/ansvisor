@@ -37,6 +37,20 @@ const FORMAT_ORDER = ['html', 'md', 'docx', 'pdf', 'csv', 'xlsx'] as const;
 const ACTION =
   'flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
+/** Whether a deliverable is in Files (an older event says nothing: it was). */
+export const isFiled = (deliverable: ChatDeliverable) =>
+  deliverable.filed === undefined || deliverable.filed === 'in_files';
+
+/**
+ * Each deliverable's place among the run's filed ones, which names its file
+ * on the server (readRunFile); null for one that wasn't filed, which has no
+ * file to read.
+ */
+export function filedNumbers(deliverables: ChatDeliverable[]): (number | null)[] {
+  let n = 0;
+  return deliverables.map((deliverable) => (isFiled(deliverable) ? ++n : null));
+}
+
 /** The file name a download came with (Content-Disposition), else one of our own. */
 function fileNameOf(res: Response, fallback: string): string {
   const named = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '');
@@ -62,18 +76,27 @@ export function DeliverableCard({
   const t = useTranslations('chatDeliverable');
   const tFormats = useTranslations('chatAnswer.formats');
   const Icon = ICONS[deliverable.type] ?? FileText;
-  const filed = deliverable.filed === 'in_files' || deliverable.filed === undefined;
+  const filed = isFiled(deliverable);
   const formats = FORMAT_ORDER.filter((format) => deliverable.formats.includes(format));
   const fileUrl = (format: string) => `/api/chat/runs/${runId}/files/${n}?format=${format}`;
 
   async function copy() {
-    const res = await fetch(fileUrl('md')).catch(() => null);
-    if (!res?.ok || !navigator.clipboard) {
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      // Safari copies only within the click: the item is written at once, its text to come.
+      const text = fetch(fileUrl('md')).then(async (res) => {
+        if (!res.ok) throw new Error('Not read');
+        return new Blob([await res.text()], { type: 'text/plain' });
+      });
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+        await navigator.clipboard.write([new ClipboardItem({ 'text/plain': text })]);
+      } else {
+        await navigator.clipboard.writeText(await (await text).text());
+      }
+      toast(t('copied'));
+    } catch {
       toast.error(t('copyFailed'));
-      return;
     }
-    await navigator.clipboard.writeText(await res.text());
-    toast(t('copied'));
   }
 
   async function download(format: string) {

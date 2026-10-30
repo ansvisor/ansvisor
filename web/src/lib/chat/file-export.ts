@@ -6,6 +6,7 @@ import {
   draftHtmlDocument,
   draftMarkdown,
 } from '@/lib/content/draft-export';
+import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { withContentDom } from '@/lib/content/server-dom';
 import { answerFileName, type AnswerExportFormat, type ExportAnswer } from './export';
 import { ANSWER_CONTENT_TYPES, exportAnswer, type AnswerFile } from './export-file';
@@ -71,10 +72,11 @@ export async function exportChatFile(
   });
   switch (format) {
     case 'html':
+      // Cleaned again on the way out (CHAT-06: no script in exported HTML), whatever was filed.
       return named(
         'html',
         'text/html; charset=utf-8',
-        strToU8(draftHtmlDocument(file.title, file.content)),
+        strToU8(draftHtmlDocument(file.title, sanitizeDraftHtml(file.content))),
       );
     case 'docx': {
       // The editor's own blocks, the file's line in every page's header and footer.
