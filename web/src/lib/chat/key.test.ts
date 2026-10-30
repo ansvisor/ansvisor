@@ -34,7 +34,7 @@ vi.mock('@/lib/agent/key-encryption', () => ({
   decryptApiKey: (envelope: string) => `plain(${envelope})`,
 }));
 
-const { ownKeyAllowed, resolveChatModelKey } = await import('./key');
+const { chatRunsOnOwnKey, ownKeyAllowed, resolveChatModelKey } = await import('./key');
 
 const CUSTOMER = {
   provider: 'openai',
@@ -145,5 +145,35 @@ describe('resolveChatModelKey, Chat off', () => {
     vi.stubEnv('CHAT_AGENTIC', 'true');
     vi.stubEnv('CHAT_AGENTIC_ORGS', '33333333-3333-4333-8333-333333333333');
     expect(await resolveChatModelKey(ORG)).toBeNull();
+  });
+});
+
+describe('chatRunsOnOwnKey', () => {
+  it('says yes only where resolveChatModelKey would pick the workspace’s own key', async () => {
+    org = { plan: 'growth', subscription_status: 'active', legacy_key_grandfathered: false };
+    ownKey = CUSTOMER;
+    expect(await chatRunsOnOwnKey(ORG)).toBe(true);
+
+    // No key saved, or the plan leaves it aside: Ansvisor's key, on the budget.
+    ownKey = null;
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    org = { plan: 'starter', subscription_status: 'active', legacy_key_grandfathered: false };
+    ownKey = CUSTOMER;
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    org = { plan: 'growth', subscription_status: 'trialing', legacy_key_grandfathered: false };
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    org = { plan: 'starter', subscription_status: 'active', legacy_key_grandfathered: true };
+    expect(await chatRunsOnOwnKey(ORG)).toBe(true);
+  });
+
+  it('is no with Chat off or self-hosted, where nothing is metered', async () => {
+    org = { plan: 'growth', subscription_status: 'active', legacy_key_grandfathered: false };
+    ownKey = CUSTOMER;
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    expect(reads).toEqual([]);
   });
 });

@@ -75,6 +75,15 @@ describe('doneSteps and dataUsed', () => {
     expect(doneSteps(steps).map((s) => s.n)).toEqual([2, 3, 4, 5, 6]);
   });
 
+  it('takes a read without "Read …" words (going to a page of the app) as no source', () => {
+    const goTo = step({ n: 1, kind: 'read', label: 'Opened a page' });
+    expect(statusLine([{ ...goTo, status: 'running' }], false)).toEqual({
+      key: 'other',
+      values: { label: 'Opened a page' },
+    });
+    expect(dataUsed([goTo, step({ n: 2, kind: 'read', label: 'Worked on a step' })])).toEqual([]);
+  });
+
   it('names each source once with its largest count, and each page opened; skills, checks and failed reads aren’t sources', () => {
     expect(dataUsed(steps)).toEqual([
       { label: 'Citations', rows: 42 },

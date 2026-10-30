@@ -103,6 +103,21 @@ describe('listChats', () => {
     expect(row.ownerInitials).toBeNull();
   });
 
+  it("shows a teammate's initials though the person can read only their own profile", async () => {
+    const { createFakeSupabase } = await import('./testing/fake-supabase');
+    const asPerson = createFakeSupabase();
+    db.tables.chat_conversations = [
+      chat(1, { user_id: TEAMMATE.userId, shared_at: '2026-10-12T00:00:00.000Z' }),
+    ];
+    // The person's reads, as the policies let them: profiles is own row only.
+    asPerson.tables = {
+      ...db.tables,
+      profiles: db.tables.profiles.filter((p) => p.id === ME.userId),
+    };
+    const list = await chats.listChats(asPerson as never, ME, chats.listQuery.parse({}));
+    expect(list.chats[0]).toMatchObject({ mine: false, ownerInitials: 'SL' });
+  });
+
   it('lists only their own archived chats under Archived', async () => {
     db.tables.chat_conversations = [
       chat(1, { archived_at: '2026-10-20T00:00:00.000Z' }),
@@ -430,15 +445,32 @@ describe('searchChats', () => {
     expect(await search(' :* & ! ')).toEqual([]);
     expect(db.log).toEqual([]);
   });
+
+  it('finds a domain, a number or an email address as it was written', async () => {
+    db.tables.chat_messages.push({
+      id: 'm4',
+      conversation_id: CHAT(2),
+      created_at: '2026-10-21T10:00:00.000Z',
+      search_tsv: 'Share fell to 4.5 on nike.com, ask ops@nike.com',
+    });
+    expect((await search('nike.com')).map((c) => c.id)).toEqual([CHAT(2)]);
+    expect((await search('4.5 nike')).map((c) => c.id)).toEqual([CHAT(2)]);
+    expect((await search('ops@nike.com')).map((c) => c.id)).toEqual([CHAT(2)]);
+  });
 });
 
 describe('searchTermsOf', () => {
-  it('keeps letters and digits of each word as a prefix, all of them required', () => {
+  it('quotes each word as a prefix for Postgres to split, all of them required', () => {
     expect(chats.searchTermsOf('Why did Citations drop?')).toBe(
-      'why:* & did:* & citations:* & drop:*',
+      "'Why':* & 'did':* & 'Citations':* & 'drop?':*",
     );
-    expect(chats.searchTermsOf("Gökhan's Q4 report")).toBe('gökhan:* & s:* & q4:* & report:*');
-    expect(chats.searchTermsOf("') | !foo:* <-> bar")).toBe('foo:* & bar:*');
+    // One token in the text ("nike.com", "4.5") stays one word to look for.
+    expect(chats.searchTermsOf('nike.com 4.5 İstanbul')).toBe(
+      "'nike.com':* & '4.5':* & 'İstanbul':*",
+    );
+    expect(chats.searchTermsOf("Gökhan's Q4")).toBe("'Gökhan''s':* & 'Q4':*");
+    // The person's operators stay inside the quotes, never Postgres's.
+    expect(chats.searchTermsOf("') | !foo:* <-> bar\\'")).toBe("'!foo:*':* & 'bar ''':*");
     expect(chats.searchTermsOf('   ')).toBeNull();
     expect(chats.searchTermsOf('a b c d e f g h i j')?.split(' & ')).toHaveLength(8);
   });
