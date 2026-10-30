@@ -65,8 +65,8 @@ const patch = (body: unknown) =>
     }) as unknown as NextRequest,
   );
 
-/** A Stripe subscription with one item. */
-const subscription = (status: string, interval = 'month', amount = 4900) => ({
+/** A Stripe subscription with one item, its period ending at `end` (seconds). */
+const subscription = (status: string, interval = 'month', amount = 4900, end = 1_800_000_000) => ({
   id: 'sub1',
   status,
   cancel_at_period_end: false,
@@ -75,7 +75,7 @@ const subscription = (status: string, interval = 'month', amount = 4900) => ({
     data: [
       {
         id: 'si1',
-        current_period_end: 1_800_000_000,
+        current_period_end: end,
         price: { unit_amount: amount, recurring: { interval } },
       },
     ],
@@ -97,7 +97,8 @@ describe('buying a trial now', () => {
   it('ends the trial today on the plan asked for, with the first-month code', async () => {
     stripeApi.retrieve.mockResolvedValue(subscription('trialing'));
     stripeApi.listCodes.mockResolvedValue({ data: [{ id: 'promo_save50' }] });
-    stripeApi.update.mockResolvedValue(subscription('active', 'month', 24900));
+    // The trial ends today: Stripe starts the first period now, a month long.
+    stripeApi.update.mockResolvedValue(subscription('active', 'month', 24900, 1_802_592_000));
 
     const res = await patch({
       buyNow: true,
@@ -117,9 +118,12 @@ describe('buying a trial now', () => {
       discounts: [{ promotion_code: 'promo_save50' }],
       metadata: { plan_id: 'growth', organization_id: 'org1' },
     });
+    // With the new period's end, so the AI usage counts from today: the
+    // trial's usage is left behind before the webhook comes. And resumed.
     expect(db.update).toHaveBeenCalledWith({
       plan: 'growth',
       subscription_status: 'active',
+      subscription_ends_at: '2027-02-14T08:00:00.000Z',
       cancel_at_period_end: false,
     });
     expect(align).toHaveBeenCalledWith('org1', 'growth');

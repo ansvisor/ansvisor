@@ -248,14 +248,20 @@ export async function PATCH(req: NextRequest) {
 
     // Optimistic DB update. Stripe has already accepted the change, so this
     // is the server mirroring its own decision, not the caller writing their
-    // own plan — hence the service role, same as the webhook. Buying a trial
-    // now resumes it too (cancel_at_period_end false, above): the app-wide
-    // "plan ends" band goes at once (00386).
+    // own plan — hence the service role, same as the webhook. The period end
+    // too, as the webhook writes it: a trial bought now starts its first
+    // period today, and the monthly quotas, AI usage among them, count from
+    // that period (quotaPeriodStart), so the trial's usage is left behind at
+    // once rather than when the webhook lands. Buying a trial now resumes it
+    // too (cancel_at_period_end false, above): the app-wide "plan ends" band
+    // goes at once (00386).
+    const endsAt = periodEndIso(updated);
     await supabaseAdmin
       .from('organizations')
       .update({
         plan: change.planId,
         subscription_status: updated.status,
+        ...(endsAt ? { subscription_ends_at: endsAt } : {}),
         ...(change.kind === 'buy_now' ? { cancel_at_period_end: false } : {}),
       })
       .eq('id', org.id);

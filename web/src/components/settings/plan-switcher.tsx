@@ -42,6 +42,7 @@ import {
   type BillingInterval,
 } from '@/lib/billing/plan-purchase';
 import { TRIAL_DAYS } from '@/lib/billing/trial';
+import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useRouter } from '@/i18n/navigation';
 import { formatNumber } from '@/lib/format';
@@ -85,6 +86,9 @@ export function PlanSwitcher({
   const { canAdmin } = useUserRole();
   // A change can unlock a read-only workspace: the layout reads the plan again.
   const router = useRouter();
+  // A trial bought starts a new period, its AI usage from 0: the header meter
+  // and its banners read it again rather than show the trial's.
+  const { refresh: refreshAiUsage } = useAiUsage();
   const [loading, setLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -153,6 +157,7 @@ export function PlanSwitcher({
       const data = await res.json();
       onUpdate(data);
       router.refresh();
+      refreshAiUsage();
       toast.success(
         pending.buy ? t('planBought', { plan: PLANS[pending.planId].name }) : t('planChanged'),
       );
@@ -282,14 +287,20 @@ export function PlanSwitcher({
                 onClick={() => setPeriod(value)}
                 className={cn(
                   'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors',
+                  // Filled, as the start choice above a new plan's cards.
                   period === value
-                    ? 'bg-background text-foreground shadow-sm'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
                 {value === 'month' ? t('monthly') : t('annual')}
                 {value === 'year' && saving > 0 && (
-                  <span className="rounded-full bg-emerald-100 px-1.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                  <span
+                    className={cn(
+                      'rounded-full bg-emerald-100 px-1.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400',
+                      period === value && 'dark:bg-emerald-950',
+                    )}
+                  >
                     {t('savePercent', { percent: saving })}
                   </span>
                 )}

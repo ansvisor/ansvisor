@@ -19,24 +19,41 @@
       "ai": "AI",
       "label": "AI {percent} used this month",
       "labelWarning": "AI {percent} used this month, close to the limit",
-      "labelExhausted": "AI {percent} used this month, the limit is reached"
+      "labelExhausted": "AI {percent} used this month, the limit is reached",
+      "trial": {
+        "normal": "Trial credit",
+        "warning": "Almost used",
+        "exhausted": "Used up"
+      },
+      "trialLabel": {
+        "normal": "AI: the free trial's AI credit",
+        "warning": "AI: the free trial's AI credit is almost used",
+        "exhausted": "AI: the free trial's AI credit is used up"
+      }
     },
     "askAdmin": "To get more AI usage or use your own key, ask an admin of your workspace.",
+    "askAdminStart": "To start the plan now, ask an admin of your workspace.",
     "getMore": {
       "plan": "Get more AI usage",
-      "ownKey": "Use your own key",
-      "startPlan": "Start your plan"
+      "ownKey": "Use your own key"
     },
     "popover": {
       "title": "AI usage this month · {plan} plan",
-      "titleTrial": "AI usage this month · {plan} free trial",
+      "titleTrial": "AI usage · {plan} free trial",
+      "trialState": {
+        "normal": "Trial AI credit",
+        "warning": "Trial AI credit almost used",
+        "exhausted": "Trial AI credit used up"
+      },
+      "trialNote": "Your free trial comes with a starter AI credit. Starting your plan gives its full monthly AI usage.",
+      "trialEnds": "Shared by every seat · the trial ends {date}",
       "titleNoPlan": "AI usage this month",
       "page": "This page this month",
       "shared": "Shared by every seat · resets {date}",
       "sharedNoDate": "Shared by every seat",
       "exhausted": "Used up. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "Used up. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
-      "exhaustedTrial": "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working.",
+      "exhaustedTrial": "Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working.",
       "none": "No AI usage yet this month.",
       "ownKey": "Agent Chat, on your own AI key",
       "notCounted": "Not counted",
@@ -48,11 +65,29 @@
     },
     "banner": {
       "warning": "You've used {percent} of this month's AI limit.",
-      "warningTrial": "You've used {percent} of the free trial's AI usage. Starting the plan gives its full monthly allowance.",
+      "warningTrial": "Your trial AI credit is almost used. Starting your plan now gives its full monthly AI usage.",
       "seeUsage": "See usage",
       "exhausted": "You've used this month's AI limit. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "You've used this month's AI limit. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
-      "exhaustedTrial": "You've used the free trial's AI usage. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working."
+      "exhaustedTrial": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working."
+    },
+    "startNow": {
+      "button": "Start my plan now",
+      "title": "Start your {plan} plan now?",
+      "titleNoPlan": "Start your plan now?",
+      "description": "Your free trial ends now and the card you added for it pays the plan's first period. The plan's full monthly AI usage starts right away.",
+      "plan": "Plan",
+      "planValue": "{plan}, {interval, select, year {yearly} other {monthly}}",
+      "today": "Charged today",
+      "thenMonthly": "first month with the offer, then ${price} a month",
+      "trial": "Free trial",
+      "endsNow": "Ends now",
+      "notNow": "Not now",
+      "confirm": "Start my plan now",
+      "unreadable": "Couldn't read your plan. Try again, or start it from Settings › Billing.",
+      "notTrialing": "Your plan has already started.",
+      "offerGone": "The first-month offer isn't available any more. Check the full price and confirm again.",
+      "failed": "Couldn't start the plan. Try again, or start it from Settings › Billing."
     }
   },
   "chatBudget": {
@@ -371,6 +406,15 @@
       "frameTitle": "Chat preview"
     }
   },
+  "firstRun": {
+    "arriving": "Your first answers are arriving",
+    "queued": "Your first tracking starts as soon as a slot opens",
+    "count": "({current} of {total})",
+    "minutesLeft": "~{minutes} min",
+    "hoursLeft": "{hours, plural, one {~# hour} other {~# hours}}",
+    "fillsIn": "This fills in when tracking finishes.",
+    "ready": "Your first results are ready"
+  },
   "managersOnly": {
     "suggestPrompts": "Ask an admin or a manager to generate prompt suggestions.",
     "suggestTopics": "Ask an admin or a manager to generate topic suggestions.",
@@ -378,7 +422,14 @@
     "trackOrSuggestContent": "Ask an admin or a manager to track these prompts or suggest content for them.",
     "generateBrief": "Ask an admin or a manager to generate a brief.",
     "improvePrompt": "Ask an admin or a manager to generate or send Improve suggestions.",
-    "addPrompts": "Ask an admin or a manager to add prompts."
+    "addPrompts": "Ask an admin or a manager to add prompts.",
+    "addTopic": "Prompts are grouped under topics. Ask an admin or a manager to add a topic first."
+  },
+  "topicFirst": {
+    "title": "Add a topic first",
+    "body": "Prompts are grouped under topics, so a brand needs at least one before it can add prompts or have them suggested. Add a topic, then come back here.",
+    "addTopic": "Add a topic",
+    "close": "Close"
   },
   "common": {
     "loading": "Loading...",
@@ -492,11 +543,12 @@
       "history": "History"
     },
     "firstRun": {
-      "running": "First analysis running",
-      "queued": "First analysis queued",
+      "running": "First tracking running",
+      "queued": "First tracking queued",
       "progress": "{current} of {total} checks",
-      "minutesLeft": "about {minutes} min left",
-      "hoursLeft": "{hours, plural, one {about # hour left} other {about # hours left}}",
+      "minutesLeft": "~{minutes} min left",
+      "hoursLeft": "{hours, plural, one {~# hour left} other {~# hours left}}",
+      "details": "Details",
       "runningBody": "AI assistants are answering your prompts for the first time. Actions, signals and KPIs fill in once it finishes: a few minutes, or an hour or two at busy times. You can leave this page.",
       "queuedBody": "Another analysis is running right now. Yours starts the moment a slot opens, and keeps going in the background.",
       "link": "Follow it on Brand Visibility"
@@ -1967,10 +2019,12 @@
         "skipped": "Skipped"
       },
       "optional": "Optional",
+      "readyNow": "Ready now",
       "everyone": "Everyone in the workspace",
       "readyWhen": {
+        "arriving": "Arriving now",
         "setup": "Now",
-        "explore": "First answers · ~3h",
+        "explore": "First answers · ~1h",
         "dataPrompts": "24h after Search Console or Analytics",
         "act": "Suggestions · ~24h",
         "ready": "After the steps above"
@@ -3212,6 +3266,22 @@
     "drafts": { "name": "Read the Content Library", "step": "Read Library" },
     "draft": { "name": "Read a draft", "step": "Read draft" },
     "reports": { "name": "Read reports", "step": "Read Reports" },
+    "goToPage": { "name": "Go to a page", "step": "Opened a page" },
+    "fanouts": { "name": "Read query fan-outs", "step": "Read Query Fan-outs" },
+    "aiAnswers": { "name": "Read a prompt's AI answers", "step": "Read AI answers" },
+    "promptInsights": { "name": "Read prompt insights", "step": "Read Prompts · Insights" },
+    "overviewSummary": { "name": "Read the brand overview", "step": "Read Brand Visibility" },
+    "actionCenterKpis": { "name": "Read Action Center KPIs", "step": "Read KPIs" },
+    "onboardingProgress": {
+      "name": "Read Getting started progress",
+      "step": "Read Getting started"
+    },
+    "gscSummary": { "name": "Read Google Search Console", "step": "Read Search Console" },
+    "gaSummary": { "name": "Read Google Analytics", "step": "Read Google Analytics" },
+    "members": { "name": "Read team members", "step": "Read Team" },
+    "connections": { "name": "Read connected tools", "step": "Read Integrations" },
+    "chatPolicy": { "name": "Read Chat's rules", "step": "Read Settings › Chat" },
+    "planFacts": { "name": "Read your plan", "step": "Read Billing" },
     "saveDraft": { "name": "Save drafts in Content", "step": "Saved draft in Content" },
     "opportunityStatus": {
       "name": "Review or dismiss opportunities",
@@ -3483,6 +3553,19 @@
       }
     }
   },
+  "chatNavigation": {
+    "filtersSet": "Filters set for you. This chat stays open in the side panel.",
+    "noFilters": "This chat stays open in the side panel.",
+    "navigationOnly": "Navigation only · no AI usage",
+    "goToPage": "Go to page",
+    "ranges": {
+      "24h": "Last 24 hours",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "90d": "Last 90 days",
+      "all": "All time"
+    }
+  },
   "chatDenial": {
     "asked": "You asked: {action}.",
     "askedTarget": "You asked: {action} · {target}.",
@@ -3518,6 +3601,7 @@
   },
   "chatEngine": {
     "allTime": "All time",
+    "lastDays": "Last {count} days",
     "since": "Since {date}",
     "until": "Until {date}",
     "range": "{from} – {to}",
@@ -3532,7 +3616,10 @@
       "readFailed": "Couldn't read this",
       "timedOut": "Timed out",
       "limit": "Over this run's limit",
-      "unknown": "Worked on a step"
+      "unknown": "Worked on a step",
+      "checkedFacts": "Checked facts",
+      "factsMatch": "Every figure matches the data",
+      "factsRemoved": "{count, plural, one {# figure wasn't in the data, so it was left out} other {# figures weren't in the data, so they were left out}}"
     },
     "error": {
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
@@ -3610,7 +3697,6 @@
         "contract": "AI limit, storage and prompt limits set in your contract",
         "aiLimit": "{times}× the monthly AI limit",
         "keepEverything": "Keep everything you're using now",
-        "mcp": "Use Ansvisor inside Claude, ChatGPT and Cursor (MCP)",
         "monthlyLimit": "A monthly AI limit that resets, instead of the trial's one-time limit",
         "packs": "Buy extra AI credits and storage when you need them"
       }
@@ -4006,7 +4092,8 @@
         "site_audit": "Site Audit",
         "action_center": "Action Center",
         "content": "Content",
-        "reports": "Reports"
+        "reports": "Reports",
+        "navigation": "Navigation"
       }
     }
   },
@@ -4335,7 +4422,8 @@
     "copyFailed": "Copy failed",
     "copyDraft": "Copy draft",
     "copyCode": "Copy code",
-    "placeholderNote": "Replace placeholders in [brackets] with your real data before publishing.",
+    "placeholderNote": "Your input needed: replace each highlighted [bracket] with your own details before you publish.",
+    "inputNeeded": "Your input needed",
     "finding": "Finding",
     "why": "Why",
     "recommendedFix": "Recommended fix",
@@ -5109,7 +5197,7 @@
           "longTitle": "Title over 300 characters",
           "empty": "Nothing to publish yet",
           "tooLong": "Over a million characters",
-          "placeholders": "Placeholders to fill",
+          "placeholders": "Your input needed",
           "slug": "Needs a slug",
           "metaTitle": "Meta title over 300 characters",
           "metaDescription": "Meta description over 500 characters"
@@ -5458,7 +5546,7 @@
           "rulesAny": "Keeping to the rules",
           "sources": "Drawing on {count, plural, one {# source} other {# sources}}",
           "sourcesAny": "Drawing on your sources",
-          "placeholders": "Adding a [placeholder] for facts it lacks"
+          "placeholders": "Looking up facts it lacks, with their sources"
         }
       },
       "agentFailed": {
@@ -5497,7 +5585,7 @@
         "breaks": "would break {names}",
         "runFailed": "Content Agent couldn't finish",
         "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
-        "placeholders": "{count, plural, one {# placeholder} other {# placeholders}} to fill",
+        "placeholders": "{count, plural, one {# fact needs your input} other {# facts need your input}}",
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
         "gain": "Rules {met, number} → {after, number} of {total, number}",
         "review": "Review",
@@ -6606,11 +6694,11 @@
         "cancel": "Cancel"
       },
       "placeholders": {
-        "label": "Placeholders to fill",
-        "left": "{count, plural, =0 {No placeholders left to fill} one {# placeholder to fill} other {# placeholders to fill}}",
-        "onOf": "Placeholder {on} of {count}",
-        "previous": "Previous placeholder",
-        "next": "Next placeholder",
+        "label": "Your input needed",
+        "left": "{count, plural, =0 {No input needed} one {Your input needed: #} other {Your input needed: #}}",
+        "onOf": "Your input {on} of {count}",
+        "previous": "Previous input needed",
+        "next": "Next input needed",
         "showHidden": "Show in HTML",
         "hiddenHint": "In an image's alt text, the JSON-LD or an HTML block: the page doesn't show them.",
         "inHtmlView": "This placeholder is in an image's alt text, the JSON-LD or an HTML block. It's selected in the HTML view ({html}): type over it, then apply."
@@ -8702,6 +8790,8 @@
       "pending": "Within 24h",
       "pendingTip": "Tracked in {location} from the next daily run: its first results come within 24 hours.",
       "promptPendingTip": "This prompt's first results come with the next daily run, within 24 hours.",
+      "arriving": "Arriving now",
+      "arrivingTip": "Your first tracking is asking this now. Its results come in as it goes, and all of them when it finishes.",
       "paused": "Paused",
       "pausedTip": "This prompt is paused, so it isn't asked anywhere until you resume it.",
       "noEngine": "No engine here",
@@ -9976,7 +10066,7 @@
     "account": "Account",
     "accountDescription": "Your profile and sign-in details.",
     "general": "General",
-    "apiKeys": "API Keys",
+    "apiKeys": "MCP & API Keys",
     "team": "Team",
     "rolesAccess": "Roles & access",
     "chatSettings": "Chat",
@@ -10167,7 +10257,15 @@
       "resets": "Resets on {date}",
       "exhausted": "This period's AI usage is used up. AI features resume on {date}.",
       "exhaustedNoDate": "This period's AI usage is used up. AI features resume when it resets.",
-      "exhaustedTrial": "The free trial's AI usage is used up. Starting the plan below gives its full monthly allowance.",
+      "exhaustedTrial": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage.",
+      "trialState": {
+        "normal": "Trial AI credit",
+        "warning": "Trial AI credit almost used",
+        "exhausted": "Trial AI credit used up"
+      },
+      "trialNote": "Your free trial comes with a starter AI credit. Starting your plan gives its full monthly AI usage.",
+      "trialWarning": "Your trial AI credit is almost used. Starting your plan now gives its full monthly AI usage.",
+      "trialEnds": "The trial ends on {date}",
       "morePlans": "A bigger plan below comes with more.",
       "features": {
         "improve": "Improve suggestions",
@@ -10305,6 +10403,7 @@
     "apiKeys_description": "Long-lived tokens for the Ansvisor MCP server and other external clients. Keys are shown once at creation — store them somewhere safe.",
     "apiKeys_mcpEndpoint": "MCP endpoint",
     "apiKeys_mcpEndpointHint": "Create a key to get a ready-to-paste setup for Claude, Codex, Cursor and other MCP clients. See the <link>MCP guide</link>.",
+    "apiKeys_planNote": "On Starter and in the free trial, MCP tools and the API can read. Changes need Growth.",
     "apiKeys_noKeys": "No API keys yet. Create one to connect the MCP server.",
     "apiKeys_revoked": "revoked",
     "apiKeys_created": "Created {date} · Last used {lastUsed}",

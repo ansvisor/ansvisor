@@ -300,11 +300,15 @@ export function draftMarkdown(title: string, html: string, fields?: ExportFields
   return `${parts.join('')}\n`;
 }
 
-type Docx = typeof import('docx');
+export type Docx = typeof import('docx');
 type DocxChild = InstanceType<Docx['Paragraph']> | InstanceType<Docx['Table']>;
 
-/** The blocks as Word paragraphs and tables, the lists numbered and bulleted as on the page. */
-function docxBlocks(m: Docx, blocks: DraftBlock[]): DocxChild[] {
+/**
+ * The blocks as Word paragraphs and tables, the lists numbered and bulleted
+ * as on the page. Chat's answer export (lib/chat/export-file.ts) writes its
+ * Word file with it too.
+ */
+export function docxBlocks(m: Docx, blocks: DraftBlock[]): DocxChild[] {
   const HEADING = {
     1: m.HeadingLevel.HEADING_1,
     2: m.HeadingLevel.HEADING_2,
@@ -373,8 +377,15 @@ function docxBlocks(m: Docx, blocks: DraftBlock[]): DocxChild[] {
   return content(blocks);
 }
 
-/** A Word document of sections, each starting on a page of its own, with the lists' numbering. */
-function docxDocument(m: Docx, title: string, sections: DocxChild[][]) {
+/**
+ * A Word document of sections, each starting on a page of its own, with the
+ * lists' numbering; `note`, when given, is a small grey line in every page's
+ * header and footer (Chat's "Generated …" line, CHAT-06 item 40).
+ */
+export function docxDocument(m: Docx, title: string, sections: DocxChild[][], note?: string) {
+  const noteLine = () => [
+    new m.Paragraph({ children: [new m.TextRun({ text: note, size: 16, color: '6B7280' })] }),
+  ];
   return new m.Document({
     title,
     numbering: {
@@ -391,7 +402,15 @@ function docxDocument(m: Docx, title: string, sections: DocxChild[][]) {
         },
       ],
     },
-    sections: sections.map((children) => ({ children })),
+    sections: sections.map((children) => ({
+      children,
+      ...(note
+        ? {
+            headers: { default: new m.Header({ children: noteLine() }) },
+            footers: { default: new m.Footer({ children: noteLine() }) },
+          }
+        : {}),
+    })),
   });
 }
 

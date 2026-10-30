@@ -6,6 +6,7 @@ import { Link } from '@/i18n/navigation';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { AiUsageBanner } from './ai-usage-banner';
 import { AiUsageGetMore } from './ai-usage-get-more';
+import { StartPlanNowDialog } from './start-plan-now';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover';
@@ -77,7 +78,9 @@ export function HeaderWithAiUsage({
 
 /**
  * "AI 21%" at the far right of a page's header row (AI usage spec §3.1): the
- * share of the workspace's monthly AI allowance used, with a small bar. A
+ * share of the workspace's monthly AI allowance used, with a small bar. In
+ * the free trial it shows no share (one page read as a big piece of a small
+ * trial credit): "Trial credit", "Almost used" from 80%, then "Used up". A
  * click opens what used it, what doesn't count, the limits that aren't AI,
  * and where to get more: getting more and an own key are an admin's to
  * change, so other members are told to ask one. Nothing on a plan without an
@@ -103,6 +106,8 @@ export function AiUsageMeter({
   const { canAdmin } = useUserRole();
   const brandId = useBrandStore((s) => s.activeBrandId);
   const [open, setOpen] = useState(false);
+  // Start my plan now's dialog, outside the popover: the popover closes as it opens.
+  const [starting, setStarting] = useState(false);
   // Undefined until the popover first opens, null while that first read runs;
   // a later opening keeps what it shows until the new read lands.
   const [limits, setLimits] = useState<UsageLimits | null | undefined>(undefined);
@@ -128,6 +133,7 @@ export function AiUsageMeter({
   if (usage === null || usage.unlimited) return null;
 
   const tone = aiUsageTone(usage);
+  const trial = !!usage.trial && tone !== 'unlimited';
   const percent = usage.percentUsed ?? 0;
   const used = percentLabel(percent);
   const width = `${Math.min(100, percent)}%`;
@@ -144,7 +150,7 @@ export function AiUsageMeter({
     void readUsageLimits(brandId).then((read) => {
       if (id === limitsRead.current) setLimits(read);
     });
-    if (draftId) {
+    if (draftId && !trial) {
       setPage((shown) => (typeof shown === 'number' ? shown : 'loading'));
       const pageId = ++pageRead.current;
       void readDraftAiUsage(draftId).then((read) => {
@@ -158,152 +164,194 @@ export function AiUsageMeter({
     t('popover.ofLimit', { used: formatNumber(n), limit: formatNumber(limit) });
 
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger
-        aria-label={t(LABEL_KEY[tone], { percent: used })}
-        // The percent alone says little: its name on hover, as the header's title has.
-        title={compact ? t(LABEL_KEY[tone], { percent: used }) : undefined}
-        className={cn(
-          'inline-flex shrink-0 items-center gap-2 rounded-full border bg-background text-xs font-medium transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:bg-muted',
-          compact ? 'h-7 px-2.5' : 'h-8 px-3',
-          METER_CLASS[tone],
-          className,
-        )}
-      >
-        <span aria-hidden className={cn(compact && 'hidden xl:inline')}>
-          {t('meter.ai')}
-        </span>
-        <span
-          aria-hidden
+    <>
+      <Popover open={open} onOpenChange={onOpenChange}>
+        <PopoverTrigger
+          aria-label={trial ? t(`meter.trialLabel.${tone}`) : t(LABEL_KEY[tone], { percent: used })}
+          // The percent alone says little: its name on hover, as the header's title has.
+          title={compact && !trial ? t(LABEL_KEY[tone], { percent: used }) : undefined}
           className={cn(
-            'block h-1.5 w-11 overflow-hidden rounded-full bg-muted',
-            compact && 'hidden xl:block',
+            'inline-flex shrink-0 items-center gap-2 rounded-full border bg-background text-xs font-medium transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:bg-muted',
+            compact ? 'h-7 px-2.5' : 'h-8 px-3',
+            METER_CLASS[tone],
+            className,
           )}
         >
-          <span className={cn('block h-full rounded-full', FILL_CLASS[tone])} style={{ width }} />
-        </span>
-        {/* As wide as "99.9%": the button keeps its width as the tenths move. */}
-        <span aria-hidden className="inline-block min-w-9 text-right tabular-nums">
-          {used}
-        </span>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] text-sm">
-        <PopoverTitle className="text-xs font-normal text-muted-foreground">
-          {usage.planName
-            ? t(usage.trial ? 'popover.titleTrial' : 'popover.title', { plan: usage.planName })
-            : t('popover.titleNoPlan')}
-        </PopoverTitle>
-        <p className="mt-0.5 text-2xl font-semibold tabular-nums">{used}</p>
-        <div
-          role="progressbar"
-          aria-label={t('popover.titleNoPlan')}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.floor(percent)}
-          aria-valuetext={used}
-          className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted"
-        >
-          <div className={cn('h-full rounded-full', FILL_CLASS[tone])} style={{ width }} />
-        </div>
-        <p className="mt-1.5 text-xs text-muted-foreground">
-          {resets ? t('popover.shared', { date: resets }) : t('popover.sharedNoDate')}
-        </p>
-        {/* The page's own share: left out when it can't be read. */}
-        {draftId && page !== undefined && page !== 'none' && (
-          <p className="mt-2 flex items-center justify-between gap-3 rounded-md bg-muted px-2.5 py-1.5 text-[13px]">
-            <span>{t('popover.page')}</span>
-            {page === 'loading' ? (
-              <span className="text-muted-foreground">
-                <LoadingDots />
-                <span className="sr-only">{tCommon('loading')}</span>
-              </span>
-            ) : (
-              <span className="font-medium tabular-nums">{percentLabel(page)}</span>
-            )}
-          </p>
-        )}
-        {tone === 'exhausted' && (
-          <p className="mt-2 text-xs text-red-700 dark:text-red-400">
-            {usage.trial
-              ? t('popover.exhaustedTrial')
-              : resets
-                ? t('popover.exhausted', { date: resets })
-                : t('popover.exhaustedNoDate')}
-          </p>
-        )}
-
-        {/* Only what used some is listed: none yet, a line says so. */}
-        {usage.features.length > 0 ? (
-          <ul className="mt-3 divide-y border-t text-[13px]">
-            {usage.features.map(({ feature, percent: share }) => (
-              <li key={feature} className="flex items-center justify-between gap-3 py-1.5">
-                <span className="text-muted-foreground">{tFeature(feature)}</span>
-                <span className="font-medium tabular-nums">{featurePercentLabel(share)}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-3 border-t py-1.5 text-[13px] text-muted-foreground">
-            {t('popover.none')}
-          </p>
-        )}
-
-        <ul className="mt-1 border-t text-[13px]">
-          <li className="flex items-center justify-between gap-3 py-1.5">
-            <span className="text-muted-foreground">{t('popover.ownKey')}</span>
-            <span className="font-medium">{t('popover.notCounted')}</span>
-          </li>
-        </ul>
-
-        {limits !== undefined &&
-          (limits === null || limits.auditPages || limits.promptLocations) && (
+          <span aria-hidden className={cn(compact && 'hidden xl:inline')}>
+            {t('meter.ai')}
+          </span>
+          {trial ? (
+            <span aria-hidden>{t(`meter.trial.${tone}`)}</span>
+          ) : (
             <>
-              <p className="mt-3 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                {t('popover.otherLimits')}
-              </p>
-              {limits === null ? (
-                <p className="mt-1 border-t py-1.5 text-muted-foreground">
-                  <LoadingDots />
-                  <span className="sr-only">{tCommon('loading')}</span>
-                </p>
-              ) : (
-                <ul className="mt-1 divide-y border-t text-[13px]">
-                  {limits.auditPages && (
-                    <li className="flex items-center justify-between gap-3 py-1.5">
-                      <span className="text-muted-foreground">{t('popover.auditPages')}</span>
-                      <span className="font-medium tabular-nums">{count(limits.auditPages)}</span>
-                    </li>
-                  )}
-                  {limits.promptLocations && (
-                    <li className="flex items-center justify-between gap-3 py-1.5">
-                      <span className="text-muted-foreground">{t('popover.promptLocations')}</span>
-                      <span className="font-medium tabular-nums">
-                        {count(limits.promptLocations)}
-                      </span>
-                    </li>
-                  )}
-                </ul>
-              )}
+              <span
+                aria-hidden
+                className={cn(
+                  'block h-1.5 w-11 overflow-hidden rounded-full bg-muted',
+                  compact && 'hidden xl:block',
+                )}
+              >
+                <span
+                  className={cn('block h-full rounded-full', FILL_CLASS[tone])}
+                  style={{ width }}
+                />
+              </span>
+              {/* As wide as "99.9%": the button keeps its width as the tenths move. */}
+              <span aria-hidden className="inline-block min-w-9 text-right tabular-nums">
+                {used}
+              </span>
             </>
           )}
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] text-sm">
+          <PopoverTitle className="text-xs font-normal text-muted-foreground">
+            {usage.planName
+              ? t(usage.trial ? 'popover.titleTrial' : 'popover.title', { plan: usage.planName })
+              : t('popover.titleNoPlan')}
+          </PopoverTitle>
+          {trial ? (
+            <>
+              <p
+                className={cn(
+                  'mt-0.5 text-base font-semibold',
+                  tone === 'warning' && 'text-amber-700 dark:text-amber-400',
+                  tone === 'exhausted' && 'text-red-700 dark:text-red-400',
+                )}
+              >
+                {t(`popover.trialState.${tone}`)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{t('popover.trialNote')}</p>
+            </>
+          ) : (
+            <>
+              <p className="mt-0.5 text-2xl font-semibold tabular-nums">{used}</p>
+              <div
+                role="progressbar"
+                aria-label={t('popover.titleNoPlan')}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.floor(percent)}
+                aria-valuetext={used}
+                className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted"
+              >
+                <div className={cn('h-full rounded-full', FILL_CLASS[tone])} style={{ width }} />
+              </div>
+            </>
+          )}
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            {resets
+              ? t(trial ? 'popover.trialEnds' : 'popover.shared', { date: resets })
+              : t('popover.sharedNoDate')}
+          </p>
+          {/* The page's own share: left out when it can't be read. */}
+          {draftId && page !== undefined && page !== 'none' && (
+            <p className="mt-2 flex items-center justify-between gap-3 rounded-md bg-muted px-2.5 py-1.5 text-[13px]">
+              <span>{t('popover.page')}</span>
+              {page === 'loading' ? (
+                <span className="text-muted-foreground">
+                  <LoadingDots />
+                  <span className="sr-only">{tCommon('loading')}</span>
+                </span>
+              ) : (
+                <span className="font-medium tabular-nums">{percentLabel(page)}</span>
+              )}
+            </p>
+          )}
+          {tone === 'exhausted' && (
+            <p className="mt-2 text-xs text-red-700 dark:text-red-400">
+              {usage.trial
+                ? t('popover.exhaustedTrial')
+                : resets
+                  ? t('popover.exhausted', { date: resets })
+                  : t('popover.exhaustedNoDate')}
+            </p>
+          )}
 
-        {!canAdmin && <p className="mt-3 text-xs text-muted-foreground">{t('askAdmin')}</p>}
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          <AiUsageGetMore
-            plan={usage.plan}
-            trial={usage.trial}
-            primary={pressing}
-            onFollow={close}
-          />
-          <Link
-            href="/dashboard/settings/billing#ai-usage"
-            onClick={close}
-            className={buttonVariants({ variant: 'ghost', size: 'sm' })}
-          >
-            {t('popover.details')}
-          </Link>
-        </div>
-      </PopoverContent>
-    </Popover>
+          {/* Only what used some is listed: none yet, a line says so. The
+            trial's shares aren't shown. */}
+          {trial ? null : usage.features.length > 0 ? (
+            <ul className="mt-3 divide-y border-t text-[13px]">
+              {usage.features.map(({ feature, percent: share }) => (
+                <li key={feature} className="flex items-center justify-between gap-3 py-1.5">
+                  <span className="text-muted-foreground">{tFeature(feature)}</span>
+                  <span className="font-medium tabular-nums">{featurePercentLabel(share)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 border-t py-1.5 text-[13px] text-muted-foreground">
+              {t('popover.none')}
+            </p>
+          )}
+
+          <ul className="mt-1 border-t text-[13px]">
+            <li className="flex items-center justify-between gap-3 py-1.5">
+              <span className="text-muted-foreground">{t('popover.ownKey')}</span>
+              <span className="font-medium">{t('popover.notCounted')}</span>
+            </li>
+          </ul>
+
+          {limits !== undefined &&
+            (limits === null || limits.auditPages || limits.promptLocations) && (
+              <>
+                <p className="mt-3 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                  {t('popover.otherLimits')}
+                </p>
+                {limits === null ? (
+                  <p className="mt-1 border-t py-1.5 text-muted-foreground">
+                    <LoadingDots />
+                    <span className="sr-only">{tCommon('loading')}</span>
+                  </p>
+                ) : (
+                  <ul className="mt-1 divide-y border-t text-[13px]">
+                    {limits.auditPages && (
+                      <li className="flex items-center justify-between gap-3 py-1.5">
+                        <span className="text-muted-foreground">{t('popover.auditPages')}</span>
+                        <span className="font-medium tabular-nums">{count(limits.auditPages)}</span>
+                      </li>
+                    )}
+                    {limits.promptLocations && (
+                      <li className="flex items-center justify-between gap-3 py-1.5">
+                        <span className="text-muted-foreground">
+                          {t('popover.promptLocations')}
+                        </span>
+                        <span className="font-medium tabular-nums">
+                          {count(limits.promptLocations)}
+                        </span>
+                      </li>
+                    )}
+                  </ul>
+                )}
+              </>
+            )}
+
+          {!canAdmin && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              {t(trial ? 'askAdminStart' : 'askAdmin')}
+            </p>
+          )}
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            <AiUsageGetMore
+              plan={usage.plan}
+              trial={usage.trial}
+              primary={pressing}
+              onFollow={close}
+              onStartPlan={() => {
+                close();
+                setStarting(true);
+              }}
+            />
+            <Link
+              href="/dashboard/settings/billing#ai-usage"
+              onClick={close}
+              className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+            >
+              {t('popover.details')}
+            </Link>
+          </div>
+        </PopoverContent>
+      </Popover>
+      {trial && canAdmin && <StartPlanNowDialog open={starting} onOpenChange={setStarting} />}
+    </>
   );
 }

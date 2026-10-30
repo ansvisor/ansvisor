@@ -29,11 +29,14 @@ const MAX_POLLS = 20;
 export function SuggestionsTab({
   brandId,
   onAccepted,
+  onAddTopic,
   planId,
   limitActions,
 }: {
   brandId: string;
   onAccepted?: () => void;
+  /** "Add a topic" on a brand without one: the page's Topics tab, with Add Topic open. */
+  onAddTopic?: () => void;
   planId?: PlanId;
   limitActions?: React.ReactNode;
 }) {
@@ -71,6 +74,7 @@ export function SuggestionsTab({
       <SuggestionsCard
         brandId={brandId}
         onAccepted={onAccepted}
+        onAddTopic={onAddTopic}
         sourceStates={states ?? null}
         planId={planId}
         limitActions={limitActions}

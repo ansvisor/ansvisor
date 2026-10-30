@@ -16,6 +16,7 @@ vi.mock('@/components/providers/ai-usage-provider', () => ({
   useAiUsage: () => ({ usage: state.usage, refresh: () => {} }),
 }));
 vi.mock('@/i18n/navigation', () => ({
+  useRouter: () => ({ refresh: () => {} }),
   Link: ({
     href,
     className,
@@ -63,6 +64,7 @@ async function render(role: TeamRole = 'admin') {
 }
 const links = () =>
   [...container.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')]);
+const buttons = () => [...container.querySelectorAll('button')].map((b) => b.textContent);
 
 beforeEach(() => {
   container = document.createElement('div');
@@ -110,27 +112,43 @@ describe('AiUsageBanner', () => {
     ]);
   });
 
-  it('says in the free trial that starting the plan gives more, also when used up', async () => {
+  it('names no share in the free trial, and lets an admin start the plan now', async () => {
     state.usage = usage({ trial: true });
     await render();
     expect(container.textContent).toContain(
-      "You've used 84.6% of the free trial's AI usage. Starting the plan gives its full monthly allowance.",
+      'Your trial AI credit is almost used. Starting your plan now gives its full monthly AI usage.',
     );
+    expect(container.textContent).not.toContain('%');
+    expect(container.firstElementChild!.className).toContain('bg-amber-50');
+    expect(buttons()).toEqual(['Start my plan now']);
+    expect(links()).toEqual([]);
 
     state.usage = usage({ trial: true, percentUsed: 100 });
     await render();
     expect(container.textContent).toContain(
-      "You've used the free trial's AI usage. Starting the plan gives its full monthly allowance;",
+      'Your trial AI credit is used up. Start your plan now for its full monthly AI usage;',
     );
-    expect(links()).toEqual([
-      ['Start your plan', '/dashboard/settings/billing'],
-      ['Use your own key', '/dashboard/settings/ai-providers'],
-    ]);
+    expect(container.textContent).not.toContain('%');
+    expect(buttons()).toEqual(['Start my plan now']);
+    expect(links()).toEqual([['Use your own key', '/dashboard/settings/ai-providers']]);
     expect(container.textContent).not.toContain('Get more AI usage');
+  });
 
-    // A member who isn't an admin can't start it: asked to ask one, no links.
+  it('asks other members of a trial to have an admin start the plan', async () => {
+    state.usage = usage({ trial: true });
     await render('analyst');
-    expect(container.textContent).toContain('ask an admin of your workspace');
+    expect(container.textContent).toContain(
+      'To start the plan now, ask an admin of your workspace.',
+    );
+    expect(buttons()).toEqual([]);
+    expect(links()).toEqual([['See usage', '/dashboard/settings/billing#ai-usage']]);
+
+    state.usage = usage({ trial: true, percentUsed: 100 });
+    await render('manager');
+    expect(container.textContent).toContain(
+      'To start the plan now, ask an admin of your workspace.',
+    );
+    expect(buttons()).toEqual([]);
     expect(links()).toEqual([]);
   });
 
