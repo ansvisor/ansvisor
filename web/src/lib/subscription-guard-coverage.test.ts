@@ -40,6 +40,7 @@ const SCHEMA = join(__dirname, '../../../supabase/schema.sql');
  */
 const OPEN_ACTIONS: Record<string, string> = {
   'organization.ts:updateAccountName': "the person's own profile",
+  'chat-prefs.ts:saveChatMenuOpen': "the person's own Chat layout, no cost",
   'team.ts:acceptInvitation': "the invited person's own account joins",
   'team.ts:revokeInvitation': 'takes back access, never gives it',
   'team.ts:removeMember': 'takes back access, never gives it',
@@ -95,6 +96,10 @@ const OPEN_ROUTES: Record<string, string> = {
   'traffic/read:POST': 'reads only',
   // Chat's runs: the engine answers 402 with the server's body itself
   // (startChatRun, prepareResume), but for a request to the Admins.
+  'chat/conversations:POST': 'an empty chat of your own starts no cost; its first message is a run, which the engine refuses with 402',
+  'chat/conversations/[id]:DELETE': 'deleting your own chat starts no cost, as the old Agent chats (#1613)',
+  'chat/conversations/[id]/read:POST': 'marking your own chat read starts no cost',
+  'chat/conversations/[id]/restore:POST': 'undoing a delete starts no cost',
   'chat/runs:POST': 'the engine refuses a read-only workspace with the 402 body (startChatRun)',
   'chat/runs/[id]/approve:POST': 'the engine answers 402 (prepareResume), but for Ask your Admin',
   'chat/runs/[id]/skip:POST': 'saying no to a change starts no cost',
