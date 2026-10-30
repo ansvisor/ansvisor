@@ -6,6 +6,7 @@ import { MobileNav } from '@/components/layout/mobile-nav';
 import { AuthProvider } from '@/components/providers/auth-provider';
 import { PlanProvider } from '@/components/providers/plan-provider';
 import { AiUsageProvider } from '@/components/providers/ai-usage-provider';
+import { GetMoreProvider } from '@/components/ai-usage/get-more';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import { MenuAccessProvider } from '@/components/providers/menu-access-provider';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
@@ -30,7 +31,9 @@ import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-pro
 import { DemoBrandProvider } from '@/components/providers/demo-brand-provider';
 import { ReadOnlyBanner } from '@/components/billing/read-only-banner';
 import { DemoBanner } from '@/components/billing/demo-banner';
+import { PlanEndsBanner } from '@/components/billing/plan-ends-banner';
 import { TrackingJobHandoff } from '@/components/layout/tracking-job-handoff';
+import { FirstRunReady } from '@/components/layout/first-run-ready';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -67,7 +70,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ] = await Promise.all([
     supabase
       .from('organizations')
-      .select('plan, subscription_status, plan_overrides, stripe_subscription_id')
+      .select(
+        'plan, subscription_status, plan_overrides, stripe_subscription_id, subscription_ends_at, cancel_at_period_end',
+      )
       .eq('id', profile.organization_id)
       .single(),
     getBrands(profile.organization_id),
@@ -204,6 +209,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         allowedModelIds={allowedModelIds}
         subscriptionActive={subscriptionActive}
         subscriptionStatus={subscriptionStatus}
+        planEndsAt={org?.cancel_at_period_end ? (org.subscription_ends_at as string | null) : null}
       >
         <RoleProvider role={role}>
           <ChatAgenticProvider enabled={chatOn}>
@@ -218,30 +224,35 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 <GettingStartedPageOpened />
                 <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
                   <AiUsageProvider>
-                    <ChatPanelProvider setup={chatPanel}>
-                      <div className="flex h-screen overflow-hidden">
-                        {/* Desktop sidebar */}
-                        <div className="relative hidden md:flex md:flex-shrink-0">
-                          <SidebarErrorBoundary>
-                            <Sidebar />
-                          </SidebarErrorBoundary>
-                        </div>
-
-                        {/* Main area, beside Chat's side panel when it is open */}
-                        <ChatPanelPage className="flex flex-1 flex-col overflow-hidden">
-                          <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
-                            <MobileNav />
+                    {/* The Get more window, for every limit on the page (CHAT-18 §B item 6). */}
+                    <GetMoreProvider>
+                      <ChatPanelProvider setup={chatPanel}>
+                        <div className="flex h-screen overflow-hidden">
+                          {/* Desktop sidebar */}
+                          <div className="relative hidden md:flex md:flex-shrink-0">
+                            <SidebarErrorBoundary>
+                              <Sidebar />
+                            </SidebarErrorBoundary>
                           </div>
-                          <ReadOnlyBanner />
-                          <DemoBanner />
-                          <main className="flex-1 overflow-y-auto bg-background p-6">
-                            <BrandGuard>{children}</BrandGuard>
-                          </main>
-                          <TrackingJobHandoff />
-                        </ChatPanelPage>
-                      </div>
-                      {chatPanel.enabled && <ChatSidePanelSlot />}
-                    </ChatPanelProvider>
+
+                          {/* Main area, beside Chat's side panel when it is open */}
+                          <ChatPanelPage className="flex flex-1 flex-col overflow-hidden">
+                            <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
+                              <MobileNav />
+                            </div>
+                            <ReadOnlyBanner />
+                            <PlanEndsBanner />
+                            <DemoBanner />
+                            <main className="flex-1 overflow-y-auto bg-background p-6">
+                              <BrandGuard>{children}</BrandGuard>
+                            </main>
+                            <TrackingJobHandoff />
+                            <FirstRunReady />
+                          </ChatPanelPage>
+                        </div>
+                        {chatPanel.enabled && <ChatSidePanelSlot />}
+                      </ChatPanelProvider>
+                    </GetMoreProvider>
                   </AiUsageProvider>
                 </MenuAccessProvider>
               </UpgradeDialogProvider>

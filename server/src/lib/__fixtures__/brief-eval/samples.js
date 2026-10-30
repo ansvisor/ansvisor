@@ -23,7 +23,7 @@ export const GOOD = {
       heading: 'Rolling cash forecast vs a static budget, side by side',
       keyPoints: [
         'A table comparing update cadence, accuracy and effort.',
-        'Fact to state: how far forecasts drift, from [figure, source] (a study).',
+        'Fact to state: how far forecasts drift, from a study.',
       ],
       fanout: 'rolling cash forecast vs static budget',
       platform: 'copilot-web',
@@ -67,7 +67,8 @@ export const BAD = {
     {
       heading: 'Cash forecasting cash forecasting software best cash forecasting',
       keyPoints: [
-        '73% of CFOs say forecasts fail, per https://made-up.example/report.',
+        '73% of CFOs say forecasts fail.',
+        'Read the CFO survey at https://made-up.example/report.',
         'Dr. Jane Doe recommends Ledgerly.',
       ],
       fanout: '13 week cash flow forecast template',
@@ -90,7 +91,7 @@ export const GOOD_JUDGED = {
     {
       key: 'sourcedFacts',
       score: 1,
-      quote: 'Fact to state: how far forecasts drift, from [figure, source] (a study).',
+      quote: 'Fact to state: how far forecasts drift, from a study.',
       why: 'One fact, with its kind of source.',
     },
     {

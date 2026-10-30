@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { ListDot } from '@/components/agentic/list-dot';
 import { Badge } from '@/components/ui/badge';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { cn } from '@/lib/utils';
@@ -64,5 +65,26 @@ export function AgentStateBadge({ state }: { state: Exclude<AgentState, null> })
       {state === 'writing' && <LoadingDots />}
       {t(state)}
     </Badge>
+  );
+}
+
+/**
+ * The agent's state as Chat lists a run (Chat agentic plan §2, "List status
+ * dot"), with the new Chat on: the running dot while it writes, the red one
+ * once it failed, and the same words beside it.
+ */
+export function AgentStateLine({ state }: { state: Exclude<AgentState, null> }) {
+  const t = useTranslations('contentEditor.agentState');
+  return (
+    <span
+      data-slot="agent-state-line"
+      className={cn(
+        'inline-flex items-center gap-1.5 text-xs',
+        state === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground',
+      )}
+    >
+      <ListDot state={state === 'writing' ? 'running' : 'failed'} decorative />
+      {t(state)}
+    </span>
   );
 }

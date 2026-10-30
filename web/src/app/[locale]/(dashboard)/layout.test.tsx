@@ -84,6 +84,7 @@ vi.mock('@/components/layout/sidebar', () => ({ Sidebar: none }));
 vi.mock('@/components/layout/sidebar-error-boundary', () => ({ SidebarErrorBoundary: pass }));
 vi.mock('@/components/layout/mobile-nav', () => ({ MobileNav: none }));
 vi.mock('@/components/layout/tracking-job-handoff', () => ({ TrackingJobHandoff: none }));
+vi.mock('@/components/layout/first-run-ready', () => ({ FirstRunReady: none }));
 // Chat's side panel has its own tests; here, only where the layout puts it,
 // the setup the layout hands it, and that its code isn't loaded with the page.
 const panel = vi.hoisted(() => ({
@@ -110,6 +111,7 @@ const ownKey = vi.hoisted(() => ({ chatRunsOnOwnKey: vi.fn(async () => false) })
 vi.mock('@/lib/chat/key', () => ownKey);
 vi.mock('@/components/providers/auth-provider', () => ({ AuthProvider: none }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({ AiUsageProvider: pass }));
+vi.mock('@/components/ai-usage/get-more', () => ({ GetMoreProvider: pass }));
 // The brands the layout hands the brand store (the store is marked loaded
 // in beforeEach, as BrandLoader leaves it).
 let loaded: { id: string }[] = [];

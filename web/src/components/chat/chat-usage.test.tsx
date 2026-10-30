@@ -19,6 +19,9 @@ vi.mock('@/i18n/navigation', () => ({
   ),
 }));
 
+const getMore = vi.hoisted(() => ({ open: null as ((tab?: string) => void) | null }));
+vi.mock('@/components/ai-usage/get-more-context', () => ({ useGetMore: () => getMore.open }));
+
 const prefs = vi.hoisted(() => ({ saveUsageNoticePeriod: vi.fn(async () => ({ ok: true })) }));
 vi.mock('@/lib/actions/chat-prefs', () => prefs);
 
@@ -41,12 +44,12 @@ const usage = (over: Partial<AiUsage> = {}): AiUsage => ({
 
 let container: HTMLDivElement;
 let root: Root;
-async function render(seenPeriod: string | null = null) {
+async function render(seenPeriod: string | null = null, onOwnKey = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <RoleProvider role="admin">
-          <ChatUsageNotice seenPeriod={seenPeriod} />
+          <ChatUsageNotice seenPeriod={seenPeriod} onOwnKey={onOwnKey} />
         </RoleProvider>
       </NextIntlClientProvider>,
     );
@@ -117,5 +120,32 @@ describe('ChatUsageNotice', () => {
     state.usage = usage({ percentUsed: 40 });
     await render();
     expect(container.innerHTML).toBe('');
+  });
+
+  it('opens the Get more window once a period at the cap, and never for the trial', async () => {
+    getMore.open = vi.fn();
+    state.usage = usage({ percentUsed: 100, trial: true });
+    await render();
+    expect(getMore.open).not.toHaveBeenCalled();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    state.usage = usage({ percentUsed: 100, periodStart: '2026-12-01T00:00:00.000Z' });
+    await render();
+    expect(getMore.open).toHaveBeenCalledWith('ai');
+    // Another chat at the same cap: not again.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    expect(getMore.open).toHaveBeenCalledTimes(1);
+    getMore.open = null;
+  });
+
+  it('never opens the Get more window on the workspace’s own key: Chat isn’t paused there', async () => {
+    getMore.open = vi.fn();
+    state.usage = usage({ percentUsed: 100, periodStart: '2027-01-01T00:00:00.000Z' });
+    await render(null, true);
+    expect(getMore.open).not.toHaveBeenCalled();
+    getMore.open = null;
   });
 });

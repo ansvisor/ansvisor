@@ -247,8 +247,12 @@ export function StartChoicePicker({
   const tOffer = useTranslations('planOffer');
   const saving = Math.max(0, ...SUBSCRIBABLE_PLANS.map((id) => annualSaving(id) ?? 0));
   const choices: StartChoice[] = trialOffered ? ['trial', 'month', 'year'] : ['month', 'year'];
-  const pill =
-    'rounded-full bg-emerald-100 px-1.5 text-xs font-medium whitespace-nowrap text-emerald-700 @max-lg:text-[11px] dark:bg-emerald-950/50 dark:text-emerald-400';
+  const pill = (selected: boolean) =>
+    cn(
+      'rounded-full bg-emerald-100 px-1.5 text-xs font-medium whitespace-nowrap text-emerald-700 @max-lg:text-[11px] dark:bg-emerald-950/50 dark:text-emerald-400',
+      // On the chosen one's light fill (dark theme), a solid ground keeps it legible.
+      selected && 'dark:bg-emerald-950',
+    );
 
   // In a narrow space (Billing beside the settings menu) the choices keep one
   // row, each with its word under its name, rather than wrapping.
@@ -269,8 +273,10 @@ export function StartChoicePicker({
             onClick={() => onChange(value)}
             className={cn(
               'inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 @max-lg:flex-col @max-lg:gap-0.5 @max-lg:px-1.5',
+              // The chosen one filled, as the site's other toggles (date range,
+              // market): dark on light, light on dark.
               choice === value
-                ? 'bg-background text-foreground shadow-sm'
+                ? 'bg-primary text-primary-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
@@ -280,10 +286,14 @@ export function StartChoicePicker({
                 ? tOffer('choice.month')
                 : tOffer('choice.year')}
             {value === 'month' && offer && (
-              <span className={pill}>{tOffer('choice.monthOffer', offerValues(offer))}</span>
+              <span className={pill(choice === value)}>
+                {tOffer('choice.monthOffer', offerValues(offer))}
+              </span>
             )}
             {value === 'year' && saving > 0 && (
-              <span className={pill}>{tSettings('savePercent', { percent: saving })}</span>
+              <span className={pill(choice === value)}>
+                {tSettings('savePercent', { percent: saving })}
+              </span>
             )}
           </button>
         ))}

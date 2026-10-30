@@ -294,7 +294,7 @@ export function shoppingPrompt(path) {
         const offer = offerLine(p.item);
         return `- ${p.title}${offer ? `: ${offer}` : ''}`;
       }),
-      "About these products, write only what is given here and in your data, a price as given (its currency's sign may stand for its code). Never write a price, size, weight or other spec that isn't; write a placeholder in square brackets instead.",
+      "About these products, write only what is given here and in your data, a price as given (its currency's sign may stand for its code). Never write a price, size, weight or other spec that isn't, and never look one up: leave it out.",
     );
   }
   return lines.join('\n');

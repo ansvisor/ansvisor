@@ -193,6 +193,27 @@ describe('POST /api/internal/chat/budget/*', () => {
       modelId: 'anthropic/claude-sonnet-5.5',
       usage: { inputTokens: 4000, outputTokens: 800 },
     });
+    // The prompt cache's reads and writes, and how long the call took.
+    res = await post('charge', {
+      orgId: ORG,
+      usageId: USAGE,
+      model: 'anthropic/claude-sonnet-5.5',
+      usage: { inputTokens: 4000, outputTokens: 800, cacheReadTokens: 3000, cacheWriteTokens: 500 },
+      latencyMs: 1830,
+    });
+    expect(res.status).toBe(200);
+    expect(chargeChatStep).toHaveBeenLastCalledWith(ORG, USAGE, {
+      modelId: 'anthropic/claude-sonnet-5.5',
+      usage: { inputTokens: 4000, outputTokens: 800, cacheReadTokens: 3000, cacheWriteTokens: 500 },
+      latencyMs: 1830,
+    });
+    for (const bad of [
+      { usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: -1 } },
+      { usage: { inputTokens: 1, outputTokens: 1 }, latencyMs: 1.5 },
+    ]) {
+      res = await post('charge', { orgId: ORG, usageId: USAGE, model: 'm', ...bad });
+      expect(res.status).toBe(400);
+    }
     // A cost from the web is never taken.
     res = await post('charge', {
       orgId: ORG,

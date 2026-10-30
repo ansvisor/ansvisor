@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRun } from '@/lib/content/agent-runs';
 import messages from '../../../../../../../../messages/en.json';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
+import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import { AgentCard, rulesAfter, type CardRules } from './_agent-card';
 
 vi.mock('@/i18n/navigation', () => ({
@@ -230,6 +231,39 @@ describe('AgentCard', () => {
     expect(buttons()).toEqual(['Compare', 'Reject', 'Accept']);
   });
 
+  it('works under Chat’s avatar and says the page can be left, with the new Chat on only', async () => {
+    const working = (chatOn: boolean, onServer = true) =>
+      act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages}>
+            <ChatAgenticProvider enabled={chatOn}>
+              <AgentCard
+                suggestions={[]}
+                rules={rules}
+                busy={false}
+                working
+                onServer={onServer}
+                {...handlers}
+              />
+            </ChatAgenticProvider>
+          </NextIntlClientProvider>,
+        );
+      });
+    await working(true);
+    expect(container.querySelector('[data-slot="agent-avatar"]')?.getAttribute('data-state')).toBe(
+      'working',
+    );
+    expect(container.textContent).toContain("You can leave this page. I'll keep going.");
+    // Still in the browser (the brief's prompts and sources): leaving would lose it.
+    await working(true, false);
+    expect(container.querySelector('[data-slot="agent-avatar"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('You can leave this page');
+    // Chat off: the card as it was.
+    await working(false);
+    expect(container.querySelector('[data-slot="agent-avatar"]')).toBeNull();
+    expect(container.textContent).not.toContain('You can leave this page');
+  });
+
   it('says how many placeholders the result leaves to fill', async () => {
     const page = suggestion({
       kind: 'page',
@@ -240,7 +274,9 @@ describe('AgentCard', () => {
     });
     await render([page], false);
     // Two new: the one the page had isn't the run's.
-    expect(container.textContent).toContain('answered each heading first · 2 placeholders to fill');
+    expect(container.textContent).toContain(
+      'answered each heading first · 2 facts need your input',
+    );
     // A list the agent wrote without paragraphs in its items: read by their words.
     await render(
       [
@@ -254,7 +290,7 @@ describe('AgentCard', () => {
       ],
       false,
     );
-    expect(container.textContent).toContain('kept the list · 1 placeholder to fill');
+    expect(container.textContent).toContain('kept the list · 1 fact needs your input');
     await render(
       [
         suggestion({ afterText: 'look at [figure, source]' }),
@@ -262,7 +298,7 @@ describe('AgentCard', () => {
       ],
       false,
     );
-    expect(container.textContent).toContain('1 placeholder to fill');
+    expect(container.textContent).toContain('1 fact needs your input');
   });
 
   it('reads a rewrite against the Length, not the agent’s say, and says what it kept', async () => {

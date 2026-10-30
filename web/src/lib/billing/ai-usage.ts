@@ -48,6 +48,11 @@ export interface AiUsage {
    * missing from an older API: off). Off, it runs on the workspace's own key.
    */
   chatMetered?: boolean;
+  /**
+   * Purchased AI credits are left (CHAT-18 §F, with Chat on): AI calls go on
+   * running on them past 100% of the allowance. Missing: none.
+   */
+  creditsLeft?: boolean;
 }
 
 /** A count against its plan's limit this period. */
@@ -110,10 +115,13 @@ export function aiUsageFromApi(raw: AiUsage): AiUsage {
   };
 }
 
-/** Warning from 80% of the allowance, used up at 100%. */
+/**
+ * Warning from 80% of the allowance, used up at 100%, unless purchased AI
+ * credits are left: the calls run on them then, so it stays a warning.
+ */
 export function aiUsageTone(usage: AiUsage): UsageTone {
   if (usage.unlimited || usage.percentUsed === null) return 'unlimited';
-  if (usage.percentUsed >= 100) return 'exhausted';
+  if (usage.percentUsed >= 100) return usage.creditsLeft ? 'warning' : 'exhausted';
   return usage.percentUsed >= USAGE_WARNING_RATIO * 100 ? 'warning' : 'normal';
 }
 
