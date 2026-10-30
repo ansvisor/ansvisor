@@ -24,6 +24,8 @@ import { formatTrafficBucketDate } from './_charts';
 import { getUntrackedGoogleQueries } from '@/lib/traffic-reads';
 import { useRangeReady } from './_range-ready';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useTopicFirstDialog } from '@/components/prompts/topic-first';
+import { isNoTopics } from '@/lib/topics-required';
 
 /**
  * Prompt slots left on the plan: null when the plan has no cap, or it
@@ -62,6 +64,8 @@ export function UntrackedQueriesCard({
   // upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  // A brand with no topic yet: Track asks for one first.
+  const topicFirst = useTopicFirstDialog();
   // Tracking reads the list again: the tracked queries leave it.
   const [reloads, setReloads] = useState(0);
   const key = `${brandId}|${dateWindow.dateFrom ?? ''}|${dateWindow.dateTo ?? ''}|${reloads}`;
@@ -120,7 +124,9 @@ export function UntrackedQueriesCard({
       setTracking(new Set());
       const tracked = outcome.promptIds.length;
       if (tracked > 0) toast.success(t('tracked', { count: tracked }));
-      if (outcome.error) {
+      if (isNoTopics(outcome)) {
+        topicFirst.show();
+      } else if (outcome.error) {
         toast.error(
           outcome.code === 'plan_limit'
             ? t('planLimit', { count: queries.length - tracked })
@@ -243,6 +249,7 @@ export function UntrackedQueriesCard({
             ? `${t('legend')} ${t('slotsLeft', { count: slotsLeft })}`
             : t('legend')}
         </p>
+        {topicFirst.dialog}
       </CardContent>
     </Card>
   );

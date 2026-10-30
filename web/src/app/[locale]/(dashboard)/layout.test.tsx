@@ -84,6 +84,7 @@ vi.mock('@/components/layout/sidebar', () => ({ Sidebar: none }));
 vi.mock('@/components/layout/sidebar-error-boundary', () => ({ SidebarErrorBoundary: pass }));
 vi.mock('@/components/layout/mobile-nav', () => ({ MobileNav: none }));
 vi.mock('@/components/layout/tracking-job-handoff', () => ({ TrackingJobHandoff: none }));
+vi.mock('@/components/layout/first-run-ready', () => ({ FirstRunReady: none }));
 // Chat's side panel has its own tests; here, only where the layout puts it,
 // the setup the layout hands it, and that its code isn't loaded with the page.
 const panel = vi.hoisted(() => ({

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 let status: string | null;
+let plan: string;
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
     from: (table: string) => {
@@ -16,7 +17,7 @@ vi.mock('@/lib/supabase/admin', () => ({
           ? { id: 'key-1', user_id: 'user-1', revoked_at: null }
           : table === 'profiles'
             ? { organization_id: 'org-1', role: 'analyst' }
-            : { subscription_status: status };
+            : { plan, subscription_status: status };
       const query = {
         select: () => query,
         eq: () => query,
@@ -41,6 +42,7 @@ const request = (method: string) =>
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   status = 'canceled';
+  plan = 'growth';
 });
 
 afterEach(() => {
@@ -81,5 +83,34 @@ describe('authenticateMcpRequest on a read-only workspace', () => {
   it('never gates self-hosted', async () => {
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
     expect(await authenticateMcpRequest(request('POST'))).toMatchObject({ apiKeyId: 'key-1' });
+  });
+});
+
+describe('authenticateMcpRequest per plan (DECISIONS S, 2026-10-30)', () => {
+  it.each([
+    ['starter', 'active'],
+    ['growth', 'trialing'],
+  ])('answers a write on %s (%s) with 402 plan_required, and lets reads through', async (p, s) => {
+    plan = p;
+    status = s;
+    expect(await authenticateMcpRequest(request('GET'))).toMatchObject({ apiKeyId: 'key-1' });
+    const res = (await authenticateMcpRequest(request('PATCH'))) as Response;
+    expect(res.status).toBe(402);
+    expect(await res.json()).toMatchObject({ code: 'plan_required', required_plan: 'growth' });
+  });
+
+  it.each([
+    ['growth', 'active'],
+    ['enterprise', 'trialing'],
+  ])('lets a write through on %s (%s)', async (p, s) => {
+    plan = p;
+    status = s;
+    expect(await authenticateMcpRequest(request('POST'))).toMatchObject({ apiKeyId: 'key-1' });
+  });
+
+  it('answers a plan that ended with subscription_inactive first', async () => {
+    plan = 'starter';
+    const res = (await authenticateMcpRequest(request('POST'))) as Response;
+    expect(await res.json()).toMatchObject({ code: 'subscription_inactive' });
   });
 });
