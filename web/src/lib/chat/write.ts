@@ -12,7 +12,8 @@ import { undoRule, type WriteRecord } from './undo';
  * state Undo needs is read around it (undo.ts), and the Activity log gets
  * its row (activity.ts) with the mode, the approval and the Undo window.
  * A repeat of the approval (a double click, a reconnect, a retry) returns
- * the first call's result and log row and changes nothing. Server only: the
+ * the first call's result and log row and changes nothing. An action that
+ * refused as a value ({ ok: false }) changed nothing and gets no row. Server only: the
  * engine (C3) calls it for each change a run makes.
  */
 
@@ -56,6 +57,13 @@ export type WriteOutcome =
 const toJson = (value: unknown): Json =>
   value === undefined ? null : (JSON.parse(JSON.stringify(value)) as Json);
 
+/** An action's refusal as a value ({ ok: false }, #427): nothing changed, so nothing is logged. */
+const refused = (output: unknown): boolean =>
+  !!output &&
+  typeof output === 'object' &&
+  !Array.isArray(output) &&
+  (output as { ok?: unknown }).ok === false;
+
 /**
  * Never throws for a failure on the way (the engine and server actions call
  * it): `failed`. Only a call against the rules (a read, an EXECUTE without
@@ -90,10 +98,12 @@ async function run(req: WriteRequest): Promise<WriteOutcome> {
       const output = await tool.run(req.ctx, req.input as never);
       // The change is made: whatever happens to its log row, it isn't made again.
       let activityId: string | null = null;
-      try {
-        activityId = await logActivity(await activityOf(req, rule, before, output));
-      } catch (err) {
-        console.error('Chat could not log a change it made:', err);
+      if (!refused(output)) {
+        try {
+          activityId = await logActivity(await activityOf(req, rule, before, output));
+        } catch (err) {
+          console.error('Chat could not log a change it made:', err);
+        }
       }
       return { result: toJson(output), activityId };
     },

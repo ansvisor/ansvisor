@@ -5,6 +5,7 @@ import { importLegacyChats } from '@/lib/chat/legacy-import';
 import { chatRunsOnOwnKey } from '@/lib/chat/key';
 import { CAREFUL_SETUP, composerSetupOf, type ChatComposerSetup } from '@/lib/chat/composer-setup';
 import { readPrecedenceContext } from '@/lib/chat/precedence-context';
+import { isChatStaff } from '@/lib/chat/staff';
 
 export { composerSetupOf, type ChatComposerSetup };
 
@@ -29,6 +30,8 @@ export interface ChatShellPrefs {
   menuOpen: boolean;
   /** The app sidebar expanded beside Chat, or the rail (the default; CHAT-01 4f). */
   railOpen: boolean;
+  /** Ansvisor staff (STAFF_EMAILS): the chat's ⋯ menu offers Debug (CHAT-03 item 25). */
+  staff: boolean;
 }
 
 /**
@@ -60,7 +63,11 @@ export async function chatShellPrefs(): Promise<ChatShellPrefs | null> {
   if (organizationId && !error && !prefs?.legacy_imported_at) {
     await importLegacyChats({ userId: user.id, email: user.email ?? null, organizationId });
   }
-  return { menuOpen: prefs?.menu_open ?? true, railOpen: prefs?.rail_open ?? false };
+  return {
+    menuOpen: prefs?.menu_open ?? true,
+    railOpen: prefs?.rail_open ?? false,
+    staff: isChatStaff(user),
+  };
 }
 
 /**

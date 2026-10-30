@@ -8,8 +8,17 @@ import {
   ORG,
   OTHER_ORG,
   PEOPLE,
+  COMPETITOR,
+  PROMPT,
   SUGGESTION,
+  TOPIC,
   fakeCreateDraft,
+  fakeAddBrandTopic,
+  fakeAddCompetitors,
+  fakeAddTopicPrompts,
+  fakePauseBrandPrompts,
+  fakeRemoveBrandCompetitor,
+  fakeRenameBrandTopic,
   fakeDismissSuggestion,
   fakeUpdateOpportunity,
   seedWorkspace,
@@ -28,12 +37,21 @@ vi.mock('@/lib/supabase/admin', async () => ({
 vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }));
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
+vi.mock('@/lib/actions/prompt', () => ({ addTopicPrompts: vi.fn(), pauseBrandPrompts: vi.fn() }));
+vi.mock('@/lib/actions/topic', () => ({ addBrandTopic: vi.fn(), renameBrandTopic: vi.fn() }));
+vi.mock('@/lib/actions/competitor', () => ({
+  addCompetitors: vi.fn(),
+  removeBrandCompetitor: vi.fn(),
+}));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
+const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
+const { addBrandTopic, renameBrandTopic } = await import('@/lib/actions/topic');
+const { addCompetitors, removeBrandCompetitor } = await import('@/lib/actions/competitor');
 const { runLoggedWrite } = await import('./write');
 const { undoChange, undoRule, UNDO_RULES } = await import('./undo');
 const { chatTool, CHAT_TOOLS } = await import('./registry/tools');
@@ -48,6 +66,12 @@ beforeEach(() => {
   vi.mocked(createContentDraft).mockImplementation(fakeCreateDraft(db) as never);
   vi.mocked(updateOpportunityStatus).mockImplementation(fakeUpdateOpportunity(db) as never);
   vi.mocked(dismissSuggestion).mockImplementation(fakeDismissSuggestion(db) as never);
+  vi.mocked(addTopicPrompts).mockImplementation(fakeAddTopicPrompts(db) as never);
+  vi.mocked(pauseBrandPrompts).mockImplementation(fakePauseBrandPrompts(db) as never);
+  vi.mocked(addBrandTopic).mockImplementation(fakeAddBrandTopic(db) as never);
+  vi.mocked(renameBrandTopic).mockImplementation(fakeRenameBrandTopic(db) as never);
+  vi.mocked(addCompetitors).mockImplementation(fakeAddCompetitors(db) as never);
+  vi.mocked(removeBrandCompetitor).mockImplementation(fakeRemoveBrandCompetitor(db) as never);
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -102,6 +126,17 @@ describe('every WRITE row has an Undo', () => {
     expect(UNDO_RULES.create_draft.windowMs).toBe(30 * DAY);
     expect(UNDO_RULES.update_opportunity.windowMs).toBe(7 * DAY);
     expect(UNDO_RULES.dismiss_prompt_suggestion.windowMs).toBe(7 * DAY);
+    // §9 rows 20–32: pausing keeps the prompts' history, so its Undo stays open 30 days.
+    expect(UNDO_RULES.pause_prompts.windowMs).toBe(30 * DAY);
+    for (const name of [
+      'add_prompts',
+      'add_topic',
+      'rename_topic',
+      'add_competitors',
+      'remove_competitor',
+    ]) {
+      expect(UNDO_RULES[name].windowMs).toBe(7 * DAY);
+    }
     for (const tool of writes) {
       expect(undoRule(tool)).not.toBeNull();
       expect(messages.chatActivity.summary).toHaveProperty(tool.labelKey);
@@ -447,5 +482,203 @@ describe('request_access: withdraw it while it waits', () => {
     expect(await rule.inverse({ id: OPPORTUNITY, brandId: null, data: {} })).toBe('changed');
     expect(db.tables.chat_access_requests[1]).toMatchObject({ status: 'approved' });
     expect(await rule.inverse({ id: SUGGESTION, brandId: null, data: {} })).toBe('gone');
+  });
+});
+
+describe('the tracking setup: prompts, topics and competitors (W2-06)', () => {
+  const prompt = (id: unknown) => db.tables.prompts.find((row) => row.id === id)!;
+  const topicNamed = (name: string) => db.tables.topics.find((row) => row.name === name);
+
+  it('add_prompts: pauses the prompts it added, and only those', async () => {
+    const row = await change(PEOPLE.manager, 'add_prompts', {
+      brand_id: BRAND,
+      topic_id: TOPIC,
+      prompts: ['crm for agencies', 'crm for law firms'],
+    });
+    expect(row).toMatchObject({
+      target_type: 'topic',
+      target_id: TOPIC,
+      summary_key: 'trackPrompts',
+      summary_params: { topic: 'Pricing', prompts: '“crm for agencies”, “crm for law firms”' },
+    });
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    const added = db.tables.prompts.filter((p) => p.id !== PROMPT);
+    expect(added.map((p) => p.is_active)).toEqual([false, false]);
+    expect(prompt(PROMPT).is_active).toBe(true);
+    expect(logRow(row.id).status).toBe('undone');
+  });
+
+  it('add_prompts: a conflict once someone paused them since', async () => {
+    const row = await change(PEOPLE.manager, 'add_prompts', {
+      brand_id: BRAND,
+      topic_id: TOPIC,
+      prompts: ['crm for agencies'],
+    });
+    for (const p of db.tables.prompts) if (p.id !== PROMPT) p.is_active = false;
+    expect(await undo(row.id)).toMatchObject({
+      code: 'conflict',
+      reason: 'changed',
+      href: `/dashboard/prompts/topics/${TOPIC}`,
+    });
+  });
+
+  it('pause_prompts: resumes what it paused while the plan has room, and not past it', async () => {
+    db.rpcs.org_prompt_location_usage = () => [{ brand_id: BRAND, locations: 0 }];
+    const row = await change(PEOPLE.manager, 'pause_prompts', {
+      brand_id: BRAND,
+      prompt_ids: [PROMPT],
+    });
+    expect(prompt(PROMPT).is_active).toBe(false);
+    expect(row).toMatchObject({ summary_key: 'pauseTracking', target_id: PROMPT });
+    // The plan's locations filled up since: nothing is resumed, and it says why (§11a).
+    db.rpcs.org_prompt_location_usage = () => [{ brand_id: BRAND, locations: 200 }];
+    const full = await undo(row.id);
+    expect(full).toMatchObject({ code: 'quota_exceeded' });
+    expect(full.message).toContain('active prompt locations');
+    expect(prompt(PROMPT).is_active).toBe(false);
+    expect(logRow(row.id).status).toBe('done');
+    db.rpcs.org_prompt_location_usage = () => [{ brand_id: BRAND, locations: 0 }];
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    expect(prompt(PROMPT).is_active).toBe(true);
+  });
+
+  it('add_topic: takes the topic away, unless prompts were tracked in it since', async () => {
+    const row = await change(PEOPLE.manager, 'add_topic', {
+      brand_id: BRAND,
+      name: 'Integrations',
+    });
+    const added = topicNamed('Integrations')!;
+    expect(row).toMatchObject({ target_type: 'topic', target_id: added.id });
+    db.tables.prompts.push({
+      id: 'p2',
+      prompt_set_id: 'set',
+      text: 'crm zapier',
+      topic_id: added.id,
+      is_active: true,
+    });
+    expect(await undo(row.id)).toMatchObject({ code: 'conflict', reason: 'changed' });
+    expect(topicNamed('Integrations')).toBeDefined();
+    db.tables.prompts = db.tables.prompts.filter((p) => p.id !== 'p2');
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    expect(topicNamed('Integrations')).toBeUndefined();
+  });
+
+  it('add_topic then add_prompts: undone in either order', async () => {
+    const topicRow = await change(PEOPLE.manager, 'add_topic', {
+      brand_id: BRAND,
+      name: 'Billing',
+    });
+    const billing = topicNamed('Billing')!;
+    const promptsRow = await change(PEOPLE.manager, 'add_prompts', {
+      brand_id: BRAND,
+      topic_id: billing.id,
+      prompts: ['crm invoicing'],
+    });
+    // The prompts first: paused, they don't hold the topic.
+    expect(await undo(promptsRow.id)).toMatchObject({ code: 'ok' });
+    expect(await undo(topicRow.id)).toMatchObject({ code: 'ok' });
+    expect(topicNamed('Billing')).toBeUndefined();
+  });
+
+  it('rename_topic: puts the name back, unless it was renamed again since', async () => {
+    const row = await change(PEOPLE.manager, 'rename_topic', {
+      topic_id: TOPIC,
+      name: 'Pricing and plans',
+    });
+    expect(row.summary_params).toEqual({ from: 'Pricing', to: 'Pricing and plans' });
+    db.tables.topics[0].name = 'Plans';
+    expect(await undo(row.id)).toMatchObject({ code: 'conflict', reason: 'changed' });
+    db.tables.topics[0].name = 'Pricing and plans';
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    expect(db.tables.topics[0].name).toBe('Pricing');
+  });
+
+  it('add_competitors: removes the ones it added', async () => {
+    const row = await change(PEOPLE.manager, 'add_competitors', {
+      brand_id: BRAND,
+      competitors: [{ name: 'Profound', domain: 'tryprofound.com' }],
+    });
+    expect(row.summary_params).toEqual({ competitors: '“Profound (tryprofound.com)”' });
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    expect(db.tables.competitors.map((c) => c.name)).toEqual(['Peec AI']);
+  });
+
+  it('remove_competitor: brings it back as it was, though its row was gone', async () => {
+    const before = { ...db.tables.competitors[0] };
+    const row = await change(PEOPLE.manager, 'remove_competitor', {
+      brand_id: BRAND,
+      competitor_id: COMPETITOR,
+    });
+    expect(db.tables.competitors).toEqual([]);
+    expect(row.summary_params).toEqual({ competitor: 'Peec AI (peec.ai)' });
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    expect(db.tables.competitors).toMatchObject([before]);
+  });
+
+  it('remove_competitor: opens its actions’ links again, which its removal closed', async () => {
+    db.tables.actions = [{ id: 'a1', brand_id: BRAND }];
+    db.tables.action_entities = [
+      {
+        action_id: 'a1',
+        entity_type: 'competitors',
+        entity_key: COMPETITOR,
+        removed_at: null,
+        removed_reason: null,
+      },
+    ];
+    const row = await change(PEOPLE.manager, 'remove_competitor', {
+      brand_id: BRAND,
+      competitor_id: COMPETITOR,
+    });
+    // As 00244's trigger does on delete.
+    Object.assign(db.tables.action_entities[0], {
+      removed_at: '2026-10-30T10:00:00.000Z',
+      removed_reason: 'deleted',
+    });
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    expect(db.tables.action_entities[0]).toMatchObject({ removed_at: null, removed_reason: null });
+  });
+
+  it('remove_competitor: a conflict once the domain was added again, written any way', async () => {
+    const row = await change(PEOPLE.manager, 'remove_competitor', {
+      brand_id: BRAND,
+      competitor_id: COMPETITOR,
+    });
+    db.tables.competitors.push({
+      id: 'c2',
+      brand_id: BRAND,
+      name: 'Peec',
+      domain: 'https://www.Peec.ai/',
+    });
+    expect(await undo(row.id)).toMatchObject({
+      code: 'conflict',
+      reason: 'changed',
+      href: '/dashboard/competitors',
+    });
+    expect(db.tables.competitors).toHaveLength(1);
+  });
+
+  it('logs nothing for a change the action refused: nothing changed', async () => {
+    const outcome = await runLoggedWrite({
+      tool: chatTool('remove_competitor')!,
+      input: { brand_id: BRAND, competitor_id: SUGGESTION },
+      ctx: {} as never,
+      organizationId: ORG,
+      userId: PEOPLE.manager,
+      brandId: BRAND,
+      surface: 'chat',
+      mode: 'auto',
+      approval: { kind: 'ask' },
+      place: { conversationId: null, runId: null, stepId: null },
+      approvalKey: `step-${++step}`,
+    });
+    expect(outcome).toMatchObject({ code: 'ok', activityId: null, output: { ok: false } });
+    expect(db.tables.chat_activity_log).toEqual([]);
+  });
+
+  it('an Analyst can’t undo a Manager’s setup change, as they can’t make one', async () => {
+    const row = await change(PEOPLE.analyst, 'add_topic', { brand_id: BRAND, name: 'Security' });
+    expect(await undo(row.id, PEOPLE.analyst)).toMatchObject({ code: 'denied' });
+    expect(topicNamed('Security')).toBeDefined();
   });
 });

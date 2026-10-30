@@ -24,6 +24,7 @@ import { menuTitleOf } from '@/lib/chat/page-context';
 import { PANEL_FROM_PARAM, panelReturnOf } from '@/lib/chat/panel';
 import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import { ChatActionsProvider, useChatActions } from './chat-actions';
+import { ChatDebugProvider } from './chat-debug';
 import { ChatCrumbContext } from './chat-crumb';
 import { inboxItems } from './chat-inbox';
 import { useChatList } from './chat-list-provider';
@@ -111,10 +112,21 @@ const PILL_OF: Partial<Record<string, StatusPillState>> = {
  * a new chat; `Ctrl K` opens the search palette under Search chats, or
  * under the strip's Search. The app sidebar beside it is untouched.
  */
-export function ChatShell(props: { menuOpen: boolean; railOpen?: boolean; children: ReactNode }) {
+export function ChatShell({
+  staff = false,
+  ...props
+}: {
+  menuOpen: boolean;
+  railOpen?: boolean;
+  /** Ansvisor staff (STAFF_EMAILS): the open chat's ⋯ menu offers Debug (W1-15). */
+  staff?: boolean;
+  children: ReactNode;
+}) {
   return (
     <ChatActionsProvider>
-      <ChatShellFrame {...props} />
+      <ChatDebugProvider staff={staff}>
+        <ChatShellFrame {...props} />
+      </ChatDebugProvider>
     </ChatActionsProvider>
   );
 }

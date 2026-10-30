@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { aiUsageFromApi, aiUsageToastDue, aiUsageToastMark, type AiUsage } from './ai-usage';
+import {
+  aiUsageFromApi,
+  aiUsageToastDue,
+  aiUsageToastMark,
+  aiUsageTone,
+  type AiUsage,
+} from './ai-usage';
 
 /** The AI usage toast (AI usage spec §4): once a period in a browser, on reaching 80%. */
 
@@ -72,5 +78,14 @@ describe('aiUsageFromApi', () => {
   it('keeps a new API’s answer as it is, a listed 0 and all', () => {
     const now = usage({ features: [{ feature: 'content', percent: 0 }] });
     expect(aiUsageFromApi(now)).toBe(now);
+  });
+});
+
+describe('aiUsageTone with purchased AI credits (CHAT-18)', () => {
+  it('is used up at 100% only when no credits are left: calls run on them past it', () => {
+    expect(aiUsageTone(usage({ percentUsed: 100 }))).toBe('exhausted');
+    expect(aiUsageTone(usage({ percentUsed: 100, creditsLeft: false }))).toBe('exhausted');
+    expect(aiUsageTone(usage({ percentUsed: 100, creditsLeft: true }))).toBe('warning');
+    expect(aiUsageTone(usage({ percentUsed: 50, creditsLeft: true }))).toBe('normal');
   });
 });

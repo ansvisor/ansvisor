@@ -5,10 +5,13 @@ import { stripe, priceIdFor } from '@/lib/stripe';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { periodEndIso } from '@/lib/billing/period-end';
 import { planChange, planRequestSchema, type BillingInterval } from '@/lib/billing/plan-purchase';
+import { planItemOf } from '@/lib/billing/add-ons';
 
 type SubscriptionItem = {
   id: string;
   current_period_end?: number;
+  // A storage pack's item names its purchase here (lib/billing/add-ons.ts).
+  metadata?: Record<string, string> | null;
   price: {
     unit_amount: number | null;
     recurring: { interval: string } | null;
@@ -82,7 +85,7 @@ export async function GET() {
       org.stripe_subscription_id as string,
     )) as unknown as SubscriptionRaw;
 
-    const item = sub.items.data[0];
+    const item = planItemOf(sub.items.data);
     const price = item?.price;
 
     return NextResponse.json({
@@ -102,15 +105,15 @@ export async function GET() {
   }
 }
 
-/** The subscription's billing period, from its first item's price. */
+/** The subscription's billing period, from its plan item's price. */
 function intervalOf(sub: SubscriptionRaw): BillingInterval | null {
-  const interval = sub.items.data[0]?.price?.recurring?.interval;
+  const interval = planItemOf(sub.items.data)?.price?.recurring?.interval;
   return interval === 'month' || interval === 'year' ? interval : null;
 }
 
 /** The subscription as GET returns it, after a change. */
 function subscriptionBody(planId: string, sub: SubscriptionRaw) {
-  const price = sub.items.data[0]?.price;
+  const price = planItemOf(sub.items.data)?.price;
   return {
     planId,
     status: sub.status,
@@ -157,6 +160,12 @@ export async function PATCH(req: NextRequest) {
       const updated = (await stripe.subscriptions.update(subscriptionId, {
         cancel_at_period_end: false,
       })) as unknown as SubscriptionRaw;
+      // Mirrored at once, as the webhook does after: the app-wide "plan
+      // ends" band goes on the next page (00386).
+      await supabaseAdmin
+        .from('organizations')
+        .update({ cancel_at_period_end: false })
+        .eq('id', org.id);
       return NextResponse.json({
         status: updated.status,
         cancelAtPeriodEnd: false,
@@ -167,7 +176,8 @@ export async function PATCH(req: NextRequest) {
     const currentSub = (await stripe.subscriptions.retrieve(
       subscriptionId,
     )) as unknown as SubscriptionRaw;
-    const itemId = currentSub.items.data[0]?.id;
+    // The plan's item: a storage pack's (CHAT-18) stays as it is.
+    const itemId = planItemOf(currentSub.items.data)?.id;
 
     if (!itemId) {
       return NextResponse.json({ error: 'Subscription item not found' }, { status: 400 });
@@ -242,10 +252,22 @@ export async function PATCH(req: NextRequest) {
 
     // Optimistic DB update. Stripe has already accepted the change, so this
     // is the server mirroring its own decision, not the caller writing their
-    // own plan — hence the service role, same as the webhook.
+    // own plan — hence the service role, same as the webhook. The period end
+    // too, as the webhook writes it: a trial bought now starts its first
+    // period today, and the monthly quotas, AI usage among them, count from
+    // that period (quotaPeriodStart), so the trial's usage is left behind at
+    // once rather than when the webhook lands. Buying a trial now resumes it
+    // too (cancel_at_period_end false, above): the app-wide "plan ends" band
+    // goes at once (00386).
+    const endsAt = periodEndIso(updated);
     await supabaseAdmin
       .from('organizations')
-      .update({ plan: change.planId, subscription_status: updated.status })
+      .update({
+        plan: change.planId,
+        subscription_status: updated.status,
+        ...(endsAt ? { subscription_ends_at: endsAt } : {}),
+        ...(change.kind === 'buy_now' ? { cancel_at_period_end: false } : {}),
+      })
       .eq('id', org.id);
 
     // Align prompts to the new plan's engine set so an upgrade actually
@@ -298,6 +320,16 @@ export async function DELETE() {
     const updated = (await stripe.subscriptions.update(org.stripe_subscription_id as string, {
       cancel_at_period_end: true,
     })) as unknown as SubscriptionRaw;
+    // Mirrored at once, as the webhook does after: every page shows when the
+    // plan ends (00386), with its period end.
+    const endsAt = periodEndIso(updated);
+    await supabaseAdmin
+      .from('organizations')
+      .update({
+        cancel_at_period_end: true,
+        ...(endsAt ? { subscription_ends_at: endsAt } : {}),
+      })
+      .eq('id', org.id);
 
     return NextResponse.json({
       cancelAtPeriodEnd: true,

@@ -40,4 +40,4 @@ To download several files at once, tick them and click **Download selected**. Yo
 
 The meter at the top right shows how much storage your workspace uses, for example "Storage 2.1 of 25 GB". Your plan includes 1 GB in the free trial, 5 GB on Starter, 25 GB on Growth, and what your contract says on Enterprise. The meter turns amber at 80%.
 
-When storage is full, a line under the title says so. Chat still shows new work in its chat as a card, but it isn't saved to Files, so the card can't copy or download it; the answer above it can still be copied and downloaded. Files you already have are never deleted because storage is full.
+When storage is full, a line under the title says so. Chat still shows new work in its chat as a card, but it isn't saved to Files, so the card can't copy or download it; the answer above it can still be copied and downloaded. Files you already have are never deleted because storage is full. Click **Get more storage** on that line, on the card, or on the meter to add a storage pack.

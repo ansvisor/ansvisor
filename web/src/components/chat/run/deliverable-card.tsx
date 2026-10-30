@@ -18,6 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useGetMore } from '@/components/ai-usage/get-more-context';
 import { Link } from '@/i18n/navigation';
 import type { ChatDeliverable } from '@/lib/chat/events';
 import { saveBlob } from '@/lib/download';
@@ -76,6 +77,7 @@ export function DeliverableCard({
 }) {
   const t = useTranslations('chatDeliverable');
   const tFormats = useTranslations('chatAnswer.formats');
+  const openGetMore = useGetMore();
   const Icon = DELIVERABLE_ICONS[deliverable.type] ?? FileText;
   const filed = isFiled(deliverable);
   const formats = FORMAT_ORDER.filter((format) => deliverable.formats.includes(format));
@@ -176,6 +178,16 @@ export function DeliverableCard({
               </DropdownMenu>
             )}
           </>
+        )}
+        {deliverable.filed === 'storage_full' && openGetMore && (
+          <button
+            type="button"
+            data-action="deliverable.getMoreStorage"
+            onClick={() => openGetMore('storage')}
+            className={cn(ACTION, 'text-foreground')}
+          >
+            {t('getMoreStorage')}
+          </button>
         )}
         {deliverable.href && (
           <Link
