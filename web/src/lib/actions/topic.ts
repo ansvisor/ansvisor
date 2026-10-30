@@ -99,6 +99,55 @@ export async function createTopic(brandId: string, name: string): Promise<Topic>
   return mapTopicRow(data as Record<string, unknown>);
 }
 
+export type AddBrandTopicResult =
+  | { ok: true; topic: Topic }
+  | { ok: false; reason: 'duplicate' | 'invalid' | 'failed'; message: string };
+
+/**
+ * Add a topic to a brand unless it has an active one by that name, case and
+ * spacing aside: Chat's add_topic (CHAT-20 §9 row 25, its natural key).
+ * Through createTopic, as the Topics tab adds one: the same name rule and
+ * policy (Admins and Managers, 00382). Errors come back as values (#427).
+ */
+export async function addBrandTopic(brandId: string, name: string): Promise<AddBrandTopicResult> {
+  await assertWritable({ brandId });
+  const trimmed = name.trim().replace(/\s+/g, ' ');
+  if (!trimmed || !topicNameFits(trimmed)) {
+    return {
+      ok: false,
+      reason: 'invalid',
+      message: `Topic names are 1 to ${TOPIC_NAME_CHARS} characters.`,
+    };
+  }
+  const supabase = await createClient();
+  const { data: existing, error } = await supabase
+    .from('topics')
+    .select('name')
+    .eq('brand_id', brandId)
+    .eq('is_active', true);
+  if (error) return { ok: false, reason: 'failed', message: error.message };
+  const key = trimmed.toLowerCase();
+  const same = (existing ?? []).find(
+    (row) => (row.name as string).trim().replace(/\s+/g, ' ').toLowerCase() === key,
+  );
+  if (same) {
+    return {
+      ok: false,
+      reason: 'duplicate',
+      message: `The brand already has the topic “${same.name as string}”.`,
+    };
+  }
+  try {
+    return { ok: true, topic: await createTopic(brandId, trimmed) };
+  } catch (err) {
+    return {
+      ok: false,
+      reason: 'failed',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 export async function updateTopic(topicId: string, name: string): Promise<Topic> {
   await assertWritable();
   assertTopicNames([name]);

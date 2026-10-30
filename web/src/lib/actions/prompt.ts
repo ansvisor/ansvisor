@@ -1041,7 +1041,14 @@ export async function addTopicPrompts(
     else if (tracked.has(textKey(text))) skipped.push({ text, reason: 'duplicate' });
     else {
       tracked.add(textKey(text));
-      rows.push({ idx: rows.length, text, topic: topic.name as string, platforms, models, regions: [region] });
+      rows.push({
+        idx: rows.length,
+        text,
+        topic: topic.name as string,
+        platforms,
+        models,
+        regions: [region],
+      });
     }
   }
   if (rows.length === 0) {
@@ -1052,7 +1059,10 @@ export async function addTopicPrompts(
 
   const result = await importPrompts(brandId, rows);
   if ('error' in result) return { ok: false, reason: 'failed', message: result.error };
-  const added = result.importedIdx.map((idx, i) => ({ id: result.promptIds[i], text: rows[idx].text }));
+  const added = result.importedIdx.map((idx, i) => ({
+    id: result.promptIds[i],
+    text: rows[idx].text,
+  }));
   const addedIdx = new Set(result.importedIdx);
   // What the locked write left out: the plan's locations ran out.
   for (const row of rows) {

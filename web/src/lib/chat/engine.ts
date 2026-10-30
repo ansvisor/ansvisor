@@ -70,7 +70,7 @@ import {
   type ToolDenial,
 } from './precedence';
 import { readBrandIsDemo, readPrecedenceContext, readToolCall } from './precedence-context';
-import type { ChatTool } from './registry/define-tool';
+import { batchSize, type ChatTool } from './registry/define-tool';
 import { CHAT_TOOLS, chatTool, chatToolByKey } from './registry/tools';
 import { abortDriver, publishRunEnd, registerDriver, unregisterDriver } from './run-hub';
 import {
@@ -1148,7 +1148,7 @@ async function handleCall(
     if (rc.progress.reads >= rc.budget.reads || rc.progress.dataChars >= rc.budget.dataChars) {
       return result(call, { code: 'limit_reached', message: 'Answer with what was read.' }, true);
     }
-  } else if ((rc.progress.writes[tool.name] ?? 0) >= writeCap(tool.name)) {
+  } else if ((rc.progress.writes[tool.name] ?? 0) + batchSize(tool, input) > writeCap(tool.name)) {
     return result(call, { code: 'limit_reached', message: 'No more of these in this run.' }, true);
   }
 
@@ -1243,14 +1243,28 @@ export function targetOf(input: Record<string, unknown>): string | null {
   return null;
 }
 
-function cardTarget(
+/**
+ * What a card and its step name: the row's own words for a list or an id
+ * (its `target`, read from the data), else the input's, and the brand.
+ */
+async function cardTarget(
   rc: RunContext,
   tool: ChatTool,
   input: Record<string, unknown>,
   brandId: string | null,
 ) {
+  let own: string | null = null;
+  if (tool.target) {
+    try {
+      own = await tool.target(input as never);
+    } catch (err) {
+      console.error('[chat/engine] could not name a card’s target:', err);
+    }
+  }
   const brand = brandId && rc.brand && rc.brand.id === brandId ? rc.brand.name : null;
-  return [targetOf(input), tool.brandOf ? brand : null].filter(Boolean).join(' · ');
+  return [own ? maskIds(own) : targetOf(input), tool.brandOf ? brand : null]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 /** The hash of the arguments a card shows: what an approval is bound to (CHAT-20 §6). */
@@ -1269,7 +1283,7 @@ async function openCard(
 ): Promise<CallOutcome> {
   const n = ++rc.progress.steps;
   const execute = decision.kind === 'click';
-  const target = cardTarget(rc, tool, input, facts.brandId);
+  const target = await cardTarget(rc, tool, input, facts.brandId);
   const row = await insertStep(rc.run.id, {
     position: n,
     kind: execute ? 'execute' : 'write',
@@ -1683,6 +1697,26 @@ function typedFailure(output: unknown): string | null {
   return typeof record.reason === 'string' ? record.reason : 'failed';
 }
 
+/** The refusals an action says in its own words, as CHAT-20 §11a's codes. */
+const SAID_FAILURES: Record<string, string> = {
+  quota_exceeded: 'quota_exceeded',
+  duplicate: 'duplicate',
+  not_found: 'not_found',
+  invalid: 'invalid_input',
+};
+
+/**
+ * An action's refusal the person can act on (a plan's prompt locations used
+ * up, a topic the brand already has): its §11a code and its message, which
+ * the step shows and the model says. Null for any other failure.
+ */
+function saidFailure(output: unknown): { code: string; message: string } | null {
+  const reason = typedFailure(output);
+  const message = (output as { message?: unknown } | null)?.message;
+  if (!reason || !Object.hasOwn(SAID_FAILURES, reason) || typeof message !== 'string') return null;
+  return { code: SAID_FAILURES[reason], message: maskIds(message) };
+}
+
 /**
  * A change: run once under its approval (runLoggedWrite logs it, with Undo),
  * on its own step, or on the card's step once approved. An approval used for
@@ -1698,7 +1732,7 @@ async function writeCall(
   approval: Exclude<ActivityApproval, { kind: 'run' }>,
   cardStepId: string | null,
 ): Promise<CallOutcome> {
-  const target = cardTarget(rc, tool, input, facts.brandId);
+  const target = await cardTarget(rc, tool, input, facts.brandId);
   let row;
   if (cardStepId) {
     row = await updateStep(cardStepId, { status: 'running' });
@@ -1755,17 +1789,19 @@ async function writeCall(
 
   const failed = outcome.code !== 'ok' ? outcome.code : typedFailure(outcome.output);
   if (failed) {
+    const said = outcome.code === 'ok' ? saidFailure(outcome.output) : null;
     row = await updateStep(stepId, {
       status: 'error',
-      detail: t('step.failed'),
+      detail: said?.message ?? t('step.failed'),
       debug: { input, error: outcome.code === 'failed' ? outcome.reason : failed },
     });
     rc.sink.emit('step.finished', { step: clientStep(row) });
-    // An EXECUTE is never tried again by itself (§11b): the model is told it failed.
-    return result(call, { code: 'failed' }, true);
+    // An EXECUTE is never tried again by itself (§11b): the model is told it failed,
+    // or, for a refusal the person can act on, why (§11a).
+    return result(call, said ?? { code: 'failed' }, true);
   }
 
-  rc.progress.writes[tool.name] = (rc.progress.writes[tool.name] ?? 0) + 1;
+  rc.progress.writes[tool.name] = (rc.progress.writes[tool.name] ?? 0) + batchSize(tool, input);
   const auto = approval.kind === 'auto';
   row = await updateStep(stepId, {
     status: 'done',

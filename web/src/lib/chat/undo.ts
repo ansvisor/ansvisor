@@ -35,7 +35,6 @@ import { SETUP_UNDO_RULES } from './undo-setup';
  * still takes back the draft their own run saved. Server only.
  */
 
-
 /**
  * What the log row records about a change, read after it ran. Its brand is
  * the call's, as the precedence found it (resolveCallBrand).

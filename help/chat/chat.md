@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, question, chat asks, recommended option, skip question, next moves, what to do next]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-30
@@ -68,6 +68,14 @@ Once answered, the card folds to one line with the question and your answer, and
 While Chat asks, you can also answer in the box below. It shows the Recommended option dim; Tab puts it in, and Enter sends it. A message that isn't one of the options answers every question Chat asked with it. An answer is text only, up to 500 characters.
 
 **Stop** beside the arrow, or Esc, ends the run and leaves its question skipped.
+
+## Change what you track
+
+Admins and Managers can ask Chat to track new prompts in a topic, pause prompts, add or rename a topic, and add or remove competitors. A prompt goes into a topic the brand already has, so Chat adds a new topic first. A prompt, topic or competitor the brand already has is skipped. Your plan's prompt locations still apply: Chat says so when they run out.
+
+Chat asks first, except in **Full auto**. Removing a competitor, or pausing more than five prompts at once, always asks.
+
+Each change is in the **Activity** log, with **Undo** for 7 days (30 days for paused prompts). Undo leaves alone anything someone changed since, and says so.
 
 ## Next moves
 

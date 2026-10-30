@@ -60,6 +60,18 @@ vi.mock('@/lib/actions/prompt-suggestions', () => ({
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: tracked.track('actions/chat-access-requests.requestAccess'),
 }));
+vi.mock('@/lib/actions/prompt', () => ({
+  addTopicPrompts: tracked.track('actions/prompt.addTopicPrompts'),
+  pauseBrandPrompts: tracked.track('actions/prompt.pauseBrandPrompts'),
+}));
+vi.mock('@/lib/actions/topic', () => ({
+  addBrandTopic: tracked.track('actions/topic.addBrandTopic'),
+  updateTopic: tracked.track('actions/topic.updateTopic'),
+}));
+vi.mock('@/lib/actions/competitor', () => ({
+  addCompetitors: tracked.track('actions/competitor.addCompetitors'),
+  removeBrandCompetitor: tracked.track('actions/competitor.removeBrandCompetitor'),
+}));
 
 const { CHAT_TOOLS, chatTool, chatToolByKey, registryCatalog } = await import('./tools');
 const { BRAND_LOOKUP_TABLES, FIXTURE_IDS, defineTool } = await import('./define-tool');
@@ -222,6 +234,12 @@ describe('the Chat tool registry', () => {
       page_type: 'docs_faq',
       source: { kind: 'opportunity', id: item },
     });
+    await run('add_prompts', { brand_id: brand, topic_id: item, prompts: [' crm pricing '] });
+    await run('pause_prompts', { brand_id: brand, prompt_ids: [item] });
+    await run('add_topic', { brand_id: brand, name: ' Pricing ' });
+    await run('rename_topic', { topic_id: item, name: 'Plans' });
+    await run('add_competitors', { brand_id: brand, competitors: [{ name: 'Peec AI' }] });
+    await run('remove_competitor', { brand_id: brand, competitor_id: item });
 
     expect(calls.map((call) => [call.from, call.args])).toEqual([
       ['actions/prompt-suggestions.dismissSuggestion', [item]],
@@ -242,6 +260,12 @@ describe('the Chat tool registry', () => {
           },
         ],
       ],
+      ['actions/prompt.addTopicPrompts', [brand, item, ['crm pricing']]],
+      ['actions/prompt.pauseBrandPrompts', [brand, [item]]],
+      ['actions/topic.addBrandTopic', [brand, 'Pricing']],
+      ['actions/topic.updateTopic', [item, 'Plans']],
+      ['actions/competitor.addCompetitors', [brand, [{ name: 'Peec AI', domain: '' }]]],
+      ['actions/competitor.removeBrandCompetitor', [brand, item]],
     ]);
   });
 
@@ -286,6 +310,13 @@ describe('approval policies', () => {
       update_opportunity: ['admin', 'manager'],
       dismiss_prompt_suggestion: ['admin', 'manager', 'analyst'],
       request_access: ['admin', 'manager', 'analyst', 'agency_partner'],
+      // The brand's tracking setup (W2-06): Admins and Managers, as the app (00382, #1762).
+      add_prompts: ['admin', 'manager'],
+      pause_prompts: ['admin', 'manager'],
+      add_topic: ['admin', 'manager'],
+      rename_topic: ['admin', 'manager'],
+      add_competitors: ['admin', 'manager'],
+      remove_competitor: ['admin', 'manager'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);

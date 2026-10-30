@@ -8,8 +8,17 @@ import {
   OPPORTUNITY,
   ORG,
   PEOPLE,
+  COMPETITOR,
+  PROMPT,
   SUGGESTION,
+  TOPIC,
   fakeCreateDraft,
+  fakeAddBrandTopic,
+  fakeAddCompetitors,
+  fakeAddTopicPrompts,
+  fakePauseBrandPrompts,
+  fakeRemoveBrandCompetitor,
+  fakeUpdateTopic,
   fakeDismissSuggestion,
   fakeUpdateOpportunity,
   seedWorkspace,
@@ -27,12 +36,21 @@ vi.mock('@/lib/supabase/admin', async () => ({
 vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }));
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
+vi.mock('@/lib/actions/prompt', () => ({ addTopicPrompts: vi.fn(), pauseBrandPrompts: vi.fn() }));
+vi.mock('@/lib/actions/topic', () => ({ addBrandTopic: vi.fn(), updateTopic: vi.fn() }));
+vi.mock('@/lib/actions/competitor', () => ({
+  addCompetitors: vi.fn(),
+  removeBrandCompetitor: vi.fn(),
+}));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
+const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
+const { addBrandTopic, updateTopic } = await import('@/lib/actions/topic');
+const { addCompetitors, removeBrandCompetitor } = await import('@/lib/actions/competitor');
 const { runLoggedWrite } = await import('./write');
 const { activitySummary, approvalFor, logActivity, recordActivity } = await import('./activity');
 const { decideToolCall } = await import('./precedence');
@@ -54,6 +72,15 @@ const INPUTS: Record<string, unknown> = {
   },
   update_opportunity: { opportunity_id: OPPORTUNITY, status: 'dismissed', reason: 'not_relevant' },
   dismiss_prompt_suggestion: { suggestion_id: SUGGESTION },
+  add_prompts: { brand_id: BRAND, topic_id: TOPIC, prompts: ['crm for agencies'] },
+  pause_prompts: { brand_id: BRAND, prompt_ids: [PROMPT] },
+  add_topic: { brand_id: BRAND, name: 'Integrations' },
+  rename_topic: { topic_id: TOPIC, name: 'Pricing and plans' },
+  add_competitors: {
+    brand_id: BRAND,
+    competitors: [{ name: 'Profound', domain: 'tryprofound.com' }],
+  },
+  remove_competitor: { brand_id: BRAND, competitor_id: COMPETITOR },
 };
 const toolCtx = {} as never;
 let step = 0;
@@ -66,6 +93,12 @@ beforeEach(() => {
   vi.mocked(createContentDraft).mockImplementation(fakeCreateDraft(db) as never);
   vi.mocked(updateOpportunityStatus).mockImplementation(fakeUpdateOpportunity(db) as never);
   vi.mocked(dismissSuggestion).mockImplementation(fakeDismissSuggestion(db) as never);
+  vi.mocked(addTopicPrompts).mockImplementation(fakeAddTopicPrompts(db) as never);
+  vi.mocked(pauseBrandPrompts).mockImplementation(fakePauseBrandPrompts(db) as never);
+  vi.mocked(addBrandTopic).mockImplementation(fakeAddBrandTopic(db) as never);
+  vi.mocked(updateTopic).mockImplementation(fakeUpdateTopic(db) as never);
+  vi.mocked(addCompetitors).mockImplementation(fakeAddCompetitors(db) as never);
+  vi.mocked(removeBrandCompetitor).mockImplementation(fakeRemoveBrandCompetitor(db) as never);
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -479,5 +512,70 @@ describe('Ask your Admin in Full auto', () => {
     expect(decision).toMatchObject({ kind: 'ask', reason: 'always_card' });
     expect(outcome).toBeNull();
     expect(db.tables.chat_activity_log ?? []).toHaveLength(0);
+  });
+});
+
+describe('the tracking setup, by role and mode (W2-06, CHAT-20 §9 rows 20–32)', () => {
+  const SETUP = [
+    'add_prompts',
+    'pause_prompts',
+    'add_topic',
+    'rename_topic',
+    'add_competitors',
+    'remove_competitor',
+  ];
+  async function decide(userId: string, name: string, mode: ChatMode, input = INPUTS[name]) {
+    const tool = chatTool(name)!;
+    const ctx = await readPrecedenceContext({ userId, organizationId: ORG, mode, surface: 'chat' });
+    const call = await readToolCall(ctx!, tool, input as Record<string, unknown>, false);
+    return decideToolCall(tool, ctx!, call);
+  }
+
+  it.each(SETUP)(
+    '%s: Admins and Managers, from a card unless Full auto; an Analyst is refused in every mode',
+    async (name) => {
+      const tool = chatTool(name)!;
+      for (const userId of [PEOPLE.admin, PEOPLE.manager]) {
+        expect(await decide(userId, name, 'ask_first')).toMatchObject({ kind: 'ask' });
+        expect(await decide(userId, name, 'auto')).toMatchObject({ kind: 'ask' });
+        expect(await decide(userId, name, 'full_auto')).toMatchObject(
+          tool.flags.alwaysCard
+            ? { kind: 'ask', reason: 'always_card' }
+            : { kind: 'run', via: 'full_auto' },
+        );
+      }
+      for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+        expect(await decide(PEOPLE.analyst, name, mode)).toMatchObject({
+          kind: 'deny',
+          denial: { code: 'forbidden_role', roles: ['admin', 'manager'] },
+        });
+      }
+    },
+  );
+
+  it('pauses more than 5 prompts only from a card, Full auto too (§9 row 22)', async () => {
+    const six = Array.from({ length: 6 }, (_, i) => `66666666-6666-4666-8666-00000000000${i}`);
+    expect(
+      await decide(PEOPLE.admin, 'pause_prompts', 'full_auto', {
+        brand_id: BRAND,
+        prompt_ids: six.slice(0, 5),
+      }),
+    ).toMatchObject({ kind: 'run' });
+    expect(
+      await decide(PEOPLE.admin, 'pause_prompts', 'full_auto', {
+        brand_id: BRAND,
+        prompt_ids: six,
+      }),
+    ).toMatchObject({ kind: 'ask', reason: 'always_card', offerDontAskAgain: false });
+  });
+
+  it('refuses them on a read-only workspace', async () => {
+    db.tables.organizations[0].subscription_status = 'canceled';
+    for (const name of SETUP) {
+      expect(await decide(PEOPLE.admin, name, 'full_auto')).toMatchObject({
+        kind: 'deny',
+        denial: { code: 'subscription_inactive' },
+      });
+    }
   });
 });

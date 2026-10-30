@@ -7,6 +7,8 @@ import {
   ORG,
   OTHER_ORG,
   PEOPLE,
+  COMPETITOR,
+  TOPIC,
   fakeCreateDraft,
   seedWorkspace,
 } from './testing/chat-fixtures';
@@ -28,6 +30,12 @@ vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }))
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
 vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: vi.fn() }));
+vi.mock('@/lib/actions/prompt', () => ({ addTopicPrompts: vi.fn(), pauseBrandPrompts: vi.fn() }));
+vi.mock('@/lib/actions/topic', () => ({ addBrandTopic: vi.fn(), updateTopic: vi.fn() }));
+vi.mock('@/lib/actions/competitor', () => ({
+  addCompetitors: vi.fn(),
+  removeBrandCompetitor: vi.fn(),
+}));
 
 const fakes = vi.hoisted(() => ({
   readRun: vi.fn(),
@@ -105,6 +113,7 @@ const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { requestAccess } = await import('@/lib/actions/chat-access-requests');
+const { addTopicPrompts } = await import('@/lib/actions/prompt');
 const engine = await import('./engine');
 const { readRunEvents } = await import('./engine-store');
 const { runFromEvents } = await import('./run-state');
@@ -1197,6 +1206,75 @@ describe('next moves (CHAT-07 §C)', () => {
     expect(runRow(runId).status).toBe('waiting');
     expect(ofType(await eventsOf(runId), 'next_moves')).toEqual([]);
     expect(movesOf(runId)).toEqual([]);
+  });
+});
+
+describe('the tracking setup (W2-06)', () => {
+  const addPrompts = (id: string, prompts: string[]) =>
+    toolCall(id, 'add_prompts', { brand_id: BRAND, topic_id: TOPIC, prompts });
+
+  it('says why when the plan’s prompt locations are used up, and logs nothing (§11a)', async () => {
+    const message =
+      'Your Growth plan allows up to 200 active prompt locations. Pause prompts or upgrade.';
+    vi.mocked(addTopicPrompts).mockResolvedValue({
+      ok: false,
+      reason: 'quota_exceeded',
+      message,
+    });
+    const { sonnet } = useModels(
+      [READY],
+      [calls(addPrompts('w1', ['crm for agencies'])), text('Your plan is full.')],
+    );
+    const runId = await turn(ADMIN, 'Track crm for agencies', 'full_auto');
+    expect(stepsOf(runId)[0]).toMatchObject({ status: 'error', detail: message });
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('"code":"quota_exceeded"');
+    expect(db.tables.chat_activity_log).toEqual([]);
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it('counts the run’s 50 prompts by prompt, not by call', async () => {
+    vi.mocked(addTopicPrompts).mockImplementation(async (_brand, _topic, texts) => ({
+      ok: true,
+      code: 'ok',
+      added: texts.map((text, i) => ({ id: `p-${text}-${i}`, text })),
+      skipped: [],
+      analysisStarted: true,
+    }));
+    const twenty = (n: number) => Array.from({ length: 20 }, (_, i) => `prompt ${n}.${i}`);
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(
+          addPrompts('w1', twenty(1)),
+          addPrompts('w2', twenty(2)),
+          addPrompts('w3', twenty(3)),
+        ),
+        text('Added 40.'),
+      ],
+    );
+    await turn(ADMIN, 'Track these 60', 'full_auto');
+    expect(addTopicPrompts).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('limit_reached');
+  });
+
+  it('names on its card what a list or an id stands for, from the data', async () => {
+    useModels(
+      [READY, READY],
+      [
+        calls(toolCall('w1', 'remove_competitor', { brand_id: BRAND, competitor_id: COMPETITOR })),
+        calls(addPrompts('w2', ['crm for agencies', 'crm for law firms', 'crm for clinics'])),
+      ],
+    );
+    const removing = await turn(ADMIN, 'Drop Peec AI', 'full_auto');
+    expect(ofType(await eventsOf(removing), 'confirm.required')[0].data).toMatchObject({
+      action: 'Remove competitors',
+      target: 'Peec AI (peec.ai) · Northwind',
+    });
+    const adding = await turn(ADMIN, 'Track these', 'ask_first');
+    expect(ofType(await eventsOf(adding), 'confirm.required')[0].data.target).toBe(
+      'Pricing · “crm for agencies”, “crm for law firms” +1 · Northwind',
+    );
+    expectClean([...(await eventsOf(removing)), ...(await eventsOf(adding))]);
   });
 });
 

@@ -64,6 +64,112 @@ export async function addCompetitor(
   return mapRow(data as Record<string, unknown>);
 }
 
+/** A competitor's domain as two are compared: scheme, www, case and trailing slash aside. */
+const domainKey = (domain: string) =>
+  domain
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/+$/, '');
+
+export type AddCompetitorsResult =
+  | {
+      ok: true;
+      /** partial: some weren't added (CHAT-20 §11a), each with why. */
+      code: 'ok' | 'partial';
+      added: Competitor[];
+      skipped: { name: string; domain: string; reason: 'duplicate' | 'failed' }[];
+    }
+  | { ok: false; reason: 'duplicate' | 'failed'; message: string };
+
+/**
+ * Add competitors to a brand: Chat's add_competitors (CHAT-20 §9 row 30).
+ * A domain (or, without one, a name) the brand already has is skipped (the
+ * natural key, §11c); each of the rest through addCompetitor, as the
+ * Competitors page adds one. Errors come back as values (#427).
+ */
+export async function addCompetitors(
+  brandId: string,
+  items: { name: string; domain: string }[],
+): Promise<AddCompetitorsResult> {
+  await assertWritable({ brandId });
+  let existing: Competitor[];
+  try {
+    existing = await getCompetitors(brandId);
+  } catch (err) {
+    return {
+      ok: false,
+      reason: 'failed',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+  const keyOf = (c: { name: string; domain: string }) =>
+    c.domain.trim() ? `d:${domainKey(c.domain)}` : `n:${c.name.trim().toLowerCase()}`;
+  const known = new Set(existing.map(keyOf));
+  const added: Competitor[] = [];
+  const skipped: Extract<AddCompetitorsResult, { ok: true }>['skipped'] = [];
+  for (const item of items) {
+    if (known.has(keyOf(item))) {
+      skipped.push({ ...item, reason: 'duplicate' });
+      continue;
+    }
+    known.add(keyOf(item));
+    try {
+      added.push(await addCompetitor(brandId, item));
+    } catch {
+      skipped.push({ ...item, reason: 'failed' });
+    }
+  }
+  if (added.length === 0) {
+    return skipped.every((s) => s.reason === 'duplicate')
+      ? { ok: false, reason: 'duplicate', message: 'The brand already has these competitors.' }
+      : { ok: false, reason: 'failed', message: "The competitors couldn't be added." };
+  }
+  return { ok: true, code: skipped.length > 0 ? 'partial' : 'ok', added, skipped };
+}
+
+export type RemoveBrandCompetitorResult =
+  | { ok: true; removed: Competitor }
+  | { ok: false; reason: 'not_found' | 'failed'; message: string };
+
+/**
+ * Remove one of a brand's competitors: Chat's remove_competitor (CHAT-20 §9
+ * row 32). Only the brand's own, then through deleteCompetitor, as the
+ * Competitors page removes one. Errors come back as values (#427).
+ */
+export async function removeBrandCompetitor(
+  brandId: string,
+  competitorId: string,
+): Promise<RemoveBrandCompetitorResult> {
+  await assertWritable({ brandId });
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('competitors')
+    .select('*')
+    .eq('id', competitorId)
+    .eq('brand_id', brandId)
+    .maybeSingle();
+  if (error) return { ok: false, reason: 'failed', message: error.message };
+  if (!data) {
+    return {
+      ok: false,
+      reason: 'not_found',
+      message: "That competitor isn't one of this brand's.",
+    };
+  }
+  try {
+    await deleteCompetitor(competitorId);
+  } catch (err) {
+    return {
+      ok: false,
+      reason: 'failed',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+  return { ok: true, removed: mapRow(data as Record<string, unknown>) };
+}
+
 export async function deleteCompetitor(id: string): Promise<void> {
   await assertWritable();
   const supabase = await createClient();

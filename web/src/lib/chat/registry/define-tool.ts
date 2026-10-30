@@ -283,10 +283,7 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
 }
 
 /** How many items a call carries: its batch's length, or 1 for a row that isn't a batch. */
-export function batchSize(
-  tool: Pick<ChatTool, 'batch'>,
-  input: Record<string, unknown>,
-): number {
+export function batchSize(tool: Pick<ChatTool, 'batch'>, input: Record<string, unknown>): number {
   if (!tool.batch) return 1;
   const items = input[tool.batch.field];
   return Array.isArray(items) ? items.length : 1;
