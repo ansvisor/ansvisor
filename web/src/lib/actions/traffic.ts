@@ -9,6 +9,7 @@ import { isHourlyWindow, listUtcHours, utcHourKey } from '@/lib/traffic-buckets'
 import { CONVERSIONS_FALLBACK_DAYS, widensToLast30Days } from '@/lib/traffic-conversions';
 import { getSuggestionSourceStates, type SourceState } from '@/lib/actions/integrations';
 import { isPlatformSurface, type PlatformSurface } from '@/lib/traffic-platforms';
+import { NO_TOPICS } from '@/lib/topics-required';
 
 export interface TrafficDateWindow {
   dateFrom?: string;
@@ -825,13 +826,14 @@ export interface PagePromptSuggestions {
  * "Add prompts" on the Pages section (AT-006 part B2): prompts whose best
  * answer is this page, written from what the page says, its figures over the
  * page's range and the brand's Search Console queries that share its words.
- * Nothing is stored until the person tracks some.
+ * Nothing is stored until the person tracks some. A brand with no topic yet
+ * gets `no_topics` before anything is written: prompts go under topics.
  */
 export async function suggestPagePrompts(
   brandId: string,
   window: TrafficDateWindow | undefined,
   page: string,
-): Promise<PagePromptSuggestions | { error: string }> {
+): Promise<PagePromptSuggestions | { error: string; code?: typeof NO_TOPICS }> {
   const supabase = await createClient();
   const {
     data: { session },
@@ -854,7 +856,8 @@ export async function suggestPagePrompts(
   // Returned, not thrown: a thrown error's message is masked in production.
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    return { error: body.message || body.error || `Server error: ${res.status}` };
+    const error: string = body.message || body.error || `Server error: ${res.status}`;
+    return body.code === NO_TOPICS ? { error, code: NO_TOPICS } : { error };
   }
   return res.json();
 }

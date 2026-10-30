@@ -39,6 +39,7 @@ import {
 } from '@/lib/prompt-position-summary';
 import { assertWritable } from '@/lib/subscription-guard';
 import { isManager } from '@/lib/session-role';
+import { NO_TOPICS, NO_TOPICS_MESSAGE, brandHasTopics } from '@/lib/topics-required';
 
 /** A prompt's text as two are compared: case and spacing aside (the natural key, CHAT-20 §11c). */
 const textKey = (text: string) => text.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -617,13 +618,22 @@ interface AddPromptInput {
   models?: string[];
 }
 
-export type AddPromptToSetResult = { prompt: Prompt } | { error: string; code?: 'plan_limit' };
+/**
+ * Why a prompt wasn't added, when the person can do something about it: the
+ * plan's prompt locations are full, or the brand has no topic to put it under.
+ */
+export type PromptAddFailureCode = 'plan_limit' | typeof NO_TOPICS;
+
+export type AddPromptToSetResult =
+  | { prompt: Prompt }
+  | { error: string; code?: PromptAddFailureCode };
 
 /**
- * User-facing failures (plan limit, empty platform selection, DB errors) come
- * back as a VALUE: production masks every error thrown from a server action,
- * so a thrown PlanLimitError would reach users as the meaningless digest
- * message (#427).
+ * User-facing failures (plan limit, no topics, empty platform selection, DB
+ * errors) come back as a VALUE: production masks every error thrown from a
+ * server action, so a thrown PlanLimitError would reach users as the
+ * meaningless digest message (#427). Prompts are grouped under topics, so a
+ * brand without one gets `no_topics` and nothing is written.
  */
 export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptToSetResult> {
   await assertWritable();
@@ -636,6 +646,12 @@ export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptTo
     .single();
 
   if (!ps?.brand_id) return { error: 'Prompt set not found' };
+
+  // A topic found by name means the brand has topics; only without one is it asked.
+  const topicId = await resolveTopicId(supabase, ps.brand_id as string, input.category);
+  if (!topicId && !(await brandHasTopics(supabase, ps.brand_id as string))) {
+    return { error: NO_TOPICS_MESSAGE, code: NO_TOPICS };
+  }
 
   const { organizationId: orgId, region: brandRegion } = await getBrandContext(
     supabase,
@@ -652,8 +668,6 @@ export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptTo
   if (filtered.platforms.length === 0 && filtered.models.length === 0) {
     return { error: 'At least one platform or model must be selected.' };
   }
-
-  const topicId = await resolveTopicId(supabase, ps.brand_id as string, input.category);
 
   // #155 — the brand's Shopping pref drives chatgpt-shopping BOTH ways: on
   // means every new prompt gets it appended automatically (the user doesn't
@@ -694,7 +708,9 @@ export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptTo
   return { prompt: mapPromptRow(data as Record<string, unknown>) };
 }
 
-export type AddPromptToBrandResult = { prompt: Prompt } | { error: string };
+export type AddPromptToBrandResult =
+  | { prompt: Prompt }
+  | { error: string; code?: PromptAddFailureCode };
 
 /**
  * Add a single prompt to a brand from the main Prompts page (#460). Same
@@ -747,7 +763,7 @@ export async function addPromptToBrand(
     platforms: input.platforms,
     models: input.models ?? [],
   });
-  if ('error' in result) return { error: result.error };
+  if ('error' in result) return { error: result.error, code: result.code };
 
   revalidatePath('/dashboard/prompts');
   return { prompt: result.prompt };
@@ -850,7 +866,7 @@ export interface ImportPromptRow {
 
 export type ImportPromptsResult =
   | { importedIdx: number[]; promptIds: string[]; analysisStarted: boolean }
-  | { error: string };
+  | { error: string; code?: typeof NO_TOPICS };
 
 /**
  * Bulk import (PROMPT-005). The rows are the preview's importable ones, in
@@ -859,7 +875,7 @@ export type ImportPromptsResult =
  * database call that stops at the plan's tracked-location cap
  * (import_prompts, 00122). New topics are created first, without touching the
  * brand's existing ones. The imported prompts are submitted for their first
- * run in one request.
+ * run in one request. A brand with no topic yet gets `no_topics`.
  */
 export async function importPrompts(
   brandId: string,
@@ -869,6 +885,11 @@ export async function importPrompts(
   if (rows.length === 0) return { importedIdx: [], promptIds: [], analysisStarted: false };
   if (rows.length > 1000) return { error: 'Import at most 1,000 prompts at a time.' };
   const supabase = await createClient();
+  // Prompts are grouped under topics: a brand without one adds a topic first,
+  // even when the file names topics of its own.
+  if (!(await brandHasTopics(supabase, brandId))) {
+    return { error: NO_TOPICS_MESSAGE, code: NO_TOPICS };
+  }
 
   let promptSetId: string;
   {

@@ -370,7 +370,14 @@
     "trackOrSuggestContent": "Ask an admin or a manager to track these prompts or suggest content for them.",
     "generateBrief": "Ask an admin or a manager to generate a brief.",
     "improvePrompt": "Ask an admin or a manager to generate or send Improve suggestions.",
-    "addPrompts": "Ask an admin or a manager to add prompts."
+    "addPrompts": "Ask an admin or a manager to add prompts.",
+    "addTopic": "Prompts are grouped under topics. Ask an admin or a manager to add a topic first."
+  },
+  "topicFirst": {
+    "title": "Add a topic first",
+    "body": "Prompts are grouped under topics, so a brand needs at least one before it can add prompts or have them suggested. Add a topic, then come back here.",
+    "addTopic": "Add a topic",
+    "close": "Close"
   },
   "common": {
     "loading": "Loading...",
