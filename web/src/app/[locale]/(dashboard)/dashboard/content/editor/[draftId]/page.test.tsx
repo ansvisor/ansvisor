@@ -996,7 +996,7 @@ describe('the content editor', () => {
           said.push(status.textContent!);
           await act(async () => void (await vi.advanceTimersByTimeAsync(4_000)));
         }
-        expect(said.join(' ')).toContain('Adding a [placeholder] for facts it lacks');
+        expect(said.join(' ')).toContain('Looking up facts it lacks, with their sources');
         expect(said.join(' ')).not.toMatch(/Keeping to|Drawing on/);
       } finally {
         vi.useRealTimers();
@@ -6426,7 +6426,7 @@ describe('the side panel', () => {
       );
       await renderPage();
       // The toolbar counts it, though the page doesn't show it.
-      expect(container.textContent).toContain('1 placeholder to fill');
+      expect(container.textContent).toContain('Your input needed: 1');
       expect(button('Show in HTML')).toBeTruthy();
       await act(async () => button('Export')!.click());
       expect(dialog()!.textContent).toContain('1 placeholder is still open');
@@ -6455,7 +6455,7 @@ describe('the side panel', () => {
         }),
       );
       await renderPage();
-      expect(container.textContent).toContain('6 placeholders to fill');
+      expect(container.textContent).toContain('Your input needed: 6');
       await act(async () => button('Show in HTML')!.click());
       const area = [...container.querySelectorAll('textarea')].find((a) =>
         a.value.includes('[photo of the founder]'),
@@ -6476,7 +6476,7 @@ describe('the side panel', () => {
         }),
       );
       await renderPage();
-      expect(container.textContent).toContain('1 placeholder to fill');
+      expect(container.textContent).toContain('Your input needed: 1');
       expect(button('Show in HTML')).toBeFalsy();
     });
 

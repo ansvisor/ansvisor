@@ -202,8 +202,9 @@ const BRAND_ENTITY = { key: 'brand-entity', status: 'fail', score: 0, evidence: 
 
 /**
  * A recommendation for a failing or warning signal, in recommendations.js's
- * stored shape (after its guard): page-specific, nothing invented, an
- * unknown fact as a [placeholder]. Null for a signal with none here.
+ * stored shape (after its guard): page-specific, nothing invented, nothing
+ * left to research, and only a fact the brand alone knows as a
+ * [placeholder] for the person. Null for a signal with none here.
  */
 /** Signals a model leaves out for a page of this kind: nothing specific to say. */
 const NOT_FOR = {
@@ -246,7 +247,6 @@ function recommendationFor(key, page, result) {
           )
         : write(
             `Add three short questions buyers ask about ${topic}, with answers and FAQPage markup.`,
-            'Q: [question a buyer asks]\nA: [answer from this page]',
           );
     case 'meta-description':
       return write(
@@ -278,7 +278,7 @@ function recommendationFor(key, page, result) {
                 '@type': 'Product',
                 name: product.title,
                 brand: { '@type': 'Brand', name: BRAND.name },
-                offers: { '@type': 'Offer', price: '[price]', priceCurrency: 'USD' },
+                offers: { '@type': 'Offer', price: '[your price]', priceCurrency: 'USD' },
               },
               null,
               2,
@@ -289,8 +289,7 @@ function recommendationFor(key, page, result) {
       return write('Add og:description and og:image so shared links show a preview.');
     case 'outbound-authority-links':
       return write(
-        'Cite an independent source for the brewing and storage advice on this page.',
-        'Link [source URL] where the page states [claim].',
+        'Cite an independent source, such as a coffee association’s brewing guide, for the brewing and storage advice.',
       );
     case 'citation-density':
       return write('Link the sources behind the main claims, about two per 1,000 words.');
@@ -301,7 +300,7 @@ function recommendationFor(key, page, result) {
     case 'quotations':
       return write(
         `Add a short attributed quote from your roaster about ${topic}.`,
-        `"[quote from the roaster]" (${AUTHORS[0].name}, ${AUTHORS[0].role})`,
+        `"[your quote from the roaster]" (${AUTHORS[0].name}, ${AUTHORS[0].role})`,
       );
     case 'author-byline':
       return write('Name the author of this guide in a byline under the title.');
@@ -331,17 +330,17 @@ function recommendationFor(key, page, result) {
     case 'first-person':
       return write(
         'Say how your team tested or brews this, in your own words.',
-        'When we tested [brew method], our team found [result].',
+        'When we tested [your brew method], our team found [your result].',
       );
     case 'case-study-evidence':
       return write(
         'Add one customer example with a real outcome.',
-        '[customer name] switched to [plan] and [real metric].',
+        '[your customer name] switched to [your plan] and [your result].',
       );
     case 'press-mentions':
       return write(
         'Link press or review coverage of Brewline, if there is any.',
-        '[publication]: [article URL]',
+        '[your publication]: [your article link]',
       );
     case 'definitions':
       return write(

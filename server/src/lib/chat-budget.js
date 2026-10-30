@@ -25,12 +25,19 @@
  *
  * The trial's budget is the plan's in its trial (applyTrialAiBudget), over a
  * period that runs the whole trial (aiBudgetOf): it never resets.
+ *
+ * Purchased AI credits (ai-credits.js, CHAT-18 §F) are on the budget too: a
+ * step's hold passes on them once the included budget is spent, and the
+ * charged step's cost past the included budget is drawn from them, its row
+ * split by grant (prompt_improve_usage.grant_id).
  */
 
 import supabaseAdmin from '../config/supabase.js';
 import { chatAgenticEnabled } from './chat-flag.js';
+import { drawCredits } from './ai-credits.js';
 import { cacheSplit, generationCostUsd } from './improve-cost.js';
 import { CHAT_AI_FEATURES, aiBudgetOf, aiBudgetUsedUp } from './plan-guard.js';
+import { logger } from './logger.js';
 
 /** What a Chat step can be metered as: a run's model step, then agents, scheduled runs, images. */
 export const CHAT_BUDGET_FEATURES = CHAT_AI_FEATURES;
@@ -110,7 +117,8 @@ export async function reserveChatStep(
  * that called the model more than once (a retry) is charged its total
  * usage. A provider that didn't report both its input and its output leaves
  * the hold as the step's cost: over, never under. `latencyMs`, how long the
- * call took, is kept for staff.
+ * call took, is kept for staff. The cost past the included budget is then
+ * drawn from the credits.
  */
 export async function chargeChatStep(orgId, usageId, { modelId, usage, latencyMs }) {
   const reported = usage?.inputTokens != null && usage?.outputTokens != null;
@@ -136,6 +144,23 @@ export async function chargeChatStep(orgId, usageId, { modelId, usage, latencyMs
     .select('id');
   if (error) throw new Error(error.message);
   if (!data?.length) throw new ChatBudgetError('not_found', 404, 'Chat step usage not found.');
+  await drawOnCredits(orgId, usageId);
+}
+
+/**
+ * The charged step's cost past the included budget, drawn from the
+ * workspace's AI credits. Only with Chat on (drawCredits reads nothing
+ * otherwise); a budget that can't be read (no active plan any more) leaves
+ * the row on the included budget, logged: the charge itself stands.
+ */
+async function drawOnCredits(orgId, usageId) {
+  if (!chatAgenticEnabled(orgId)) return;
+  try {
+    const { includedUsd, since } = await aiBudgetOf(orgId, { credits: false });
+    await drawCredits(orgId, usageId, { includedUsd, since });
+  } catch (err) {
+    logger.error({ err, orgId, usageId }, '[chat-budget] credit draw skipped');
+  }
 }
 
 /**

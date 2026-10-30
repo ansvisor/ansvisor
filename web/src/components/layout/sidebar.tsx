@@ -9,16 +9,21 @@ import { usePathname, Link } from '@/i18n/navigation';
 import { getTrackedPromptCount } from '@/lib/actions/prompt';
 import { carriedParams, PROMPTS_BASE } from '@/lib/prompts-routes';
 import { dashboardNav } from '@/config/dashboard';
+import { saveChatRailOpen } from '@/lib/actions/chat-prefs';
 import {
   activeChildHref,
+  CHAT_AGENTIC_HREF,
   childLinkHref,
   dashboardNavBadge,
   getDashboardNavLabel,
   getDashboardNavGroupLabel,
+  navItemHref,
   shouldShowDashboardNavItem,
 } from '@/lib/dashboard-navigation';
 import { useDemoBrand } from '@/components/providers/demo-brand-provider';
+import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useSidebarStore } from '@/stores/use-sidebar-store';
+import { useChatRailStore } from '@/stores/use-chat-rail-store';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
@@ -122,7 +127,16 @@ function handleNavKeys(
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { isCollapsed, toggleCollapse } = useSidebarStore();
+  const { isCollapsed: pinnedClosed, toggleCollapse } = useSidebarStore();
+  // On Chat's screens (the new Chat on) the sidebar is the rail unless the
+  // person expanded it with the logo, a choice kept on them for every device
+  // (CHAT-01 item 4f); elsewhere it keeps its own pinned state.
+  const chatAgentic = useChatAgentic();
+  const onChat =
+    chatAgentic && (pathname === CHAT_AGENTIC_HREF || pathname.startsWith(`${CHAT_AGENTIC_HREF}/`));
+  const railOpen = useChatRailStore((s) => s.open);
+  const setRailOpen = useChatRailStore((s) => s.setOpen);
+  const isCollapsed = onChat ? !railOpen : pinnedClosed;
   // A collapsed sidebar opens over the page while the pointer is on it
   // ("peeking") and while its brand menu is open, and closes again after.
   const [peeking, setPeeking] = useState(false);
@@ -281,7 +295,12 @@ export function Sidebar() {
     // Collapsing takes effect at once, even with the pointer still on it.
     clearTimeout(peekTimer.current);
     setPeeking(false);
-    toggleCollapse();
+    if (onChat) {
+      setRailOpen(!railOpen);
+      void saveChatRailOpen(!railOpen);
+    } else {
+      toggleCollapse();
+    }
   }
 
   return (
@@ -315,20 +334,49 @@ export function Sidebar() {
             compact && 'justify-center px-0',
           )}
         >
-          <Link
-            href="/dashboard"
-            className={cn('flex items-center gap-2 overflow-hidden', !compact && 'min-w-0 flex-1')}
-          >
-            <Image
-              src={logoSrc}
-              alt={siteConfig.name}
-              width={24}
-              height={24}
-              className="h-6 w-6 shrink-0"
-              priority
-            />
-            {!compact && <span className="truncate font-semibold">{siteConfig.name}</span>}
-          </Link>
+          {onChat ? (
+            // On Chat's screens the logo expands the rail, and collapses it again (CHAT-23 rail.toggle).
+            <button
+              type="button"
+              data-action="rail.toggle"
+              onClick={handleToggleCollapse}
+              aria-expanded={!isCollapsed}
+              aria-label={isCollapsed ? t('expandRail') : t('collapseRail')}
+              title={t('railTip')}
+              className={cn(
+                'flex items-center gap-2 overflow-hidden rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                !compact && 'min-w-0 flex-1',
+              )}
+            >
+              <Image
+                src={logoSrc}
+                alt=""
+                width={24}
+                height={24}
+                className="h-6 w-6 shrink-0"
+                priority
+              />
+              {!compact && <span className="truncate font-semibold">{siteConfig.name}</span>}
+            </button>
+          ) : (
+            <Link
+              href="/dashboard"
+              className={cn(
+                'flex items-center gap-2 overflow-hidden',
+                !compact && 'min-w-0 flex-1',
+              )}
+            >
+              <Image
+                src={logoSrc}
+                alt={siteConfig.name}
+                width={24}
+                height={24}
+                className="h-6 w-6 shrink-0"
+                priority
+              />
+              {!compact && <span className="truncate font-semibold">{siteConfig.name}</span>}
+            </Link>
+          )}
           {/* Too narrow beside the logo when collapsed; it shows while the
               sidebar is open over the page. */}
           {!compact && <ThemeToggle className="shrink-0" />}
@@ -368,10 +416,11 @@ export function Sidebar() {
               {group.title && compact && i > 0 && <Separator className="my-2" />}
               <nav className="space-y-0.5">
                 {group.items.map((item) => {
+                  const href = navItemHref(item, chatAgentic);
                   const isActive =
                     item.href === '/dashboard'
                       ? pathname === '/dashboard'
-                      : pathname.startsWith(item.href);
+                      : pathname.startsWith(href);
                   const label = getDashboardNavLabel(item.title, t);
 
                   // Chat's own badge: "Soon (next week)" on the demo brand,
@@ -504,7 +553,7 @@ export function Sidebar() {
                   return (
                     <Link
                       key={item.href}
-                      href={item.href}
+                      href={href}
                       data-nav-item="link"
                       aria-current={isActive ? 'page' : undefined}
                     >

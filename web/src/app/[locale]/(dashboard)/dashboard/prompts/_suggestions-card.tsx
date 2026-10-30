@@ -68,6 +68,10 @@ import type { SuggestionSourceStates } from '@/lib/actions/integrations';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
 import { readWithOneRetry, type ReadFailure } from '@/lib/api-failure';
+import { NO_TOPICS, isNoTopics } from '@/lib/topics-required';
+import { useFailureToast } from '@/hooks/use-failure-toast';
+import type { PromptAddFailureCode } from '@/lib/actions/prompt';
+import { useTopicFirstDialog } from '@/components/prompts/topic-first';
 import { SuggestionsLoadError } from './_suggestions-load-error';
 import {
   Dialog,
@@ -265,6 +269,8 @@ function isMeasuredSuggestion(s: PromptSuggestion): boolean {
 interface Props {
   brandId: string;
   onAccepted?: () => void;
+  /** "Add a topic" on a brand without one: the page's Topics tab, with Add Topic open. */
+  onAddTopic?: () => void;
   /** Connected sources and whether their data has landed; null when unknown. */
   sourceStates: SuggestionSourceStates | null;
   /** The organization's plan, for the prompt limit note's wording; absent while unknown. */
@@ -320,6 +326,7 @@ function sourceNotice(
 export function SuggestionsCard({
   brandId,
   onAccepted,
+  onAddTopic,
   sourceStates,
   planId,
   limitActions,
@@ -357,6 +364,10 @@ export function SuggestionsCard({
   // What Add All left behind when the plan's prompt limit stopped it.
   const [limitNote, setLimitNote] = useState<{ added: number; left: number } | null>(null);
   const [, startTransition] = useTransition();
+  // A brand with no topic yet: generating or adding asks for one first.
+  const topicFirst = useTopicFirstDialog({ onAddTopic });
+  // A failed generation in plain words, with the one thing to do (or the upgrade dialog).
+  const failureToast = useFailureToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -393,12 +404,18 @@ export function SuggestionsCard({
     setRefreshing(true);
     try {
       const fresh = await refreshPromptSuggestions(brandId);
-      setSuggestions(fresh);
+      if (!fresh.ok) {
+        if (fresh.failure === NO_TOPICS) topicFirst.show();
+        else failureToast(fresh.failure);
+        return;
+      }
+      setSuggestions(fresh.suggestions);
       setLoaded(true);
       setError(null);
       toast.success('Suggestions refreshed');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Refresh failed');
+    } catch {
+      // The request to Next itself failed: production hides why.
+      failureToast('failed');
     } finally {
       setRefreshing(false);
     }
@@ -478,7 +495,7 @@ export function SuggestionsCard({
     setLimitNote(null);
     const added: string[] = [];
     const gone: string[] = [];
-    let failure: { error: string; code?: 'plan_limit' } | null = null;
+    let failure: { error: string; code?: PromptAddFailureCode } | null = null;
     try {
       for (let i = 0; i < ids.length && !failure; i += TRACK_BATCH) {
         const result = await trackSuggestions(ids.slice(i, i + TRACK_BATCH));
@@ -499,6 +516,8 @@ export function SuggestionsCard({
     }
     if (failure?.code === 'plan_limit') {
       setLimitNote({ added: added.length, left: ids.length - leaving.size });
+    } else if (isNoTopics(failure)) {
+      topicFirst.show();
     } else if (failure) {
       toast.error(failure.error);
     } else if (added.length === 0) {
@@ -513,7 +532,8 @@ export function SuggestionsCard({
       try {
         const result = await acceptSuggestion(s.id);
         if ('error' in result) {
-          toast.error(result.error);
+          if (isNoTopics(result)) topicFirst.show();
+          else toast.error(result.error);
           return;
         }
         setSuggestions((prev) => prev.filter((x) => x.id !== s.id));
@@ -924,6 +944,7 @@ export function SuggestionsCard({
           </div>
         )}
         <EstimateNoteTooltip handle={volumeNote} />
+        {topicFirst.dialog}
       </CardContent>
     </Card>
   );
