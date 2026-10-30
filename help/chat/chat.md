@@ -89,6 +89,8 @@ A chat is yours alone until you share it. **Share with team** lets everyone in y
 
 Chat replaces the earlier Agent page. Links and bookmarks to the Agent page open Chat instead, and a link to one of your chats opens that chat.
 
+The first time you open Chat, your chats from the Agent page are copied in, so they are in the chat menu with your other chats, by the date of their last message. Your questions and the answers are kept; the steps the Agent took to find them are not. A chat the Agent page never named is called **New chat**.
+
 ## A chat that isn't available
 
 If a chat was deleted, or it belongs to someone else and isn't shared with you, Chat says **This chat isn't available.** Click **New chat** to start a new one.
