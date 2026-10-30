@@ -3630,7 +3630,8 @@
       "rateDay": "You've sent today's messages. Chat takes more tomorrow.",
       "notWaiting": "This run isn't waiting for an answer any more.",
       "approvalMismatch": "This changed after you approved it. Approve again?",
-      "notFound": "This chat isn't there any more."
+      "notFound": "This chat isn't there any more.",
+      "attachments": "A file you attached isn't ready or isn't yours any more. Attach it again and send."
     }
   },
   "chatRun": {
@@ -3663,6 +3664,15 @@
     "modelAuto": "Auto",
     "modelAutoHow": "Haiku reads, Sonnet writes",
     "removeChip": "Remove {label}",
+    "files": {
+      "uploading": "Uploading…",
+      "sendWaits": "Uploading · Send waits for your files",
+      "type": "This file type isn't supported.",
+      "size": "Files must be 10 MB or smaller.",
+      "count": "You can attach up to 5 files.",
+      "failed": "Upload failed.",
+      "retry": "Retry"
+    },
     "slash": {
       "label": "Skills and shortcuts",
       "title": "Shortcuts",
@@ -3691,6 +3701,7 @@
     "plus": {
       "label": "Attach, read a page or connect a tool",
       "attach": "Attach files",
+      "attachNote": "Up to 5 files, 10 MB each",
       "connect": "Connect a tool",
       "connectAsk": "Ask your Admin to connect",
       "connectNote": "Admins connect · others ask an Admin",
@@ -3716,8 +3727,7 @@
       "stopped": "Stopped · done steps stay",
       "homeGhost": "Why did our Perplexity citations drop this week?",
       "dockGhost": "Start task 2: comparison page",
-      "panelGhost": "Show which pages Perplexity cites most",
-      "attach": "Attach files comes with W1-13"
+      "panelGhost": "Show which pages Perplexity cites most"
     },
     "mode": {
       "label": "Run mode",

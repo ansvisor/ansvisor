@@ -79,6 +79,7 @@ import {
 } from './scope';
 import { dataBlock, guardData, isUntrustedRead } from './untrusted';
 import { runLoggedWrite } from './write';
+import { MAX_UPLOADS } from './uploads';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -131,6 +132,8 @@ export type EngineFailureCode =
   | 'rate_limited'
   | 'not_waiting'
   | 'approval_mismatch'
+  /** A file attached isn't the person's, isn't up, or went with another message (W1-13). */
+  | 'attachments'
   | 'failed';
 
 /** A refusal as a value, never thrown (#1777): the route answers with its status. */
@@ -220,6 +223,8 @@ export const startRunInput = z.object({
   brandId: z.guid().nullable().optional(),
   mode: z.enum(CHAT_MODES).default('auto'),
   timezone: z.string().trim().max(64).optional(),
+  /** The files attached to the message (chat_uploads, W1-13): the person's own, up and ready. */
+  attachmentIds: z.array(z.string().uuid()).max(MAX_UPLOADS).optional(),
 });
 
 export type StartRunResult =
@@ -290,6 +295,24 @@ export async function startChatRun(actor: ChatActor, raw: unknown): Promise<Star
     );
   }
 
+  // The files go with the message only when each is the person's own, up,
+  // and not sent with another (00409); else nothing is kept.
+  const attachments = [...new Set(input.attachmentIds ?? [])];
+  if (attachments.length > 0) {
+    const { data, error } = await supabaseAdmin
+      .from('chat_uploads')
+      .select('id')
+      .in('id', attachments)
+      .eq('user_id', actor.userId)
+      .eq('organization_id', actor.organizationId)
+      .eq('status', 'ready')
+      .is('message_id', null);
+    if (error) throw new Error(`Chat could not read the attachments: ${error.message}`);
+    if ((data ?? []).length !== attachments.length) {
+      return failure(400, 'attachments', t('error.attachments'));
+    }
+  }
+
   let conversationId = input.conversationId ?? null;
   let brandId: string | null = null;
   if (conversationId) {
@@ -331,11 +354,19 @@ export async function startChatRun(actor: ChatActor, raw: unknown): Promise<Star
 
   const timezone = validTimezone(input.timezone);
   // One after the other, so the question comes before its answer.
-  await insertRow(
+  const questionId = await insertRow(
     'chat_messages',
     { conversation_id: conversationId, role: 'user', content_md: input.message },
     'keep the message',
   );
+  if (attachments.length > 0) {
+    const { error } = await supabaseAdmin
+      .from('chat_uploads')
+      .update({ message_id: questionId, conversation_id: conversationId })
+      .in('id', attachments)
+      .eq('user_id', actor.userId);
+    if (error) throw new Error(`Chat could not attach the files: ${error.message}`);
+  }
   const answerId = await insertRow(
     'chat_messages',
     { conversation_id: conversationId, role: 'assistant', content_md: '', timezone },

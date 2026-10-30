@@ -1207,6 +1207,51 @@ describe('starting', () => {
     expect(parse({ conversationId: 'not-an-id' })).toBe(false);
   });
 
+  it('sends the person’s ready files with the message, and refuses one that isn’t ready first', async () => {
+    useModels([READY], [text('Hi.')]);
+    db.rpcs.chat_run_limits = () => ({
+      workspaceRunning: 0,
+      userRunning: 0,
+      messagesHour: 0,
+      messagesDay: 0,
+    });
+    const FILE = '11111111-2222-4333-8444-555555555555';
+    const PENDING = '11111111-2222-4333-8444-666666666666';
+    const upload = (id: string, status: string) => ({
+      id,
+      user_id: PEOPLE.admin,
+      organization_id: ORG,
+      status,
+      message_id: null,
+      conversation_id: null,
+    });
+    db.tables.chat_uploads = [upload(FILE, 'ready'), upload(PENDING, 'pending')];
+    const chats = db.tables.chat_conversations.length;
+    expect(
+      await engine.startChatRun(ADMIN, {
+        message: 'Read this',
+        brandId: BRAND,
+        attachmentIds: [FILE, PENDING],
+      }),
+    ).toMatchObject({ ok: false, status: 400, code: 'attachments' });
+    // Refused before anything is kept: no chat, no message.
+    expect(db.tables.chat_conversations).toHaveLength(chats);
+
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Read this',
+      brandId: BRAND,
+      attachmentIds: [FILE],
+    });
+    expect(started.ok).toBe(true);
+    const question = db.tables.chat_messages.find(
+      (m) => m.role === 'user' && m.content_md === 'Read this',
+    );
+    const file = db.tables.chat_uploads.find((r) => r.id === FILE);
+    expect(file?.message_id).toBe(question?.id);
+    if (started.ok) expect(file?.conversation_id).toBe(started.conversationId);
+    expect(db.tables.chat_uploads.find((r) => r.id === PENDING)?.message_id).toBeNull();
+  });
+
   it('queues a run while every slot is busy', async () => {
     useModels([READY], [text('Hi.')]);
     db.rpcs.chat_run_limits = () => ({
