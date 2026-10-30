@@ -11,7 +11,7 @@ import { asService } from './chat-facts';
  */
 export async function getOverviewSummaryFor(
   auth: McpAuthContext,
-  params: { brandId: string; dateFrom?: string; dateTo?: string },
+  params: { brandId: string; dateFrom?: string; dateTo?: string; model?: string },
 ) {
   const summary = await getVisibilitySummaryFor(auth, params);
   if (!summary) return null;

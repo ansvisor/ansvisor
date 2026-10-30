@@ -3551,6 +3551,7 @@
   },
   "chatEngine": {
     "allTime": "All time",
+    "lastDays": "Last {count} days",
     "since": "Since {date}",
     "until": "Until {date}",
     "range": "{from} – {to}",

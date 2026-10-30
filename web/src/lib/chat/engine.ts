@@ -64,6 +64,14 @@ import {
   writeCap,
   type ReadBudget,
 } from './run-limits';
+import {
+  DEFAULT_RANGE_DAYS,
+  brandModels,
+  capRows,
+  scopeRead,
+  type ScopeUsed,
+  type ScopedRead,
+} from './scope';
 import { runLoggedWrite } from './write';
 
 /**
@@ -810,12 +818,14 @@ function systemPrompt(rc: RunContext, phase: ChatPhase): string {
   ];
   if (phase === 'read') {
     lines.push(
-      `You are gathering what the answer needs. Call the read tools you need, at most ${rc.budget.reads} in all, together when they don't depend on each other. Prefer summaries and a date range; read all time only when the person asks for it. Don't write the answer: another step writes it. When you have enough, or need nothing, answer {"ready": true}.`,
+      `You are gathering what the answer needs. Call the read tools you need, at most ${rc.budget.reads} in all, together when they don't depend on each other. Prefer summaries. The app sets each read's period (the last ${DEFAULT_RANGE_DAYS} days unless the person asks for all time), keeps it to the plan's platforms and caps its rows: give dates or a platform only when the person names them. Don't write the answer: another step writes it. When you have enough, or need nothing, answer {"ready": true}.`,
     );
   } else {
     lines.push(
       [
-        'Answer from the data you read; never invent a number. Say which period and platforms numbers cover, and say plainly when data is missing.',
+        'Answer from the data you read; never invent a number. Each read says the period and platforms it covered (`scope`): say them with its numbers, and say plainly when data is missing.',
+        'A list with `truncated: true` was cut to its first rows (a series by date: its latest): `{list}_more` says how many were left out (null: more, count unknown). Never present a cut list as complete or count it as a total.',
+        "A result with code \"not_on_plan\": the workspace's plan doesn't track that platform; say so in one sentence, naming the platforms it does track (`on_plan`), and don't try again.",
         "To make a change, call its tool: the app asks the person first when it should. Don't ask for permission in text, and don't say a change is made until its tool returned ok.",
         'A result with code "skipped": the person said no, so don\'t make that change. Codes forbidden_role, plan_locked, policy_never, subscription_inactive, demo_brand, brand_scope, execute_off, no_access: the person already sees a card saying why; say it in one short sentence and don\'t try again.',
         "Never show ids, tool names, JSON or code to the person. Answer in the person's language, in short Markdown.",
@@ -985,7 +995,7 @@ async function handleCall(
     case 'deny':
       return result(call, await deny(rc, tool, ctx, facts, decision.denial, input), true);
     case 'run': {
-      if (tool.class === 'read') return readCall(rc, tool, call, input);
+      if (tool.class === 'read') return readCall(rc, tool, call, input, ctx);
       // A change that runs without a card: Always, Full auto or the person's tick.
       const approval = approvalFor(decision);
       if (!approval || approval.kind === 'run') return result(call, { code: 'failed' }, true);
@@ -1122,26 +1132,56 @@ async function openCard(
   };
 }
 
-/** A read's scope in names (CHAT-03 item 5): its dates ("All time" when none) and platforms. */
-export function scopeOf(tool: ChatTool, input: Record<string, unknown>): ChatStepScope {
+/**
+ * A read's scope in names (CHAT-03 item 5): its dates as the server set them
+ * ("Last 30 days", "Oct 1 – Oct 15", "All time") and its platforms (the
+ * plan's when the server picked them, else the ones asked for).
+ */
+export function scopeOf(
+  tool: ChatTool,
+  input: Record<string, unknown>,
+  scoped?: Pick<Extract<ScopedRead, { kind: 'read' }>, 'used' | 'platformNames'>,
+): ChatStepScope {
   const scope: ChatStepScope = {};
   const shape = tool.inputSchema.shape as Record<string, unknown>;
-  if ('date_from' in shape || 'date_to' in shape) {
+  const used = scoped?.used;
+  if (used && (used.dates === 'default' || used.dates === 'days')) {
+    scope.dateRange = t('lastDays', { count: used.days ?? DEFAULT_RANGE_DAYS });
+  } else if (used?.dates === 'all_time' && used.days) {
+    scope.dateRange = t('lastDays', { count: used.days });
+  } else if ('date_from' in shape || 'date_to' in shape) {
     scope.dateRange = dateRangeLabel(input.date_from, input.date_to);
   }
-  const platforms = typeof input.platform === 'string' ? input.platform : input.model;
-  if (typeof platforms === 'string' && platforms.trim()) {
-    const names = platforms
-      .split(',')
-      .map((slug) => slug.trim())
-      .filter(Boolean)
-      .map(platformName);
+  const asked = typeof input.platform === 'string' ? input.platform : input.model;
+  const names =
+    scoped?.platformNames ??
+    (typeof asked === 'string' && asked.trim()
+      ? [
+          ...new Set(
+            asked
+              .split(',')
+              .map((slug) => slug.trim())
+              .filter(Boolean)
+              .map(platformName),
+          ),
+        ]
+      : []);
+  if (names.length > 0) {
     scope.platforms =
       names.length > 2
         ? [...names.slice(0, 2), t('morePlatforms', { count: names.length - 2 })]
         : names;
   }
   return scope;
+}
+
+/** What the model is told a read covered, beside its rows: the step's words, never ids. */
+function scopeForModel(scope: ChatStepScope, used: ScopeUsed): Json {
+  const note: Record<string, Json> = {};
+  if (scope.dateRange) note.period = scope.dateRange;
+  if (used.dateFrom || used.dateTo) note.dates = { from: used.dateFrom, to: used.dateTo };
+  if (scope.platforms) note.platforms = scope.platforms;
+  return note;
 }
 
 const day = (value: unknown) => {
@@ -1293,15 +1333,40 @@ function toolContext(rc: RunContext, role: PrecedenceContext['role']): McpAuthCo
   };
 }
 
-/** A read: its step, its rows and data date, and its output cut to the run's budget. */
+/**
+ * A read: scoped by the server first (scope.ts: its dates, the plan's
+ * platforms, its rows), then its step, its rows and data date, and its
+ * output cut to its row limit and the run's budget. A platform the plan
+ * doesn't track isn't read: the model is told so (`not_on_plan`).
+ */
 async function readCall(
   rc: RunContext,
   tool: ChatTool,
   call: PendingCall,
-  input: Record<string, unknown>,
+  asked: Record<string, unknown>,
+  ctx: PrecedenceContext | null,
 ): Promise<CallOutcome> {
+  const scoped = await scopeRead(tool, asked, {
+    question: rc.progress.question,
+    limits: ctx?.plan.limits ?? null,
+    planName: ctx?.plan.planName ?? rc.planName,
+    modelsOf: brandModels,
+  });
+  if (scoped.kind === 'failed') return result(call, { code: 'failed' }, true);
+  if (scoped.kind === 'not_on_plan') {
+    // The writer answers from the read log: it says the plan doesn't track it.
+    if (rc.progress.phase === 'read' && rc.models.phases === 'auto') {
+      rc.progress.readLog.push({
+        tool: tool.name,
+        input: toJson(asked),
+        result: toJson(scoped.result),
+      });
+    }
+    return result(call, scoped.result, true);
+  }
+  const input = scoped.input;
   const n = ++rc.progress.steps;
-  const scope = scopeOf(tool, input);
+  const scope = scopeOf(tool, input, scoped);
   const started = Date.now();
   let row = await insertStep(rc.run.id, {
     position: n,
@@ -1309,9 +1374,10 @@ async function readCall(
     status: 'running',
     label: toolWords(tool, 'step'),
     detail: scopeDetail(scope),
-    scope: { ...scope },
+    // What the person sees, and the scope the server used (CHAT-04 item 4).
+    scope: { ...scope, used: { ...scoped.used } },
     tool: tool.name,
-    debug: { input },
+    debug: { input, asked },
   });
   rc.sink.emit('step.started', { step: clientStep(row) });
   rc.progress.reads += 1;
@@ -1325,16 +1391,21 @@ async function readCall(
         : outcome.timedOut
           ? t('step.timedOut')
           : t('step.readFailed'),
-      debug: { input, error: outcome.error, latencyMs },
+      debug: { input, asked, error: outcome.error, latencyMs },
     });
     rc.sink.emit('step.finished', { step: clientStep(row) });
     return result(call, { code: outcome.timedOut ? 'timeout' : 'failed' }, true);
   }
   if (!TRUSTED_READS.has(tool.name)) rc.progress.tainted = true;
-  const rows = countRows(outcome.value);
-  const asOf = dataAsOfOf(outcome.value);
+  const output = toJson(outcome.value);
+  const capped = capRows(output, scoped.cap);
+  const rows = countRows(capped.value);
+  const asOf = dataAsOfOf(output);
   const room = Math.min(rc.budget.resultChars, rc.budget.dataChars - rc.progress.dataChars);
-  const fitted = fitResult(outcome.value, Math.max(500, room));
+  const fitted = fitResult(
+    withScope(capped.value, scopeForModel(scope, scoped.used)),
+    Math.max(500, room),
+  );
   rc.progress.dataChars += fitted.chars;
   if (asOf && (!rc.progress.dataAsOf || asOf > rc.progress.dataAsOf)) rc.progress.dataAsOf = asOf;
   const source = toolWords(tool, 'step').replace(/^Read /, '');
@@ -1347,10 +1418,17 @@ async function readCall(
     detail: scopeDetail(scope, rows),
     rowCount: rows ?? null,
     dataAsOf: asOf,
-    debug: { input, output: toJson(outcome.value), latencyMs },
+    debug: { input, asked, output, latencyMs, cut: capped.cut },
   });
   rc.sink.emit('step.finished', { step: clientStep(row) });
   return result(call, fitted.value);
+}
+
+/** A read's output with the scope it covered, first: a list becomes `items`. */
+function withScope(value: Json, scope: Json): Json {
+  if (!scope || (typeof scope === 'object' && Object.keys(scope).length === 0)) return value;
+  if (value && typeof value === 'object' && !Array.isArray(value)) return { scope, ...value };
+  return { scope, items: value };
 }
 
 /** A server action's typed failure ({ ok: false, reason }): the change wasn't made. */

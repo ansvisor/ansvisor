@@ -24,12 +24,14 @@ export const VISIBILITY_READS = [
       brand_id: contentUuid.describe('Brand id, from list_brands.'),
       date_from: z.string().optional().describe('ISO timestamp (inclusive) lower bound.'),
       date_to: z.string().optional().describe('ISO timestamp (inclusive) upper bound.'),
+      model: z.string().optional().describe('A model slug, or comma-separated slugs.'),
     }),
     run: (ctx, input) =>
       getOverviewSummaryFor(ctx, {
         brandId: input.brand_id,
         dateFrom: input.date_from,
         dateTo: input.date_to,
+        model: input.model,
       }),
     fixture: { input: { brand_id: FIXTURE_IDS.brand } },
   }),
