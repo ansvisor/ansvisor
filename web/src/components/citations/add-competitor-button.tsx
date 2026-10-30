@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { addCompetitor } from '@/lib/actions/competitor';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useUserRole } from '@/hooks/use-user-role';
 
 /** Turn a domain into a first-guess competitor name, e.g. caranddriver.com → "Caranddriver". */
 export function deriveCompetitorName(domain: string): string {
@@ -53,6 +54,8 @@ export function AddCompetitorButton({
   // A read-only workspace (plan not active): the upgrade dialog instead of this one.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  // Admins and managers add competitors; others only read them.
+  const { canManage } = useUserRole();
 
   const openDialog = guard(
     () => {
@@ -77,6 +80,8 @@ export function AddCompetitorButton({
       setSaving(false);
     }
   }
+
+  if (!canManage) return null;
 
   return (
     <Dialog

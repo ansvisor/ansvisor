@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 
 /**
  * Competitors on a read-only workspace (plan not active): Add, Suggest (it
@@ -52,15 +53,17 @@ let container: HTMLDivElement;
 let root: Root;
 const openUpgrade = vi.fn();
 
-async function render(isLocked: boolean) {
+async function render(isLocked: boolean, role: TeamRole = 'manager') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <UpgradeDialogContext.Provider
-          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
-        >
-          <CompetitorsPage />
-        </UpgradeDialogContext.Provider>
+        <RoleProvider role={role}>
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <CompetitorsPage />
+          </UpgradeDialogContext.Provider>
+        </RoleProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -118,4 +121,17 @@ describe('Competitors on a read-only workspace', () => {
     expect(dialog()).not.toBeNull();
     expect(suggestCompetitors).toHaveBeenCalledTimes(1);
   });
+});
+
+describe('Competitors for a member who is not an admin or a manager', () => {
+  it.each(['analyst', 'agency_partner'] as const)(
+    'shows an %s the competitors without Add, Suggest or Delete',
+    async (role) => {
+      await render(false, role);
+      expect(container.textContent).toContain('Rival');
+      expect(headerButton('Add Competitor')).toBeUndefined();
+      expect(headerButton('Suggest competitors')).toBeUndefined();
+      expect(container.querySelector('button[aria-label="Delete"]')).toBeNull();
+    },
+  );
 });
