@@ -20,4 +20,18 @@ describe('start_brand_getting_started', () => {
     expect(definitions.length).toBeGreaterThan(1);
     expect(latest).toContain('and not b.is_demo');
   });
+
+  // 00383's backfill confirms only brands the demo brand made "a later
+  // brand". A second brand whose first was deleted, in an organization that
+  // never had a demo brand, keeps asking.
+  it('backfills only in organizations with a demo brand', () => {
+    const migration = readFileSync(
+      join(__dirname, '../../../../supabase/migrations/00383_getting_started_skip_demo_brand.sql'),
+      'utf8',
+    );
+    const backfill = migration.slice(migration.indexOf('update public.getting_started gs'));
+    expect(backfill).toMatch(
+      /and exists \(\s*select 1 from public\.brands demo\s+where demo\.organization_id = b\.organization_id\s+and demo\.is_demo\s*\)/,
+    );
+  });
 });

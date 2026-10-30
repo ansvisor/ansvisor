@@ -44491,9 +44491,11 @@ create policy "topic_suggestions: admin/manager update" on public.topic_suggesti
 --   * start_brand_getting_started: only the organization's other real brands
 --     (is_demo false) make a new brand ask first.
 --   * Brands already caught by it: a real brand whose Getting started still
---     waits for an answer (confirmed_at and dismissed_at null) and that has
---     no real brand before it in its organization runs it now, as it would
---     have.
+--     waits for an answer (confirmed_at and dismissed_at null), that has no
+--     real brand before it in its organization, in an organization with a
+--     demo brand, runs it now, as it would have. A second brand whose first
+--     was deleted, with no demo brand, still asks: the demo brand didn't
+--     cause it.
 
 create or replace function public.start_brand_getting_started()
 returns trigger
@@ -44537,6 +44539,14 @@ update public.getting_started gs
        and earlier.id <> b.id
        and not earlier.is_demo
        and earlier.created_at <= b.created_at
+   )
+   -- Only where a demo brand is what made it "a later brand". Its own
+   -- created_at is counted back from each rebuild (server/src/lib/demo/
+   -- core.js), so it can't be compared.
+   and exists (
+     select 1 from public.brands demo
+     where demo.organization_id = b.organization_id
+       and demo.is_demo
    );
 
 -- ─────────────────────────────────────────────────────────────────────────
