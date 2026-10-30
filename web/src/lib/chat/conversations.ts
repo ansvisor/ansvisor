@@ -193,8 +193,14 @@ async function itemsOf(reader: Reader, actor: ChatActor, chats: ChatRow[]) {
     brandIds.length
       ? reader.from('brands').select('id, name').in('id', brandIds)
       : Promise.resolve({ data: [], error: null }),
+    // A person reads only their own profile, so a teammate's name is read by
+    // the server, within the workspace; only its initials leave.
     ownerIds.length
-      ? reader.from('profiles').select('id, full_name').in('id', ownerIds)
+      ? supabaseAdmin
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', ownerIds)
+          .eq('organization_id', actor.organizationId)
       : Promise.resolve({ data: [], error: null }),
   ]);
   if (runs.error) throw new Error(`Could not read the chats' runs: ${runs.error.message}`);
