@@ -350,6 +350,13 @@ describe('Why’s counts (00423)', () => {
     // Grouped before they meet: one row a side, so no join repeats a count.
     expect(why).toMatch(/competitor_cells as \([\s\S]*?group by/);
     expect(why).toMatch(/left join competitor_cells c/);
+    // Share of voice and visibility as Insights counts them, and whether old rows were read.
+    expect(why).toContain('sum(r.total_mentions)');
+    expect(why).toContain('sum(r.mention_count)');
+    expect(why).toMatch(
+      /count\(distinct r\.prompt_id\) filter \(where r\.has_mention or r\.has_citation\)/,
+    );
+    expect(why).toMatch(/'complete', not exists/);
     expect(why).toContain("'[]'::jsonb");
   });
 });

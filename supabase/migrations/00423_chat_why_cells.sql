@@ -9,11 +9,16 @@
 --   * cells: per prompt, platform, model and location, and period (a or b):
 --     the tracked day rows (runs) and those where the brand was named or
 --     cited (visible_runs); answers, those naming the brand and those citing
---     its pages; the positions where it was named (sum and count); the
---     answers naming a tracked competitor (summed over competitors, for share
---     of voice); and the newest answer.
---   * daily: the same sums per day from p_series_from to p_b_to, for the
---     change point (§1 item 5.2).
+--     its pages; its mentions and its tracked competitors' (share of voice as
+--     Insights counts it: total_mentions against the competitors'
+--     mention_count); the positions where it was named (sum and count); and
+--     the newest answer.
+--   * daily: the same sums per day from p_series_from to p_b_to, with the
+--     prompts named or cited and those tracked (visibility as Insights counts
+--     it), for the change point (§1 item 5.2).
+--   * complete: false while a row read predates 00130/00131's columns (its
+--     sums count as 0 until the daily refresh rewrites its day), as
+--     insights_kpi_series says it.
 --
 -- From insights_prompt_daily and insights_competitor_prompt_daily, on their
 -- (brand_id, day) index, each with its own day ranges; the competitors' sums
@@ -68,9 +73,12 @@ begin
            d.answer_count, d.has_mention, d.has_citation,
            coalesce(d.mention_answers, 0) as mention_answers,
            coalesce(d.citation_answers, 0) as citation_answers,
+           coalesce(d.total_mentions, 0) as total_mentions,
            coalesce(d.sum_position, 0) as sum_position,
            coalesce(d.position_count, 0) as position_count,
-           d.max_created_at
+           d.max_created_at,
+           -- A row the daily refresh hasn't rewritten since 00130/00131.
+           (d.mention_answers is null or d.negative_count is null) as stale
     from public.insights_prompt_daily d
     where d.brand_id = p_brand_id
       and (d.day between p_a_from and p_a_to
@@ -87,7 +95,7 @@ begin
              when c.day between p_a_from and p_a_to then 'a'
              when c.day between p_b_from and p_b_to then 'b'
            end as period,
-           coalesce(c.mention_answers, 0) as mention_answers
+           c.mention_count
     from public.insights_competitor_prompt_daily c
     where c.brand_id = p_brand_id
       and (c.day between p_a_from and p_a_to
@@ -105,6 +113,7 @@ begin
            sum(r.answer_count)::integer as answers,
            sum(r.mention_answers)::integer as mention_answers,
            sum(r.citation_answers)::integer as citation_answers,
+           sum(r.total_mentions)::integer as brand_mentions,
            sum(r.sum_position) as sum_position,
            sum(r.position_count)::integer as position_count,
            max(r.max_created_at) as last_at
@@ -114,7 +123,7 @@ begin
   ),
   competitor_cells as (
     select r.prompt_id, r.platform, r.model_used, r.region, r.period,
-           sum(r.mention_answers)::integer as competitor_mentions
+           sum(r.mention_count)::integer as competitor_mentions
     from competitor_rows r
     where r.period is not null
     group by r.prompt_id, r.platform, r.model_used, r.region, r.period
@@ -126,19 +135,26 @@ begin
            sum(r.answer_count)::integer as answers,
            sum(r.mention_answers)::integer as mention_answers,
            sum(r.citation_answers)::integer as citation_answers,
+           sum(r.total_mentions)::integer as brand_mentions,
            sum(r.sum_position) as sum_position,
-           sum(r.position_count)::integer as position_count
+           sum(r.position_count)::integer as position_count,
+           -- Visibility as Insights counts it: prompts named or cited, of those tracked.
+           (count(distinct r.prompt_id) filter (where r.has_mention or r.has_citation))::integer
+             as visible_prompts,
+           count(distinct r.prompt_id)::integer as active_prompts
     from brand_rows r
     where r.day between p_series_from and p_b_to
     group by r.day
   ),
   competitor_daily as (
-    select r.day, sum(r.mention_answers)::integer as competitor_mentions
+    select r.day, sum(r.mention_count)::integer as competitor_mentions
     from competitor_rows r
     where r.day between p_series_from and p_b_to
     group by r.day
   )
   select jsonb_build_object(
+    -- As insights_kpi_series: false while a row read predates 00130/00131's columns.
+    'complete', not exists (select 1 from brand_rows r where r.stale),
     'cells', coalesce((
       select jsonb_agg(jsonb_build_object(
         'prompt_id', b.prompt_id,
@@ -151,6 +167,7 @@ begin
         'answers', b.answers,
         'mention_answers', b.mention_answers,
         'citation_answers', b.citation_answers,
+        'brand_mentions', b.brand_mentions,
         'sum_position', b.sum_position,
         'position_count', b.position_count,
         'competitor_mentions', coalesce(c.competitor_mentions, 0),
@@ -172,8 +189,11 @@ begin
         'answers', b.answers,
         'mention_answers', b.mention_answers,
         'citation_answers', b.citation_answers,
+        'brand_mentions', b.brand_mentions,
         'sum_position', b.sum_position,
         'position_count', b.position_count,
+        'visible_prompts', b.visible_prompts,
+        'active_prompts', b.active_prompts,
         'competitor_mentions', coalesce(c.competitor_mentions, 0)
       ) order by b.day)
       from brand_daily b
