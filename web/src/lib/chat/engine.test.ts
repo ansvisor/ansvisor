@@ -8,8 +8,10 @@ import {
   OTHER_ORG,
   PEOPLE,
   COMPETITOR,
+  DRAFT,
   TOPIC,
   fakeCreateDraft,
+  seedDraft,
   seedWorkspace,
 } from './testing/chat-fixtures';
 
@@ -26,7 +28,13 @@ import {
 vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('@/lib/chat/testing/fake-supabase')).createFakeSupabase(),
 }));
-vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }));
+vi.mock('@/lib/actions/content-drafts', () => ({
+  createContentDraft: vi.fn(),
+  updateContentDraft: vi.fn(),
+}));
+vi.mock('@/lib/actions/cms-send', () => ({ sendDraftToCms: vi.fn() }));
+vi.mock('@/lib/actions/reports', () => ({ createReport: vi.fn() }));
+vi.mock('@/lib/actions/audits', () => ({ startSiteAudits: vi.fn(), getAuditQuota: vi.fn() }));
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
 vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: vi.fn() }));
@@ -114,6 +122,8 @@ const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { requestAccess } = await import('@/lib/actions/chat-access-requests');
 const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
+const { sendDraftToCms } = await import('@/lib/actions/cms-send');
+const { getAuditQuota, startSiteAudits } = await import('@/lib/actions/audits');
 const engine = await import('./engine');
 const { readRunEvents } = await import('./engine-store');
 const { runFromEvents } = await import('./run-state');
@@ -1296,6 +1306,85 @@ describe('the tracking setup (W2-06)', () => {
       'Pricing · “crm for agencies”, “crm for law firms” +1 · Northwind',
     );
     expectClean([...(await eventsOf(removing)), ...(await eventsOf(adding))]);
+  });
+});
+
+describe('content, reports and Site Audit (W2-07)', () => {
+  beforeEach(() => seedDraft(db));
+
+  it('says on a CMS send’s card that it can’t be undone, and why it didn’t go', async () => {
+    vi.mocked(sendDraftToCms).mockResolvedValue({
+      ok: false,
+      reason: 'not_connected',
+      message: 'Connect Webflow in Settings › Integrations first.',
+    });
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'push_cms_draft', { draft_id: DRAFT, destination: 'webflow' })),
+        text('Webflow isn’t connected.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Send the FAQ to Webflow', 'auto');
+    const card = ofType(await eventsOf(runId), 'confirm.required')[0].data;
+    expect(card).toMatchObject({
+      action: 'Send drafts to your CMS',
+      target: '“Pricing FAQ” → Webflow · Northwind',
+      noUndo: true,
+    });
+    await approve(ADMIN, runId);
+    expect(stepsOf(runId)[0]).toMatchObject({
+      status: 'error',
+      detail: 'Connect Webflow in Settings › Integrations first.',
+    });
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('"code":"not_connected"');
+    expect(db.tables.chat_activity_log).toEqual([]);
+  });
+
+  it('starts several audits only from a card that says what they use of the month', async () => {
+    vi.mocked(getAuditQuota).mockResolvedValue({
+      used: 120,
+      limit: 500,
+      remaining: 380,
+    } as never);
+    vi.mocked(startSiteAudits).mockResolvedValue({ ok: true, started: 2, audits: [] });
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'run_site_audit', {
+            brand_id: BRAND,
+            urls: ['https://acme.example/pricing', 'https://acme.example/features'],
+          }),
+        ),
+        text('Started.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Audit both pages', 'full_auto');
+    expect(runRow(runId).status).toBe('waiting');
+    expect(ofType(await eventsOf(runId), 'confirm.required')[0].data).toMatchObject({
+      target:
+        '“https://acme.example/pricing”, “https://acme.example/features” · Uses 2 audits of 380 left this month · Northwind',
+      noUndo: true,
+    });
+    expect(startSiteAudits).not.toHaveBeenCalled();
+    await approve(ADMIN, runId);
+    expect(startSiteAudits).toHaveBeenCalledWith(BRAND, [
+      'https://acme.example/pricing',
+      'https://acme.example/features',
+    ]);
+  });
+
+  it('names a draft it changes by its title now, and a new title beside it', async () => {
+    useModels(
+      [READY],
+      [calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, title: 'Pricing FAQ for teams' }))],
+    );
+    const runId = await turn(ADMIN, 'Rename the FAQ', 'ask_first');
+    const card = ofType(await eventsOf(runId), 'confirm.required')[0].data;
+    expect(card.target).toBe('“Pricing FAQ” → “Pricing FAQ for teams” · Northwind');
+    // Its Undo puts the page back: no "can't be undone".
+    expect(card).not.toHaveProperty('noUndo');
   });
 });
 

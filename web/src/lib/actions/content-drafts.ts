@@ -117,6 +117,7 @@ import {
   type DraftSourcesData,
 } from '@/lib/content/sources';
 import { assertWritable } from '@/lib/subscription-guard';
+import { isManager } from '@/lib/session-role';
 
 /**
  * Content drafts (Content Editor, CE-002), read through the signed-in member's
@@ -1414,11 +1415,16 @@ export type UpdateContentDraftResult =
       /** History's version of the page before the change, which Undo restores. */
       beforeVersionId: string | null;
     }
-  | { ok: false; reason: 'not_found' | 'conflict' | 'invalid'; message: string };
+  | {
+      ok: false;
+      reason: 'forbidden_role' | 'not_found' | 'conflict' | 'invalid';
+      message: string;
+    };
 
 /**
  * A change to a draft's title or page from Chat: update_draft (CHAT-20 §9
- * row 55). History keeps the page before it first ('agent_before', CE-018:
+ * row 55). Admins and Managers, checked here (DECISIONS T: an Analyst's
+ * Chat creates drafts, and changes none). History keeps the page before it first ('agent_before', CE-018:
  * the page before an agent changes it), then it is saved as the editor
  * saves, over the page just read (saveContentDraft: the same allow-list,
  * the agent's lock, a conflict when it changed in between). Errors come
@@ -1433,6 +1439,13 @@ export async function updateContentDraft(
     return { ok: false, reason: 'invalid', message: 'That isn’t a draft’s id.' };
   }
   const supabase = await createClient();
+  if (!(await isManager(supabase))) {
+    return {
+      ok: false,
+      reason: 'forbidden_role',
+      message: 'Only an admin or a manager can change a draft from Chat.',
+    };
+  }
   const { data: current, error } = await supabase
     .from('content_drafts')
     .select('title, body_html, updated_at, archived_at')

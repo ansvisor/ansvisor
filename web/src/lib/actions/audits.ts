@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { assertWritable } from '@/lib/subscription-guard';
+import { isManager } from '@/lib/session-role';
 import { API_BASE_URL } from '@/config/api';
 import type { SiteTrust } from '@/lib/content/site-trust';
 import type { NoPlanMark } from '@/lib/billing/no-plan';
@@ -331,11 +332,12 @@ export async function runAuditsBulk(brandId: string, urls: string[]): Promise<{ 
 
 export type StartSiteAuditsResult =
   | { ok: true; started: number; audits: { id: string; url: string }[] }
-  | { ok: false; reason: 'quota_exceeded' | 'failed'; message: string };
+  | { ok: false; reason: 'forbidden_role' | 'quota_exceeded' | 'failed'; message: string };
 
 /**
  * Start audits of a brand's pages: Chat's run_site_audit (CHAT-20 §9 row
- * 37). One page as Run audit starts it, several as the Pages tab's Re-audit
+ * 37). Admins and Managers, checked here (DECISIONS T). One page as Run
+ * audit starts it, several as the Pages tab's Re-audit
  * (the API's bulk route: every page fits the month's Site Audit quota, or
  * none starts). The quota is the API's check, said back as quota_exceeded.
  * Errors come back as values (#427).
@@ -345,6 +347,13 @@ export async function startSiteAudits(
   urls: string[],
 ): Promise<StartSiteAuditsResult> {
   await assertWritable({ brandId });
+  if (!(await isManager(await createClient()))) {
+    return {
+      ok: false,
+      reason: 'forbidden_role',
+      message: 'Only an admin or a manager can start audits from Chat.',
+    };
+  }
   const session = await getSession();
   const many = urls.length > 1;
   let res: Response;
