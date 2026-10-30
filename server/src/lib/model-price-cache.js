@@ -64,8 +64,10 @@ export function variesByTime(row) {
  * The price in effect for a row: its time override at `now`, when one
  * applies (CHAT-16 item 3), and on top the prompt-size override for a call
  * that large (`promptTokens` at or above its min_prompt_tokens; the largest
- * that fits). `{ input, output }` in USD per million tokens; null when the
- * row has no usable base price.
+ * that fits). `{ input, output }` in USD per million tokens, and `cacheRead`
+ * when the row has a cache-read rate; null when the row has no usable base
+ * price. An override that raises the input rate without its own cache-read
+ * rate raises that one as much: never lowered by a guess.
  *
  * @param {object} row  a chat_model_prices row
  * @param {{ now?: Date, promptTokens?: number }} [at]
@@ -73,14 +75,19 @@ export function variesByTime(row) {
 export function priceInEffect(row, { now = new Date(), promptTokens = 0 } = {}) {
   if (!row || row.input_per_m == null || row.output_per_m == null) return null;
   let price = { input: Number(row.input_per_m), output: Number(row.output_per_m) };
+  if (row.cache_read_per_m != null) price.cacheRead = Number(row.cache_read_per_m);
   const overrides = Array.isArray(row.overrides) ? row.overrides : [];
   const apply = (override) => {
     const input = perMillion(override.prompt);
     const output = perMillion(override.completion);
-    price = {
-      input: input ?? price.input,
-      output: output ?? price.output,
-    };
+    const cacheRead = perMillion(override.input_cache_read);
+    const next = { input: input ?? price.input, output: output ?? price.output };
+    if (cacheRead != null) next.cacheRead = cacheRead;
+    else if (price.cacheRead != null) {
+      const raised = price.input > 0 ? (price.cacheRead * next.input) / price.input : 0;
+      next.cacheRead = Math.max(price.cacheRead, raised);
+    }
+    price = next;
   };
   const timed = overrides.find((o) => isTimeOverride(o) && inTimeWindow(o, now));
   if (timed) apply(timed);

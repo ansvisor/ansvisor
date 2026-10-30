@@ -15,6 +15,10 @@ vi.mock('@/lib/actions/cancel-feedback', () => ({
 }));
 const refresh = vi.hoisted(() => vi.fn());
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
+const refreshAiUsage = vi.hoisted(() => vi.fn());
+vi.mock('@/components/providers/ai-usage-provider', () => ({
+  useAiUsage: () => ({ usage: null, refresh: refreshAiUsage }),
+}));
 
 (
   globalThis as typeof globalThis & {
@@ -222,6 +226,24 @@ describe('the billing period', () => {
     expect(growth.textContent).toContain('$2,390/yr');
   });
 
+  it('marks the period shown, filled dark, and only that one', async () => {
+    await render('starter', { status: 'trialing' });
+    const pressed = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')]
+        .filter((b) => b.getAttribute('aria-pressed') === 'true')
+        .map((b) => [b.textContent, b.classList.contains('bg-primary')]);
+    const filled = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')].filter((b) =>
+        b.classList.contains('bg-primary'),
+      );
+
+    expect(pressed()).toEqual([['Monthly', true]]);
+    expect(filled()).toHaveLength(1);
+    await click('AnnualSave 20%');
+    expect(pressed()).toEqual([['AnnualSave 20%', true]]);
+    expect(filled()).toHaveLength(1);
+  });
+
   it('moves a paid plan to annual billing from its own card', async () => {
     await render('starter');
     expect(button('Switch to annual billing')).toBeUndefined();
@@ -301,6 +323,8 @@ describe('buying during the free trial', () => {
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'active' }));
     // The layout reads the plan again: a read-only workspace opens up.
     expect(refresh).toHaveBeenCalledTimes(1);
+    // The header meter reads the AI usage again: the paid period starts at 0.
+    expect(refreshAiUsage).toHaveBeenCalledTimes(1);
   });
 
   it('buys a year without a code', async () => {
@@ -332,6 +356,7 @@ describe('buying during the free trial', () => {
       action: { label: 'Update card', onClick: expect.any(Function) },
     });
     expect(onUpdate).not.toHaveBeenCalled();
+    expect(refreshAiUsage).not.toHaveBeenCalled();
     // The dialog stays open to try again.
     expect(document.body.textContent).toContain('Buy Starter now?');
   });
@@ -501,6 +526,38 @@ describe('choosing a plan once the old one has ended', () => {
       returnTo: 'billing',
       mode: 'trial',
     });
+  });
+
+  it('marks the chosen way to start, filled dark, and only that one', async () => {
+    await render('starter', { status: 'incomplete', trialOffered: true });
+    const choices = () => [...container.querySelectorAll<HTMLButtonElement>('[data-choice]')];
+    const chosen = () =>
+      choices()
+        .filter((b) => b.getAttribute('aria-pressed') === 'true')
+        .map((b) => b.dataset.choice);
+    const filled = () =>
+      choices()
+        .filter((b) => b.classList.contains('bg-primary'))
+        .map((b) => b.dataset.choice);
+
+    // Monthly at first, where the first-month offer is.
+    expect(choices().map((b) => b.dataset.choice)).toEqual(['trial', 'month', 'year']);
+    expect(chosen()).toEqual(['month']);
+    expect(filled()).toEqual(['month']);
+    expect(container.querySelector('[data-choice="month"]')!.className).toContain(
+      'text-primary-foreground',
+    );
+
+    for (const choice of ['trial', 'year'] as const) {
+      await choose(choice);
+      expect(chosen()).toEqual([choice]);
+      expect(filled()).toEqual([choice]);
+      expect(
+        choices()
+          .filter((b) => b.dataset.choice !== choice)
+          .every((b) => b.className.includes('text-muted-foreground')),
+      ).toBe(true);
+    }
   });
 
   it('says so when Stripe turns the code down at Checkout, and shows the plain prices', async () => {

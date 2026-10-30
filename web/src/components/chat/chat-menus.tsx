@@ -6,6 +6,7 @@ import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -18,6 +19,7 @@ import type { ChatListItem } from '@/lib/chat/conversations';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { useChatActions } from './chat-actions';
+import { useChatDebug } from './chat-debug';
 
 /** The menus' look (mockup `.pop2`, `.mi2`): opaque, 14px corners, soft shadow. */
 const MENU =
@@ -134,8 +136,9 @@ export function ChatRowMenu({ chat }: { chat: ChatListItem }) {
 /**
  * The open chat's ⋯ in the header (CHAT-23 `header.more`, G10): Chat
  * settings (Chat's Settings page, CHAT-01 owner update), Open in new window; for the author Pin, Rename (in the title),
- * Share with team; Export chat (shown, not yet working); Activity log;
- * Archive and Delete. Split view, Schedule this and Save as agent come later.
+ * Share with team; Export chat; Activity log; for Ansvisor staff only, the
+ * Debug switch (CHAT-03 item 25, W1-15); Archive and Delete. Split view,
+ * Schedule this and Save as agent come later.
  */
 export function ChatHeaderMenu({ chat }: { chat: ChatListItem }) {
   const t = useTranslations('chatShell.actions');
@@ -189,6 +192,7 @@ export function ChatHeaderMenu({ chat }: { chat: ChatListItem }) {
         >
           {t('activity')}
         </Item>
+        <DebugItem />
         {(editable || actions.canDelete(chat)) && <DropdownMenuSeparator />}
         {editable && (
           <Item glyph="▤" action="chat.archive" onClick={() => void actions.archive(chat)}>
@@ -202,6 +206,32 @@ export function ChatHeaderMenu({ chat }: { chat: ChatListItem }) {
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * Debug (CHAT-03 item 25): Ansvisor staff only, never rendered for anyone
+ * else. On, each answer shows its steps' tools, inputs, outputs and cost.
+ */
+function DebugItem() {
+  const t = useTranslations('chatShell.actions');
+  const debug = useChatDebug();
+  if (!debug?.staff) return null;
+  return (
+    <DropdownMenuCheckboxItem
+      data-action="chat.debug"
+      checked={debug.on}
+      onCheckedChange={debug.toggle}
+      className={cn(ITEM, 'pr-8')}
+    >
+      <span aria-hidden className="w-3.5 shrink-0 text-center text-foreground">
+        ⚙
+      </span>
+      <span className="flex-1">
+        {t('debug')}
+        <span className="block text-[11.5px] text-muted-foreground">{t('debugNote')}</span>
+      </span>
+    </DropdownMenuCheckboxItem>
   );
 }
 

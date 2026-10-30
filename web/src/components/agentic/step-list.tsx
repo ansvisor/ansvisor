@@ -16,7 +16,7 @@ export interface StepRow {
   state: StepMarkerState;
   /** How it runs (Auto, Asks you, Needs your click…); none once it ran. */
   pill?: ApprovalPillKind | null;
-  /** Skipped by the person or by a Stop: greyed, with "Skipped". */
+  /** Skipped by the person or by a Stop: greyed, with its reason ("Stopped"), else "Skipped". */
   skipped?: boolean;
 }
 
@@ -68,7 +68,7 @@ export function StepList({
     <ol data-slot="step-list" className={cn('m-0 list-none p-0', className)}>
       {rows.map((row, index) => {
         const detail = row.skipped
-          ? t('skipped')
+          ? (row.detail ?? t('skipped'))
           : (row.detail ?? (row.state === 'waiting' ? t('waiting') : null));
         return (
           <li

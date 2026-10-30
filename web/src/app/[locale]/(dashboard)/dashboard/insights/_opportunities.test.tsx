@@ -193,3 +193,59 @@ describe('Opportunities on a read-only workspace (plan not active)', () => {
     expect(openUpgrade).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Track on a brand without topics: prompts are grouped under topics, so it
+ * asks for one first, with a way to the Topics tab, and tracks nothing.
+ */
+describe('Opportunities on a brand without topics', () => {
+  const render = () =>
+    act(() =>
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <Opportunities
+            brandId="b1"
+            suggestions={[suggestion('s1', 'Espresso', 800), suggestion('s2', 'Espresso', 400)]}
+            trackedTopicIds={[]}
+            topics={null}
+            entities={null}
+            slotsLeft={null}
+            contentUsage={null}
+            onTracked={() => {}}
+          />
+        </NextIntlClientProvider>,
+      ),
+    );
+  const button = (name: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === name,
+    );
+  const addTopicLink = () =>
+    [...document.querySelectorAll('a')].find((a) => a.textContent === 'Add a topic');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal(
+      'open',
+      vi.fn(() => null),
+    );
+    vi.mocked(trackSuggestions).mockResolvedValue({
+      trackedIds: [],
+      skippedIds: [],
+      error: 'Add a topic first: prompts are grouped under topics.',
+      code: 'no_topics',
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('asks for a topic first, with a way to the Topics tab, and keeps the topic on the card', async () => {
+    render();
+    await act(async () => button('Track 2')!.click());
+    expect(document.body.textContent).toContain('Add a topic first');
+    expect(addTopicLink()?.getAttribute('href')).toBe('/dashboard/prompts/topics?new=1');
+    expect(button('Track 2')).toBeDefined();
+  });
+});

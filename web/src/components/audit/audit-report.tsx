@@ -106,7 +106,9 @@ export function ScoreGauge({ score }: { score: number | null }) {
   );
 }
 
-// A value the user fills in, e.g. "[customer name]" or "[price]".
+// A value only the brand knows, for the user to fill in ("Your input
+// needed"), e.g. "[customer name]" or "[your price]". The guard takes out a
+// figure the page doesn't have: none is left to research.
 const PLACEHOLDER = /(\[[A-Za-z][A-Za-z ]{1,38}\])/;
 
 function hasPlaceholder(text: string | null | undefined): boolean {
@@ -137,6 +139,7 @@ function DraftBlock({ text, copyLabel }: { text: string; copyLabel: string }) {
           i % 2 === 1 ? (
             <mark
               key={i}
+              title={t('inputNeeded')}
               className="rounded bg-amber-100 px-0.5 font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-200"
             >
               {part}
