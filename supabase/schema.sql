@@ -44476,6 +44476,156 @@ create policy "topic_suggestions: admin/manager update" on public.topic_suggesti
   );
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00383_getting_started_skip_demo_brand.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00383: the demo brand doesn't make a real brand "a later brand"
+-- ============================================================================
+-- 00197 runs Getting started at once for an organization's first brand and
+-- asks first for a later one. Since the demo brand (00380), a person who
+-- starts without a card has the demo brand first, so the brand they set up
+-- after adding a card counted as a later brand: its Getting started waited
+-- for an answer and the Actions page said "No actions yet" instead of the
+-- 17 steps.
+--
+--   * start_brand_getting_started: only the organization's other real brands
+--     (is_demo false) make a new brand ask first.
+--   * Brands already caught by it: a real brand whose Getting started still
+--     waits for an answer (confirmed_at and dismissed_at null), that has no
+--     real brand before it in its organization, in an organization with a
+--     demo brand, runs it now, as it would have. A second brand whose first
+--     was deleted, with no demo brand, still asks: the demo brand didn't
+--     cause it.
+
+create or replace function public.start_brand_getting_started()
+returns trigger
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+begin
+  insert into public.getting_started (brand_id, confirmed_at)
+  values (
+    new.id,
+    -- The organization's first real brand runs it; a later one asks first.
+    -- The demo brand doesn't count (00380).
+    case
+      when exists (
+        select 1 from public.brands b
+        where b.organization_id = new.organization_id
+          and b.id <> new.id
+          and not b.is_demo
+      ) then null
+      else now()
+    end
+  )
+  on conflict (brand_id) do nothing;
+  return new;
+end;
+$$;
+
+revoke all on function public.start_brand_getting_started() from public, anon, authenticated;
+
+update public.getting_started gs
+   set confirmed_at = now()
+  from public.brands b
+ where b.id = gs.brand_id
+   and not b.is_demo
+   and gs.confirmed_at is null
+   and gs.dismissed_at is null
+   and not exists (
+     select 1 from public.brands earlier
+     where earlier.organization_id = b.organization_id
+       and earlier.id <> b.id
+       and not earlier.is_demo
+       and earlier.created_at <= b.created_at
+   )
+   -- Only where a demo brand is what made it "a later brand". Its own
+   -- created_at is counted back from each rebuild (server/src/lib/demo/
+   -- core.js), so it can't be compared.
+   and exists (
+     select 1 from public.brands demo
+     where demo.organization_id = b.organization_id
+       and demo.is_demo
+   );
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00385_first_results_email.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00385: "Your first results are ready", e-mailed once per person
+-- ============================================================================
+-- A new customer's first tracking run takes 30 to 65 minutes, and most leave
+-- the app meanwhile. When a brand's first full run stamps, the API e-mails
+-- the organization's members that its results are in
+-- (server/src/lib/first-results-email.js).
+--
+--   * profiles.first_results_emailed_at: when the person was sent it. The
+--     API claims the members still without one in a single update before it
+--     sends, so two brands' first runs finishing at once never send it
+--     twice, and a later brand's first run doesn't send it again. A send
+--     Resend refused (or one skipped where e-mail isn't set up) gives the
+--     claim back.
+
+alter table public.profiles
+  add column if not exists first_results_emailed_at timestamptz;
+
+comment on column public.profiles.first_results_emailed_at is
+  'When "Your first results are ready" was e-mailed to the person, once, after a brand''s first full tracking run stamped. Null: never sent.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00386_organization_cancel_at_period_end.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00386: whether an organization's plan ends at the end of its period
+-- ============================================================================
+-- A canceled subscription runs to the end of its paid period (Stripe's
+-- cancel_at_period_end). Billing read that live from Stripe; every page now
+-- shows a thin band while it is so ("Your plan ends on {date} · Keep my
+-- plan"), so the organization keeps it beside subscription_ends_at, written
+-- as the plan is: by Stripe's webhook and the billing routes, with the
+-- service role.
+--
+-- The column is the server's, as 00062 / 00276 / 00405's guard has the plan
+-- and billing columns. Its own trigger holds it: 00405 rewrote that guard
+-- after this number in the migration order, so a fresh install would end on
+-- 00405's version, without this column.
+
+alter table public.organizations
+  add column if not exists cancel_at_period_end boolean not null default false;
+
+comment on column public.organizations.cancel_at_period_end is
+  'The subscription ends at the end of its period (canceled, still paid until subscription_ends_at): Stripe''s cancel_at_period_end, written by the webhook and the billing routes; server only.';
+
+create or replace function public.guard_organization_cancel_at_period_end()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if (tg_op = 'INSERT' and new.cancel_at_period_end is distinct from false)
+     or (tg_op = 'UPDATE' and new.cancel_at_period_end is distinct from old.cancel_at_period_end)
+  then
+    raise exception 'organization column is managed server-side and cannot be set from the client'
+      using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists organizations_guard_cancel_at_period_end on public.organizations;
+
+create trigger organizations_guard_cancel_at_period_end
+  before insert or update on public.organizations
+  for each row
+  execute function public.guard_organization_cancel_at_period_end();
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00400_chat_core.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -46883,6 +47033,95 @@ create policy "add_on_purchases: admin select"
   );
 
 notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00414_own_keys_enterprise.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00414: own AI keys are Enterprise's; a key saved before Chat keeps 30 days
+-- ============================================================================
+-- Owner decision 2026-10-30 (CHAT-16 items 19 and 28): with Chat on for a
+-- workspace (CHAT_AGENTIC), it runs on its own provider key only on
+-- Enterprise. On Growth own keys would take the place of AI credit packs.
+-- A workspace that saved a key before Chat went live for it keeps using
+-- that key for 30 days, on any plan; after that Chat runs on the plan's
+-- monthly AI limit.
+--
+--   * legacy_key_grandfathered (00405) now marks every workspace that isn't
+--     on Enterprise and has a saved key: 00405 marked only Starter and
+--     Growth trials, while paid Growth had own keys in its plan. The web
+--     marks one that saves a key while Chat is still off for it, as before.
+--   * legacy_key_until: when its 30 days end. Empty until Chat (or Settings
+--     › AI Providers) first needs the key with Chat on; the web fills it
+--     once (lib/chat/key.ts startLegacyKeyDays). Server only, as the mark.
+
+alter table public.organizations
+  add column if not exists legacy_key_until timestamptz;
+
+comment on column public.organizations.legacy_key_grandfathered is
+  'CHAT-16 item 28: a workspace not on Enterprise that saved its own AI key before Chat went live for it keeps using that key for Chat for 30 days (legacy_key_until). Set by 00405 / 00414 and, while Chat is off for the workspace, when it saves a key; server only.';
+
+comment on column public.organizations.legacy_key_until is
+  'CHAT-16 item 28: when a kept key (legacy_key_grandfathered) stops running Chat, 30 days after Chat first needed it. Null until then; server only.';
+
+update public.organizations o
+set legacy_key_grandfathered = true
+where o.plan is distinct from 'enterprise'
+  and not o.legacy_key_grandfathered
+  and exists (select 1 from public.organization_ai_keys k where k.organization_id = o.id);
+
+-- 00405's guard, with the new column the server's too: a member can't move
+-- their own workspace's end date.
+create or replace function public.guard_organization_server_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.plan is distinct from 'free'
+       or new.plan_overrides is not null
+       or new.subscription_status is distinct from 'incomplete'
+       or new.subscription_ends_at is not null
+       or new.stripe_customer_id is not null
+       or new.stripe_subscription_id is not null
+       or new.anthropic_api_key_encrypted is not null
+       or new.anthropic_api_key_last4 is not null
+       or new.anthropic_api_key_set_at is not null
+       or new.anthropic_api_key_set_by is not null
+       or new.legacy_key_grandfathered is distinct from false
+       or new.legacy_key_until is not null
+    then
+      raise exception 'organization column is managed server-side and cannot be set from the client'
+        using errcode = '42501';
+    end if;
+    return new;
+  end if;
+
+  if new.plan is distinct from old.plan
+     or new.plan_overrides is distinct from old.plan_overrides
+     or new.subscription_status is distinct from old.subscription_status
+     or new.subscription_ends_at is distinct from old.subscription_ends_at
+     or new.stripe_customer_id is distinct from old.stripe_customer_id
+     or new.stripe_subscription_id is distinct from old.stripe_subscription_id
+     or new.anthropic_api_key_encrypted is distinct from old.anthropic_api_key_encrypted
+     or new.anthropic_api_key_last4 is distinct from old.anthropic_api_key_last4
+     or new.anthropic_api_key_set_at is distinct from old.anthropic_api_key_set_at
+     or new.anthropic_api_key_set_by is distinct from old.anthropic_api_key_set_by
+     or new.legacy_key_grandfathered is distinct from old.legacy_key_grandfathered
+     or new.legacy_key_until is distinct from old.legacy_key_until
+  then
+    raise exception 'organization column is managed server-side and cannot be set from the client'
+      using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00417_chat_asks_next_moves.sql

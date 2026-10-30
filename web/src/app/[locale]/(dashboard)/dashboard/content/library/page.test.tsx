@@ -28,6 +28,8 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   deleteContentDraft: (...args: unknown[]) => deleteContentDraft(...args),
 }));
 const role = vi.hoisted(() => ({ canManage: true }));
+const chat = vi.hoisted(() => ({ on: false }));
+vi.mock('@/components/providers/chat-agentic-provider', () => ({ useChatAgentic: () => chat.on }));
 vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
 // Start's Team: its assignee picker reads the team, and the sent task is assigned.
 vi.mock('@/lib/actions/team', () => ({ listMembers: vi.fn(async () => []) }));
@@ -357,6 +359,26 @@ describe('the Content Library', () => {
       expect(getContentDrafts).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it('shows the agent as Chat lists a run, with the new Chat on', async () => {
+    chat.on = true;
+    try {
+      getContentDrafts.mockResolvedValue([
+        row({ status: 'draft', author: 'agent', agentState: 'writing' }),
+        row({ id: 'd2', status: 'draft', agentState: 'failed' }),
+      ]);
+      await renderPage();
+      const lines = [...container.querySelectorAll('[data-slot="agent-state-line"]')];
+      expect(lines.map((line) => line.textContent)).toEqual(['Agent writing…', 'Agent failed']);
+      expect(
+        lines.map((line) =>
+          line.querySelector('[data-slot="list-dot"]')?.getAttribute('data-state'),
+        ),
+      ).toEqual(['running', 'failed']);
+    } finally {
+      chat.on = false;
     }
   });
 

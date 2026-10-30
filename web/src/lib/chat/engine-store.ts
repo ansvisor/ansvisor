@@ -56,6 +56,10 @@ export interface CallResult {
   /** What the model reads: the tool's output, cut to the run's budget, or a result code. */
   value: Json;
   error: boolean;
+  /** It may carry text written outside the workspace: the model reads it in an untrusted block. */
+  untrusted?: boolean;
+  /** Where it came from, in the step's words ("AI answers"), for its block's label. */
+  source?: string;
 }
 
 /** The calls of a model step a run waits in: the one on the card, and those after it. */
@@ -84,7 +88,7 @@ export interface RunProgress {
   /** Writes made, by tool name. */
   writes: Record<string, number>;
   /** What the read phase read, for the writing model. */
-  readLog: { tool: string; input: unknown; result: Json }[];
+  readLog: { tool: string; input: unknown; result: Json; source?: string; untrusted?: boolean }[];
   /** Steps so far: the next one is n = steps + 1. */
   steps: number;
   /** The answer so far, as the person saw it stream. */
@@ -101,6 +105,16 @@ export interface RunProgress {
    * it shows a card, in every mode (CHAT-20 §16a).
    */
   tainted?: boolean;
+  /**
+   * A read returned text written to steer an AI assistant (CHAT-05 item 12):
+   * ignored, said so in the answer, and the rest of the run asks first.
+   */
+  injection?: boolean;
+  /**
+   * The answer's fact check (CHAT-05 item 11): figures checked against the
+   * run's data, and the ones taken out (a placeholder in their place).
+   */
+  facts?: { checked: number; replaced: string[] };
   /** Question cards asked so far (CHAT-07 §B: at most 4 a run). */
   asks?: number;
 }
@@ -255,6 +269,41 @@ export interface StepWrite {
   dataAsOf?: string | null;
   tool?: string | null;
   debug?: Record<string, unknown> | null;
+  /** The step's measure (00410), for staff only: never a member column, never in an event. */
+  measure?: StepMeasure;
+}
+
+/** What a step measured (CHAT-04 item 10): how long it took, and what its result sent the model. */
+export interface StepMeasure {
+  latencyMs?: number;
+  /** Its result came from the chat's kept results (tool-cache.ts). */
+  cacheHit?: boolean;
+  /** Its result was cut to its row limit or the run's budget before the model saw it. */
+  truncated?: boolean;
+  /** The tokens its result sent the model. */
+  resultTokens?: number;
+}
+
+type MeasureColumns = Partial<{
+  latency_ms: number;
+  cache_hit: boolean;
+  truncated: boolean;
+  result_tokens: number;
+}>;
+
+/** A measure as chat_run_steps' columns; only what it holds. */
+export function measureColumns(measure: StepMeasure | undefined): MeasureColumns {
+  if (!measure) return {};
+  const count = (n: number | undefined) =>
+    typeof n === 'number' && Number.isFinite(n) ? Math.max(0, Math.round(n)) : undefined;
+  const row: MeasureColumns = {};
+  const latency = count(measure.latencyMs);
+  const tokens = count(measure.resultTokens);
+  if (latency !== undefined) row.latency_ms = latency;
+  if (measure.cacheHit !== undefined) row.cache_hit = measure.cacheHit;
+  if (measure.truncated !== undefined) row.truncated = measure.truncated;
+  if (tokens !== undefined) row.result_tokens = tokens;
+  return row;
 }
 
 /** The member columns of a step the engine just wrote, for toClientStep. */
@@ -290,6 +339,7 @@ export async function insertStep(
     finished_at: step.status === 'done' || step.status === 'error' ? now : null,
     tool: step.tool ?? null,
     debug_json: debugJson(step.debug),
+    ...measureColumns(step.measure),
   };
   const { data, error } = await supabaseAdmin
     .from('chat_run_steps')
@@ -320,6 +370,7 @@ export async function updateStep(
   if (patch.rowCount !== undefined) row.row_count = patch.rowCount;
   if (patch.dataAsOf !== undefined) row.data_as_of = patch.dataAsOf;
   if (patch.debug !== undefined) row.debug_json = debugJson(patch.debug);
+  Object.assign(row, measureColumns(patch.measure));
   const { data, error } = await supabaseAdmin
     .from('chat_run_steps')
     .update(row)
