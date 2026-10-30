@@ -360,7 +360,9 @@ export function ChatThreadView({
               : 'sticky bottom-0 flex flex-col gap-2 bg-background pt-1 pb-2'
         }
       >
-        {(!thread || thread.mine) && <ChatUsageNotice seenPeriod={usageNoticeSeen} />}
+        {(!thread || thread.mine) && (
+          <ChatUsageNotice seenPeriod={usageNoticeSeen} onOwnKey={onOwnKey} />
+        )}
         <ChatComposer
           variant={variant}
           mode={mode}

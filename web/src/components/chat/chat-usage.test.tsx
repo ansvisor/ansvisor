@@ -44,12 +44,12 @@ const usage = (over: Partial<AiUsage> = {}): AiUsage => ({
 
 let container: HTMLDivElement;
 let root: Root;
-async function render(seenPeriod: string | null = null) {
+async function render(seenPeriod: string | null = null, onOwnKey = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <RoleProvider role="admin">
-          <ChatUsageNotice seenPeriod={seenPeriod} />
+          <ChatUsageNotice seenPeriod={seenPeriod} onOwnKey={onOwnKey} />
         </RoleProvider>
       </NextIntlClientProvider>,
     );
@@ -138,6 +138,14 @@ describe('ChatUsageNotice', () => {
     root = createRoot(container);
     await render();
     expect(getMore.open).toHaveBeenCalledTimes(1);
+    getMore.open = null;
+  });
+
+  it('never opens the Get more window on the workspace’s own key: Chat isn’t paused there', async () => {
+    getMore.open = vi.fn();
+    state.usage = usage({ percentUsed: 100, periodStart: '2027-01-01T00:00:00.000Z' });
+    await render(null, true);
+    expect(getMore.open).not.toHaveBeenCalled();
     getMore.open = null;
   });
 });

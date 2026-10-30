@@ -69,7 +69,14 @@ export function ComposerUsageMeter() {
  * `seenPeriod` is the period the person already saw it in, as the page read
  * it.
  */
-export function ChatUsageNotice({ seenPeriod = null }: { seenPeriod?: string | null }) {
+export function ChatUsageNotice({
+  seenPeriod = null,
+  onOwnKey = false,
+}: {
+  seenPeriod?: string | null;
+  /** Chat runs on the workspace's own key: the cap doesn't pause it, so no window opens. */
+  onOwnKey?: boolean;
+}) {
   const t = useTranslations('aiUsage.banner');
   const tChat = useTranslations('chatComposer.usage');
   const { usage } = useAiUsage();
@@ -80,7 +87,7 @@ export function ChatUsageNotice({ seenPeriod = null }: { seenPeriod?: string | n
   const period = usage ? usagePeriodDay(usage) : null;
   const shown = tone === 'warning' && !closed && !(period && seenBefore.has(period));
   const openGetMore = useGetMore();
-  const atCap = chatAtCap(usage) && !usage?.trial;
+  const atCap = chatAtCap(usage, onOwnKey) && !usage?.trial;
 
   // At the cap, the Get more window opens once a period (the trial can't buy packs).
   useEffect(() => {
