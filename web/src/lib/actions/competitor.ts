@@ -95,7 +95,23 @@ export async function addCompetitors(
   brandId: string,
   items: { name: string; domain: string }[],
 ): Promise<AddCompetitorsResult> {
-  await assertWritable({ brandId });
+  try {
+    await assertWritable({ brandId });
+    return await addSomeCompetitors(brandId, items);
+  } catch (err) {
+    console.error('Failed to add competitors from Chat:', err);
+    return {
+      ok: false,
+      reason: 'failed',
+      message: 'The competitors couldn’t be added. Try again.',
+    };
+  }
+}
+
+async function addSomeCompetitors(
+  brandId: string,
+  items: { name: string; domain: string }[],
+): Promise<AddCompetitorsResult> {
   if (!(await isManager(await createClient()))) {
     return {
       ok: false,
@@ -153,7 +169,23 @@ export async function removeBrandCompetitor(
   brandId: string,
   competitorId: string,
 ): Promise<RemoveBrandCompetitorResult> {
-  await assertWritable({ brandId });
+  try {
+    await assertWritable({ brandId });
+    return await removeOneCompetitor(brandId, competitorId);
+  } catch (err) {
+    console.error('Failed to remove a competitor from Chat:', err);
+    return {
+      ok: false,
+      reason: 'failed',
+      message: 'The competitor couldn’t be removed. Try again.',
+    };
+  }
+}
+
+async function removeOneCompetitor(
+  brandId: string,
+  competitorId: string,
+): Promise<RemoveBrandCompetitorResult> {
   const supabase = await createClient();
   if (!(await isManager(supabase))) {
     return {

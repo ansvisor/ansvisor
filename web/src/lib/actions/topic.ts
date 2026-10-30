@@ -155,7 +155,16 @@ const forbidden = (what: string): BrandTopicResult => ({
  * createTopic, as the Topics tab adds one. Errors come back as values (#427).
  */
 export async function addBrandTopic(brandId: string, name: string): Promise<BrandTopicResult> {
-  await assertWritable({ brandId });
+  try {
+    await assertWritable({ brandId });
+    return await addOneTopic(brandId, name);
+  } catch (err) {
+    console.error('Failed to add a topic from Chat:', err);
+    return { ok: false, reason: 'failed', message: 'The topic couldn’t be added. Try again.' };
+  }
+}
+
+async function addOneTopic(brandId: string, name: string): Promise<BrandTopicResult> {
   const supabase = await createClient();
   if (!(await isManager(supabase))) return forbidden('add');
   const named = topicNameOf(name);
@@ -186,7 +195,16 @@ export async function addBrandTopic(brandId: string, name: string): Promise<Bran
  * the Topics tab renames one. Errors come back as values (#427).
  */
 export async function renameBrandTopic(topicId: string, name: string): Promise<BrandTopicResult> {
-  await assertWritable();
+  try {
+    await assertWritable();
+    return await renameOneTopic(topicId, name);
+  } catch (err) {
+    console.error('Failed to rename a topic from Chat:', err);
+    return { ok: false, reason: 'failed', message: 'The topic couldn’t be renamed. Try again.' };
+  }
+}
+
+async function renameOneTopic(topicId: string, name: string): Promise<BrandTopicResult> {
   const supabase = await createClient();
   if (!(await isManager(supabase))) return forbidden('rename');
   const named = topicNameOf(name);

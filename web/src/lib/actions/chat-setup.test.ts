@@ -256,3 +256,23 @@ describe('addCompetitors and removeBrandCompetitor', () => {
     expect(fake.db.tables.competitors).toHaveLength(2);
   });
 });
+
+describe('a failure on the way', () => {
+  it('comes back as failed from each action, never a throw (#427)', async () => {
+    // The role can't be read: isManager throws, and the action says it failed.
+    fake.db.failures.profiles = { message: 'db down' };
+    const results = [
+      await addTopicPrompts(BRAND, TOPIC, ['best crm']),
+      await pauseBrandPrompts(BRAND, ['p1']),
+      await addBrandTopic(BRAND, 'Security'),
+      await renameBrandTopic(TOPIC, 'Plans'),
+      await addCompetitors(BRAND, [{ name: 'X', domain: 'x.ai' }]),
+      await removeBrandCompetitor(BRAND, 'c1'),
+    ];
+    for (const result of results) {
+      expect(result).toMatchObject({ ok: false, reason: 'failed' });
+    }
+    expect(fake.db.tables.prompts).toHaveLength(3);
+    expect(fake.db.tables.competitors).toHaveLength(2);
+  });
+});
