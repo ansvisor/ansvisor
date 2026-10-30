@@ -26,10 +26,11 @@ import { useChatList } from './chat-list-provider';
 
 /**
  * What a chat's ⋯ menus do (CHAT-23 G9, P5, P6): Pin, Rename in place,
- * Share with team, Archive with Undo, Delete after a confirm with Undo, Open
- * in a new window. Each change shows at once in the menu and is then sent;
- * a refused one is put back and says so. The author changes their chat; a
- * teammate's shared chat only opens, and an Admin may delete it.
+ * Share with team, Archive (brought back from All chats › Archived), Delete
+ * after a confirm with Undo, Open in a new window. Each change shows at
+ * once in the menu and is then sent; a refused one is put back and says so.
+ * The author changes their chat; a teammate's shared chat only opens, and
+ * an Admin may delete it.
  */
 
 /** A toast with Undo stays this long (CHAT-23 P6). */
@@ -122,23 +123,14 @@ export function ChatActionsProvider({ children }: { children: ReactNode }) {
     [replace, send, t],
   );
 
+  // The toast says where the chat went (CHAT-23 `chat.archive`): Unarchive
+  // is in All chats › Archived.
   const archive = useCallback(
     async (chat: ChatListItem) => {
       update((chats) => chats.filter((c) => c.id !== chat.id));
       if (!(await send(chat, { archived: true }))) return;
       void refresh();
-      toast(t('archived'), {
-        duration: UNDO_TOAST_MS,
-        action: {
-          label: t('undo'),
-          onClick: async () => {
-            if (await send(chat, { archived: false })) {
-              toast(t('undone'), { duration: TOAST_MS });
-              void refresh();
-            }
-          },
-        },
-      });
+      toast(t('archived'), { duration: TOAST_MS });
     },
     [refresh, send, t, update],
   );

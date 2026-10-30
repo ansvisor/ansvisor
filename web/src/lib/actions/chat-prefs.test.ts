@@ -1,10 +1,12 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ChatGeneralAccess } from '@/lib/chat/general-settings';
 
 /**
- * The chat menu's state on the person (CHAT-01 item 9d, DECISIONS N3):
- * written to their own chat_user_prefs row, only with the new Chat on, and
- * answered as a value — never thrown (#1777).
+ * The person's Chat settings (CHAT-01 items 4f, 9d; Settings › General;
+ * DECISIONS N3): written to their own chat_user_prefs row, only with the new
+ * Chat on, only what they may pick, and answered as a value — never thrown
+ * (#1777).
  */
 
 const db = vi.hoisted(() => ({
@@ -12,6 +14,11 @@ const db = vi.hoisted(() => ({
   upserts: [] as { row: unknown; options: unknown }[],
   error: null as { message: string } | null,
   throws: false,
+  access: {
+    modes: true,
+    fullAutoLock: null,
+    slack: false,
+  } as ChatGeneralAccess | null,
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -34,8 +41,17 @@ vi.mock('@/lib/supabase/server', () => ({
     };
   },
 }));
+vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
+vi.mock('@/lib/chat/general-settings', async (original) => ({
+  ...(await original<typeof import('@/lib/chat/general-settings')>()),
+  readChatGeneral: vi.fn(async () => (db.access ? { settings: {}, access: db.access } : null)),
+}));
 
-const { saveChatMenuOpen, saveUsageNoticePeriod } = await import('./chat-prefs');
+const { saveChatGeneralSettings, saveChatMenuOpen, saveChatRailOpen, saveUsageNoticePeriod } =
+  await import('./chat-prefs');
+const { readChatGeneral } = await import('@/lib/chat/general-settings');
+
+let errorLog: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   vi.stubEnv('CHAT_AGENTIC', 'true');
@@ -43,33 +59,109 @@ beforeEach(() => {
   db.upserts = [];
   db.error = null;
   db.throws = false;
+  db.access = { modes: true, fullAutoLock: null, slack: false };
+  errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  errorLog.mockRestore();
+});
 
-describe('saveChatMenuOpen', () => {
+describe('saveChatMenuOpen and saveChatRailOpen', () => {
   it("keeps the choice on the person's own row", async () => {
     expect(await saveChatMenuOpen(false)).toEqual({ ok: true });
+    expect(await saveChatRailOpen(true)).toEqual({ ok: true });
     expect(db.upserts).toEqual([
       { row: { user_id: 'user-1', menu_open: false }, options: { onConflict: 'user_id' } },
+      { row: { user_id: 'user-1', rail_open: true }, options: { onConflict: 'user_id' } },
     ]);
   });
 
   it('does nothing while the new Chat is off, signed out or for a bad value', async () => {
     db.user = null;
     expect(await saveChatMenuOpen(true)).toEqual({ ok: false });
+    expect(await saveChatRailOpen(true)).toEqual({ ok: false });
     db.user = { id: 'user-1' };
     vi.stubEnv('CHAT_AGENTIC', 'false');
     expect(await saveChatMenuOpen(true)).toEqual({ ok: false });
+    expect(await saveChatRailOpen(true)).toEqual({ ok: false });
     vi.stubEnv('CHAT_AGENTIC', 'true');
     expect(await saveChatMenuOpen('yes' as unknown as boolean)).toEqual({ ok: false });
+    expect(await saveChatRailOpen(1 as unknown as boolean)).toEqual({ ok: false });
     expect(db.upserts).toEqual([]);
   });
 
   it('answers a failed write or a thrown error as a value', async () => {
     db.error = { message: 'nope' };
     expect(await saveChatMenuOpen(true)).toEqual({ ok: false });
+    expect(await saveChatRailOpen(true)).toEqual({ ok: false });
     db.throws = true;
     expect(await saveChatMenuOpen(true)).toEqual({ ok: false });
+    expect(await saveChatRailOpen(true)).toEqual({ ok: false });
+  });
+});
+
+describe('saveChatGeneralSettings', () => {
+  it('keeps each General setting as its column', async () => {
+    expect(
+      await saveChatGeneralSettings({
+        defaultMode: 'ask_first',
+        answerLanguage: 'tr',
+        notifyVia: 'inbox',
+        showThought: false,
+        panelOnPages: false,
+      }),
+    ).toEqual({ ok: true });
+    expect(await saveChatGeneralSettings({ answerLanguage: null })).toEqual({ ok: true });
+    expect(db.upserts.map((u) => u.row)).toEqual([
+      {
+        user_id: 'user-1',
+        default_mode: 'ask_first',
+        answer_language: 'tr',
+        notify_via: 'inbox',
+        show_thought: false,
+        panel_on_pages: false,
+      },
+      { user_id: 'user-1', answer_language: null },
+    ]);
+    expect(readChatGeneral).toHaveBeenCalledWith({ userId: 'user-1', organizationId: 'org-1' });
+  });
+
+  it('refuses an unknown setting, a bad value or nothing at all', async () => {
+    for (const bad of [
+      {},
+      null,
+      { theme: 'dark' },
+      { defaultMode: 'yolo' },
+      { answerLanguage: 'xx' },
+      { showThought: 'yes' },
+    ]) {
+      expect(await saveChatGeneralSettings(bad)).toEqual({ ok: false });
+    }
+    expect(db.upserts).toEqual([]);
+  });
+
+  it('refuses what the person may not pick: a mode for a reader, locked Full auto, Slack unconnected', async () => {
+    db.access = { modes: false, fullAutoLock: null, slack: false };
+    expect(await saveChatGeneralSettings({ defaultMode: 'auto' })).toEqual({ ok: false });
+    // A reader still keeps their other settings.
+    expect(await saveChatGeneralSettings({ showThought: false })).toEqual({ ok: true });
+    db.access = { modes: true, fullAutoLock: 'plan', slack: false };
+    expect(await saveChatGeneralSettings({ defaultMode: 'full_auto' })).toEqual({ ok: false });
+    expect(await saveChatGeneralSettings({ notifyVia: 'inbox_slack' })).toEqual({ ok: false });
+    db.access = null;
+    expect(await saveChatGeneralSettings({ showThought: true })).toEqual({ ok: false });
+    expect(db.upserts.map((u) => u.row)).toEqual([{ user_id: 'user-1', show_thought: false }]);
+  });
+
+  it('answers a failure as a value', async () => {
+    db.error = { message: 'nope' };
+    expect(await saveChatGeneralSettings({ showThought: true })).toEqual({ ok: false });
+    db.throws = true;
+    expect(await saveChatGeneralSettings({ showThought: true })).toEqual({ ok: false });
+    vi.mocked(readChatGeneral).mockRejectedValueOnce(new Error('down'));
+    db.throws = false;
+    expect(await saveChatGeneralSettings({ showThought: true })).toEqual({ ok: false });
   });
 });
 

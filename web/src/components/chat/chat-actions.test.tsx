@@ -198,14 +198,15 @@ describe('chat actions', () => {
     expect(calls[0].body).toEqual({ title: 'Q4 plan' });
   });
 
-  it('archives with an Undo that brings it back', async () => {
+  it('archives, and says where to find it again', async () => {
     await render(null);
     await act(async () => actions!.archive(chat()));
     expect(list.chats).toEqual([]);
-    const archived = toasts.calls.find((c) => c.text === 'Archived')!;
-    const undo = (archived.options as { action: { onClick: () => Promise<void> } }).action;
-    await act(async () => undo.onClick());
-    expect(calls.map((c) => c.body)).toEqual([{ archived: true }, { archived: false }]);
+    expect(calls.map((c) => c.body)).toEqual([{ archived: true }]);
+    const archived = toasts.calls.find((c) => c.text.startsWith('Archived'))!;
+    expect(archived.text).toBe('Archived · find it in All chats › Archived');
+    // Unarchive is in All chats › Archived, not in the toast.
+    expect(archived.options).not.toHaveProperty('action');
   });
 
   it('asks before Delete, leaves the open chat for Home, and Undo restores it', async () => {

@@ -128,7 +128,7 @@ export function ChatRowMenu({ chat }: { chat: ChatListItem }) {
 
 /**
  * The open chat's ⋯ in the header (CHAT-23 `header.more`, G10): Chat
- * settings, Open in new window; for the author Pin, Rename (in the title),
+ * settings (Chat's Settings page, CHAT-01 owner update), Open in new window; for the author Pin, Rename (in the title),
  * Share with team; Export chat (shown, not yet working); Activity log;
  * Archive and Delete. Split view, Schedule this and Save as agent come later.
  */
@@ -151,8 +151,8 @@ export function ChatHeaderMenu({ chat }: { chat: ChatListItem }) {
       <DropdownMenuContent align="end" className={MENU}>
         <Item
           glyph="⚙"
-          action="policy.open"
-          onClick={() => router.push('/dashboard/settings/chat')}
+          action="chatMenu.openSettings"
+          onClick={() => router.push('/dashboard/chat/settings')}
         >
           {t('settings')}
         </Item>

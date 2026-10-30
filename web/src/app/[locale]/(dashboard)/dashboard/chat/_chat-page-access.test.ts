@@ -1,10 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+// @vitest-environment node
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CHAT_SETTINGS, type PrecedenceContext } from '@/lib/chat/precedence';
 
 /**
  * The composer's setup (W1-10): Full auto shows open only where the server
  * would run it, so a member whose Admin turned "Full auto for members" off
  * doesn't pick a mode that then asks anyway.
+ *
+ * The Chat frame's saved choices (chatShellPrefs): none while the new Chat
+ * is off, and on the person's first visit their Agent Chat conversations
+ * are copied in (W1-02) — once, and never in the way of Chat opening.
  */
 
 const facts = vi.hoisted(() => ({
@@ -15,20 +20,33 @@ const facts = vi.hoisted(() => ({
   ownKey: false as boolean | 'throws',
 }));
 
+const db = vi.hoisted(() => ({
+  prefs: null as {
+    menu_open: boolean;
+    rail_open?: boolean;
+    legacy_imported_at: string | null;
+  } | null,
+  prefsError: null as { message: string } | null,
+}));
+
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
-    auth: { getUser: async () => ({ data: { user: { id: 'user-1' } } }) },
+    auth: {
+      getUser: async () => ({ data: { user: { id: 'user-1', email: 'jo@example.com' } } }),
+    },
     from: (table: string) => ({
       select: () => ({
         eq: () => ({
           maybeSingle: async () =>
             table === 'profiles'
-              ? { data: { organization_id: 'org-1' } }
+              ? { data: { organization_id: 'org-1' }, error: null }
               : {
                   data:
-                    facts.savedMode || facts.notice
+                    db.prefs ??
+                    (facts.savedMode || facts.notice
                       ? { default_mode: facts.savedMode, usage_notice_period: facts.notice }
-                      : null,
+                      : null),
+                  error: db.prefsError,
                 },
         }),
       }),
@@ -41,6 +59,9 @@ vi.mock('@/lib/chat/precedence-context', () => ({
     return facts.ctx;
   }),
 }));
+vi.mock('@/lib/chat/legacy-import', () => ({
+  importLegacyChats: vi.fn(async () => ({ ok: false })),
+}));
 
 vi.mock('@/lib/chat/key', () => ({
   chatRunsOnOwnKey: vi.fn(async () => {
@@ -49,7 +70,8 @@ vi.mock('@/lib/chat/key', () => ({
   }),
 }));
 
-const { chatComposerSetup } = await import('./_chat-page-access');
+const { importLegacyChats } = await import('@/lib/chat/legacy-import');
+const { chatComposerSetup, chatShellPrefs } = await import('./_chat-page-access');
 
 function ctxOf(
   role: PrecedenceContext['role'],
@@ -64,12 +86,17 @@ function ctxOf(
 }
 
 beforeEach(() => {
+  vi.stubEnv('CHAT_AGENTIC', 'true');
   facts.savedMode = 'full_auto';
   facts.ctx = null;
   facts.fail = false;
+  db.prefs = null;
+  db.prefsError = null;
+  vi.mocked(importLegacyChats).mockClear();
   facts.notice = null;
   facts.ownKey = false;
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe('chatComposerSetup', () => {
   it('keeps Full auto closed for a member when the Admin turned it off, and says why', async () => {
@@ -132,5 +159,35 @@ describe('chatComposerSetup', () => {
     // A key that can't be read: the careful answer, and the server's hold still decides.
     facts.ownKey = 'throws';
     expect((await chatComposerSetup()).onOwnKey).toBe(false);
+  });
+});
+
+describe('chatShellPrefs', () => {
+  it("copies the person's Agent Chat conversations on their first visit, and opens even when that fails", async () => {
+    expect(await chatShellPrefs()).toEqual({ menuOpen: true, railOpen: false });
+    expect(importLegacyChats).toHaveBeenCalledWith({
+      userId: 'user-1',
+      email: 'jo@example.com',
+      organizationId: 'org-1',
+    });
+  });
+
+  it('copies nothing once they were copied, or when the settings could not be read', async () => {
+    db.prefs = {
+      menu_open: false,
+      rail_open: true,
+      legacy_imported_at: '2026-10-30T09:00:00.000Z',
+    };
+    expect(await chatShellPrefs()).toEqual({ menuOpen: false, railOpen: true });
+    db.prefs = null;
+    db.prefsError = { message: 'down' };
+    expect(await chatShellPrefs()).toEqual({ menuOpen: true, railOpen: false });
+    expect(importLegacyChats).not.toHaveBeenCalled();
+  });
+
+  it('does nothing while the new Chat is off', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await chatShellPrefs()).toBeNull();
+    expect(importLegacyChats).not.toHaveBeenCalled();
   });
 });

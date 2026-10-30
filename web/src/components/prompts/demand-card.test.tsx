@@ -26,6 +26,8 @@ vi.mock('@/lib/actions/prompt-demand-signals', () => ({
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+// Adding a topic is for admins and managers.
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
 
 const { DemandLevelValue, DemandSection } = await import('./demand-card');
 
@@ -323,6 +325,23 @@ describe('+ Track on a People Also Ask question', () => {
     expect(toast.error).toHaveBeenCalledWith(
       "Your plan's prompt limit is reached. Upgrade to track more prompts.",
     );
+    expect(buttons('+ Track')).toHaveLength(2);
+  });
+
+  it('asks for a topic first on a brand without one, with a way to the Topics tab', async () => {
+    trackDemandQuestion.mockResolvedValue({
+      promptIds: [],
+      error: 'Add a topic first: prompts are grouped under topics.',
+      code: 'no_topics',
+    });
+    render(full());
+    await act(async () => buttons('+ Track')[0].click());
+    expect(document.body.textContent).toContain('Add a topic first');
+    const link = [...document.body.querySelectorAll('a')].find(
+      (a) => a.textContent === 'Add a topic',
+    );
+    expect(link?.getAttribute('href')).toBe('/dashboard/prompts/topics?new=1');
+    expect(toast.error).not.toHaveBeenCalled();
     expect(buttons('+ Track')).toHaveLength(2);
   });
 

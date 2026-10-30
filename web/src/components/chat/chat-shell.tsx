@@ -16,6 +16,7 @@ import { StatusPill, type StatusPillState } from '@/components/agentic/status-pi
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { saveChatMenuOpen } from '@/lib/actions/chat-prefs';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useChatRailStore } from '@/stores/use-chat-rail-store';
 import { cn } from '@/lib/utils';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { ChatActionsProvider, useChatActions } from './chat-actions';
@@ -23,6 +24,7 @@ import { inboxItems } from './chat-inbox';
 import { useChatList } from './chat-list-provider';
 import { ChatMenu } from './chat-menu';
 import { ChatHeaderMenu, RenameField } from './chat-menus';
+import { ChatSearchPalette } from './chat-search';
 import { chatShortcutOf, MenuToggleIcon, shortcutLabel, useIsMac } from './chat-shortcuts';
 
 /** At this width and up the chat menu is a column; below it, a drawer (CHAT-01 item 9). */
@@ -45,6 +47,42 @@ function useIsWide(): boolean {
 
 const CHAT_PATH = /^\/dashboard\/chat\/([0-9a-f-]{36})$/i;
 
+/**
+ * Where the palette opens while the menu is shown: under its Search chats
+ * field, or under New chat while the Chats section is folded.
+ */
+function searchAnchor(): Element | null {
+  if (typeof document === 'undefined') return null;
+  return (
+    document.getElementById('chat-menu-search') ??
+    document.querySelector('#chat-menu [data-action="chat.new"]')
+  );
+}
+
+/**
+ * Chat's pages that sit under it (CHAT-01 4b; mockup sub-pages): the header
+ * shows ← Back to Chat and the breadcrumb "Chat › {page}".
+ */
+const SUB_PAGES: Record<string, string> = {
+  '/dashboard/chat/inbox': 'inbox',
+  '/dashboard/chat/all': 'allChats',
+  '/dashboard/chat/activity': 'activity',
+  '/dashboard/chat/capabilities': 'capabilities',
+};
+/** Chat's own pages the header names (mockup: Settings, right under Home). */
+const TITLED_PAGES: Record<string, string> = { '/dashboard/chat/settings': 'settings' };
+
+/** The last conversation open in this browser tab, for Back to Chat (CHAT-01 4b, 4c). */
+const LAST_CHAT_KEY = 'ansvisor.chat.lastConversation';
+
+function readLastChat(): string | null {
+  try {
+    return window.sessionStorage.getItem(LAST_CHAT_KEY);
+  } catch {
+    return null;
+  }
+}
+
 /** A chat's dot as the pill beside its title, or none while it is idle. */
 const PILL_OF: Partial<Record<string, StatusPillState>> = {
   running: 'working',
@@ -58,12 +96,13 @@ const PILL_OF: Partial<Record<string, StatusPillState>> = {
  * beside the page, and the 52px header. The menu's toggle and `Ctrl+\`
  * hide or show it, and the choice is kept on the person (all devices);
  * hidden, the page takes the whole width and the header starts with a
- * strip — toggle · New chat · runs pill · Inbox — that is gone again once the menu
- * is back. Below 1100px the menu is a drawer the same toggle opens, which
- * leaves the saved choice alone. `Ctrl+Shift+O` starts a new chat. The app
- * sidebar beside it is untouched.
+ * strip — toggle · New chat · Search · runs pill · Inbox — that is gone
+ * again once the menu is back. Below 1100px the menu is a drawer the same
+ * toggle opens, which leaves the saved choice alone. `Ctrl+Shift+O` starts
+ * a new chat; `Ctrl K` opens the search palette under Search chats, or
+ * under the strip's Search. The app sidebar beside it is untouched.
  */
-export function ChatShell(props: { menuOpen: boolean; children: ReactNode }) {
+export function ChatShell(props: { menuOpen: boolean; railOpen?: boolean; children: ReactNode }) {
   return (
     <ChatActionsProvider>
       <ChatShellFrame {...props} />
@@ -84,17 +123,28 @@ function ChatTitle({ chat, fallback }: { chat: ChatListItem; fallback: string })
   );
 }
 
-function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: ReactNode }) {
+function ChatShellFrame({
+  menuOpen,
+  railOpen = false,
+  children,
+}: {
+  menuOpen: boolean;
+  railOpen?: boolean;
+  children: ReactNode;
+}) {
   const t = useTranslations('chatShell.menu');
+  const tNav = useTranslations('chatShell.nav');
   const router = useRouter();
   const pathname = usePathname();
   const isWide = useIsWide();
   const isMac = useIsMac();
   const brandId = useBrandStore((s) => s.activeBrandId);
-  const { chats } = useChatList();
+  const { chats, status } = useChatList();
   const inbox = useMemo(() => inboxItems(chats).length, [chats]);
   const [open, setOpen] = useState(menuOpen);
   const [drawer, setDrawer] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [lastChat, setLastChat] = useState<string | null>(null);
   const stripToggle = useRef<HTMLButtonElement>(null);
   const focusAfterToggle = useRef(false);
 
@@ -131,6 +181,7 @@ function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: R
       if (!shortcut) return;
       event.preventDefault();
       if (shortcut === 'menu') toggle();
+      else if (shortcut === 'search') setSearching((was) => !was);
       else newChat();
     };
     window.addEventListener('keydown', onKey);
@@ -138,6 +189,32 @@ function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: R
   }, [toggle, newChat]);
 
   const chatId = CHAT_PATH.exec(pathname)?.[1] ?? null;
+
+  // The app sidebar beside Chat: the rail, or expanded as the person left it (CHAT-01 4f).
+  useEffect(() => {
+    useChatRailStore.getState().setOpen(railOpen);
+  }, [railOpen]);
+
+  // The conversation open now is where Back to Chat returns, in this tab.
+  useEffect(() => {
+    if (chatId) {
+      try {
+        window.sessionStorage.setItem(LAST_CHAT_KEY, chatId);
+      } catch {
+        // Private windows: Back to Chat then opens Chat Home.
+      }
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLastChat(chatId ?? readLastChat());
+  }, [chatId]);
+
+  // A chat that is gone (deleted, no longer shared) isn't gone back to.
+  const backTo =
+    lastChat && (status !== 'ready' || chats.some((chat) => chat.id === lastChat))
+      ? `/dashboard/chat/${lastChat}`
+      : '/dashboard/chat';
+  const subPage = SUB_PAGES[pathname];
+  const titled = TITLED_PAGES[pathname];
   const current = chatId ? chats.find((chat) => chat.id === chatId) : undefined;
   const pill = current ? PILL_OF[current.state] : undefined;
   // A chat or Home fills the page itself; the other Chat pages get the usual padding.
@@ -191,6 +268,12 @@ function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: R
                 <span aria-hidden>＋</span>
                 {t('newChat')}
               </button>
+              <ChatSearchPalette
+                trigger
+                open={searching}
+                onOpenChange={setSearching}
+                onNewChat={newChat}
+              />
               {runs}
               <Link
                 href="/dashboard/chat/inbox"
@@ -208,11 +291,51 @@ function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: R
               <span aria-hidden className="mx-1 h-5 w-px bg-border" />
             </div>
           )}
+          {subPage && (
+            <>
+              <Link
+                href={backTo}
+                data-action="nav.backToChat"
+                title={tNav(backTo === '/dashboard/chat' ? 'backHomeTip' : 'backChatTip')}
+                className="flex h-7 shrink-0 items-center rounded-lg border bg-card px-2.5 text-xs font-medium outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                {tNav('backToChat')}
+              </Link>
+              <nav
+                aria-label={tNav('breadcrumb')}
+                className="min-w-0 truncate text-sm font-semibold"
+              >
+                <Link
+                  href="/dashboard/chat"
+                  data-action="nav.breadcrumb"
+                  className="font-medium text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
+                >
+                  {tNav('chat')}
+                </Link>
+                <span aria-hidden className="mx-1.5 font-normal text-muted-foreground/70">
+                  ›
+                </span>
+                <span aria-current="page">{tNav(`pages.${subPage}`)}</span>
+              </nav>
+            </>
+          )}
+          {titled && (
+            <h1 className="min-w-0 truncate text-sm font-semibold">{tNav(`pages.${titled}`)}</h1>
+          )}
           {current && (
             <>
               <ChatTitle chat={current} fallback={t('untitled')} />
               {pill && <StatusPill state={pill} />}
             </>
+          )}
+          {!strip && (
+            // With the menu shown, the palette opens under its Search chats field.
+            <ChatSearchPalette
+              open={searching}
+              onOpenChange={setSearching}
+              onNewChat={newChat}
+              anchor={searchAnchor}
+            />
           )}
           <div className="ml-auto flex items-center gap-1.5">
             {!strip && runs}

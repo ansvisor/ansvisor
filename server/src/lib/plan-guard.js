@@ -12,6 +12,7 @@ import {
   estimateGenerationsLeft,
   generationCostUsd,
   medianCost,
+  searchCostUsd,
   typicalCostUsd,
 } from './improve-cost.js';
 import { logger } from './logger.js';
@@ -428,10 +429,11 @@ export async function getImproveQuotaStatus(orgId, modelId, { readOnly = false }
  * spent, PlanLimitError (429).
  *
  * Returns the call's meter:
- *   - charge(usage): one model attempt at its real token cost. The first
- *     turns the reservation into it; any later one (a retry, a second call)
- *     adds its own row. Errors are logged, not thrown: what the user paid
- *     for still goes out.
+ *   - charge(usage, { searches }): one model attempt at its real token
+ *     cost, and the web searches it ran (content-research.js) at theirs.
+ *     The first turns the reservation into it; any later one (a retry, a
+ *     second call) adds its own row. Errors are logged, not thrown: what
+ *     the user paid for still goes out.
  *   - release(): when nothing was charged (the call failed before an
  *     answer), the reservation goes. Safe to call more than once; call it
  *     in a finally.
@@ -467,12 +469,12 @@ export async function reserveAiBudget(
 
   let charged = false;
   return {
-    async charge(usage) {
+    async charge(usage, { searches = 0 } = {}) {
       const cost = {
         model: modelId,
         input_tokens: usage?.inputTokens ?? null,
         output_tokens: usage?.outputTokens ?? null,
-        cost_usd: generationCostUsd(modelId, usage),
+        cost_usd: generationCostUsd(modelId, usage) + searchCostUsd(searches),
       };
       const first = reservedId && !charged;
       charged = true;

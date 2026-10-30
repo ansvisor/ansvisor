@@ -8,9 +8,11 @@ import type { ChatListItem } from '@/lib/chat/conversations';
 /**
  * The chat menu and its shell (CHAT-01 items 6, 9a–9f; CHAT-23 G1): the
  * toggle and New chat, Home with what needs the person, Agents at work in
- * three rows with See all and Show less, Chats by day, and no item for a page
- * that isn't built. `Ctrl+\` hides the menu, keeps the choice on the person
- * and shows the strip instead; `Ctrl+Shift+O` starts a new chat.
+ * three rows with See all and Show less, Chats by day, Search chats in
+ * place of the days while typing, All chats and Archived at the end, and no
+ * item for a page that isn't built. `Ctrl+\` hides the menu, keeps the
+ * choice on the person and shows the strip instead; `Ctrl+Shift+O` starts a
+ * new chat; `Ctrl K` opens the search palette and closes it again.
  */
 
 const nav = vi.hoisted(() => ({ pathname: '/dashboard/chat', push: vi.fn() }));
@@ -29,10 +31,21 @@ vi.mock('@/components/agentic/runs-tray', () => ({
 vi.mock('@/lib/actions/chat-prefs', () => ({
   saveChatMenuOpen: vi.fn(async () => ({ ok: true })),
 }));
+const usage = vi.hoisted(() => ({ percentUsed: null as number | null }));
+vi.mock('@/components/providers/ai-usage-provider', () => ({
+  useAiUsage: () => ({
+    usage:
+      usage.percentUsed === null
+        ? null
+        : { unlimited: false, percentUsed: usage.percentUsed, features: [], plan: 'growth' },
+    refresh: () => undefined,
+  }),
+}));
 
 const { ChatMenuView } = await import('./chat-menu');
 const { ChatShell } = await import('./chat-shell');
 const { saveChatMenuOpen } = await import('@/lib/actions/chat-prefs');
+const { useChatRailStore } = await import('@/stores/use-chat-rail-store');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -68,6 +81,8 @@ beforeEach(() => {
   nav.pathname = '/dashboard/chat';
   nav.push.mockClear();
   vi.mocked(saveChatMenuOpen).mockClear();
+  usage.percentUsed = null;
+  window.sessionStorage.clear();
   wide = true;
   window.matchMedia = ((query: string) => ({
     matches: wide,
@@ -126,17 +141,59 @@ describe('ChatMenuView', () => {
       '/dashboard/chat/activity',
     );
     expect(action('chatMenu.openPolicy')[0].getAttribute('href')).toBe('/dashboard/settings/chat');
+    expect(action('chatMenu.openSettings')[0].getAttribute('href')).toBe(
+      '/dashboard/chat/settings',
+    );
+    // No allowance to meter: no usage beside Settings.
+    expect(action('chatMenu.openSettings')[0].textContent).toBe('Settings');
     expect(action('chatMenu.openInbox')[0].getAttribute('href')).toBe('/dashboard/chat/inbox');
-    for (const unbuilt of [
-      'chatMenu.openSkills',
-      'chatMenu.openScheduled',
-      'chatMenu.openFiles',
-      'chatMenu.searchChats',
-      'chatMenu.openAllChats',
-    ]) {
+    for (const unbuilt of ['chatMenu.openSkills', 'chatMenu.openScheduled', 'chatMenu.openFiles']) {
       expect(action(unbuilt)).toHaveLength(0);
     }
     expect(text()).toContain('No chats yet.');
+    expect(action('chatMenu.searchChats')[0].getAttribute('placeholder')).toBe(
+      'Search chats · Ctrl K',
+    );
+    expect(action('chatMenu.openAllChats')[0].getAttribute('href')).toBe('/dashboard/chat/all');
+    expect(action('chatMenu.openAllChats')[0].textContent).toBe('All chats · 0 ›');
+    expect(action('chatMenu.openArchived')[0].getAttribute('href')).toBe(
+      '/dashboard/chat/all?tab=archived',
+    );
+  });
+
+  it('lists the matching chats in place of the days while Search chats has words', async () => {
+    const fetchMock = vi.fn(async (url: string) => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        chats: url.includes('q=zzz') ? [] : [chat('found', { title: 'Citations drop' })],
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    await render(menu([chat('t', { lastMessageAt: '2026-10-30T10:00:00' })], { archived: 2 }));
+    expect(action('chatMenu.openArchived')[0].textContent).toBe('Archived · 2 ›');
+    const field = action('chatMenu.searchChats')[0] as HTMLInputElement;
+    const type = async (value: string) => {
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+        setter.call(field, value);
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 260));
+      });
+    };
+    await type('citat');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/chat/conversations/search?q=citat&view=active',
+      expect.anything(),
+    );
+    expect(text()).toContain('Citations drop');
+    expect(text()).not.toContain('Today');
+    await type('zzz');
+    expect(text()).toContain('No chats match.');
+    await act(async () => action('emptyState.clearFilters')[0].click());
+    expect(field.value).toBe('');
+    expect(text()).toContain('Today');
+    vi.unstubAllGlobals();
   });
 
   it('counts the Inbox, and lists Agents at work in three rows until See all', async () => {
@@ -240,6 +297,7 @@ describe('ChatShell', () => {
       'Show chat menu',
     );
     expect(strip.querySelector('[data-action="chat.new"]')).not.toBeNull();
+    expect(strip.querySelector('[data-action="search.open"]')?.textContent).toBe('SearchCtrl K');
     expect(strip.querySelector('[data-action="runs.toggleTray"]')).not.toBeNull();
     expect(strip.querySelector('[data-action="chatMenu.openInbox"]')).not.toBeNull();
     await act(async () =>
@@ -276,5 +334,104 @@ describe('ChatShell', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: '\\', metaKey: true }));
     });
     expect(saveChatMenuOpen).not.toHaveBeenCalled();
+  });
+
+  it('opens the search palette with Ctrl K, with New chat and the Chat pages, and closes it again', async () => {
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    const press = async () => {
+      const event = new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, cancelable: true });
+      await act(async () => {
+        window.dispatchEvent(event);
+      });
+      return event;
+    };
+    expect((await press()).defaultPrevented).toBe(true);
+    const palette = document.body.querySelector('[data-action="search.input"]');
+    expect(palette).not.toBeNull();
+    const popup = palette!.closest('[data-slot="popover-content"]')!;
+    expect(popup.querySelector('[data-action="chat.new"]')).not.toBeNull();
+    expect(popup.querySelector('[data-action="search.openPage"]')?.textContent).toContain(
+      'All chats',
+    );
+    await act(async () =>
+      (popup.querySelector('[data-action="search.openPage"]') as HTMLElement).click(),
+    );
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/all');
+    await press();
+    expect(document.body.querySelector('[data-action="search.input"]')).not.toBeNull();
+    await press();
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(document.body.querySelector('[data-action="search.input"]')).toBeNull();
+  });
+
+  it("shows the month's AI usage beside Settings, amber from 80%", async () => {
+    usage.percentUsed = 18;
+    await render(menu([]));
+    const settings = action('chatMenu.openSettings')[0];
+    expect(settings.textContent).toBe('Settings18%');
+    expect(settings.querySelector('[title="AI usage this month"]')).not.toBeNull();
+    act(() => root.unmount());
+    root = createRoot(host);
+    usage.percentUsed = 85;
+    await render(menu([]));
+    expect(action('chatMenu.openSettings')[0].querySelector('i')?.className).toContain('amber');
+  });
+
+  it('gives a Chat page Back to Chat and the breadcrumb, back to the last conversation', async () => {
+    nav.pathname = '/dashboard/chat/all';
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    const back = action('nav.backToChat')[0];
+    expect(back.textContent).toBe('← Back to Chat');
+    expect(back.getAttribute('href')).toBe('/dashboard/chat');
+    expect(back.getAttribute('title')).toBe('Back to Chat Home');
+    expect(action('nav.breadcrumb')[0].getAttribute('href')).toBe('/dashboard/chat');
+    expect(host.querySelector('header nav')?.textContent).toBe('Chat›All chats');
+
+    // A conversation opened in this tab is where Back to Chat goes.
+    const id = 'cccccccc-0000-4000-8000-000000000001';
+    nav.pathname = `/dashboard/chat/${id}`;
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    expect(action('nav.backToChat')).toHaveLength(0);
+    nav.pathname = '/dashboard/chat/inbox';
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    expect(action('nav.backToChat')[0].getAttribute('href')).toBe(`/dashboard/chat/${id}`);
+    expect(action('nav.backToChat')[0].getAttribute('title')).toBe(
+      'Back to your last conversation',
+    );
+    expect(host.querySelector('header nav')?.textContent).toBe('Chat›Inbox');
+
+    // Settings sits right under Home: its name, no way back needed.
+    nav.pathname = '/dashboard/chat/settings';
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    expect(action('nav.backToChat')).toHaveLength(0);
+    expect(host.querySelector('header h1')?.textContent).toBe('Settings');
+  });
+
+  it('closes only the palette with Esc, and never navigates', async () => {
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));
+    });
+    const input = document.body.querySelector<HTMLInputElement>('[data-action="search.input"]')!;
+    expect(input).not.toBeNull();
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(document.body.querySelector('[data-action="search.input"]')).toBeNull();
+    // The menu stays as it was, and nothing went back.
+    expect(host.querySelector('#chat-menu')?.className).toContain('w-64');
+    expect(nav.push).not.toHaveBeenCalled();
+    expect(saveChatMenuOpen).not.toHaveBeenCalled();
+  });
+
+  it("sets the app sidebar beside Chat to the person's saved rail state", async () => {
+    useChatRailStore.setState({ open: false });
+    await render(
+      <ChatShell menuOpen railOpen>
+        {<p>page</p>}
+      </ChatShell>,
+    );
+    expect(useChatRailStore.getState().open).toBe(true);
   });
 });

@@ -1,11 +1,11 @@
 ---
 title: Fix site audit issues
 route: /dashboard/audit
-keywords: [ai recommendations, fix audit issues, placeholders, send to action center, re-audit]
+keywords: [ai recommendations, fix audit issues, placeholders, your input needed, send to action center, re-audit]
 synonyms: [audit fixes, improve audit score, fix failed signals, raise page score]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-30
+last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -19,11 +19,11 @@ An audit report doesn't only score a page: it writes fixes for what failed. Star
 
 Mechanical signals, such as HTTPS, the viewport tag, alt text or a video embed, keep their general fix.
 
-## Placeholders in brackets
+## Your input needed
 
-Recommendations only use facts found on the page, or your brand's name, description and domains when the page is on one of your domains. A number, percentage, price, date or company name found in neither becomes a placeholder in square brackets, highlighted in the draft, such as [customer name], [real metric], [price], [date] or [source URL].
+Recommendations only use facts found on the page, or your brand's name, description and domains when the page is on one of your domains. A number, percentage or date found in neither, such as a statistic, is left out with its sentence, so there is nothing for you to research.
 
-Replace each one with your real data before you publish. Search the pasted text for an opening bracket first: a placeholder left in schema code tells AI engines nothing.
+Only what your brand alone knows is left in square brackets for you, three at most in a recommendation: a customer's name, your price, your own result, such as [customer name], [price] or [your result]. Each is highlighted, marked **Your input needed**. Replace each one before you publish. Search the pasted text for an opening bracket first: a placeholder left in schema code tells AI engines nothing.
 
 ## Copy drafts and code
 

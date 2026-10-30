@@ -4,12 +4,13 @@ import { useSyncExternalStore } from 'react';
 
 /**
  * The Chat shell's keys (CHAT-23 P11): `Ctrl+\` (`⌘\`) hides or shows the
- * chat menu, `Ctrl+Shift+O` (`⌘⇧O`) starts a new chat, on every Chat route
- * and with focus in the composer too, without the browser's own action.
- * `Ctrl+B` is left alone: it is Bold in the composer.
+ * chat menu, `Ctrl+Shift+O` (`⌘⇧O`) starts a new chat, `Ctrl K` (`⌘K`)
+ * opens or closes the search palette, on every Chat route and with focus in
+ * the composer too, without the browser's own action. `Ctrl+B` is left
+ * alone: it is Bold in the composer.
  */
 
-export type ChatShortcut = 'menu' | 'new';
+export type ChatShortcut = 'menu' | 'new' | 'search';
 
 /** Which shortcut a key press is, or null. */
 export function chatShortcutOf(event: {
@@ -23,12 +24,15 @@ export function chatShortcutOf(event: {
   if (!(event.ctrlKey || event.metaKey) || event.altKey) return null;
   if (!event.shiftKey && (event.key === '\\' || event.code === 'Backslash')) return 'menu';
   if (event.shiftKey && (event.key.toLowerCase() === 'o' || event.code === 'KeyO')) return 'new';
+  if (!event.shiftKey && (event.key.toLowerCase() === 'k' || event.code === 'KeyK'))
+    return 'search';
   return null;
 }
 
 /** The keys as the person's keyboard names them: "Ctrl+\" or "⌘\". */
 export function shortcutLabel(shortcut: ChatShortcut, isMac: boolean): string {
   if (shortcut === 'menu') return isMac ? '⌘\\' : 'Ctrl+\\';
+  if (shortcut === 'search') return isMac ? '⌘K' : 'Ctrl K';
   return isMac ? '⌘⇧O' : 'Ctrl ⇧ O';
 }
 
