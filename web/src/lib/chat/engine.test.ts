@@ -8,6 +8,7 @@ import {
   ORG,
   OTHER_ORG,
   PEOPLE,
+  SUGGESTION,
   fakeCreateDraft,
   seedWorkspace,
 } from './testing/chat-fixtures';
@@ -87,7 +88,8 @@ vi.mock('./registry/tools', async (importOriginal) => {
     executeGroup: 'publishing',
     area: 'content',
     description: 'Publish a page.',
-    minRole: 'analyst',
+    // Going live is Admin and Manager work, as precedence.test's publish row has it.
+    minRole: 'manager',
     planGate: null,
     brandOf: { input: 'brand_id' },
     costClass: 'C0',
@@ -120,6 +122,7 @@ const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { requestAccess } = await import('@/lib/actions/chat-access-requests');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
+const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
 const engine = await import('./engine');
 const { readRunEvents } = await import('./engine-store');
 const { runFromEvents } = await import('./run-state');
@@ -940,6 +943,15 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     };
   }
 
+  it('covers every change the registry has', () => {
+    // A new WRITE or EXECUTE row has to take its place in this matrix.
+    expect([...CHANGES].sort()).toEqual(
+      CHAT_TOOLS.filter((tool) => tool.class !== 'read')
+        .map((tool) => tool.name)
+        .sort(),
+    );
+  });
+
   it('offers each role only the changes its role allows, and the way to say why (§9)', async () => {
     const offered: Record<string, string[]> = {};
     const explains: Record<string, boolean> = {};
@@ -956,9 +968,10 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
       // Admins have no one to ask: no request to the Admins, and nothing to explain about it.
       admin: CHANGES.filter((name) => name !== 'request_access').sort(),
       manager: [...CHANGES].sort(),
-      // A Manager's write stays out for both; an Agency partner doesn't dismiss suggestions.
-      analyst: ['create_draft', 'dismiss_prompt_suggestion', 'publish_page', 'request_access'],
-      agency_partner: ['create_draft', 'publish_page', 'request_access'],
+      // A Manager's write and going live stay out for both; an Agency partner doesn't dismiss
+      // suggestions.
+      analyst: ['create_draft', 'dismiss_prompt_suggestion', 'request_access'],
+      agency_partner: ['create_draft', 'request_access'],
     });
   });
 
@@ -1115,6 +1128,173 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
         data: expect.objectContaining({ rule: expect.objectContaining({ kind: 'role' }) }),
       }),
     ]);
+  });
+
+  it('lets an Analyst and an Agency partner make their own changes as the mode says (§5)', async () => {
+    const draft = toolCall('w1', 'create_draft', {
+      brand_id: BRAND,
+      title: 'Pricing FAQ',
+      page_type: 'docs_faq',
+      source: { kind: 'opportunity', id: OPPORTUNITY },
+    });
+    for (const role of ['analyst', 'agency_partner'] as const) {
+      for (const mode of ['ask_first', 'auto'] as const) {
+        const tried = await attempt(role, mode, draft);
+        expect(tried, `${role} ${mode}`).toMatchObject({ waits: true, cards: 1, denials: [] });
+      }
+      const full = await attempt(role, 'full_auto', draft);
+      expect(full, `${role} full_auto`).toMatchObject({ waits: false, cards: 0, denials: [] });
+    }
+    expect(createContentDraft).toHaveBeenCalledTimes(2);
+
+    // "Full auto for members" off: their Full auto asks again.
+    settings({ full_auto_for_members: false });
+    for (const role of ['analyst', 'agency_partner'] as const) {
+      const tried = await attempt(role, 'full_auto', draft);
+      expect(tried, role).toMatchObject({ waits: true, cards: 1 });
+    }
+    expect(createContentDraft).toHaveBeenCalledTimes(2);
+
+    // An Analyst's dismissal of a suggestion waits on its card; an Agency partner's isn't theirs to
+    // make: no card, and nothing reaches the server.
+    const dismissSuggestionCall = toolCall('w1', 'dismiss_prompt_suggestion', {
+      suggestion_id: SUGGESTION,
+    });
+    expect(await attempt('analyst', 'auto', dismissSuggestionCall)).toMatchObject({
+      waits: true,
+      cards: 1,
+    });
+    expect(await attempt('agency_partner', 'full_auto', dismissSuggestionCall)).toMatchObject({
+      waits: false,
+      cards: 0,
+    });
+    expect(dismissSuggestion).not.toHaveBeenCalled();
+  });
+
+  it('never lets an Analyst or an Agency partner go live: not offered, and refused (test set 30)', async () => {
+    const explain = toolCall('x1', engine.EXPLAIN_TOOL, {
+      capability: 'publishPage',
+      target: 'Pricing FAQ',
+    });
+    for (const role of ['analyst', 'agency_partner'] as const) {
+      for (const mode of MODES) {
+        // Called anyway: it isn't in their list, so no card and no click.
+        const called = await attempt(role, mode, publish);
+        expect(called, `${role} ${mode}`).toMatchObject({ waits: false, cards: 0 });
+        expect(called.offered, `${role} ${mode}`).not.toContain('publish_page');
+      }
+      const asked = await attempt(role, 'full_auto', explain);
+      expect(asked.denials, role).toEqual([
+        expect.objectContaining({
+          rule: expect.objectContaining({ kind: 'role' }),
+          whoCan: 'Admins and Managers can do this.',
+        }),
+      ]);
+    }
+    expect(fakes.publishRun).not.toHaveBeenCalled();
+  });
+
+  it("leaves a card to the person whose run it is: a teammate can't approve, skip or stop it", async () => {
+    const tried = await attempt('manager', 'auto', dismiss);
+    expect(tried).toMatchObject({ waits: true, cards: 1 });
+    // The chat is shared with the workspace: teammates may read it, not answer for its author.
+    const run = runRow(tried.runId);
+    Object.assign(db.tables.chat_conversations.find((c) => c.id === run.conversation_id)!, {
+      shared_at: '2026-10-29T10:00:00.000Z',
+    });
+    const digest = ofType(await eventsOf(tried.runId), 'confirm.required')[0].data.digest;
+    for (const teammate of [actorOf(PEOPLE.otherManager), as('admin')]) {
+      expect(
+        await engine.prepareResume(teammate, tried.runId, 'approve', { n: 1, digest }),
+      ).toMatchObject({ ok: false, status: 404 });
+      expect(await engine.prepareResume(teammate, tried.runId, 'skip', { n: 1 })).toMatchObject({
+        ok: false,
+        status: 404,
+      });
+      expect(await engine.stopChatRun(teammate, tried.runId)).toMatchObject({
+        ok: false,
+        status: 404,
+      });
+      await engine.driveRun(teammate, tried.runId, { kind: 'approve', dontAskAgain: false });
+    }
+    expect(runRow(tried.runId).status).toBe('waiting');
+    expect(updateOpportunityStatus).not.toHaveBeenCalled();
+    // Its author still answers it.
+    await approve(as('manager'), tried.runId);
+    expect(updateOpportunityStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a Manager's click once the Admin turned publishing off while it waited (§4)", async () => {
+    const tried = await attempt('manager', 'auto', publish);
+    expect(tried).toMatchObject({ waits: true, cards: 1 });
+    settings({ manager_execute_off: ['publishing'] });
+    await approve(as('manager'), tried.runId);
+    expect(fakes.publishRun).not.toHaveBeenCalled();
+    expect(ofType(await eventsOf(tried.runId), 'access.denied')).toEqual([
+      expect.objectContaining({
+        data: expect.objectContaining({ rule: expect.objectContaining({ kind: 'policy' }) }),
+      }),
+    ]);
+  });
+
+  it('changes nothing on the demo brand for any role in any mode, and still reads it', async () => {
+    Object.assign(db.tables.brands[0], { is_demo: true });
+    const draft = toolCall('w1', 'create_draft', {
+      brand_id: BRAND,
+      title: 'Pricing FAQ',
+      page_type: 'docs_faq',
+      source: { kind: 'content' },
+    });
+    for (const role of ['admin', 'manager', 'analyst', 'agency_partner'] as const) {
+      for (const mode of MODES) {
+        const tried = await attempt(role, mode, draft);
+        // Only the request to the Admins stays, for those who have Admins to ask.
+        expect(tried.offered, `${role} ${mode}`).toEqual(
+          role === 'admin' ? [] : ['request_access'],
+        );
+        expect(tried, `${role} ${mode}`).toMatchObject({ waits: false, cards: 0 });
+      }
+      const read = toolCall('r1', 'read_visibility', { brand_id: BRAND });
+      models([calls(read), READY], [text('Up 12%.')]);
+      expect(runRow(await turn(as(role), 'How are we doing?', 'full_auto')).status).toBe('done');
+    }
+    expect(createContentDraft).not.toHaveBeenCalled();
+    expect(fakes.readRun).toHaveBeenCalledTimes(4);
+  });
+
+  it('runs nothing when Stop comes after Approve, before the change runs', async () => {
+    const approved = async () => {
+      const tried = await attempt('manager', 'auto', dismiss);
+      const digest = ofType(await eventsOf(tried.runId), 'confirm.required')[0].data.digest;
+      const prepared = await engine.prepareResume(as('manager'), tried.runId, 'approve', {
+        n: 1,
+        digest,
+      });
+      if (!prepared.ok) throw new Error(prepared.code);
+      return { runId: tried.runId, resume: prepared.resume };
+    };
+    const closed = async (runId: string) => {
+      expect(runRow(runId).status).toBe('stopped');
+      expect(stepsOf(runId)[0]).toMatchObject({ status: 'skipped', detail: 'Stopped' });
+      const events = await eventsOf(runId);
+      expect(ofType(events, 'run.stopped')).toHaveLength(1);
+      expect(runFromEvents(events).status).toBe('stopped');
+    };
+
+    // Stopped in this process while the approved change is about to run.
+    const here = await approved();
+    const driving = engine.driveRun(as('manager'), here.runId, here.resume);
+    expect(await engine.stopChatRun(as('manager'), here.runId)).toEqual({ ok: true });
+    await driving;
+    await closed(here.runId);
+
+    // Stopped from another process before this one's driver started: no driver there to end it.
+    const elsewhere = await approved();
+    expect(await engine.stopChatRun(as('manager'), elsewhere.runId)).toEqual({ ok: true });
+    await engine.driveRun(as('manager'), elsewhere.runId, elsewhere.resume);
+    await closed(elsewhere.runId);
+
+    expect(updateOpportunityStatus).not.toHaveBeenCalled();
   });
 });
 

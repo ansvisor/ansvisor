@@ -545,7 +545,15 @@ export async function driveRun(
     if (run.status === 'queued' && !(await waitForSlot(actor, run, sink, controller.signal))) {
       return;
     }
-    if ((await runStatus(runId)) !== 'running') return;
+    const status = await runStatus(runId);
+    if (status !== 'running') {
+      // Stopped right after an Approve, before this driver started: a Stop made in another
+      // process left the run to its driver, so the card is closed here.
+      if (resume && status === 'stopped' && run.pending) {
+        await finishStopped(run, sink, 'person', run.workingMs);
+      }
+      return;
+    }
     watch = setInterval(() => {
       void runStatus(runId)
         .then((status) => {
@@ -1717,6 +1725,11 @@ async function resumePending(
     } else {
       if (action.dontAskAgain && decision.kind === 'ask' && decision.offerDontAskAgain) {
         await saveAutoChoice(rc, tool);
+      }
+      // A Stop that came after the Approve wins while the change hasn't started.
+      if (rc.signal.aborted || (await runStatus(rc.run.id)) === 'stopped') {
+        await stopNow(rc);
+        return 'ended';
       }
       // The person's OK on the card, or their click: whatever the precedence says now.
       const approval =
