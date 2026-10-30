@@ -30,6 +30,7 @@ import {
   type ComposerVariant,
 } from './composer/chat-composer';
 import { AnswerActions } from './run/answer-actions';
+import { DeliverableCard } from './run/deliverable-card';
 import { RunAnswer } from './run/run-answer';
 import { ChatUsageNotice, ComposerUsageMeter, chatAtCap } from './chat-usage';
 
@@ -68,6 +69,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
       turn.run = {
         ...emptyRun(message.run.status as ClientRunStatus),
         steps: message.run.steps,
+        deliverables: message.run.deliverables ?? [],
         text: message.text,
         generatedAt: message.generatedAt,
         dataAsOf: message.dataAsOf,
@@ -431,6 +433,15 @@ function Answer({
           onSkip={() => void onSkip()}
         />
       )}
+      {turn.runId &&
+        run.deliverables.map((deliverable, i) => (
+          <DeliverableCard
+            key={`${deliverable.title}-${i}`}
+            runId={turn.runId!}
+            n={i + 1}
+            deliverable={deliverable}
+          />
+        ))}
       {run.status === 'paused_cap' && (
         <p className="text-sm text-amber-700 dark:text-amber-400">{t('pausedCap')}</p>
       )}

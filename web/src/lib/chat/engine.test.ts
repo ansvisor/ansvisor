@@ -264,9 +264,23 @@ function seed() {
   };
 }
 
+/** chat-files: what was put in it (a deliverable's file, CHAT-06 item 9). */
+let uploads: string[] = [];
+
 beforeEach(() => {
   vi.clearAllMocks();
   holds.length = 0;
+  uploads = [];
+  Object.assign(db, {
+    storage: {
+      from: () => ({
+        upload: async (path: string) => {
+          uploads.push(path);
+          return { error: null };
+        },
+      }),
+    },
+  });
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   seed();
   budgetHolds();
@@ -299,9 +313,13 @@ const stepsOf = (runId: string) =>
 const ofType = <K extends ChatEvent['type']>(events: ChatEvent[], type: K) =>
   events.filter((e): e is Extract<ChatEvent, { type: K }> => e.type === type);
 
-/** No event names a tool, carries an id or holds an id field (CHAT-03 item 22). */
+/**
+ * No event names a tool, carries an id or holds an id field (CHAT-03 item
+ * 22). A link's path to an app page may hold one (an output card's draft in
+ * the editor): never shown, as chatEvent keeps it.
+ */
 function expectClean(events: ChatEvent[]) {
-  const json = JSON.stringify(events);
+  const json = JSON.stringify(events, (key, value) => (key === 'href' ? undefined : value));
   for (const tool of CHAT_TOOLS) expect(json).not.toContain(tool.name);
   expect(json).not.toContain(engine.EXPLAIN_TOOL);
   expect(json).not.toMatch(UUID);
@@ -534,6 +552,49 @@ describe('changes wait for the person', () => {
       BRAND,
       expect.objectContaining({ method: 'create', title: 'Pricing FAQ' }),
     );
+  });
+
+  it('files the page it saved in Files and shows it as an output card (CHAT-06 items 1, 9)', async () => {
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'create_draft', {
+            brand_id: BRAND,
+            title: 'Pricing FAQ',
+            page_type: 'docs_faq',
+            source: { kind: 'content' },
+            body_html: '<h1>Pricing FAQ</h1><p>Answers.</p>',
+          }),
+        ),
+        text('Saved the draft.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Draft a pricing FAQ', 'ask_first');
+    expect((await approve(ADMIN, runId)).ok).toBe(true);
+    const draftId = db.tables.content_drafts.at(-1)!.id;
+    const file = (db.tables.chat_files ?? []).find((f) => f.run_id === runId)!;
+    expect(file).toMatchObject({
+      type: 'document',
+      title: 'Pricing FAQ',
+      mime_type: 'text/html',
+      origin: 'chat',
+      message_id: null,
+      content_draft_id: draftId,
+    });
+    expect(uploads).toEqual([`${ORG}/${file.id}/page.html`]);
+    const cards = ofType(await eventsOf(runId), 'deliverable.created');
+    expect(cards.map((c) => c.data)).toEqual([
+      {
+        title: 'Pricing FAQ',
+        type: 'document',
+        formats: ['html', 'md', 'docx', 'pdf'],
+        status: 'draft',
+        href: `/dashboard/content/editor/${draftId}`,
+        filed: 'in_files',
+      },
+    ]);
+    expectClean(await eventsOf(runId));
   });
 
   it("doesn't take the same approval twice", async () => {

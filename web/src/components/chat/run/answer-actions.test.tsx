@@ -15,6 +15,12 @@ const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 const download = vi.hoisted(() => ({ saveBlob: vi.fn() }));
 vi.mock('@/lib/download', () => download);
+const router = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('@/i18n/navigation', () => ({ useRouter: () => router }));
+vi.mock('@/stores/use-brand-store', () => ({
+  useBrandStore: (pick: (s: { activeBrandId: string }) => unknown) =>
+    pick({ activeBrandId: '22222222-2222-4222-8222-222222222222' }),
+}));
 
 const { AnswerActions } = await import('./answer-actions');
 
@@ -64,6 +70,7 @@ beforeEach(() => {
   download.saveBlob.mockClear();
   openUpgrade.mockClear();
   onFiled.mockClear();
+  router.push.mockClear();
   fetchMock.mockClear();
   answer = () => new Response('{}', { status: 200 });
   vi.stubGlobal('fetch', fetchMock);
@@ -85,7 +92,7 @@ describe('AnswerActions', () => {
       [...container.querySelectorAll('[role="toolbar"] [aria-label]')].map((b) =>
         b.getAttribute('aria-label'),
       ),
-    ).toEqual(['Copy', 'Download', 'Save to Files']);
+    ).toEqual(['Copy', 'Download', 'Save to Files', 'Open in Content Editor']);
   });
 
   it('offers Markdown, Word and PDF, and CSV and Excel only with a table', async () => {
@@ -149,6 +156,28 @@ describe('AnswerActions', () => {
 
     answer = () => Response.json({ ok: false, code: 'subscription_inactive' }, { status: 402 });
     await click(button('answer.saveToFiles'));
+    expect(openUpgrade).toHaveBeenCalled();
+  });
+
+  it('opens the answer in the Content Editor as a new draft, in the brand open', async () => {
+    answer = () =>
+      Response.json({ ok: true, href: '/dashboard/content/editor/d1' }, { status: 201 });
+    await render();
+    await click(button('answer.openInEditor'));
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`/api/chat/runs/${RUN}/content-draft`);
+    expect(JSON.parse(String(init!.body))).toEqual({
+      brandId: '22222222-2222-4222-8222-222222222222',
+    });
+    expect(router.push).toHaveBeenCalledWith('/dashboard/content/editor/d1');
+
+    answer = () => Response.json({ ok: false, code: 'no_brand' }, { status: 400 });
+    await click(button('answer.openInEditor'));
+    expect(toast.error).toHaveBeenCalledWith(
+      'Pick a brand first: the draft goes to its Content Library.',
+    );
+    answer = () => Response.json({ ok: false, code: 'demo_brand' }, { status: 402 });
+    await click(button('answer.openInEditor'));
     expect(openUpgrade).toHaveBeenCalled();
   });
 });

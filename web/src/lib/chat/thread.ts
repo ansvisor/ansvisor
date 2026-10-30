@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import type { ChatStep } from './events';
+import type { ChatDeliverable, ChatStep } from './events';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
 
 /**
@@ -17,6 +17,8 @@ export interface ThreadRun {
   steps: ChatStep[];
   /** Its answer in Files (CHAT-06 item 36): "In Files"; null until saved. */
   fileId: string | null;
+  /** What it made, as filed (CHAT-06 item 1), in the order it made them. */
+  deliverables: ChatDeliverable[];
 }
 
 export interface ThreadMessage {
@@ -35,6 +37,18 @@ export interface ChatThread {
   /** The person's own chat; false for a teammate's shared one, which they only read. */
   mine: boolean;
   messages: ThreadMessage[];
+}
+
+/** A file in Files the chat's runs made or saved, as the thread reads it. */
+interface FileRow {
+  id: string;
+  run_id: string | null;
+  message_id: string | null;
+  title: string;
+  type: ChatDeliverable['type'];
+  formats: string[];
+  status: ChatDeliverable['status'];
+  content_draft_id: string | null;
 }
 
 /** The person's chat with its messages and runs; null when it isn't theirs or isn't there. */
@@ -73,7 +87,11 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
           .select(CHAT_RUN_STEP_SELECT)
           .in('run_id', runIds)
           .order('position', { ascending: true }),
-        supabase.from('chat_files').select('id, run_id').in('run_id', runIds),
+        supabase
+          .from('chat_files')
+          .select('id, run_id, message_id, title, type, formats, status, content_draft_id')
+          .in('run_id', runIds)
+          .order('created_at', { ascending: true }),
       ])
     : [
         { data: [], error: null },
@@ -81,9 +99,27 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
       ];
   if (steps.error) throw new Error(`Could not read the chat's steps: ${steps.error.message}`);
   if (files.error) throw new Error(`Could not read the chat's files: ${files.error.message}`);
-  const fileByRun = new Map(
-    ((files.data ?? []) as { id: string; run_id: string | null }[]).map((f) => [f.run_id, f.id]),
-  );
+  // An answer saved to Files names its message; what a run made doesn't.
+  const fileByRun = new Map<string, string>();
+  const madeByRun = new Map<string, ChatDeliverable[]>();
+  for (const f of (files.data ?? []) as FileRow[]) {
+    if (!f.run_id) continue;
+    if (f.message_id) {
+      fileByRun.set(f.run_id, f.id);
+      continue;
+    }
+    madeByRun.set(f.run_id, [
+      ...(madeByRun.get(f.run_id) ?? []),
+      {
+        title: f.title,
+        type: f.type,
+        formats: f.formats,
+        status: f.status,
+        ...(f.content_draft_id ? { href: `/dashboard/content/editor/${f.content_draft_id}` } : {}),
+        filed: 'in_files',
+      },
+    ]);
+  }
   const stepsByRun = new Map<string, ChatStep[]>();
   for (const row of (steps.data ?? []) as unknown as ChatRunStepMemberRow[]) {
     const step = toClientStep(row);
@@ -97,6 +133,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         status: run.status,
         steps: stepsByRun.get(run.id) ?? [],
         fileId: fileByRun.get(run.id) ?? null,
+        deliverables: madeByRun.get(run.id) ?? [],
       },
     ]),
   );

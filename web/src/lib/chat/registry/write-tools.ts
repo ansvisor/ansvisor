@@ -4,6 +4,7 @@ import { createContentDraft } from '@/lib/actions/content-drafts';
 import { dismissSuggestion } from '@/lib/actions/prompt-suggestions';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { ACCESS_REQUEST_RULES } from '@/lib/chat/access-requests';
+import { escapeHtml } from '@/lib/content/attachments';
 import { PAGE_TYPES } from '@/lib/content/drafts';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { contentUuid, isHttpUrl } from '@/lib/mcp/content-schemas';
@@ -76,6 +77,20 @@ export const WRITE_TOOLS = [
         bodyHtml: input.body_html,
         sourceUrl: input.source_url,
       }),
+    // The page it saved (CHAT-06 item 6): a document, open in the Content Editor.
+    deliverable: (input, output) =>
+      typeof output === 'string' && output
+        ? {
+            title: input.title,
+            type: 'document',
+            formats: ['html', 'md', 'docx', 'pdf'],
+            body: input.body_html ?? `<h1>${escapeHtml(input.title)}</h1>`,
+            mimeType: 'text/html',
+            fileName: 'page.html',
+            href: `/dashboard/content/editor/${output}`,
+            contentDraftId: output,
+          }
+        : null,
     fixture: {
       input: {
         brand_id: BRAND,

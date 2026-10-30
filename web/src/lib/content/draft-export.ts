@@ -2,6 +2,7 @@ import type { Sheet } from 'write-excel-file/browser';
 import { BYTE_ORDER_MARK } from '@/lib/action-center/export';
 import { toCsv } from '@/lib/csv';
 import { slugify } from '@/lib/slug';
+import { ELEMENT_NODE, TEXT_NODE, parseHtml } from './dom';
 import { safeLinkHref } from './editor';
 import { pageFields, withoutLeadingH1 } from './ready-to-publish';
 
@@ -74,7 +75,7 @@ function sameFormat(a: DraftRun, b: DraftRun) {
 function inlineRuns(nodes: Node[]): DraftRun[] {
   const runs: DraftRun[] = [];
   const walk = (node: Node, format: Omit<DraftRun, 'text'>) => {
-    if (node.nodeType === Node.TEXT_NODE) {
+    if (node.nodeType === TEXT_NODE) {
       const text = (node.textContent ?? '').replace(/\s+/g, ' ');
       if (!text) return;
       const last = runs.at(-1);
@@ -82,7 +83,7 @@ function inlineRuns(nodes: Node[]): DraftRun[] {
       else runs.push({ text, ...format });
       return;
     }
-    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    if (node.nodeType !== ELEMENT_NODE) return;
     const el = node as Element;
     const tag = el.tagName.toLowerCase();
     if (SKIPPED.has(tag)) return;
@@ -150,13 +151,13 @@ function tableRows(table: Element): Extract<DraftBlock, { kind: 'table' }>['rows
 function blocksIn(parent: Element, counter: { lists: number }): DraftBlock[] {
   const blocks: DraftBlock[] = [];
   for (const node of Array.from(parent.childNodes)) {
-    if (node.nodeType === Node.TEXT_NODE) {
+    if (node.nodeType === TEXT_NODE) {
       // Loose text between blocks, as an HTML block may leave it.
       const runs = inlineRuns([node]);
       if (runs.length) blocks.push({ kind: 'paragraph', runs });
       continue;
     }
-    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+    if (node.nodeType !== ELEMENT_NODE) continue;
     const el = node as Element;
     const tag = el.tagName.toLowerCase();
     if (SKIPPED.has(tag)) continue;
@@ -195,7 +196,7 @@ export function draftBlocks(
   /** Shared by pages that go in one file, so each list numbers on its own. */
   counter: { lists: number } = { lists: 0 },
 ): DraftBlock[] {
-  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+  const doc = parseHtml(`<body>${html}</body>`);
   const blocks = blocksIn(doc.body, counter);
   const hasTitle = blocks.some((b) => b.kind === 'heading' && b.level === 1);
   return hasTitle || !title.trim()

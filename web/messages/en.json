@@ -3678,6 +3678,7 @@
     "downloaded": "Downloaded {name}",
     "downloadFailed": "Couldn't download that. Try again.",
     "formats": {
+      "html": "HTML .html",
       "md": "Markdown .md",
       "docx": "Word .docx",
       "pdf": "PDF .pdf",
@@ -3688,7 +3689,30 @@
     "saved": "Saved to Files",
     "inFiles": "In Files",
     "storageFull": "Not saved to Files · Storage is full",
-    "saveFailed": "Couldn't save that to Files. Try again."
+    "saveFailed": "Couldn't save that to Files. Try again.",
+    "openEditor": "Open in Content Editor",
+    "openEditorNoBrand": "Pick a brand first: the draft goes to its Content Library.",
+    "openEditorFailed": "Couldn't open that in the Content Editor. Try again."
+  },
+  "chatDeliverable": {
+    "types": {
+      "document": "Document",
+      "table": "Table",
+      "code": "Code",
+      "image": "Image",
+      "report": "Report"
+    },
+    "inFiles": "In Files",
+    "usedInDraft": "In Files · Used in Content draft",
+    "storageFull": "Not saved to Files · Storage is full",
+    "notFiled": "Not saved to Files",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Couldn't copy that. Try again.",
+    "download": "Download",
+    "downloaded": "Downloaded {name}",
+    "downloadFailed": "Couldn't download that. Try again.",
+    "openEditor": "Open in Content Editor"
   },
   "chatPanel": {
     "label": "Chat side panel",

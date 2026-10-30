@@ -141,8 +141,30 @@ interface ToolFields<S extends z.ZodObject> {
   specRow: string;
   inputSchema: S;
   run(ctx: ChatToolContext, input: z.output<S>): Promise<unknown>;
+  /**
+   * What a call made, for the answer's output card and Files (CHAT-06
+   * items 1, 9): filed as it is made. Null when the call made nothing to
+   * file; a row without it makes nothing.
+   */
+  deliverable?(input: z.output<S>, output: unknown): ToolDeliverable | null;
   /** A valid input, for the registry's tests and the permission fixtures (CHAT-20 §19). */
   fixture: { input: z.input<S> };
+}
+
+/** Something a call made (CHAT-06 item 1): its card, and the file kept for it. */
+export interface ToolDeliverable {
+  title: string;
+  type: 'document' | 'table' | 'code' | 'image' | 'report';
+  /** The formats it downloads in, its main one first. */
+  formats: string[];
+  /** Its canonical content, its type and its object's name in Files. */
+  body: string;
+  mimeType: string;
+  fileName: string;
+  /** Its card's Open: an app page (the Content Editor's draft). */
+  href?: `/dashboard/${string}`;
+  /** The Content draft it is ("Used in Content draft"). */
+  contentDraftId?: string;
 }
 
 type ClassFields =

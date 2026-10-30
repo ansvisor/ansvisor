@@ -65,6 +65,7 @@ import {
   type ReadBudget,
 } from './run-limits';
 import { runLoggedWrite } from './write';
+import { fileChatOutput } from './file-output';
 import { originPageSchema } from './origin';
 import { CHAT_REFERENCE_TYPES, MAX_REFERENCES } from './references';
 import { MAX_UPLOADS } from './uploads';
@@ -1558,7 +1559,55 @@ async function writeCall(
   });
   rc.sink.emit('step.finished', { step: clientStep(row) });
   const output = outcome.code === 'ok' ? outcome.output : null;
+  await deliver(rc, tool, input, output, facts.brandId);
   return result(call, { code: 'ok', output: fitResult(output, rc.budget.resultChars).value });
+}
+
+/**
+ * What a write made (CHAT-06 items 1, 9): filed in Files as it is made,
+ * then shown as the answer's output card. A workspace whose storage is full
+ * still gets the card, saying it wasn't filed (item 29); filing never stops
+ * the run.
+ */
+async function deliver(
+  rc: RunContext,
+  tool: ChatTool,
+  input: Record<string, unknown>,
+  output: unknown,
+  brandId: string | null,
+): Promise<void> {
+  const made = tool.deliverable?.(input as never, output);
+  if (!made) return;
+  const filed = await fileChatOutput({
+    organizationId: rc.actor.organizationId,
+    createdBy: rc.actor.userId,
+    brandId,
+    title: made.title,
+    type: made.type,
+    formats: made.formats,
+    body: new TextEncoder().encode(made.body),
+    mimeType: made.mimeType,
+    fileName: made.fileName,
+    origin: 'chat',
+    conversationId: rc.run.conversationId,
+    messageId: null,
+    runId: rc.run.id,
+    generatedAt: new Date().toISOString(),
+    dataAsOf: rc.progress.dataAsOf,
+    timezone: rc.progress.timezone,
+    contentDraftId: made.contentDraftId ?? null,
+  }).catch((error: unknown) => {
+    console.error('[chat] could not file a deliverable:', error);
+    return { ok: false as const, failure: 'failed' as const };
+  });
+  rc.sink.emit('deliverable.created', {
+    title: made.title,
+    type: made.type,
+    formats: made.formats,
+    status: 'draft',
+    ...(made.href ? { href: made.href } : {}),
+    filed: filed.ok ? 'in_files' : filed.failure,
+  });
 }
 
 // ─── Waiting, approving, skipping ───────────────────────────────────────────
