@@ -2,9 +2,8 @@ import { createClient } from '@/lib/supabase/server';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { firstNameOf } from '@/lib/chat/home';
 import { importLegacyChats } from '@/lib/chat/legacy-import';
-import { planFactsFromOrgRow } from '@/lib/chat/plan-facts';
-import { chatDefaultModeOf, type ChatMode } from '@/lib/chat/precedence';
-import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
+import { CHAT_MODES, type ChatMode, type PrecedenceContext } from '@/lib/chat/precedence';
+import { readPrecedenceContext } from '@/lib/chat/precedence-context';
 
 /** Whether the signed-in person's workspace has the new Chat on (CHAT_AGENTIC). */
 export async function chatPageOpen(): Promise<boolean> {
@@ -85,51 +84,80 @@ export async function chatFirstName(): Promise<string | null> {
 /** What the composer opens with (W1-10): the person's default mode, and whether Full auto is open. */
 export interface ChatComposerSetup {
   defaultMode: ChatMode;
-  /** Full auto (plan facts §7): Growth and up, paid. */
+  /**
+   * Full auto runs for this person as the server decides it: the plan (plan
+   * facts §7: Growth and up, paid) and, for anyone but an Admin, the Admin's
+   * "Full auto for members" switch (CHAT-23).
+   */
   fullAutoOpen: boolean;
+  /** Closed by the Admin's switch, not the plan: the composer says so instead of "Needs Growth". */
+  fullAutoOffByAdmin: boolean;
   /** The AI usage period whose 80% line the person already saw (CHAT-04 item 16). */
   usageNoticeSeen: string | null;
+}
+
+const CAREFUL_SETUP: ChatComposerSetup = {
+  defaultMode: 'auto',
+  fullAutoOpen: false,
+  fullAutoOffByAdmin: false,
+  usageNoticeSeen: null,
+};
+
+/**
+ * The setup from the person's saved default mode and the facts the approval
+ * precedence decides a run by (role, plan, Chat settings), so the composer
+ * never offers a Full auto the server would turn into a card. A saved Full
+ * auto that isn't open any more starts as Auto, ask before changes. No
+ * facts, the careful setup.
+ */
+export function composerSetupOf(
+  savedMode: unknown,
+  ctx: Pick<PrecedenceContext, 'role' | 'plan' | 'settings'> | null,
+): Omit<ChatComposerSetup, 'usageNoticeSeen'> {
+  if (!ctx) return { defaultMode: 'auto', fullAutoOpen: false, fullAutoOffByAdmin: false };
+  const forRole = ctx.role === 'admin' || ctx.settings.fullAutoForMembers;
+  const fullAutoOpen = ctx.plan.fullAuto && forRole;
+  const defaultMode = CHAT_MODES.find((m) => m === savedMode) ?? 'auto';
+  return {
+    defaultMode: defaultMode === 'full_auto' && !fullAutoOpen ? 'auto' : defaultMode,
+    fullAutoOpen,
+    fullAutoOffByAdmin: ctx.plan.fullAuto && !forRole,
+  };
 }
 
 /**
  * The composer's setup: the default mode the person chose in Chat's settings
  * (chat_user_prefs.default_mode; Auto, ask before changes, when none), and
- * Full auto from the workspace's plan. A value that can't be read falls back
- * to the careful one.
+ * Full auto as the server will decide it. A value that can't be read falls
+ * back to the careful one.
  */
 export async function chatComposerSetup(): Promise<ChatComposerSetup> {
-  const fallback: ChatComposerSetup = {
-    defaultMode: 'auto',
-    fullAutoOpen: false,
-    usageNoticeSeen: null,
-  };
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return fallback;
+  if (!user) return CAREFUL_SETUP;
   const { data: profile } = await supabase
     .from('profiles')
     .select('organization_id')
     .eq('id', user.id)
     .maybeSingle();
-  if (!profile?.organization_id) return fallback;
-  const [{ data: prefs }, { data: org }] = await Promise.all([
+  if (!profile?.organization_id) return CAREFUL_SETUP;
+  const [{ data: prefs }, ctx] = await Promise.all([
     supabase
       .from('chat_user_prefs')
       .select('default_mode, usage_notice_period')
       .eq('user_id', user.id)
       .maybeSingle(),
-    supabase
-      .from('organizations')
-      .select(ORG_PLAN_COLUMNS)
-      .eq('id', profile.organization_id)
-      .maybeSingle(),
+    readPrecedenceContext({
+      userId: user.id,
+      organizationId: profile.organization_id,
+      mode: 'ask_first',
+      surface: 'chat',
+    }).catch(() => null),
   ]);
-  const fullAutoOpen = org ? planFactsFromOrgRow(org).fullAuto : false;
   return {
-    defaultMode: chatDefaultModeOf(prefs?.default_mode, fullAutoOpen),
-    fullAutoOpen,
+    ...composerSetupOf(prefs?.default_mode, ctx),
     usageNoticeSeen: prefs?.usage_notice_period ?? null,
   };
 }

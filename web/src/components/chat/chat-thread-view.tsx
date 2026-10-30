@@ -99,6 +99,7 @@ export function ChatThreadView({
   pageReferences,
   pageRoute,
   draft,
+  fullAutoOffByAdmin = false,
 }: {
   thread: ChatThread | null;
   variant: ComposerVariant;
@@ -119,6 +120,7 @@ export function ChatThreadView({
   pageRoute?: string;
   /** A question or an object the page hands the box. */
   draft?: ComposerDraft | null;
+  fullAutoOffByAdmin?: boolean;
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
@@ -277,14 +279,19 @@ export function ChatThreadView({
     await consume(turn.key, res.body, runId);
   }
 
-  async function stop() {
-    if (!last?.runId) return;
-    await fetch(`/api/chat/runs/${last.runId}/stop`, { method: 'POST' }).catch(() => null);
+  /** Stops the run under way: false when the Stop wasn't taken. */
+  async function stop(): Promise<boolean> {
+    if (!last?.runId) return true;
+    const res = await fetch(`/api/chat/runs/${last.runId}/stop`, { method: 'POST' }).catch(
+      () => null,
+    );
+    if (!res?.ok) return false;
     // A run nothing drives (queued, waiting) is ended by the Stop itself: its events say so.
     if (last.run && last.run.status !== 'running') {
-      const res = await fetch(`/api/chat/runs/${last.runId}/events?after=${last.run.lastSeq}`);
-      if (res.ok && res.body) await consume(last.key, res.body, last.runId);
+      const events = await fetch(`/api/chat/runs/${last.runId}/events?after=${last.run.lastSeq}`);
+      if (events.ok && events.body) await consume(last.key, events.body, last.runId);
     }
+    return true;
   }
 
   return (
@@ -337,6 +344,7 @@ export function ChatThreadView({
           mode={mode}
           onModeChange={setMode}
           fullAutoOpen={fullAutoOpen}
+          fullAutoOffByAdmin={fullAutoOffByAdmin}
           running={working}
           sharedReadOnly={!!thread && !thread.mine}
           disabled={atCap}
@@ -349,7 +357,11 @@ export function ChatThreadView({
           onSend={send}
           onStop={() => void stop()}
           onSteer={async (message, sent) => {
-            await stop();
+            // Only once the Stop is taken: else two runs would answer in one chat.
+            if (!(await stop())) {
+              toast.error(t('sendFailed'));
+              return false;
+            }
             return send(message, sent);
           }}
           searchReferences={

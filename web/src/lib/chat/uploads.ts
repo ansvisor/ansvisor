@@ -58,6 +58,45 @@ export function uploadTypeOf(file: { name: string; type: string }): ChatUploadTy
   return found ? (found[0] as ChatUploadType) : null;
 }
 
+/** The first bytes of a file the server reads to tell what it is. */
+export const SNIFF_BYTES = 1024;
+
+const startsWith = (head: Uint8Array, bytes: number[], at = 0) =>
+  head.length >= at + bytes.length && bytes.every((b, i) => head[at + i] === b);
+const ascii = (text: string) => Array.from(text, (c) => c.charCodeAt(0));
+
+/**
+ * Whether a file's first bytes are what its type says: the browser names
+ * the type, and the bucket only checks that name, so the server looks at
+ * the bytes before it calls a file ready. PDF has %PDF- in its first 1 KB,
+ * DOCX and XLSX are zip files, the images have their signatures, and a text
+ * type has no NUL byte (UTF-16 with its BOM aside).
+ */
+export function contentMatchesType(type: ChatUploadType, head: Uint8Array): boolean {
+  switch (type) {
+    case 'application/pdf': {
+      const pdf = ascii('%PDF-');
+      for (let at = 0; at + pdf.length <= Math.min(head.length, SNIFF_BYTES); at += 1) {
+        if (startsWith(head, pdf, at)) return true;
+      }
+      return false;
+    }
+    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+      return startsWith(head, [0x50, 0x4b, 0x03, 0x04]);
+    case 'image/png':
+      return startsWith(head, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    case 'image/jpeg':
+      return startsWith(head, [0xff, 0xd8, 0xff]);
+    case 'image/webp':
+      return startsWith(head, ascii('RIFF')) && startsWith(head, ascii('WEBP'), 8);
+    default:
+      if (head.length === 0) return false;
+      if (startsWith(head, [0xff, 0xfe]) || startsWith(head, [0xfe, 0xff])) return true;
+      return !head.subarray(0, SNIFF_BYTES).includes(0);
+  }
+}
+
 /** Why a file can't be attached (item 21), or null when it can. */
 export type UploadProblem = 'type' | 'size' | 'count';
 
