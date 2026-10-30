@@ -1,4 +1,5 @@
 import type { ModelMessage } from 'ai';
+import { cutText } from './fit';
 
 /**
  * What a run sends of the chat so far (CHAT-04 items 5, 7 and 23): the
@@ -47,9 +48,9 @@ interface Turn {
 
 const flat = (text: string) => text.replace(/\s+/g, ' ').trim();
 const clip = (text: string, max: number) =>
-  text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  text.length > max ? `${cutText(text, max - 1)}…` : text;
 const clipMessage = (text: string) =>
-  text.length > MESSAGE_CHARS ? `${text.slice(0, MESSAGE_CHARS)}\n[…shortened]` : text;
+  text.length > MESSAGE_CHARS ? `${cutText(text, MESSAGE_CHARS)}\n[…shortened]` : text;
 
 /** The rows as turns: a question and what was answered to it; answers with no question go. */
 function turnsOf(rows: readonly HistoryRow[]): Turn[] {
@@ -78,7 +79,7 @@ function summaryLine(turn: Turn): string {
  * The chat before this question, within `maxChars` (the run's history
  * budget): turns past the last KEEP_TURNS fold FOLD_TURNS at a time, and
  * more while the recent ones are over three quarters of the budget; the
- * summary takes the rest, its oldest lines left out first.
+ * summary takes the last quarter, its oldest lines left out first.
  */
 export function planHistory(rows: readonly HistoryRow[], maxChars: number): HistoryPlan {
   const turns = turnsOf(rows);
@@ -98,13 +99,17 @@ export function planHistory(rows: readonly HistoryRow[], maxChars: number): Hist
 
   let summary: string | null = null;
   if (folded > 0) {
-    const room = Math.max(400, maxChars - Math.min(recentChars(), recentBudget));
+    // The summary's room doesn't follow the recent turns' size, so the
+    // summary changes only when turns fold, and the cache keeps it.
+    const room = Math.max(400, maxChars - recentBudget);
     const lines = turns.slice(0, folded).map(summaryLine);
+    let length = lines.reduce((sum, line) => sum + line.length + 1, -1);
     let dropped = 0;
-    while (lines.length > 1 && lines.join('\n').length > room) {
-      lines.shift();
+    while (dropped < lines.length - 1 && length > room) {
+      length -= lines[dropped].length + 1;
       dropped += 1;
     }
+    lines.splice(0, dropped);
     const head =
       dropped > 0
         ? `Earlier in this chat, in short (${dropped} older ${dropped === 1 ? 'turn' : 'turns'} left out):`

@@ -859,7 +859,7 @@ function coreRules(rc: Pick<RunContext, 'budget'>, phase: ChatPhase): string {
     lines.push(
       [
         'Answer from the data you read; never invent a number. Each read says the period and platforms it covered (`scope`): say them with its numbers, and say plainly when data is missing.',
-        'A list with `truncated: true` was cut to its first rows: `{list}_more` says how many were left out (null: more, count unknown) and `{list}_rest` what they add up to. Never present a cut list as complete or count it as a total. `texts_shortened: true`: long texts in it end early.',
+        'A list with `truncated: true` was cut to its first rows (a series by date: its latest): `{list}_more` says how many were left out (null: more, count unknown) and `{list}_rest` what they add up to. Never present a cut list as complete or count it as a total. `texts_shortened: true`: long texts in it end early.',
         "A result with code \"not_on_plan\": the workspace's plan doesn't track that platform; say so in one sentence, naming the platforms it does track (`on_plan`), and don't try again.",
         "To make a change, call its tool: the app asks the person first when it should. Don't ask for permission in text, and don't say a change is made until its tool returned ok.",
         'A result with code "skipped": the person said no, so don\'t make that change. Codes forbidden_role, plan_locked, policy_never, subscription_inactive, demo_brand, brand_scope, execute_off, no_access: the person already sees a card saying why; say it in one short sentence and don\'t try again.',
@@ -1341,6 +1341,7 @@ async function readCall(
     planName: ctx?.plan.planName ?? rc.planName,
     modelsOf: brandModels,
   });
+  if (scoped.kind === 'failed') return result(call, { code: 'failed' }, true);
   if (scoped.kind === 'not_on_plan') {
     // The writer answers from the read log: it says the plan doesn't track it.
     if (rc.progress.phase === 'read' && rc.models.phases === 'auto') {

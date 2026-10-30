@@ -93,6 +93,15 @@ describe('dates', () => {
     });
     // Not a date: as if none were given.
     expect(resolveDates('last week', undefined, false, NOW).dates).toBe('default');
+    // A start after today: neither date passes today.
+    expect(resolveDates('2027-02-01', '2027-03-01', false, NOW).values).toEqual({
+      date_from: '2026-10-30',
+      date_to: '2026-10-30',
+    });
+    expect(resolveDates('2027-02-01', undefined, false, NOW).values).toEqual({
+      date_from: '2026-10-30',
+      date_to: '2026-10-30',
+    });
   });
 
   it('gives a `days` read its default, or the most it reaches on an all-time ask', async () => {
@@ -186,6 +195,13 @@ describe('platforms', () => {
       facts({ limits: PLANS.starter.limits, modelsOf: async () => ['sonar-pro'] }),
     );
     expect(unseen).toMatchObject({ input: { model: 'chatgpt-web,copilot-web' } });
+    // The brand's models couldn't be read: not read, rather than held to ids that read empty.
+    const failed = await scopeRead(
+      visibility,
+      { brand_id: BRAND },
+      facts({ limits: PLANS.starter.limits, modelsOf: async () => null }),
+    );
+    expect(failed).toEqual({ kind: 'failed' });
   });
 
   it('leaves a plan that tracks every app alone when no platform is named', async () => {
@@ -244,6 +260,18 @@ describe('rows', () => {
       more: 2,
       truncated: true,
     });
+    // A series oldest first (a trend's days) keeps its latest rows.
+    const days = Array.from({ length: 91 }, (_, i) => ({
+      date: new Date(Date.UTC(2026, 7, 1) + i * 86_400_000).toISOString().slice(0, 10),
+    })) as Json[];
+    const trend = capRows({ granularity: 'day', buckets: days }, { rows: 50, probe: null });
+    const kept = (trend.value as { buckets: { date: string }[] }).buckets;
+    expect(kept).toHaveLength(50);
+    expect(kept[kept.length - 1].date).toBe('2026-10-30');
+    expect(trend.value).toMatchObject({ buckets_more: 41, truncated: true });
+    // Newest first: its first rows are its latest.
+    const newest = capRows([...days].reverse(), { rows: 50, probe: null }).value;
+    expect((newest as { items: { date: string }[] }).items[0].date).toBe('2026-10-30');
     // Lists inside rows stay as they are.
     const nested = capRows({ items: [{ tags: rows(80) }] as Json[] }, { rows: 50, probe: null });
     expect(nested.cut).toBe(false);
