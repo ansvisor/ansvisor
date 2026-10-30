@@ -110,6 +110,10 @@ export interface ChatAsk {
   options: ChatAskOption[];
   allowOther: boolean;
   multi: boolean;
+  /** Its place among the questions asked together ("1 of 2"), when there are more. */
+  batch?: { at: number; of: number };
+  /** What comes after the answer: "Then I'll write the FAQ draft". */
+  then?: string;
 }
 
 /**

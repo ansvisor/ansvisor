@@ -5,10 +5,16 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { ApprovalCard } from '@/components/agentic/approval-card';
 import { DenialCard } from '@/components/agentic/denial-card';
+import {
+  QuestionAnswered,
+  QuestionCard,
+  type QuestionAnswerValue,
+} from '@/components/agentic/question-card';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { searchChatReferences } from '@/lib/actions/chat-references';
+import { ANSWER_MAX, composerAnswer, recommendedLabel } from '@/lib/chat/asks';
 import type { ChatEvent } from '@/lib/chat/events';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { readSse } from '@/lib/chat/run-hub';
@@ -68,6 +74,7 @@ const OPEN: ClientRunStatus[] = ['queued', 'running', 'waiting'];
 /** The events after which a run's stream ends: it waits on the person, or it ended. */
 const SETTLING = new Set<string>([
   'confirm.required',
+  'ask.created',
   'run.finished',
   'run.error',
   'run.paused_cap',
@@ -209,6 +216,8 @@ export function ChatThreadView({
 
   const last = turns[turns.length - 1];
   const working = !!last?.run && OPEN.includes(last.run.status);
+  // A question the run waits on: the composer's message answers it (CHAT-07 §A item 8).
+  const asking = last?.run?.question ?? null;
 
   useEffect(() => {
     if (!working) return;
@@ -420,6 +429,44 @@ export function ChatThreadView({
     await follow(turn.key, runId, res.body, run.lastSeq);
   }
 
+  /** An answer to the question card the run waits on: from the card, or the composer's text. */
+  async function answerQuestion(
+    turn: Turn,
+    value: QuestionAnswerValue,
+    via: 'card' | 'composer' = 'card',
+  ): Promise<boolean> {
+    const run = turn.run;
+    if (!turn.runId || !run?.question) return false;
+    const runId = turn.runId;
+    const res = await fetch(`/api/chat/runs/${runId}/answer?after=${run.lastSeq}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ n: run.question.n, ...value, via }),
+    }).catch(() => null);
+    if (!res?.ok || !res.body) {
+      const failed = (await res?.json().catch(() => null)) as {
+        error?: string;
+        code?: string;
+      } | null;
+      if (failed?.code === 'subscription_inactive') openUpgrade();
+      else toast.error(failed?.error ?? t('answerFailed'));
+      // Already answered elsewhere: the run's events show where it went.
+      const events = await fetch(`/api/chat/runs/${runId}/events?after=${run.lastSeq}`, {
+        signal: life.current?.signal,
+      }).catch(() => null);
+      if (events?.ok && events.body) await follow(turn.key, runId, events.body, run.lastSeq);
+      return false;
+    }
+    // The next question asked with it comes up: say so (CHAT-07 §A item 6).
+    const batch = run.question.batch;
+    if (via === 'card' && batch && batch.at < batch.of) {
+      toast(t('questionNext', { at: batch.at + 1, of: batch.of }));
+    }
+    // The run goes on as it streams: the composer is free again at once.
+    void follow(turn.key, runId, res.body, run.lastSeq);
+    return true;
+  }
+
   /** Stops the run under way: false when the Stop wasn't taken. */
   async function stop(): Promise<boolean> {
     if (!last?.runId) return true;
@@ -486,6 +533,7 @@ export function ChatThreadView({
                   reconnecting={reconnecting && turn === last}
                   onApprove={(dontAskAgain) => answer(turn, 'approve', dontAskAgain)}
                   onSkip={() => answer(turn, 'skip')}
+                  onAnswerQuestion={(value) => answerQuestion(turn, value)}
                   onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
                   onRetry={retryOf(index)}
                 />
@@ -510,16 +558,24 @@ export function ChatThreadView({
           onModeChange={setMode}
           fullAutoOpen={fullAutoOpen}
           fullAutoOffByAdmin={fullAutoOffByAdmin}
-          running={working}
+          running={working && !asking}
+          answering={!!asking}
+          maxLength={asking ? ANSWER_MAX : undefined}
+          ghost={asking ? recommendedLabel(asking) : undefined}
           sharedReadOnly={!!thread && !thread.mine}
           disabled={atCap}
           placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : undefined}
           usage={<ComposerUsageMeter />}
-          chips={chips}
+          // An answer is its text only: no page chips, @ data or files go with it.
+          chips={asking ? undefined : chips}
           onRemoveChip={onRemoveChip}
-          references={pageReferences}
+          references={asking ? undefined : pageReferences}
           draft={draft}
-          onSend={send}
+          onSend={(message, sent) =>
+            asking && last
+              ? answerQuestion(last, composerAnswer(asking, message), 'composer')
+              : send(message, sent)
+          }
           onStop={() => void stop()}
           onSteer={async (message, sent) => {
             // Only once the Stop is taken: else two runs would answer in one chat.
@@ -530,14 +586,18 @@ export function ChatThreadView({
             return send(message, sent);
           }}
           searchReferences={
-            brandId
+            brandId && !asking
               ? (q) => searchChatReferences(brandId, q).then((r) => (r.ok ? r.references : []))
               : undefined
           }
-          uploader={{
-            upload: (file) => uploadChatFile(file, conversationId),
-            remove: dropChatUpload,
-          }}
+          uploader={
+            asking
+              ? undefined
+              : {
+                  upload: (file) => uploadChatFile(file, conversationId),
+                  remove: dropChatUpload,
+                }
+          }
         />
       </div>
     </div>
@@ -551,6 +611,7 @@ function Answer({
   reconnecting,
   onApprove,
   onSkip,
+  onAnswerQuestion,
   onFiled,
   onRetry,
 }: {
@@ -559,6 +620,7 @@ function Answer({
   reconnecting: boolean;
   onApprove: (dontAskAgain: boolean) => Promise<void>;
   onSkip: () => Promise<void>;
+  onAnswerQuestion: (value: QuestionAnswerValue) => Promise<boolean>;
   onFiled: (fileId: string) => void;
   /** Sends its question again; none while another run works, or on a teammate's chat. */
   onRetry?: () => void;
@@ -566,6 +628,10 @@ function Answer({
   const t = useTranslations('chatPage');
   const debug = useChatDebug();
   const run = turn.run ?? { ...emptyRun('done'), text: turn.text };
+  // The question being answered: saving lasts until it goes (its answer
+  // streams in) or the answer failed.
+  const [answeringN, setAnsweringN] = useState<number | null>(null);
+  const answering = answeringN !== null && answeringN === run.question?.n;
   const workingMs = run.summary?.workingMs ?? (turn.startedAt ? now - turn.startedAt : 0);
   const confirmStep = run.confirm ? run.steps.find((s) => s.n === run.confirm!.n) : undefined;
   const filedAt = filedNumbers(run.deliverables);
@@ -591,6 +657,23 @@ function Answer({
           }}
         />
       ))}
+      {run.steps
+        .filter((step) => step.kind === 'ask' && step.status === 'done')
+        .map((step) => (
+          <QuestionAnswered key={step.n} question={step.label} answer={step.detail ?? ''} />
+        ))}
+      {run.question && (
+        <QuestionCard
+          key={run.question.n}
+          ask={run.question}
+          status={answering ? 'saving' : 'pending'}
+          onAnswer={async (value) => {
+            const n = run.question!.n;
+            setAnsweringN(n);
+            if (!(await onAnswerQuestion(value))) setAnsweringN(null);
+          }}
+        />
+      )}
       {run.confirm && (
         <ApprovalCard
           kind={confirmStep?.kind === 'execute' ? 'execute' : 'write'}

@@ -74,8 +74,8 @@ export interface PendingCalls {
   n: number;
   /** The hash of the arguments on the card (ChatConfirm.digest). */
   digest: string;
-  /** A WRITE's card (`ask`) or an EXECUTE's click. */
-  kind: 'ask' | 'click';
+  /** A WRITE's card (`ask`), an EXECUTE's click, or a question card (CHAT-07). */
+  kind: 'ask' | 'click' | 'question';
   offerDontAskAgain: boolean;
 }
 
@@ -115,6 +115,8 @@ export interface RunProgress {
    * run's data, and the ones taken out (a placeholder in their place).
    */
   facts?: { checked: number; replaced: string[] };
+  /** Question cards asked so far (CHAT-07 §B: at most 4 a run). */
+  asks?: number;
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {

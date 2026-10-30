@@ -10,7 +10,8 @@ import type { ChatThread } from '@/lib/chat/thread';
 /**
  * Chat's page view (Wave 1 wiring): the composer sends to the run API with
  * the person's mode and files, the answer streams in as RunAnswer, Steer
- * stops the run first, and a teammate's shared chat is read only.
+ * stops the run first, a question card is answered from the card or the
+ * composer, and a teammate's shared chat is read only.
  */
 
 vi.mock('@/i18n/navigation', () => ({
@@ -21,7 +22,17 @@ vi.mock('@/i18n/navigation', () => ({
     </a>
   ),
 }));
-const gate = vi.hoisted(() => ({ isLocked: false, openUpgrade: vi.fn() }));
+const gate = vi.hoisted(() => {
+  const state = {
+    isLocked: false,
+    openUpgrade: vi.fn(),
+    guard:
+      <Args extends unknown[]>(fn: (...args: Args) => unknown, options?: { action?: string }) =>
+      (...args: Args) =>
+        state.isLocked ? state.openUpgrade(options?.action) : fn(...args),
+  };
+  return state;
+});
 vi.mock('@/components/providers/upgrade-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/providers/upgrade-gate')>()),
   useUpgradeGate: () => gate,
@@ -80,7 +91,8 @@ const finished = [
 ];
 
 let calls: { url: string; init?: RequestInit }[];
-async function answerFetch(url: string, init?: RequestInit) {
+/** The run API: a new run streams `finished`; anything else answers {}. */
+async function runApi(url: string, init?: RequestInit) {
   calls.push({ url, init });
   if (url === '/api/chat/runs') {
     return new Response(stream(finished), {
@@ -90,7 +102,7 @@ async function answerFetch(url: string, init?: RequestInit) {
   }
   return new Response('{}', { status: 200 });
 }
-const fetchMock = vi.fn(answerFetch);
+const fetchMock = vi.fn(runApi);
 
 let container: HTMLDivElement;
 let root: Root;
@@ -132,7 +144,7 @@ beforeEach(() => {
   aiUsage.refresh.mockClear();
   calls = [];
   fetchMock.mockReset();
-  fetchMock.mockImplementation(answerFetch);
+  fetchMock.mockImplementation(runApi);
   toast.error.mockClear();
   vi.stubGlobal('fetch', fetchMock);
   window.history.replaceState(null, '', '/dashboard/chat');
@@ -614,6 +626,200 @@ describe('ChatThreadView', () => {
     });
     expect(container.textContent).toContain('Two pages lost most of it.');
     expect(container.textContent).toContain('Generated Oct 30, 2026');
+  });
+
+  describe('a question card (CHAT-07)', () => {
+    /** Its place among the questions asked together, when there are more. */
+    let batch: { at: number; of: number } | undefined;
+    const asked = () => [
+      chatEvent('step.started', 1, {
+        step: { n: 1, kind: 'ask', status: 'waiting', label: 'Waiting for your answer' },
+      }),
+      chatEvent('ask.created', 2, {
+        n: 1,
+        question: 'Which page should the FAQ go on?',
+        options: [
+          { label: '/pricing', recommended: true },
+          { label: '/features', recommended: false },
+        ],
+        allowOther: false,
+        multi: false,
+        ...(batch ? { batch } : {}),
+      }),
+    ];
+    const goesOn = (answer: string) => [
+      chatEvent('step.finished', 3, {
+        step: {
+          n: 1,
+          kind: 'ask',
+          status: 'done',
+          label: 'Which page should the FAQ go on?',
+          detail: answer,
+        },
+      }),
+      chatEvent('text.delta', 4, { text: 'Writing it.' }),
+      chatEvent('run.finished', 5, {
+        workingMs: 8000,
+        stepCount: 1,
+        sources: [],
+        generatedAt: '2026-10-30T09:14:00.000Z',
+        dataAsOf: null,
+      }),
+    ];
+    beforeEach(() => {
+      batch = undefined;
+      fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init });
+        if (url === '/api/chat/runs') {
+          return new Response(stream(asked()), {
+            status: 200,
+            headers: { 'x-chat-conversation': CHAT, 'x-chat-run': RUN },
+          });
+        }
+        if (url.startsWith(`/api/chat/runs/${RUN}/events`)) {
+          // After a Stop: the question's step skipped, and the run stopped.
+          return new Response(
+            stream([
+              chatEvent('step.finished', 3, {
+                step: {
+                  n: 1,
+                  kind: 'ask',
+                  status: 'skipped',
+                  label: 'Question skipped',
+                  detail: 'Stopped',
+                },
+              }),
+              chatEvent('run.stopped', 4, {
+                workingMs: 4000,
+                stepCount: 1,
+                sources: [],
+                reason: 'person',
+              }),
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.startsWith(`/api/chat/runs/${RUN}/answer`)) {
+          const body = JSON.parse(String(init!.body)) as { selected: number[]; other?: string };
+          return new Response(
+            stream(goesOn(body.other ?? ['/pricing', '/features'][body.selected[0]])),
+            {
+              status: 200,
+            },
+          );
+        }
+        return new Response('{}', { status: 200 });
+      });
+    });
+    afterEach(() => {
+      fetchMock.mockImplementation(runApi);
+    });
+
+    it('waits on the card, sends its answer to the run and folds it to one line', async () => {
+      await render();
+      await type('Write a pricing FAQ');
+      await enter();
+      const card = container.querySelector('[data-slot="question-card"]')!;
+      expect(card.querySelector('h3')!.textContent).toBe('Which page should the FAQ go on?');
+      // The stream settled on the card: no reconnect.
+      expect(calls.filter((c) => c.url.includes('/events'))).toHaveLength(0);
+      // The composer offers the Recommended option as its ghost, with Send, Stop beside it,
+      // and an answer's length; no files or @ data go with an answer.
+      expect(
+        container.querySelector('[data-action="composer.acceptGhost"]')!.textContent,
+      ).toContain('/pricing');
+      expect(container.querySelector('[data-action="composer.send"]')).not.toBeNull();
+      expect(container.querySelector('[data-action="composer.stop"]')).not.toBeNull();
+      expect(box().maxLength).toBe(500);
+      expect(container.textContent).toContain("Your message answers Chat's question");
+      await act(async () => {
+        container.querySelectorAll<HTMLElement>('[data-action="question.pick"]')[1].click();
+      });
+      await act(async () => {
+        container.querySelector<HTMLElement>('[data-action="question.next"]')!.click();
+      });
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      const answer = calls.find((c) => c.url.includes('/answer'))!;
+      expect(answer.url).toBe(`/api/chat/runs/${RUN}/answer?after=2`);
+      expect(JSON.parse(String(answer.init!.body))).toEqual({
+        n: 1,
+        selected: [1],
+        other: null,
+        skipped: false,
+        via: 'card',
+      });
+      expect(container.querySelector('[data-slot="question-card"]')).toBeNull();
+      expect(container.querySelector('[data-slot="question-answered"]')!.textContent).toBe(
+        'Which page should the FAQ go on?/features',
+      );
+      expect(container.textContent).toContain('Writing it.');
+    });
+
+    it('says the next question asked with it comes up', async () => {
+      batch = { at: 1, of: 2 };
+      await render();
+      await type('Write a pricing FAQ');
+      await enter();
+      expect(container.querySelector('[data-slot="question-card"]')!.textContent).toContain(
+        '1 of 2',
+      );
+      await act(async () => {
+        container.querySelector<HTMLElement>('[data-action="question.next"]')!.click();
+      });
+      expect(toast).toHaveBeenCalledWith('Answer saved · question 2 of 2 next');
+    });
+
+    it('picks the option the composer’s message names (the ghost after Tab)', async () => {
+      await render();
+      await type('Write a pricing FAQ');
+      await enter();
+      await type('/features');
+      await enter();
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      const answer = calls.find((c) => c.url.includes('/answer'))!;
+      expect(JSON.parse(String(answer.init!.body))).toMatchObject({
+        selected: [1],
+        other: null,
+        via: 'composer',
+      });
+    });
+
+    it('stops the run from the composer while it asks: the question is left skipped', async () => {
+      await render();
+      await type('Write a pricing FAQ');
+      await enter();
+      await act(async () => {
+        box().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      });
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      expect(calls.map((c) => c.url)).toContain(`/api/chat/runs/${RUN}/stop`);
+      expect(container.querySelector('[data-slot="question-card"]')).toBeNull();
+      expect(calls.some((c) => c.url.includes('/answer'))).toBe(false);
+      // Stopped: Send again, no Stop.
+      expect(container.querySelector('[data-action="composer.stop"]')).toBeNull();
+    });
+
+    it('takes the composer’s message as the answer, without a new run or a Stop', async () => {
+      await render();
+      await type('Write a pricing FAQ');
+      await enter();
+      await type('The blog');
+      await enter();
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      expect(calls.filter((c) => c.url === '/api/chat/runs')).toHaveLength(1);
+      expect(calls.some((c) => c.url.endsWith('/stop'))).toBe(false);
+      const answer = calls.find((c) => c.url.includes('/answer'))!;
+      expect(JSON.parse(String(answer.init!.body))).toEqual({
+        n: 1,
+        selected: [],
+        other: 'The blog',
+        skipped: false,
+        via: 'composer',
+      });
+      expect(container.querySelector('[data-slot="question-answered"]')!.textContent).toBe(
+        'Which page should the FAQ go on?The blog',
+      );
+    });
   });
 
   it('keeps the steer’s text, and sends nothing, when the Stop isn’t taken', async () => {

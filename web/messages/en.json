@@ -3423,6 +3423,19 @@
       "approveNeedsPlan": "Approving changes needs a plan",
       "clickNeedsPlan": "Going live needs a plan"
     },
+    "questionCard": {
+      "counter": "{at} of {of}",
+      "recommended": "Recommended",
+      "multiplier": "{times}×",
+      "other": "Other…",
+      "otherLabel": "Your own answer",
+      "add": "Add",
+      "pressToPick": "Press 1–{max} to pick",
+      "pickSeveral": "Pick one or more · Press 1–{max} to pick",
+      "skip": "Skip",
+      "next": "Next",
+      "answerNeedsPlan": "Answering needs a plan"
+    },
     "resultCard": {
       "generated": "Generated {date} · {time}",
       "generatedTip": "Generated {full}",
@@ -3513,11 +3526,12 @@
       "tickPop": "Pops in once",
       "cards": {
         "title": "Run cards",
-        "description": "Plan, approval, result, out-of-permission and failed-run cards, and the runs tray, in every state. Sample data; nothing here runs.",
+        "description": "Plan, approval, question, result, out-of-permission and failed-run cards, and the runs tray, in every state. Sample data; nothing here runs.",
         "sections": {
           "plan": "Plan card",
           "runSteps": "Run steps",
           "approval": "Approval card",
+          "question": "Question card",
           "execute": "Click card (EXECUTE)",
           "result": "Result card",
           "denial": "Out-of-permission answer",
@@ -3540,6 +3554,10 @@
           "error": "Failed, with Retry",
           "approved": "Approved",
           "skipped": "Skipped",
+          "questionPending": "Waiting, 1 of 2, with Other…",
+          "questionMulti": "Waiting, several may be picked",
+          "questionAnswered": "Answered",
+          "questionSkipped": "Skipped",
           "executePending": "Waiting for the click",
           "executeDisabled": "Before the draft is approved",
           "executeSaving": "Publishing",
@@ -3630,7 +3648,10 @@
       "checkedFacts": "Checked facts",
       "factsMatch": "Every figure matches the data",
       "factsRemoved": "{count, plural, one {# figure wasn't in the data, so it was left out} other {# figures weren't in the data, so they were left out}}",
-      "readHelp": "Read Ansvisor Help"
+      "readHelp": "Read Ansvisor Help",
+      "ask": "Waiting for your answer",
+      "askSkipped": "Skipped · used {option}",
+      "askStopped": "Question skipped"
     },
     "error": {
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
@@ -3639,6 +3660,8 @@
       "rateHour": "You're sending a lot. Wait a few minutes, then send again.",
       "rateDay": "You've sent today's messages. Chat takes more tomorrow.",
       "notWaiting": "This run isn't waiting for an answer any more.",
+      "answered": "This question was already answered.",
+      "answerInvalid": "That answer doesn't fit this question. Pick one of its options, or write up to 500 characters.",
       "approvalMismatch": "This changed after you approved it. Approve again?",
       "notFound": "This chat isn't there any more.",
       "attachments": "A file you attached isn't ready or isn't yours any more. Attach it again and send."
@@ -3734,6 +3757,7 @@
       "ghostHint": "Tab to accept · / skills · @ data",
       "readOnly": "@ data · read-only",
       "answering": "Answering · Esc to stop",
+      "answerQuestion": "Your message answers Chat's question · Esc stops the run",
       "steer": "Enter stops this run and sends your message"
     },
     "preview": {
@@ -3771,6 +3795,7 @@
     "deniedTitle": "I can't do this for you",
     "sendFailed": "Couldn't send that. Try again.",
     "answerFailed": "Couldn't save your answer. Try again.",
+    "questionNext": "Answer saved · question {at} of {of} next",
     "pausedCap": "You've used this month's AI limit, so Chat stopped here.",
     "connectionLost": "Lost the connection to Chat. It keeps working: reload the page to see where it is.",
     "untitledExport": "Chat"

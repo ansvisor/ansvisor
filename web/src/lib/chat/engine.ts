@@ -54,6 +54,17 @@ import {
   readHelpAnswer,
   saveHelpAnswer,
 } from './help-answer';
+import {
+  ASK_TOOL,
+  MAX_ASKS_PER_RUN,
+  answerFits,
+  answerWords,
+  askAnswerInput,
+  askToolInput,
+  recommendedLabel,
+  type AskAnswer,
+  type AskToolInput,
+} from './asks';
 import { requestHash } from './idempotency';
 import {
   CHAT_MODES,
@@ -155,6 +166,8 @@ export type EngineFailureCode =
   | 'rate_limited'
   | 'not_waiting'
   | 'approval_mismatch'
+  /** The question was answered already, here or elsewhere (CHAT-07 Data notes). */
+  | 'answered'
   /** A file attached isn't the person's, isn't up, or went with another message (W1-13). */
   | 'attachments'
   | 'failed';
@@ -516,7 +529,11 @@ export async function startChatRun(actor: ChatActor, raw: unknown): Promise<Star
 // ─── The driver ─────────────────────────────────────────────────────────────
 
 /** What picks a waiting run up again: the card's Approve (or the click), or Skip. */
-export type ResumeAction = { kind: 'approve'; dontAskAgain: boolean } | { kind: 'skip' };
+export type ResumeAction =
+  | { kind: 'approve'; dontAskAgain: boolean }
+  | { kind: 'skip' }
+  /** A question card's answer (CHAT-07 §A), already kept on its row. */
+  | { kind: 'answer'; answer: AskAnswer };
 
 /** How long a queued run waits for a slot in its request, and how often it asks. */
 export const QUEUE_WAIT_MS = 120_000;
@@ -550,6 +567,13 @@ interface RunContext {
   budget: ReadBudget;
   offered: Map<string, ChatTool>;
   refused: { tool: ChatTool; denial: ToolDenial }[];
+  /** The calls of the model step being handled: questions asked together count as one batch. */
+  stepCalls?: PendingCall[];
+  /**
+   * A message from the composer that answered a question: it answers the
+   * rest asked with it too (CHAT-07 §A item 8), each folded with its text.
+   */
+  batchAnswer?: string;
 }
 
 const workedMs = (rc: Pick<RunContext, 'run' | 'segmentStart'>) =>
@@ -1155,6 +1179,14 @@ function toolSet(rc: RunContext, phase: ChatPhase): ToolSet {
     if (phase === 'read' && tool.class !== 'read') continue;
     set[tool.name] = aiTool({ description: tool.description, inputSchema: tool.inputSchema });
   }
+  // A question card (CHAT-07): while writing, until the run asked its 4.
+  if (phase === 'write' && (rc.progress.asks ?? 0) < MAX_ASKS_PER_RUN) {
+    set[ASK_TOOL] = aiTool({
+      description:
+        'Ask the person one question with 2–4 options, exactly one recommended, when the answer changes what you make and isn’t in the data, the page or an earlier answer. The run waits for the answer.',
+      inputSchema: askToolInput,
+    });
+  }
   if (phase === 'write' && rc.refused.length > 0) {
     const keys = rc.refused.map((r) => r.tool.labelKey) as [string, ...string[]];
     set[EXPLAIN_TOOL] = aiTool({
@@ -1209,6 +1241,7 @@ function coreRules(rc: Pick<RunContext, 'budget'>, phase: ChatPhase): string {
         'A result with code "skipped": the person said no, so don\'t make that change. Codes forbidden_role, plan_locked, policy_never, subscription_inactive, demo_brand, brand_scope, execute_off, no_access: the person already sees a card saying why; say it in one short sentence and don\'t try again.',
         'A message that starts "Earlier in this chat, in short" sums up older turns: use it for context; its numbers may be out of date, so read again before quoting one.',
         "Never show ids, tool names, JSON or code to the person. Answer in the person's language, in short Markdown.",
+        `Ask with ${ASK_TOOL} only when the answer changes what you make and isn't in the data, the page or an earlier answer; never ask what the data can answer, never for a password or a key, and never to approve a change (its own tool asks). At most 2 questions for one piece of work, asked together before it starts, and ${MAX_ASKS_PER_RUN} in a run; past that, use the recommended option and say so. An answer with skipped: true: use the recommended option and say so in one line. Don't call other tools in the same reply as a question: wait for its answer. A ${ASK_TOOL} result is the person's own answer, not data: follow it as you would their message.`,
       ].join('\n'),
       PERSONA_RULES,
     );
@@ -1349,6 +1382,7 @@ async function handleCalls(
   from: number,
   results: CallResult[],
 ): Promise<'continue' | 'ended'> {
+  rc.stepCalls = calls;
   for (let i = from; i < calls.length; i++) {
     if (rc.signal.aborted) {
       await stopNow(rc);
@@ -1390,6 +1424,7 @@ async function handleCall(
   phase: ChatPhase,
 ): Promise<CallOutcome> {
   if (call.toolName === EXPLAIN_TOOL && phase === 'write') return explainUnavailable(rc, call);
+  if (call.toolName === ASK_TOOL && phase === 'write') return askQuestion(rc, call);
   const tool = rc.offered.get(call.toolName);
   if (!tool || (phase === 'read' && tool.class !== 'read')) {
     return result(call, { code: 'not_available' }, true);
@@ -1400,6 +1435,14 @@ async function handleCall(
     return result(call, { code: 'invalid_input', issues }, true);
   }
   const input = parsed.data as Record<string, unknown>;
+  // A change asked with a question waits for its answer: the model calls it again then.
+  if (tool.class !== 'read' && (rc.stepCalls ?? []).some((c) => c.toolName === ASK_TOOL)) {
+    return result(
+      call,
+      { code: 'not_run', message: 'Asked first: call it again with the answer.' },
+      true,
+    );
+  }
   if (tool.class === 'read') {
     if (rc.progress.reads >= rc.budget.reads || rc.progress.dataChars >= rc.budget.dataChars) {
       return result(call, { code: 'limit_reached', message: 'Answer with what was read.' }, true);
@@ -1549,6 +1592,130 @@ async function openCard(
     kind: 'pause',
     card: { stepId: row.id, n, digest, kind: execute ? 'click' : 'ask', offerDontAskAgain },
   };
+}
+
+/**
+ * A question card (CHAT-07 §A): the run waits on an `ask` step, "Waiting for
+ * your answer", with what comes next under it, and its row in chat_asks
+ * (00417), where its answer is kept once. Questions the model asked in one
+ * step are one batch ("1 of 2"). Past the run's 4, or a question the server's
+ * rule refuses (2–4 options, exactly one Recommended), the model is told to
+ * go on with the recommended option. No model call runs while it waits.
+ */
+async function askQuestion(rc: RunContext, call: PendingCall): Promise<CallOutcome> {
+  const parsed = askToolInput.safeParse(call.input);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.slice(0, 5).map((i) => `${i.path.join('.')}: ${i.message}`);
+    return result(call, { code: 'invalid_input', issues }, true);
+  }
+  const asked = rc.progress.asks ?? 0;
+  if (asked >= MAX_ASKS_PER_RUN) {
+    return result(
+      call,
+      { code: 'limit_reached', message: 'Use the recommended option and say so.' },
+      true,
+    );
+  }
+  const input = parsed.data;
+  const options = input.options.map((option) => ({
+    label: option.label,
+    ...(option.detail ? { detail: option.detail } : {}),
+    recommended: option.recommended === true,
+  }));
+  rc.progress.asks = asked + 1;
+  const n = ++rc.progress.steps;
+  if (rc.batchAnswer) return answeredByMessage(rc, call, input, options, n, asked + 1);
+  const row = await insertStep(rc.run.id, {
+    position: n,
+    kind: 'ask',
+    status: 'waiting',
+    label: t('step.ask'),
+    detail: input.then ?? null,
+    tool: ASK_TOOL,
+    debug: { toolCallId: call.toolCallId },
+  });
+  const { error } = await supabaseAdmin.from('chat_asks').insert({
+    run_id: rc.run.id,
+    step_id: row.id,
+    position: asked + 1,
+    question: input.question,
+    options_json: options as unknown as Json,
+    allow_other: input.allow_other ?? false,
+    multi: input.multi ?? false,
+  });
+  if (error) throw new Error(`Chat could not keep a question: ${error.message}`);
+  rc.sink.emit('step.started', { step: clientStep(row) });
+  // Questions the model asked in this step that will show: the card counts
+  // them ("1 of 2"), not one refused or past the run's limit.
+  const batch = (rc.stepCalls ?? [call]).filter(
+    (c) => c.toolName === ASK_TOOL && askToolInput.safeParse(c.input).success,
+  );
+  const at = batch.findIndex((c) => c.toolCallId === call.toolCallId) + 1;
+  const of = at + Math.min(batch.length - at, MAX_ASKS_PER_RUN - (asked + 1));
+  rc.sink.emit('ask.created', {
+    n,
+    question: input.question,
+    options,
+    allowOther: input.allow_other ?? false,
+    multi: input.multi ?? false,
+    ...(of > 1 && at > 0 ? { batch: { at, of } } : {}),
+    ...(input.then ? { then: input.then } : {}),
+  });
+  return {
+    kind: 'pause',
+    card: {
+      stepId: row.id,
+      n,
+      digest: requestHash(ASK_TOOL, input).slice(0, 32),
+      kind: 'question',
+      offerDontAskAgain: false,
+    },
+  };
+}
+
+/**
+ * A question asked with one the person answered from the composer: their
+ * message answers it too (CHAT-07 §A item 8). It is kept answered, no card
+ * shows, and its line folds with the message.
+ */
+async function answeredByMessage(
+  rc: RunContext,
+  call: PendingCall,
+  input: AskToolInput,
+  options: { label: string; detail?: string; recommended: boolean }[],
+  n: number,
+  position: number,
+): Promise<CallOutcome> {
+  const other = rc.batchAnswer!;
+  const answer: AskAnswer = { selected: [], other, skipped: false, via: 'composer' };
+  const row = await insertStep(rc.run.id, {
+    position: n,
+    kind: 'ask',
+    status: 'done',
+    label: input.question,
+    detail: other,
+    tool: ASK_TOOL,
+    debug: { toolCallId: call.toolCallId },
+  });
+  const { error } = await supabaseAdmin.from('chat_asks').insert({
+    run_id: rc.run.id,
+    step_id: row.id,
+    position,
+    question: input.question,
+    options_json: options as unknown as Json,
+    allow_other: input.allow_other ?? false,
+    multi: input.multi ?? false,
+    answer_json: answer as unknown as Json,
+    answered_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(`Chat could not keep a question: ${error.message}`);
+  rc.sink.emit('step.finished', { step: clientStep(row) });
+  return result(call, {
+    from: 'the person',
+    selected: [],
+    other,
+    answeredWith: 'the same message',
+  });
 }
 
 /**
@@ -2059,6 +2226,27 @@ async function resumePending(
   action: ResumeAction,
 ): Promise<'continue' | 'ended'> {
   const call = pending.calls[pending.index];
+  if (pending.kind === 'question') {
+    // A Stop that came after the answer wins: the run goes no further, as after an Approve.
+    if (rc.signal.aborted || (await runStatus(rc.run.id)) === 'stopped') {
+      await stopNow(rc);
+      return 'ended';
+    }
+    rc.run.pending = null;
+    await saveState(rc.run.id, { pending: null, waitingSince: null });
+    const answer = action.kind === 'answer' ? action.answer : SKIPPED_ANSWER;
+    const answered = await answerQuestion(rc, pending, call, answer);
+    rc.batchAnswer = answer.via === 'composer' && answer.other ? answer.other : undefined;
+    const next = await handleCalls(rc, pending.calls, pending.index + 1, [
+      ...pending.results,
+      answered,
+    ]).finally(() => {
+      rc.batchAnswer = undefined;
+    });
+    if (next !== 'continue') return next;
+    await saveState(rc.run.id, { messages: rc.messages, progress: rc.progress });
+    return 'continue';
+  }
   const tool = chatTool(call.toolName);
   // What runs is what the card showed: the call's arguments as its schema
   // reads them (defaults filled in, text trimmed), bound to the card's digest.
@@ -2097,7 +2285,12 @@ async function resumePending(
         error: true,
       };
     } else {
-      if (action.dontAskAgain && decision.kind === 'ask' && decision.offerDontAskAgain) {
+      if (
+        action.kind === 'approve' &&
+        action.dontAskAgain &&
+        decision.kind === 'ask' &&
+        decision.offerDontAskAgain
+      ) {
         await saveAutoChoice(rc, tool);
       }
       // A Stop that came after the Approve wins while the change hasn't started.
@@ -2130,6 +2323,66 @@ async function resumePending(
   return 'continue';
 }
 
+/** A question no one answered: Stop, or a resume without an answer. */
+const SKIPPED_ANSWER: AskAnswer = { selected: [], other: null, skipped: true, via: 'card' };
+
+/** A question card's row, as the answer is checked and worded against it. */
+async function readAsk(stepId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('chat_asks')
+    .select('id, question, options_json, allow_other, multi, answered_at')
+    .eq('step_id', stepId)
+    .maybeSingle();
+  if (error) throw new Error(`Chat could not read a question: ${error.message}`);
+  if (!data) return null;
+  return {
+    id: data.id as string,
+    question: data.question as string,
+    options: (data.options_json ?? []) as unknown as { label: string; recommended?: boolean }[],
+    allowOther: data.allow_other as boolean,
+    multi: data.multi as boolean,
+    answeredAt: data.answered_at as string | null,
+  };
+}
+
+/**
+ * A question answered (CHAT-07 §A items 6, 7, 10): its step closes on the
+ * question with the answer in words, its collapsed line; the model reads
+ * what was picked, or, skipped, the recommended option to go on with.
+ */
+async function answerQuestion(
+  rc: RunContext,
+  pending: PendingCalls,
+  call: PendingCall,
+  answer: AskAnswer,
+): Promise<CallResult> {
+  const ask = await readAsk(pending.stepId);
+  const options = ask?.options ?? [];
+  const words = ask
+    ? answerWords(ask, answer, (option) => t('step.askSkipped', { option }))
+    : t('step.skipped');
+  const row = await updateStep(pending.stepId, {
+    status: 'done',
+    ...(ask ? { label: ask.question } : {}),
+    detail: words,
+  });
+  rc.sink.emit('step.finished', { step: clientStep(row) });
+  // The person's own answer: the model follows it as their message, not as data.
+  const value = answer.skipped
+    ? { from: 'the person', skipped: true, use: ask ? recommendedLabel(ask) : null }
+    : {
+        from: 'the person',
+        selected: answer.selected.map((i) => options[i]?.label).filter(Boolean),
+        other: answer.other,
+      };
+  return {
+    toolCallId: call.toolCallId,
+    toolName: call.toolName,
+    value: toJson(value),
+    error: false,
+  };
+}
+
 /** "Don't ask again for this kind of change" (CHAT-20 §5 step 6): the person's tick. */
 async function saveAutoChoice(rc: RunContext, tool: ChatTool) {
   const { error } = await supabaseAdmin.from('chat_auto_choices').insert({
@@ -2149,20 +2402,100 @@ export const approveInput = z.object({
 });
 export const skipInput = z.object({ n: z.number().int().min(1) });
 
+type AskAnswerBody = z.output<typeof askAnswerInput>;
+
+/**
+ * An answer to the question the run waits on: checked against its options,
+ * kept on its row once, then the run is taken back. Read-only, nothing goes
+ * on (the next model step couldn't be paid for).
+ */
+async function prepareAnswer(
+  actor: ChatActor,
+  runId: string,
+  pending: PendingCalls,
+  body: AskAnswerBody,
+): Promise<{ ok: true; resume: ResumeAction } | EngineFailure> {
+  const answer: AskAnswer = {
+    selected: body.selected,
+    other: body.other || null,
+    skipped: body.skipped,
+    via: body.via,
+  };
+  const ask = await readAsk(pending.stepId);
+  if (!ask) return failure(404, 'not_found', t('error.notFound'));
+  if (ask.answeredAt) return failure(409, 'answered', t('error.answered'));
+  if (!answerFits(ask, answer)) return failure(400, 'invalid', t('error.answerInvalid'));
+  const ctx = await readPrecedenceContext({
+    userId: actor.userId,
+    organizationId: actor.organizationId,
+    mode: 'ask_first',
+    surface: 'chat',
+  });
+  if (!ctx) return failure(404, 'not_found', t('error.notFound'));
+  if (!ctx.plan.writable)
+    return failure(402, 'subscription_inactive', SUBSCRIPTION_INACTIVE.message);
+  // Kept once: a second answer, from another tab or device, finds it taken.
+  const { data: kept, error } = await supabaseAdmin
+    .from('chat_asks')
+    .update({ answer_json: answer as unknown as Json, answered_at: new Date().toISOString() })
+    .eq('id', ask.id)
+    .is('answered_at', null)
+    .select('id');
+  if (error) throw new Error(`Chat could not keep the answer: ${error.message}`);
+  if ((kept ?? []).length === 0) return failure(409, 'answered', t('error.answered'));
+  // The run is taken back, or the answer is let go again: a run stopped or
+  // ended meanwhile keeps no answer it never went on with (its question is
+  // kept as skipped, as its Stop keeps it), and a retry after a failure here
+  // finds the question open.
+  let moved: boolean | null = null;
+  try {
+    moved = await moveRun(runId, ['waiting'], 'running');
+  } finally {
+    if (!moved) await releaseAnswer(ask.id, moved === false ? SKIPPED_ANSWER : null);
+  }
+  if (!moved) return failure(409, 'not_waiting', t('error.notWaiting'));
+  return { ok: true, resume: { kind: 'answer', answer } };
+}
+
+/**
+ * An answer kept on a question whose run didn't go on: the question is open
+ * again, or, its run ended meanwhile, kept as skipped.
+ */
+async function releaseAnswer(askId: string, skipped: AskAnswer | null): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('chat_asks')
+    .update(
+      skipped
+        ? { answer_json: skipped as unknown as Json, answered_at: new Date().toISOString() }
+        : { answer_json: null, answered_at: null },
+    )
+    .eq('id', askId);
+  if (error) console.error('[chat/engine] could not let an answer go:', error.message);
+}
+
 /**
  * Checks an Approve, a click or a Skip against the card the run waits on,
- * and takes the run back (waiting → running) for the driver to go on with
- * (driveRun's `resume`). An approval for other arguments than the card's now
- * (a stale card) is refused (`approval_mismatch`) and the card is shown again.
+ * or an answer against its question card, and takes the run back (waiting →
+ * running) for the driver to go on with (driveRun's `resume`). An approval
+ * for other arguments than the card's now (a stale card) is refused
+ * (`approval_mismatch`) and the card is shown again. An answer is kept on
+ * its question once: a second one is 409 `answered` (CHAT-07 Data notes).
  */
 export async function prepareResume(
   actor: ChatActor,
   runId: string,
-  kind: 'approve' | 'skip',
+  kind: 'approve' | 'skip' | 'answer',
   raw: unknown,
 ): Promise<{ ok: true; resume: ResumeAction } | EngineFailure> {
-  const parsed = kind === 'approve' ? approveInput.safeParse(raw) : skipInput.safeParse(raw);
-  if (!parsed.success) return failure(400, 'invalid', t('error.failed'));
+  const parsed =
+    kind === 'approve'
+      ? approveInput.safeParse(raw)
+      : kind === 'answer'
+        ? askAnswerInput.safeParse(raw)
+        : skipInput.safeParse(raw);
+  if (!parsed.success) {
+    return failure(400, 'invalid', t(kind === 'answer' ? 'error.answerInvalid' : 'error.failed'));
+  }
   const body = parsed.data as { n: number; digest?: string; dontAskAgain?: boolean };
   const run = await loadRun(runId);
   if (!run || run.userId !== actor.userId || run.organizationId !== actor.organizationId) {
@@ -2171,6 +2504,13 @@ export async function prepareResume(
   const pending = run.pending;
   if (run.status !== 'waiting' || !pending) {
     return failure(409, 'not_waiting', t('error.notWaiting'));
+  }
+  // A question card takes an answer, and an answer goes to a question card only.
+  if (pending.kind === 'question' || kind === 'answer') {
+    if (pending.kind !== 'question' || kind !== 'answer' || body.n !== pending.n) {
+      return failure(409, 'not_waiting', t('error.notWaiting'));
+    }
+    return prepareAnswer(actor, runId, pending, parsed.data as AskAnswerBody);
   }
   const call = pending.calls[pending.index];
   const tool = chatTool(call.toolName);
@@ -2341,7 +2681,38 @@ async function finishStopped(
   reason: 'person' | 'expired',
   workingMs: number,
 ): Promise<void> {
-  await skipOpenSteps(run.id, sink, reason === 'expired' ? t('step.expired') : t('step.stopped'));
+  const openAsks: string[] = [];
+  for (const step of await openSteps(run.id)) {
+    const row = await updateStep(step.id, {
+      status: 'skipped',
+      // An open question is skipped with it (CHAT-07 §A item 9).
+      ...(step.kind === 'ask' ? { label: t('step.askStopped') } : {}),
+      detail: reason === 'expired' ? t('step.expired') : t('step.stopped'),
+    });
+    if (step.kind === 'ask') openAsks.push(step.id);
+    sink.emit('step.finished', { step: clientStep(row) });
+  }
+  // Its open questions are kept as skipped (CHAT-07 §A item 9): one answered
+  // just before the Stop too, as the run never went on with that answer.
+  const skipped = { answer_json: SKIPPED_ANSWER as unknown as Json };
+  const at = new Date().toISOString();
+  const [{ error: asksError }, { error: takenError }] = await Promise.all([
+    supabaseAdmin
+      .from('chat_asks')
+      .update({ ...skipped, answered_at: at })
+      .eq('run_id', run.id)
+      .is('answered_at', null),
+    openAsks.length > 0
+      ? supabaseAdmin
+          .from('chat_asks')
+          .update({ ...skipped, answered_at: at })
+          .eq('run_id', run.id)
+          .in('step_id', openAsks)
+      : Promise.resolve({ error: null }),
+  ]);
+  for (const e of [asksError, takenError]) {
+    if (e) console.error('[chat/engine] could not skip open questions:', e.message);
+  }
   await saveAnswer(run.messageId, {
     text: run.progress.text,
     generatedAt: new Date().toISOString(),
