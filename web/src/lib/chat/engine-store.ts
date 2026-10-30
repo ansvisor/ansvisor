@@ -110,6 +110,11 @@ export interface RunProgress {
    * ignored, said so in the answer, and the rest of the run asks first.
    */
   injection?: boolean;
+  /**
+   * The answer's fact check (CHAT-05 item 11): figures checked against the
+   * run's data, and the ones taken out (a placeholder in their place).
+   */
+  facts?: { checked: number; replaced: string[] };
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {

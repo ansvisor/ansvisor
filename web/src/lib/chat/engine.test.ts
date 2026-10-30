@@ -273,6 +273,7 @@ beforeEach(() => {
   budgetHolds();
   fakes.readRun.mockResolvedValue({
     rows: [{ prompt: 'best crm' }, { prompt: 'crm for teams' }, { prompt: 'crm pricing' }],
+    change_pct: 12,
     data_as_of: DATA_AS_OF,
   });
   fakes.publishRun.mockResolvedValue({ published: true });
@@ -384,7 +385,7 @@ describe('a turn', () => {
     ).toBe('Visibility is up 12% on ChatGPT.');
     const end = ofType(events, 'run.finished')[0].data;
     expect(end).toMatchObject({
-      stepCount: 1,
+      stepCount: 2,
       dataAsOf: DATA_AS_OF,
       sources: [{ label: 'Visibility', count: 3 }],
     });
@@ -531,12 +532,12 @@ describe('the prompt, for the cache (W1-18)', () => {
   });
 
   it('gives the writer the chat so far, marked at its end, and the reader a few lines of it', async () => {
-    useModels([READY], [text('Visibility is 42.')]);
+    useModels([READY], [text('Visibility is 7.')]);
     const first = await engine.startChatRun(ADMIN, { message: 'First question?', brandId: BRAND });
     if (!first.ok) throw new Error('not started');
     await engine.driveRun(ADMIN, first.runId);
 
-    const { haiku, sonnet } = useModels([READY], [text('Still 42.')]);
+    const { haiku, sonnet } = useModels([READY], [text('Still 7.')]);
     const second = await engine.startChatRun(ADMIN, {
       message: 'And now?',
       conversationId: first.conversationId,
@@ -548,7 +549,7 @@ describe('the prompt, for the cache (W1-18)', () => {
     expect(write).toHaveLength(3);
     expect(JSON.stringify(write[0].content)).toContain('First question?');
     expect(write[1]).toMatchObject({ role: 'assistant', providerOptions: MARK });
-    expect(JSON.stringify(write[1].content)).toContain('Visibility is 42.');
+    expect(JSON.stringify(write[1].content)).toContain('Visibility is 7.');
     const read = sent(haiku.seen[0]).filter((m) => m.role !== 'system');
     expect(read).toHaveLength(1);
     expect(JSON.stringify(read[0].content)).toContain('Asked: First question?');
@@ -650,6 +651,87 @@ describe('guardrails (W1-20)', () => {
     expect(createContentDraft).not.toHaveBeenCalled();
     expect(runRow(runId).status).toBe('waiting');
     expectClean(await eventsOf(runId));
+  });
+});
+
+describe('the fact check (W1-21)', () => {
+  it('takes a figure the data does not hold out of the answer before it streams, and says so', async () => {
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Visibility is up 1', '2% on ChatGPT and 3', '7% on Perplexity.')],
+    );
+    const runId = await turn(ADMIN, 'How are we doing?');
+    const events = await eventsOf(runId);
+    const streamed = ofType(events, 'text.delta')
+      .map((e) => e.data.text)
+      .join('');
+    expect(streamed).toBe('Visibility is up 12% on ChatGPT and [real metric] on Perplexity.');
+    expect(streamed).not.toContain('37');
+    const answer = db.tables.chat_messages.find((m) => m.role === 'assistant')!;
+    expect(answer.content_md).toBe(streamed);
+
+    const check = stepsOf(runId).at(-1)!;
+    expect(check).toMatchObject({
+      kind: 'check',
+      status: 'done',
+      label: 'Checked facts',
+      detail: "1 figure wasn't in the data, so it was left out",
+      debug_json: { checked: 2, replaced: ['37%'], guardrails: ['placeholder_inserted'] },
+    });
+    expect(ofType(events, 'step.finished').at(-1)!.data.step).toMatchObject({
+      kind: 'check',
+      label: 'Checked facts',
+    });
+    expectClean(events);
+  });
+
+  it('keeps a link whole when the stream is cut just before its figure', async () => {
+    const lead = `${'Visibility is up 12% on ChatGPT. '.repeat(5)}Read https://example.com/blog/`;
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text(lead, '98765 for more.')],
+    );
+    const runId = await turn(ADMIN, 'How are we doing?');
+    const streamed = ofType(await eventsOf(runId), 'text.delta')
+      .map((e) => e.data.text)
+      .join('');
+    expect(streamed).toBe(`${lead}98765 for more.`);
+  });
+
+  it('never marks a run done without its answer when the check step cannot be written', async () => {
+    useModels([READY], [text('Up 37% this week.')]);
+    db.failures.chat_run_steps = { message: 'down' };
+    const runId = await turn(ADMIN, 'Hi');
+    delete db.failures.chat_run_steps;
+    expect(runRow(runId)).toMatchObject({ status: 'error', error: 'failed' });
+  });
+
+  it('holds back only a short run, so each check reads a short text', async () => {
+    const run = 'a-'.repeat(2_000);
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text(...run.match(/.{1,200}/g)!, ' Up 12%.')],
+    );
+    const runId = await turn(ADMIN, 'How are we doing?');
+    const deltas = ofType(await eventsOf(runId), 'text.delta').map((e) => e.data.text as string);
+    expect(deltas.join('')).toBe(`${run} Up 12%.`);
+    expect(Math.max(...deltas.map((d) => d.length))).toBeLessThanOrEqual(200 + 160);
+  });
+
+  it('says every figure matched, and adds no step to an answer without figures', async () => {
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Up 12% across 3 prompts.')],
+    );
+    const runId = await turn(ADMIN, 'How are we doing?');
+    expect(stepsOf(runId).at(-1)).toMatchObject({
+      kind: 'check',
+      detail: 'Every figure matches the data',
+    });
+
+    useModels([READY], [text('Hello! Ask me about your brand.')]);
+    const plain = await turn(ADMIN, 'Hi');
+    expect(stepsOf(plain)).toHaveLength(0);
   });
 });
 

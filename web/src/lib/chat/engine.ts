@@ -39,6 +39,7 @@ import {
   type RunProgress,
 } from './engine-store';
 import { maskIds, type ChatDenialCard, type ChatRunSummary, type ChatStepScope } from './events';
+import { HOLD_MAX, checkFigures, figureHold, figuresOfRun, type KnownFigures } from './facts';
 import { fitResult, toJson } from './fit';
 import { historyMessages, planHistory, type HistoryPlan, type HistoryRow } from './history';
 import { requestHash } from './idempotency';
@@ -672,7 +673,7 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
     return { kind: 'ended' };
   }
   const { budget } = reservation;
-  const text = phase === 'write' ? new TextOut(rc) : null;
+  const text = phase === 'write' ? new TextOut(rc, runFigures(rc)) : null;
   try {
     const result = streamText({
       model: choice.model,
@@ -899,15 +900,41 @@ function workspaceBlock(
 }
 
 /**
+ * The figures this answer may state (facts.ts): the question, the chat so
+ * far, what was read and every tool result in this run, today's date.
+ * Never the model's own earlier text: a figure it made up stays made up.
+ */
+function runFigures(rc: RunContext): KnownFigures {
+  const results: Json[] = [];
+  for (const message of rc.messages) {
+    if (message.role !== 'tool') continue;
+    for (const part of message.content) {
+      if (part.type === 'tool-result') results.push(toJson(part.output));
+    }
+  }
+  return figuresOfRun({
+    question: `${rc.progress.question ?? ''}\n${todayLine()}`,
+    history: [rc.history.summary ?? '', ...rc.history.recent.map((m) => toJson(m.content))],
+    reads: [...rc.progress.readLog.map((read) => toJson(read)), ...results],
+  });
+}
+
+/**
  * The answer's text as it streams: in small batches (one event every ~60 ms
- * or 160 characters), with every uuid shown as "…" (CHAT-03 item 5). A run
- * of characters that could still become a uuid waits for the next chunk.
+ * or 160 characters), with every uuid shown as "…" (CHAT-03 item 5) and
+ * every figure the run's data doesn't hold replaced by a placeholder before
+ * it leaves (CHAT-05 item 11, facts.ts). A run of characters that could
+ * still become a uuid, or a figure without the text that follows it, waits
+ * for the next chunk.
  */
 class TextOut {
   private pending = '';
   private timer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private readonly rc: RunContext) {}
+  constructor(
+    private readonly rc: RunContext,
+    private readonly known: KnownFigures,
+  ) {}
 
   push(delta: string) {
     this.pending += delta;
@@ -922,10 +949,25 @@ class TextOut {
   private emit(all: boolean) {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
-    const held = all ? null : /[0-9a-fA-F-]+$/.exec(this.pending);
-    const cut = held ? held.index : this.pending.length;
-    const out = maskIds(this.pending.slice(0, cut));
+    let cut = this.pending.length;
+    if (!all) {
+      const id = /[0-9a-fA-F-]+$/.exec(this.pending);
+      if (id) cut = id.index;
+      const figure = figureHold(this.pending);
+      if (figure !== null) cut = Math.min(cut, figure);
+      cut = Math.max(cut, this.pending.length - HOLD_MAX);
+    }
+    const checked = checkFigures(maskIds(this.pending.slice(0, cut)), this.known, {
+      before: this.rc.progress.text.slice(-80),
+      after: this.pending.slice(cut),
+    });
     this.pending = this.pending.slice(cut);
+    if (checked.checked > 0) {
+      const facts = (this.rc.progress.facts ??= { checked: 0, replaced: [] });
+      facts.checked += checked.checked;
+      facts.replaced.push(...checked.replaced);
+    }
+    const out = checked.text;
     if (!out) return;
     this.rc.progress.text += out;
     this.rc.sink.emit('text.delta', { text: out });
@@ -1745,6 +1787,8 @@ function summaryOf(progress: RunProgress, workingMs: number): ChatRunSummary {
 
 /** The answer is written: kept with when it was made and the newest data it read (CHAT-20 §15a). */
 async function finish(rc: RunContext): Promise<void> {
+  // Written while the run still runs: a failed write ends it as an error, never "done" without its answer.
+  await checkedFactsStep(rc);
   if (!(await moveRun(rc.run.id, ['running'], 'done', { finished: true }))) return stopNow(rc);
   const generatedAt = new Date().toISOString();
   const workingMs = workedMs(rc);
@@ -1765,6 +1809,35 @@ async function finish(rc: RunContext): Promise<void> {
     generatedAt,
     dataAsOf: rc.progress.dataAsOf,
   });
+}
+
+/**
+ * "Checked facts" (CHAT-05 item 11): the answer's figures were checked
+ * against the run's data as it streamed; this step says so, and how many
+ * were taken out. Staff see which (`placeholder_inserted`). None when the
+ * answer stated no figure.
+ */
+async function checkedFactsStep(rc: RunContext): Promise<void> {
+  const facts = rc.progress.facts;
+  if (!facts || facts.checked === 0) return;
+  const removed = facts.replaced.length;
+  let row = await insertStep(rc.run.id, {
+    position: ++rc.progress.steps,
+    kind: 'check',
+    status: 'running',
+    label: t('step.checkedFacts'),
+  });
+  rc.sink.emit('step.started', { step: clientStep(row) });
+  row = await updateStep(row.id, {
+    status: 'done',
+    detail: removed > 0 ? t('step.factsRemoved', { count: removed }) : t('step.factsMatch'),
+    debug: {
+      checked: facts.checked,
+      replaced: facts.replaced,
+      guardrails: removed > 0 ? ['placeholder_inserted'] : [],
+    },
+  });
+  rc.sink.emit('step.finished', { step: clientStep(row) });
 }
 
 /** The month's AI limit is used (CHAT-04 item 17): the next step doesn't start; what's done stays. */
