@@ -50,7 +50,13 @@ import {
   type AskAnswer,
   type AskToolInput,
 } from './asks';
-import { NEXT_MOVES_TOOL, clientMove, nextMovesInput, pickNextMoves } from './next-moves';
+import {
+  NEXT_MOVES_TOOL,
+  clientMove,
+  nextMovesInput,
+  pickNextMoves,
+  validMoves,
+} from './next-moves';
 import { requestHash } from './idempotency';
 import {
   CHAT_MODES,
@@ -729,6 +735,8 @@ async function modelLoop(rc: RunContext): Promise<void> {
     if (rc.signal.aborted) return stopNow(rc);
     if (rc.progress.modelSteps >= MAX_MODEL_STEPS) return finish(rc);
     const phase: ChatPhase = rc.models.phases === 'single' ? 'write' : rc.progress.phase;
+    // Next moves belong to the answer they came with: a later step suggests its own, or none.
+    if (phase === 'write') rc.progress.nextMoves = undefined;
     const step = await modelStep(rc, phase);
     if (step.kind === 'ended') return;
     rc.progress.modelSteps += 1;
@@ -1373,9 +1381,23 @@ async function askQuestion(rc: RunContext, call: PendingCall): Promise<CallOutco
 function keepNextMoves(rc: RunContext, call: PendingCall): CallOutcome {
   const parsed = nextMovesInput.safeParse(call.input);
   if (!parsed.success) return result(call, { code: 'invalid_input' }, true);
-  rc.progress.nextMoves = parsed.data.moves;
+  rc.progress.nextMoves = validMoves(parsed.data.moves);
   return result(call, { ok: true });
 }
+
+/** Words that name a tool, or look like one (snake_case): a move never shows them. */
+const TOOLISH = /\b[a-z][a-z0-9]*_[a-z0-9_]+\b/i;
+const namesTool = (text: string) => {
+  const lower = text.toLowerCase();
+  return (
+    TOOLISH.test(text) ||
+    [ASK_TOOL, EXPLAIN_TOOL, NEXT_MOVES_TOOL].some((name) => lower.includes(name)) ||
+    CHAT_TOOLS.some(
+      (tool) =>
+        lower.includes(tool.name) || (!!tool.mcpTool && lower.includes(tool.mcpTool.toLowerCase())),
+    )
+  );
+};
 
 /**
  * A question asked with one the person answered from the composer: their
@@ -2198,7 +2220,9 @@ async function offerNextMoves(rc: RunContext): Promise<void> {
   try {
     const ctx = await contextFor(rc);
     if (!ctx) return;
-    const picked = pickNextMoves(moves, { role: ctx.role, writable: ctx.plan.writable });
+    // A move never names a tool (CHAT-03 item 22), even in words the model made up.
+    const clean = moves.filter((move) => !namesTool(move.label) && !namesTool(move.prompt));
+    const picked = pickNextMoves(clean, { role: ctx.role, writable: ctx.plan.writable });
     if (picked.length === 0) return;
     const { error } = await supabaseAdmin.from('chat_next_moves').insert(
       picked.map((move, i) => ({

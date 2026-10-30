@@ -1079,6 +1079,102 @@ describe('next moves (CHAT-07 §C)', () => {
     }
   });
 
+  it('keeps the moves that fit when one doesn’t, and drops one that names a tool', async () => {
+    useModels(
+      [READY],
+      [
+        answerWithMoves('Done.', [
+          { ...MOVES[0], prompt: 'x'.repeat(81) },
+          { ...MOVES[0], kind: 'wander' },
+          { ...MOVES[1], prompt: 'Run get_visibility_trend for May', kind: 'repeat' },
+          { ...MOVES[1], label: 'Use create_draft again', kind: 'act' },
+          MOVES[1],
+        ]),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    expect(movesOf(runId).map((m) => m.prompt)).toEqual([
+      'Compare these citations with Perplexity',
+    ]);
+    expectClean(await eventsOf(runId));
+  });
+
+  it('shows no moves from an earlier step when the last one suggests none', async () => {
+    useModels(
+      [READY],
+      [
+        [
+          toolCall('q1', ASK_TOOL, {
+            question: 'Which page?',
+            options: [{ label: '/pricing', recommended: true }, { label: '/features' }],
+          }),
+          toolCall('m1', NEXT_MOVES_TOOL, { moves: MOVES }),
+          {
+            type: 'finish',
+            finishReason: { unified: 'tool-calls', raw: 'tool_use' },
+            usage: usage(),
+          },
+        ],
+        text('Used /pricing.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Write a FAQ');
+    const prepared = await engine.prepareResume(ADMIN, runId, 'answer', { n: 1, selected: [0] });
+    if (prepared.ok) await engine.driveRun(ADMIN, runId, prepared.resume);
+    expect(runRow(runId).status).toBe('done');
+    expect(ofType(await eventsOf(runId), 'next_moves')).toEqual([]);
+    expect(movesOf(runId)).toEqual([]);
+  });
+
+  it('ends the run all the same when the moves can’t be kept, without them', async () => {
+    useModels([READY], [answerWithMoves('Two pages lost most of it.', MOVES)]);
+    db.failures.chat_next_moves = { message: 'down' };
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    const events = await eventsOf(runId);
+    expect(runRow(runId).status).toBe('done');
+    expect(ofType(events, 'run.finished')).toHaveLength(1);
+    expect(ofType(events, 'next_moves')).toEqual([]);
+  });
+
+  it('shows none after a run that ends in an error or a Stop', async () => {
+    const failing = () => {
+      throw new Error('model down');
+    };
+    useModels(
+      [READY, READY],
+      [
+        calls(
+          toolCall('m1', NEXT_MOVES_TOOL, { moves: MOVES }),
+          toolCall('w1', 'create_draft', {
+            brand_id: BRAND,
+            title: 'Pricing FAQ',
+            page_type: 'docs_faq',
+            source: { kind: 'content' },
+          }),
+        ),
+        failing,
+        calls(
+          toolCall('m2', NEXT_MOVES_TOOL, { moves: MOVES }),
+          toolCall('w2', 'create_draft', {
+            brand_id: BRAND,
+            title: 'Pricing FAQ',
+            page_type: 'docs_faq',
+            source: { kind: 'content' },
+          }),
+        ),
+      ],
+    );
+    const failed = await turn(ADMIN, 'Draft it', 'full_auto');
+    expect(runRow(failed).status).toBe('error');
+    const stopped = await turn(ADMIN, 'Draft it again', 'ask_first');
+    await engine.stopChatRun(ADMIN, stopped);
+    expect(runRow(stopped).status).toBe('stopped');
+    for (const runId of [failed, stopped]) {
+      expect(ofType(await eventsOf(runId), 'next_moves')).toEqual([]);
+      expect(movesOf(runId)).toEqual([]);
+    }
+  });
+
   it('suggests none while the run waits on the person', async () => {
     useModels(
       [READY],

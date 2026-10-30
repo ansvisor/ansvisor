@@ -20,26 +20,35 @@ export const NEXT_MOVE_KINDS = ['continue', 'deepen', 'act', 'repeat', 'reuse'] 
 /** Roles that only read: a write or an EXECUTE move is never theirs, as a card or as ghost text (§C item 4). */
 const READ_ONLY_ROLES: readonly TeamRole[] = ['analyst', 'agency_partner'];
 
-/** What the model suggests with: its ranked moves, best first. */
+/** One move as it is kept: each is checked on its own, so a bad one loses only itself. */
+export const nextMoveItem = z.object({
+  label: z.string().trim().min(1).max(80),
+  prompt: z.string().trim().min(1).max(80),
+  kind: z.enum(NEXT_MOVE_KINDS),
+  class: z.enum(['read', 'write', 'execute']),
+  continues_this_run: z.boolean().optional(),
+});
+export type NextMoveInput = z.output<typeof nextMoveItem>;
+
+/**
+ * What the model suggests with: its ranked moves, best first. Loose on
+ * purpose: the call is taken whole and each move checked against
+ * nextMoveItem (validMoves), so one move too long or of an unknown kind
+ * doesn't lose the others.
+ */
 export const nextMovesInput = z.object({
   moves: z
     .array(
       z.object({
         label: z
           .string()
-          .trim()
-          .min(1)
-          .max(80)
           .describe('Names a real object: "Do the same for /features". Never an id or a tool.'),
         prompt: z
           .string()
-          .trim()
-          .min(1)
-          .max(80)
           .describe('The message it sends, as the person would type it, under 80 characters.'),
-        kind: z.enum(NEXT_MOVE_KINDS),
+        kind: z.string().describe(`One of: ${NEXT_MOVE_KINDS.join(', ')}.`),
         class: z
-          .enum(['read', 'write', 'execute'])
+          .string()
           .describe('read: only reads data; write: changes the workspace; execute: goes live.'),
         continues_this_run: z
           .boolean()
@@ -47,17 +56,26 @@ export const nextMovesInput = z.object({
           .describe('It continues an object of this answer (a page, task or prompt it worked on).'),
       }),
     )
-    .min(1)
-    .max(4),
+    .max(6),
 });
-export type NextMoveInput = z.output<typeof nextMovesInput>['moves'][number];
+
+/** The moves that pass nextMoveItem, in order; the rest are dropped. */
+export function validMoves(moves: readonly unknown[]): NextMoveInput[] {
+  return moves.flatMap((move) => {
+    const parsed = nextMoveItem.safeParse(move);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
 
 /** A move as chat_next_moves keeps it, in rank order. */
 export interface PickedMove {
   label: string;
   prompt: string;
   class: NextMoveInput['class'];
-  /** The server's mark that it continues this run's object: only then ghost text. */
+  /**
+   * The model said it continues this run's object (continues_this_run): only
+   * then ghost text. Its word, not checked here; the card shows what it sends.
+   */
   ghostOk: boolean;
 }
 
