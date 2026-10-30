@@ -3602,7 +3602,6 @@
         "contract": "AI limit, storage and prompt limits set in your contract",
         "aiLimit": "{times}× the monthly AI limit",
         "keepEverything": "Keep everything you're using now",
-        "mcp": "Use Ansvisor inside Claude, ChatGPT and Cursor (MCP)",
         "monthlyLimit": "A monthly AI limit that resets, instead of the trial's one-time limit",
         "packs": "Buy extra AI credits and storage when you need them"
       }
@@ -10297,6 +10296,7 @@
     "apiKeys_description": "Long-lived tokens for the Ansvisor MCP server and other external clients. Keys are shown once at creation — store them somewhere safe.",
     "apiKeys_mcpEndpoint": "MCP endpoint",
     "apiKeys_mcpEndpointHint": "Create a key to get a ready-to-paste setup for Claude, Codex, Cursor and other MCP clients. See the <link>MCP guide</link>.",
+    "apiKeys_planNote": "On Starter and in the free trial, MCP tools and the API can read. Changes need Growth.",
     "apiKeys_noKeys": "No API keys yet. Create one to connect the MCP server.",
     "apiKeys_revoked": "revoked",
     "apiKeys_created": "Created {date} · Last used {lastUsed}",
