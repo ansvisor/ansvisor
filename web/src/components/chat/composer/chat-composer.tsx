@@ -195,7 +195,11 @@ export function ChatComposer({
                     <button
                       type="button"
                       data-action="composer.removeChip"
-                      onClick={() => onRemoveChip(chip.key)}
+                      onClick={() => {
+                        onRemoveChip(chip.key);
+                        // The × goes with its chip: keep the focus in the composer.
+                        box.current?.focus();
+                      }}
                       aria-label={t('removeChip', { label: chip.label })}
                       className="inline-flex size-4 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
