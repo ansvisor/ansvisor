@@ -53,6 +53,34 @@ export function renderFirstResultsEmail({ brandName }) {
 }
 
 /**
+ * Whether this brand's run is the organization's first results: of its real
+ * brands' stamped runs, the earliest is this brand's. A workspace that had
+ * results before (another brand, or before this e-mail existed) isn't told
+ * its "first" results are ready when it adds a brand. Two brands' first runs
+ * stamping close together: the earlier stamp sends, the later doesn't.
+ */
+async function isOrganizationsFirstResults(orgId, brandId) {
+  const { data: brands, error: brandsError } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('organization_id', orgId)
+    .eq('is_demo', false);
+  if (brandsError) throw new Error(brandsError.message);
+  const ids = (brands ?? []).map((row) => row.id);
+  if (ids.length === 0) return false;
+
+  const { data: runs, error } = await supabaseAdmin
+    .from('tracking_runs')
+    .select('brand_id')
+    .in('brand_id', ids)
+    .not('completed_at', 'is', null)
+    .order('completed_at', { ascending: true })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return runs?.[0]?.brand_id === brandId;
+}
+
+/**
  * Take the organization's members who were never sent it, in one update, so
  * two first runs finishing at once can't both send it. The ids taken.
  */
@@ -87,18 +115,20 @@ async function emailsOf(ids) {
 
 /**
  * E-mail the brand's organization that its first results are in: the
- * members never sent it before. 'sent', 'refused', 'unknown' (no answer:
+ * members never sent it before, when this brand's run is the organization's
+ * first results (not a demo brand's, nor a later brand's). 'sent', 'refused', 'unknown' (no answer:
  * Resend may have sent it, so the claim stays) or 'skipped' (nobody left to
  * send it to, or e-mail isn't set up).
  */
 export async function sendFirstResultsEmail(brandId) {
   const { data: brand, error } = await supabaseAdmin
     .from('brands')
-    .select('name, organization_id')
+    .select('name, organization_id, is_demo')
     .eq('id', brandId)
     .single();
   if (error) throw new Error(error.message);
-  if (!brand?.organization_id) return 'skipped';
+  if (!brand?.organization_id || brand.is_demo) return 'skipped';
+  if (!(await isOrganizationsFirstResults(brand.organization_id, brandId))) return 'skipped';
 
   const ids = await claimRecipients(brand.organization_id);
   if (ids.length === 0) return 'skipped';

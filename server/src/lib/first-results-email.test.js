@@ -6,7 +6,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const db = vi.hoisted(() => ({
-  brand: { data: { name: 'Acme Coffee', organization_id: 'org-1' }, error: null },
+  brand: { data: { name: 'Acme Coffee', organization_id: 'org-1', is_demo: false }, error: null },
+  // The organization's real brands, and its earliest stamped run.
+  orgBrands: { data: [{ id: 'brand-1' }, { id: 'brand-2' }], error: null },
+  firstRun: { data: [{ brand_id: 'brand-1' }], error: null },
+  runQueries: [],
   claimed: { data: [{ id: 'u1' }, { id: 'u2' }], error: null },
   emails: { u1: 'ana@acme.test', u2: 'bo@acme.test' },
   updates: [],
@@ -17,7 +21,31 @@ vi.mock('../config/supabase.js', () => ({
   default: {
     from: (table) => {
       if (table === 'brands') {
-        return { select: () => ({ eq: () => ({ single: async () => db.brand }) }) };
+        // The brand itself (… eq id … single), or the organization's real
+        // brands (… eq organization_id … eq is_demo false).
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => db.brand,
+              eq: async (column, value) =>
+                column === 'is_demo' && value === false
+                  ? db.orgBrands
+                  : { data: null, error: { message: 'unexpected filter' } },
+            }),
+          }),
+        };
+      }
+      if (table === 'tracking_runs') {
+        const query = [];
+        db.runQueries.push(query);
+        const chain = {
+          select: (columns) => (query.push(['select', columns]), chain),
+          in: (column, value) => (query.push(['in', column, value]), chain),
+          not: (column, op, value) => (query.push(['not', column, op, value]), chain),
+          order: (column, options) => (query.push(['order', column, options]), chain),
+          limit: async (n) => (query.push(['limit', n]), db.firstRun),
+        };
+        return chain;
       }
       // profiles: the claim (update … is null … select) or its release (update … in).
       return {
@@ -50,7 +78,13 @@ vi.mock('./logger.js', () => ({ default: { warn: vi.fn(), error: vi.fn(), info: 
 const { renderFirstResultsEmail, sendFirstResultsEmail } = await import('./first-results-email.js');
 
 beforeEach(() => {
-  db.brand = { data: { name: 'Acme Coffee', organization_id: 'org-1' }, error: null };
+  db.brand = {
+    data: { name: 'Acme Coffee', organization_id: 'org-1', is_demo: false },
+    error: null,
+  };
+  db.orgBrands = { data: [{ id: 'brand-1' }, { id: 'brand-2' }], error: null };
+  db.firstRun = { data: [{ brand_id: 'brand-1' }], error: null };
+  db.runQueries = [];
   db.claimed = { data: [{ id: 'u1' }, { id: 'u2' }], error: null };
   db.updates = [];
   deliverEmail.mockReset().mockResolvedValue('sent');
@@ -113,6 +147,40 @@ describe('sendFirstResultsEmail', () => {
     deliverEmail.mockResolvedValue('unknown');
     expect(await sendFirstResultsEmail('brand-1')).toBe('unknown');
     expect(db.updates).toHaveLength(1);
+  });
+
+  it("reads the organization's earliest stamped run, of its real brands", async () => {
+    await sendFirstResultsEmail('brand-1');
+    expect(db.runQueries).toEqual([
+      [
+        ['select', 'brand_id'],
+        ['in', 'brand_id', ['brand-1', 'brand-2']],
+        ['not', 'completed_at', 'is', null],
+        ['order', 'completed_at', { ascending: true }],
+        ['limit', 1],
+      ],
+    ]);
+  });
+
+  it('sends nothing when the organization had results before, from another brand', async () => {
+    // An existing workspace adding a brand, or the later of two first runs.
+    db.firstRun = { data: [{ brand_id: 'brand-2' }], error: null };
+    expect(await sendFirstResultsEmail('brand-1')).toBe('skipped');
+    expect(db.updates).toHaveLength(0);
+    expect(deliverEmail).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing for a demo brand', async () => {
+    db.brand = { data: { name: 'Demo', organization_id: 'org-1', is_demo: true }, error: null };
+    expect(await sendFirstResultsEmail('brand-1')).toBe('skipped');
+    expect(db.updates).toHaveLength(0);
+    expect(deliverEmail).not.toHaveBeenCalled();
+  });
+
+  it('fails when the earliest run cannot be read, before taking anyone', async () => {
+    db.firstRun = { data: null, error: { message: 'runs boom' } };
+    await expect(sendFirstResultsEmail('brand-1')).rejects.toThrow('runs boom');
+    expect(db.updates).toHaveLength(0);
   });
 
   it('fails when the brand cannot be read, before taking anyone', async () => {
