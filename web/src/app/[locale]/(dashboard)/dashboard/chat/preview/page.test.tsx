@@ -152,6 +152,7 @@ describe('the Chat pieces preview', () => {
       'execute:pending',
     ]);
     expect(slots('question-card')).toHaveLength(3);
+    expect(slots('next-moves')).toHaveLength(1);
     expect(slots('question-answered')).toHaveLength(2);
     expect(slots('done-line')).toHaveLength(2);
     expect(slots('approval-skipped')).toHaveLength(1);

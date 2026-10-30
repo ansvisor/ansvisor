@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, question, chat asks, recommended option, skip question]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, question, chat asks, recommended option, skip question, next moves, what to do next]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-30
@@ -68,6 +68,14 @@ Once answered, the card folds to one line with the question and your answer, and
 While Chat asks, you can also answer in the box below. It shows the Recommended option dim; Tab puts it in, and Enter sends it. A message that isn't one of the options answers every question Chat asked with it. An answer is text only, up to 500 characters.
 
 **Stop** beside the arrow, or Esc, ends the run and leaves its question skipped.
+
+## Next moves
+
+When Chat finishes an answer, **Next moves** under it suggests up to three things to do next, such as "Do the same for /features". Click one to send it as your next message. A change it leads to still asks you first where it should.
+
+When the first move carries on with what this answer worked on, the box shows it dim: Tab puts it in, and Enter sends it. Nothing is sent by itself.
+
+Analysts and Agency partners see only moves that read data. Next moves show under the latest answer, and come back when you open the chat again.
 
 ## Shortcuts and your data
 

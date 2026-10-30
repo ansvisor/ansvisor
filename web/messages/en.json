@@ -3482,6 +3482,7 @@
           "executeDisabled": "Before the draft is approved",
           "executeSaving": "Publishing",
           "executeDone": "Published",
+          "nextMoves": "Next moves under the latest answer (the first one continues it)",
           "resultDone": "Done",
           "resultNeedsClick": "Done but for a click",
           "denialRole": "Role",
