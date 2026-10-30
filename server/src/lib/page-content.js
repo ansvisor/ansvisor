@@ -369,6 +369,7 @@ function blockReader() {
         links: 0,
         linkText: 0,
         inPage: 0,
+        pictures: node.name === 'img' ? 1 : 0,
         hrefs: new Set(),
       };
       for (const child of children) {
@@ -388,6 +389,7 @@ function blockReader() {
         block.links += sub.links;
         block.linkText += sub.linkText;
         block.inPage += sub.inPage;
+        block.pictures += sub.pictures;
         for (const href of sub.hrefs) {
           if (block.hrefs.size >= MIN_LIST_TARGETS) break;
           block.hrefs.add(href);
@@ -570,12 +572,22 @@ export function classesHiddenOnDesktop(css) {
  * it says nothing (a spacer). Its words are read only when it has some.
  */
 function signatureOf($, el, length) {
-  // A builder's copies ask for the same picture in other sizes.
   const pictures = [...(el.name === 'img' ? [el] : []), ...findIn($, el, 'img').toArray()].map(
-    (img) => (img.attribs?.src ?? '').split('?')[0],
+    (img) => pictureOf(img.attribs?.src ?? ''),
   );
   const text = length > 0 ? clean($(el).text()) : '';
   return text || pictures.some(Boolean) ? `${text}|${pictures.join(' ')}` : null;
+}
+
+/**
+ * A picture's address for telling a copy: a builder's copies ask for the
+ * same image file in other sizes (`a.png?scale-down-to=512`), so a file's
+ * query is left out; an address that is a script's (`/_next/image?url=…`,
+ * `image.php?id=…`) names its picture in the query, and is kept whole.
+ */
+function pictureOf(src) {
+  const [path] = src.split('?');
+  return /\.(?:avif|gif|jpe?g|png|svg|webp)$/i.test(path) ? path : src;
 }
 
 /** The blocks a run of copies is looked for in: not a list's items or a table's cells. */
@@ -616,10 +628,16 @@ function repeatedBlocks($, root, kept) {
     let before = null;
     for (const child of parent.children ?? []) {
       if (!isElement(child)) continue;
+      // Read in full only when their text and their pictures count the same
+      // and aren't nothing: such a block inside another such block holds at
+      // most half of its text and pictures, so the page is read only as many
+      // times as it can be halved.
       if (
         before?.name === child.name &&
         REPEATABLE.has(child.name) &&
         read(child).length === read(before).length &&
+        read(child).pictures === read(before).pictures &&
+        read(child).length + read(child).pictures > 0 &&
         signature(child) !== null &&
         signature(child) === signature(before)
       ) {
@@ -818,11 +836,11 @@ export function extractPageContent(html, pageUrl) {
     clean($('title').first().text());
   // Still on the page (not in a header that went with the frame).
   const heading = titleH1 && $(titleH1).closest('body').length > 0 ? titleH1 : null;
-  let pageLength = null;
+  // Each block's text read once, however many app roots nest.
+  const measured = blockReader();
   const appRoot = (el) => {
     if (el.name === 'main' || el.name === 'article' || el.attribs.role === 'main') return false;
-    pageLength ??= clean(body.text()).length;
-    return clean($(el).text()).length >= pageLength * APP_ROOT_SHARE;
+    return measured.read(el).length >= measured.read(body[0]).length * APP_ROOT_SHARE;
   };
   const main = MAIN_SELECTORS.map((selector) => $(selector).toArray())
     .flat()

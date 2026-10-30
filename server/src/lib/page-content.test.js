@@ -431,6 +431,22 @@ describe('extractPageContent', () => {
     expect(html.match(/<td>Yes<\/td>/g)).toHaveLength(2);
   });
 
+  it('keeps pictures side by side whose address names them in its query', () => {
+    const { html } = extractPageContent(
+      `<body><main>
+        <p>Cold brew takes time, coarse grounds and cold water, nothing more.</p>
+        <img src="/_next/image?url=%2Fjar.jpg&amp;w=1080" alt="">
+        <img src="/_next/image?url=%2Fpour.jpg&amp;w=1080" alt="">
+        <figure><img src="/image.php?id=1"></figure><figure><img src="/image.php?id=2"></figure>
+      </main></body>`,
+      'https://coffee.example/cold-brew',
+    );
+    expect(html).toContain('%2Fjar.jpg');
+    expect(html).toContain('%2Fpour.jpg');
+    expect(html).toContain('image.php?id=1');
+    expect(html).toContain('image.php?id=2');
+  });
+
   it('judges images in the text as the text’s when the text area is the root', () => {
     const { html } = extractPageContent(
       `<body><article>
@@ -466,6 +482,14 @@ describe('extractPageContent on a long or deep page', () => {
     [
       'H1s without words',
       `<html><body><h1>Title</h1>${P}${fill('<h1><b></b></h1>', SIZE / 2)}</body></html>`,
+    ],
+    [
+      'paragraphs under 500 blocks named #main',
+      `<html><body>${'<div id="main">'.repeat(500)}${fill(P)}</body></html>`,
+    ],
+    [
+      'images under 500 pairs of blocks',
+      `<html><body>${P}${'<div><div></div><div>'.repeat(500)}${fill('<img src="/a.png">')}</body></html>`,
     ],
     [
       'images under 500 named blocks',
