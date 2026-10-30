@@ -152,6 +152,52 @@ describe('syncCatalogOrders', () => {
     expect(fake.rows('catalog_order_items')).toHaveLength(1);
   });
 
+  it('sends every NOT NULL column in each order upsert, the completing one included', async () => {
+    // Postgres checks NOT NULL on an upsert's row before it finds the conflict,
+    // so a row with only the key and the hash fails on placed_at.
+    const upserts = [];
+    const db = {
+      from(table) {
+        const builder = fake.db.from(table);
+        if (table !== 'catalog_orders') return builder;
+        const upsert = builder.upsert.bind(builder);
+        builder.upsert = (payload, opts) => {
+          upserts.push(...[payload].flat());
+          return upsert(payload, opts);
+        };
+        return builder;
+      },
+    };
+
+    await syncCatalogOrders(BRAND, SOURCE, [ORDER], { db });
+
+    expect(upserts).toHaveLength(2);
+    for (const row of upserts) {
+      expect(row).toMatchObject({ brand_id: BRAND, source: SOURCE, external_id: '9001' });
+      expect(row.placed_at).toBe('2026-10-20T10:00:00.000Z');
+    }
+    expect(upserts[1].content_hash).not.toBe(upserts[0].content_hash);
+  });
+
+  it('writes an order listed twice in one read once, as last read', async () => {
+    const counts = await syncCatalogOrders(
+      BRAND,
+      SOURCE,
+      [ORDER, { ...ORDER, status: 'refunded', refunded_total: 250 }],
+      { db: fake.db },
+    );
+
+    expect(counts).toMatchObject({ added: 1, items: 1 });
+    expect(fake.rows('catalog_orders')).toHaveLength(1);
+    expect(fake.rows('catalog_orders')[0]).toMatchObject({
+      status: 'refunded',
+      refunded_total: 250,
+    });
+    expect(
+      fake.writes.filter((w) => w.table === 'catalog_orders').every((w) => w.count === 1),
+    ).toBe(true);
+  });
+
   it('skips orders without a valid id/date and drops malformed line items', async () => {
     const counts = await syncCatalogOrders(
       BRAND,

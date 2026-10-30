@@ -6,7 +6,7 @@ vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
 import { ConnectError } from '../errors.js';
 import { runSync, startFakeApi } from '../testing.js';
-import wooCommerce, { MAX_PAGES, verifyWebhookSignature } from './index.js';
+import wooCommerce, { MAX_PAGES, ORDER_MAX_PAGES, verifyWebhookSignature } from './index.js';
 
 const CONSUMER_KEY = 'ck_test_woocommerce_readonly';
 const CONSUMER_SECRET = 'cs_test_woocommerce_secret';
@@ -411,7 +411,86 @@ describe('readCatalog through the connector harness', () => {
       status: 'any',
       orderby: 'modified',
       order: 'asc',
+      dates_are_gmt: 'true',
     });
+  });
+
+  it('moves the order cursor to the last change read when the order pages hit their cap', async () => {
+    await api.close();
+    api = await startFakeApi({
+      'GET /wp-json/wc/v3/products/categories': () => ({
+        headers: { 'x-wp-totalpages': '1' },
+        json: [],
+      }),
+      'GET /wp-json/wc/v3/products': () => ({ headers: { 'x-wp-totalpages': '1' }, json: [] }),
+      'GET /wp-json/wc/v3/orders': (req) => {
+        const page = Number(req.query.page);
+        const minute = String(page % 60).padStart(2, '0');
+        return {
+          headers: { 'x-wp-totalpages': String(ORDER_MAX_PAGES + 50) },
+          json: [
+            {
+              id: 5000 + page,
+              date_created_gmt: '2026-01-01T10:00:00',
+              date_modified_gmt: `2026-01-${String(1 + Math.floor(page / 60)).padStart(2, '0')}T11:${minute}:00`,
+              status: 'completed',
+              total: '10.00',
+              billing: { email: 'private@example.invalid' },
+              line_items: [],
+            },
+          ],
+        };
+      },
+    });
+
+    const { outcome, fake } = await runSync(
+      wooCommerce,
+      { ...source(), last_orders_synced_at: '2025-12-31T00:00:00.000Z' },
+      {
+        credentials: { consumerKey: CONSUMER_KEY, consumerSecret: CONSUMER_SECRET },
+        request: api.request,
+        now: new Date('2026-10-29T12:00:00.000Z'),
+      },
+    );
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.counts.orders).toMatchObject({ added: ORDER_MAX_PAGES, truncated: true });
+    expect(api.calls.filter((call) => call.path === '/wp-json/wc/v3/orders')).toHaveLength(
+      ORDER_MAX_PAGES,
+    );
+    // Page 100 is the last read: 2026-01-02 11:40 GMT. Not the run's own time,
+    // and not left where it was, so the next sync reads the next pages.
+    expect(fake.rows('catalog_sources')[0].last_orders_synced_at).toBe('2026-01-02T11:40:00.000Z');
+    expect(JSON.stringify(fake.rows('catalog_orders'))).not.toContain('private@example.invalid');
+  });
+
+  it("keeps the catalog's outcome and the order cursor when the order read fails", async () => {
+    await api.close();
+    api = await startFakeApi({
+      'GET /wp-json/wc/v3/products/categories': () => ({
+        headers: { 'x-wp-totalpages': '1' },
+        json: [],
+      }),
+      'GET /wp-json/wc/v3/products': () => ({
+        headers: { 'x-wp-totalpages': '1' },
+        json: [simple(101)],
+      }),
+      'GET /wp-json/wc/v3/orders': () => ({ json: { message: 'not a list' } }),
+    });
+
+    const { outcome, products, fake } = await runSync(
+      wooCommerce,
+      { ...source(), last_orders_synced_at: '2026-10-01T00:00:00.000Z' },
+      {
+        credentials: { consumerKey: CONSUMER_KEY, consumerSecret: CONSUMER_SECRET },
+        request: api.request,
+      },
+    );
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.counts.orders).toEqual({ failed: true });
+    expect(products).toHaveLength(1);
+    expect(fake.rows('catalog_sources')[0].last_orders_synced_at).toBe('2026-10-01T00:00:00.000Z');
   });
 
   it('retries a 429 according to Retry-After and then continues the sync', async () => {

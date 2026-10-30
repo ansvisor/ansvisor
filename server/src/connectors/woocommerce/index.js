@@ -7,6 +7,11 @@ import { ConnectorHttpError } from '../http.js';
 /** Maximum pages read from any WooCommerce collection during one catalog sync. */
 export const MAX_PAGES = 200;
 export const PER_PAGE = 100;
+/**
+ * Order pages read in one sync at most. A store with more changed orders than
+ * this catches up over the next runs: the cursor moves to the last order read.
+ */
+export const ORDER_MAX_PAGES = 100;
 const ORDER_SYNC_OVERLAP_MS = 5 * 60 * 1000;
 
 const API_PATH = '/wp-json/wc/v3';
@@ -90,10 +95,21 @@ function pageCount(headers) {
   return Number.isInteger(value) && value >= 0 ? value : null;
 }
 
-/** Reads a bounded WooCommerce REST collection, using WordPress's total-page header. */
-async function listPages(request, endpoint, credentials, malformedMessage, query = {}) {
+/**
+ * Reads a bounded WooCommerce REST collection, using WordPress's total-page
+ * header. `map` turns each page into what is kept, so a page's raw rows don't
+ * outlive it.
+ */
+async function listPages(
+  request,
+  endpoint,
+  credentials,
+  malformedMessage,
+  query = {},
+  { maxPages = MAX_PAGES, map = (data) => data } = {},
+) {
   const items = [];
-  for (let page = 1; page <= MAX_PAGES; page += 1) {
+  for (let page = 1; page <= maxPages; page += 1) {
     const { data, headers } = await request(endpoint, {
       headers: authHeaders(credentials),
       query: { ...query, per_page: PER_PAGE, page },
@@ -102,14 +118,14 @@ async function listPages(request, endpoint, credentials, malformedMessage, query
       throw new ConnectorHttpError('bad_response', malformedMessage);
     }
 
-    items.push(...data);
+    items.push(...map(data));
     const totalPages = pageCount(headers);
     if (totalPages !== null) {
       if (page >= totalPages) return { items, truncated: false, totalPages };
-      if (page === MAX_PAGES) return { items, truncated: true, totalPages };
+      if (page === maxPages) return { items, truncated: true, totalPages };
     } else {
       if (data.length < PER_PAGE) return { items, truncated: false, totalPages: page };
-      if (page === MAX_PAGES) return { items, truncated: true, totalPages: null };
+      if (page === maxPages) return { items, truncated: true, totalPages: null };
     }
   }
   return { items, truncated: true, totalPages: null };
@@ -580,6 +596,10 @@ export default {
     const modifiedAfterWithOverlap = modifiedAfter
       ? new Date(Date.parse(modifiedAfter) - ORDER_SYNC_OVERLAP_MS).toISOString()
       : null;
+    let skipped = 0;
+    // The latest modified time read, from every order (kept or not): where a
+    // truncated read's next sync starts.
+    let latest = null;
     const result = await listPages(
       request,
       `${base}/orders`,
@@ -589,20 +609,33 @@ export default {
         status: 'any',
         orderby: 'modified',
         order: 'asc',
+        // Compare with the GMT modified time, not the store's local one: the
+        // cursor is UTC, and a store behind UTC would otherwise skip orders.
+        dates_are_gmt: true,
         ...(modifiedAfterWithOverlap ? { modified_after: modifiedAfterWithOverlap } : {}),
       },
+      {
+        maxPages: ORDER_MAX_PAGES,
+        // Only the normalized order outlives its page: the raw one carries the buyer.
+        map: (page) =>
+          page.flatMap((order) => {
+            const modified =
+              dateText(order?.date_modified_gmt, true) ?? dateText(order?.date_modified);
+            if (modified && (!latest || modified > latest)) latest = modified;
+            const normalized = normalizedOrder(order);
+            if (!normalized) skipped += 1;
+            return normalized ? [normalized] : [];
+          }),
+      },
     );
-    const orders = [];
-    let skipped = 0;
-    for (const order of result.items) {
-      const normalized = normalizedOrder(order);
-      if (!normalized) {
-        skipped += 1;
-        continue;
-      }
-      orders.push(normalized);
-    }
-    return { orders, skipped, truncated: result.truncated };
+    return {
+      orders: result.items,
+      skipped,
+      truncated: result.truncated,
+      // A truncated read moves the cursor to the last change it read (orders
+      // come oldest change first), so the next sync goes on from there.
+      ...(result.truncated && latest ? { cursor: latest } : {}),
+    };
   },
 
   /**

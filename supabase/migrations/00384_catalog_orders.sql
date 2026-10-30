@@ -1,5 +1,5 @@
 -- ============================================================================
--- 00407: orders from store connectors (#1275)
+-- 00384: orders from store connectors (#1275)
 -- ============================================================================
 -- Store connectors may sync order totals and line items for revenue reporting.
 -- This deliberately excludes buyer/customer fields: no names, emails, phone
@@ -81,6 +81,31 @@ begin
     );
   end loop;
 end $$;
+
+-- A removed source takes its orders with it, as it does its products (00279):
+-- same function, one more delete; the order lines go with their orders (on
+-- delete cascade).
+create or replace function public.catalog_sources_forget()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  delete from public.catalog_products
+  where brand_id = old.brand_id
+    and source = 'src_' || replace(old.id::text, '-', '');
+  delete from public.catalog_variants
+  where brand_id = old.brand_id
+    and source = 'src_' || replace(old.id::text, '-', '');
+  delete from public.catalog_orders
+  where brand_id = old.brand_id
+    and source = 'src_' || replace(old.id::text, '-', '');
+  return old;
+end;
+$$;
+
+revoke all on function public.catalog_sources_forget() from public, anon, authenticated;
 
 comment on table public.catalog_orders is
   'Store order summaries for revenue reporting. Contains ids, dates, status, source channel and money totals only; never buyer personal data.';

@@ -319,6 +319,46 @@ export async function syncSource(source, { afterSync = queueShoppingCheck, ...op
   return outcome;
 }
 
+/**
+ * A store's changed orders (#1275), after its catalog was written. The cursor
+ * (`last_orders_synced_at`) moves only past orders saved: to the sync's start
+ * once the read is complete, or to the last change read when the connector
+ * stopped at its page cap, so a store with more orders catches up over the
+ * next runs instead of reading the same first pages again. A failure here
+ * leaves the cursor where it was and the catalog's outcome as it is: the
+ * orders are tried again by the next sync.
+ */
+async function syncStoreOrders(source, connector, { request, credentials, db, now, at }) {
+  const since = source.last_orders_synced_at ?? null;
+  try {
+    const result = await connector.syncOrders(source, { request, credentials, since });
+    const counts = await syncCatalogOrders(source.brand_id, sourceKey(source.id), result.orders, {
+      db,
+      now,
+    });
+    const cursor = Date.parse(result.truncated ? (result.cursor ?? '') : at);
+    const previous = since ? Date.parse(since) : NaN;
+    if (Number.isFinite(cursor) && !(cursor <= previous)) {
+      const { error } = await db
+        .from('catalog_sources')
+        .update({ last_orders_synced_at: new Date(cursor).toISOString() })
+        .eq('id', source.id);
+      if (error) throw new Error(`catalog_sources order cursor write: ${error.message}`);
+    }
+    return {
+      ...counts,
+      skippedFromApi: Number.isInteger(result.skipped) ? result.skipped : 0,
+      truncated: !!result.truncated,
+    };
+  } catch (err) {
+    logger.warn(
+      { err: { name: err?.name, code: err?.code }, sourceId: source.id },
+      '[catalog] order sync failed; the next sync tries again',
+    );
+    return { failed: true };
+  }
+}
+
 async function syncOnce(
   source,
   {
@@ -396,37 +436,19 @@ async function syncOnce(
       }
 
       // Store connectors with order support share one idempotent persistence path.
-      // The checkpoint advances only after every page and normalized row was saved.
       if (
         isStore(connector) &&
         credentials &&
         storeRequest &&
         typeof connector.syncOrders === 'function'
       ) {
-        const checkpointAt = at;
-        const orderResult = await connector.syncOrders(source, {
+        outcome.counts.orders = await syncStoreOrders(source, connector, {
           request: storeRequest,
           credentials,
-          since: source.last_orders_synced_at ?? null,
+          db,
+          now,
+          at,
         });
-        const orderCounts = await syncCatalogOrders(
-          source.brand_id,
-          sourceKey(source.id),
-          orderResult.orders,
-          { db, now },
-        );
-        outcome.counts.orders = {
-          ...orderCounts,
-          skippedFromApi: Number.isInteger(orderResult.skipped) ? orderResult.skipped : 0,
-          truncated: !!orderResult.truncated,
-        };
-        if (!orderResult.truncated) {
-          const { error } = await db
-            .from('catalog_sources')
-            .update({ last_orders_synced_at: checkpointAt })
-            .eq('id', source.id);
-          if (error) throw new Error(`catalog_sources order cursor write: ${error.message}`);
-        }
       }
     }
   } catch (err) {

@@ -36,7 +36,7 @@ You write no migration, no route and no UI.
 | `fields` | What the person types to connect, in order: `{ name, label, secret?, placeholder?, help? }`. A `secret` field is typed like a password and never shown again. Use `help` to say where in the store to find it, and which access to give it. |
 | `connect(input, ctx)` | Checks `input` (the fields' values, as strings) with the store. Returns `{ account, url?, label?, credentials }` (see below). |
 | `readCatalog(source, ctx)` | Reads the store's products. Returns `{ items, errors, format }`, where `format` is your `kind`. |
-| `syncOrders(source, ctx)` | Optional. Returns `{ orders, skipped?, truncated? }`; the shared sync persists the normalized order summaries and line items, then advances the incremental cursor only if paging completed. |
+| `syncOrders(source, ctx)` | Optional. `ctx.since` is the cursor: read orders changed after it, oldest change first. Returns `{ orders, skipped?, truncated?, cursor? }`; the shared sync persists the normalized order summaries and line items, then moves the cursor to the sync's start, or, when `truncated` (a page cap was hit), to `cursor`: the last change read. A failed order read leaves the cursor and the catalog's outcome as they were. Removing the store removes its orders. |
 | `handleWebhook(event)` | Optional, connector-level verification/normalization. A receiver route and dispatch plumbing are still required before platform webhooks run automatically. |
 | `disconnect(source, ctx)` | Optional. Revokes the sign-in at the store when the person removes it, where the platform allows. It's best effort: the source is removed anyway. |
 

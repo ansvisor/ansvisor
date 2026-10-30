@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import supabaseAdmin from '../../config/supabase.js';
 
-const READ_PAGE = 1000;
 const WRITE_CHUNK = 500;
 const FILTER_CHUNK = 100;
 
@@ -30,19 +29,23 @@ function chunks(values, size) {
   return result;
 }
 
-async function readAll(db, table, columns, brandId, source) {
+/**
+ * The kept rows of these orders only, FILTER_CHUNK ids a request: a sync
+ * reads what it changes, not every order the store ever had.
+ */
+async function readKept(db, brandId, source, externalIds) {
   const rows = [];
-  for (let start = 0; ; start += READ_PAGE) {
+  for (const ids of chunks([...new Set(externalIds)], FILTER_CHUNK)) {
     const { data, error } = await db
-      .from(table)
-      .select(columns)
+      .from('catalog_orders')
+      .select('id, external_id, content_hash')
       .eq('brand_id', brandId)
       .eq('source', source)
-      .range(start, start + READ_PAGE - 1);
-    if (error) throw new Error(`${table} read: ${error.message}`);
+      .in('external_id', ids);
+    if (error) throw new Error(`catalog_orders read: ${error.message}`);
     rows.push(...(data ?? []));
-    if (!data || data.length < READ_PAGE) return rows;
   }
+  return rows;
 }
 
 function cleanOrder(order) {
@@ -102,14 +105,17 @@ export async function syncCatalogOrders(
 ) {
   const at = now.toISOString();
   const counts = { added: 0, changed: 0, unchanged: 0, skipped: 0, items: 0 };
-  const normalized = [];
+  // By external id: an order changed while the store was paged can come twice,
+  // and one upsert can't write the same row twice. The later read wins.
+  const byId = new Map();
   for (const order of Array.isArray(orders) ? orders : []) {
     const safe = cleanOrder(order);
     if (!safe) {
       counts.skipped++;
       continue;
     }
-    normalized.push({
+    byId.delete(safe.external_id);
+    byId.set(safe.external_id, {
       ...safe,
       content_hash: hashOf(safe),
       // Mark the order as incomplete until its replacement line items have
@@ -118,13 +124,13 @@ export async function syncCatalogOrders(
       pending_hash: hashOf({ pending: true, order: safe }),
     });
   }
+  const normalized = [...byId.values()];
 
-  const kept = await readAll(
+  const kept = await readKept(
     db,
-    'catalog_orders',
-    'id, external_id, content_hash',
     brandId,
     source,
+    normalized.map((order) => order.external_id),
   );
   const keptById = new Map(kept.map((row) => [row.external_id, row]));
   const idsByExternal = new Map(kept.map((row) => [row.external_id, row.id]));
@@ -182,12 +188,11 @@ export async function syncCatalogOrders(
   // Commit the complete content hash only after the line items have been
   // replaced successfully. Leaving the pending hash on failure makes retries
   // idempotent while still repairing a partially written order.
-  const completedWrites = changed.map((order) => ({
-    brand_id: brandId,
-    source,
-    external_id: order.external_id,
-    content_hash: order.content_hash,
-    updated_at: at,
+  // The whole row again, not just the hash: Postgres checks an upsert's row
+  // for NOT NULL columns (placed_at) before it finds the conflict.
+  const completedWrites = writes.map((row, i) => ({
+    ...row,
+    content_hash: changed[i].content_hash,
   }));
   for (const batch of chunks(completedWrites, WRITE_CHUNK)) {
     const { error } = await db
