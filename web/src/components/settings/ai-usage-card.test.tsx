@@ -102,6 +102,41 @@ describe('AiUsageCard', () => {
     expect(container.textContent).not.toContain('No AI usage yet');
   });
 
+  it('gives Chat its row in percent, and says it uses the allowance, once Chat is on', async () => {
+    vi.mocked(getAiUsage).mockResolvedValue(
+      usage({
+        chatMetered: true,
+        percentUsed: 20.5,
+        features: [
+          { feature: 'content', percent: 12.5 },
+          { feature: 'chat', percent: 8 },
+        ],
+      }),
+    );
+    await render();
+    const text = container.textContent ?? '';
+    expect([...container.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      'Content Editor (briefs, Content Agent, quality checks)12.5%',
+      'Chat8%',
+    ]);
+    expect(text).toContain("Chat, Improve suggestions, the Content Editor's AI");
+    expect(text).toContain("Chat uses this allowance too. Chat on your own AI key isn't counted.");
+    expect(text).not.toContain('Agent Chat runs on your own AI key');
+    // Shares only: no dollar figure reaches the page.
+    expect(text).not.toContain('$');
+  });
+
+  it('keeps today’s line on Agent Chat while Chat is off', async () => {
+    vi.mocked(getAiUsage).mockResolvedValue(usage({ chatMetered: false }));
+    await render();
+    const text = container.textContent ?? '';
+    expect(text).toContain("Agent Chat runs on your own AI key, so it doesn't use this allowance.");
+    expect(text).toContain(
+      "Improve suggestions, the Content Editor's AI and the Action Center's task writing share",
+    );
+    expect(text).not.toContain('Chat uses this allowance too');
+  });
+
   it('says nothing has used it yet, in place of the list', async () => {
     vi.mocked(getAiUsage).mockResolvedValue(usage({ percentUsed: 0, features: [] }));
     await render();

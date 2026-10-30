@@ -1,5 +1,5 @@
 -- ============================================================================
--- 00405: orders from store connectors (#1275)
+-- 00407: orders from store connectors (#1275)
 -- ============================================================================
 -- Store connectors may sync order totals and line items for revenue reporting.
 -- This deliberately excludes buyer/customer fields: no names, emails, phone

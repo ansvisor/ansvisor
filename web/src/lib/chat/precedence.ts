@@ -419,3 +419,18 @@ export function allowedTools<T extends ChatTool>(
     (tool) => decide(tool, ctx, { ...scope, tainted: false }, true).kind !== 'deny',
   );
 }
+
+/**
+ * Why allowedTools() leaves a row out of the model's list, or null when it
+ * keeps it. The engine (C3) names the rows left out to the model, so it can
+ * answer "why not" with the out-of-permission answer (§4c) instead of
+ * silence: the reason is decided as the list is, on the run's brand.
+ */
+export function listingDenial(
+  tool: ChatTool,
+  ctx: PrecedenceContext,
+  scope: { brandId: string | null; brandIsDemo: boolean },
+): ToolDenial | null {
+  const decision = decide(tool, ctx, { ...scope, tainted: false }, true);
+  return decision.kind === 'deny' ? decision.denial : null;
+}

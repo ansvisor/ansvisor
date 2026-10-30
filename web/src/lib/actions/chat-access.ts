@@ -66,8 +66,25 @@ async function viewer(): Promise<{ userId: string; organizationId: string } | nu
   return { userId: user.id, organizationId };
 }
 
-/** The signed-in person's access and plan card; null while Chat is off for them. */
-export async function getChatAccess(): Promise<ChatAccess | null> {
+/** Why a read gave nothing: Chat is off for the person, or the database didn't answer. */
+export type AccessReadFailure = 'chat_off' | 'failed';
+
+/**
+ * The signed-in person's access and plan card. Never throws (#1777): a
+ * failed read is `failed`, Chat off for them `chat_off`.
+ */
+export async function getChatAccess(): Promise<
+  { ok: true; access: ChatAccess } | { ok: false; failure: AccessReadFailure }
+> {
+  try {
+    const access = await readChatAccess();
+    return access ? { ok: true, access } : { ok: false, failure: 'chat_off' };
+  } catch {
+    return { ok: false, failure: 'failed' };
+  }
+}
+
+async function readChatAccess(): Promise<ChatAccess | null> {
   const who = await viewer();
   if (!who) return null;
   const [ctx, settings] = await Promise.all([
@@ -111,11 +128,22 @@ export async function getChatAccess(): Promise<ChatAccess | null> {
 /**
  * The workspace's members for Roles & access: name, role and last sign-in
  * for everyone, e-mails for Admins only (§4a). A member without a name goes
- * by the part of their e-mail before the @. Empty while Chat is off.
+ * by the part of their e-mail before the @. Never throws, as above.
  */
-export async function listRoleMembers(): Promise<RoleMember[]> {
+export async function listRoleMembers(): Promise<
+  { ok: true; members: RoleMember[] } | { ok: false; failure: AccessReadFailure }
+> {
+  try {
+    const members = await readRoleMembers();
+    return members ? { ok: true, members } : { ok: false, failure: 'chat_off' };
+  } catch {
+    return { ok: false, failure: 'failed' };
+  }
+}
+
+async function readRoleMembers(): Promise<RoleMember[] | null> {
   const who = await viewer();
-  if (!who) return [];
+  if (!who) return null;
   const { data, error } = await supabaseAdmin
     .from('profiles')
     .select('id, full_name, role, created_at')
