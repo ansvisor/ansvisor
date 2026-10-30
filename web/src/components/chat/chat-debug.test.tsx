@@ -228,7 +228,10 @@ describe('StaffDebug', () => {
     await openDebug();
     await act(async () => item('debug.downloadFull')!.click());
     expect(urls).toContain(`/api/internal/chat/messages/${RUN}/debug?full=1`);
-    expect(download.saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'step-1-output.json');
+    expect(download.saveBlob).toHaveBeenCalledWith(
+      expect.objectContaining({ size: expect.any(Number) }),
+      'step-1-output.json',
+    );
   });
 
   it('says so when the record can’t be read, as for anyone but staff (403)', async () => {
