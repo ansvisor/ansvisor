@@ -3633,6 +3633,24 @@
       "notFound": "This chat isn't there any more."
     }
   },
+  "chatRun": {
+    "status": {
+      "thinking": "Thinking…",
+      "writing": "Writing the answer…",
+      "read": "Reading {source}…",
+      "openPage": "Opening {page}…",
+      "check": "Checking facts…",
+      "other": "{label}…",
+      "reconnecting": "Reconnecting…"
+    },
+    "dataUsed": "Data used",
+    "preview": {
+      "title": "Live answer",
+      "note": "Play runs the mockup's answer a step at a time; nothing is read or sent.",
+      "play": "Play",
+      "footer": "Next moves and the answer's actions fade in here once it is done."
+    }
+  },
   "chatComposer": {
     "message": "Message",
     "placeholder": "Ask anything…",
