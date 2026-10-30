@@ -69,3 +69,14 @@ export async function competitorName(
   if (error) throw new Error(`Could not read the competitor: ${error.message}`);
   return data ? competitorWords(data as { name: string; domain: string }) : null;
 }
+
+/** A Library draft's title; null when it isn't there. */
+export async function draftTitle(draftId: string): Promise<string | null> {
+  const { data, error } = await supabaseAdmin
+    .from('content_drafts')
+    .select('title')
+    .eq('id', draftId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the draft: ${error.message}`);
+  return (data?.title as string | undefined) ?? null;
+}

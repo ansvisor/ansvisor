@@ -53,6 +53,17 @@ vi.mock('@/lib/actions/content', () => ({
 }));
 vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: tracked.track('actions/content-drafts.createContentDraft'),
+  updateContentDraft: tracked.track('actions/content-drafts.updateContentDraft'),
+}));
+vi.mock('@/lib/actions/cms-send', () => ({
+  sendDraftToCms: tracked.track('actions/cms-send.sendDraftToCms'),
+}));
+vi.mock('@/lib/actions/reports', () => ({
+  createReport: tracked.track('actions/reports.createReport'),
+}));
+vi.mock('@/lib/actions/audits', () => ({
+  startSiteAudits: tracked.track('actions/audits.startSiteAudits'),
+  getAuditQuota: tracked.track('actions/audits.getAuditQuota'),
 }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({
   dismissSuggestion: tracked.track('actions/prompt-suggestions.dismissSuggestion'),
@@ -240,6 +251,15 @@ describe('the Chat tool registry', () => {
     await run('rename_topic', { topic_id: item, name: 'Plans' });
     await run('add_competitors', { brand_id: brand, competitors: [{ name: 'Peec AI' }] });
     await run('remove_competitor', { brand_id: brand, competitor_id: item });
+    await run('update_draft', { draft_id: item, body_html: '<h1>FAQ</h1>' });
+    await run('push_cms_draft', { draft_id: item, destination: 'wordpress' });
+    await run('build_report', {
+      brand_id: brand,
+      template: 'competitor_benchmark',
+      date_from: '2026-10-01',
+      date_to: '2026-10-31',
+    });
+    await run('run_site_audit', { brand_id: brand, urls: [' https://acme.example/a '] });
 
     expect(calls.map((call) => [call.from, call.args])).toEqual([
       ['actions/prompt-suggestions.dismissSuggestion', [item]],
@@ -266,6 +286,16 @@ describe('the Chat tool registry', () => {
       ['actions/topic.updateTopic', [item, 'Plans']],
       ['actions/competitor.addCompetitors', [brand, [{ name: 'Peec AI', domain: '' }]]],
       ['actions/competitor.removeBrandCompetitor', [brand, item]],
+      [
+        'actions/content-drafts.updateContentDraft',
+        [item, { title: undefined, bodyHtml: '<h1>FAQ</h1>' }],
+      ],
+      ['actions/cms-send.sendDraftToCms', [item, 'wordpress']],
+      [
+        'actions/reports.createReport',
+        [brand, { dateFrom: '2026-10-01', dateTo: '2026-10-31', template: 'competitor_benchmark' }],
+      ],
+      ['actions/audits.startSiteAudits', [brand, ['https://acme.example/a']]],
     ]);
   });
 
@@ -317,6 +347,11 @@ describe('approval policies', () => {
       rename_topic: ['admin', 'manager'],
       add_competitors: ['admin', 'manager'],
       remove_competitor: ['admin', 'manager'],
+      // Content, reports and Site Audit (W2-07, DECISIONS T): an Analyst only saves drafts.
+      update_draft: ['admin', 'manager'],
+      push_cms_draft: ['admin', 'manager'],
+      build_report: ['admin', 'manager'],
+      run_site_audit: ['admin', 'manager'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);

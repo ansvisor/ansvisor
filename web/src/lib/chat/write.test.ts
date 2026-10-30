@@ -9,10 +9,16 @@ import {
   ORG,
   PEOPLE,
   COMPETITOR,
+  DRAFT,
   PROMPT,
   SUGGESTION,
   TOPIC,
   fakeCreateDraft,
+  fakeCreateReport,
+  fakeRestoreDraftVersion,
+  fakeSendDraftToCms,
+  fakeStartSiteAudits,
+  fakeUpdateContentDraft,
   fakeAddBrandTopic,
   fakeAddCompetitors,
   fakeAddTopicPrompts,
@@ -21,6 +27,7 @@ import {
   fakeUpdateTopic,
   fakeDismissSuggestion,
   fakeUpdateOpportunity,
+  seedDraft,
   seedWorkspace,
 } from './testing/chat-fixtures';
 
@@ -33,7 +40,13 @@ import {
 vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('@/lib/chat/testing/fake-supabase')).createFakeSupabase(),
 }));
-vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }));
+vi.mock('@/lib/actions/content-drafts', () => ({
+  createContentDraft: vi.fn(),
+  updateContentDraft: vi.fn(),
+}));
+vi.mock('@/lib/actions/cms-send', () => ({ sendDraftToCms: vi.fn() }));
+vi.mock('@/lib/actions/reports', () => ({ createReport: vi.fn() }));
+vi.mock('@/lib/actions/audits', () => ({ startSiteAudits: vi.fn(), getAuditQuota: vi.fn() }));
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
 vi.mock('@/lib/actions/prompt', () => ({ addTopicPrompts: vi.fn(), pauseBrandPrompts: vi.fn() }));
@@ -45,7 +58,10 @@ vi.mock('@/lib/actions/competitor', () => ({
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { createContentDraft } = await import('@/lib/actions/content-drafts');
+const { createContentDraft, updateContentDraft } = await import('@/lib/actions/content-drafts');
+const { sendDraftToCms } = await import('@/lib/actions/cms-send');
+const { createReport } = await import('@/lib/actions/reports');
+const { startSiteAudits } = await import('@/lib/actions/audits');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
 const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
@@ -81,7 +97,18 @@ const INPUTS: Record<string, unknown> = {
     competitors: [{ name: 'Profound', domain: 'tryprofound.com' }],
   },
   remove_competitor: { brand_id: BRAND, competitor_id: COMPETITOR },
+  update_draft: { draft_id: DRAFT, title: 'Pricing FAQ for teams' },
+  push_cms_draft: { draft_id: DRAFT, destination: 'webflow' },
+  build_report: {
+    brand_id: BRAND,
+    template: 'weekly_visibility',
+    date_from: '2026-10-01',
+    date_to: '2026-10-07',
+  },
+  run_site_audit: { brand_id: BRAND, urls: ['https://acme.example/pricing'] },
 };
+/** The rows that change or send a Library draft find one. */
+const NEEDS_DRAFT = new Set(['update_draft', 'push_cms_draft']);
 const toolCtx = {} as never;
 let step = 0;
 const nextStep = () => `step-${++step}`;
@@ -91,6 +118,11 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   seedWorkspace(db);
   vi.mocked(createContentDraft).mockImplementation(fakeCreateDraft(db) as never);
+  vi.mocked(updateContentDraft).mockImplementation(fakeUpdateContentDraft(db) as never);
+  vi.mocked(sendDraftToCms).mockImplementation(fakeSendDraftToCms() as never);
+  vi.mocked(createReport).mockImplementation(fakeCreateReport(db) as never);
+  vi.mocked(startSiteAudits).mockImplementation(fakeStartSiteAudits() as never);
+  db.rpcs.content_draft_restore = fakeRestoreDraftVersion(db);
   vi.mocked(updateOpportunityStatus).mockImplementation(fakeUpdateOpportunity(db) as never);
   vi.mocked(dismissSuggestion).mockImplementation(fakeDismissSuggestion(db) as never);
   vi.mocked(addTopicPrompts).mockImplementation(fakeAddTopicPrompts(db) as never);
@@ -139,6 +171,7 @@ describe('every WRITE that ran is in the Activity log (§21)', () => {
   )(
     '%s in Full auto: mode, approval, Undo window, label key, target and summary',
     async (name, tool) => {
+      if (NEEDS_DRAFT.has(name)) seedDraft(db);
       const { decision, outcome } = await runAs(PEOPLE.admin, tool, 'full_auto');
       expect(decision).toEqual({ kind: 'run', via: 'full_auto' });
       expect(outcome).toMatchObject({ code: 'ok', repeated: false });
@@ -163,10 +196,15 @@ describe('every WRITE that ran is in the Activity log (§21)', () => {
       // The label key, never the tool's name (CHAT-03 item 22).
       expect(JSON.stringify(row)).not.toContain(name);
       expect(row.target_id).toEqual(expect.any(String));
-      expect(row.undo_json).toEqual(expect.any(Object));
-      const window = Date.parse(row.undo_until as string) - Date.now();
-      expect(window).toBeGreaterThan(UNDO_RULES[name].windowMs - 60_000);
-      expect(window).toBeLessThanOrEqual(UNDO_RULES[name].windowMs);
+      if (UNDO_RULES[name].windowMs === 0) {
+        // §9 gives it no Undo (a page sent to a CMS, an audit): recorded, nothing to put back.
+        expect(row).toMatchObject({ undo_json: null, undo_until: null });
+      } else {
+        expect(row.undo_json).toEqual(expect.any(Object));
+        const window = Date.parse(row.undo_until as string) - Date.now();
+        expect(window).toBeGreaterThan(UNDO_RULES[name].windowMs - 60_000);
+        expect(window).toBeLessThanOrEqual(UNDO_RULES[name].windowMs);
+      }
       expect(outcome && 'activityId' in outcome && outcome.activityId).toBe(row.id);
       expect(activitySummary(row.summary_key as string, row.summary_params as never)).not.toBe('');
     },
@@ -577,5 +615,60 @@ describe('the tracking setup, by role and mode (W2-06, CHAT-20 §9 rows 20–32)
         denial: { code: 'subscription_inactive' },
       });
     }
+  });
+});
+
+describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 rows 37–64)', () => {
+  const OUTPUT = ['update_draft', 'push_cms_draft', 'build_report', 'run_site_audit'];
+  async function decide(userId: string, name: string, mode: ChatMode, input = INPUTS[name]) {
+    const tool = chatTool(name)!;
+    const ctx = await readPrecedenceContext({ userId, organizationId: ORG, mode, surface: 'chat' });
+    const call = await readToolCall(ctx!, tool, input as Record<string, unknown>, false);
+    return decideToolCall(tool, ctx!, call);
+  }
+  beforeEach(() => seedDraft(db));
+
+  it.each(OUTPUT)(
+    '%s: Admins and Managers, from a card unless Full auto; an Analyst is refused in every mode',
+    async (name) => {
+      for (const userId of [PEOPLE.admin, PEOPLE.manager]) {
+        expect(await decide(userId, name, 'ask_first')).toMatchObject({ kind: 'ask' });
+        expect(await decide(userId, name, 'auto')).toMatchObject({ kind: 'ask' });
+        expect(await decide(userId, name, 'full_auto')).toMatchObject({
+          kind: 'run',
+          via: 'full_auto',
+        });
+      }
+      for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+        expect(await decide(PEOPLE.analyst, name, mode)).toMatchObject({
+          kind: 'deny',
+          denial: { code: 'forbidden_role', roles: ['admin', 'manager'] },
+        });
+      }
+    },
+  );
+
+  it('an Analyst still saves a draft (DECISIONS T), but changes none', async () => {
+    expect(await decide(PEOPLE.analyst, 'create_draft', 'full_auto')).toMatchObject({
+      kind: 'run',
+    });
+    expect(await decide(PEOPLE.analyst, 'update_draft', 'full_auto')).toMatchObject({
+      kind: 'deny',
+    });
+  });
+
+  it('audits several pages only from a card, with its cost, Full auto too (§9 row 37)', async () => {
+    expect(chatTool('run_site_audit')!.flags.costCard).toBe(true);
+    expect(
+      await decide(PEOPLE.admin, 'run_site_audit', 'full_auto', {
+        brand_id: BRAND,
+        urls: ['https://acme.example/pricing', 'https://acme.example/features'],
+      }),
+    ).toMatchObject({ kind: 'ask', reason: 'always_card' });
+  });
+
+  it('has no row that goes live in a CMS: publishing stays the person’s, in the CMS', () => {
+    expect(CHAT_TOOLS.filter((tool) => tool.class === 'execute')).toEqual([]);
+    expect(chatTool('publish_cms')).toBeUndefined();
   });
 });

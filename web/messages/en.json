@@ -3222,7 +3222,11 @@
     "newTopic": { "name": "Add topics", "step": "Added topic" },
     "topicName": { "name": "Rename topics", "step": "Renamed topic" },
     "trackCompetitors": { "name": "Add competitors", "step": "Added competitors" },
-    "dropCompetitor": { "name": "Remove competitors", "step": "Removed competitor" }
+    "dropCompetitor": { "name": "Remove competitors", "step": "Removed competitor" },
+    "reviseDraft": { "name": "Change drafts in Content", "step": "Changed draft in Content" },
+    "sendToCms": { "name": "Send drafts to your CMS", "step": "Sent draft to your CMS" },
+    "makeReport": { "name": "Make reports", "step": "Made report" },
+    "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" }
   },
   "agentic": {
     "avatar": {
@@ -3557,6 +3561,9 @@
       "askSkipped": "Skipped · used {option}",
       "askStopped": "Question skipped"
     },
+    "costs": {
+      "siteAudit": "{count, plural, one {Uses # audit} other {Uses # audits}} of {left} left this month"
+    },
     "error": {
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
       "queueTimeout": "Too many runs are working at once in this workspace, so this one didn't start. Try again in a moment.",
@@ -3698,6 +3705,7 @@
     "answerFailed": "Couldn't save your answer. Try again.",
     "questionNext": "Answer saved · question {at} of {of} next",
     "nextMoves": "Next moves",
+    "noUndo": "This can’t be undone from Chat once it’s done.",
     "pausedCap": "You've used this month's AI limit, so Chat stopped here.",
     "untitledExport": "Chat"
   },
@@ -4598,6 +4606,12 @@
       "trackCompetitorsUndo": "Removed the competitors added: {competitors}",
       "dropCompetitor": "Removed the competitor {competitor}",
       "dropCompetitorUndo": "Brought back the competitor {competitor}",
+      "reviseDraft": "Changed the draft “{title}”",
+      "reviseDraftUndo": "Put the draft “{title}” back as it was",
+      "sendToCms": "Sent the draft “{title}” to {cms}",
+      "makeReport": "Made the report “{title}”",
+      "makeReportUndo": "Removed the report “{title}” from Reports",
+      "startAudit": "Started Site Audit on {pages}",
       "accessDenied": "Not allowed: {tool}"
     },
     "undo": {

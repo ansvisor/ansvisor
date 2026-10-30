@@ -1406,6 +1406,79 @@ export async function saveContentDraft(
   return { ok: false, reason: 'conflict' };
 }
 
+export type UpdateContentDraftResult =
+  | {
+      ok: true;
+      updatedAt: string;
+      bodyHash: string;
+      /** History's version of the page before the change, which Undo restores. */
+      beforeVersionId: string | null;
+    }
+  | { ok: false; reason: 'not_found' | 'conflict' | 'invalid'; message: string };
+
+/**
+ * A change to a draft's title or page from Chat: update_draft (CHAT-20 §9
+ * row 55). History keeps the page before it first ('agent_before', CE-018:
+ * the page before an agent changes it), then it is saved as the editor
+ * saves, over the page just read (saveContentDraft: the same allow-list,
+ * the agent's lock, a conflict when it changed in between). Errors come
+ * back as values (#427).
+ */
+export async function updateContentDraft(
+  id: string,
+  change: { title?: string; bodyHtml?: string },
+): Promise<UpdateContentDraftResult> {
+  await assertWritable();
+  if (!draftId.safeParse(id).success) {
+    return { ok: false, reason: 'invalid', message: 'That isn’t a draft’s id.' };
+  }
+  const supabase = await createClient();
+  const { data: current, error } = await supabase
+    .from('content_drafts')
+    .select('title, body_html, updated_at, archived_at')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!current || current.archived_at) {
+    return { ok: false, reason: 'not_found', message: 'That draft isn’t in the Library.' };
+  }
+  const { data: version, error: versionError } = await supabase.rpc('content_draft_snapshot', {
+    p_draft_id: id,
+    p_origin: 'agent_before',
+  });
+  if (versionError)
+    console.error('Failed to keep the draft before Chat’s change:', versionError.message);
+  const saved = await saveContentDraft(id, {
+    title: change.title ?? current.title,
+    bodyHtml: change.bodyHtml ?? current.body_html,
+    base: { updatedAt: current.updated_at, bodyHash: await bodyHash(current.body_html) },
+  });
+  if (!saved.ok) {
+    return saved.reason === 'conflict'
+      ? {
+          ok: false,
+          reason: 'conflict',
+          message: 'The page changed while Chat was saving it. Open it to see the latest.',
+        }
+      : saved.reason === 'not_found'
+        ? { ok: false, reason: 'not_found', message: 'That draft isn’t in the Library.' }
+        : {
+            ok: false,
+            reason: 'invalid',
+            message:
+              saved.reason === 'too_large'
+                ? 'The page is too long to save.'
+                : 'The page couldn’t be saved as it is.',
+          };
+  }
+  return {
+    ok: true,
+    updatedAt: saved.updatedAt,
+    bodyHash: saved.bodyHash,
+    beforeVersionId: typeof version === 'string' ? version : null,
+  };
+}
+
 const pageTypeInput = z.enum(PAGE_TYPES);
 
 /**

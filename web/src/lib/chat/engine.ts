@@ -82,6 +82,7 @@ import {
   writeCap,
   type ReadBudget,
 } from './run-limits';
+import { undoRule } from './undo';
 import { runLoggedWrite } from './write';
 import { fileChatOutput } from './file-output';
 import { originPageSchema } from './origin';
@@ -1296,12 +1297,15 @@ async function openCard(
   rc.sink.emit('step.started', { step: clientStep(row) });
   const digest = cardDigest(tool, input);
   const offerDontAskAgain = decision.kind === 'ask' && decision.offerDontAskAgain;
+  // A WRITE whose change can't be undone once made (§9) says so on its card.
+  const noUndo = tool.class === 'write' && !undoRule(tool)?.windowMs;
   rc.sink.emit('confirm.required', {
     n,
     action: toolWords(tool, 'name'),
     target,
     digest,
     canDontAskAgain: offerDontAskAgain,
+    ...(noUndo ? { noUndo: true as const } : {}),
   });
   return {
     kind: 'pause',
@@ -1702,6 +1706,8 @@ const SAID_FAILURES: Record<string, string> = {
   quota_exceeded: 'quota_exceeded',
   duplicate: 'duplicate',
   not_found: 'not_found',
+  not_connected: 'not_connected',
+  conflict: 'conflict',
   invalid: 'invalid_input',
 };
 
