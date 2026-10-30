@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,7 +9,8 @@ import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
  * Settings › AI Providers: a row per provider with its saved key, the one
  * Chat uses, and — for admins — adding, replacing, switching and removing.
  * On a read-only workspace (plan not active) adding, replacing and switching
- * open the upgrade dialog; removing a key stays open.
+ * open the upgrade dialog; removing a key stays open. With Chat on, own keys
+ * are Enterprise's: below it only Remove, and a kept key until its date.
  */
 
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
@@ -18,6 +19,22 @@ vi.mock('sonner', () => ({ toast }));
 let canAdmin = true;
 vi.mock('@/hooks/use-user-role', () => ({
   useUserRole: () => ({ role: canAdmin ? 'admin' : 'member', canManage: canAdmin, canAdmin }),
+}));
+
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({
+    href,
+    className,
+    children,
+  }: {
+    href: string;
+    className?: string;
+    children: ReactNode;
+  }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  ),
 }));
 
 const { AiProvidersSection } = await import('./ai-providers-section');
@@ -29,6 +46,7 @@ let container: HTMLDivElement;
 let root: Root;
 const fetchMock = vi.fn();
 let saved: unknown[];
+let access: unknown;
 const openUpgrade = vi.fn();
 
 const json = (body: unknown, status = 200) =>
@@ -55,8 +73,9 @@ beforeEach(() => {
       setByEmail: null,
     },
   ];
+  access = undefined;
   fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
-    !init?.method ? json({ configured: true, providers: saved }) : json({ ok: true }),
+    !init?.method ? json({ configured: true, providers: saved, access }) : json({ ok: true }),
   );
   vi.stubGlobal('fetch', fetchMock);
   container = document.createElement('div');
@@ -200,5 +219,31 @@ describe('AiProvidersSection', () => {
     expect(container.textContent).toContain('No key yet');
     expect(container.textContent).toContain('Admin-only setting');
     expect(button(row('anthropic'), 'Add key')).toBeUndefined();
+  });
+
+  it('says own keys are Enterprise’s below it, and leaves only Remove', async () => {
+    access = { state: 'locked' };
+    await render();
+    expect(container.textContent).toContain('Own AI keys come with the Enterprise plan.');
+    expect(container.querySelector('a[href="/dashboard/settings/billing"]')?.textContent).toBe(
+      'Compare plans',
+    );
+    expect(container.textContent).not.toContain('No key yet');
+    expect(row('anthropic').textContent).toContain('Not used on your plan');
+    for (const provider of ['anthropic', 'openai', 'azure']) {
+      for (const label of ['Add key', 'Replace', 'Use for Chat']) {
+        expect(button(row(provider), label)).toBeUndefined();
+      }
+    }
+    expect(row('openai').querySelector('button[aria-label="Remove key: OpenAI"]')).toBeTruthy();
+  });
+
+  it('keeps a saved key until its date: replaced or switched to, no other provider added', async () => {
+    access = { state: 'kept', until: '2026-12-01T12:00:00Z' };
+    await render();
+    expect(container.textContent).toContain('Your saved key keeps running Chat until Dec 1, 2026.');
+    expect(button(row('anthropic'), 'Replace')).toBeTruthy();
+    expect(button(row('openai'), 'Use for Chat')).toBeTruthy();
+    expect(button(row('azure'), 'Add key')).toBeUndefined();
   });
 });

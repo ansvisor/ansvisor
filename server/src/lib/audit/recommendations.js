@@ -9,9 +9,11 @@
  * alt-text…) are excluded — their generic howToFix is already actionable and
  * the LLM can't add page-specific value.
  *
- * Before saving, recommendation-guard.js swaps facts the page and brand data
- * don't contain for [placeholders] and holds the copy to 150 characters per
- * sentence (one rewrite, then a cut at a word boundary).
+ * Before saving, recommendation-guard.js takes out a figure or a date the
+ * page and brand data don't contain, with its sentence, swaps a name or a
+ * price only the brand knows for a [placeholder] it fills, and holds the
+ * copy to 150 characters per sentence (one rewrite, then a cut at a word
+ * boundary).
  */
 
 import { generateObject } from 'ai';
@@ -23,6 +25,7 @@ import { logger } from '../logger.js';
 import { onBrandDomain } from './host.js';
 import {
   MAX_COPY_CHARS,
+  MAX_INPUT_PLACEHOLDERS,
   buildKnownFacts,
   cutToLength,
   guardFacts,
@@ -90,7 +93,7 @@ const rewriteSchema = z.object({
   ),
 });
 
-const FACTS_RULE = `Facts: use only facts that appear in the PAGE TEXT or the BRAND DATA. Never invent customers, testimonials, case studies, statistics, percentages, prices, dates, awards or quotes. When a fact is needed but unknown, write a placeholder in square brackets instead: [customer name], [real metric], [price], [date], [source URL].`;
+const FACTS_RULE = `Facts: use only facts that appear in the PAGE TEXT or the BRAND DATA. Never invent customers, testimonials, case studies, statistics, percentages, prices, dates, awards or quotes. A fact anyone could look up that the page doesn't have (a statistic, a study, a date, a source's address) is never a placeholder: write the sentence without it, or name the kind of source in words ("Google's structured data documentation", "a recent industry survey"). Only a fact the brand alone knows may be a placeholder in square brackets, starting with "your": [your customer name], [your price], [your result]. At most ${MAX_INPUT_PLACEHOLDERS} in a recommendation.`;
 
 const LENGTH_RULE = `Length: "recommendation" is one imperative sentence of at most ${MAX_COPY_CHARS} characters, specific to this page. Every sentence in "draft" is at most ${MAX_COPY_CHARS} characters.`;
 
@@ -111,13 +114,13 @@ When the fix is content the user can paste, put the ready-to-use text in "draft"
 - length → which specific sections to expand or trim (draft can be null)
 - product-description-opening → a new opening for the product description, at most 40 words, that starts with the product type and names at least two key attributes from the page (a measure, a material, a fit or a use)
 
-Put markup (JSON-LD, HTML) only in "code", never in "draft". Code has no length limit but uses the same placeholders for unknown values, e.g. "price": "[price]".
+Put markup (JSON-LD, HTML) only in "code", never in "draft". Code has no length limit; a value only the brand knows is a placeholder there too, e.g. "price": "[your price]".
 
 When suggesting sources to cite (outbound-authority-links, citation-density, statistic-density), prefer the most recent, currently-authoritative references and do not present older material as if it were current. Never invent URLs or fabricate statistics/dates — only suggest sources you are confident exist.
 
 Set "draft" and "code" to null when they don't apply. Prioritize by impact. Only return items you can make genuinely specific and useful.`;
 
-const REWRITE_PROMPT = `You shorten AEO/GEO recommendations that broke the length rule. Keep each item's meaning, its [placeholders] and its ref, add no new facts, and return every item you are given.
+const REWRITE_PROMPT = `You shorten AEO/GEO recommendations that broke the length rule. Keep each item's meaning, its [placeholders] and its ref, add no new facts or placeholders, and return every item you are given.
 
 ${LENGTH_RULE}`;
 
@@ -301,11 +304,14 @@ Return prioritized, page-specific recommendations.`,
     }
 
     let cuts = 0;
-    items = items.map((r) => {
-      const out = cutToLength(r);
-      cuts += out.cuts;
-      return out.rec;
-    });
+    items = items
+      // An explanation the guard left nothing of says nothing to do.
+      .filter((r) => r.recommendation)
+      .map((r) => {
+        const out = cutToLength(r);
+        cuts += out.cuts;
+        return out.rec;
+      });
 
     if (facts + rewritten + cuts > 0) {
       logger.info(

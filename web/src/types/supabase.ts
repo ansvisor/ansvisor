@@ -4697,9 +4697,11 @@ export type Database = {
           anthropic_api_key_last4: string | null
           anthropic_api_key_set_at: string | null
           anthropic_api_key_set_by: string | null
+          cancel_at_period_end: boolean
           created_at: string
           id: string
           legacy_key_grandfathered: boolean
+          legacy_key_until: string | null
           name: string
           plan: string
           plan_overrides: Json | null
@@ -4715,9 +4717,11 @@ export type Database = {
           anthropic_api_key_last4?: string | null
           anthropic_api_key_set_at?: string | null
           anthropic_api_key_set_by?: string | null
+          cancel_at_period_end?: boolean
           created_at?: string
           id?: string
           legacy_key_grandfathered?: boolean
+          legacy_key_until?: string | null
           name: string
           plan?: string
           plan_overrides?: Json | null
@@ -4733,9 +4737,11 @@ export type Database = {
           anthropic_api_key_last4?: string | null
           anthropic_api_key_set_at?: string | null
           anthropic_api_key_set_by?: string | null
+          cancel_at_period_end?: boolean
           created_at?: string
           id?: string
           legacy_key_grandfathered?: boolean
+          legacy_key_until?: string | null
           name?: string
           plan?: string
           plan_overrides?: Json | null
