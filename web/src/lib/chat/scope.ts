@@ -3,6 +3,7 @@ import type { PlanLimits } from '@/config/plans';
 import { platformFamily, platformName } from '@/lib/signals/names';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
+import { oldestFirst } from './fit';
 import type { ChatTool } from './registry/define-tool';
 
 /**
@@ -365,20 +366,6 @@ export async function scopeRead(
 }
 
 // ─── Rows ───────────────────────────────────────────────────────────────────
-
-/** A row's day (`date` or `day`), for a series. */
-const dayOfRow = (row: Json): string | null => {
-  if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
-  const value = (row as Record<string, Json>).date ?? (row as Record<string, Json>).day;
-  return typeof value === 'string' ? value : null;
-};
-
-/** A series oldest first (a trend's days or weeks): it keeps its latest rows, not its first. */
-function oldestFirst(list: Json[]): boolean {
-  const first = dayOfRow(list[0]);
-  const last = dayOfRow(list[list.length - 1]);
-  return first !== null && last !== null && first < last;
-}
 
 /** Cuts one list; how many it left out, null when a probe says "more" without a count. */
 function cutList(list: Json[], cap: RowCap): { items: Json[]; more: number | null } | null {
