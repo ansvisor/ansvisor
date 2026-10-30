@@ -3219,6 +3219,7 @@
     "connections": { "name": "Read connected tools", "step": "Read Integrations" },
     "chatPolicy": { "name": "Read Chat's rules", "step": "Read Settings › Chat" },
     "planFacts": { "name": "Read your plan", "step": "Read Billing" },
+    "goToPage": { "name": "Go to a page", "step": "Opened a page" },
     "saveDraft": { "name": "Save drafts in Content", "step": "Saved draft in Content" },
     "opportunityStatus": {
       "name": "Review or dismiss opportunities",
@@ -3488,6 +3489,19 @@
           "trayLive": "Live: your runs and this brand’s"
         }
       }
+    }
+  },
+  "chatNavigation": {
+    "filtersSet": "Filters set for you. This chat stays open in the side panel.",
+    "noFilters": "This chat stays open in the side panel.",
+    "navigationOnly": "Navigation only · no AI usage",
+    "goToPage": "Go to page",
+    "ranges": {
+      "24h": "Last 24 hours",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "90d": "Last 90 days",
+      "all": "All time"
     }
   },
   "chatDenial": {
@@ -4017,7 +4031,8 @@
         "site_audit": "Site Audit",
         "action_center": "Action Center",
         "content": "Content",
-        "reports": "Reports"
+        "reports": "Reports",
+        "navigation": "Navigation"
       }
     }
   },
