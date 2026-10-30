@@ -37,7 +37,6 @@
       "trial": "Trial",
       "aiLine": "AI usage this month: {percent} · {plan} · resets {date}",
       "aiLineNoDate": "AI usage this month: {percent} · {plan}",
-      "added": "Added. You can continue.",
       "ownKey": "Use your own key",
       "askAi": "Buy an AI credit pack",
       "askStorage": "Buy a storage pack",

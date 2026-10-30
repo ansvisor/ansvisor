@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle } from 'lucide-react';
 import { AskAdminButton } from '@/components/chat-access/ask-admin-button';
@@ -8,6 +8,7 @@ import { YourPlanCard } from '@/components/chat-access/plan-card';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import {
+  AFTER_PAYMENT_READ_MS,
   PackCard,
   firstPick,
   formatDate,
@@ -79,9 +80,12 @@ function GetMoreDialog({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    void getGetMore().then((next) => {
-      if (!cancelled) setRead(next);
-    });
+    void getGetMore()
+      // A dropped connection or a 502 says so, never a window left on its skeleton.
+      .catch((): GetMoreRead => ({ ok: false, failure: 'failed' }))
+      .then((next) => {
+        if (!cancelled) setRead(next);
+      });
     return () => {
       cancelled = true;
     };
@@ -133,11 +137,17 @@ function GetMoreBody({
     ai: firstPick(addOns.packs, 'ai'),
     storage: firstPick(addOns.packs, 'storage'),
   }));
+  // A storage pack counts once Stripe's webhook hears it was paid: said so, and read again after
+  // the moment that usually takes, as Billing does.
+  const later = useRef<number | null>(null);
+  useEffect(() => () => window.clearTimeout(later.current ?? undefined), []);
   const { busy, confirming, setConfirming, message, buy, start } = useAddOnPurchase(
-    t('added'),
+    tAdd('storageAdded'),
     () => {
-      refresh();
-      onAdded();
+      later.current = window.setTimeout(() => {
+        refresh();
+        onAdded();
+      }, AFTER_PAYMENT_READ_MS);
     },
   );
 

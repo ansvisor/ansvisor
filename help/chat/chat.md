@@ -79,7 +79,7 @@ Under the answer, **Data used** names each source it read, with its rows, and ea
 
 Chat draws on your workspace's monthly AI usage, shared by every seat. The meter under the box shows how much is used; click it for what used it and when it resets. From 80% it turns amber, and a line above the box says so once a month, on whichever device you are on; **×** closes it.
 
-Once the usage is used up, Chat pauses: the box is off, and a red line above it says until when. Admins can get more AI usage or use their own key from there; others are asked to ask an Admin. In the free trial, starting the plan gives its full monthly AI usage. Chat on your workspace's own AI key keeps working.
+Once the usage is used up, Chat pauses: the box is off, and a red line above it says until when. **Get more AI credits** there opens a window with your plan and the credit packs, and it opens once by itself the first time Chat stops. Admins buy packs; everyone else sees them and can **Ask your Admin**. On Enterprise, admins can also use their own AI key. In the free trial, starting the plan gives its full monthly AI usage.
 
 ## Inbox
 

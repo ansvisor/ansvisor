@@ -178,6 +178,7 @@ afterEach(() => {
   container.remove();
   document.body.innerHTML = '';
   vi.unstubAllEnvs();
+  vi.useRealTimers();
 });
 
 describe('the Get more window', () => {
@@ -219,6 +220,7 @@ describe('the Get more window', () => {
   });
 
   it('opens on Storage with its meter, and adds storage once confirmed', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     addOnActions.startAddOnPurchase.mockResolvedValue({ ok: true, next: 'added' });
     await openWindow('storage');
     expect(dialog()?.querySelector('h2')?.textContent).toBe('Get more storage');
@@ -232,8 +234,31 @@ describe('the Get more window', () => {
     );
     await click(button('Add to plan'));
     expect(addOnActions.startAddOnPurchase).toHaveBeenCalledWith('storage_25');
-    expect(text()).toContain('Added. You can continue.');
+    // It counts once Stripe's webhook hears of the payment: said so, read again a moment later.
+    expect(text()).toContain(
+      'Added to your plan. The storage counts as soon as the payment goes through.',
+    );
+    expect(ai.refresh).not.toHaveBeenCalled();
+    const reads = read.getGetMore.mock.calls.length;
+    await act(async () => vi.advanceTimersByTime(5_000));
+    await act(async () => {});
     expect(ai.refresh).toHaveBeenCalled();
+    expect(read.getGetMore.mock.calls.length).toBe(reads + 1);
+  });
+
+  it('says a read that failed, never a window left on its skeleton', async () => {
+    read.getGetMore.mockRejectedValue(new Error('502'));
+    await openWindow();
+    expect(text()).toContain("Couldn't read your plan and packs.");
+  });
+
+  it('says a purchase that failed to start, never a button left at Opening…', async () => {
+    addOnActions.startAddOnPurchase.mockRejectedValue(new TypeError('Failed to fetch'));
+    await openWindow();
+    await click(button('Continue to payment'));
+    expect(text()).toContain("Couldn't start the purchase. Try again.");
+    expect(button('Continue to payment')).toBeDefined();
+    expect((button('Continue to payment') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('switches tabs in place, the picked one marked', async () => {

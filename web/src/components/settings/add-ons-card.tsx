@@ -33,8 +33,8 @@ import type { AddOnKind } from '@/lib/billing/add-ons';
 import type { AddOnPackView, AddOnPurchaseState } from '@/lib/billing/add-on-view';
 import { cn } from '@/lib/utils';
 
-/** After Checkout's return, Billing reads once more: the webhook has usually landed by then. */
-const AFTER_PAYMENT_READ_MS = 5_000;
+/** After a payment, Billing reads once more: the webhook has usually landed by then. */
+export const AFTER_PAYMENT_READ_MS = 5_000;
 
 /** A price in its currency, without cents when it has none: $50, $1,000, $48.20. */
 export function formatPackPrice(cents: number, currency: string): string {
@@ -284,7 +284,10 @@ export function useAddOnPurchase(added: string, onAdded: () => void) {
   async function buy(pack: AddOnPackView) {
     setBusy(true);
     setMessage(null);
-    const result = await startAddOnPurchase(pack.id);
+    // A dropped connection or a 502 answers as a failure, never a button left at "Opening…".
+    const result = await startAddOnPurchase(pack.id).catch(
+      () => ({ ok: false, failure: 'failed' }) as const,
+    );
     if (result.ok && result.next === 'checkout') {
       // Stripe's page; the busy state stays until the browser leaves.
       window.location.assign(result.url);
