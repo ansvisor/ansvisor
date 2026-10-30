@@ -26,6 +26,19 @@ export const toJson = (value: unknown): Json =>
   value === undefined ? null : (JSON.parse(JSON.stringify(value)) as Json);
 
 const size = (value: Json) => JSON.stringify(value).length;
+
+/**
+ * A text's first `max` UTF-16 units, never ending in half of a character
+ * outside the BMP (an emoji): a lone surrogate makes the request body
+ * invalid JSON for the model's API, which turns the step away.
+ */
+export function cutText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  let end = Math.max(0, max);
+  const last = text.charCodeAt(end - 1);
+  if (end > 0 && last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return text.slice(0, end);
+}
 const isRecord = (value: Json): value is Record<string, Json> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
@@ -70,7 +83,7 @@ function shortenTexts(value: Json, max: number): { value: Json; shortened: boole
     if (typeof node === 'string') {
       if (node.length <= max) return node;
       shortened = true;
-      return `${node.slice(0, max - 1)}…`;
+      return `${cutText(node, max - 1)}…`;
     }
     if (depth > 6 || !node || typeof node !== 'object') return node;
     if (Array.isArray(node)) return node.map((item) => walk(item, depth + 1));
@@ -154,7 +167,11 @@ export function fitResult(
     }
   }
 
-  // 3. As text.
+  // 3. As text, within maxChars once escaped (its quotes and backslashes grow).
   const text = JSON.stringify(base);
-  return done({ text: text.slice(0, room), truncated: true });
+  let cut = cutText(text, room);
+  while (cut.length > 0 && size({ text: cut, truncated: true }) > maxChars) {
+    cut = cutText(cut, cut.length - (size({ text: cut, truncated: true }) - maxChars));
+  }
+  return done({ text: cut, truncated: true });
 }

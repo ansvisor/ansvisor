@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Json } from '@/types/supabase';
-import { TEXT_FIELD_CHARS, fitResult, restOf } from './fit';
+import { TEXT_FIELD_CHARS, cutText, fitResult, restOf } from './fit';
 
 /**
  * Chat's data budgets on a tool's result (W1-18; CHAT-04 items 5–6): what
@@ -83,5 +83,34 @@ describe('restOf', () => {
     expect(restOf(list, 1)).toEqual({ mentions: { sum: 5, share_pct: 50 } });
     expect(restOf(list, 3)).toBeNull();
     expect(restOf([{ name: 'a' }, { name: 'b' }], 1)).toBeNull();
+  });
+});
+
+describe('cuts that stay valid', () => {
+  const wellFormed = (text: string) =>
+    !/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(text);
+
+  it('never leaves half an emoji at the end of a cut', () => {
+    expect(cutText('ab😀c', 3)).toBe('ab');
+    expect(cutText('ab😀c', 4)).toBe('ab😀');
+    expect(cutText('abc', 5)).toBe('abc');
+  });
+
+  it('shortens a long text with an emoji at the cut and keeps it well formed', () => {
+    const answer = `${'x'.repeat(TEXT_FIELD_CHARS - 2)}😀${'y'.repeat(2_000)}`;
+    const out = fitResult({ answers: [{ text: answer }, { text: answer }] }, 1_200);
+    expect(out.cut).toBe(true);
+    expect(wellFormed(JSON.stringify(out.value))).toBe(true);
+    expect(JSON.stringify(out.value)).not.toMatch(/\\ud83d/);
+  });
+
+  it('keeps a result cut as text within its budget, quotes and all', () => {
+    const value = {
+      data: { rows: Array.from({ length: 400 }, (_, i) => ({ q: `"asked ${i}"`, n: i })) },
+    };
+    const out = fitResult(value, 2_000);
+    expect(out.value).toMatchObject({ truncated: true });
+    expect(out.chars).toBeLessThanOrEqual(2_000);
+    expect(JSON.stringify(out.value).length).toBe(out.chars);
   });
 });
