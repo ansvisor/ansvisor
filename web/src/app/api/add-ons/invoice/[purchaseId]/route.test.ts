@@ -36,6 +36,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+  vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_x');
   auth.userId = 'u_admin';
   db.failures = {};
   db.tables = {
@@ -80,4 +81,10 @@ it('is the Admins’ only, and only their own workspace’s', async () => {
 it('is off while Chat is off', async () => {
   vi.stubEnv('CHAT_AGENTIC', 'false');
   expect((await get(OURS)).status).toBe(404);
+});
+
+it('is not found on a deployment without Stripe', async () => {
+  vi.stubEnv('STRIPE_SECRET_KEY', '');
+  expect((await get(OURS)).status).toBe(404);
+  expect(retrieve).not.toHaveBeenCalled();
 });
