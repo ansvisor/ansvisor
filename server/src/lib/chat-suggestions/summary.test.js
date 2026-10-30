@@ -165,6 +165,24 @@ describe('titlePayload', () => {
     expect(got.removedKeys).toHaveLength(100);
   });
 
+  it('never cuts an emoji in half', () => {
+    // An astral character across the cut: its first half alone is a lone
+    // surrogate, which jsonb refuses, failing the brand's whole insert.
+    const got = titlePayload({
+      promptText: `${'q'.repeat(299)}😀 more`,
+      why: `${'w'.repeat(999)}😀`,
+      targets: [{ label: `${'l'.repeat(299)}😀` }],
+    });
+    const lone = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+    expect(got.promptText).toBe('q'.repeat(299));
+    expect(got.why).toBe('w'.repeat(999));
+    expect(got.targets[0].label).toBe('l'.repeat(299));
+    expect(JSON.stringify(got)).not.toMatch(/\\ud[89ab]/i);
+    expect(lone.test(got.promptText + got.why + got.targets[0].label)).toBe(false);
+    // A whole emoji before the cut stays.
+    expect(titlePayload({ title: `${'t'.repeat(298)}😀x` }).title).toBe(`${'t'.repeat(298)}😀`);
+  });
+
   it('reads nothing from no payload', () => {
     expect(titlePayload(null)).toEqual({});
     expect(titlePayload('x')).toEqual({});

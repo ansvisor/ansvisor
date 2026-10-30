@@ -71,7 +71,18 @@ const TEXT_MAX = 300;
 /** An Improve action's own "why" is its description. */
 const WHY_MAX = 1000;
 
-const clip = (text, max = TEXT_MAX) => (text.length > max ? text.slice(0, max) : text);
+/**
+ * A text cut to `max` UTF-16 units, never through a character: a cut that
+ * would end on the first half of an emoji's pair drops that half, since
+ * Postgres refuses a lone surrogate in jsonb and the brand's whole insert
+ * would fail with it.
+ */
+function clip(text, max = TEXT_MAX) {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
 
 /** A list as a title reads it: its first items, primitives as they are, objects by label. */
 function compactList(list) {
