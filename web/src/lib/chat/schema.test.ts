@@ -407,10 +407,27 @@ describe('agents', () => {
     expect(allowed(runs, 'outcome')).toEqual(OUTCOMES);
   });
 
-  it('run one at a time per agent and brand', () => {
+  it('run one at a time per agent and brand, a run paused at its cap keeping its place', () => {
     expect(agentSql).toMatch(
-      /on public\.chat_agent_runs \(agent_id, brand_id\)\s+where status in \('running', 'needs_you'\)/,
+      /on public\.chat_agent_runs \(agent_id, brand_id\)\s+where status in \('running', 'needs_you', 'paused_cap'\)/,
     );
+  });
+
+  it('start a queued run only for a live agent and brand, within the workspace limit', () => {
+    const start = agentSql.slice(agentSql.indexOf('function public.chat_start_next_agent_run'));
+    expect(start).toContain("raise exception 'a workspace limit is needed'");
+    expect(start).toContain('q.brand_id is not null');
+    expect(start).toContain("g.status <> 'archived'");
+    expect(start).toContain("(g.status = 'active' or q.trigger_kind in ('manual', 'action'))");
+  });
+
+  it("hold a step against the chat's own agent run, so subtasks count toward it", () => {
+    const reserve = agentSql.slice(agentSql.indexOf('function public.reserve_chat_ai_usage'));
+    expect(reserve).toContain(
+      'select r.parent_run_id, c.agent_run_id into v_parent_id, v_agent_run',
+    );
+    expect(reserve).toContain("raise exception 'agent run is not the chat''s'");
+    expect(reserve).toMatch(/set search_path = ''/);
   });
 
   it('show a run’s chat to whoever reads the run, never once deleted', () => {

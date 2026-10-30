@@ -300,10 +300,11 @@ create index if not exists chat_agent_runs_queue_idx
 create index if not exists chat_agent_runs_running_idx
   on public.chat_agent_runs (organization_id)
   where status = 'running';
--- One run at a time per agent and brand (§M item 58).
+-- One run at a time per agent and brand (§M item 58). A run paused at its
+-- AI cap keeps its place: an Admin may continue it (CHAT-27 item 22).
 create unique index if not exists chat_agent_runs_active_uidx
   on public.chat_agent_runs (agent_id, brand_id)
-  where status in ('running', 'needs_you');
+  where status in ('running', 'needs_you', 'paused_cap');
 create index if not exists chat_agent_runs_brand_idx
   on public.chat_agent_runs (brand_id) where brand_id is not null;
 create index if not exists chat_agent_runs_trigger_idx
@@ -323,9 +324,13 @@ comment on column public.chat_agent_runs.usage_share is
 -- Run now and Run agent first, then in fire order; never one whose agent and
 -- brand already have a run running or waiting on a person. One start at a
 -- time per workspace: the next waits and counts this one. Returns the run
--- started, or null. A run whose agent was deleted never starts. A running
--- run whose Chat run was lost is ended by the server's sweep, which frees
--- its place.
+-- started, or null. A run whose agent was deleted or archived, or whose
+-- brand was deleted, never starts; a triggered run starts only while its
+-- agent is active (Run now and Run agent also on a paused or draft one,
+-- CHAT-21 §G). A running run whose Chat run was lost is ended by the
+-- server's sweep, which frees its place. A run that goes back to running
+-- from needs_you or paused_cap doesn't pass through here: the server checks
+-- the workspace's limit for it.
 create or replace function public.chat_start_next_agent_run(
   p_organization_id uuid,
   p_workspace_limit integer
@@ -339,6 +344,9 @@ declare
   v_running integer;
   v_id uuid;
 begin
+  if p_workspace_limit is null or p_workspace_limit < 1 then
+    raise exception 'a workspace limit is needed' using errcode = '22023';
+  end if;
   perform pg_advisory_xact_lock(hashtext('chat_agent_run_slot:' || p_organization_id::text));
 
   select count(*) into v_running
@@ -351,14 +359,17 @@ begin
 
   select q.id into v_id
   from public.chat_agent_runs q
+  join public.chat_agents g on g.id = q.agent_id
   where q.organization_id = p_organization_id
     and q.status = 'queued'
-    and q.agent_id is not null
+    and q.brand_id is not null
+    and g.status <> 'archived'
+    and (g.status = 'active' or q.trigger_kind in ('manual', 'action'))
     and not exists (
       select 1 from public.chat_agent_runs a
       where a.agent_id = q.agent_id
-        and a.brand_id is not distinct from q.brand_id
-        and a.status in ('running', 'needs_you')
+        and a.brand_id = q.brand_id
+        and a.status in ('running', 'needs_you', 'paused_cap')
     )
   order by (q.trigger_kind in ('manual', 'action')) desc, q.queued_at, q.id
   limit 1;
@@ -529,9 +540,12 @@ drop function if exists public.reserve_chat_ai_usage(
 -- steps included, plus p_cost would pass it; the server tells the two apart
 -- from the run's spend. On the workspace's own key (p_own_key), or with no
 -- budget to hold against (p_budget null: self-hosted), the budget isn't
--- checked. The run must be the organization's, the step, when named, the
--- run's, and the agent run, when named, the organization's. The row is
--- named by the run's parent and the agent run's agent.
+-- checked. The run must be the organization's, and the step, when named,
+-- the run's. The agent run is the chat's (chat_conversations.agent_run_id),
+-- so a subtask's step counts toward its parent's: p_agent_run_id, when
+-- given, must be that one. p_run_cap is always the whole agent run's cap,
+-- subtasks included, never one subtask's slice (the server checks slices).
+-- The row is named by the run's parent and the agent run's agent.
 create or replace function public.reserve_chat_ai_usage(
   p_organization_id  uuid,
   p_chat_run_id      uuid,
@@ -548,10 +562,11 @@ create or replace function public.reserve_chat_ai_usage(
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_parent_id uuid;
+  v_agent_run uuid;
   v_agent_id  uuid;
   v_spent     numeric;
   v_run_spent numeric;
@@ -560,11 +575,7 @@ begin
   if p_feature is null or p_feature not in ('chat', 'agent', 'schedule', 'image') then
     raise exception 'not a Chat feature: %', p_feature using errcode = '22023';
   end if;
-  if p_run_cap is not null and p_agent_run_id is null then
-    raise exception 'a run cap needs its agent run' using errcode = '22023';
-  end if;
-
-  select r.parent_run_id into v_parent_id
+  select r.parent_run_id, c.agent_run_id into v_parent_id, v_agent_run
   from public.chat_runs r
   join public.chat_conversations c on c.id = r.conversation_id
   where r.id = p_chat_run_id
@@ -578,11 +589,17 @@ begin
   ) then
     raise exception 'chat run not found' using errcode = 'P0002';
   end if;
+  if p_agent_run_id is not null and p_agent_run_id is distinct from v_agent_run then
+    raise exception 'agent run is not the chat''s' using errcode = '22023';
+  end if;
+  if p_run_cap is not null and v_agent_run is null then
+    raise exception 'a run cap needs an agent run' using errcode = '22023';
+  end if;
 
-  if p_agent_run_id is not null then
+  if v_agent_run is not null then
     select a.agent_id into v_agent_id
     from public.chat_agent_runs a
-    where a.id = p_agent_run_id
+    where a.id = v_agent_run
       and a.organization_id = p_organization_id;
     if not found then
       raise exception 'agent run not found' using errcode = 'P0002';
@@ -610,7 +627,7 @@ begin
     -- Own-key steps count too: the cap stops a runaway run on any key.
     select coalesce(sum(cost_usd), 0) into v_run_spent
     from public.prompt_improve_usage
-    where agent_run_id = p_agent_run_id;
+    where agent_run_id = v_agent_run;
 
     if v_run_spent + greatest(p_cost, 0) > p_run_cap then
       return null;
@@ -622,7 +639,7 @@ begin
     agent_id, agent_run_id, parent_run_id)
   values (
     p_organization_id, p_feature, p_model, greatest(p_cost, 0), coalesce(p_own_key, false),
-    p_chat_run_id, p_chat_run_step_id, v_agent_id, p_agent_run_id, v_parent_id)
+    p_chat_run_id, p_chat_run_step_id, v_agent_id, v_agent_run, v_parent_id)
   returning id into v_id;
   return v_id;
 end;

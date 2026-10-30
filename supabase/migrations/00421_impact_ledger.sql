@@ -59,6 +59,8 @@ create table if not exists public.ship_events (
   change_type text check (change_type in ('content', 'technical', 'outreach')),
   run_id uuid references public.chat_runs(id) on delete set null,
   agent_id uuid references public.chat_agents(id) on delete set null,
+  -- The agent run that shipped it, for the run's Outcome (CHAT-21 §I item 43).
+  agent_run_id uuid references public.chat_agent_runs(id) on delete set null,
   shipped_at timestamptz not null,
   -- The person who shipped it or marked it; null for an integration or an
   -- agent on its own.
@@ -83,6 +85,8 @@ create index if not exists ship_events_run_idx
   on public.ship_events (run_id) where run_id is not null;
 create index if not exists ship_events_agent_idx
   on public.ship_events (agent_id) where agent_id is not null;
+create index if not exists ship_events_agent_run_idx
+  on public.ship_events (agent_run_id) where agent_run_id is not null;
 
 comment on table public.ship_events is
   'Impact ledger (00421): a change that went live (CHAT-22 §2 item 1): CMS publish, merged PR, Mark as shipped or a third-party placement; what shipped, its action, source, change type, run, agent, when, by whom and how. Every member reads; the server writes.';

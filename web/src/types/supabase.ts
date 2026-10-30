@@ -6601,6 +6601,7 @@ export type Database = {
         Row: {
           action_id: string | null
           agent_id: string | null
+          agent_run_id: string | null
           brand_id: string
           change_type: string | null
           content_draft_id: string | null
@@ -6620,6 +6621,7 @@ export type Database = {
         Insert: {
           action_id?: string | null
           agent_id?: string | null
+          agent_run_id?: string | null
           brand_id: string
           change_type?: string | null
           content_draft_id?: string | null
@@ -6639,6 +6641,7 @@ export type Database = {
         Update: {
           action_id?: string | null
           agent_id?: string | null
+          agent_run_id?: string | null
           brand_id?: string
           change_type?: string | null
           content_draft_id?: string | null
@@ -6668,6 +6671,13 @@ export type Database = {
             columns: ["agent_id"]
             isOneToOne: false
             referencedRelation: "chat_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ship_events_agent_run_id_fkey"
+            columns: ["agent_run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agent_runs"
             referencedColumns: ["id"]
           },
           {
