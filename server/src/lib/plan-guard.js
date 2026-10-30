@@ -16,7 +16,7 @@ import {
 } from './improve-cost.js';
 import { logger } from './logger.js';
 import { chatAgenticEnabled } from './chat-flag.js';
-import { creditRoomUsd, drawCredits } from './ai-credits.js';
+import { creditRoomUsd, creditsLeftUsd, drawCredits } from './ai-credits.js';
 import { RELEVANCE_BUDGET_SHARE } from './suggestion-relevance.js';
 import { AUDIT_RUN_TIMEOUT_MS } from './audit/history.js';
 import {
@@ -389,7 +389,11 @@ async function improveSpendThisPeriod(orgId) {
   // Quality's small checks and Chat's steps count in what's spent, not in
   // what a call costs.
   const calls = rows.filter((r) => !NOT_TYPICAL.has(r.feature)).slice(0, RECENT_CALLS);
-  return { spent, typical: medianCost(calls.map((r) => Number(r.cost_usd) || 0)) };
+  return {
+    spent,
+    since: periodStart.toISOString(),
+    typical: medianCost(calls.map((r) => Number(r.cost_usd) || 0)),
+  };
 }
 
 /**
@@ -405,8 +409,10 @@ export async function getImproveQuotaStatus(orgId, modelId, { readOnly = false }
   const plan = await resolveOrgPlanByOrgId(orgId, { readOnly });
   const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
   if (budget === -1) return { unlimited: true, planName: plan.name };
-  const { spent, typical } = await improveSpendThisPeriod(orgId);
-  const remaining = Math.max(0, budget - spent);
+  const { spent, since, typical } = await improveSpendThisPeriod(orgId);
+  // Purchased AI credits (with Chat on) are on the budget too, as reserveAiBudget
+  // counts them: what's left is the included budget's and then theirs.
+  const remaining = Math.max(0, budget + (await creditRoomUsd(orgId, since)) - spent);
   return {
     unlimited: false,
     planName: plan.name,
@@ -415,7 +421,7 @@ export async function getImproveQuotaStatus(orgId, modelId, { readOnly = false }
     spentUsd: spent,
     remainingUsd: remaining,
     generationsLeft: estimateGenerationsLeft(remaining, typical ?? typicalCostUsd(modelId)),
-    percentLeft: budget > 0 ? Math.round((remaining / budget) * 100) : 0,
+    percentLeft: budget > 0 ? Math.min(100, Math.round((remaining / budget) * 100)) : 0,
     ...noPlanMark(plan),
   };
 }
@@ -667,6 +673,10 @@ export async function getAiUsage(orgId) {
   return {
     ...base,
     unlimited: false,
+    // Purchased AI credits left (with Chat on): calls still run on them once
+    // the plan's share reads 100, so the pages don't say "used up". Whether,
+    // never how much: dollars stay on the server.
+    creditsLeft: (await creditsLeftUsd(orgId)) > 0,
     // 100 only once it's spent, as reserveAiBudget stops there (a budget of
     // 0 included); just under reads as 99.9, never rounded up to "used up".
     percentUsed:

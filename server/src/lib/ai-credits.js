@@ -98,6 +98,27 @@ export async function creditRoomUsd(orgId, since, now = new Date()) {
 }
 
 /**
+ * The AI credits left on the workspace's grants still valid, in dollars (for
+ * the server only: what a meter says is whether any is left). 0 with Chat
+ * off, without a grant, or when they can't be read (logged).
+ */
+export async function creditsLeftUsd(orgId, now = new Date()) {
+  if (!chatAgenticEnabled(orgId)) return 0;
+  try {
+    const { data: grants, error } = await supabaseAdmin
+      .from('ai_credit_grants')
+      .select('usd_total, usd_used, expires_at')
+      .eq('organization_id', orgId)
+      .gt('expires_at', now.toISOString());
+    if (error) throw new Error(error.message);
+    return dollars((grants ?? []).reduce((sum, g) => sum + leftMicros(g), 0));
+  } catch (err) {
+    logger.error({ err, orgId }, '[ai-credits] credits left read failed');
+    return 0;
+  }
+}
+
+/**
  * Takes up to `wanted` micros from the grants, soonest ending first. Each
  * take moves usd_used only if no other draw moved it since it was read; one
  * that did is read again and tried again. Returns what each grant gave.
