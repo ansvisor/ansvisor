@@ -22,7 +22,11 @@ vi.mock('@/components/chat/agents/agent-detail', () => ({ AgentDetail: () => nul
 vi.mock('@/components/chat/agents/agent-form', () => ({ AgentForm: () => null }));
 const form = vi.hoisted(() => ({
   setup: { role: 'manager' } as unknown,
-  agent: { id: 'aaaaaaaa-0000-4000-8000-000000000001', version: 3 } as unknown,
+  agent: {
+    id: 'aaaaaaaa-0000-4000-8000-000000000001',
+    version: 3,
+    updatedAt: '2026-10-29T10:00:00.000Z',
+  } as unknown,
 }));
 vi.mock('@/lib/chat/agent-form-setup', () => ({
   readAgentFormSetup: vi.fn(async () => form.setup),
@@ -47,7 +51,7 @@ const search = (skill?: string) => ({ searchParams: Promise.resolve(skill ? { sk
 beforeEach(() => {
   access.open = true;
   form.setup = { role: 'manager' };
-  form.agent = { id: ID, version: 3 };
+  form.agent = { id: ID, version: 3, updatedAt: '2026-10-29T10:00:00.000Z' };
   notFound.mockClear();
 });
 
@@ -92,7 +96,7 @@ describe('New agent and Edit (W2-15)', () => {
     expect(plain.props.initialSkill).toBeNull();
   });
 
-  it('show Edit filled with the agent, keyed by its version', async () => {
+  it('show Edit filled with the agent, keyed by its version and last save', async () => {
     const page = (await EditAgentPage(params(ID))) as {
       type: unknown;
       key: string;
@@ -100,7 +104,15 @@ describe('New agent and Edit (W2-15)', () => {
     };
     expect(isValidElement(page) && page.type).toBe(AgentForm);
     expect(page.props.agent).toBe(form.agent);
-    expect(page.key).toBe(`${ID}:3`);
+    expect(page.key).toBe(`${ID}:3:2026-10-29T10:00:00.000Z`);
+  });
+
+  it('opens Edit fresh after a save that made no new version, so Reload clears a conflict', async () => {
+    // Someone else renamed or paused it: the same version, a later updatedAt.
+    const before = (await EditAgentPage(params(ID))) as { key: string };
+    form.agent = { id: ID, version: 3, updatedAt: '2026-10-29T10:05:00.000Z' };
+    const after = (await EditAgentPage(params(ID))) as { key: string };
+    expect(after.key).not.toBe(before.key);
   });
 
   it('are not found without a setup, for an id that isn’t an agent’s, or an agent the person can’t see', async () => {

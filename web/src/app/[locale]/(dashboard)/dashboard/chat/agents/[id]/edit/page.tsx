@@ -17,6 +17,15 @@ export default async function EditAgentPage({ params }: { params: Promise<{ id: 
   if (!id) notFound();
   const found = await readAgentEdit(id);
   if (!found) notFound();
-  // Keyed by the agent and its version: a saved change opens fresh.
-  return <AgentForm key={`${id}:${found.agent.version}`} setup={found.setup} agent={found.agent} />;
+  // Keyed by the agent, its version and its last save: a saved change opens
+  // fresh, and so does Reload after a save that made no new version (a name,
+  // sharing, a cap, triggers, Pause), or the form would keep the old one and
+  // be refused again.
+  return (
+    <AgentForm
+      key={`${id}:${found.agent.version}:${found.agent.updatedAt}`}
+      setup={found.setup}
+      agent={found.agent}
+    />
+  );
 }
