@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { isCloud } from '@/config/plans';
+import { PLANS, getPlan, isCloud } from '@/config/plans';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import {
   ADD_ON_PRODUCT_COLUMNS,
@@ -11,8 +11,19 @@ import {
   addOnOnSale,
   loadStripe,
   planItemOf,
+  type AddOnKind,
   type AddOnProductRow,
 } from '@/lib/billing/add-ons';
+import {
+  creditLeftCents,
+  creditLine,
+  gigabytes,
+  packView,
+  purchaseState,
+  type AddOnPackView,
+  type AddOnPurchaseState,
+  type CreditGrant,
+} from '@/lib/billing/add-on-view';
 
 /**
  * Buying an add-on pack (CHAT-18 §C–E), behind CHAT_AGENTIC: an Admin of a
@@ -258,4 +269,236 @@ async function addStorageItem(buyer: Buyer, pack: AddOnProductRow): Promise<AddO
     .eq('id', purchaseId)
     .is('stripe_subscription_item_id', null);
   return { ok: true, next: 'added' };
+}
+
+// ─── Settings › Billing › Add-ons ──────────────────────────────────────────
+
+/** A purchase as Billing's history lists it (CHAT-18 item 17). */
+export interface AddOnPurchaseView {
+  id: string;
+  createdAt: string;
+  kind: AddOnKind;
+  /** The pack's price: an AI pack goes by it ("AI credits · $50"). */
+  packPriceCents: number;
+  /** What was paid (a storage pack's first period is prorated); null until paid. */
+  paidCents: number | null;
+  currency: string;
+  /** Storage: the GB it adds. */
+  gb: number | null;
+  state: AddOnPurchaseState;
+  /** AI: the credit left, in the pack's own dollars. */
+  creditLeftCents: number | null;
+  /** AI: when its credit ends. Storage: the end of the period paid for. */
+  until: string | null;
+  hasInvoice: boolean;
+}
+
+export interface BillingAddOns {
+  isAdmin: boolean;
+  /** Whether the workspace can buy: an active paid plan; the free trial can't (CHAT-18). */
+  buy: 'open' | 'trial' | 'no_plan';
+  packs: AddOnPackView[];
+  /** "AI credit: $X left · expires {date}"; null when none is left. */
+  credit: { leftCents: number; expiresAt: string } | null;
+  /** Admins only: billing is theirs. */
+  purchases: AddOnPurchaseView[] | null;
+}
+
+export type BillingAddOnsRead =
+  | { ok: true; addOns: BillingAddOns }
+  /** off: Chat is off for the workspace, or not the cloud: no section. */
+  | { ok: false; failure: 'off' | 'failed' };
+
+/** How many purchases the history lists, newest first. */
+const HISTORY_ROWS = 20;
+/** A Checkout left unpaid this long was abandoned: the history leaves it out. */
+const PENDING_SHOWN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Settings › Billing › Add-ons for the signed-in person (CHAT-18 §B item 6,
+ * §E item 17), behind CHAT_AGENTIC: the packs with what each adds to this
+ * workspace's plan, the AI credit left, and, for Admins, the purchases.
+ * Dollars here are the packs' prices, what the workspace pays; the model
+ * cost a pack grants stays on the server. Never throws (#1777).
+ */
+export async function getBillingAddOns(): Promise<BillingAddOnsRead> {
+  try {
+    const addOns = await readBillingAddOns(new Date());
+    return addOns ? { ok: true, addOns } : { ok: false, failure: 'off' };
+  } catch (err) {
+    console.error('[add-ons] Billing read failed:', err);
+    return { ok: false, failure: 'failed' };
+  }
+}
+
+function rows<T>({ data, error }: { data: unknown; error: { message: string } | null }): T[] {
+  if (error) throw new Error(error.message);
+  return (data ?? []) as T[];
+}
+
+/**
+ * The plan's own monthly AI limit, what an AI pack is measured against: the
+ * plan's, not the trial's smaller one; Enterprise's own when Ansvisor set one
+ * at least the plan's. Null when unlimited.
+ */
+function monthlyLimitUsd(org: { plan?: unknown; plan_overrides?: unknown } | null): number | null {
+  const plan = getPlan(org?.plan as string | null | undefined);
+  let usd = plan.limits.improveMonthlyBudgetUsd;
+  const overrides = org?.plan_overrides as Record<string, unknown> | null | undefined;
+  const own = overrides?.improveMonthlyBudgetUsd;
+  if (
+    plan.id === 'enterprise' &&
+    typeof own === 'number' &&
+    Number.isFinite(own) &&
+    own >= PLANS.enterprise.limits.improveMonthlyBudgetUsd
+  ) {
+    usd = own;
+  }
+  return usd > 0 ? usd : null;
+}
+
+interface GrantRow {
+  purchase_id: string;
+  usd_total: number;
+  usd_used: number;
+  expires_at: string;
+}
+
+interface PurchaseRow {
+  id: string;
+  product_id: string;
+  status: string;
+  created_at: string;
+  amount_paid_cents: number | null;
+  currency: string;
+  stripe_invoice_id: string | null;
+}
+
+async function readBillingAddOns(now: Date): Promise<BillingAddOns | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('organization_id, role')
+    .eq('id', user.id)
+    .maybeSingle();
+  const organizationId = profile?.organization_id as string | undefined;
+  if (!organizationId || !chatAgenticEnabled(organizationId) || !isCloud()) return null;
+  const isAdmin = profile?.role === 'admin';
+
+  const [org, products, grants, purchases, storage] = await Promise.all([
+    supabaseAdmin
+      .from('organizations')
+      .select('plan, subscription_status, plan_overrides')
+      .eq('id', organizationId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) throw new Error(error.message);
+        return data as { plan?: unknown; subscription_status?: unknown; plan_overrides?: unknown };
+      }),
+    supabaseAdmin
+      .from('add_on_products')
+      .select(ADD_ON_PRODUCT_COLUMNS)
+      .then((r) => rows<AddOnProductRow>(r)),
+    supabaseAdmin
+      .from('ai_credit_grants')
+      .select('purchase_id, usd_total, usd_used, expires_at')
+      .eq('organization_id', organizationId)
+      .then((r) => rows<GrantRow>(r)),
+    supabaseAdmin
+      .from('add_on_purchases')
+      .select('id, product_id, status, created_at, amount_paid_cents, currency, stripe_invoice_id')
+      .eq('organization_id', organizationId)
+      .in('status', ['pending', 'paid', 'refunded', 'cancelled'])
+      .order('created_at', { ascending: false })
+      .limit(200)
+      .then((r) => rows<PurchaseRow>(r)),
+    isAdmin
+      ? supabaseAdmin
+          .from('storage_grants')
+          .select('purchase_id, active_until')
+          .eq('organization_id', organizationId)
+          .then((r) => rows<{ purchase_id: string; active_until: string }>(r))
+      : Promise.resolve([]),
+  ]);
+
+  const productById = new Map(products.map((p) => [p.id, p]));
+  const purchaseById = new Map(purchases.map((p) => [p.id, p]));
+  // Each grant with its pack's price, for the credit in the pack's own dollars.
+  const priced = new Map<string, CreditGrant>();
+  for (const grant of grants) {
+    const product = productById.get(purchaseById.get(grant.purchase_id)?.product_id ?? '');
+    if (!product?.grant_ai_usd) continue;
+    priced.set(grant.purchase_id, {
+      usdTotal: Number(grant.usd_total),
+      usdUsed: Number(grant.usd_used),
+      expiresAt: grant.expires_at,
+      priceCents: product.price_cents,
+      grantUsd: Number(product.grant_ai_usd),
+    });
+  }
+
+  const status = org?.subscription_status;
+  const included = monthlyLimitUsd(org);
+  const packs = products
+    .filter((p) => p.active)
+    .sort((a, b) => (a.kind === b.kind ? a.sort - b.sort : a.kind === 'ai' ? -1 : 1))
+    .map((p) => packView(p, included));
+
+  return {
+    isAdmin,
+    buy: status === 'active' ? 'open' : status === 'trialing' ? 'trial' : 'no_plan',
+    packs,
+    credit: creditLine([...priced.values()], now),
+    purchases: isAdmin ? history(purchases, productById, priced, storage, now) : null,
+  };
+}
+
+function history(
+  purchases: PurchaseRow[],
+  productById: Map<string, AddOnProductRow>,
+  priced: Map<string, CreditGrant>,
+  storage: { purchase_id: string; active_until: string }[],
+  now: Date,
+): AddOnPurchaseView[] {
+  const storageUntil = new Map(storage.map((g) => [g.purchase_id, g.active_until]));
+  const listed: AddOnPurchaseView[] = [];
+  for (const purchase of purchases) {
+    const product = productById.get(purchase.product_id);
+    if (!product) continue;
+    if (
+      purchase.status === 'pending' &&
+      now.getTime() - Date.parse(purchase.created_at) > PENDING_SHOWN_MS
+    ) {
+      continue;
+    }
+    const grant = priced.get(purchase.id);
+    const leftCents = grant ? creditLeftCents(grant) : 0;
+    const until =
+      product.kind === 'ai' ? (grant?.expiresAt ?? null) : (storageUntil.get(purchase.id) ?? null);
+    const state = purchaseState(
+      { status: purchase.status, kind: product.kind },
+      { leftCents, until },
+      now,
+    );
+    if (!state) continue;
+    listed.push({
+      id: purchase.id,
+      createdAt: purchase.created_at,
+      kind: product.kind,
+      packPriceCents: product.price_cents,
+      paidCents: purchase.amount_paid_cents,
+      currency: purchase.currency,
+      gb: product.grant_bytes ? gigabytes(product.grant_bytes) : null,
+      state,
+      creditLeftCents: product.kind === 'ai' && state === 'active' ? leftCents : null,
+      until,
+      hasInvoice: !!purchase.stripe_invoice_id,
+    });
+    if (listed.length === HISTORY_ROWS) break;
+  }
+  return listed;
 }

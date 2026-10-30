@@ -32,10 +32,13 @@ afterAll(() => {
 describe('the add-on actions without a Stripe key', () => {
   it('load, though lib/stripe.ts itself can’t', async () => {
     await expect(import('@/lib/stripe')).rejects.toThrow();
-    await expect(import('./add-ons')).resolves.toHaveProperty('startAddOnPurchase');
+    await expect(import('./add-ons')).resolves.toMatchObject({
+      startAddOnPurchase: expect.any(Function),
+      getBillingAddOns: expect.any(Function),
+    });
   });
 
-  it('answer a purchase "unavailable", with nothing written', async () => {
+  it('answer a purchase "unavailable", with nothing written, and still list the packs', async () => {
     vi.stubEnv('CHAT_AGENTIC', 'true');
     vi.stubEnv('CHAT_AGENTIC_ORGS', '');
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
@@ -70,11 +73,31 @@ describe('the add-on actions without a Stripe key', () => {
       ],
       add_on_purchases: [],
     };
-    const { startAddOnPurchase } = await import('./add-ons');
+    const { getBillingAddOns, startAddOnPurchase } = await import('./add-ons');
     await expect(startAddOnPurchase('ai_50')).resolves.toEqual({
       ok: false,
       failure: 'unavailable',
     });
     expect(db.tables.add_on_purchases).toEqual([]);
+
+    // Billing's packs and credit line are read without Stripe.
+    db.tables.organizations[0] = {
+      ...db.tables.organizations[0],
+      plan: 'growth',
+      plan_overrides: null,
+    };
+    db.tables.ai_credit_grants = [];
+    db.tables.storage_grants = [];
+    const read = await getBillingAddOns();
+    expect(read).toMatchObject({
+      ok: true,
+      addOns: {
+        isAdmin: true,
+        buy: 'open',
+        credit: null,
+        purchases: [],
+        packs: [{ id: 'ai_50', adds: { kind: 'limits', count: 1 }, mostPicked: true }],
+      },
+    });
   });
 });
