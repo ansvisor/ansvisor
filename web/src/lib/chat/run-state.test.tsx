@@ -94,6 +94,23 @@ describe('the run in the browser', () => {
     ).toMatchObject({ status: 'stopped', question: null });
   });
 
+  it('keeps the next moves sent before its end (CHAT-07 §C)', () => {
+    const moves = [
+      { label: 'Do the same for /features', prompt: 'Do the same for /features', ghost: true },
+    ];
+    const done = runFromEvents([
+      chatEvent('text.delta', 1, { text: 'Done.' }),
+      chatEvent('next_moves', 2, { moves }),
+      chatEvent('run.finished', 3, {
+        ...summary,
+        generatedAt: '2026-10-30T09:00:00.000Z',
+        dataAsOf: null,
+      }),
+    ]);
+    expect(done).toMatchObject({ status: 'done', nextMoves: moves });
+    expect(emptyRun().nextMoves).toEqual([]);
+  });
+
   it('keeps what the run made, in order: each one its card (CHAT-06 item 1)', () => {
     const made = {
       title: 'Pricing FAQ',

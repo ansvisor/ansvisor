@@ -13,12 +13,14 @@ import { ResultCard } from '@/components/agentic/result-card';
 import { DenialCard } from '@/components/agentic/denial-card';
 import { ErrorCard } from '@/components/agentic/error-card';
 import { RunsTray, RunsTrayView } from '@/components/agentic/runs-tray';
+import { NextMoves } from '@/components/chat/run/next-moves';
 import {
   APPROVAL,
   APPROVAL_HEAD,
   DENIAL_FOOTNOTE,
   DENIALS,
   FAILED,
+  NEXT_MOVES,
   PUBLISH,
   PUSH_APPROVAL,
   QUALITY_PLAN,
@@ -189,6 +191,9 @@ export function CardsPreview() {
       </Group>
 
       <Group title={t('sections.result')}>
+        <State caption={s('nextMoves')}>
+          <NextMoves moves={NEXT_MOVES} onPick={noop} />
+        </State>
         <State caption={s('resultDone')}>
           <ResultCard
             state="done"

@@ -18,7 +18,8 @@ import {
  * streams as steps; Auto reads with Haiku and writes with Sonnet; a change
  * waits on its card, an EXECUTE on its click; Approve is bound to the card's
  * arguments; a refused hold starts nothing; a refusal is recorded; a question
- * card waits for its answer, once; Stop and a card left 7 days end the run;
+ * card waits for its answer, once; next moves come with the final answer, for
+ * the person's role; Stop and a card left 7 days end the run;
  * and no event names a tool or carries an id.
  */
 
@@ -172,6 +173,7 @@ const { CHAT_TOOLS } = await import('./registry/tools');
 const { readPrecedenceContext } = await import('./precedence-context');
 const { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } = await import('./rules');
 const { ASK_TOOL } = await import('./asks');
+const { NEXT_MOVES_TOOL } = await import('./next-moves');
 
 type ChatEvent = import('./events').ChatEvent;
 type ChatActor = import('./engine').ChatActor;
@@ -284,6 +286,7 @@ function seed() {
     chat_run_steps: [],
     chat_run_events: [],
     chat_asks: [],
+    chat_next_moves: [],
   });
   let clock = Date.parse('2026-10-29T09:00:00.000Z');
   const at = () => new Date((clock += 1000)).toISOString();
@@ -389,6 +392,8 @@ function expectClean(events: ChatEvent[]) {
   for (const tool of CHAT_TOOLS) expect(json).not.toContain(tool.name);
   expect(json).not.toContain(engine.EXPLAIN_TOOL);
   expect(json).not.toContain(ASK_TOOL);
+  expect(json).not.toContain(NEXT_MOVES_TOOL);
+  expect(json).not.toContain('continues_this_run');
   expect(json).not.toMatch(UUID);
   expect(json).not.toMatch(/"(id|brand_id|brandId|tool|toolName|input|output)"\s*:/);
 }
@@ -1661,6 +1666,259 @@ describe('question cards (CHAT-07)', () => {
     expect(await eventsOf(runId)).toHaveLength(before.length);
     expect(await answer(ADMIN, runId, { selected: [1] })).toMatchObject({ ok: true });
     expect(runRow(runId).status).toBe('done');
+  });
+});
+
+describe('next moves (CHAT-07 §C)', () => {
+  /** The final answer and its next moves, in one model step. */
+  const answerWithMoves = (answer: string, moves: unknown) => [
+    { type: 'text-start', id: 't' },
+    { type: 'text-delta', id: 't', delta: answer },
+    { type: 'text-end', id: 't' },
+    toolCall('m1', NEXT_MOVES_TOOL, { moves }),
+    { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool_use' }, usage: usage() },
+  ];
+  const MOVES = [
+    {
+      label: 'Do the same for /features',
+      prompt: 'Do the same for /features',
+      kind: 'continue',
+      class: 'write',
+      continues_this_run: true,
+    },
+    {
+      label: 'Compare with Perplexity',
+      prompt: 'Compare these citations with Perplexity',
+      kind: 'deepen',
+      class: 'read',
+    },
+  ];
+  const movesOf = (runId: string) =>
+    db.tables.chat_next_moves
+      .filter((m) => m.run_id === runId)
+      .sort((a, b) => (a.rank as number) - (b.rank as number));
+
+  it('keeps them with the final answer, without another model step, and sends them before the end', async () => {
+    const { sonnet } = useModels([READY], [answerWithMoves('Two pages lost most of it.', MOVES)]);
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    expect(sonnet.seen[0].tools?.map((tool) => tool.name)).toContain(NEXT_MOVES_TOOL);
+    expect(sonnet.seen).toHaveLength(1);
+    expect(runRow(runId).status).toBe('done');
+    expect(movesOf(runId)).toMatchObject([
+      { rank: 1, prompt: 'Do the same for /features', class: 'write', ghost_ok: true },
+      {
+        rank: 2,
+        prompt: 'Compare these citations with Perplexity',
+        class: 'read',
+        ghost_ok: false,
+      },
+    ]);
+    const events = await eventsOf(runId);
+    expectClean(events);
+    const types = events.map((e) => e.type);
+    expect(types.indexOf('next_moves')).toBeLessThan(types.indexOf('run.finished'));
+    expect(ofType(events, 'next_moves')[0].data.moves).toEqual([
+      { label: 'Do the same for /features', prompt: 'Do the same for /features', ghost: true },
+      { label: 'Compare with Perplexity', prompt: 'Compare these citations with Perplexity' },
+    ]);
+    const rebuilt = runFromEvents(events);
+    expect(rebuilt.text).toBe('Two pages lost most of it.');
+    expect(rebuilt.nextMoves).toHaveLength(2);
+  });
+
+  it('gives an Analyst read moves only, so no ghost unless one continues this run', async () => {
+    useModels([READY], [answerWithMoves('Two pages lost most of it.', MOVES)]);
+    const runId = await turn(ANALYST, 'Why did citations fall?');
+    expect(movesOf(runId)).toMatchObject([
+      {
+        rank: 1,
+        prompt: 'Compare these citations with Perplexity',
+        class: 'read',
+        ghost_ok: false,
+      },
+    ]);
+    expect(ofType(await eventsOf(runId), 'next_moves')[0].data.moves).toEqual([
+      { label: 'Compare with Perplexity', prompt: 'Compare these citations with Perplexity' },
+    ]);
+  });
+
+  it('ends without moves when they don’t fit, or none were suggested', async () => {
+    const { sonnet } = useModels(
+      [READY, READY],
+      [answerWithMoves('Done.', []), text('Done again.')],
+    );
+    const bad = await turn(ADMIN, 'Why did citations fall?');
+    expect(sonnet.seen).toHaveLength(1);
+    expect(runRow(bad).status).toBe('done');
+    const plain = await turn(ADMIN, 'And now?');
+    expect(runRow(plain).status).toBe('done');
+    for (const runId of [bad, plain]) {
+      expect(movesOf(runId)).toEqual([]);
+      expect(ofType(await eventsOf(runId), 'next_moves')).toEqual([]);
+    }
+  });
+
+  it('keeps the moves that fit when one doesn’t, and drops one that names a tool', async () => {
+    useModels(
+      [READY],
+      [
+        answerWithMoves('Done.', [
+          { ...MOVES[0], prompt: 'x'.repeat(81) },
+          { ...MOVES[0], kind: 'wander' },
+          { ...MOVES[1], prompt: 'Run get_visibility_trend for May', kind: 'repeat' },
+          { ...MOVES[1], label: 'Use create_draft again', kind: 'act' },
+          MOVES[1],
+        ]),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    expect(movesOf(runId).map((m) => m.prompt)).toEqual([
+      'Compare these citations with Perplexity',
+    ]);
+    expectClean(await eventsOf(runId));
+  });
+
+  it('shows no moves from an earlier step when the last one suggests none', async () => {
+    useModels(
+      [READY],
+      [
+        [
+          toolCall('q1', ASK_TOOL, {
+            question: 'Which page?',
+            options: [{ label: '/pricing', recommended: true }, { label: '/features' }],
+          }),
+          toolCall('m1', NEXT_MOVES_TOOL, { moves: MOVES }),
+          {
+            type: 'finish',
+            finishReason: { unified: 'tool-calls', raw: 'tool_use' },
+            usage: usage(),
+          },
+        ],
+        text('Used /pricing.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Write a FAQ');
+    const prepared = await engine.prepareResume(ADMIN, runId, 'answer', { n: 1, selected: [0] });
+    if (prepared.ok) await engine.driveRun(ADMIN, runId, prepared.resume);
+    expect(runRow(runId).status).toBe('done');
+    expect(ofType(await eventsOf(runId), 'next_moves')).toEqual([]);
+    expect(movesOf(runId)).toEqual([]);
+  });
+
+  it('ends the run all the same when the moves can’t be kept, without them', async () => {
+    useModels([READY], [answerWithMoves('Two pages lost most of it.', MOVES)]);
+    db.failures.chat_next_moves = { message: 'down' };
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    const events = await eventsOf(runId);
+    expect(runRow(runId).status).toBe('done');
+    expect(ofType(events, 'run.finished')).toHaveLength(1);
+    expect(ofType(events, 'next_moves')).toEqual([]);
+  });
+
+  it('shows none after a run that ends in an error or a Stop', async () => {
+    const failing = () => {
+      throw new Error('model down');
+    };
+    useModels(
+      [READY, READY],
+      [
+        calls(
+          toolCall('m1', NEXT_MOVES_TOOL, { moves: MOVES }),
+          toolCall('w1', 'create_draft', {
+            brand_id: BRAND,
+            title: 'Pricing FAQ',
+            page_type: 'docs_faq',
+            source: { kind: 'content' },
+          }),
+        ),
+        failing,
+        calls(
+          toolCall('m2', NEXT_MOVES_TOOL, { moves: MOVES }),
+          toolCall('w2', 'create_draft', {
+            brand_id: BRAND,
+            title: 'Pricing FAQ',
+            page_type: 'docs_faq',
+            source: { kind: 'content' },
+          }),
+        ),
+      ],
+    );
+    const failed = await turn(ADMIN, 'Draft it', 'full_auto');
+    expect(runRow(failed).status).toBe('error');
+    const stopped = await turn(ADMIN, 'Draft it again', 'ask_first');
+    await engine.stopChatRun(ADMIN, stopped);
+    expect(runRow(stopped).status).toBe('stopped');
+    for (const runId of [failed, stopped]) {
+      expect(ofType(await eventsOf(runId), 'next_moves')).toEqual([]);
+      expect(movesOf(runId)).toEqual([]);
+    }
+  });
+
+  describe('a move taken from a run that read outside text (§16a)', () => {
+    const draftCall = calls(
+      toolCall('w1', 'create_draft', {
+        brand_id: BRAND,
+        title: 'Features FAQ',
+        page_type: 'docs_faq',
+        source: { kind: 'content' },
+      }),
+    );
+    /** A first run that read with `read`, then its first move sent in Full auto. */
+    const script = (read: string): [Step[], Step[]] => [
+      [calls(toolCall('r1', read, { brand_id: BRAND })), READY, READY],
+      [answerWithMoves('Two pages lost most of it.', MOVES), draftCall, text('Saved.')],
+    ];
+    async function takeTheMove() {
+      const first = await turn(ADMIN, 'Why did citations fall?');
+      expect(movesOf(first)).toHaveLength(2);
+      const started = await engine.startChatRun(ADMIN, {
+        message: 'Do the same for /features',
+        conversationId: runRow(first).conversation_id,
+        mode: 'full_auto',
+      });
+      if (!started.ok) throw new Error(`not started: ${started.code}`);
+      await engine.driveRun(ADMIN, started.runId);
+      return started.runId;
+    }
+
+    it('starts its run tainted, so a change shows a card even in Full auto', async () => {
+      useModels(...script('read_visibility'));
+      const runId = await takeTheMove();
+      expect(createContentDraft).not.toHaveBeenCalled();
+      expect(runRow(runId).status).toBe('waiting');
+      expect(ofType(await eventsOf(runId), 'confirm.required')).toHaveLength(1);
+    });
+
+    it("doesn't when that run read the workspace's own numbers only", async () => {
+      useModels(...script('get_visibility_summary'));
+      const runId = await takeTheMove();
+      expect(createContentDraft).toHaveBeenCalledTimes(1);
+      expect(runRow(runId).status).toBe('done');
+    });
+  });
+
+  it('suggests none while the run waits on the person', async () => {
+    useModels(
+      [READY],
+      [
+        [
+          toolCall('q1', ASK_TOOL, {
+            question: 'Which page?',
+            options: [{ label: '/pricing', recommended: true }, { label: '/features' }],
+          }),
+          toolCall('m1', NEXT_MOVES_TOOL, { moves: MOVES }),
+          {
+            type: 'finish',
+            finishReason: { unified: 'tool-calls', raw: 'tool_use' },
+            usage: usage(),
+          },
+        ],
+      ],
+    );
+    const runId = await turn(ADMIN, 'Write a FAQ');
+    expect(runRow(runId).status).toBe('waiting');
+    expect(ofType(await eventsOf(runId), 'next_moves')).toEqual([]);
+    expect(movesOf(runId)).toEqual([]);
   });
 });
 

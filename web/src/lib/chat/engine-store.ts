@@ -9,6 +9,7 @@ import {
   type ChatEventType,
 } from './events';
 import type { ChatPhase } from './engine-model';
+import type { NextMoveInput } from './next-moves';
 import type { ChatMode } from './precedence';
 import { publishRunEvent, type TailSource } from './run-hub';
 import type { ChatEffort } from './run-limits';
@@ -117,6 +118,8 @@ export interface RunProgress {
   facts?: { checked: number; replaced: string[] };
   /** Question cards asked so far (CHAT-07 §B: at most 4 a run). */
   asks?: number;
+  /** The next moves the model suggested last (CHAT-07 §C), kept once the run ends. */
+  nextMoves?: NextMoveInput[];
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {

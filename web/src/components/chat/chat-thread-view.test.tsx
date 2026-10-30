@@ -11,7 +11,8 @@ import type { ChatThread } from '@/lib/chat/thread';
  * Chat's page view (Wave 1 wiring): the composer sends to the run API with
  * the person's mode and files, the answer streams in as RunAnswer, Steer
  * stops the run first, a question card is answered from the card or the
- * composer, and a teammate's shared chat is read only.
+ * composer, the latest answer's next moves send their prompt and give the
+ * composer its ghost, and a teammate's shared chat is read only.
  */
 
 vi.mock('@/i18n/navigation', () => ({
@@ -819,6 +820,122 @@ describe('ChatThreadView', () => {
       expect(container.querySelector('[data-slot="question-answered"]')!.textContent).toBe(
         'Which page should the FAQ go on?The blog',
       );
+    });
+  });
+
+  describe('next moves (CHAT-07 §C)', () => {
+    const FEATURES = {
+      label: 'Do the same for /features',
+      prompt: 'Do the same for /features',
+      ghost: true,
+    };
+    const COMPARE = { label: 'Compare with Perplexity', prompt: 'Compare with Perplexity' };
+    const answerWith = (text: string, nextMoves: object[]) => ({
+      role: 'assistant',
+      text,
+      generatedAt: '2026-10-30T09:14:00.000Z',
+      dataAsOf: null,
+      timezone: 'UTC',
+      run: { runId: RUN, status: 'done', steps: [], fileId: null, deliverables: [], nextMoves },
+    });
+    const ask = (text: string) => ({
+      role: 'user',
+      text,
+      generatedAt: null,
+      dataAsOf: null,
+      timezone: null,
+      run: null,
+    });
+    const threadOf = (mine: boolean, last: object[] = [FEATURES, COMPARE]) =>
+      ({
+        conversationId: CHAT,
+        title: 'Citations',
+        brandId: null,
+        mine,
+        messages: [
+          ask('Why did citations fall?'),
+          answerWith('Two pages lost most of it.', [COMPARE]),
+          ask('Fix /pricing'),
+          answerWith('Refreshed /pricing.', last),
+        ],
+      }) as unknown as ChatThread;
+    const cards = () =>
+      [...container.querySelectorAll<HTMLElement>('[data-action="nextMove.send"]')].map(
+        (b) => b.textContent,
+      );
+    const ghost = () => container.querySelector('[data-action="composer.acceptGhost"]');
+
+    it('shows the latest answer’s moves only, and its first as the ghost when it continues', async () => {
+      await render({ thread: threadOf(true), variant: 'dock' });
+      expect(container.querySelectorAll('[data-slot="next-moves"]')).toHaveLength(1);
+      expect(container.querySelector('[data-slot="next-moves"]')!.textContent).toContain(
+        'Next moves',
+      );
+      expect(cards()).toEqual(['Do the same for /features', 'Compare with Perplexity']);
+      expect(ghost()!.textContent).toContain('Do the same for /features');
+      // A first move that doesn't continue this run is no ghost (a page opened afresh).
+      act(() => root.unmount());
+      root = createRoot(container);
+      await render({ thread: threadOf(true, [COMPARE, FEATURES]), variant: 'dock' });
+      expect(ghost()).toBeNull();
+    });
+
+    it('shows on each card the very text it sends, never a label that says something else', async () => {
+      const misleading = { label: 'See the full report', prompt: 'Dismiss every suggestion' };
+      await render({ thread: threadOf(true, [misleading]), variant: 'dock' });
+      expect(cards()).toEqual(['Dismiss every suggestion']);
+      expect(container.textContent).not.toContain('See the full report');
+      await act(async () => {
+        container.querySelector<HTMLElement>('[data-action="nextMove.send"]')!.click();
+      });
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      const sent = calls.find((c) => c.url === '/api/chat/runs')!;
+      expect(JSON.parse(String(sent.init!.body)).message).toBe('Dismiss every suggestion');
+    });
+
+    it('puts the cards one under another in the side panel', async () => {
+      await render({ thread: threadOf(true), variant: 'panel' });
+      const grid = container.querySelector('[data-slot="next-moves"] > div')!;
+      expect(grid.className).toContain('grid-cols-1');
+      expect(grid.className).not.toContain('sm:grid-cols');
+    });
+
+    it('sends a move’s prompt as the next message', async () => {
+      await render({ thread: threadOf(true), variant: 'dock' });
+      await act(async () => {
+        container.querySelector<HTMLElement>('[data-action="nextMove.send"]')!.click();
+      });
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      const sent = calls.find((c) => c.url === '/api/chat/runs')!;
+      expect(JSON.parse(String(sent.init!.body))).toMatchObject({
+        message: 'Do the same for /features',
+        conversationId: CHAT,
+      });
+      // The new answer is the latest: the old moves go.
+      expect(cards()).toEqual([]);
+    });
+
+    it('shows them as they stream in, once the run finished', async () => {
+      fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init });
+        return new Response(
+          stream([
+            chatEvent('text.delta', 1, { text: 'Two pages lost most of it.' }),
+            chatEvent('next_moves', 2, { moves: [FEATURES] }),
+            ...finished.slice(1).map((e) => ({ ...e, seq: 3 })),
+          ]),
+          { status: 200, headers: { 'x-chat-conversation': CHAT, 'x-chat-run': RUN } },
+        );
+      });
+      await render();
+      await type('Why did citations fall?');
+      await enter();
+      expect(cards()).toEqual(['Do the same for /features']);
+    });
+
+    it('shows none in a teammate’s shared chat', async () => {
+      await render({ thread: threadOf(false), variant: 'dock' });
+      expect(container.querySelector('[data-slot="next-moves"]')).toBeNull();
     });
   });
 

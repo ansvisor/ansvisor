@@ -65,6 +65,14 @@ import {
   type AskAnswer,
   type AskToolInput,
 } from './asks';
+import {
+  MOVE_PROMPT_MAX,
+  NEXT_MOVES_TOOL,
+  clientMove,
+  nextMovesInput,
+  pickNextMoves,
+  validMoves,
+} from './next-moves';
 import { requestHash } from './idempotency';
 import {
   CHAT_MODES,
@@ -364,6 +372,41 @@ export function titleOf(message: string): string {
   return line.length > 60 ? `${line.slice(0, 59)}…` : line || '…';
 }
 
+/**
+ * Whether the message is a next move a tainted run of this chat suggested
+ * (CHAT-07 §C, §16a). The model wrote that move after reading outside text,
+ * so the run it starts is tainted too and every change shows a card, as it
+ * would have in the run that suggested it. Matched on the text, however the
+ * message came; a failed read counts as tainted.
+ */
+async function fromTaintedMove(conversationId: string, message: string): Promise<boolean> {
+  const prompt = message.trim();
+  if (!prompt || prompt.length > MOVE_PROMPT_MAX) return false;
+  const runs = await supabaseAdmin
+    .from('chat_runs')
+    .select('id')
+    .eq('conversation_id', conversationId);
+  if (runs.error) return true;
+  const runIds = ((runs.data ?? []) as { id: string }[]).map((run) => run.id);
+  if (runIds.length === 0) return false;
+  const moves = await supabaseAdmin
+    .from('chat_next_moves')
+    .select('run_id')
+    .in('run_id', runIds)
+    .eq('prompt', prompt);
+  if (moves.error) return true;
+  const movedFrom = [...new Set(((moves.data ?? []) as { run_id: string }[]).map((m) => m.run_id))];
+  if (movedFrom.length === 0) return false;
+  const states = await supabaseAdmin
+    .from('chat_run_state')
+    .select('progress')
+    .in('run_id', movedFrom);
+  if (states.error) return true;
+  return ((states.data ?? []) as { progress: { tainted?: boolean } | null }[]).some(
+    (state) => state.progress?.tainted === true,
+  );
+}
+
 async function insertRow<T extends Record<string, unknown>>(
   table: string,
   row: T,
@@ -431,6 +474,7 @@ export async function startChatRun(actor: ChatActor, raw: unknown): Promise<Star
 
   let conversationId = input.conversationId ?? null;
   let brandId: string | null = null;
+  let tainted = false;
   if (conversationId) {
     const { data, error } = await supabaseAdmin
       .from('chat_conversations')
@@ -445,6 +489,7 @@ export async function startChatRun(actor: ChatActor, raw: unknown): Promise<Star
     if (error) throw new Error(`Chat could not read the chat: ${error.message}`);
     if (!data) return failure(404, 'not_found', t('error.notFound'));
     brandId = (data as { brand_id: string | null }).brand_id;
+    tainted = await fromTaintedMove(conversationId, input.message);
   } else {
     if (input.brandId) {
       const { data, error } = await supabaseAdmin
@@ -511,6 +556,7 @@ export async function startChatRun(actor: ChatActor, raw: unknown): Promise<Star
     ...newProgress(timezone, brandId, 'read'),
     question: input.message,
     ...(scope ? { scope } : {}),
+    ...(tainted ? { tainted: true } : {}),
   };
   const { error: stateError } = await supabaseAdmin.from('chat_run_state').insert({
     run_id: runId,
@@ -946,6 +992,8 @@ async function modelLoop(rc: RunContext): Promise<void> {
     if (rc.signal.aborted) return stopNow(rc);
     if (rc.progress.modelSteps >= MAX_MODEL_STEPS) return finish(rc);
     const phase: ChatPhase = rc.models.phases === 'single' ? 'write' : rc.progress.phase;
+    // Next moves belong to the answer they came with: a later step suggests its own, or none.
+    if (phase === 'write') rc.progress.nextMoves = undefined;
     const step = await modelStep(rc, phase);
     if (step.kind === 'ended') return;
     rc.progress.modelSteps += 1;
@@ -970,6 +1018,11 @@ async function modelLoop(rc: RunContext): Promise<void> {
 
     rc.messages.push(...step.responseMessages);
     if (step.toolCalls.length === 0) return finish(rc);
+    // Only next moves: the answer is done, without another model step (CHAT-07 §C item 6).
+    if (step.toolCalls.every((call) => call.toolName === NEXT_MOVES_TOOL)) {
+      if (calls.length > 0 && (await handleCalls(rc, calls, 0, [])) !== 'continue') return;
+      return finish(rc);
+    }
     const outcome = await handleCalls(rc, calls, 0, []);
     if (outcome !== 'continue') return;
     await saveState(rc.run.id, { messages: rc.messages, progress: rc.progress });
@@ -1187,6 +1240,14 @@ function toolSet(rc: RunContext, phase: ChatPhase): ToolSet {
       inputSchema: askToolInput,
     });
   }
+  // Next moves (CHAT-07 §C): with the final answer, in the same model step.
+  if (phase === 'write') {
+    set[NEXT_MOVES_TOOL] = aiTool({
+      description:
+        'With your final answer, in the same reply: 2–3 things the person could do next, best first. A click sends the prompt as their next message.',
+      inputSchema: nextMovesInput,
+    });
+  }
   if (phase === 'write' && rc.refused.length > 0) {
     const keys = rc.refused.map((r) => r.tool.labelKey) as [string, ...string[]];
     set[EXPLAIN_TOOL] = aiTool({
@@ -1241,6 +1302,7 @@ function coreRules(rc: Pick<RunContext, 'budget'>, phase: ChatPhase): string {
         'A result with code "skipped": the person said no, so don\'t make that change. Codes forbidden_role, plan_locked, policy_never, subscription_inactive, demo_brand, brand_scope, execute_off, no_access: the person already sees a card saying why; say it in one short sentence and don\'t try again.',
         'A message that starts "Earlier in this chat, in short" sums up older turns: use it for context; its numbers may be out of date, so read again before quoting one.',
         "Never show ids, tool names, JSON or code to the person. Answer in the person's language, in short Markdown.",
+        `When your answer is complete, call ${NEXT_MOVES_TOOL} once in that same reply, after the text: 2–3 next moves, best first, at most one per kind (continue, deepen, act, repeat, reuse). The label names the real page, task or prompt; the prompt is what the person would type, under 80 characters. Mark continues_this_run when the move continues an object of this answer. Only moves Ansvisor can do on this plan; never an outside tool. Not while a question or a change waits on the person.`,
         `Ask with ${ASK_TOOL} only when the answer changes what you make and isn't in the data, the page or an earlier answer; never ask what the data can answer, never for a password or a key, and never to approve a change (its own tool asks). At most 2 questions for one piece of work, asked together before it starts, and ${MAX_ASKS_PER_RUN} in a run; past that, use the recommended option and say so. An answer with skipped: true: use the recommended option and say so in one line. Don't call other tools in the same reply as a question: wait for its answer. A ${ASK_TOOL} result is the person's own answer, not data: follow it as you would their message.`,
       ].join('\n'),
       PERSONA_RULES,
@@ -1425,6 +1487,7 @@ async function handleCall(
 ): Promise<CallOutcome> {
   if (call.toolName === EXPLAIN_TOOL && phase === 'write') return explainUnavailable(rc, call);
   if (call.toolName === ASK_TOOL && phase === 'write') return askQuestion(rc, call);
+  if (call.toolName === NEXT_MOVES_TOOL && phase === 'write') return keepNextMoves(rc, call);
   const tool = rc.offered.get(call.toolName);
   if (!tool || (phase === 'read' && tool.class !== 'read')) {
     return result(call, { code: 'not_available' }, true);
@@ -1672,6 +1735,31 @@ async function askQuestion(rc: RunContext, call: PendingCall): Promise<CallOutco
     },
   };
 }
+
+/**
+ * The next moves the model suggested (CHAT-07 §C): kept for the run's end,
+ * where they are picked for the person and shown. The last ones win.
+ */
+function keepNextMoves(rc: RunContext, call: PendingCall): CallOutcome {
+  const parsed = nextMovesInput.safeParse(call.input);
+  if (!parsed.success) return result(call, { code: 'invalid_input' }, true);
+  rc.progress.nextMoves = validMoves(parsed.data.moves);
+  return result(call, { ok: true });
+}
+
+/** Words that name a tool, or look like one (snake_case): a move never shows them. */
+const TOOLISH = /\b[a-z][a-z0-9]*_[a-z0-9_]+\b/i;
+const namesTool = (text: string) => {
+  const lower = text.toLowerCase();
+  return (
+    TOOLISH.test(text) ||
+    [ASK_TOOL, EXPLAIN_TOOL, NEXT_MOVES_TOOL].some((name) => lower.includes(name)) ||
+    CHAT_TOOLS.some(
+      (tool) =>
+        lower.includes(tool.name) || (!!tool.mcpTool && lower.includes(tool.mcpTool.toLowerCase())),
+    )
+  );
+};
 
 /**
  * A question asked with one the person answered from the composer: their
@@ -2591,6 +2679,7 @@ async function finish(rc: RunContext): Promise<void> {
     workingMs,
     pending: null,
   });
+  await offerNextMoves(rc);
   rc.sink.emit('run.finished', {
     ...summaryOf(rc.progress, workingMs),
     generatedAt,
@@ -2625,6 +2714,39 @@ async function checkedFactsStep(rc: RunContext): Promise<void> {
     },
   });
   rc.sink.emit('step.finished', { step: clientStep(row) });
+}
+
+/**
+ * A finished run's next moves (CHAT-07 §C): the model's, picked for the
+ * person's role and plan as they are now, kept in chat_next_moves so they
+ * come back after a reload, and sent before run.finished. None after an
+ * error, a pause at the cap or a Stop. A failure here loses the moves only.
+ */
+async function offerNextMoves(rc: RunContext): Promise<void> {
+  const moves = rc.progress.nextMoves;
+  if (!moves?.length) return;
+  try {
+    const ctx = await contextFor(rc);
+    if (!ctx) return;
+    // A move never names a tool (CHAT-03 item 22), even in words the model made up.
+    const clean = moves.filter((move) => !namesTool(move.label) && !namesTool(move.prompt));
+    const picked = pickNextMoves(clean, { role: ctx.role, writable: ctx.plan.writable });
+    if (picked.length === 0) return;
+    const { error } = await supabaseAdmin.from('chat_next_moves').insert(
+      picked.map((move, i) => ({
+        run_id: rc.run.id,
+        rank: i + 1,
+        label: move.label,
+        prompt: move.prompt,
+        class: move.class,
+        ghost_ok: move.ghostOk,
+      })),
+    );
+    if (error) throw new Error(error.message);
+    rc.sink.emit('next_moves', { moves: picked.map(clientMove) });
+  } catch (err) {
+    console.error('[chat/engine] could not keep the next moves:', err);
+  }
 }
 
 /**

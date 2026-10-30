@@ -15,6 +15,7 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { searchChatReferences } from '@/lib/actions/chat-references';
 import { ANSWER_MAX, composerAnswer, recommendedLabel } from '@/lib/chat/asks';
+import { ghostOf } from '@/lib/chat/next-moves';
 import type { ChatEvent } from '@/lib/chat/events';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { readSse } from '@/lib/chat/run-hub';
@@ -37,6 +38,7 @@ import {
 } from './composer/chat-composer';
 import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
+import { NextMoves } from './run/next-moves';
 import { RunAnswer } from './run/run-answer';
 import { StaffDebug } from './run/staff-debug';
 import { useChatDebug } from './chat-debug';
@@ -96,6 +98,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         ...emptyRun(message.run.status as ClientRunStatus),
         steps: message.run.steps,
         deliverables: message.run.deliverables ?? [],
+        nextMoves: message.run.nextMoves ?? [],
         text: message.text,
         generatedAt: message.generatedAt,
         dataAsOf: message.dataAsOf,
@@ -218,6 +221,9 @@ export function ChatThreadView({
   const working = !!last?.run && OPEN.includes(last.run.status);
   // A question the run waits on: the composer's message answers it (CHAT-07 §A item 8).
   const asking = last?.run?.question ?? null;
+  // The latest answer's next moves, once it finished, in the person's own chat (CHAT-07 §C).
+  const nextMoves =
+    last?.run?.status === 'done' && (!thread || thread.mine) ? last.run.nextMoves : [];
 
   useEffect(() => {
     if (!working) return;
@@ -537,6 +543,20 @@ export function ChatThreadView({
                   onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
                   onRetry={retryOf(index)}
                 />
+                {turn === last && (
+                  <NextMoves
+                    moves={nextMoves}
+                    narrow={variant === 'panel'}
+                    disabled={atCap}
+                    onPick={(move) =>
+                      void send(move.prompt, {
+                        context: chips ?? [],
+                        references: [],
+                        attachments: [],
+                      })
+                    }
+                  />
+                )}
               </li>
             ),
           )}
@@ -561,7 +581,7 @@ export function ChatThreadView({
           running={working && !asking}
           answering={!!asking}
           maxLength={asking ? ANSWER_MAX : undefined}
-          ghost={asking ? recommendedLabel(asking) : undefined}
+          ghost={asking ? recommendedLabel(asking) : ghostOf(nextMoves)}
           sharedReadOnly={!!thread && !thread.mine}
           disabled={atCap}
           placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : undefined}

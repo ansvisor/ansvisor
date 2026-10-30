@@ -4,9 +4,11 @@ import {
   isChatEventType,
   maskIds,
   type ChatDeliverable,
+  type ChatNextMove,
   type ChatRunSummary,
   type ChatStep,
 } from './events';
+import { clientMove } from './next-moves';
 import { applyChatEvent, emptyRun } from './run-state';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
 
@@ -19,6 +21,8 @@ import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from '.
  * run that ended keeps what its end event told the browser (W1-15): its
  * header's time, steps and sources, and why it ended in error, in the same
  * words, so a reload shows "Stopped after 41s" and the reason with Retry.
+ * A finished run's next moves come back from chat_next_moves, in the
+ * person's own chat only; a failed read of them loses the moves, not the chat.
  */
 
 export interface ThreadRun {
@@ -34,6 +38,8 @@ export interface ThreadRun {
   summary: ChatRunSummary | null;
   /** Why it ended in error, in its run.error event's words; null without them. */
   errorReason: string | null;
+  /** What could come next once it finished (CHAT-07 §C), best first. */
+  nextMoves: ChatNextMove[];
 }
 
 export interface ThreadMessage {
@@ -115,6 +121,15 @@ async function readRunEnds(
   return ends;
 }
 
+/** A finished run's next move, as the thread reads it. */
+interface NextMoveRow {
+  run_id: string;
+  rank: number;
+  label: string;
+  prompt: string;
+  ghost_ok: boolean;
+}
+
 /** The person's chat with its messages and runs; null when it isn't theirs or isn't there. */
 export async function loadChatThread(conversationId: string): Promise<ChatThread | null> {
   const supabase = await createClient();
@@ -158,7 +173,8 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
 
   const runIds = (runs.data ?? []).map((run) => run.id);
   const endedIds = (runs.data ?? []).filter((run) => ENDED.includes(run.status)).map((r) => r.id);
-  const [steps, files, ends] = runIds.length
+  const mine = !!user && chat.user_id === user.id;
+  const [steps, files, ends, moves] = runIds.length
     ? await Promise.all([
         supabase
           .from('chat_run_steps')
@@ -171,10 +187,25 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
           .in('run_id', runIds)
           .order('created_at', { ascending: true }),
         readRunEnds(endedIds),
+        // A teammate's shared chat shows no moves: they are the author's to take.
+        mine
+          ? supabase
+              .from('chat_next_moves')
+              .select('run_id, rank, label, prompt, ghost_ok')
+              .in('run_id', runIds)
+              .order('rank', { ascending: true })
+          : { data: [], error: null },
       ])
-    : [{ data: [], error: null }, { data: [], error: null }, new Map()];
+    : [{ data: [], error: null }, { data: [], error: null }, new Map(), { data: [], error: null }];
   if (steps.error) throw new Error(`Could not read the chat's steps: ${steps.error.message}`);
   if (files.error) throw new Error(`Could not read the chat's files: ${files.error.message}`);
+  if (moves.error)
+    console.error("[chat/thread] could not read the chat's next moves:", moves.error.message);
+  const movesByRun = new Map<string, ChatNextMove[]>();
+  for (const m of (moves.error ? [] : (moves.data ?? [])) as NextMoveRow[]) {
+    const move = clientMove({ label: m.label, prompt: m.prompt, ghostOk: m.ghost_ok });
+    movesByRun.set(m.run_id, [...(movesByRun.get(m.run_id) ?? []), move]);
+  }
   // An answer saved to Files names its message; what a run made doesn't.
   const fileByRun = new Map<string, string>();
   const madeByRun = new Map<string, ChatDeliverable[]>();
@@ -212,6 +243,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         deliverables: madeByRun.get(run.id) ?? [],
         summary: ends.get(run.id)?.summary ?? null,
         errorReason: ends.get(run.id)?.errorReason ?? null,
+        nextMoves: movesByRun.get(run.id) ?? [],
       },
     ]),
   );
@@ -220,7 +252,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
     conversationId: chat.id,
     title: chat.title,
     brandId: chat.brand_id,
-    mine: !!user && chat.user_id === user.id,
+    mine,
     messages: (messages.data ?? []).map((message) => ({
       role: message.role as 'user' | 'assistant',
       text: message.content_md,

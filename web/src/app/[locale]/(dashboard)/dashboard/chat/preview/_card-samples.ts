@@ -169,6 +169,16 @@ export const APPROVAL = {
   doneLabel: 'cited passage changed',
 };
 
+/** A finished run's next moves (CHAT-07 §C, mockup `#s-done`): the first continues it. */
+export const NEXT_MOVES = [
+  { label: 'Do the same for /features', prompt: 'Do the same for /features', ghost: true },
+  {
+    label: 'Win back Google AI Overviews citations',
+    prompt: 'Win back the Google AI Overviews citations we lost this week',
+  },
+  { label: 'Schedule this every Monday', prompt: 'Schedule this every Monday' },
+];
+
 /** Two questions asked together before a FAQ draft (CHAT-07 §A). */
 export const QUESTIONS = {
   page: {
