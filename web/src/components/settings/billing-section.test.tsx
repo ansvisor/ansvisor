@@ -37,12 +37,22 @@ vi.mock('@/lib/supabase/client', () => ({
 // The cards, as Billing hands them the subscription; their own test covers them.
 const switcher = vi.hoisted(() => vi.fn());
 vi.mock('@/components/settings/plan-switcher', () => ({
-  PlanSwitcher: (props: { trialOffered?: boolean }) => {
+  PlanSwitcher: (props: { trialOffered?: boolean; onUpdate: (data: unknown) => void }) => {
     switcher(props);
     return <div data-slot="plan-switcher" />;
   },
 }));
-vi.mock('@/components/settings/ai-usage-card', () => ({ AiUsageCard: () => null }));
+// The AI usage card: each time it mounts, it reads the usage.
+const usageReads = vi.hoisted(() => vi.fn());
+vi.mock('@/components/settings/ai-usage-card', async () => {
+  const { useEffect } = await import('react');
+  return {
+    AiUsageCard: () => {
+      useEffect(() => usageReads(), []);
+      return null;
+    },
+  };
+});
 vi.mock('@/components/settings/invoice-list', () => ({ InvoiceList: () => null }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -111,5 +121,17 @@ describe('BillingSection', () => {
     expect(container.textContent).not.toContain('No plan yet');
     expect(container.textContent).toContain('Choose a plan');
     expect(switcher).toHaveBeenLastCalledWith(expect.objectContaining({ trialOffered: false }));
+  });
+
+  it('reads the AI usage again once the plan changes, as a trial bought starts at 0', async () => {
+    org = { plan: 'starter', subscription_status: 'trialing' };
+    await render(true);
+    expect(usageReads).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      switcher.mock.lastCall![0].onUpdate({ planId: 'starter', status: 'active' });
+    });
+    expect(container.textContent).toContain('Active');
+    expect(usageReads).toHaveBeenCalledTimes(2);
   });
 });
