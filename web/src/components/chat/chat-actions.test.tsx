@@ -113,12 +113,14 @@ function Grab() {
   return null;
 }
 
+const heard = { updated: vi.fn(), gone: vi.fn() };
+
 async function render(node: ReactNode, role: TeamRole = 'manager') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <RoleProvider role={role}>
-          <ChatActionsProvider>
+          <ChatActionsProvider onUpdated={heard.updated} onGone={heard.gone}>
             <Grab />
             {node}
           </ChatActionsProvider>
@@ -207,6 +209,20 @@ describe('chat actions', () => {
     expect(archived.text).toBe('Archived · find it in All chats › Archived');
     // Unarchive is in All chats › Archived, not in the toast.
     expect(archived.options).not.toHaveProperty('action');
+  });
+
+  it('tells the page outside the shell of a new row, and of a chat gone (the side panel)', async () => {
+    heard.updated.mockClear();
+    heard.gone.mockClear();
+    await render(null);
+    await act(async () => actions!.togglePin(chat()));
+    expect(heard.updated).toHaveBeenCalledWith(expect.objectContaining({ id: ID }));
+    await act(async () => actions!.archive(chat()));
+    expect(heard.gone).toHaveBeenCalledWith(expect.objectContaining({ id: ID }));
+    answer = () => ({ status: 404, body: { ok: false } });
+    heard.gone.mockClear();
+    await act(async () => actions!.archive(chat()));
+    expect(heard.gone).not.toHaveBeenCalled();
   });
 
   it('asks before Delete, leaves the open chat for Home, and Undo restores it', async () => {

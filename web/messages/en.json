@@ -3675,6 +3675,8 @@
     "newChat": "New chat here",
     "newChatToast": "New chat in the panel · this one stays in your list",
     "backToPage": "Back to the page",
+    "more": "More",
+    "openFullPage": "Open as full page",
     "askAbout": "Ask about {name}",
     "history": "Chat history",
     "sizes": "Panel size",
@@ -3916,6 +3918,9 @@
       "backToChat": "← Back to Chat",
       "backChatTip": "Back to your last conversation",
       "backHomeTip": "Back to Chat Home",
+      "backToPage": "↙ Back to {page}",
+      "backToPageTip": "Back to the page, with this chat in its side panel",
+      "page": "the page",
       "breadcrumb": "Breadcrumb",
       "chat": "Chat",
       "pages": {

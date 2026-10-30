@@ -204,6 +204,57 @@ export function ChatHeaderMenu({ chat }: { chat: ChatListItem }) {
 }
 
 /**
+ * The side panel's ⋯ (CHAT-23 `panel.more`, CHAT-01 item 24): Open as full
+ * page, Open in new window; for the author, Pin, Rename, Share with team,
+ * Archive; Delete for the author, or an Admin on a shared chat.
+ */
+export function ChatPanelMenu({
+  chat,
+  onOpenFullPage,
+}: {
+  chat: ChatListItem;
+  onOpenFullPage: () => void;
+}) {
+  const t = useTranslations('chatShell.actions');
+  const tPanel = useTranslations('chatPanel');
+  const actions = useChatActions();
+  if (!actions) return null;
+  const editable = actions.canEdit(chat);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        data-action="panel.more"
+        aria-label={tPanel('more')}
+        title={tPanel('more')}
+        className="flex size-7 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        ⋯
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className={MENU}>
+        <Item glyph="⤢" action="panel.openFullPage" onClick={onOpenFullPage}>
+          {tPanel('openFullPage')}
+        </Item>
+        <Item glyph="⧉" action="chat.openNewWindow" onClick={() => actions.openNewWindow(chat)}>
+          {t('openNewWindow')}
+        </Item>
+        <EditItems chat={chat} />
+        {(editable || actions.canDelete(chat)) && <DropdownMenuSeparator />}
+        {editable && (
+          <Item glyph="▤" action="chat.archive" onClick={() => void actions.archive(chat)}>
+            {t('archive')}
+          </Item>
+        )}
+        {actions.canDelete(chat) && (
+          <Item glyph="✕" action="chat.delete" danger onClick={() => actions.askDelete(chat)}>
+            {t('delete')}
+          </Item>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
  * A chat's name, edited in place (CHAT-23 `chat.rename`): Enter or clicking
  * away saves, Esc cancels.
  */
