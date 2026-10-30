@@ -9,6 +9,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { RunsTray } from '@/components/agentic/runs-tray';
@@ -19,6 +20,9 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { useChatRailStore } from '@/stores/use-chat-rail-store';
 import { cn } from '@/lib/utils';
 import type { ChatListItem } from '@/lib/chat/conversations';
+import { menuTitleOf } from '@/lib/chat/page-context';
+import { PANEL_FROM_PARAM, panelReturnOf } from '@/lib/chat/panel';
+import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import { ChatActionsProvider, useChatActions } from './chat-actions';
 import { inboxItems } from './chat-inbox';
 import { useChatList } from './chat-list-provider';
@@ -134,6 +138,8 @@ function ChatShellFrame({
 }) {
   const t = useTranslations('chatShell.menu');
   const tNav = useTranslations('chatShell.nav');
+  const tMenu = useTranslations('nav');
+  const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const isWide = useIsWide();
@@ -147,6 +153,9 @@ function ChatShellFrame({
   const [lastChat, setLastChat] = useState<string | null>(null);
   const stripToggle = useRef<HTMLButtonElement>(null);
   const focusAfterToggle = useRef(false);
+  // Opened as a full page from the side panel (CHAT-22): ↙ Back to that page.
+  const backToPage = panelReturnOf(searchParams?.get(PANEL_FROM_PARAM) ?? null);
+  const backToTitle = backToPage ? menuTitleOf(backToPage.split(/[?#]/)[0]) : null;
 
   const toggle = useCallback(() => {
     if (!window.matchMedia(WIDE_QUERY).matches) {
@@ -323,6 +332,18 @@ function ChatShellFrame({
           )}
           {titled && (
             <h1 className="min-w-0 truncate text-sm font-semibold">{tNav(`pages.${titled}`)}</h1>
+          )}
+          {chatId && backToPage && (
+            <Link
+              href={backToPage}
+              data-action="nav.backToPage"
+              title={tNav('backToPageTip')}
+              className="flex h-7 shrink-0 items-center rounded-lg border bg-card px-2.5 text-xs font-medium outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              {tNav('backToPage', {
+                page: backToTitle ? getDashboardNavLabel(backToTitle, tMenu) : tNav('page'),
+              })}
+            </Link>
           )}
           {current && (
             <>

@@ -16,6 +16,8 @@ import type { ChatListItem } from '@/lib/chat/conversations';
  */
 
 const nav = vi.hoisted(() => ({ pathname: '/dashboard/chat', push: vi.fn() }));
+const search = vi.hoisted(() => ({ value: '' }));
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(search.value) }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>
@@ -405,6 +407,22 @@ describe('ChatShell', () => {
     await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
     expect(action('nav.backToChat')).toHaveLength(0);
     expect(host.querySelector('header h1')?.textContent).toBe('Settings');
+  });
+
+  it('leads a chat opened as a full page back to the app page it came from (CHAT-22)', async () => {
+    const id = 'cccccccc-0000-4000-8000-000000000002';
+    nav.pathname = `/dashboard/chat/${id}`;
+    search.value = `from=${encodeURIComponent('/dashboard/mentions?platform=chatgpt-web')}`;
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    const back = action('nav.backToPage')[0];
+    expect(back.textContent).toBe('↙ Back to Mentions');
+    expect(back.getAttribute('href')).toBe('/dashboard/mentions?platform=chatgpt-web');
+
+    // Never anywhere else.
+    search.value = `from=${encodeURIComponent('https://example.com/dashboard/x')}`;
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    expect(action('nav.backToPage')).toHaveLength(0);
+    search.value = '';
   });
 
   it('closes only the palette with Esc, and never navigates', async () => {
