@@ -4101,7 +4101,8 @@
       "archivedLink": "Archived · {count} ›",
       "settings": "Settings",
       "usageTip": "AI usage this month",
-      "files": "Files"
+      "files": "Files",
+      "agents": "Agents"
     },
     "actions": {
       "more": "More for {name}",
@@ -4196,6 +4197,7 @@
       "failed": "Couldn't search your chats.",
       "pages": {
         "allChats": "All chats",
+        "agents": "Agents",
         "files": "Files",
         "settings": "Settings"
       }
@@ -4253,6 +4255,7 @@
         "activity": "Activity",
         "capabilities": "What Chat can do",
         "files": "Files",
+        "agents": "Agents",
         "settings": "Settings"
       }
     },
@@ -4826,6 +4829,321 @@
       "ai_limit": "This month's AI limit is used up, so the agent can't start. It can run again once the limit resets.",
       "owner_role": "This agent's owner can't run agents any more. An Admin can take it over.",
       "failed": "Something went wrong with this agent. Try again."
+    },
+    "status": {
+      "draft": "Draft",
+      "active": "Active",
+      "paused": "Paused",
+      "archived": "Archived"
+    },
+    "pausedReason": {
+      "cap": "AI limit reached",
+      "connection": "A required connection is off",
+      "skill_off": "A skill is off",
+      "failures": "3 failed runs in a row",
+      "owner_role": "Its owner can't run agents",
+      "plan": "Your plan doesn't allow its settings",
+      "brand_gone": "Its brands are gone",
+      "manual": "Paused by a person"
+    },
+    "line": {
+      "draft": "Not on yet",
+      "running": "Running now",
+      "needsYou": "Needs you",
+      "nextRun": "Next run {when}",
+      "event": "Runs when a trigger fires",
+      "manual": "Runs when someone clicks Run now",
+      "archived": "Its triggers don't fire"
+    },
+    "when": {
+      "today": "Today {time}",
+      "yesterday": "Yesterday {time}",
+      "tomorrow": "Tomorrow {time}",
+      "week": "{weekday} {time}",
+      "date": "{date}",
+      "dateTime": "{date}, {time}"
+    },
+    "days": {
+      "MO": "Mon",
+      "TU": "Tue",
+      "WE": "Wed",
+      "TH": "Thu",
+      "FR": "Fri",
+      "SA": "Sat",
+      "SU": "Sun"
+    },
+    "trigger": {
+      "types": {
+        "schedule": "Schedule",
+        "signal": "Signal created",
+        "kpi": "KPI changed",
+        "watch_rule": "Watch rule"
+      },
+      "daily": "Every day {time}",
+      "weekdays": "Weekdays {time}",
+      "days": "Every {days} {time}",
+      "monthly": "Monthly on day {day} · {time}",
+      "monthlyLast": "Monthly on the last day · {time}",
+      "once": "Once · {when}",
+      "schedule": "Schedule",
+      "signal": "New {category} signal",
+      "signalAny": "New signal",
+      "kpi": "{kpi} {sign}{amount} in a {period, select, day {day} month {month} other {week}}",
+      "kpiAny": "A KPI",
+      "watchRule": "Watch rule",
+      "manualOnly": "Manual only",
+      "more": "+{count}",
+      "firesWhen": {
+        "signal": "Fires when Action Center finds a matching signal",
+        "kpi": "Fires when the KPI crosses the threshold",
+        "watch_rule": "Fires when its watch rule fires"
+      },
+      "timeZone": "{zone} time",
+      "off": "Off · it doesn't fire",
+      "notFiring": "{status, select, paused {Paused} draft {Draft} other {Archived}} · it doesn't fire",
+      "onceDone": "Fired · it doesn't fire again",
+      "lastFired": "Last fired {when}"
+    },
+    "scope": {
+      "all": "All brands",
+      "count": "{count, plural, one {# brand} other {# brands}}",
+      "none": "No brand"
+    },
+    "modes": {
+      "ask_first": "Ask me first",
+      "auto": "Auto, ask before changes",
+      "full_auto": "Full auto"
+    },
+    "model": {
+      "auto": "Auto",
+      "limit": "Monthly AI limit",
+      "ownKey": "On your own key"
+    },
+    "connections": {
+      "none": "No connections",
+      "required": "Required",
+      "optional": "Optional",
+      "names": {
+        "google_search_console": "Google Search Console",
+        "gsc": "Google Search Console",
+        "google_analytics": "Google Analytics",
+        "ga4": "Google Analytics",
+        "webflow": "Webflow",
+        "wordpress": "WordPress",
+        "framer": "Framer",
+        "wix": "Wix",
+        "shopify": "Shopify",
+        "hubspot": "HubSpot",
+        "github": "GitHub",
+        "merchant_center": "Merchant Center"
+      }
+    },
+    "outcomes": {
+      "pending": "Pending",
+      "improved": "Improved",
+      "no_meaningful_change": "No meaningful change",
+      "declined": "Declined",
+      "not_measurable": "Not measurable"
+    },
+    "outcomeCount": {
+      "pending": "{count} pending",
+      "improved": "{count} improved",
+      "no_meaningful_change": "{count} no change",
+      "declined": "{count} declined",
+      "not_measurable": "{count} not measurable"
+    },
+    "confidence": {
+      "low": "Low confidence",
+      "medium": "Medium confidence",
+      "high": "High confidence"
+    },
+    "runStatus": {
+      "queued": "Queued",
+      "running": "Running",
+      "needs_you": "Needs you",
+      "done": "Done",
+      "failed": "Failed",
+      "stopped": "Stopped",
+      "skipped": "Skipped",
+      "paused_cap": "Paused · AI limit reached"
+    },
+    "stopReason": {
+      "user": "Stopped by a person",
+      "no_answer": "No answer in 7 days",
+      "run_cap": "Stopped at its limit",
+      "action_closed": "The action was closed",
+      "brand_gone": "Its brand was removed"
+    },
+    "skippedReason": {
+      "coalesced": "Joined another run",
+      "cooldown": "Fired during its cooldown",
+      "daily_limit": "Daily run limit",
+      "nothing_to_do": "Nothing to do"
+    },
+    "runTrigger": {
+      "schedule": "Schedule",
+      "signal": "Signal",
+      "kpi": "KPI changed",
+      "watch_rule": "Watch rule",
+      "manual": "Manual",
+      "action": "Run agent from an action"
+    },
+    "manualBy": "Manual · {name}",
+    "actions": {
+      "runNow": "Run now",
+      "pause": "Pause",
+      "resume": "Resume",
+      "activate": "Activate",
+      "archive": "Archive",
+      "restore": "Restore",
+      "duplicate": "Duplicate",
+      "takeOver": "Take over",
+      "open": "Open",
+      "openRun": "Open run",
+      "more": "More agent options"
+    },
+    "toast": {
+      "ran": "{count, plural, one {Run queued for {brand}} other {# runs queued, one a brand}}",
+      "ranAgain": "Already started a minute ago",
+      "paused": "{name} paused · its triggers stop until you resume it",
+      "resumed": "{name} resumed",
+      "activated": "Agent is on. Next run {when}",
+      "activatedEvent": "Agent is on. It runs when a trigger fires",
+      "activatedManual": "Agent is on",
+      "archived": "{name} archived",
+      "restored": "{name} restored · it stays paused until you resume it",
+      "duplicated": "Copied as a draft · {name}",
+      "tookOver": "You own {name} now · its triggered runs act as you",
+      "failed": "Couldn't do that. Try again."
+    },
+    "deniedTitle": "I can't do this for you",
+    "closeDenial": "Close",
+    "list": {
+      "title": "Agents",
+      "formula": {
+        "skill": "skill",
+        "mode": "mode",
+        "connections": "connections",
+        "model": "model"
+      },
+      "formulaTip": "An agent is a skill, a mode, connections and a model, saved to run again",
+      "newAgent": "New agent",
+      "activeTip": "{active, plural, one {# agent on} other {# agents on}}{limit, select, none {} other { · your plan keeps up to {limit} on}}",
+      "tabsLabel": "Agents to show",
+      "tabs": {
+        "mine": "Mine",
+        "workspace": "Workspace",
+        "paused": "Paused",
+        "archived": "Archived"
+      },
+      "search": "Search by name or skill",
+      "cells": {
+        "trigger": "Trigger",
+        "nextRun": "Next run",
+        "scope": "Scope",
+        "lastRun": "Last run",
+        "outcomes": "Outcomes · 30 days",
+        "aiUse": "AI use · 30 days"
+      },
+      "none": "—",
+      "noOutcomes": "No outcomes yet",
+      "aiUseTip": "{runs, plural, one {# run} other {# runs}} · average {average} a run · cap {cap} a run",
+      "aiUseLabel": "AI use in the last 30 days: {share} of the monthly AI limit",
+      "ownKey": "+{share} on your own key",
+      "readOnly": {
+        "title": "You see agents read-only ({role})",
+        "detail": "Only Admins and Managers create, run and change agents",
+        "asked": "Create and run Chat agents"
+      },
+      "empty": {
+        "title": "No agents here",
+        "mine": "Agents you own show up here. Make one with New agent.",
+        "mineReadOnly": "Agents your team shares show up under Workspace.",
+        "workspace": "Agents shared with your workspace show up here.",
+        "paused": "Paused agents show up here.",
+        "archived": "Archived agents show up here.",
+        "match": "No agents match “{q}”.",
+        "clear": "Clear search"
+      },
+      "loadFailed": "Couldn't load the agents.",
+      "retry": "Retry"
+    },
+    "detail": {
+      "owner": "Owner",
+      "you": "You",
+      "ownerNone": "No owner",
+      "visibility": {
+        "private": "Private",
+        "workspace": "Workspace"
+      },
+      "thisPeriod": "This period: {share}",
+      "monthCap": "monthly cap {cap}",
+      "fields": {
+        "skills": "Skills",
+        "mode": "Mode",
+        "connections": "Connections",
+        "model": "Model"
+      },
+      "triggers": "Triggers",
+      "triggersEmpty": "No triggers. It runs when someone clicks Run now.",
+      "triggerState": "{trigger}: {state, select, on {on} other {off}}",
+      "runs": {
+        "title": "Run history",
+        "filtersLabel": "Filter runs",
+        "filters": {
+          "all": "All",
+          "improved": "Improved",
+          "pending": "Pending",
+          "stopped": "Stopped"
+        },
+        "columns": {
+          "started": "Run",
+          "trigger": "Trigger · brand",
+          "result": "Result",
+          "outcome": "Outcome",
+          "aiUse": "AI use"
+        },
+        "version": "Version {version}",
+        "noBrand": "No brand",
+        "aiUse": "{used} of {cap}",
+        "aiUseTip": "Used {used} of the monthly AI limit · limit {cap} for this run",
+        "noOutcome": "—",
+        "empty": "No runs yet. Runs show up here when a trigger fires or someone clicks Run now.",
+        "emptyFiltered": "No runs match this filter.",
+        "loadFailed": "Couldn't load the runs.",
+        "openChat": "Open this run's chat"
+      },
+      "side": {
+        "access": "Access",
+        "owner": "Owner",
+        "shared": "Shared",
+        "runsAs": "Runs as",
+        "runsAsValue": "Who starts it · triggers: its owner",
+        "approvals": "Approvals",
+        "approvalsValue": "Wait 7 days, then the run stops",
+        "scope": "Scope",
+        "brands": "Brands",
+        "engines": "Engines",
+        "enginesAll": "Your plan's engines",
+        "topics": "Topics",
+        "topicsValue": "{count, plural, one {# topic} other {# topics}}",
+        "tags": "Prompt tags",
+        "urls": "Pages",
+        "urlsValue": "{count, plural, one {# page} other {# pages}}",
+        "aiUse": "AI use",
+        "aiUseNote": "Shares of the monthly AI limit",
+        "perRun": "Max per run",
+        "monthCap": "Monthly cap",
+        "monthCapNone": "None",
+        "thisPeriod": "This period",
+        "days30": "Last 30 days",
+        "days30Value": "{share} · {runs, plural, one {# run} other {# runs}}",
+        "notMetered": "—"
+      },
+      "notFound": "This agent isn't available. It may have been deleted, or it isn't shared with you.",
+      "backToAgents": "Back to Agents",
+      "loadFailed": "Couldn't load this agent.",
+      "retry": "Retry"
     }
   },
   "audit": {
