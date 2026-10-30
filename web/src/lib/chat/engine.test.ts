@@ -27,6 +27,21 @@ vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }))
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
 vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: vi.fn() }));
+// The test's own EXECUTE row (publish_page) has its words here: the product has no such tool yet.
+vi.mock('../../../messages/en.json', async (importOriginal) => {
+  const { default: messages } = await importOriginal<{
+    default: { chatTools: Record<string, unknown> };
+  }>();
+  return {
+    default: {
+      ...messages,
+      chatTools: {
+        ...messages.chatTools,
+        publishPage: { name: 'Publish pages', step: 'Published page' },
+      },
+    },
+  };
+});
 
 const fakes = vi.hoisted(() => ({
   readRun: vi.fn(),
@@ -335,7 +350,9 @@ async function approve(actor: ChatActor, runId: string, override: { digest?: str
     n: confirm.n,
     digest: override.digest ?? confirm.digest,
   });
-  if (prepared.ok) await engine.driveRun(actor, runId, prepared.resume);
+  // A refused approval is the caller's to check: nothing runs.
+  if (!prepared.ok) return prepared;
+  await engine.driveRun(actor, runId, prepared.resume);
   return prepared;
 }
 
@@ -643,7 +660,8 @@ describe('changes wait for the person', () => {
     const runId = await turn(ADMIN, 'Draft it', 'auto');
     const prepared = await engine.prepareResume(ADMIN, runId, 'skip', { n: 1 });
     expect(prepared.ok).toBe(true);
-    if (prepared.ok) await engine.driveRun(ADMIN, runId, prepared.resume);
+    if (!prepared.ok) throw new Error(prepared.code);
+    await engine.driveRun(ADMIN, runId, prepared.resume);
     expect(createContentDraft).not.toHaveBeenCalled();
     expect(stepsOf(runId)[0]).toMatchObject({ status: 'skipped', detail: 'Skipped' });
     expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('skipped');
@@ -1051,6 +1069,7 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     expect(manager.offered).not.toContain('publish_page');
     expect(manager.denials).toEqual([
       expect.objectContaining({
+        asked: 'You asked: Publish pages · Pricing FAQ.',
         rule: expect.objectContaining({ kind: 'policy' }),
         whoCan: 'Admins can do this.',
         nextActions: expect.arrayContaining(['ask_admin']),
@@ -1061,6 +1080,23 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     expect(fakes.publishRun).not.toHaveBeenCalled();
   });
 
+  it('never puts a request to the Admins before an Admin: not offered, and refused if called', async () => {
+    const { sonnet } = models(
+      [READY],
+      [
+        calls(toolCall('a1', 'request_access', { asked: 'Add competitors', rule_kind: 'role' })),
+        text('OK.'),
+      ],
+    );
+    const runId = await turn(as('admin'), 'Ask my admin');
+    expect(sonnet.seen[0].tools?.map((t) => t.name)).not.toContain('request_access');
+    expect(ofType(await eventsOf(runId), 'confirm.required')).toEqual([]);
+    expect(requestAccess).not.toHaveBeenCalled();
+    // Not in the Admin's list: the call is turned away before it reaches the row.
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain("unavailable tool 'request_access'");
+    expect(runRow(runId).status).toBe('done');
+  });
+
   it('decides with the live role: a Manager made an Analyst while the card waits is refused (§4)', async () => {
     const tried = await attempt('manager', 'auto', dismiss);
     expect(tried).toMatchObject({ waits: true, cards: 1 });
@@ -1069,7 +1105,10 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
       n: 1,
       digest: ofType(await eventsOf(tried.runId), 'confirm.required')[0].data.digest,
     });
-    if (prepared.ok) await engine.driveRun(as('manager'), tried.runId, prepared.resume);
+    // The approval itself goes through: the role is decided again as the change runs.
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) throw new Error(prepared.code);
+    await engine.driveRun(as('manager'), tried.runId, prepared.resume);
     expect(updateOpportunityStatus).not.toHaveBeenCalled();
     expect(ofType(await eventsOf(tried.runId), 'access.denied')).toEqual([
       expect.objectContaining({
