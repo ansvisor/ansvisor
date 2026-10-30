@@ -125,6 +125,10 @@ describe('ChatFiles', () => {
     expect(a.textContent).toContain('FAQ block for /pricing');
     expect(a.textContent).toContain('HTML · Markdown · Word · PDF');
     expect(a.textContent).toContain('Used in Content draft');
+    // On its own line, so 1024px never cuts it off after the formats.
+    expect([...a.querySelectorAll('em')].map((em) => em.textContent)).toContain(
+      'Used in Content draft',
+    );
     expect(a.textContent).toContain('Agent');
     expect(a.querySelector('[data-action="files.openSourceChat"]')?.getAttribute('href')).toBe(
       `/dashboard/chat/${CHAT}`,

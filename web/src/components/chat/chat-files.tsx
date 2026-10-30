@@ -350,13 +350,8 @@ export function ChatFiles() {
             const Icon = DELIVERABLE_ICONS[file.type] ?? FileText;
             const formats = FORMAT_ORDER.filter((format) => file.formats.includes(format));
             const stamp = when(file);
-            const line = [
-              knownFormats(file.formats)
-                .map((format) => t(`formatNames.${format}`))
-                .join(' · '),
-              file.draftHref ? t('usedInDraft') : null,
-            ]
-              .filter(Boolean)
+            const line = knownFormats(file.formats)
+              .map((format) => t(`formatNames.${format}`))
               .join(' · ');
             return (
               <div
@@ -388,6 +383,12 @@ export function ChatFiles() {
                     <em className="block truncate text-xs not-italic text-muted-foreground">
                       {line}
                     </em>
+                    {/* Its own line, so a narrow table (1024px) never cuts it off. */}
+                    {file.draftHref && (
+                      <em className="block truncate text-xs not-italic text-muted-foreground">
+                        {t('usedInDraft')}
+                      </em>
+                    )}
                   </span>
                 </span>
                 <span className={cn('truncate text-[13px]', HIDE_NARROW)}>{maker(file)}</span>
