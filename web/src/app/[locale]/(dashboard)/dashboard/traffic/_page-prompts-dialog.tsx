@@ -28,6 +28,8 @@ import {
   type PagePromptSuggestions,
   type TrafficDateWindow,
 } from '@/lib/actions/traffic';
+import { AddTopicLink, TopicFirstNotice } from '@/components/prompts/topic-first';
+import { isNoTopics } from '@/lib/topics-required';
 
 /**
  * Prompts slots left on the plan, from its tracked-location cap: null when
@@ -68,15 +70,19 @@ export function PagePromptsDialog({
   // never show while this one's load.
   const [loaded, setLoaded] = useState<{
     page: string;
-    result: PagePromptSuggestions | { error: string };
+    result: PagePromptSuggestions | { error: string; code?: string };
     slotsLeft: number | null;
     unlimited: boolean;
   } | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [tracking, setTracking] = useState(false);
+  // The page whose Track found the brand had no topic left.
+  const [noTopicsPage, setNoTopicsPage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!page) return;
+    // Each open asks again: a topic may have been added since a Track found none.
+    setNoTopicsPage(null);
     let cancelled = false;
     Promise.all([
       suggestPagePrompts(brandId, dateWindow, page).catch(() => ({ error: '' })),
@@ -96,6 +102,8 @@ export function PagePromptsDialog({
   }, [brandId, dateWindow, page]);
 
   const current = page && loaded?.page === page ? loaded : null;
+  // A brand with no topic yet: suggesting or tracking asks for one first.
+  const askTopic = (!!page && noTopicsPage === page) || (!!current && isNoTopics(current.result));
   const suggestions = current && 'suggestions' in current.result ? current.result.suggestions : [];
   const slotsLeft = current?.slotsLeft ?? null;
   const over = slotsLeft !== null && selected.size > slotsLeft;
@@ -135,6 +143,8 @@ export function PagePromptsDialog({
         onClose();
       } else if (result.code === 'plan_limit') {
         toast.error(t('planFull'));
+      } else if (isNoTopics(result)) {
+        setNoTopicsPage(page);
       } else {
         toast.error(t('trackFailed'), { description: result.error });
       }
@@ -160,7 +170,9 @@ export function PagePromptsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {!current ? (
+        {askTopic ? (
+          <TopicFirstNotice />
+        ) : !current ? (
           <div className="space-y-3" aria-busy>
             <p className="text-sm text-muted-foreground">{t('loading')}</p>
             <Skeleton className="h-4 w-3/4" />
@@ -228,16 +240,22 @@ export function PagePromptsDialog({
               : null}
           </p>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
-            <Link href="/dashboard/prompts" className={buttonVariants({ variant: 'outline' })}>
-              {t('addOwn')}
-            </Link>
-            <Button
-              disabled={!current || selected.size === 0 || over || tracking}
-              onClick={() => void track()}
-            >
-              {tracking && <Loader2 className="h-4 w-4 animate-spin" />}
-              {t('track', { count: selected.size })}
-            </Button>
+            {askTopic ? (
+              <AddTopicLink />
+            ) : (
+              <>
+                <Link href="/dashboard/prompts" className={buttonVariants({ variant: 'outline' })}>
+                  {t('addOwn')}
+                </Link>
+                <Button
+                  disabled={!current || selected.size === 0 || over || tracking}
+                  onClick={() => void track()}
+                >
+                  {tracking && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {t('track', { count: selected.size })}
+                </Button>
+              </>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>

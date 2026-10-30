@@ -27,11 +27,15 @@ vi.mock('../workers/tracking-worker.js', () => ({ processTrackingJob }));
 vi.mock('../workers/content-worker.js', () => ({ processContentJob }));
 vi.mock('./pulse/engine.js', () => ({ generatePulseForBrand: vi.fn() }));
 vi.mock('./signals/pass.js', () => ({ runFirstSignalPass: vi.fn(), runSignalPass: vi.fn() }));
+const sendFirstResultsEmail = vi.hoisted(() => vi.fn());
+vi.mock('./first-results-email.js', () => ({ sendFirstResultsEmail }));
 vi.mock('./logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 const { runContentJob, runTrackingJob, recoverWaitingJobs } = await import('./job-runner.js');
+const { runFirstSignalPass, runSignalPass } = await import('./signals/pass.js');
+const { generatePulseForBrand } = await import('./pulse/engine.js');
 
 // Default TRACKING_CONCURRENCY.
 const MAX = 2;
@@ -224,6 +228,71 @@ describe('runTrackingJob, the first run after a payment', () => {
  * Once the plan has ended (2026-10-27): a job is cancelled when it is
  * claimed, however it was started, before anything is tracked or written.
  */
+/**
+ * "Your first results are ready" (00385): a brand's first full run e-mails
+ * it once it stamps, now or once its late answers are in.
+ */
+describe('the e-mail after a brand’s first run', () => {
+  beforeEach(() => {
+    sendFirstResultsEmail.mockReset().mockResolvedValue('sent');
+    vi.mocked(runFirstSignalPass).mockResolvedValue({});
+    vi.mocked(runSignalPass).mockResolvedValue({});
+    vi.mocked(generatePulseForBrand).mockResolvedValue({});
+  });
+
+  const claimWith = (data) =>
+    manager.claimWaitingJob.mockImplementation(async (id) => ({
+      id,
+      attempts: 1,
+      max_attempts: 3,
+      data: { brandId: 'brand-1', immediate: true, ...data },
+    }));
+
+  it('is sent when the first run stamps', async () => {
+    claimWith({});
+    processTrackingJob.mockResolvedValue({ resultCount: 40, stamped: true, firstRun: true });
+    runTrackingJob('first');
+    await flush();
+    expect(sendFirstResultsEmail).toHaveBeenCalledWith('brand-1');
+    expect(runFirstSignalPass).toHaveBeenCalledWith('brand-1');
+  });
+
+  it('waits for a late stamp, and is not sent when the run never stamps', async () => {
+    claimWith({});
+    let stamp;
+    processTrackingJob.mockResolvedValue({
+      resultCount: 30,
+      stamped: false,
+      firstRun: true,
+      lateStamp: new Promise((resolve) => (stamp = resolve)),
+    });
+    runTrackingJob('late');
+    await flush();
+    expect(sendFirstResultsEmail).not.toHaveBeenCalled();
+    stamp(true);
+    await flush();
+    expect(sendFirstResultsEmail).toHaveBeenCalledTimes(1);
+
+    processTrackingJob.mockResolvedValue({ resultCount: 0, stamped: false, firstRun: true });
+    runTrackingJob('never');
+    await flush();
+    expect(sendFirstResultsEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('is not sent for a later run, or for a few prompts of the first', async () => {
+    claimWith({ immediate: false });
+    processTrackingJob.mockResolvedValue({ resultCount: 40, stamped: true, firstRun: false });
+    runTrackingJob('nightly');
+    await flush();
+
+    claimWith({ promptIds: ['p1'] });
+    processTrackingJob.mockResolvedValue({ resultCount: 3, stamped: true, firstRun: true });
+    runTrackingJob('subset');
+    await flush();
+    expect(sendFirstResultsEmail).not.toHaveBeenCalled();
+  });
+});
+
 describe('a job of an organization whose plan has ended', () => {
   it('is cancelled once claimed, not tracked, and gives its slot back', async () => {
     const releases = heldRuns();

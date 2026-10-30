@@ -28,6 +28,8 @@ import { guessedVolumeEstimate } from '@/lib/volume-estimate';
 import { EstimateRange } from '@/components/prompts/volume-estimate';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useTopicFirstDialog } from '@/components/prompts/topic-first';
+import { NO_TOPICS } from '@/lib/topics-required';
 
 /** Items shown, as in the mockup; "See all" opens the rest. */
 const VISIBLE_ITEMS = 4;
@@ -87,6 +89,8 @@ export function Opportunities({
   // Send action and Suggest content run on their own: writing content takes a while.
   const [working, setWorking] = useState<ReadonlySet<string>>(new Set());
   const [contentSpent, setContentSpent] = useState(0);
+  // A brand with no topic yet: Track asks for one first.
+  const topicFirst = useTopicFirstDialog();
 
   const result = useMemo(() => {
     const names = Object.fromEntries(
@@ -258,6 +262,8 @@ export function Opportunities({
         );
       } else if (code === 'plan_limit') {
         toast.error(t('planFull'));
+      } else if (code === NO_TOPICS) {
+        topicFirst.show();
       } else {
         toast.error(t('trackFailed'), { description: error });
       }
@@ -433,6 +439,7 @@ export function Opportunities({
             </Link>
           </div>
         )}
+        {topicFirst.dialog}
       </CardContent>
     </Card>
   );

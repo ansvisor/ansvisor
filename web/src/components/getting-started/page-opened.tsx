@@ -13,16 +13,20 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
  * dashboard layout, so it counts the page however it was reached: the step's
  * button, the sidebar or a link. Each brand and step is sent until the
  * server records it, then remembered in this browser. Not sent while the
- * workspace is read-only (plan not active): it writes.
+ * workspace is read-only (plan not active): it writes. Nor for the demo
+ * brand, whose sample data keeps no steps.
  */
 export function GettingStartedPageOpened() {
   const pathname = usePathname();
   const brandId = useBrandStore((s) => s.activeBrandId);
+  const isDemo = useBrandStore(
+    (s) => s.brands.find((b) => b.id === s.activeBrandId)?.isDemo ?? false,
+  );
   const { isLocked } = useUpgradeGate();
 
   useEffect(() => {
     const step = pageOpenedStep(pathname);
-    if (!step || !brandId || isLocked) return;
+    if (!step || !brandId || isLocked || isDemo) return;
     const key = `aeo:getting-started:${brandId}:${step}`;
     try {
       if (localStorage.getItem(key)) return;
@@ -30,8 +34,8 @@ export function GettingStartedPageOpened() {
       // Storage blocked: ask the server, which keeps it once.
     }
     markGettingStartedPageOpened(brandId, step)
-      .then((recorded) => {
-        if (!recorded) return;
+      .then((result) => {
+        if (!result.ok || !result.recorded) return;
         try {
           localStorage.setItem(key, '1');
         } catch {
@@ -41,7 +45,7 @@ export function GettingStartedPageOpened() {
       .catch(() => {
         // A database without 00196, or offline: the step stays open.
       });
-  }, [pathname, brandId, isLocked]);
+  }, [pathname, brandId, isLocked, isDemo]);
 
   return null;
 }

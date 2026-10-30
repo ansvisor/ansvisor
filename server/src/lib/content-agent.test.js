@@ -13,6 +13,22 @@ let rows;
 let writes;
 const generateObject = vi.fn();
 const reserveAiBudget = vi.fn();
+/**
+ * The facts pass (content-research.js), as a search that finds nothing:
+ * each sentence written again without what it needed.
+ */
+const notFound = async ({ prompt }) => ({
+  text: JSON.stringify({
+    facts: [...prompt.matchAll(/^(G\d+): "(.*)"$/gmu)].map(([, id, sentence]) => ({
+      id,
+      text: sentence.replace(/\s*\(?\[[^\]]+\]\)?|\s*\{\{[^}]*\}\}/gu, ''),
+      source: null,
+    })),
+  }),
+  sources: [],
+  usage: { inputTokens: 1000, outputTokens: 100 },
+});
+const generateText = vi.fn(notFound);
 /** The functions called, with what they were sent. */
 const rpc = vi.fn();
 
@@ -48,14 +64,18 @@ class NoObjectGeneratedError extends Error {
 vi.mock('ai', async (importOriginal) => ({
   ...(await importOriginal()),
   generateObject: (...args) => generateObject(...args),
+  generateText: (...args) => generateText(...args),
   NoObjectGeneratedError,
 }));
-vi.mock('./ai-provider.js', () => ({ resolveModel: vi.fn((id) => `model:${id}`) }));
+vi.mock('./ai-provider.js', () => ({
+  resolveModel: vi.fn((id) => `model:${id}`),
+  webSearchTools: () => ({ web_search: { id: 'anthropic.web_search_20250305' } }),
+}));
 vi.mock('./plan-guard.js', async (importOriginal) => ({
   ...(await importOriginal()),
   reserveAiBudget: (...args) => reserveAiBudget(...args),
 }));
-vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
+vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
 const stopIfStopped = vi.fn();
 /** A run's start, take-back and finish, when a test stands in for them. */
 const runs = vi.hoisted(() => ({ startRun: null, dropRun: null, finishRun: null }));
@@ -166,11 +186,14 @@ beforeEach(() => {
     brands: { name: 'Acme Coffee', organization_id: 'org-1', language: 'en' },
   };
   generateObject.mockReset();
+  generateText.mockReset().mockImplementation(notFound);
   reserveAiBudget.mockReset().mockImplementation(realGuard.reserveAiBudget);
   readLinkTargets.mockReset().mockResolvedValue(NO_LINK_TARGETS);
   // The model as a server without an Anthropic key picks it, whatever the shell has.
   vi.stubEnv('ANTHROPIC_API_KEY', '');
   vi.stubEnv('CONTENT_WRITE_MODEL', '');
+  // The facts pass searches on Anthropic only (content-research.js searchesCapped).
+  vi.stubEnv('CONTENT_READ_MODEL', 'anthropic/claude-haiku-5-5');
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -1957,7 +1980,7 @@ describe('fixDraftRules', () => {
             sources: [],
             marks: [],
           }),
-          // The name's number alone: a number with no source.
+          // The name's number alone: a number with no source, left for the person.
           suggestion({
             passage: 3,
             before: 'A dripper',
@@ -1985,10 +2008,11 @@ describe('fixDraftRules', () => {
     expect(generateObject.mock.calls[0][0].prompt).toContain(
       '- Ruth Miller Kettle 600 — https://shop.example/products/k1',
     );
-    expect(result.count).toBe(2);
+    expect(result.count).toBe(3);
     const batch = writes.find((w) => w.table === 'content_draft_suggestions');
     expect(batch.value.map((r) => r.after_text)).toEqual([
       'good coffee and the Ruth Miller Kettle 600 at $49',
+      'A [figure, source] ml dripper',
       'tastes better, says designer Ruth Miller',
     ]);
     expect(batch.value[0].after_links).toEqual([
@@ -2127,6 +2151,69 @@ describe('fixDraftRules', () => {
         ],
       }),
     ]);
+  });
+
+  it('looks a fact up instead of leaving a placeholder, and links it where it was found', async () => {
+    const STANDARD = 'https://sca.example/water-standard';
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: [
+          suggestion({
+            after: 'freshly ground coffee and water at {{find: SCA brewing water temperature}}',
+            sources: [],
+            marks: [],
+          }),
+          // A figure it wrote with no source, that no page has: left for the person, never dropped unseen.
+          suggestion({
+            passage: 3,
+            before: 'A dripper and a filter',
+            after: 'A dripper and a filter, 40% cheaper',
+            sources: [],
+            marks: [],
+          }),
+        ],
+      },
+      usage: { inputTokens: 900, outputTokens: 200 },
+    });
+    generateText.mockImplementationOnce(async (call) => ({
+      ...(await notFound(call)),
+      text: JSON.stringify({
+        facts: [
+          {
+            id: 'G1',
+            text: 'freshly ground coffee and water at 90.5–96.1 °C',
+            source: STANDARD,
+            words: '90.5–96.1 °C',
+          },
+        ],
+      }),
+      sources: [{ sourceType: 'url', url: STANDARD, title: 'Water standard' }],
+      providerMetadata: { anthropic: { usage: { server_tool_use: { web_search_requests: 1 } } } },
+    }));
+
+    const result = await fixDraftRules({
+      draftId: DRAFT,
+      brandId: BRAND,
+      input: input({ sources: SOURCES }),
+    });
+
+    // Looked up on the read model, with its search, on its own hold.
+    const call = generateText.mock.calls[0][0];
+    expect(call.prompt).toContain('needs: find: SCA brewing water temperature');
+    expect(call.prompt).toContain('needs: check: 40%');
+    expect(reserveAiBudget).toHaveBeenCalledWith(
+      'org-1',
+      expect.objectContaining({ feature: 'quality', holdUsd: expect.any(Number) }),
+    );
+    expect(result).toEqual({ count: 2, batchId: expect.any(String) });
+    const [row, second] = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    expect(second.after_text).toBe('A dripper and a filter, [figure, source] cheaper');
+    expect(row).toMatchObject({
+      kind: 'replace',
+      after_text: 'freshly ground coffee and water at 90.5–96.1 °C',
+      after_links: [{ start: 35, end: 47, href: STANDARD }],
+    });
+    expect(row.after_text).not.toMatch(/[[{]/);
   });
 
   it("knows the workspace's authors, and puts any other person as a placeholder (CE-044)", async () => {
@@ -2438,8 +2525,11 @@ describe('Quality’s hand-off (CE-051)', () => {
       input: handoff(),
       handoff: { origin: 'person' },
     });
-    // 94 was only in the editor's detail: a number with no source, so not kept.
-    expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
+    // 94 was only in the editor's detail: a number with no source, looked up,
+    // found nowhere, so the person's to fill.
+    expect(writes.find((w) => w.table === 'content_draft_suggestions').value[0].after_text).toBe(
+      'good coffee and water at [figure, source] degrees',
+    );
     // A Fix open rules run takes the details as given.
     writes = [];
     await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: handoff() });
