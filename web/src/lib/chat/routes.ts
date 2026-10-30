@@ -191,6 +191,8 @@ export function routeRegistry({ cloud = isCloud() }: { cloud?: boolean } = {}): 
     }
   }
   for (const page of EXTRA_PAGES) {
+    // A page the sidebar lists (Competitors, once it's back on it) is there already.
+    if (out.some((r) => r.href === page.href)) continue;
     out.push(route(page.href, page.name, page.section, page.requiredFeature));
   }
   out.push(route('/dashboard/settings', navT('settings'), null));
