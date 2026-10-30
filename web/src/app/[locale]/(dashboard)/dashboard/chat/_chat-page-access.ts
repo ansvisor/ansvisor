@@ -24,6 +24,8 @@ export async function chatPageOpen(): Promise<boolean> {
 export interface ChatShellPrefs {
   /** The chat menu shown (the default) or hidden (CHAT-01 item 9d). */
   menuOpen: boolean;
+  /** The app sidebar expanded beside Chat, or the rail (the default; CHAT-01 4f). */
+  railOpen: boolean;
 }
 
 /**
@@ -49,13 +51,13 @@ export async function chatShellPrefs(): Promise<ChatShellPrefs | null> {
   if (!chatAgenticEnabled(organizationId)) return null;
   const { data: prefs, error } = await supabase
     .from('chat_user_prefs')
-    .select('menu_open, legacy_imported_at')
+    .select('menu_open, rail_open, legacy_imported_at')
     .eq('user_id', user.id)
     .maybeSingle();
   if (organizationId && !error && !prefs?.legacy_imported_at) {
     await importLegacyChats({ userId: user.id, email: user.email ?? null, organizationId });
   }
-  return { menuOpen: prefs?.menu_open ?? true };
+  return { menuOpen: prefs?.menu_open ?? true, railOpen: prefs?.rail_open ?? false };
 }
 
 /**

@@ -511,7 +511,10 @@
     "contentEditor": "Editor",
     "toggleSubmenu": "Show or hide {label}",
     "menuOff": "{count, plural, one {# section} other {# sections}} off your menu.",
-    "menuOffChange": "Change"
+    "menuOffChange": "Change",
+    "expandRail": "Expand the Ansvisor menu",
+    "collapseRail": "Collapse the Ansvisor menu",
+    "railTip": "Ansvisor · hover or click to expand"
   },
   "actionCenter": {
     "dismissReason": {
@@ -3819,7 +3822,9 @@
       "clearSearch": "Clear filters",
       "searchFailed": "Couldn't search your chats.",
       "allChats": "All chats · {count} ›",
-      "archivedLink": "Archived · {count} ›"
+      "archivedLink": "Archived · {count} ›",
+      "settings": "Settings",
+      "usageTip": "AI usage this month"
     },
     "actions": {
       "more": "More for {name}",
@@ -3905,7 +3910,8 @@
       "searching": "Searching…",
       "failed": "Couldn't search your chats.",
       "pages": {
-        "allChats": "All chats"
+        "allChats": "All chats",
+        "settings": "Settings"
       }
     },
     "allChats": {
@@ -3945,6 +3951,65 @@
       },
       "loadFailed": "Couldn't load your chats.",
       "retry": "Retry"
+    },
+    "nav": {
+      "backToChat": "← Back to Chat",
+      "backChatTip": "Back to your last conversation",
+      "backHomeTip": "Back to Chat Home",
+      "breadcrumb": "Breadcrumb",
+      "chat": "Chat",
+      "pages": {
+        "inbox": "Inbox",
+        "allChats": "All chats",
+        "activity": "Activity",
+        "capabilities": "What Chat can do",
+        "settings": "Settings"
+      }
+    },
+    "settings": {
+      "title": "Settings",
+      "intro": "How Chat works for you and your team.",
+      "tabs": {
+        "general": "General"
+      },
+      "general": {
+        "title": "General",
+        "intro": "Your own preferences. Workspace rules are in <policy>Tool policy</policy>."
+      },
+      "defaultMode": {
+        "label": "Default mode",
+        "note": "How much the agent does on its own when you start a job. Nothing is published or sent without your click.",
+        "ask_first": "Ask me first",
+        "auto": "Auto, ask before changes",
+        "full_auto": "Full auto"
+      },
+      "fullAutoPlan": "Full auto needs the Growth plan",
+      "fullAutoAdmin": "Your Admin turned Full auto off for your role",
+      "language": {
+        "label": "Answer language",
+        "note": "The app stays in English; Chat answers in this language",
+        "same": "Same as my question",
+        "en": "English",
+        "tr": "Türkçe",
+        "de": "Deutsch"
+      },
+      "notify": {
+        "label": "Notify me when an agent needs me",
+        "note": "Inbox always; also email or Slack",
+        "inbox_email": "Inbox + email",
+        "inbox": "Inbox only",
+        "inbox_slack": "Inbox + Slack",
+        "slackSoon": "Inbox + Slack (connect Slack first)"
+      },
+      "thought": {
+        "label": "Show “Thought for N s”",
+        "note": "A short summary of the agent’s reasoning under answers"
+      },
+      "everyPage": {
+        "label": "Open Chat on every page",
+        "note": "Ask Chat · Ctrl J in each page header"
+      },
+      "failed": "Couldn't save that. Try again."
     }
   },
   "chatAccess": {

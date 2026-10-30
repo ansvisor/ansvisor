@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link, usePathname } from '@/i18n/navigation';
 import { DotLegend } from '@/components/agentic/dot-legend';
+import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { Skeleton } from '@/components/ui/skeleton';
+import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { AT_WORK_ROWS, chatMenuLists, type DayGroup } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
@@ -125,6 +127,39 @@ function MenuItem({
   );
 }
 
+/**
+ * The workspace's AI usage this month beside Settings (mockup `.usg2`): a
+ * 30px bar and its percent, amber from 80%, red when used up. Nothing where
+ * there is no allowance to meter (self-hosted) or before it is read.
+ */
+function UsageMeter() {
+  const t = useTranslations('chatShell.menu');
+  const { usage } = useAiUsage();
+  if (!usage || usage.percentUsed === null) return null;
+  const tone = aiUsageTone(usage);
+  return (
+    <span
+      title={t('usageTip')}
+      className="ml-auto inline-flex items-center gap-[5px] text-[11.5px] font-normal text-muted-foreground tabular-nums"
+    >
+      <span aria-hidden className="h-1 w-[30px] overflow-hidden rounded bg-foreground/10">
+        <i
+          className={cn(
+            'block h-full rounded',
+            tone === 'exhausted'
+              ? 'bg-red-600 dark:bg-red-400'
+              : tone === 'warning'
+                ? 'bg-amber-600 dark:bg-amber-400'
+                : 'bg-foreground',
+          )}
+          style={{ width: `${Math.min(100, usage.percentUsed)}%` }}
+        />
+      </span>
+      {percentLabel(usage.percentUsed)}
+    </span>
+  );
+}
+
 function groupLabel(group: DayGroup, t: ReturnType<typeof useTranslations>, now: Date): string {
   if (group.kind !== 'calendar') return t(`groups.${group.kind}`);
   return group.month.toLocaleDateString('en-US', {
@@ -156,14 +191,14 @@ export interface ChatMenuViewProps {
  * The chat menu, top to bottom (CHAT-01 items 6, 9a; agentic update; mockup
  * CHAT-mockup-v2.html, the menu on every #s-… screen): the toggle and
  * "＋ New chat"; Menu (Home; Inbox, with its count and an amber dot while
- * something needs the person); Governance (Activity, What Chat can do, Tool
+ * something needs the person; Settings, with the month's AI usage); Governance (Activity, What Chat can do, Tool
  * policy: the governance mockup's menu, #cnav); Agents at work (needs you,
  * running, unread results: three rows, See all, Show less, the dots'
  * legend); Chats with its count, Search chats (typing lists the chats
  * whose title or messages match, in place of the days; Ctrl K opens the
  * palette under it), Pinned, then by day, and All chats and Archived at the
- * end. Items whose pages aren't built yet stay out (Settings, Skills,
- * Integrations, Scheduled, Files). Sections fold, remembered in this
+ * end. Items whose pages aren't built yet stay out (Skills, Integrations,
+ * Scheduled, Files). Sections fold, remembered in this
  * browser.
  */
 export function ChatMenuView({
@@ -316,6 +351,15 @@ export function ChatMenuView({
                 </span>
               </span>
             )}
+          </MenuItem>
+          <MenuItem
+            href="/dashboard/chat/settings"
+            action="chatMenu.openSettings"
+            active={pathname === '/dashboard/chat/settings'}
+            onNavigate={onNavigate}
+          >
+            {t('settings')}
+            <UsageMeter />
           </MenuItem>
         </div>
       )}

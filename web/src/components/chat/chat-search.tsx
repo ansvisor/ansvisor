@@ -88,6 +88,7 @@ export interface ChatSearchPage {
 /** The Chat pages the palette lists, in the mockup's order. */
 export const CHAT_SEARCH_PAGES: ChatSearchPage[] = [
   { key: 'allChats', href: '/dashboard/chat/all', glyph: '☰' },
+  { key: 'settings', href: '/dashboard/chat/settings', glyph: '⚙' },
 ];
 
 /** The menus' look (mockup `.pop2`, `.mi2`): opaque, 14px corners, soft shadow. */

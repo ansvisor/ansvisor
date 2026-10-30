@@ -19,7 +19,11 @@ const facts = vi.hoisted(() => ({
 }));
 
 const db = vi.hoisted(() => ({
-  prefs: null as { menu_open: boolean; legacy_imported_at: string | null } | null,
+  prefs: null as {
+    menu_open: boolean;
+    rail_open?: boolean;
+    legacy_imported_at: string | null;
+  } | null,
   prefsError: null as { message: string } | null,
 }));
 
@@ -124,7 +128,7 @@ describe('chatComposerSetup', () => {
 
 describe('chatShellPrefs', () => {
   it("copies the person's Agent Chat conversations on their first visit, and opens even when that fails", async () => {
-    expect(await chatShellPrefs()).toEqual({ menuOpen: true });
+    expect(await chatShellPrefs()).toEqual({ menuOpen: true, railOpen: false });
     expect(importLegacyChats).toHaveBeenCalledWith({
       userId: 'user-1',
       email: 'jo@example.com',
@@ -133,11 +137,15 @@ describe('chatShellPrefs', () => {
   });
 
   it('copies nothing once they were copied, or when the settings could not be read', async () => {
-    db.prefs = { menu_open: false, legacy_imported_at: '2026-10-30T09:00:00.000Z' };
-    expect(await chatShellPrefs()).toEqual({ menuOpen: false });
+    db.prefs = {
+      menu_open: false,
+      rail_open: true,
+      legacy_imported_at: '2026-10-30T09:00:00.000Z',
+    };
+    expect(await chatShellPrefs()).toEqual({ menuOpen: false, railOpen: true });
     db.prefs = null;
     db.prefsError = { message: 'down' };
-    expect(await chatShellPrefs()).toEqual({ menuOpen: true });
+    expect(await chatShellPrefs()).toEqual({ menuOpen: true, railOpen: false });
     expect(importLegacyChats).not.toHaveBeenCalled();
   });
 
