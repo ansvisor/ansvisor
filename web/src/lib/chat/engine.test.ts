@@ -1270,6 +1270,49 @@ describe('next moves (CHAT-07 §C)', () => {
     }
   });
 
+  describe('a move taken from a run that read outside text (§16a)', () => {
+    const draftCall = calls(
+      toolCall('w1', 'create_draft', {
+        brand_id: BRAND,
+        title: 'Features FAQ',
+        page_type: 'docs_faq',
+        source: { kind: 'content' },
+      }),
+    );
+    /** A first run that read with `read`, then its first move sent in Full auto. */
+    const script = (read: string): [Step[], Step[]] => [
+      [calls(toolCall('r1', read, { brand_id: BRAND })), READY, READY],
+      [answerWithMoves('Two pages lost most of it.', MOVES), draftCall, text('Saved.')],
+    ];
+    async function takeTheMove() {
+      const first = await turn(ADMIN, 'Why did citations fall?');
+      expect(movesOf(first)).toHaveLength(2);
+      const started = await engine.startChatRun(ADMIN, {
+        message: 'Do the same for /features',
+        conversationId: runRow(first).conversation_id,
+        mode: 'full_auto',
+      });
+      if (!started.ok) throw new Error(`not started: ${started.code}`);
+      await engine.driveRun(ADMIN, started.runId);
+      return started.runId;
+    }
+
+    it('starts its run tainted, so a change shows a card even in Full auto', async () => {
+      useModels(...script('read_visibility'));
+      const runId = await takeTheMove();
+      expect(createContentDraft).not.toHaveBeenCalled();
+      expect(runRow(runId).status).toBe('waiting');
+      expect(ofType(await eventsOf(runId), 'confirm.required')).toHaveLength(1);
+    });
+
+    it("doesn't when that run read the workspace's own numbers only", async () => {
+      useModels(...script('get_visibility_summary'));
+      const runId = await takeTheMove();
+      expect(createContentDraft).toHaveBeenCalledTimes(1);
+      expect(runRow(runId).status).toBe('done');
+    });
+  });
+
   it('suggests none while the run waits on the person', async () => {
     useModels(
       [READY],

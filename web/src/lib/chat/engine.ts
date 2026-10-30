@@ -51,6 +51,7 @@ import {
   type AskToolInput,
 } from './asks';
 import {
+  MOVE_PROMPT_MAX,
   NEXT_MOVES_TOOL,
   clientMove,
   nextMovesInput,
@@ -336,6 +337,41 @@ export function titleOf(message: string): string {
   return line.length > 60 ? `${line.slice(0, 59)}…` : line || '…';
 }
 
+/**
+ * Whether the message is a next move a tainted run of this chat suggested
+ * (CHAT-07 §C, §16a). The model wrote that move after reading outside text,
+ * so the run it starts is tainted too and every change shows a card, as it
+ * would have in the run that suggested it. Matched on the text, however the
+ * message came; a failed read counts as tainted.
+ */
+async function fromTaintedMove(conversationId: string, message: string): Promise<boolean> {
+  const prompt = message.trim();
+  if (!prompt || prompt.length > MOVE_PROMPT_MAX) return false;
+  const runs = await supabaseAdmin
+    .from('chat_runs')
+    .select('id')
+    .eq('conversation_id', conversationId);
+  if (runs.error) return true;
+  const runIds = ((runs.data ?? []) as { id: string }[]).map((run) => run.id);
+  if (runIds.length === 0) return false;
+  const moves = await supabaseAdmin
+    .from('chat_next_moves')
+    .select('run_id')
+    .in('run_id', runIds)
+    .eq('prompt', prompt);
+  if (moves.error) return true;
+  const movedFrom = [...new Set(((moves.data ?? []) as { run_id: string }[]).map((m) => m.run_id))];
+  if (movedFrom.length === 0) return false;
+  const states = await supabaseAdmin
+    .from('chat_run_state')
+    .select('progress')
+    .in('run_id', movedFrom);
+  if (states.error) return true;
+  return ((states.data ?? []) as { progress: { tainted?: boolean } | null }[]).some(
+    (state) => state.progress?.tainted === true,
+  );
+}
+
 async function insertRow<T extends Record<string, unknown>>(
   table: string,
   row: T,
@@ -403,6 +439,7 @@ export async function startChatRun(actor: ChatActor, raw: unknown): Promise<Star
 
   let conversationId = input.conversationId ?? null;
   let brandId: string | null = null;
+  let tainted = false;
   if (conversationId) {
     const { data, error } = await supabaseAdmin
       .from('chat_conversations')
@@ -417,6 +454,7 @@ export async function startChatRun(actor: ChatActor, raw: unknown): Promise<Star
     if (error) throw new Error(`Chat could not read the chat: ${error.message}`);
     if (!data) return failure(404, 'not_found', t('error.notFound'));
     brandId = (data as { brand_id: string | null }).brand_id;
+    tainted = await fromTaintedMove(conversationId, input.message);
   } else {
     if (input.brandId) {
       const { data, error } = await supabaseAdmin
@@ -483,6 +521,7 @@ export async function startChatRun(actor: ChatActor, raw: unknown): Promise<Star
     ...newProgress(timezone, brandId, 'read'),
     question: input.message,
     ...(scope ? { scope } : {}),
+    ...(tainted ? { tainted: true } : {}),
   };
   const { error: stateError } = await supabaseAdmin.from('chat_run_state').insert({
     run_id: runId,
