@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { firstNameOf } from '@/lib/chat/home';
+import { importLegacyChats } from '@/lib/chat/legacy-import';
 
 /** Whether the signed-in person's workspace has the new Chat on (CHAT_AGENTIC). */
 export async function chatPageOpen(): Promise<boolean> {
@@ -26,7 +27,10 @@ export interface ChatShellPrefs {
 /**
  * The shell's saved choices, or null while the new Chat is off for the
  * person's workspace (the Chat pages then answer as they do today). A
- * choice that can't be read falls back to its default.
+ * choice that can't be read falls back to its default. On the person's
+ * first visit their Agent Chat conversations are copied in first (W1-02),
+ * so the menu lists them; a copy that fails is tried again next time and
+ * never keeps Chat from opening.
  */
 export async function chatShellPrefs(): Promise<ChatShellPrefs | null> {
   const supabase = await createClient();
@@ -39,12 +43,16 @@ export async function chatShellPrefs(): Promise<ChatShellPrefs | null> {
     .select('organization_id')
     .eq('id', user.id)
     .maybeSingle();
-  if (!chatAgenticEnabled(profile?.organization_id ?? null)) return null;
-  const { data: prefs } = await supabase
+  const organizationId = profile?.organization_id ?? null;
+  if (!chatAgenticEnabled(organizationId)) return null;
+  const { data: prefs, error } = await supabase
     .from('chat_user_prefs')
-    .select('menu_open')
+    .select('menu_open, legacy_imported_at')
     .eq('user_id', user.id)
     .maybeSingle();
+  if (organizationId && !error && !prefs?.legacy_imported_at) {
+    await importLegacyChats({ userId: user.id, email: user.email ?? null, organizationId });
+  }
   return { menuOpen: prefs?.menu_open ?? true };
 }
 
