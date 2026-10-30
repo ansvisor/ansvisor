@@ -3216,7 +3216,8 @@
       "name": "Dismiss prompt suggestions",
       "step": "Dismissed prompt suggestion"
     },
-    "askAdmin": { "name": "Ask your Admin", "step": "Sent to your Admins" }
+    "askAdmin": { "name": "Ask your Admin", "step": "Sent to your Admins" },
+    "agents": { "name": "Create and run agents", "step": "Changed an agent" }
   },
   "agentic": {
     "avatar": {
@@ -4553,7 +4554,17 @@
       "dismissSuggestionUndo": "Brought back the prompt suggestion “{text}”",
       "askAdmin": "Asked your Admins: “{asked}”",
       "askAdminUndo": "Withdrew the request “{asked}”",
-      "accessDenied": "Not allowed: {tool}"
+      "accessDenied": "Not allowed: {tool}",
+      "agentCreated": "Created the agent “{name}”",
+      "agentUpdated": "Changed the agent “{name}”",
+      "agentActivated": "Turned on the agent “{name}”",
+      "agentPaused": "Paused the agent “{name}”",
+      "agentResumed": "Resumed the agent “{name}”",
+      "agentArchived": "Archived the agent “{name}”",
+      "agentRestored": "Restored the agent “{name}”",
+      "agentDeleted": "Deleted the agent “{name}”",
+      "agentDuplicated": "Copied the agent “{from}” as “{name}”",
+      "agentRunQueued": "Asked the agent “{name}” to run for {brand}"
     },
     "undo": {
       "ok": "Undone.",
@@ -4565,6 +4576,42 @@
       "inProgress": "Undo is already on its way.",
       "notFound": "I couldn't find that change.",
       "failed": "Something went wrong, so nothing was undone. Try again."
+    }
+  },
+  "chatAgents": {
+    "asked": {
+      "create": "Create an agent",
+      "edit": "Change an agent",
+      "activate": "Turn an agent on",
+      "pause": "Pause an agent",
+      "resume": "Resume an agent",
+      "archive": "Archive an agent",
+      "restore": "Restore an agent",
+      "delete": "Delete an agent",
+      "duplicate": "Duplicate an agent",
+      "run": "Run an agent now",
+      "workspace": "Share an agent with the workspace",
+      "monthCap": "Set an agent's monthly AI cap",
+      "fullAuto": "Run an agent in Full auto",
+      "engines": "Use these engines in an agent"
+    },
+    "refusal": {
+      "invalid": "Some of this agent's settings aren't valid. Check them and try again.",
+      "not_found": "This agent isn't available.",
+      "name_taken": "An agent named “{name}” already exists in this workspace. Pick another name.",
+      "wrong_status": "{status, select, draft {This agent is a draft} active {This agent is on} paused {This agent is paused} other {This agent is archived}}, so it can't do that now.",
+      "archived": "This agent is archived. Restore it first.",
+      "version_conflict": "This agent was changed since you opened it. Reload to see its latest version.",
+      "schedule_past": "A one-time schedule has to be in the future.",
+      "schedule_too_far": "A one-time schedule can be at most a year ahead.",
+      "brand_not_found": "One of the brands in this agent's scope isn't in this workspace.",
+      "topic_not_found": "One of the topics in this agent's scope isn't in its brands.",
+      "member_not_found": "One of the people to notify isn't a member of this workspace.",
+      "agent_limit": "Your plan keeps up to {limit, plural, one {# agent} other {# agents}} on at once. Pause or archive one to turn this one on.",
+      "no_brand": "None of this agent's brands is left. Pick a brand in its scope.",
+      "ai_limit": "This month's AI limit is used up, so the agent can't start. It can run again once the limit resets.",
+      "owner_role": "This agent's owner can't run agents any more. An Admin can take it over.",
+      "failed": "Something went wrong with this agent. Try again."
     }
   },
   "audit": {

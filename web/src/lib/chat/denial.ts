@@ -78,9 +78,21 @@ function whoCanText(roles: TeamRole[]): string {
 
 /** The four parts of a denial, for the person whose call it refused. */
 export function buildDenial(denial: ToolDenial, input: DenialInput): ChatDenial {
-  const { tool, role, plan } = input;
+  const { tool, ...rest } = input;
   // Every row has its label: the registry's test fails one without.
-  const action = toolT(`${tool.labelKey}.name` as never);
+  return buildActionDenial(denial, { ...rest, action: toolT(`${tool.labelKey}.name` as never) });
+}
+
+/**
+ * The same four parts for a request that isn't a registry row, its action
+ * named in words: an agent's create, change or Run now on Chat's API
+ * (CHAT-21 §K item 51).
+ */
+export function buildActionDenial(
+  denial: ToolDenial,
+  input: Omit<DenialInput, 'tool'> & { action: string },
+): ChatDenial {
+  const { role, plan, action } = input;
   // Out of scope, the target may name the brand: only the tool's own words stay.
   const target = denial.code === 'brand_scope' ? null : input.target?.trim() || null;
   const asked = target ? t('askedTarget', { action, target }) : t('asked', { action });

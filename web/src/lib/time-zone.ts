@@ -90,6 +90,22 @@ export function startOfDayIn(day: string, timeZone: string): string {
   return new Date(Math.min(...(onDay.length ? onDay : candidates))).toISOString();
 }
 
+/**
+ * When `timeZone`'s clock reads `hour`:`minute` on a calendar date, as an ISO
+ * instant: a scheduled time ("every Monday 09:00, Istanbul"). The offsets in
+ * force half a day either side are tried, as startOfDayIn does. A time the
+ * clocks pass twice (autumn) is the first; one they skip (spring) is that
+ * long after, on the new clock (02:30 → 03:30).
+ */
+export function zonedInstant(day: string, hour: number, minute: number, timeZone: string): string {
+  const wall = Date.parse(`${day}T00:00:00.000Z`) + (hour * 60 + minute) * 60_000;
+  const candidates = [wall - HALF_DAY_MS, wall + HALF_DAY_MS].map(
+    (at) => wall - offsetAt(at, timeZone),
+  );
+  const exact = candidates.filter((t) => t + offsetAt(t, timeZone) === wall);
+  return new Date(exact.length ? Math.min(...exact) : Math.max(...candidates)).toISOString();
+}
+
 /** The last millisecond of a calendar date in `timeZone`, as an ISO instant. */
 export function endOfDayIn(day: string, timeZone: string): string {
   return new Date(Date.parse(startOfDayIn(nextDay(day), timeZone)) - 1).toISOString();
