@@ -185,6 +185,18 @@ describe('ChatHome', () => {
   });
 });
 
+describe("a teammate's shared chat", () => {
+  it('never needs the person on Home: its author answers it', async () => {
+    list.chats = [
+      chat('t', { mine: false, shared: true, ownerInitials: 'SL', state: 'needsYou' }),
+      chat('u', { mine: false, shared: true, ownerInitials: 'SL', state: 'running' }),
+    ];
+    await render(<ChatHome firstName="Alex" />);
+    expect(host.querySelector('[data-action="home.openInbox"]')).toBeNull();
+    expect(text()).toContain('All caught up.');
+  });
+});
+
 describe('ChatInboxView', () => {
   it('lists needs you, running and unread results, each with its button', async () => {
     const now = at('12:00:00');

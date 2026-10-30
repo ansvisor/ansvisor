@@ -13,9 +13,13 @@ import { chatMenuLists } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
 import { useChatList, type ChatListStatus } from './chat-list-provider';
 
-/** The Inbox's rows: what needs the person, what runs, and unread results (Agents at work). */
+/**
+ * The Inbox's rows: what needs the person, what runs, and unread results —
+ * their own chats in Agents at work. A teammate's shared chat waits on its
+ * author, who alone can answer it, so it is never one that "needs you".
+ */
 export function inboxItems(chats: ChatListItem[], now = new Date()): ChatListItem[] {
-  return chatMenuLists(chats, now).atWork;
+  return chatMenuLists(chats, now).atWork.filter((chat) => chat.mine);
 }
 
 /** The Inbox's counts: needs you, running, and results that came in today. */

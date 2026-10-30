@@ -26,12 +26,13 @@ export const MAX_REFERENCE_QUERY = 100;
 
 /**
  * A search as a pattern part: what PostgREST's filters read as their own
- * (%, _, \, and the commas and brackets of or()) becomes a space.
+ * (%, _, \, the * PostgREST reads as % in like and ilike, and the commas
+ * and brackets of or()) becomes a space.
  */
 export function referenceQuery(q: string): string {
   return q
     .slice(0, MAX_REFERENCE_QUERY)
-    .replace(/[%_\\,()]/g, ' ')
+    .replace(/[%_*\\,()]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
