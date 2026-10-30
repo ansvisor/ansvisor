@@ -383,6 +383,7 @@ export function ChatThreadView({
                 {turn === last && (
                   <NextMoves
                     moves={nextMoves}
+                    narrow={variant === 'panel'}
                     disabled={atCap}
                     onPick={(move) =>
                       void send(move.prompt, {

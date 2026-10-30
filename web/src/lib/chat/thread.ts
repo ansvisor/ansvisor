@@ -9,7 +9,8 @@ import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from '.
  * tool, no debug record). Read as the person, so the chat's policy holds: a
  * chat is its author's only (CHAT-20 §16c). A run still under way is rebuilt
  * by the page from its events (`…/events?after=0`), and keeps streaming.
- * A finished run's next moves come back from chat_next_moves.
+ * A finished run's next moves come back from chat_next_moves, in the
+ * person's own chat only; a failed read of them loses the moves, not the chat.
  */
 
 export interface ThreadRun {
@@ -93,6 +94,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   if (runs.error) throw new Error(`Could not read the chat's runs: ${runs.error.message}`);
 
   const runIds = (runs.data ?? []).map((run) => run.id);
+  const mine = !!user && chat.user_id === user.id;
   const [steps, files, moves] = runIds.length
     ? await Promise.all([
         supabase
@@ -105,11 +107,14 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
           .select('id, run_id, message_id, title, type, formats, status, content_draft_id')
           .in('run_id', runIds)
           .order('created_at', { ascending: true }),
-        supabase
-          .from('chat_next_moves')
-          .select('run_id, rank, label, prompt, ghost_ok')
-          .in('run_id', runIds)
-          .order('rank', { ascending: true }),
+        // A teammate's shared chat shows no moves: they are the author's to take.
+        mine
+          ? supabase
+              .from('chat_next_moves')
+              .select('run_id, rank, label, prompt, ghost_ok')
+              .in('run_id', runIds)
+              .order('rank', { ascending: true })
+          : { data: [], error: null },
       ])
     : [
         { data: [], error: null },
@@ -118,9 +123,10 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
       ];
   if (steps.error) throw new Error(`Could not read the chat's steps: ${steps.error.message}`);
   if (files.error) throw new Error(`Could not read the chat's files: ${files.error.message}`);
-  if (moves.error) throw new Error(`Could not read the chat's next moves: ${moves.error.message}`);
+  if (moves.error)
+    console.error("[chat/thread] could not read the chat's next moves:", moves.error.message);
   const movesByRun = new Map<string, ChatNextMove[]>();
-  for (const m of (moves.data ?? []) as NextMoveRow[]) {
+  for (const m of (moves.error ? [] : (moves.data ?? [])) as NextMoveRow[]) {
     const move = clientMove({ label: m.label, prompt: m.prompt, ghostOk: m.ghost_ok });
     movesByRun.set(m.run_id, [...(movesByRun.get(m.run_id) ?? []), move]);
   }
@@ -168,7 +174,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
     conversationId: chat.id,
     title: chat.title,
     brandId: chat.brand_id,
-    mine: !!user && chat.user_id === user.id,
+    mine,
     messages: (messages.data ?? []).map((message) => ({
       role: message.role as 'user' | 'assistant',
       text: message.content_md,

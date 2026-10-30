@@ -4,6 +4,7 @@ import {
   ghostOf,
   nextMovesInput,
   pickNextMoves,
+  validMoves,
   type NextMoveInput,
 } from './next-moves';
 
@@ -118,13 +119,19 @@ describe('the browser’s moves', () => {
   });
 });
 
-describe('nextMovesInput', () => {
-  it('takes 1–4 moves with prompts under 80 characters', () => {
-    expect(nextMovesInput.safeParse({ moves: [move()] }).success).toBe(true);
-    expect(nextMovesInput.safeParse({ moves: [] }).success).toBe(false);
-    expect(nextMovesInput.safeParse({ moves: Array(5).fill(move()) }).success).toBe(false);
-    expect(nextMovesInput.safeParse({ moves: [move({ prompt: 'x'.repeat(81) })] }).success).toBe(
-      false,
-    );
+describe('nextMovesInput and validMoves', () => {
+  it('takes the call whole, up to 6 moves, and drops each move that doesn’t fit on its own', () => {
+    const bad = [
+      move({ prompt: 'x'.repeat(81) }),
+      { ...move(), kind: 'wander' },
+      { ...move(), class: 'delete' },
+      { label: '', prompt: 'Empty label', kind: 'continue', class: 'read' },
+    ];
+    const call = { moves: [...bad, move({ kind: 'deepen', class: 'read' })] };
+    expect(nextMovesInput.safeParse(call).success).toBe(true);
+    expect(validMoves(nextMovesInput.parse(call).moves)).toEqual([
+      move({ kind: 'deepen', class: 'read' }),
+    ]);
+    expect(nextMovesInput.safeParse({ moves: Array(7).fill(move()) }).success).toBe(false);
   });
 });

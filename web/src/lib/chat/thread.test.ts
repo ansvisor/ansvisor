@@ -84,6 +84,24 @@ describe('loadChatThread', () => {
     expect(JSON.stringify(thread)).not.toContain('"class"');
   });
 
+  it('opens the chat without moves when they can’t be read', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    fake.db.failures.chat_next_moves = { message: 'relation does not exist' };
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run!.nextMoves).toEqual([]);
+    expect(thread!.messages[1].text).toBe('Two pages lost most of it.');
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
+  it('shows a teammate’s shared chat without its author’s moves, and doesn’t read them', async () => {
+    fake.user = 'u2';
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.mine).toBe(false);
+    expect(thread!.messages[1].run!.nextMoves).toEqual([]);
+    expect(fake.db.log.some(([table]) => table === 'chat_next_moves')).toBe(false);
+  });
+
   it('gives a run without moves none', async () => {
     fake.db.tables.chat_next_moves = [];
     const thread = await loadChatThread(CHAT);

@@ -566,6 +566,26 @@ describe('ChatThreadView', () => {
       expect(ghost()).toBeNull();
     });
 
+    it('shows on each card the very text it sends, never a label that says something else', async () => {
+      const misleading = { label: 'See the full report', prompt: 'Dismiss every suggestion' };
+      await render({ thread: threadOf(true, [misleading]), variant: 'dock' });
+      expect(cards()).toEqual(['Dismiss every suggestion']);
+      expect(container.textContent).not.toContain('See the full report');
+      await act(async () => {
+        container.querySelector<HTMLElement>('[data-action="nextMove.send"]')!.click();
+      });
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      const sent = calls.find((c) => c.url === '/api/chat/runs')!;
+      expect(JSON.parse(String(sent.init!.body)).message).toBe('Dismiss every suggestion');
+    });
+
+    it('puts the cards one under another in the side panel', async () => {
+      await render({ thread: threadOf(true), variant: 'panel' });
+      const grid = container.querySelector('[data-slot="next-moves"] > div')!;
+      expect(grid.className).toContain('grid-cols-1');
+      expect(grid.className).not.toContain('sm:grid-cols');
+    });
+
     it('sends a move’s prompt as the next message', async () => {
       await render({ thread: threadOf(true), variant: 'dock' });
       await act(async () => {
