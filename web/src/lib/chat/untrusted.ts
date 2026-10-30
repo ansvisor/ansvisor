@@ -48,6 +48,8 @@ export const DATA_TAGS = ['untrusted_data', 'app_data', 'read_results'] as const
 
 // Zero-width, soft hyphen, direction marks and isolates, word joiners, BOM.
 const INVISIBLE = /[­​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;
+// Unicode tag characters (U+E0000–U+E007F): invisible, yet a model can read the ASCII they spell.
+const TAG_CHARS = /[\u{E0000}-\u{E007F}]/gu;
 const HTML_COMMENT = /<!--[\s\S]*?(?:-->|$)/g;
 const HIDDEN_ELEMENT =
   /<([a-z][\w-]*)\b[^>]*?(?:\shidden(?=[\s=>/])|display\s*:\s*none|visibility\s*:\s*hidden|aria-hidden\s*=\s*["']?true|font-size\s*:\s*0(?:px)?\s*[;"'])[^>]*>[\s\S]*?<\/\1\s*>/gi;
@@ -59,6 +61,7 @@ export function stripHidden(text: string): string {
     .replace(HTML_COMMENT, '')
     .replace(HIDDEN_ELEMENT, '')
     .replace(INVISIBLE, '')
+    .replace(TAG_CHARS, '')
     .replace(DATA_TAG, '[tag removed]');
 }
 
@@ -83,17 +86,32 @@ export function looksLikeInjection(text: string): boolean {
   return INJECTION.some((pattern) => pattern.test(text));
 }
 
+/** The ASCII that tag characters spell, in place, so a check can read it. */
+const spelledByTags = (text: string) =>
+  text.replace(TAG_CHARS, (c) => String.fromCharCode((c.codePointAt(0) ?? 0xe0000) - 0xe0000));
+
 /**
  * An untrusted result made safe to show the model: every text in it
  * stripped of hidden parts, and whether any text tried to instruct an AI
- * (checked before stripping, since hidden text is where that hides).
+ * (checked before and after stripping: hidden text is where that hides, and
+ * zero-width characters can split a phrase until they are gone).
  */
 export function guardData(value: Json): { value: Json; injection: boolean } {
   let injection = false;
   const walk = (node: Json, depth: number): Json => {
     if (typeof node === 'string') {
-      if (!injection && looksLikeInjection(node)) injection = true;
-      return stripHidden(node);
+      const stripped = stripHidden(node);
+      const spelled = spelledByTags(node);
+      // Raw (hidden text is where it hides), stripped (what the model reads) and tag-spelled.
+      if (
+        !injection &&
+        (looksLikeInjection(node) ||
+          looksLikeInjection(stripped) ||
+          (spelled !== node && looksLikeInjection(spelled)))
+      ) {
+        injection = true;
+      }
+      return stripped;
     }
     if (depth > 8 || !node || typeof node !== 'object') return node;
     if (Array.isArray(node)) return node.map((item) => walk(item, depth + 1));
