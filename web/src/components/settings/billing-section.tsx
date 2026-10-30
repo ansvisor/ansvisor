@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PlanSwitcher } from '@/components/settings/plan-switcher';
 import { InvoiceList } from '@/components/settings/invoice-list';
 import { AiUsageCard } from '@/components/settings/ai-usage-card';
+import { PLAN_STARTED_EVENT } from '@/lib/billing/plan-started';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { createClient } from '@/lib/supabase/client';
@@ -133,6 +134,18 @@ export function BillingSection() {
 
     loadSubscription();
   }, [contextPlanId]);
+
+  // A trial's plan started from the AI usage band or card (Start my plan
+  // now): the plan card shows it, and the AI usage card reads it again.
+  useEffect(() => {
+    const onStarted = (event: Event) => {
+      const started = (event as CustomEvent<SubscriptionData>).detail;
+      if (started?.planId) setSubscription(started);
+      setPlanChanges((n) => n + 1);
+    };
+    window.addEventListener(PLAN_STARTED_EVENT, onStarted);
+    return () => window.removeEventListener(PLAN_STARTED_EVENT, onStarted);
+  }, []);
 
   if (loading) {
     return (
