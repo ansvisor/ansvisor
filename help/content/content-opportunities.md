@@ -34,23 +34,23 @@ On the list, tick several opportunities. **Send All** sends them all to your wor
 
 Admins and managers click **New** to get suggestions now, instead of waiting for the next automatic run. Pick a **Focus**: **Let Ansvisor choose**, a **Topic** or a **Prompt**. You can add your own idea, up to 500 characters, and set **How many**.
 
-Opportunities are written per group of prompts: prompts of one topic that a single page could answer, and that already have tracked answers. Each group has at most one open opportunity.
+Opportunities are written per group of prompts: prompts of one topic that a single page could answer, and that already have tracked answers. Each group gets one opportunity; only **Another angle** adds a second take on it.
 
 ## What each focus picks
 
 - **Let Ansvisor choose** takes the highest-scoring groups that have no opportunity yet, one from each topic first.
 - **Topic** takes only that topic's groups.
-- **Prompt** takes only that prompt's group, so it always writes one opportunity, and **How many** stays at 1. If that prompt already has an open opportunity, a message says so when the run ends, with **Open existing**.
+- **Prompt** takes only that prompt's group, so it writes at most one opportunity, and **How many** stays at 1. If that prompt already has an open opportunity, a message says so when the run ends, with **Open existing**.
 
 ## No duplicates
 
-Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped. If nothing new is left, a message says every matching need already has one.
+Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped. If nothing new is written, the message says so and counts any duplicates it skipped.
 
 For a second take on the same need, use **Another angle** on the opportunity.
 
 ## How many you get
 
-New opportunities come from a monthly allowance set by your plan, with a cap on how many one request asks for; on limited plans the page shows what's left. Skipped duplicates and opportunities that couldn't be written don't count; **Another angle** counts as one new opportunity. Ansvisor also writes up to three new opportunities by itself each night.
+New opportunities come from a monthly allowance set by your plan, with a cap on how many one request asks for; on limited plans the page shows what's left. Skipped duplicates and opportunities that couldn't be written don't count; **Another angle** counts as one new opportunity. The up to three new opportunities Ansvisor writes by itself each night come from the same allowance.
 
 ## Owned and earned
 
