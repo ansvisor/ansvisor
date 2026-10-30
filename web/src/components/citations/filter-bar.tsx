@@ -12,8 +12,7 @@ import { useTranslations } from 'next-intl';
 import type { Topic } from '@/types';
 import { cn } from '@/lib/utils';
 import type { CitationsDatePreset } from '@/lib/actions/citations';
-import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
-import { getAIProviderDisplayName, resolveAIProvider } from '@/components/ai-provider-avatar';
+import { modelLabel } from '@/lib/model-families';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import {
   Select,
@@ -137,12 +136,9 @@ export interface PlatformOption {
   label: string;
 }
 
+/** The name a model slug is shown by, as Brand Visibility's filter names it. */
 export function getPlatformDisplayLabel(slug: string): string {
-  return (
-    MODEL_PROVIDER_LABELS[slug] ??
-    PLATFORM_LABELS[slug] ??
-    getAIProviderDisplayName(resolveAIProvider(slug))
-  );
+  return modelLabel(slug);
 }
 
 export function getGroupedPlatformLabel(value: string): string {
