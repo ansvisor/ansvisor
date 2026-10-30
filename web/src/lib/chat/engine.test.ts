@@ -698,6 +698,14 @@ describe('the fact check (W1-21)', () => {
     expect(streamed).toBe(`${lead}98765 for more.`);
   });
 
+  it('never marks a run done without its answer when the check step cannot be written', async () => {
+    useModels([READY], [text('Up 37% this week.')]);
+    db.failures.chat_run_steps = { message: 'down' };
+    const runId = await turn(ADMIN, 'Hi');
+    delete db.failures.chat_run_steps;
+    expect(runRow(runId)).toMatchObject({ status: 'error', error: 'failed' });
+  });
+
   it('holds back only a short run, so each check reads a short text', async () => {
     const run = 'a-'.repeat(2_000);
     useModels(
