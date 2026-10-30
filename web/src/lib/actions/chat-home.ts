@@ -18,7 +18,8 @@ export type DueCountResult = { ok: true; count: number } | { ok: false };
 const OPEN_STATUSES = ['new', 'in_progress', 'on_hold'];
 
 const input = z.object({
-  brandId: z.string().uuid(),
+  // guid, not uuid: ids made by hand (the demo brand's) aren't RFC 4122 ones.
+  brandId: z.guid(),
   /** The week's last day, YYYY-MM-DD, in the person's own time zone. */
   through: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
