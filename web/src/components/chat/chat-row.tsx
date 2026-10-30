@@ -19,6 +19,57 @@ export function rowTime(iso: string, now = new Date()): string {
 }
 
 /**
+ * A chat's one line under its title (CHAT-01 agentic update, "Chat rows"):
+ * the step it is on while it works or waits, the result's time once done,
+ * else its brand; amber while it needs the person, red once it stopped.
+ * `t` is the `chatShell.menu` translations.
+ */
+export function chatLineOf(
+  chat: ChatListItem,
+  t: ReturnType<typeof useTranslations>,
+): { line: string | null; tone: 'amber' | 'red' | null } {
+  const step = chat.progress ? Math.min(chat.progress.done + 1, chat.progress.total) : 0;
+  const total = chat.progress?.total ?? 0;
+  switch (chat.state) {
+    case 'needsYou':
+      return {
+        line: total ? t('line.needsYouStep', { step, total }) : t('line.needsYou'),
+        tone: 'amber',
+      };
+    case 'running':
+      return {
+        line: total
+          ? chat.step
+            ? t('line.runningStep', { step, total, label: chat.step })
+            : t('line.runningCount', { step, total })
+          : t('line.running'),
+        tone: null,
+      };
+    case 'paused':
+      return {
+        line: total ? t('line.pausedStep', { step, total }) : t('line.paused'),
+        tone: null,
+      };
+    case 'done':
+      return {
+        line: chat.finishedAt
+          ? t('line.doneAt', { time: rowTime(chat.finishedAt) })
+          : t('line.done'),
+        tone: null,
+      };
+    case 'failed':
+      return {
+        line: chat.finishedAt
+          ? t('line.failedAt', { time: rowTime(chat.finishedAt) })
+          : t('line.failed'),
+        tone: 'red',
+      };
+    default:
+      return { line: chat.brand, tone: null };
+  }
+}
+
+/**
  * A chat in the chat menu (CHAT-01 agentic update, "Chat rows"): its dot,
  * its title — "New chat" shimmering until Chat names it, bold while a result
  * is unread — and one line: the step it is on while it works or waits, the
@@ -41,29 +92,7 @@ export function ChatRow({
   className?: string;
 }) {
   const t = useTranslations('chatShell.menu');
-  const step = chat.progress ? Math.min(chat.progress.done + 1, chat.progress.total) : 0;
-  const total = chat.progress?.total ?? 0;
-  let line: ReactNode = chat.brand;
-  let lineTone: 'amber' | 'red' | null = null;
-  if (chat.state === 'needsYou') {
-    line = total ? t('line.needsYouStep', { step, total }) : t('line.needsYou');
-    lineTone = 'amber';
-  } else if (chat.state === 'running') {
-    line = total
-      ? chat.step
-        ? t('line.runningStep', { step, total, label: chat.step })
-        : t('line.runningCount', { step, total })
-      : t('line.running');
-  } else if (chat.state === 'paused') {
-    line = total ? t('line.pausedStep', { step, total }) : t('line.paused');
-  } else if (chat.state === 'done') {
-    line = chat.finishedAt ? t('line.doneAt', { time: rowTime(chat.finishedAt) }) : t('line.done');
-  } else if (chat.state === 'failed') {
-    line = chat.finishedAt
-      ? t('line.failedAt', { time: rowTime(chat.finishedAt) })
-      : t('line.failed');
-    lineTone = 'red';
-  }
+  const { line, tone: lineTone } = chatLineOf(chat, t);
   const title = chat.title ?? t('untitled');
   const chatActions = useChatActions();
   // A pinned chat shows the pin where the dot is, unless it works or waits (CHAT-01 row menu).

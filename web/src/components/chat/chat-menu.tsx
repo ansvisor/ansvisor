@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { useChatList, type ChatListStatus } from './chat-list-provider';
 import { ChatRowMenu } from './chat-menus';
 import { ChatRow } from './chat-row';
+import { useChatSearch } from './chat-search';
 import { MenuToggleIcon, shortcutLabel, useIsMac } from './chat-shortcuts';
 
 /** The menu's sections the person folded, remembered in this browser. */
@@ -136,6 +137,8 @@ export interface ChatMenuViewProps {
   status: ChatListStatus;
   chats: ChatListItem[];
   total: number;
+  /** The person's archived chats ("Archived · 2 ›"). */
+  archived?: number;
   pathname: string;
   /** Whether the menu is shown: its toggle says Hide or Show. */
   open: boolean;
@@ -156,15 +159,18 @@ export interface ChatMenuViewProps {
  * something needs the person); Governance (Activity, What Chat can do, Tool
  * policy: the governance mockup's menu, #cnav); Agents at work (needs you,
  * running, unread results: three rows, See all, Show less, the dots'
- * legend); Chats with its count, Pinned, then by day. Items whose pages
- * aren't built yet stay out (Settings, Skills, Integrations, Scheduled,
- * Files, Search, All chats, Archived). Sections fold, remembered in this
+ * legend); Chats with its count, Search chats (typing lists the chats
+ * whose title or messages match, in place of the days; Ctrl K opens the
+ * palette under it), Pinned, then by day, and All chats and Archived at the
+ * end. Items whose pages aren't built yet stay out (Settings, Skills,
+ * Integrations, Scheduled, Files). Sections fold, remembered in this
  * browser.
  */
 export function ChatMenuView({
   status,
   chats,
   total,
+  archived = 0,
   pathname,
   open,
   onToggle,
@@ -183,6 +189,9 @@ export function ChatMenuView({
     chats: false,
   });
   const [allRuns, setAllRuns] = useState(false);
+  const [query, setQuery] = useState('');
+  const found = useChatSearch(query);
+  const searching = query.trim() !== '';
   useEffect(() => {
     // Browser storage exists only after hydration.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -408,15 +417,79 @@ export function ChatMenuView({
                 </button>
               </p>
             )}
-            {status === 'ready' && groups.length === 0 && atWork.length === 0 && (
-              <p className="px-2 py-1 text-xs text-muted-foreground">{t('empty')}</p>
+            {status === 'ready' && (
+              <input
+                id="chat-menu-search"
+                type="search"
+                data-action="chatMenu.searchChats"
+                aria-label={t('searchLabel')}
+                title={t('searchTip', { keys: shortcutLabel('search', isMac) })}
+                placeholder={t('searchPlaceholder', { keys: shortcutLabel('search', isMac) })}
+                autoComplete="off"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape' && query) {
+                    event.stopPropagation();
+                    setQuery('');
+                  }
+                }}
+                className="mt-1.5 mb-1 block w-full rounded-lg border bg-background px-2.5 py-1.5 text-[12.5px] outline-none placeholder:text-muted-foreground focus:border-foreground/30 [&::-webkit-search-cancel-button]:hidden"
+              />
             )}
-            {groups.map((group) => (
-              <div key={group.key}>
-                <SectionHead>{groupLabel(group.group, t, now)}</SectionHead>
-                {group.chats.map(row)}
+            {searching ? (
+              <div role="region" aria-label={t('searchResults')} aria-live="polite">
+                {found.chats.map(row)}
+                {found.status === 'ready' && found.chats.length === 0 && (
+                  <p className="px-2 py-1 text-xs text-muted-foreground">
+                    {t('noMatch')}{' '}
+                    <button
+                      type="button"
+                      data-action="emptyState.clearFilters"
+                      onClick={() => setQuery('')}
+                      className="underline underline-offset-2 hover:text-foreground"
+                    >
+                      {t('clearSearch')}
+                    </button>
+                  </p>
+                )}
+                {found.status === 'error' && (
+                  <p className="px-2 py-1 text-xs text-muted-foreground">{t('searchFailed')}</p>
+                )}
               </div>
-            ))}
+            ) : (
+              <>
+                {status === 'ready' && groups.length === 0 && atWork.length === 0 && (
+                  <p className="px-2 py-1 text-xs text-muted-foreground">{t('empty')}</p>
+                )}
+                {groups.map((group) => (
+                  <div key={group.key}>
+                    <SectionHead>{groupLabel(group.group, t, now)}</SectionHead>
+                    {group.chats.map(row)}
+                  </div>
+                ))}
+              </>
+            )}
+            {status === 'ready' && (
+              <div className="mt-1">
+                <Link
+                  href="/dashboard/chat/all"
+                  data-action="chatMenu.openAllChats"
+                  onClick={onNavigate}
+                  className="block w-full rounded-lg p-2 text-[12.5px] text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  {t('allChats', { count: total })}
+                </Link>
+                <Link
+                  href="/dashboard/chat/all?tab=archived"
+                  data-action="chatMenu.openArchived"
+                  onClick={onNavigate}
+                  className="block w-full rounded-lg p-2 text-[12.5px] text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  {t('archivedLink', { count: archived })}
+                </Link>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -426,9 +499,12 @@ export function ChatMenuView({
 
 /** The chat menu with the person's chats from the shell's list. */
 export function ChatMenu(
-  props: Omit<ChatMenuViewProps, 'status' | 'chats' | 'total' | 'pathname' | 'onRetry'>,
+  props: Omit<
+    ChatMenuViewProps,
+    'status' | 'chats' | 'total' | 'archived' | 'pathname' | 'onRetry'
+  >,
 ) {
-  const { status, chats, total, refresh } = useChatList();
+  const { status, chats, total, archived, refresh } = useChatList();
   const pathname = usePathname();
   return (
     <ChatMenuView
@@ -437,6 +513,7 @@ export function ChatMenu(
       status={status}
       chats={chats}
       total={total}
+      archived={archived}
       pathname={pathname}
       onRetry={() => void refresh()}
     />

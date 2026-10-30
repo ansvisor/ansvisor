@@ -8,9 +8,11 @@ import type { ChatListItem } from '@/lib/chat/conversations';
 /**
  * The chat menu and its shell (CHAT-01 items 6, 9a–9f; CHAT-23 G1): the
  * toggle and New chat, Home with what needs the person, Agents at work in
- * three rows with See all and Show less, Chats by day, and no item for a page
- * that isn't built. `Ctrl+\` hides the menu, keeps the choice on the person
- * and shows the strip instead; `Ctrl+Shift+O` starts a new chat.
+ * three rows with See all and Show less, Chats by day, Search chats in
+ * place of the days while typing, All chats and Archived at the end, and no
+ * item for a page that isn't built. `Ctrl+\` hides the menu, keeps the
+ * choice on the person and shows the strip instead; `Ctrl+Shift+O` starts a
+ * new chat; `Ctrl K` opens the search palette and closes it again.
  */
 
 const nav = vi.hoisted(() => ({ pathname: '/dashboard/chat', push: vi.fn() }));
@@ -127,16 +129,53 @@ describe('ChatMenuView', () => {
     );
     expect(action('chatMenu.openPolicy')[0].getAttribute('href')).toBe('/dashboard/settings/chat');
     expect(action('chatMenu.openInbox')[0].getAttribute('href')).toBe('/dashboard/chat/inbox');
-    for (const unbuilt of [
-      'chatMenu.openSkills',
-      'chatMenu.openScheduled',
-      'chatMenu.openFiles',
-      'chatMenu.searchChats',
-      'chatMenu.openAllChats',
-    ]) {
+    for (const unbuilt of ['chatMenu.openSkills', 'chatMenu.openScheduled', 'chatMenu.openFiles']) {
       expect(action(unbuilt)).toHaveLength(0);
     }
     expect(text()).toContain('No chats yet.');
+    expect(action('chatMenu.searchChats')[0].getAttribute('placeholder')).toBe(
+      'Search chats · Ctrl K',
+    );
+    expect(action('chatMenu.openAllChats')[0].getAttribute('href')).toBe('/dashboard/chat/all');
+    expect(action('chatMenu.openAllChats')[0].textContent).toBe('All chats · 0 ›');
+    expect(action('chatMenu.openArchived')[0].getAttribute('href')).toBe(
+      '/dashboard/chat/all?tab=archived',
+    );
+  });
+
+  it('lists the matching chats in place of the days while Search chats has words', async () => {
+    const fetchMock = vi.fn(async (url: string) => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        chats: url.includes('q=zzz') ? [] : [chat('found', { title: 'Citations drop' })],
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    await render(menu([chat('t', { lastMessageAt: '2026-10-30T10:00:00' })], { archived: 2 }));
+    expect(action('chatMenu.openArchived')[0].textContent).toBe('Archived · 2 ›');
+    const field = action('chatMenu.searchChats')[0] as HTMLInputElement;
+    const type = async (value: string) => {
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+        setter.call(field, value);
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 260));
+      });
+    };
+    await type('citat');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/chat/conversations/search?q=citat&view=active',
+      expect.anything(),
+    );
+    expect(text()).toContain('Citations drop');
+    expect(text()).not.toContain('Today');
+    await type('zzz');
+    expect(text()).toContain('No chats match.');
+    await act(async () => action('emptyState.clearFilters')[0].click());
+    expect(field.value).toBe('');
+    expect(text()).toContain('Today');
+    vi.unstubAllGlobals();
   });
 
   it('counts the Inbox, and lists Agents at work in three rows until See all', async () => {
@@ -240,6 +279,7 @@ describe('ChatShell', () => {
       'Show chat menu',
     );
     expect(strip.querySelector('[data-action="chat.new"]')).not.toBeNull();
+    expect(strip.querySelector('[data-action="search.open"]')?.textContent).toBe('SearchCtrl K');
     expect(strip.querySelector('[data-action="runs.toggleTray"]')).not.toBeNull();
     expect(strip.querySelector('[data-action="chatMenu.openInbox"]')).not.toBeNull();
     await act(async () =>
@@ -276,5 +316,33 @@ describe('ChatShell', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: '\\', metaKey: true }));
     });
     expect(saveChatMenuOpen).not.toHaveBeenCalled();
+  });
+
+  it('opens the search palette with Ctrl K, with New chat and the Chat pages, and closes it again', async () => {
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    const press = async () => {
+      const event = new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, cancelable: true });
+      await act(async () => {
+        window.dispatchEvent(event);
+      });
+      return event;
+    };
+    expect((await press()).defaultPrevented).toBe(true);
+    const palette = document.body.querySelector('[data-action="search.input"]');
+    expect(palette).not.toBeNull();
+    const popup = palette!.closest('[data-slot="popover-content"]')!;
+    expect(popup.querySelector('[data-action="chat.new"]')).not.toBeNull();
+    expect(popup.querySelector('[data-action="search.openPage"]')?.textContent).toContain(
+      'All chats',
+    );
+    await act(async () =>
+      (popup.querySelector('[data-action="search.openPage"]') as HTMLElement).click(),
+    );
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/all');
+    await press();
+    expect(document.body.querySelector('[data-action="search.input"]')).not.toBeNull();
+    await press();
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(document.body.querySelector('[data-action="search.input"]')).toBeNull();
   });
 });

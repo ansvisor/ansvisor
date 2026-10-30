@@ -45,6 +45,12 @@ interface Builder extends PromiseLike<Result> {
   not(column: string, operator: 'is', value: null): Builder;
   lt(column: string, value: string): Builder;
   gt(column: string, value: unknown): Builder;
+  /**
+   * A full-text match (`fts`): every `'word':*` term of `query`, joined by `&`,
+   * starts a word of the row's `column` — a test row holds its search
+   * column as plain words.
+   */
+  textSearch(column: string, query: string, options?: { config?: string }): Builder;
   order(column: string, options?: { ascending?: boolean }): Builder;
   limit(count: number): Builder;
   /** Rows `from` to `to`, both included, after the order. */
@@ -233,6 +239,27 @@ export function createFakeSupabase(): FakeSupabase {
         },
         gt(column, value) {
           filters.push((row) => (row[column] as number) > (value as number));
+          return builder;
+        },
+        textSearch(column, query) {
+          // Words as Postgres's parser keeps them, roughly: split on spaces,
+          // punctuation trimmed from the ends ("nike.com" stays one word).
+          const wordOf = (text: string) =>
+            text.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+          const terms = query.split(' & ').map((term) =>
+            wordOf(
+              term
+                .trim()
+                .replace(/^'(.*)':\*$/, '$1')
+                .replace(/''/g, "'"),
+            ),
+          );
+          filters.push((row) => {
+            const words = String(row[column] ?? '')
+              .split(/\s+/)
+              .map(wordOf);
+            return terms.every((term) => words.some((word) => word.startsWith(term)));
+          });
           return builder;
         },
         order(column, options) {

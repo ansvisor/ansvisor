@@ -329,6 +329,100 @@ export async function listChats(
   };
 }
 
+/** Search answers with this many chats at most. */
+export const CHAT_SEARCH_MAX = 50;
+/** Messages a search looks through for their chats, newest first. */
+const SEARCH_MESSAGES_MAX = 200;
+
+export const searchQuery = z.object({
+  q: z.string().trim().min(1).max(200),
+  view: z.enum(['active', 'archived']).default('active'),
+  limit: z.coerce.number().int().min(1).max(CHAT_SEARCH_MAX).default(20),
+});
+export type SearchQuery = z.infer<typeof searchQuery>;
+
+/**
+ * What the person typed as a full-text query over the search columns
+ * (00407: the 'simple' configuration, any language): each space-separated
+ * word as a quoted prefix ("citat" finds "citations"), all of them
+ * required. Quoted, Postgres splits a word the way it split the text, so
+ * "nike.com", "4.5" or an email address — one token in the text — is found
+ * whole, and lowercases it itself ("İstanbul"). A quote is doubled and a
+ * backslash dropped, so the person's own operators never reach Postgres as
+ * operators. Null when no word has a letter or digit.
+ */
+export function searchTermsOf(text: string): string | null {
+  const words = text
+    .split(/\s+/)
+    .filter((word) => /[\p{L}\p{N}]/u.test(word))
+    .slice(0, 8);
+  return words.length
+    ? words.map((word) => `'${word.replace(/\\/g, ' ').replace(/'/g, "''")}':*`).join(' & ')
+    : null;
+}
+
+/**
+ * Search chats and the Ctrl K palette (CHAT-01 item 6; CHAT-23 G2,
+ * `chatMenu.searchChats`, `allChats.search`): the chats whose title or any
+ * message has every word typed, newest first. `active`: the person's own
+ * and the team's shared chats that aren't archived (an archived chat is out
+ * of search, as it is out of Chats); `archived`: their own archived ones,
+ * for All chats › Archived. Read as the person, so the chats' policies hold.
+ */
+export async function searchChats(
+  reader: Reader,
+  actor: ChatActor,
+  query: SearchQuery,
+): Promise<ChatListItem[]> {
+  const terms = searchTermsOf(query.q);
+  if (!terms) return [];
+  const archived = query.view === 'archived';
+  const chats = () => {
+    const q = reader
+      .from('chat_conversations')
+      .select(CHAT_COLUMNS)
+      .eq('organization_id', actor.organizationId)
+      .is('deleted_at', null);
+    return archived ? q.not('archived_at', 'is', null) : q.is('archived_at', null);
+  };
+
+  const [byTitle, byMessage] = await Promise.all([
+    chats()
+      .textSearch('search_tsv', terms, { config: 'simple' })
+      .order('last_message_at', { ascending: false })
+      .limit(query.limit),
+    reader
+      .from('chat_messages')
+      .select('conversation_id')
+      .textSearch('search_tsv', terms, { config: 'simple' })
+      .order('created_at', { ascending: false })
+      .limit(SEARCH_MESSAGES_MAX),
+  ]);
+  if (byTitle.error) throw new Error(`Could not search the chats: ${byTitle.error.message}`);
+  if (byMessage.error) throw new Error(`Could not search the messages: ${byMessage.error.message}`);
+
+  const titled = (byTitle.data ?? []) as ChatRow[];
+  const found = new Set(titled.map((c) => c.id));
+  const others = [
+    ...new Set(
+      ((byMessage.data ?? []) as { conversation_id: string }[])
+        .map((m) => m.conversation_id)
+        .filter((id) => !found.has(id)),
+    ),
+  ];
+  const messaged = others.length ? await chats().in('id', others) : { data: [], error: null };
+  if (messaged.error) throw new Error(`Could not search the chats: ${messaged.error.message}`);
+
+  const rows = [...titled, ...((messaged.data ?? []) as ChatRow[])]
+    // Belt and braces over the policies: their own, or (not archived) shared with the team.
+    .filter((c) =>
+      archived ? c.user_id === actor.userId : c.user_id === actor.userId || c.shared_at !== null,
+    )
+    .sort((a, b) => Date.parse(b.last_message_at) - Date.parse(a.last_message_at))
+    .slice(0, query.limit);
+  return itemsOf(reader, actor, rows);
+}
+
 /** One chat's row, as the person reads it; null when it isn't theirs to read or is gone. */
 export async function readChat(
   reader: Reader,

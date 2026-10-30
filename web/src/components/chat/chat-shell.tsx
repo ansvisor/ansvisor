@@ -23,6 +23,7 @@ import { inboxItems } from './chat-inbox';
 import { useChatList } from './chat-list-provider';
 import { ChatMenu } from './chat-menu';
 import { ChatHeaderMenu, RenameField } from './chat-menus';
+import { ChatSearchPalette } from './chat-search';
 import { chatShortcutOf, MenuToggleIcon, shortcutLabel, useIsMac } from './chat-shortcuts';
 
 /** At this width and up the chat menu is a column; below it, a drawer (CHAT-01 item 9). */
@@ -45,6 +46,18 @@ function useIsWide(): boolean {
 
 const CHAT_PATH = /^\/dashboard\/chat\/([0-9a-f-]{36})$/i;
 
+/**
+ * Where the palette opens while the menu is shown: under its Search chats
+ * field, or under New chat while the Chats section is folded.
+ */
+function searchAnchor(): Element | null {
+  if (typeof document === 'undefined') return null;
+  return (
+    document.getElementById('chat-menu-search') ??
+    document.querySelector('#chat-menu [data-action="chat.new"]')
+  );
+}
+
 /** A chat's dot as the pill beside its title, or none while it is idle. */
 const PILL_OF: Partial<Record<string, StatusPillState>> = {
   running: 'working',
@@ -58,10 +71,11 @@ const PILL_OF: Partial<Record<string, StatusPillState>> = {
  * beside the page, and the 52px header. The menu's toggle and `Ctrl+\`
  * hide or show it, and the choice is kept on the person (all devices);
  * hidden, the page takes the whole width and the header starts with a
- * strip — toggle · New chat · runs pill · Inbox — that is gone again once the menu
- * is back. Below 1100px the menu is a drawer the same toggle opens, which
- * leaves the saved choice alone. `Ctrl+Shift+O` starts a new chat. The app
- * sidebar beside it is untouched.
+ * strip — toggle · New chat · Search · runs pill · Inbox — that is gone
+ * again once the menu is back. Below 1100px the menu is a drawer the same
+ * toggle opens, which leaves the saved choice alone. `Ctrl+Shift+O` starts
+ * a new chat; `Ctrl K` opens the search palette under Search chats, or
+ * under the strip's Search. The app sidebar beside it is untouched.
  */
 export function ChatShell(props: { menuOpen: boolean; children: ReactNode }) {
   return (
@@ -95,6 +109,7 @@ function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: R
   const inbox = useMemo(() => inboxItems(chats).length, [chats]);
   const [open, setOpen] = useState(menuOpen);
   const [drawer, setDrawer] = useState(false);
+  const [searching, setSearching] = useState(false);
   const stripToggle = useRef<HTMLButtonElement>(null);
   const focusAfterToggle = useRef(false);
 
@@ -131,6 +146,7 @@ function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: R
       if (!shortcut) return;
       event.preventDefault();
       if (shortcut === 'menu') toggle();
+      else if (shortcut === 'search') setSearching((was) => !was);
       else newChat();
     };
     window.addEventListener('keydown', onKey);
@@ -191,6 +207,12 @@ function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: R
                 <span aria-hidden>＋</span>
                 {t('newChat')}
               </button>
+              <ChatSearchPalette
+                trigger
+                open={searching}
+                onOpenChange={setSearching}
+                onNewChat={newChat}
+              />
               {runs}
               <Link
                 href="/dashboard/chat/inbox"
@@ -213,6 +235,15 @@ function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: R
               <ChatTitle chat={current} fallback={t('untitled')} />
               {pill && <StatusPill state={pill} />}
             </>
+          )}
+          {!strip && (
+            // With the menu shown, the palette opens under its Search chats field.
+            <ChatSearchPalette
+              open={searching}
+              onOpenChange={setSearching}
+              onNewChat={newChat}
+              anchor={searchAnchor}
+            />
           )}
           <div className="ml-auto flex items-center gap-1.5">
             {!strip && runs}

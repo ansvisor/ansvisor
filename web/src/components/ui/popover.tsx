@@ -18,14 +18,19 @@ function PopoverContent({
   alignOffset = 0,
   side = 'bottom',
   sideOffset = 6,
+  anchor,
   className,
   ...props
 }: PopoverPrimitive.Popup.Props &
-  Pick<PopoverPrimitive.Positioner.Props, 'align' | 'alignOffset' | 'side' | 'sideOffset'>) {
+  Pick<
+    PopoverPrimitive.Positioner.Props,
+    'align' | 'alignOffset' | 'side' | 'sideOffset' | 'anchor'
+  >) {
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Positioner
         className="isolate z-50 outline-none"
+        anchor={anchor}
         align={align}
         alignOffset={alignOffset}
         side={side}

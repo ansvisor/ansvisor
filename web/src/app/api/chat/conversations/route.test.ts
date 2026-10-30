@@ -26,6 +26,7 @@ vi.mock('@/lib/chat/conversations', async (original) => {
   return {
     ...actual,
     listChats: vi.fn(async () => ({ chats: [], total: 0, archived: 0 })),
+    searchChats: vi.fn(async () => []),
     readChat: vi.fn(async () => null),
     deleteChat: vi.fn(async () => ({ ok: false, reason: 'not_found' })),
     updateChat: vi.fn(async () => null),
@@ -35,7 +36,8 @@ vi.mock('@/lib/chat/thread', () => ({ loadChatThread: vi.fn(async () => null) })
 
 const list = await import('./route');
 const one = await import('./[id]/route');
-const { listChats } = await import('@/lib/chat/conversations');
+const search = await import('./search/route');
+const { listChats, searchChats } = await import('@/lib/chat/conversations');
 
 const ID = 'cccccccc-0000-4000-8000-000000000001';
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
@@ -92,5 +94,21 @@ describe('/api/chat/conversations', () => {
     expect((await patch({})).status).toBe(400);
     expect((await patch({ owner: 'me' })).status).toBe(400);
     expect((await patch({ pinned: true })).status).toBe(404);
+  });
+
+  it('searches with the defaults, and refuses an empty or bad search as a value', async () => {
+    const url = 'https://app.example.com/api/chat/conversations/search';
+    const ok = await search.GET(new Request(`${url}?q=citations`));
+    expect(await ok.json()).toEqual({ ok: true, chats: [] });
+    expect(searchChats).toHaveBeenCalledWith({}, ACTOR, {
+      q: 'citations',
+      view: 'active',
+      limit: 20,
+    });
+    expect((await search.GET(new Request(url))).status).toBe(400);
+    expect((await search.GET(new Request(`${url}?q=%20%20`))).status).toBe(400);
+    expect((await search.GET(new Request(`${url}?q=x&limit=500`))).status).toBe(400);
+    state.on = false;
+    expect((await search.GET(new Request(`${url}?q=x`))).status).toBe(404);
   });
 });
