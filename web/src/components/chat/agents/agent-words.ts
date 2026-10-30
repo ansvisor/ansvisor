@@ -14,7 +14,9 @@ import {
  * times ("Today 09:14", "Mon 07:00"), triggers in short ("Every Mon 09:00 ·
  * New Recover signal"), the next run, the scope ("Brand A", "3 brands"),
  * connections and the 30-day outcomes. One place for the list and the
- * detail. `now` and `timeZone` are fixed in tests; the browser's otherwise.
+ * detail. A schedule's times are on its own clock, as its rule reads
+ * ("Every Mon 07:00" runs next "Mon 07:00"); other times on the viewer's.
+ * `now` and `timeZone` are fixed in tests; the browser's otherwise.
  */
 export function useAgentWords(now: Date, timeZone?: string) {
   const t = useTranslations('chatAgents');
@@ -22,9 +24,12 @@ export function useAgentWords(now: Date, timeZone?: string) {
   const tKpis = useTranslations('actionCenter.registry');
 
   return useMemo(() => {
-    /** An instant: past ones as a day, future ones with their time too. */
-    const when = (iso: string) => {
-      const at = whenParts(iso, now, timeZone);
+    /**
+     * An instant: past ones as a day, future ones with their time too. On
+     * `zone`'s clock when given (a schedule's own), else the viewer's.
+     */
+    const when = (iso: string, zone?: string | null) => {
+      const at = whenParts(iso, now, zone ?? timeZone);
       if (at.kind === 'date') {
         return Date.parse(iso) > now.getTime()
           ? t('when.dateTime', { date: at.date, time: at.time })
@@ -93,8 +98,10 @@ export function useAgentWords(now: Date, timeZone?: string) {
     /** When it runs next: a time, on a trigger, or only on Run now. */
     const nextRun = (triggers: readonly AgentTriggerView[]) => {
       const next = nextRunOf(triggers);
-      if (next.kind === 'at')
-        return { short: when(next.at), line: t('line.nextRun', { when: when(next.at) }) };
+      if (next.kind === 'at') {
+        const at = when(next.at, next.zone);
+        return { short: at, line: t('line.nextRun', { when: at }) };
+      }
       if (next.kind === 'event') return { short: t('line.event'), line: t('line.event') };
       return { short: t('line.manual'), line: t('line.manual') };
     };

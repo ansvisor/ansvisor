@@ -48,8 +48,8 @@ const ASKED: Record<AgentButton, string> = {
 export function useAgentActions(
   words: AgentWords,
   handlers: {
-    /** The agent's detail after a change of state. */
-    onChanged?: (agent: AgentDetail) => void;
+    /** The agent's detail after a change of state, and the button that made it. */
+    onChanged?: (agent: AgentDetail, button: AgentChange) => void;
     /** Runs were queued. */
     onRan?: (agentId: string) => void;
     /** The copy, a draft. */
@@ -103,7 +103,7 @@ export function useAgentActions(
           const next = nextRunOf(answer.agent.triggers);
           toast(
             next.kind === 'at'
-              ? t('toast.activated', { when: words.when(next.at) })
+              ? t('toast.activated', { when: words.when(next.at, next.zone) })
               : next.kind === 'event'
                 ? t('toast.activatedEvent')
                 : t('toast.activatedManual'),
@@ -111,7 +111,7 @@ export function useAgentActions(
         } else {
           toast(t(CHANGE_TOAST[button], { name: answer.agent.name }));
         }
-        onChanged?.(answer.agent);
+        onChanged?.(answer.agent, button);
       } finally {
         setBusy(null);
       }

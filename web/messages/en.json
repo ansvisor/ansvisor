@@ -4676,7 +4676,6 @@
       "schedule": "Schedule",
       "signal": "New {category} signal",
       "signalAny": "New signal",
-      "signalDefinitions": "{count, plural, one {# kind of signal} other {# kinds of signal}}",
       "kpi": "{kpi} {sign}{amount} in a {period, select, day {day} month {month} other {week}}",
       "kpiAny": "A KPI",
       "watchRule": "Watch rule",
@@ -4689,6 +4688,8 @@
       },
       "timeZone": "{zone} time",
       "off": "Off · it doesn't fire",
+      "notFiring": "{status, select, paused {Paused} draft {Draft} other {Archived}} · it doesn't fire",
+      "onceDone": "Fired · it doesn't fire again",
       "lastFired": "Last fired {when}"
     },
     "scope": {
@@ -4873,8 +4874,7 @@
       },
       "triggers": "Triggers",
       "triggersEmpty": "No triggers. It runs when someone clicks Run now.",
-      "triggerOn": "On",
-      "triggerOff": "Off",
+      "triggerState": "{trigger}: {state, select, on {on} other {off}}",
       "runs": {
         "title": "Run history",
         "filtersLabel": "Filter runs",
@@ -4892,7 +4892,6 @@
           "aiUse": "AI use"
         },
         "version": "Version {version}",
-        "queued": "Queued {when}",
         "noBrand": "No brand",
         "aiUse": "{used} of {cap}",
         "aiUseTip": "Used {used} of the monthly AI limit · limit {cap} for this run",

@@ -2,7 +2,7 @@ import type { TeamRole } from '@/components/providers/role-provider';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import { parseRecurringRule, type RruleDay } from './agent-schedule';
 import type { AgentListView, AgentStatus } from './agent-rules';
-import type { AgentListItem, AgentOutcome, AgentTriggerView } from './agents';
+import type { AgentOutcome, AgentTriggerView } from './agents';
 
 /**
  * Chat › Agents as the browser shows it (CHAT-21 §B, §C; CHAT-27 items
@@ -40,28 +40,6 @@ export function agentDot(status: AgentStatus): AgentDot {
 
 /** Admins and Managers make, run and change agents; Analysts and Agency partners read (§K item 51). */
 export const writesAgents = (role: TeamRole) => role === 'admin' || role === 'manager';
-
-/**
- * What a list row offers the person (§K item 51), as the server decides it
- * for the detail's `can`: Run now on their own agent or a workspace one (an
- * Admin's on any), Pause and Resume on their own (an Admin's on any). The
- * server checks again; a refusal comes back as the out-of-permission answer.
- */
-export function rowAbilities(
-  role: TeamRole,
-  agent: Pick<AgentListItem, 'status' | 'mine' | 'visibility' | 'skills'>,
-): { run: boolean; pause: boolean; resume: boolean } {
-  if (!writesAgents(role)) return { run: false, pause: false, resume: false };
-  const own = role === 'admin' || agent.mine;
-  return {
-    run:
-      agent.status !== 'archived' &&
-      agent.skills.length > 0 &&
-      (own || agent.visibility === 'workspace'),
-    pause: own && agent.status === 'active',
-    resume: own && agent.status === 'paused',
-  };
-}
 
 /**
  * A share of the monthly AI limit as a percent: 0.032 → "3.2%", 0.1 →
@@ -181,19 +159,31 @@ export function triggerSummary(trigger: Pick<AgentTriggerView, 'kind' | 'config'
 }
 
 /**
- * When the agent runs next: the soonest of its switched-on schedules, or
- * `event` when only event triggers (Signal, KPI, watch rule) are on, or
- * `manual` when nothing is on but Run now.
+ * A schedule's time zone (its RRULE's clock), so its times are written on
+ * that clock: "Every Mon 07:00" fires at 07:00 there. Null for a one-off
+ * (an instant) and for other triggers.
+ */
+export function triggerZone(trigger: Pick<AgentTriggerView, 'kind' | 'config'>): string | null {
+  if (trigger.kind !== 'schedule') return null;
+  const config = record(trigger.config);
+  return config.type === 'recurring' && typeof config.timezone === 'string'
+    ? config.timezone
+    : null;
+}
+
+/**
+ * When the agent runs next: the soonest of its switched-on schedules, with
+ * the zone it is written in, or `event` when only event triggers (Signal,
+ * KPI, watch rule) are on, or `manual` when nothing is on but Run now.
  */
 export function nextRunOf(
-  triggers: readonly Pick<AgentTriggerView, 'kind' | 'enabled' | 'nextFireAt'>[],
-): { kind: 'at'; at: string } | { kind: 'event' } | { kind: 'manual' } {
+  triggers: readonly Pick<AgentTriggerView, 'kind' | 'config' | 'enabled' | 'nextFireAt'>[],
+): { kind: 'at'; at: string; zone: string | null } | { kind: 'event' } | { kind: 'manual' } {
   const on = triggers.filter((t) => t.enabled);
-  const times = on
-    .map((t) => t.nextFireAt)
-    .filter((at): at is string => !!at)
-    .sort((a, b) => Date.parse(a) - Date.parse(b));
-  if (times.length > 0) return { kind: 'at', at: times[0] };
+  const next = on
+    .filter((t): t is typeof t & { nextFireAt: string } => !!t.nextFireAt)
+    .sort((a, b) => Date.parse(a.nextFireAt) - Date.parse(b.nextFireAt))[0];
+  if (next) return { kind: 'at', at: next.nextFireAt, zone: triggerZone(next) };
   if (on.some((t) => t.kind !== 'schedule')) return { kind: 'event' };
   return { kind: 'manual' };
 }
