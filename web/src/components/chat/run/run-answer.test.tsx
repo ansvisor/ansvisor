@@ -122,6 +122,17 @@ describe('RunAnswer', () => {
     expect(container.textContent).toContain('Next moves');
   });
 
+  it('styles the answer as the app’s other AI answers: headings, lists and table cells', async () => {
+    await render({
+      run: run({ steps, text: '# Why\n\n| Engine | Share |\n|---|---|\n| AIO | 19% |' }),
+    });
+    const text = container.querySelector('[data-slot="run-text"]')!;
+    expect(text.className).toContain('prose');
+    expect(text.className).toContain('dark:prose-invert');
+    expect(text.querySelector('h1')?.textContent).toBe('Why');
+    expect([...text.querySelectorAll('td')].map((td) => td.textContent)).toEqual(['AIO', '19%']);
+  });
+
   it('links only http(s) addresses and pages of the app, and fetches no image', async () => {
     await render({
       run: run({

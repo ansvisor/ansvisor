@@ -123,6 +123,7 @@ const OPEN_ROUTES: Record<string, string> = {
   'chat/runs/[id]/approve:POST': 'the engine answers 402 (prepareResume), but for Ask your Admin',
   'chat/runs/[id]/skip:POST': 'saying no to a change starts no cost',
   'chat/runs/[id]/stop:POST': 'stopping a run starts no cost',
+  'chat/files/zip:POST': 'reads only: the picked files as one .zip, nothing kept',
 };
 
 /** What checks a route's plan before it writes. */

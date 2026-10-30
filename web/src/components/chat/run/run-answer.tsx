@@ -170,7 +170,8 @@ export function RunAnswer({
         )}
         {openedStep?.detail && <p className="text-xs text-muted-foreground">{openedStep.detail}</p>}
         {run.text && (
-          <div data-slot="run-text" className="text-sm">
+          // Styled as the app's other AI answers (headings, lists, table cells).
+          <div data-slot="run-text" className="prose prose-sm dark:prose-invert max-w-none">
             <Markdown components={ANSWER_MARKDOWN}>{run.text}</Markdown>
           </div>
         )}

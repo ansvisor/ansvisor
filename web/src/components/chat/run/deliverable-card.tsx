@@ -23,7 +23,8 @@ import type { ChatDeliverable } from '@/lib/chat/events';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 
-const ICONS = {
+/** Each type's icon, on its card and its Files row. */
+export const DELIVERABLE_ICONS = {
   document: FileText,
   table: Table,
   code: Code,
@@ -75,7 +76,7 @@ export function DeliverableCard({
 }) {
   const t = useTranslations('chatDeliverable');
   const tFormats = useTranslations('chatAnswer.formats');
-  const Icon = ICONS[deliverable.type] ?? FileText;
+  const Icon = DELIVERABLE_ICONS[deliverable.type] ?? FileText;
   const filed = isFiled(deliverable);
   const formats = FORMAT_ORDER.filter((format) => deliverable.formats.includes(format));
   const fileUrl = (format: string) => `/api/chat/runs/${runId}/files/${n}?format=${format}`;

@@ -149,7 +149,8 @@ describe('ChatMenuView', () => {
     // No allowance to meter: no usage beside Settings.
     expect(action('chatMenu.openSettings')[0].textContent).toBe('Settings');
     expect(action('chatMenu.openInbox')[0].getAttribute('href')).toBe('/dashboard/chat/inbox');
-    for (const unbuilt of ['chatMenu.openSkills', 'chatMenu.openScheduled', 'chatMenu.openFiles']) {
+    expect(action('chatMenu.openFiles')[0].getAttribute('href')).toBe('/dashboard/chat/files');
+    for (const unbuilt of ['chatMenu.openSkills', 'chatMenu.openScheduled']) {
       expect(action(unbuilt)).toHaveLength(0);
     }
     expect(text()).toContain('No chats yet.');
@@ -355,6 +356,9 @@ describe('ChatShell', () => {
     expect(popup.querySelector('[data-action="search.openPage"]')?.textContent).toContain(
       'All chats',
     );
+    expect(
+      [...popup.querySelectorAll('[data-action="search.openPage"]')].map((b) => b.textContent),
+    ).toEqual(['☰All chats', '▤Files', '⚙Settings']);
     await act(async () =>
       (popup.querySelector('[data-action="search.openPage"]') as HTMLElement).click(),
     );

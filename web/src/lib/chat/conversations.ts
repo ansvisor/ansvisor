@@ -105,7 +105,8 @@ export const listQuery = z.object({
 export type ListQuery = z.infer<typeof listQuery>;
 
 export const createInput = z.object({
-  brandId: z.string().uuid().optional(),
+  // guid, not uuid: ids made by hand (the demo brand's) aren't RFC 4122 ones.
+  brandId: z.guid().optional(),
   origin: z.enum(['page', 'panel']).default('page'),
   /** The app page it started on: a path, never a full address. */
   originPage: originPageSchema.optional(),

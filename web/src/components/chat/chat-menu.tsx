@@ -191,14 +191,14 @@ export interface ChatMenuViewProps {
  * The chat menu, top to bottom (CHAT-01 items 6, 9a; agentic update; mockup
  * CHAT-mockup-v2.html, the menu on every #s-… screen): the toggle and
  * "＋ New chat"; Menu (Home; Inbox, with its count and an amber dot while
- * something needs the person; Settings, with the month's AI usage); Governance (Activity, What Chat can do, Tool
+ * something needs the person; Settings, with the month's AI usage; Files); Governance (Activity, What Chat can do, Tool
  * policy: the governance mockup's menu, #cnav); Agents at work (needs you,
  * running, unread results: three rows, See all, Show less, the dots'
  * legend); Chats with its count, Search chats (typing lists the chats
  * whose title or messages match, in place of the days; Ctrl K opens the
  * palette under it), Pinned, then by day, and All chats and Archived at the
  * end. Items whose pages aren't built yet stay out (Skills, Integrations,
- * Scheduled, Files). Sections fold, remembered in this
+ * Scheduled). Sections fold, remembered in this
  * browser.
  */
 export function ChatMenuView({
@@ -360,6 +360,14 @@ export function ChatMenuView({
           >
             {t('settings')}
             <UsageMeter />
+          </MenuItem>
+          <MenuItem
+            href="/dashboard/chat/files"
+            action="chatMenu.openFiles"
+            active={pathname === '/dashboard/chat/files'}
+            onNavigate={onNavigate}
+          >
+            {t('files')}
           </MenuItem>
         </div>
       )}

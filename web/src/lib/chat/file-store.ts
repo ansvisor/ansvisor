@@ -1,3 +1,4 @@
+import { Zip, ZipDeflate } from 'fflate';
 import { Marked } from 'marked';
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
@@ -9,16 +10,18 @@ import { createClient } from '@/lib/supabase/server';
 import { readChat } from './conversations';
 import type { ChatActor } from './engine';
 import { answerFormats, answerTitle, type ExportAnswer } from './export';
-import type { StoredChatFile } from './file-export';
+import { exportChatFile, type ChatFileFormat, type StoredChatFile } from './file-export';
 import { fileChatOutput } from './file-output';
-import { CHAT_FILES_BUCKET } from './files';
+import { CHAT_FILES_BUCKET, ZIP_MAX_BYTES, ZIP_MAX_FILES } from './files';
 import { fileStamp } from './stamp';
 
 /**
  * Answers and chats as files, on the server (CHAT-06 items 30–37): an
- * answer read for its downloads, Save to Files, and Export chat. Filing
+ * answer read for its downloads, Save to Files, Export chat, and a filed
+ * file read for its card, its Files row and Download selected. Filing
  * itself, and the storage it counts against, is file-output's. The rows and the bucket are the server's to write (00411); the
- * person's access is read as them: a chat is theirs or shared with them.
+ * person's access is read as them: a chat is theirs or shared with them;
+ * a file, any member's.
  */
 
 /**
@@ -219,6 +222,45 @@ export async function readChatExport(
   };
 }
 
+/** A file's row, as its downloads read it. */
+const STORED_COLUMNS =
+  'id, title, mime_type, formats, storage_path, size_bytes, generated_at, data_as_of, timezone';
+
+interface StoredRow {
+  id: string;
+  title: string;
+  mime_type: string;
+  formats: string[];
+  storage_path: string;
+  size_bytes: number | string;
+  generated_at: string;
+  data_as_of: string | null;
+  timezone: string | null;
+}
+
+/** A file's content, read from chat-files, with its row's facts and its time line. */
+async function storedFile(row: StoredRow, appOrigin: string | null): Promise<StoredChatFile> {
+  const { data: blob, error } = await supabaseAdmin.storage
+    .from(CHAT_FILES_BUCKET)
+    .download(row.storage_path);
+  if (error || !blob) throw new Error(`Could not read the file: ${error?.message ?? 'missing'}`);
+  return {
+    title: row.title,
+    mimeType: row.mime_type,
+    formats: row.formats,
+    generatedAt: row.generated_at,
+    timezone: row.timezone,
+    stamp: fileStamp(
+      (key, values) => tStamp(key, values),
+      row.generated_at,
+      row.data_as_of,
+      row.timezone,
+    ),
+    content: await blob.text(),
+    appOrigin,
+  };
+}
+
 /**
  * A run's n-th deliverable (CHAT-06 item 1), as its card downloads it: the
  * file Chat filed as it made it, its content read from chat-files. Null
@@ -241,35 +283,124 @@ export async function readRunFile(
 
   const { data: files, error: filesError } = await supabaseAdmin
     .from('chat_files')
-    .select('title, mime_type, formats, storage_path, generated_at, data_as_of, timezone')
+    .select(STORED_COLUMNS)
     .eq('organization_id', actor.organizationId)
     .eq('run_id', runId)
     .is('message_id', null)
     .order('created_at', { ascending: true });
   if (filesError) throw new Error(`Could not read Files: ${filesError.message}`);
-  const file = (files ?? [])[n - 1];
-  if (!file) return null;
+  const file = ((files ?? []) as unknown as StoredRow[])[n - 1];
+  return file ? storedFile(file, appOrigin) : null;
+}
 
-  const { data: blob, error: downloadError } = await supabaseAdmin.storage
-    .from(CHAT_FILES_BUCKET)
-    .download(file.storage_path);
-  if (downloadError || !blob) {
-    throw new Error(`Could not read the file: ${downloadError?.message ?? 'missing'}`);
-  }
+/**
+ * A file on the Files page (CHAT-06 items 17, 24), as its row downloads
+ * it: files belong to the workspace, so any member reads it (its policy,
+ * read as them). Null for a file that isn't their workspace's.
+ */
+export async function readChatFile(
+  actor: ChatActor,
+  fileId: string,
+  appOrigin: string | null,
+): Promise<StoredChatFile | null> {
+  const { data, error } = await (await createClient())
+    .from('chat_files')
+    .select(STORED_COLUMNS)
+    .eq('id', fileId)
+    .eq('organization_id', actor.organizationId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the file: ${error.message}`);
+  return data ? storedFile(data as unknown as StoredRow, appOrigin) : null;
+}
+
+export type ZipResult =
+  /** count: the files going in, as the header says it before the stream starts. */
+  | { ok: true; fileName: string; stream: ReadableStream<Uint8Array>; count: number }
+  | { ok: false; failure: 'not_found' | 'too_big' };
+
+/** "name.ext", then "name (2).ext", for two files of the same name in one .zip. */
+function uniqueName(taken: Set<string>, name: string): string {
+  const dot = name.lastIndexOf('.');
+  const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ''];
+  let unique = name;
+  for (let n = 2; taken.has(unique); n += 1) unique = `${stem} (${n})${ext}`;
+  taken.add(unique);
+  return unique;
+}
+
+/**
+ * The files as a .zip, streamed: one file read, written and compressed at a
+ * time, as the reader asks for more, so neither the files nor the .zip are
+ * ever held whole (a function's response isn't capped this way, as a body
+ * is). A file whose main format can't be written is left out.
+ */
+function zipStream(rows: StoredRow[], appOrigin: string | null): ReadableStream<Uint8Array> {
+  let zip: Zip;
+  let next = 0;
+  const taken = new Set<string>();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      zip = new Zip((error, chunk, final) => {
+        if (error) return controller.error(error);
+        controller.enqueue(chunk);
+        if (final) controller.close();
+      });
+    },
+    async pull() {
+      try {
+        while (next < rows.length) {
+          const row = rows[next++];
+          const file = await exportChatFile(
+            await storedFile(row, appOrigin),
+            row.formats[0] as ChatFileFormat,
+          );
+          if (!file) continue;
+          const entry = new ZipDeflate(uniqueName(taken, file.fileName), { level: 6 });
+          zip.add(entry);
+          entry.push(file.body, true);
+          return;
+        }
+        zip.end();
+      } catch (error) {
+        zip.terminate();
+        throw error;
+      }
+    },
+    cancel() {
+      zip.terminate();
+    },
+  });
+}
+
+/**
+ * Download selected (CHAT-06 item 18): the files picked on the Files page
+ * as one .zip, each in its main format, rendered as its own download is and
+ * kept nowhere, streamed as it is made. Files the person's workspace
+ * doesn't hold are left out; none left is not_found. Past ZIP_MAX_BYTES
+ * stored is too_big, before anything is read.
+ */
+export async function zipChatFiles(
+  actor: ChatActor,
+  fileIds: string[],
+  appOrigin: string | null,
+): Promise<ZipResult> {
+  const { data, error } = await (await createClient())
+    .from('chat_files')
+    .select(STORED_COLUMNS)
+    .in('id', fileIds.slice(0, ZIP_MAX_FILES))
+    .eq('organization_id', actor.organizationId)
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(`Could not read the files: ${error.message}`);
+  const rows = (data ?? []) as unknown as StoredRow[];
+  if (rows.length === 0) return { ok: false, failure: 'not_found' };
+  const bytes = rows.reduce((sum, row) => sum + Number(row.size_bytes), 0);
+  if (bytes > ZIP_MAX_BYTES) return { ok: false, failure: 'too_big' };
+  const day = new Date().toISOString().slice(0, 10);
   return {
-    title: file.title,
-    mimeType: file.mime_type,
-    formats: file.formats,
-    generatedAt: file.generated_at,
-    timezone: file.timezone,
-    stamp: fileStamp(
-      (key, values) => tStamp(key, values),
-      file.generated_at,
-      file.data_as_of,
-      file.timezone,
-    ),
-    content: await blob.text(),
-    appOrigin,
+    ok: true,
+    fileName: `files-${day}.zip`,
+    stream: zipStream(rows, appOrigin),
+    count: rows.length,
   };
 }
 

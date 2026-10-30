@@ -72,6 +72,7 @@ const SUB_PAGES: Record<string, string> = {
   '/dashboard/chat/all': 'allChats',
   '/dashboard/chat/activity': 'activity',
   '/dashboard/chat/capabilities': 'capabilities',
+  '/dashboard/chat/files': 'files',
 };
 /** Chat's own pages the header names (mockup: Settings, right under Home). */
 const TITLED_PAGES: Record<string, string> = { '/dashboard/chat/settings': 'settings' };

@@ -2,7 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FakeSupabase } from './testing/fake-supabase';
 import { BRAND, ORG, PEOPLE } from './testing/chat-fixtures';
-import { GB } from './files';
+import { unzipSync } from 'fflate';
+import { GB, ZIP_MAX_BYTES } from './files';
 
 /**
  * Files on the server (CHAT-06 items 26–37): the storage a workspace's
@@ -13,7 +14,10 @@ import { GB } from './files';
 vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('./testing/fake-supabase')).createFakeSupabase(),
 }));
-vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
+// Files are read as the person: the fake stands in for their client too (no policies here).
+vi.mock('@/lib/supabase/server', async () => ({
+  createClient: async () => (await import('@/lib/supabase/admin')).supabaseAdmin,
+}));
 const access = vi.hoisted(() => ({ chat: null as Record<string, unknown> | null }));
 vi.mock('./conversations', () => ({ readChat: vi.fn(async () => access.chat) }));
 const DRAFT = 'dddddddd-0000-4000-8000-000000000001';
@@ -266,5 +270,77 @@ describe('readRunFile', () => {
     expect(await store.readRunFile(ACTOR, RUN, 2, null)).toBeNull();
     access.chat = null;
     expect(await store.readRunFile(ACTOR, RUN, 1, null)).toBeNull();
+  });
+});
+
+/** A file in Files: an answer saved as Markdown, unless told otherwise. */
+const fileRow = (id: string, extra: Record<string, unknown> = {}) => ({
+  id,
+  organization_id: ORG,
+  run_id: RUN,
+  message_id: ANSWER,
+  title: 'Why citations dropped',
+  mime_type: 'text/markdown',
+  formats: ['md', 'docx', 'pdf'],
+  storage_path: `${id}.md`,
+  size_bytes: 120,
+  generated_at: '2026-10-30T09:01:00.000Z',
+  data_as_of: null,
+  timezone: 'UTC',
+  created_at: '2026-10-30T09:01:00.000Z',
+  ...extra,
+});
+
+describe('readChatFile', () => {
+  it('reads a file of the person’s workspace, and nothing of another', async () => {
+    db.tables.chat_files = [fileRow('f1'), fileRow('f2', { organization_id: 'other-org' })];
+    stored['f1.md'] = 'Two pages lost most of it.';
+    stored['f2.md'] = 'Not yours.';
+    expect(await store.readChatFile(ACTOR, 'f1', null)).toMatchObject({
+      title: 'Why citations dropped',
+      content: 'Two pages lost most of it.',
+      stamp: 'Generated Oct 30, 2026 · 09:01 GMT+0',
+    });
+    expect(await store.readChatFile(ACTOR, 'f2', null)).toBeNull();
+  });
+});
+
+describe('zipChatFiles', () => {
+  it('zips the picked files in their main format, two of a name kept apart', async () => {
+    db.tables.chat_files = [
+      fileRow('f1'),
+      fileRow('f2', { created_at: '2026-10-30T09:02:00.000Z' }),
+      fileRow('f3', { organization_id: 'other-org' }),
+    ];
+    stored['f1.md'] = 'First.';
+    stored['f2.md'] = 'Second.';
+    stored['f3.md'] = 'Not yours.';
+    const zip = await store.zipChatFiles(ACTOR, ['f1', 'f2', 'f3'], null);
+    if (!zip.ok) throw new Error(zip.failure);
+    expect(zip.count).toBe(2);
+    expect(zip.fileName).toMatch(/^files-\d{4}-\d{2}-\d{2}\.zip$/);
+    // Streamed to its end: a whole .zip, with each file in it.
+    const body = new Uint8Array(await new Response(zip.stream).arrayBuffer());
+    const files = unzipSync(body);
+    expect(new TextDecoder().decode(files['why-citations-dropped-2026-10-30.md'])).toContain(
+      'Second.',
+    );
+    const names = Object.keys(files);
+    expect(names).toEqual([
+      'why-citations-dropped-2026-10-30.md',
+      'why-citations-dropped-2026-10-30 (2).md',
+    ]);
+  });
+
+  it('refuses past 100 MB before reading anything, and none of the workspace’s', async () => {
+    db.tables.chat_files = [fileRow('f1', { size_bytes: ZIP_MAX_BYTES + 1 })];
+    expect(await store.zipChatFiles(ACTOR, ['f1'], null)).toEqual({
+      ok: false,
+      failure: 'too_big',
+    });
+    expect(await store.zipChatFiles(ACTOR, ['nope'], null)).toEqual({
+      ok: false,
+      failure: 'not_found',
+    });
   });
 });
