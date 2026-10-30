@@ -29,11 +29,15 @@ let profile: Record<string, unknown> | null;
 let org: Record<string, unknown> | null;
 let orgError: { message: string } | null;
 let owner: { full_name: string | null } | null;
+let chatSettings: { full_auto_for_members: boolean } | null;
+let chatPrefs: Record<string, unknown> | null;
+const reads: string[] = [];
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
     from: (table: string) => {
+      reads.push(table);
       const query = {
         select: () => query,
         eq: () => query,
@@ -41,7 +45,12 @@ vi.mock('@/lib/supabase/server', () => ({
         limit: () => query,
         single: async () =>
           table === 'profiles' ? { data: profile } : { data: org, error: orgError },
-        maybeSingle: async () => ({ data: owner }),
+        maybeSingle: async () =>
+          table === 'chat_settings'
+            ? { data: chatSettings, error: null }
+            : table === 'chat_user_prefs'
+              ? { data: chatPrefs, error: null }
+              : { data: owner },
       };
       return query;
     },
@@ -75,11 +84,30 @@ vi.mock('@/components/layout/sidebar', () => ({ Sidebar: none }));
 vi.mock('@/components/layout/sidebar-error-boundary', () => ({ SidebarErrorBoundary: pass }));
 vi.mock('@/components/layout/mobile-nav', () => ({ MobileNav: none }));
 vi.mock('@/components/layout/tracking-job-handoff', () => ({ TrackingJobHandoff: none }));
-// Chat's side panel has its own tests; here, only where the layout puts it.
-vi.mock('@/components/chat/panel/chat-side-panel', () => ({ ChatSidePanel: none }));
+// Chat's side panel has its own tests; here, only where the layout puts it,
+// the setup the layout hands it, and that its code isn't loaded with the page.
+const panel = vi.hoisted(() => ({
+  setup: null as Record<string, unknown> | null,
+  codeLoaded: false,
+}));
+vi.mock('@/components/chat/panel/chat-side-panel', () => {
+  panel.codeLoaded = true;
+  return { ChatSidePanel: none };
+});
+vi.mock('@/components/chat/panel/chat-side-panel-slot', async () => {
+  const { useChatPanel } = await import('@/components/chat/panel/chat-panel-context');
+  return {
+    ChatSidePanelSlot: () => {
+      panel.setup = (useChatPanel()?.setup as unknown as Record<string, unknown>) ?? null;
+      return null;
+    },
+  };
+});
 const legacy = vi.hoisted(() => ({ importLegacyChats: vi.fn(async () => ({ ok: true })) }));
 vi.mock('@/lib/chat/legacy-import', () => legacy);
 vi.mock('@/lib/actions/chat-prefs', () => ({ saveChatPanelSize: vi.fn() }));
+const ownKey = vi.hoisted(() => ({ chatRunsOnOwnKey: vi.fn(async () => false) }));
+vi.mock('@/lib/chat/key', () => ownKey);
 vi.mock('@/components/providers/auth-provider', () => ({ AuthProvider: none }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({ AiUsageProvider: pass }));
 // The brands the layout hands the brand store (the store is marked loaded
@@ -142,6 +170,10 @@ beforeEach(() => {
   };
   orgError = null;
   owner = null;
+  chatSettings = null;
+  chatPrefs = null;
+  panel.setup = null;
+  reads.length = 0;
   orgBrands = [];
   loaded = [];
   useBrandStore.setState({ loaded: true });
@@ -215,6 +247,53 @@ describe('the dashboard layout', () => {
     expect(legacy.importLegacyChats).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'u1', organizationId: profile!.organization_id }),
     );
+  });
+
+  it("offers the panel's composer Full auto only where the server runs it", async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    org = { ...org, plan: 'growth' };
+    chatPrefs = { default_mode: 'full_auto', legacy_imported_at: '2026-10-30T09:00:00.000Z' };
+    // A member, with the Admin's "Full auto for members" off: closed, and said why.
+    profile = { ...profile, role: 'manager' };
+    chatSettings = { full_auto_for_members: false };
+    expect(await open()).toBeNull();
+    expect(panel.setup).toMatchObject({
+      defaultMode: 'auto',
+      fullAutoOpen: false,
+      fullAutoOffByAdmin: true,
+    });
+    // The Admin, whatever the switch says.
+    profile = { ...profile, role: 'admin' };
+    expect(await open()).toBeNull();
+    expect(panel.setup).toMatchObject({
+      defaultMode: 'full_auto',
+      fullAutoOpen: true,
+      fullAutoOffByAdmin: false,
+    });
+    // A member with no settings row: the default, open.
+    profile = { ...profile, role: 'manager' };
+    chatSettings = null;
+    expect(await open()).toBeNull();
+    expect(panel.setup).toMatchObject({ fullAutoOpen: true, fullAutoOffByAdmin: false });
+  });
+
+  it("keeps the panel's composer on at the AI limit when Chat runs on the workspace's own key", async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    chatPrefs = { legacy_imported_at: '2026-10-30T09:00:00.000Z' };
+    ownKey.chatRunsOnOwnKey.mockResolvedValueOnce(true);
+    expect(await open()).toBeNull();
+    expect(panel.setup).toMatchObject({ onOwnKey: true });
+    expect(ownKey.chatRunsOnOwnKey).toHaveBeenCalledWith('org1');
+  });
+
+  it('reads nothing of Chat and draws no panel while the new Chat is off', async () => {
+    expect(await open()).toBeNull();
+    expect(panel.setup).toBeNull();
+    expect(reads.filter((table) => table.startsWith('chat_'))).toEqual([]);
+    expect(ownKey.chatRunsOnOwnKey).not.toHaveBeenCalled();
+    // The panel's own code (thread, composer, runs) isn't part of the layout's.
+    expect(panel.codeLoaded).toBe(false);
+    expect(container.querySelector('[data-action="panel.open"]')).toBeNull();
   });
 
   it('never locks self-hosted', async () => {

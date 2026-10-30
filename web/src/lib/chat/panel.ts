@@ -80,5 +80,8 @@ export function panelReturnOf(from: string | null | undefined): string | null {
   if (!from || from.length > 2000 || !from.startsWith('/dashboard/')) return null;
   if (/[\s\\]/.test(from) || from.includes('//')) return null;
   const path = from.split(/[?#]/)[0];
+  // A `.` or `..` segment (also as %2e) resolves to another path: out of
+  // the dashboard, or into Chat.
+  if (path.split('/').some((segment) => /^(\.|%2e){1,2}$/i.test(segment))) return null;
   return panelRouteOf(path) === 'page' ? from : null;
 }

@@ -7,6 +7,8 @@ import { chatActor, runFailure, runIdOf } from '@/lib/chat/run-api';
 type Params = { params: Promise<{ id: string }> };
 
 export const runtime = 'nodejs';
+// A long answer's or chat's PDF takes tens of seconds to lay out (lib/chat/export-pdf).
+export const maxDuration = 300;
 
 /**
  * GET /api/chat/runs/{id}/export?format=md|docx|pdf|csv|xlsx

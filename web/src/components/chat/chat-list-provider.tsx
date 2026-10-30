@@ -18,12 +18,12 @@ import { anyUnderWay } from '@/lib/chat/menu-groups';
  * The person's chats for every part of the Chat shell (the menu, Home's
  * Inbox, the header's title): read once from GET /api/chat/conversations
  * and shared, read again when the page changes, when the window comes
- * back, every few seconds while a chat works or waits, and every half
+ * back, every few seconds while a chat works, and every half
  * minute otherwise. A change made here (a rename, a pin) shows at once
  * through `update`, before the next read.
  */
 
-/** How often the list is read while a chat works or waits on the person. */
+/** How often the list is read while a chat works. */
 export const CHAT_LIST_POLL_BUSY_MS = 5_000;
 /** How often it is read otherwise. */
 export const CHAT_LIST_POLL_IDLE_MS = 30_000;

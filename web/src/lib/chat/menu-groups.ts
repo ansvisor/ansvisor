@@ -33,8 +33,13 @@ export interface ChatMenuLists {
 /** Agents at work shows this many rows until See all. */
 export const AT_WORK_ROWS = 3;
 
-/** Where a chat sits in Agents at work, or null when it isn't there. */
+/**
+ * Where a chat sits in Agents at work, or null when it isn't there. Only the
+ * person's own chats: a teammate's shared chat waits on its author's OK, not
+ * theirs, and keeps its dot under its day.
+ */
 function atWorkRank(chat: ChatListItem): number | null {
+  if (!chat.mine) return null;
   if (chat.state === 'needsYou') return 0;
   if (chat.state === 'running' || chat.state === 'paused') return 1;
   if (chat.unread) return 2;
@@ -99,14 +104,16 @@ export function chatMenuLists(chats: ChatListItem[], now = new Date()): ChatMenu
   return { atWork, groups };
 }
 
-/** How many chats need the person: Home's count and the main menu's amber dot. */
+/** How many of the person's own chats need them: Home's count and the main menu's amber dot. */
 export function needsYouCount(chats: ChatListItem[]): number {
-  return chats.filter((chat) => chat.state === 'needsYou').length;
+  return chats.filter((chat) => chat.mine && chat.state === 'needsYou').length;
 }
 
-/** Whether any chat is still working or waiting: the menu reads its list more often then. */
+/**
+ * Whether any chat is working: the menu reads its list more often then. A
+ * chat that waits on an OK or is paused changes only when someone acts on
+ * it, which can take days, so it doesn't count.
+ */
 export function anyUnderWay(chats: ChatListItem[]): boolean {
-  return chats.some(
-    (chat) => chat.state === 'running' || chat.state === 'needsYou' || chat.state === 'paused',
-  );
+  return chats.some((chat) => chat.state === 'running');
 }
