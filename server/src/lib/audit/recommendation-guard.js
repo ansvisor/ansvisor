@@ -73,10 +73,11 @@ const VALUE_RE = new RegExp(
   'gi',
 );
 
-// "Write a 120–150 character description", "add 3–5 questions": writing
+// "Write a 120–150 character description", "add 3–5 questions", "an
+// og:image of 1200×630 pixels", "under 200 KB": writing and build
 // instructions, not claims. Only the explanation may use them.
 const INSTRUCTION_UNIT_RE =
-  /^\s*(?:[a-z-]+\s+){0,2}(?:characters?|chars?|words?|sentences?|paragraphs?|questions?|q&as?|pairs?|answers?|items?|bullets?|points?|steps?|headings?|subheadings?|h[1-6]s?|sections?|links?|sources?|citations?|examples?|faqs?|lines?|tips?|terms?|definitions?|quotes?|quotations?|statistics?|stats?|images?)\b/i;
+  /^\s*(?:[×x]\s*\d+\s*)?(?:[a-z-]+\s+){0,2}(?:characters?|chars?|words?|sentences?|paragraphs?|questions?|q&as?|pairs?|answers?|items?|bullets?|points?|steps?|headings?|subheadings?|h[1-6]s?|sections?|links?|sources?|citations?|examples?|faqs?|lines?|tips?|terms?|definitions?|quotes?|quotations?|statistics?|stats?|images?|px|pixels?|kb|mb|kilobytes?|megabytes?|ms|milliseconds?|seconds?|secs?)\b/i;
 
 // "A Flesch reading ease of 60", "a score above 70": targets to aim for.
 const TARGET_BEFORE_RE =
@@ -386,10 +387,20 @@ export function replaceUnknownNames(text, known) {
  * Where a sentence ends inside a line, for taking one out: before a capital,
  * a digit, a quote, a bracket or what stands for a figure that went.
  */
-const DROP_BREAK_RE = new RegExp(`(?<=[.!?…])\\s+(?=["“'([A-Z0-9${GONE}])`);
+const DROP_BREAK_RE = new RegExp(
+  // "e.g. Google's guide" goes on: an abbreviation, not a sentence's end.
+  `(?<=[.!?…])(?<!\\b(?:[Ee]\\.[Gg]|[Ii]\\.[Ee]|vs|cf)\\.)\\s+(?=["“'([A-Z0-9${GONE}])`,
+);
 
-/** The placeholders a text holds, as written. */
-const placeholdersOf = (text) => text.match(new RegExp(PLACEHOLDER_SOURCE, 'g')) ?? [];
+/** "1. ", "2) " or "- " that starts a line: it stays or goes with the line's text. */
+const LIST_MARKER_RE = /^\s*(?:\d{1,3}[.)]|[-*•])\s+/;
+
+/** The two lines of a Q&A pair ("Q: …" then "A: …"): one goes with the other. */
+const QUESTION_LINE_RE = /^\s*(?:\*\*)?(?:q|question)\s*\d*\s*(?:\*\*)?\s*:/i;
+const ANSWER_LINE_RE = /^\s*(?:\*\*)?(?:a|answer)\s*\d*\s*(?:\*\*)?\s*:/i;
+
+/** The placeholders a text holds, as written; "[a link](…)" is a link, not one. */
+const placeholdersOf = (text) => text.match(new RegExp(`${PLACEHOLDER_SOURCE}(?!\\()`, 'g')) ?? [];
 
 /**
  * A text with the sentences it can't keep taken out, line by line: one with
@@ -399,20 +410,33 @@ const placeholdersOf = (text) => text.match(new RegExp(PLACEHOLDER_SOURCE, 'g'))
  */
 function dropUnsettled(text, budget) {
   let dropped = 0;
-  const lines = text.split('\n').map((line) => {
+  const source = text.split('\n');
+  const lines = source.map((line) => {
     if (!line.trim()) return line;
-    const kept = line.split(DROP_BREAK_RE).filter((sentence) => {
-      const own = placeholdersOf(sentence);
-      const keep =
-        !sentence.includes(GONE) &&
-        own.every((p) => BRAND_OWN.test(p)) &&
-        own.length <= budget.left;
-      if (keep) budget.left -= own.length;
-      else dropped += 1;
-      return keep;
-    });
-    return kept.length ? kept.join(' ') : null;
+    const marker = line.match(LIST_MARKER_RE)?.[0] ?? '';
+    const kept = line
+      .slice(marker.length)
+      .split(DROP_BREAK_RE)
+      .filter((sentence) => {
+        const own = placeholdersOf(sentence);
+        const keep =
+          !sentence.includes(GONE) &&
+          own.every((p) => BRAND_OWN.test(p)) &&
+          own.length <= budget.left;
+        if (keep) budget.left -= own.length;
+        else dropped += 1;
+        return keep;
+      });
+    return kept.length ? marker + kept.join(' ') : null;
   });
+  // A question whose answer went goes too, and an answer whose question went.
+  for (let i = 0; i + 1 < source.length; i++) {
+    if (!QUESTION_LINE_RE.test(source[i]) || !ANSWER_LINE_RE.test(source[i + 1])) continue;
+    if ((lines[i] === null) === (lines[i + 1] === null)) continue;
+    lines[i] = null;
+    lines[i + 1] = null;
+    dropped += 1;
+  }
   // A line that went leaves no run of empty lines (between Q&A pairs) behind.
   const out = lines
     .filter((line) => line !== null)

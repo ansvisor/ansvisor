@@ -88,6 +88,53 @@ describe('guardFacts', () => {
     expect(out.recommendation).toBe('');
   });
 
+  it('keeps build instructions in the explanation: image sizes, file sizes, load times', () => {
+    for (const recommendation of [
+      'Add an og:image of 1200×630 pixels so shared links show a preview.',
+      'Add an og:image at 1200 x 630 px.',
+      'Shrink the hero image below 200 KB.',
+      'Compress images so the page loads in under 2.5 seconds.',
+    ]) {
+      const { rec: out, hits } = guardFacts(rec({ recommendation }), known);
+      expect(out.recommendation).toBe(recommendation);
+      expect(hits).toBe(0);
+    }
+    // In the draft, a load time the page lacks is still a claim.
+    expect(
+      guardFacts(rec({ draft: 'Our pages load in 2.5 seconds.' }), known).rec.draft,
+    ).toBeNull();
+  });
+
+  it('takes a list item out with its number, not leaving the number behind', () => {
+    const { rec: out } = guardFacts(
+      rec({ draft: '1. Pick a plan.\n2. Track 75 prompts a day.\n3. Read the report.' }),
+      known,
+    );
+    expect(out.draft).toBe('1. Pick a plan.\n3. Read the report.');
+  });
+
+  it('takes a Q&A pair out whole when either half goes', () => {
+    const { rec: out } = guardFacts(
+      rec({
+        draft:
+          'Q: How long is the trial?\nA: The trial lasts 21 days.\n\nQ: Is there a 97% uptime?\nA: Yes.\n\nQ: What does Starter cost?\nA: Starter is $49 per month.',
+      }),
+      known,
+    );
+    expect(out.draft).toBe('Q: What does Starter cost?\nA: Starter is $49 per month.');
+  });
+
+  it('reads a link’s text as a link and "e.g." as no sentence end', () => {
+    const draft = 'See the [structured data guide](https://developers.google.com/search) first.';
+    expect(guardFacts(rec({ draft }), known).rec.draft).toBe(draft);
+    const { rec: out } = guardFacts(
+      rec({ recommendation: 'Cite a source, e.g. Google documentation from 2019.' }),
+      known,
+    );
+    // One sentence with an invented year: it goes whole, never as "Cite a source, e.g."
+    expect(out.recommendation).toBe('');
+  });
+
   it('replaces a price the page does not show and keeps the ones it does', () => {
     const { rec: out } = guardFacts(
       rec({ draft: 'Starter is $49 per month, Growth $249, and Pro costs $799 per month.' }),
