@@ -13,8 +13,8 @@ const body = z.object({ ids: z.array(z.guid()).min(1).max(ZIP_MAX_FILES) });
  * POST /api/chat/files/zip `{ ids }`
  *
  * Download selected on the Files page (CHAT-06 item 18): the picked files
- * as one .zip, each in its main format; nothing is kept. 400 for none or
- * more than 50, 413 past 100 MB, 404 when none is the workspace's.
+ * as one .zip, each in its main format, streamed; nothing is kept. 400 for
+ * none or more than 50, 413 past 100 MB, 404 when none is the workspace's.
  */
 export async function POST(req: Request) {
   try {
@@ -28,7 +28,8 @@ export async function POST(req: Request) {
         ? runFailure(413, 'failed', 'too_big', 'More than 100 MB')
         : runFailure(404, 'not_found', 'not_found', 'Not found');
     }
-    return new NextResponse(Buffer.from(zip.body), {
+    // Streamed as it is made: never held whole (a function's body is capped, a stream isn't).
+    return new NextResponse(zip.stream, {
       headers: {
         'Content-Type': 'application/zip',
         'Content-Disposition': `attachment; filename="${zip.fileName}"`,
