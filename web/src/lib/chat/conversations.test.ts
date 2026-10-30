@@ -372,3 +372,74 @@ describe('updateChat', () => {
     expect(chats.updateInput.safeParse({ user_id: 'x' }).success).toBe(false);
   });
 });
+
+describe('searchChats', () => {
+  const search = (q: string, view?: 'active' | 'archived') =>
+    chats.searchChats(reader, ME, chats.searchQuery.parse({ q, view }));
+
+  beforeEach(() => {
+    db.tables.chat_conversations = [
+      chat(1, { search_tsv: 'Why did citations drop' }),
+      chat(2, { search_tsv: 'Weekly report', title: 'Weekly report' }),
+      chat(3, {
+        user_id: TEAMMATE.userId,
+        shared_at: '2026-10-12T00:00:00.000Z',
+        search_tsv: 'Citations on Perplexity',
+      }),
+      // A teammate's private chat, a deleted one, an archived one, another workspace.
+      chat(4, { user_id: TEAMMATE.userId, search_tsv: 'Citations private' }),
+      chat(5, { deleted_at: '2026-10-29T00:00:00.000Z', search_tsv: 'Citations deleted' }),
+      chat(6, { archived_at: '2026-10-20T00:00:00.000Z', search_tsv: 'Old citations plan' }),
+      chat(7, { organization_id: OTHER_ORG, search_tsv: 'Citations elsewhere' }),
+    ];
+    db.tables.chat_messages = [
+      {
+        id: 'm1',
+        conversation_id: CHAT(2),
+        created_at: '2026-10-20T10:00:00.000Z',
+        search_tsv: 'Which pages lost citations?',
+      },
+      {
+        id: 'm2',
+        conversation_id: CHAT(4),
+        created_at: '2026-10-20T10:00:00.000Z',
+        search_tsv: 'citations',
+      },
+      {
+        id: 'm3',
+        conversation_id: CHAT(1),
+        created_at: '2026-10-20T10:00:00.000Z',
+        search_tsv: 'citations again',
+      },
+    ];
+  });
+
+  it('finds chats by title or message words, newest first, never a private, deleted or archived one', async () => {
+    const found = await search('citat');
+    expect(found.map((c) => c.id)).toEqual([CHAT(3), CHAT(2), CHAT(1)]);
+    expect(found[0]).toMatchObject({ mine: false, ownerInitials: 'SL' });
+  });
+
+  it('needs every word, and finds their own archived chats under Archived', async () => {
+    expect((await search('citations perplexity')).map((c) => c.id)).toEqual([CHAT(3)]);
+    expect((await search('citations', 'archived')).map((c) => c.id)).toEqual([CHAT(6)]);
+  });
+
+  it("answers nothing for words it can't search, without asking the database", async () => {
+    db.log = [];
+    expect(await search(' :* & ! ')).toEqual([]);
+    expect(db.log).toEqual([]);
+  });
+});
+
+describe('searchTermsOf', () => {
+  it('keeps letters and digits of each word as a prefix, all of them required', () => {
+    expect(chats.searchTermsOf('Why did Citations drop?')).toBe(
+      'why:* & did:* & citations:* & drop:*',
+    );
+    expect(chats.searchTermsOf("Gökhan's Q4 report")).toBe('gökhan:* & s:* & q4:* & report:*');
+    expect(chats.searchTermsOf("') | !foo:* <-> bar")).toBe('foo:* & bar:*');
+    expect(chats.searchTermsOf('   ')).toBeNull();
+    expect(chats.searchTermsOf('a b c d e f g h i j')?.split(' & ')).toHaveLength(8);
+  });
+});

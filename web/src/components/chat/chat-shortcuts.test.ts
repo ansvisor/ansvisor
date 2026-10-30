@@ -17,6 +17,8 @@ describe('chatShortcutOf', () => {
     expect(chatShortcutOf(key('\\', { meta: true }))).toBe('menu');
     expect(chatShortcutOf(key('O', { ctrl: true, shift: true }))).toBe('new');
     expect(chatShortcutOf(key('o', { meta: true, shift: true }))).toBe('new');
+    expect(chatShortcutOf(key('k', { ctrl: true }))).toBe('search');
+    expect(chatShortcutOf(key('K', { meta: true }))).toBe('search');
   });
 
   it('leaves Bold, plain keys and other chords alone', () => {
@@ -24,6 +26,8 @@ describe('chatShortcutOf', () => {
     expect(chatShortcutOf(key('\\', {}))).toBeNull();
     expect(chatShortcutOf(key('o', { ctrl: true }))).toBeNull();
     expect(chatShortcutOf(key('\\', { ctrl: true, alt: true }))).toBeNull();
+    expect(chatShortcutOf(key('k', {}))).toBeNull();
+    expect(chatShortcutOf(key('k', { ctrl: true, shift: true }))).toBeNull();
   });
 });
 
@@ -32,5 +36,7 @@ describe('shortcutLabel', () => {
     expect(shortcutLabel('menu', false)).toBe('Ctrl+\\');
     expect(shortcutLabel('menu', true)).toBe('⌘\\');
     expect(shortcutLabel('new', true)).toBe('⌘⇧O');
+    expect(shortcutLabel('search', false)).toBe('Ctrl K');
+    expect(shortcutLabel('search', true)).toBe('⌘K');
   });
 });
