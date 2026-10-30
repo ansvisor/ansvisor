@@ -432,7 +432,8 @@ export function ChatThreadView({
       const events = await fetch(`/api/chat/runs/${last.runId}/events?after=${last.run.lastSeq}`, {
         signal: life.current?.signal,
       }).catch(() => null);
-      if (events?.ok && events.body) await follow(last.key, last.runId, events.body, last.run.lastSeq);
+      if (events?.ok && events.body)
+        await follow(last.key, last.runId, events.body, last.run.lastSeq);
     }
     return true;
   }
