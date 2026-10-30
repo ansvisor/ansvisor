@@ -117,7 +117,11 @@ describe('buying a trial now', () => {
       discounts: [{ promotion_code: 'promo_save50' }],
       metadata: { plan_id: 'growth', organization_id: 'org1' },
     });
-    expect(db.update).toHaveBeenCalledWith({ plan: 'growth', subscription_status: 'active' });
+    expect(db.update).toHaveBeenCalledWith({
+      plan: 'growth',
+      subscription_status: 'active',
+      cancel_at_period_end: false,
+    });
     expect(align).toHaveBeenCalledWith('org1', 'growth');
     expect(await res.json()).toMatchObject({
       planId: 'growth',
@@ -140,6 +144,20 @@ describe('buying a trial now', () => {
     expect(params.discounts).toBeUndefined();
     // Same plan: its engines stay as they are.
     expect(align).not.toHaveBeenCalled();
+  });
+
+  it('resumes a trial canceled before it was bought, so the "plan ends" band goes at once', async () => {
+    stripeApi.retrieve.mockResolvedValue({
+      ...subscription('trialing'),
+      cancel_at_period_end: true,
+    });
+    stripeApi.update.mockResolvedValue(subscription('active'));
+
+    const res = await patch({ buyNow: true });
+
+    expect(res.status).toBe(200);
+    expect(stripeApi.update.mock.calls[0][1].cancel_at_period_end).toBe(false);
+    expect(db.update.mock.calls[0][0]).toMatchObject({ cancel_at_period_end: false });
   });
 
   it('refuses an unknown code before charging anything', async () => {
@@ -214,6 +232,8 @@ describe('changing a paid plan', () => {
       payment_behavior: 'error_if_incomplete',
     });
     expect(await res.json()).toMatchObject({ planId: 'starter', interval: 'year' });
+    // A period change leaves a cancellation as Stripe has it: not written here.
+    expect(db.update.mock.calls[0][0]).not.toHaveProperty('cancel_at_period_end');
   });
 
   it('keeps the plan as it was when the new period’s invoice is declined', async () => {
