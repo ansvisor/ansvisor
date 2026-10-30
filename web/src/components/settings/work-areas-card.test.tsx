@@ -89,7 +89,7 @@ describe('WorkAreasCard', () => {
     );
     expect(chip('Brand & PR').getAttribute('aria-pressed')).toBe('true');
     expect(chip('Everything').getAttribute('aria-pressed')).toBe('false');
-    expect(container.textContent).toContain('5 of 11 sections');
+    expect(container.textContent).toContain('6 of 12 sections');
     expect(section('mentions').textContent).toContain('Hidden by your admin');
     expect(section('content').textContent).toContain('Not in your work areas');
     expect(section('insights').textContent).not.toContain('Not in');
@@ -104,7 +104,7 @@ describe('WorkAreasCard', () => {
 
     await act(async () => chip('Everything').click());
     expect(actions.setMyWorkAreas).toHaveBeenLastCalledWith([]);
-    expect(container.textContent).toContain('11 of 11 sections');
+    expect(container.textContent).toContain('12 of 12 sections');
   });
 
   it('reads the menu again when a save fails', async () => {

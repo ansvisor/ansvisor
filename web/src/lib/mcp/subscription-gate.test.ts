@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 let status: string | null;
+let plan: string;
 let dbError: { message: string } | null;
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
@@ -19,7 +20,7 @@ vi.mock('@/lib/supabase/admin', () => ({
         maybeSingle: async () =>
           dbError
             ? { data: null, error: dbError }
-            : { data: { subscription_status: status }, error: null },
+            : { data: { plan, subscription_status: status }, error: null },
       };
       return query;
     },
@@ -36,8 +37,13 @@ vi.mock('@/lib/mcp/data', async (importOriginal) => ({
 }));
 
 const { createMcpServer } = await import('./server');
-const { isReadTool, SubscriptionInactiveError, subscriptionActiveFor, gateWriteTools } =
-  await import('./subscription-gate');
+const {
+  isReadTool,
+  SubscriptionInactiveError,
+  subscriptionActiveFor,
+  gateWriteTools,
+  mcpWriteAccess,
+} = await import('./subscription-gate');
 const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
 const { runSiteAuditFor, generateBriefFor } = await import('./data');
 
@@ -67,6 +73,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   status = 'canceled';
+  plan = 'growth';
   dbError = null;
 });
 
@@ -140,6 +147,7 @@ describe('the MCP tools on a read-only workspace', () => {
   it('keeps a gated tool closed when the plan cannot be read', async () => {
     dbError = { message: 'connection reset' };
     await expect(subscriptionActiveFor('org-1')).rejects.toThrow('connection reset');
+    await expect(mcpWriteAccess('org-1')).rejects.toThrow('connection reset');
     const client = await connect();
     const result = await client.callTool({
       name: 'dismiss_topic_suggestion',
@@ -168,7 +176,7 @@ describe('the MCP tools on a read-only workspace', () => {
   });
 
   it('runs a write tool once the plan is active', async () => {
-    status = 'trialing';
+    status = 'active';
     const client = await connect();
     const result = await client.callTool({
       name: 'dismiss_topic_suggestion',
@@ -187,6 +195,66 @@ describe('the MCP tools on a read-only workspace', () => {
     });
     expect(result.isError).toBeFalsy();
     expect(data.dismissTopicSuggestionFor).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the MCP tools per plan (DECISIONS S, 2026-10-30)', () => {
+  const call = async (name: string, args: Record<string, unknown>) => {
+    const client = await connect();
+    return client.callTool({ name, arguments: args });
+  };
+
+  it.each([
+    ['starter', 'active', false],
+    ['starter', 'trialing', false],
+    ['growth', 'trialing', false],
+    ['growth', 'active', true],
+    ['enterprise', 'trialing', true],
+    ['enterprise', 'active', true],
+  ])('%s %s: reads, and writes only from Growth, paid (%s)', async (p, s, writes) => {
+    plan = p;
+    status = s;
+    const read = await call('list_brands', {});
+    expect(read.isError).toBeFalsy();
+    const write = await call('dismiss_topic_suggestion', { suggestion_id: SUGGESTION_ID });
+    if (writes) {
+      expect(write.isError).toBeFalsy();
+      expect(data.dismissTopicSuggestionFor).toHaveBeenCalledTimes(1);
+    } else {
+      expect(write.isError).toBe(true);
+      expect(body(write)).toEqual({
+        error: 'plan_limit',
+        code: 'plan_required',
+        required_plan: 'growth',
+        message: expect.stringContaining('need the Growth plan or above'),
+      });
+      expect(data.dismissTopicSuggestionFor).not.toHaveBeenCalled();
+    }
+  });
+
+  it('answers a plan that ended with subscription_inactive before the plan it needs', async () => {
+    plan = 'starter';
+    status = 'canceled';
+    const write = await call('dismiss_topic_suggestion', { suggestion_id: SUGGESTION_ID });
+    expect(body(write)).toMatchObject({ code: 'subscription_inactive' });
+  });
+
+  it('keeps every write tool listed on Starter, for the host to say why', async () => {
+    plan = 'starter';
+    status = 'active';
+    const { tools } = await (await connect()).listTools();
+    expect(tools.filter((tool) => !isReadTool(tool.name))).toHaveLength(17);
+  });
+
+  it('says whether a write may go through, and never gates self-hosted', async () => {
+    plan = 'starter';
+    status = 'active';
+    await expect(mcpWriteAccess('org-1')).resolves.toBe('plan');
+    await expect(mcpWriteAccess(null)).resolves.toBe('ok');
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    await expect(mcpWriteAccess('org-1')).resolves.toBe('ok');
+    const write = await call('dismiss_topic_suggestion', { suggestion_id: SUGGESTION_ID });
+    expect(write.isError).toBeFalsy();
   });
 });
 
