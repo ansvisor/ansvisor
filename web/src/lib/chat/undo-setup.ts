@@ -142,7 +142,8 @@ const pausePrompts: UndoRule = {
       const adding = activationDelta(
         paused.map((row) => ({ isActive: false, regions: row.regions })),
       );
-      if (locationLimitMessage(planFromOrgRow(org), usage.total, adding)) return 'changed';
+      const full = locationLimitMessage(planFromOrgRow(org), usage.total, adding);
+      if (full) return { refused: 'quota_exceeded', message: full };
     }
     const { error } = await supabaseAdmin
       .from('prompts')
@@ -189,10 +190,12 @@ const addTopic: UndoRule = {
     if (!topic) return 'gone';
     if (topic.is_active === false || topic.name !== asObject(data.after).name) return 'changed';
     // Prompts tracked in it since: taking it away would leave them without their topic.
+    // Paused ones don't hold it (an Undo of add_prompts pauses what it added).
     const { count, error } = await supabaseAdmin
       .from('prompts')
       .select('id', { count: 'exact', head: true })
-      .eq('topic_id', id);
+      .eq('topic_id', id)
+      .eq('is_active', true);
     check(error, "the topic's prompts");
     if ((count ?? 0) > 0) return 'changed';
     const { data: removed, error: deleteError } = await supabaseAdmin
@@ -218,7 +221,8 @@ const renameTopic: UndoRule = {
     return topic ? { name: topic.name } : null;
   },
   async record(input, output, before): Promise<WriteRecord> {
-    const after = textOf(asObject(output).name);
+    const result = asObject(output);
+    const after = result.ok === true ? textOf(asObject(result.topic).name) : null;
     const from = textOf(before?.name);
     return {
       target: { type: 'topic', id: textOf(asObject(input).topic_id) },
@@ -339,16 +343,18 @@ const removeCompetitor: UndoRule = {
     const row = asObject(data.before);
     const brand = brandId ?? textOf(row.brand_id);
     if (!brand) return 'gone';
-    // Added again since (by hand, or with the same domain): the person's now.
+    // Added again since (by hand, or the same domain or, without one, the same name): the person's now.
     const { data: now, error } = await supabaseAdmin
       .from('competitors')
-      .select('id, domain')
+      .select('id, name, domain')
       .eq('brand_id', brand);
     check(error, "the brand's competitors");
-    const domain = (textOf(row.domain) ?? '').toLowerCase();
+    const key = competitorKey({ name: textOf(row.name) ?? '', domain: textOf(row.domain) ?? '' });
     if (
       (now ?? []).some(
-        (c) => c.id === id || (domain && (c.domain as string).toLowerCase() === domain),
+        (c) =>
+          c.id === id ||
+          competitorKey({ name: c.name as string, domain: (c.domain as string) ?? '' }) === key,
       )
     ) {
       return 'changed';
@@ -361,10 +367,49 @@ const removeCompetitor: UndoRule = {
       ...(textOf(row.created_at) ? { created_at: textOf(row.created_at)! } : {}),
     });
     if (insertError) throw new Error(`Could not bring the competitor back: ${insertError.message}`);
+    await reopenActionLinks(brand, id, textOf(row.name));
     return 'ok';
   },
   href: () => '/dashboard/competitors',
 };
+
+/**
+ * The brand's actions' links to the competitor, marked deleted as it went
+ * (00244), open again. Its page events and timeline scans went with it and
+ * don't come back. A failure here leaves the competitor back, links closed.
+ */
+async function reopenActionLinks(brandId: string, id: string, name: string | null) {
+  try {
+    const { data: actions, error } = await supabaseAdmin
+      .from('actions')
+      .select('id')
+      .eq('brand_id', brandId);
+    check(error, "the brand's actions");
+    const actionIds = (actions ?? []).map((a) => a.id as string);
+    if (actionIds.length === 0) return;
+    const { error: reopenError } = await supabaseAdmin
+      .from('action_entities')
+      .update({ removed_at: null, removed_reason: null })
+      .in('action_id', actionIds)
+      .eq('entity_type', 'competitors')
+      .eq('removed_reason', 'deleted')
+      .in('entity_key', name ? [id, name] : [id]);
+    if (reopenError) throw new Error(reopenError.message);
+  } catch (err) {
+    console.error('[chat/undo] could not open the competitor’s action links again:', err);
+  }
+}
+
+/** A competitor as two are compared: its domain (scheme, www, case, slash aside), else its name. */
+function competitorKey(c: { name: string; domain: string }): string {
+  const domain = c.domain
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/+$/, '');
+  return domain ? `d:${domain}` : `n:${c.name.trim().toLowerCase()}`;
+}
 
 /** The setup rows' Undo, by tool name (undo.ts UNDO_RULES). */
 export const SETUP_UNDO_RULES: Readonly<Record<string, UndoRule>> = {

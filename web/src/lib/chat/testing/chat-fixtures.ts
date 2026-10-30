@@ -183,13 +183,17 @@ export function fakeAddBrandTopic(db: FakeSupabase) {
   };
 }
 
-/** updateTopic: the topic renamed. */
-export function fakeUpdateTopic(db: FakeSupabase) {
+/** renameBrandTopic: the topic renamed. */
+export function fakeRenameBrandTopic(db: FakeSupabase) {
   return async (id: string, name: string) => {
     const row = db.tables.topics.find((r) => r.id === id);
-    if (!row) throw new Error('Topic not found');
+    if (!row)
+      return { ok: false, reason: 'not_found', message: "That topic isn't one of this brand's." };
     row.name = name;
-    return { id, brandId: row.brand_id, name, isActive: true, createdAt: iso() };
+    return {
+      ok: true,
+      topic: { id, brandId: row.brand_id, name, isActive: true, createdAt: iso() },
+    };
   };
 }
 

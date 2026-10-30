@@ -116,6 +116,12 @@ import { MAX_UPLOADS } from './uploads';
 const t = createTranslator({ locale: 'en', messages, namespace: 'chatEngine' });
 const toolT = createTranslator({ locale: 'en', messages, namespace: 'chatTools' });
 
+/** What a row's card says under it, when it has words for that (chatTools.{key}.note). */
+function toolNote(tool: Pick<ChatTool, 'labelKey'>): string | null {
+  const label = (messages.chatTools as Record<string, Record<string, unknown>>)[tool.labelKey];
+  return typeof label?.note === 'string' ? toolT(`${tool.labelKey}.note` as never) : null;
+}
+
 /** A row's words: its Settings name (`name`, "Save drafts in Content") or its step's (`step`). */
 function toolWords(tool: Pick<ChatTool, 'labelKey'>, which: 'name' | 'step'): string {
   return Object.hasOwn(messages.chatTools, tool.labelKey)
@@ -1296,12 +1302,14 @@ async function openCard(
   rc.sink.emit('step.started', { step: clientStep(row) });
   const digest = cardDigest(tool, input);
   const offerDontAskAgain = decision.kind === 'ask' && decision.offerDontAskAgain;
+  const note = toolNote(tool);
   rc.sink.emit('confirm.required', {
     n,
     action: toolWords(tool, 'name'),
     target,
     digest,
     canDontAskAgain: offerDontAskAgain,
+    ...(note ? { note } : {}),
   });
   return {
     kind: 'pause',
@@ -1703,6 +1711,7 @@ const SAID_FAILURES: Record<string, string> = {
   duplicate: 'duplicate',
   not_found: 'not_found',
   invalid: 'invalid_input',
+  forbidden_role: 'forbidden_role',
 };
 
 /**

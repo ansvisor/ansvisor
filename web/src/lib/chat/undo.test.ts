@@ -18,7 +18,7 @@ import {
   fakeAddTopicPrompts,
   fakePauseBrandPrompts,
   fakeRemoveBrandCompetitor,
-  fakeUpdateTopic,
+  fakeRenameBrandTopic,
   fakeDismissSuggestion,
   fakeUpdateOpportunity,
   seedWorkspace,
@@ -38,7 +38,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }))
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
 vi.mock('@/lib/actions/prompt', () => ({ addTopicPrompts: vi.fn(), pauseBrandPrompts: vi.fn() }));
-vi.mock('@/lib/actions/topic', () => ({ addBrandTopic: vi.fn(), updateTopic: vi.fn() }));
+vi.mock('@/lib/actions/topic', () => ({ addBrandTopic: vi.fn(), renameBrandTopic: vi.fn() }));
 vi.mock('@/lib/actions/competitor', () => ({
   addCompetitors: vi.fn(),
   removeBrandCompetitor: vi.fn(),
@@ -50,7 +50,7 @@ const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
 const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
-const { addBrandTopic, updateTopic } = await import('@/lib/actions/topic');
+const { addBrandTopic, renameBrandTopic } = await import('@/lib/actions/topic');
 const { addCompetitors, removeBrandCompetitor } = await import('@/lib/actions/competitor');
 const { runLoggedWrite } = await import('./write');
 const { undoChange, undoRule, UNDO_RULES } = await import('./undo');
@@ -69,7 +69,7 @@ beforeEach(() => {
   vi.mocked(addTopicPrompts).mockImplementation(fakeAddTopicPrompts(db) as never);
   vi.mocked(pauseBrandPrompts).mockImplementation(fakePauseBrandPrompts(db) as never);
   vi.mocked(addBrandTopic).mockImplementation(fakeAddBrandTopic(db) as never);
-  vi.mocked(updateTopic).mockImplementation(fakeUpdateTopic(db) as never);
+  vi.mocked(renameBrandTopic).mockImplementation(fakeRenameBrandTopic(db) as never);
   vi.mocked(addCompetitors).mockImplementation(fakeAddCompetitors(db) as never);
   vi.mocked(removeBrandCompetitor).mockImplementation(fakeRemoveBrandCompetitor(db) as never);
 });
@@ -530,10 +530,13 @@ describe('the tracking setup: prompts, topics and competitors (W2-06)', () => {
     });
     expect(prompt(PROMPT).is_active).toBe(false);
     expect(row).toMatchObject({ summary_key: 'pauseTracking', target_id: PROMPT });
-    // The plan's locations filled up since: nothing is resumed.
+    // The plan's locations filled up since: nothing is resumed, and it says why (§11a).
     db.rpcs.org_prompt_location_usage = () => [{ brand_id: BRAND, locations: 200 }];
-    expect(await undo(row.id)).toMatchObject({ code: 'conflict', reason: 'changed' });
+    const full = await undo(row.id);
+    expect(full).toMatchObject({ code: 'quota_exceeded' });
+    expect(full.message).toContain('active prompt locations');
     expect(prompt(PROMPT).is_active).toBe(false);
+    expect(logRow(row.id).status).toBe('done');
     db.rpcs.org_prompt_location_usage = () => [{ brand_id: BRAND, locations: 0 }];
     expect(await undo(row.id)).toMatchObject({ code: 'ok' });
     expect(prompt(PROMPT).is_active).toBe(true);
@@ -551,12 +554,30 @@ describe('the tracking setup: prompts, topics and competitors (W2-06)', () => {
       prompt_set_id: 'set',
       text: 'crm zapier',
       topic_id: added.id,
+      is_active: true,
     });
     expect(await undo(row.id)).toMatchObject({ code: 'conflict', reason: 'changed' });
     expect(topicNamed('Integrations')).toBeDefined();
     db.tables.prompts = db.tables.prompts.filter((p) => p.id !== 'p2');
     expect(await undo(row.id)).toMatchObject({ code: 'ok' });
     expect(topicNamed('Integrations')).toBeUndefined();
+  });
+
+  it('add_topic then add_prompts: undone in either order', async () => {
+    const topicRow = await change(PEOPLE.manager, 'add_topic', {
+      brand_id: BRAND,
+      name: 'Billing',
+    });
+    const billing = topicNamed('Billing')!;
+    const promptsRow = await change(PEOPLE.manager, 'add_prompts', {
+      brand_id: BRAND,
+      topic_id: billing.id,
+      prompts: ['crm invoicing'],
+    });
+    // The prompts first: paused, they don't hold the topic.
+    expect(await undo(promptsRow.id)).toMatchObject({ code: 'ok' });
+    expect(await undo(topicRow.id)).toMatchObject({ code: 'ok' });
+    expect(topicNamed('Billing')).toBeUndefined();
   });
 
   it('rename_topic: puts the name back, unless it was renamed again since', async () => {
@@ -594,12 +615,41 @@ describe('the tracking setup: prompts, topics and competitors (W2-06)', () => {
     expect(db.tables.competitors).toMatchObject([before]);
   });
 
-  it('remove_competitor: a conflict once the domain was added again', async () => {
+  it('remove_competitor: opens its actions’ links again, which its removal closed', async () => {
+    db.tables.actions = [{ id: 'a1', brand_id: BRAND }];
+    db.tables.action_entities = [
+      {
+        action_id: 'a1',
+        entity_type: 'competitors',
+        entity_key: COMPETITOR,
+        removed_at: null,
+        removed_reason: null,
+      },
+    ];
     const row = await change(PEOPLE.manager, 'remove_competitor', {
       brand_id: BRAND,
       competitor_id: COMPETITOR,
     });
-    db.tables.competitors.push({ id: 'c2', brand_id: BRAND, name: 'Peec', domain: 'peec.ai' });
+    // As 00244's trigger does on delete.
+    Object.assign(db.tables.action_entities[0], {
+      removed_at: '2026-10-30T10:00:00.000Z',
+      removed_reason: 'deleted',
+    });
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    expect(db.tables.action_entities[0]).toMatchObject({ removed_at: null, removed_reason: null });
+  });
+
+  it('remove_competitor: a conflict once the domain was added again, written any way', async () => {
+    const row = await change(PEOPLE.manager, 'remove_competitor', {
+      brand_id: BRAND,
+      competitor_id: COMPETITOR,
+    });
+    db.tables.competitors.push({
+      id: 'c2',
+      brand_id: BRAND,
+      name: 'Peec',
+      domain: 'https://www.Peec.ai/',
+    });
     expect(await undo(row.id)).toMatchObject({
       code: 'conflict',
       reason: 'changed',

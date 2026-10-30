@@ -7,6 +7,7 @@ import {
   BRAND,
   OPPORTUNITY,
   ORG,
+  OTHER_ORG,
   PEOPLE,
   COMPETITOR,
   PROMPT,
@@ -18,7 +19,7 @@ import {
   fakeAddTopicPrompts,
   fakePauseBrandPrompts,
   fakeRemoveBrandCompetitor,
-  fakeUpdateTopic,
+  fakeRenameBrandTopic,
   fakeDismissSuggestion,
   fakeUpdateOpportunity,
   seedWorkspace,
@@ -37,7 +38,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }))
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
 vi.mock('@/lib/actions/prompt', () => ({ addTopicPrompts: vi.fn(), pauseBrandPrompts: vi.fn() }));
-vi.mock('@/lib/actions/topic', () => ({ addBrandTopic: vi.fn(), updateTopic: vi.fn() }));
+vi.mock('@/lib/actions/topic', () => ({ addBrandTopic: vi.fn(), renameBrandTopic: vi.fn() }));
 vi.mock('@/lib/actions/competitor', () => ({
   addCompetitors: vi.fn(),
   removeBrandCompetitor: vi.fn(),
@@ -49,7 +50,7 @@ const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
 const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
-const { addBrandTopic, updateTopic } = await import('@/lib/actions/topic');
+const { addBrandTopic, renameBrandTopic } = await import('@/lib/actions/topic');
 const { addCompetitors, removeBrandCompetitor } = await import('@/lib/actions/competitor');
 const { runLoggedWrite } = await import('./write');
 const { activitySummary, approvalFor, logActivity, recordActivity } = await import('./activity');
@@ -96,7 +97,7 @@ beforeEach(() => {
   vi.mocked(addTopicPrompts).mockImplementation(fakeAddTopicPrompts(db) as never);
   vi.mocked(pauseBrandPrompts).mockImplementation(fakePauseBrandPrompts(db) as never);
   vi.mocked(addBrandTopic).mockImplementation(fakeAddBrandTopic(db) as never);
-  vi.mocked(updateTopic).mockImplementation(fakeUpdateTopic(db) as never);
+  vi.mocked(renameBrandTopic).mockImplementation(fakeRenameBrandTopic(db) as never);
   vi.mocked(addCompetitors).mockImplementation(fakeAddCompetitors(db) as never);
   vi.mocked(removeBrandCompetitor).mockImplementation(fakeRemoveBrandCompetitor(db) as never);
 });
@@ -567,6 +568,28 @@ describe('the tracking setup, by role and mode (W2-06, CHAT-20 §9 rows 20–32)
         prompt_ids: six,
       }),
     ).toMatchObject({ kind: 'ask', reason: 'always_card', offerDontAskAgain: false });
+  });
+
+  it('refuses another workspace’s topic or brand: out of the person’s scope', async () => {
+    db.tables.brands.push({ id: 'b-elsewhere', organization_id: OTHER_ORG });
+    db.tables.topics.push({
+      id: '77777777-7777-4777-8777-777777777777',
+      brand_id: 'b-elsewhere',
+      name: 'Theirs',
+      is_active: true,
+    });
+    expect(
+      await decide(PEOPLE.admin, 'rename_topic', 'full_auto', {
+        topic_id: '77777777-7777-4777-8777-777777777777',
+        name: 'Ours now',
+      }),
+    ).toMatchObject({ kind: 'deny', denial: { code: 'brand_scope' } });
+    expect(
+      await decide(PEOPLE.admin, 'remove_competitor', 'full_auto', {
+        brand_id: 'b-elsewhere',
+        competitor_id: COMPETITOR,
+      }),
+    ).toMatchObject({ kind: 'deny', denial: { code: 'brand_scope' } });
   });
 
   it('refuses them on a read-only workspace', async () => {

@@ -96,6 +96,8 @@ export function readBudget(effort: ChatEffort = 'normal'): ReadBudget {
 export const WRITE_CAPS: Readonly<Record<string, number>> = {
   add_prompts: 50,
   add_competitors: 5,
+  // Prompts paused, as the row takes them (up to 50 a call, §9 row 22).
+  pause_prompts: 50,
   create_action: 5,
   create_draft: 10,
   set_follow_up_check: 3,
