@@ -926,7 +926,7 @@ describe('question cards (CHAT-07)', () => {
     expect(runRow(runId).status).toBe('done');
   });
 
-  it('lets the answer go when the run stopped meanwhile, so nothing is kept half-way', async () => {
+  it('keeps no answer when the run stopped meanwhile: the question is kept as skipped', async () => {
     useModels([READY], [calls(toolCall('q1', ASK_TOOL, ask('Which page?')))]);
     const runId = await turn(ADMIN, 'Write a FAQ');
     // The run stops between the answer being kept and the run being taken back.
@@ -945,7 +945,14 @@ describe('question cards (CHAT-07)', () => {
     expect(
       await engine.prepareResume(ADMIN, runId, 'answer', { n: 1, selected: [0] }),
     ).toMatchObject({ ok: false, status: 409, code: 'not_waiting' });
-    expect(asksOf(runId)[0]).toMatchObject({ answered_at: null, answer_json: null });
+    // Not open again on a run that ended: skipped, as its Stop keeps an open one.
+    expect(asksOf(runId)[0].answer_json).toEqual({
+      selected: [],
+      other: null,
+      skipped: true,
+      via: 'card',
+    });
+    expect(asksOf(runId)[0].answered_at).not.toBeNull();
   });
 
   it('refuses a question without exactly one Recommended, and asks 4 a run at most', async () => {
@@ -1005,6 +1012,71 @@ describe('question cards (CHAT-07)', () => {
     });
     expect(asksOf(locked)[0].answered_at).toBeNull();
     expect(runRow(locked).status).toBe('waiting');
+  });
+
+  it('goes no further when Stop comes right after the answer, here or in another process', async () => {
+    const { sonnet } = useModels(
+      [READY, READY],
+      [
+        calls(toolCall('q1', ASK_TOOL, ask('Which page?'))),
+        calls(toolCall('q2', ASK_TOOL, ask('Which page?'))),
+      ],
+    );
+    const answered = async () => {
+      const runId = await turn(ADMIN, 'Write a FAQ');
+      const prepared = await engine.prepareResume(ADMIN, runId, 'answer', {
+        n: 1,
+        selected: [1],
+      });
+      if (!prepared.ok) throw new Error(prepared.code);
+      return { runId, resume: prepared.resume };
+    };
+    const closed = async (runId: string) => {
+      expect(runRow(runId).status).toBe('stopped');
+      expect(stepsOf(runId)[0]).toMatchObject({ status: 'skipped', label: 'Question skipped' });
+      // Never went on with: the question is kept as skipped, not with an answer no one used.
+      expect(asksOf(runId)[0].answer_json).toMatchObject({ skipped: true });
+      const events = await eventsOf(runId);
+      expect(ofType(events, 'run.stopped')).toHaveLength(1);
+      expect(runFromEvents(events)).toMatchObject({ status: 'stopped', question: null });
+    };
+
+    // Stopped in this process as the answer is taken up.
+    const here = await answered();
+    const driving = engine.driveRun(ADMIN, here.runId, here.resume);
+    expect(await engine.stopChatRun(ADMIN, here.runId)).toEqual({ ok: true });
+    await driving;
+    await closed(here.runId);
+
+    // Stopped from another process before this one's driver started.
+    const elsewhere = await answered();
+    expect(await engine.stopChatRun(ADMIN, elsewhere.runId)).toEqual({ ok: true });
+    await engine.driveRun(ADMIN, elsewhere.runId, elsewhere.resume);
+    await closed(elsewhere.runId);
+
+    // No model step after either answer.
+    expect(sonnet.seen).toHaveLength(2);
+  });
+
+  it('lets only the run’s author answer: a teammate on the shared chat gets 404', async () => {
+    useModels([READY], [calls(toolCall('q1', ASK_TOOL, ask('Which page?'))), text('Done.')]);
+    const runId = await turn(ADMIN, 'Write a FAQ');
+    const before = await eventsOf(runId);
+    for (const body of [
+      { n: 1, selected: [1] },
+      { n: 1, skipped: true },
+    ]) {
+      expect(await engine.prepareResume(ANALYST, runId, 'answer', body)).toMatchObject({
+        ok: false,
+        status: 404,
+      });
+    }
+    expect(await engine.stopChatRun(ANALYST, runId)).toMatchObject({ ok: false, status: 404 });
+    expect(runRow(runId).status).toBe('waiting');
+    expect(asksOf(runId)[0]).toMatchObject({ answered_at: null, answer_json: null });
+    expect(await eventsOf(runId)).toHaveLength(before.length);
+    expect(await answer(ADMIN, runId, { selected: [1] })).toMatchObject({ ok: true });
+    expect(runRow(runId).status).toBe('done');
   });
 });
 

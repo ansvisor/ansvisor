@@ -1853,6 +1853,11 @@ async function resumePending(
 ): Promise<'continue' | 'ended'> {
   const call = pending.calls[pending.index];
   if (pending.kind === 'question') {
+    // A Stop that came after the answer wins: the run goes no further, as after an Approve.
+    if (rc.signal.aborted || (await runStatus(rc.run.id)) === 'stopped') {
+      await stopNow(rc);
+      return 'ended';
+    }
     rc.run.pending = null;
     await saveState(rc.run.id, { pending: null, waitingSince: null });
     const answer = action.kind === 'answer' ? action.answer : SKIPPED_ANSWER;
@@ -2065,23 +2070,31 @@ async function prepareAnswer(
   if (error) throw new Error(`Chat could not keep the answer: ${error.message}`);
   if ((kept ?? []).length === 0) return failure(409, 'answered', t('error.answered'));
   // The run is taken back, or the answer is let go again: a run stopped or
-  // ended meanwhile keeps no answer it never went on with, and a retry after
-  // a failure here finds the question open.
-  let moved = false;
+  // ended meanwhile keeps no answer it never went on with (its question is
+  // kept as skipped, as its Stop keeps it), and a retry after a failure here
+  // finds the question open.
+  let moved: boolean | null = null;
   try {
     moved = await moveRun(runId, ['waiting'], 'running');
   } finally {
-    if (!moved) await releaseAnswer(ask.id);
+    if (!moved) await releaseAnswer(ask.id, moved === false ? SKIPPED_ANSWER : null);
   }
   if (!moved) return failure(409, 'not_waiting', t('error.notWaiting'));
   return { ok: true, resume: { kind: 'answer', answer } };
 }
 
-/** An answer kept on a question whose run didn't go on: the question is open again. */
-async function releaseAnswer(askId: string): Promise<void> {
+/**
+ * An answer kept on a question whose run didn't go on: the question is open
+ * again, or, its run ended meanwhile, kept as skipped.
+ */
+async function releaseAnswer(askId: string, skipped: AskAnswer | null): Promise<void> {
   const { error } = await supabaseAdmin
     .from('chat_asks')
-    .update({ answer_json: null, answered_at: null })
+    .update(
+      skipped
+        ? { answer_json: skipped as unknown as Json, answered_at: new Date().toISOString() }
+        : { answer_json: null, answered_at: null },
+    )
     .eq('id', askId);
   if (error) console.error('[chat/engine] could not let an answer go:', error.message);
 }
@@ -2258,6 +2271,7 @@ async function finishStopped(
   reason: 'person' | 'expired',
   workingMs: number,
 ): Promise<void> {
+  const openAsks: string[] = [];
   for (const step of await openSteps(run.id)) {
     const row = await updateStep(step.id, {
       status: 'skipped',
@@ -2265,18 +2279,30 @@ async function finishStopped(
       ...(step.kind === 'ask' ? { label: t('step.askStopped') } : {}),
       detail: reason === 'expired' ? t('step.expired') : t('step.stopped'),
     });
+    if (step.kind === 'ask') openAsks.push(step.id);
     sink.emit('step.finished', { step: clientStep(row) });
   }
-  // Its open questions are kept as skipped (CHAT-07 §A item 9).
-  const { error: asksError } = await supabaseAdmin
-    .from('chat_asks')
-    .update({
-      answer_json: SKIPPED_ANSWER as unknown as Json,
-      answered_at: new Date().toISOString(),
-    })
-    .eq('run_id', run.id)
-    .is('answered_at', null);
-  if (asksError) console.error('[chat/engine] could not skip open questions:', asksError.message);
+  // Its open questions are kept as skipped (CHAT-07 §A item 9): one answered
+  // just before the Stop too, as the run never went on with that answer.
+  const skipped = { answer_json: SKIPPED_ANSWER as unknown as Json };
+  const at = new Date().toISOString();
+  const [{ error: asksError }, { error: takenError }] = await Promise.all([
+    supabaseAdmin
+      .from('chat_asks')
+      .update({ ...skipped, answered_at: at })
+      .eq('run_id', run.id)
+      .is('answered_at', null),
+    openAsks.length > 0
+      ? supabaseAdmin
+          .from('chat_asks')
+          .update({ ...skipped, answered_at: at })
+          .eq('run_id', run.id)
+          .in('step_id', openAsks)
+      : Promise.resolve({ error: null }),
+  ]);
+  for (const e of [asksError, takenError]) {
+    if (e) console.error('[chat/engine] could not skip open questions:', e.message);
+  }
   await saveAnswer(run.messageId, {
     text: run.progress.text,
     generatedAt: new Date().toISOString(),
