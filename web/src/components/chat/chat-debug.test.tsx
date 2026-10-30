@@ -184,9 +184,30 @@ describe('the Debug switch', () => {
   });
 });
 
+/** Opens an answer's Debug view: only an answer opened is read. */
+async function openDebug() {
+  await act(async () => item('debug.open')!.click());
+}
+
 describe('StaffDebug', () => {
+  it('reads nothing until it is opened, and only the answer opened', async () => {
+    await render(
+      <>
+        <StaffDebug runId={RUN} status="done" />
+        <StaffDebug runId="44444444-4444-4444-8444-444444444445" status="done" />
+      </>,
+      true,
+    );
+    expect(urls).toEqual([]);
+    expect(host.textContent).not.toContain('list_citations');
+    await openDebug();
+    expect(urls).toEqual([`/api/internal/chat/messages/${RUN}/debug`]);
+    expect(item('debug.open')!.getAttribute('aria-expanded')).toBe('true');
+  });
+
   it("shows each step's tool, input, output and measure, and the model calls with cost", async () => {
     await render(<StaffDebug runId={RUN} status="done" />, true);
+    await openDebug();
     expect(urls).toEqual([`/api/internal/chat/messages/${RUN}/debug`]);
     const text = host.textContent!;
     expect(text).toContain('Debug · staff only');
@@ -204,6 +225,7 @@ describe('StaffDebug', () => {
 
   it('downloads a step’s whole output past the first 20 KB', async () => {
     await render(<StaffDebug runId={RUN} status="done" />, true);
+    await openDebug();
     await act(async () => item('debug.downloadFull')!.click());
     expect(urls).toContain(`/api/internal/chat/messages/${RUN}/debug?full=1`);
     expect(download.saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'step-1-output.json');
@@ -214,6 +236,7 @@ describe('StaffDebug', () => {
       Response.json({ ok: false, code: 'forbidden' }, { status: 403 }),
     ) as unknown as typeof fetch;
     await render(<StaffDebug runId={RUN} status="done" />, true);
+    await openDebug();
     expect(host.textContent).toContain("Couldn't read the debug record.");
     expect(host.textContent).not.toContain('list_citations');
   });

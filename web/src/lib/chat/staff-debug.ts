@@ -10,7 +10,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
  * 00410; prompt_improve_usage, 00405). Server only, for the staff-only
  * endpoint (GET /api/internal/chat/messages/{id}/debug), which checks the
  * person first: none of it goes into an event, the conversation API or a
- * customer's page.
+ * customer's page. Staff read their own workspace's answers only (privacy
+ * first): an answer in another workspace reads as not there.
  */
 
 /** How much of a step's output the view shows; the rest is a download. */
@@ -67,6 +68,7 @@ export interface ChatMessageDebug {
 
 interface RunRow {
   id: string;
+  conversation_id: string;
   status: string;
   model: string;
   effort: string;
@@ -99,13 +101,16 @@ interface LedgerRow {
   used_at: string;
 }
 
-const RUN_COLUMNS = 'id, status, model, effort, error';
+const RUN_COLUMNS = 'id, conversation_id, status, model, effort, error';
 
 /**
  * The answer's run: `id` is the answer's message id, or its run's id (the
- * handle the page already has for its routes). Null when there is none.
+ * handle the page already has for its routes). Null when there is none, or
+ * when its chat isn't in `organizationId`, the workspace of the staff member
+ * who asks.
  */
-async function runOf(id: string): Promise<RunRow | null> {
+async function runOf(id: string, organizationId: string): Promise<RunRow | null> {
+  let run: RunRow | null = null;
   for (const column of ['message_id', 'id'] as const) {
     const { data, error } = await supabaseAdmin
       .from('chat_runs')
@@ -113,19 +118,32 @@ async function runOf(id: string): Promise<RunRow | null> {
       .eq(column, id)
       .maybeSingle();
     if (error) throw new Error(`Could not read the run: ${error.message}`);
-    if (data) return data as RunRow;
+    if (data) {
+      run = data as RunRow;
+      break;
+    }
   }
-  return null;
+  if (!run) return null;
+  const { data: chat, error } = await supabaseAdmin
+    .from('chat_conversations')
+    .select('organization_id')
+    .eq('id', run.conversation_id)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the run's chat: ${error.message}`);
+  const chatOrg = (chat as { organization_id: string } | null)?.organization_id;
+  return chatOrg && chatOrg === organizationId ? run : null;
 }
 
-async function stepsOf(runId: string): Promise<StepRow[]> {
-  const { data, error } = await supabaseAdmin
+/** The run's steps in order; with `n`, that step only. */
+async function stepsOf(runId: string, n?: number): Promise<StepRow[]> {
+  let query = supabaseAdmin
     .from('chat_run_steps')
     .select(
       'id, position, kind, status, label, tool, debug_json, latency_ms, cache_hit, truncated, result_tokens',
     )
-    .eq('run_id', runId)
-    .order('position', { ascending: true });
+    .eq('run_id', runId);
+  if (n !== undefined) query = query.eq('position', n);
+  const { data, error } = await query.order('position', { ascending: true });
   if (error) throw new Error(`Could not read the run's steps: ${error.message}`);
   return (data ?? []) as StepRow[];
 }
@@ -173,10 +191,14 @@ function debugStep(row: StepRow): ChatDebugStep {
 
 /**
  * The Debug view of an answer: its run's steps with their tool, input and
- * output, and its model calls; null when `id` names no answer's run.
+ * output, and its model calls; null when `id` names no answer's run in
+ * `organizationId`.
  */
-export async function readChatMessageDebug(id: string): Promise<ChatMessageDebug | null> {
-  const run = await runOf(id);
+export async function readChatMessageDebug(
+  id: string,
+  organizationId: string,
+): Promise<ChatMessageDebug | null> {
+  const run = await runOf(id, organizationId);
   if (!run) return null;
   const [steps, ledger] = await Promise.all([
     stepsOf(run.id),
@@ -220,12 +242,16 @@ export async function readChatMessageDebug(id: string): Promise<ChatMessageDebug
 
 /**
  * "Download full": step `n`'s whole output as JSON text; null when the
- * answer, the step or its output isn't there.
+ * answer (in `organizationId`), the step or its output isn't there.
  */
-export async function readChatStepOutput(id: string, n: number): Promise<string | null> {
-  const run = await runOf(id);
+export async function readChatStepOutput(
+  id: string,
+  organizationId: string,
+  n: number,
+): Promise<string | null> {
+  const run = await runOf(id, organizationId);
   if (!run) return null;
-  const step = (await stepsOf(run.id)).find((row) => row.position === n);
+  const [step] = await stepsOf(run.id, n);
   const output = step ? record(step.debug_json).output : undefined;
   return output === undefined ? null : printed(output);
 }

@@ -48,6 +48,19 @@ interface Turn {
   /** Its answer in Files (Save to Files). */
   fileId?: string | null;
   timezone?: string | null;
+  /**
+   * A question as it was sent, for Retry to send it again: its page chips,
+   * @ references and the page they came from. Null when it can't go again
+   * as it was: it had files (each goes with one message only), or it was
+   * read back with a scope this page doesn't hold.
+   */
+  resend?: Resend | null;
+}
+
+interface Resend {
+  context: ComposerChip[];
+  references: ChatReference[];
+  route?: string;
 }
 
 const OPEN: ClientRunStatus[] = ['queued', 'running', 'waiting'];
@@ -64,6 +77,10 @@ const SETTLING = new Set<string>([
 function turnsOf(thread: ChatThread | null): Turn[] {
   return (thread?.messages ?? []).map((message, i) => {
     const turn: Turn = { key: `saved-${i}`, role: message.role, text: message.text };
+    // A saved question goes again only as it was: without files or a scope.
+    if (message.role === 'user') {
+      turn.resend = message.resendable === false ? null : { context: [], references: [] };
+    }
     if (message.role === 'assistant' && message.run) {
       turn.runId = message.run.runId;
       turn.timezone = message.timezone;
@@ -89,12 +106,22 @@ function turnsOf(thread: ChatThread | null): Turn[] {
  */
 const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Waits `ms`, or less when `signal` aborts. */
+const wait = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(done, ms);
+    function done() {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', done);
+      resolve();
+    }
+    signal.addEventListener('abort', done, { once: true });
+  });
 
 /** The question an answer answers: the person's message right before it. */
-function questionOf(turns: Turn[], index: number): string | null {
+function questionOf(turns: Turn[], index: number): Turn | null {
   const before = turns[index - 1];
-  return before?.role === 'user' && before.text.trim() ? before.text : null;
+  return before?.role === 'user' && before.text.trim() ? before : null;
 }
 
 /**
@@ -161,7 +188,18 @@ export function ChatThreadView({
   const [mode, setMode] = useState<ChatMode>(defaultMode);
   const [reconnecting, setReconnecting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const resumed = useRef(false);
+  // While the view is on screen: what it streams stops once it goes (another
+  // page, the side panel closed), so nothing keeps listening or warns there.
+  const life = useRef<AbortController | null>(null);
+  // Read when a stream gives up, so following a run never waits on a render.
+  const lostWords = useRef(t('connectionLost'));
+  // The run under way when the page opened, which it picks up again.
+  const [resumable] = useState(() => {
+    const open = turns[turns.length - 1];
+    return open?.runId && open.run && OPEN.includes(open.run.status)
+      ? { key: open.key, runId: open.runId }
+      : null;
+  });
   const brandId = thread?.brandId ?? activeBrandId ?? null;
 
   const last = turns[turns.length - 1];
@@ -184,7 +222,9 @@ export function ChatThreadView({
    * last one applied (`from`, then each event's seq) are asked for again, a
    * few times, longer apart each time; when none come back the person is
    * told. `rebuild`: the first event builds the answer anew (a run read
-   * again after a reload), its kept steps showing until then.
+   * again after a reload), its kept steps showing until then. Once the view
+   * is gone (`signal`, the view's life when it was called) it stops at once:
+   * the stream is cancelled, no reconnect, no warning.
    */
   const follow = useCallback(
     async (
@@ -193,7 +233,12 @@ export function ChatThreadView({
       first: ReadableStream<Uint8Array> | null,
       from = 0,
       rebuild = false,
+      signal: AbortSignal | undefined = life.current?.signal,
     ) => {
+      if (!signal || signal.aborted) {
+        void first?.cancel().catch(() => {});
+        return;
+      }
       let body = first;
       let lastSeq = from;
       let fresh = rebuild;
@@ -202,7 +247,7 @@ export function ChatThreadView({
         let settled = false;
         if (body) {
           try {
-            for await (const event of readSse(body)) {
+            for await (const event of readSse(body, signal)) {
               lastSeq = Math.max(lastSeq, event.seq);
               settled ||= SETTLING.has(event.type);
               tries = 0;
@@ -218,40 +263,52 @@ export function ChatThreadView({
             // The connection broke mid-stream: reconnected below.
           }
         }
+        if (signal.aborted) return;
         if (settled) break;
         if (tries >= RECONNECT_DELAYS_MS.length) {
-          toast.error(t('connectionLost'));
+          toast.error(lostWords.current);
           break;
         }
         setReconnecting(true);
-        await wait(RECONNECT_DELAYS_MS[tries]);
+        await wait(RECONNECT_DELAYS_MS[tries], signal);
+        if (signal.aborted) return;
         tries += 1;
-        const res = await fetch(`/api/chat/runs/${runId}/events?after=${lastSeq}`).catch(
-          () => null,
-        );
+        const res = await fetch(`/api/chat/runs/${runId}/events?after=${lastSeq}`, {
+          signal,
+        }).catch(() => null);
         body = res?.ok && res.body ? res.body : null;
         if (body) setReconnecting(false);
       }
       setReconnecting(false);
     },
-    [updateRun, t],
+    [updateRun],
   );
 
-  // A run under way when the page opened: rebuilt from its events, then live.
+  // The view's life; a run under way when the page opened is rebuilt from
+  // its events, then followed live, until the view goes.
   useEffect(() => {
-    if (resumed.current) return;
-    resumed.current = true;
-    const open = turns[turns.length - 1];
-    if (!open?.runId || !open.run || !OPEN.includes(open.run.status)) return;
-    const runId = open.runId;
-    updateRun(open.key, (turn) => ({ ...turn, startedAt: Date.now() }));
-    void fetch(`/api/chat/runs/${runId}/events?after=0`)
-      .catch(() => null)
-      .then((res) => follow(open.key, runId, res?.ok && res.body ? res.body : null, 0, true));
-  }, [turns, follow, updateRun]);
+    const controller = new AbortController();
+    life.current = controller;
+    if (resumable) {
+      const { key, runId } = resumable;
+      updateRun(key, (turn) => ({ ...turn, startedAt: Date.now() }));
+      void fetch(`/api/chat/runs/${runId}/events?after=0`, { signal: controller.signal })
+        .catch(() => null)
+        .then((res) =>
+          follow(key, runId, res?.ok && res.body ? res.body : null, 0, true, controller.signal),
+        );
+    }
+    return () => {
+      controller.abort();
+      if (life.current === controller) life.current = null;
+    };
+  }, [resumable, follow, updateRun]);
 
-  /** A message to Chat: false when it wasn't taken, so the composer keeps it. */
-  async function send(message: string, sent: ComposerSend): Promise<boolean> {
+  /**
+   * A message to Chat: false when it wasn't taken, so the composer keeps it.
+   * `route`: the page its chips came from, when not this one (a Retry).
+   */
+  async function send(message: string, sent: ComposerSend, route = pageRoute): Promise<boolean> {
     if (isLocked) {
       openUpgrade();
       return false;
@@ -260,7 +317,15 @@ export function ChatThreadView({
     const answerKey = `answer-${Date.now()}`;
     setTurns((all) => [
       ...all,
-      { key: questionKey, role: 'user', text: message },
+      {
+        key: questionKey,
+        role: 'user',
+        text: message,
+        resend:
+          sent.attachments.length > 0
+            ? null
+            : { context: sent.context, references: sent.references, route },
+      },
       {
         key: answerKey,
         role: 'assistant',
@@ -284,7 +349,7 @@ export function ChatThreadView({
           : {}),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(sent.attachments.length > 0 ? { attachmentIds: sent.attachments } : {}),
-        ...(sent.context.length > 0 ? { context: { route: pageRoute, chips: sent.context } } : {}),
+        ...(sent.context.length > 0 ? { context: { route, chips: sent.context } } : {}),
         ...(sent.references.length > 0 ? { references: sent.references } : {}),
       }),
     }).catch(() => null);
@@ -333,9 +398,9 @@ export function ChatThreadView({
       if (failed?.code === 'subscription_inactive') openUpgrade();
       else toast.error(failed?.error ?? t('answerFailed'));
       // The card may have changed (approval_mismatch): the run's events show it again.
-      const events = await fetch(`/api/chat/runs/${runId}/events?after=${run.lastSeq}`).catch(
-        () => null,
-      );
+      const events = await fetch(`/api/chat/runs/${runId}/events?after=${run.lastSeq}`, {
+        signal: life.current?.signal,
+      }).catch(() => null);
       if (events?.ok && events.body) await follow(turn.key, runId, events.body, run.lastSeq);
       return;
     }
@@ -347,24 +412,30 @@ export function ChatThreadView({
     await fetch(`/api/chat/runs/${last.runId}/stop`, { method: 'POST' }).catch(() => null);
     // A run nothing drives (queued, waiting) is ended by the Stop itself: its events say so.
     if (last.run && last.run.status !== 'running') {
-      const res = await fetch(
-        `/api/chat/runs/${last.runId}/events?after=${last.run.lastSeq}`,
-      ).catch(() => null);
+      const res = await fetch(`/api/chat/runs/${last.runId}/events?after=${last.run.lastSeq}`, {
+        signal: life.current?.signal,
+      }).catch(() => null);
       if (res?.ok && res.body) await follow(last.key, last.runId, res.body, last.run.lastSeq);
     }
   }
 
   /**
    * Retry on the answer at `index` (CHAT-03 item 18): its question, sent
-   * again. The latest answer only, once nothing works; none on a teammate's
-   * chat.
+   * again as it was, with its page chips and @ references. The latest answer
+   * only, once nothing works and Chat isn't paused at the AI limit; none on a
+   * teammate's chat, or for a question that can't go again as it was (files).
    */
   function retryOf(index: number): (() => void) | undefined {
     const question = questionOf(turns, index);
-    if (!question || index !== turns.length - 1 || (thread && !thread.mine) || working) {
-      return undefined;
-    }
-    return () => void send(question, { context: [], references: [], attachments: [] });
+    const resend = question?.resend;
+    if (!question || !resend || index !== turns.length - 1) return undefined;
+    if ((thread && !thread.mine) || working || atCap) return undefined;
+    return () =>
+      void send(
+        question.text,
+        { context: resend.context, references: resend.references, attachments: [] },
+        resend.route,
+      );
   }
 
   return (

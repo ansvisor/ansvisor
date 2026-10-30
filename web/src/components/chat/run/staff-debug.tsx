@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import type { ChatMessageDebug } from '@/lib/chat/staff-debug';
 import { saveBlob } from '@/lib/download';
 import { formatNumber } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 type Load =
   | { state: 'loading' }
@@ -23,15 +25,18 @@ const counted = (value: number | null, dash: string) =>
  * Chat's staff Debug view of one answer (CHAT-03 items 25–26; W1-15), shown
  * under it while Debug is on in the chat's ⋯ menu: each step with its tool,
  * input and output (the first 20 KB, then Download full), latency and cache
- * hit; then the run's model calls with tokens and cost in USD. Read from
- * the staff-only endpoint, which checks the person on the server; read
- * again as the run moves on (`status`).
+ * hit; then the run's model calls with tokens and cost in USD. Folded
+ * until staff open it: only an answer opened is read, from the staff-only
+ * endpoint, which checks the person on the server; read again as the run
+ * moves on (`status`).
  */
 export function StaffDebug({ runId, status }: { runId: string; status: string }) {
   const t = useTranslations('chatDebug');
+  const [open, setOpen] = useState(false);
   const [load, setLoad] = useState<Load>({ state: 'loading' });
 
   useEffect(() => {
+    if (!open) return;
     let live = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoad({ state: 'loading' });
@@ -52,7 +57,7 @@ export function StaffDebug({ runId, status }: { runId: string; status: string })
     return () => {
       live = false;
     };
-  }, [runId, status]);
+  }, [open, runId, status]);
 
   async function downloadFull(n: number) {
     const res = await fetch(`${debugUrl(runId)}?full=${n}`).catch(() => null);
@@ -70,10 +75,27 @@ export function StaffDebug({ runId, status }: { runId: string; status: string })
       aria-label={t('title')}
       className="space-y-2 rounded-lg border border-dashed bg-muted/30 p-3 text-xs"
     >
-      <p className="font-semibold">{t('title')}</p>
-      {load.state === 'loading' && <p className="text-muted-foreground">{t('loading')}</p>}
-      {load.state === 'failed' && <p className="text-red-700 dark:text-red-400">{t('failed')}</p>}
-      {load.state === 'ready' && (
+      <button
+        type="button"
+        data-action="debug.open"
+        aria-expanded={open}
+        onClick={() => setOpen((was) => !was)}
+        className="flex w-full items-center gap-1.5 text-left font-semibold"
+      >
+        <ChevronDown
+          aria-hidden
+          className={cn(
+            'size-3.5 transition-transform motion-reduce:transition-none',
+            open && 'rotate-180',
+          )}
+        />
+        {t('title')}
+      </button>
+      {open && load.state === 'loading' && <p className="text-muted-foreground">{t('loading')}</p>}
+      {open && load.state === 'failed' && (
+        <p className="text-red-700 dark:text-red-400">{t('failed')}</p>
+      )}
+      {open && load.state === 'ready' && (
         <>
           <p className="text-muted-foreground">
             {t('run', {

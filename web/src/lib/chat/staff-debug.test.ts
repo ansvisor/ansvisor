@@ -7,7 +7,8 @@ import { createFakeSupabase, type FakeSupabase } from './testing/fake-supabase';
  * What the staff Debug view reads of an answer (CHAT-03 items 25–26;
  * W1-15): by the answer's message id or its run's id, each step's tool,
  * input, output (the first 20 KB) and measure, and the run's model calls
- * with tokens and cost. None of it can go out as an event.
+ * with tokens and cost; in the staff member's own workspace only. None of
+ * it can go out as an event.
  */
 
 const fake = vi.hoisted(() => ({ db: null as unknown as FakeSupabase }));
@@ -21,14 +22,26 @@ const { DEBUG_OUTPUT_BYTES, readChatMessageDebug, readChatStepOutput } =
   await import('./staff-debug');
 
 const RUN = '44444444-4444-4444-8444-444444444444';
+const CHAT = '33333333-3333-4333-8333-333333333333';
+const ORG = '77777777-7777-4777-8777-777777777777';
+const OTHER_ORG = '88888888-8888-4888-8888-888888888888';
 const MESSAGE = '55555555-5555-4555-8555-555555555555';
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const big = { rows: Array.from({ length: 2000 }, (_, i) => ({ url: `/page-${i}`, cited: i })) };
 
 beforeEach(() => {
   fake.db = createFakeSupabase();
+  fake.db.tables.chat_conversations = [{ id: CHAT, organization_id: ORG }];
   fake.db.tables.chat_runs = [
-    { id: RUN, message_id: MESSAGE, status: 'done', model: 'auto', effort: 'normal', error: null },
+    {
+      id: RUN,
+      message_id: MESSAGE,
+      conversation_id: CHAT,
+      status: 'done',
+      model: 'auto',
+      effort: 'normal',
+      error: null,
+    },
   ];
   fake.db.tables.chat_run_steps = [
     {
@@ -91,7 +104,7 @@ beforeEach(() => {
 
 describe('readChatMessageDebug', () => {
   it("shows each step's tool, input, output and measure, and the run's model calls with cost", async () => {
-    const debug = (await readChatMessageDebug(MESSAGE))!;
+    const debug = (await readChatMessageDebug(MESSAGE, ORG))!;
     expect(debug).toMatchObject({ status: 'done', model: 'auto', effort: 'normal', error: null });
     expect(debug.steps.map((s) => [s.n, s.tool])).toEqual([
       [1, 'list_citations'],
@@ -115,24 +128,54 @@ describe('readChatMessageDebug', () => {
   });
 
   it('shows the first 20 KB of a large output, and the whole one as a download', async () => {
-    const step = (await readChatMessageDebug(MESSAGE))!.steps[0];
+    const step = (await readChatMessageDebug(MESSAGE, ORG))!.steps[0];
     const whole = JSON.stringify(big, null, 2);
     expect(step.outputCut).toBe(true);
     expect(step.outputBytes).toBe(new TextEncoder().encode(whole).length);
     expect(new TextEncoder().encode(step.output!).length).toBe(DEBUG_OUTPUT_BYTES);
     expect(whole.startsWith(step.output!)).toBe(true);
-    expect(await readChatStepOutput(MESSAGE, 1)).toBe(whole);
-    expect(await readChatStepOutput(MESSAGE, 2)).toBeNull();
-    expect(await readChatStepOutput(MESSAGE, 9)).toBeNull();
+    expect(await readChatStepOutput(MESSAGE, ORG, 1)).toBe(whole);
+    expect(await readChatStepOutput(MESSAGE, ORG, 2)).toBeNull();
+    expect(await readChatStepOutput(MESSAGE, ORG, 9)).toBeNull();
   });
 
   it("finds the answer by its run's id too, and nothing for an unknown one", async () => {
-    expect((await readChatMessageDebug(RUN))!.steps).toHaveLength(2);
-    expect(await readChatMessageDebug('66666666-6666-4666-8666-666666666666')).toBeNull();
+    expect((await readChatMessageDebug(RUN, ORG))!.steps).toHaveLength(2);
+    expect(await readChatMessageDebug('66666666-6666-4666-8666-666666666666', ORG)).toBeNull();
+  });
+
+  it("reads nothing of another workspace's answer, even for staff", async () => {
+    expect(await readChatMessageDebug(MESSAGE, OTHER_ORG)).toBeNull();
+    expect(await readChatMessageDebug(RUN, OTHER_ORG)).toBeNull();
+    expect(await readChatStepOutput(MESSAGE, OTHER_ORG, 1)).toBeNull();
+    // Nor an answer whose chat is gone.
+    fake.db.tables.chat_conversations = [];
+    expect(await readChatMessageDebug(MESSAGE, ORG)).toBeNull();
+    expect(fake.db.log).not.toContainEqual(['prompt_improve_usage', 'select']);
+  });
+
+  it('reads only the step asked for, for Download full', async () => {
+    const filters: [string, unknown][] = [];
+    const from = fake.db.from.bind(fake.db);
+    fake.db.from = (table: string) => {
+      const builder = from(table);
+      if (table !== 'chat_run_steps') return builder;
+      const eq = builder.eq.bind(builder);
+      builder.eq = (column: string, value: unknown) => {
+        filters.push([column, value]);
+        return eq(column, value);
+      };
+      return builder;
+    };
+    await readChatStepOutput(MESSAGE, ORG, 1);
+    expect(filters).toEqual([
+      ['run_id', RUN],
+      ['position', 1],
+    ]);
   });
 
   it('can never go to the browser as an event', async () => {
-    const debug = (await readChatMessageDebug(MESSAGE))!;
+    const debug = (await readChatMessageDebug(MESSAGE, ORG))!;
     const step = { n: 1, kind: 'read' as const, status: 'done' as const, label: 'Read Citations' };
     expect(() =>
       chatEvent('step.finished', 1, { step: { ...step, ...debug.steps[0] } as never }),

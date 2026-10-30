@@ -5,22 +5,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * The staff Debug endpoint (CHAT-03 items 25–26; W1-15): not there while the
  * new Chat is off; 401 without a session; 403 for anyone who isn't Ansvisor
  * staff, a customer's Admin too; for staff, the answer's debug record, and
- * a step's whole output as a download. Each staff view is logged.
+ * a step's whole output as a download, in their own workspace only. Each
+ * staff view is logged, with the workspace.
  */
 
 const auth = vi.hoisted(() => ({
   user: null as { id: string; email: string; email_confirmed_at: string | null } | null,
+  org: '77777777-7777-4777-8777-777777777777' as string | null,
 }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: auth.user } }) },
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data: auth.org ? { organization_id: auth.org } : null,
+            error: null,
+          }),
+        }),
+      }),
+    }),
   }),
 }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 vi.mock('@/lib/chat/engine', () => ({ driveRun: vi.fn() }));
 vi.mock('@/lib/chat/staff-debug', () => ({
-  readChatMessageDebug: vi.fn(async (id: string) =>
-    id === MESSAGE
+  readChatMessageDebug: vi.fn(async (id: string, organizationId: string) =>
+    id === MESSAGE && organizationId === ORG
       ? {
           status: 'done',
           model: 'auto',
@@ -32,8 +44,8 @@ vi.mock('@/lib/chat/staff-debug', () => ({
         }
       : null,
   ),
-  readChatStepOutput: vi.fn(async (id: string, n: number) =>
-    id === MESSAGE && n === 1 ? '{\n  "rows": []\n}' : null,
+  readChatStepOutput: vi.fn(async (id: string, organizationId: string, n: number) =>
+    id === MESSAGE && organizationId === ORG && n === 1 ? '{\n  "rows": []\n}' : null,
   ),
 }));
 
@@ -41,6 +53,7 @@ const { GET } = await import('./route');
 const { readChatMessageDebug } = await import('@/lib/chat/staff-debug');
 
 const MESSAGE = '55555555-5555-4555-8555-555555555555';
+const ORG = '77777777-7777-4777-8777-777777777777';
 const CONFIRMED = '2026-10-01T09:00:00.000Z';
 const STAFF = { id: 'staff-1', email: 'ops@ansvisor.com', email_confirmed_at: CONFIRMED };
 const ADMIN = { id: 'admin-1', email: 'admin@customer.com', email_confirmed_at: CONFIRMED };
@@ -56,6 +69,7 @@ beforeEach(() => {
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('STAFF_EMAILS', 'ops@ansvisor.com');
   auth.user = STAFF;
+  auth.org = ORG;
   vi.mocked(readChatMessageDebug).mockClear();
   info = vi.spyOn(console, 'info').mockImplementation(() => {});
 });
@@ -99,10 +113,23 @@ describe('GET /api/internal/chat/messages/{id}/debug', () => {
     expect(body.ok).toBe(true);
     expect(body.debug.steps[0].tool).toBe('list_citations');
     expect(body.debug.modelCalls[0].costUsd).toBe(0.0012);
+    expect(readChatMessageDebug).toHaveBeenCalledWith(MESSAGE, ORG);
     expect(info).toHaveBeenCalledWith('[chat/debug] staff view', {
       staffUserId: 'staff-1',
+      organizationId: ORG,
       id: MESSAGE,
     });
+  });
+
+  it("finds nothing outside the staff member's own workspace (404)", async () => {
+    auth.org = '88888888-8888-4888-8888-888888888888';
+    const res = await get(MESSAGE);
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(await res.json())).not.toMatch(/list_citations|claude|cost/i);
+    expect((await get(MESSAGE, '?full=1')).status).toBe(404);
+    // Without a workspace, nothing is theirs.
+    auth.org = null;
+    expect((await get(MESSAGE)).status).toBe(404);
   });
 
   it("gives a step's whole output as a download, and 404 for what isn't there", async () => {

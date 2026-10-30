@@ -127,6 +127,7 @@ beforeEach(() => {
   aiUsage.usage = null;
   calls = [];
   fetchMock.mockClear();
+  toast.error.mockClear();
   vi.stubGlobal('fetch', fetchMock);
   window.history.replaceState(null, '', '/dashboard/chat');
   container = document.createElement('div');
@@ -351,6 +352,146 @@ describe('ChatThreadView', () => {
     root = createRoot(container);
     await render({ thread: { ...thread, mine: false }, variant: 'dock' });
     expect(container.querySelector('[data-action="run.retry"]')).toBeNull();
+
+    // A question sent with files or a page scope can't go again as it was: no Retry.
+    const scoped = {
+      ...thread,
+      messages: [{ ...thread.messages[0], resendable: false }, thread.messages[1]],
+    } as ChatThread;
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render({ thread: scoped, variant: 'dock' });
+    expect(container.querySelector('[data-slot="run-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-action="run.retry"]')).toBeNull();
+
+    // Paused at the AI limit, the composer is off, and so is Retry.
+    aiUsage.usage = {
+      plan: 'growth',
+      planName: 'Growth',
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      unlimited: false,
+      percentUsed: 100,
+      features: [],
+      chatMetered: true,
+    };
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render({ thread, variant: 'dock' });
+    expect(container.querySelector('[data-slot="run-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-action="run.retry"]')).toBeNull();
+  });
+
+  it('retries a question with the page chips and @ objects it was sent with', async () => {
+    const chart = { type: 'chart' as const, id: 'mentions-trend', label: 'Mentions over time' };
+    const chips = [
+      { key: 'page', label: 'Mentions & Sentiment' },
+      { key: 'filter:platform', label: 'ChatGPT', value: 'chatgpt-web' },
+    ];
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(
+        stream([
+          chatEvent('run.error', 1, {
+            workingMs: 1000,
+            stepCount: 0,
+            sources: [],
+            code: 'failed',
+            reason: 'Something went wrong, so Chat stopped here.',
+          }),
+        ]),
+        { status: 200, headers: { 'x-chat-conversation': CHAT, 'x-chat-run': RUN } },
+      );
+    });
+    await render({
+      variant: 'panel',
+      onConversation: vi.fn(),
+      chips,
+      pageRoute: '/dashboard/mentions',
+      draft: { nonce: 1, reference: chart },
+    });
+    await type('Why the drop?');
+    await enter();
+    const retry = container.querySelector<HTMLButtonElement>('[data-action="run.retry"]')!;
+    await act(async () => retry.click());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const sent = calls.filter((c) => c.url === '/api/chat/runs');
+    expect(sent).toHaveLength(2);
+    const [first, again] = sent.map((c) => JSON.parse(String(c.init!.body)));
+    expect(again).toMatchObject({
+      message: 'Why the drop?',
+      conversationId: CHAT,
+      context: { route: '/dashboard/mentions', chips },
+      references: [chart],
+    });
+    expect(again.context).toEqual(first.context);
+    expect(again.references).toEqual(first.references);
+    expect(again.attachmentIds).toBeUndefined();
+  });
+
+  it('stops following a run once the view goes: no reconnect, no warning', async () => {
+    const thread = {
+      conversationId: CHAT,
+      title: 'Citations',
+      brandId: null,
+      mine: true,
+      messages: [
+        { role: 'user', text: 'Find the drop', generatedAt: null, dataAsOf: null, timezone: null },
+        {
+          role: 'assistant',
+          text: '',
+          generatedAt: null,
+          dataAsOf: null,
+          timezone: 'UTC',
+          run: { runId: RUN, status: 'running', steps: [], fileId: null, deliverables: [] },
+        },
+      ],
+    } as unknown as ChatThread;
+    // The stream ends with no end: the view would reconnect after a second.
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(stream([]), { status: 200 });
+    });
+    await render({ thread, variant: 'dock' });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(container.textContent).toContain('Reconnecting…');
+    await act(async () => root.unmount());
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    expect(calls.filter((c) => c.url.includes('/events'))).toHaveLength(1);
+    expect(toast.error).not.toHaveBeenCalled();
+    root = createRoot(container);
+  });
+
+  it('cancels a stream still open once the view goes', async () => {
+    const thread = {
+      conversationId: CHAT,
+      title: 'Citations',
+      brandId: null,
+      mine: true,
+      messages: [
+        { role: 'user', text: 'Find the drop', generatedAt: null, dataAsOf: null, timezone: null },
+        {
+          role: 'assistant',
+          text: '',
+          generatedAt: null,
+          dataAsOf: null,
+          timezone: 'UTC',
+          run: { runId: RUN, status: 'running', steps: [], fileId: null, deliverables: [] },
+        },
+      ],
+    } as unknown as ChatThread;
+    const cancel = vi.fn();
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(new ReadableStream({ start: () => {}, cancel }), { status: 200 });
+    });
+    await render({ thread, variant: 'dock' });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(cancel).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(cancel).toHaveBeenCalled();
+    root = createRoot(container);
   });
 
   it('says "Reconnecting…" when the stream drops, and resumes after the last event', async () => {

@@ -43,6 +43,12 @@ export interface ThreadMessage {
   dataAsOf: string | null;
   timezone: string | null;
   run: ThreadRun | null;
+  /**
+   * A question Retry may send again as it was (W1-15): one without files
+   * (each goes with one message only) and without a page scope (its chips
+   * and @ references stay on the server). Questions only.
+   */
+  resendable?: boolean;
 }
 
 export interface ChatThread {
@@ -126,7 +132,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   const [messages, runs] = await Promise.all([
     supabase
       .from('chat_messages')
-      .select('id, role, content_md, generated_at, data_as_of, timezone, created_at')
+      .select('id, role, content_md, context_json, generated_at, data_as_of, timezone, created_at')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true }),
     supabase
@@ -136,6 +142,19 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   ]);
   if (messages.error) throw new Error(`Could not read the chat: ${messages.error.message}`);
   if (runs.error) throw new Error(`Could not read the chat's runs: ${runs.error.message}`);
+
+  const questionIds = (messages.data ?? []).filter((m) => m.role === 'user').map((m) => m.id);
+  const uploads = questionIds.length
+    ? await supabase.from('chat_uploads').select('message_id').in('message_id', questionIds)
+    : { data: [], error: null };
+  // Unread, every question counts as having files: Retry stays off rather than send it short.
+  if (uploads.error)
+    console.error('[chat/thread] could not read the files sent:', uploads.error.message);
+  const withFiles = new Set(
+    uploads.error
+      ? questionIds
+      : (uploads.data ?? []).map((row) => row.message_id).filter((id): id is string => !!id),
+  );
 
   const runIds = (runs.data ?? []).map((run) => run.id);
   const endedIds = (runs.data ?? []).filter((run) => ENDED.includes(run.status)).map((r) => r.id);
@@ -209,6 +228,9 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
       dataAsOf: message.data_as_of,
       timezone: message.timezone,
       run: runByMessage.get(message.id) ?? null,
+      ...(message.role === 'user'
+        ? { resendable: !message.context_json && !withFiles.has(message.id) }
+        : {}),
     })),
   };
 }

@@ -19,8 +19,11 @@ import { createClient } from '@/lib/supabase/server';
  *
  * Ansvisor staff only, checked here on the server (STAFF_EMAILS,
  * lib/chat/staff.ts): anyone else signed in gets 403, a customer's Admin
- * too. Each view is logged with who looked. Not there (404) while the new
- * Chat is off (CHAT_AGENTIC). Refusals as values (#1777), never thrown.
+ * too. Staff see their own workspace's answers only (privacy first): one in
+ * another workspace is 404, as a run that isn't the person's is on the run
+ * routes. Each view is logged with who looked and in which workspace. Not
+ * there (404) while the new Chat is off (CHAT_AGENTIC). Refusals as values
+ * (#1777), never thrown.
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -35,17 +38,27 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (!isChatStaff(user)) return runFailure(403, 'failed', 'forbidden', 'Forbidden');
     const id = runIdOf((await params).id);
     if (!id) return runFailure(404, 'not_found', 'not_found', 'Not found');
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const organizationId = profile?.organization_id ?? null;
+    if (!organizationId) return runFailure(404, 'not_found', 'not_found', 'Not found');
 
     const full = new URL(req.url).searchParams.get('full');
     console.info('[chat/debug] staff view', {
       staffUserId: user.id,
+      organizationId,
       id,
       ...(full ? { full } : {}),
     });
 
     if (full !== null) {
       const n = Number(full);
-      const output = Number.isInteger(n) && n > 0 ? await readChatStepOutput(id, n) : null;
+      const output =
+        Number.isInteger(n) && n > 0 ? await readChatStepOutput(id, organizationId, n) : null;
       if (output === null) return runFailure(404, 'not_found', 'not_found', 'Not found');
       return new Response(output, {
         headers: {
@@ -56,7 +69,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       });
     }
 
-    const debug = await readChatMessageDebug(id);
+    const debug = await readChatMessageDebug(id, organizationId);
     if (!debug) return runFailure(404, 'not_found', 'not_found', 'Not found');
     return NextResponse.json<{ ok: true; debug: ChatMessageDebug }>(
       { ok: true, debug },

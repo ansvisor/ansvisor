@@ -41,6 +41,7 @@ function seed(runs: { id: string; status: string; error?: string | null }[]) {
       conversation_id: CHAT,
       role: 'user',
       content_md: `Question ${i + 1}`,
+      context_json: null,
       generated_at: null,
       data_as_of: null,
       timezone: null,
@@ -156,6 +157,37 @@ describe('loadChatThread', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const run = (await loadChatThread(CHAT))!.messages[1].run!;
     expect(run).toMatchObject({ status: 'error', errorReason: null, summary: null });
+    error.mockRestore();
+  });
+
+  it('says which questions Retry may send again as they were: no files, no page scope', async () => {
+    seed([
+      { id: 'run-1', status: 'error', error: 'failed' },
+      { id: 'run-2', status: 'error', error: 'failed' },
+      { id: 'run-3', status: 'error', error: 'failed' },
+    ]);
+    fake.db.tables.chat_messages[2].context_json = {
+      context: { route: '/dashboard/mentions', chips: [{ key: 'page', label: 'Mentions' }] },
+    };
+    fake.db.tables.chat_uploads = [{ id: 'u1', message_id: 'q-run-3' }];
+    fake.db.tables.chat_run_steps = [];
+    fake.db.tables.chat_run_events = [];
+    const messages = (await loadChatThread(CHAT))!.messages;
+    expect(messages.map((m) => m.resendable)).toEqual([
+      true,
+      undefined,
+      false,
+      undefined,
+      false,
+      undefined,
+    ]);
+    // The scope itself stays on the server.
+    expect(JSON.stringify(messages)).not.toContain('/dashboard/mentions');
+
+    // Unread, no question is sent again short of its files.
+    fake.db.failures.chat_uploads = { message: 'down' };
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect((await loadChatThread(CHAT))!.messages[0].resendable).toBe(false);
     error.mockRestore();
   });
 
