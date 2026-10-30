@@ -1025,7 +1025,20 @@ export async function addTopicPrompts(
   topicId: string,
   texts: string[],
 ): Promise<AddTopicPromptsResult> {
-  await assertWritable({ brandId });
+  try {
+    await assertWritable({ brandId });
+    return await addPromptsToTopic(brandId, topicId, texts);
+  } catch (err) {
+    console.error('Failed to add prompts from Chat:', err);
+    return { ok: false, reason: 'failed', message: 'The prompts couldn’t be added. Try again.' };
+  }
+}
+
+async function addPromptsToTopic(
+  brandId: string,
+  topicId: string,
+  texts: string[],
+): Promise<AddTopicPromptsResult> {
   const supabase = await createClient();
   if (!(await isManager(supabase))) {
     return {
@@ -1155,7 +1168,16 @@ export async function pauseBrandPrompts(
   brandId: string,
   ids: string[],
 ): Promise<PauseBrandPromptsResult> {
-  await assertWritable({ brandId });
+  try {
+    await assertWritable({ brandId });
+    return await pauseSomePrompts(brandId, ids);
+  } catch (err) {
+    console.error('Failed to pause prompts from Chat:', err);
+    return { ok: false, reason: 'failed', message: 'The prompts couldn’t be paused. Try again.' };
+  }
+}
+
+async function pauseSomePrompts(brandId: string, ids: string[]): Promise<PauseBrandPromptsResult> {
   const supabase = await createClient();
   if (!(await isManager(supabase))) {
     return {
