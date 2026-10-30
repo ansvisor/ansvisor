@@ -298,6 +298,38 @@ function stepState(
 
 const complete = (s: GettingStartedStep) => s.state === 'done' || s.state === 'skipped';
 
+/**
+ * Whether a step's page shows the first tracking run's answers: the explore
+ * pages. The high-value prompts step waits for Search Console or Analytics
+ * instead.
+ */
+export function needsFirstAnswers(step: Pick<GettingStartedStepDef, 'key' | 'stage'>): boolean {
+  return step.stage === 'explore' && step.key !== 'data_prompts';
+}
+
+/**
+ * Whether a step needs what the brand's tracking brings: the first answers,
+ * then the content suggestions built from them (the act steps). The set-up
+ * steps need nothing.
+ */
+export function needsTrackingData(step: Pick<GettingStartedStepDef, 'key' | 'stage'>): boolean {
+  return needsFirstAnswers(step) || step.stage === 'act';
+}
+
+/** A step to do while the first run goes on ("Ready now"): open, and needing none of its data. */
+export function readyNow(step: GettingStartedStep): boolean {
+  return step.state === 'new' && !needsTrackingData(step);
+}
+
+/**
+ * The steps as listed while the brand's first run goes on: the ones ready
+ * now first, then the rest, each in their usual order. Once it's done, the
+ * usual order.
+ */
+export function firstRunOrder(steps: GettingStartedStep[]): GettingStartedStep[] {
+  return [...steps.filter(readyNow), ...steps.filter((step) => !readyNow(step))];
+}
+
 export function buildGettingStarted(f: GettingStartedFacts): GettingStartedStatus {
   const steps = GETTING_STARTED_STEPS.map((def) => ({
     ...def,

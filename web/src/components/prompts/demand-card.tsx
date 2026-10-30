@@ -12,6 +12,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import KpiSparkline from '@/components/action-center/kpi-sparkline';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
 import { trackDemandQuestion } from '@/lib/actions/prompt-demand-signals';
+import { isNoTopics } from '@/lib/topics-required';
+import { useTopicFirstDialog } from '@/components/prompts/topic-first';
 import { formatCompactNumber, formatDate, formatNumber } from '@/lib/format';
 import {
   DEMAND_SIGNALS,
@@ -274,6 +276,8 @@ function PaaCard({
   const t = useTranslations('promptDemand');
   const [tracking, setTracking] = useState<string | null>(null);
   const [tracked, setTracked] = useState<Set<string>>(new Set());
+  // A brand with no topic yet: Track asks for one first.
+  const topicFirst = useTopicFirstDialog();
   const paa = demand.paa;
 
   const track = async (question: string) => {
@@ -290,6 +294,10 @@ function PaaCard({
       toast.success(
         t(outcome.alreadyTracked ? 'paa.alreadyTrackedToast' : 'paa.trackedToast', { question }),
       );
+      return;
+    }
+    if (isNoTopics(outcome)) {
+      topicFirst.show();
       return;
     }
     toast.error(
@@ -338,6 +346,7 @@ function PaaCard({
       ) : (
         <PaidState demand={demand} signal="paa" />
       )}
+      {topicFirst.dialog}
     </SignalCard>
   );
 }

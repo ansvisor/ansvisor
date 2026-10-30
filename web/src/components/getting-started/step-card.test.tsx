@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GettingStartedStep } from '@/lib/getting-started/steps';
+import type { FirstRun } from '@/hooks/use-first-run';
 
 /**
  * A Getting started step's card (AC-ALT2 §6): why, how (a video's place and
@@ -55,7 +56,14 @@ const onChanged = vi.fn();
 const onReady = vi.fn();
 const openUpgrade = vi.fn();
 
-async function render(s: GettingStartedStep, { canManage = true, isLocked = false } = {}) {
+async function render(
+  s: GettingStartedStep,
+  {
+    canManage = true,
+    isLocked = false,
+    firstRun = null,
+  }: { canManage?: boolean; isLocked?: boolean; firstRun?: FirstRun | null } = {},
+) {
   await act(async () =>
     root.render(
       <UpgradeDialogContext.Provider
@@ -69,6 +77,7 @@ async function render(s: GettingStartedStep, { canManage = true, isLocked = fals
           onClose={onClose}
           onChanged={onChanged}
           onReady={onReady}
+          firstRun={firstRun}
         />
       </UpgradeDialogContext.Provider>,
     ),
@@ -121,6 +130,31 @@ describe('GettingStartedStepCard', () => {
     await render(step({ state: 'waiting' }));
     expect(text()).toContain('opensWhenReady');
     expect(button('steps.mentions.open')).toBeUndefined();
+  });
+
+  it('says how far the first run is for a step it brings the data for, in place of its page', async () => {
+    const firstRun: FirstRun = {
+      brandId: 'b1',
+      queued: false,
+      progress: { current: 18, total: 40 },
+      left: { minutes: 6 },
+    };
+    await render(step({ state: 'waiting' }), { firstRun });
+    expect(text()).toContain('arriving count · minutesLeft.');
+    expect(text()).toContain('fillsIn');
+    expect(text()).not.toContain('opensWhenReady');
+
+    // An early answer opened the step: its page would still be nearly empty.
+    await render(step({ state: 'new' }), { firstRun });
+    expect(text()).toContain('fillsIn');
+    expect(button('steps.mentions.open')).toBeUndefined();
+
+    // Done, or a step that needs none of its data: as usual.
+    await render(step({ state: 'done' }), { firstRun });
+    expect(text()).toContain('panel.doneAuto');
+    await render(step({ key: 'competitors', stage: 'setup' }), { firstRun });
+    expect(text()).not.toContain('fillsIn');
+    expect(button('steps.competitors.open')).toBeDefined();
   });
 
   it('skips an optional step only after the last-chance question', async () => {
