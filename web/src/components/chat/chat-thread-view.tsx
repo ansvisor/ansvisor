@@ -29,6 +29,7 @@ import {
   type ComposerSend,
   type ComposerVariant,
 } from './composer/chat-composer';
+import { AnswerActions } from './run/answer-actions';
 import { RunAnswer } from './run/run-answer';
 import { ChatUsageNotice, ComposerUsageMeter, chatAtCap } from './chat-usage';
 
@@ -41,6 +42,8 @@ interface Turn {
   run?: ClientRun;
   /** When this page first saw it work, for the header's clock. */
   startedAt?: number;
+  /** Its answer in Files (Save to Files). */
+  fileId?: string | null;
   timezone?: string | null;
 }
 
@@ -61,6 +64,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
     if (message.role === 'assistant' && message.run) {
       turn.runId = message.run.runId;
       turn.timezone = message.timezone;
+      turn.fileId = message.run.fileId;
       turn.run = {
         ...emptyRun(message.run.status as ClientRunStatus),
         steps: message.run.steps,
@@ -320,6 +324,7 @@ export function ChatThreadView({
                   reconnecting={reconnecting && turn === last}
                   onApprove={(dontAskAgain) => answer(turn, 'approve', dontAskAgain)}
                   onSkip={() => answer(turn, 'skip')}
+                  onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
                 />
               </li>
             ),
@@ -378,12 +383,14 @@ function Answer({
   reconnecting,
   onApprove,
   onSkip,
+  onFiled,
 }: {
   turn: Turn;
   now: number;
   reconnecting: boolean;
   onApprove: (dontAskAgain: boolean) => Promise<void>;
   onSkip: () => Promise<void>;
+  onFiled: (fileId: string) => void;
 }) {
   const t = useTranslations('chatPage');
   const run = turn.run ?? { ...emptyRun('done'), text: turn.text };
@@ -440,6 +447,16 @@ function Answer({
       timezone={turn.timezone}
       reconnecting={reconnecting}
       cards={cards}
+      footer={
+        turn.runId && run.text.trim() ? (
+          <AnswerActions
+            runId={turn.runId}
+            markdown={run.text}
+            filed={!!turn.fileId}
+            onFiled={onFiled}
+          />
+        ) : undefined
+      }
     />
   );
 }

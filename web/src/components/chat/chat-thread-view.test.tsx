@@ -208,6 +208,31 @@ describe('ChatThreadView', () => {
     });
   });
 
+  it('puts Copy, Download and Save to Files under a finished answer, In Files once filed', async () => {
+    const thread = {
+      conversationId: CHAT,
+      title: 'Citations',
+      brandId: null,
+      mine: true,
+      messages: [
+        { role: 'user', text: 'Find the drop', generatedAt: null, dataAsOf: null, timezone: null },
+        {
+          role: 'assistant',
+          text: 'Two pages lost most of it.',
+          generatedAt: '2026-10-30T09:14:00.000Z',
+          dataAsOf: null,
+          timezone: 'UTC',
+          run: { runId: RUN, status: 'done', steps: [], fileId: 'f1' },
+        },
+      ],
+    } as unknown as ChatThread;
+    await render({ thread, variant: 'dock' });
+    const bar = container.querySelector('[role="toolbar"][aria-label="Answer actions"]')!;
+    expect(
+      [...bar.querySelectorAll('[aria-label]')].map((b) => b.getAttribute('aria-label')),
+    ).toEqual(['Copy', 'Download', 'In Files']);
+  });
+
   it('keeps the text when the run API refuses it', async () => {
     fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });

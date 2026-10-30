@@ -3,14 +3,19 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
+import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { ChatListItem } from '@/lib/chat/conversations';
+import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { useChatActions } from './chat-actions';
 
@@ -176,10 +181,7 @@ export function ChatHeaderMenu({ chat }: { chat: ChatListItem }) {
             </Item>
           </>
         )}
-        {/* Export joins the answer exports (W1-24/W1-25); until then it says so. */}
-        <Item glyph="⤓" action="chat.export" disabled note={t('exportSoon')}>
-          {t('export')}
-        </Item>
+        <ExportChatItem chat={chat} />
         <Item
           glyph="☰"
           action="activity.open"
@@ -200,6 +202,52 @@ export function ChatHeaderMenu({ chat }: { chat: ChatListItem }) {
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+const CHAT_EXPORT_FORMATS = ['md', 'docx', 'pdf'] as const;
+
+/**
+ * ⤓ Export chat (CHAT-23 `chat.export`): the whole chat as Markdown, Word
+ * or PDF, rendered on the server from what is stored, nothing kept.
+ */
+function ExportChatItem({ chat }: { chat: ChatListItem }) {
+  const t = useTranslations('chatShell.actions');
+  async function download(format: (typeof CHAT_EXPORT_FORMATS)[number]) {
+    const res = await fetch(`/api/chat/conversations/${chat.id}/export?format=${format}`).catch(
+      () => null,
+    );
+    if (!res?.ok) {
+      toast.error(t('exportFailed'));
+      return;
+    }
+    const named = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '');
+    const name = named?.[1] ?? `chat.${format}`;
+    saveBlob(await res.blob(), name);
+    toast(t('exported', { name }));
+  }
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger data-action="chat.export" className={ITEM}>
+        <span aria-hidden className="w-3.5 shrink-0 text-center text-foreground">
+          ⤓
+        </span>
+        <span className="flex-1">{t('export')}</span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="w-40 rounded-[14px] p-1.5">
+        {CHAT_EXPORT_FORMATS.map((format) => (
+          <DropdownMenuItem
+            key={format}
+            data-action="chat.exportAs"
+            data-format={format}
+            onClick={() => void download(format)}
+            className={ITEM}
+          >
+            {t(`exportAs.${format}`)}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   );
 }
 

@@ -15,6 +15,8 @@ export interface ThreadRun {
   runId: string;
   status: string;
   steps: ChatStep[];
+  /** Its answer in Files (CHAT-06 item 36): "In Files"; null until saved. */
+  fileId: string | null;
 }
 
 export interface ThreadMessage {
@@ -64,14 +66,24 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   if (runs.error) throw new Error(`Could not read the chat's runs: ${runs.error.message}`);
 
   const runIds = (runs.data ?? []).map((run) => run.id);
-  const steps = runIds.length
-    ? await supabase
-        .from('chat_run_steps')
-        .select(CHAT_RUN_STEP_SELECT)
-        .in('run_id', runIds)
-        .order('position', { ascending: true })
-    : { data: [], error: null };
+  const [steps, files] = runIds.length
+    ? await Promise.all([
+        supabase
+          .from('chat_run_steps')
+          .select(CHAT_RUN_STEP_SELECT)
+          .in('run_id', runIds)
+          .order('position', { ascending: true }),
+        supabase.from('chat_files').select('id, run_id').in('run_id', runIds),
+      ])
+    : [
+        { data: [], error: null },
+        { data: [], error: null },
+      ];
   if (steps.error) throw new Error(`Could not read the chat's steps: ${steps.error.message}`);
+  if (files.error) throw new Error(`Could not read the chat's files: ${files.error.message}`);
+  const fileByRun = new Map(
+    ((files.data ?? []) as { id: string; run_id: string | null }[]).map((f) => [f.run_id, f.id]),
+  );
   const stepsByRun = new Map<string, ChatStep[]>();
   for (const row of (steps.data ?? []) as unknown as ChatRunStepMemberRow[]) {
     const step = toClientStep(row);
@@ -80,7 +92,12 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   const runByMessage = new Map(
     (runs.data ?? []).map((run) => [
       run.message_id,
-      { runId: run.id, status: run.status, steps: stepsByRun.get(run.id) ?? [] },
+      {
+        runId: run.id,
+        status: run.status,
+        steps: stepsByRun.get(run.id) ?? [],
+        fileId: fileByRun.get(run.id) ?? null,
+      },
     ]),
   );
 

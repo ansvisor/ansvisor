@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-30
@@ -115,7 +115,17 @@ Point at a chat in the menu and click **⋯**, or click **⋯** at the top right
 - **Delete** asks first, then deletes the chat for everyone. Click **Undo** within a few seconds to bring it back. A chat that is still working is stopped first.
 - **Open in new window** opens it in another browser window.
 
-**Export chat** is coming soon.
+**Export chat** downloads the whole chat as **Markdown**, **Word** or **PDF**: each question under "You" and its answer after it.
+
+## Copy, download or save an answer
+
+Under every finished answer, three small buttons show their names when you point at them:
+
+- **Copy** copies the answer, with its formatting where you paste it.
+- **Download** gives the answer as **Markdown**, **Word** or **PDF**, and as **CSV** or **Excel** when it has a table (one sheet per table). The file is named after your question and the day, and it carries when the answer was made and how fresh its data was. Downloads aren't kept and use no AI.
+- **Save to Files** keeps the answer for your whole workspace; it then reads **In Files**. Saved answers count toward your workspace's storage: 1 GB in the free trial, 5 GB on Starter, 25 GB on Growth, and what your contract says on Enterprise. When storage is full, the answer isn't saved, and the button says so.
+
+Every role can copy, download and save answers it can open.
 
 ## Share a chat with your team
 

@@ -4,6 +4,15 @@ import createNextIntlPlugin from 'next-intl/plugin';
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 const nextConfig: NextConfig = {
+  // Chat's PDF downloads (CHAT-06 item 32) render on the server with
+  // @react-pdf/renderer, which reads Inter from public/fonts at run time:
+  // the package stays outside the server bundle, and the fonts go with the
+  // two routes that write a PDF (Vercel serves public/ from its CDN only).
+  serverExternalPackages: ['@react-pdf/renderer'],
+  outputFileTracingIncludes: {
+    '/api/chat/runs/[id]/export': ['./public/fonts/**/*'],
+    '/api/chat/conversations/[id]/export': ['./public/fonts/**/*'],
+  },
   // The Prompts area has a route per view (PROMPT-001). Older links and
   // bookmarks — /dashboard/prompts and its ?tab= / ?view= shapes — land on
   // the matching route; their other query params come along.

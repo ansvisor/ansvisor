@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { stampParts } from '@/lib/chat/stamp';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -30,28 +31,8 @@ export interface ResultFile {
   href?: string;
 }
 
-/** "Oct 26, 2026", "14:32", "Oct 26" and the GMT offset of an instant, in a time zone. */
-export function stampParts(iso: string, timeZone?: string) {
-  const at = new Date(iso);
-  const date = at.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone,
-  });
-  const day = at.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone });
-  const time = at.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-    timeZone,
-  });
-  const offset =
-    new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'shortOffset' })
-      .formatToParts(at)
-      .find((part) => part.type === 'timeZoneName')?.value ?? '';
-  return { date, day, time, offset };
-}
+/** The time line's parts, kept with the downloads' (lib/chat/stamp). */
+export { stampParts };
 
 /**
  * The result card (CHAT-mockup-v2 `#s-done`, CHAT-03 v2, CHAT-23 G7): the
