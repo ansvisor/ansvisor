@@ -107,7 +107,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   rows = {
-    organizations: { [ORG]: { subscription_status: 'active' } },
+    organizations: { [ORG]: { plan: 'growth', subscription_status: 'active' } },
     brands: {
       'demo-brand': { organization_id: ORG, is_demo: true, demo_hidden_at: null, name: 'Brewline' },
       'own-brand': { organization_id: ORG, is_demo: false, demo_hidden_at: null, name: 'Acme' },
@@ -144,6 +144,21 @@ describe('the MCP tools on the demo brand', () => {
       const result = (await registered[name].handler(args, {})) as ToolResult;
       expect(result.isError, name).toBe(true);
       expect(body(result), name).toMatchObject({ code: 'demo_brand' });
+    }
+    expect(data.runSiteAuditFor).not.toHaveBeenCalled();
+  });
+
+  it('answers demo_brand before the plan: on Starter too, and on a plan that ended', async () => {
+    for (const org of [
+      { plan: 'starter', subscription_status: 'active' },
+      { plan: 'growth', subscription_status: 'canceled' },
+    ]) {
+      rows.organizations[ORG] = org;
+      const result = (await handlers().run_site_audit.handler(
+        ON_DEMO.run_site_audit,
+        {},
+      )) as ToolResult;
+      expect(body(result)).toMatchObject({ code: 'demo_brand' });
     }
     expect(data.runSiteAuditFor).not.toHaveBeenCalled();
   });

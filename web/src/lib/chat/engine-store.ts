@@ -56,6 +56,10 @@ export interface CallResult {
   /** What the model reads: the tool's output, cut to the run's budget, or a result code. */
   value: Json;
   error: boolean;
+  /** It may carry text written outside the workspace: the model reads it in an untrusted block. */
+  untrusted?: boolean;
+  /** Where it came from, in the step's words ("AI answers"), for its block's label. */
+  source?: string;
 }
 
 /** The calls of a model step a run waits in: the one on the card, and those after it. */
@@ -84,7 +88,7 @@ export interface RunProgress {
   /** Writes made, by tool name. */
   writes: Record<string, number>;
   /** What the read phase read, for the writing model. */
-  readLog: { tool: string; input: unknown; result: Json }[];
+  readLog: { tool: string; input: unknown; result: Json; source?: string; untrusted?: boolean }[];
   /** Steps so far: the next one is n = steps + 1. */
   steps: number;
   /** The answer so far, as the person saw it stream. */
@@ -101,6 +105,16 @@ export interface RunProgress {
    * it shows a card, in every mode (CHAT-20 §16a).
    */
   tainted?: boolean;
+  /**
+   * A read returned text written to steer an AI assistant (CHAT-05 item 12):
+   * ignored, said so in the answer, and the rest of the run asks first.
+   */
+  injection?: boolean;
+  /**
+   * The answer's fact check (CHAT-05 item 11): figures checked against the
+   * run's data, and the ones taken out (a placeholder in their place).
+   */
+  facts?: { checked: number; replaced: string[] };
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {
