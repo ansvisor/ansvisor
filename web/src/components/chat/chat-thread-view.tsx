@@ -82,6 +82,7 @@ export function ChatThreadView({
   fullAutoOpen,
   fullAutoOffByAdmin = false,
   usageNoticeSeen = null,
+  onOwnKey = false,
 }: {
   thread: ChatThread | null;
   variant: ComposerVariant;
@@ -90,14 +91,16 @@ export function ChatThreadView({
   fullAutoOffByAdmin?: boolean;
   /** The AI usage period whose 80% line the person already saw. */
   usageNoticeSeen?: string | null;
+  /** Chat runs on the workspace's own key: a used-up allowance doesn't pause it. */
+  onOwnKey?: boolean;
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const { isLocked, openUpgrade } = useUpgradeGate();
   // At the AI limit, Chat pauses: the composer is off (CHAT-04 item 17).
-  const { usage } = useAiUsage();
-  const atCap = chatAtCap(usage);
+  const { usage, refresh: refreshUsage } = useAiUsage();
+  const atCap = chatAtCap(usage, onOwnKey);
   const [turns, setTurns] = useState<Turn[]>(() => turnsOf(thread));
   const [conversationId, setConversationId] = useState<string | null>(
     thread?.conversationId ?? null,
@@ -116,6 +119,14 @@ export function ChatThreadView({
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [working]);
+
+  // A run that stopped working spent some of the AI usage: the meter, the 80%
+  // line and the pause read it again, once per run, not on a timer.
+  const wasWorking = useRef(working);
+  useEffect(() => {
+    if (wasWorking.current && !working) refreshUsage();
+    wasWorking.current = working;
+  }, [working, refreshUsage]);
 
   const updateRun = useCallback((key: string, fn: (turn: Turn) => Turn) => {
     setTurns((all) => all.map((turn) => (turn.key === key ? fn(turn) : turn)));

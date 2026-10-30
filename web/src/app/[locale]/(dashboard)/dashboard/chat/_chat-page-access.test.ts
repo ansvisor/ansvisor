@@ -11,6 +11,8 @@ const facts = vi.hoisted(() => ({
   savedMode: null as string | null,
   ctx: null as Pick<PrecedenceContext, 'role' | 'plan' | 'settings'> | null,
   fail: false,
+  notice: null as string | null,
+  ownKey: false as boolean | 'throws',
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -22,7 +24,12 @@ vi.mock('@/lib/supabase/server', () => ({
           maybeSingle: async () =>
             table === 'profiles'
               ? { data: { organization_id: 'org-1' } }
-              : { data: facts.savedMode ? { default_mode: facts.savedMode } : null },
+              : {
+                  data:
+                    facts.savedMode || facts.notice
+                      ? { default_mode: facts.savedMode, usage_notice_period: facts.notice }
+                      : null,
+                },
         }),
       }),
     }),
@@ -32,6 +39,13 @@ vi.mock('@/lib/chat/precedence-context', () => ({
   readPrecedenceContext: vi.fn(async () => {
     if (facts.fail) throw new Error('no answer');
     return facts.ctx;
+  }),
+}));
+
+vi.mock('@/lib/chat/key', () => ({
+  chatRunsOnOwnKey: vi.fn(async () => {
+    if (facts.ownKey === 'throws') throw new Error('no answer');
+    return facts.ownKey;
   }),
 }));
 
@@ -53,6 +67,8 @@ beforeEach(() => {
   facts.savedMode = 'full_auto';
   facts.ctx = null;
   facts.fail = false;
+  facts.notice = null;
+  facts.ownKey = false;
 });
 
 describe('chatComposerSetup', () => {
@@ -63,6 +79,7 @@ describe('chatComposerSetup', () => {
       fullAutoOpen: false,
       fullAutoOffByAdmin: true,
       usageNoticeSeen: null,
+      onOwnKey: false,
     });
   });
 
@@ -73,6 +90,7 @@ describe('chatComposerSetup', () => {
       fullAutoOpen: true,
       fullAutoOffByAdmin: false,
       usageNoticeSeen: null,
+      onOwnKey: false,
     });
   });
 
@@ -88,6 +106,7 @@ describe('chatComposerSetup', () => {
       fullAutoOpen: false,
       fullAutoOffByAdmin: false,
       usageNoticeSeen: null,
+      onOwnKey: false,
     });
   });
 
@@ -98,6 +117,20 @@ describe('chatComposerSetup', () => {
       fullAutoOpen: false,
       fullAutoOffByAdmin: false,
       usageNoticeSeen: null,
+      onOwnKey: false,
     });
+  });
+
+  it('passes on the period whose 80% line was seen, and whether Chat runs on its own key', async () => {
+    facts.ctx = ctxOf('admin', true, false);
+    facts.notice = '2026-10-01';
+    facts.ownKey = true;
+    const setup = await chatComposerSetup();
+    expect(setup.usageNoticeSeen).toBe('2026-10-01');
+    expect(setup.onOwnKey).toBe(true);
+
+    // A key that can't be read: the careful answer, and the server's hold still decides.
+    facts.ownKey = 'throws';
+    expect((await chatComposerSetup()).onOwnKey).toBe(false);
   });
 });

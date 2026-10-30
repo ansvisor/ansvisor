@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { firstNameOf } from '@/lib/chat/home';
+import { chatRunsOnOwnKey } from '@/lib/chat/key';
 import { CHAT_MODES, type ChatMode, type PrecedenceContext } from '@/lib/chat/precedence';
 import { readPrecedenceContext } from '@/lib/chat/precedence-context';
 
@@ -84,6 +85,11 @@ export interface ChatComposerSetup {
   fullAutoOffByAdmin: boolean;
   /** The AI usage period whose 80% line the person already saw (CHAT-04 item 16). */
   usageNoticeSeen: string | null;
+  /**
+   * Chat runs on the workspace's own key (chatRunsOnOwnKey): its steps don't
+   * draw on the AI budget, so a used-up allowance doesn't pause it.
+   */
+  onOwnKey: boolean;
 }
 
 /** The modes part of the setup, from the person's saved mode and the precedence facts. */
@@ -98,7 +104,11 @@ const CAREFUL_MODES: ComposerModeSetup = {
   fullAutoOffByAdmin: false,
 };
 
-const CAREFUL_SETUP: ChatComposerSetup = { ...CAREFUL_MODES, usageNoticeSeen: null };
+const CAREFUL_SETUP: ChatComposerSetup = {
+  ...CAREFUL_MODES,
+  usageNoticeSeen: null,
+  onOwnKey: false,
+};
 
 /**
  * The setup from the person's saved default mode and the facts the approval
@@ -125,9 +135,9 @@ export function composerSetupOf(
 /**
  * The composer's setup: the default mode the person chose in Chat's settings
  * (chat_user_prefs.default_mode; Auto, ask before changes, when none), and
- * Full auto as the server will decide it, and the period whose 80% usage line
- * the person already saw. A value that can't be read falls back to the
- * careful one.
+ * Full auto as the server will decide it, the period whose 80% usage line
+ * the person already saw, and whether Chat runs on the workspace's own key.
+ * A value that can't be read falls back to the careful one.
  */
 export async function chatComposerSetup(): Promise<ChatComposerSetup> {
   const supabase = await createClient();
@@ -141,7 +151,7 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
     .eq('id', user.id)
     .maybeSingle();
   if (!profile?.organization_id) return CAREFUL_SETUP;
-  const [{ data: prefs }, ctx] = await Promise.all([
+  const [{ data: prefs }, ctx, onOwnKey] = await Promise.all([
     supabase
       .from('chat_user_prefs')
       .select('default_mode, usage_notice_period')
@@ -153,9 +163,11 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
       mode: 'ask_first',
       surface: 'chat',
     }).catch(() => null),
+    chatRunsOnOwnKey(profile.organization_id).catch(() => false),
   ]);
   return {
     ...composerSetupOf(prefs?.default_mode, ctx),
     usageNoticeSeen: prefs?.usage_notice_period ?? null,
+    onOwnKey,
   };
 }
