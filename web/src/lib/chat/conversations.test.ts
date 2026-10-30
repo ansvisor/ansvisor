@@ -103,6 +103,21 @@ describe('listChats', () => {
     expect(row.ownerInitials).toBeNull();
   });
 
+  it("shows a teammate's initials though the person can read only their own profile", async () => {
+    const { createFakeSupabase } = await import('./testing/fake-supabase');
+    const asPerson = createFakeSupabase();
+    db.tables.chat_conversations = [
+      chat(1, { user_id: TEAMMATE.userId, shared_at: '2026-10-12T00:00:00.000Z' }),
+    ];
+    // The person's reads, as the policies let them: profiles is own row only.
+    asPerson.tables = {
+      ...db.tables,
+      profiles: db.tables.profiles.filter((p) => p.id === ME.userId),
+    };
+    const list = await chats.listChats(asPerson as never, ME, chats.listQuery.parse({}));
+    expect(list.chats[0]).toMatchObject({ mine: false, ownerInitials: 'SL' });
+  });
+
   it('lists only their own archived chats under Archived', async () => {
     db.tables.chat_conversations = [
       chat(1, { archived_at: '2026-10-20T00:00:00.000Z' }),

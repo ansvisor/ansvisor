@@ -193,8 +193,8 @@ async function itemsOf(reader: Reader, actor: ChatActor, chats: ChatRow[]) {
     brandIds.length
       ? reader.from('brands').select('id, name').in('id', brandIds)
       : Promise.resolve({ data: [], error: null }),
-    // Other members' profiles are hidden from the person (their policy): read
-    // with the server's client, kept to this workspace, for the initials only.
+    // A person reads only their own profile, so a teammate's name is read by
+    // the server, within the workspace; only its initials leave.
     ownerIds.length
       ? supabaseAdmin
           .from('profiles')
