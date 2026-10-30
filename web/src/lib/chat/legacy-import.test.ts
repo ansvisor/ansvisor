@@ -173,6 +173,39 @@ describe('importLegacyChats', () => {
     expect(db.tables.chat_user_prefs[0]).toMatchObject({ legacy_imported_at: NOW.toISOString() });
   });
 
+  it('keeps the order Agent Chat showed a thread in when its messages share one time', async () => {
+    // Agent Chat wrote the whole thread again on each turn, in one insert:
+    // one created_at for all, and ids that don't follow the order.
+    const at = '2026-09-01T12:30:00.000Z';
+    db.tables.agent_conversations = [legacyChat(1)];
+    db.tables.agent_messages = [
+      { ...legacyMsg(9, 1, 'user', 'First question'), created_at: at },
+      { ...legacyMsg(3, 1, 'assistant', 'First answer'), created_at: at },
+      { ...legacyMsg(7, 1, 'user', 'Second question'), created_at: at },
+      { ...legacyMsg(1, 1, 'assistant', 'Second answer'), created_at: at },
+    ];
+    expect(await importLegacyChats(ME, NOW)).toEqual({ ok: true, chats: 1, messages: 4 });
+    const copied = [...db.tables.chat_messages].sort((a, b) =>
+      String(a.created_at).localeCompare(String(b.created_at)),
+    );
+    expect(copied.map((m) => m.content_md)).toEqual([
+      'First question',
+      'First answer',
+      'Second question',
+      'Second answer',
+    ]);
+    expect(copied.map((m) => m.created_at)).toEqual([
+      at,
+      '2026-09-01T12:30:00.001Z',
+      '2026-09-01T12:30:00.002Z',
+      '2026-09-01T12:30:00.003Z',
+    ]);
+    expect(copied[3]).toMatchObject({ generated_at: '2026-09-01T12:30:00.003Z' });
+    expect(db.tables.chat_conversations[0]).toMatchObject({
+      last_message_at: '2026-09-01T12:30:00.003Z',
+    });
+  });
+
   it('reads the messages page by page', async () => {
     db.tables.agent_conversations = [legacyChat(1)];
     db.tables.agent_messages = Array.from({ length: 1_203 }, (_, i) => ({
@@ -203,5 +236,11 @@ describe('legacyTitle and legacyMessage', () => {
     expect(
       legacyMessage({ ...base, role: 'user', content: 'x'.repeat(200_005) })?.content_md,
     ).toHaveLength(200_000);
+
+    // Never half of an emoji at the cut.
+    expect(
+      legacyMessage({ ...base, role: 'user', content: `${'x'.repeat(199_999)}😀` })?.content_md,
+    ).toBe('x'.repeat(199_999));
+    expect(legacyTitle(`${'a'.repeat(199)}😀`)).toBe('a'.repeat(199));
   });
 });

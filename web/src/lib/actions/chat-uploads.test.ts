@@ -14,6 +14,8 @@ const db = vi.hoisted(() => ({
   deletedRows: 0,
   removed: [] as string[],
   listed: ['up-1'] as string[],
+  meta: { size: 2048, mimetype: 'application/pdf' } as Record<string, unknown>,
+  bytes: new TextEncoder().encode('%PDF-1.7\n') as Uint8Array,
 }));
 
 function sessionQuery(table: string) {
@@ -58,7 +60,14 @@ vi.mock('@/lib/supabase/admin', () => ({
           data: { path, token: 'tok' },
           error: null,
         }),
-        list: async () => ({ data: db.listed.map((name) => ({ name })), error: null }),
+        list: async () => ({
+          data: db.listed.map((name) => ({ name, metadata: db.meta })),
+          error: null,
+        }),
+        createSignedUrl: async (path: string) => ({
+          data: { signedUrl: `https://storage.test/${path}` },
+          error: null,
+        }),
         remove: async (paths: string[]) => (db.removed.push(...paths), { error: null }),
       }),
     },
@@ -82,6 +91,12 @@ beforeEach(() => {
   db.deletedRows = 0;
   db.removed = [];
   db.listed = ['up-1'];
+  db.meta = { size: 2048, mimetype: 'application/pdf' };
+  db.bytes = new TextEncoder().encode('%PDF-1.7\n');
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(db.bytes as BodyInit, { status: 206 })),
+  );
 });
 
 describe('prepareChatUpload', () => {
@@ -130,15 +145,42 @@ describe('prepareChatUpload', () => {
 
 describe('finishChatUpload and removeChatUpload', () => {
   beforeEach(() => {
-    db.upload = { id: 'up-1', storage_path: 'org-1/up-1', status: 'pending', size_bytes: 2048 };
+    db.upload = {
+      id: 'up-1',
+      storage_path: 'org-1/up-1',
+      status: 'pending',
+      size_bytes: 2048,
+      mime_type: 'application/pdf',
+    };
   });
 
   it('marks the file ready once it is there, failed when it isn’t', async () => {
     expect(await finishChatUpload('up-1')).toEqual({ ok: true });
-    expect(db.updated).toEqual([{ status: 'ready' }]);
+    expect(db.updated).toEqual([{ status: 'ready', size_bytes: 2048 }]);
+    expect(db.removed).toEqual([]);
     db.listed = [];
     expect(await finishChatUpload('up-1')).toEqual({ ok: false, failure: 'failed' });
     expect(db.updated[1]).toEqual({ status: 'failed' });
+  });
+
+  it('keeps the size the bucket has, not the one the browser said', async () => {
+    db.meta = { size: 9000, mimetype: 'application/pdf' };
+    expect(await finishChatUpload('up-1')).toEqual({ ok: true });
+    expect(db.updated).toEqual([{ status: 'ready', size_bytes: 9000 }]);
+  });
+
+  it('fails and deletes a file whose bytes or stored type aren’t the type it was prepared for', async () => {
+    // An executable sent as a PDF: the bucket only checks the name of the type.
+    db.bytes = new Uint8Array([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00]);
+    expect(await finishChatUpload('up-1')).toEqual({ ok: false, failure: 'failed' });
+    expect(db.updated).toEqual([{ status: 'failed' }]);
+    expect(db.removed).toEqual(['org-1/up-1']);
+    // Prepared as a PDF, sent up as HTML.
+    db.bytes = new TextEncoder().encode('%PDF-1.7\n');
+    db.meta = { size: 2048, mimetype: 'text/html' };
+    expect(await finishChatUpload('up-1')).toEqual({ ok: false, failure: 'failed' });
+    expect(db.updated[1]).toEqual({ status: 'failed' });
+    expect(db.removed).toEqual(['org-1/up-1', 'org-1/up-1']);
   });
 
   it('takes a draft’s file and row away, and nothing of another’s or a sent one', async () => {

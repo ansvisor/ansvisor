@@ -30,7 +30,10 @@ export async function uploadChatFile(
   try {
     const { error } = await createClient()
       .storage.from(CHAT_UPLOAD_BUCKET)
-      .uploadToSignedUrl(path, token, file, { contentType: type });
+      // A File goes up as a form part whose type is the browser's, not
+      // contentType: one with the type named here, so a .md the browser gave
+      // no type isn't refused by the bucket as application/octet-stream.
+      .uploadToSignedUrl(path, token, new File([file], file.name, { type }), { contentType: type });
     if (error) throw new Error(error.message);
     const done = await finishChatUpload(id);
     if (!done.ok) throw new Error(done.failure);
