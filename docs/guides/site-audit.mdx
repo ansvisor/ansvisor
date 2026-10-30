@@ -125,15 +125,17 @@ The **Signals** section lists every check by category, each with a pass, warning
 
 Recommendations are written for the content signals an AI model can help with. Mechanical ones — HTTPS, the viewport tag, alt text, a video embed — keep their general fix. Every sentence is kept to 150 characters.
 
-### Placeholders in [brackets]
+### Your input needed
 
-Recommendations only use facts found on the page, or in your brand's name, description and domains when the page is on one of your domains. A number, percentage, price, date or company name that appears in neither becomes a **placeholder** in square brackets, highlighted in the draft:
+Recommendations only use facts found on the page, or in your brand's name, description and domains when the page is on one of your domains. A number, percentage or date that appears in neither, such as a statistic or a year, is left out with its sentence: the audit reads the page, it doesn't search the web, so it leaves you nothing to research. A source to cite is named in words, such as "Google's structured data documentation".
+
+Only what your brand alone knows stays as a **placeholder** in square brackets, three at most in a recommendation, highlighted in the draft and marked **Your input needed**:
 
 ```text
-Teams at [customer name] cut onboarding time by [real metric] after switching.
+Teams at [customer name] switched to [your plan] last spring.
 ```
 
-Common placeholders are `[customer name]`, `[real metric]`, `[price]`, `[date]` and `[source URL]`. When a draft or code block holds one, the report reminds you: **Replace placeholders in [brackets] with your real data before publishing.**
+Common placeholders are `[customer name]`, `[price]`, `[your result]` and, in code, `[date]` and `[your figure]`. When a draft or code block holds one, the report reminds you: **Your input needed: replace each highlighted [bracket] with your own details before you publish.**
 
 <Tip>
 Search the pasted text for `[` before you publish. A placeholder left in a JSON-LD block, such as `"price": "[price]"`, is valid JSON but tells AI engines nothing.
