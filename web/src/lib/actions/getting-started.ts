@@ -17,6 +17,9 @@ import {
 } from '@/lib/getting-started/steps';
 import { assertWritable } from '@/lib/subscription-guard';
 
+/** What the database says when a write would change the demo brand (00381). */
+const DEMO_BRAND = 'demo_brand';
+
 /** The brand's steps, or null for a brand the caller can't see. */
 export async function getGettingStarted(brandId: string): Promise<GettingStartedStatus | null> {
   const supabase = await createClient();
@@ -26,24 +29,41 @@ export async function getGettingStarted(brandId: string): Promise<GettingStarted
   return facts ? buildGettingStarted(facts) : null;
 }
 
+/** A page opened, as recorded: whether it counts now (or did before), or why it couldn't be. */
+export type PageOpenedResult =
+  | { ok: true; recorded: boolean }
+  | { ok: false; failure: 'step' | 'failed' };
+
 /**
  * One of the explore pages was opened. Recorded once the brand's first
  * answers are in, so a page opened while it had nothing to show doesn't
- * count. True when the step is recorded, now or before. Open while the
- * workspace is read-only: a trace of reading, which changes nothing.
+ * count: `recorded` says whether the step counts, now or before. Open while
+ * the workspace is read-only: a trace of reading, which changes nothing.
+ * The demo brand's sample data keeps no steps (00381 refuses the write):
+ * nothing is recorded and nothing is said. Answers as a value and never
+ * throws (#1777), so a page's open never ends in an error.
  */
 export async function markGettingStartedPageOpened(
   brandId: string,
   step: string,
-): Promise<boolean> {
-  if (!isPageOpenedStep(step)) throw new Error('not a page step');
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc('getting_started_page_opened', {
-    p_brand_id: brandId,
-    p_step: step,
-  });
-  if (error) throw new Error(error.message);
-  return data === true;
+): Promise<PageOpenedResult> {
+  try {
+    if (!isPageOpenedStep(step)) return { ok: false, failure: 'step' };
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc('getting_started_page_opened', {
+      p_brand_id: brandId,
+      p_step: step,
+    });
+    if (error?.message === DEMO_BRAND) return { ok: true, recorded: false };
+    if (error) {
+      console.error('[getting-started] could not record a page opened:', error.message);
+      return { ok: false, failure: 'failed' };
+    }
+    return { ok: true, recorded: data === true };
+  } catch (error) {
+    console.error('[getting-started] could not record a page opened:', error);
+    return { ok: false, failure: 'failed' };
+  }
 }
 
 /** Skip an optional step (Search Console, Analytics). It counts as complete. */
