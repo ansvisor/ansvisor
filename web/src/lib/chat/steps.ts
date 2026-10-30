@@ -12,10 +12,10 @@ import {
 type StepRow = Database['public']['Tables']['chat_run_steps']['Row'];
 
 /**
- * chat_run_steps' columns a member may read: every one but `tool` and
- * `debug_json`, which stay with the server and staff (00400's grants;
- * CHAT-03 item 22). As a member, select these by name: `select('*')` asks
- * for the two others too and is refused (42501).
+ * chat_run_steps' columns a member may read: every one but `tool`,
+ * `debug_json` and the step's measure (00410), which stay with the server
+ * and staff (00400's grants; CHAT-03 item 22). As a member, select these by
+ * name: `select('*')` asks for the others too and is refused (42501).
  */
 export const CHAT_RUN_STEP_MEMBER_COLUMNS = [
   'id',

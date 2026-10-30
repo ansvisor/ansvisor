@@ -45990,6 +45990,1051 @@ grant execute on function public.chat_claim_run_slot(uuid, integer, integer) to 
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00407_chat_conversations_share_search.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00407: Chat's chats — shared with the team, read, deleted with Undo and
+-- searched; and what a message was scoped to
+-- ============================================================================
+-- Chat's shell and composer (CHAT-01, CHAT-02; CHAT-20 §15b, §16c), behind
+-- CHAT_AGENTIC: nothing reads or writes these columns while the flag is off.
+-- The server writes every one of them (service role), as it writes the rest
+-- of a chat (00400).
+--
+--   * shared_at: Share with team (CHAT-20 §16c). Null: private to its author,
+--     as every chat starts. Set: every member of the chat's workspace reads
+--     it, its messages, runs and steps (they follow the chat's policies,
+--     00400); the row shows the author's initials. Unshare clears it. A
+--     brand's access is its workspace's membership today; when brands are
+--     shared with Agency partners one by one (a Team feature), this policy
+--     narrows with it.
+--   * last_read_at: when the author last opened the chat's newest answer.
+--     An answer finished after it is an unread result, which keeps the chat
+--     in Agents at work and bold in Recents (CHAT-01 agentic update).
+--   * deleted_at: Delete with Undo (CHAT-01 row menu). A deleted chat is
+--     gone for every member at once (the policies below leave it out); the
+--     server brings it back on Undo, and its sweep removes it for good once
+--     the Undo toast is over (CHAT-20 §16c: a hard delete after Undo), its
+--     messages, runs and steps with it. Activity log rows stay (00402).
+--   * search_tsv: Search chats and the Ctrl K palette (CHAT-01 item 6) look
+--     in titles and message text. The 'simple' configuration: no stemming,
+--     so a chat in any language is found by its words.
+--   * chat_messages.context_json: what the person scoped a message to
+--     (CHAT-02 Data notes): the page and its chips as sent (a removed chip
+--     isn't), the @ references with their scope, the attachments
+--     (chat_uploads, 00409), Browse a page, and the skill or shortcut that
+--     started it. A person's message only; an answer has none.
+
+-- ─── Chats ──────────────────────────────────────────────────────────────────
+
+alter table public.chat_conversations
+  add column if not exists shared_at timestamptz,
+  add column if not exists last_read_at timestamptz,
+  add column if not exists deleted_at timestamptz,
+  add column if not exists search_tsv tsvector
+    generated always as (to_tsvector('simple', coalesce(title, ''))) stored;
+
+comment on column public.chat_conversations.shared_at is
+  'Share with team (CHAT-20 §16c): null = private to the author; set = every member of the workspace reads the chat. Written by the server.';
+comment on column public.chat_conversations.last_read_at is
+  'When the author last opened the newest answer: an answer finished after it is an unread result (Agents at work, bold in Recents).';
+comment on column public.chat_conversations.deleted_at is
+  'Deleted, with the Undo toast still open: no member reads it; the server restores it on Undo and its sweep removes it for good afterwards.';
+comment on column public.chat_conversations.search_tsv is
+  'The title''s words (simple configuration, any language), for Search chats and Ctrl K.';
+
+-- Search chats: titles.
+create index if not exists chat_conversations_search_idx
+  on public.chat_conversations using gin (search_tsv);
+-- All chats › Team: the workspace's shared chats, newest first.
+create index if not exists chat_conversations_shared_idx
+  on public.chat_conversations (organization_id, last_message_at desc)
+  where shared_at is not null and deleted_at is null;
+-- The sweep of deleted chats once their Undo is over.
+create index if not exists chat_conversations_deleted_idx
+  on public.chat_conversations (deleted_at)
+  where deleted_at is not null;
+
+-- ─── Messages ───────────────────────────────────────────────────────────────
+
+alter table public.chat_messages
+  add column if not exists context_json jsonb
+    check (
+      context_json is null
+      or (jsonb_typeof(context_json) = 'object' and octet_length(context_json::text) <= 32000)
+    ),
+  add column if not exists search_tsv tsvector
+    generated always as (to_tsvector('simple', content_md)) stored;
+
+-- Only a person's message carries what it was scoped to.
+alter table public.chat_messages
+  drop constraint if exists chat_messages_context_json_role_check;
+alter table public.chat_messages
+  add constraint chat_messages_context_json_role_check
+    check (context_json is null or role = 'user');
+
+comment on column public.chat_messages.context_json is
+  'What the person scoped the message to (CHAT-02): {page, chips [{key, label, value}], references [{type, id, label, scope}], attachments [upload ids], browse, skill, shortcut}. Removed chips are not in it. A person''s message only; up to 32,000 bytes.';
+comment on column public.chat_messages.search_tsv is
+  'The message''s words (simple configuration, any language), for Search chats and Ctrl K.';
+
+-- Search chats: message text.
+create index if not exists chat_messages_search_idx
+  on public.chat_messages using gin (search_tsv);
+
+-- ─── Who reads ──────────────────────────────────────────────────────────────
+
+-- 00400's author policy, without deleted chats.
+drop policy if exists "chat_conversations: author select" on public.chat_conversations;
+create policy "chat_conversations: author select"
+  on public.chat_conversations
+  for select
+  using (
+    user_id = auth.uid()
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+-- A shared chat: every member of its workspace, while they belong to it.
+drop policy if exists "chat_conversations: shared select" on public.chat_conversations;
+create policy "chat_conversations: shared select"
+  on public.chat_conversations
+  for select
+  using (
+    shared_at is not null
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00408_chat_user_prefs_general.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00408: a person's Chat settings — the rest of Settings › General, the
+-- panel and rail they left, and what Chat already showed them once
+-- ============================================================================
+-- Chat's settings follow the person to every device (DECISIONS N3), so they
+-- live on chat_user_prefs (00400) with the menu, focus, model and effort.
+-- Behind CHAT_AGENTIC: nothing reads them while the flag is off. The person
+-- reads and writes their own row (00400's policies); the server checks what
+-- their plan and role allow before it acts on one (Full auto, Slack).
+--
+--   * rail_open: the app sidebar on Chat screens, expanded (true) or the
+--     56px rail (false, the default; CHAT-01 4f).
+--   * panel_size: the side panel's last size (CHAT-01 item 16): compact
+--     (420px, the default), wide (640px) or full screen.
+--   * default_mode: the mode a new chat starts in (Settings › General;
+--     CHAT-23 chatSettings.defaultMode): Ask me first, Auto (the default) or
+--     Full auto, which the server allows only where the plan and the
+--     workspace's switch do (CHAT-20 §5).
+--   * answer_language: the language Chat answers in, a BCP 47 tag ('tr',
+--     'pt-BR'). Null: the language the person writes in. The app itself
+--     stays in English.
+--   * notify_via: when an agent needs them (CHAT-23 chatSettings.notifyChannel):
+--     Inbox and email (the default), Inbox only, or Inbox and Slack (offered
+--     once Slack is connected).
+--   * show_thought: "Thought for N s" under answers.
+--   * panel_on_pages: Ask Chat · Ctrl J in every app page's header.
+--   * focus_prompted_at: when the focus picker (CHAT-24) was last shown, so
+--     it isn't shown again too soon; focus itself (00400) stays null until
+--     they pick or skip.
+--   * usage_notice_period: the first day of the AI usage period whose 80%
+--     notice they saw (CHAT-04 item 16: once per person per period). Null:
+--     none seen yet.
+--   * legacy_imported_at: when their Agent Chat conversations
+--     (agent_conversations, 00009) were copied into Chat, keeping their ids,
+--     on their first visit to Chat. Null: not copied yet.
+
+alter table public.chat_user_prefs
+  add column if not exists rail_open boolean not null default false,
+  add column if not exists panel_size text not null default 'compact'
+    check (panel_size in ('compact', 'wide', 'full')),
+  add column if not exists default_mode text not null default 'auto'
+    check (default_mode in ('ask_first', 'auto', 'full_auto')),
+  add column if not exists answer_language text
+    check (answer_language ~ '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$'),
+  add column if not exists notify_via text not null default 'inbox_email'
+    check (notify_via in ('inbox_email', 'inbox', 'inbox_slack')),
+  add column if not exists show_thought boolean not null default true,
+  add column if not exists panel_on_pages boolean not null default true,
+  add column if not exists focus_prompted_at timestamptz,
+  add column if not exists usage_notice_period date,
+  add column if not exists legacy_imported_at timestamptz;
+
+comment on column public.chat_user_prefs.rail_open is
+  'The app sidebar on Chat screens: expanded (true) or the 56px rail (false, the default; CHAT-01 4f).';
+comment on column public.chat_user_prefs.panel_size is
+  'The side panel''s last size (CHAT-01 item 16): compact (420px), wide (640px) or full.';
+comment on column public.chat_user_prefs.default_mode is
+  'The mode a new chat starts in: ask_first, auto or full_auto (Full auto only where the plan and the workspace allow; the server checks).';
+comment on column public.chat_user_prefs.answer_language is
+  'The language Chat answers in (BCP 47). Null: the language the person writes in.';
+comment on column public.chat_user_prefs.notify_via is
+  'When an agent needs them: inbox_email, inbox or inbox_slack (CHAT-23 chatSettings.notifyChannel).';
+comment on column public.chat_user_prefs.usage_notice_period is
+  'The first day of the AI usage period whose 80% notice they saw (CHAT-04 item 16). Null: none yet.';
+comment on column public.chat_user_prefs.legacy_imported_at is
+  'When their Agent Chat conversations (00009) were copied into Chat with their ids. Null: not yet.';
+
+comment on table public.chat_user_prefs is
+  'Chat (00400, 00408): a person''s Chat settings, on the server so they follow them to every device (DECISIONS N3): menu, rail and panel, where pages open, focus areas, model, effort, default mode, answer language, notifications, Thought for N s, Ask Chat on pages, and the one-time notices and copy. Theirs to read and write.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00409_chat_uploads.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00409: Chat's attachments — the files a person attaches to a message
+-- ============================================================================
+-- The composer's Attach (CHAT-02 items 18–22), behind CHAT_AGENTIC: nothing
+-- writes here while the flag is off. An attachment is data for the run that
+-- reads it (CHAT-05), never a deliverable: it doesn't show in Files (00411)
+-- and doesn't count toward the workspace's storage.
+--
+--   * The bucket chat-uploads: private, 10 MB a file (CHAT-00: every
+--     upload), the types CHAT-02 item 19 lists. Each file goes under its
+--     workspace's folder ({organization_id}/{upload id}). Members have no
+--     policy on it: the app gives a one-time upload address after its own
+--     checks, and reads the file with the service role, as content-images
+--     does (00272).
+--   * chat_uploads: one row per attached file. pending until the file
+--     arrived, ready once the server checked it, failed when it didn't (the
+--     chip's Retry). conversation_id is null for a new chat's draft, before
+--     its first message makes the chat; message_id is set when the message
+--     is sent, and a message carries at most 5 (the trigger below backs the
+--     server's check). Kept 90 days (expires_at): a daily sweep deletes the
+--     row and its file, also after its chat was deleted, so no file is left
+--     behind without a row.
+--
+-- The server writes every row (service role). A person reads their own, and
+-- the attachments of a chat they can read (a shared chat's, 00407).
+
+-- ─── The bucket ─────────────────────────────────────────────────────────────
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'chat-uploads',
+  'chat-uploads',
+  false,
+  10485760,
+  array[
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+    'text/markdown',
+    'text/csv',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/json',
+    'text/html',
+    'image/png',
+    'image/jpeg',
+    'image/webp'
+  ]
+)
+-- Run again, it leaves the bucket as an admin may have set it.
+on conflict (id) do nothing;
+
+-- ─── Attachments ────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_uploads (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  -- The person who attached it.
+  user_id uuid not null references auth.users(id) on delete cascade,
+  -- Null while it is in a new chat's draft. A deleted chat or message leaves
+  -- its attachments to the sweep, which deletes each file with its row.
+  conversation_id uuid references public.chat_conversations(id) on delete set null,
+  -- The message it was sent with; null while it is in a draft.
+  message_id uuid references public.chat_messages(id) on delete set null,
+  -- The file's name as the person had it, for the chip.
+  name text not null check (char_length(name) between 1 and 255),
+  mime_type text not null check (
+    mime_type in (
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'text/markdown',
+      'text/csv',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/json',
+      'text/html',
+      'image/png',
+      'image/jpeg',
+      'image/webp'
+    )
+  ),
+  size_bytes integer not null check (size_bytes between 1 and 10485760),
+  -- Its object in chat-uploads: {organization_id}/{id}.
+  storage_path text not null unique check (char_length(storage_path) between 1 and 300),
+  status text not null default 'pending' check (status in ('pending', 'ready', 'failed')),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '90 days')
+);
+
+create index if not exists chat_uploads_user_created_idx
+  on public.chat_uploads (user_id, created_at desc);
+create index if not exists chat_uploads_organization_idx
+  on public.chat_uploads (organization_id);
+create index if not exists chat_uploads_conversation_idx
+  on public.chat_uploads (conversation_id) where conversation_id is not null;
+create index if not exists chat_uploads_message_idx
+  on public.chat_uploads (message_id) where message_id is not null;
+-- The daily sweep of expired attachments.
+create index if not exists chat_uploads_expires_idx
+  on public.chat_uploads (expires_at);
+
+comment on table public.chat_uploads is
+  'Chat (00409): the files a person attached to a message (CHAT-02 18–22), in the private bucket chat-uploads; 10 MB each, 5 a message, kept 90 days. Data for the run, never a deliverable. Written by the server; a person reads their own and those of a chat they can read.';
+comment on column public.chat_uploads.storage_path is
+  'The object in the chat-uploads bucket: {organization_id}/{id}.';
+
+-- At most 5 attachments a message: the database's backstop to the server's
+-- check. Counted when an attachment joins a message.
+create or replace function public.chat_uploads_per_message()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.message_id is not null
+     and (tg_op = 'INSERT' or new.message_id is distinct from old.message_id)
+     and (
+       select count(*) from public.chat_uploads u
+       where u.message_id = new.message_id and u.id <> new.id
+     ) >= 5
+  then
+    raise exception 'a message carries at most 5 attachments' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_chat_uploads_per_message on public.chat_uploads;
+create trigger trg_chat_uploads_per_message
+  before insert or update of message_id on public.chat_uploads
+  for each row execute function public.chat_uploads_per_message();
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_uploads enable row level security;
+revoke all on table public.chat_uploads from anon, authenticated;
+grant select on table public.chat_uploads to authenticated;
+grant all on table public.chat_uploads to service_role;
+
+-- Their own, while they belong to its workspace; and those of a chat they
+-- can read (its policies: the author's, or a shared one).
+drop policy if exists "chat_uploads: own or chat select" on public.chat_uploads;
+create policy "chat_uploads: own or chat select"
+  on public.chat_uploads
+  for select
+  using (
+    (
+      user_id = auth.uid()
+      and organization_id in (
+        select p.organization_id from public.profiles p where p.id = auth.uid()
+      )
+    )
+    or conversation_id in (select c.id from public.chat_conversations c)
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00410_chat_tool_cache.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00410: Chat's tool results kept within a chat, and what each step and
+-- model call measured
+-- ============================================================================
+-- The context engine (CHAT-04 items 9–10, 27–28; CHAT-20 §15a), behind
+-- CHAT_AGENTIC: nothing writes here while the flag is off. Everything here
+-- is the server's and staff's: tool names, results and costs never reach a
+-- member (CHAT-03 item 22, CHAT-04 item 15).
+--
+--   * chat_tool_cache: within one chat, the same read with the same scope
+--     reuses the earlier result (item 9), unless the data has refreshed
+--     since: the engine compares data_as_of with the brand's newest
+--     tracking run before it uses a row (§15a: the cache is dropped when
+--     data_as_of moves). scope_hash is the sha-256 of the read's normalized
+--     scope (brand, dates, platforms, filters, limit). Rows are kept a day
+--     (expires_at, the sweep), and go with their chat. A reuse costs no
+--     model tokens and no budget (item 27).
+--   * chat_run_steps, a step's measure (staff only: members are granted
+--     00400's columns, not these): latency_ms; cache_hit when its result
+--     came from chat_tool_cache; truncated when the result was cut to the
+--     run's budget before the model saw it (item 6); result_tokens, what it
+--     sent the model.
+--   * prompt_improve_usage, a model call's measure (the AI budget's ledger,
+--     00405; server only): the prompt cache's read and write tokens (§D
+--     item 28) and the call's latency. input_tokens and output_tokens are
+--     already there (00120).
+
+-- ─── A chat's tool results ──────────────────────────────────────────────────
+
+create table if not exists public.chat_tool_cache (
+  conversation_id uuid not null references public.chat_conversations(id) on delete cascade,
+  -- The registry name of the tool that read.
+  tool text not null check (char_length(tool) between 1 and 100),
+  -- sha-256 (hex) of the read's normalized scope.
+  scope_hash text not null check (scope_hash ~ '^[0-9a-f]{64}$'),
+  -- The brand the read was about, whose refresh voids it; null for a
+  -- workspace-wide read.
+  brand_id uuid references public.brands(id) on delete cascade,
+  -- The result as the model got it, already within the run's budget.
+  result_json jsonb not null check (octet_length(result_json::text) <= 1000000),
+  row_count integer check (row_count >= 0),
+  data_as_of timestamptz,
+  hits integer not null default 0 check (hits >= 0),
+  created_at timestamptz not null default now(),
+  last_hit_at timestamptz,
+  expires_at timestamptz not null default (now() + interval '1 day'),
+  primary key (conversation_id, tool, scope_hash)
+);
+
+create index if not exists chat_tool_cache_brand_idx
+  on public.chat_tool_cache (brand_id) where brand_id is not null;
+-- The sweep of expired results.
+create index if not exists chat_tool_cache_expires_idx
+  on public.chat_tool_cache (expires_at);
+
+comment on table public.chat_tool_cache is
+  'Chat (00410): within one chat, a read''s result by tool and normalized scope (CHAT-04 item 9), reused until the brand''s data refreshes (data_as_of) or it expires (a day). Server only.';
+
+alter table public.chat_tool_cache enable row level security;
+revoke all on table public.chat_tool_cache from anon, authenticated;
+grant all on table public.chat_tool_cache to service_role;
+
+-- ─── A step's measure ───────────────────────────────────────────────────────
+
+alter table public.chat_run_steps
+  add column if not exists latency_ms integer check (latency_ms >= 0),
+  add column if not exists cache_hit boolean not null default false,
+  add column if not exists truncated boolean not null default false,
+  add column if not exists result_tokens integer check (result_tokens >= 0);
+
+comment on column public.chat_run_steps.latency_ms is
+  'How long the step took (CHAT-04 item 10). Staff only: never granted to members.';
+comment on column public.chat_run_steps.cache_hit is
+  'Its result came from chat_tool_cache (00410). Staff only.';
+comment on column public.chat_run_steps.truncated is
+  'Its result was cut to the run''s budget before the model saw it (CHAT-04 item 6). Staff only.';
+comment on column public.chat_run_steps.result_tokens is
+  'The tokens its result sent the model. Staff only.';
+
+-- ─── A model call's measure ─────────────────────────────────────────────────
+
+alter table public.prompt_improve_usage
+  add column if not exists cache_read_tokens integer check (cache_read_tokens >= 0),
+  add column if not exists cache_write_tokens integer check (cache_write_tokens >= 0),
+  add column if not exists latency_ms integer check (latency_ms >= 0);
+
+comment on column public.prompt_improve_usage.cache_read_tokens is
+  'Input tokens the provider read from its prompt cache (CHAT-04 §D item 28). Null where not measured.';
+comment on column public.prompt_improve_usage.cache_write_tokens is
+  'Input tokens the provider wrote to its prompt cache. Null where not measured.';
+comment on column public.prompt_improve_usage.latency_ms is
+  'How long the model call took. Null where not measured.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00411_chat_files.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00411: Chat's Files — the work Chat finished, filed for the workspace, and
+-- the storage it takes
+-- ============================================================================
+-- Outputs and Files (CHAT-06; CHAT-09 items 13–17; CHAT-18 item 21), behind
+-- CHAT_AGENTIC: nothing writes here while the flag is off. The server writes
+-- every row (service role): it files a deliverable when a run makes one,
+-- an answer on Save to Files, and deletes a file for its creator or an
+-- Admin (the Chat plan's decision).
+--
+--   * The bucket chat-files: private. Each file's canonical content (Markdown
+--     for a document or report, JSON rows for a table, the source for code,
+--     PNG or WebP for an image) under {organization_id}/{file id}/, and the
+--     formats rendered from it on a first download, cached beside it (CHAT-06
+--     Data notes). 25 MB an object: Chat's own output, not an upload. Members
+--     have no policy on it; the app hands out one-time download addresses.
+--   * chat_files: one row per filed deliverable or saved answer. Files
+--     belong to the workspace (CHAT-06 item 24): every member reads them
+--     (brand access is workspace membership today). Its type, the formats it
+--     downloads in, where it came from (origin, and the chat, message and run
+--     when Chat made it; the Content draft it was opened in), its status
+--     (draft, attached to a task, done), audience (public content follows
+--     CHAT-05's rule), version (a revision updates the same file), tags and
+--     a one-line summary for the finder and the chat's history (CHAT-04
+--     item 7), and when it was generated with the newest data it read
+--     (items 38–42). Kept a year (expires_at); a daily sweep deletes it and
+--     its objects after the 30-day notice. A deleted brand leaves its files
+--     to the workspace, a deleted member leaves theirs with no creator.
+--   * chat_file_task_links: a file attached to an Action Center task
+--     (CHAT-09 item 13), by whom and when. Readable where its file is.
+--   * chat_storage_usage: each workspace's bytes and files in Files, kept by
+--     the trigger below on every file written, resized or deleted, so the
+--     meter and the "Storage is full" check read one row (CHAT-06 items
+--     26–29). Attachments (00409) and rendered formats don't count. The
+--     limit is the plan's plus its storage packs (00413), worked out on the
+--     server.
+
+-- ─── The bucket ─────────────────────────────────────────────────────────────
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'chat-files',
+  'chat-files',
+  false,
+  26214400,
+  array[
+    'text/markdown',
+    'text/html',
+    'text/plain',
+    'text/csv',
+    'application/json',
+    'application/ld+json',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'image/png',
+    'image/webp'
+  ]
+)
+-- Run again, it leaves the bucket as an admin may have set it.
+on conflict (id) do nothing;
+
+-- ─── Files ──────────────────────────────────────────────────────────────────
+
+-- A list's words as one text, for a generated search column (array_to_string
+-- is only stable).
+create or replace function public.chat_text_array_words(p_values text[])
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(string_agg(v, ' '), '') from unnest(p_values) as t(v);
+$$;
+
+create table if not exists public.chat_files (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  -- Null: about the workspace, or its brand was deleted.
+  brand_id uuid references public.brands(id) on delete set null,
+  created_by uuid references auth.users(id) on delete set null,
+  title text not null check (char_length(title) between 1 and 200),
+  type text not null check (type in ('document', 'table', 'code', 'image', 'report')),
+  -- The formats it downloads in (CHAT-06 item 2), the first its main one.
+  formats text[] not null default '{}' check (
+    formats <@ array[
+      'md', 'html', 'docx', 'pdf', 'csv', 'xlsx', 'json', 'jsonld', 'txt', 'png', 'webp'
+    ]::text[]
+    and public.chat_text_array_distinct(formats)
+  ),
+  -- The canonical content's type and object in chat-files.
+  mime_type text not null check (char_length(mime_type) between 3 and 100),
+  storage_path text not null unique check (char_length(storage_path) between 1 and 300),
+  size_bytes bigint not null default 0 check (size_bytes >= 0),
+  -- From: an Action Center task, Chat, a scheduled job or the Content Editor.
+  origin text not null check (origin in ('task', 'chat', 'schedule', 'editor')),
+  conversation_id uuid references public.chat_conversations(id) on delete set null,
+  message_id uuid references public.chat_messages(id) on delete set null,
+  run_id uuid references public.chat_runs(id) on delete set null,
+  -- Open in Content Editor: the draft made from it ("Used in Content draft").
+  content_draft_id uuid references public.content_drafts(id) on delete set null,
+  status text not null default 'draft' check (status in ('draft', 'attached', 'done')),
+  audience text not null default 'internal' check (audience in ('internal', 'public')),
+  version integer not null default 1 check (version >= 1),
+  summary text check (char_length(summary) between 1 and 300),
+  tags text[] not null default '{}' check (cardinality(tags) <= 30),
+  -- CHAT-06 items 38–42: when it was made (UTC), the newest data it read and
+  -- the IANA time zone both were shown in.
+  generated_at timestamptz not null default now(),
+  data_as_of timestamptz,
+  timezone text check (char_length(timezone) between 1 and 64),
+  search_tsv tsvector generated always as (
+    to_tsvector(
+      'simple',
+      title || ' ' || coalesce(summary, '') || ' ' || public.chat_text_array_words(tags)
+    )
+  ) stored,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '1 year')
+);
+
+-- Files: the workspace's, newest first.
+create index if not exists chat_files_organization_created_idx
+  on public.chat_files (organization_id, created_at desc);
+create index if not exists chat_files_brand_idx
+  on public.chat_files (brand_id) where brand_id is not null;
+create index if not exists chat_files_created_by_idx
+  on public.chat_files (created_by) where created_by is not null;
+create index if not exists chat_files_conversation_idx
+  on public.chat_files (conversation_id) where conversation_id is not null;
+create index if not exists chat_files_message_idx
+  on public.chat_files (message_id) where message_id is not null;
+create index if not exists chat_files_run_idx
+  on public.chat_files (run_id) where run_id is not null;
+create index if not exists chat_files_content_draft_idx
+  on public.chat_files (content_draft_id) where content_draft_id is not null;
+-- The finder (CHAT-06 items 13–15): title, summary and tags.
+create index if not exists chat_files_search_idx
+  on public.chat_files using gin (search_tsv);
+-- The daily sweep, and its 30-day notice.
+create index if not exists chat_files_expires_idx
+  on public.chat_files (expires_at);
+
+drop trigger if exists trg_chat_files_updated_at on public.chat_files;
+create trigger trg_chat_files_updated_at
+  before update on public.chat_files
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_files is
+  'Chat (00411): the work Chat finished, filed for the workspace (CHAT-06): type, formats, origin, status, audience, version, tags, summary, generated_at / data_as_of / timezone; content in the private bucket chat-files; kept a year. Every member reads; the server writes.';
+comment on column public.chat_files.storage_path is
+  'The canonical content''s object in the chat-files bucket, under {organization_id}/{id}/; rendered formats are cached beside it.';
+comment on column public.chat_files.formats is
+  'The formats it downloads in (CHAT-06 item 2), its main format first.';
+
+-- ─── Files attached to tasks ────────────────────────────────────────────────
+
+create table if not exists public.chat_file_task_links (
+  file_id uuid not null references public.chat_files(id) on delete cascade,
+  action_task_id uuid not null references public.action_tasks(id) on delete cascade,
+  attached_by uuid references auth.users(id) on delete set null,
+  attached_at timestamptz not null default now(),
+  primary key (file_id, action_task_id)
+);
+
+create index if not exists chat_file_task_links_task_idx
+  on public.chat_file_task_links (action_task_id);
+
+comment on table public.chat_file_task_links is
+  'Chat (00411): a file attached to an Action Center task (CHAT-09 item 13), by whom and when. Readable where its file is; the server writes.';
+
+-- ─── Storage used ───────────────────────────────────────────────────────────
+
+create table if not exists public.chat_storage_usage (
+  organization_id uuid primary key references public.organizations(id) on delete cascade,
+  bytes_used bigint not null default 0 check (bytes_used >= 0),
+  file_count integer not null default 0 check (file_count >= 0),
+  updated_at timestamptz not null default now()
+);
+
+comment on table public.chat_storage_usage is
+  'Chat (00411): a workspace''s bytes and files in Files (CHAT-06 items 26–29), kept by the trigger on chat_files. Members read it; only the trigger writes.';
+
+-- Keeps chat_storage_usage in step with chat_files. Security definer, so
+-- the row is kept whoever writes a file. A file leaving takes its bytes off
+-- an existing row only: a workspace being deleted takes its counter with it,
+-- and a new row there would fail its key.
+create or replace function public.chat_files_count_storage()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_op = 'INSERT' then
+    insert into public.chat_storage_usage as u (organization_id, bytes_used, file_count)
+    values (new.organization_id, new.size_bytes, 1)
+    on conflict (organization_id) do update
+      set bytes_used = u.bytes_used + excluded.bytes_used,
+          file_count = u.file_count + 1,
+          updated_at = now();
+    return new;
+  elsif tg_op = 'DELETE' then
+    update public.chat_storage_usage
+    set bytes_used = greatest(bytes_used - old.size_bytes, 0),
+        file_count = greatest(file_count - 1, 0),
+        updated_at = now()
+    where organization_id = old.organization_id;
+    return old;
+  else
+    update public.chat_storage_usage
+    set bytes_used = greatest(bytes_used + new.size_bytes - old.size_bytes, 0),
+        updated_at = now()
+    where organization_id = new.organization_id;
+    return new;
+  end if;
+end;
+$$;
+
+drop trigger if exists trg_chat_files_count_storage on public.chat_files;
+create trigger trg_chat_files_count_storage
+  after insert or delete or update of size_bytes on public.chat_files
+  for each row execute function public.chat_files_count_storage();
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_files enable row level security;
+alter table public.chat_file_task_links enable row level security;
+alter table public.chat_storage_usage enable row level security;
+
+revoke all on table public.chat_files from anon, authenticated;
+revoke all on table public.chat_file_task_links from anon, authenticated;
+revoke all on table public.chat_storage_usage from anon, authenticated;
+
+grant select on table public.chat_files to authenticated;
+grant select on table public.chat_file_task_links to authenticated;
+grant select on table public.chat_storage_usage to authenticated;
+
+grant all on table public.chat_files to service_role;
+grant all on table public.chat_file_task_links to service_role;
+grant all on table public.chat_storage_usage to service_role;
+
+-- Files belong to the workspace: its members read them while they belong to it.
+drop policy if exists "chat_files: member select" on public.chat_files;
+create policy "chat_files: member select"
+  on public.chat_files
+  for select
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+drop policy if exists "chat_file_task_links: file select" on public.chat_file_task_links;
+create policy "chat_file_task_links: file select"
+  on public.chat_file_task_links
+  for select
+  using (file_id in (select f.id from public.chat_files f));
+
+drop policy if exists "chat_storage_usage: member select" on public.chat_storage_usage;
+create policy "chat_storage_usage: member select"
+  on public.chat_storage_usage
+  for select
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00412_help_answers.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00412: Chat's Help answers — the answers it already gave, and the
+-- questions Help couldn't answer
+-- ============================================================================
+-- Help in Chat (CHAT-19 §4–§6), behind CHAT_AGENTIC: nothing writes here
+-- while the flag is off. A Help answer is written from the Help articles in
+-- the repository (help/{area}/{slug}.md) alone: no workspace's data, files
+-- or history goes into it (§5), so one answer serves every workspace.
+-- Server only: staff read both tables with the service role.
+--
+--   * help_answer_cache: step 2 of §5's cheapest path. The same Help
+--     question, normalized (case, spacing, punctuation), in the same
+--     language and app version gets the answer given before, with no model
+--     call. articles lists the articles it was written from ({area}/{slug}),
+--     so an article that changes clears the answers built on it.
+--   * help_gaps: a question Help had no good match for (§4 "Gaps"), for the
+--     weekly list of articles to write: the question as asked, the page the
+--     person was on, the closest article and its score. No workspace's or
+--     person's id is kept: the log is anonymous.
+
+-- ─── Answers given ──────────────────────────────────────────────────────────
+
+create table if not exists public.help_answer_cache (
+  id uuid primary key default gen_random_uuid(),
+  -- The question as normalized, and its sha-256 (hex), the key.
+  question text not null check (char_length(question) between 1 and 500),
+  question_hash text not null check (question_hash ~ '^[0-9a-f]{64}$'),
+  -- The language the answer is in (BCP 47) and the app version it is for.
+  lang text not null check (lang ~ '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$'),
+  app_version text not null check (char_length(app_version) between 1 and 40),
+  answer_md text not null check (char_length(answer_md) between 1 and 20000),
+  -- The articles it was written from, as {area}/{slug}.
+  articles text[] not null default '{}' check (cardinality(articles) <= 10),
+  -- The model that wrote it.
+  model text check (char_length(model) between 1 and 200),
+  hits integer not null default 0 check (hits >= 0),
+  created_at timestamptz not null default now(),
+  last_hit_at timestamptz,
+  unique (question_hash, lang, app_version)
+);
+
+-- An article that changed: the answers built on it.
+create index if not exists help_answer_cache_articles_idx
+  on public.help_answer_cache using gin (articles);
+
+comment on table public.help_answer_cache is
+  'Help in Chat (00412): a Help answer by normalized question, language and app version (CHAT-19 §5 step 2), written from the listed Help articles only, with no workspace data. Cleared for an article when it changes. Server only.';
+
+-- ─── Questions with no good answer ──────────────────────────────────────────
+
+create table if not exists public.help_gaps (
+  id uuid primary key default gen_random_uuid(),
+  question text not null check (char_length(question) between 1 and 500),
+  lang text not null check (lang ~ '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$'),
+  -- The app page the person asked from.
+  route text check (char_length(route) between 1 and 500),
+  -- The closest article ({area}/{slug}) and its retrieval score; null when
+  -- nothing matched at all.
+  best_article text check (char_length(best_article) between 1 and 200),
+  best_score real check (best_score >= 0),
+  app_version text check (char_length(app_version) between 1 and 40),
+  created_at timestamptz not null default now()
+);
+
+-- The weekly list, newest first.
+create index if not exists help_gaps_created_idx
+  on public.help_gaps (created_at desc);
+
+comment on table public.help_gaps is
+  'Help in Chat (00412): questions Help had no good match for (CHAT-19 §4 Gaps), anonymous: the question, the page, the closest article and its score. For the weekly list of new articles. Server only.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.help_answer_cache enable row level security;
+alter table public.help_gaps enable row level security;
+
+revoke all on table public.help_answer_cache from anon, authenticated;
+revoke all on table public.help_gaps from anon, authenticated;
+
+grant all on table public.help_answer_cache to service_role;
+grant all on table public.help_gaps to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00413_add_on_packs.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00413: Add-on packs — AI credits and storage, bought with Stripe
+-- ============================================================================
+-- CHAT-18 (and CHAT-04 item 11, CHAT-06 item 26), behind CHAT_AGENTIC: no
+-- pack is offered or granted while the flag is off. A workspace that used
+-- its monthly AI limit or its storage buys more in the product; nothing is
+-- granted before Stripe says it was paid.
+--
+--   * add_on_products: the packs on sale (CHAT-18 §A), a table and not code,
+--     so staff change them without a release. AI credits are one payment,
+--     valid 12 months, and add half their price to the AI budget (2x the
+--     model cost; grant_ai_usd); storage is monthly, renewed with the plan,
+--     and adds grant_bytes (1 GB = 1024³ bytes). stripe_price_id is set per
+--     deployment (test prices on a test deployment); a pack without one is
+--     never sold. highlight is the "Most picked" one on its tab. Seeded with
+--     the owner's packs below. Server only: the grants are dollars of model
+--     cost, which no browser gets (CHAT-18 item 3); the server tells the
+--     page what each pack adds for its plan.
+--   * add_on_purchases: one row per Checkout an Admin started (CHAT-18 §D):
+--     pending until Stripe's webhook says paid or failed (checkout.session
+--     .completed, invoice.paid), each Checkout once (its id is unique);
+--     refunded by staff in Stripe; a storage pack's subscription item ended
+--     is cancelled. The workspace's Admins read their purchases (Settings ›
+--     Billing › Add-ons); the server writes.
+--   * ai_credit_grants: what a paid AI pack added: its dollars of model cost,
+--     how much was used, and until when (12 months). The budget draws on
+--     them after the month's included limit, oldest first (CHAT-18 item 19).
+--     A refund takes the unused part away (usd_total down to usd_used).
+--     Server only.
+--   * storage_grants: what a paid storage pack adds, until the end of the
+--     period paid for (each invoice.paid moves active_until on). Server only.
+--   * prompt_improve_usage.grant_id: the AI credit grant a ledger row drew on
+--     (CHAT-18 Data notes); null when it drew on the included budget. A step
+--     that crosses from one to the other is written as two rows.
+
+-- ─── Packs on sale ──────────────────────────────────────────────────────────
+
+create table if not exists public.add_on_products (
+  id text primary key check (id ~ '^[a-z][a-z0-9_]{1,39}$'),
+  kind text not null check (kind in ('ai', 'storage')),
+  name text not null check (char_length(name) between 1 and 100),
+  -- The price in the currency's smallest unit (cents).
+  price_cents integer not null check (price_cents > 0),
+  currency text not null default 'usd' check (currency ~ '^[a-z]{3}$'),
+  billing text not null check (billing in ('one_time', 'monthly')),
+  -- AI: the dollars of model cost it adds (price ÷ 2). Storage: the bytes.
+  grant_ai_usd numeric(12, 2) check (grant_ai_usd > 0),
+  grant_bytes bigint check (grant_bytes > 0),
+  -- AI: how long its credits last. Storage: null, it lasts while it renews.
+  valid_months smallint check (valid_months > 0),
+  stripe_price_id text check (stripe_price_id ~ '^price_[A-Za-z0-9]{1,200}$'),
+  active boolean not null default true,
+  -- "Most picked" on its tab.
+  highlight boolean not null default false,
+  sort smallint not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check ((kind = 'ai') = (grant_ai_usd is not null)),
+  check ((kind = 'storage') = (grant_bytes is not null)),
+  check (kind <> 'ai' or (billing = 'one_time' and valid_months is not null)),
+  check (kind <> 'storage' or (billing = 'monthly' and valid_months is null))
+);
+
+drop trigger if exists trg_add_on_products_updated_at on public.add_on_products;
+create trigger trg_add_on_products_updated_at
+  before update on public.add_on_products
+  for each row execute function public.handle_updated_at();
+
+comment on table public.add_on_products is
+  'Add-on packs on sale (CHAT-18 §A): AI credits (one payment, 12 months, grant_ai_usd = price ÷ 2 of model cost) and storage (monthly, grant_bytes). Staff-edited; stripe_price_id per deployment, a pack without one isn''t sold. Server only.';
+
+-- The owner's packs (CHAT-18 items 2 and 4; "Most picked": $50 and +25 GB).
+-- Run again, it leaves them as staff may have changed them.
+insert into public.add_on_products
+  (id, kind, name, price_cents, billing, grant_ai_usd, grant_bytes, valid_months, highlight, sort)
+values
+  ('ai_10', 'ai', 'AI credits $10', 1000, 'one_time', 5, null, 12, false, 1),
+  ('ai_50', 'ai', 'AI credits $50', 5000, 'one_time', 25, null, 12, true, 2),
+  ('ai_250', 'ai', 'AI credits $250', 25000, 'one_time', 125, null, 12, false, 3),
+  ('ai_1000', 'ai', 'AI credits $1,000', 100000, 'one_time', 500, null, 12, false, 4),
+  ('storage_25', 'storage', 'Storage +25 GB', 500, 'monthly', null, 26843545600, null, true, 1),
+  ('storage_100', 'storage', 'Storage +100 GB', 1500, 'monthly', null, 107374182400, null, false, 2),
+  ('storage_250', 'storage', 'Storage +250 GB', 2900, 'monthly', null, 268435456000, null, false, 3)
+on conflict (id) do nothing;
+
+-- ─── Purchases ──────────────────────────────────────────────────────────────
+
+create table if not exists public.add_on_purchases (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  product_id text not null references public.add_on_products(id) on update cascade,
+  -- The Admin who bought it.
+  bought_by uuid references auth.users(id) on delete set null,
+  status text not null default 'pending'
+    check (status in ('pending', 'paid', 'failed', 'refunded', 'cancelled')),
+  stripe_checkout_session_id text unique check (stripe_checkout_session_id ~ '^cs_[A-Za-z0-9_]{1,250}$'),
+  stripe_invoice_id text check (stripe_invoice_id ~ '^in_[A-Za-z0-9_]{1,250}$'),
+  -- A storage pack's item on the plan's subscription.
+  stripe_subscription_item_id text unique
+    check (stripe_subscription_item_id ~ '^si_[A-Za-z0-9_]{1,250}$'),
+  amount_paid_cents integer check (amount_paid_cents >= 0),
+  currency text not null default 'usd' check (currency ~ '^[a-z]{3}$'),
+  granted_at timestamptz,
+  -- AI credits: granted_at + the pack's months. Storage: null.
+  expires_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  -- Paid, and what came after paying, were granted.
+  check (status in ('pending', 'failed') or granted_at is not null)
+);
+
+-- Settings › Billing › Add-ons: the workspace's purchases, newest first.
+create index if not exists add_on_purchases_organization_created_idx
+  on public.add_on_purchases (organization_id, created_at desc);
+create index if not exists add_on_purchases_product_idx
+  on public.add_on_purchases (product_id);
+create index if not exists add_on_purchases_bought_by_idx
+  on public.add_on_purchases (bought_by) where bought_by is not null;
+create index if not exists add_on_purchases_invoice_idx
+  on public.add_on_purchases (stripe_invoice_id) where stripe_invoice_id is not null;
+
+drop trigger if exists trg_add_on_purchases_updated_at on public.add_on_purchases;
+create trigger trg_add_on_purchases_updated_at
+  before update on public.add_on_purchases
+  for each row execute function public.handle_updated_at();
+
+comment on table public.add_on_purchases is
+  'Add-on packs bought (CHAT-18 §D–E): one row per Checkout, pending until the Stripe webhook says paid or failed (each Checkout once), refunded by staff, cancelled when a storage item ends. The workspace''s Admins read; the server writes.';
+
+-- ─── What a paid pack grants ────────────────────────────────────────────────
+
+create table if not exists public.ai_credit_grants (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  purchase_id uuid not null unique references public.add_on_purchases(id) on delete cascade,
+  -- Dollars of model cost (the pack's grant_ai_usd), and how much is used.
+  usd_total numeric(12, 6) not null check (usd_total >= 0),
+  usd_used numeric(12, 6) not null default 0 check (usd_used >= 0),
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (usd_used <= usd_total)
+);
+
+-- The budget's draw: a workspace's grants still valid, oldest first.
+create index if not exists ai_credit_grants_organization_expires_idx
+  on public.ai_credit_grants (organization_id, expires_at);
+
+drop trigger if exists trg_ai_credit_grants_updated_at on public.ai_credit_grants;
+create trigger trg_ai_credit_grants_updated_at
+  before update on public.ai_credit_grants
+  for each row execute function public.handle_updated_at();
+
+comment on table public.ai_credit_grants is
+  'AI credits a paid pack added (CHAT-18 §F): dollars of model cost, used, valid until; drawn after the month''s included limit, oldest first. A refund lowers usd_total to usd_used. Server only: dollars never reach a browser.';
+
+create table if not exists public.storage_grants (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  purchase_id uuid not null unique references public.add_on_purchases(id) on delete cascade,
+  bytes bigint not null check (bytes > 0),
+  -- The end of the period paid for; each paid renewal moves it on.
+  active_until timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists storage_grants_organization_active_idx
+  on public.storage_grants (organization_id, active_until);
+
+drop trigger if exists trg_storage_grants_updated_at on public.storage_grants;
+create trigger trg_storage_grants_updated_at
+  before update on public.storage_grants
+  for each row execute function public.handle_updated_at();
+
+comment on table public.storage_grants is
+  'Storage a paid pack adds (CHAT-18 item 21): bytes, until the end of the period paid for (moved on by each paid renewal). The limit is the plan''s plus these, worked out on the server. Server only.';
+
+-- ─── The ledger's grant ─────────────────────────────────────────────────────
+
+alter table public.prompt_improve_usage
+  add column if not exists grant_id uuid
+    references public.ai_credit_grants(id) on delete set null;
+
+comment on column public.prompt_improve_usage.grant_id is
+  'The AI credit grant this row drew on (00413); null when it drew on the month''s included budget.';
+
+create index if not exists prompt_improve_usage_grant_idx
+  on public.prompt_improve_usage (grant_id)
+  where grant_id is not null;
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.add_on_products enable row level security;
+alter table public.add_on_purchases enable row level security;
+alter table public.ai_credit_grants enable row level security;
+alter table public.storage_grants enable row level security;
+
+revoke all on table public.add_on_products from anon, authenticated;
+revoke all on table public.add_on_purchases from anon, authenticated;
+revoke all on table public.ai_credit_grants from anon, authenticated;
+revoke all on table public.storage_grants from anon, authenticated;
+
+grant select on table public.add_on_purchases to authenticated;
+
+grant all on table public.add_on_products to service_role;
+grant all on table public.add_on_purchases to service_role;
+grant all on table public.ai_credit_grants to service_role;
+grant all on table public.storage_grants to service_role;
+
+-- Billing is the Admins': the workspace's Admins read its purchases, while
+-- they belong to it.
+drop policy if exists "add_on_purchases: admin select" on public.add_on_purchases;
+create policy "add_on_purchases: admin select"
+  on public.add_on_purchases
+  for select
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00414_own_keys_enterprise.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
