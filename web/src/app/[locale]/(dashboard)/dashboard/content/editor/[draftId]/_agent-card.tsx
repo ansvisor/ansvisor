@@ -242,6 +242,7 @@ export function AgentCard({
   rules,
   busy,
   working,
+  onServer = false,
   onAcceptAll,
   onRejectAll,
   onUndoAll,
@@ -267,6 +268,11 @@ export function AgentCard({
   busy: boolean;
   /** The agent is working from this page (Apply rules with Agent). */
   working: boolean;
+  /**
+   * Its run is on the server now, so the page can be left: not while the
+   * browser still gathers what it sends (the brief's prompts and sources).
+   */
+  onServer?: boolean;
   onAcceptAll: () => void;
   onRejectAll: () => void;
   onUndoAll: () => void;
@@ -425,8 +431,8 @@ export function AgentCard({
     );
     line = (
       <>
-        {/* As Chat says it: the run goes on without the page open. */}
-        {chatOn && <span className="block">{t('leavePage')}</span>}
+        {/* As Chat says it: the run goes on without the page open, once it is on the server. */}
+        {chatOn && onServer && <span className="block">{t('leavePage')}</span>}
         {/* Its real steps, as the run says them; none until its first is read. */}
         {run && <RunSteps run={run} />}
         <span

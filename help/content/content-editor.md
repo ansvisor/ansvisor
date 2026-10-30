@@ -17,7 +17,7 @@ The Content Editor is where pages are written. It opens from the Library, from t
 
 The header shows the title, the page type, a **Rules** chip with how many rules the page meets now, and whether your changes are saved. Its buttons are **History**, **Copy HTML**, **Export**, **Send to CMS** (admins and managers) and **Mark ready**, and a button to show or hide the side panel.
 
-Where your workspace has Chat, a pill next to the title says where the page stands: **Working** while the Content Agent works on it, **Needs you** while its suggestions wait, **Ready**, **Done** once published, or **Draft**. **Runs** at the top lists the agent runs in your workspace, this page's among them; click one to open it. While the agent works, its card says you can leave the page: it keeps going.
+Where your workspace has Chat, a pill next to the title says where the page stands: **Working** while the Content Agent works on it, **Needs you** while its suggestions wait or the page is in review, **Ready**, **Done** once published, or **Draft**. **Runs** at the top lists your own Chat runs and this brand's Content Agent runs, this page's among them; click one to open it. Once the agent's work has started on the server, its card says you can leave the page: it keeps going.
 
 ## Write and paste
 
