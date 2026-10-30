@@ -685,6 +685,31 @@ describe('the fact check (W1-21)', () => {
     expectClean(events);
   });
 
+  it('keeps a link whole when the stream is cut just before its figure', async () => {
+    const lead = `${'Visibility is up 12% on ChatGPT. '.repeat(5)}Read https://example.com/blog/`;
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text(lead, '98765 for more.')],
+    );
+    const runId = await turn(ADMIN, 'How are we doing?');
+    const streamed = ofType(await eventsOf(runId), 'text.delta')
+      .map((e) => e.data.text)
+      .join('');
+    expect(streamed).toBe(`${lead}98765 for more.`);
+  });
+
+  it('holds back only a short run, so each check reads a short text', async () => {
+    const run = 'a-'.repeat(2_000);
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text(...run.match(/.{1,200}/g)!, ' Up 12%.')],
+    );
+    const runId = await turn(ADMIN, 'How are we doing?');
+    const deltas = ofType(await eventsOf(runId), 'text.delta').map((e) => e.data.text as string);
+    expect(deltas.join('')).toBe(`${run} Up 12%.`);
+    expect(Math.max(...deltas.map((d) => d.length))).toBeLessThanOrEqual(200 + 160);
+  });
+
   it('says every figure matched, and adds no step to an answer without figures', async () => {
     useModels(
       [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],

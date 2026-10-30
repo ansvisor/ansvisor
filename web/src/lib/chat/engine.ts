@@ -39,7 +39,7 @@ import {
   type RunProgress,
 } from './engine-store';
 import { maskIds, type ChatDenialCard, type ChatRunSummary, type ChatStepScope } from './events';
-import { checkFigures, figureHold, figuresOfRun, type KnownFigures } from './facts';
+import { HOLD_MAX, checkFigures, figureHold, figuresOfRun, type KnownFigures } from './facts';
 import { fitResult, toJson } from './fit';
 import { historyMessages, planHistory, type HistoryPlan, type HistoryRow } from './history';
 import { requestHash } from './idempotency';
@@ -954,6 +954,7 @@ class TextOut {
       if (id) cut = id.index;
       const figure = figureHold(this.pending);
       if (figure !== null) cut = Math.min(cut, figure);
+      cut = Math.max(cut, this.pending.length - HOLD_MAX);
     }
     const checked = checkFigures(maskIds(this.pending.slice(0, cut)), this.known, {
       before: this.rc.progress.text.slice(-80),
