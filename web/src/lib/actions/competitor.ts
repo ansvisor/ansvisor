@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { Competitor } from '@/types';
 import { assertWritable } from '@/lib/subscription-guard';
+import { isManager } from '@/lib/session-role';
 import { z } from 'zod';
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
 import {
@@ -81,12 +82,13 @@ export type AddCompetitorsResult =
       added: Competitor[];
       skipped: { name: string; domain: string; reason: 'duplicate' | 'failed' }[];
     }
-  | { ok: false; reason: 'duplicate' | 'failed'; message: string };
+  | { ok: false; reason: 'forbidden_role' | 'duplicate' | 'failed'; message: string };
 
 /**
  * Add competitors to a brand: Chat's add_competitors (CHAT-20 §9 row 30).
- * A domain (or, without one, a name) the brand already has is skipped (the
- * natural key, §11c); each of the rest through addCompetitor, as the
+ * Admins and Managers, checked here (the table's policy lets every member
+ * in). A domain (or, without one, a name) the brand already has is skipped
+ * (the natural key, §11c); each of the rest through addCompetitor, as the
  * Competitors page adds one. Errors come back as values (#427).
  */
 export async function addCompetitors(
@@ -94,6 +96,13 @@ export async function addCompetitors(
   items: { name: string; domain: string }[],
 ): Promise<AddCompetitorsResult> {
   await assertWritable({ brandId });
+  if (!(await isManager(await createClient()))) {
+    return {
+      ok: false,
+      reason: 'forbidden_role',
+      message: 'Only an admin or a manager can add competitors.',
+    };
+  }
   let existing: Competitor[];
   try {
     existing = await getCompetitors(brandId);
@@ -131,12 +140,14 @@ export async function addCompetitors(
 
 export type RemoveBrandCompetitorResult =
   | { ok: true; removed: Competitor }
-  | { ok: false; reason: 'not_found' | 'failed'; message: string };
+  | { ok: false; reason: 'forbidden_role' | 'not_found' | 'failed'; message: string };
 
 /**
  * Remove one of a brand's competitors: Chat's remove_competitor (CHAT-20 §9
- * row 32). Only the brand's own, then through deleteCompetitor, as the
- * Competitors page removes one. Errors come back as values (#427).
+ * row 32). Admins and Managers, checked here. Only the brand's own, then
+ * through deleteCompetitor, as the Competitors page removes one: its page
+ * events and timeline scans go with it, and its actions' links are marked
+ * deleted (00244). Errors come back as values (#427).
  */
 export async function removeBrandCompetitor(
   brandId: string,
@@ -144,6 +155,13 @@ export async function removeBrandCompetitor(
 ): Promise<RemoveBrandCompetitorResult> {
   await assertWritable({ brandId });
   const supabase = await createClient();
+  if (!(await isManager(supabase))) {
+    return {
+      ok: false,
+      reason: 'forbidden_role',
+      message: 'Only an admin or a manager can remove competitors.',
+    };
+  }
   const { data, error } = await supabase
     .from('competitors')
     .select('*')

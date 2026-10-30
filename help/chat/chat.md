@@ -75,7 +75,7 @@ Admins and Managers can ask Chat to track new prompts in a topic, pause prompts,
 
 Chat asks first, except in **Full auto**. Removing a competitor, or pausing more than five prompts at once, always asks.
 
-Each change is in the **Activity** log, with **Undo** for 7 days (30 days for paused prompts). Undo leaves alone anything someone changed since, and says so.
+Each change is in the **Activity** log, with **Undo** for 7 days (30 days for paused prompts). Undo leaves alone anything someone changed since, and says so. Undoing new prompts pauses them; their first answers, and what they cost, stay. A removed competitor comes back without its timeline events.
 
 ## Next moves
 

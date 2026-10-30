@@ -531,7 +531,10 @@ function Answer({
           summary={confirmStep?.kind === 'execute' ? run.confirm.target : undefined}
           actionLabel={confirmStep?.kind === 'execute' ? run.confirm.action : undefined}
           canDontAskAgain={run.confirm.canDontAskAgain}
-          note={run.confirm.noUndo ? t('noUndo') : undefined}
+          note={
+            [run.confirm.note, run.confirm.noUndo ? t('noUndo') : null].filter(Boolean).join(' ') ||
+            undefined
+          }
           onApprove={(answer) => void onApprove(answer.dontAskAgain)}
           onSkip={() => void onSkip()}
         />

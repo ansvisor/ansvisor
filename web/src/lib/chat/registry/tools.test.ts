@@ -77,7 +77,7 @@ vi.mock('@/lib/actions/prompt', () => ({
 }));
 vi.mock('@/lib/actions/topic', () => ({
   addBrandTopic: tracked.track('actions/topic.addBrandTopic'),
-  updateTopic: tracked.track('actions/topic.updateTopic'),
+  renameBrandTopic: tracked.track('actions/topic.renameBrandTopic'),
 }));
 vi.mock('@/lib/actions/competitor', () => ({
   addCompetitors: tracked.track('actions/competitor.addCompetitors'),
@@ -283,7 +283,7 @@ describe('the Chat tool registry', () => {
       ['actions/prompt.addTopicPrompts', [brand, item, ['crm pricing']]],
       ['actions/prompt.pauseBrandPrompts', [brand, [item]]],
       ['actions/topic.addBrandTopic', [brand, 'Pricing']],
-      ['actions/topic.updateTopic', [item, 'Plans']],
+      ['actions/topic.renameBrandTopic', [item, 'Plans']],
       ['actions/competitor.addCompetitors', [brand, [{ name: 'Peec AI', domain: '' }]]],
       ['actions/competitor.removeBrandCompetitor', [brand, item]],
       [

@@ -48,8 +48,16 @@ export interface WriteRecord {
   undo: Snapshot | null;
 }
 
-/** How an inverse went: done, the target changed since, or it is gone. */
-export type InverseResult = 'ok' | 'changed' | 'gone';
+/**
+ * How an inverse went: done, the target changed since, it is gone, or the
+ * plan has no room for it now (resuming prompts is metered, §11a): nothing
+ * changed, and Undo may be tried again once there is.
+ */
+export type InverseResult =
+  | 'ok'
+  | 'changed'
+  | 'gone'
+  | { refused: 'quota_exceeded'; message: string };
 
 export interface UndoRule {
   /** The target's type in the log. */
@@ -415,6 +423,8 @@ export type UndoOutcome =
   | { code: 'not_found' }
   | { code: 'in_progress' }
   | { code: 'denied'; denial: ChatDenial }
+  /** The plan has no room for it now (§11a): nothing changed; Undo works again once it has. */
+  | { code: 'quota_exceeded'; message: string }
   /** Something failed on the way (a read, a write): nothing was undone, Undo may try again. */
   | { code: 'failed' };
 
@@ -432,6 +442,8 @@ export function undoMessage(outcome: UndoOutcome): string {
       return undoT(outcome.reason === 'gone' ? 'gone' : 'changed');
     case 'denied':
       return outcome.denial.rule.detail;
+    case 'quota_exceeded':
+      return outcome.message;
     case 'expired':
       return undoT('expired');
     case 'not_undoable':
@@ -575,7 +587,10 @@ async function undo(req: UndoRequest): Promise<UndoResult> {
   };
   const targetType = row.target_type;
   // Set inside the work: a conflict answers this click, and its key goes back.
-  const found: { conflict: InverseResult | null } = { conflict: null };
+  const found: {
+    conflict: 'changed' | 'gone' | null;
+    refused: { message: string } | null;
+  } = { conflict: null, refused: null };
   const outcome = await withIdempotencyKey<StoredUndo>(
     {
       organizationId: req.organizationId,
@@ -584,6 +599,11 @@ async function undo(req: UndoRequest): Promise<UndoResult> {
     },
     async () => {
       const inverse = await rule.inverse(target);
+      // No room on the plan: nothing changed, nothing marked; it may be tried again.
+      if (typeof inverse === 'object') {
+        found.refused = inverse;
+        return { result: { code: 'ok', activityId: null }, activityId: null };
+      }
       if (inverse !== 'ok') {
         found.conflict = inverse;
         await markChange(row.id, { status: 'undo_conflict' });
@@ -617,13 +637,14 @@ async function undo(req: UndoRequest): Promise<UndoResult> {
       return { result: { code: 'ok', activityId }, activityId };
     },
     // A conflict isn't kept: once the target is back as it was, Undo may try again.
-    { keep: () => found.conflict === null },
+    { keep: () => found.conflict === null && found.refused === null },
   );
 
   if (outcome.kind === 'mismatch' || outcome.kind === 'busy')
     return result({ code: 'in_progress' });
+  if (found.refused) return result({ code: 'quota_exceeded', message: found.refused.message });
   const { conflict } = found;
-  if (conflict && conflict !== 'ok') {
+  if (conflict) {
     return result({
       code: 'conflict',
       reason: conflict,

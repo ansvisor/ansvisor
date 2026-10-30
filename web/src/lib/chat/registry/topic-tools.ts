@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { addBrandTopic, updateTopic } from '@/lib/actions/topic';
+import { addBrandTopic, renameBrandTopic } from '@/lib/actions/topic';
 import { contentUuid } from '@/lib/mcp/content-schemas';
 import { TOPIC_NAME_CHARS } from '@/lib/topic-names';
 import { FIXTURE_IDS, defineTool } from './define-tool';
@@ -60,7 +60,7 @@ export const TOPIC_TOOLS = [
       topic_id: contentUuid.describe("The topic's id, from list_topics."),
       name: name.describe('Its new name.'),
     }),
-    run: (_ctx, input) => updateTopic(input.topic_id, input.name),
+    run: (_ctx, input) => renameBrandTopic(input.topic_id, input.name),
     target: async (input) => {
       const now = await topicName(input.topic_id);
       return now ? `“${now}” → “${input.name}”` : `“${input.name}”`;

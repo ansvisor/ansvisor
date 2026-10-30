@@ -31,7 +31,7 @@ vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
 vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: vi.fn() }));
 vi.mock('@/lib/actions/prompt', () => ({ addTopicPrompts: vi.fn(), pauseBrandPrompts: vi.fn() }));
-vi.mock('@/lib/actions/topic', () => ({ addBrandTopic: vi.fn(), updateTopic: vi.fn() }));
+vi.mock('@/lib/actions/topic', () => ({ addBrandTopic: vi.fn(), renameBrandTopic: vi.fn() }));
 vi.mock('@/lib/actions/competitor', () => ({
   addCompetitors: vi.fn(),
   removeBrandCompetitor: vi.fn(),
@@ -113,7 +113,7 @@ const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { requestAccess } = await import('@/lib/actions/chat-access-requests');
-const { addTopicPrompts } = await import('@/lib/actions/prompt');
+const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
 const engine = await import('./engine');
 const { readRunEvents } = await import('./engine-store');
 const { runFromEvents } = await import('./run-state');
@@ -1255,6 +1255,27 @@ describe('the tracking setup (W2-06)', () => {
     await turn(ADMIN, 'Track these 60', 'full_auto');
     expect(addTopicPrompts).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('limit_reached');
+  });
+
+  it('pauses more than 10 prompts at once: from a card, within the run’s 50', async () => {
+    const twelve = Array.from(
+      { length: 12 },
+      (_, i) => `66666666-6666-4666-8666-0000000000${String(i).padStart(2, '0')}`,
+    );
+    vi.mocked(pauseBrandPrompts).mockResolvedValue({ ok: true, paused: twelve });
+    useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'pause_prompts', { brand_id: BRAND, prompt_ids: twelve })),
+        text('Paused 12.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Pause these 12', 'full_auto');
+    // More than 5: a card, Full auto too.
+    expect(runRow(runId).status).toBe('waiting');
+    expect(await approve(ADMIN, runId)).toMatchObject({ ok: true });
+    expect(pauseBrandPrompts).toHaveBeenCalledWith(BRAND, twelve);
+    expect(runRow(runId).status).toBe('done');
   });
 
   it('names on its card what a list or an id stands for, from the data', async () => {
