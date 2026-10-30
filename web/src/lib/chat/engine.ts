@@ -11,7 +11,7 @@ import type { Json } from '@/types/supabase';
 import type { UserRole } from '@/types';
 import { recordAccessDenied } from './access-log';
 import { approvalFor, type ActivityApproval } from './activity';
-import { reserveChatStep } from './budget';
+import { reserveChatStep, type ChatStepUsage } from './budget';
 import { buildDenial } from './denial';
 import {
   estimateInputTokens,
@@ -77,6 +77,14 @@ import {
   type ScopeUsed,
   type ScopedRead,
 } from './scope';
+import {
+  cacheKey,
+  cachePolicy,
+  dropCached,
+  readCached,
+  saveCached,
+  type CachedRead,
+} from './tool-cache';
 import { dataBlock, guardData, isUntrustedRead } from './untrusted';
 import { runLoggedWrite } from './write';
 
@@ -673,6 +681,7 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
   }
   const { budget } = reservation;
   const text = phase === 'write' ? new TextOut(rc, runFigures(rc)) : null;
+  const called = Date.now();
   try {
     const result = streamText({
       model: choice.model,
@@ -702,10 +711,7 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
       return { kind: 'ended' };
     }
     const [usage, response] = await Promise.all([result.usage, result.response]);
-    await budget.charge({
-      inputTokens: chargedInputTokens(usage),
-      outputTokens: usage.outputTokens,
-    });
+    await budget.charge(stepUsage(usage), Date.now() - called);
     const responseMessages = response.messages as ModelMessage[];
     return { kind: 'ok', toolCalls, responseMessages, answered: answeredIds(responseMessages) };
   } catch (err) {
@@ -791,18 +797,33 @@ function turnMessage(rc: RunContext, phase: ChatPhase): ModelMessage {
 }
 
 /**
- * The input tokens a step is charged: what it read, with a cache write's
- * 25% premium on top (Anthropic's 5-minute write is 1.25x the input price;
- * a cache read is charged in full for now, so a step is never charged less
- * than it cost). The hold before it already assumes no cache hit.
+ * What a step is charged for (CHAT-04 §D items 28–29): every input token,
+ * and of those the ones read from and written to the prompt cache, which
+ * the server prices at the cache's own rates (a read below the input price,
+ * a write above it; a model without a known cache price pays the full one,
+ * so a step is never charged less than it cost). The hold before it already
+ * assumes no cache hit. A provider that didn't report both counts sends
+ * none: the server then keeps the hold as the step's cost.
  */
-export function chargedInputTokens(usage: {
+export function stepUsage(usage: {
   inputTokens: number | undefined;
-  inputTokenDetails?: { cacheWriteTokens?: number | undefined };
-}): number | undefined {
-  if (typeof usage.inputTokens !== 'number') return undefined;
-  const written = usage.inputTokenDetails?.cacheWriteTokens ?? 0;
-  return usage.inputTokens + Math.ceil(Math.max(0, written) * 0.25);
+  outputTokens?: number | undefined;
+  inputTokenDetails?: {
+    cacheReadTokens?: number | undefined;
+    cacheWriteTokens?: number | undefined;
+  };
+}): ChatStepUsage {
+  const count = (n: number | undefined) =>
+    typeof n === 'number' && Number.isFinite(n) ? Math.max(0, n) : undefined;
+  const input = count(usage.inputTokens);
+  const output = count(usage.outputTokens);
+  if (input === undefined || output === undefined) return {};
+  const out: ChatStepUsage = { inputTokens: input, outputTokens: output };
+  const read = count(usage.inputTokenDetails?.cacheReadTokens);
+  const written = count(usage.inputTokenDetails?.cacheWriteTokens);
+  if (read) out.cacheReadTokens = read;
+  if (written) out.cacheWriteTokens = written;
+  return out;
 }
 
 /** The tools of a phase: reads only while reading; every offered row, and the explainer, while writing. */
@@ -1070,7 +1091,7 @@ async function handleCall(
     case 'deny':
       return result(call, await deny(rc, tool, ctx, facts, decision.denial, input), true);
     case 'run': {
-      if (tool.class === 'read') return readCall(rc, tool, call, input, ctx);
+      if (tool.class === 'read') return readCall(rc, tool, call, input, ctx, facts.brandId);
       // A change that runs without a card: Always, Full auto or the person's tick.
       const approval = approvalFor(decision);
       if (!approval || approval.kind === 'run') return result(call, { code: 'failed' }, true);
@@ -1363,11 +1384,16 @@ function toolContext(rc: RunContext, role: PrecedenceContext['role']): McpAuthCo
   };
 }
 
+/** About how many tokens a result of this many characters sends the model (about 4 to a token). */
+const tokensOf = (chars: number) => Math.ceil(chars / 4);
+
 /**
  * A read: scoped by the server first (scope.ts: its dates, the plan's
  * platforms, its rows), then its step, its rows and data date, and its
  * output cut to its row limit and the run's budget. A platform the plan
- * doesn't track isn't read: the model is told so (`not_on_plan`).
+ * doesn't track isn't read: the model is told so (`not_on_plan`). The same
+ * read earlier in this chat gives its kept result instead (tool-cache.ts),
+ * on the same step: the person sees the read either way.
  */
 async function readCall(
   rc: RunContext,
@@ -1375,6 +1401,7 @@ async function readCall(
   call: PendingCall,
   asked: Record<string, unknown>,
   ctx: PrecedenceContext | null,
+  brandId: string | null,
 ): Promise<CallOutcome> {
   const scoped = await scopeRead(tool, asked, {
     question: rc.progress.question,
@@ -1412,33 +1439,68 @@ async function readCall(
   });
   rc.sink.emit('step.started', { step: clientStep(row) });
   rc.progress.reads += 1;
-  const outcome = await runRead(rc, tool, input, rc.role);
-  const latencyMs = Date.now() - started;
-  if (!outcome.ok) {
-    row = await updateStep(row.id, {
-      status: rc.signal.aborted ? 'skipped' : 'error',
-      detail: rc.signal.aborted
-        ? t('step.stopped')
-        : outcome.timedOut
-          ? t('step.timedOut')
-          : t('step.readFailed'),
-      debug: { input, asked, error: outcome.error, latencyMs },
-    });
-    rc.sink.emit('step.finished', { step: clientStep(row) });
-    return result(call, { code: outcome.timedOut ? 'timeout' : 'failed' }, true);
-  }
-  // Outside text (§16a): the run is tainted; hidden text goes; an attempt to instruct is marked.
   const untrusted = isUntrustedRead(tool.name);
+
+  // The same read earlier in this chat (CHAT-04 item 9): its kept result,
+  // while the brand's data hasn't refreshed since.
+  const policy = cachePolicy(tool);
+  const key = policy
+    ? cacheKey({
+        tool: tool.name,
+        input,
+        brandId,
+        scope: scoped.used,
+        userId: rc.actor.userId,
+        role: rc.role,
+      })
+    : null;
+  const kept =
+    policy && key ? await readCached(rc.run.conversationId, tool.name, key, policy, brandId) : null;
+  let read: CachedRead;
+  let output: Json | undefined;
+  if (kept) {
+    read = kept;
+  } else {
+    const outcome = await runRead(rc, tool, input, rc.role);
+    if (!outcome.ok) {
+      const latencyMs = Date.now() - started;
+      row = await updateStep(row.id, {
+        status: rc.signal.aborted ? 'skipped' : 'error',
+        detail: rc.signal.aborted
+          ? t('step.stopped')
+          : outcome.timedOut
+            ? t('step.timedOut')
+            : t('step.readFailed'),
+        debug: { input, asked, error: outcome.error, latencyMs },
+        measure: { latencyMs },
+      });
+      rc.sink.emit('step.finished', { step: clientStep(row) });
+      return result(call, { code: outcome.timedOut ? 'timeout' : 'failed' }, true);
+    }
+    output = toJson(outcome.value);
+    // Outside text (§16a): hidden text goes; an attempt to instruct is marked.
+    const guarded = untrusted ? guardData(output) : { value: output, injection: false };
+    const capped = capRows(guarded.value, scoped.cap);
+    read = {
+      value: capped.value,
+      cut: capped.cut,
+      injection: guarded.injection,
+      rows: countRows(capped.value) ?? null,
+      dataAsOf: dataAsOfOf(output),
+    };
+    if (policy && key) {
+      await saveCached(rc.run.conversationId, tool.name, key, policy, brandId, read);
+    }
+  }
+  const latencyMs = Date.now() - started;
+  // Outside text (§16a): the run is tainted, kept or not.
   if (untrusted) rc.progress.tainted = true;
-  const output = toJson(outcome.value);
-  const guarded = untrusted ? guardData(output) : { value: output, injection: false };
-  if (guarded.injection) rc.progress.injection = true;
-  const capped = capRows(guarded.value, scoped.cap);
-  const rows = countRows(capped.value);
-  const asOf = dataAsOfOf(output);
+  if (read.injection) rc.progress.injection = true;
+  const rows = read.rows ?? undefined;
+  const asOf = read.dataAsOf;
   const room = Math.min(rc.budget.resultChars, rc.budget.dataChars - rc.progress.dataChars);
   const fitted = fitResult(
-    withScope(capped.value, scopeForModel(scope, scoped.used)),
+    withScope(read.value, scopeForModel(scope, scoped.used)),
     Math.max(500, room),
   );
   rc.progress.dataChars += fitted.chars;
@@ -1462,11 +1524,17 @@ async function readCall(
     debug: {
       input,
       asked,
-      output,
+      ...(kept ? { cacheHit: true } : { output }),
       latencyMs,
-      cut: capped.cut,
+      cut: read.cut,
       // For staff (CHAT-05 Data / API notes): the guardrail events of this read.
-      ...(guarded.injection ? { guardrails: ['injection_ignored'] } : {}),
+      ...(read.injection ? { guardrails: ['injection_ignored'] } : {}),
+    },
+    measure: {
+      latencyMs,
+      cacheHit: !!kept,
+      truncated: read.cut || fitted.cut,
+      resultTokens: tokensOf(fitted.chars),
     },
   });
   rc.sink.emit('step.finished', { step: clientStep(row) });
@@ -1523,6 +1591,7 @@ async function writeCall(
     rc.sink.emit('step.started', { step: clientStep(row) });
   }
   const stepId = (row as { id: string }).id;
+  const started = Date.now();
   const outcome = await runLoggedWrite({
     tool,
     input,
@@ -1566,6 +1635,7 @@ async function writeCall(
       status: 'error',
       detail: t('step.failed'),
       debug: { input, error: outcome.code === 'failed' ? outcome.reason : failed },
+      measure: { latencyMs: Date.now() - started },
     });
     rc.sink.emit('step.finished', { step: clientStep(row) });
     // An EXECUTE is never tried again by itself (§11b): the model is told it failed.
@@ -1573,12 +1643,15 @@ async function writeCall(
   }
 
   rc.progress.writes[tool.name] = (rc.progress.writes[tool.name] ?? 0) + 1;
+  // What the change touched is read again: the chat's kept results go (tool-cache.ts).
+  await dropCached(rc.run.conversationId);
   const auto = approval.kind === 'auto';
   row = await updateStep(stepId, {
     status: 'done',
     label: toolWords(tool, 'step'),
     detail: [target || null, auto ? t('step.auto') : null].filter(Boolean).join(' · ') || null,
     debug: { input, output: outcome.code === 'ok' ? outcome.output : null },
+    measure: { latencyMs: Date.now() - started },
   });
   rc.sink.emit('step.finished', { step: clientStep(row) });
   const output = outcome.code === 'ok' ? outcome.output : null;

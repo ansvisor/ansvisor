@@ -30,6 +30,8 @@ export interface FakeSupabase {
 interface Builder extends PromiseLike<Result> {
   select(columns?: string): Builder;
   insert(rows: Row | Row[]): Builder;
+  /** Inserts, or replaces the row with the same `onConflict` columns. */
+  upsert(rows: Row | Row[], options?: { onConflict?: string }): Builder;
   update(patch: Row): Builder;
   delete(): Builder;
   eq(column: string, value: unknown): Builder;
@@ -71,6 +73,7 @@ export function createFakeSupabase(): FakeSupabase {
     from(table) {
       let kind: 'select' | 'insert' | 'update' | 'delete' = 'select';
       let payload: Row | Row[] | null = null;
+      let conflict: string[] | null = null;
       let returning = false;
       const filters: Filter[] = [];
       let sort: { column: string; ascending: boolean } | null = null;
@@ -112,12 +115,17 @@ export function createFakeSupabase(): FakeSupabase {
           fake.tables[table] = after;
           return { data: returning ? patched.map((row) => ({ ...row })) : null, error: null };
         }
-        const added = (Array.isArray(payload) ? payload : [payload!]).map((row) => ({
-          id: fakeId(),
-          ...(fake.defaults[table]?.() ?? {}),
-          ...row,
-        }));
-        const after = [...rows(), ...added];
+        const added = (Array.isArray(payload) ? payload : [payload!]).map(
+          (row): Row => ({
+            id: fakeId(),
+            ...(fake.defaults[table]?.() ?? {}),
+            ...row,
+          }),
+        );
+        const kept = conflict
+          ? rows().filter((row) => !added.some((add) => conflict!.every((c) => row[c] === add[c])))
+          : rows();
+        const after = [...kept, ...added];
         if (added.some((row) => clash(row, after))) {
           return { data: null, error: { code: '23505', message: 'duplicate key' } };
         }
@@ -142,6 +150,12 @@ export function createFakeSupabase(): FakeSupabase {
         insert(rowsIn) {
           kind = 'insert';
           payload = rowsIn;
+          return builder;
+        },
+        upsert(rowsIn, options) {
+          kind = 'insert';
+          payload = rowsIn;
+          conflict = (options?.onConflict ?? 'id').split(',').map((c) => c.trim());
           return builder;
         },
         update(patch) {

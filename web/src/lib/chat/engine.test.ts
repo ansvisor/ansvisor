@@ -556,7 +556,7 @@ describe('the prompt, for the cache (W1-18)', () => {
     expect(JSON.stringify(read[0].content)).toContain('And now?');
   });
 
-  it("charges a cache write's premium on top of what the step read", async () => {
+  it("sends the prompt cache's reads and writes, and how long the call took, to be priced", async () => {
     useModels(
       [READY],
       [
@@ -576,8 +576,109 @@ describe('the prompt, for the cache (W1-18)', () => {
       ],
     );
     await turn(ADMIN, 'How are we doing?');
-    expect(holds.at(-1)!.charge).toHaveBeenCalledWith({ inputTokens: 1_145, outputTokens: 30 });
-    expect(engine.chargedInputTokens({ inputTokens: undefined })).toBeUndefined();
+    // The server prices the 1,000 read at the cache-read rate and the 100 written at the premium.
+    expect(holds.at(-1)!.charge).toHaveBeenCalledWith(
+      { inputTokens: 1_120, outputTokens: 30, cacheReadTokens: 1_000, cacheWriteTokens: 100 },
+      expect.any(Number),
+    );
+    // Without both counts, none: the hold stays as the step's cost.
+    expect(engine.stepUsage({ inputTokens: undefined, outputTokens: 3 })).toEqual({});
+    expect(engine.stepUsage({ inputTokens: 10, outputTokens: 3 })).toEqual({
+      inputTokens: 10,
+      outputTokens: 3,
+    });
+  });
+});
+
+describe("the chat's kept reads and each step's measure (W1-19)", () => {
+  const readCall = (name = 'read_visibility') =>
+    calls(toolCall('r1', name, { brand_id: BRAND, platform: 'chatgpt-web' }));
+
+  /** A turn in a chat already started. */
+  async function turnIn(conversationId: string, message: string, mode: Mode = 'auto') {
+    const started = await engine.startChatRun(ADMIN, { message, conversationId, mode });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    await engine.driveRun(ADMIN, started.runId);
+    return started.runId;
+  }
+  const conversationOf = (runId: string) => runRow(runId).conversation_id as string;
+
+  it('reads the same read once in a chat, on the same step, and measures each step for staff', async () => {
+    useModels([readCall(), READY], [text('Up 12%.')]);
+    const first = await turn(ADMIN, 'How is ChatGPT doing?');
+    useModels([readCall(), READY], [text('Still up 12%.')]);
+    const second = await turnIn(conversationOf(first), 'And on ChatGPT again?');
+
+    expect(fakes.readRun).toHaveBeenCalledTimes(1);
+    const [a, b] = [stepsOf(first)[0], stepsOf(second)[0]];
+    // The person sees the same read both times.
+    for (const key of ['kind', 'status', 'label', 'detail', 'row_count', 'data_as_of']) {
+      expect(b[key]).toEqual(a[key]);
+    }
+    expect(a).toMatchObject({ cache_hit: false, truncated: false });
+    expect(b).toMatchObject({ cache_hit: true, truncated: false });
+    for (const step of [a, b]) {
+      expect(step.latency_ms).toEqual(expect.any(Number));
+      expect(step.result_tokens).toBeGreaterThan(0);
+    }
+    // The writer read the same numbers.
+    const events = [...(await eventsOf(first)), ...(await eventsOf(second))];
+    expect(JSON.stringify(events)).not.toMatch(/cache|latency|result_tokens|truncated/i);
+    expectClean(events);
+  });
+
+  it('reads again in another chat', async () => {
+    useModels([readCall(), READY], [text('Ok.')]);
+    await turn(ADMIN, 'How is ChatGPT doing?');
+    useModels([readCall(), READY], [text('Ok.')]);
+    await turn(ADMIN, 'How is ChatGPT doing?');
+    expect(fakes.readRun).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads tracking data again once the brand's tracking ran since", async () => {
+    useModels([readCall('get_visibility_summary'), READY], [text('Ok.')]);
+    const first = await turn(ADMIN, 'How is ChatGPT doing?');
+    useModels([readCall('get_visibility_summary'), READY], [text('Ok.')]);
+    await turnIn(conversationOf(first), 'Again?');
+    expect(fakes.readRun).toHaveBeenCalledTimes(1);
+
+    db.tables.tracking_runs = [
+      { id: 'run-1', brand_id: BRAND, completed_at: new Date(Date.now() + 60_000).toISOString() },
+    ];
+    useModels([readCall('get_visibility_summary'), READY], [text('Ok.')]);
+    const third = await turnIn(conversationOf(first), 'And now?');
+    expect(fakes.readRun).toHaveBeenCalledTimes(2);
+    expect(stepsOf(third)[0].cache_hit).toBe(false);
+  });
+
+  it('reads again after a change the chat made', async () => {
+    const draft = calls(
+      toolCall('w1', 'create_draft', {
+        brand_id: BRAND,
+        title: 'Pricing FAQ',
+        page_type: 'docs_faq',
+        source: { kind: 'content' },
+      }),
+    );
+    useModels([readCall('get_visibility_summary'), READY], [draft, text('Saved.')]);
+    const first = await turn(ADMIN, 'Draft a pricing FAQ', 'full_auto');
+    expect(createContentDraft).toHaveBeenCalledTimes(1);
+    expect(db.tables.chat_tool_cache ?? []).toHaveLength(0);
+    useModels([readCall('get_visibility_summary'), READY], [text('Ok.')]);
+    await turnIn(conversationOf(first), 'How is ChatGPT doing now?', 'full_auto');
+    expect(fakes.readRun).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads as usual when the kept results can’t be read', async () => {
+    db.failures.chat_tool_cache = { message: 'relation does not exist' };
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    useModels([readCall(), READY], [text('Ok.')]);
+    const first = await turn(ADMIN, 'How is ChatGPT doing?');
+    useModels([readCall(), READY], [text('Ok.')]);
+    const second = await turnIn(conversationOf(first), 'Again?');
+    expect(fakes.readRun).toHaveBeenCalledTimes(2);
+    expect(runRow(second).status).toBe('done');
+    vi.mocked(console.error).mockRestore();
   });
 });
 
