@@ -209,12 +209,19 @@ export function sseResponse(
 /**
  * Reads a stream of Server-Sent Events into Chat events, for the browser:
  * every `data:` line that holds an event, in order. Unknown or broken lines
- * are skipped.
+ * are skipped. `signal` stops it: the stream is cancelled and it ends (the
+ * page that read it went away).
  */
-export async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator<ChatEvent> {
+export async function* readSse(
+  body: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
+): AsyncGenerator<ChatEvent> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  const cancel = () => void reader.cancel().catch(() => {});
+  signal?.addEventListener('abort', cancel, { once: true });
+  if (signal?.aborted) cancel();
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -240,6 +247,7 @@ export async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator
       }
     }
   } finally {
+    signal?.removeEventListener('abort', cancel);
     reader.releaseLock();
   }
 }

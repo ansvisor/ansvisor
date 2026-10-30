@@ -3372,7 +3372,8 @@
       "rows": "{count, plural, one {# row} other {# rows}}",
       "seconds": "{s}s",
       "minutes": "{m}m {s}s",
-      "now": "Step {n}: {label}"
+      "now": "Step {n}: {label}",
+      "reconnecting": "Reconnecting…"
     },
     "planCard": {
       "head": "Here’s my plan",
@@ -3624,6 +3625,7 @@
       "readFailed": "Couldn't read this",
       "timedOut": "Timed out",
       "limit": "Over this run's limit",
+      "pausedCap": "Stopped at the AI limit",
       "unknown": "Worked on a step",
       "checkedFacts": "Checked facts",
       "factsMatch": "Every figure matches the data",
@@ -3653,6 +3655,7 @@
       "reconnecting": "Reconnecting…"
     },
     "dataUsed": "Data used",
+    "retry": "Retry",
     "preview": {
       "title": "Live answer",
       "note": "Play runs the mockup's answer a step at a time; nothing is read or sent.",
@@ -3769,7 +3772,35 @@
     "sendFailed": "Couldn't send that. Try again.",
     "answerFailed": "Couldn't save your answer. Try again.",
     "pausedCap": "You've used this month's AI limit, so Chat stopped here.",
+    "connectionLost": "Lost the connection to Chat. It keeps working: reload the page to see where it is.",
     "untitledExport": "Chat"
+  },
+  "chatDebug": {
+    "title": "Debug · staff only",
+    "loading": "Reading the debug record…",
+    "failed": "Couldn't read the debug record.",
+    "run": "Run · {status} · model {model} · effort {effort}",
+    "runError": "Error code: {code}",
+    "noSteps": "No steps.",
+    "step": "Step {n} · {label}",
+    "tool": "Tool",
+    "noTool": "none",
+    "latency": "{ms} ms",
+    "cacheHit": "Cache hit",
+    "cacheMiss": "No cache hit",
+    "cutToBudget": "Cut to the run's budget",
+    "resultTokens": "{tokens} result tokens",
+    "input": "Input",
+    "output": "Output",
+    "outputCut": "First 20 KB of {kb} KB",
+    "downloadFull": "Download full",
+    "error": "Error",
+    "modelCalls": "Model calls",
+    "noModelCalls": "No model calls recorded.",
+    "modelCall": "{model} · {input} in / {output} out tokens · cache {cacheRead} read / {cacheWrite} write · ${cost} · {latency}",
+    "forStep": "for step {n}",
+    "total": "Total · {input} in / {output} out tokens · ${cost}",
+    "unknown": "–"
   },
   "chatAnswer": {
     "label": "Answer actions",
@@ -4032,6 +4063,8 @@
       "exported": "Downloaded {name}",
       "exportFailed": "Couldn't export the chat. Try again.",
       "activity": "Activity log",
+      "debug": "Debug",
+      "debugNote": "Staff only",
       "pinned": "Pinned",
       "unpinned": "Unpinned",
       "renamed": "Renamed",
