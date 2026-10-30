@@ -927,6 +927,9 @@ describe('reading', () => {
     });
     db.tables.chat_conversations.push({
       id: 'cccccccc-0000-4000-8000-000000000009',
+      organization_id: ORG,
+      user_id: PEOPLE.manager,
+      shared_at: null,
       agent_run_id: 'dddddddd-0000-4000-8000-000000000001',
     });
     const detail = await agents.readAgent(await ctxOf(PEOPLE.manager), id, NOW);
@@ -969,10 +972,63 @@ describe('reading', () => {
     });
     db.tables.chat_conversations.push({
       id: 'cccccccc-0000-4000-8000-000000000010',
+      organization_id: ORG,
+      user_id: PEOPLE.manager,
+      shared_at: null,
       agent_run_id: 'dddddddd-0000-4000-8000-000000000002',
       deleted_at: '2026-10-28T10:00:00.000Z',
     });
     const runsOf = await agents.listAgentRuns(await ctxOf(PEOPLE.manager), id, 50);
     expect(runsOf?.map((run) => run.chatId)).toEqual([null]);
+  });
+
+  it("links a run's chat only for those who can open it: its author, or anyone once shared", async () => {
+    const { id } = await create(PEOPLE.manager, { visibility: 'workspace' });
+    const run = (n: number) => ({
+      id: `dddddddd-0000-4000-8000-00000000002${n}`,
+      organization_id: ORG,
+      agent_id: id,
+      agent_version: 1,
+      brand_id: BRAND,
+      trigger_kind: 'manual',
+      acting_user_id: PEOPLE.manager,
+      status: 'done',
+      max_share: 0.1,
+      usage_share: 0.01,
+      queued_at: `2026-10-28T0${n}:00:00.000Z`,
+    });
+    db.tables.chat_agent_runs.push(run(1), run(2));
+    db.tables.chat_conversations.push(
+      {
+        id: 'cccccccc-0000-4000-8000-000000000021',
+        organization_id: ORG,
+        user_id: PEOPLE.manager,
+        shared_at: null,
+        agent_run_id: run(1).id,
+      },
+      {
+        id: 'cccccccc-0000-4000-8000-000000000022',
+        organization_id: ORG,
+        user_id: PEOPLE.manager,
+        shared_at: '2026-10-28T03:00:00.000Z',
+        agent_run_id: run(2).id,
+      },
+    );
+    const chatsFor = async (person: string) =>
+      (await agents.listAgentRuns(await ctxOf(person), id, 50))?.map((r) => r.chatId);
+    // Newest first: the shared chat, then the private one.
+    expect(await chatsFor(PEOPLE.manager)).toEqual([
+      'cccccccc-0000-4000-8000-000000000022',
+      'cccccccc-0000-4000-8000-000000000021',
+    ]);
+    // The chat page opens only its author's own chats and shared ones: no link to a private one.
+    for (const person of [PEOPLE.admin, PEOPLE.analyst]) {
+      expect(await chatsFor(person)).toEqual(['cccccccc-0000-4000-8000-000000000022', null]);
+    }
+    const detail = await agents.readAgent(await ctxOf(PEOPLE.analyst), id, NOW);
+    expect(detail?.recentRuns.map((r) => r.chatId)).toEqual([
+      'cccccccc-0000-4000-8000-000000000022',
+      null,
+    ]);
   });
 });
