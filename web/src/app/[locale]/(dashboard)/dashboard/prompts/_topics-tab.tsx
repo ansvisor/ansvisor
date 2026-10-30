@@ -14,6 +14,7 @@ import {
   type TopicOverviewRow,
 } from '@/lib/actions/topic';
 import { TOPIC_NAME_CHARS } from '@/lib/topic-names';
+import { readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { customUtcWindow } from '@/lib/topic-trend';
 import type { PromptRange, PromptRangePreset } from '@/config/prompt-options';
 import { TopicSuggestionsCard } from './_topic-suggestions-card';
@@ -263,6 +264,8 @@ export function TopicsTab({
   customFrom,
   customTo,
   onLoaded,
+  openAddTopic: addTopicRequested = false,
+  onAddTopicOpened,
 }: {
   /**
    * The Prompts page's place for a tab's buttons, beside the tabs: Add Topic,
@@ -277,6 +280,13 @@ export function TopicsTab({
   customTo: string;
   /** Called once the first read has finished, so the page can load the rest. */
   onLoaded?: () => void;
+  /**
+   * The page asks for Add Topic: "Add a topic" in Add prompt, Suggestions or
+   * Query Fan-out on a brand without topics switched to this tab. It opens
+   * once, and `onAddTopicOpened` hands the request back.
+   */
+  openAddTopic?: boolean;
+  onAddTopicOpened?: () => void;
 }) {
   const t = useTranslations('topics');
   const common = useTranslations('common');
@@ -363,6 +373,25 @@ export function TopicsTab({
       onLoadedRef.current?.();
     }
   }, [activeBrandId, range, rangePreset, customFrom, customTo, t]);
+
+  // "Add a topic" from a prompt flow on a brand without one (?new=1) opens
+  // Add Topic once: closed, it doesn't open again on a reload. Read-only, it
+  // opens the upgrade dialog, as the button does. Before the first read, so
+  // the URL is rewritten while no server action is in flight.
+  useEffect(() => {
+    if (readUrlParam('new') !== '1') return;
+    writeUrlParams({ new: null });
+    if (canManage) openAddTopic();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one read of the URL after mount
+  }, []);
+
+  // The same asked for by the page, from one of its own tabs.
+  useEffect(() => {
+    if (!addTopicRequested) return;
+    onAddTopicOpened?.();
+    if (canManage) openAddTopic();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per request
+  }, [addTopicRequested]);
 
   useEffect(() => {
     loadData();

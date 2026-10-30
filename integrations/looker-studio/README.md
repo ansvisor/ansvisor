@@ -11,7 +11,7 @@ Brings the [Public Metrics API](https://github.com/ansvisor/ansvisor/blob/main/d
 | Citations — Top Domains    | domain, source category, citations, results citing, usage %                      | `/api/v1/citations`             |
 | AI Traffic by Platform     | platform, visits                                                                 | `/api/v1/ai-traffic`            |
 
-Auth is an Ansvisor API key (dashboard → **Settings → API Keys**). The report-level date range flows into every request; responses are cached for 5 minutes per user.
+Auth is an Ansvisor API key (dashboard → **Settings → MCP & API Keys**). The report-level date range flows into every request; responses are cached for 5 minutes per user.
 
 ## Deploying (maintainers)
 

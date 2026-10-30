@@ -13,7 +13,6 @@ import {
   HEADING_RULE,
   LINK_RULE,
   MAX_AGENT_SUGGESTIONS,
-  PLACEHOLDER_RULE,
   draftPassages,
   hasOpenSuggestions,
   keepSuggestions,
@@ -28,10 +27,24 @@ import {
   WRITING_GUARDRAIL,
   briefForWriter,
   briefRulesOn,
+  contentReadModelId,
   contentWriteModelId,
   rebuildSources,
 } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import {
+  RESEARCH_RULE,
+  applyEdits,
+  editHtml,
+  linkFacts,
+  lookUpFacts,
+  lookUpSuggestionFacts,
+  pageOwn,
+  settler,
+  sweepHtml,
+  sweeper,
+  withFactLinks,
+} from './content-research.js';
 import { draftLanguage } from './content-language.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { insertProductGrid } from './shopping-blocks.js';
@@ -177,8 +190,8 @@ How to write:
 - Short paragraphs and plain sentences. Lists where a reader compares or follows steps.
 - Follow every rule listed, and the writer's own rules.
 - For each fan-out a rule names, use its words, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq.
-- Use only facts from the brand, the brief and your data. Never invent numbers, prices, dates, names, customers, sources or quotes. When the page needs a fact you don't have, write a placeholder in square brackets, e.g. [price], [figure, source, year]. A number that isn't in them becomes a placeholder.
-${PLACEHOLDER_RULE}
+- Use only facts from the brand, the brief and your data, and the ones you ask to have looked up. Never invent numbers, prices, dates, names, customers, sources or quotes.
+${RESEARCH_RULE}
 - Plain text in every field: no HTML, no Markdown.
 - Write in the language asked for.`;
 
@@ -186,7 +199,7 @@ ${PLACEHOLDER_RULE}
  * With the brief rules (2026) on: the brief's section plans followed, headings
  * kept short (the editor's limits), and the guardrail.
  */
-const WRITE_RULES_2026 = `- Follow the brief's section plans when it has them: each section's answer first, its format, the facts it names (a placeholder until a source is found), the names as written.
+const WRITE_RULES_2026 = `- Follow the brief's section plans when it has them: each section's answer first, its format, the facts it names (from your data, else looked up with {{find: …}}), the names as written.
 - Headings are one short line: the title up to ${HEADING_LIMITS.h1} characters, each section heading about 8 to 15 words (a fan-out's own words, when shorter) and under ${HEADING_LIMITS.other} characters. Never put a sentence or an answer in a heading.
 ${WRITING_GUARDRAIL}`;
 
@@ -212,8 +225,8 @@ ${LINK_RULE}
 ${FANOUT_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Put the keys of the rules a change meets in "rules" (none when it meets none).
-- Use only facts from the page, the brand and your data. Never invent numbers, prices, dates, names, sources or quotes; write a placeholder in square brackets instead, e.g. [figure, source, year].
-${PLACEHOLDER_RULE}
+- Use only facts from the page, the brand and your data, and the ones you ask to have looked up. Never invent numbers, prices, dates, names, sources or quotes.
+${RESEARCH_RULE}
 ${SOURCES_RULE}
 ${ATTRIBUTION_RULE}
 - Keep the page's voice. The most useful changes first, at most ${MAX_AGENT_SUGGESTIONS}.
@@ -282,6 +295,30 @@ const list = (items) => (items.length ? items.map((item) => `- ${item}`).join('\
 export function sourcedPage(page, known, people = knownPeople()) {
   const fix = (text, heading = false) =>
     guardPeople(placeholderNumbers(stripSourceIds(text), known), people, { heading }).text;
+  const heading = (text) => fix(text, true);
+  return {
+    ...page,
+    title: heading(page.title),
+    intro: page.intro.map((text) => fix(text)),
+    sections: page.sections.map((section) => ({
+      ...section,
+      heading: heading(section.heading),
+      paragraphs: section.paragraphs.map((text) => fix(text)),
+      bullets: section.bullets.map((text) => fix(text)),
+    })),
+    faqHeading: heading(page.faqHeading),
+    faq: page.faq.map((item) => ({ question: heading(item.question), answer: fix(item.answer) })),
+  };
+}
+
+/**
+ * A written page with `editsFor(text, heading)`'s edits ({ start, end,
+ * text }) made in each of its texts, in order: the title, the intro, each
+ * section's heading, paragraphs and list, the FAQ's heading, questions and
+ * answers (content-research.js lookUpFacts, settler).
+ */
+export function editPage(page, editsFor) {
+  const fix = (text, heading = false) => applyEdits(text, editsFor(String(text ?? ''), heading));
   const heading = (text) => fix(text, true);
   return {
     ...page,
@@ -666,6 +703,7 @@ async function letGo(draft) {
  */
 async function rewritePage({
   attributable,
+  language,
   draft,
   shoppingPath,
   brand,
@@ -729,16 +767,37 @@ async function rewritePage({
     rewriteLinks(draft.body_html, linkAllowList(targets)),
     { h1Kept: page.h1Token !== null, originalH1: page.h1 },
   );
-  const { html: restored, missing } = restoreKept(cleaned, page.kept, {
+  // The facts it asked for, and the figures it wrote with no source, looked
+  // up on the web and written in with their links, or left for the person
+  // (content-research.js). Its kept lines are never read, nor its shopping
+  // path's products' specs.
+  const looked = await lookUpFacts({
+    map: (editsFor) => editHtml(cleaned, editsFor),
+    known,
+    own: pageOwn(draft.body_html),
+    products: shoppingGiven(shoppingPath).names,
+    orgId: brand.organization_id,
+    draftId: draft.id,
+    modelId: contentReadModelId(),
+    run,
+    context: { brand: brand.name, title: draft.title, language: getLanguageName(language) },
+  });
+  // No number without a source (CE-033): one nobody found is the person's
+  // to fill, as a fact only the brand has; a marker left broken goes with
+  // its sentence, in code or an attribute on its own (sweeper, sweepHtml).
+  const settled = editHtml(
+    editHtml(placeholderNumbersInHtml(looked.page, known), settler(looked.own, looked.stats)),
+    sweeper(looked.own, looked.stats),
+  );
+  logger.info({ draftId: draft.id, ...looked.stats }, '[content-writer] facts settled');
+  const linked = linkFacts(sweepHtml(settled, looked.own), looked.links);
+  const { html, missing } = restoreKept(linked, page.kept, {
     word: page.word,
     h1Token: page.h1Token,
   });
   if (missing.length) {
     throw new Error(`The rewrite left out ${missing.length} kept block(s)`);
   }
-  // No number without a source: one the page, the brand, the brief or the
-  // data doesn't have becomes a placeholder (CE-033).
-  const html = placeholderNumbersInHtml(restored, known);
   if (!textLength(html)) throw new Error('The agent left no page to review');
   if (html.length > MAX_PAGE_HTML) throw new Error('The rewritten page is too long to keep');
   // A batch that landed during the run stays the one to decide.
@@ -863,7 +922,7 @@ async function cutToLength({ answer, page, length, brand, draft, model, modelId,
 function cutPrompt({ html, page, total, length, max }) {
   return `Your rewrite below is about ${total} characters of text, ${page.keptChars} of them in kept blocks, which count toward Length. Its Length is ${length} characters, up to ${max}. Cut it to about ${length}.
 
-Cut repetition, filler, long examples and the least useful detail first. Keep the H1 and every heading, a short answer under each heading, every [[${page.word} n]] line exactly as it is and on its own, the links on their words, the facts and any placeholders in square brackets. Add nothing new. Return the whole page.
+Cut repetition, filler, long examples and the least useful detail first. Keep the H1 and every heading, a short answer under each heading, every [[${page.word} n]] line exactly as it is and on its own, the links on their words, the facts, each {{find: …}} and {{ask: …}} exactly as it is, and any placeholders in square brackets. Add nothing new. Return the whole page.
 
 ${html}
 
@@ -1035,6 +1094,7 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
   if (rewrite) {
     return await rewritePage({
       attributable,
+      language,
       draft,
       shoppingPath,
       brand,
@@ -1070,8 +1130,27 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
     );
     await budget.charge(usage);
     await advanceRun(run, 3);
-    // No number without a source: a placeholder where one had none.
-    const written = sourcedPage(object, knownInPage, people);
+    // The facts it asked for, and the figures it wrote with no source,
+    // looked up on the web and written in with their links, or left for the
+    // person (content-research.js); never its shopping path's products' specs.
+    const looked = await lookUpFacts({
+      map: (editsFor) => editPage(object, editsFor),
+      known: knownInPage,
+      own: pageOwn(draft.body_html),
+      products: shopping.names,
+      orgId: brand.organization_id,
+      draftId: draft.id,
+      modelId: contentReadModelId(),
+      run,
+      context: { brand: brand.name, title: draft.title, language: getLanguageName(language) },
+    });
+    // No number without a source (CE-033): one nobody found is the person's
+    // to fill, as a fact only the brand has; a marker left broken goes.
+    const written = editPage(
+      editPage(sourcedPage(looked.page, knownInPage, people), settler(looked.own, looked.stats)),
+      sweeper(looked.own, looked.stats),
+    );
+    logger.info({ draftId: draft.id, ...looked.stats }, '[content-writer] facts settled');
     // The title column as the H1 reads it: a capital first (headingCase).
     const title = headingCase(clean(written.title).slice(0, 300), language) || draft.title;
     // Stopped meanwhile: the page stays as it was, and History with it.
@@ -1092,7 +1171,10 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
         // The shopping path's names it wrote, linked (shopping-links.js), and
         // its products as a grid where the page names them most (shopping-blocks.js).
         body_html: insertProductGrid(
-          linkShoppingPath(renderPage({ ...written, title }, { language }), shoppingPath).html,
+          linkShoppingPath(
+            linkFacts(renderPage({ ...written, title }, { language }), looked.links),
+            shoppingPath,
+          ).html,
           shoppingPath && { ...shoppingPath, pageType: draft.page_type },
         ),
         status: 'in_review',
@@ -1142,12 +1224,26 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
   );
   await budget.charge(usage);
   await advanceRun(run, 3);
+  // The facts it asked for, and the figures it wrote with no source, looked
+  // up (content-research.js); its data's own figures are its sources'.
+  const looked = await lookUpSuggestionFacts({
+    suggestions: object.suggestions,
+    known: knownInPage,
+    own: pageOwn(draft.body_html),
+    products: shopping.names,
+    orgId: brand.organization_id,
+    draftId: draft.id,
+    modelId: contentReadModelId(),
+    run,
+    context: { brand: brand.name, title: draft.title, language: getLanguageName(language) },
+  });
+  for (const value of looked.learned) known.add(value);
   const rows = keepSuggestions(
-    object.suggestions,
+    looked.suggestions,
     passages,
     lockedKeys,
     ruleKeys,
-    linkAllowList(targets),
+    withFactLinks(linkAllowList(targets), looked.links),
     { numbered, known, people, attributable, banned: bannedWordsOf(input.rules) },
   );
   // Stopped meanwhile: nothing it wrote is kept.
