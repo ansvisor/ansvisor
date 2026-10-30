@@ -6,6 +6,7 @@ import messages from '../../../messages/en.json';
 import type { ActionItem } from '@/lib/actions/action-center';
 import { ActionTable } from './action-table';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { ChatPanelContext, type ChatPanelState } from '@/components/chat/panel/chat-panel-context';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -211,5 +212,33 @@ describe('ActionTable assignee', () => {
       ],
     });
     expect(assigneeCell().textContent).toBe('AK');
+  });
+});
+
+describe('ActionTable and Chat’s side panel (W1-08)', () => {
+  it('asks about a task from its row, without opening the task', () => {
+    const ask = vi.fn();
+    act(() => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <ChatPanelContext.Provider value={{ available: true, ask } as unknown as ChatPanelState}>
+            <ActionTable actions={[action]} onSelect={onSelect} />
+          </ChatPanelContext.Provider>
+        </NextIntlClientProvider>,
+      );
+    });
+    const icon = container.querySelector<HTMLButtonElement>('[data-action="page.askAboutThis"]')!;
+    act(() => icon.click());
+    expect(ask).toHaveBeenCalledExactlyOnceWith({
+      type: 'task',
+      id: 'a1',
+      label: expect.any(String),
+    });
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('has no Ask about this without the panel', () => {
+    render();
+    expect(container.querySelector('[data-action="page.askAboutThis"]')).toBeNull();
   });
 });

@@ -37,9 +37,9 @@ At the top of the panel, start a **New chat**, open a recent one from **Chat his
 
 The box in the panel starts with chips for what you have on screen: the page, your brand, the date range and the filters you picked. Chat takes them as the scope of your question. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.
 
-An empty panel offers a few questions about the page. Click one to put it in the box, then edit it or send it.
+An empty panel offers a few questions about the page, some from what the page shows, such as the platform that moved most. Click one to put it in the box, then edit it or send it.
 
-On charts and tables, the speech bubble icon next to the title opens the panel with that chart or table attached, so you can ask about it directly. Mentions & Sentiment has them first; more pages follow.
+The speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Brand Visibility, Mentions & Sentiment, Citations, AI Referral Traffic, Prompts and Action Center.
 
 ## Chats in the panel
 

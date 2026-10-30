@@ -3693,6 +3693,24 @@
     "historyFailed": "Couldn't load your chats. Try again in a moment.",
     "allChats": "All chats",
     "loading": "Opening the chat",
+    "suggest": {
+      "actions": "Turn this page into actions",
+      "visibilityDrop": "Why did our visibility drop on {platform}?",
+      "visibilityRise": "Why did our visibility rise on {platform}?",
+      "competitorGained": "Which competitor gained share of voice this month?",
+      "citedMost": "Why does AI cite {domain} most?",
+      "citeRivals": "Which sources cite our competitors but not us?",
+      "actionHow": "How do I finish “{title}”?",
+      "actionsImpact": "Which open actions will move our visibility most?",
+      "actionsWeek": "Plan this week's actions for me",
+      "promptUnseen": "Why don't we show up for “{prompt}”?",
+      "promptsNext": "Which prompts should we track next?",
+      "trafficDrop": "Why did visits from {platform} drop?",
+      "trafficRise": "Why did visits from {platform} rise?",
+      "trafficPages": "Which pages do AI visitors land on, and what do they do there?",
+      "opportunityStart": "Help me start on “{title}”",
+      "opportunitiesFirst": "Which content opportunities should we do first?"
+    },
     "range": {
       "day": "Last 24 hours",
       "days": "Last {days} days",
@@ -8120,6 +8138,10 @@
     "newSignalGainLost": "Completed earlier, but the gain did not hold: visibility on these prompts was {after}% after the work and is {now}% now."
   },
   "traffic": {
+    "chat": {
+      "platformsTable": "Referrals by Platform",
+      "pagesTable": "Top Landing Pages"
+    },
     "loadingRange": "Loading the selected range",
     "title": "AI Traffic Analytics",
     "description": "Track which AI bots are crawling your website.",

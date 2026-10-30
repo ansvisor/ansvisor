@@ -120,6 +120,9 @@ import {
 } from '@/lib/prompt-position-summary';
 import { mentionRateLabel } from '@/lib/prompt-improve';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel } from '@/lib/chat/page-context';
 import {
   startPromptVolumeAnalysis,
   getVolumeAnalysisStatus,
@@ -1312,6 +1315,8 @@ export default function PromptsPage() {
   const tNav = useTranslations('nav');
   const tPrompts = useTranslations('prompts');
   const tVolumes = useTranslations('prompts.volumeInsights');
+  const tChat = useTranslations('chatPanel.suggest');
+  const tChatRange = useTranslations('chatPanel.range');
   // One method note per table: these tables list every analyzed prompt.
   const volumeTableNote = useMemo(() => createEstimateNoteHandle(), []);
   const opportunityTableNote = useMemo(() => createEstimateNoteHandle(), []);
@@ -1898,6 +1903,34 @@ export default function PromptsPage() {
     estimateByPromptId,
     rangePreset,
   ]);
+
+  // Chat's side panel sees the page (W1-08): its range and location, and a
+  // tracked prompt the brand doesn't show up for (the one asked most).
+  const unseen = allPrompts
+    .filter((prompt) => (visibility[prompt.id]?.runs ?? 0) > 0)
+    .filter((prompt) => visibility[prompt.id].visibleRuns === 0)
+    .sort((a, b) => visibility[b.id].runs - visibility[a.id].runs)[0];
+  useChatPageContext(
+    activeBrandId
+      ? {
+          dateRange: {
+            from: rangePreset === 'custom' ? customFrom : rangePreset,
+            to: rangePreset === 'custom' ? customTo : null,
+            label: rangeChipLabel(rangePreset, { from: customFrom, to: customTo }, (key, values) =>
+              tChatRange(key, values),
+            ),
+          },
+          filters: regionFilter
+            ? [{ key: 'region', label: formatRegionDisplay(regionFilter), value: regionFilter }]
+            : [],
+          suggestions: [
+            ...(unseen ? [tChat('promptUnseen', { prompt: unseen.text })] : []),
+            tChat('promptsNext'),
+            tChat('actions'),
+          ],
+        }
+      : null,
+  );
 
   if (!activeBrandId) {
     return (
@@ -4261,6 +4294,10 @@ function AllPromptsTab({
                               className="line-clamp-2 transition-colors hover:text-primary hover:underline"
                             />
                           }
+                        />
+                        <AskAboutThis
+                          reference={{ type: 'prompt', id: p.id, label: p.text }}
+                          className="-mt-0.5 shrink-0"
                         />
                       </div>
                     </TableCell>

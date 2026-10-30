@@ -130,6 +130,7 @@ vi.mock('@/components/getting-started/step-card', () => ({
 }));
 
 const { default: ActionCenterActionsPage } = await import('./page');
+const { ChatPageSetterContext } = await import('@/components/chat/panel/chat-panel-context');
 
 let container: HTMLDivElement;
 let root: Root;
@@ -489,5 +490,33 @@ describe('starting and skipping Getting started', () => {
     expect(startGettingStarted).toHaveBeenCalledWith('brand-id');
     expect(toast.success).toHaveBeenCalledWith('secondBrand.ran');
     expect(steps()).not.toBeNull();
+  });
+});
+
+describe('what Chat’s side panel sees (W1-08)', () => {
+  it('tells the panel its filters, questions and the actions in view', async () => {
+    const setPage = vi.fn();
+    await act(async () =>
+      root.render(
+        <ChatPageSetterContext.Provider value={setPage}>
+          <UpgradeDialogContext.Provider
+            value={{ isLocked: false, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <ActionCenterActionsPage />
+          </UpgradeDialogContext.Provider>
+        </ChatPageSetterContext.Provider>,
+      ),
+    );
+    const page = setPage.mock.lastCall![0];
+    expect(page).toMatchObject({
+      pageName: 'title',
+      filters: [],
+      referenceables: [{ type: 'task', id: action.id }],
+    });
+    expect(page.suggestions).toEqual(expect.arrayContaining(['actionsImpact', 'actionsWeek']));
+    // Leaving the page takes it back.
+    act(() => root.unmount());
+    expect(setPage).toHaveBeenLastCalledWith(null);
+    root = createRoot(container);
   });
 });
