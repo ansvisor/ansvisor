@@ -5,10 +5,13 @@ import { stripe, priceIdFor } from '@/lib/stripe';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { periodEndIso } from '@/lib/billing/period-end';
 import { planChange, planRequestSchema, type BillingInterval } from '@/lib/billing/plan-purchase';
+import { planItemOf } from '@/lib/billing/add-ons';
 
 type SubscriptionItem = {
   id: string;
   current_period_end?: number;
+  // A storage pack's item names its purchase here (lib/billing/add-ons.ts).
+  metadata?: Record<string, string> | null;
   price: {
     unit_amount: number | null;
     recurring: { interval: string } | null;
@@ -82,7 +85,7 @@ export async function GET() {
       org.stripe_subscription_id as string,
     )) as unknown as SubscriptionRaw;
 
-    const item = sub.items.data[0];
+    const item = planItemOf(sub.items.data);
     const price = item?.price;
 
     return NextResponse.json({
@@ -102,15 +105,15 @@ export async function GET() {
   }
 }
 
-/** The subscription's billing period, from its first item's price. */
+/** The subscription's billing period, from its plan item's price. */
 function intervalOf(sub: SubscriptionRaw): BillingInterval | null {
-  const interval = sub.items.data[0]?.price?.recurring?.interval;
+  const interval = planItemOf(sub.items.data)?.price?.recurring?.interval;
   return interval === 'month' || interval === 'year' ? interval : null;
 }
 
 /** The subscription as GET returns it, after a change. */
 function subscriptionBody(planId: string, sub: SubscriptionRaw) {
-  const price = sub.items.data[0]?.price;
+  const price = planItemOf(sub.items.data)?.price;
   return {
     planId,
     status: sub.status,
@@ -173,7 +176,8 @@ export async function PATCH(req: NextRequest) {
     const currentSub = (await stripe.subscriptions.retrieve(
       subscriptionId,
     )) as unknown as SubscriptionRaw;
-    const itemId = currentSub.items.data[0]?.id;
+    // The plan's item: a storage pack's (CHAT-18) stays as it is.
+    const itemId = planItemOf(currentSub.items.data)?.id;
 
     if (!itemId) {
       return NextResponse.json({ error: 'Subscription item not found' }, { status: 400 });
