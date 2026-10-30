@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FakeSupabase } from './testing/fake-supabase';
 import {
   BRAND,
+  OPPORTUNITY,
   ORG,
   OTHER_ORG,
   PEOPLE,
@@ -103,6 +104,7 @@ const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { requestAccess } = await import('@/lib/actions/chat-access-requests');
+const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const engine = await import('./engine');
 const { readRunEvents } = await import('./engine-store');
 const { runFromEvents } = await import('./run-state');
@@ -855,6 +857,224 @@ describe('refusals', () => {
     expect(await approve(ADMIN, runId)).toMatchObject({ ok: false, status: 402 });
     expect(createContentDraft).not.toHaveBeenCalled();
     expect(runRow(runId).status).toBe('waiting');
+  });
+});
+
+describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)', () => {
+  const AGENCY = 'aaaaaaaa-0000-4000-8000-000000000005';
+  type Role = 'admin' | 'manager' | 'analyst' | 'agency_partner';
+  const PERSON: Record<Role, string> = {
+    admin: PEOPLE.admin,
+    manager: PEOPLE.manager,
+    analyst: PEOPLE.analyst,
+    agency_partner: AGENCY,
+  };
+  const as = (role: Role) => actorOf(PERSON[role]);
+  // The scripted models under a name React's hooks rule leaves alone: no hook, called in loops here.
+  const models = useModels;
+  const MODES: Mode[] = ['ask_first', 'auto', 'full_auto'];
+  const CHANGES = [
+    'create_draft',
+    'update_opportunity',
+    'dismiss_prompt_suggestion',
+    'request_access',
+    'publish_page',
+  ];
+  const dismiss = toolCall('w1', 'update_opportunity', {
+    opportunity_id: OPPORTUNITY,
+    status: 'dismissed',
+    reason: 'not_relevant',
+  });
+  const publish = toolCall('e1', 'publish_page', { brand_id: BRAND, title: 'Pricing FAQ' });
+
+  beforeEach(() => {
+    db.tables.profiles.push({ id: AGENCY, role: 'agency_partner', organization_id: ORG });
+  });
+
+  /** A workspace's Chat settings row (00401), as an Admin set it. */
+  function settings(over: Record<string, unknown>) {
+    db.tables.chat_settings = [
+      {
+        organization_id: ORG,
+        tool_policies: {},
+        full_auto_for_members: true,
+        dont_ask_again: true,
+        manager_execute_off: [],
+        ...over,
+      },
+    ];
+  }
+
+  /** One turn whose writer makes `call`, then answers; what became of it. */
+  async function attempt(role: Role, mode: Mode, call: object) {
+    const { sonnet } = models([READY], [calls(call), text('Done.')]);
+    const runId = await turn(as(role), 'Do it', mode);
+    const events = await eventsOf(runId);
+    expectClean(events);
+    return {
+      runId,
+      offered: (sonnet.seen[0].tools?.map((t) => t.name) ?? []).filter((name) =>
+        CHANGES.includes(name),
+      ),
+      waits: runRow(runId).status === 'waiting',
+      cards: ofType(events, 'confirm.required').length,
+      denials: ofType(events, 'access.denied').map((e) => e.data),
+    };
+  }
+
+  it('offers each role only the changes its role allows, and the way to say why (§9)', async () => {
+    const offered: Record<string, string[]> = {};
+    const explains: Record<string, boolean> = {};
+    for (const role of ['admin', 'manager', 'analyst', 'agency_partner'] as const) {
+      const { sonnet } = models([READY], [text('Hi.')]);
+      await turn(as(role), 'What can you change?');
+      const names = sonnet.seen[0].tools?.map((t) => t.name) ?? [];
+      explains[role] = names.includes(engine.EXPLAIN_TOOL);
+      offered[role] = names.filter((name) => CHANGES.includes(name)).sort();
+    }
+    // The explainer comes with something left out, to say why: nothing is, for Admins and Managers.
+    expect(explains).toEqual({ admin: false, manager: false, analyst: true, agency_partner: true });
+    expect(offered).toEqual({
+      admin: [...CHANGES].sort(),
+      manager: [...CHANGES].sort(),
+      // A Manager's write stays out for both; an Agency partner doesn't dismiss suggestions.
+      analyst: ['create_draft', 'dismiss_prompt_suggestion', 'publish_page', 'request_access'],
+      agency_partner: ['create_draft', 'publish_page', 'request_access'],
+    });
+  });
+
+  it('lets every role read in every mode, with no card', async () => {
+    for (const role of ['admin', 'manager', 'analyst', 'agency_partner'] as const) {
+      for (const mode of MODES) {
+        const read = toolCall('r1', 'read_visibility', { brand_id: BRAND });
+        models([calls(read), READY], [text('Up 12%.')]);
+        const runId = await turn(as(role), 'How are we doing?', mode);
+        expect(runRow(runId).status, `${role} ${mode}`).toBe('done');
+        expect(ofType(await eventsOf(runId), 'confirm.required'), `${role} ${mode}`).toEqual([]);
+      }
+    }
+    expect(fakes.readRun).toHaveBeenCalledTimes(12);
+  });
+
+  it('holds a change on its card in Ask me first and Auto for the roles that may make it', async () => {
+    for (const role of ['admin', 'manager'] as const) {
+      for (const mode of ['ask_first', 'auto'] as const) {
+        const tried = await attempt(role, mode, dismiss);
+        expect(tried, `${role} ${mode}`).toMatchObject({ waits: true, cards: 1, denials: [] });
+      }
+    }
+    expect(updateOpportunityStatus).not.toHaveBeenCalled();
+  });
+
+  it('runs it in Full auto for an Admin, and for a Manager only while members may (§5)', async () => {
+    const admin = await attempt('admin', 'full_auto', dismiss);
+    expect(admin).toMatchObject({ waits: false, cards: 0 });
+    const manager = await attempt('manager', 'full_auto', dismiss);
+    expect(manager).toMatchObject({ waits: false, cards: 0 });
+    expect(updateOpportunityStatus).toHaveBeenCalledTimes(2);
+
+    // An Admin turns "Full auto for members" off: the Manager's change waits on its card.
+    settings({ full_auto_for_members: false });
+    const after = await attempt('manager', 'full_auto', dismiss);
+    expect(after).toMatchObject({ waits: true, cards: 1 });
+    expect(updateOpportunityStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps Full auto to Growth and up, paid: Starter and the trial get the card', async () => {
+    for (const [plan, status] of [
+      ['starter', 'active'],
+      ['growth', 'trialing'],
+    ] as const) {
+      Object.assign(db.tables.organizations[0], { plan, subscription_status: status });
+      const tried = await attempt('admin', 'full_auto', dismiss);
+      expect(tried, `${plan} ${status}`).toMatchObject({ waits: true, cards: 1 });
+    }
+    // Enterprise's trial is a deal's, with its terms: Full auto runs.
+    Object.assign(db.tables.organizations[0], {
+      plan: 'enterprise',
+      subscription_status: 'trialing',
+    });
+    expect(await attempt('admin', 'full_auto', dismiss)).toMatchObject({ waits: false, cards: 0 });
+    expect(updateOpportunityStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an Analyst and an Agency partner the four-part way in every mode, and changes nothing (test set 27)', async () => {
+    const explain = (capability: string) =>
+      toolCall('x1', engine.EXPLAIN_TOOL, { capability, target: 'Pricing page' });
+    for (const role of ['analyst', 'agency_partner'] as const) {
+      for (const mode of MODES) {
+        const tried = await attempt(role, mode, explain('opportunityStatus'));
+        expect(tried.offered, `${role} ${mode}`).not.toContain('update_opportunity');
+        expect(tried.cards, `${role} ${mode}`).toBe(0);
+        expect(tried.denials, `${role} ${mode}`).toEqual([
+          {
+            asked: 'You asked: Review or dismiss opportunities · Pricing page.',
+            rule: expect.objectContaining({ kind: 'role' }),
+            whoCan: 'Admins and Managers can do this.',
+            nextActions: ['ask_admin', 'see_access'],
+          },
+        ]);
+      }
+    }
+    // An Agency partner doesn't dismiss suggestions, which an Analyst does.
+    const agency = await attempt('agency_partner', 'auto', explain('dismissSuggestion'));
+    expect(agency.denials).toEqual([
+      expect.objectContaining({
+        rule: expect.objectContaining({ kind: 'role' }),
+        whoCan: 'Admins, Managers, and Analysts can do this.',
+      }),
+    ]);
+    expect(updateOpportunityStatus).not.toHaveBeenCalled();
+    // Every refusal is logged, with its rule, and names no person.
+    const logged = db.tables.chat_activity_log.filter((row) => row.kind === 'access.denied');
+    expect(logged).toHaveLength(7);
+    expect(logged.every((row) => row.denial_code === 'forbidden_role')).toBe(true);
+    expect(JSON.stringify(logged)).not.toContain('person@example.com');
+  });
+
+  it('never runs an EXECUTE without the click in any mode; a Manager the Admin turned publishing off for is refused (test set 30)', async () => {
+    for (const role of ['admin', 'manager'] as const) {
+      for (const mode of MODES) {
+        const tried = await attempt(role, mode, publish);
+        expect(tried, `${role} ${mode}`).toMatchObject({ waits: true, cards: 1, denials: [] });
+      }
+    }
+    expect(fakes.publishRun).not.toHaveBeenCalled();
+
+    settings({ manager_execute_off: ['publishing'] });
+    const explain = toolCall('x1', engine.EXPLAIN_TOOL, {
+      capability: 'publishPage',
+      target: 'Pricing FAQ',
+    });
+    const manager = await attempt('manager', 'full_auto', explain);
+    expect(manager.offered).not.toContain('publish_page');
+    expect(manager.denials).toEqual([
+      expect.objectContaining({
+        rule: expect.objectContaining({ kind: 'policy' }),
+        whoCan: 'Admins can do this.',
+        nextActions: expect.arrayContaining(['ask_admin']),
+      }),
+    ]);
+    // The Admin still clicks it through.
+    expect(await attempt('admin', 'auto', publish)).toMatchObject({ waits: true, cards: 1 });
+    expect(fakes.publishRun).not.toHaveBeenCalled();
+  });
+
+  it('decides with the live role: a Manager made an Analyst while the card waits is refused (§4)', async () => {
+    const tried = await attempt('manager', 'auto', dismiss);
+    expect(tried).toMatchObject({ waits: true, cards: 1 });
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.role = 'analyst';
+    const prepared = await engine.prepareResume(as('manager'), tried.runId, 'approve', {
+      n: 1,
+      digest: ofType(await eventsOf(tried.runId), 'confirm.required')[0].data.digest,
+    });
+    if (prepared.ok) await engine.driveRun(as('manager'), tried.runId, prepared.resume);
+    expect(updateOpportunityStatus).not.toHaveBeenCalled();
+    expect(ofType(await eventsOf(tried.runId), 'access.denied')).toEqual([
+      expect.objectContaining({
+        data: expect.objectContaining({ rule: expect.objectContaining({ kind: 'role' }) }),
+      }),
+    ]);
   });
 });
 
