@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import messages from '../../messages/en.json';
 import { dashboardNav } from '@/config/dashboard';
 import {
   activeChildHref,
@@ -96,6 +97,29 @@ describe('the Mentions item', () => {
   it('sits directly above Citations', () => {
     expect(index('Mentions')).toBe(index('Citations') - 1);
     expect(analytics[index('Mentions')]).toMatchObject({ href: '/dashboard/mentions' });
+  });
+});
+
+// Off the menu since #506 (only Brand Visibility's Leaderboard and Getting
+// started opened it), back on it right under Brand Visibility.
+describe('the Competitors item', () => {
+  const analytics = dashboardNav.find((group) => group.title === 'Analytics')!.items;
+  const index = (title: string) => analytics.findIndex((item) => item.title === title);
+
+  it('sits under Brand Visibility, gated by competitor tracking, with no badge', () => {
+    expect(index('Competitors')).toBe(index('Answer Engine Insights') + 1);
+    const item = analytics[index('Competitors')];
+    expect(item).toMatchObject({
+      href: '/dashboard/competitors',
+      requiredFeature: 'competitor_tracking',
+    });
+    expect(item.badge).toBeUndefined();
+    expect(item.children).toBeUndefined();
+  });
+
+  it('reads Competitors from the nav namespace', () => {
+    expect(getDashboardNavLabel('Competitors', translateNav)).toBe('nav.competitors');
+    expect(messages.nav.competitors).toBe('Competitors');
   });
 });
 
