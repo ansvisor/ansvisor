@@ -221,7 +221,7 @@ describe("the Content Editor's models", () => {
 });
 
 describe('rebuildDraftBrief', () => {
-  it('puts a number, name or quote its sources don\u2019t have as a placeholder, as the writer would', async () => {
+  it('takes out a number its sources don\u2019t have, and puts a name or quote as a placeholder', async () => {
     const year = new Date().getUTCFullYear();
     generateObject.mockResolvedValue({
       object: {
@@ -248,13 +248,15 @@ describe('rebuildDraftBrief', () => {
 
     const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
 
-    expect(brief.goal).toBe(`Win ${NUMBER_PLACEHOLDER} of home baristas`);
+    // A figure no source has goes with its sentence: nobody is left one to find.
+    expect(brief.goal).toBe('');
+    expect(JSON.stringify(brief)).not.toContain(NUMBER_PLACEHOLDER);
     // A lone digit is a count, as on a page.
     expect(brief.audience).toBe('Home baristas who drink 4 cups a day');
     expect(brief.outline).toEqual([
       {
-        // A heading's number as a page's: "$500" is the prompt's.
-        heading: `The ${NUMBER_PLACEHOLDER} best espresso machines under $500`,
+        // A heading's number as a page's: "$500" is the prompt's; 12 goes on its own.
+        heading: 'The best espresso machines under $500',
         keyPoints: [
           `${NAME_PLACEHOLDER} recommends a flat burr`,
           `${QUOTE_PLACEHOLDER} says the owner`,
@@ -577,11 +579,11 @@ describe('the brief guard', () => {
     }
   });
 
-  it('puts what it adds as a placeholder, and drops a keyword that adds one', () => {
+  it('takes out a figure it adds with its sentence, a person as a placeholder, and drops a keyword that adds one', () => {
     const guard = guardFor();
-    expect(guard.text('Prices rose 40% in 2021')).toBe(
-      `Prices rose ${NUMBER_PLACEHOLDER} in ${NUMBER_PLACEHOLDER}`,
-    );
+    expect(guard.text('Prices rose 40% in 2021')).toBe('');
+    expect(guard.text('Prices rose 40% in 2021. Compare the plans.')).toBe('Compare the plans.');
+    expect(guard.heading('Prices in 2021, plan by plan')).toBe('Prices in, plan by plan');
     expect(guard.heading('Why CEO Grace Hopper chose Acme')).toBe(
       'Why CEO Grace Hopper chose Acme',
     );
@@ -612,9 +614,7 @@ describe('the brief guard', () => {
   it('reads Turkish percentages as the writer does', () => {
     const guard = guardFor({ prompts: ['Espresso makinelerinde %25 indirim var mı?'] });
     expect(guard.text('%25 indirimi anlat')).toBe('%25 indirimi anlat');
-    expect(guard.text('Satışlar yüzde 40 arttı')).toBe(
-      `Satışlar yüzde ${NUMBER_PLACEHOLDER} arttı`,
-    );
+    expect(guard.text('Satışlar yüzde 40 arttı')).toBe('');
   });
 });
 
@@ -795,10 +795,8 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
     expect(brief.version).toBe(2);
     const [section, second] = brief.outline;
     expect(section.fanout).toBe('Best espresso machine under 500');
-    // Its numbers out of the words; the rule's number kept, one of its own a placeholder.
-    expect(section.answer).toBe(
-      'Say that [figure, source] of buyers pick a single boiler, in 60 words.',
-    );
+    // A figure of its own takes its sentence with it: the answer had no other.
+    expect(section.answer).toBeNull();
     // A format the web doesn't know: none; one it knows, as it lists it.
     expect(section.format).toBeNull();
     expect(second).toMatchObject({
@@ -813,10 +811,11 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
     };
     expect(section.facts).toEqual([
       { claim: 'Average price of a machine', sourceType: 'statistic', source: page },
-      // A number the data doesn't have, a source it doesn't list.
-      { claim: '[figure, source] of baristas say so', sourceType: 'study', source: null },
+      // A number the data doesn't have: the claim goes, and with it the fact.
       { claim: 'Average price of a machine', sourceType: 'statistic', source: page },
       { claim: 'Average price of a machine', sourceType: 'statistic', source: null },
+      // So the last one fits under the cap.
+      { claim: 'Average price of a machine', sourceType: 'statistic', source: page },
     ]);
     expect(section.facts.length).toBeLessThanOrEqual(BRIEF_V2_LIMITS.facts);
   });
@@ -899,8 +898,8 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
     const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
     expect(brief).toMatchObject({
       version: 2,
-      // Guarded and cut as the rest: a figure it wasn't given is a placeholder, its number goes.
-      tldr: `Say which machine wins for ${NUMBER_PLACEHOLDER} of home baristas.`,
+      // Guarded and cut as the rest: a figure it wasn't given goes with its sentence.
+      tldr: null,
       angle: 'Our own side-by-side pull tests.',
       // Kinds the web knows, read by key; none left empty.
       proof: [
@@ -1214,10 +1213,8 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
       sources: sources(),
       rules: RULES,
     });
-    expect(brief.outline[0].keyPoints).toEqual([
-      'Price bands (S1)',
-      `Answer in ${NUMBER_PLACEHOLDER} words`,
-    ]);
+    // Without the rules, their 60 is no number it was given: the key point goes.
+    expect(brief.outline[0].keyPoints).toEqual(['Price bands (S1)']);
   });
 
   it('fits the brief under the column’s 64 KB: sources go first, then facts', async () => {
