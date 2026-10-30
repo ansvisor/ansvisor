@@ -232,12 +232,19 @@ describe('AgentCard', () => {
   });
 
   it('works under Chat’s avatar and says the page can be left, with the new Chat on only', async () => {
-    const working = (chatOn: boolean) =>
+    const working = (chatOn: boolean, onServer = true) =>
       act(async () => {
         root.render(
           <NextIntlClientProvider locale="en" messages={messages}>
             <ChatAgenticProvider enabled={chatOn}>
-              <AgentCard suggestions={[]} rules={rules} busy={false} working {...handlers} />
+              <AgentCard
+                suggestions={[]}
+                rules={rules}
+                busy={false}
+                working
+                onServer={onServer}
+                {...handlers}
+              />
             </ChatAgenticProvider>
           </NextIntlClientProvider>,
         );
@@ -247,6 +254,10 @@ describe('AgentCard', () => {
       'working',
     );
     expect(container.textContent).toContain("You can leave this page. I'll keep going.");
+    // Still in the browser (the brief's prompts and sources): leaving would lose it.
+    await working(true, false);
+    expect(container.querySelector('[data-slot="agent-avatar"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('You can leave this page');
     // Chat off: the card as it was.
     await working(false);
     expect(container.querySelector('[data-slot="agent-avatar"]')).toBeNull();

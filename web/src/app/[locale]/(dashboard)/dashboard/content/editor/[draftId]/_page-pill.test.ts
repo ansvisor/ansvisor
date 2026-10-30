@@ -11,6 +11,8 @@ describe('pagePillOf', () => {
     expect(pagePillOf({ ...page, status: 'published' })).toBe('done');
     expect(pagePillOf({ ...page, status: 'ready' })).toBe('ready');
     expect(pagePillOf(page)).toBe('draft');
-    expect(pagePillOf({ ...page, status: 'in_review' })).toBe('draft');
+    // In review: the agent wrote it, and the person's OK is next.
+    expect(pagePillOf({ ...page, status: 'in_review' })).toBe('needsYou');
+    expect(pagePillOf({ ...page, working: true, status: 'in_review' })).toBe('working');
   });
 });

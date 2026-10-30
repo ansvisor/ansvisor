@@ -8,6 +8,7 @@ import { RoleProvider, type TeamRole } from '@/components/providers/role-provide
 import { PlanProvider } from '@/components/providers/plan-provider';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
@@ -290,13 +291,15 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
 let container: HTMLDivElement;
 let root: Root;
 
-async function renderPage(role: TeamRole = 'admin') {
+async function renderPage(role: TeamRole = 'admin', { chatOn = false } = {}) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <RoleProvider role={role}>
-          <ContentEditorPage />
-        </RoleProvider>
+        <ChatAgenticProvider enabled={chatOn}>
+          <RoleProvider role={role}>
+            <ContentEditorPage />
+          </RoleProvider>
+        </ChatAgenticProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -6774,7 +6777,8 @@ describe('the side panel', () => {
       expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Fix open rules');
     });
 
-    it('says "1 running" while Fix open rules works, and opens the basket on it', async () => {
+    /** A page whose next step is Fix open rules, the agent's run left under way. */
+    function fixUnderWay() {
       getDraftSources.mockResolvedValue({
         data: {
           prompts: [],
@@ -6810,14 +6814,58 @@ describe('the side panel', () => {
         }),
       );
       fixDraftRules.mockReturnValue(new Promise(() => {}));
-      await renderPage();
-      expect(button('1 running')).toBeUndefined();
+    }
+    const runFix = async () => {
       await act(async () => nextButton()!.click());
       await act(async () => inBasket('Fix open rules')!.click());
       await act(async () => {});
-      expect(basket()).toBeNull();
-      await act(async () => button('1 running')!.click());
-      expect(basket()!.textContent).toContain('Content Agent is working');
+    };
+    const pill = () => container.querySelector<HTMLElement>('header [data-slot="status-pill"]');
+    const trayCalls = (fetch: ReturnType<typeof vi.fn>) =>
+      fetch.mock.calls.filter(([url]) => String(url).startsWith('/api/chat/runs/tray'));
+
+    it('says "1 running" while Fix open rules works, and opens the basket on it', async () => {
+      const fetch = vi.fn(async () => new Response('{}'));
+      vi.stubGlobal('fetch', fetch);
+      try {
+        fixUnderWay();
+        await renderPage();
+        expect(button('1 running')).toBeUndefined();
+        // Chat off: no page pill, and no runs tray or its read.
+        expect(pill()).toBeNull();
+        expect(container.querySelector('[data-action="runs.toggleTray"]')).toBeNull();
+        await runFix();
+        expect(basket()).toBeNull();
+        expect(pill()).toBeNull();
+        expect(container.textContent).not.toContain('You can leave this page');
+        await act(async () => button('1 running')!.click());
+        expect(basket()!.textContent).toContain('Content Agent is working');
+        expect(trayCalls(fetch)).toEqual([]);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('with the new Chat on, shows the page’s pill and the runs tray in place of "1 running"', async () => {
+      const fetch = vi.fn(
+        async () => new Response(JSON.stringify({ ok: true, runs: [], running: 0, needsYou: 0 })),
+      );
+      vi.stubGlobal('fetch', fetch);
+      try {
+        fixUnderWay();
+        await renderPage('admin', { chatOn: true });
+        // In review: the agent wrote it, and the person's OK is next.
+        expect(pill()!.dataset.state).toBe('needsYou');
+        expect(container.querySelector('header [data-action="runs.toggleTray"]')).not.toBeNull();
+        expect(trayCalls(fetch).map(([url]) => url)).toContain('/api/chat/runs/tray?brand=b1');
+        await runFix();
+        expect(pill()!.dataset.state).toBe('working');
+        expect(button('1 running')).toBeUndefined();
+        // Fix is the server's now: the page can be left.
+        expect(container.textContent).toContain("You can leave this page. I'll keep going.");
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
 
     describe('once the agent took Fix open rules (editor test 2026-10-26)', () => {

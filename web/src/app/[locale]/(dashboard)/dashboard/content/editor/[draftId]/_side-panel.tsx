@@ -196,8 +196,11 @@ export function EditorSidePanel({
   onSourceShown?: () => void;
   /** The brief asked for is being built: the request is spent. */
   onBuildStarted?: () => void;
-  /** Whether the agent is writing the brief: the agent card shows it working (CE-027). */
-  onBriefRebuilding?: (rebuilding: boolean) => void;
+  /**
+   * Whether the agent is writing the brief: the agent card shows it working
+   * (CE-027); `onServer` once the server writes it (the page can be left).
+   */
+  onBriefRebuilding?: (rebuilding: boolean, onServer: boolean) => void;
   /** Why the brief's Run Agent waits (another agent run from this page), or null. */
   briefBlocked?: string | null;
   /** What Quality reads from the draft and its author (CE-036/039), with Quality on. */
@@ -320,7 +323,7 @@ export function EditorSidePanel({
 
   const briefOpened = opened.has('brief');
 
-  const { rebuilding, rebuild } = useBriefRebuild({
+  const { rebuilding, onServer, rebuild } = useBriefRebuild({
     draft,
     pageNow: (): PageNow => {
       const { checks, ...now } = page.current;
@@ -348,12 +351,13 @@ export function EditorSidePanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requested]);
 
-  // The agent card shows the brief's run too, with its steps and Stop; a
-  // panel closed meanwhile says it no longer waits on it.
+  // The agent card shows the brief's run too, with its steps and Stop, and
+  // whether it is on the server yet; a panel closed meanwhile says it no
+  // longer waits on it.
   useEffect(() => {
-    onBriefRebuilding?.(rebuilding);
-    return () => onBriefRebuilding?.(false);
-  }, [rebuilding, onBriefRebuilding]);
+    onBriefRebuilding?.(rebuilding, onServer);
+    return () => onBriefRebuilding?.(false, false);
+  }, [rebuilding, onServer, onBriefRebuilding]);
 
   return (
     <aside aria-label={t('label')} className="flex w-[400px] shrink-0 flex-col border-l bg-card">

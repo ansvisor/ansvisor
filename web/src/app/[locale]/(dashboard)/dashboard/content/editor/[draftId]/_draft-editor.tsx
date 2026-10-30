@@ -525,6 +525,9 @@ export function DraftEditor({
   const [fixing, setFixing] = useState(false);
   // The brief the agent writes from the side panel: the card shows it working too.
   const [briefRebuilding, setBriefRebuilding] = useState(false);
+  // Fix (or the brief) is the server's now: the card says the page can be left (Chat on).
+  const [fixOnServer, setFixOnServer] = useState(false);
+  const [briefOnServer, setBriefOnServer] = useState(false);
   // The run Stop was pressed for: the card waits for it to end (CE-027). Another
   // run under way (one a restarted server left was shown first) can be stopped.
   const [stoppingRun, setStoppingRun] = useState<string | null>(null);
@@ -2531,6 +2534,7 @@ export function DraftEditor({
       await autosave.settle();
       // The run there was before this one: one whose answer is lost is the next.
       const before = (await readAgentRun(draft.id, FIX_RUNS).catch(() => null))?.id ?? null;
+      setFixOnServer(true);
       const result = await send().catch((err) => {
         // The call itself gave up (a timeout on the way): the agent may still finish.
         console.error('Failed to hear back from the Content Agent:', err);
@@ -2616,6 +2620,7 @@ export function DraftEditor({
       failed('suggestions.fixErrors.failed', 'failed');
     } finally {
       setFixing(false);
+      setFixOnServer(false);
       setStoppingRun(null);
       stopSent.current = null;
     }
@@ -2709,7 +2714,7 @@ export function DraftEditor({
       setStoppingRun(null);
     }
   };
-  const onBriefRebuilding = useCallback((on: boolean) => {
+  const onBriefRebuilding = useCallback((on: boolean, onServer: boolean) => {
     // Only the brief's end clears its Stop: the panel says "not rebuilding" as
     // it opens and closes, while Fix may be the one stopping.
     if (briefNow.current && !on) {
@@ -2718,6 +2723,7 @@ export function DraftEditor({
     }
     briefNow.current = on;
     setBriefRebuilding(on);
+    setBriefOnServer(on && onServer);
   }, []);
   // One agent run at a time from this page: the others wait for it.
   const agentBusy = fixing || starting || rewriting || briefRebuilding;
@@ -3806,8 +3812,8 @@ export function DraftEditor({
                 }
               />
             )}
-            {/* With Chat on, every run of the workspace, this page's agent's among them (Chat
-                agentic plan §2–3): the same tray as Chat's header. */}
+            {/* With Chat on, the person's own Chat runs and this brand's Content Agent runs,
+                this page's among them (Chat agentic plan §2–3): the same tray as Chat's header. */}
             {chatOn && <RunsTray brandId={draft.brandId} />}
             {/* The agent at work on this page: a click opens the basket, with its steps and Stop. */}
             {/* Fix open rules or the brief at work: the basket shows their steps and Stop. */}
@@ -4136,6 +4142,7 @@ export function DraftEditor({
               // Not while the HTML view holds the page: it would write over it.
               busy={deciding || restoring || htmlSource !== null}
               working={agentWorking}
+              onServer={(fixing && fixOnServer) || (briefRebuilding && briefOnServer)}
               run={agentRun}
               lastRunFailed={lastRunFailed}
               onStop={() => void stopAgent()}
