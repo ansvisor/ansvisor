@@ -18,7 +18,7 @@ import { DEFAULT_CHAT_SETTINGS, parseTeamRole } from '@/lib/chat/precedence';
 import { composerSetupOf } from '@/lib/chat/composer-setup';
 import { chatRunsOnOwnKey } from '@/lib/chat/key';
 import { ChatPanelPage, ChatPanelProvider } from '@/components/chat/panel/chat-panel-provider';
-import { ChatSidePanel } from '@/components/chat/panel/chat-side-panel';
+import { ChatSidePanelSlot } from '@/components/chat/panel/chat-side-panel-slot';
 import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { GettingStartedPageOpened } from '@/components/getting-started/page-opened';
@@ -240,7 +240,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                           <TrackingJobHandoff />
                         </ChatPanelPage>
                       </div>
-                      {chatPanel.enabled && <ChatSidePanel />}
+                      {chatPanel.enabled && <ChatSidePanelSlot />}
                     </ChatPanelProvider>
                   </AiUsageProvider>
                 </MenuAccessProvider>

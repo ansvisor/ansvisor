@@ -84,13 +84,20 @@ vi.mock('@/components/layout/sidebar', () => ({ Sidebar: none }));
 vi.mock('@/components/layout/sidebar-error-boundary', () => ({ SidebarErrorBoundary: pass }));
 vi.mock('@/components/layout/mobile-nav', () => ({ MobileNav: none }));
 vi.mock('@/components/layout/tracking-job-handoff', () => ({ TrackingJobHandoff: none }));
-// Chat's side panel has its own tests; here, only where the layout puts it
-// and the setup the layout hands it.
-const panel = vi.hoisted(() => ({ setup: null as Record<string, unknown> | null }));
-vi.mock('@/components/chat/panel/chat-side-panel', async () => {
+// Chat's side panel has its own tests; here, only where the layout puts it,
+// the setup the layout hands it, and that its code isn't loaded with the page.
+const panel = vi.hoisted(() => ({
+  setup: null as Record<string, unknown> | null,
+  codeLoaded: false,
+}));
+vi.mock('@/components/chat/panel/chat-side-panel', () => {
+  panel.codeLoaded = true;
+  return { ChatSidePanel: none };
+});
+vi.mock('@/components/chat/panel/chat-side-panel-slot', async () => {
   const { useChatPanel } = await import('@/components/chat/panel/chat-panel-context');
   return {
-    ChatSidePanel: () => {
+    ChatSidePanelSlot: () => {
       panel.setup = (useChatPanel()?.setup as unknown as Record<string, unknown>) ?? null;
       return null;
     },
@@ -284,6 +291,8 @@ describe('the dashboard layout', () => {
     expect(panel.setup).toBeNull();
     expect(reads.filter((table) => table.startsWith('chat_'))).toEqual([]);
     expect(ownKey.chatRunsOnOwnKey).not.toHaveBeenCalled();
+    // The panel's own code (thread, composer, runs) isn't part of the layout's.
+    expect(panel.codeLoaded).toBe(false);
     expect(container.querySelector('[data-action="panel.open"]')).toBeNull();
   });
 
