@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StartPlanNow } from '@/components/ai-usage/start-plan-now';
+import { useUserRole } from '@/hooks/use-user-role';
 import { getAiUsage } from '@/lib/actions/ai-usage';
 import {
   aiUsageTone,
@@ -27,10 +29,14 @@ const BAR_CLASS: Record<UsageTone, string> = {
  * renews. With Chat on for the workspace (`chatMetered`), Chat draws on it
  * too and has its row; off, Agent Chat runs on the workspace's own AI key,
  * so it is a line of text, not a share. Renders nothing for a plan without
- * an allowance, or a workspace without an active plan.
+ * an allowance, or a workspace without an active plan. In the free trial it
+ * shows no shares, only how far the trial credit is (as the header meter),
+ * and an admin can start the plan from 80% on.
  */
 export function AiUsageCard() {
   const t = useTranslations('settings.aiUsageMeter');
+  const tUsage = useTranslations('aiUsage');
+  const { canAdmin } = useUserRole();
   // Undefined while it is read; null when there is no allowance to meter.
   const [usage, setUsage] = useState<AiUsage | null | undefined>(undefined);
   const [failed, setFailed] = useState(false);
@@ -62,6 +68,7 @@ export function AiUsageCard() {
   if (usage === null || usage?.unlimited) return null;
 
   const tone = usage ? aiUsageTone(usage) : 'normal';
+  const trial = !!usage?.trial && tone !== 'unlimited';
   // As the plan card's "Renews on" above reads its date.
   const resets = usage?.periodEnd
     ? new Date(usage.periodEnd).toLocaleDateString('en-US', {
@@ -87,46 +94,74 @@ export function AiUsageCard() {
           <Skeleton className="h-16 w-full" />
         ) : (
           <>
-            <div>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <span className="text-lg font-semibold tabular-nums">{used}</span>
-                {resets && (
-                  <span className="text-sm text-muted-foreground">
-                    {t('resets', { date: resets })}
+            {trial ? (
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <span
+                    className={cn(
+                      'text-lg font-semibold',
+                      tone === 'warning' && 'text-amber-700 dark:text-amber-400',
+                      tone === 'exhausted' && 'text-red-600 dark:text-red-400',
+                    )}
+                  >
+                    {t(`trialState.${tone}`)}
                   </span>
+                  {resets && (
+                    <span className="text-sm text-muted-foreground">
+                      {t('trialEnds', { date: resets })}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {tone === 'exhausted'
+                    ? t('exhaustedTrial')
+                    : tone === 'warning'
+                      ? t('trialWarning')
+                      : t('trialNote')}
+                </p>
+                {tone !== 'normal' &&
+                  (canAdmin ? (
+                    <StartPlanNow />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">{tUsage('askAdminStart')}</p>
+                  ))}
+              </div>
+            ) : (
+              <div>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <span className="text-lg font-semibold tabular-nums">{used}</span>
+                  {resets && (
+                    <span className="text-sm text-muted-foreground">
+                      {t('resets', { date: resets })}
+                    </span>
+                  )}
+                </div>
+                <div
+                  role="progressbar"
+                  aria-label={t('title')}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.floor(usage.percentUsed ?? 0)}
+                  aria-valuetext={used}
+                  className="mt-2 h-2 overflow-hidden rounded-full bg-muted"
+                >
+                  <div
+                    className={cn('h-full rounded-full', BAR_CLASS[tone])}
+                    style={{ width: `${Math.min(100, usage.percentUsed ?? 0)}%` }}
+                  />
+                </div>
+                {tone === 'exhausted' && (
+                  <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">
+                    {resets ? t('exhausted', { date: resets }) : t('exhaustedNoDate')}
+                    {/* Enterprise has no bigger plan to move to. */}
+                    {usage.plan !== 'enterprise' && <> {t('morePlans')}</>}
+                  </p>
                 )}
               </div>
-              <div
-                role="progressbar"
-                aria-label={t('title')}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.floor(usage.percentUsed ?? 0)}
-                aria-valuetext={used}
-                className="mt-2 h-2 overflow-hidden rounded-full bg-muted"
-              >
-                <div
-                  className={cn('h-full rounded-full', BAR_CLASS[tone])}
-                  style={{ width: `${Math.min(100, usage.percentUsed ?? 0)}%` }}
-                />
-              </div>
-              {tone === 'exhausted' && (
-                <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">
-                  {/* In the free trial, more comes with starting the plan, not a bigger one. */}
-                  {usage.trial ? (
-                    t('exhaustedTrial')
-                  ) : (
-                    <>
-                      {resets ? t('exhausted', { date: resets }) : t('exhaustedNoDate')}
-                      {/* Enterprise has no bigger plan to move to. */}
-                      {usage.plan !== 'enterprise' && <> {t('morePlans')}</>}
-                    </>
-                  )}
-                </p>
-              )}
-            </div>
-            {/* Only what used some is listed: none yet, a line says so. */}
-            {usage.features.length > 0 ? (
+            )}
+            {/* Only what used some is listed: none yet, a line says so. The
+                trial's shares aren't shown. */}
+            {trial ? null : usage.features.length > 0 ? (
               <ul className="divide-y rounded-lg border text-sm">
                 {usage.features.map(({ feature, percent }) => (
                   <li key={feature} className="flex items-center justify-between gap-3 px-3 py-2">
