@@ -3318,6 +3318,16 @@
       "step": "Dismissed prompt suggestion"
     },
     "askAdmin": { "name": "Ask your Admin", "step": "Sent to your Admins" },
+    "trackPrompts": { "name": "Add prompts", "step": "Added prompts" },
+    "pauseTracking": { "name": "Pause prompts", "step": "Paused prompts" },
+    "newTopic": { "name": "Add topics", "step": "Added topic" },
+    "topicName": { "name": "Rename topics", "step": "Renamed topic" },
+    "trackCompetitors": { "name": "Add competitors", "step": "Added competitors" },
+    "dropCompetitor": {
+      "name": "Remove competitors",
+      "step": "Removed competitor",
+      "note": "Its timeline events go with it. Undo brings the competitor back, not those events."
+    },
     "agents": { "name": "Create and run agents", "step": "Changed an agent" }
   },
   "agentic": {
@@ -4744,6 +4754,18 @@
       "dismissSuggestionUndo": "Brought back the prompt suggestion “{text}”",
       "askAdmin": "Asked your Admins: “{asked}”",
       "askAdminUndo": "Withdrew the request “{asked}”",
+      "trackPrompts": "Added prompts to the topic “{topic}”: {prompts}",
+      "trackPromptsUndo": "Paused the prompts added to “{topic}”: {prompts} (their first answers are kept)",
+      "pauseTracking": "Paused prompts: {prompts}",
+      "pauseTrackingUndo": "Resumed prompts: {prompts}",
+      "newTopic": "Added the topic “{name}”",
+      "newTopicUndo": "Removed the topic “{name}”",
+      "topicName": "Renamed the topic “{from}” to “{to}”",
+      "topicNameUndo": "Renamed the topic “{to}” back to “{from}”",
+      "trackCompetitors": "Added competitors: {competitors}",
+      "trackCompetitorsUndo": "Removed the competitors added: {competitors}",
+      "dropCompetitor": "Removed the competitor {competitor}",
+      "dropCompetitorUndo": "Brought back the competitor {competitor}, without its timeline events from before",
       "accessDenied": "Not allowed: {tool}",
       "agentCreated": "Created the agent “{name}”",
       "agentUpdated": "Changed the agent “{name}”",

@@ -45,11 +45,13 @@ export type ExecuteGroup = (typeof EXECUTE_GROUPS)[number];
 /** The tables whose rows name their brand, for a row whose input names an object, not a brand. */
 export const BRAND_LOOKUP_TABLES = [
   'actions',
+  'competitors',
   'content_drafts',
   'content_opportunities',
   'prompt_results',
   'prompt_suggestions',
   'site_audits',
+  'topics',
 ] as const;
 export type BrandLookupTable = (typeof BRAND_LOOKUP_TABLES)[number];
 
@@ -144,6 +146,19 @@ interface ToolFields<S extends z.ZodObject> {
   inputSchema: S;
   run(ctx: ChatToolContext, input: z.output<S>): Promise<unknown>;
   /**
+   * A batch row (CHAT-20 §11b: add_prompts, add_competitors, pausing
+   * prompts): the input field holding its items. A run's cap counts the
+   * items, not the calls (§14), and a call with more than `askAbove` of them
+   * shows a card in every mode (§9 row 22: "> 5 prompts: Ask").
+   */
+  batch?: { field: string; askAbove?: number };
+  /**
+   * What its card and step name as the target when the input's own words
+   * don't (a list, an id): read from the data if need be, in the person's
+   * words. Without it the engine reads the input's title, name or text.
+   */
+  target?(input: z.output<S>): string | null | Promise<string | null>;
+  /**
    * What a call made, for the answer's output card and Files (CHAT-06
    * items 1, 9): filed as it is made. Null when the call made nothing to
    * file; a row without it makes nothing.
@@ -223,6 +238,9 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
       throw new Error(`${def.name}: its brand comes from ${field}, which its input lacks`);
     }
   }
+  if (def.batch && !(def.batch.field in def.inputSchema.shape)) {
+    throw new Error(`${def.name}: its items are in ${def.batch.field}, which its input lacks`);
+  }
   const excludeRoles = [...(def.excludeRoles ?? [])];
   if (excludeRoles.length > 0 && (def.minRole !== 'analyst' || excludeRoles.includes('admin'))) {
     throw new Error(`${def.name}: only a row open to every role leaves roles out, never an Admin`);
@@ -264,4 +282,20 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     throw new Error(`${def.name}: an always_card write never runs without a card`);
   }
   return { ...def, flags, excludeRoles, executeGroup: null };
+}
+
+/** How many items a call carries: its batch's length, or 1 for a row that isn't a batch. */
+export function batchSize(tool: Pick<ChatTool, 'batch'>, input: Record<string, unknown>): number {
+  if (!tool.batch) return 1;
+  const items = input[tool.batch.field];
+  return Array.isArray(items) ? items.length : 1;
+}
+
+/** A call with more items than its row runs without a card (CHAT-20 §9 row 22). */
+export function overBatchCard(
+  tool: Pick<ChatTool, 'batch'>,
+  input: Record<string, unknown>,
+): boolean {
+  const above = tool.batch?.askAbove;
+  return above !== undefined && batchSize(tool, input) > above;
 }

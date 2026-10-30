@@ -136,6 +136,8 @@ export interface ChatConfirm {
   digest: string;
   /** offerDontAskAgain: the card may offer "Don't ask again" (CHAT-20 §5 step 6). */
   canDontAskAgain: boolean;
+  /** What the change leaves behind, under the card ("Its timeline … doesn't come back"). */
+  note?: string;
 }
 
 /** The rule behind a refusal (CHAT-20 §4c): denial.ts's kinds. */

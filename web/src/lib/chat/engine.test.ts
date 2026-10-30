@@ -8,6 +8,9 @@ import {
   ORG,
   OTHER_ORG,
   PEOPLE,
+  PROMPT,
+  COMPETITOR,
+  TOPIC,
   SUGGESTION,
   fakeCreateDraft,
   seedWorkspace,
@@ -69,6 +72,12 @@ vi.mock('@/lib/mcp/navigation', () => ({
     filters: [],
     navigation_only: true,
   })),
+}));
+vi.mock('@/lib/actions/prompt', () => ({ addTopicPrompts: vi.fn(), pauseBrandPrompts: vi.fn() }));
+vi.mock('@/lib/actions/topic', () => ({ addBrandTopic: vi.fn(), renameBrandTopic: vi.fn() }));
+vi.mock('@/lib/actions/competitor', () => ({
+  addCompetitors: vi.fn(),
+  removeBrandCompetitor: vi.fn(),
 }));
 // The test's own EXECUTE row (publish_page) has its words here: the product has no such tool yet.
 vi.mock('../../../messages/en.json', async (importOriginal) => {
@@ -163,6 +172,9 @@ const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { requestAccess } = await import('@/lib/actions/chat-access-requests');
+const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
+const { addBrandTopic, renameBrandTopic } = await import('@/lib/actions/topic');
+const { addCompetitors, removeBrandCompetitor } = await import('@/lib/actions/competitor');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
 const engine = await import('./engine');
@@ -1922,6 +1934,96 @@ describe('next moves (CHAT-07 §C)', () => {
   });
 });
 
+describe('the tracking setup (W2-06)', () => {
+  const addPrompts = (id: string, prompts: string[]) =>
+    toolCall(id, 'add_prompts', { brand_id: BRAND, topic_id: TOPIC, prompts });
+
+  it('says why when the plan’s prompt locations are used up, and logs nothing (§11a)', async () => {
+    const message =
+      'Your Growth plan allows up to 200 active prompt locations. Pause prompts or upgrade.';
+    vi.mocked(addTopicPrompts).mockResolvedValue({
+      ok: false,
+      reason: 'quota_exceeded',
+      message,
+    });
+    const { sonnet } = useModels(
+      [READY],
+      [calls(addPrompts('w1', ['crm for agencies'])), text('Your plan is full.')],
+    );
+    const runId = await turn(ADMIN, 'Track crm for agencies', 'full_auto');
+    expect(stepsOf(runId)[0]).toMatchObject({ status: 'error', detail: message });
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('"code":"quota_exceeded"');
+    expect(db.tables.chat_activity_log).toEqual([]);
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it('counts the run’s 50 prompts by prompt, not by call', async () => {
+    vi.mocked(addTopicPrompts).mockImplementation(async (_brand, _topic, texts) => ({
+      ok: true,
+      code: 'ok',
+      added: texts.map((text, i) => ({ id: `p-${text}-${i}`, text })),
+      skipped: [],
+      analysisStarted: true,
+    }));
+    const twenty = (n: number) => Array.from({ length: 20 }, (_, i) => `prompt ${n}.${i}`);
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(
+          addPrompts('w1', twenty(1)),
+          addPrompts('w2', twenty(2)),
+          addPrompts('w3', twenty(3)),
+        ),
+        text('Added 40.'),
+      ],
+    );
+    await turn(ADMIN, 'Track these 60', 'full_auto');
+    expect(addTopicPrompts).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('limit_reached');
+  });
+
+  it('pauses more than 10 prompts at once: from a card, within the run’s 50', async () => {
+    const twelve = Array.from(
+      { length: 12 },
+      (_, i) => `66666666-6666-4666-8666-0000000000${String(i).padStart(2, '0')}`,
+    );
+    vi.mocked(pauseBrandPrompts).mockResolvedValue({ ok: true, paused: twelve });
+    useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'pause_prompts', { brand_id: BRAND, prompt_ids: twelve })),
+        text('Paused 12.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Pause these 12', 'full_auto');
+    // More than 5: a card, Full auto too.
+    expect(runRow(runId).status).toBe('waiting');
+    expect(await approve(ADMIN, runId)).toMatchObject({ ok: true });
+    expect(pauseBrandPrompts).toHaveBeenCalledWith(BRAND, twelve);
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it('names on its card what a list or an id stands for, from the data', async () => {
+    useModels(
+      [READY, READY],
+      [
+        calls(toolCall('w1', 'remove_competitor', { brand_id: BRAND, competitor_id: COMPETITOR })),
+        calls(addPrompts('w2', ['crm for agencies', 'crm for law firms', 'crm for clinics'])),
+      ],
+    );
+    const removing = await turn(ADMIN, 'Drop Peec AI', 'full_auto');
+    expect(ofType(await eventsOf(removing), 'confirm.required')[0].data).toMatchObject({
+      action: 'Remove competitors',
+      target: 'Peec AI (peec.ai) · Northwind',
+    });
+    const adding = await turn(ADMIN, 'Track these', 'ask_first');
+    expect(ofType(await eventsOf(adding), 'confirm.required')[0].data.target).toBe(
+      'Pricing · “crm for agencies”, “crm for law firms” +1 · Northwind',
+    );
+    expectClean([...(await eventsOf(removing)), ...(await eventsOf(adding))]);
+  });
+});
+
 describe('what a read brings in (§16a)', () => {
   const draftCall = calls(
     toolCall('w1', 'create_draft', {
@@ -2185,6 +2287,13 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'dismiss_prompt_suggestion',
     'request_access',
     'publish_page',
+    // W2-06's setup rows: Admins and Managers only.
+    'add_prompts',
+    'pause_prompts',
+    'add_topic',
+    'rename_topic',
+    'add_competitors',
+    'remove_competitor',
   ];
   const dismiss = toolCall('w1', 'update_opportunity', {
     opportunity_id: OPPORTUNITY,
@@ -2520,6 +2629,54 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
         data: expect.objectContaining({ rule: expect.objectContaining({ kind: 'policy' }) }),
       }),
     ]);
+  });
+
+  it('keeps the setup rows (prompts, topics, competitors) to Admins and Managers, on a card outside Full auto', async () => {
+    const setup = [
+      toolCall('s1', 'add_prompts', { brand_id: BRAND, topic_id: TOPIC, prompts: ['best crm'] }),
+      toolCall('s2', 'pause_prompts', { brand_id: BRAND, prompt_ids: [PROMPT] }),
+      toolCall('s3', 'add_topic', { brand_id: BRAND, name: 'Integrations' }),
+      toolCall('s4', 'rename_topic', { topic_id: TOPIC, name: 'Plans' }),
+      toolCall('s5', 'add_competitors', {
+        brand_id: BRAND,
+        competitors: [{ name: 'Otterly', domain: 'otterly.ai' }],
+      }),
+      toolCall('s6', 'remove_competitor', { brand_id: BRAND, competitor_id: COMPETITOR }),
+    ];
+    const actions = [
+      addTopicPrompts,
+      pauseBrandPrompts,
+      addBrandTopic,
+      renameBrandTopic,
+      addCompetitors,
+      removeBrandCompetitor,
+    ];
+    for (const role of ['analyst', 'agency_partner'] as const) {
+      for (const mode of MODES) {
+        for (const call of setup) {
+          const tried = await attempt(role, mode, call);
+          // Not offered (called anyway: no card, nothing reaches the server).
+          expect(tried.offered, `${role} ${mode}`).toEqual(
+            role === 'analyst'
+              ? ['create_draft', 'dismiss_prompt_suggestion', 'request_access']
+              : ['create_draft', 'request_access'],
+          );
+          expect(tried, `${role} ${mode}`).toMatchObject({ waits: false, cards: 0 });
+        }
+      }
+    }
+    for (const role of ['admin', 'manager'] as const) {
+      for (const mode of ['ask_first', 'auto'] as const) {
+        for (const call of setup) {
+          const tried = await attempt(role, mode, call);
+          expect(tried, `${role} ${mode}`).toMatchObject({ waits: true, cards: 1, denials: [] });
+        }
+      }
+    }
+    for (const action of actions) expect(action).not.toHaveBeenCalled();
+    // Removing a competitor shows its card in Full auto too.
+    expect(await attempt('admin', 'full_auto', setup[5])).toMatchObject({ waits: true, cards: 1 });
+    expect(removeBrandCompetitor).not.toHaveBeenCalled();
   });
 
   it('changes nothing on the demo brand for any role in any mode, and still reads it', async () => {
