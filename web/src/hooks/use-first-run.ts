@@ -12,6 +12,14 @@ import { etaParts, minutesLeft, withSample, type ProgressSample } from '@/lib/tr
  */
 export const FIRST_RUN_POLL_MS = 12_000;
 
+/**
+ * After this many reads in a row with no run going (a brand never tracked,
+ * or a run that failed before the ledger had it), read only every
+ * FIRST_RUN_IDLE_POLL_MS: the pages that show the run are open for long.
+ */
+export const FIRST_RUN_IDLE_READS = 5;
+export const FIRST_RUN_IDLE_POLL_MS = 60_000;
+
 /** A saved job the worker hasn't finished: queued, delayed or running. */
 const LIVE_JOB = new Set<TrackingJobStatus['status']>(['waiting', 'delayed', 'active']);
 
@@ -28,19 +36,58 @@ export interface FirstRun {
 
 interface Watch {
   run: FirstRun | null;
+  /** The run was seen going: its end is news ("Your first results are ready"). */
+  seen: boolean;
   /** The run's pace while the page watches it, for the time left. */
   pace: ProgressSample[];
   listeners: Set<() => void>;
   /** False once nobody watches, or the brand has a completed run. */
   live: boolean;
+  /** Reads in a row that found no run going. */
+  idle: number;
+  /** The next read waits for the tab to be shown again. */
+  paused: boolean;
   timer?: ReturnType<typeof setTimeout>;
 }
 
 // One read loop per brand, however many parts of the page show the run.
 const watches = new Map<string, Watch>();
+// Told once when a run a page watched finishes.
+const finishedListeners = new Set<(brandId: string) => void>();
 
 function emit(watch: Watch) {
   for (const listener of watch.listeners) listener();
+}
+
+const tabHidden = () => typeof document !== 'undefined' && document.hidden;
+
+let resumeListening = false;
+// A hidden tab reads nothing; shown again, every paused watch reads at once.
+function resumeOnShow() {
+  if (resumeListening || typeof document === 'undefined') return;
+  resumeListening = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    for (const [brandId, watch] of watches) {
+      if (!watch.paused || !watch.live) continue;
+      watch.paused = false;
+      void tick(brandId, watch);
+    }
+  });
+}
+
+/** The next read: later while nothing goes on, and not while the tab is hidden. */
+function schedule(brandId: string, watch: Watch) {
+  const wait = watch.idle >= FIRST_RUN_IDLE_READS ? FIRST_RUN_IDLE_POLL_MS : FIRST_RUN_POLL_MS;
+  watch.timer = setTimeout(() => {
+    if (!watch.live) return;
+    if (tabHidden()) {
+      watch.paused = true;
+      resumeOnShow();
+      return;
+    }
+    void tick(brandId, watch);
+  }, wait);
 }
 
 /**
@@ -58,6 +105,7 @@ async function tick(brandId: string, watch: Watch) {
     watch.live = false;
     watch.run = null;
     emit(watch);
+    if (watch.seen) for (const listener of finishedListeners) listener(brandId);
     return;
   }
   if (win) {
@@ -80,15 +128,25 @@ async function tick(brandId: string, watch: Watch) {
             left: eta === null ? null : etaParts(eta),
           }
         : null;
+    if (watch.run) watch.seen = true;
+    watch.idle = watch.run ? 0 : watch.idle + 1;
     emit(watch);
   }
-  watch.timer = setTimeout(() => void tick(brandId, watch), FIRST_RUN_POLL_MS);
+  schedule(brandId, watch);
 }
 
 function watchFirstRun(brandId: string, listener: () => void) {
   let watch = watches.get(brandId);
   if (!watch) {
-    watch = { run: null, pace: [], listeners: new Set(), live: true };
+    watch = {
+      run: null,
+      seen: false,
+      pace: [],
+      listeners: new Set(),
+      live: true,
+      idle: 0,
+      paused: false,
+    };
     watches.set(brandId, watch);
     void tick(brandId, watch);
   }
@@ -106,19 +164,32 @@ function watchFirstRun(brandId: string, listener: () => void) {
 const noWatch = () => () => {};
 
 /**
+ * Called with the brand's id when a first run a page watched finishes (the
+ * brand's first completed run): not for one already done when first read.
+ * Returns the way to stop listening.
+ */
+export function onFirstRunFinished(listener: (brandId: string) => void) {
+  finishedListeners.add(listener);
+  return () => {
+    finishedListeners.delete(listener);
+  };
+}
+
+/**
  * The active brand's first tracking run while it goes on, or null: before
  * the first read, when no run is under way, and once the brand has a
- * completed run. Another brand's run never shows under this one.
+ * completed run. Another brand's run never shows under this one. With
+ * `enabled` false: nothing, and no reads.
  */
-export function useFirstRun(): FirstRun | null {
+export function useFirstRun({ enabled = true }: { enabled?: boolean } = {}): FirstRun | null {
   const brandId = useBrandStore((s) => s.activeBrandId);
   const subscribe = useCallback(
-    (listener: () => void) => (brandId ? watchFirstRun(brandId, listener) : noWatch()),
-    [brandId],
+    (listener: () => void) => (brandId && enabled ? watchFirstRun(brandId, listener) : noWatch()),
+    [brandId, enabled],
   );
   const run = useSyncExternalStore(
     subscribe,
-    () => (brandId ? (watches.get(brandId)?.run ?? null) : null),
+    () => (brandId && enabled ? (watches.get(brandId)?.run ?? null) : null),
     () => null,
   );
   return run && run.brandId === brandId ? run : null;

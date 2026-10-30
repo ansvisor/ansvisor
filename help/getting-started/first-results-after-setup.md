@@ -4,8 +4,8 @@ route: /dashboard/insights
 keywords: [first results, after onboarding, first run, first tracking, visibility zero, brand name prompts, tracking snippet]
 synonyms: [no data yet, empty dashboard, why is my score zero, what happens next, how long until results]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-30
+last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -40,6 +40,10 @@ Setup doesn't include the tracking snippet. It's an optional step you do separat
 3. Paste it into the head section of your site's pages, just before the head closes. On WordPress, use a header injection plugin; on a static site, edit your template.
 
 Once the snippet sends a visit, the **Tracking snippet** card shows it as active, with the time of the last visit.
+
+## While the first tracking runs
+
+Brand Visibility says **First tracking in progress** at the top until its first results are in. Above the **Tracked Prompts** table, a note says "Your first answers are arriving", with how many are in and about how long is left, and rows still without results say **Arriving now**. Everything fills in when tracking finishes. Meanwhile, do the **Ready now** steps of **Getting started** on the Action Center. When tracking finishes, the app says **Your first results are ready**.
 
 ## My visibility score is 0
 
