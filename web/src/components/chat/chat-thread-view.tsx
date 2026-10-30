@@ -104,6 +104,7 @@ export function ChatThreadView({
   variant,
   defaultMode,
   fullAutoOpen,
+  fullAutoOffByAdmin = false,
   onConversation,
   empty,
   usageNoticeSeen = null,
@@ -112,11 +113,13 @@ export function ChatThreadView({
   pageReferences,
   pageRoute,
   draft,
+  onOwnKey = false,
 }: {
   thread: ChatThread | null;
   variant: ComposerVariant;
   defaultMode: ChatMode;
   fullAutoOpen: boolean;
+  fullAutoOffByAdmin?: boolean;
   /** In the side panel: the chat's id after each message it takes, instead of the address changing. */
   onConversation?: (conversationId: string) => void;
   /** What shows before the first message (the side panel's greeting). */
@@ -132,14 +135,16 @@ export function ChatThreadView({
   pageRoute?: string;
   /** A question or an object the page hands the box. */
   draft?: ComposerDraft | null;
+  /** Chat runs on the workspace's own key: a used-up allowance doesn't pause it. */
+  onOwnKey?: boolean;
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const { isLocked, openUpgrade } = useUpgradeGate();
   // At the AI limit, Chat pauses: the composer is off (CHAT-04 item 17).
-  const { usage } = useAiUsage();
-  const atCap = chatAtCap(usage);
+  const { usage, refresh: refreshUsage } = useAiUsage();
+  const atCap = chatAtCap(usage, onOwnKey);
   const [turns, setTurns] = useState<Turn[]>(() => turnsOf(thread));
   const [conversationId, setConversationId] = useState<string | null>(
     thread?.conversationId ?? null,
@@ -160,6 +165,14 @@ export function ChatThreadView({
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [working]);
+
+  // A run that stopped working spent some of the AI usage: the meter, the 80%
+  // line and the pause read it again, once per run, not on a timer.
+  const wasWorking = useRef(working);
+  useEffect(() => {
+    if (wasWorking.current && !working) refreshUsage();
+    wasWorking.current = working;
+  }, [working, refreshUsage]);
 
   const updateRun = useCallback((key: string, fn: (turn: Turn) => Turn) => {
     setTurns((all) => all.map((turn) => (turn.key === key ? fn(turn) : turn)));
@@ -332,14 +345,19 @@ export function ChatThreadView({
     return true;
   }
 
-  async function stop() {
-    if (!last?.runId) return;
-    await fetch(`/api/chat/runs/${last.runId}/stop`, { method: 'POST' }).catch(() => null);
+  /** Stops the run under way: false when the Stop wasn't taken. */
+  async function stop(): Promise<boolean> {
+    if (!last?.runId) return true;
+    const res = await fetch(`/api/chat/runs/${last.runId}/stop`, { method: 'POST' }).catch(
+      () => null,
+    );
+    if (!res?.ok) return false;
     // A run nothing drives (queued, waiting) is ended by the Stop itself: its events say so.
     if (last.run && last.run.status !== 'running') {
-      const res = await fetch(`/api/chat/runs/${last.runId}/events?after=${last.run.lastSeq}`);
-      if (res.ok && res.body) await consume(last.key, res.body, last.runId);
+      const events = await fetch(`/api/chat/runs/${last.runId}/events?after=${last.run.lastSeq}`);
+      if (events.ok && events.body) await consume(last.key, events.body, last.runId);
     }
+    return true;
   }
 
   return (
@@ -394,6 +412,7 @@ export function ChatThreadView({
           mode={mode}
           onModeChange={setMode}
           fullAutoOpen={fullAutoOpen}
+          fullAutoOffByAdmin={fullAutoOffByAdmin}
           running={working && !asking}
           answering={!!asking}
           maxLength={asking ? ANSWER_MAX : undefined}
@@ -414,7 +433,11 @@ export function ChatThreadView({
           }
           onStop={() => void stop()}
           onSteer={async (message, sent) => {
-            await stop();
+            // Only once the Stop is taken: else two runs would answer in one chat.
+            if (!(await stop())) {
+              toast.error(t('sendFailed'));
+              return false;
+            }
             return send(message, sent);
           }}
           searchReferences={

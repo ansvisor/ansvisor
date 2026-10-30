@@ -320,6 +320,23 @@ describe('ChatComposer: context chips and the ghost suggestion (W1-11)', () => {
     });
   });
 
+  it('keeps the focus in the composer when a chip is removed from the keyboard', async () => {
+    let shownChips = chips;
+    const onRemoveChip = vi.fn((key: string) => {
+      shownChips = shownChips.filter((c) => c.key !== key);
+    });
+    await render({ chips, onRemoveChip });
+    const remove = container.querySelectorAll<HTMLButtonElement>(
+      '[data-action="composer.removeChip"]',
+    )[0];
+    remove.focus();
+    expect(document.activeElement).toBe(remove);
+    await act(async () => remove.click());
+    expect(onRemoveChip).toHaveBeenCalledExactlyOnceWith('brand');
+    await render({ chips: shownChips, onRemoveChip });
+    expect(document.activeElement).toBe(box());
+  });
+
   it('shows one ghost suggestion in the empty box; Tab makes it the text, and nothing sends by itself', async () => {
     await render({ ghost });
     const shown = () => container.querySelector('[data-action="composer.acceptGhost"]');
