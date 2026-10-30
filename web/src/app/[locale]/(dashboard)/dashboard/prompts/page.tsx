@@ -65,6 +65,8 @@ import {
 import { CompetitionBars } from '@/components/ui/competition-bars';
 import { WorkStatusBadge } from '@/components/prompts/work-status';
 import { BulkImportPrompts } from '@/components/prompts/bulk-import-prompts';
+import { AddTopicLink, TopicFirstNotice } from '@/components/prompts/topic-first';
+import { isNoTopics } from '@/lib/topics-required';
 import { promptKey } from '@/lib/prompt-import';
 import {
   DropdownMenu,
@@ -120,6 +122,8 @@ import {
 } from '@/lib/prompt-position-summary';
 import { mentionRateLabel } from '@/lib/prompt-improve';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useFirstRun } from '@/hooks/use-first-run';
+import { FirstRunEmptyState } from '@/components/first-run/first-run-empty-state';
 import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { rangeChipLabel } from '@/lib/chat/page-context';
@@ -661,6 +665,7 @@ function AddPromptDialog({
   open,
   onClose,
   onAdded,
+  onAddTopic,
 }: {
   brandId: string;
   shoppingEnabled: boolean;
@@ -673,18 +678,23 @@ function AddPromptDialog({
   open: boolean;
   onClose: () => void;
   onAdded: () => void;
+  /** "Add a topic" on a brand without one: the page's Topics tab, with Add Topic open. */
+  onAddTopic: () => void;
 }) {
   const limitReached =
     !!locationQuota &&
     isPromptLimitReached(getPromptUsage(locationQuota.used, locationQuota.maxPrompts));
   const { allowedScraperIds, allowedModelIds, visibleScrapers, visibleModels } =
     useAllowedEngines(shoppingEnabled);
+  const tCommon = useTranslations('common');
 
   const [text, setText] = useState('');
   const [category, setCategory] = useState('');
   const [scrapers, setScrapers] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
+  // The brand has no topic yet: the dialog asks for one instead of the form.
+  const [noTopics, setNoTopics] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<'single' | 'bulk'>('single');
@@ -701,15 +711,18 @@ function AddPromptDialog({
     if (!open) return;
     setText('');
     setError(null);
+    setNoTopics(false);
     setMode('single');
     setStaged([]);
     setScrapers(allowedScraperIds);
     setModels(allowedModelIds);
     let cancelled = false;
+    // Read on every open, so a topic added on the Topics tab counts on return.
     getTopics(brandId)
       .then((t) => {
         if (cancelled) return;
         setTopics(t);
+        setNoTopics(t.length === 0);
         setCategory((prev) => prev || (t[0]?.name ?? ''));
       })
       .catch(() => {});
@@ -776,7 +789,8 @@ function AddPromptDialog({
         })),
       );
       if ('error' in result) {
-        setError(result.error);
+        if (isNoTopics(result)) setNoTopics(true);
+        else setError(result.error);
         return;
       }
       const added = result.importedIdx.length;
@@ -846,6 +860,16 @@ function AddPromptDialog({
                 Close
               </Button>
               <PromptLimitActions planId={locationQuota.planId} />
+            </DialogFooter>
+          </>
+        ) : noTopics ? (
+          <>
+            <TopicFirstNotice />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleClose}>
+                {tCommon('cancel')}
+              </Button>
+              <AddTopicLink onAddTopic={onAddTopic} />
             </DialogFooter>
           </>
         ) : (
@@ -1298,6 +1322,8 @@ export default function PromptsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [quota, setQuota] = useState<VolumeQuota | null>(null);
   const [addPromptOpen, setAddPromptOpen] = useState(false);
+  // "Add a topic" was asked for on a tab: the Topics tab opens Add Topic once it shows.
+  const [addTopicPending, setAddTopicPending] = useState(false);
   // Where a tab's own buttons go: beside the tabs, as the Prompts tab's do.
   const [headerActions, setHeaderActions] = useState<HTMLDivElement | null>(null);
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
@@ -1311,6 +1337,8 @@ export default function PromptsPage() {
   const openAddPrompt = guard(() => setAddPromptOpen(true), { action: tActions('addPrompts') });
 
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  // The brand's first run while it goes on: the table's answers are still coming.
+  const firstRun = useFirstRun();
   const tCommon = useTranslations('common');
   const tNav = useTranslations('nav');
   const tPrompts = useTranslations('prompts');
@@ -1481,6 +1509,19 @@ export default function PromptsPage() {
     },
     [tab, rangePreset, customFrom, customTo, regionFilter, writeUrl],
   );
+
+  /**
+   * "Add a topic" from Add prompt, Suggestions or Query Fan-out on a brand
+   * without topics: the Topics tab, with Add Topic open, in place. A link to
+   * /dashboard/prompts/topics?new=1 would change the address alone: the page
+   * reads its tab from the route only when it opens. Back on the tab, the
+   * flow reads the topics again.
+   */
+  const addTopicInPlace = useCallback(() => {
+    setAddPromptOpen(false);
+    setAddTopicPending(true);
+    showSection('topics', view);
+  }, [showSection, view]);
 
   // Deep link from the Insights Recommendations row (#459): the target card
   // only exists once the Insights tab's volume data has rendered, so a bare
@@ -2099,6 +2140,7 @@ export default function PromptsPage() {
                 <SuggestionsTab
                   brandId={activeBrandId}
                   onAccepted={reloadAfterChange}
+                  onAddTopic={addTopicInPlace}
                   planId={locationQuota?.planId}
                   limitActions={
                     locationQuota ? <PromptLimitActions planId={locationQuota.planId} /> : null
@@ -2155,6 +2197,7 @@ export default function PromptsPage() {
                   </Button>
                 </div>
               )}
+              {firstRun && allPrompts.length > 0 && <FirstRunEmptyState run={firstRun} />}
               <AllPromptsTab
                 loading={loading}
                 failed={loadFailed}
@@ -2195,6 +2238,8 @@ export default function PromptsPage() {
               customFrom={customFrom}
               customTo={customTo}
               onLoaded={() => setPromptDataWanted(true)}
+              openAddTopic={addTopicPending}
+              onAddTopicOpened={() => setAddTopicPending(false)}
             />
           )}
         </TabsContent>
@@ -2207,6 +2252,7 @@ export default function PromptsPage() {
               range={range}
               rangeLabel={rangeLabel}
               onTracked={reloadAfterChange}
+              onAddTopic={addTopicInPlace}
             />
           )}
         </TabsContent>
@@ -2587,6 +2633,7 @@ export default function PromptsPage() {
           open={addPromptOpen}
           onClose={() => setAddPromptOpen(false)}
           onAdded={reloadAfterChange}
+          onAddTopic={addTopicInPlace}
         />
       )}
 

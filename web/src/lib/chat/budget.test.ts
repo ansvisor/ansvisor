@@ -123,6 +123,23 @@ describe('reserveChatStep', () => {
     expect(calls[2].body.usage).toEqual({ inputTokens: 2200, outputTokens: 400 });
   });
 
+  it("sends the prompt cache's reads and writes, and how long the call took, never a cost", async () => {
+    held();
+    const budget = budgetOf(await reserveChatStep(step()));
+    await budget.charge(
+      { inputTokens: 4000, outputTokens: 700, cacheReadTokens: 3000, cacheWriteTokens: 400 },
+      1830,
+    );
+    expect(calls[1].body).toEqual({
+      orgId: ORG,
+      usageId: USAGE,
+      model: 'anthropic/claude-sonnet-5.5',
+      usage: { inputTokens: 4000, outputTokens: 700, cacheReadTokens: 3000, cacheWriteTokens: 400 },
+      latencyMs: 1830,
+    });
+    expect(JSON.stringify(calls[1].body)).not.toMatch(/cost|usd/i);
+  });
+
   it('sends no counts the provider didn’t report, so the hold stays as the cost', async () => {
     held();
     const budget = budgetOf(await reserveChatStep(step()));

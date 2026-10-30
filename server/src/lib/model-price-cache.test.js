@@ -102,6 +102,28 @@ describe('priceInEffect', () => {
     });
   });
 
+  it("keeps the cache-read rate, an override's own, or one raised with the input rate", () => {
+    const cached = { ...HAIKU, cache_read_per_m: 0.01 };
+    expect(priceInEffect(cached, { promptTokens: 7000 })).toEqual({
+      input: 0.1,
+      output: 0.5,
+      cacheRead: 0.01,
+    });
+    // The prompt-size override raises the input 5x and names no cache-read rate: 5x too.
+    expect(priceInEffect(cached, { promptTokens: 100000 }).cacheRead).toBeCloseTo(0.05);
+    const own = {
+      ...cached,
+      overrides: [{ ...HAIKU.overrides[0], input_cache_read: '0.00000003' }],
+    };
+    expect(priceInEffect(own, { promptTokens: 100000 }).cacheRead).toBeCloseTo(0.03);
+    // A cheaper window lowers the input, never the cache-read rate.
+    const peak = { ...DEEPSEEK, input_per_m: 1.32, output_per_m: 3.96, cache_read_per_m: 0.1 };
+    expect(priceInEffect(peak, { now: WED_0030 })).toMatchObject({
+      input: expect.closeTo(0.66),
+      cacheRead: expect.closeTo(0.1),
+    });
+  });
+
   it('gives none without a base price (a variable-priced router)', () => {
     expect(
       priceInEffect({ model_id: 'openrouter/auto', input_per_m: null, output_per_m: null }),
