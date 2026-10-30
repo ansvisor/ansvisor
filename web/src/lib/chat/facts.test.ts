@@ -130,7 +130,8 @@ describe('the Site Audit guard it mirrors', () => {
       join(__dirname, '../../../../server/src/lib/audit/recommendation-guard.js'),
       'utf8',
     );
-    expect(server).toContain(`metric: '${PLACEHOLDER.metric}'`);
+    // The audit drops an unsupported metric with its sentence (#1816), so only
+    // the price and date placeholders are still shared.
     expect(server).toContain(`price: '${PLACEHOLDER.price}'`);
     expect(server).toContain(`date: '${PLACEHOLDER.date}'`);
     expect(server).toContain(
