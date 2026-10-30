@@ -162,6 +162,7 @@ function query(table) {
 
 let budget;
 let guard;
+let agentShareRows;
 
 beforeEach(async () => {
   vi.resetModules();
@@ -179,6 +180,7 @@ beforeEach(async () => {
   rpcCalls = [];
   runs = new Set([RUN]);
   nextId = 1;
+  agentShareRows = [];
   lock = Promise.resolve();
   vi.doMock('../config/supabase.js', () => ({
     default: {
@@ -188,6 +190,7 @@ beforeEach(async () => {
         if (fn === 'reserve_chat_ai_usage') return reserveChatAiUsage(args);
         if (fn === 'reserve_ai_usage') return reserveAiUsage(args);
         if (fn === 'ai_usage_by_feature') return aiUsageByFeature(args);
+        if (fn === 'chat_agent_usage_shares') return { data: agentShareRows, error: null };
         return { data: null, error: { message: `no ${fn}` } };
       },
     },
@@ -669,5 +672,44 @@ describe('with purchased AI credits (CHAT-18 §F)', () => {
     ).rejects.toMatchObject({ statusCode: 429 });
     expect(rpcCalls.find((c) => c.fn === 'reserve_ai_usage').args.p_budget).toBe(5);
     expect(usedOf('g1')).toBe(0);
+  });
+});
+
+describe('each agent’s share of the AI limit', () => {
+  it('reads the shares this period, or over the last days, against the budget, and answers no dollars', async () => {
+    const AGENT = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c09';
+    agentShareRows = [
+      { agent_id: AGENT, share: '0.0320', own_key_share: '0.0000', runs: 4 },
+      { agent_id: null, share: '0.0100', own_key_share: '0.0050', runs: 1 },
+    ];
+    const period = await budget.agentUsageShares('o1');
+    expect(rpcCalls.at(-1)).toEqual({
+      fn: 'chat_agent_usage_shares',
+      args: { p_organization_id: 'o1', p_since: '2026-10-20T09:00:00.000Z', p_budget: 5 },
+    });
+    expect(period).toEqual({
+      unlimited: false,
+      since: '2026-10-20T09:00:00.000Z',
+      shares: [
+        { agentId: AGENT, share: 0.032, ownKeyShare: 0, runs: 4 },
+        { agentId: null, share: 0.01, ownKeyShare: 0.005, runs: 1 },
+      ],
+    });
+
+    const days = await budget.agentUsageShares('o1', { days: 30 });
+    expect(rpcCalls.at(-1).args.p_since).toBe('2026-09-29T12:00:00.000Z');
+    expect(days.since).toBe('2026-09-29T12:00:00.000Z');
+  });
+
+  it('has nothing to share without a budget (self-hosted), and nothing while Chat is off', async () => {
+    vi.stubEnv('IS_CLOUD', 'false');
+    expect(await budget.agentUsageShares('o1')).toEqual({
+      unlimited: true,
+      since: null,
+      shares: [],
+    });
+    expect(rpcCalls).toEqual([]);
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    await expect(budget.agentUsageShares('o1')).rejects.toMatchObject({ code: 'chat_off' });
   });
 });

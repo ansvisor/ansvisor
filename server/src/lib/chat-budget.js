@@ -179,3 +179,35 @@ export async function releaseChatStep(orgId, usageId) {
     .in('feature', CHAT_BUDGET_FEATURES);
   if (error) throw new Error(error.message);
 }
+
+/**
+ * Each agent's share of the AI limit (CHAT-27 items 24–30), for the web's
+ * Agents list and agent detail: what its runs spent on the budget and on the
+ * workspace's own key, over the budget, and how many runs spent anything
+ * (chat_agent_usage_shares, 00419). Since the period's start (the meter's,
+ * aiBudgetOf), or over the last `days` days against the same budget. Shares
+ * only: the budget stays here. No budget to share (self-hosted): unlimited,
+ * no rows.
+ */
+export async function agentUsageShares(orgId, { days = null } = {}) {
+  assertChatOn(orgId);
+  const { budgetUsd, since } = await aiBudgetOf(orgId);
+  if (budgetUsd === null || !(budgetUsd > 0)) return { unlimited: true, since: null, shares: [] };
+  const from = days ? new Date(Date.now() - days * 86_400_000).toISOString() : since;
+  const { data, error } = await supabaseAdmin.rpc('chat_agent_usage_shares', {
+    p_organization_id: orgId,
+    p_since: from,
+    p_budget: budgetUsd,
+  });
+  if (error) throw new Error(error.message);
+  return {
+    unlimited: false,
+    since: from,
+    shares: (data ?? []).map((row) => ({
+      agentId: row.agent_id ?? null,
+      share: Number(row.share) || 0,
+      ownKeyShare: Number(row.own_key_share) || 0,
+      runs: Number(row.runs) || 0,
+    })),
+  };
+}
