@@ -48444,12 +48444,7 @@ begin
     raise exception 'chat_why_cells: a period or the series is over 92 days' using errcode = '22023';
   end if;
 
-  with topic_prompts as (
-    select coalesce(array_agg(p.id), '{}'::uuid[]) as ids
-    from public.prompts p
-    where p.topic_id = p_topic_id
-  ),
-  brand_rows as (
+  with brand_rows as (
     select d.day, d.prompt_id, d.platform, d.model_used, d.region,
            case
              when d.day between p_a_from and p_a_to then 'a'
@@ -48468,7 +48463,8 @@ begin
            or d.day between p_series_from and p_b_to)
       and (p_models is null or d.model_used = any (p_models))
       and (p_region is null or d.region = p_region)
-      and (p_topic_id is null or d.prompt_id = any ((select tp.ids from topic_prompts tp)))
+      and (p_topic_id is null
+           or d.prompt_id in (select p.id from public.prompts p where p.topic_id = p_topic_id))
   ),
   competitor_rows as (
     select c.day, c.prompt_id, c.platform, c.model_used, c.region,
@@ -48484,7 +48480,8 @@ begin
            or c.day between p_series_from and p_b_to)
       and (p_models is null or c.model_used = any (p_models))
       and (p_region is null or c.region = p_region)
-      and (p_topic_id is null or c.prompt_id = any ((select tp.ids from topic_prompts tp)))
+      and (p_topic_id is null
+           or c.prompt_id in (select p.id from public.prompts p where p.topic_id = p_topic_id))
   ),
   brand_cells as (
     select r.prompt_id, r.platform, r.model_used, r.region, r.period,
