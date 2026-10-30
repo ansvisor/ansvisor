@@ -1,10 +1,11 @@
 /**
  * The AI Traffic page's range (AT-017, spec §3.01): it opens on the last 24
  * hours and remembers the member's last choice. Client-side: the presets
- * come from the range control. How a window is bucketed is traffic-buckets.ts.
+ * are the range control's (config/date-presets.ts). How a window is
+ * bucketed is traffic-buckets.ts.
  */
 
-import { ALL_DATE_PRESETS, type DateRangePreset } from '@/components/filters/date-range-filter';
+import { ALL_DATE_PRESETS, type DateRangePreset } from '@/config/date-presets';
 
 /** The range a first visit opens on. */
 export const DEFAULT_TRAFFIC_PRESET: DateRangePreset = '24h';
