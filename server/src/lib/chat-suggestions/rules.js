@@ -10,9 +10,8 @@
  *     Center off a menu (cleanMenuSections strips it, the menu always shows
  *     it), so the role decides.
  *   * When: once the person's day starts, 07:00 in their time zone, until
- *     noon: a suggestion is a morning one, and one turned back on in the
- *     afternoon arrives the next morning. At most one a day and 7 in any 7
- *     days.
+ *     noon: a suggestion is a morning one. A feed made or turned back on
+ *     today starts tomorrow morning. At most one a day and 7 in any 7 days.
  *   * What: the brand's open actions (`new`, `in_progress`; not on hold,
  *     dismissed or deleted), unassigned or the person's own, ranked by
  *     their priority score (the shared priority core, past success
@@ -22,9 +21,9 @@
  *     off and back after the week), what they removed or put off, and what
  *     waits on someone in Chat's "Needs you". When yesterday's was of the
  *     same category and another's score is close, the other comes first.
- *   * Pause: 30 days with none used (opened, started, put off or removed),
- *     while suggestions kept coming, pauses the feed until the person turns
- *     it back on.
+ *   * Pause: 30 days from the first suggestion after the last use (opened,
+ *     started, put off or removed), with at least 7 sent and none used,
+ *     pauses the feed until the person turns it back on.
  */
 
 import { resolve } from '../../config/action-engine.js';
@@ -46,8 +45,10 @@ export const WEEK_MAX = 7;
 export const WEEK_DAYS = 7;
 /** An action suggested within this many days isn't suggested again; rows older are deleted. */
 export const KEEP_DAYS = 14;
-/** Days with no suggestion used after which a feed is paused. */
+/** Days from the first suggestion after the last use, with none used, after which a feed is paused. */
 export const PAUSE_AFTER_DAYS = 30;
+/** Suggestions at least that went unused in those days: a feed that got few isn't paused. */
+export const PAUSE_MIN_SENT = 7;
 /** Points for an action "Start now" opens in the Content Editor: one sitting's work. */
 export const START_NOW_LIFT = 5;
 /** Points within which another category comes before yesterday's. */
@@ -166,17 +167,30 @@ export function inMorning(now, zone) {
 
 // ─── Sending ────────────────────────────────────────────────────────────────
 
+const timeOf = (value) => Date.parse(value ?? '') || 0;
+
 /**
  * Whether a feed gets today's suggestion now: in the person's morning, none
  * sent on their today, none in the last MIN_GAP_HOURS (a time zone that
- * changed can't send two in a morning), and fewer than WEEK_MAX in the
- * WEEK_DAYS calendar days that end today.
+ * changed can't send two in a morning), fewer than WEEK_MAX in the
+ * WEEK_DAYS calendar days that end today, and not made or turned back on
+ * today.
  *
- * @param {{ now: Date, zone: string, rows: Array<{ sent_on: string, sent_at: string }> }} input
+ * "The first suggestion after turning back on arrives the next morning"
+ * (CHAT-26 §5), with no column saying when a feed was turned on: a feed
+ * made (created_at) or changed (updated_at) on the person's today that got
+ * none yesterday waits for tomorrow. That covers a feed made this morning
+ * (an admin's, by this job, or a member's on their first Inbox) and Turn
+ * back on (the Inbox writes status 'on'). On a usual day yesterday's
+ * suggestion is there, so a use that moved updated_at this morning doesn't
+ * hold today's back; after a day with none, it does, once.
+ *
+ * @param {{ now: Date, zone: string, rows: Array<{ sent_on: string, sent_at: string }>,
+ *   feed?: { created_at?: string, updated_at?: string|null } }} input
  *   rows: the feed's suggestions kept (the last KEEP_DAYS days).
  * @returns {{ due: true, day: string } | { due: false, reason: string }}
  */
-export function dueNow({ now, zone, rows }) {
+export function dueNow({ now, zone, rows, feed }) {
   const { day, hour } = localClock(now, zone);
   if (hour < DAY_STARTS_AT || hour >= SEND_UNTIL) return { due: false, reason: 'not_morning' };
   if (rows.some((row) => row.sent_on === day)) return { due: false, reason: 'sent_today' };
@@ -187,18 +201,27 @@ export function dueNow({ now, zone, rows }) {
   const weekStart = addDays(day, -(WEEK_DAYS - 1));
   const week = rows.filter((row) => row.sent_on >= weekStart && row.sent_on <= day).length;
   if (week >= WEEK_MAX) return { due: false, reason: 'week_full' };
+  const changed = Math.max(timeOf(feed?.created_at), timeOf(feed?.updated_at));
+  const yesterday = addDays(day, -1);
+  if (
+    changed > 0 &&
+    localClock(new Date(changed), zone).day === day &&
+    !rows.some((row) => row.sent_on === yesterday)
+  ) {
+    return { due: false, reason: 'turned_on_today' };
+  }
   return { due: true, day };
 }
 
 /**
  * Whether a suggestion still keeps its action from being suggested again:
- * put off until a time still ahead ("Not now", a week); otherwise removed,
- * or sent in the last KEEP_DAYS days. A put-off one whose week is over
- * comes back ("back in a week if it's still open").
+ * removed (put off before or not); put off until a time still ahead ("Not
+ * now", a week); or sent in the last KEEP_DAYS days. A put-off one whose
+ * week is over comes back ("back in a week if it's still open").
  */
 export function blocksAction(row, now) {
-  if (row.snoozed_until) return Date.parse(row.snoozed_until) > now.getTime();
   if (row.removed_at) return true;
+  if (row.snoozed_until) return Date.parse(row.snoozed_until) > now.getTime();
   return Date.parse(row.sent_at) > now.getTime() - KEEP_DAYS * DAY_MS;
 }
 
@@ -288,30 +311,55 @@ export function pickSuggestion({ actions, userId, rows, needsYou, startNow, now 
 // ─── Pausing ────────────────────────────────────────────────────────────────
 
 /**
- * Whether an `on` feed is paused: its person used none of its suggestions
- * (opened, started, put off or removed) for PAUSE_AFTER_DAYS, while they
- * kept coming (one is kept, so one came in the last KEEP_DAYS days). Use is
- * the feed's last_used_at, kept by the Inbox's API, or a kept row's own
- * marks; the feed's last change (made, or turned back on) starts the count.
+ * When a feed was last used: its last_used_at (kept by the Inbox's API), a
+ * kept suggestion's own marks (opened, started, removed), or, never used,
+ * when it was made. In ms.
+ */
+export function lastUseOf({ feed, rows }) {
+  return Math.max(
+    timeOf(feed.created_at),
+    timeOf(feed.last_used_at),
+    ...rows.flatMap((row) => [row.opened_at, row.started_at, row.removed_at].map(timeOf)),
+  );
+}
+
+/**
+ * Whether a suggestion sent now is the first since the feed's last use: no
+ * kept one came after it. The job then marks the feed (an update, so
+ * updated_at is now), as the start of the 30 days: suggestions are kept
+ * only KEEP_DAYS, so the first one after a use is gone long before the 30
+ * are over, and no column holds when it was sent. After a gap of more than
+ * KEEP_DAYS with none, the next one marks it again: the count starts over,
+ * never sooner.
+ */
+export function firstSinceUse({ feed, rows }) {
+  const since = lastUseOf({ feed, rows });
+  return !rows.some((row) => timeOf(row.sent_at) > since);
+}
+
+/**
+ * Whole days a feed has gone unused, counted from the first suggestion after
+ * its last use (the job's mark in updated_at; firstSinceUse), or from the
+ * use itself when later. Turning it back on (the Inbox's update) starts the
+ * count again too.
+ */
+export function idleDays({ feed, rows, now }) {
+  const from = Math.max(lastUseOf({ feed, rows }), timeOf(feed.updated_at));
+  return Math.floor((now.getTime() - from) / DAY_MS);
+}
+
+/**
+ * Whether an `on` feed is paused: PAUSE_AFTER_DAYS since the first
+ * suggestion after its last use (idleDays), with at least PAUSE_MIN_SENT
+ * sent since that use and still kept, none of them used. A feed that got
+ * one yesterday after a long quiet spell isn't paused today.
  *
- * @param {{ feed: { status: string, created_at?: string, updated_at?: string,
+ * @param {{ feed: { status: string, created_at?: string, updated_at?: string|null,
  *   last_used_at?: string|null }, rows: Array<object>, now: Date }} input
  */
 export function shouldPause({ feed, rows, now }) {
-  if (feed.status !== 'on' || rows.length === 0) return false;
-  return idleDays({ feed, rows, now }) >= PAUSE_AFTER_DAYS;
-}
-
-/** Whole days since a feed was last used or changed (shouldPause's count). */
-export function idleDays({ feed, rows, now }) {
-  const marks = [
-    feed.created_at,
-    feed.updated_at,
-    feed.last_used_at,
-    ...rows.flatMap((row) => [row.opened_at, row.started_at, row.removed_at]),
-  ]
-    .map((value) => Date.parse(value ?? ''))
-    .filter(Number.isFinite);
-  const lastUse = marks.length ? Math.max(...marks) : 0;
-  return Math.floor((now.getTime() - lastUse) / DAY_MS);
+  if (feed.status !== 'on') return false;
+  const since = lastUseOf({ feed, rows });
+  const unused = rows.filter((row) => timeOf(row.sent_at) > since).length;
+  return unused >= PAUSE_MIN_SENT && idleDays({ feed, rows, now }) >= PAUSE_AFTER_DAYS;
 }

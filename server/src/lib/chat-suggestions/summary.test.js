@@ -7,6 +7,7 @@ import {
   actionPages,
   buildSummary,
   startNowOf,
+  summaryBytes,
   titlePayload,
 } from './summary.js';
 
@@ -96,7 +97,7 @@ describe('buildSummary', () => {
       play: { id: 'p', dataRow: { note: huge } },
     };
     const summary = buildSummary({ action, payload, pick });
-    expect(Buffer.byteLength(JSON.stringify(summary))).toBeLessThanOrEqual(SUMMARY_MAX_BYTES);
+    expect(summaryBytes(summary)).toBeLessThanOrEqual(SUMMARY_MAX_BYTES);
     expect(summary.play?.dataRow ?? null).toBeNull();
     expect(summary.action.payload.title).toBe('Optimize pages');
     expect(summary.action.payload.promptIds).toBeUndefined();
@@ -106,8 +107,29 @@ describe('buildSummary', () => {
       payload: {},
       pick,
     });
-    expect(Buffer.byteLength(JSON.stringify(reasonTooBig))).toBeLessThanOrEqual(SUMMARY_MAX_BYTES);
+    expect(summaryBytes(reasonTooBig)).toBeLessThanOrEqual(SUMMARY_MAX_BYTES);
     expect(reasonTooBig.priority.reason).toBeNull();
+  });
+});
+
+describe('summaryBytes', () => {
+  it('counts a byte more for each comma and colon, as jsonb\u2019s text writes ", " and ": "', () => {
+    const value = { a: [1, 2, 3], b: 'x' };
+    const json = JSON.stringify(value); // {"a":[1,2,3],"b":"x"}
+    expect(summaryBytes(value)).toBe(Buffer.byteLength(json) + 5);
+    const jsonbText = '{"a": [1, 2, 3], "b": "x"}';
+    expect(summaryBytes(value)).toBeGreaterThanOrEqual(Buffer.byteLength(jsonbText));
+  });
+
+  it('keeps a summary of many small items within the database\u2019s check', () => {
+    const many = Array.from({ length: 4000 }, (_, i) => i);
+    const summary = buildSummary({
+      action: { ...action, priority_reason: { many } },
+      payload: {},
+      pick,
+    });
+    expect(summaryBytes(summary)).toBeLessThanOrEqual(SUMMARY_MAX_BYTES);
+    expect(summary.priority.reason).toBeNull();
   });
 });
 

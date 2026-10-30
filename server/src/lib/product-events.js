@@ -46,7 +46,13 @@ export async function captureProductEvents(
           batch: chunk.map(({ event, distinctId, properties = {}, timestamp }) => ({
             event,
             distinct_id: distinctId,
-            properties: { ...properties, distinct_id: distinctId, $lib: 'ansvisor-server' },
+            properties: {
+              ...properties,
+              distinct_id: distinctId,
+              $lib: 'ansvisor-server',
+              // The server's address isn't the person's: no location from it (posthog-node's default).
+              $geoip_disable: true,
+            },
             ...(timestamp ? { timestamp } : {}),
           })),
         }),

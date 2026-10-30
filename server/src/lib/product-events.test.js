@@ -31,6 +31,10 @@ describe('captureProductEvents', () => {
     });
     expect(sent).toBe(2);
     const [url, init] = fetcher.mock.calls[0];
+    // No location from the server's own address.
+    expect(JSON.parse(init.body).batch.every((e) => e.properties.$geoip_disable === true)).toBe(
+      true,
+    );
     expect(url).toBe('https://eu.i.posthog.com/batch/');
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({
@@ -38,7 +42,12 @@ describe('captureProductEvents', () => {
       batch: [1, 2].map((n) => ({
         event: 'daily_suggestion_sent',
         distinct_id: `user-${n}`,
-        properties: { brand_id: 'b1', distinct_id: `user-${n}`, $lib: 'ansvisor-server' },
+        properties: {
+          brand_id: 'b1',
+          distinct_id: `user-${n}`,
+          $lib: 'ansvisor-server',
+          $geoip_disable: true,
+        },
         timestamp: '2026-10-30T09:30:00.000Z',
       })),
     });

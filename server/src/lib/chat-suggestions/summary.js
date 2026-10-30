@@ -30,8 +30,11 @@
 import { MINUTES_PER_PAGE, START_NOW_LIFT } from './rules.js';
 
 export const SUMMARY_VERSION = 1;
-/** The summary's ceiling, under chat_suggestions' 32,000-byte check. */
-export const SUMMARY_MAX_BYTES = 24_000;
+/**
+ * The summary's ceiling, well under chat_suggestions' 32,000-byte check on
+ * the jsonb's text, measured as that text is (summaryBytes).
+ */
+export const SUMMARY_MAX_BYTES = 20_000;
 
 /** The payload keys the web's actionTexts reads for an action's title and description. */
 export const TITLE_KEYS = Object.freeze([
@@ -122,7 +125,15 @@ function playOf(payload) {
   };
 }
 
-const bytes = (value) => Buffer.byteLength(JSON.stringify(value), 'utf8');
+/**
+ * A summary's size as the database's check reads it, or more: jsonb's text
+ * puts a space after each comma and colon, which JSON.stringify doesn't, so
+ * each one counts a byte more (one inside a string too: never less).
+ */
+export function summaryBytes(value) {
+  const json = JSON.stringify(value);
+  return Buffer.byteLength(json, 'utf8') + (json.match(/[,:]/g)?.length ?? 0);
+}
 
 /**
  * A suggestion's summary (the version-1 shape above). Kept within
@@ -164,13 +175,13 @@ export function buildSummary({ action, payload, pick }) {
     play: playOf(payload),
   };
 
-  if (bytes(summary) > SUMMARY_MAX_BYTES && summary.play) summary.play.dataRow = null;
-  if (bytes(summary) > SUMMARY_MAX_BYTES) {
+  if (summaryBytes(summary) > SUMMARY_MAX_BYTES && summary.play) summary.play.dataRow = null;
+  if (summaryBytes(summary) > SUMMARY_MAX_BYTES) {
     summary.action.payload = Object.fromEntries(
       Object.entries(summary.action.payload).filter(([, value]) => !Array.isArray(value)),
     );
   }
-  if (bytes(summary) > SUMMARY_MAX_BYTES) {
+  if (summaryBytes(summary) > SUMMARY_MAX_BYTES) {
     summary.priority.reason = null;
     summary.play = null;
   }

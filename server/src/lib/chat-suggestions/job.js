@@ -16,8 +16,10 @@
  *      and managers who have none), the suggestions kept, then, for those due,
  *      the brand's open actions, which of them "Start now" opens and which
  *      wait in "Needs you";
- *   5. pauses the feeds unused for 30 days, writes today's suggestions, and
- *      sends daily_suggestion_sent and daily_suggestions_paused.
+ *   5. pauses the feeds unused for 30 days, writes today's suggestions
+ *      (marking a feed whose first since its last use it is), and at the
+ *      run's end sends daily_suggestion_sent and daily_suggestions_paused.
+ *      A brand or workspace that fails is counted and the next goes on.
  *
  * Twice in an hour, or on two servers, sends nothing twice: a suggestion is
  * unique per person, brand and day (00422) and a second insert is ignored; a
@@ -37,6 +39,7 @@ import {
   KEEP_DAYS,
   OPEN_STATUSES,
   dueNow,
+  firstSinceUse,
   idleDays,
   inMorning,
   pickSuggestion,
@@ -126,9 +129,10 @@ async function loadActiveWorkspaces(db, orgIds) {
 
 /** The workspace's people who get suggestions at all (not analysts). */
 async function loadPeople(db, orgId) {
-  const { data, error } = await db.from('profiles').select('id, role').eq('organization_id', orgId);
-  if (error) throw new SuggestionsDbError('profiles read', error);
-  return (data ?? []).filter((person) => roleFeed(person.role) !== 'never');
+  const people = await readAll('profiles read', () =>
+    db.from('profiles').select('id, role').eq('organization_id', orgId).order('id'),
+  );
+  return people.filter((person) => roleFeed(person.role) !== 'never');
 }
 
 /** The workspace's latest Chat answers' time zones, newest first (resolveZones). */
@@ -152,23 +156,34 @@ async function loadAnswerZones(db, orgId, now) {
 }
 
 /**
- * The brand's open actions, highest priority first. Their payloads and
- * reasons are read for the picked ones only (loadPicked).
+ * The brand's open actions the people due may get, highest priority first:
+ * the unassigned ones and those assigned to one of them, MAX_CANDIDATES of
+ * each, so actions assigned to someone else never take the places. Their
+ * payloads and reasons are read for the picked ones only (loadPicked).
  */
-async function loadCandidates(db, brandId) {
-  const { data, error } = await db
-    .from('actions')
-    .select(
-      'id, action_no, kind, category, impact, status, priority_score, created_at, assignee_id',
-    )
-    .eq('brand_id', brandId)
-    .in('status', OPEN_STATUSES)
-    .is('deleted_at', null)
-    .order('priority_score', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: true })
-    .limit(MAX_CANDIDATES);
-  if (error) throw new SuggestionsDbError('actions read', error);
-  return data ?? [];
+async function loadCandidates(db, brandId, userIds) {
+  const open = () =>
+    db
+      .from('actions')
+      .select(
+        'id, action_no, kind, category, impact, status, priority_score, created_at, assignee_id',
+      )
+      .eq('brand_id', brandId)
+      .in('status', OPEN_STATUSES)
+      .is('deleted_at', null);
+  const ranked = (query) =>
+    query
+      .order('priority_score', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: true })
+      .limit(MAX_CANDIDATES);
+  const [unassigned, assigned] = await Promise.all([
+    ranked(open().is('assignee_id', null)),
+    readChunks('assigned actions read', userIds, (chunk) =>
+      ranked(open().in('assignee_id', chunk)),
+    ),
+  ]);
+  if (unassigned.error) throw new SuggestionsDbError('actions read', unassigned.error);
+  return [...(unassigned.data ?? []), ...assigned];
 }
 
 const WRITING_TASKS = [...DRAFT_TASK_KEYS.create, ...DRAFT_TASK_KEYS.optimize];
@@ -266,12 +281,30 @@ async function pauseFeed(db, { userId, brandId, feed, now }) {
 // ─── The run ────────────────────────────────────────────────────────────────
 
 /**
- * One brand's feeds for the people whose morning it is: made, paused, and
- * today's suggestions written.
+ * Marks the feeds whose suggestion just sent was the first since their last
+ * use (firstSinceUse): an update that changes nothing but updated_at (the
+ * table's trigger), where the 30 days before a pause count from. A mark
+ * that fails is logged and the run goes on: the count then starts at the
+ * use itself.
  */
-async function runBrand(db, { orgId, brandId, people, zones, now }) {
+async function markFirstSinceUse(db, { brandId, userIds }) {
+  if (userIds.length === 0) return;
+  const { error } = await db
+    .from('chat_suggestion_feeds')
+    .update({ status: 'on' })
+    .eq('brand_id', brandId)
+    .in('user_id', userIds)
+    .eq('status', 'on');
+  if (error) logger.warn({ code: error.code ?? null }, '[chat-suggestions] feeds not marked');
+}
+
+/**
+ * One brand's feeds for the people whose morning it is: made, paused, and
+ * today's suggestions written. Counts and events go to `tally` as they
+ * happen, so a failure later in the brand keeps what was done before it.
+ */
+async function runBrand(db, { orgId, brandId, people, zones, now, tally }) {
   const at = now.toISOString();
-  const result = { feedsMade: 0, sent: 0, paused: 0, events: [] };
 
   const feeds = await readAll('feeds read', () =>
     db
@@ -298,9 +331,9 @@ async function runBrand(db, { orgId, brandId, people, zones, now }) {
       .upsert(toMake, { onConflict: 'user_id,brand_id', ignoreDuplicates: true })
       .select('user_id');
     if (error) throw new SuggestionsDbError('feeds insert', error);
-    result.feedsMade = (data ?? []).length;
+    tally.feedsMade += (data ?? []).length;
   }
-  if (active.length === 0) return result;
+  if (active.length === 0) return;
 
   const kept = await readAll('suggestions read', () =>
     db
@@ -319,8 +352,8 @@ async function runBrand(db, { orgId, brandId, people, zones, now }) {
     const rows = keptOf.get(person.id) ?? [];
     if (shouldPause({ feed, rows, now })) {
       if (await pauseFeed(db, { userId: person.id, brandId, feed, now })) {
-        result.paused++;
-        result.events.push({
+        tally.paused++;
+        tally.events.push({
           event: 'daily_suggestions_paused',
           distinctId: person.id,
           timestamp: at,
@@ -333,13 +366,19 @@ async function runBrand(db, { orgId, brandId, people, zones, now }) {
       }
       continue;
     }
-    const when = dueNow({ now, zone: zones.ofPerson(person.id), rows });
-    if (when.due) due.push({ person, day: when.day, rows });
+    const when = dueNow({ now, zone: zones.ofPerson(person.id), rows, feed });
+    if (when.due) {
+      due.push({ person, day: when.day, rows, first: firstSinceUse({ feed, rows }) });
+    }
   }
-  if (due.length === 0) return result;
+  if (due.length === 0) return;
 
-  const actions = await loadCandidates(db, brandId);
-  if (actions.length === 0) return result;
+  const actions = await loadCandidates(
+    db,
+    brandId,
+    due.map((entry) => entry.person.id),
+  );
+  if (actions.length === 0) return;
   const ids = actions.map((action) => action.id);
   const [startNow, needsYou] = await Promise.all([loadStartNow(db, ids), loadNeedsYou(db, ids)]);
 
@@ -356,14 +395,15 @@ async function runBrand(db, { orgId, brandId, people, zones, now }) {
       }),
     }))
     .filter((entry) => entry.pick);
-  if (picks.length === 0) return result;
+  if (picks.length === 0) return;
 
   const picked = await loadPicked(db, [...new Set(picks.map((entry) => entry.pick.action.id))]);
   const pickOf = new Map();
-  const rows = picks.map(({ person, day, pick }) => {
+  const rows = picks.map((entry) => {
+    const { person, day, pick } = entry;
     const more = picked.get(pick.action.id) ?? {};
     const action = { ...pick.action, ...more };
-    pickOf.set(person.id, { pick, action });
+    pickOf.set(person.id, { ...entry, action });
     return {
       user_id: person.id,
       organization_id: orgId,
@@ -379,11 +419,15 @@ async function runBrand(db, { orgId, brandId, people, zones, now }) {
     .upsert(rows, { onConflict: 'user_id,brand_id,sent_on', ignoreDuplicates: true })
     .select('user_id, action_id');
   if (error) throw new SuggestionsDbError('suggestions insert', error);
+
+  const firsts = [];
   for (const row of sent ?? []) {
-    const { pick, action } = pickOf.get(row.user_id) ?? {};
-    if (!pick) continue;
-    result.sent++;
-    result.events.push({
+    const entry = pickOf.get(row.user_id);
+    if (!entry) continue;
+    const { pick, action, first } = entry;
+    if (first) firsts.push(row.user_id);
+    tally.sent++;
+    tally.events.push({
       event: 'daily_suggestion_sent',
       distinctId: row.user_id,
       timestamp: at,
@@ -398,31 +442,37 @@ async function runBrand(db, { orgId, brandId, people, zones, now }) {
       },
     });
   }
-  return result;
-}
-
-/** One workspace: its people whose morning it is, brand by brand. */
-async function runWorkspace(db, { orgId, brands, now }) {
-  const result = { feedsMade: 0, sent: 0, paused: 0, events: [] };
-  const people = await loadPeople(db, orgId);
-  if (people.length === 0) return result;
-  const zones = resolveZones(await loadAnswerZones(db, orgId, now));
-  const morning = people.filter((person) => inMorning(now, zones.ofPerson(person.id)));
-  if (morning.length === 0) return result;
-
-  for (const brand of brands) {
-    const done = await runBrand(db, { orgId, brandId: brand.id, people: morning, zones, now });
-    result.feedsMade += done.feedsMade;
-    result.sent += done.sent;
-    result.paused += done.paused;
-    result.events.push(...done.events);
-  }
-  return result;
+  await markFirstSinceUse(db, { brandId, userIds: firsts });
 }
 
 /**
- * One run of the job (the hourly tick). Never throws: a workspace that fails
- * is counted and logged, and the next one goes on.
+ * One workspace: its people whose morning it is, brand by brand. A brand
+ * that fails is counted and logged, and the next one goes on.
+ */
+async function runWorkspace(db, { orgId, brands, now, tally }) {
+  const people = await loadPeople(db, orgId);
+  if (people.length === 0) return;
+  const zones = resolveZones(await loadAnswerZones(db, orgId, now));
+  const morning = people.filter((person) => inMorning(now, zones.ofPerson(person.id)));
+  if (morning.length === 0) return;
+
+  for (const brand of brands) {
+    try {
+      await runBrand(db, { orgId, brandId: brand.id, people: morning, zones, now, tally });
+    } catch (err) {
+      tally.failed++;
+      logger.error(
+        { err: { name: err?.name, code: err?.code ?? null } },
+        '[chat-suggestions] brand failed',
+      );
+    }
+  }
+}
+
+/**
+ * One run of the job (the hourly tick). Never throws: a workspace or brand
+ * that fails is counted and logged, and the next one goes on. The run's
+ * events are sent once, at its end, whatever failed.
  *
  * @param {{ db?: object, now?: Date, capture?: typeof captureProductEvents }} [options]
  * @returns {Promise<{ workspaces: number, feedsMade: number, sent: number, paused: number,
@@ -433,21 +483,37 @@ export async function runDailySuggestions({
   now = new Date(),
   capture = captureProductEvents,
 } = {}) {
-  const stats = { workspaces: 0, feedsMade: 0, sent: 0, paused: 0, deleted: 0, failed: 0 };
-  if (!chatAgenticDeployed()) return stats;
+  const tally = {
+    workspaces: 0,
+    feedsMade: 0,
+    sent: 0,
+    paused: 0,
+    deleted: 0,
+    failed: 0,
+    events: [],
+  };
+  const statsOf = () => ({
+    workspaces: tally.workspaces,
+    feedsMade: tally.feedsMade,
+    sent: tally.sent,
+    paused: tally.paused,
+    deleted: tally.deleted,
+    failed: tally.failed,
+  });
+  if (!chatAgenticDeployed()) return statsOf();
 
-  // Its own step: a failed delete is tried again next hour and sends on.
   try {
-    stats.deleted = await deleteExpired(db, now);
-  } catch (err) {
-    stats.failed++;
-    logger.error(
-      { err: { name: err?.name, code: err?.code ?? null } },
-      '[chat-suggestions] delete failed',
-    );
-  }
+    // Its own step: a failed delete is tried again next hour and sends on.
+    try {
+      tally.deleted = await deleteExpired(db, now);
+    } catch (err) {
+      tally.failed++;
+      logger.error(
+        { err: { name: err?.name, code: err?.code ?? null } },
+        '[chat-suggestions] delete failed',
+      );
+    }
 
-  try {
     const brands = await loadBrands(db);
     const byOrg = groupBy(brands, 'organization_id');
     const active = await loadActiveWorkspaces(db, [...byOrg.keys()]);
@@ -455,14 +521,10 @@ export async function runDailySuggestions({
     for (const [orgId, orgBrands] of byOrg) {
       if (!active.has(orgId)) continue;
       try {
-        const done = await runWorkspace(db, { orgId, brands: orgBrands, now });
-        stats.workspaces++;
-        stats.feedsMade += done.feedsMade;
-        stats.sent += done.sent;
-        stats.paused += done.paused;
-        await capture(done.events);
+        await runWorkspace(db, { orgId, brands: orgBrands, now, tally });
+        tally.workspaces++;
       } catch (err) {
-        stats.failed++;
+        tally.failed++;
         logger.error(
           { err: { name: err?.name, code: err?.code ?? null } },
           '[chat-suggestions] workspace failed',
@@ -470,13 +532,20 @@ export async function runDailySuggestions({
       }
     }
   } catch (err) {
-    stats.failed++;
+    tally.failed++;
     logger.error(
       { err: { name: err?.name, code: err?.code ?? null } },
       '[chat-suggestions] run failed',
     );
+  } finally {
+    try {
+      await capture(tally.events);
+    } catch (err) {
+      logger.warn({ err: { name: err?.name } }, '[chat-suggestions] events not sent');
+    }
   }
-  logger.info(stats, '[chat-suggestions] run done');
+  const stats = statsOf();
+  logger.info({ ...stats, events: tally.events.length }, '[chat-suggestions] run done');
   return stats;
 }
 

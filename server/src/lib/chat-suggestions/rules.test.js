@@ -3,11 +3,13 @@ import {
   DAY_STARTS_AT,
   KEEP_DAYS,
   PAUSE_AFTER_DAYS,
+  PAUSE_MIN_SENT,
   START_NOW_LIFT,
   VARIETY_MARGIN,
   addDays,
   blocksAction,
   dueNow,
+  firstSinceUse,
   idleDays,
   inMorning,
   isTimeZone,
@@ -156,10 +158,65 @@ describe('dueNow', () => {
   });
 });
 
+describe('dueNow: made or turned back on today', () => {
+  const morning = new Date('2026-10-30T08:00:00Z');
+  const sent = (day) => ({ sent_on: day, sent_at: `${day}T07:10:00Z` });
+
+  it('waits for tomorrow when the feed was made or turned back on this morning', () => {
+    const made = { created_at: '2026-10-30T07:07:00Z', updated_at: '2026-10-30T07:07:00Z' };
+    expect(dueNow({ now: morning, zone: 'UTC', rows: [], feed: made })).toEqual({
+      due: false,
+      reason: 'turned_on_today',
+    });
+    const backOn = { created_at: '2026-08-01T07:00:00Z', updated_at: '2026-10-30T06:15:00Z' };
+    expect(
+      dueNow({ now: morning, zone: 'UTC', rows: [sent('2026-10-20')], feed: backOn }).reason,
+    ).toBe('turned_on_today');
+    // The next morning it sends.
+    const tomorrow = new Date('2026-10-31T08:00:00Z');
+    expect(dueNow({ now: tomorrow, zone: 'UTC', rows: [], feed: made })).toEqual({
+      due: true,
+      day: '2026-10-31',
+    });
+  });
+
+  it('reads "today" in the person\u2019s zone', () => {
+    // 22:30 UTC on the 29th is 01:30 on the 30th in Istanbul: today, there.
+    const feed = { created_at: '2026-10-29T22:30:00Z', updated_at: '2026-10-29T22:30:00Z' };
+    const istanbulMorning = new Date('2026-10-30T05:00:00Z');
+    expect(dueNow({ now: istanbulMorning, zone: 'Europe/Istanbul', rows: [], feed }).reason).toBe(
+      'turned_on_today',
+    );
+    // In UTC it was yesterday's.
+    expect(dueNow({ now: morning, zone: 'UTC', rows: [], feed }).due).toBe(true);
+  });
+
+  it('doesn\u2019t hold back a usual day: yesterday\u2019s came, and a use moved updated_at this morning', () => {
+    const used = { created_at: '2026-08-01T07:00:00Z', updated_at: '2026-10-30T06:40:00Z' };
+    expect(dueNow({ now: morning, zone: 'UTC', rows: [sent('2026-10-29')], feed: used })).toEqual({
+      due: true,
+      day: '2026-10-30',
+    });
+  });
+});
+
 describe('blocksAction', () => {
   it('keeps an action sent in the last 14 days from coming back', () => {
     expect(blocksAction({ sent_at: daysAgo(KEEP_DAYS - 1) }, NOW)).toBe(true);
     expect(blocksAction({ sent_at: daysAgo(KEEP_DAYS + 1) }, NOW)).toBe(false);
+  });
+
+  it('keeps a removed one away, even one put off before and back from its week', () => {
+    const ended = new Date(NOW.getTime() - DAY).toISOString();
+    expect(
+      blocksAction({ sent_at: daysAgo(9), snoozed_until: ended, removed_at: daysAgo(1) }, NOW),
+    ).toBe(true);
+    expect(
+      blocksAction(
+        { sent_at: daysAgo(KEEP_DAYS + 1), snoozed_until: ended, removed_at: daysAgo(KEEP_DAYS) },
+        NOW,
+      ),
+    ).toBe(true);
   });
 
   it('keeps a removed one away, and a put-off one only for its week', () => {
@@ -304,47 +361,79 @@ describe('shouldPause', () => {
     last_used_at: null,
     ...overrides,
   });
-  const unused = [{ sent_at: daysAgo(1) }, { sent_at: daysAgo(2) }];
+  /** One a day for the last `count` days, none used. */
+  const daily = (count) => Array.from({ length: count }, (_, i) => ({ sent_at: daysAgo(i + 1) }));
 
-  it('pauses after 30 days with none used while they kept coming', () => {
-    expect(shouldPause({ feed: feed(), rows: unused, now: NOW })).toBe(true);
+  it('pauses 30 days after the first suggestion since the last use, with 7 or more unused', () => {
+    // The job marked the feed (updated_at) at that first one, 31 days ago.
+    const marked = feed({ updated_at: daysAgo(31), last_used_at: daysAgo(35) });
+    expect(shouldPause({ feed: marked, rows: daily(PAUSE_MIN_SENT), now: NOW })).toBe(true);
+    expect(idleDays({ feed: marked, rows: daily(7), now: NOW })).toBe(31);
     expect(
       shouldPause({
-        feed: feed({ last_used_at: daysAgo(PAUSE_AFTER_DAYS) }),
-        rows: unused,
+        feed: feed({ updated_at: daysAgo(PAUSE_AFTER_DAYS) }),
+        rows: daily(13),
         now: NOW,
       }),
     ).toBe(true);
-    expect(idleDays({ feed: feed(), rows: unused, now: NOW })).toBe(60);
+  });
+
+  it('doesn\u2019t pause a feed that got one yesterday after a long quiet spell', () => {
+    // 40 days old, never used, nothing to suggest until yesterday.
+    const quiet = feed({ created_at: daysAgo(40), updated_at: daysAgo(40) });
+    expect(shouldPause({ feed: quiet, rows: daily(1), now: NOW })).toBe(false);
+    // Marked at that first one (yesterday): a day, not 40.
+    expect(idleDays({ feed: { ...quiet, updated_at: daysAgo(1) }, rows: daily(1), now: NOW })).toBe(
+      1,
+    );
+  });
+
+  it('doesn\u2019t pause before 30 days from the first one, however many came', () => {
+    // Seven a day after 40 quiet days: marked at the first, 7 days ago.
+    const fresh = feed({ created_at: daysAgo(40), updated_at: daysAgo(7) });
+    expect(shouldPause({ feed: fresh, rows: daily(7), now: NOW })).toBe(false);
+  });
+
+  it('needs 7 unused: fewer since the last use keeps it on', () => {
+    const marked = feed({ updated_at: daysAgo(40) });
+    expect(shouldPause({ feed: marked, rows: daily(PAUSE_MIN_SENT - 1), now: NOW })).toBe(false);
   });
 
   it('keeps it on with one used in the 30 days', () => {
-    expect(shouldPause({ feed: feed({ last_used_at: daysAgo(29) }), rows: unused, now: NOW })).toBe(
-      false,
-    );
+    expect(
+      shouldPause({ feed: feed({ last_used_at: daysAgo(29) }), rows: daily(13), now: NOW }),
+    ).toBe(false);
     // Opened, started or removed on the row itself counts as well.
     for (const mark of ['opened_at', 'started_at', 'removed_at']) {
-      const rows = [{ sent_at: daysAgo(3), [mark]: daysAgo(2) }];
+      const rows = daily(13);
+      rows[10][mark] = daysAgo(2);
       expect(shouldPause({ feed: feed(), rows, now: NOW })).toBe(false);
     }
   });
 
-  it('counts from when the feed was made or turned back on', () => {
-    expect(
-      shouldPause({
-        feed: feed({ created_at: daysAgo(10), updated_at: daysAgo(10) }),
-        rows: unused,
-        now: NOW,
-      }),
-    ).toBe(false);
-    expect(shouldPause({ feed: feed({ updated_at: daysAgo(5) }), rows: unused, now: NOW })).toBe(
+  it('counts again from when the feed was turned back on', () => {
+    expect(shouldPause({ feed: feed({ updated_at: daysAgo(5) }), rows: daily(13), now: NOW })).toBe(
       false,
     );
   });
 
-  it('doesn’t pause when nothing was sent to use, or a feed not on', () => {
-    expect(shouldPause({ feed: feed(), rows: [], now: NOW })).toBe(false);
-    expect(shouldPause({ feed: feed({ status: 'paused' }), rows: unused, now: NOW })).toBe(false);
-    expect(shouldPause({ feed: feed({ status: 'off' }), rows: unused, now: NOW })).toBe(false);
+  it('doesn\u2019t pause a feed not on', () => {
+    expect(shouldPause({ feed: feed({ status: 'paused' }), rows: daily(13), now: NOW })).toBe(
+      false,
+    );
+    expect(shouldPause({ feed: feed({ status: 'off' }), rows: daily(13), now: NOW })).toBe(false);
+  });
+});
+
+describe('firstSinceUse', () => {
+  it('is the first suggestion since the last use when none kept came after it', () => {
+    const feed = { created_at: daysAgo(40), last_used_at: daysAgo(3) };
+    expect(firstSinceUse({ feed, rows: [] })).toBe(true);
+    expect(firstSinceUse({ feed, rows: [{ sent_at: daysAgo(5) }] })).toBe(true);
+    expect(firstSinceUse({ feed, rows: [{ sent_at: daysAgo(2) }] })).toBe(false);
+    // A use on the row itself counts.
+    expect(firstSinceUse({ feed, rows: [{ sent_at: daysAgo(2), opened_at: daysAgo(1) }] })).toBe(
+      true,
+    );
   });
 });
