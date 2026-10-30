@@ -145,7 +145,6 @@ export function ChatFiles() {
   }, [query]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load(filter, q);
   }, [load, filter, q]);
 
@@ -177,13 +176,23 @@ export function ChatFiles() {
     });
 
   async function copy(file: ChatFileItem) {
-    const res = await fetch(`/api/chat/files/${file.id}?format=md`).catch(() => null);
-    if (!res?.ok || !navigator.clipboard) {
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      // Safari copies only within the click: the item is written at once, its text to come.
+      const text = fetch(`/api/chat/files/${file.id}?format=md`).then((res) => {
+        if (!res.ok) throw new Error('Not read');
+        return res.text();
+      });
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+        const blob = text.then((value) => new Blob([value], { type: 'text/plain' }));
+        await navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })]);
+      } else {
+        await navigator.clipboard.writeText(await text);
+      }
+      toast(t('copied'));
+    } catch {
       toast.error(t('copyFailed'));
-      return;
     }
-    await navigator.clipboard.writeText(await res.text());
-    toast(t('copied'));
   }
 
   async function download(file: ChatFileItem, format: string) {

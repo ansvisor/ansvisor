@@ -1,4 +1,4 @@
-import { zipSync } from 'fflate';
+import { Zip, ZipDeflate } from 'fflate';
 import { Marked } from 'marked';
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
@@ -304,7 +304,8 @@ export async function readChatFile(
 }
 
 export type ZipResult =
-  | { ok: true; fileName: string; body: Uint8Array; count: number }
+  /** count: the files going in, as the header says it before the stream starts. */
+  | { ok: true; fileName: string; stream: ReadableStream<Uint8Array>; count: number }
   | { ok: false; failure: 'not_found' | 'too_big' };
 
 /** "name.ext", then "name (2).ext", for two files of the same name in one .zip. */
@@ -318,11 +319,55 @@ function uniqueName(taken: Set<string>, name: string): string {
 }
 
 /**
+ * The files as a .zip, streamed: one file read, written and compressed at a
+ * time, as the reader asks for more, so neither the files nor the .zip are
+ * ever held whole (a function's response isn't capped this way, as a body
+ * is). A file whose main format can't be written is left out.
+ */
+function zipStream(rows: StoredRow[], appOrigin: string | null): ReadableStream<Uint8Array> {
+  let zip: Zip;
+  let next = 0;
+  const taken = new Set<string>();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      zip = new Zip((error, chunk, final) => {
+        if (error) return controller.error(error);
+        controller.enqueue(chunk);
+        if (final) controller.close();
+      });
+    },
+    async pull() {
+      try {
+        while (next < rows.length) {
+          const row = rows[next++];
+          const file = await exportChatFile(
+            await storedFile(row, appOrigin),
+            row.formats[0] as ChatFileFormat,
+          );
+          if (!file) continue;
+          const entry = new ZipDeflate(uniqueName(taken, file.fileName), { level: 6 });
+          zip.add(entry);
+          entry.push(file.body, true);
+          return;
+        }
+        zip.end();
+      } catch (error) {
+        zip.terminate();
+        throw error;
+      }
+    },
+    cancel() {
+      zip.terminate();
+    },
+  });
+}
+
+/**
  * Download selected (CHAT-06 item 18): the files picked on the Files page
  * as one .zip, each in its main format, rendered as its own download is and
- * kept nowhere. Files the person's workspace doesn't hold are left out; none
- * left is not_found. Past ZIP_MAX_BYTES stored is too_big, before anything
- * is read.
+ * kept nowhere, streamed as it is made. Files the person's workspace
+ * doesn't hold are left out; none left is not_found. Past ZIP_MAX_BYTES
+ * stored is too_big, before anything is read.
  */
 export async function zipChatFiles(
   actor: ChatActor,
@@ -340,22 +385,12 @@ export async function zipChatFiles(
   if (rows.length === 0) return { ok: false, failure: 'not_found' };
   const bytes = rows.reduce((sum, row) => sum + Number(row.size_bytes), 0);
   if (bytes > ZIP_MAX_BYTES) return { ok: false, failure: 'too_big' };
-
-  const entries: Record<string, Uint8Array> = {};
-  const taken = new Set<string>();
-  for (const row of rows) {
-    const file = await exportChatFile(
-      await storedFile(row, appOrigin),
-      row.formats[0] as ChatFileFormat,
-    );
-    if (file) entries[uniqueName(taken, file.fileName)] = file.body;
-  }
   const day = new Date().toISOString().slice(0, 10);
   return {
     ok: true,
     fileName: `files-${day}.zip`,
-    body: zipSync(entries, { level: 6 }),
-    count: Object.keys(entries).length,
+    stream: zipStream(rows, appOrigin),
+    count: rows.length,
   };
 }
 
