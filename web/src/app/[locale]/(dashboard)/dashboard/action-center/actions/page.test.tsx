@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Brand } from '@/types';
 import type { ActionItem } from '@/lib/actions/action-center';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import type { FirstRun } from '@/hooks/use-first-run';
 import {
   buildGettingStarted,
   type GettingStartedFacts,
@@ -68,6 +69,7 @@ const {
   role,
   saveBlob,
   toast,
+  firstRun,
 } = vi.hoisted(() => ({
   getActions: vi.fn(),
   getActionsAffected: vi.fn(),
@@ -77,6 +79,8 @@ const {
   role: { canManage: true },
   saveBlob: vi.fn(),
   toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
+  // The brand's first run as the page reads it, and who listens for its end.
+  firstRun: { run: null as FirstRun | null, finished: new Set<(brandId: string) => void>() },
 }));
 
 vi.mock('next-intl', () => ({
@@ -93,6 +97,13 @@ vi.mock('@/lib/actions/getting-started', () => ({
   skipGettingStarted,
 }));
 vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
+vi.mock('@/hooks/use-first-run', () => ({
+  useFirstRun: () => firstRun.run,
+  onFirstRunFinished: (listener: (brandId: string) => void) => {
+    firstRun.finished.add(listener);
+    return () => firstRun.finished.delete(listener);
+  },
+}));
 vi.mock('@/lib/actions/team', () => ({ listMembers: vi.fn(async () => []) }));
 vi.mock('@/lib/download', () => ({ saveBlob }));
 vi.mock('sonner', () => ({ toast }));
@@ -102,27 +113,32 @@ vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
 vi.mock('@/components/action-center/action-center-tabs', () => ({ ActionCenterTabs: () => null }));
 vi.mock('@/components/action-center/action-table', () => ({ ActionTable: () => null }));
 vi.mock('@/components/action-center/action-drawer', () => ({ ActionDrawer: () => null }));
-vi.mock('@/components/getting-started/getting-started-table', () => ({
-  GettingStartedTable: ({
-    steps,
-    showNote,
-    onSelect,
-  }: {
-    steps: GettingStartedStep[];
-    showNote: boolean;
-    onSelect: (step: GettingStartedStep) => void;
-  }) => (
-    <div data-testid="steps">
-      <span data-testid="steps-summary">{`${steps.length} steps${showNote ? ', with the note' : ''}`}</span>
-      {steps.map((step) => (
-        <button key={step.key} data-step={step.key} onClick={() => onSelect(step)}>
-          {step.key}
-        </button>
-      ))}
-    </div>
-  ),
-  readyWhenKey: () => 'setup',
-}));
+vi.mock('@/components/getting-started/getting-started-table', async () => {
+  const { needsFirstAnswers } = await import('@/lib/getting-started/steps');
+  return {
+    arrivingStep: (step: GettingStartedStep, run: FirstRun | null) =>
+      run !== null && needsFirstAnswers(step) && step.state !== 'done',
+    GettingStartedTable: ({
+      steps,
+      showNote,
+      onSelect,
+    }: {
+      steps: GettingStartedStep[];
+      showNote: boolean;
+      onSelect: (step: GettingStartedStep) => void;
+    }) => (
+      <div data-testid="steps">
+        <span data-testid="steps-summary">{`${steps.length} steps${showNote ? ', with the note' : ''}`}</span>
+        {steps.map((step) => (
+          <button key={step.key} data-step={step.key} onClick={() => onSelect(step)}>
+            {step.key}
+          </button>
+        ))}
+      </div>
+    ),
+    readyWhenKey: () => 'setup',
+  };
+});
 vi.mock('@/components/getting-started/step-card', () => ({
   GettingStartedStepCard: ({ step }: { step: GettingStartedStep }) => (
     <div data-testid="card">{step.key}</div>
@@ -162,7 +178,9 @@ beforeEach(() => {
   root = createRoot(container);
   getActionsAffected.mockReset();
   saveBlob.mockReset();
+  toast.mockReset();
   toast.error.mockReset();
+  firstRun.run = null;
 });
 
 afterEach(() => {
@@ -350,6 +368,42 @@ describe('Getting started in the actions list', () => {
     await act(async () => stepButton('mentions').click());
     expect(toast).toHaveBeenCalledWith('opensWhenReady');
     expect(card()?.textContent).toBe('competitors');
+  });
+
+  it("opens the card of a step the first run brings the data for, while it's on", async () => {
+    firstRun.run = { brandId: 'brand-id', queued: false, progress: null, left: null };
+    getGettingStarted.mockResolvedValue(started());
+    await render();
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-step="mentions"]')!.click(),
+    );
+    expect(container.querySelector('[data-testid="card"]')?.textContent).toBe('mentions');
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('reads the list again when the first run finishes, and once more for the first actions', async () => {
+    getGettingStarted.mockResolvedValue(started());
+    await render();
+    expect(getActions).toHaveBeenCalledTimes(1);
+
+    vi.useFakeTimers();
+    try {
+      // Another brand's run: nothing to read here.
+      await act(async () => firstRun.finished.forEach((listener) => listener('other-brand')));
+      expect(getActions).toHaveBeenCalledTimes(1);
+
+      await act(async () => firstRun.finished.forEach((listener) => listener('brand-id')));
+      expect(getActions).toHaveBeenCalledTimes(2);
+      expect(getGettingStarted).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(90_000);
+      });
+      expect(getActions).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // gkhngyk on #1235: Create action, a signal and the history drawer link to

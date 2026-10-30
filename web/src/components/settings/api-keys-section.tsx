@@ -27,6 +27,7 @@ import {
 import { Copy, KeyRound, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatDate } from '@/lib/format';
+import { isCloud } from '@/config/plans';
 import { siteConfig } from '@/config/site';
 import {
   MCP_CLIENTS,
@@ -170,6 +171,12 @@ export function ApiKeysSection() {
               ),
             })}
           </p>
+          {/* MCP per plan (DECISIONS S): the server refuses the writes, this says so first. */}
+          {isCloud() && (
+            <p data-slot="mcp-plan-note" className="text-muted-foreground">
+              {t('apiKeys_planNote')}
+            </p>
+          )}
         </div>
 
         {loading ? (

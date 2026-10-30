@@ -268,6 +268,22 @@ describe('customer.subscription.updated', () => {
     await deliver('customer.subscription.updated', subscription('past_due'));
     expect(db.update).toHaveBeenCalledWith({ subscription_status: 'past_due', plan: 'growth' });
   });
+
+  it('writes the first paid period’s end when a trial is bought, so the AI usage starts again', async () => {
+    // Bought the day before the trial would end: Stripe ends it and starts a
+    // month-long period that day. The monthly quotas count from that period's start
+    // (quotaPeriodStart), so the trial's usage no longer counts.
+    await deliver('customer.subscription.updated', subscription('active', 1_802_592_000), {
+      status: 'trialing',
+      trial_end: 1_800_000_000,
+    });
+    expect(db.update).toHaveBeenCalledWith({
+      subscription_status: 'active',
+      subscription_ends_at: '2027-02-14T08:00:00.000Z',
+      plan: 'growth',
+    });
+    expect(db.eq).toHaveBeenCalledWith('stripe_customer_id', 'cus1');
+  });
 });
 
 describe('the demo brand after a purchase', () => {
