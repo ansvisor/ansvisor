@@ -190,16 +190,41 @@ const ABBREVIATIONS = new Set([
 /** Where a sentence may end: punctuation before a space or the text's end. */
 const SENTENCE_END = /[.!?…。！？]+["”’»)]*(?=\s|$)/gu;
 
+/** The first character of the word after a sentence end, read where it is. */
+const NEXT_WORD = /\s+(\S)/uy;
+const WORD_CHAR = /^[\p{L}\p{N}.]$/u;
+
+/**
+ * Where the run of letters, digits and dots that ends at `at` starts (`at`
+ * when there's none), read back a character at a time: the runs before two
+ * sentence ends never overlap, so a line is read once in all.
+ */
+function wordStart(s, at) {
+  let i = at;
+  while (i > 0) {
+    const low = s.charCodeAt(i - 1);
+    const high = i > 1 ? s.charCodeAt(i - 2) : 0;
+    const pair = low >= 0xdc00 && low <= 0xdfff && high >= 0xd800 && high <= 0xdbff;
+    const size = pair ? 2 : 1;
+    if (!WORD_CHAR.test(s.slice(i - size, i))) break;
+    i -= size;
+  }
+  return i;
+}
+
 /**
  * Whether a full stop at `at` ends no sentence: after an abbreviation
  * ("Dr.", "e.g."), an initial ("J. Smith"), or before a word in lower case
  * ("3. çeyrekte", "approx. ten").
  */
 function notAnEnd(s, at, punct) {
-  const next = s.slice(at + punct.length).match(/^\s+(\S)/u)?.[1] ?? '';
+  // Read in place, never on a copy of the text before or after it: a line
+  // with thousands of sentences would take their count times its length.
+  NEXT_WORD.lastIndex = at + punct.length;
+  const next = NEXT_WORD.exec(s)?.[1] ?? '';
   if (next && /\p{Ll}/u.test(next)) return true;
   if (punct !== '.') return false;
-  const word = s.slice(0, at).match(/[\p{L}\p{N}.]+$/u)?.[0] ?? '';
+  const word = s.slice(wordStart(s, at), at);
   if (!word) return false;
   if (ABBREVIATIONS.has(word.toLowerCase())) return true;
   return /^\p{Lu}$/u.test(word);
@@ -211,10 +236,13 @@ function notAnEnd(s, at, punct) {
  */
 export function sentenceSpans(text) {
   const s = String(text ?? '');
-  const inside = [...s.matchAll(MARK), ...s.matchAll(BRACKET)].map((m) => [
-    m.index,
-    m.index + m[0].length,
-  ]);
+  // Each position inside a marker or a placeholder, marked up front: markers
+  // never overlap each other, nor placeholders, so the line is marked at
+  // most twice, never once per sentence end.
+  const inside = new Uint8Array(s.length);
+  for (const m of [...s.matchAll(MARK), ...s.matchAll(BRACKET)]) {
+    inside.fill(1, m.index + 1, m.index + m[0].length);
+  }
   const spans = [];
   let start = 0;
   const push = (end) => {
@@ -226,7 +254,7 @@ export function sentenceSpans(text) {
   };
   for (const m of s.matchAll(SENTENCE_END)) {
     const end = m.index + m[0].length;
-    if (inside.some(([a, b]) => m.index > a && m.index < b)) continue;
+    if (inside[m.index]) continue;
     if (notAnEnd(s, m.index, m[0])) continue;
     push(end);
   }
