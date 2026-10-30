@@ -6,9 +6,9 @@ import messages from '../../../messages/en.json';
 import type { TrackingJobStatus, TrackingWindow } from '@/lib/actions/tracking';
 
 /**
- * The Action Center's "First analysis running" note (#1238's review): people
+ * The Action Center's "First tracking running" line (#1238's review): people
  * land on Actions while a new brand's first run goes on, and only Visibility
- * showed it.
+ * showed it. One thin line; Details unfolds the rest.
  */
 
 const { getTrackingWindow, getJobStatus, loadTrackingJob, store } = vi.hoisted(() => ({
@@ -50,16 +50,19 @@ const job = (over: Partial<TrackingJobStatus> = {}): TrackingJobStatus => ({
 let container: HTMLDivElement;
 let root: Root;
 
-async function render() {
+async function render(count = 1) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <FirstRunNote />
+        {Array.from({ length: count }, (_, i) => (
+          <FirstRunNote key={i} />
+        ))}
       </NextIntlClientProvider>,
     );
   });
 }
 const text = () => container.textContent ?? '';
+const details = () => container.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -79,15 +82,32 @@ afterEach(() => {
 });
 
 describe('FirstRunNote', () => {
-  it("says the first analysis is running from the ledger, whoever's browser started it", async () => {
+  it("says the first tracking is running from the ledger, whoever's browser started it", async () => {
     getTrackingWindow.mockResolvedValue(
       win({ activeRun: { startedAt: '2026-10-20T09:00:00Z', source: 'manual' } }),
     );
     await render();
-    expect(text()).toContain('First analysis running');
+    expect(text()).toContain('First tracking running');
+    expect(getJobStatus).not.toHaveBeenCalled();
+  });
+
+  it('is one line, and Details unfolds what it means and the way to Brand Visibility', async () => {
+    getTrackingWindow.mockResolvedValue(
+      win({ activeRun: { startedAt: '2026-10-20T09:00:00Z', source: 'manual' } }),
+    );
+    await render();
+    expect(container.querySelector('.h-9')?.textContent).toBe('First tracking runningDetails');
+    expect(text()).not.toContain('Actions, signals and KPIs fill in once it finishes');
+    expect(container.querySelector('a')).toBeNull();
+    expect(details().getAttribute('aria-expanded')).toBe('false');
+
+    await act(async () => details().click());
+    expect(details().getAttribute('aria-expanded')).toBe('true');
     expect(text()).toContain('Actions, signals and KPIs fill in once it finishes');
     expect(container.querySelector('a')?.getAttribute('href')).toBe('/dashboard/insights');
-    expect(getJobStatus).not.toHaveBeenCalled();
+
+    await act(async () => details().click());
+    expect(text()).not.toContain('Actions, signals and KPIs fill in once it finishes');
   });
 
   it("says it's queued before the worker starts it, from the job this browser saved", async () => {
@@ -95,7 +115,8 @@ describe('FirstRunNote', () => {
     getJobStatus.mockResolvedValue(job({ status: 'waiting' }));
     await render();
     expect(getJobStatus).toHaveBeenCalledWith('j1');
-    expect(text()).toContain('First analysis queued');
+    expect(text()).toContain('First tracking queued');
+    await act(async () => details().click());
     expect(text()).toContain('Yours starts the moment a slot opens');
   });
 
@@ -107,7 +128,7 @@ describe('FirstRunNote', () => {
     getJobStatus.mockResolvedValue(job({ progress: { current: 12, total: 40 } }));
     await render();
     // Checks, not answers: a task can end without one.
-    expect(text()).toContain('First analysis running12 of 40 checks');
+    expect(text()).toContain('First tracking running · 12 of 40 checks');
   });
 
   it('reads again every 12 seconds, and says about how long is left once the pace shows', async () => {
@@ -132,7 +153,24 @@ describe('FirstRunNote', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(48_000);
     });
-    expect(text()).toContain('32 of 400 checks · about 20 min left');
+    expect(text()).toContain('32 of 400 checks · ~20 min left');
+  });
+
+  it('reads once for every line on the page', async () => {
+    getTrackingWindow.mockResolvedValue(
+      win({ activeRun: { startedAt: '2026-10-20T09:00:00Z', source: 'manual' } }),
+    );
+    loadTrackingJob.mockReturnValue({ jobId: 'j1', brandId: 'b1', startedAt: 1 });
+    getJobStatus.mockResolvedValue(job({ progress: { current: 12, total: 40 } }));
+    await render(2);
+    expect(text()).toBe(
+      'First tracking running · 12 of 40 checksDetailsFirst tracking running · 12 of 40 checksDetails',
+    );
+    expect(getTrackingWindow).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(12_000);
+    });
+    expect(getTrackingWindow).toHaveBeenCalledTimes(2);
   });
 
   it('shows nothing once the brand has a completed run, and stops reading', async () => {
@@ -170,14 +208,14 @@ describe('FirstRunNote', () => {
       win({ activeRun: { startedAt: '2026-10-20T09:00:00Z', source: 'manual' } }),
     );
     await render();
-    expect(text()).toContain('First analysis running');
+    expect(text()).toContain('First tracking running');
 
-    // One read each: the note reads again every 12 seconds.
+    // One read each: the line reads again every 12 seconds.
     getTrackingWindow.mockRejectedValueOnce(new Error('timeout'));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(12_000);
     });
-    expect(text()).toContain('First analysis running');
+    expect(text()).toContain('First tracking running');
 
     getTrackingWindow.mockResolvedValueOnce(win({ lastRunAt: '2026-10-20T09:40:00Z' }));
     await act(async () => {

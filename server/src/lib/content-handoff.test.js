@@ -31,10 +31,14 @@ describe('handOffInput', () => {
         .success,
     ).toBe(true);
     expect(HANDOFF_CHECKS['readability:typeRules']).toMatch(/never one made up/);
-    // An answer too: fit, sizes, shipping, returns and prices only from the page and the data.
+    // An answer too: fit, sizes, shipping, returns and prices only from the page and the data,
+    // else asked of the person, the brand's own ("Your input needed").
     expect(HANDOFF_CHECKS['readability:typeRules']).toMatch(
-      /an answer the page and your data don't give \(fit, sizes, shipping, returns, prices\) is a placeholder too/,
+      /an answer the page and your data don't give \(fit, sizes, shipping, returns, prices\) is \{\{ask: …\}\} too/,
     );
+    // A figure with no source is looked up, never left as a placeholder.
+    expect(HANDOFF_CHECKS['trust:claimsSourced']).toContain('{{find: …}}');
+    expect(Object.values(HANDOFF_CHECKS).join(' ')).not.toContain('placeholder');
     expect(
       handOffInput.safeParse({ items: [{ key: 'readability:longSentences' }], origin: 'cron' })
         .success,

@@ -181,7 +181,8 @@ const PLACEHOLDERS = [NUMBER_PLACEHOLDER, NAME_PLACEHOLDER, QUOTE_PLACEHOLDER];
  *   * fanoutCoverage: the share of the case's fan-outs an H2 answers, of
  *     those the brief keeps (version 2 leaves some to another page, as
  *     leftOut counts);
- *   * placeholders: the figures, names and quotes the guard took out;
+ *   * placeholders: the names and quotes the guard put as placeholders (a
+ *     figure goes with its sentence: none is left as one);
  *   * invented (the gate, all 0): figures and names or quotes the guard let
  *     through that the case didn't give, and addresses it didn't list.
  */
@@ -248,7 +249,7 @@ export const JUDGE_SYSTEM_PROMPT = `You grade one content brief: the plan a writ
 Rules:
 - Score each criterion listed 0 (missing), 1 (partly) or 2 (fully), from what the brief says only. Don't reward length or fill in what it leaves out.
 - For a score above 0, put in "quote" the brief's own words that earn it, copied exactly from one of its lines, at least 3 words and at most 30. For 0, leave "quote" empty.
-- A placeholder in square brackets, e.g. [figure, source], marks a fact for the writer to find: that is correct, not a missing fact.
+- A fact named in words without its figure, e.g. "how far forecasts drift, from a study", is one the writer looks up as it writes: that is correct, not a missing fact. A placeholder in square brackets, e.g. [name of a real person], marks what only the brand can give.
 - In "why", one short sentence.
 - Score every criterion listed, once each, by its key.`;
 

@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { routing } from '@/i18n/routing';
 import { updateSession } from '@/lib/supabase/middleware';
 import { nextFromRequest } from '@/lib/auth-next';
+import { chatAgenticForUser, chatPathOfAgentPath } from '@/lib/chat/legacy-route';
 
 const intlMiddleware = createMiddleware(routing);
 
@@ -24,11 +25,13 @@ export async function proxy(request: NextRequest) {
 
   let supabaseResponse: NextResponse | undefined;
   let user: { id: string } | null = null;
+  let supabase: Awaited<ReturnType<typeof updateSession>>['supabase'] | null = null;
 
   try {
     const session = await updateSession(request);
     supabaseResponse = session.supabaseResponse;
     user = session.user;
+    supabase = session.supabase;
   } catch {
     // Supabase session refresh failed — continue without auth context
     // so next-intl locale routing still works
@@ -60,6 +63,35 @@ export async function proxy(request: NextRequest) {
 
   if (isAuthRoute(pathnameWithoutLocale) && user) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
+  // Agent Chat's old addresses open the new Chat, where it is on for the
+  // person's workspace (CHAT-01 item 2): a 301 to the matching
+  // /dashboard/chat address, query kept. Not kept by the browser
+  // (no-store), so it stops at once if the flag is turned off again.
+  const chatPath = chatPathOfAgentPath(pathnameWithoutLocale);
+  if (chatPath && user && supabase) {
+    const db = supabase;
+    const signedIn = user;
+    const on = await chatAgenticForUser(async () => {
+      const { data } = await db
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', signedIn.id)
+        .maybeSingle();
+      return data?.organization_id ?? null;
+    }).catch(() => false);
+    if (on) {
+      const response = NextResponse.redirect(
+        new URL(`${chatPath}${request.nextUrl.search}`, request.url),
+        301,
+      );
+      response.headers.set('Cache-Control', 'no-store');
+      supabaseResponse?.cookies.getAll().forEach((cookie) => {
+        response.cookies.set(cookie.name, cookie.value, cookie);
+      });
+      return response;
+    }
   }
 
   // Workaround for a Next.js framework issue (vercel/next.js#91723): RSC

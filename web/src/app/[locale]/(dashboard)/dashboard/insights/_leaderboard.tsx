@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
 import { ArrowRight, ArrowUp } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -69,7 +70,12 @@ export function Leaderboard({
     <Card className={className}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-3">
-          <CardTitle className="text-sm font-medium">{t('title')}</CardTitle>
+          <div className="flex items-center gap-1">
+            <CardTitle className="text-sm font-medium">{t('title')}</CardTitle>
+            <AskAboutThis
+              reference={{ type: 'table', id: 'visibility-leaderboard', label: t('title') }}
+            />
+          </div>
           <Link
             href="/dashboard/competitors"
             className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"

@@ -1,18 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Link } from '@/i18n/navigation';
 import { ApprovalCard } from '@/components/agentic/approval-card';
 import { DenialCard } from '@/components/agentic/denial-card';
-import { stampParts } from '@/components/agentic/result-card';
-import { RunSteps, type RunStepsStatus } from '@/components/agentic/run-steps';
+import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { Markdown } from '@/components/ui/markdown';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
+import { searchChatReferences } from '@/lib/actions/chat-references';
 import type { ChatEvent } from '@/lib/chat/events';
+import type { ChatMode } from '@/lib/chat/precedence';
 import { readSse } from '@/lib/chat/run-hub';
 import {
   applyChatEvent,
@@ -21,11 +19,18 @@ import {
   type ClientRunStatus,
 } from '@/lib/chat/run-state';
 import type { ChatThread } from '@/lib/chat/thread';
+import { dropChatUpload, uploadChatFile } from '@/lib/chat/upload-client';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { cn } from '@/lib/utils';
-
-type Mode = 'ask_first' | 'auto' | 'full_auto';
-const MODES: Mode[] = ['ask_first', 'auto', 'full_auto'];
+import type { ChatReference } from '@/lib/chat/references';
+import {
+  ChatComposer,
+  type ComposerChip,
+  type ComposerDraft,
+  type ComposerSend,
+  type ComposerVariant,
+} from './composer/chat-composer';
+import { RunAnswer } from './run/run-answer';
+import { ChatUsageNotice, ComposerUsageMeter, chatAtCap } from './chat-usage';
 
 interface Turn {
   key: string;
@@ -50,17 +55,6 @@ const SETTLING = new Set<string>([
   'run.stopped',
 ]);
 
-const stepsStatus = (status: ClientRunStatus): RunStepsStatus =>
-  status === 'done'
-    ? 'done'
-    : status === 'waiting'
-      ? 'waiting'
-      : status === 'error'
-        ? 'error'
-        : status === 'stopped' || status === 'paused_cap'
-          ? 'stopped'
-          : 'running';
-
 function turnsOf(thread: ChatThread | null): Turn[] {
   return (thread?.messages ?? []).map((message, i) => {
     const turn: Turn = { key: `saved-${i}`, role: message.role, text: message.text };
@@ -80,24 +74,73 @@ function turnsOf(thread: ChatThread | null): Turn[] {
 }
 
 /**
- * The engine's test page (C3): send a message, watch its steps stream, answer
- * its cards (D2's approval and denial cards) and Stop. A run still under way
- * when the page opens is rebuilt from its events and keeps streaming. Plain
- * on purpose: the real Chat shell (W1-01) replaces it.
+ * A chat in Chat (CHAT-01, Wave 1): its messages, each answer as its run
+ * works (RunAnswer, W1-14), and the composer (W1-10…13) under them; Chat
+ * Home's composer (`variant="home"`) starts a new chat. A run still under way
+ * when the page opens is rebuilt from its events and keeps streaming; a
+ * dropped stream reconnects from its last event. Steering stops the run,
+ * its done steps kept, and sends the text as the next message (decided
+ * 2026-10-30). A teammate's shared chat is read only. In the side panel
+ * (`variant="panel"`, CHAT-01 items 15–24) the page's address stays: the
+ * panel is told the chat's id with every message it takes, and `empty`
+ * shows until the first one; the page's context chips and @ references go
+ * with each message as its scope (W1-08, CHAT-04 item 8).
  */
-export function ChatTestView({ thread }: { thread: ChatThread | null }) {
+export function ChatThreadView({
+  thread,
+  variant,
+  defaultMode,
+  fullAutoOpen,
+  fullAutoOffByAdmin = false,
+  onConversation,
+  empty,
+  usageNoticeSeen = null,
+  chips,
+  onRemoveChip,
+  pageReferences,
+  pageRoute,
+  draft,
+  onOwnKey = false,
+}: {
+  thread: ChatThread | null;
+  variant: ComposerVariant;
+  defaultMode: ChatMode;
+  fullAutoOpen: boolean;
+  fullAutoOffByAdmin?: boolean;
+  /** In the side panel: the chat's id after each message it takes, instead of the address changing. */
+  onConversation?: (conversationId: string) => void;
+  /** What shows before the first message (the side panel's greeting). */
+  empty?: ReactNode;
+  /** The AI usage period whose 80% line the person already saw. */
+  usageNoticeSeen?: string | null;
+  /** The page's context as chips (the side panel, CHAT-01 item 20). */
+  chips?: ComposerChip[];
+  onRemoveChip?: (key: string) => void;
+  /** What on the page can be asked about, first in the @ menu. */
+  pageReferences?: ChatReference[];
+  /** The page the message is sent from, kept with it. */
+  pageRoute?: string;
+  /** A question or an object the page hands the box. */
+  draft?: ComposerDraft | null;
+  /** Chat runs on the workspace's own key: a used-up allowance doesn't pause it. */
+  onOwnKey?: boolean;
+}) {
   const t = useTranslations('chatPage');
+  const tLimit = useTranslations('chatComposer.limit');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const { isLocked, openUpgrade } = useUpgradeGate();
+  // At the AI limit, Chat pauses: the composer is off (CHAT-04 item 17).
+  const { usage, refresh: refreshUsage } = useAiUsage();
+  const atCap = chatAtCap(usage, onOwnKey);
   const [turns, setTurns] = useState<Turn[]>(() => turnsOf(thread));
   const [conversationId, setConversationId] = useState<string | null>(
     thread?.conversationId ?? null,
   );
-  const [input, setInput] = useState('');
-  const [mode, setMode] = useState<Mode>('auto');
+  const [mode, setMode] = useState<ChatMode>(defaultMode);
   const [reconnecting, setReconnecting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const resumed = useRef(false);
+  const brandId = thread?.brandId ?? activeBrandId ?? null;
 
   const last = turns[turns.length - 1];
   const working = !!last?.run && OPEN.includes(last.run.status);
@@ -107,6 +150,14 @@ export function ChatTestView({ thread }: { thread: ChatThread | null }) {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [working]);
+
+  // A run that stopped working spent some of the AI usage: the meter, the 80%
+  // line and the pause read it again, once per run, not on a timer.
+  const wasWorking = useRef(working);
+  useEffect(() => {
+    if (wasWorking.current && !working) refreshUsage();
+    wasWorking.current = working;
+  }, [working, refreshUsage]);
 
   const updateRun = useCallback((key: string, fn: (turn: Turn) => Turn) => {
     setTurns((all) => all.map((turn) => (turn.key === key ? fn(turn) : turn)));
@@ -153,18 +204,17 @@ export function ChatTestView({ thread }: { thread: ChatThread | null }) {
     });
   }, [turns, consume, updateRun]);
 
-  async function send() {
-    const message = input.trim();
-    if (!message || working) return;
+  /** A message to Chat: false when it wasn't taken, so the composer keeps it. */
+  async function send(message: string, sent: ComposerSend): Promise<boolean> {
     if (isLocked) {
       openUpgrade();
-      return;
+      return false;
     }
+    const questionKey = `you-${Date.now()}`;
     const answerKey = `answer-${Date.now()}`;
-    setInput('');
     setTurns((all) => [
       ...all,
-      { key: `you-${Date.now()}`, role: 'user', text: message },
+      { key: questionKey, role: 'user', text: message },
       {
         key: answerKey,
         role: 'assistant',
@@ -181,8 +231,15 @@ export function ChatTestView({ thread }: { thread: ChatThread | null }) {
         message,
         mode,
         conversationId: conversationId ?? undefined,
-        brandId: conversationId ? undefined : (activeBrandId ?? undefined),
+        brandId: conversationId ? undefined : (brandId ?? undefined),
+        // A chat the side panel starts names the page it started on.
+        ...(!conversationId && variant === 'panel' && pageRoute
+          ? { origin: 'panel', originPage: pageRoute }
+          : {}),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        ...(sent.attachments.length > 0 ? { attachmentIds: sent.attachments } : {}),
+        ...(sent.context.length > 0 ? { context: { route: pageRoute, chips: sent.context } } : {}),
+        ...(sent.references.length > 0 ? { references: sent.references } : {}),
       }),
     }).catch(() => null);
     if (!res?.ok || !res.body) {
@@ -190,20 +247,22 @@ export function ChatTestView({ thread }: { thread: ChatThread | null }) {
         error?: string;
         code?: string;
       } | null;
-      setTurns((all) => all.filter((turn) => turn.key !== answerKey));
-      setInput(message);
+      setTurns((all) => all.filter((turn) => turn.key !== answerKey && turn.key !== questionKey));
       if (body?.code === 'subscription_inactive') openUpgrade();
       else toast.error(body?.error ?? t('sendFailed'));
-      return;
+      return false;
     }
     const chatId = res.headers.get('x-chat-conversation');
     const runId = res.headers.get('x-chat-run');
     if (chatId && !conversationId) {
       setConversationId(chatId);
-      window.history.replaceState(null, '', `${window.location.pathname}/${chatId}`);
+      if (!onConversation) window.history.replaceState(null, '', `/dashboard/chat/${chatId}`);
     }
+    const id = chatId ?? conversationId;
+    if (id) onConversation?.(id);
     updateRun(answerKey, (turn) => ({ ...turn, runId }));
-    if (runId) await consume(answerKey, res.body, runId);
+    if (runId) void consume(answerKey, res.body, runId);
+    return true;
   }
 
   /** Approve (or the click) or Skip on the card the run waits on. */
@@ -235,102 +294,108 @@ export function ChatTestView({ thread }: { thread: ChatThread | null }) {
     await consume(turn.key, res.body, runId);
   }
 
-  async function stop() {
-    if (!last?.runId) return;
-    await fetch(`/api/chat/runs/${last.runId}/stop`, { method: 'POST' }).catch(() => null);
+  /** Stops the run under way: false when the Stop wasn't taken. */
+  async function stop(): Promise<boolean> {
+    if (!last?.runId) return true;
+    const res = await fetch(`/api/chat/runs/${last.runId}/stop`, { method: 'POST' }).catch(
+      () => null,
+    );
+    if (!res?.ok) return false;
     // A run nothing drives (queued, waiting) is ended by the Stop itself: its events say so.
     if (last.run && last.run.status !== 'running') {
-      const res = await fetch(`/api/chat/runs/${last.runId}/events?after=${last.run.lastSeq}`);
-      if (res.ok && res.body) await consume(last.key, res.body, last.runId);
+      const events = await fetch(`/api/chat/runs/${last.runId}/events?after=${last.run.lastSeq}`);
+      if (events.ok && events.body) await consume(last.key, events.body, last.runId);
     }
+    return true;
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">{t('title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
-        </div>
-        <Link href="/dashboard/chat" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-          {t('newChat')}
-        </Link>
-      </header>
-
-      <ol className="m-0 flex list-none flex-col gap-5 p-0">
-        {turns.map((turn) =>
-          turn.role === 'user' ? (
-            <li key={turn.key} className="flex justify-end">
-              <div className="max-w-[80%] rounded-2xl bg-muted px-4 py-2 text-sm whitespace-pre-wrap">
-                <span className="sr-only">{t('you')}: </span>
-                {turn.text}
-              </div>
-            </li>
-          ) : (
-            <li key={turn.key} className="flex flex-col gap-3">
-              <AnswerView
-                turn={turn}
-                now={now}
-                reconnecting={reconnecting && turn === last}
-                onApprove={(dontAskAgain) => answer(turn, 'approve', dontAskAgain)}
-                onSkip={() => answer(turn, 'skip')}
-              />
-            </li>
-          ),
-        )}
-      </ol>
-
-      <form
-        className="sticky bottom-0 flex flex-col gap-2 rounded-xl border bg-card p-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void send();
-        }}
-      >
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              void send();
-            }
-          }}
-          rows={2}
-          placeholder={t('placeholder')}
-          className="w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-        />
-        <div className="flex items-center justify-between gap-2">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            {t('modeLabel')}
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value as Mode)}
-              className="rounded-md border bg-background px-2 py-1 text-xs text-foreground"
-            >
-              {MODES.map((m) => (
-                <option key={m} value={m}>
-                  {t(`modes.${m}`)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {working ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => void stop()}>
-              {t('stop')}
-            </Button>
-          ) : (
-            <Button type="submit" size="sm" disabled={!input.trim()}>
-              {t('send')}
-            </Button>
+    <div
+      className={
+        variant === 'home'
+          ? 'mx-auto flex w-full max-w-[720px] flex-col gap-5 px-5 pb-6'
+          : variant === 'panel'
+            ? 'flex w-full flex-1 flex-col gap-4 px-4 pt-4'
+            : 'mx-auto flex w-full max-w-[760px] flex-col gap-5 px-5 py-6'
+      }
+    >
+      {turns.length === 0 && empty}
+      {turns.length > 0 && (
+        <ol className="m-0 flex list-none flex-col gap-5 p-0">
+          {turns.map((turn) =>
+            turn.role === 'user' ? (
+              <li key={turn.key} className="flex justify-end">
+                <div className="max-w-[80%] rounded-2xl bg-muted px-4 py-2 text-sm whitespace-pre-wrap">
+                  <span className="sr-only">{t('you')}: </span>
+                  {turn.text}
+                </div>
+              </li>
+            ) : (
+              <li key={turn.key}>
+                <Answer
+                  turn={turn}
+                  now={now}
+                  reconnecting={reconnecting && turn === last}
+                  onApprove={(dontAskAgain) => answer(turn, 'approve', dontAskAgain)}
+                  onSkip={() => answer(turn, 'skip')}
+                />
+              </li>
+            ),
           )}
-        </div>
-      </form>
+        </ol>
+      )}
+      <div
+        className={
+          variant === 'home'
+            ? 'flex flex-col gap-2'
+            : variant === 'panel'
+              ? 'sticky bottom-0 mt-auto flex flex-col gap-2 bg-background pt-1 pb-3'
+              : 'sticky bottom-0 flex flex-col gap-2 bg-background pt-1 pb-2'
+        }
+      >
+        {(!thread || thread.mine) && <ChatUsageNotice seenPeriod={usageNoticeSeen} />}
+        <ChatComposer
+          variant={variant}
+          mode={mode}
+          onModeChange={setMode}
+          fullAutoOpen={fullAutoOpen}
+          fullAutoOffByAdmin={fullAutoOffByAdmin}
+          running={working}
+          sharedReadOnly={!!thread && !thread.mine}
+          disabled={atCap}
+          placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : undefined}
+          usage={<ComposerUsageMeter />}
+          chips={chips}
+          onRemoveChip={onRemoveChip}
+          references={pageReferences}
+          draft={draft}
+          onSend={send}
+          onStop={() => void stop()}
+          onSteer={async (message, sent) => {
+            // Only once the Stop is taken: else two runs would answer in one chat.
+            if (!(await stop())) {
+              toast.error(t('sendFailed'));
+              return false;
+            }
+            return send(message, sent);
+          }}
+          searchReferences={
+            brandId
+              ? (q) => searchChatReferences(brandId, q).then((r) => (r.ok ? r.references : []))
+              : undefined
+          }
+          uploader={{
+            upload: (file) => uploadChatFile(file, conversationId),
+            remove: dropChatUpload,
+          }}
+        />
+      </div>
     </div>
   );
 }
 
-function AnswerView({
+/** One answer: its run as it works, with the cards it waits on or was refused with. */
+function Answer({
   turn,
   now,
   reconnecting,
@@ -344,28 +409,12 @@ function AnswerView({
   onSkip: () => Promise<void>;
 }) {
   const t = useTranslations('chatPage');
-  const run = turn.run ?? emptyRun('done');
+  const run = turn.run ?? { ...emptyRun('done'), text: turn.text };
   const workingMs = run.summary?.workingMs ?? (turn.startedAt ? now - turn.startedAt : 0);
   const confirmStep = run.confirm ? run.steps.find((s) => s.n === run.confirm!.n) : undefined;
-  const timeZone = turn.timezone ?? undefined;
 
-  return (
+  const cards = (
     <>
-      <RunSteps
-        status={stepsStatus(run.status)}
-        steps={run.steps}
-        workingMs={workingMs}
-        sources={run.summary?.sources.length ?? 0}
-      />
-      {run.status === 'queued' && run.steps.length === 0 && (
-        <p className="text-sm text-muted-foreground">{t('queued')}</p>
-      )}
-      {reconnecting && <p className="text-sm text-muted-foreground">{t('reconnecting')}</p>}
-      {run.text && (
-        <div className="text-sm">
-          <Markdown>{run.text}</Markdown>
-        </div>
-      )}
       {run.denials.map((denial, i) => (
         <DenialCard
           key={i}
@@ -398,24 +447,22 @@ function AnswerView({
           onSkip={() => void onSkip()}
         />
       )}
-      {run.status === 'stopped' && <p className="text-sm text-muted-foreground">{t('stopped')}</p>}
       {run.status === 'paused_cap' && (
         <p className="text-sm text-amber-700 dark:text-amber-400">{t('pausedCap')}</p>
       )}
       {run.status === 'error' && run.errorReason && (
         <p className="text-sm text-red-700 dark:text-red-400">{run.errorReason}</p>
       )}
-      {run.generatedAt && (
-        <p className={cn('text-xs text-muted-foreground')}>
-          {(() => {
-            const at = stampParts(run.generatedAt, timeZone);
-            const generated = t('generated', { date: `${at.date} · ${at.time}` });
-            if (!run.dataAsOf) return generated;
-            const asOf = stampParts(run.dataAsOf, timeZone);
-            return `${generated} · ${t('dataAsOf', { date: `${asOf.date} · ${asOf.time}` })}`;
-          })()}
-        </p>
-      )}
     </>
+  );
+
+  return (
+    <RunAnswer
+      run={run}
+      workingMs={workingMs}
+      timezone={turn.timezone}
+      reconnecting={reconnecting}
+      cards={cards}
+    />
   );
 }

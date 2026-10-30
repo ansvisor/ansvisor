@@ -1,6 +1,7 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
+import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -42,8 +43,11 @@ export function PlatformTable({
 
   return (
     <Card className={className}>
-      <CardHeader className="pb-2">
+      <CardHeader className="flex flex-row items-center gap-1 pb-2">
         <CardTitle className="text-sm font-medium">{t('title')}</CardTitle>
+        <AskAboutThis
+          reference={{ type: 'table', id: 'mentions-by-platform', label: t('title') }}
+        />
       </CardHeader>
       <CardContent className="overflow-x-auto">
         <table className="w-full min-w-[480px] text-sm" aria-label={t('tableLabel')}>

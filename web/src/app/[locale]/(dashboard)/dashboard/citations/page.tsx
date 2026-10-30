@@ -25,6 +25,10 @@ import {
 import { toast } from 'sonner';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel } from '@/lib/chat/page-context';
+import { formatRegionDisplay } from '@/lib/region';
 import { Link } from '@/i18n/navigation';
 import { AddCompetitorButton } from '@/components/citations/add-competitor-button';
 import {
@@ -35,6 +39,7 @@ import {
   buildPlatformOptions,
   buildCitationDetailHref,
   getDateRange,
+  getGroupedPlatformLabel,
   type CitationsUIFilters as UIFilters,
   type PlatformOption,
   type PromptOption,
@@ -52,7 +57,8 @@ import {
   type CitationGapDomain,
 } from '@/lib/actions/citations';
 import { getTopics } from '@/lib/actions/topic';
-import { getBrandPrompts } from '@/lib/actions/tracking';
+import { getBrandFilterOptions, getBrandPrompts } from '@/lib/actions/tracking';
+import { isSingleModel, modelFamilies, modelFamilyValue } from '@/lib/model-families';
 import { toCsv } from '@/lib/csv';
 import type { Topic } from '@/types';
 import { SOURCE_CATEGORY_LABELS, type SourceCategory } from '@/lib/citations/classify';
@@ -850,6 +856,8 @@ function writeFiltersToUrl(f: UIFilters) {
 export default function CitationsPage() {
   const t = useTranslations('citations');
   const tCommon = useTranslations('common');
+  const tChat = useTranslations('chatPanel.suggest');
+  const tChatRange = useTranslations('chatPanel.range');
   const { getActiveBrand } = useBrandStore();
   const brand = getActiveBrand();
 
@@ -893,6 +901,19 @@ export default function CitationsPage() {
   const [prompts, setPrompts] = useState<PromptOption[]>([]);
   const [availablePlatforms, setAvailablePlatforms] = useState<PlatformOption[]>([]);
   const [availableRegions, setAvailableRegions] = useState<string[]>([]);
+  // The platform asked for is always one of the choices: the dropdown drops a
+  // value it doesn't list, and the choices come from the rows read, so a
+  // family partly answered in the window, or a link's, would go unasked.
+  const platformChoices = useMemo<PlatformOption[]>(
+    () =>
+      !filters.platform || availablePlatforms.some((p) => p.value === filters.platform)
+        ? availablePlatforms
+        : [
+            ...availablePlatforms,
+            { value: filters.platform, label: getGroupedPlatformLabel(filters.platform) },
+          ],
+    [availablePlatforms, filters.platform],
+  );
   const isRefetching = isLoading && data !== null;
 
   const activeBrandId = brand?.id ?? null;
@@ -951,6 +972,9 @@ export default function CitationsPage() {
   // a response arriving after the filters changed — or after the user left the
   // page — can recognise itself as stale instead of writing state or toasting.
   const loadGen = useRef(0);
+  // The single models already read as their family (modelFamilyValue): each
+  // asks the brand's models once.
+  const familyRead = useRef(new Set<string>());
 
   const loadData = useCallback(async () => {
     if (!activeBrandId) {
@@ -962,6 +986,24 @@ export default function CitationsPage() {
 
     setIsLoading(true);
     setLoadFailed(false);
+    // A platform from an address can be one model of a family (Chat's link,
+    // platform=chatgpt-web): it reads as its family, as the dropdown sets it,
+    // so the numbers are those of picking ChatGPT there. The rows below are
+    // filtered, so the brand's models are asked for.
+    const asked = overviewFilters.platforms?.[0] ?? '';
+    if (isSingleModel(asked) && !familyRead.current.has(asked)) {
+      familyRead.current.add(asked);
+      const family = await getBrandFilterOptions(activeBrandId)
+        .then((options) => modelFamilyValue(asked, modelFamilies(options.models)))
+        .catch(() => asked);
+      if (stale()) return;
+      familyRead.current.add(family);
+      if (family !== asked) {
+        // The filters change, and the load they start reads the family.
+        setFilters((f) => ({ ...f, platform: family }));
+        return;
+      }
+    }
     try {
       const overview = await getCitationsOverview(activeBrandId, overviewFilters);
       if (stale()) return;
@@ -1164,6 +1206,71 @@ export default function CitationsPage() {
     }
   }, [brand, data, gaps, sourceTab]);
 
+  // Chat's side panel sees the page (W1-08): its dates and filters, the
+  // source cited most, and the sources table to ask about.
+  const scopeLabel = {
+    all: tCommon('sourceAll'),
+    own: tCommon('sourceBrand'),
+    competitors: tCommon('sourceCompetitors'),
+    third_party: tCommon('sourceThirdParty'),
+  }[filters.sourceScope];
+  const topSource = data?.rows.reduce<CitationDomainRow | null>(
+    (best, row) => (!best || row.totalCitations > best.totalCitations ? row : best),
+    null,
+  );
+  const topicName = topics.find((topic) => topic.id === filters.topic)?.name;
+  const promptText = prompts.find((prompt) => prompt.id === filters.prompt)?.text;
+  useChatPageContext(
+    brand
+      ? {
+          pageName: t('title'),
+          dateRange: {
+            from: filters.datePreset === 'custom' ? filters.dateFrom : filters.datePreset,
+            to: filters.datePreset === 'custom' ? filters.dateTo : null,
+            label: rangeChipLabel(
+              filters.datePreset,
+              { from: filters.dateFrom, to: filters.dateTo },
+              (key, values) => tChatRange(key, values),
+            ),
+          },
+          filters: [
+            {
+              key: 'platform',
+              label: filters.platform
+                ? (availablePlatforms.find((p) => p.value === filters.platform)?.label ??
+                  getGroupedPlatformLabel(filters.platform))
+                : tCommon('allPlatforms'),
+              value: filters.platform,
+            },
+            ...(filters.region
+              ? [
+                  {
+                    key: 'region',
+                    label: formatRegionDisplay(filters.region),
+                    value: filters.region,
+                  },
+                ]
+              : []),
+            ...(filters.topic && topicName
+              ? [{ key: 'topic', label: topicName, value: filters.topic }]
+              : []),
+            ...(filters.prompt && promptText
+              ? [{ key: 'prompt', label: promptText, value: filters.prompt }]
+              : []),
+            { key: 'sources', label: scopeLabel, value: filters.sourceScope },
+          ],
+          suggestions: [
+            ...(topSource && topSource.totalCitations > 0
+              ? [tChat('citedMost', { domain: topSource.domain })]
+              : []),
+            tChat('citeRivals'),
+            tChat('actions'),
+          ],
+          referenceables: [{ type: 'table', id: 'citations-sources', label: t('sourcesTitle') }],
+        }
+      : null,
+  );
+
   const exportDisabled =
     isExporting ||
     isLoading ||
@@ -1218,7 +1325,7 @@ export default function CitationsPage() {
         onChange={(patch) => setFilters((f) => ({ ...f, ...patch }))}
         topics={topics}
         prompts={prompts}
-        platforms={availablePlatforms}
+        platforms={platformChoices}
         regions={availableRegions}
       />
 
@@ -1242,7 +1349,12 @@ export default function CitationsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">{t('sourcesTitle')}</CardTitle>
+                <div className="flex items-center gap-1">
+                  <CardTitle className="text-base">{t('sourcesTitle')}</CardTitle>
+                  <AskAboutThis
+                    reference={{ type: 'table', id: 'citations-sources', label: t('sourcesTitle') }}
+                  />
+                </div>
               </CardHeader>
               <CardContent>
                 {/* Only Domains and URLs are scoped by it — Competitor Gaps and

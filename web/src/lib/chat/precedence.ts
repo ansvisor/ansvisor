@@ -93,6 +93,16 @@ export function allowedRoles(tool: Pick<ChatTool, 'minRole' | 'excludeRoles'>): 
 export const CHAT_MODES = ['ask_first', 'auto', 'full_auto'] as const;
 export type ChatMode = (typeof CHAT_MODES)[number];
 
+/**
+ * The mode a new chat's composer starts in: the person's saved default
+ * (chat_user_prefs.default_mode), Auto, ask before changes, when none; a
+ * saved Full auto the plan no longer opens starts as Auto too.
+ */
+export function chatDefaultModeOf(saved: unknown, fullAutoOpen: boolean): ChatMode {
+  const mode = CHAT_MODES.find((m) => m === saved) ?? 'auto';
+  return mode === 'full_auto' && !fullAutoOpen ? 'auto' : mode;
+}
+
 /** Where a call comes from. MCP has no Full auto and no "Don't ask again" in v1 (§17). */
 export const CHAT_SURFACES = ['chat', 'mcp'] as const;
 export type ChatSurface = (typeof CHAT_SURFACES)[number];
