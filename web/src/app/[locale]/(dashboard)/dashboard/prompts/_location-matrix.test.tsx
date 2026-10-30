@@ -5,12 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { PromptLocationCell } from '@/lib/prompt-location-matrix';
 import type { Prompt } from '@/types';
+import type { FirstRun } from '@/hooks/use-first-run';
 
 const getPromptLocationMatrix = vi.hoisted(() => vi.fn());
 const getLocationQuota = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/prompt', () => ({ getPromptLocationMatrix, getLocationQuota }));
 const getTrackingCountries = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/tracking-countries', () => ({ getTrackingCountries }));
+// The brand's first run: null unless a test says it goes on.
+const firstRun = vi.hoisted(() => ({ run: null as FirstRun | null }));
+vi.mock('@/hooks/use-first-run', () => ({ useFirstRun: () => firstRun.run }));
 
 const { clearTrackingCountries } = await import('@/lib/use-tracking-countries');
 const { LocationMatrix, LocationPending, clearLocationMatrixCache, loadLocationMatrix } =
@@ -387,6 +391,25 @@ describe('a prompt with no answers yet, in the Table view', () => {
     const { shown, tip } = await renderPending(prompt('p1', 'new prompt', ['US']));
     expect(shown).toBe('Within 24h');
     expect(tip).toBe("This prompt's first results come with the next daily run, within 24 hours.");
+  });
+
+  it("says it's arriving while the brand's first run asks it, and Within 24h again after", async () => {
+    firstRun.run = { brandId: 'b1', queued: false, progress: null, left: null };
+    try {
+      const during = await renderPending(prompt('p1', 'new prompt', ['US']), 'US');
+      expect(during.shown).toBe('Arriving now');
+      expect(during.tip).toBe(
+        'Your first tracking is asking this now. Its results come in as it goes, and all of them when it finishes.',
+      );
+      // Paused stays paused.
+      const paused = await renderPending(
+        prompt('p1', 'paused prompt', ['US'], 'Coffee', { isActive: false }),
+      );
+      expect(paused.shown).toBe('Paused');
+    } finally {
+      firstRun.run = null;
+    }
+    expect((await renderPending(prompt('p1', 'new prompt', ['US']))).shown).toBe('Within 24h');
   });
 
   it('says when the prompt is paused', async () => {

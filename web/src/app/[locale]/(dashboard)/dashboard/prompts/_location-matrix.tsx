@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useFirstRun } from '@/hooks/use-first-run';
 import {
   Table,
   TableBody,
@@ -129,8 +130,10 @@ export function clearLocationMatrixCache() {
 /**
  * A location a prompt is tracked in that has no answers yet, and why: a
  * paused prompt; none of its engines answering from there; or, usually,
- * just added: the next daily run asks it, within 24 hours. Without a
- * location, the same for the prompt in the Table view (pendingColumn).
+ * just added: the next daily run asks it, within 24 hours. While the
+ * brand's first run goes on, that run is asking it now ("Arriving now").
+ * Without a location, the same for the prompt in the Table view
+ * (pendingColumn).
  */
 export function LocationPending({
   prompt,
@@ -153,6 +156,7 @@ export function LocationPending({
 }) {
   const t = useTranslations('prompts.locations');
   const countries = useTrackingCountries();
+  const firstRun = useFirstRun();
   const tipId = useId();
   const parsed = region ? parseLocation(region) : null;
   const state = !reachesToday(window)
@@ -174,8 +178,11 @@ export function LocationPending({
       </span>
     );
   }
-  const tip =
-    !region && state === 'pending'
+  // A new prompt in the brand's first run: asked now, not by the next daily run.
+  const arriving = state === 'pending' && firstRun !== null;
+  const tip = arriving
+    ? t('arrivingTip')
+    : !region && state === 'pending'
       ? t('promptPendingTip')
       : t(`${state}Tip`, { location: region ? regionLabel(region) : '' });
   // Why, on hover and on keyboard focus; and for a screen reader, as the
@@ -201,7 +208,7 @@ export function LocationPending({
           }
         >
           {state === 'pending' && <Clock className="h-3 w-3" aria-hidden />}
-          {t(state)}
+          {arriving ? t('arriving') : t(state)}
         </TooltipTrigger>
         <TooltipContent className="max-w-72">{tip}</TooltipContent>
       </Tooltip>

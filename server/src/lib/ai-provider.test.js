@@ -87,6 +87,11 @@ describe('ai-provider registry', () => {
     expect(webSearchTools('anthropic/claude-haiku-4-5').web_search.id).toBe(
       'anthropic.web_search_20250305',
     );
+    // Claude Haiku 5.5 takes the basic version; a call may cap its searches.
+    expect(webSearchTools('anthropic/claude-haiku-5-5').web_search.args).toEqual({ maxUses: 5 });
+    expect(webSearchTools('anthropic/claude-haiku-5-5', { maxUses: 3 }).web_search.args).toEqual({
+      maxUses: 3,
+    });
   });
 
   it('has no search tool for openrouter or an unconfigured provider', async () => {
