@@ -42,13 +42,13 @@ afterEach(() => vi.unstubAllEnvs());
 describe('openPageFor', () => {
   it('opens a page with the filters it keeps, reading only the plan: no AI usage', async () => {
     expect(
-      await openPageFor(auth, { route: 'insights', range: '30d', platform: 'perplexity-web' }),
+      await openPageFor(auth, { route: 'citations', range: '30d', platform: 'perplexity-web' }),
     ).toEqual({
       found: true,
-      title: 'Brand Visibility',
+      title: 'Citations',
       section: null,
       locked: false,
-      href: '/dashboard/insights?range=30d&model=perplexity-web',
+      href: '/dashboard/citations?preset=30d&platform=perplexity-web',
       filters: [
         { key: 'range', value: '30d' },
         { key: 'platform', value: 'perplexity-web' },

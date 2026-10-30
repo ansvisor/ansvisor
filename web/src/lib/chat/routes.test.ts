@@ -73,12 +73,19 @@ describe('routeRegistry', () => {
 
   it('sets only the filters a page keeps, with the values it takes', () => {
     const insights = routeById('insights')!;
-    expect(hrefWithFilters(insights, { range: '30d', platform: 'perplexity-web' })).toEqual({
-      href: '/dashboard/insights?range=30d&model=perplexity-web',
+    const citations = routeById('citations')!;
+    expect(hrefWithFilters(citations, { range: '30d', platform: 'perplexity-web' })).toEqual({
+      href: '/dashboard/citations?preset=30d&platform=perplexity-web',
       applied: [
         { key: 'range', value: '30d' },
         { key: 'platform', value: 'perplexity-web' },
       ],
+    });
+    // Insights' `model` filter holds the answers' model slugs, not platform
+    // ids: a platform id there would open an empty page.
+    expect(hrefWithFilters(insights, { range: '30d', platform: 'chatgpt-web' })).toEqual({
+      href: '/dashboard/insights?range=30d',
+      applied: [{ key: 'range', value: '30d' }],
     });
     expect(hrefWithFilters(routeById('competitors')!, { range: '24h', platform: 'x' }).href).toBe(
       '/dashboard/competitors',
@@ -98,9 +105,7 @@ describe('routeRequest', () => {
   };
 
   it('opens the page with its filters set, from plain words', () => {
-    expect(to('Open Visibility for Perplexity, last 30 days')).toBe(
-      '/dashboard/insights?range=30d&model=perplexity-web',
-    );
+    expect(to('Open Visibility for the last 30 days')).toBe('/dashboard/insights?range=30d');
     expect(to('Take me to Competitors')).toBe('/dashboard/competitors');
     expect(to('Open Settings › AI Providers')).toBe('/dashboard/settings/ai-providers');
     expect(to('go to tracked prompts for the last 7 days')).toBe(
@@ -139,6 +144,7 @@ describe('routeRequest', () => {
     expect(to('Show me the Content drafts under Quality 60')).toBeNull();
     // A filter the page doesn't keep.
     expect(to('Open Competitors for Perplexity')).toBeNull();
+    expect(to('Open Visibility for Perplexity, last 30 days')).toBeNull();
     // A question, or no navigation verb.
     expect(to('Why did my visibility drop?')).toBeNull();
     expect(to('visibility for perplexity')).toBeNull();
