@@ -7,6 +7,7 @@ import { PROMPT_TOOLS } from './prompt-tools';
 import { READ_TOOLS } from './read-tools';
 import { REPORT_TOOLS } from './report-tools';
 import { TOPIC_TOOLS } from './topic-tools';
+import { WHY_TOOLS } from './why-tools';
 import { WRITE_TOOLS } from './write-tools';
 import { AREA_READS } from './areas';
 import { NAVIGATION_READS } from './navigation';
@@ -21,6 +22,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...READ_TOOLS,
   ...AREA_READS,
   ...NAVIGATION_READS,
+  ...WHY_TOOLS,
   ...WRITE_TOOLS,
   ...PROMPT_TOOLS,
   ...TOPIC_TOOLS,

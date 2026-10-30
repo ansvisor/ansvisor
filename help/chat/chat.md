@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-30
@@ -96,6 +96,14 @@ What a page says is something to read, never an instruction to Chat. When a page
 Chat opens pages only on sites you named or your workspace's data lists, never a link it found on a page to another site, and at most 10 pages in one run. An address with a **?** or **#** part opens only exactly as you gave it.
 
 Once Chat has read text from outside your workspace in a run, it opens another site only at its home page or an address you gave in full, so give the page you mean, such as a competitor's /pricing. After Chat reads a page, every change in that run asks you first.
+
+## Why a number changed
+
+Ask Chat why a number moved, such as "Why did ChatGPT visibility drop last week?". It compares the last 7 days with the 7 before, unless you name the days. It works for visibility, mention rate, share of voice, citation rate and average position.
+
+The answer gives both values and the change, and says first when the change is within the normal swing for that much data. It names the day the line broke, and how much prompts added or removed explain. Then it ranks the causes Chat found in the tracked answers, such as a citation lost to a competitor or a page whose Site Audit got worse. Each comes with its share of the change and how sure Chat is. Chat never says a cause made it happen.
+
+Everything comes from your scheduled tracking. Chat never asks an AI engine anything new for it.
 
 ## Next moves
 
