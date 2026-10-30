@@ -67,6 +67,9 @@ const OPEN_ACTIONS: Record<string, string> = {
   'chat-settings.ts:setManagerExecute': 'checks ctx.plan.writable itself, answering read_only',
   'chat-settings.ts:removeAutoChoice':
     "removes the person's own Don't ask again tick: takes an auto-approval back, never gives one",
+  // An add-on pack (CHAT-18): only on an active, paid plan.
+  'add-ons.ts:startAddOnPurchase':
+    'checks the plan itself (subscription_status active), answering trial or no_plan',
 };
 
 /** Actions that take a brand's own id under another name: file:function → the parameter. */
