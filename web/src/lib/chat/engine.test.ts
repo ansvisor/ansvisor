@@ -798,6 +798,15 @@ describe('answers from Help (W1-30)', () => {
     expect(db.tables.help_answer_cache ?? []).toEqual([]);
   });
 
+  it("doesn't keep an answer written on the workspace's own key", async () => {
+    useModels([text(ANSWER)], []);
+    // Same models, on the workspace's own key.
+    fakes.resolveModels.mockResolvedValue({ ...(await fakes.resolveModels()), source: 'own' });
+    const runId = await turn(ADMIN, 'How do I add a prompt?');
+    expect(answerOf(runId)).toBe(`${ANSWER}\n\n${SOURCE}`);
+    expect(db.tables.help_answer_cache ?? []).toEqual([]);
+  });
+
   it('logs a question Help has no answer for, anonymously, and answers it as usual', async () => {
     const { sonnet } = useModels([READY], [text('Settings › Integrations lists them.')]);
     const runId = await turn(ADMIN, 'How do I connect Slack for team@acme-corp.com?');

@@ -736,7 +736,9 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
       });
       return 'none';
     }
-    if (key) {
+    // Kept for every workspace only when Ansvisor's model wrote it: a
+    // workspace's own key may run another model, and its words stay its own.
+    if (key && rc.models.source === 'ansvisor') {
       await saveHelpAnswer(
         key,
         rc.progress.text,

@@ -44,7 +44,7 @@ const HELP_ASK: readonly RegExp[] = [
 
 /** A question about the person's own numbers or results: Chat reads their data (§5 step 5). */
 const DATA_ASK =
-  /\b(?:why|improve|increase|boost|grow|drop(?:ped)?|fell|fall|decline[ds]?|compare|versus|vs|how (?:is|are|did|was|were) (?:my|our|we|us))\b|(?:^|\s)(?:neden|niye|artır|düş|karşılaştır|iyileştir)/i;
+  /\b(?:why|improve|increase|boost|grow|drop(?:ped)?|fell|fall|decline[ds]?|compare|versus|vs|how (?:is|are|did|was|were) (?:my|our|we|us)|what(?:'s|’s| is| are| was| were) (?:my|our)|where do (?:i|we) (?:stand|rank))\b|(?:^|\s)(?:neden|niye|artır|düş|karşılaştır|iyileştir)/i;
 
 /** Whether a question is one Help answers: how to, where, what it means; never one about the person's results. */
 export function isHelpQuestion(question: string | null | undefined): boolean {
