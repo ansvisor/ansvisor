@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
     '/api/chat/runs/[id]/export': ['./public/fonts/**/*'],
     '/api/chat/conversations/[id]/export': ['./public/fonts/**/*'],
     '/api/chat/runs/[id]/files/[n]': ['./public/fonts/**/*'],
+    '/api/chat/files/[id]': ['./public/fonts/**/*'],
+    '/api/chat/files/zip': ['./public/fonts/**/*'],
   },
   // The Prompts area has a route per view (PROMPT-001). Older links and
   // bookmarks — /dashboard/prompts and its ?tab= / ?view= shapes — land on

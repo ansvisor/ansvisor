@@ -3714,6 +3714,76 @@
     "downloadFailed": "Couldn't download that. Try again.",
     "openEditor": "Open in Content Editor"
   },
+  "chatFiles": {
+    "title": "Files",
+    "subtitle": "Everything Chat finished, filed by task. Kept for 1 year.",
+    "downloadSelected": "Download selected",
+    "selectFirst": "Select files to download them together",
+    "zipped": "Downloaded {count, plural, one {# file} other {# files}} (.zip)",
+    "zipTooBig": "Pick up to 50 files and 100 MB at a time.",
+    "zipFailed": "Couldn't download the files. Try again.",
+    "storage": "Storage {used} of {limit} GB",
+    "storageNoLimit": "Storage {used} GB",
+    "storageTip": "Files are kept for 1 year",
+    "storageFull": "Storage is full. New work still shows in its chat, but isn't saved to Files.",
+    "searchPlaceholder": "Filter by name…",
+    "filters": {
+      "all": "All",
+      "drafts": "Drafts",
+      "reports": "Reports",
+      "code": "Code",
+      "tables": "Tables",
+      "images": "Images",
+      "me": "From me",
+      "agents": "From agents"
+    },
+    "columns": {
+      "name": "Name",
+      "madeBy": "Made by",
+      "fromChat": "From chat",
+      "updated": "Updated"
+    },
+    "select": "Select {name}",
+    "madeBy": {
+      "you": "You",
+      "agent": "Agent",
+      "schedule": "Scheduled",
+      "formerMember": "Former member"
+    },
+    "untitledChat": "Untitled chat",
+    "noChat": "—",
+    "generated": "{date} · {time}",
+    "generatedTip": "{date} {time} {offset}",
+    "dataAsOf": "Data as of {day}, {time}",
+    "usedInDraft": "Used in Content draft",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Couldn't copy that. Try again.",
+    "open": "Open",
+    "openTip": "Open in Content Editor",
+    "download": "Download",
+    "downloaded": "Downloaded {name}",
+    "downloadFailed": "Couldn't download that. Try again.",
+    "showMore": "Show more",
+    "empty": "No files here yet. Files your chats and agents make show up here.",
+    "noMatch": "No files match.",
+    "clearFilters": "Clear filters",
+    "loadFailed": "Couldn't load Files.",
+    "retry": "Retry",
+    "formatNames": {
+      "md": "Markdown",
+      "html": "HTML",
+      "docx": "Word",
+      "pdf": "PDF",
+      "csv": "CSV",
+      "xlsx": "Excel",
+      "json": "JSON",
+      "jsonld": "JSON-LD",
+      "txt": "TXT",
+      "png": "PNG",
+      "webp": "WebP"
+    }
+  },
   "chatPanel": {
     "label": "Chat side panel",
     "askChat": "Ask Chat",
@@ -3832,7 +3902,8 @@
       "allChats": "All chats · {count} ›",
       "archivedLink": "Archived · {count} ›",
       "settings": "Settings",
-      "usageTip": "AI usage this month"
+      "usageTip": "AI usage this month",
+      "files": "Files"
     },
     "actions": {
       "more": "More for {name}",
@@ -3925,6 +3996,7 @@
       "failed": "Couldn't search your chats.",
       "pages": {
         "allChats": "All chats",
+        "files": "Files",
         "settings": "Settings"
       }
     },
@@ -3980,6 +4052,7 @@
         "allChats": "All chats",
         "activity": "Activity",
         "capabilities": "What Chat can do",
+        "files": "Files",
         "settings": "Settings"
       }
     },
