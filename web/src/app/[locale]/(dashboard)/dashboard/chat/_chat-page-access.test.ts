@@ -5,9 +5,8 @@ import { DEFAULT_CHAT_SETTINGS, type PrecedenceContext } from '@/lib/chat/preced
 /**
  * The Chat frame's saved choices (chatShellPrefs): none while the new Chat
  * is off, and on the person's first visit their Agent Chat conversations
- * are copied in (W1-02) — once, and never in the way of Chat opening.
- *
- * The composer's setup (W1-10): Full auto shows open only where the server
+ * are copied in (W1-02) — once, and never in the way of Chat opening. And
+ * the composer's setup (W1-10): Full auto shows open only where the server
  * would run it, so a member whose Admin turned "Full auto for members" off
  * doesn't pick a mode that then asks anyway.
  */
@@ -17,12 +16,16 @@ const db = vi.hoisted(() => ({
     menu_open?: boolean;
     rail_open?: boolean;
     legacy_imported_at?: string | null;
-    default_mode?: string;
+    default_mode?: string | null;
     usage_notice_period?: string | null;
   } | null,
   prefsError: null as { message: string } | null,
+}));
+
+const facts = vi.hoisted(() => ({
   ctx: null as Pick<PrecedenceContext, 'role' | 'plan' | 'settings'> | null,
   fail: false,
+  ownKey: false as boolean | 'throws',
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -47,8 +50,14 @@ vi.mock('@/lib/chat/legacy-import', () => ({
 }));
 vi.mock('@/lib/chat/precedence-context', () => ({
   readPrecedenceContext: vi.fn(async () => {
-    if (db.fail) throw new Error('no answer');
-    return db.ctx;
+    if (facts.fail) throw new Error('no answer');
+    return facts.ctx;
+  }),
+}));
+vi.mock('@/lib/chat/key', () => ({
+  chatRunsOnOwnKey: vi.fn(async () => {
+    if (facts.ownKey === 'throws') throw new Error('no answer');
+    return facts.ownKey;
   }),
 }));
 
@@ -59,8 +68,9 @@ beforeEach(() => {
   vi.stubEnv('CHAT_AGENTIC', 'true');
   db.prefs = null;
   db.prefsError = null;
-  db.ctx = null;
-  db.fail = false;
+  facts.ctx = null;
+  facts.fail = false;
+  facts.ownKey = false;
   vi.mocked(importLegacyChats).mockClear();
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -113,53 +123,64 @@ describe('chatComposerSetup', () => {
   });
 
   it('keeps Full auto closed for a member when the Admin turned it off, and says why', async () => {
-    db.ctx = ctxOf('manager', true, false);
+    facts.ctx = ctxOf('manager', true, false);
     expect(await chatComposerSetup()).toEqual({
       defaultMode: 'auto',
       fullAutoOpen: false,
       fullAutoOffByAdmin: true,
       usageNoticeSeen: null,
+      onOwnKey: false,
     });
   });
 
   it('opens Full auto for an Admin whatever the members switch says', async () => {
-    db.ctx = ctxOf('admin', true, false);
+    facts.ctx = ctxOf('admin', true, false);
     expect(await chatComposerSetup()).toEqual({
       defaultMode: 'full_auto',
       fullAutoOpen: true,
       fullAutoOffByAdmin: false,
       usageNoticeSeen: null,
+      onOwnKey: false,
     });
   });
 
   it('opens Full auto for a member with the switch on', async () => {
-    db.ctx = ctxOf('manager', true, true);
+    facts.ctx = ctxOf('manager', true, true);
     expect((await chatComposerSetup()).fullAutoOpen).toBe(true);
   });
 
   it('names the plan, not the Admin, when the plan has no Full auto', async () => {
-    db.ctx = ctxOf('manager', false, false);
+    facts.ctx = ctxOf('manager', false, false);
     expect(await chatComposerSetup()).toEqual({
       defaultMode: 'auto',
       fullAutoOpen: false,
       fullAutoOffByAdmin: false,
       usageNoticeSeen: null,
+      onOwnKey: false,
     });
-  });
-
-  it('keeps the usage period whose 80% line the person saw', async () => {
-    db.prefs = { default_mode: 'auto', usage_notice_period: '2026-10' };
-    db.ctx = ctxOf('admin', true, false);
-    expect((await chatComposerSetup()).usageNoticeSeen).toBe('2026-10');
   });
 
   it('falls back to the careful setup when the facts can’t be read', async () => {
-    db.fail = true;
+    facts.fail = true;
     expect(await chatComposerSetup()).toEqual({
       defaultMode: 'auto',
       fullAutoOpen: false,
       fullAutoOffByAdmin: false,
       usageNoticeSeen: null,
+      onOwnKey: false,
     });
+  });
+
+  it('passes on the period whose 80% line was seen, and whether Chat runs on its own key', async () => {
+    facts.ctx = ctxOf('admin', true, false);
+    db.prefs = { default_mode: 'full_auto', usage_notice_period: '2026-10-01' };
+    facts.ownKey = true;
+    const setup = await chatComposerSetup();
+    expect(setup.usageNoticeSeen).toBe('2026-10-01');
+    expect(setup.onOwnKey).toBe(true);
+
+    // A key that can't be read: the careful answer, and the server's hold still decides.
+    facts.ownKey = 'throws';
+    expect((await chatComposerSetup()).onOwnKey).toBe(false);
   });
 });

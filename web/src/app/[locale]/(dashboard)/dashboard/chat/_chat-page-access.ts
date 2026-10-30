@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { firstNameOf } from '@/lib/chat/home';
 import { importLegacyChats } from '@/lib/chat/legacy-import';
-import { chatDefaultModeOf, type ChatMode, type PrecedenceContext } from '@/lib/chat/precedence';
+import { chatRunsOnOwnKey } from '@/lib/chat/key';
+import { CHAT_MODES, type ChatMode, type PrecedenceContext } from '@/lib/chat/precedence';
 import { readPrecedenceContext } from '@/lib/chat/precedence-context';
 
 /** Whether the signed-in person's workspace has the new Chat on (CHAT_AGENTIC). */
@@ -94,13 +95,29 @@ export interface ChatComposerSetup {
   fullAutoOffByAdmin: boolean;
   /** The AI usage period whose 80% line the person already saw (CHAT-04 item 16). */
   usageNoticeSeen: string | null;
+  /**
+   * Chat runs on the workspace's own key (chatRunsOnOwnKey): its steps don't
+   * draw on the AI budget, so a used-up allowance doesn't pause it.
+   */
+  onOwnKey: boolean;
 }
 
-const CAREFUL_SETUP: ChatComposerSetup = {
+/** The modes part of the setup, from the person's saved mode and the precedence facts. */
+type ComposerModeSetup = Pick<
+  ChatComposerSetup,
+  'defaultMode' | 'fullAutoOpen' | 'fullAutoOffByAdmin'
+>;
+
+const CAREFUL_MODES: ComposerModeSetup = {
   defaultMode: 'auto',
   fullAutoOpen: false,
   fullAutoOffByAdmin: false,
+};
+
+const CAREFUL_SETUP: ChatComposerSetup = {
+  ...CAREFUL_MODES,
   usageNoticeSeen: null,
+  onOwnKey: false,
 };
 
 /**
@@ -113,14 +130,13 @@ const CAREFUL_SETUP: ChatComposerSetup = {
 export function composerSetupOf(
   savedMode: unknown,
   ctx: Pick<PrecedenceContext, 'role' | 'plan' | 'settings'> | null,
-): Omit<ChatComposerSetup, 'usageNoticeSeen'> {
-  if (!ctx) {
-    return { defaultMode: 'auto', fullAutoOpen: false, fullAutoOffByAdmin: false };
-  }
+): ComposerModeSetup {
+  if (!ctx) return CAREFUL_MODES;
   const forRole = ctx.role === 'admin' || ctx.settings.fullAutoForMembers;
   const fullAutoOpen = ctx.plan.fullAuto && forRole;
+  const defaultMode = CHAT_MODES.find((m) => m === savedMode) ?? 'auto';
   return {
-    defaultMode: chatDefaultModeOf(savedMode, fullAutoOpen),
+    defaultMode: defaultMode === 'full_auto' && !fullAutoOpen ? 'auto' : defaultMode,
     fullAutoOpen,
     fullAutoOffByAdmin: ctx.plan.fullAuto && !forRole,
   };
@@ -129,8 +145,9 @@ export function composerSetupOf(
 /**
  * The composer's setup: the default mode the person chose in Chat's settings
  * (chat_user_prefs.default_mode; Auto, ask before changes, when none), and
- * Full auto as the server will decide it. A value that can't be read falls
- * back to the careful one.
+ * Full auto as the server will decide it, the period whose 80% usage line
+ * the person already saw, and whether Chat runs on the workspace's own key.
+ * A value that can't be read falls back to the careful one.
  */
 export async function chatComposerSetup(): Promise<ChatComposerSetup> {
   const supabase = await createClient();
@@ -144,7 +161,7 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
     .eq('id', user.id)
     .maybeSingle();
   if (!profile?.organization_id) return CAREFUL_SETUP;
-  const [{ data: prefs }, ctx] = await Promise.all([
+  const [{ data: prefs }, ctx, onOwnKey] = await Promise.all([
     supabase
       .from('chat_user_prefs')
       .select('default_mode, usage_notice_period')
@@ -156,9 +173,11 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
       mode: 'ask_first',
       surface: 'chat',
     }).catch(() => null),
+    chatRunsOnOwnKey(profile.organization_id).catch(() => false),
   ]);
   return {
     ...composerSetupOf(prefs?.default_mode, ctx),
     usageNoticeSeen: prefs?.usage_notice_period ?? null,
+    onOwnKey,
   };
 }
