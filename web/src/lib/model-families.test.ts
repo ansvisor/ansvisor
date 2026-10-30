@@ -30,6 +30,18 @@ describe('modelFamilyValue', () => {
     expect(modelFamilyValue('grok-web', families)).toBe('grok-web');
   });
 
+  it('reads a platform id as the family of the same name when no answer was stored under it', () => {
+    // ChatGPT's web answers store the model Cloro names ("gpt-5-5"), not "chatgpt-web".
+    const stored = modelFamilies(['gpt-5-5', 'gpt-5-3-mini', 'sonar-pro']);
+    expect(stored).toEqual(['gpt-5-3-mini,gpt-5-5', 'sonar-pro']);
+    expect(modelFamilyValue('chatgpt-web', stored)).toBe('gpt-5-3-mini,gpt-5-5');
+    expect(modelFamilyValue('perplexity-web', stored)).toBe('sonar-pro');
+    expect(modelFamilyValue('grok-web', stored)).toBe('grok-web');
+    // An unknown slug is not ChatGPT, though the page would name it so.
+    expect(modelFamilyValue('not-a-model', stored)).toBe('not-a-model');
+    expect(modelFamilyValue('chatgpt-web,grok-web', stored)).toBe('chatgpt-web,grok-web');
+  });
+
   it('tells a single slug from a family', () => {
     expect(isSingleModel('chatgpt-web')).toBe(true);
     expect(isSingleModel('chatgpt-web,gpt-5-chat-latest')).toBe(false);

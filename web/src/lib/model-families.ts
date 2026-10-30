@@ -31,17 +31,23 @@ export function modelFamilies(slugs: readonly string[]): string[] {
 /**
  * The filter value an address names, as the dropdown would set it: one slug
  * of a family (Chat's link, "model=chatgpt-web") reads as its whole family,
- * so the numbers are those of picking ChatGPT. Anything else is kept.
+ * so the numbers are those of picking ChatGPT. A known platform id the
+ * brand's answers weren't stored under (ChatGPT's are stored as "gpt-5-…")
+ * reads as the family shown by the same name. Anything else is kept.
  */
 export function modelFamilyValue(value: string, families: readonly string[]): string {
   if (!value || families.includes(value)) return value;
   const asked = value.split(',');
-  return (
-    families.find((family) => {
-      const members = family.split(',');
-      return asked.every((slug) => members.includes(slug));
-    }) ?? value
-  );
+  const containing = families.find((family) => {
+    const members = family.split(',');
+    return asked.every((slug) => members.includes(slug));
+  });
+  if (containing) return containing;
+  // Only a slug with a label of its own: an unknown one would fall back to
+  // ChatGPT's name (resolveAIProvider's default) and open ChatGPT's numbers.
+  const known = isSingleModel(value) && (MODEL_PROVIDER_LABELS[value] ?? PLATFORM_LABELS[value]);
+  if (!known) return value;
+  return families.find((family) => modelLabel(family.split(',')[0]) === known) ?? value;
 }
 
 /** Whether a value is a single slug, so it may stand for a family. */
