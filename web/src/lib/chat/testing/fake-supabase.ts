@@ -9,7 +9,11 @@
 
 type Row = Record<string, unknown>;
 type Filter = (row: Row) => boolean;
-type Result = { data: unknown; error: { code?: string; message: string } | null };
+type Result = {
+  data: unknown;
+  error: { code?: string; message: string } | null;
+  count?: number | null;
+};
 
 export interface FakeSupabase {
   tables: Record<string, Row[]>;
@@ -28,7 +32,7 @@ export interface FakeSupabase {
 }
 
 interface Builder extends PromiseLike<Result> {
-  select(columns?: string): Builder;
+  select(columns?: string, options?: { count?: 'exact'; head?: boolean }): Builder;
   insert(rows: Row | Row[]): Builder;
   update(patch: Row): Builder;
   delete(): Builder;
@@ -36,6 +40,7 @@ interface Builder extends PromiseLike<Result> {
   neq(column: string, value: unknown): Builder;
   in(column: string, values: unknown[]): Builder;
   is(column: string, value: null): Builder;
+  not(column: string, operator: 'is', value: null): Builder;
   lt(column: string, value: string): Builder;
   gt(column: string, value: unknown): Builder;
   order(column: string, options?: { ascending?: boolean }): Builder;
@@ -75,6 +80,7 @@ export function createFakeSupabase(): FakeSupabase {
       const filters: Filter[] = [];
       let sort: { column: string; ascending: boolean } | null = null;
       let max: number | null = null;
+      let counting: { head: boolean } | null = null;
 
       const rows = () => (fake.tables[table] ??= []);
       const clash = (row: Row, others: Row[]) =>
@@ -97,6 +103,10 @@ export function createFakeSupabase(): FakeSupabase {
               })
             : matching;
           const limited = max === null ? sorted : sorted.slice(0, max);
+          if (counting) {
+            const data = counting.head ? null : limited.map((row) => ({ ...row }));
+            return { data, error: null, count: matching.length };
+          }
           return { data: limited.map((row) => ({ ...row })), error: null };
         }
         if (kind === 'delete') {
@@ -135,8 +145,9 @@ export function createFakeSupabase(): FakeSupabase {
       };
 
       const builder: Builder = {
-        select() {
+        select(_columns, options) {
           if (kind !== 'select') returning = true;
+          else if (options?.count) counting = { head: options.head ?? false };
           return builder;
         },
         insert(rowsIn) {
@@ -167,6 +178,10 @@ export function createFakeSupabase(): FakeSupabase {
         },
         is(column, value) {
           filters.push((row) => (row[column] ?? null) === value);
+          return builder;
+        },
+        not(column, _operator, value) {
+          filters.push((row) => (row[column] ?? null) !== value);
           return builder;
         },
         lt(column, value) {

@@ -122,6 +122,7 @@ export async function requestAccess(input: AccessRequestInput): Promise<RequestA
           .eq('id', req.conversationId)
           .eq('user_id', who.userId)
           .eq('organization_id', who.organizationId)
+          .is('deleted_at', null)
           .maybeSingle()
       : null,
   ]);

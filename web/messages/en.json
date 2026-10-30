@@ -3671,6 +3671,136 @@
     "stopped": "Stopped. What's done so far is kept.",
     "pausedCap": "You've used this month's AI limit, so Chat stopped here."
   },
+  "chatShell": {
+    "unavailable": {
+      "title": "This chat isn't available.",
+      "newChat": "New chat"
+    },
+    "menu": {
+      "label": "Chat menu",
+      "strip": "Chat menu shortcuts",
+      "hide": "Hide chat menu",
+      "show": "Show chat menu",
+      "hideTip": "Hide menu · {keys}",
+      "showTip": "Show menu · {keys}",
+      "newChat": "New chat",
+      "newChatTip": "New chat · {keys}",
+      "menu": "Menu",
+      "toggleMenu": "Show or hide the Menu section",
+      "home": "Home",
+      "inbox": "Inbox",
+      "inboxLabel": "Inbox · {count, plural, one {# item} other {# items}}",
+      "inboxLabelNeedsYou": "Inbox · {count, plural, one {# item} other {# items}} · {needsYou, plural, one {# needs you} other {# need you}}",
+      "governance": "Governance",
+      "activity": "Activity",
+      "capabilities": "What Chat can do",
+      "policy": "Tool policy",
+      "atWork": "Agents at work",
+      "toggleAtWork": "Show or hide agents at work",
+      "seeAll": "See all · {count}",
+      "showLess": "Show less ▴",
+      "chats": "Chats",
+      "toggleChats": "Show or hide chats",
+      "loadFailed": "Couldn't load your chats.",
+      "retry": "Retry",
+      "empty": "No chats yet.",
+      "untitled": "New chat",
+      "sharedBy": "Shared by {initials}",
+      "groups": {
+        "pinned": "Pinned",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "week": "Previous 7 days",
+        "month": "Previous 30 days"
+      },
+      "line": {
+        "needsYou": "Needs your OK",
+        "needsYouStep": "Needs your OK · step {step} of {total}",
+        "running": "Working",
+        "runningCount": "Step {step} of {total}",
+        "runningStep": "Step {step} of {total} · {label}",
+        "paused": "Paused",
+        "pausedStep": "Paused · step {step} of {total}",
+        "done": "Done",
+        "doneAt": "Done · {time}",
+        "failed": "Stopped",
+        "failedAt": "Stopped · {time}"
+      }
+    },
+    "actions": {
+      "more": "More for {name}",
+      "headerMore": "More",
+      "untitled": "New chat",
+      "open": "Open",
+      "openNewWindow": "Open in new window",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "rename": "Rename",
+      "renameLabel": "Chat name",
+      "share": "Share with team",
+      "unshare": "Stop sharing",
+      "archive": "Archive",
+      "delete": "Delete",
+      "settings": "Chat settings",
+      "export": "Export chat",
+      "exportSoon": "Coming soon",
+      "activity": "Activity log",
+      "pinned": "Pinned",
+      "unpinned": "Unpinned",
+      "renamed": "Renamed",
+      "shared": "Shared with your team",
+      "unshared": "Stopped sharing",
+      "archived": "Archived",
+      "deleted": "Chat deleted",
+      "undo": "Undo",
+      "undone": "Undone",
+      "undoTooLate": "It's too late to undo.",
+      "failed": "Couldn't save that. Try again.",
+      "deleteTitle": "Delete this chat?",
+      "deleteBody": "“{name}” will be deleted for everyone. Files it made stay in Files. A running agent is stopped first.",
+      "cancel": "Cancel"
+    },
+    "home": {
+      "greeting": {
+        "morning": "Good morning, {name}",
+        "afternoon": "Good afternoon, {name}",
+        "evening": "Good evening, {name}"
+      },
+      "greetingNoName": {
+        "morning": "Good morning",
+        "afternoon": "Good afternoon",
+        "evening": "Good evening"
+      },
+      "workedWhileAway": "Your agents worked while you were away.",
+      "needsYou": "{count, plural, one {# thing needs you} other {# things need you}}",
+      "caughtUp": "All caught up.",
+      "dueTasks": "{count, plural, one {# Action Center task is due this week} other {# Action Center tasks are due this week}}",
+      "completeWithChat": "Complete with Chat",
+      "completeTasksMessage": "Complete this week's Action Center tasks.",
+      "startFailed": "Couldn't start that. Try again."
+    },
+    "inbox": {
+      "title": "Inbox",
+      "lands": "Results from your agents land here.",
+      "summary": {
+        "needsYou": "{count, plural, one {# needs you} other {# need you}}",
+        "running": "{count} running",
+        "doneToday": "{count} done today"
+      },
+      "empty": "Nothing needs you. Results from your agents land here.",
+      "review": "Review",
+      "watch": "Watch",
+      "open": "Open",
+      "ago": {
+        "now": "Just now",
+        "minutes": "{minutes} min ago",
+        "today": "Today",
+        "yesterday": "Yesterday"
+      },
+      "loadFailed": "Couldn't load your Inbox.",
+      "retry": "Retry"
+    }
+  },
   "chatAccess": {
     "roleNames": {
       "admin": "Admin",

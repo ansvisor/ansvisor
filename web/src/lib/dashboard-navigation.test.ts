@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { dashboardNav } from '@/config/dashboard';
 import {
   activeChildHref,
+  CHAT_AGENTIC_HREF,
+  CHAT_HREF,
   childLinkHref,
   dashboardNavBadge,
   dashboardNavLabelKeys,
   getDashboardNavGroupLabel,
   getDashboardNavLabel,
+  navItemHref,
   shouldShowDashboardNavItem,
 } from '@/lib/dashboard-navigation';
 
@@ -223,5 +226,18 @@ describe('dashboardNavBadge', () => {
 
   it("keeps every other item's own badge", () => {
     expect(dashboardNavBadge(actionCenter, { chatSoon: 'Soon (next week)' })).toBe('New');
+  });
+});
+
+describe('navItemHref', () => {
+  const chat = { href: CHAT_HREF };
+  it('keeps Chat on its old address while the new Chat is off', () => {
+    expect(navItemHref(chat, false)).toBe('/dashboard/agent');
+  });
+  it('opens /dashboard/chat with the new Chat on, and leaves every other item alone', () => {
+    expect(navItemHref(chat, true)).toBe(CHAT_AGENTIC_HREF);
+    expect(navItemHref({ href: '/dashboard/action-center' }, true)).toBe(
+      '/dashboard/action-center',
+    );
   });
 });
