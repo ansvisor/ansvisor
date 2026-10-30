@@ -35,6 +35,7 @@ import {
   buildPlatformOptions,
   buildCitationDetailHref,
   getDateRange,
+  getGroupedPlatformLabel,
   type CitationsUIFilters as UIFilters,
   type PlatformOption,
   type PromptOption,
@@ -52,7 +53,8 @@ import {
   type CitationGapDomain,
 } from '@/lib/actions/citations';
 import { getTopics } from '@/lib/actions/topic';
-import { getBrandPrompts } from '@/lib/actions/tracking';
+import { getBrandFilterOptions, getBrandPrompts } from '@/lib/actions/tracking';
+import { isSingleModel, modelFamilies, modelFamilyValue } from '@/lib/model-families';
 import { toCsv } from '@/lib/csv';
 import type { Topic } from '@/types';
 import { SOURCE_CATEGORY_LABELS, type SourceCategory } from '@/lib/citations/classify';
@@ -893,6 +895,19 @@ export default function CitationsPage() {
   const [prompts, setPrompts] = useState<PromptOption[]>([]);
   const [availablePlatforms, setAvailablePlatforms] = useState<PlatformOption[]>([]);
   const [availableRegions, setAvailableRegions] = useState<string[]>([]);
+  // The platform asked for is always one of the choices: the dropdown drops a
+  // value it doesn't list, and the choices come from the rows read, so a
+  // family partly answered in the window, or a link's, would go unasked.
+  const platformChoices = useMemo<PlatformOption[]>(
+    () =>
+      !filters.platform || availablePlatforms.some((p) => p.value === filters.platform)
+        ? availablePlatforms
+        : [
+            ...availablePlatforms,
+            { value: filters.platform, label: getGroupedPlatformLabel(filters.platform) },
+          ],
+    [availablePlatforms, filters.platform],
+  );
   const isRefetching = isLoading && data !== null;
 
   const activeBrandId = brand?.id ?? null;
@@ -951,6 +966,9 @@ export default function CitationsPage() {
   // a response arriving after the filters changed — or after the user left the
   // page — can recognise itself as stale instead of writing state or toasting.
   const loadGen = useRef(0);
+  // The single models already read as their family (modelFamilyValue): each
+  // asks the brand's models once.
+  const familyRead = useRef(new Set<string>());
 
   const loadData = useCallback(async () => {
     if (!activeBrandId) {
@@ -962,6 +980,24 @@ export default function CitationsPage() {
 
     setIsLoading(true);
     setLoadFailed(false);
+    // A platform from an address can be one model of a family (Chat's link,
+    // platform=chatgpt-web): it reads as its family, as the dropdown sets it,
+    // so the numbers are those of picking ChatGPT there. The rows below are
+    // filtered, so the brand's models are asked for.
+    const asked = overviewFilters.platforms?.[0] ?? '';
+    if (isSingleModel(asked) && !familyRead.current.has(asked)) {
+      familyRead.current.add(asked);
+      const family = await getBrandFilterOptions(activeBrandId)
+        .then((options) => modelFamilyValue(asked, modelFamilies(options.models)))
+        .catch(() => asked);
+      if (stale()) return;
+      familyRead.current.add(family);
+      if (family !== asked) {
+        // The filters change, and the load they start reads the family.
+        setFilters((f) => ({ ...f, platform: family }));
+        return;
+      }
+    }
     try {
       const overview = await getCitationsOverview(activeBrandId, overviewFilters);
       if (stale()) return;
@@ -1218,7 +1254,7 @@ export default function CitationsPage() {
         onChange={(patch) => setFilters((f) => ({ ...f, ...patch }))}
         topics={topics}
         prompts={prompts}
-        platforms={availablePlatforms}
+        platforms={platformChoices}
         regions={availableRegions}
       />
 
