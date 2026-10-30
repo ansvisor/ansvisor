@@ -13,15 +13,21 @@ import { composerKeyAction } from './composer-keys';
  * Agency partners.
  */
 
+const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
+  useRouter: () => router,
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>
       {children}
     </a>
   ),
 }));
-const toast = vi.hoisted(() => vi.fn());
+const toast = vi.hoisted(() =>
+  Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), info: vi.fn() }),
+);
 vi.mock('sonner', () => ({ toast }));
+const requestAccess = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess }));
 
 const { ChatComposer } = await import('./chat-composer');
 
@@ -144,6 +150,7 @@ describe('ChatComposer', () => {
     await press('Enter');
     expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('Why did our citations drop?', {
       context: [],
+      references: [],
     });
     expect(box().value).toBe('');
   });
@@ -169,7 +176,10 @@ describe('ChatComposer', () => {
     await type('only blog pages');
     expect(under()).toContain('Enter stops this run and sends your message');
     await press('Enter');
-    expect(handlers.onSteer).toHaveBeenCalledExactlyOnceWith('only blog pages', { context: [] });
+    expect(handlers.onSteer).toHaveBeenCalledExactlyOnceWith('only blog pages', {
+      context: [],
+      references: [],
+    });
     expect(handlers.onSend).not.toHaveBeenCalled();
   });
 
@@ -263,7 +273,10 @@ describe('ChatComposer: context chips and the ghost suggestion (W1-11)', () => {
 
     await type('What changed?');
     await press('Enter');
-    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('What changed?', { context: chips });
+    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('What changed?', {
+      context: chips,
+      references: [],
+    });
   });
 
   it('keeps the focus in the composer when a chip is removed from the keyboard', async () => {
@@ -297,7 +310,7 @@ describe('ChatComposer: context chips and the ghost suggestion (W1-11)', () => {
     expect(shown()).toBeNull();
     expect(handlers.onSend).not.toHaveBeenCalled();
     await press('Enter');
-    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith(ghost, { context: [] });
+    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith(ghost, { context: [], references: [] });
   });
 
   it('gives way to typing, comes back on an empty box, and fills the box on a click', async () => {
@@ -317,5 +330,163 @@ describe('ChatComposer: context chips and the ghost suggestion (W1-11)', () => {
     await render({ ghost, running: true, onStop: handlers.onStop });
     expect(container.querySelector('[data-action="composer.acceptGhost"]')).toBeNull();
     expect(box().placeholder).toBe('Steer while I work: “only blog pages”…');
+  });
+});
+
+describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
+  // A row's words, without its mark (aria-hidden).
+  const options = () =>
+    [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].map((o) => {
+      const copy = o.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll('[aria-hidden]').forEach((mark) => mark.remove());
+      return copy.textContent;
+    });
+  const listbox = () => container.querySelector('[role="listbox"]');
+
+  it('lists the shortcuts on "/" first in an empty box, filters them, and fills the starter on Enter', async () => {
+    await render();
+    await type('/');
+    expect(listbox()!.getAttribute('aria-label')).toBe('Skills and shortcuts');
+    expect(options()).toEqual(['/analyzeAnalyze', '/reportReports', '/createCreate content']);
+
+    await type('/re');
+    expect(options()).toEqual(['/reportReports']);
+    await press('Enter');
+    expect(box().value).toBe('Create a report on ');
+    expect(listbox()).toBeNull();
+    expect(handlers.onSend).not.toHaveBeenCalled();
+  });
+
+  it('moves with the arrows, closes on Esc keeping the text, and opens on "/" only first', async () => {
+    await render();
+    await type('/');
+    await press('ArrowDown');
+    expect(container.querySelector('[aria-selected="true"]')!.textContent).toBe('/reportReports');
+    await press('ArrowUp');
+    await press('ArrowUp');
+    expect(container.querySelector('[aria-selected="true"]')!.textContent).toBe(
+      '/createCreate content',
+    );
+    await press('Escape');
+    expect(listbox()).toBeNull();
+    expect(box().value).toBe('/');
+
+    await type('Compare a/b');
+    expect(listbox()).toBeNull();
+    await type('/zz');
+    expect(container.textContent).toContain('No shortcuts match');
+  });
+
+  it('opens the shortcuts from the / button, the text kept after the starter', async () => {
+    await render();
+    await type('our pricing page');
+    await act(async () => button('Skills and shortcuts')!.click());
+    await act(async () =>
+      [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')][0].click(),
+    );
+    expect(box().value).toBe('Analyze our pricing page');
+  });
+
+  it('gives Analysts and Agency partners no shortcuts', async () => {
+    await render({}, 'analyst');
+    expect(button('Skills and shortcuts')).toBeNull();
+    await type('/');
+    expect(listbox()).toBeNull();
+  });
+
+  it('references data on "@": the page’s own first, then the brand’s matches; the pick is a chip that goes with the message', async () => {
+    const searchReferences = vi.fn(async () => [
+      { type: 'prompt' as const, id: 'p1', label: 'Best AEO tools' },
+      { type: 'page' as const, id: 'https://ansvisor.com/pricing', label: 'ansvisor.com/pricing' },
+    ]);
+    const chart = {
+      type: 'chart' as const,
+      id: 'visibility-by-platform',
+      label: 'Visibility by platform',
+      scope: { range: '30d' },
+    };
+    await render({ references: [chart], searchReferences });
+    await type('Explain @');
+    expect(listbox()!.getAttribute('aria-label')).toBe('Reference your data');
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 200)));
+    expect(searchReferences).toHaveBeenCalledWith('');
+    expect(options()).toEqual([
+      'Visibility by platformChart',
+      'Best AEO toolsPrompt',
+      'ansvisor.com/pricingPage',
+    ]);
+    // No ID anywhere on screen.
+    expect(container.textContent).not.toContain('visibility-by-platform');
+    expect(container.textContent).not.toContain('p1');
+
+    await press('Enter');
+    expect(box().value).toBe('Explain ');
+    const chips = [...container.querySelectorAll('[data-action="composer.removeChip"]')];
+    expect(chips.map((c) => c.parentElement!.textContent)).toEqual(['Visibility by platform×']);
+
+    await type('Explain this');
+    await press('Enter');
+    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('Explain this', {
+      context: [],
+      references: [chart],
+    });
+    expect(container.querySelector('[data-action="composer.removeChip"]')).toBeNull();
+  });
+
+  it('opens @ from its button at the cursor, filters as you type, and takes a reference off with ×', async () => {
+    await render({
+      references: [
+        { type: 'chart', id: 'c1', label: 'Visibility by platform' },
+        { type: 'metric', id: 'm1', label: 'Share of voice' },
+      ],
+    });
+    await type('Why');
+    await act(async () => button('Reference a chart, metric, page or task')!.click());
+    expect(box().value).toBe('Why @');
+    await type('Why @share');
+    expect(options()).toEqual(['Share of voiceMetric']);
+    await press('Enter');
+    const remove = container.querySelector<HTMLButtonElement>(
+      '[data-action="composer.removeChip"]',
+    )!;
+    expect(remove.getAttribute('aria-label')).toBe('Remove Share of voice');
+    await act(async () => remove.click());
+    expect(container.querySelector('[data-action="composer.removeChip"]')).toBeNull();
+  });
+
+  it('attaches files and connects a tool from ＋ for an Admin', async () => {
+    const onAttach = vi.fn();
+    await render({ onAttach });
+    await act(async () => button('Attach, read a page or connect a tool')!.click());
+    expect(options()).toEqual([
+      'Attach files',
+      'Connect a toolAdmins connect · others ask an Admin',
+    ]);
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-action="plusMenu.attachFiles"]')!.click(),
+    );
+    expect(onAttach).toHaveBeenCalledOnce();
+
+    await act(async () => button('Attach, read a page or connect a tool')!.click());
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-action="plusMenu.connectTool"]')!.click(),
+    );
+    expect(router.push).toHaveBeenCalledWith('/dashboard/settings/integrations');
+  });
+
+  it('lets other members ask an Admin to connect, in one click', async () => {
+    requestAccess.mockResolvedValue({ ok: true });
+    await render({}, 'manager');
+    await act(async () => button('Attach, read a page or connect a tool')!.click());
+    // No Attach files without the page's upload (W1-13).
+    expect(options()).toEqual(['Ask your Admin to connectAdmins connect · others ask an Admin']);
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-action="plusMenu.connectTool"]')!.click(),
+    );
+    expect(requestAccess).toHaveBeenCalledWith({
+      asked: 'Connect a tool so Chat can use it',
+      ruleKind: 'role',
+    });
+    expect(toast.success).toHaveBeenCalledWith('Sent to your Admins');
   });
 });

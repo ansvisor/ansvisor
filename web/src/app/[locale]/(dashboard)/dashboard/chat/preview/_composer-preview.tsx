@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { ChatComposer } from '@/components/chat/composer/chat-composer';
 import { RoleProvider } from '@/components/providers/role-provider';
 import type { ChatMode } from '@/lib/chat/precedence';
+import type { ChatReference } from '@/lib/chat/references';
 
 /** How long the preview's pretend run answers. */
 const RUN_MS = 6000;
@@ -21,6 +22,28 @@ const PANEL_CHIPS = [
   { key: 'range', label: 'Last 30 days' },
   { key: 'platform', label: 'All platforms' },
 ];
+/** The mockup's @ menu (#atmenu): the page's chart and metric, then what the brand has. */
+const PAGE_REFERENCES: ChatReference[] = [
+  { type: 'chart', id: 'visibility-by-platform', label: 'Visibility by platform' },
+  { type: 'metric', id: 'share-of-voice', label: 'Share of voice' },
+];
+const BRAND_REFERENCES: ChatReference[] = [
+  { type: 'table', id: 'citations-aio', label: 'Citations · Google AI Overviews' },
+  { type: 'page', id: 'https://ansvisor.com/pricing', label: 'ansvisor.com/pricing' },
+  { type: 'task', id: 'faq-pricing', label: 'Add FAQ block to /pricing' },
+];
+/** The preview's search: the mockup's rows that match, after a moment. */
+const searchReferences = (query: string) =>
+  new Promise<ChatReference[]>((resolve) =>
+    setTimeout(
+      () =>
+        resolve(
+          BRAND_REFERENCES.filter((r) => r.label.toLowerCase().includes(query.toLowerCase())),
+        ),
+      300,
+    ),
+  );
+
 const DOCK_CHIPS = [
   { key: 'brand', label: 'Ansvisor' },
   { key: 'area', label: 'Action Center' },
@@ -70,6 +93,9 @@ export function ComposerPreview() {
               chips={homeChips}
               onRemoveChip={(key) => setHomeChips((all) => all.filter((c) => c.key !== key))}
               ghost={t('homeGhost')}
+              references={PAGE_REFERENCES}
+              searchReferences={searchReferences}
+              onAttach={() => toast(t('attach'))}
               onSend={(text) => {
                 toast(t('sent', { text }));
                 run();

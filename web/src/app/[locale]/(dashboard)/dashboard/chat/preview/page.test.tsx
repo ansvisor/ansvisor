@@ -29,7 +29,10 @@ const notFound = vi.hoisted(() =>
   }),
 );
 vi.mock('next/navigation', () => ({ notFound }));
+// The composer's "Ask your Admin to connect" (B2's requests).
+vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
+  useRouter: () => ({ push: () => {}, refresh: () => {} }),
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>
       {children}
