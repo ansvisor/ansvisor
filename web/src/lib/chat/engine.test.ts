@@ -1116,6 +1116,15 @@ describe('the sweep', () => {
 });
 
 describe('starting', () => {
+  it('takes ids made by hand, like the demo brand’s, and refuses what isn’t an id', () => {
+    const parse = (input: Record<string, unknown>) =>
+      engine.startRunInput.safeParse({ message: 'Hello', ...input }).success;
+    expect(parse({ brandId: '33333333-3333-3333-3333-333333333333' })).toBe(true);
+    expect(parse({ conversationId: '22222222-2222-2222-2222-222222222222' })).toBe(true);
+    expect(parse({ brandId: '3333-3333' })).toBe(false);
+    expect(parse({ conversationId: 'not-an-id' })).toBe(false);
+  });
+
   it('queues a run while every slot is busy', async () => {
     useModels([READY], [text('Hi.')]);
     db.rpcs.chat_run_limits = () => ({

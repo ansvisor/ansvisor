@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { MetricBreakdownSheet, type BreakdownTab } from './_metric-breakdown-sheet';
 import { FormulaDialog } from './_formula-dialog';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useFirstRun } from '@/hooks/use-first-run';
 import {
   getInsightsData,
   getTrackingWindow,
@@ -17,6 +18,7 @@ import {
   getJobStatus,
   cancelTrackingJob,
   getBrandPrompts,
+  getBrandFilterOptions,
   exportPromptResults,
   type InsightsSummary,
   type TrackedPromptsKpi,
@@ -29,7 +31,8 @@ import {
   type CoverageKpi,
 } from '@/lib/actions/tracking';
 import { getTopics } from '@/lib/actions/topic';
-import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
+import { PLATFORM_LABELS } from '@/config/platform-labels';
+import { isSingleModel, modelFamilies, modelFamilyValue, modelLabel } from '@/lib/model-families';
 import { formatRegionDisplay } from '@/lib/region';
 import { mentionsHref } from '@/lib/mentions-filters';
 import type { Topic } from '@/types';
@@ -64,7 +67,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { getAIProviderDisplayName, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { toast } from 'sonner';
@@ -373,11 +375,7 @@ function FilterBar({
               {(value) => {
                 if (!value || value === '__all__') return t('allPlatforms');
                 const firstSlug = String(value).split(',')[0];
-                return (
-                  MODEL_PROVIDER_LABELS[firstSlug] ??
-                  PLATFORM_LABELS[firstSlug] ??
-                  getAIProviderDisplayName(resolveAIProvider(firstSlug))
-                );
+                return modelLabel(firstSlug);
               }}
             </SelectValue>
           </SelectTrigger>
@@ -388,9 +386,7 @@ function FilterBar({
               const firstSlug = m.split(',')[0];
               return (
                 <SelectItem key={m} value={m}>
-                  {MODEL_PROVIDER_LABELS[firstSlug] ??
-                    PLATFORM_LABELS[firstSlug] ??
-                    getAIProviderDisplayName(resolveAIProvider(firstSlug))}
+                  {modelLabel(firstSlug)}
                 </SelectItem>
               );
             })}
@@ -661,6 +657,9 @@ export default function InsightsPage() {
   const tActions = useTranslations('readOnly.actions');
   const locale = useLocale();
   const brand = useBrandStore((s) => s.getActiveBrand());
+  // The brand's first run while it goes on: the run's band above says it
+  // all, so no empty state under it.
+  const firstRun = useFirstRun();
   const [summary, setSummary] = useState<InsightsSummary | null>(null);
   const [trackedPrompts, setTrackedPrompts] = useState<TrackedPromptsKpi | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -711,6 +710,9 @@ export default function InsightsPage() {
   );
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
+  // The single models already read as their family (modelFamilyValue): each
+  // asks the brand's models once.
+  const familyRead = useRef(new Set<string>());
 
   // The filters are read from the URL after mount (window isn't available
   // during the server render), and the first load waits for them.
@@ -734,7 +736,23 @@ export default function InsightsPage() {
       if (!brandId) return;
       if (!silent) setIsLoading(true);
       try {
-        const f = overrideFilters ?? filtersRef.current;
+        let f = overrideFilters ?? filtersRef.current;
+        // A model from an address can be one slug of a family (Chat's link,
+        // model=chatgpt-web): it reads as its family, as the dropdown sets
+        // it, so the numbers are those of picking ChatGPT there.
+        if (isSingleModel(f.model) && !familyRead.current.has(f.model)) {
+          familyRead.current.add(f.model);
+          const asked = f.model;
+          const family = await getBrandFilterOptions(brandId)
+            .then((options) => modelFamilyValue(asked, modelFamilies(options.models)))
+            .catch(() => asked);
+          familyRead.current.add(family);
+          if (family !== asked) {
+            f = { ...f, model: family };
+            filtersRef.current = f;
+            setFilters(f);
+          }
+        }
         const { dateFrom, dateTo, days } = getDateRange(f.datePreset, {
           from: f.dateFrom,
           to: f.dateTo,
@@ -799,30 +817,13 @@ export default function InsightsPage() {
         setTopicCompetitors(insights.topicCompetitors);
         setHasAnyData(insights.hasAnyData);
 
-        // Group raw model slugs by their resolved display name so different
-        // ChatGPT versions ("gpt-5-3-mini" + "gpt-5-5") collapse into one
-        // "ChatGPT" filter option. Stored as `slugA,slugB` so the server can
-        // filter the whole family with .in() via applyModelFilter().
-        const slugToLabel = new Map<string, string>();
-        for (const slug of insights.filterOptions.models) {
-          if (slugToLabel.has(slug)) continue;
-          const label =
-            MODEL_PROVIDER_LABELS[slug] ??
-            PLATFORM_LABELS[slug] ??
-            getAIProviderDisplayName(resolveAIProvider(slug));
-          slugToLabel.set(slug, label);
-        }
-        const familyToSlugs = new Map<string, string[]>();
-        for (const [slug, label] of slugToLabel) {
-          const arr = familyToSlugs.get(label) ?? [];
-          arr.push(slug);
-          familyToSlugs.set(label, arr);
-        }
-        const models = Array.from(familyToSlugs.values())
-          .map((slugs) => slugs.sort().join(','))
-          .sort();
+        // Different ChatGPT versions ("gpt-5-3-mini" + "gpt-5-5") collapse
+        // into one "ChatGPT" filter option, stored as `slugA,slugB` so the
+        // server filters the whole family with .in() via applyModelFilter().
         setAvailableRegions([...insights.filterOptions.regions].sort((a, b) => a.localeCompare(b)));
-        setAvailableModels(models.sort((a, b) => a.localeCompare(b)));
+        setAvailableModels(
+          modelFamilies(insights.filterOptions.models).sort((a, b) => a.localeCompare(b)),
+        );
       } catch (err) {
         const message = err instanceof Error ? err.message : '';
 
@@ -1148,7 +1149,7 @@ export default function InsightsPage() {
         </HeaderWithAiUsage>
         <TrackingProgressBanner jobStatus={jobStatus} pace={pace} onStop={handleStopTracking} />
         {!localJobActive && <ServerRunBanner run={cronRun} firstRun={!runTimes.lastRunAt} />}
-        <EmptyState onRunPrompts={runAll} isRunning={isRunning} isCloud={isCloud} />
+        {!firstRun && <EmptyState onRunPrompts={runAll} isRunning={isRunning} isCloud={isCloud} />}
         {!isCloud && (
           <div className="flex justify-center">
             <Button variant="outline" onClick={openSinglePrompt} className="gap-2">
@@ -1273,7 +1274,7 @@ export default function InsightsPage() {
           </div>
         )}
         <div className={cn('space-y-6', isRefetching && 'opacity-60')}>
-          {noResults ? (
+          {noResults && firstRun ? null : noResults ? (
             <NoDataForPeriod datePreset={filters.datePreset} onReset={handleResetFilters} />
           ) : (
             <>
