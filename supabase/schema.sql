@@ -48748,8 +48748,9 @@ notify pgrst, 'reload schema';
 --     cited (visible_runs); answers, those naming the brand and those citing
 --     its pages; its mentions and its tracked competitors' (share of voice as
 --     Insights counts it: total_mentions against the competitors'
---     mention_count); the positions where it was named (sum and count); and
---     the newest answer.
+--     mention_count); the positions where it was named (sum, sum of 1/position
+--     for the Visibility score's position factor, and count); and the newest
+--     answer.
 --   * daily: the same sums per day from p_series_from to p_b_to, with the
 --     prompts named or cited and those tracked (visibility as Insights counts
 --     it), for the change point (§1 item 5.2).
@@ -48812,12 +48813,15 @@ begin
            coalesce(d.citation_answers, 0) as citation_answers,
            coalesce(d.total_mentions, 0) as total_mentions,
            coalesce(d.sum_position, 0) as sum_position,
+           coalesce(d.sum_inv_position, 0) as sum_inv_position,
            coalesce(d.position_count, 0) as position_count,
            d.max_created_at,
            -- A row the daily refresh hasn't rewritten since 00130/00131.
            (d.mention_answers is null or d.negative_count is null) as stale
     from public.insights_prompt_daily d
     where d.brand_id = p_brand_id
+      -- One range on the (brand_id, day) index; the periods narrow it below.
+      and d.day between least(p_a_from, p_series_from) and p_b_to
       and (d.day between p_a_from and p_a_to
            or d.day between p_b_from and p_b_to
            or d.day between p_series_from and p_b_to)
@@ -48835,6 +48839,8 @@ begin
            c.mention_count
     from public.insights_competitor_prompt_daily c
     where c.brand_id = p_brand_id
+      -- One range on the (brand_id, day) index; the periods narrow it below.
+      and c.day between least(p_a_from, p_series_from) and p_b_to
       and (c.day between p_a_from and p_a_to
            or c.day between p_b_from and p_b_to
            or c.day between p_series_from and p_b_to)
@@ -48852,6 +48858,7 @@ begin
            sum(r.citation_answers)::integer as citation_answers,
            sum(r.total_mentions)::integer as brand_mentions,
            sum(r.sum_position) as sum_position,
+           sum(r.sum_inv_position) as sum_inv_position,
            sum(r.position_count)::integer as position_count,
            max(r.max_created_at) as last_at
     from brand_rows r
@@ -48874,6 +48881,7 @@ begin
            sum(r.citation_answers)::integer as citation_answers,
            sum(r.total_mentions)::integer as brand_mentions,
            sum(r.sum_position) as sum_position,
+           sum(r.sum_inv_position) as sum_inv_position,
            sum(r.position_count)::integer as position_count,
            -- Visibility as Insights counts it: prompts named or cited, of those tracked.
            (count(distinct r.prompt_id) filter (where r.has_mention or r.has_citation))::integer
@@ -48906,6 +48914,7 @@ begin
         'citation_answers', b.citation_answers,
         'brand_mentions', b.brand_mentions,
         'sum_position', b.sum_position,
+        'sum_inv_position', b.sum_inv_position,
         'position_count', b.position_count,
         'competitor_mentions', coalesce(c.competitor_mentions, 0),
         'last_at', b.last_at
@@ -48928,6 +48937,7 @@ begin
         'citation_answers', b.citation_answers,
         'brand_mentions', b.brand_mentions,
         'sum_position', b.sum_position,
+        'sum_inv_position', b.sum_inv_position,
         'position_count', b.position_count,
         'visible_prompts', b.visible_prompts,
         'active_prompts', b.active_prompts,

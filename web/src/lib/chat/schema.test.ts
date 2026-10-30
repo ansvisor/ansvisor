@@ -359,6 +359,19 @@ describe('Why’s counts (00423)', () => {
     expect(why).toMatch(/'complete', not exists/);
     expect(why).toContain("'[]'::jsonb");
   });
+
+  it('return the Visibility score’s position factor, per cell and per day', () => {
+    // Insights' Visibility card: 0.6 × mention rate + 0.25 × citation rate +
+    // 0.15 × (sum of 1/position ÷ positions), as ai_visibility_aggregates_daily.
+    expect(why.match(/sum\(r\.sum_inv_position\) as sum_inv_position/g)).toHaveLength(2);
+    expect(why.match(/'sum_inv_position', b\.sum_inv_position/g)).toHaveLength(2);
+  });
+
+  it('read each rollup on one day range of its (brand_id, day) index', () => {
+    for (const t of ['d', 'c']) {
+      expect(why).toContain(`and ${t}.day between least(p_a_from, p_series_from) and p_b_to`);
+    }
+  });
 });
 
 describe('questions and next moves', () => {
