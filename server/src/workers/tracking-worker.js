@@ -1033,5 +1033,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     // Still arriving: the run waits for its late answers before it stamps.
     stillArriving: Boolean(settlement.lateStamp),
     lateStamp: settlement.lateStamp,
+    // The brand's first full run: its stamp e-mails "Your first results are ready".
+    firstRun,
   };
 }

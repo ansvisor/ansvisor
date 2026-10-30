@@ -82,6 +82,8 @@ export async function POST(req: NextRequest) {
                 stripe_customer_id: customerId,
                 stripe_subscription_id: subscriptionId,
                 ...(endsAt ? { subscription_ends_at: endsAt } : {}),
+                // A new subscription renews: the app-wide "plan ends" band is off.
+                cancel_at_period_end: subscription.cancel_at_period_end ?? false,
               })
               .eq('id', orgId);
             if (error) {
@@ -125,6 +127,9 @@ export async function POST(req: NextRequest) {
         if (customerId) {
           const updates: Record<string, unknown> = {
             subscription_status: subscription.status,
+            // Canceled to the end of its period, or resumed: the app-wide
+            // "plan ends" band (00386).
+            cancel_at_period_end: subscription.cancel_at_period_end ?? false,
           };
           // Skipped when Stripe gives no period end, rather than cleared.
           const endsAt = periodEndIso(subscription);
@@ -217,6 +222,8 @@ export async function POST(req: NextRequest) {
             .update({
               subscription_status: 'canceled',
               plan: 'starter',
+              // Ended: read-only now, so no "plan ends" band.
+              cancel_at_period_end: false,
             })
             .eq('stripe_customer_id', customerId);
 

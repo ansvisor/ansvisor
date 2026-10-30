@@ -160,19 +160,20 @@ export function yourAccessRows(
 /**
  * The plan card's features (CHAT-20 §7a item 2): included, or locked with
  * the plan that has it. `platforms` carries how many AI platforms are
- * tracked; `mcp` is `read` on Starter, `read_write` from Growth.
+ * tracked; `mcp` is `read` on Starter and in the free trial, `read_write`
+ * from Growth, paid (DECISIONS S, 2026-10-30).
  */
 export type PlanChip =
   | { key: 'platforms'; count: number; locked: null }
   | { key: 'fullAuto' | 'ownKeys' | 'openPr' | 'claude'; locked: PlanId | null }
-  | { key: 'mcp'; access: 'read' | 'read_write' | null; locked: PlanId | null };
+  | { key: 'mcp'; access: 'read' | 'read_write'; locked: PlanId | null };
 
 /** A line of "With {next plan} you'd also get" (§7a item 5), with its numbers. */
 export type PlanBenefit =
   | { key: 'morePlatforms'; count: number }
-  | { key: 'fullAuto' | 'mcpWrite' | 'claude' | 'contract' }
+  | { key: 'fullAuto' | 'mcpWrite' | 'claude' | 'ownKeys' | 'contract' }
   | { key: 'aiLimit'; times: number }
-  | { key: 'keepEverything' | 'mcp' | 'monthlyLimit' | 'packs' };
+  | { key: 'keepEverything' | 'monthlyLimit' | 'packs' };
 
 /**
  * The "Your plan" card (CHAT-20 §7a), without a dollar of AI budget: the
@@ -206,7 +207,9 @@ const tracksClaude = (limits: PlanLimits) =>
 /** What the plan after `from` adds, in the card's benefit lines. */
 function benefitsOf(from: PlanId, to: PlanId, afterTrial: boolean): PlanBenefit[] {
   if (afterTrial) {
-    return [{ key: 'keepEverything' }, { key: 'mcp' }, { key: 'monthlyLimit' }, { key: 'packs' }];
+    // MCP reads in the trial already: paying adds its writes, from Growth.
+    const mcpWrite: PlanBenefit[] = rank(to) >= rank('growth') ? [{ key: 'mcpWrite' }] : [];
+    return [{ key: 'keepEverything' }, ...mcpWrite, { key: 'monthlyLimit' }, { key: 'packs' }];
   }
   const own = PLANS[from].limits;
   const next = PLANS[to].limits;
@@ -222,7 +225,7 @@ function benefitsOf(from: PlanId, to: PlanId, afterTrial: boolean): PlanBenefit[
     out.push({ key: 'claude' });
   }
   if (to === 'enterprise') {
-    out.push({ key: 'contract' });
+    out.push({ key: 'ownKeys' }, { key: 'contract' });
   } else if (
     own.improveMonthlyBudgetUsd > 0 &&
     next.improveMonthlyBudgetUsd > own.improveMonthlyBudgetUsd
@@ -241,20 +244,14 @@ export function planCardOf(facts: PlanFacts): PlanCard | null {
   // The entitled limits: an Enterprise contract's overrides included.
   const limits = facts.limits;
   const growthLock = planGateLock(facts, { minPlan: 'growth' });
-  const mcpAccess: 'read' | 'read_write' | null = facts.isTrial
-    ? null
-    : growthLock
-      ? 'read'
-      : 'read_write';
+  // MCP reads on every plan; writes are Growth's, paid (the MCP server's own gate).
+  const mcpAccess: 'read' | 'read_write' = growthLock ? 'read' : 'read_write';
   const all: PlanChip[] = [
     { key: 'platforms', count: limits.maxPlatforms, locked: null },
     { key: 'fullAuto', locked: facts.fullAuto ? null : 'growth' },
-    { key: 'ownKeys', locked: growthLock },
-    {
-      key: 'mcp',
-      access: mcpAccess,
-      locked: mcpAccess === 'read_write' ? null : facts.isTrial ? 'starter' : 'growth',
-    },
+    // Own AI keys are Enterprise's only (CHAT-16 item 19, lib/chat/key.ts).
+    { key: 'ownKeys', locked: facts.planId === 'enterprise' ? null : 'enterprise' },
+    { key: 'mcp', access: mcpAccess, locked: growthLock },
     { key: 'openPr', locked: growthLock },
     { key: 'claude', locked: tracksClaude(limits) ? null : 'enterprise' },
   ];

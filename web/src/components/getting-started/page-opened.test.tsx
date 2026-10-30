@@ -15,13 +15,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { markGettingStartedPageOpened, nav } = vi.hoisted(() => ({
   markGettingStartedPageOpened: vi.fn(),
-  nav: { pathname: '/dashboard/mentions', brandId: 'b1' as string | null },
+  nav: { pathname: '/dashboard/mentions', brandId: 'b1' as string | null, isDemo: false },
 }));
 
 vi.mock('@/i18n/navigation', () => ({ usePathname: () => nav.pathname }));
 vi.mock('@/stores/use-brand-store', () => ({
-  useBrandStore: (selector: (state: { activeBrandId: string | null }) => unknown) =>
-    selector({ activeBrandId: nav.brandId }),
+  useBrandStore: (
+    selector: (state: {
+      activeBrandId: string | null;
+      brands: { id: string; isDemo?: boolean }[];
+    }) => unknown,
+  ) =>
+    selector({
+      activeBrandId: nav.brandId,
+      brands: nav.brandId ? [{ id: nav.brandId, isDemo: nav.isDemo }] : [],
+    }),
 }));
 vi.mock('@/lib/actions/getting-started', () => ({ markGettingStartedPageOpened }));
 
@@ -60,6 +68,7 @@ beforeEach(() => {
   markGettingStartedPageOpened.mockReset();
   nav.pathname = '/dashboard/mentions';
   nav.brandId = 'b1';
+  nav.isDemo = false;
   container = document.createElement('div');
   root = createRoot(container);
 });
@@ -70,7 +79,7 @@ afterEach(() => {
 
 describe('GettingStartedPageOpened', () => {
   it('records an explore page once, then remembers it in this browser', async () => {
-    markGettingStartedPageOpened.mockResolvedValue(true);
+    markGettingStartedPageOpened.mockResolvedValue({ ok: true, recorded: true });
     await render();
     expect(markGettingStartedPageOpened).toHaveBeenCalledWith('b1', 'mentions');
     expect(localStorage.getItem('aeo:getting-started:b1:mentions')).toBe('1');
@@ -82,7 +91,7 @@ describe('GettingStartedPageOpened', () => {
   });
 
   it('asks again next time when the server did not record it (no answers yet)', async () => {
-    markGettingStartedPageOpened.mockResolvedValue(false);
+    markGettingStartedPageOpened.mockResolvedValue({ ok: true, recorded: false });
     await render();
     expect(localStorage.getItem('aeo:getting-started:b1:mentions')).toBeNull();
   });
@@ -101,7 +110,16 @@ describe('GettingStartedPageOpened', () => {
     expect(markGettingStartedPageOpened).not.toHaveBeenCalled();
   });
 
+  it('asks nothing for the demo brand, whose sample data keeps no steps', async () => {
+    nav.isDemo = true;
+    await render();
+    expect(markGettingStartedPageOpened).not.toHaveBeenCalled();
+  });
+
   it('keeps the page working when the server call fails', async () => {
+    markGettingStartedPageOpened.mockResolvedValue({ ok: false, failure: 'failed' });
+    await render();
+    expect(localStorage.getItem('aeo:getting-started:b1:mentions')).toBeNull();
     markGettingStartedPageOpened.mockRejectedValue(new Error('offline'));
     await render();
     expect(localStorage.getItem('aeo:getting-started:b1:mentions')).toBeNull();

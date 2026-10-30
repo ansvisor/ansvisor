@@ -6,7 +6,7 @@ import messages from '../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /**
- * Settings › API keys on a read-only workspace (plan not active): the keys
+ * Settings › MCP & API Keys on a read-only workspace (plan not active): the keys
  * show and both New key and revoking stay open. A key costs nothing, and the
  * MCP surface it opens only reads for such a workspace.
  */
@@ -75,6 +75,12 @@ const button = (text: string) =>
   [...document.body.querySelectorAll('button')].find((b) => b.textContent?.trim() === text);
 
 describe('ApiKeysSection', () => {
+  it('is titled MCP & API Keys, as the Settings menu names it', async () => {
+    await render(false);
+    expect(container.querySelector('[data-slot="card-title"]')?.textContent).toBe('MCP & API Keys');
+    expect(messages.settings.apiKeys).toBe('MCP & API Keys');
+  });
+
   it('creates and revokes keys on a read-only workspace', async () => {
     await render(true);
     expect(container.textContent).toContain('MCP — laptop');
@@ -87,6 +93,20 @@ describe('ApiKeysSection', () => {
     await act(async () => button('Revoke')!.click());
     expect(fetchMock).toHaveBeenCalledWith('/api/keys/k1', { method: 'DELETE' });
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+
+  it('says on the cloud that MCP writes need Growth, and nothing self-hosted', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    await render(false);
+    expect(container.querySelector('[data-slot="mcp-plan-note"]')?.textContent).toBe(
+      'On Starter and in the free trial, MCP tools and the API can read. Changes need Growth.',
+    );
+    act(() => root.unmount());
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    root = createRoot(container);
+    await render(false);
+    expect(container.querySelector('[data-slot="mcp-plan-note"]')).toBeNull();
+    vi.unstubAllEnvs();
   });
 
   it('opens New key on an active plan', async () => {
