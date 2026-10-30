@@ -206,6 +206,17 @@ describe('answerToDraft', () => {
     expect(db.tables.chat_files[0].content_draft_id).toBe(DRAFT);
   });
 
+  it('keeps an answer’s images as their alt text and its raw HTML as text, as the answer shows them', async () => {
+    db.tables.chat_messages[1].content_md =
+      'See ![the chart](https://example.com/c.png?d=1) and [the page](https://example.com/p).\n\n<img src="https://example.com/x.png">\n';
+    await store.answerToDraft(ACTOR, RUN, null);
+    const html = drafts.createContentDraft.mock.calls[0][1].bodyHtml as string;
+    expect(html).not.toMatch(/<img/i);
+    expect(html).toContain('the chart');
+    expect(html).toContain('&lt;img src=');
+    expect(html).toContain('<a href="https://example.com/p">the page</a>');
+  });
+
   it('takes the brand open for a chat about none, and asks for one without it', async () => {
     db.tables.chat_conversations[0].brand_id = null;
     const other = '33333333-3333-4333-8333-333333333333';
