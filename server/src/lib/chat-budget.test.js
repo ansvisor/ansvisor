@@ -576,6 +576,30 @@ describe('with purchased AI credits (CHAT-18 §F)', () => {
     expect(usedOf('g1')).toBeCloseTo(0.0038, 9);
   });
 
+  it('tells the meter credits are left, and counts them in the Improve tab’s quota', async () => {
+    spent(5);
+    ledger[0].organization_id = 'o1';
+    expect((await guard.getAiUsage('o1')).creditsLeft).toBe(false);
+    expect((await guard.getImproveQuotaStatus('o1', MODEL)).remainingUsd).toBe(0);
+
+    grant('g1', 5, { used: 1 });
+    const usage = await guard.getAiUsage('o1');
+    // The plan's share is used up, but calls still run on the credits.
+    expect(usage).toMatchObject({ percentUsed: 100, creditsLeft: true });
+    // A boolean only: no dollars reach the page.
+    expect(JSON.stringify(usage)).not.toMatch(/"(usd|credit)[a-z]*":\s*\d/i);
+    const quota = await guard.getImproveQuotaStatus('o1', MODEL);
+    expect(quota.remainingUsd).toBeCloseTo(4, 9);
+    expect(quota.percentLeft).toBe(80);
+
+    // Used up, or ended: none left.
+    grants[0].usd_used = 5;
+    expect((await guard.getAiUsage('o1')).creditsLeft).toBe(false);
+    grants[0].usd_used = 1;
+    grants[0].expires_at = '2026-10-28T00:00:00.000Z';
+    expect((await guard.getAiUsage('o1')).creditsLeft).toBe(false);
+  });
+
   it('reads no credits while Chat is off: the budget is the plan’s', async () => {
     vi.stubEnv('CHAT_AGENTIC', 'false');
     spent(5);

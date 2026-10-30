@@ -16,7 +16,8 @@ import { addMonthsUtc, loadStripe, purchaseIdOf } from './add-ons';
  *     invoice, then each renewal of the plan): a storage_grants row active
  *     until the end of the period paid for, moved on by each renewal.
  *   - charge.refunded, in full: the purchase is refunded and its grant taken
- *     back: the AI credits not yet used, the storage from the refund on. A
+ *     back: the AI credits not yet used, the storage from the refund on (its
+ *     item taken off the plan's subscription, so it isn't charged again). A
  *     part refund is left to staff.
  *
  * Each event can come twice, late, or before the purchase's start finished
@@ -378,6 +379,22 @@ async function purchaseOfCharge(charge: Stripe.Charge): Promise<string | null> {
   return rows?.[0]?.id ?? null;
 }
 
+/**
+ * A refunded storage pack's item comes off the plan's subscription, so it
+ * isn't charged again each month for storage it no longer grants. Nothing
+ * prorated: the refund settled the money. Already gone: nothing to do.
+ */
+async function removeStorageItem(itemId: string | null) {
+  if (!itemId) return;
+  try {
+    await (await stripeClient()).subscriptionItems.del(itemId, { proration_behavior: 'none' });
+  } catch (err) {
+    const e = err as { code?: string; statusCode?: number } | null;
+    if (e?.code === 'resource_missing' || e?.statusCode === 404) return;
+    throw err;
+  }
+}
+
 /** A refunded purchase gives back what it hasn't used: once. */
 async function refund(purchaseId: string, at: number) {
   const found = await readPurchase(purchaseId);
@@ -417,6 +434,7 @@ async function refund(purchaseId: string, at: number) {
         .eq('purchase_id', purchase.id)
         .gt('active_until', iso(at)),
     );
+    await removeStorageItem(purchase.stripe_subscription_item_id);
   }
   unwrap(
     await supabaseAdmin
@@ -440,8 +458,9 @@ export async function handleAddOnEvent(event: Stripe.Event): Promise<boolean> {
       const session = event.data.object;
       const purchaseId = purchaseIdOf(session.metadata);
       if (!purchaseId) return false;
-      // A delayed payment (a bank debit) isn't paid yet: async_payment_succeeded grants it.
-      if (session.payment_status !== 'unpaid') {
+      // A delayed payment (a bank debit) isn't paid yet: async_payment_succeeded
+      // grants it. Only a paid one grants ('no_payment_required' never does).
+      if (session.payment_status === 'paid') {
         await grantAiCredits(purchaseId, {
           at: event.created,
           sessionId: session.id,
