@@ -64,7 +64,12 @@ export function guardedFix(c, suggestions, open = new Set(['dated'])) {
   ).map((row) => (row.kind === 'replace' ? row.after_text : textOf(row.after_text)));
 }
 
-/** What a page written whole says once kept. */
+/**
+ * What a page written whole says once the guards have read it. The facts
+ * pass after them (content-research.js: a fact looked up, or its sentence
+ * written without it) needs the web, so it isn't run here: its own tests
+ * hold it to the same rule.
+ */
 export function guardedPage(c, page) {
   const { people, knownInPage } = sourcing(c);
   return textOf(renderPage(sourcedPage(page, knownInPage, people)));
