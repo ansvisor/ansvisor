@@ -2,6 +2,22 @@ import { generateText } from 'ai';
 import { logger } from './logger.js';
 import { resolveModel, webSearchTools } from './ai-provider.js';
 
+/** A hung search must not hold the suggestion request open. */
+const TAVILY_TIMEOUT_MS = 15_000;
+
+/**
+ * A quota or rate-limit wall on the grounded call. generateText already retried
+ * a 429 twice before throwing, so by now the wall is not transient. Other
+ * failures (auth, bad model, 5xx) are real and must reach the caller rather than
+ * quietly turn into research without search.
+ * @param {unknown} err
+ */
+export function isQuotaWall(err) {
+  const e = err?.lastError ?? err;
+  if (e?.statusCode === 429) return true;
+  return /quota|rate.?limit|resource.?exhausted/i.test(String(e?.message ?? ''));
+}
+
 /**
  * Research via Tavily when `TAVILY_API_KEY` is set. Provider search tools are
  * quota-gated on free keys — Google Search grounding 429s the whole suggestion
@@ -31,6 +47,7 @@ async function tavilyResearch(modelString, prompt) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({ query, max_results: 8, search_depth: 'basic' }),
+      signal: AbortSignal.timeout(TAVILY_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`Tavily search HTTP ${res.status}`);
     const data = await res.json();
@@ -73,10 +90,11 @@ export async function webResearch(modelString, prompt) {
       const result = await generateText({
         model: resolveModel(modelString),
         prompt,
-        ...(tools ? { tools } : {}),
+        tools,
       });
-      return { text: result.text, searched: Boolean(tools), sources: result.sources?.length ?? 0 };
+      return { text: result.text, searched: true, sources: result.sources?.length ?? 0 };
     } catch (err) {
+      if (!isQuotaWall(err)) throw err;
       logger.warn(
         { err: err?.message },
         'provider search-grounded research failed; falling back to no-search research',

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
   generateText: vi.fn(),
@@ -17,7 +17,11 @@ vi.mock('./logger.js', () => ({
 
 import { webResearch } from './web-research.js';
 
-vi.stubGlobal('fetch', (...args) => state.fetch(...args));
+// Stubbed before every test: unstubAllGlobals in afterEach would otherwise
+// hand later tests the real fetch, and they would call Tavily for real.
+beforeEach(() => {
+  vi.stubGlobal('fetch', (...args) => state.fetch(...args));
+});
 
 /** What suggestion research does when its search options fail. */
 
@@ -62,6 +66,47 @@ describe('webResearch', () => {
     const result = await webResearch('google/gemini-3-flash', 'research this');
 
     expect(result).toEqual({ text: 'grounded answer', searched: true, sources: 2 });
+    expect(state.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives the Tavily search a timeout', async () => {
+    vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
+    state.generateText
+      .mockResolvedValueOnce({ text: 'a query' })
+      .mockResolvedValueOnce({ text: 'the synthesis' });
+    state.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [{ title: 'A', url: 'https://a', content: 'a' }] }),
+    });
+
+    await webResearch('google/gemini-3-flash', 'research this');
+
+    expect(state.fetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('surfaces a grounded-call failure that is not a quota wall', async () => {
+    state.generateText.mockRejectedValueOnce(
+      Object.assign(new Error('API key not valid'), { statusCode: 400 }),
+    );
+
+    await expect(webResearch('google/gemini-3-flash', 'research this')).rejects.toThrow(
+      'API key not valid',
+    );
+    expect(state.generateText).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a retried-out 429 as a quota wall', async () => {
+    state.generateText
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Failed after 3 attempts'), {
+          lastError: { statusCode: 429, message: 'Too Many Requests' },
+        }),
+      )
+      .mockResolvedValueOnce({ text: 'from the model alone' });
+
+    const result = await webResearch('google/gemini-3-flash', 'research this');
+
+    expect(result).toEqual({ text: 'from the model alone', searched: false, sources: 0 });
   });
 
   it('survives a quota wall on the provider search and still returns research', async () => {
