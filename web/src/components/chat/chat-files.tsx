@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Copy, Download, FileText, PenLine } from 'lucide-react';
+import { useGetMore } from '@/components/ai-usage/get-more-context';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -59,27 +60,39 @@ function fileNameOf(res: Response, fallback: string): string {
 
 const FILL = { ok: 'bg-foreground', warning: 'bg-amber-500', full: 'bg-red-500' } as const;
 
-/** "Storage 2.1 of 25 GB" with a thin bar; its tooltip says how long files are kept (item 27). */
+/**
+ * "Storage 2.1 of 25 GB" with a thin bar; its tooltip says how long files
+ * are kept (item 27). With a limit, clicking it opens the Get more window on
+ * Storage (CHAT-18 §B item 6).
+ */
 function StorageMeter({ storage }: { storage: ChatStorage }) {
   const t = useTranslations('chatFiles');
+  const openGetMore = useGetMore();
   const tone = storageTone(storage);
   const used = gbLabel(storage.usedBytes);
   const limit = storage.limitBytes;
   const width = limit ? `${Math.min(100, (storage.usedBytes / limit) * 100)}%` : '0%';
+  const className = cn(
+    'flex items-center gap-2 rounded-lg text-[12.5px] text-muted-foreground tabular-nums outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+    tone === 'warning' && 'text-amber-700 dark:text-amber-400',
+    tone === 'full' && 'text-red-700 dark:text-red-400',
+  );
   return (
     <Tooltip>
       <TooltipTrigger
         render={
-          <span
-            tabIndex={0}
-            data-slot="storage-meter"
-            data-tone={tone}
-            className={cn(
-              'flex items-center gap-2 rounded-lg text-[12.5px] text-muted-foreground tabular-nums outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-              tone === 'warning' && 'text-amber-700 dark:text-amber-400',
-              tone === 'full' && 'text-red-700 dark:text-red-400',
-            )}
-          />
+          openGetMore && limit !== null ? (
+            <button
+              type="button"
+              data-slot="storage-meter"
+              data-action="files.getMoreStorage"
+              data-tone={tone}
+              onClick={() => openGetMore('storage')}
+              className={cn(className, 'hover:text-foreground')}
+            />
+          ) : (
+            <span tabIndex={0} data-slot="storage-meter" data-tone={tone} className={className} />
+          )
         }
       >
         {limit === null
@@ -110,6 +123,7 @@ async function readFiles(
 
 export function ChatFiles() {
   const t = useTranslations('chatFiles');
+  const openGetMore = useGetMore();
   const tFormats = useTranslations('chatAnswer.formats');
   const tTypes = useTranslations('chatDeliverable.types');
   const [filter, setFilter] = useState<ChatFileFilter>('all');
@@ -278,9 +292,20 @@ export function ChatFiles() {
         <p
           role="status"
           data-slot="storage-full"
-          className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[13px] text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+          className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[13px] text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
         >
-          {t('storageFull')}
+          <span className="min-w-0 flex-1">
+            {openGetMore ? t('storageFullGetMore') : t('storageFull')}
+          </span>
+          {openGetMore && (
+            <Button
+              size="sm"
+              data-action="files.getMoreStorage"
+              onClick={() => openGetMore('storage')}
+            >
+              {t('getMoreStorage')}
+            </Button>
+          )}
         </p>
       )}
 

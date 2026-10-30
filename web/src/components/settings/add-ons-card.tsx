@@ -33,8 +33,8 @@ import type { AddOnKind } from '@/lib/billing/add-ons';
 import type { AddOnPackView, AddOnPurchaseState } from '@/lib/billing/add-on-view';
 import { cn } from '@/lib/utils';
 
-/** After Checkout's return, Billing reads once more: the webhook has usually landed by then. */
-const AFTER_PAYMENT_READ_MS = 5_000;
+/** After a payment, Billing reads once more: the webhook has usually landed by then. */
+export const AFTER_PAYMENT_READ_MS = 5_000;
 
 /** A price in its currency, without cents when it has none: $50, $1,000, $48.20. */
 export function formatPackPrice(cents: number, currency: string): string {
@@ -45,7 +45,8 @@ export function formatPackPrice(cents: number, currency: string): string {
   }).format(cents / 100);
 }
 
-const formatDate = (iso: string) =>
+/** "Oct 30, 2027": when a pack's credit ends, or it was bought. */
+export const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
 const STATE_VARIANT: Record<AddOnPurchaseState, 'default' | 'secondary' | 'outline'> = {
@@ -133,44 +134,17 @@ function AddOnsBody({
     ai: firstPick(addOns.packs, 'ai'),
     storage: firstPick(addOns.packs, 'storage'),
   }));
-  const [busy, setBusy] = useState(false);
-  const [confirming, setConfirming] = useState<AddOnPackView | null>(null);
-  const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  const { busy, confirming, setConfirming, message, buy, start } = useAddOnPurchase(
+    t('storageAdded'),
+    onChange,
+  );
 
   const canBuy = addOns.isAdmin && addOns.buy === 'open';
   const packs = addOns.packs.filter((p) => p.kind === tab);
   const chosen = packs.find((p) => p.id === picked[tab] && p.available) ?? null;
 
-  async function buy(pack: AddOnPackView) {
-    setBusy(true);
-    setMessage(null);
-    const result = await startAddOnPurchase(pack.id);
-    if (result.ok && result.next === 'checkout') {
-      // Stripe's page; the busy state stays until the browser leaves.
-      window.location.assign(result.url);
-      return;
-    }
-    setBusy(false);
-    setConfirming(null);
-    if (result.ok) {
-      setMessage({ tone: 'ok', text: t('storageAdded') });
-      onChange();
-      return;
-    }
-    setMessage({
-      tone: 'error',
-      text:
-        result.failure === 'payment_failed' && result.message
-          ? result.message
-          : t(`errors.${result.failure}`),
-    });
-  }
-
   function onContinue() {
-    if (!chosen) return;
-    // Storage is charged at once, to the card on file: said first.
-    if (chosen.kind === 'storage') setConfirming(chosen);
-    else void buy(chosen);
+    if (chosen) start(chosen);
   }
 
   return (
@@ -295,14 +269,63 @@ function AddOnsBody({
   );
 }
 
+/**
+ * Buying a pack with Continue to payment, here and in the Get more window:
+ * AI credits go on to Stripe Checkout; storage, charged at once to the
+ * card on file, waits in `confirming` until `buy` is called again. `added`
+ * says what a storage pack did; `onAdded` reads again.
+ */
+export function useAddOnPurchase(added: string, onAdded: () => void) {
+  const t = useTranslations('settings.addOns');
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState<AddOnPackView | null>(null);
+  const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+
+  async function buy(pack: AddOnPackView) {
+    setBusy(true);
+    setMessage(null);
+    // A dropped connection or a 502 answers as a failure, never a button left at "Opening…".
+    const result = await startAddOnPurchase(pack.id).catch(
+      () => ({ ok: false, failure: 'failed' }) as const,
+    );
+    if (result.ok && result.next === 'checkout') {
+      // Stripe's page; the busy state stays until the browser leaves.
+      window.location.assign(result.url);
+      return;
+    }
+    setBusy(false);
+    setConfirming(null);
+    if (result.ok) {
+      setMessage({ tone: 'ok', text: added });
+      onAdded();
+      return;
+    }
+    setMessage({
+      tone: 'error',
+      text:
+        result.failure === 'payment_failed' && result.message
+          ? result.message
+          : t(`errors.${result.failure}`),
+    });
+  }
+
+  /** Continue to payment: storage is charged at once, to the card on file, so it's said first. */
+  function start(pack: AddOnPackView) {
+    if (pack.kind === 'storage') setConfirming(pack);
+    else void buy(pack);
+  }
+
+  return { busy, confirming, setConfirming, message, buy, start };
+}
+
 /** The tab's Most picked pack, else its first, while it can be bought. */
-function firstPick(packs: AddOnPackView[], kind: AddOnKind): string | null {
+export function firstPick(packs: AddOnPackView[], kind: AddOnKind): string | null {
   const open = packs.filter((p) => p.kind === kind && p.available);
   return (open.find((p) => p.mostPicked) ?? open[0])?.id ?? null;
 }
 
 /** One pack, as the "Get more" window's cards show it: price, what it adds, how long, Most picked. */
-function PackCard({
+export function PackCard({
   pack,
   selected,
   selectable,

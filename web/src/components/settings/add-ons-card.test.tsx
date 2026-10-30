@@ -202,6 +202,14 @@ describe('for an Admin', () => {
     expect(picked()).toEqual([['Storage', true]]);
   });
 
+  it('says a purchase that failed to start, and lets the person try again', async () => {
+    vi.mocked(startAddOnPurchase).mockRejectedValue(new TypeError('Failed to fetch'));
+    await render(addOns());
+    await click(button('Continue to payment'));
+    expect(text()).toContain("Couldn't start the purchase. Try again.");
+    expect(button('Continue to payment')?.disabled).toBe(false);
+  });
+
   it('confirms storage before adding it to the plan, as it is charged at once', async () => {
     vi.mocked(startAddOnPurchase).mockResolvedValue({ ok: true, next: 'added' });
     await render(addOns());

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { Marked } from 'marked';
 import { toast } from 'sonner';
 import { Check, Copy, Download, FolderCheck, FolderPlus, PenLine } from 'lucide-react';
+import { useGetMore } from '@/components/ai-usage/get-more-context';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useRouter } from '@/i18n/navigation';
 import {
@@ -69,6 +70,7 @@ export function AnswerActions({
 }) {
   const t = useTranslations('chatAnswer');
   const { openUpgrade } = useUpgradeGate();
+  const openGetMore = useGetMore();
   const router = useRouter();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const [saving, setSaving] = useState(false);
@@ -125,8 +127,14 @@ export function AnswerActions({
       onFiled(body.file.id);
       toast(t('saved'));
     } else if (body?.code === 'storage_full') {
-      // Storage packs are bought from Billing once the plan rules are set: a line for now.
-      toast(t('storageFull'));
+      // Storage packs are bought in the Get more window (CHAT-18 §B item 6).
+      if (openGetMore) {
+        toast(t('storageFull'), {
+          action: { label: t('getMoreStorage'), onClick: () => openGetMore('storage') },
+        });
+      } else {
+        toast(t('storageFull'));
+      }
     } else {
       toast.error(t('saveFailed'));
     }

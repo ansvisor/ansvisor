@@ -2,9 +2,11 @@
 
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
+import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { useUserRole } from '@/hooks/use-user-role';
 import { StartPlanNow, StartPlanNowButton } from './start-plan-now';
+import { useGetMore } from './get-more-context';
 
 /**
  * Whether an own key is a way to get more (CHAT-16 item 19): always before
@@ -17,12 +19,15 @@ export function ownKeyOffered(usage: { plan: string; chatMetered?: boolean }): b
 
 /**
  * Where to get more AI usage, in the meter's popover and the used-up banner
- * (AI usage spec §3.1, §4): a bigger plan and the workspace's own key, both
- * an admin's to change, so nothing for other members (they are told to ask
- * one). Enterprise has no bigger plan to move to. In the free trial, more
- * comes with starting the plan: Start my plan now ends the trial here.
- * `primary` makes the plan button the area's one black button. The own-key
- * link only where an own key helps (ownKeyOffered).
+ * (AI usage spec §3.1, §4; CHAT-18 §B item 6). With Chat on, Get more AI
+ * credits opens the Get more window, for every member: the others see the
+ * packs there and ask an Admin. Otherwise a bigger plan, an admin's to
+ * change, and nothing for other members (they are told to ask one);
+ * Enterprise has no bigger plan to move to. In the free trial, more comes
+ * with starting the plan: Start my plan now ends the trial here (the trial
+ * can't buy packs). The own-key link only where an own key helps
+ * (ownKeyOffered), for Admins. `primary` makes the first one the area's one
+ * black button.
  */
 export function AiUsageGetMore({
   plan,
@@ -34,6 +39,7 @@ export function AiUsageGetMore({
 }: {
   plan: string;
   trial?: boolean;
+  /** Chat draws on the AI budget (CHAT_AGENTIC on). */
   chatMetered?: boolean;
   primary: boolean;
   /** When a link is followed: the popover closes. */
@@ -46,10 +52,24 @@ export function AiUsageGetMore({
 }) {
   const t = useTranslations('aiUsage.getMore');
   const { canAdmin } = useUserRole();
-  if (!canAdmin) return null;
+  const openGetMore = useGetMore();
+  const getMore = openGetMore && !trial ? openGetMore : null;
+  if (!canAdmin && !getMore) return null;
   return (
     <>
-      {trial ? (
+      {getMore ? (
+        <Button
+          size="sm"
+          variant={primary ? 'default' : 'outline'}
+          data-action="credits.getMore"
+          onClick={() => {
+            onFollow?.();
+            getMore('ai');
+          }}
+        >
+          {t('credits')}
+        </Button>
+      ) : trial ? (
         onStartPlan ? (
           <StartPlanNowButton variant={primary ? 'default' : 'outline'} onClick={onStartPlan} />
         ) : (
@@ -66,7 +86,7 @@ export function AiUsageGetMore({
           </Link>
         )
       )}
-      {ownKeyOffered({ plan, chatMetered }) && (
+      {canAdmin && ownKeyOffered({ plan, chatMetered }) && (
         <Link
           href="/dashboard/settings/ai-providers"
           onClick={onFollow}
