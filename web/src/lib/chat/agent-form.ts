@@ -8,7 +8,7 @@ import {
   MAX_AGENT_TRIGGERS,
   agentScopeSchema,
   agentTriggerSchema,
-  nameKey,
+  defaultAgentName,
   triggerTimeProblem,
   type AgentConnection,
   type AgentEffort,
@@ -125,7 +125,7 @@ export interface AgentFormState {
   brandIds: string[];
   topicIds: string[];
   engines: string[];
-  /** As typed: one per line (or comma). */
+  /** As typed: one per line (a URL or a tag may hold a comma). */
   tagsText: string;
   urlsText: string;
   mode: ChatMode;
@@ -161,12 +161,12 @@ export const MAX_NAME = 60;
 /** A name as the server keeps it: spaces folded. */
 export const foldName = (name: string) => name.replace(/\s+/g, ' ').trim();
 
-/** Tags or URLs as typed: one per line or comma, trimmed, once each. */
+/** Tags or URLs as typed: one per line, trimmed, once each. A comma stays in its line. */
 export function parseList(text: string): string[] {
   return [
     ...new Set(
       text
-        .split(/[\n,]/)
+        .split(/\r?\n/)
         .map((item) => item.trim())
         .filter(Boolean),
     ),
@@ -448,34 +448,8 @@ export function syncConnections(
   ];
 }
 
-/**
- * A new agent's name (§O): the primary skill's title; taken in the
- * workspace, with its brand ("Win back lost citations · Brand A"), then
- * " 2", " 3". At most 60 characters.
- */
-export function defaultAgentName(
-  title: string,
-  brand: string | null,
-  taken: readonly string[],
-): string {
-  const used = new Set(taken.map(nameKey));
-  const fit = (text: string) => foldName(text).slice(0, MAX_NAME).trimEnd();
-  const free = (text: string) => !used.has(nameKey(text));
-  const first = fit(title);
-  if (free(first)) return first;
-  if (brand) {
-    const withBrand = fit(`${title} · ${brand}`);
-    if (free(withBrand)) return withBrand;
-  }
-  for (let n = 2; n < 1000; n++) {
-    const suffix = ` ${n}`;
-    const candidate = `${fit(title)
-      .slice(0, MAX_NAME - suffix.length)
-      .trimEnd()}${suffix}`;
-    if (free(candidate)) return candidate;
-  }
-  return first;
-}
+/** A new agent's name (§O); the server names it again against every agent (`autoName`). */
+export { defaultAgentName };
 
 /** A new agent's form: the skill it starts from, if any, the brand on screen, Monday 07:00. */
 export function newForm(
@@ -685,10 +659,21 @@ function builtTriggers(state: AgentFormState) {
 /** A share from a percent as typed: "10" → 0.1. */
 const shareOf = (percent: string) => Math.round(Number(percent)) / 100;
 
-/** POST /api/chat/agents's body: a new draft. The monthly cap only an Admin sends (CHAT-27 item 23). */
-export function createBody(state: AgentFormState, role: TeamRole): Record<string, unknown> {
+/**
+ * POST /api/chat/agents's body: a new draft. The monthly cap only an Admin
+ * sends (CHAT-27 item 23). A name the person didn't type goes as the
+ * skill's title (`autoTitle`) for the server to name by §O against every
+ * agent, the ones the person can't see included.
+ */
+export function createBody(
+  state: AgentFormState,
+  role: TeamRole,
+  autoTitle: string | null = null,
+): Record<string, unknown> {
+  const auto = !state.nameEdited && !!autoTitle;
   return {
-    name: foldName(state.name),
+    name: auto ? autoTitle : foldName(state.name),
+    ...(auto ? { autoName: true } : {}),
     visibility: state.visibility,
     maxRunShare: shareOf(state.maxRun),
     ...(role === 'admin'
@@ -708,8 +693,9 @@ export function createBody(state: AgentFormState, role: TeamRole): Record<string
 }
 
 /**
- * PATCH /{id}'s body: only what changed, with the version the form opened
- * (a save over someone else's is refused). Null when nothing changed.
+ * PATCH /{id}'s body: only what changed, with the version and the
+ * `updatedAt` the form opened (a save over someone else's, even one that
+ * made no new version, is refused). Null when nothing changed.
  */
 export function patchBody(
   state: AgentFormState,
@@ -745,7 +731,7 @@ export function patchBody(
   const was = agent.triggers.map((t) => ({ kind: t.kind, config: t.config, enabled: t.enabled }));
   if (canonical(triggers) !== canonical(was)) patch.triggers = triggers;
   if (Object.keys(patch).length === 0) return null;
-  return { expectedVersion: agent.version, ...patch };
+  return { expectedVersion: agent.version, expectedUpdatedAt: agent.updatedAt, ...patch };
 }
 
 // ─── The server's refusals ───────────────────────────────────────────────────
@@ -764,6 +750,7 @@ export function refusalPlace(
 ): { step: AgentFormStep; field: FormField } {
   switch (code) {
     case 'name_taken':
+    case 'name_taken_hidden':
       return { step: 3, field: 'name' };
     case 'schedule_past':
     case 'schedule_too_far':

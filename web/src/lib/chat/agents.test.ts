@@ -201,6 +201,47 @@ describe('creating an agent', () => {
     });
   });
 
+  it('never says a private agent’s name to someone who can’t see it (W2-15)', async () => {
+    await create(PEOPLE.otherManager, { name: 'Secret plan' });
+    const taken = await agents.createAgent(
+      await ctxOf(PEOPLE.manager),
+      input({ name: 'secret PLAN' }),
+      NOW,
+    );
+    expect(taken).toMatchObject({
+      ok: false,
+      refusal: { kind: 'refused', status: 409, code: 'name_taken_hidden' },
+    });
+    expect(JSON.stringify(taken)).not.toMatch(/secret plan/i);
+    // Renaming into it: the same.
+    const { id } = await create(PEOPLE.manager, { name: 'Mine' });
+    const renamed = await agents.updateAgent(
+      await ctxOf(PEOPLE.manager),
+      id,
+      updateAgentInput.parse({ name: 'Secret plan' }),
+    );
+    expect(renamed).toMatchObject({ ok: false, refusal: { code: 'name_taken_hidden' } });
+    expect(JSON.stringify(renamed)).not.toMatch(/secret plan/i);
+    // An Admin sees every agent: the name is said.
+    const admin = await agents.createAgent(
+      await ctxOf(PEOPLE.admin),
+      input({ name: 'Secret plan' }),
+      NOW,
+    );
+    expect(admin).toMatchObject({ ok: false, refusal: { code: 'name_taken' } });
+  });
+
+  it('names an agent the person didn’t name by §O against every agent, hidden ones included (W2-15)', async () => {
+    await create(PEOPLE.otherManager, { name: 'Win back lost citations' });
+    const first = await create(PEOPLE.manager, { name: 'Win back lost citations', autoName: true });
+    expect(first.name).toBe('Win back lost citations · Brand A');
+    const second = await create(PEOPLE.manager, {
+      name: 'Win back lost citations',
+      autoName: true,
+    });
+    expect(second.name).toBe('Win back lost citations 2');
+  });
+
   it('locks Full auto below Growth and the monthly cap to Admins', async () => {
     db.tables.organizations[0].plan = 'starter';
     const fullAuto = await agents.createAgent(
@@ -343,6 +384,49 @@ describe('changing an agent', () => {
     expect([a, b].find((r) => !r.ok)).toMatchObject({ refusal: { code: 'version_conflict' } });
     expect(rows('chat_agent_versions').map((v) => v.version)).toEqual([1, 2]);
     expect(agentRow(id).version).toBe(2);
+  });
+
+  it('refuses a save over one that made no new version: a name, sharing or triggers (W2-15)', async () => {
+    const { id, updatedAt } = await create(PEOPLE.manager);
+    const ctx = await ctxOf(PEOPLE.manager);
+    // Two editors open the agent; the first renames it (no new version).
+    const first = await agents.updateAgent(
+      ctx,
+      id,
+      updateAgentInput.parse({ expectedVersion: 1, expectedUpdatedAt: updatedAt, name: 'Renamed' }),
+    );
+    expect(first).toMatchObject({ ok: true, value: { name: 'Renamed', version: 1 } });
+    // The second changes its triggers from what it opened: refused, the first save kept.
+    const second = await agents.updateAgent(
+      ctx,
+      id,
+      updateAgentInput.parse({
+        expectedVersion: 1,
+        expectedUpdatedAt: updatedAt,
+        triggers: [{ kind: 'signal', config: { category: 'recover' } }],
+      }),
+    );
+    expect(second).toMatchObject({ ok: false, refusal: { status: 409, code: 'version_conflict' } });
+    expect(rows('chat_agent_triggers').filter((t) => t.agent_id === id)).toHaveLength(0);
+    // With what it reads now, it saves; a triggers-only save moves updatedAt too.
+    const fresh = first.ok ? first.value.updatedAt : '';
+    const third = await agents.updateAgent(
+      ctx,
+      id,
+      updateAgentInput.parse({
+        expectedUpdatedAt: fresh,
+        triggers: [{ kind: 'signal', config: { category: 'recover' } }],
+      }),
+    );
+    expect(third.ok).toBe(true);
+    expect(third.ok && third.value.updatedAt).not.toBe(fresh);
+    expect(
+      await agents.updateAgent(
+        ctx,
+        id,
+        updateAgentInput.parse({ expectedUpdatedAt: fresh, visibility: 'workspace' }),
+      ),
+    ).toMatchObject({ ok: false, refusal: { code: 'version_conflict' } });
   });
 
   it('lets only its owner or an Admin change it; a teammate gets the out-of-permission answer', async () => {

@@ -62,7 +62,7 @@ Managers change their own agents and can run agents shared with the workspace. A
 Admins and Managers click **New agent** on **Agents**. Four steps open, with a summary of the agent on the right:
 
 1. **Skill**: pick what it does, add up to 2 follow-on skills, and write instructions if you like.
-2. **Trigger**: add up to 5, such as **Schedule** or **Signal created**. Each shows its next run or when it fires. **Manual** runs only on **Run now**. Next to **FOR**, pick its brands, and narrow it to platforms, topics, prompt tags or URLs.
+2. **Trigger**: add up to 5, such as **Schedule** or **Signal created**. Each shows its next run or when it fires. **Manual** is always on: **Run now**. Next to **FOR**, pick its brands, and narrow it to platforms, topics, prompt tags or URLs.
 3. **Mode & approvals**: how much it may do without asking.
 4. **Connections & model**: then its name, **Private** or **Workspace**, and **Max per run**, the most one run may use of your monthly AI limit. Admins can also set a **Monthly cap**.
 
@@ -72,7 +72,7 @@ Click **Save as draft** to keep it off, or **Turn on**. If something needs fixin
 
 On an agent's page, click **Edit** to open the same four steps with its current settings. An agent that is on or paused has **Save changes**; a draft has **Save as draft** and **Turn on**. A change to what it does saves a new version, and a run that already started keeps the version it started with. If someone saved the agent after you opened it, click **Reload** to see their change first.
 
-Managers edit their own agents, and Admins every agent. Analysts and Agency partners see a read-only line with **Ask your Admin** instead.
+Managers edit their own agents, and Admins every agent. If your Admin keeps workspace agents to Admins, Managers can't change their agents shared with the workspace either. Analysts and Agency partners see a read-only line with **Ask your Admin** instead.
 
 To delete an agent, archive it first. Then open **⋯** on its page and click **Delete**. Chat asks first; its past runs and files stay.
 

@@ -4604,6 +4604,7 @@
       "invalid": "Some of this agent's settings aren't valid. Check them and try again.",
       "not_found": "This agent isn't available.",
       "name_taken": "An agent named “{name}” already exists in this workspace. Pick another name.",
+      "name_taken_hidden": "That name is taken in this workspace. Try another.",
       "wrong_status": "{status, select, draft {This agent is a draft} active {This agent is on} paused {This agent is paused} other {This agent is archived}}, so it can't do that now.",
       "archived": "This agent is archived. Restore it first.",
       "version_conflict": "This agent was changed since you opened it. Reload to see its latest version.",
@@ -4845,6 +4846,8 @@
         "connections": "Connections & model"
       },
       "stepOf": "Step {step} of 4",
+      "stepTitle": "Step {step} of 4 · {name}",
+      "alert": "{count, plural, one {One thing on this step needs fixing.} other {# things on this step need fixing.}}",
       "back": "Back",
       "next": "Next",
       "saveDraft": "Save as draft",
@@ -4906,6 +4909,8 @@
         "list": "Triggers",
         "count": "{count} of 5",
         "add": "Add trigger",
+        "alwaysOn": "Always on",
+        "kindLabel": "Trigger type",
         "max": "An agent has up to 5 triggers. Remove one to add another.",
         "remove": "Remove this trigger",
         "select": "Edit this trigger",
@@ -5053,8 +5058,7 @@
         "maxRunNote": "The most one run may use of the monthly AI limit, 1–50%",
         "monthCap": "Monthly cap",
         "monthCapNote": "The most this agent may use of the monthly AI limit a month, 1–100%",
-        "monthCapSet": "Set by an Admin · {cap} a month",
-        "percent": "percent"
+        "monthCapSet": "Set by an Admin · {cap} a month"
       },
       "summary": {
         "title": "Agent",

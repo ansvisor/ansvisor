@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Check, Loader2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
@@ -64,6 +64,9 @@ import {
   SectionTitle,
   TOK,
   TriggerStep,
+  errorId,
+  radioKeys,
+  radioTab,
 } from './agent-form-triggers';
 import { changeAgent, createAgent, updateAgent, type AgentRefused } from './agent-requests';
 import { useAgentWords } from './agent-words';
@@ -142,11 +145,14 @@ function NeedsClick({ children }: { children: ReactNode }) {
 function SettingRow({
   label,
   note,
+  noteId,
   htmlFor,
   children,
 }: {
   label: string;
   note?: string;
+  /** Its note's id, for the control's aria-describedby. */
+  noteId?: string;
   htmlFor?: string;
   children: ReactNode;
 }) {
@@ -160,7 +166,11 @@ function SettingRow({
         ) : (
           <span className="font-medium">{label}</span>
         )}
-        {note && <em className={cn(EM, 'mt-0.5 text-xs')}>{note}</em>}
+        {note && (
+          <em id={noteId} className={cn(EM, 'mt-0.5 text-xs')}>
+            {note}
+          </em>
+        )}
       </div>
       <div className="min-w-0">{children}</div>
     </div>
@@ -380,6 +390,31 @@ function AgentFormBody({
   const [busy, setBusy] = useState<'draft' | 'on' | 'save' | null>(null);
   // What a save patches: the agent being edited, or the draft a first save made.
   const [base, setBase] = useState<AgentDetail | null>(agent);
+  // Where the focus goes after a render: a new step's title, or the first problem.
+  const [focusAsk, setFocusAsk] = useState<{ to: 'title' | 'problem'; n: number } | null>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const paneRef = useRef<HTMLElement>(null);
+  // A trigger switched to another kind and back keeps what it had (selection follows the arrows).
+  const kindsSeen = useRef(new Map<string, TriggerDraft>());
+
+  useEffect(() => {
+    if (!focusAsk) return;
+    if (focusAsk.to === 'title') {
+      titleRef.current?.focus();
+      return;
+    }
+    const pane = paneRef.current;
+    const target =
+      pane?.querySelector<HTMLElement>(
+        ':is(input, select, textarea, button)[aria-invalid="true"]',
+      ) ??
+      pane?.querySelector<HTMLElement>('[data-slot="agent-form-alert"]') ??
+      pane?.querySelector<HTMLElement>(
+        '[data-slot="agent-denial"] button:not([data-action="denial.close"])',
+      ) ??
+      titleRef.current;
+    target?.focus();
+  }, [focusAsk]);
 
   // A fresh clock with every change, so "Next run" and a one-off's time stay right.
   const now = useMemo(() => nowProp ?? new Date(), [nowProp, state]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -412,23 +447,26 @@ function AgentFormBody({
   };
 
   const show = (at: AgentFormStep) => setShown((was) => ({ ...was, [at]: true }));
+  /** Opens a step with the focus on its title (read out), or on its first problem. */
+  const moveTo = (target: AgentFormStep, focus: 'title' | 'problem' = 'title') => {
+    setStep(target);
+    setFocusAsk((was) => ({ to: focus, n: (was?.n ?? 0) + 1 }));
+  };
+  /** A step that isn't ready: its problems shown, and the focus on the first. */
+  const stopAt = (at: AgentFormStep) => {
+    show(at);
+    moveTo(at, 'problem');
+  };
   const goTo = (target: AgentFormStep) => {
     if (target > step) {
       const bad = firstStepWithProblems(state, ctx, target);
-      if (bad !== null) {
-        show(bad);
-        setStep(bad);
-        return;
-      }
+      if (bad !== null) return stopAt(bad);
     }
-    setStep(target);
+    moveTo(target);
   };
   const next = () => {
-    if (hasProblems(problems)) {
-      show(step);
-      return;
-    }
-    setStep((step + 1) as AgentFormStep);
+    if (hasProblems(problems)) return stopAt(step);
+    moveTo((step + 1) as AgentFormStep);
   };
 
   // ─── Skills ──────────────────────────────────────────────────────────────
@@ -441,18 +479,13 @@ function AgentFormBody({
 
   // ─── Triggers ────────────────────────────────────────────────────────────
 
-  const onKind = (kind: TriggerKind | 'manual') => {
+  const onKind = (kind: TriggerKind) => {
     setServer(null);
-    if (kind === 'manual') {
-      // Manual is the trigger kept as none: the selected one goes.
-      if (!selected) return;
-      const rest = state.triggers.filter((d) => d.key !== selected);
-      setState((was) => ({ ...was, triggers: rest }));
-      setSelected(rest[0]?.key ?? null);
-      return;
-    }
     if (kind === 'watch_rule') return;
-    const draft = newTriggerDraft(kind, selected ?? freshKey(), zone);
+    const current = state.triggers.find((d) => d.key === selected);
+    if (current) kindsSeen.current.set(`${current.key}:${current.kind}`, current);
+    const key = selected ?? freshKey();
+    const draft = kindsSeen.current.get(`${key}:${kind}`) ?? newTriggerDraft(kind, key, zone);
     setState((was) => ({
       ...was,
       triggers: selected
@@ -483,7 +516,7 @@ function AgentFormBody({
       return;
     }
     const place = refusalPlace(answer.code, answer.asked);
-    setStep(place.step);
+    moveTo(place.step, 'problem');
     setServer({
       ...place,
       code: answer.code,
@@ -496,11 +529,7 @@ function AgentFormBody({
   const submit = async (intent: 'draft' | 'on' | 'save') => {
     if (busy) return;
     const bad = firstStepWithProblems(state, ctx);
-    if (bad !== null) {
-      show(bad);
-      setStep(bad);
-      return;
-    }
+    if (bad !== null) return stopAt(bad);
     if (isLocked) {
       openUpgrade(tAgents(`asked.${base ? 'edit' : 'create'}`));
       return;
@@ -511,10 +540,23 @@ function AgentFormBody({
       let saved = base;
       const created = !agent;
       if (!saved) {
-        const answer = await createAgent(createBody(state, setup.role));
+        const answer = await createAgent(
+          createBody(state, setup.role, primary ? skillTitle(primary) : null),
+        );
         if (!answer.ok) return refuse(answer, false);
-        saved = answer.agent;
-        setBase(saved);
+        const draft = answer.agent;
+        saved = draft;
+        setBase(draft);
+        // The name the server gave it (§O, against every agent) is its name from now on.
+        setState((was) => ({ ...was, name: draft.name, nameEdited: true }));
+        // The address is the draft's Edit: a reload opens it, never a second agent.
+        if (/\/agents\/new\/?$/.test(window.location.pathname)) {
+          window.history.replaceState(
+            null,
+            '',
+            window.location.pathname.replace(/\/new\/?$/, `/${draft.id}/edit`),
+          );
+        }
       } else {
         const patch = patchBody(state, saved, setup.role);
         if (patch) {
@@ -556,43 +598,59 @@ function AgentFormBody({
 
   // ─── Pieces ──────────────────────────────────────────────────────────────
 
+  /** The server's refusal of a field on this step, said under it. */
+  const serverOn = (field: FormField) =>
+    !!server && server.step === step && server.field === field && !server.denial;
+  /** Whether a field shows a problem now: its aria-invalid and aria-describedby follow. */
+  const invalid = (field: FormField) =>
+    serverOn(field) || (shown[step] && !!problems.fields[field]);
+  const described = (field: FormField, ...more: (string | false)[]) =>
+    [...more, invalid(field) && errorId(field)].filter(Boolean).join(' ') || undefined;
   const fieldError = (field: FormField) => {
-    if (server && server.step === step && server.field === field && !server.denial) {
-      return <FieldError field={field}>{server.message}</FieldError>;
-    }
+    if (serverOn(field)) return <FieldError field={field}>{server!.message}</FieldError>;
     const code = shown[step] ? problems.fields[field] : undefined;
     return code ? (
       <FieldError field={field}>{tErrors(code, { plan: setup.fullAutoPlan })}</FieldError>
     ) : null;
   };
 
-  const serverLine =
-    server && server.step === step ? (
-      server.denial ? (
-        <AgentDenial denial={server.denial} onClose={() => setServer(null)} />
-      ) : !INLINE_FIELDS.includes(server.field) ? (
-        <div
-          role="alert"
-          data-slot="agent-form-refusal"
-          data-code={server.code ?? undefined}
-          className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
-        >
-          <span className="min-w-0 flex-1">
-            {server.savedDraft && <b className="mr-1 font-semibold">{t('savedNotOn')}</b>}
-            {server.message}
-          </span>
-          {server.code === 'version_conflict' && (
-            <Button
-              size="sm"
-              variant="outline"
-              data-action="agentNew.reload"
-              onClick={() => router.refresh()}
-            >
-              {t('reload')}
-            </Button>
-          )}
-        </div>
-      ) : null
+  // One alert a step (read once): the server's refusal, or how many problems the step has.
+  const ALERT =
+    'mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-900 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200';
+  const problemCount =
+    (shown[step]
+      ? Object.keys(problems.fields).length + Object.keys(problems.triggers).length
+      : 0) + (server && server.step === step && INLINE_FIELDS.includes(server.field) ? 1 : 0);
+  const alertLine =
+    server && server.step === step && server.denial ? (
+      <AgentDenial denial={server.denial} onClose={() => setServer(null)} />
+    ) : server && server.step === step && !INLINE_FIELDS.includes(server.field) ? (
+      <div
+        role="alert"
+        tabIndex={-1}
+        data-slot="agent-form-alert"
+        data-refusal={server.code ?? ''}
+        className={ALERT}
+      >
+        <span data-slot="agent-form-refusal" className="min-w-0 flex-1">
+          {server.savedDraft && <b className="mr-1 font-semibold">{t('savedNotOn')}</b>}
+          {server.message}
+        </span>
+        {server.code === 'version_conflict' && (
+          <Button
+            size="sm"
+            variant="outline"
+            data-action="agentNew.reload"
+            onClick={() => router.refresh()}
+          >
+            {t('reload')}
+          </Button>
+        )}
+      </div>
+    ) : problemCount > 0 ? (
+      <div role="alert" tabIndex={-1} data-slot="agent-form-alert" className={ALERT}>
+        {t('alert', { count: problemCount })}
+      </div>
     ) : null;
 
   const brandsLine = state.allBrands
@@ -728,8 +786,18 @@ function AgentFormBody({
 
       <div className="grid items-start gap-4 min-[1200px]:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0">
-          <section data-step-pane={step} aria-label={t(`steps.${AGENT_FORM_STEPS[step]}`)}>
-            {serverLine}
+          <section ref={paneRef} data-step-pane={step} aria-labelledby="agent-form-step-title">
+            {/* The step's title, read out and focused when the step opens (the stepper shows it). */}
+            <h2
+              id="agent-form-step-title"
+              ref={titleRef}
+              tabIndex={-1}
+              data-slot="agent-form-step-title"
+              className="sr-only"
+            >
+              {t('stepTitle', { step: step + 1, name: t(`steps.${AGENT_FORM_STEPS[step]}`) })}
+            </h2>
+            {alertLine}
 
             {step === 0 && (
               <>
@@ -759,6 +827,9 @@ function AgentFormBody({
                   <div
                     role="radiogroup"
                     aria-label={t('steps.skill')}
+                    aria-invalid={invalid('skills') || undefined}
+                    aria-describedby={described('skills')}
+                    onKeyDown={radioKeys}
                     className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2"
                   >
                     {[
@@ -767,7 +838,7 @@ function AgentFormBody({
                         ? [{ id: primary, uses: [] as readonly string[] }]
                         : []),
                       ...ANSVISOR_SKILLS,
-                    ].map((skill) => {
+                    ].map((skill, i) => {
                       const on = primary === skill.id;
                       return (
                         <button
@@ -775,6 +846,7 @@ function AgentFormBody({
                           type="button"
                           role="radio"
                           aria-checked={on}
+                          tabIndex={radioTab(on, i === 0, !!primary)}
                           data-action="agentNew.pickSkill"
                           data-skill={skill.id}
                           onClick={() => pickPrimary(skill.id)}
@@ -853,12 +925,15 @@ function AgentFormBody({
                   rows={3}
                   value={state.instructions}
                   placeholder={t('skill.instructionsPlaceholder')}
-                  aria-invalid={(shown[0] && !!problems.fields.instructions) || undefined}
+                  aria-invalid={invalid('instructions') || undefined}
+                  aria-describedby={described('instructions', 'agent-form-note-instructions')}
                   onChange={(event) => update({ instructions: event.target.value })}
                   className="text-[13px]"
                 />
                 <div className="mt-1 flex gap-3 text-[11.5px] text-muted-foreground">
-                  <span className="min-w-0 flex-1">{t('skill.instructionsNote')}</span>
+                  <span id="agent-form-note-instructions" className="min-w-0 flex-1">
+                    {t('skill.instructionsNote')}
+                  </span>
                   <span
                     className={cn(
                       'tabular-nums',
@@ -897,9 +972,12 @@ function AgentFormBody({
                 <div
                   role="radiogroup"
                   aria-label={tAgents('detail.fields.mode')}
+                  aria-invalid={invalid('mode') || undefined}
+                  aria-describedby={described('mode')}
+                  onKeyDown={radioKeys}
                   className="grid grid-cols-3 gap-2 max-[640px]:grid-cols-1"
                 >
-                  {modes.map((mode) => {
+                  {modes.map((mode, i) => {
                     const locked = mode === 'full_auto' && setup.fullAuto !== 'open';
                     const on = state.mode === mode;
                     return (
@@ -909,6 +987,7 @@ function AgentFormBody({
                         role="radio"
                         aria-checked={on}
                         aria-disabled={locked || undefined}
+                        tabIndex={locked ? -1 : radioTab(on, i === 0, true)}
                         data-action="agentNew.mode"
                         data-mode={mode}
                         onClick={() => !locked && update({ mode })}
@@ -1064,6 +1143,7 @@ function AgentFormBody({
                 <div
                   role="radiogroup"
                   aria-label={t('model.title')}
+                  onKeyDown={radioKeys}
                   className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2"
                 >
                   {models.map((id) => {
@@ -1082,6 +1162,7 @@ function AgentFormBody({
                         type="button"
                         role="radio"
                         aria-checked={on}
+                        tabIndex={radioTab(on, false, true)}
                         data-action="agentNew.model"
                         data-model={kind}
                         onClick={() => update({ model: id })}
@@ -1110,17 +1191,15 @@ function AgentFormBody({
                   <SettingRow
                     label={t('agent.name')}
                     note={t('agent.nameNote')}
+                    noteId="agent-form-note-name"
                     htmlFor="agent-name"
                   >
                     <Input
                       id="agent-name"
                       data-action="agentNew.name"
                       value={state.name}
-                      aria-invalid={
-                        (shown[3] && !!problems.fields.name) ||
-                        (server?.field === 'name' && server.step === 3) ||
-                        undefined
-                      }
+                      aria-invalid={invalid('name') || undefined}
+                      aria-describedby={described('name', 'agent-form-note-name')}
                       onChange={(event) => update({ name: event.target.value, nameEdited: true })}
                       className="max-w-[360px]"
                     />
@@ -1134,6 +1213,9 @@ function AgentFormBody({
                     <div
                       role="radiogroup"
                       aria-label={t('agent.visibility')}
+                      aria-invalid={invalid('visibility') || undefined}
+                      aria-describedby={described('visibility')}
+                      onKeyDown={radioKeys}
                       className="grid grid-cols-2 gap-2 max-[520px]:grid-cols-1"
                     >
                       {(['private', 'workspace'] as const).map((visibility) => {
@@ -1146,6 +1228,7 @@ function AgentFormBody({
                             role="radio"
                             aria-checked={on}
                             aria-disabled={locked || undefined}
+                            tabIndex={locked ? -1 : radioTab(on, false, true)}
                             data-action="agentNew.visibility"
                             data-visibility={visibility}
                             onClick={() => !locked && update({ visibility })}
@@ -1171,6 +1254,7 @@ function AgentFormBody({
                   <SettingRow
                     label={t('agent.maxRun')}
                     note={t('agent.maxRunNote')}
+                    noteId="agent-form-note-max-run"
                     htmlFor="agent-max-run"
                   >
                     <div className="flex items-center gap-1.5">
@@ -1183,11 +1267,13 @@ function AgentFormBody({
                         step={1}
                         data-action="agentNew.maxRun"
                         value={state.maxRun}
-                        aria-invalid={(shown[3] && !!problems.fields.maxRun) || undefined}
+                        aria-invalid={invalid('maxRun') || undefined}
+                        aria-describedby={described('maxRun', 'agent-form-note-max-run')}
                         onChange={(event) => update({ maxRun: event.target.value })}
                         className="w-20 tabular-nums"
                       />
-                      <span aria-label={t('agent.percent')} className="text-muted-foreground">
+                      {/* Read from the note ("…of the monthly AI limit, 1–50%"). */}
+                      <span aria-hidden className="text-muted-foreground">
                         %
                       </span>
                     </div>
@@ -1195,7 +1281,11 @@ function AgentFormBody({
                   </SettingRow>
 
                   {isAdmin ? (
-                    <SettingRow label={t('agent.monthCap')} note={t('agent.monthCapNote')}>
+                    <SettingRow
+                      label={t('agent.monthCap')}
+                      note={t('agent.monthCapNote')}
+                      noteId="agent-form-note-month-cap"
+                    >
                       <div className="flex flex-wrap items-center gap-3">
                         <FormSwitch
                           checked={state.monthCapOn}
@@ -1214,11 +1304,14 @@ function AgentFormBody({
                               aria-label={t('agent.monthCap')}
                               data-action="agentNew.maxMonth"
                               value={state.maxMonth}
-                              aria-invalid={(shown[3] && !!problems.fields.maxMonth) || undefined}
+                              aria-invalid={invalid('maxMonth') || undefined}
+                              aria-describedby={described('maxMonth', 'agent-form-note-month-cap')}
                               onChange={(event) => update({ maxMonth: event.target.value })}
                               className="w-20 tabular-nums"
                             />
-                            <span className="text-muted-foreground">%</span>
+                            <span aria-hidden className="text-muted-foreground">
+                              %
+                            </span>
                           </div>
                         )}
                       </div>
@@ -1243,20 +1336,25 @@ function AgentFormBody({
               variant="outline"
               data-action="agentNew.back"
               disabled={step === 0}
-              onClick={() => setStep((step - 1) as AgentFormStep)}
+              onClick={() => moveTo((step - 1) as AgentFormStep)}
             >
               {t('back')}
             </Button>
             <span className="text-[11.5px] text-muted-foreground">
               {t('stepOf', { step: step + 1 })}
             </span>
+            {/*
+              Each button its own (keyed): Next never turns into Save under the
+              focus, so Enter pressed again can't save past the last step unseen.
+            */}
             <div className="ml-auto flex items-center gap-2">
               {step < LAST_STEP ? (
-                <Button data-action="agentNew.next" onClick={next}>
+                <Button key="next" data-action="agentNew.next" onClick={next}>
                   {t('next')}
                 </Button>
               ) : savesInPlace ? (
                 <Button
+                  key="save"
                   data-action="agentNew.save"
                   disabled={!!busy}
                   onClick={() => void submit('save')}
@@ -1267,6 +1365,7 @@ function AgentFormBody({
               ) : (
                 <>
                   <Button
+                    key="draft"
                     variant="outline"
                     data-action="agentNew.saveDraft"
                     disabled={!!busy}
@@ -1276,6 +1375,7 @@ function AgentFormBody({
                     {t('saveDraft')}
                   </Button>
                   <Button
+                    key="on"
                     data-action="agentNew.turnOn"
                     disabled={!!busy}
                     onClick={() => void submit('on')}

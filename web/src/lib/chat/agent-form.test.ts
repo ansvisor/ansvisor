@@ -9,6 +9,8 @@ import {
   newTriggerDraft,
   patchBody,
   refusalPlace,
+  parseList,
+  scopeOf,
   stepProblems,
   syncConnections,
   triggerError,
@@ -272,6 +274,17 @@ describe('each step’s checks', () => {
     expect(stepProblems(1, fresh({ tagsText: 'x'.repeat(51) }), ctxOf()).fields.tags).toBe(
       'tags_invalid',
     );
+    // One address or tag a line: a comma stays in it.
+    const commas = fresh({
+      urlsText: 'https://ansvisor.com/compare?a=1,2\nhttps://ansvisor.com/',
+      tagsText: 'pricing, plans\nbrand',
+    });
+    expect(stepProblems(1, commas, ctxOf()).fields).toEqual({});
+    expect(scopeOf(commas)).toMatchObject({
+      urls: ['https://ansvisor.com/compare?a=1,2', 'https://ansvisor.com/'],
+      tags: ['pricing, plans', 'brand'],
+    });
+    expect(parseList(' a \r\n\n a\nb ')).toEqual(['a', 'b']);
     // Manual only: no trigger kept is fine.
     expect(stepProblems(1, fresh({ triggers: [] }), ctxOf()).fields).toEqual({});
   });
@@ -311,6 +324,17 @@ describe('each step’s checks', () => {
 });
 
 describe('what is sent', () => {
+  it('sends a name the person didn’t type as the skill’s title, for the server to name by §O', () => {
+    const auto = createAgentInput.parse(
+      createBody(fresh({ nameEdited: false }), 'manager', 'Win back lost citations'),
+    );
+    expect(auto).toMatchObject({ name: 'Win back lost citations', autoName: true });
+    const typed = createAgentInput.parse(
+      createBody(fresh({ nameEdited: true }), 'manager', 'Win back lost citations'),
+    );
+    expect(typed).toMatchObject({ name: 'Win back', autoName: false });
+  });
+
   it('creates a draft the server’s own schema takes, the monthly cap only from an Admin', () => {
     const body = createBody(
       fresh({
@@ -365,7 +389,12 @@ describe('what is sent', () => {
     const agent = detail();
     const form = formFromAgent(agent, SETUP, { timeZone: 'UTC', triggerKey: (i) => `k${i}` })!;
     const renamed = patchBody({ ...form, name: '  Win  back ' }, agent, 'manager');
-    expect(renamed).toEqual({ expectedVersion: 2, name: 'Win back' });
+    // With the version and the moment it opened: a save in between refuses this one.
+    expect(renamed).toEqual({
+      expectedVersion: 2,
+      expectedUpdatedAt: '2026-10-29T10:00:00.000Z',
+      name: 'Win back',
+    });
     expect(updateAgentInput.safeParse(renamed).success).toBe(true);
 
     const changed = patchBody(
@@ -393,6 +422,7 @@ describe('what is sent', () => {
     // An Admin's monthly cap, set and taken off.
     expect(patchBody({ ...form, monthCapOn: true, maxMonth: '30' }, agent, 'admin')).toEqual({
       expectedVersion: 2,
+      expectedUpdatedAt: '2026-10-29T10:00:00.000Z',
       maxMonthShare: 0.3,
     });
   });
@@ -401,6 +431,7 @@ describe('what is sent', () => {
 describe('the server’s refusals', () => {
   it('land on the step they belong to', () => {
     expect(refusalPlace('name_taken', null)).toEqual({ step: 3, field: 'name' });
+    expect(refusalPlace('name_taken_hidden', null)).toEqual({ step: 3, field: 'name' });
     expect(refusalPlace('schedule_past', null)).toEqual({ step: 1, field: 'triggers' });
     expect(refusalPlace('topic_not_found', null)).toEqual({ step: 1, field: 'brands' });
     expect(refusalPlace('demo_brand', null)).toEqual({ step: 1, field: 'brands' });

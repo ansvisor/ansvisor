@@ -103,6 +103,12 @@ async function type(el: HTMLElement, value: string) {
   await settle();
 }
 const next = () => click(action('agentNew.next')[0]);
+async function press(el: HTMLElement, key: string) {
+  await act(async () => {
+    el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+  });
+  await settle();
+}
 const calls = () => fetchMock.mock.calls.map(([url, init]) => `${init?.method ?? 'GET'} ${url}`);
 const bodyOf = (n: number) => JSON.parse(String(fetchMock.mock.calls[n][1]?.body));
 
@@ -165,6 +171,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  window.history.replaceState(null, '', '/');
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
@@ -238,9 +245,23 @@ describe('AgentForm: new agent', () => {
     await type(one('[data-action="agentNew.threshold"]')!, '0');
     await next();
     expect(errors()).toContain('Enter a number above 0.');
-    await type(one('[data-action="agentNew.threshold"]')!, '10');
-    // Manual takes the selected one away: Run now only for it.
-    await click(one('[data-trigger="manual"]')!);
+    // The problem is marked on its field and read with it; one alert for the step.
+    const threshold = one('[data-action="agentNew.threshold"]')!;
+    expect(threshold.getAttribute('aria-invalid')).toBe('true');
+    expect(threshold.getAttribute('aria-describedby')).toBe(
+      one('[data-field-error^="trigger-"]')!.id,
+    );
+    expect(all('[role="alert"]')).toHaveLength(1);
+    expect(document.activeElement).toBe(threshold);
+    await type(threshold, '7');
+    // Another kind and back: what it had stays.
+    await click(one('[data-trigger="signal"]')!);
+    await click(one('[data-trigger="kpi"]')!);
+    expect((one('[data-action="agentNew.threshold"]') as HTMLInputElement).value).toBe('7');
+    // Manual is always there, as its own line; triggers go only with their ×.
+    expect(one('[data-slot="agent-form-manual"]')!.textContent).toContain('Always on');
+    expect(one('[data-trigger="manual"]')).toBeNull();
+    await click(action('agentNew.removeTrigger')[1]);
     expect(all('[data-slot="agent-form-trigger"]')).toHaveLength(1);
     await click(action('agentNew.removeTrigger')[0]);
     expect(all('[data-slot="agent-form-trigger"]')).toHaveLength(0);
@@ -408,10 +429,15 @@ describe('AgentForm: new agent', () => {
       }
       return Response.json({ ok: false, failure: 'failed' }, { status: 500 });
     };
+    window.history.replaceState(null, '', '/dashboard/chat/agents/new');
     await render();
     await toLastStep();
     await click(action('agentNew.turnOn')[0]);
     expect(step()).toBe('3');
+    // Its name wasn't typed: the server names it (§O, against every agent).
+    expect(bodyOf(0)).toMatchObject({ name: 'Win back lost citations', autoName: true });
+    // The address is the draft's Edit now: a reload opens it, not a second agent.
+    expect(window.location.pathname).toBe(`/dashboard/chat/agents/${NEW_ID}/edit`);
     expect(one('[data-slot="agent-form-refusal"]')!.textContent).toBe(
       'Saved as a draft. It isn’t on yet.Your plan keeps up to 1 agent on at once. Pause or archive one to turn this one on.',
     );
@@ -451,6 +477,56 @@ describe('AgentForm: new agent', () => {
     await type(one('[data-action="agentNew.maxMonth"]')!, '30');
     await click(action('agentNew.saveDraft')[0]);
     expect(bodyOf(0)).toMatchObject({ visibility: 'workspace', maxMonthShare: 0.3 });
+  });
+
+  it('moves with the keyboard: arrows choose a skill, each step opens on its title, a problem takes the focus', async () => {
+    await render();
+    const first = one('[data-skill="winback"]')!;
+    // Tab reaches the group once: the first radio while none is chosen.
+    expect(first.tabIndex).toBe(0);
+    expect(one('[data-skill="tasks"]')!.tabIndex).toBe(-1);
+    first.focus();
+    await press(first, 'ArrowRight');
+    expect(one('[data-skill="tasks"]')!.getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(one('[data-skill="tasks"]'));
+    await press(one('[data-skill="tasks"]')!, 'ArrowLeft');
+    expect(document.activeElement).toBe(first);
+    expect(first.getAttribute('aria-checked')).toBe('true');
+    expect(first.tabIndex).toBe(0);
+
+    await next();
+    const title = one('[data-slot="agent-form-step-title"]')!;
+    expect(title.textContent).toBe('Step 2 of 4 · Trigger');
+    expect(document.activeElement).toBe(title);
+    await next();
+    await next();
+    // No name: the save stops on it, with the focus there and one alert.
+    await type(one('#agent-name')!, '');
+    await click(action('agentNew.saveDraft')[0]);
+    const name = one('#agent-name')!;
+    expect(document.activeElement).toBe(name);
+    expect(name.getAttribute('aria-describedby')).toBe(
+      'agent-form-note-name agent-form-error-name',
+    );
+    expect(all('[role="alert"]').map((a) => a.textContent)).toEqual([
+      'One thing on this step needs fixing.',
+    ]);
+    expect(calls()).toEqual([]);
+  });
+
+  it('never lets Enter pressed again on Next save past the last step unseen (Edit)', async () => {
+    await render(SETUP, detail({ can: { ...ADMIN_CAN } }));
+    await click(one('[data-step-button="2"]')!);
+    const nextButton = action('agentNew.next')[0];
+    nextButton.focus();
+    await click(nextButton);
+    expect(step()).toBe('3');
+    // Next is gone, not turned into Save under the focus: the focus is on the step's title.
+    expect(nextButton.isConnected).toBe(false);
+    expect(document.activeElement).toBe(one('[data-slot="agent-form-step-title"]'));
+    await click(document.activeElement as HTMLElement);
+    expect(calls()).toEqual([]);
+    expect(nav.push).not.toHaveBeenCalled();
   });
 
   it('shows Analysts and Agency partners a read-only line with Ask your Admin, and no form', async () => {
@@ -503,7 +579,11 @@ describe('AgentForm: edit', () => {
     await type(one('#agent-name')!, 'Win back weekly');
     await click(action('agentNew.save')[0]);
     expect(calls()).toEqual([`PATCH /api/chat/agents/${AGENT_ID}`]);
-    expect(bodyOf(0)).toEqual({ expectedVersion: 2, name: 'Win back weekly' });
+    expect(bodyOf(0)).toEqual({
+      expectedVersion: 2,
+      expectedUpdatedAt: '2026-10-29T10:00:00.000Z',
+      name: 'Win back weekly',
+    });
     expect(toast).toHaveBeenLastCalledWith('Saved · Win back weekly');
   });
 
@@ -522,9 +602,11 @@ describe('AgentForm: edit', () => {
     await click(one('[data-step-button="3"]')!);
     await type(one('#agent-name')!, 'Mine');
     await click(action('agentNew.save')[0]);
-    expect(one('[data-slot="agent-form-refusal"]')!.getAttribute('data-code')).toBe(
+    expect(one('[data-slot="agent-form-alert"]')!.getAttribute('data-refusal')).toBe(
       'version_conflict',
     );
+    // The focus is on the refusal, so it is read and Reload is next.
+    expect(document.activeElement).toBe(one('[data-slot="agent-form-alert"]'));
     await click(action('agentNew.reload')[0]);
     expect(nav.refresh).toHaveBeenCalled();
   });

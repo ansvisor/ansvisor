@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronDown, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -52,14 +52,54 @@ export const BOX =
   'overflow-hidden rounded-[14px] border bg-card shadow-[0_1px_2px_rgba(10,10,10,.04)]';
 export const EM = 'block text-[11.5px] not-italic text-muted-foreground';
 
-/** A problem under a field. */
+/** The id of a field's problem line, for the field's aria-describedby. */
+export const errorId = (field: string) => `agent-form-error-${field}`;
+
+/**
+ * A problem under a field: read with the field (aria-describedby), not as
+ * an alert of its own — the step's one alert says how many there are.
+ */
 export function FieldError({ field, children }: { field: string; children: ReactNode }) {
   return (
-    <p role="alert" data-field-error={field} className="mt-1.5 text-xs text-destructive">
+    <p id={errorId(field)} data-field-error={field} className="mt-1.5 text-xs text-destructive">
       {children}
     </p>
   );
 }
+
+const RADIO_KEYS = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'];
+
+/**
+ * A radio group's arrow keys (WAI-ARIA radio group): the next or previous
+ * radio that isn't locked gets the focus and is chosen; Home and End the
+ * first and last. Tab reaches the group once (`radioTab`).
+ */
+export function radioKeys(event: KeyboardEvent<HTMLElement>) {
+  if (!RADIO_KEYS.includes(event.key)) return;
+  const radios = [
+    ...event.currentTarget.querySelectorAll<HTMLElement>(
+      '[role="radio"]:not([aria-disabled="true"])',
+    ),
+  ];
+  if (radios.length === 0) return;
+  event.preventDefault();
+  const at = radios.indexOf(event.target as HTMLElement);
+  const back = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
+  const to =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? radios.length - 1
+        : at < 0
+          ? 0
+          : (at + (back ? -1 : 1) + radios.length) % radios.length;
+  radios[to].focus();
+  if (radios[to].getAttribute('aria-checked') !== 'true') radios[to].click();
+}
+
+/** Which radio Tab reaches: the chosen one, or the first when none is. */
+export const radioTab = (on: boolean, first: boolean, anyOn: boolean) =>
+  on || (first && !anyOn) ? 0 : -1;
 
 /** A section's title (mockup `.h2`), with its count and a button on the right. */
 export function SectionTitle({
@@ -128,12 +168,15 @@ function TokenPanel({
   text,
   action,
   invalid,
+  field,
   children,
 }: {
   label: string;
   text: string;
   action: string;
   invalid?: boolean;
+  /** Its problem line's field, read with it while invalid. */
+  field?: string;
   children: ReactNode;
 }) {
   return (
@@ -142,6 +185,7 @@ function TokenPanel({
         data-action={action}
         aria-label={`${label}: ${text}`}
         aria-invalid={invalid || undefined}
+        aria-describedby={invalid && field ? errorId(field) : undefined}
         className={TOK}
       >
         <span className="truncate">{text}</span>
@@ -179,8 +223,21 @@ function Check({
   );
 }
 
-/** The trigger kinds as the mockup's options, Manual first. */
-const KINDS = ['manual', 'schedule', 'signal', 'kpi', 'watch_rule'] as const;
+/** The trigger kinds a kept trigger can be (Manual is always there, as its own line). */
+const KINDS = ['schedule', 'signal', 'kpi', 'watch_rule'] as const;
+
+/** The control a trigger's problem is about, so it is marked and read with it. */
+const PROBLEM_CONTROL: Record<string, 'date' | 'time' | 'category' | 'kpi' | 'threshold'> = {
+  date_required: 'date',
+  schedule_past: 'date',
+  schedule_too_far: 'date',
+  time_required: 'time',
+  category_required: 'category',
+  kpi_required: 'kpi',
+  threshold: 'threshold',
+  threshold_percent: 'threshold',
+};
+const KIND_CONTROL = { schedule: 'time', signal: 'category', kpi: 'kpi' } as const;
 
 export function TriggerStep({
   state,
@@ -205,10 +262,11 @@ export function TriggerStep({
   problems: StepProblems;
   /** The step's problems are shown (Next was tried). */
   shown: boolean;
-  /** The trigger the rule box edits, by key; null: Manual (none kept). */
+  /** The trigger the rule box edits, by key; null: none kept (Manual only). */
   selected: string | null;
   onSelect: (key: string) => void;
-  onKind: (kind: TriggerKind | 'manual') => void;
+  /** The selected trigger becomes this kind (one is added when none is kept). */
+  onKind: (kind: TriggerKind) => void;
   onAdd: () => void;
   onRemove: (key: string) => void;
   onTrigger: (key: string, patch: Partial<TriggerDraft>) => void;
@@ -220,6 +278,15 @@ export function TriggerStep({
   const tKpis = useTranslations('actionCenter.registry');
   const draft = state.triggers.find((d) => d.key === selected) ?? null;
   const full = state.triggers.length >= MAX_AGENT_TRIGGERS;
+  // The selected trigger's problem: marked on its control and read with it.
+  const draftProblem = draft && shown ? problems.triggers[draft.key] : undefined;
+  const invalidOn = (control: 'date' | 'time' | 'category' | 'kpi' | 'threshold') => {
+    if (!draft || !draftProblem || draft.kind === 'watch_rule') return {};
+    const target = PROBLEM_CONTROL[draftProblem] ?? KIND_CONTROL[draft.kind];
+    return target === control
+      ? { 'aria-invalid': true, 'aria-describedby': errorId(`trigger-${draft.key}`) }
+      : {};
+  };
   const error = (code: string | undefined, field: string) =>
     shown && code ? (
       <FieldError field={field}>{tErrors(code, { plan: setup.fullAutoPlan })}</FieldError>
@@ -310,80 +377,95 @@ export function TriggerStep({
         </Button>
       </SectionTitle>
 
-      {state.triggers.length > 0 && (
-        <div data-slot="agent-form-triggers" className={BOX}>
-          {state.triggers.map((d, i) => {
-            const input = triggerInputOf(d);
-            const problem = shown ? problems.triggers[d.key] : undefined;
-            return (
-              <div
-                key={d.key}
-                data-slot="agent-form-trigger"
-                data-kind={d.kind}
-                className={cn(
-                  'grid grid-cols-[118px_minmax(0,1fr)_30px_28px] items-center gap-3 px-3.5 py-[9px] text-[13px] max-[640px]:grid-cols-[minmax(0,1fr)_30px_28px]',
-                  i > 0 && 'border-t',
-                  d.key === selected && 'bg-muted/50',
-                  !d.enabled && 'text-muted-foreground',
-                )}
-              >
-                <span className="text-xs text-muted-foreground max-[640px]:hidden">
-                  {tAgents(`trigger.types.${d.kind}`)}
-                </span>
-                <button
-                  type="button"
-                  data-action="agentNew.selectTrigger"
-                  aria-pressed={d.key === selected}
-                  title={t('trigger.select')}
-                  onClick={() => onSelect(d.key)}
-                  className="min-w-0 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                  <b className="block truncate font-medium">
-                    {input ? words.trigger(input) : tAgents(`trigger.types.${d.kind}`)}
-                  </b>
-                  {problem ? (
-                    <em
-                      data-trigger-error={d.key}
-                      className="block truncate text-xs text-destructive not-italic"
-                    >
-                      {tErrors(problem)}
-                    </em>
-                  ) : (
-                    <em className={cn(EM, 'truncate text-xs')}>{detail(d)}</em>
-                  )}
-                </button>
-                <FormSwitch
-                  checked={d.enabled}
-                  label={t('trigger.switch')}
-                  action="agentNew.toggleTrigger"
-                  onChange={(enabled) => onTrigger(d.key, { enabled })}
-                />
-                <button
-                  type="button"
-                  data-action="agentNew.removeTrigger"
-                  aria-label={t('trigger.remove')}
-                  title={t('trigger.remove')}
-                  onClick={() => onRemove(d.key)}
-                  className="flex size-7 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                  <X className="size-3.5" aria-hidden />
-                </button>
-              </div>
-            );
-          })}
+      <div data-slot="agent-form-triggers" className={BOX}>
+        {/* Manual is always on (§E): Run now, and Run agent on an action. */}
+        <div
+          data-slot="agent-form-manual"
+          className="grid grid-cols-[118px_minmax(0,1fr)_auto] items-center gap-3 px-3.5 py-[9px] text-[13px] max-[640px]:grid-cols-[minmax(0,1fr)_auto]"
+        >
+          <span className="text-xs text-muted-foreground max-[640px]:hidden">
+            {t('trigger.options.manual')}
+          </span>
+          <div className="min-w-0">
+            <b className="block truncate font-medium">{t('trigger.manualWhen')}</b>
+            <em className={cn(EM, 'truncate text-xs')}>{t('trigger.notes.manual')}</em>
+          </div>
+          <span className="rounded-full border px-2 py-px text-[11px] text-muted-foreground">
+            {t('trigger.alwaysOn')}
+          </span>
         </div>
-      )}
+        {state.triggers.map((d) => {
+          const input = triggerInputOf(d);
+          const problem = shown ? problems.triggers[d.key] : undefined;
+          return (
+            <div
+              key={d.key}
+              data-slot="agent-form-trigger"
+              data-kind={d.kind}
+              className={cn(
+                'grid grid-cols-[118px_minmax(0,1fr)_30px_28px] items-center gap-3 border-t px-3.5 py-[9px] text-[13px] max-[640px]:grid-cols-[minmax(0,1fr)_30px_28px]',
+                d.key === selected && 'bg-muted/50',
+                !d.enabled && 'text-muted-foreground',
+              )}
+            >
+              <span className="text-xs text-muted-foreground max-[640px]:hidden">
+                {tAgents(`trigger.types.${d.kind}`)}
+              </span>
+              <button
+                type="button"
+                data-action="agentNew.selectTrigger"
+                aria-pressed={d.key === selected}
+                title={t('trigger.select')}
+                onClick={() => onSelect(d.key)}
+                className="min-w-0 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <b className="block truncate font-medium">
+                  {input ? words.trigger(input) : tAgents(`trigger.types.${d.kind}`)}
+                </b>
+                {problem ? (
+                  <em
+                    data-trigger-error={d.key}
+                    className="block truncate text-xs text-destructive not-italic"
+                  >
+                    {tErrors(problem)}
+                  </em>
+                ) : (
+                  <em className={cn(EM, 'truncate text-xs')}>{detail(d)}</em>
+                )}
+              </button>
+              <FormSwitch
+                checked={d.enabled}
+                label={t('trigger.switch')}
+                action="agentNew.toggleTrigger"
+                onChange={(enabled) => onTrigger(d.key, { enabled })}
+              />
+              <button
+                type="button"
+                data-action="agentNew.removeTrigger"
+                aria-label={t('trigger.remove')}
+                title={t('trigger.remove')}
+                onClick={() => onRemove(d.key)}
+                className="flex size-7 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <X className="size-3.5" aria-hidden />
+              </button>
+            </div>
+          );
+        })}
+      </div>
       {error(problems.fields.triggers, 'triggers')}
 
       <div
         role="radiogroup"
-        aria-label={tAgents('detail.triggers')}
+        aria-label={t('trigger.kindLabel')}
+        onKeyDown={radioKeys}
         className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2"
       >
-        {KINDS.map((kind) => {
-          const on = kind === 'manual' ? !draft : draft?.kind === kind;
+        {KINDS.map((kind, i) => {
+          const on = draft?.kind === kind;
           // Watch rules are chosen on the rule (CHAT-22): a kept one stays, no new one here.
-          const locked = kind === 'watch_rule' && draft?.kind !== 'watch_rule';
+          const locked =
+            (kind === 'watch_rule' && draft?.kind !== 'watch_rule') || (!draft && full);
           return (
             <button
               key={kind}
@@ -391,6 +473,7 @@ export function TriggerStep({
               role="radio"
               aria-checked={on}
               aria-disabled={locked || undefined}
+              tabIndex={locked ? -1 : radioTab(on, i === 0, !!draft)}
               data-action="agentNew.trigger"
               data-trigger={kind}
               onClick={() => {
@@ -400,7 +483,9 @@ export function TriggerStep({
             >
               <b className="font-semibold">{t(`trigger.options.${kind}`)}</b>
               <em className={EM}>
-                {locked ? t('trigger.watchRuleNone') : t(`trigger.notes.${kind}`)}
+                {kind === 'watch_rule' && locked
+                  ? t('trigger.watchRuleNone')
+                  : t(`trigger.notes.${kind}`)}
               </em>
             </button>
           );
@@ -451,6 +536,7 @@ export function TriggerStep({
                     type="date"
                     aria-label={t('trigger.dateLabel')}
                     data-action="agentNew.date"
+                    {...invalidOn('date')}
                     value={draft.date}
                     onChange={(event) => onTrigger(draft.key, { date: event.target.value })}
                     className={TOK}
@@ -462,6 +548,7 @@ export function TriggerStep({
                 type="time"
                 aria-label={t('trigger.timeLabel')}
                 data-action="agentNew.time"
+                {...invalidOn('time')}
                 value={draft.time}
                 step={300}
                 onChange={(event) => onTrigger(draft.key, { time: event.target.value })}
@@ -478,6 +565,7 @@ export function TriggerStep({
               <select
                 aria-label={t('trigger.categoryLabel')}
                 data-action="agentNew.category"
+                {...invalidOn('category')}
                 value={draft.category}
                 onChange={(event) => onTrigger(draft.key, { category: event.target.value })}
                 className={TOK}
@@ -498,6 +586,7 @@ export function TriggerStep({
               <select
                 aria-label={t('trigger.kpiLabel')}
                 data-action="agentNew.kpi"
+                {...invalidOn('kpi')}
                 value={draft.kpi}
                 onChange={(event) => onTrigger(draft.key, { kpi: event.target.value })}
                 className={TOK}
@@ -534,6 +623,7 @@ export function TriggerStep({
                 step="any"
                 aria-label={t('trigger.thresholdLabel')}
                 data-action="agentNew.threshold"
+                {...invalidOn('threshold')}
                 value={draft.threshold}
                 onChange={(event) => onTrigger(draft.key, { threshold: event.target.value })}
                 className={cn(TOK, 'w-20 tabular-nums')}
@@ -590,6 +680,7 @@ export function TriggerStep({
             text={brandsText}
             action="agentNew.brands"
             invalid={shown && !!problems.fields.brands}
+            field="brands"
           >
             <Check
               checked={state.allBrands}
@@ -614,6 +705,7 @@ export function TriggerStep({
             text={enginesText}
             action="agentNew.engines"
             invalid={shown && !!problems.fields.engines}
+            field="engines"
           >
             <Check
               checked={state.engines.length === 0}
@@ -654,6 +746,7 @@ export function TriggerStep({
             }
             action="agentNew.tags"
             invalid={shown && !!problems.fields.tags}
+            field="tags"
           >
             <Textarea
               aria-label={t('scope.tags')}
@@ -672,6 +765,7 @@ export function TriggerStep({
             }
             action="agentNew.urls"
             invalid={shown && !!problems.fields.urls}
+            field="urls"
           >
             <Textarea
               aria-label={t('scope.urls')}
