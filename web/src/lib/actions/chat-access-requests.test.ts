@@ -34,7 +34,7 @@ function from(table: string) {
     insert: (row: unknown) => Object.assign(call, { op: 'insert', row }) && chain,
     update: (row: unknown) => Object.assign(call, { op: 'update', row }) && chain,
     ...Object.fromEntries(
-      ['eq', 'in', 'or', 'order', 'limit'].map((name) => [
+      ['eq', 'in', 'is', 'or', 'order', 'limit'].map((name) => [
         name,
         (...args: unknown[]) => {
           call.filters.push([name, ...args]);
@@ -126,6 +126,8 @@ describe('requestAccess', () => {
       expect.arrayContaining([
         ['eq', 'user_id', ME],
         ['eq', 'organization_id', ORG],
+        // A deleted chat (its Undo still open) isn't one to attach (00407).
+        ['is', 'deleted_at', null],
       ]),
     );
   });

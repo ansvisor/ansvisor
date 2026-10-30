@@ -322,6 +322,9 @@ export async function startChatRun(actor: ChatActor, raw: unknown): Promise<Star
       .eq('id', conversationId)
       .eq('user_id', actor.userId)
       .eq('organization_id', actor.organizationId)
+      // Read with the service role, past the policies: a deleted chat (its
+      // Undo still open) takes no new message (00407).
+      .is('deleted_at', null)
       .maybeSingle();
     if (error) throw new Error(`Chat could not read the chat: ${error.message}`);
     if (!data) return failure(404, 'not_found', t('error.notFound'));

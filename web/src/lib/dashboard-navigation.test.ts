@@ -3,11 +3,14 @@ import messages from '../../messages/en.json';
 import { dashboardNav } from '@/config/dashboard';
 import {
   activeChildHref,
+  CHAT_AGENTIC_HREF,
+  CHAT_HREF,
   childLinkHref,
   dashboardNavBadge,
   dashboardNavLabelKeys,
   getDashboardNavGroupLabel,
   getDashboardNavLabel,
+  navItemHref,
   shouldShowDashboardNavItem,
 } from '@/lib/dashboard-navigation';
 
@@ -248,5 +251,18 @@ describe('dashboardNavBadge', () => {
       group.items.flatMap((item) => [item.badge, ...(item.children ?? []).map((c) => c.badge)]),
     );
     expect(badges.filter(Boolean)).toEqual([]);
+  });
+});
+
+describe('navItemHref', () => {
+  const chat = { href: CHAT_HREF };
+  it('keeps Chat on its old address while the new Chat is off', () => {
+    expect(navItemHref(chat, false)).toBe('/dashboard/agent');
+  });
+  it('opens /dashboard/chat with the new Chat on, and leaves every other item alone', () => {
+    expect(navItemHref(chat, true)).toBe(CHAT_AGENTIC_HREF);
+    expect(navItemHref({ href: '/dashboard/action-center' }, true)).toBe(
+      '/dashboard/action-center',
+    );
   });
 });

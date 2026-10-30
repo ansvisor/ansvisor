@@ -1291,5 +1291,16 @@ describe('starting', () => {
     expect(
       await engine.startChatRun(ADMIN, { message: 'Hello', conversationId: OTHER_BRAND }),
     ).toMatchObject({ ok: false, status: 404 });
+    // The person's own chat, deleted with its Undo still open (00407): read
+    // with the service role, it still takes no new message.
+    db.tables.chat_conversations.push({
+      id: BRAND,
+      user_id: ADMIN.userId,
+      organization_id: ORG,
+      deleted_at: new Date().toISOString(),
+    });
+    expect(
+      await engine.startChatRun(ADMIN, { message: 'Hello', conversationId: BRAND }),
+    ).toMatchObject({ ok: false, status: 404 });
   });
 });
