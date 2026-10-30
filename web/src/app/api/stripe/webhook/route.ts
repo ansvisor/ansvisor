@@ -6,6 +6,7 @@ import { periodEndIso } from '@/lib/billing/period-end';
 import { startFirstTrackingRun } from '@/lib/billing/first-run';
 import { isSubscriptionActive } from '@/config/plans';
 import { hideDemoBrandAfterPurchase } from '@/lib/demo/hide-after-purchase';
+import { handleAddOnEvent } from '@/lib/billing/add-on-webhook';
 import type Stripe from 'stripe';
 
 /**
@@ -42,6 +43,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Add-on packs (CHAT-18): granted here only. A pack's Checkout and a
+    // packs-only invoice are theirs alone; the plan's handlers never see them.
+    if (await handleAddOnEvent(event)) {
+      return NextResponse.json({ received: true });
+    }
+
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;

@@ -30,6 +30,8 @@ export interface FakeSupabase {
 interface Builder extends PromiseLike<Result> {
   select(columns?: string): Builder;
   insert(rows: Row | Row[]): Builder;
+  /** Postgres's insert … on conflict: the row is merged in, or left as it is with ignoreDuplicates. */
+  upsert(rows: Row | Row[], options?: { onConflict?: string; ignoreDuplicates?: boolean }): Builder;
   update(patch: Row): Builder;
   delete(): Builder;
   eq(column: string, value: unknown): Builder;
@@ -69,8 +71,10 @@ export function createFakeSupabase(): FakeSupabase {
       return { data: await fn(args), error: null };
     },
     from(table) {
-      let kind: 'select' | 'insert' | 'update' | 'delete' = 'select';
+      let kind: 'select' | 'insert' | 'upsert' | 'update' | 'delete' = 'select';
       let payload: Row | Row[] | null = null;
+      let conflict: string[] = [];
+      let ignoreDuplicates = false;
       let returning = false;
       const filters: Filter[] = [];
       let sort: { column: string; ascending: boolean } | null = null;
@@ -112,7 +116,30 @@ export function createFakeSupabase(): FakeSupabase {
           fake.tables[table] = after;
           return { data: returning ? patched.map((row) => ({ ...row })) : null, error: null };
         }
-        const added = (Array.isArray(payload) ? payload : [payload!]).map((row) => ({
+        const incoming = Array.isArray(payload) ? payload : [payload!];
+        if (kind === 'upsert') {
+          let after = rows();
+          const written: Row[] = [];
+          for (const row of incoming) {
+            const existing = after.find((other) => conflict.every((c) => other[c] === row[c]));
+            if (existing) {
+              if (ignoreDuplicates) continue;
+              const merged = { ...existing, ...row };
+              after = after.map((other) => (other === existing ? merged : other));
+              written.push(merged);
+            } else {
+              const added = { id: fakeId(), ...(fake.defaults[table]?.() ?? {}), ...row };
+              after = [...after, added];
+              written.push(added);
+            }
+          }
+          if (written.some((row) => clash(row, after))) {
+            return { data: null, error: { code: '23505', message: 'duplicate key' } };
+          }
+          fake.tables[table] = after;
+          return { data: returning ? written.map((row) => ({ ...row })) : null, error: null };
+        }
+        const added = incoming.map((row) => ({
           id: fakeId(),
           ...(fake.defaults[table]?.() ?? {}),
           ...row,
@@ -142,6 +169,13 @@ export function createFakeSupabase(): FakeSupabase {
         insert(rowsIn) {
           kind = 'insert';
           payload = rowsIn;
+          return builder;
+        },
+        upsert(rowsIn, options) {
+          kind = 'upsert';
+          payload = rowsIn;
+          conflict = (options?.onConflict ?? 'id').split(',').map((c) => c.trim());
+          ignoreDuplicates = options?.ignoreDuplicates ?? false;
           return builder;
         },
         update(patch) {
