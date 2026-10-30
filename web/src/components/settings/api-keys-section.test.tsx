@@ -95,6 +95,20 @@ describe('ApiKeysSection', () => {
     expect(openUpgrade).not.toHaveBeenCalled();
   });
 
+  it('says on the cloud that MCP writes need Growth, and nothing self-hosted', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    await render(false);
+    expect(container.querySelector('[data-slot="mcp-plan-note"]')?.textContent).toBe(
+      'On Starter and in the free trial, MCP tools and the API can read. Changes need Growth.',
+    );
+    act(() => root.unmount());
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    root = createRoot(container);
+    await render(false);
+    expect(container.querySelector('[data-slot="mcp-plan-note"]')).toBeNull();
+    vi.unstubAllEnvs();
+  });
+
   it('opens New key on an active plan', async () => {
     await render(false);
     await act(async () => button('New key')!.click());

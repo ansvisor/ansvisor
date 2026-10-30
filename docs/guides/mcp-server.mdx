@@ -459,6 +459,29 @@ Retrying doesn't help: an admin has to choose a plan first. New API keys
 can still be created; on a read-only workspace they only read. A self-hosted
 instance is never read-only.
 
+## Reading and writing per plan
+
+On Ansvisor Cloud, every plan reads over MCP and the REST routes, the free
+trial included. Writing, running and spending (each tool marked **writes**
+above) need the Growth plan or above, paid: on Starter and in the free trial
+those tools stay listed, so the assistant can tell the user why, but every
+call is refused before it runs with this text:
+
+```json
+{
+  "error": "plan_limit",
+  "code": "plan_required",
+  "required_plan": "growth",
+  "message": "On Starter and in the free trial, Ansvisor's MCP tools and API can read. Changes, runs and anything that uses credits need the Growth plan or above: an admin can upgrade in Settings › Billing."
+}
+```
+
+The REST routes answer a `POST`, `PUT`, `PATCH` or `DELETE` with `402` and
+the same body. The rule is the same for every client (Claude, ChatGPT,
+Cursor and the others). The demo brand's refusal comes first, then a plan
+that has ended (`subscription_inactive`), then this one. A self-hosted
+instance can do everything.
+
 ## Revoking access
 
 If a key leaks or you stop using a client, open **Settings → MCP & API Keys** and
