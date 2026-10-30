@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { saveChatMenuOpen } from '@/lib/actions/chat-prefs';
 import { chatMenuLists } from '@/lib/chat/menu-groups';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useChatRailStore } from '@/stores/use-chat-rail-store';
 import { cn } from '@/lib/utils';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { ChatActionsProvider, useChatActions } from './chat-actions';
@@ -58,6 +59,30 @@ function searchAnchor(): Element | null {
   );
 }
 
+/**
+ * Chat's pages that sit under it (CHAT-01 4b; mockup sub-pages): the header
+ * shows ← Back to Chat and the breadcrumb "Chat › {page}".
+ */
+const SUB_PAGES: Record<string, string> = {
+  '/dashboard/chat/inbox': 'inbox',
+  '/dashboard/chat/all': 'allChats',
+  '/dashboard/chat/activity': 'activity',
+  '/dashboard/chat/capabilities': 'capabilities',
+};
+/** Chat's own pages the header names (mockup: Settings, right under Home). */
+const TITLED_PAGES: Record<string, string> = { '/dashboard/chat/settings': 'settings' };
+
+/** The last conversation open in this browser tab, for Back to Chat (CHAT-01 4b, 4c). */
+const LAST_CHAT_KEY = 'ansvisor.chat.lastConversation';
+
+function readLastChat(): string | null {
+  try {
+    return window.sessionStorage.getItem(LAST_CHAT_KEY);
+  } catch {
+    return null;
+  }
+}
+
 /** A chat's dot as the pill beside its title, or none while it is idle. */
 const PILL_OF: Partial<Record<string, StatusPillState>> = {
   running: 'working',
@@ -77,7 +102,7 @@ const PILL_OF: Partial<Record<string, StatusPillState>> = {
  * a new chat; `Ctrl K` opens the search palette under Search chats, or
  * under the strip's Search. The app sidebar beside it is untouched.
  */
-export function ChatShell(props: { menuOpen: boolean; children: ReactNode }) {
+export function ChatShell(props: { menuOpen: boolean; railOpen?: boolean; children: ReactNode }) {
   return (
     <ChatActionsProvider>
       <ChatShellFrame {...props} />
@@ -98,18 +123,28 @@ function ChatTitle({ chat, fallback }: { chat: ChatListItem; fallback: string })
   );
 }
 
-function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: ReactNode }) {
+function ChatShellFrame({
+  menuOpen,
+  railOpen = false,
+  children,
+}: {
+  menuOpen: boolean;
+  railOpen?: boolean;
+  children: ReactNode;
+}) {
   const t = useTranslations('chatShell.menu');
+  const tNav = useTranslations('chatShell.nav');
   const router = useRouter();
   const pathname = usePathname();
   const isWide = useIsWide();
   const isMac = useIsMac();
   const brandId = useBrandStore((s) => s.activeBrandId);
-  const { chats } = useChatList();
+  const { chats, status } = useChatList();
   const inbox = useMemo(() => chatMenuLists(chats).atWork.length, [chats]);
   const [open, setOpen] = useState(menuOpen);
   const [drawer, setDrawer] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [lastChat, setLastChat] = useState<string | null>(null);
   const stripToggle = useRef<HTMLButtonElement>(null);
   const focusAfterToggle = useRef(false);
 
@@ -154,6 +189,32 @@ function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: R
   }, [toggle, newChat]);
 
   const chatId = CHAT_PATH.exec(pathname)?.[1] ?? null;
+
+  // The app sidebar beside Chat: the rail, or expanded as the person left it (CHAT-01 4f).
+  useEffect(() => {
+    useChatRailStore.getState().setOpen(railOpen);
+  }, [railOpen]);
+
+  // The conversation open now is where Back to Chat returns, in this tab.
+  useEffect(() => {
+    if (chatId) {
+      try {
+        window.sessionStorage.setItem(LAST_CHAT_KEY, chatId);
+      } catch {
+        // Private windows: Back to Chat then opens Chat Home.
+      }
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLastChat(chatId ?? readLastChat());
+  }, [chatId]);
+
+  // A chat that is gone (deleted, no longer shared) isn't gone back to.
+  const backTo =
+    lastChat && (status !== 'ready' || chats.some((chat) => chat.id === lastChat))
+      ? `/dashboard/chat/${lastChat}`
+      : '/dashboard/chat';
+  const subPage = SUB_PAGES[pathname];
+  const titled = TITLED_PAGES[pathname];
   const current = chatId ? chats.find((chat) => chat.id === chatId) : undefined;
   const pill = current ? PILL_OF[current.state] : undefined;
   // A chat or Home fills the page itself; the other Chat pages get the usual padding.
@@ -229,6 +290,37 @@ function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: R
               </Link>
               <span aria-hidden className="mx-1 h-5 w-px bg-border" />
             </div>
+          )}
+          {subPage && (
+            <>
+              <Link
+                href={backTo}
+                data-action="nav.backToChat"
+                title={tNav(backTo === '/dashboard/chat' ? 'backHomeTip' : 'backChatTip')}
+                className="flex h-7 shrink-0 items-center rounded-lg border bg-card px-2.5 text-xs font-medium outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                {tNav('backToChat')}
+              </Link>
+              <nav
+                aria-label={tNav('breadcrumb')}
+                className="min-w-0 truncate text-sm font-semibold"
+              >
+                <Link
+                  href="/dashboard/chat"
+                  data-action="nav.breadcrumb"
+                  className="font-medium text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
+                >
+                  {tNav('chat')}
+                </Link>
+                <span aria-hidden className="mx-1.5 font-normal text-muted-foreground/70">
+                  ›
+                </span>
+                <span aria-current="page">{tNav(`pages.${subPage}`)}</span>
+              </nav>
+            </>
+          )}
+          {titled && (
+            <h1 className="min-w-0 truncate text-sm font-semibold">{tNav(`pages.${titled}`)}</h1>
           )}
           {current && (
             <>

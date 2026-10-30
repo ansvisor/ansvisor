@@ -35,6 +35,14 @@ The chat menu on the left of Chat lists your chats. **New chat** starts a new on
 
 Click the panel button next to **New chat**, or press Ctrl+\ (⌘\ on a Mac), to hide the menu and give the chat the whole width. A small bar at the top then keeps **New chat** and your runs at hand. Chat remembers your choice on every device. On a narrow window the menu opens over the page instead. Ctrl+Shift+O (⌘⇧O) starts a new chat from anywhere in Chat.
 
+## Move around Chat
+
+Pages under Chat, such as **Inbox** and **All chats**, show **← Back to Chat** at the top left, next to where you are, such as Chat › All chats. It takes you back to the chat you last had open in this tab, or to Chat Home. Click **Chat** in the path for Chat Home; **Chat** in the main menu always opens Chat Home too.
+
+Esc closes only the box or menu on top, such as search or a **⋯** menu, and never leaves the page.
+
+In Chat, the main menu on the left is a narrow bar of icons, so the chat has room. Point at it to see it whole, or click the Ansvisor logo to keep it open; click the logo again to make it narrow. Chat remembers your choice on every device.
+
 ## Manage a chat
 
 Point at a chat in the menu and click **⋯**, or click **⋯** at the top right of an open chat:

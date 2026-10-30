@@ -31,10 +31,21 @@ vi.mock('@/components/agentic/runs-tray', () => ({
 vi.mock('@/lib/actions/chat-prefs', () => ({
   saveChatMenuOpen: vi.fn(async () => ({ ok: true })),
 }));
+const usage = vi.hoisted(() => ({ percentUsed: null as number | null }));
+vi.mock('@/components/providers/ai-usage-provider', () => ({
+  useAiUsage: () => ({
+    usage:
+      usage.percentUsed === null
+        ? null
+        : { unlimited: false, percentUsed: usage.percentUsed, features: [], plan: 'growth' },
+    refresh: () => undefined,
+  }),
+}));
 
 const { ChatMenuView } = await import('./chat-menu');
 const { ChatShell } = await import('./chat-shell');
 const { saveChatMenuOpen } = await import('@/lib/actions/chat-prefs');
+const { useChatRailStore } = await import('@/stores/use-chat-rail-store');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -70,6 +81,8 @@ beforeEach(() => {
   nav.pathname = '/dashboard/chat';
   nav.push.mockClear();
   vi.mocked(saveChatMenuOpen).mockClear();
+  usage.percentUsed = null;
+  window.sessionStorage.clear();
   wide = true;
   window.matchMedia = ((query: string) => ({
     matches: wide,
@@ -128,6 +141,11 @@ describe('ChatMenuView', () => {
       '/dashboard/chat/activity',
     );
     expect(action('chatMenu.openPolicy')[0].getAttribute('href')).toBe('/dashboard/settings/chat');
+    expect(action('chatMenu.openSettings')[0].getAttribute('href')).toBe(
+      '/dashboard/chat/settings',
+    );
+    // No allowance to meter: no usage beside Settings.
+    expect(action('chatMenu.openSettings')[0].textContent).toBe('Settings');
     expect(action('chatMenu.openInbox')[0].getAttribute('href')).toBe('/dashboard/chat/inbox');
     for (const unbuilt of ['chatMenu.openSkills', 'chatMenu.openScheduled', 'chatMenu.openFiles']) {
       expect(action(unbuilt)).toHaveLength(0);
@@ -315,5 +333,76 @@ describe('ChatShell', () => {
     await press();
     await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
     expect(document.body.querySelector('[data-action="search.input"]')).toBeNull();
+  });
+
+  it("shows the month's AI usage beside Settings, amber from 80%", async () => {
+    usage.percentUsed = 18;
+    await render(menu([]));
+    const settings = action('chatMenu.openSettings')[0];
+    expect(settings.textContent).toBe('Settings18%');
+    expect(settings.querySelector('[title="AI usage this month"]')).not.toBeNull();
+    act(() => root.unmount());
+    root = createRoot(host);
+    usage.percentUsed = 85;
+    await render(menu([]));
+    expect(action('chatMenu.openSettings')[0].querySelector('i')?.className).toContain('amber');
+  });
+
+  it('gives a Chat page Back to Chat and the breadcrumb, back to the last conversation', async () => {
+    nav.pathname = '/dashboard/chat/all';
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    const back = action('nav.backToChat')[0];
+    expect(back.textContent).toBe('← Back to Chat');
+    expect(back.getAttribute('href')).toBe('/dashboard/chat');
+    expect(back.getAttribute('title')).toBe('Back to Chat Home');
+    expect(action('nav.breadcrumb')[0].getAttribute('href')).toBe('/dashboard/chat');
+    expect(host.querySelector('header nav')?.textContent).toBe('Chat›All chats');
+
+    // A conversation opened in this tab is where Back to Chat goes.
+    const id = 'cccccccc-0000-4000-8000-000000000001';
+    nav.pathname = `/dashboard/chat/${id}`;
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    expect(action('nav.backToChat')).toHaveLength(0);
+    nav.pathname = '/dashboard/chat/inbox';
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    expect(action('nav.backToChat')[0].getAttribute('href')).toBe(`/dashboard/chat/${id}`);
+    expect(action('nav.backToChat')[0].getAttribute('title')).toBe(
+      'Back to your last conversation',
+    );
+    expect(host.querySelector('header nav')?.textContent).toBe('Chat›Inbox');
+
+    // Settings sits right under Home: its name, no way back needed.
+    nav.pathname = '/dashboard/chat/settings';
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    expect(action('nav.backToChat')).toHaveLength(0);
+    expect(host.querySelector('header h1')?.textContent).toBe('Settings');
+  });
+
+  it('closes only the palette with Esc, and never navigates', async () => {
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));
+    });
+    const input = document.body.querySelector<HTMLInputElement>('[data-action="search.input"]')!;
+    expect(input).not.toBeNull();
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(document.body.querySelector('[data-action="search.input"]')).toBeNull();
+    // The menu stays as it was, and nothing went back.
+    expect(host.querySelector('#chat-menu')?.className).toContain('w-64');
+    expect(nav.push).not.toHaveBeenCalled();
+    expect(saveChatMenuOpen).not.toHaveBeenCalled();
+  });
+
+  it("sets the app sidebar beside Chat to the person's saved rail state", async () => {
+    useChatRailStore.setState({ open: false });
+    await render(
+      <ChatShell menuOpen railOpen>
+        {<p>page</p>}
+      </ChatShell>,
+    );
+    expect(useChatRailStore.getState().open).toBe(true);
   });
 });
