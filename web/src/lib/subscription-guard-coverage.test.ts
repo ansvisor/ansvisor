@@ -40,6 +40,7 @@ const SCHEMA = join(__dirname, '../../../supabase/schema.sql');
  */
 const OPEN_ACTIONS: Record<string, string> = {
   'organization.ts:updateAccountName': "the person's own profile",
+  'chat-prefs.ts:saveChatMenuOpen': "the person's own Chat layout, no cost",
   'team.ts:acceptInvitation': "the invited person's own account joins",
   'team.ts:revokeInvitation': 'takes back access, never gives it',
   'team.ts:removeMember': 'takes back access, never gives it',
