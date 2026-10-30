@@ -119,7 +119,8 @@ const MASK_RE = new RegExp(
   [
     String.raw`\bhttps?:\/\/[^\s"'<>)]+`,
     String.raw`\bwww\.[^\s"'<>)]+`,
-    String.raw`\b[\w-]+(?:\.[\w-]+)*\.(?:com|org|net|io|ai|co|dev|app|edu|gov|info)\b(?:\/[^\s"'<>)]*)?`,
+    // Tried from a word's start only, so a long run of "a-a-a…" is read once, not once per letter.
+    String.raw`(?<![\w.-])[\w-]+(?:\.[\w-]+)*\.(?:com|org|net|io|ai|co|dev|app|edu|gov|info)\b(?:\/[^\s"'<>)]*)?`,
     PLACEHOLDER_SOURCE,
   ].join('|'),
   'gi',
@@ -132,8 +133,9 @@ const MONTH = String.raw`(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may
 const VALUE_RE = new RegExp(
   [
     `(?<date>\\b\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d+)?)?(?:Z|[+-]\\d{2}:?\\d{2})?)?(?![\\w-])|\\b${MONTH}\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+\\d{4})?\\b|\\b\\d{1,2}(?:st|nd|rd|th)?\\s+${MONTH}\\.?(?:\\s+\\d{4})?\\b|\\b${MONTH}\\.?\\s+\\d{4}\\b|\\b\\d{1,2}:\\d{2}\\b)`,
-    `(?<price>[$€£¥₹₺]\\s?${NUM}(?:\\s?(?:k|m|bn)\\b)?|\\b${NUM}\\s?(?:usd|eur|gbp|try|dollars?|euros?|pounds?)\\b)`,
-    `(?<percent>\\b${NUM}\\s?(?:%|percent\\b|per cent\\b))`,
+    // A figure followed by its unit is tried from its first digit only (linear on "1.1.1…").
+    `(?<price>[$€£¥₹₺]\\s?${NUM}(?:\\s?(?:k|m|bn)\\b)?|(?<![\\d.,])\\b${NUM}\\s?(?:usd|eur|gbp|try|dollars?|euros?|pounds?)\\b)`,
+    `(?<percent>(?<![\\d.,])\\b${NUM}\\s?(?:%|percent\\b|per cent\\b))`,
     `(?<year>\\b(?:19|20)\\d{2}\\b)`,
     `(?<number>(?<![\\w.#/:-])${NUM}(?:\\s?[–-]\\s?${NUM})?(?:[kmx×+](?![a-z])|\\s?(?:million|billion|thousand)\\b)?(?![\\w%:]))`,
   ].join('|'),
@@ -202,6 +204,9 @@ function isKnown(
   return false;
 }
 
+/** How far either side of a figure its rules read ("Step", "Claude", "1." at a line's start). */
+const AROUND = 80;
+
 export interface FactCheck {
   /** The text with figures not in the data replaced. */
   text: string;
@@ -238,12 +243,19 @@ export function checkFigures(
   const year = (context.now ?? new Date()).getUTCFullYear();
   let checked = 0;
   const replaced: string[] = [];
-  const out = outsideMasks(text, (chunk, offset) =>
+  // What was sent is read with the text, so a link, "#12" or "Oct 17" cut
+  // across two chunks reads as one; only `text`'s own figures change.
+  const full = before + text;
+  const from = before.length;
+  const out = outsideMasks(full, (chunk, offset) =>
     chunk.replace(VALUE_RE, (match, ...args) => {
       const groups = args.at(-1) as Record<string, string | undefined>;
-      const at = args.at(-3) as number;
-      const lead = before + text.slice(0, offset) + chunk.slice(0, at);
-      const tail = chunk.slice(at + match.length) + text.slice(offset + chunk.length) + after;
+      const at = offset + (args.at(-3) as number);
+      if (at < from) return match;
+      // The rules read a few words either side, so a long text stays linear.
+      const lead = full.slice(Math.max(0, at - AROUND), at);
+      const end = at + match.length;
+      const tail = full.slice(end, end + AROUND) + after.slice(0, AROUND);
       if (groups.date) return match;
       if (groups.year && !groups.number) {
         const y = Number(match);
@@ -267,11 +279,17 @@ export function checkFigures(
       return groups.price ? PLACEHOLDER.price : PLACEHOLDER.metric;
     }),
   );
-  return { text: out, checked, replaced };
+  return { text: out.slice(from), checked, replaced };
 }
 
 /** Where a streamed text may be cut so no figure is checked without what follows it. */
 export const FIGURE_CONTEXT = 16;
+
+/**
+ * The most a stream holds back (a uuid, or a figure and its unit, fit well
+ * inside), so each check reads a short text however long the answer runs.
+ */
+export const HOLD_MAX = 120;
 
 /**
  * The start of a figure still near the end of `text`: hold from there until

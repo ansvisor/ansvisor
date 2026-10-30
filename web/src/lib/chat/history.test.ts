@@ -94,3 +94,38 @@ describe('planHistory', () => {
     );
   });
 });
+
+describe('planHistory, cache and encoding', () => {
+  it('keeps the summary the same between folds in a long chat', () => {
+    const rows: HistoryRow[] = [];
+    const summaries: (string | null)[] = [];
+    for (let i = 0; i < 40; i++) {
+      rows.push(
+        { role: 'user', content: `Question ${i} ${'q'.repeat(300)}` },
+        { role: 'assistant', content: `Answer ${i} ${'a'.repeat(600 + (i % 3) * 400)}` },
+      );
+      summaries.push(planHistory(rows, BUDGET).summary);
+    }
+    const changedAt = summaries.flatMap((s, i) => (i > 0 && s !== summaries[i - 1] ? [i + 1] : []));
+    // Turn counts at which the summary changed: only when FOLD_TURNS more turns fold.
+    for (const turns of changedAt) expect((turns - KEEP_TURNS) % FOLD_TURNS).toBe(0);
+    expect(changedAt.length).toBeGreaterThan(0);
+  });
+
+  it('never cuts an emoji in half in the summary, the digest or a recent message', () => {
+    const question = `${'q'.repeat(198)}😀 and more`;
+    const long = `${'a'.repeat(MESSAGE_CHARS - 1)}😀 tail`;
+    const rows: HistoryRow[] = [];
+    for (let i = 0; i < 12; i++) {
+      rows.push({ role: 'user', content: question }, { role: 'assistant', content: long });
+    }
+    const plan = planHistory(rows, BUDGET);
+    const texts = [
+      plan.summary ?? '',
+      plan.digest ?? '',
+      ...plan.recent.map((m) => (typeof m.content === 'string' ? m.content : '')),
+    ];
+    expect(plan.summary).not.toBeNull();
+    for (const text of texts) expect(text.isWellFormed()).toBe(true);
+  });
+});

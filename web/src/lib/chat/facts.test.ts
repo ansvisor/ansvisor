@@ -89,6 +89,30 @@ describe('checkFigures', () => {
       `Up ${PLACEHOLDER.metric}`,
     );
   });
+
+  it('reads a link, "#12" or a date cut across two chunks as one', () => {
+    const known = knownFigures([]);
+    const after = (before: string, text: string) =>
+      checkFigures(text, known, { before, now: NOW }).text;
+    expect(after('Read https://example.com/blog/', '98765 for more.')).toBe('98765 for more.');
+    expect(after('Ranked #', '12 overall.')).toBe('12 overall.');
+    expect(after('Since Oct ', '17 traffic rose.')).toBe('17 traffic rose.');
+    // What was sent is context only: its figures are neither changed nor counted.
+    expect(checkFigures(' and up.', known, { before: 'Visits were 7,777' })).toEqual({
+      text: ' and up.',
+      checked: 0,
+      replaced: [],
+    });
+  });
+
+  it('stays linear on a long text', () => {
+    const known = knownFigures([]);
+    const text = `${'A-'.repeat(100_000)}${' 12'.repeat(30_000)}`;
+    const started = performance.now();
+    const result = checkFigures(text, known);
+    expect(result.replaced).toHaveLength(30_000);
+    expect(performance.now() - started).toBeLessThan(3_000);
+  });
 });
 
 describe('figureHold', () => {

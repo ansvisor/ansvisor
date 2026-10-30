@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Json } from '@/types/supabase';
-import { TEXT_FIELD_CHARS, fitResult, restOf } from './fit';
+import { TEXT_FIELD_CHARS, cutText, fitResult, restOf } from './fit';
 
 /**
  * Chat's data budgets on a tool's result (W1-18; CHAT-04 items 5–6): what
@@ -83,5 +83,68 @@ describe('restOf', () => {
     expect(restOf(list, 1)).toEqual({ mentions: { sum: 5, share_pct: 50 } });
     expect(restOf(list, 3)).toBeNull();
     expect(restOf([{ name: 'a' }, { name: 'b' }], 1)).toBeNull();
+  });
+});
+
+describe('cuts that stay valid', () => {
+  const wellFormed = (text: string) =>
+    !/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(text);
+
+  it('never leaves half an emoji at the end of a cut', () => {
+    expect(cutText('ab😀c', 3)).toBe('ab');
+    expect(cutText('ab😀c', 4)).toBe('ab😀');
+    expect(cutText('abc', 5)).toBe('abc');
+  });
+
+  it('shortens a long text with an emoji at the cut and keeps it well formed', () => {
+    const answer = `${'x'.repeat(TEXT_FIELD_CHARS - 2)}😀${'y'.repeat(2_000)}`;
+    const out = fitResult({ answers: [{ text: answer }, { text: answer }] }, 1_200);
+    expect(out.cut).toBe(true);
+    expect(wellFormed(JSON.stringify(out.value))).toBe(true);
+    expect(JSON.stringify(out.value)).not.toMatch(/\\ud83d/);
+  });
+
+  it('keeps a result cut as text within its budget, quotes and all', () => {
+    const value = {
+      data: { rows: Array.from({ length: 400 }, (_, i) => ({ q: `"asked ${i}"`, n: i })) },
+    };
+    const out = fitResult(value, 2_000);
+    expect(out.value).toMatchObject({ truncated: true });
+    expect(out.chars).toBeLessThanOrEqual(2_000);
+    expect(JSON.stringify(out.value).length).toBe(out.chars);
+  });
+});
+
+describe('a series by date', () => {
+  const days = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      date: new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10),
+      mentions: 1,
+    }));
+
+  it('keeps the latest rows of a series oldest first, and sums the older ones', () => {
+    const out = fitResult({ daily: days(300) }, 2_000);
+    const value = out.value as Record<string, Json>;
+    const kept = value.daily as { date: string }[];
+    expect(kept.length).toBeGreaterThan(0);
+    expect(kept.length).toBeLessThan(300);
+    expect(kept[kept.length - 1].date).toBe(days(300)[299].date);
+    expect(value.daily_more).toBe(300 - kept.length);
+    expect(value.daily_rest).toEqual({
+      mentions: {
+        sum: 300 - kept.length,
+        share_pct: Math.round(((300 - kept.length) / 300) * 100),
+      },
+    });
+  });
+
+  it('keeps the latest rows of a top-level series too, and the first of a newest-first one', () => {
+    const top = fitResult(days(300), 2_000).value as { items: { date: string }[] };
+    expect(top.items[top.items.length - 1].date).toBe(days(300)[299].date);
+    const newest = fitResult({ daily: days(300).reverse() }, 2_000).value as Record<
+      string,
+      { date: string }[]
+    >;
+    expect(newest.daily[0].date).toBe(days(300)[299].date);
   });
 });
