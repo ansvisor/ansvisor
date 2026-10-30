@@ -189,8 +189,12 @@ export function ChatMenuView({
       return next;
     });
 
-  const now = useMemo(() => nowProp ?? new Date(), [nowProp]);
-  const { atWork, groups } = useMemo(() => chatMenuLists(chats, now), [chats, now]);
+  // Read the clock again with every list read, so a menu left open past
+  // midnight moves Today's chats to Yesterday.
+  const { now, atWork, groups } = useMemo(() => {
+    const at = nowProp ?? new Date();
+    return { now: at, ...chatMenuLists(chats, at) };
+  }, [chats, nowProp]);
   const needsYou = needsYouCount(chats);
   const shownRuns = allRuns ? atWork : atWork.slice(0, AT_WORK_ROWS);
   const row = (chat: ChatListItem) => (
