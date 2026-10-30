@@ -3678,6 +3678,8 @@
       "full_auto": "Full auto",
       "needsGrowth": "Needs Growth",
       "fullAutoLocked": "Full auto · Needs Growth: agents apply changes for you, logged and undoable",
+      "offByAdmin": "Off by Admin",
+      "fullAutoOffByAdmin": "Full auto · Your Admin turned it off for your role in Settings › Chat",
       "toast": {
         "ask_first": "Ask me first: the agent asks before every step.",
         "auto": "Auto, ask before changes: the agent reads freely and asks before every change.",

@@ -229,6 +229,18 @@ describe('ChatMenuView', () => {
     expect(action('chatMenu.openChat')).toHaveLength(4);
   });
 
+  it("leaves a teammate's shared chat out of the Inbox: it waits on its author", async () => {
+    await render(
+      menu([
+        chat('a', { state: 'running' }),
+        chat('t', { mine: false, shared: true, ownerInitials: 'SL', state: 'needsYou' }),
+      ]),
+    );
+    const inbox = action('chatMenu.openInbox')[0];
+    expect(inbox.textContent).toBe('Inbox1');
+    expect(inbox.getAttribute('aria-label')).toBe('Inbox · 1 item');
+  });
+
   it('groups the other chats by day, bold while unread, and folds Chats', async () => {
     await render(
       menu([
@@ -246,6 +258,23 @@ describe('ChatMenuView', () => {
     await act(async () => fold.click());
     expect(fold.getAttribute('aria-expanded')).toBe('false');
     expect(action('chatMenu.openChat')).toHaveLength(0);
+  });
+
+  it("moves Today's chats to Yesterday once the menu, left open, passes midnight", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-10-30T23:50:00'));
+      const at = chat('late', { lastMessageAt: '2026-10-30T23:40:00' });
+      await render(menu([at], { now: undefined }));
+      expect(text()).toContain('Today');
+      vi.setSystemTime(new Date('2026-10-31T00:10:00'));
+      // The next read of the list: the same chat, a new array.
+      await render(menu([{ ...at }], { now: undefined }));
+      expect(text()).toContain('Yesterday');
+      expect(text()).not.toContain('Today');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('says when the list could not be read, with Retry', async () => {

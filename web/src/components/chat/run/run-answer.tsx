@@ -6,12 +6,45 @@ import { Check } from 'lucide-react';
 import { AgentAvatar, type AgentAvatarState } from '@/components/agentic/agent-avatar';
 import { stampParts } from '@/components/agentic/result-card';
 import { RunSteps, type RunStepsStatus } from '@/components/agentic/run-steps';
-import { Markdown } from '@/components/ui/markdown';
+import type { Components } from 'react-markdown';
+import { MARKDOWN_COMPONENTS, Markdown } from '@/components/ui/markdown';
 import type { ClientRun, ClientRunStatus } from '@/lib/chat/run-state';
 import { cn } from '@/lib/utils';
 import { dataUsed, doneSteps, statusLine } from './run-view';
 
 const ACTIVE: ClientRunStatus[] = ['queued', 'running'];
+
+const WEB = /^https?:\/\//i;
+
+/**
+ * The answer's Markdown. Its text can quote what a read brought in, so a
+ * link opens only an http(s) address (in a new tab) or a page of the app;
+ * any other address shows as its text. An image shows as its alt text and
+ * is never fetched.
+ */
+const ANSWER_MARKDOWN: Partial<Components> = {
+  ...MARKDOWN_COMPONENTS,
+  a: function AnswerLink({ href, children }) {
+    if (href && WEB.test(href)) {
+      return (
+        <a href={href} target="_blank" rel="noopener noreferrer nofollow" className="underline">
+          {children}
+        </a>
+      );
+    }
+    if (href?.startsWith('/dashboard/')) {
+      return (
+        <a href={href} className="underline">
+          {children}
+        </a>
+      );
+    }
+    return <>{children}</>;
+  },
+  img: function AnswerImage({ alt }) {
+    return alt ? <span>{alt}</span> : null;
+  },
+};
 
 const stepsStatus = (status: ClientRunStatus): RunStepsStatus =>
   status === 'done'
@@ -139,15 +172,18 @@ export function RunAnswer({
         {run.text && (
           // Styled as the app's other AI answers (headings, lists, table cells).
           <div data-slot="run-text" className="prose prose-sm dark:prose-invert max-w-none">
-            <Markdown>{run.text}</Markdown>
+            <Markdown components={ANSWER_MARKDOWN}>{run.text}</Markdown>
           </div>
         )}
         {cards}
         {sources.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
             <span className="text-muted-foreground">{t('dataUsed')}</span>
-            {sources.map((chip) => (
-              <span key={chip.label} className="rounded-full border px-2 py-0.5 text-foreground/80">
+            {sources.map((chip, i) => (
+              <span
+                key={`${i}:${chip.label}`}
+                className="rounded-full border px-2 py-0.5 text-foreground/80"
+              >
                 {chip.label}
                 {chip.rows !== undefined && <> · {tSteps('rows', { count: chip.rows })}</>}
               </span>

@@ -171,7 +171,8 @@ export const WRITE_TOOLS = [
     defaultPolicy: 'ask',
     maxPolicy: 'ask',
     flags: { alwaysCard: true },
-    // Every role; the server turns an Admin's away, who has no one to ask.
+    // Every role in the row, as defineTool never leaves an Admin out; the engine doesn't offer it
+    // to Admins, who have no one to ask (NOT_FOR_ADMINS), and the server turns an Admin's away.
     minRole: 'analyst',
     planGate: null,
     // About the person and the workspace: the chat it came from is the run's own.
