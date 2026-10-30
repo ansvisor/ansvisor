@@ -116,6 +116,7 @@
   "chatBudget": {
     "ai_limit": "You've used this month's AI limit, so Chat stopped here. What's done so far is kept.",
     "ai_limit_trial": "Your trial AI limit is used up, so Chat stopped here. What's done so far is kept.",
+    "run_cap": "This run reached its limit, so Chat stopped here. What's done so far is kept.",
     "plan_limit": "This workspace's plan isn't active, so Chat can't run. Choose a plan to use it again.",
     "not_found": "This chat's work is gone. Ask your question again.",
     "chat_off": "Chat isn't on for this workspace.",
@@ -3676,6 +3677,7 @@
       "failed": "Something went wrong",
       "readFailed": "Couldn't read this",
       "timedOut": "Timed out",
+      "stoppedAtLimit": "Stopped at its limit",
       "limit": "Over this run's limit",
       "pausedCap": "Stopped at the AI limit",
       "unknown": "Worked on a step",
@@ -4956,6 +4958,24 @@
       "low": "Low confidence",
       "medium": "Medium confidence",
       "high": "High confidence"
+    },
+    "runner": {
+      "title": "{agent} · {brand}",
+      "message": "Run the agent “{agent}” for {brand}: {skills}.",
+      "skill": "/{skill}",
+      "then": ", then ",
+      "instructions": "Its instructions: {text}",
+      "started": "{trigger, select, schedule {It started on its schedule.} signal {It started because Action Center found {count, plural, one {a new signal} other {# new signals}}.} kpi {It started because a KPI changed.} watch_rule {It started because a watch rule fired.} action {It started from an Action Center action.} other {It started with Run now.}}",
+      "earlier": "{count, plural, one {One more fire came while it waited (cooldown or daily limit): it's in the scope too.} other {# more fires came while it waited (cooldown or daily limit): they're in the scope too.}}",
+      "background": "This run works in the background. When a question comes up, take the recommended option and list your assumptions at the top of the answer. Changes still wait for approval as the agent's mode says.",
+      "chip": {
+        "agent": "Agent",
+        "brand": "Brand",
+        "trigger": "Trigger",
+        "signal": "Signal",
+        "slot": "Scheduled for",
+        "earlier": "Earlier fires"
+      }
     },
     "runStatus": {
       "queued": "Queued",

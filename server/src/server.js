@@ -77,6 +77,7 @@ import { sendHealthReport } from './lib/health/report.js';
 import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 import { refreshCloroCountries } from './lib/cloro-countries.js';
 import { chatAgenticDeployed } from './lib/chat-flag.js';
+import { startChatAgentTicks } from './lib/chat-agents.js';
 import { startModelPriceSync } from './lib/model-prices.js';
 
 // Before anything starts: a stray rejection is logged, not a crash.
@@ -845,6 +846,8 @@ server.listen(PORT, async () => {
   // read from improve-cost.js's own table, as before.
   if (chatAgenticDeployed()) {
     startModelPriceSync().catch((err) => logger.error({ err }, '[model-prices] start failed'));
+    // Chat's agents (W2-16): every minute the web fires due schedules and sweeps.
+    startChatAgentTicks();
   }
 
   if (!isCloud()) {
