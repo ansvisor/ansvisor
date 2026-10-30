@@ -24,7 +24,7 @@ vi.mock('@/components/ai-usage/get-more-context', () => ({ useGetMore: () => get
 const download = vi.hoisted(() => ({ saveBlob: vi.fn() }));
 vi.mock('@/lib/download', () => download);
 
-const { DeliverableCard } = await import('./deliverable-card');
+const { DeliverableCard, filedNumbers } = await import('./deliverable-card');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -106,6 +106,49 @@ describe('DeliverableCard', () => {
     expect(fetchMock).toHaveBeenCalledWith(`/api/chat/runs/${RUN}/files/2?format=md`);
     expect(download.saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'pricing-faq-2026-10-30.md');
     expect(toast).toHaveBeenCalledWith('Downloaded pricing-faq-2026-10-30.md');
+  });
+
+  it('copies through a clipboard item written within the click, as Safari needs, and says when it can’t', async () => {
+    const write = vi.fn(async (items: { types: Record<string, Promise<Blob>> }[]) => {
+      await items[0].types['text/plain'];
+    });
+    vi.stubGlobal(
+      'ClipboardItem',
+      class {
+        constructor(public types: Record<string, Promise<Blob>>) {}
+      },
+    );
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { write, writeText: vi.fn() } });
+    await render();
+    await click(action('deliverable.copy')!);
+    expect(write).toHaveBeenCalledTimes(1);
+    const blob = await (write.mock.calls[0][0][0] as { types: Record<string, Promise<Blob>> })
+      .types['text/plain'];
+    // jsdom's Blob has no text(): read as the browser would.
+    const copied = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.readAsText(blob);
+    });
+    expect(copied).toBe('# Pricing FAQ');
+    expect(toast).toHaveBeenCalledWith('Copied');
+
+    fetchMock.mockImplementationOnce(async () => new Response('Not found', { status: 404 }));
+    await click(action('deliverable.copy')!);
+    expect(toast.error).toHaveBeenCalledWith("Couldn't copy that. Try again.");
+  });
+
+  it('numbers only the filed ones, as the server counts their files', () => {
+    const made = (filed?: ChatDeliverable['filed']): ChatDeliverable => ({ ...page, filed });
+    expect(
+      filedNumbers([
+        made('storage_full'),
+        made('in_files'),
+        made('failed'),
+        made(),
+        made('in_files'),
+      ]),
+    ).toEqual([null, 1, null, 2, 3]);
   });
 
   it('says it wasn’t saved when storage is full, with nothing to download', async () => {

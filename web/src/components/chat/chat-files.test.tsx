@@ -183,6 +183,15 @@ describe('ChatFiles', () => {
     expect(writeText).toHaveBeenCalledWith('# FAQ');
     expect(toast).toHaveBeenCalledWith('Copied');
 
+    // A failed read says so, never a silent copy (Safari's refusal included).
+    answer = () => new Response('Not found', { status: 404 });
+    await click(rows()[0].querySelector<HTMLElement>('[data-action="files.copy"]')!);
+    expect(toast.error).toHaveBeenCalledWith("Couldn't copy that. Try again.");
+    answer = (url) =>
+      url.startsWith('/api/chat/files?')
+        ? Response.json({ ok: true, ...page })
+        : new Response('# FAQ', { status: 200 });
+
     answer = () =>
       new Response('%PDF', {
         headers: { 'Content-Disposition': 'attachment; filename="faq-2026-10-26.pdf"' },

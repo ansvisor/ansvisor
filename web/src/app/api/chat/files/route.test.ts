@@ -90,13 +90,21 @@ describe('POST /api/chat/files/zip', () => {
     files.zipChatFiles.mockResolvedValue({
       ok: true,
       fileName: 'files-2026-10-30.zip',
-      body: new Uint8Array([80, 75]),
+      stream: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([80, 75]));
+          controller.enqueue(new Uint8Array([3, 4]));
+          controller.close();
+        },
+      }),
       count: 2,
     });
     const res = await post({ ids: [FILE, '22222222-2222-2222-2222-222222222222'] });
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toBe('application/zip');
     expect(res.headers.get('X-File-Count')).toBe('2');
+    // The stream goes out as it comes.
+    expect([...new Uint8Array(await res.arrayBuffer())]).toEqual([80, 75, 3, 4]);
   });
 
   it('refuses none, more than 50, past 100 MB, and none of the workspace’s', async () => {
