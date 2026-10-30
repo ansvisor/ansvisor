@@ -358,6 +358,7 @@ export function ChatSidePanel() {
               variant="panel"
               defaultMode={setup.defaultMode}
               fullAutoOpen={setup.fullAutoOpen}
+              usageNoticeSeen={setup.usageNoticeSeen}
               onConversation={remember}
               empty={
                 <p className="pt-6 text-center text-sm text-muted-foreground">

@@ -20,6 +20,8 @@ export interface ChatPanelSetup {
   /** What the panel's composer starts with (W1-10). */
   defaultMode: ChatMode;
   fullAutoOpen: boolean;
+  /** The AI usage period whose 80% line the person already saw (CHAT-04 item 16). */
+  usageNoticeSeen: string | null;
 }
 
 export interface ChatPanelState {

@@ -68,7 +68,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       chatOn
         ? supabase
             .from('chat_user_prefs')
-            .select('panel_on_pages, panel_size, default_mode')
+            .select('panel_on_pages, panel_size, default_mode, usage_notice_period')
             .eq('user_id', user.id)
             .maybeSingle()
         : Promise.resolve({ data: null }),
@@ -142,6 +142,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ),
     defaultMode: chatDefaultModeOf(chatPrefs?.default_mode, fullAutoOpen),
     fullAutoOpen,
+    usageNoticeSeen: chatPrefs?.usage_notice_period ?? null,
   };
 
   return (

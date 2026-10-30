@@ -16,7 +16,7 @@ export type ChatPrefResult = { ok: true } | { ok: false };
 
 /** Writes one choice on the person's own row; false when it isn't theirs to keep. */
 async function keepPref(
-  change: { menu_open: boolean } | { panel_size: PanelSize },
+  change: { menu_open: boolean } | { panel_size: PanelSize } | { usage_notice_period: string },
   what: string,
 ): Promise<ChatPrefResult> {
   try {
@@ -62,4 +62,14 @@ export async function saveChatMenuOpen(open: boolean): Promise<ChatPrefResult> {
 export async function saveChatPanelSize(size: PanelSize): Promise<ChatPrefResult> {
   if (!PANEL_SIZES.includes(size)) return { ok: false };
   return keepPref({ panel_size: size }, 'panel size');
+}
+
+/**
+ * The AI usage period whose 80% line above the composer the person saw
+ * (CHAT-04 item 16; chat_user_prefs.usage_notice_period, its first day),
+ * so the line shows once per person per period, on every device.
+ */
+export async function saveUsageNoticePeriod(period: string): Promise<ChatPrefResult> {
+  if (typeof period !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(period)) return { ok: false };
+  return keepPref({ usage_notice_period: period }, 'usage notice');
 }

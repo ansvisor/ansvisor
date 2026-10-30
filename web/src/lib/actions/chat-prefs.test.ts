@@ -35,7 +35,7 @@ vi.mock('@/lib/supabase/server', () => ({
   },
 }));
 
-const { saveChatMenuOpen, saveChatPanelSize } = await import('./chat-prefs');
+const { saveChatMenuOpen, saveChatPanelSize, saveUsageNoticePeriod } = await import('./chat-prefs');
 
 beforeEach(() => {
   vi.stubEnv('CHAT_AGENTIC', 'true');
@@ -83,6 +83,24 @@ describe('saveChatPanelSize', () => {
 
   it('keeps no size it does not know', async () => {
     expect(await saveChatPanelSize('huge' as 'wide')).toEqual({ ok: false });
+    expect(db.upserts).toEqual([]);
+  });
+});
+
+describe('saveUsageNoticePeriod', () => {
+  it('keeps the period whose 80% line the person saw on their own row', async () => {
+    expect(await saveUsageNoticePeriod('2026-10-01')).toEqual({ ok: true });
+    expect(db.upserts).toEqual([
+      {
+        row: { user_id: 'user-1', usage_notice_period: '2026-10-01' },
+        options: { onConflict: 'user_id' },
+      },
+    ]);
+  });
+
+  it('keeps nothing that is not a day', async () => {
+    expect(await saveUsageNoticePeriod('2026-10-01T00:00:00Z')).toEqual({ ok: false });
+    expect(await saveUsageNoticePeriod(7 as unknown as string)).toEqual({ ok: false });
     expect(db.upserts).toEqual([]);
   });
 });
