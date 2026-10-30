@@ -15,8 +15,8 @@
  * pass `over`.
  *
  * A Chat step's input read from the provider's prompt cache is priced at the
- * model's cache-read rate (`cacheRead`, CHAT-04 §D: about a tenth or a
- * twentieth of the input price) and input written to it at
+ * model's cache-read rate (`cacheRead`, CHAT-04 §D: a tenth of the input
+ * price for Claude) and input written to it at
  * CACHE_WRITE_MULTIPLIER times the input price. A model without a known
  * cache-read rate has its cache reads priced in full: never less than they
  * cost.
@@ -36,7 +36,7 @@ export const MODEL_PRICES = {
     cacheRead: 0.01,
     long: { over: 100_000, input: 0.5, output: 2.5 },
   },
-  'anthropic/claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.1 },
+  'anthropic/claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.2 },
 };
 
 /**
