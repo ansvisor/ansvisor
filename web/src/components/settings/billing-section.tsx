@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PlanSwitcher } from '@/components/settings/plan-switcher';
 import { InvoiceList } from '@/components/settings/invoice-list';
 import { AiUsageCard } from '@/components/settings/ai-usage-card';
+import { AddOnsCard } from '@/components/settings/add-ons-card';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { createClient } from '@/lib/supabase/client';
@@ -235,6 +236,9 @@ export function BillingSection() {
       </Card>
 
       <AiUsageCard />
+
+      {/* AI credit and storage packs (CHAT-18): nothing while Chat is off. */}
+      <AddOnsCard />
 
       {/* Plan Switcher */}
       {!ended && planCard}

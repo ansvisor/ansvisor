@@ -16,6 +16,7 @@ import {
 } from './improve-cost.js';
 import { logger } from './logger.js';
 import { chatAgenticEnabled } from './chat-flag.js';
+import { creditRoomUsd, drawCredits } from './ai-credits.js';
 import { RELEVANCE_BUDGET_SHARE } from './suggestion-relevance.js';
 import { AUDIT_RUN_TIMEOUT_MS } from './audit/history.js';
 import {
@@ -439,6 +440,11 @@ export async function getImproveQuotaStatus(orgId, modelId, { readOnly = false }
  * the rows, as before. `holdUsd` sets the hold for a call much smaller than
  * the model's typical one (Quality's checks): else the typical cost or the
  * recent calls' median is held.
+ *
+ * With Chat on, the workspace's purchased AI credits (ai-credits.js, CHAT-18
+ * §F) are on the budget too: the hold passes on them once the included
+ * budget is spent, and the held row's cost past the included budget is drawn
+ * from them when it is charged or kept.
  */
 export async function reserveAiBudget(
   orgId,
@@ -447,12 +453,13 @@ export async function reserveAiBudget(
   const plan = await resolveOrgPlanByOrgId(orgId);
   const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
   let reservedId = null;
+  let since = null;
   if (budget !== -1) {
-    const since = (await quotaPeriodStart(orgId)).toISOString();
+    since = (await quotaPeriodStart(orgId)).toISOString();
     const { data, error } = await supabaseAdmin.rpc('reserve_ai_usage', {
       p_organization_id: orgId,
       p_since: since,
-      p_budget: budget,
+      p_budget: budget + (await creditRoomUsd(orgId, since)),
       p_cost: holdUsd ?? (await holdCostUsd(orgId, modelId, since)),
       p_feature: feature,
       p_model: modelId,
@@ -487,6 +494,8 @@ export async function reserveAiBudget(
             ...cost,
           });
       if (error) logger.error({ err: error, orgId, feature }, '[ai-budget] usage write failed');
+      // The held row past the included budget draws on the credits.
+      else if (first) await drawCredits(orgId, reservedId, { includedUsd: budget, since });
     },
     async release() {
       if (!reservedId || charged) return;
@@ -506,8 +515,11 @@ export async function reserveAiBudget(
     async keep() {
       if (charged) return;
       charged = true;
-      if (reservedId) return;
-      const since = (await quotaPeriodStart(orgId)).toISOString();
+      if (reservedId) {
+        await drawCredits(orgId, reservedId, { includedUsd: budget, since });
+        return;
+      }
+      const periodStart = (await quotaPeriodStart(orgId)).toISOString();
       const { error } = await supabaseAdmin.from('prompt_improve_usage').insert({
         organization_id: orgId,
         feature,
@@ -515,7 +527,7 @@ export async function reserveAiBudget(
         action_id: actionId,
         content_draft_id: draftId,
         model: modelId,
-        cost_usd: holdUsd ?? (await holdCostUsd(orgId, modelId, since)),
+        cost_usd: holdUsd ?? (await holdCostUsd(orgId, modelId, periodStart)),
       });
       if (error) logger.error({ err: error, orgId, feature }, '[ai-budget] usage write failed');
     },
@@ -543,12 +555,17 @@ export function aiBudgetUsedUp(plan) {
  * start, from which the spend counts; both null when the budget is
  * unlimited (self-hosted). In the free trial the period runs over the whole
  * trial (quotaPeriodStart, from the trial's end): its budget never resets.
+ * `includedUsd` is the plan's own; `budgetUsd` adds what the workspace's
+ * purchased AI credits add for a hold (creditRoomUsd: nothing with Chat
+ * off), unless `credits` is false.
  */
-export async function aiBudgetOf(orgId) {
+export async function aiBudgetOf(orgId, { credits = true } = {}) {
   const plan = await resolveOrgPlanByOrgId(orgId);
   const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
-  if (budget === -1) return { plan, budgetUsd: null, since: null };
-  return { plan, budgetUsd: budget, since: (await quotaPeriodStart(orgId)).toISOString() };
+  if (budget === -1) return { plan, budgetUsd: null, includedUsd: null, since: null };
+  const since = (await quotaPeriodStart(orgId)).toISOString();
+  const room = credits ? await creditRoomUsd(orgId, since) : 0;
+  return { plan, budgetUsd: budget + room, includedUsd: budget, since };
 }
 
 /**
