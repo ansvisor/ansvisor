@@ -124,6 +124,9 @@ describe('composerKeyAction', () => {
     expect(key({ running: true, canSteer: false })).toBe('block');
     expect(key({ key: 'Escape', running: true })).toBe('stop');
     expect(key({ key: 'Escape' })).toBeNull();
+    // A run waiting on a question: Enter answers, Esc stops it.
+    expect(key({ stoppable: true })).toBe('send');
+    expect(key({ key: 'Escape', stoppable: true })).toBe('stop');
   });
 
   it('takes a ghost suggestion in on Tab only in an empty box', () => {
@@ -183,6 +186,19 @@ describe('ChatComposer', () => {
       attachments: [],
     });
     expect(handlers.onSend).not.toHaveBeenCalled();
+  });
+
+  it('answers a question with Send, Stop beside it and Esc, up to the answer’s length', async () => {
+    await render({ answering: true, maxLength: 500, onStop: handlers.onStop });
+    expect(under()).toContain("Your message answers Chat's question · Esc stops the run");
+    expect(box().maxLength).toBe(500);
+    await act(async () => button('Stop')!.click());
+    await press('Escape');
+    expect(handlers.onStop).toHaveBeenCalledTimes(2);
+    await type('The blog');
+    await press('Enter');
+    expect(handlers.onSend).toHaveBeenCalledWith('The blog', expect.anything());
+    expect(button('Send')).not.toBeNull();
   });
 
   it('waits for the run on Enter when the page doesn’t steer', async () => {

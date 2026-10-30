@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-30
@@ -51,9 +51,23 @@ The panel isn't on Chat's own pages, where **Ctrl J** takes you to the message b
 
 ## Stop or steer
 
-While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay.
+While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay, and so does the answer so far. The step it was on shows **Stopped**, and the line with the steps says how long it worked, such as **Stopped after 41s · 5 steps**.
 
 You can type while it works. Enter then stops the run and sends what you typed as the next message, so you can redirect it, for example "only blog pages".
+
+## When Chat asks you
+
+When an answer changes what Chat makes and isn't in your data, Chat stops and asks, with 2 to 4 options. The one marked **Recommended** is picked to start with; under each option it says why it fits. When Chat asks more than one thing at once, the card counts them, such as "1 of 2".
+
+Click an option, or press its number, then **Next** or Enter. Where the card says **Pick one or more**, click each one. Type your own answer in **Other…**. **Skip** goes on with the Recommended option.
+
+Once answered, the card folds to one line with the question and your answer, and Chat goes on.
+
+## Answer in the box
+
+While Chat asks, you can also answer in the box below. It shows the Recommended option dim; Tab puts it in, and Enter sends it. A message that isn't one of the options answers every question Chat asked with it. An answer is text only, up to 500 characters.
+
+**Stop** beside the arrow, or Esc, ends the run and leaves its question skipped.
 
 ## Shortcuts and your data
 
@@ -74,6 +88,14 @@ In **＋**, **Connect a tool** opens **Settings › Integrations** for Admins; o
 While Chat works, one line says what it is doing now, such as "Reading Citations…". Steps it finished show as chips with a check mark above the answer: click one for its detail, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.
 
 Under the answer, **Data used** names each source it read, with its rows, and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
+
+## When something goes wrong
+
+A step that fails shows a red mark and why, such as **Timed out**. Chat goes on where it can, and the answer says what it couldn't read.
+
+If the whole answer stops on an error, it says **Stopped: something went wrong** and why, and it still says so after you reload the page. Click **Retry** to send your message again.
+
+If your connection drops while Chat works, the line with the steps says **Reconnecting…**. Chat keeps working meanwhile and picks up where it was; reloading the page shows where it is too. When the monthly AI usage runs out mid-answer, the step it was on shows **Stopped at the AI limit**.
 
 ## AI usage
 

@@ -169,6 +169,35 @@ export const APPROVAL = {
   doneLabel: 'cited passage changed',
 };
 
+/** Two questions asked together before a FAQ draft (CHAT-07 §A). */
+export const QUESTIONS = {
+  page: {
+    n: 2,
+    question: 'Which page should the FAQ go on?',
+    options: [
+      { label: '/pricing', detail: 'Cited 18 times for pricing prompts', recommended: true },
+      { label: '/features', detail: 'Cited 6 times' },
+      { label: 'A new FAQ page' },
+    ],
+    allowOther: true,
+    multi: false,
+    batch: { at: 1, of: 2 },
+    then: 'Then I’ll write the FAQ draft',
+  },
+  topics: {
+    n: 3,
+    question: 'Which questions should it answer?',
+    options: [
+      { label: 'Plans and prices', recommended: true },
+      { label: 'Platforms tracked' },
+      { label: 'Trial and cancelling' },
+    ],
+    allowOther: false,
+    multi: true,
+    batch: { at: 2, of: 2 },
+  },
+};
+
 export const PUSH_APPROVAL = {
   title: 'Push to Webflow as a draft',
   items: [

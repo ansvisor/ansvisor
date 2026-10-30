@@ -5,10 +5,16 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { ApprovalCard } from '@/components/agentic/approval-card';
 import { DenialCard } from '@/components/agentic/denial-card';
+import {
+  QuestionAnswered,
+  QuestionCard,
+  type QuestionAnswerValue,
+} from '@/components/agentic/question-card';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { searchChatReferences } from '@/lib/actions/chat-references';
+import { ANSWER_MAX, composerAnswer, recommendedLabel } from '@/lib/chat/asks';
 import type { ChatEvent } from '@/lib/chat/events';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { readSse } from '@/lib/chat/run-hub';
@@ -32,6 +38,8 @@ import {
 import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
 import { RunAnswer } from './run/run-answer';
+import { StaffDebug } from './run/staff-debug';
+import { useChatDebug } from './chat-debug';
 import { ChatUsageNotice, ComposerUsageMeter, chatAtCap } from './chat-usage';
 
 interface Turn {
@@ -46,6 +54,19 @@ interface Turn {
   /** Its answer in Files (Save to Files). */
   fileId?: string | null;
   timezone?: string | null;
+  /**
+   * A question as it was sent, for Retry to send it again: its page chips,
+   * @ references and the page they came from. Null when it can't go again
+   * as it was: it had files (each goes with one message only), or it was
+   * read back with a scope this page doesn't hold.
+   */
+  resend?: Resend | null;
+}
+
+interface Resend {
+  context: ComposerChip[];
+  references: ChatReference[];
+  route?: string;
 }
 
 const OPEN: ClientRunStatus[] = ['queued', 'running', 'waiting'];
@@ -53,6 +74,7 @@ const OPEN: ClientRunStatus[] = ['queued', 'running', 'waiting'];
 /** The events after which a run's stream ends: it waits on the person, or it ended. */
 const SETTLING = new Set<string>([
   'confirm.required',
+  'ask.created',
   'run.finished',
   'run.error',
   'run.paused_cap',
@@ -62,6 +84,10 @@ const SETTLING = new Set<string>([
 function turnsOf(thread: ChatThread | null): Turn[] {
   return (thread?.messages ?? []).map((message, i) => {
     const turn: Turn = { key: `saved-${i}`, role: message.role, text: message.text };
+    // A saved question goes again only as it was: without files or a scope.
+    if (message.role === 'user') {
+      turn.resend = message.resendable === false ? null : { context: [], references: [] };
+    }
     if (message.role === 'assistant' && message.run) {
       turn.runId = message.run.runId;
       turn.timezone = message.timezone;
@@ -73,6 +99,8 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         text: message.text,
         generatedAt: message.generatedAt,
         dataAsOf: message.dataAsOf,
+        summary: message.run.summary ?? null,
+        errorReason: message.run.errorReason ?? null,
       };
     }
     return turn;
@@ -80,11 +108,38 @@ function turnsOf(thread: ChatThread | null): Turn[] {
 }
 
 /**
+ * How long a dropped stream waits before each try to reconnect (CHAT-03
+ * item 21); a try that brings events starts the count again.
+ */
+const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
+
+/** Waits `ms`, or less when `signal` aborts. */
+const wait = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(done, ms);
+    function done() {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', done);
+      resolve();
+    }
+    signal.addEventListener('abort', done, { once: true });
+  });
+
+/** The question an answer answers: the person's message right before it. */
+function questionOf(turns: Turn[], index: number): Turn | null {
+  const before = turns[index - 1];
+  return before?.role === 'user' && before.text.trim() ? before : null;
+}
+
+/**
  * A chat in Chat (CHAT-01, Wave 1): its messages, each answer as its run
  * works (RunAnswer, W1-14), and the composer (W1-10…13) under them; Chat
  * Home's composer (`variant="home"`) starts a new chat. A run still under way
- * when the page opens is rebuilt from its events and keeps streaming; a
- * dropped stream reconnects from its last event. Steering stops the run,
+ * when the page opens is rebuilt from its events and keeps streaming, its
+ * kept steps shown until they come; a dropped or broken stream says
+ * "Reconnecting…" and resumes after its last event (W1-15). An answer that
+ * ended in error says why, after a reload too, and Retry sends its question
+ * again; Ansvisor staff can switch on the Debug view. Steering stops the run,
  * its done steps kept, and sends the text as the next message (decided
  * 2026-10-30). A teammate's shared chat is read only. In the side panel
  * (`variant="panel"`, CHAT-01 items 15–24) the page's address stays: the
@@ -145,11 +200,24 @@ export function ChatThreadView({
   const [mode, setMode] = useState<ChatMode>(defaultMode);
   const [reconnecting, setReconnecting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const resumed = useRef(false);
+  // While the view is on screen: what it streams stops once it goes (another
+  // page, the side panel closed), so nothing keeps listening or warns there.
+  const life = useRef<AbortController | null>(null);
+  // Read when a stream gives up, so following a run never waits on a render.
+  const lostWords = useRef(t('connectionLost'));
+  // The run under way when the page opened, which it picks up again.
+  const [resumable] = useState(() => {
+    const open = turns[turns.length - 1];
+    return open?.runId && open.run && OPEN.includes(open.run.status)
+      ? { key: open.key, runId: open.runId }
+      : null;
+  });
   const brandId = thread?.brandId ?? activeBrandId ?? null;
 
   const last = turns[turns.length - 1];
   const working = !!last?.run && OPEN.includes(last.run.status);
+  // A question the run waits on: the composer's message answers it (CHAT-07 §A item 8).
+  const asking = last?.run?.question ?? null;
 
   useEffect(() => {
     if (!working) return;
@@ -169,49 +237,100 @@ export function ChatThreadView({
     setTurns((all) => all.map((turn) => (turn.key === key ? fn(turn) : turn)));
   }, []);
 
-  /** Applies a stream's events to the answer, and reconnects once it drops mid-run. */
-  const consume = useCallback(
-    async (key: string, body: ReadableStream<Uint8Array>, runId: string, tries = 3) => {
-      let lastSeq = 0;
-      let settled = false;
-      for await (const event of readSse(body)) {
-        lastSeq = Math.max(lastSeq, event.seq);
-        settled ||= SETTLING.has(event.type);
-        updateRun(key, (turn) => ({
-          ...turn,
-          run: applyChatEvent(turn.run ?? emptyRun(), event as ChatEvent),
-          startedAt: turn.startedAt ?? Date.now(),
-        }));
+  /**
+   * Applies a run's events to its answer until the run waits on the person
+   * or ends (CHAT-03 item 21). A stream that ends otherwise, or breaks, lost
+   * its connection: the header says "Reconnecting…" and the events after the
+   * last one applied (`from`, then each event's seq) are asked for again, a
+   * few times, longer apart each time; when none come back the person is
+   * told. `rebuild`: the first event builds the answer anew (a run read
+   * again after a reload), its kept steps showing until then. Once the view
+   * is gone (`signal`, the view's life when it was called) it stops at once:
+   * the stream is cancelled, no reconnect, no warning.
+   */
+  const follow = useCallback(
+    async (
+      key: string,
+      runId: string,
+      first: ReadableStream<Uint8Array> | null,
+      from = 0,
+      rebuild = false,
+      signal: AbortSignal | undefined = life.current?.signal,
+    ) => {
+      if (!signal || signal.aborted) {
+        void first?.cancel().catch(() => {});
+        return;
       }
-      // A stream ends when the run waits or ends; one that ends otherwise lost its connection.
-      if (!settled && tries > 0) {
+      let body = first;
+      let lastSeq = from;
+      let fresh = rebuild;
+      let tries = 0;
+      for (;;) {
+        let settled = false;
+        if (body) {
+          try {
+            for await (const event of readSse(body, signal)) {
+              lastSeq = Math.max(lastSeq, event.seq);
+              settled ||= SETTLING.has(event.type);
+              tries = 0;
+              const anew = fresh;
+              fresh = false;
+              updateRun(key, (turn) => ({
+                ...turn,
+                run: applyChatEvent(anew || !turn.run ? emptyRun() : turn.run, event as ChatEvent),
+                startedAt: turn.startedAt ?? Date.now(),
+              }));
+            }
+          } catch {
+            // The connection broke mid-stream: reconnected below.
+          }
+        }
+        if (signal.aborted) return;
+        if (settled) break;
+        if (tries >= RECONNECT_DELAYS_MS.length) {
+          toast.error(lostWords.current);
+          break;
+        }
         setReconnecting(true);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        const res = await fetch(`/api/chat/runs/${runId}/events?after=${lastSeq}`).catch(
-          () => null,
-        );
-        setReconnecting(false);
-        if (res?.ok && res.body) await consume(key, res.body, runId, tries - 1);
+        await wait(RECONNECT_DELAYS_MS[tries], signal);
+        if (signal.aborted) return;
+        tries += 1;
+        const res = await fetch(`/api/chat/runs/${runId}/events?after=${lastSeq}`, {
+          signal,
+        }).catch(() => null);
+        body = res?.ok && res.body ? res.body : null;
+        if (body) setReconnecting(false);
       }
+      setReconnecting(false);
     },
     [updateRun],
   );
 
-  // A run under way when the page opened: rebuilt from its events, then live.
+  // The view's life; a run under way when the page opened is rebuilt from
+  // its events, then followed live, until the view goes.
   useEffect(() => {
-    if (resumed.current) return;
-    resumed.current = true;
-    const open = turns[turns.length - 1];
-    if (!open?.runId || !open.run || !OPEN.includes(open.run.status)) return;
-    const runId = open.runId;
-    updateRun(open.key, (turn) => ({ ...turn, run: emptyRun(), startedAt: Date.now() }));
-    void fetch(`/api/chat/runs/${runId}/events?after=0`).then((res) => {
-      if (res.ok && res.body) void consume(open.key, res.body, runId);
-    });
-  }, [turns, consume, updateRun]);
+    const controller = new AbortController();
+    life.current = controller;
+    if (resumable) {
+      const { key, runId } = resumable;
+      updateRun(key, (turn) => ({ ...turn, startedAt: Date.now() }));
+      void fetch(`/api/chat/runs/${runId}/events?after=0`, { signal: controller.signal })
+        .catch(() => null)
+        .then((res) =>
+          follow(key, runId, res?.ok && res.body ? res.body : null, 0, true, controller.signal),
+        );
+    }
+    return () => {
+      controller.abort();
+      if (life.current === controller) life.current = null;
+    };
+  }, [resumable, follow, updateRun]);
 
-  /** A message to Chat: false when it wasn't taken, so the composer keeps it. */
-  async function send(message: string, sent: ComposerSend): Promise<boolean> {
+  /**
+   * A message to Chat: false when it wasn't taken, so the composer keeps it.
+   * `route`: the page its chips came from, when not this one (a Retry).
+   */
+  async function send(message: string, sent: ComposerSend, route = pageRoute): Promise<boolean> {
     if (isLocked) {
       openUpgrade();
       return false;
@@ -220,7 +339,15 @@ export function ChatThreadView({
     const answerKey = `answer-${Date.now()}`;
     setTurns((all) => [
       ...all,
-      { key: questionKey, role: 'user', text: message },
+      {
+        key: questionKey,
+        role: 'user',
+        text: message,
+        resend:
+          sent.attachments.length > 0
+            ? null
+            : { context: sent.context, references: sent.references, route },
+      },
       {
         key: answerKey,
         role: 'assistant',
@@ -244,7 +371,7 @@ export function ChatThreadView({
           : {}),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(sent.attachments.length > 0 ? { attachmentIds: sent.attachments } : {}),
-        ...(sent.context.length > 0 ? { context: { route: pageRoute, chips: sent.context } } : {}),
+        ...(sent.context.length > 0 ? { context: { route, chips: sent.context } } : {}),
         ...(sent.references.length > 0 ? { references: sent.references } : {}),
       }),
     }).catch(() => null);
@@ -267,7 +394,7 @@ export function ChatThreadView({
     const id = chatId ?? conversationId;
     if (id) onConversation?.(id);
     updateRun(answerKey, (turn) => ({ ...turn, runId }));
-    if (runId) void consume(answerKey, res.body, runId);
+    if (runId) void follow(answerKey, runId, res.body);
     return true;
   }
 
@@ -293,11 +420,51 @@ export function ChatThreadView({
       if (failed?.code === 'subscription_inactive') openUpgrade();
       else toast.error(failed?.error ?? t('answerFailed'));
       // The card may have changed (approval_mismatch): the run's events show it again.
-      const events = await fetch(`/api/chat/runs/${runId}/events?after=${run.lastSeq}`);
-      if (events.ok && events.body) await consume(turn.key, events.body, runId);
+      const events = await fetch(`/api/chat/runs/${runId}/events?after=${run.lastSeq}`, {
+        signal: life.current?.signal,
+      }).catch(() => null);
+      if (events?.ok && events.body) await follow(turn.key, runId, events.body, run.lastSeq);
       return;
     }
-    await consume(turn.key, res.body, runId);
+    await follow(turn.key, runId, res.body, run.lastSeq);
+  }
+
+  /** An answer to the question card the run waits on: from the card, or the composer's text. */
+  async function answerQuestion(
+    turn: Turn,
+    value: QuestionAnswerValue,
+    via: 'card' | 'composer' = 'card',
+  ): Promise<boolean> {
+    const run = turn.run;
+    if (!turn.runId || !run?.question) return false;
+    const runId = turn.runId;
+    const res = await fetch(`/api/chat/runs/${runId}/answer?after=${run.lastSeq}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ n: run.question.n, ...value, via }),
+    }).catch(() => null);
+    if (!res?.ok || !res.body) {
+      const failed = (await res?.json().catch(() => null)) as {
+        error?: string;
+        code?: string;
+      } | null;
+      if (failed?.code === 'subscription_inactive') openUpgrade();
+      else toast.error(failed?.error ?? t('answerFailed'));
+      // Already answered elsewhere: the run's events show where it went.
+      const events = await fetch(`/api/chat/runs/${runId}/events?after=${run.lastSeq}`, {
+        signal: life.current?.signal,
+      }).catch(() => null);
+      if (events?.ok && events.body) await follow(turn.key, runId, events.body, run.lastSeq);
+      return false;
+    }
+    // The next question asked with it comes up: say so (CHAT-07 §A item 6).
+    const batch = run.question.batch;
+    if (via === 'card' && batch && batch.at < batch.of) {
+      toast(t('questionNext', { at: batch.at + 1, of: batch.of }));
+    }
+    // The run goes on as it streams: the composer is free again at once.
+    void follow(turn.key, runId, res.body, run.lastSeq);
+    return true;
   }
 
   /** Stops the run under way: false when the Stop wasn't taken. */
@@ -309,10 +476,32 @@ export function ChatThreadView({
     if (!res?.ok) return false;
     // A run nothing drives (queued, waiting) is ended by the Stop itself: its events say so.
     if (last.run && last.run.status !== 'running') {
-      const events = await fetch(`/api/chat/runs/${last.runId}/events?after=${last.run.lastSeq}`);
-      if (events.ok && events.body) await consume(last.key, events.body, last.runId);
+      const events = await fetch(`/api/chat/runs/${last.runId}/events?after=${last.run.lastSeq}`, {
+        signal: life.current?.signal,
+      }).catch(() => null);
+      if (events?.ok && events.body)
+        await follow(last.key, last.runId, events.body, last.run.lastSeq);
     }
     return true;
+  }
+
+  /**
+   * Retry on the answer at `index` (CHAT-03 item 18): its question, sent
+   * again as it was, with its page chips and @ references. The latest answer
+   * only, once nothing works and Chat isn't paused at the AI limit; none on a
+   * teammate's chat, or for a question that can't go again as it was (files).
+   */
+  function retryOf(index: number): (() => void) | undefined {
+    const question = questionOf(turns, index);
+    const resend = question?.resend;
+    if (!question || !resend || index !== turns.length - 1) return undefined;
+    if ((thread && !thread.mine) || working || atCap) return undefined;
+    return () =>
+      void send(
+        question.text,
+        { context: resend.context, references: resend.references, attachments: [] },
+        resend.route,
+      );
   }
 
   return (
@@ -328,7 +517,7 @@ export function ChatThreadView({
       {turns.length === 0 && empty}
       {turns.length > 0 && (
         <ol className="m-0 flex list-none flex-col gap-5 p-0">
-          {turns.map((turn) =>
+          {turns.map((turn, index) =>
             turn.role === 'user' ? (
               <li key={turn.key} className="flex justify-end">
                 <div className="max-w-[80%] rounded-2xl bg-muted px-4 py-2 text-sm whitespace-pre-wrap">
@@ -344,7 +533,9 @@ export function ChatThreadView({
                   reconnecting={reconnecting && turn === last}
                   onApprove={(dontAskAgain) => answer(turn, 'approve', dontAskAgain)}
                   onSkip={() => answer(turn, 'skip')}
+                  onAnswerQuestion={(value) => answerQuestion(turn, value)}
                   onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
+                  onRetry={retryOf(index)}
                 />
               </li>
             ),
@@ -367,16 +558,24 @@ export function ChatThreadView({
           onModeChange={setMode}
           fullAutoOpen={fullAutoOpen}
           fullAutoOffByAdmin={fullAutoOffByAdmin}
-          running={working}
+          running={working && !asking}
+          answering={!!asking}
+          maxLength={asking ? ANSWER_MAX : undefined}
+          ghost={asking ? recommendedLabel(asking) : undefined}
           sharedReadOnly={!!thread && !thread.mine}
           disabled={atCap}
           placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : undefined}
           usage={<ComposerUsageMeter />}
-          chips={chips}
+          // An answer is its text only: no page chips, @ data or files go with it.
+          chips={asking ? undefined : chips}
           onRemoveChip={onRemoveChip}
-          references={pageReferences}
+          references={asking ? undefined : pageReferences}
           draft={draft}
-          onSend={send}
+          onSend={(message, sent) =>
+            asking && last
+              ? answerQuestion(last, composerAnswer(asking, message), 'composer')
+              : send(message, sent)
+          }
           onStop={() => void stop()}
           onSteer={async (message, sent) => {
             // Only once the Stop is taken: else two runs would answer in one chat.
@@ -387,14 +586,18 @@ export function ChatThreadView({
             return send(message, sent);
           }}
           searchReferences={
-            brandId
+            brandId && !asking
               ? (q) => searchChatReferences(brandId, q).then((r) => (r.ok ? r.references : []))
               : undefined
           }
-          uploader={{
-            upload: (file) => uploadChatFile(file, conversationId),
-            remove: dropChatUpload,
-          }}
+          uploader={
+            asking
+              ? undefined
+              : {
+                  upload: (file) => uploadChatFile(file, conversationId),
+                  remove: dropChatUpload,
+                }
+          }
         />
       </div>
     </div>
@@ -408,17 +611,27 @@ function Answer({
   reconnecting,
   onApprove,
   onSkip,
+  onAnswerQuestion,
   onFiled,
+  onRetry,
 }: {
   turn: Turn;
   now: number;
   reconnecting: boolean;
   onApprove: (dontAskAgain: boolean) => Promise<void>;
   onSkip: () => Promise<void>;
+  onAnswerQuestion: (value: QuestionAnswerValue) => Promise<boolean>;
   onFiled: (fileId: string) => void;
+  /** Sends its question again; none while another run works, or on a teammate's chat. */
+  onRetry?: () => void;
 }) {
   const t = useTranslations('chatPage');
+  const debug = useChatDebug();
   const run = turn.run ?? { ...emptyRun('done'), text: turn.text };
+  // The question being answered: saving lasts until it goes (its answer
+  // streams in) or the answer failed.
+  const [answeringN, setAnsweringN] = useState<number | null>(null);
+  const answering = answeringN !== null && answeringN === run.question?.n;
   const workingMs = run.summary?.workingMs ?? (turn.startedAt ? now - turn.startedAt : 0);
   const confirmStep = run.confirm ? run.steps.find((s) => s.n === run.confirm!.n) : undefined;
   const filedAt = filedNumbers(run.deliverables);
@@ -444,6 +657,23 @@ function Answer({
           }}
         />
       ))}
+      {run.steps
+        .filter((step) => step.kind === 'ask' && step.status === 'done')
+        .map((step) => (
+          <QuestionAnswered key={step.n} question={step.label} answer={step.detail ?? ''} />
+        ))}
+      {run.question && (
+        <QuestionCard
+          key={run.question.n}
+          ask={run.question}
+          status={answering ? 'saving' : 'pending'}
+          onAnswer={async (value) => {
+            const n = run.question!.n;
+            setAnsweringN(n);
+            if (!(await onAnswerQuestion(value))) setAnsweringN(null);
+          }}
+        />
+      )}
       {run.confirm && (
         <ApprovalCard
           kind={confirmStep?.kind === 'execute' ? 'execute' : 'write'}
@@ -470,9 +700,7 @@ function Answer({
       {run.status === 'paused_cap' && (
         <p className="text-sm text-amber-700 dark:text-amber-400">{t('pausedCap')}</p>
       )}
-      {run.status === 'error' && run.errorReason && (
-        <p className="text-sm text-red-700 dark:text-red-400">{run.errorReason}</p>
-      )}
+      {debug?.on && turn.runId && <StaffDebug runId={turn.runId} status={run.status} />}
     </>
   );
 
@@ -482,6 +710,7 @@ function Answer({
       workingMs={workingMs}
       timezone={turn.timezone}
       reconnecting={reconnecting}
+      onRetry={onRetry}
       cards={cards}
       footer={
         turn.runId && run.text.trim() ? (

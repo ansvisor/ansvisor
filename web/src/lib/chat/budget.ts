@@ -33,10 +33,17 @@ import type { ChatKeySource } from './key';
 export const CHAT_BUDGET_FEATURES = ['chat', 'agent', 'schedule', 'image'] as const;
 export type ChatBudgetFeature = (typeof CHAT_BUDGET_FEATURES)[number];
 
-/** What a model step used, as the AI SDK reports it. */
+/**
+ * What a model step used, as the AI SDK reports it: every input token
+ * (`inputTokens`, the prompt cache's included), and of those the ones read
+ * from and written to the provider's prompt cache. The server prices a cache
+ * read below the input price and a write above it (CHAT-04 §D item 28).
+ */
 export interface ChatStepUsage {
   inputTokens?: number;
   outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
 }
 
 export interface ChatBudgetStep {
@@ -76,8 +83,8 @@ export type ChatBudgetRefusal = (typeof CHAT_BUDGET_REFUSALS)[number];
 
 /** A held step, settled once by charge, release or keep. */
 export interface ChatStepBudget {
-  /** The step answered: its usage, priced on the server. */
-  charge(usage: ChatStepUsage): Promise<void>;
+  /** The step answered: its usage, priced on the server, and how long its call took (staff only). */
+  charge(usage: ChatStepUsage, latencyMs?: number): Promise<void>;
   /** Nothing was billed: the hold goes. A no-op once charged or kept; call it in a finally. */
   release(): Promise<void>;
   /** A Stop aborted the call the provider still bills: the hold stays as its cost. */
@@ -224,16 +231,23 @@ export async function reserveChatStep(step: ChatBudgetStep): Promise<ChatStepRes
     if (typeof n === 'number' && Number.isFinite(n)) used[key] = (used[key] ?? 0) + Math.max(0, n);
   };
   let settled = false;
+  let took = 0;
   const budget: ChatStepBudget = {
-    async charge(usage) {
+    async charge(usage, latencyMs) {
       settled = true;
       add('inputTokens', usage?.inputTokens);
       add('outputTokens', usage?.outputTokens);
+      add('cacheReadTokens', usage?.cacheReadTokens);
+      add('cacheWriteTokens', usage?.cacheWriteTokens);
+      if (typeof latencyMs === 'number' && Number.isFinite(latencyMs)) {
+        took += Math.max(0, Math.round(latencyMs));
+      }
       await settle('charge', {
         orgId: step.organizationId,
         usageId,
         model: step.model,
         usage: { ...used },
+        ...(took > 0 ? { latencyMs: took } : {}),
       });
     },
     async release() {
