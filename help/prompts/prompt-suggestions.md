@@ -4,8 +4,8 @@ route: /dashboard/prompts/suggestions
 keywords: [prompt suggestions, add all, clear all, suggested prompts, source filter]
 synonyms: [prompt ideas, recommended prompts, new prompt ideas, suggest queries]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-30
+last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -23,6 +23,10 @@ Suggestions come from four sources, and the **Source** filter shows one at a tim
 - **Your catalog**: for an online shop with a product catalog, the questions a shopper asks before buying in its categories, using their price bands. Hover the badge for the category; the **Shopping** filter lists them.
 
 When Search Console or Analytics is connected, a share of each refresh is drawn from their data.
+
+## A brand without topics
+
+Suggestions are written for a brand's topics. If the brand has none, **Generate** and **New** ask you to add a topic first and open **Prompts › Topics**, without using any AI.
 
 ## Add, dismiss or refresh suggestions
 

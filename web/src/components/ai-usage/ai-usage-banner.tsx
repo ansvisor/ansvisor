@@ -10,12 +10,14 @@ import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { AiUsageGetMore, ownKeyOffered } from './ai-usage-get-more';
+import { StartPlanNow } from './start-plan-now';
 
 /**
  * The month's AI usage once it needs attention, under a page's header row
  * (AI usage spec §4): amber from 80%, with where to see it; red once used up,
  * saying until when AI features stop, with where to get more (other members
- * are told to ask an admin). Nothing below 80%.
+ * are told to ask an admin). Nothing below 80%. In the free trial it names
+ * no share, and an admin can start the plan here (Start my plan now).
  */
 export function AiUsageBanner({ className }: { className?: string }) {
   const t = useTranslations('aiUsage');
@@ -36,16 +38,21 @@ export function AiUsageBanner({ className }: { className?: string }) {
       >
         <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
         <p className="min-w-0 flex-1 text-amber-900 dark:text-amber-200">
-          {t(usage.trial ? 'banner.warningTrial' : 'banner.warning', {
-            percent: percentLabel(usage.percentUsed ?? 0),
-          })}
+          {usage.trial
+            ? t('banner.warningTrial')
+            : t('banner.warning', { percent: percentLabel(usage.percentUsed ?? 0) })}
+          {usage.trial && !canAdmin && <> {t('askAdminStart')}</>}
         </p>
-        <Link
-          href="/dashboard/settings/billing#ai-usage"
-          className={buttonVariants({ variant: 'outline', size: 'sm' })}
-        >
-          {t('banner.seeUsage')}
-        </Link>
+        {usage.trial && canAdmin ? (
+          <StartPlanNow variant="outline" />
+        ) : (
+          <Link
+            href="/dashboard/settings/billing#ai-usage"
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+          >
+            {t('banner.seeUsage')}
+          </Link>
+        )}
       </div>
     );
   }
@@ -65,7 +72,12 @@ export function AiUsageBanner({ className }: { className?: string }) {
           : resets
             ? t('banner.exhausted', { date: resets })
             : t('banner.exhaustedNoDate')}
-        {!canAdmin && <> {t(ownKeyOffered(usage) ? 'askAdmin' : 'askAdminNoKey')}</>}
+        {!canAdmin && (
+          <>
+            {' '}
+            {t(usage.trial ? 'askAdminStart' : ownKeyOffered(usage) ? 'askAdmin' : 'askAdminNoKey')}
+          </>
+        )}
       </p>
       {canAdmin && (
         <div className="flex flex-wrap gap-1.5">
