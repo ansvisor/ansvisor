@@ -42,7 +42,7 @@ Activate this skill when the user asks anything in the shape of:
 You need two things from the user, in this order:
 
 1. **API key** — a token starting with `ans_`. Tell them to grab one
-   from their Ansvisor dashboard: **Settings → API Keys → New key**. The
+   from their Ansvisor dashboard: **Settings → MCP & API Keys → New key**. The
    token is shown once at creation. If they don't have an Ansvisor
    account yet, point them at <https://www.ansvisor.com>.
 2. **Base URL** — defaults to `https://app.ansvisor.com`. Only ask if
@@ -562,7 +562,7 @@ When the user asks how AI describes the brand, why sentiment moved
 ## Error handling
 
 - `401 Invalid API key` → ask the user to regenerate from Settings →
-  API Keys.
+  MCP & API Keys.
 - `403` on a sentiment correction → the key's user isn't an admin or
   manager of the brand's organization. Say so; don't retry.
 - `404 ... not found` → the id doesn't belong to the authenticated

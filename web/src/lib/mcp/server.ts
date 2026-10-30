@@ -171,7 +171,8 @@ export const MCP_INSTRUCTIONS = [
 
 export function createMcpServer(auth: McpAuthContext): McpServer {
   // A read-only workspace (Cloud, plan not active) keeps its list_/get_ tools;
-  // every other tool answers subscription_inactive until a plan is chosen.
+  // every other tool answers subscription_inactive until a plan is chosen, and
+  // plan_required on Starter and in the free trial (MCP writes are Growth's).
   const server = gateWriteTools(
     new McpServer(
       {

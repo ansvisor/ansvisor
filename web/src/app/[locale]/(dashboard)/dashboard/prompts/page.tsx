@@ -120,6 +120,8 @@ import {
 } from '@/lib/prompt-position-summary';
 import { mentionRateLabel } from '@/lib/prompt-improve';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useFirstRun } from '@/hooks/use-first-run';
+import { FirstRunEmptyState } from '@/components/first-run/first-run-empty-state';
 import {
   startPromptVolumeAnalysis,
   getVolumeAnalysisStatus,
@@ -1308,6 +1310,8 @@ export default function PromptsPage() {
   const openAddPrompt = guard(() => setAddPromptOpen(true), { action: tActions('addPrompts') });
 
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  // The brand's first run while it goes on: the table's answers are still coming.
+  const firstRun = useFirstRun();
   const tCommon = useTranslations('common');
   const tNav = useTranslations('nav');
   const tPrompts = useTranslations('prompts');
@@ -2122,6 +2126,7 @@ export default function PromptsPage() {
                   </Button>
                 </div>
               )}
+              {firstRun && allPrompts.length > 0 && <FirstRunEmptyState run={firstRun} />}
               <AllPromptsTab
                 loading={loading}
                 failed={loadFailed}
