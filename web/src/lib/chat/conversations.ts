@@ -354,6 +354,22 @@ export async function readChat(
 export type ChatWriteResult = { ok: true } | { ok: false; reason: 'not_found' | 'expired' };
 
 /**
+ * A change from a chat's ⋯ menu (CHAT-01 row menu; CHAT-23 G9): Pin or
+ * Unpin, Rename, Share with team or Stop sharing, Archive or Unarchive. At
+ * least one; a title is trimmed, 1 to 200 characters.
+ */
+export const updateInput = z
+  .object({
+    pinned: z.boolean().optional(),
+    title: z.string().trim().min(1).max(200).optional(),
+    shared: z.boolean().optional(),
+    archived: z.boolean().optional(),
+  })
+  .strict()
+  .refine((patch) => Object.keys(patch).length > 0);
+export type UpdateInput = z.infer<typeof updateInput>;
+
+/**
  * A new, empty chat (the side panel's New chat, CHAT-01 item 23; the full
  * page makes one on the first message instead). Its brand must be the
  * workspace's. Untitled until Chat names it.
@@ -416,6 +432,36 @@ async function isAdmin(actor: ChatActor): Promise<boolean> {
   if (error) throw new Error(`Could not read the role: ${error.message}`);
   const row = data as { role: string | null; organization_id: string | null } | null;
   return row?.role === 'admin' && row.organization_id === actor.organizationId;
+}
+
+/**
+ * Pin, Rename, Share with team and Archive, and their reverses (CHAT-23
+ * `chat.pin`, `chat.rename`, `chat.share`, `chat.archive`): the author's
+ * own chat only. Answers the chat's new row; null when it isn't theirs.
+ */
+export async function updateChat(
+  reader: Reader,
+  actor: ChatActor,
+  chatId: string,
+  patch: UpdateInput,
+  now = new Date(),
+): Promise<ChatListItem | null> {
+  const chat = await ownedChat(actor, chatId);
+  if (!chat || chat.deleted_at !== null || chat.user_id !== actor.userId) return null;
+  const at = now.toISOString();
+  const row: Record<string, string | null> = {};
+  if (patch.pinned !== undefined) row.pinned_at = patch.pinned ? at : null;
+  if (patch.title !== undefined) row.title = patch.title;
+  if (patch.shared !== undefined) row.shared_at = patch.shared ? at : null;
+  if (patch.archived !== undefined) row.archived_at = patch.archived ? at : null;
+  const { error } = await supabaseAdmin
+    .from('chat_conversations')
+    .update(row)
+    .eq('id', chatId)
+    .eq('user_id', actor.userId)
+    .is('deleted_at', null);
+  if (error) throw new Error(`Could not change the chat: ${error.message}`);
+  return readChat(reader, actor, chatId);
 }
 
 /**

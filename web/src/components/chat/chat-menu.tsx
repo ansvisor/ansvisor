@@ -9,6 +9,7 @@ import type { ChatListItem } from '@/lib/chat/conversations';
 import { AT_WORK_ROWS, chatMenuLists, needsYouCount, type DayGroup } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
 import { useChatList, type ChatListStatus } from './chat-list-provider';
+import { ChatRowMenu } from './chat-menus';
 import { ChatRow } from './chat-row';
 import { MenuToggleIcon, shortcutLabel, useIsMac } from './chat-shortcuts';
 
@@ -139,7 +140,7 @@ export interface ChatMenuViewProps {
   onRetry: () => void;
   /** After a link is followed: the drawer closes. */
   onNavigate?: () => void;
-  /** The row's ⋯ menu (W1-04); none here. */
+  /** Each row's ⋯ menu. */
   rowActions?: (chat: ChatListItem) => ReactNode;
   now?: Date;
 }
@@ -401,6 +402,7 @@ export function ChatMenu(
   const pathname = usePathname();
   return (
     <ChatMenuView
+      rowActions={(chat) => <ChatRowMenu chat={chat} />}
       {...props}
       status={status}
       chats={chats}

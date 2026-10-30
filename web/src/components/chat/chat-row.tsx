@@ -6,6 +6,8 @@ import { Link } from '@/i18n/navigation';
 import { ListDot, ListProgress } from '@/components/agentic/list-dot';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { cn } from '@/lib/utils';
+import { useChatActions } from './chat-actions';
+import { RenameField } from './chat-menus';
 
 /** A time as the row says it: the clock today ("08:02"), else the day ("Oct 28"). */
 export function rowTime(iso: string, now = new Date()): string {
@@ -21,7 +23,8 @@ export function rowTime(iso: string, now = new Date()): string {
  * its title — "New chat" shimmering until Chat names it, bold while a result
  * is unread — and one line: the step it is on while it works or waits, the
  * result's time once done, else its brand. A teammate's shared chat shows
- * their initials. The whole row opens the chat; `actions` (the row's ⋯)
+ * their initials. A pinned chat shows the pin; double-clicking the title
+ * renames it in place. The whole row opens the chat; `actions` (the row's ⋯)
  * sit over its right edge on hover and focus.
  */
 export function ChatRow({
@@ -62,6 +65,33 @@ export function ChatRow({
     lineTone = 'red';
   }
   const title = chat.title ?? t('untitled');
+  const chatActions = useChatActions();
+  // A pinned chat shows the pin where the dot is, unless it works or waits (CHAT-01 row menu).
+  const dot =
+    chat.pinned && chat.state === 'idle' ? (
+      <span
+        aria-hidden
+        className="mt-px flex size-4 shrink-0 items-center justify-center text-[10px] text-muted-foreground"
+      >
+        ⌖
+      </span>
+    ) : (
+      <ListDot state={chat.state} className="mt-px" />
+    );
+
+  if (chatActions?.renaming?.id === chat.id && chatActions.renaming.where === 'row') {
+    return (
+      <div
+        className={cn(
+          'flex items-start gap-[9px] rounded-[9px] bg-sidebar-accent px-2 py-[7px]',
+          className,
+        )}
+      >
+        {dot}
+        <RenameField chat={chat} />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -78,7 +108,7 @@ export function ChatRow({
         onClick={onOpen}
         className="flex items-start gap-[9px] rounded-[9px] px-2 py-[7px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
-        <ListDot state={chat.state} className="mt-px" />
+        {dot}
         <span
           className={cn(
             'min-w-0 flex-1 text-[13px]',
@@ -87,6 +117,14 @@ export function ChatRow({
         >
           <span
             title={title}
+            onDoubleClick={
+              chatActions?.canEdit(chat)
+                ? (event) => {
+                    event.preventDefault();
+                    chatActions.startRename(chat, 'row');
+                  }
+                : undefined
+            }
             className={cn(
               'block truncate',
               chat.unread ? 'font-semibold text-foreground' : 'text-foreground/90',

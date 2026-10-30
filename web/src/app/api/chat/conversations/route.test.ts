@@ -28,6 +28,7 @@ vi.mock('@/lib/chat/conversations', async (original) => {
     listChats: vi.fn(async () => ({ chats: [], total: 0, archived: 0 })),
     readChat: vi.fn(async () => null),
     deleteChat: vi.fn(async () => ({ ok: false, reason: 'not_found' })),
+    updateChat: vi.fn(async () => null),
   };
 });
 vi.mock('@/lib/chat/thread', () => ({ loadChatThread: vi.fn(async () => null) }));
@@ -77,5 +78,19 @@ describe('/api/chat/conversations', () => {
     expect((await one.GET(req, params(ID))).status).toBe(404);
     expect((await one.GET(req, params('../x'))).status).toBe(404);
     expect((await one.DELETE(req, params(ID))).status).toBe(404);
+  });
+
+  it("refuses a bad change as a value, and answers 404 for a chat that isn't the person's", async () => {
+    const patch = (body: unknown) =>
+      one.PATCH(
+        new Request('https://app.example.com/api/chat/conversations/x', {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        }),
+        params(ID),
+      );
+    expect((await patch({})).status).toBe(400);
+    expect((await patch({ owner: 'me' })).status).toBe(400);
+    expect((await patch({ pinned: true })).status).toBe(404);
   });
 });
