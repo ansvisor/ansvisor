@@ -343,14 +343,22 @@ export type SearchQuery = z.infer<typeof searchQuery>;
 
 /**
  * What the person typed as a full-text query over the search columns
- * (00407: the 'simple' configuration, any language): each word, letters and
- * digits only, as a prefix ("citat" finds "citations"), all of them
- * required. Null when nothing searchable is left. Never passes the person's
- * own operators to Postgres.
+ * (00407: the 'simple' configuration, any language): each space-separated
+ * word as a quoted prefix ("citat" finds "citations"), all of them
+ * required. Quoted, Postgres splits a word the way it split the text, so
+ * "nike.com", "4.5" or an email address — one token in the text — is found
+ * whole, and lowercases it itself ("İstanbul"). A quote is doubled and a
+ * backslash dropped, so the person's own operators never reach Postgres as
+ * operators. Null when no word has a letter or digit.
  */
 export function searchTermsOf(text: string): string | null {
-  const words = (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).slice(0, 8);
-  return words.length ? words.map((word) => `${word}:*`).join(' & ') : null;
+  const words = text
+    .split(/\s+/)
+    .filter((word) => /[\p{L}\p{N}]/u.test(word))
+    .slice(0, 8);
+  return words.length
+    ? words.map((word) => `'${word.replace(/\\/g, ' ').replace(/'/g, "''")}':*`).join(' & ')
+    : null;
 }
 
 /**
