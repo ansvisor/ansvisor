@@ -3633,6 +3633,48 @@
       "notFound": "This chat isn't there any more."
     }
   },
+  "chatComposer": {
+    "message": "Message",
+    "placeholder": "Ask anything…",
+    "steerPlaceholder": "Steer while I work: “only blog pages”…",
+    "send": "Send",
+    "stop": "Stop",
+    "readOnly": "Read-only · {role}",
+    "readOnlyTitle": "{role}s ask and read. Admins and Managers make changes. See what you can do.",
+    "model": "Model",
+    "modelAuto": "Auto",
+    "modelAutoHow": "Haiku reads, Sonnet writes",
+    "under": {
+      "hint": "/ skills · @ data",
+      "readOnly": "@ data · read-only",
+      "answering": "Answering · Esc to stop",
+      "steer": "Enter stops this run and sends your message"
+    },
+    "preview": {
+      "title": "Composer",
+      "note": "Nothing is sent: a message starts a pretend run of a few seconds.",
+      "home": "Chat home · 2 rows, Full auto open (Growth)",
+      "dock": "An open chat · Full auto locked (Starter or trial)",
+      "dockRunning": "An open chat · answering: Stop, Esc, or type to steer",
+      "readOnly": "Side panel · an Analyst reads only",
+      "sent": "Sent: {text}",
+      "steered": "Stopped the run and sent: {text}",
+      "stopped": "Stopped · done steps stay"
+    },
+    "mode": {
+      "label": "Run mode",
+      "ask_first": "Ask me first",
+      "auto": "Auto, ask before changes",
+      "full_auto": "Full auto",
+      "needsGrowth": "Needs Growth",
+      "fullAutoLocked": "Full auto · Needs Growth: agents apply changes for you, logged and undoable",
+      "toast": {
+        "ask_first": "Ask me first: the agent asks before every step.",
+        "auto": "Auto, ask before changes: the agent reads freely and asks before every change.",
+        "full_auto": "Full auto: the agent makes changes without asking. Nothing is published or sent without your click. Every change is in the Activity log."
+      }
+    }
+  },
   "chatPage": {
     "title": "Chat",
     "subtitle": "A test page for Chat's engine. The full Chat replaces it.",
