@@ -32,6 +32,7 @@ import { percentLabel } from '@/lib/billing/ai-usage';
 import { gbLabel } from '@/lib/chat/files';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { ownKeyOffered } from './ai-usage-get-more';
 import { GetMoreContext, type GetMoreTab } from './get-more-context';
 
 /**
@@ -144,9 +145,13 @@ function GetMoreBody({
   const packs = addOns.packs.filter((p) => p.kind === tab);
   const chosen = packs.find((p) => p.id === picked[tab] && p.available) ?? null;
   const planName = plan ? (plan.isTrial ? `${t('trial')} · ${plan.planName}` : plan.planName) : '';
-  // Own AI keys are Enterprise's while Chat draws on the AI budget (DECISIONS S). The same
-  // rule as ownKeyOffered in feature/own-keys-enterprise-only: keep one once both land.
-  const ownKey = addOns.isAdmin && (plan?.planId === 'enterprise' || usage?.chatMetered === false);
+  // Own AI keys: Enterprise's while Chat draws on the AI budget (DECISIONS S), as everywhere.
+  const ownKey =
+    addOns.isAdmin &&
+    ownKeyOffered({
+      plan: plan?.planId ?? usage?.plan ?? '',
+      chatMetered: usage?.chatMetered ?? true,
+    });
 
   const limitLine =
     tab === 'ai'

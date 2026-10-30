@@ -9,7 +9,7 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { AiUsageGetMore } from './ai-usage-get-more';
+import { AiUsageGetMore, ownKeyOffered } from './ai-usage-get-more';
 
 /**
  * The month's AI usage once it needs attention, under a page's header row
@@ -65,7 +65,7 @@ export function AiUsageBanner({ className }: { className?: string }) {
           : resets
             ? t('banner.exhausted', { date: resets })
             : t('banner.exhaustedNoDate')}
-        {!canAdmin && <> {t('askAdmin')}</>}
+        {!canAdmin && <> {t(ownKeyOffered(usage) ? 'askAdmin' : 'askAdminNoKey')}</>}
       </p>
       <div className="flex flex-wrap gap-1.5 empty:hidden">
         <AiUsageGetMore

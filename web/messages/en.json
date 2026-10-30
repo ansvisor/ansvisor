@@ -22,6 +22,7 @@
       "labelExhausted": "AI {percent} used this month, the limit is reached"
     },
     "askAdmin": "To get more AI usage or use your own key, ask an admin of your workspace.",
+    "askAdminNoKey": "To get more AI usage, ask an admin of your workspace.",
     "getMore": {
       "plan": "Get more AI usage",
       "credits": "Get more AI credits",
@@ -4166,6 +4167,7 @@
         "fullAuto": "Let Chat make routine changes for you with Full auto",
         "mcpWrite": "Open pull requests and make changes from Claude, ChatGPT or Cursor",
         "claude": "Track how Claude answers about your brand",
+        "ownKeys": "Run Chat on your own OpenAI, Anthropic, Google, Azure or OpenRouter key",
         "contract": "AI limit, storage and prompt limits set in your contract",
         "aiLimit": "{times}× the monthly AI limit",
         "keepEverything": "Keep everything you're using now",
@@ -10904,7 +10906,8 @@
       "Custom prompt and location tracking",
       "Custom KPI frameworks and data integrations",
       "Priority support and onboarding sessions",
-      "SSO / SAML and custom feature requests"
+      "SSO / SAML and custom feature requests",
+      "Your own AI keys: OpenAI, Anthropic, Google, Azure or OpenRouter"
     ],
     "planCards": {
       "starter": {
@@ -10974,6 +10977,11 @@
     "agent_savedBy": "by {email}",
     "agent_modelInUse": "Model {model}",
     "agent_noKey": "No key yet. Chat stays locked for everyone in this organization until a key is saved.",
+    "agent_descriptionMetered": "Chat runs on your plan's monthly AI limit. On the Enterprise plan, an admin can connect your own account with an AI provider instead: Chat then runs on it, and the provider bills that account. Keys are stored encrypted; Ansvisor support cannot read them.",
+    "agent_kept": "Your saved key keeps running Chat until {date}. After that, Chat uses your plan's monthly AI limit. Own AI keys come with the Enterprise plan.",
+    "agent_locked": "Own AI keys come with the Enterprise plan. Chat runs on your plan's monthly AI limit.",
+    "agent_comparePlans": "Compare plans",
+    "agent_notUsed": "Not used on your plan",
     "agent_addKey": "Add key",
     "agent_replace": "Replace",
     "agent_useForChat": "Use for Chat",

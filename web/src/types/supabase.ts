@@ -4700,6 +4700,7 @@ export type Database = {
           created_at: string
           id: string
           legacy_key_grandfathered: boolean
+          legacy_key_until: string | null
           name: string
           plan: string
           plan_overrides: Json | null
@@ -4718,6 +4719,7 @@ export type Database = {
           created_at?: string
           id?: string
           legacy_key_grandfathered?: boolean
+          legacy_key_until?: string | null
           name: string
           plan?: string
           plan_overrides?: Json | null
@@ -4736,6 +4738,7 @@ export type Database = {
           created_at?: string
           id?: string
           legacy_key_grandfathered?: boolean
+          legacy_key_until?: string | null
           name?: string
           plan?: string
           plan_overrides?: Json | null

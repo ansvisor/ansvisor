@@ -8,6 +8,15 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { useGetMore } from './get-more-context';
 
 /**
+ * Whether an own key is a way to get more (CHAT-16 item 19): always before
+ * Chat draws on the allowance (today's Agent Chat runs on one), then only
+ * on Enterprise.
+ */
+export function ownKeyOffered(usage: { plan: string; chatMetered?: boolean }): boolean {
+  return usage.plan === 'enterprise' || !usage.chatMetered;
+}
+
+/**
  * Where to get more AI usage, in the meter's popover and the used-up banner
  * (AI usage spec §3.1, §4; CHAT-18 §B item 6). With Chat on, Get more AI
  * credits opens the Get more window, for every member: the others see the
@@ -15,10 +24,8 @@ import { useGetMore } from './get-more-context';
  * change, and nothing for other members (they are told to ask one);
  * Enterprise has no bigger plan to move to. In the free trial, more comes
  * with starting the plan, so the link says so (the trial can't buy packs).
- * Use your own key: Enterprise's while Chat draws on the AI budget, and
- * every plan's while it doesn't (DECISIONS S; the same rule as
- * ownKeyOffered in feature/own-keys-enterprise-only: keep one once both
- * land). `primary` makes the first one the area's one black button.
+ * The own-key link only where an own key helps (ownKeyOffered), for
+ * Admins. `primary` makes the first one the area's one black button.
  */
 export function AiUsageGetMore({
   plan,
@@ -40,7 +47,6 @@ export function AiUsageGetMore({
   const openGetMore = useGetMore();
   const getMore = openGetMore && !trial ? openGetMore : null;
   if (!canAdmin && !getMore) return null;
-  const ownKey = canAdmin && (plan === 'enterprise' || !chatMetered);
   return (
     <>
       {getMore ? (
@@ -66,7 +72,7 @@ export function AiUsageGetMore({
           </Link>
         )
       )}
-      {ownKey && (
+      {canAdmin && ownKeyOffered({ plan, chatMetered }) && (
         <Link
           href="/dashboard/settings/ai-providers"
           onClick={onFollow}
