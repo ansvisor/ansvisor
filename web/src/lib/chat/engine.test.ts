@@ -26,6 +26,46 @@ vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }))
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
 vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: vi.fn() }));
+// Help (W1-30): one approved article of the test's own, and its page as open_page finds it.
+vi.mock('@/lib/help/search', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/lib/help/search')>();
+  const index = real.buildHelpIndex([
+    {
+      area: 'prompts',
+      slug: 'add-prompts',
+      meta: {
+        title: 'Add prompts to track',
+        route: '/dashboard/prompts/tracked',
+        keywords: ['add prompt', 'bulk import'],
+        synonyms: ['add queries'],
+        plan: 'all',
+        updated: '2026-10-29',
+        approved: true,
+      },
+      sections: [
+        { heading: null, text: 'A prompt is a question Ansvisor asks the AI engines every day.' },
+        { heading: 'Add one prompt', text: 'On Tracked Prompts, click Add prompt and save.' },
+        { heading: 'Add many at once', text: 'Open the Bulk import tab and upload a file.' },
+      ],
+    },
+  ]);
+  return {
+    ...real,
+    HELP_INDEX: index,
+    searchHelp: (question: string) => real.searchHelp(question, index),
+  };
+});
+vi.mock('@/lib/mcp/navigation', () => ({
+  openPageFor: vi.fn(async () => ({
+    found: true,
+    title: 'Tracked Prompts',
+    section: 'Prompts',
+    locked: false,
+    href: '/dashboard/prompts/tracked',
+    filters: [],
+    navigation_only: true,
+  })),
+}));
 
 const fakes = vi.hoisted(() => ({
   readRun: vi.fn(),
@@ -678,6 +718,153 @@ describe("the chat's kept reads and each step's measure (W1-19)", () => {
     const second = await turnIn(conversationOf(first), 'Again?');
     expect(fakes.readRun).toHaveBeenCalledTimes(2);
     expect(runRow(second).status).toBe('done');
+    vi.mocked(console.error).mockRestore();
+  });
+});
+
+describe('answers from Help (W1-30)', () => {
+  const ANSWER = '1. Open **Tracked Prompts**.\n2. Click **Add prompt** and save.';
+  const SOURCE =
+    'From Help: Add prompts to track · [Open Tracked Prompts](/dashboard/prompts/tracked)';
+  const answerOf = (runId: string) => {
+    const message = db.tables.chat_runs.find((r) => r.id === runId)!.message_id;
+    return db.tables.chat_messages.find((m) => m.id === message)!.content_md as string;
+  };
+
+  it('answers a how-to question from Help with the small model, no data read, and its source', async () => {
+    const { haiku, sonnet } = useModels([text(ANSWER)], []);
+    const runId = await turn(ADMIN, 'How do I add a prompt?');
+
+    // The small model, the Help sections and the question only: no tools, no workspace.
+    expect(haiku.seen).toHaveLength(1);
+    expect(sonnet.seen).toHaveLength(0);
+    expect(haiku.seen[0].tools ?? []).toEqual([]);
+    const sent = JSON.stringify(haiku.seen[0].prompt);
+    expect(sent).toContain('Answer only from the Help sections');
+    expect(sent).toContain('<help_sections>');
+    expect(sent).toContain('Add one prompt');
+    expect(sent).not.toContain('Northwind');
+    expect(fakes.readRun).not.toHaveBeenCalled();
+
+    // Held and charged on the AI budget, as every step.
+    expect(fakes.reserve).toHaveBeenCalledTimes(1);
+    expect(fakes.reserve.mock.calls[0][0]).toMatchObject({
+      model: 'anthropic/claude-haiku-5.5',
+      maxOutputTokens: 8_000,
+    });
+    expect(holds[0].charge).toHaveBeenCalledTimes(1);
+
+    expect(answerOf(runId)).toBe(`${ANSWER}\n\n${SOURCE}`);
+    const events = await eventsOf(runId);
+    expect(ofType(events, 'step.finished')[0].data.step).toMatchObject({
+      kind: 'read',
+      status: 'done',
+      label: 'Read Ansvisor Help',
+      detail: 'Add prompts to track',
+    });
+    expect(ofType(events, 'run.finished')[0].data).toMatchObject({ dataAsOf: null, sources: [] });
+    expect(runRow(runId).status).toBe('done');
+    expectClean(events);
+
+    // Kept for the next time, without the source line: who may open the page is checked each time.
+    expect(db.tables.help_answer_cache).toEqual([
+      expect.objectContaining({
+        question: 'how do i add a prompt',
+        question_hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        lang: 'en',
+        app_version: expect.stringMatching(/^\d+\.\d+\.\d+\+[0-9a-f]{8}$/),
+        answer_md: ANSWER,
+        articles: ['prompts/add-prompts'],
+        model: 'anthropic/claude-haiku-5.5',
+      }),
+    ]);
+  });
+
+  it('gives the same question its answer again, with no model', async () => {
+    useModels([text(ANSWER)], []);
+    await turn(ADMIN, 'How do I add a prompt?');
+    const { haiku } = useModels([], []);
+    const runId = await turn(ADMIN, 'how do I add a prompt');
+    expect(haiku.seen).toHaveLength(0);
+    expect(fakes.reserve).toHaveBeenCalledTimes(1);
+    expect(answerOf(runId)).toBe(`${ANSWER}\n\n${SOURCE}`);
+    expect(stepsOf(runId)[0]).toMatchObject({ label: 'Read Ansvisor Help', cache_hit: true });
+    expect(db.tables.help_answer_cache[0].hits).toBe(1);
+  });
+
+  it("doesn't keep the answer to a question that names a site", async () => {
+    useModels([text(ANSWER)], []);
+    await turn(ADMIN, 'How do I add a prompt for acme-corp.com?');
+    expect(db.tables.help_answer_cache ?? []).toEqual([]);
+  });
+
+  it("doesn't keep an answer written on the workspace's own key", async () => {
+    useModels([text(ANSWER)], []);
+    // Same models, on the workspace's own key.
+    fakes.resolveModels.mockResolvedValue({ ...(await fakes.resolveModels()), source: 'own' });
+    const runId = await turn(ADMIN, 'How do I add a prompt?');
+    expect(answerOf(runId)).toBe(`${ANSWER}\n\n${SOURCE}`);
+    expect(db.tables.help_answer_cache ?? []).toEqual([]);
+  });
+
+  it('logs a question Help has no answer for, anonymously, and answers it as usual', async () => {
+    const { sonnet } = useModels([READY], [text('Settings › Integrations lists them.')]);
+    const runId = await turn(ADMIN, 'How do I connect Slack for team@acme-corp.com?');
+    expect(db.tables.help_gaps).toEqual([
+      {
+        id: expect.any(String),
+        question: 'How do I connect Slack for [email]?',
+        lang: 'en',
+        route: null,
+        best_article: null,
+        best_score: null,
+        app_version: expect.any(String),
+      },
+    ]);
+    expect(sonnet.seen).toHaveLength(1);
+    expect(answerOf(runId)).toBe('Settings › Integrations lists them.');
+  });
+
+  it("leaves a question about the person's own results to their data", async () => {
+    const { sonnet } = useModels([READY], [text('Ok.')]);
+    await turn(ADMIN, 'Why did my prompts drop? How do I add a prompt?');
+    expect(sonnet.seen).toHaveLength(1);
+    expect(db.tables.help_gaps ?? []).toEqual([]);
+    expect(db.tables.help_answer_cache ?? []).toEqual([]);
+  });
+
+  it('pauses at the cap when the AI limit is used, before the model writes', async () => {
+    const { haiku } = useModels([text(ANSWER)], []);
+    fakes.reserve.mockResolvedValueOnce({
+      ok: false,
+      refusal: 'ai_limit',
+      trial: false,
+      retryable: false,
+      message: "You've used this month's AI limit.",
+    });
+    const runId = await turn(ADMIN, 'How do I add a prompt?');
+    expect(haiku.seen).toHaveLength(0);
+    expect(runRow(runId).status).toBe('paused_cap');
+    expect(stepsOf(runId)[0]).toMatchObject({ label: 'Read Ansvisor Help', status: 'skipped' });
+  });
+
+  it('answers as usual when the small model fails before it wrote a word', async () => {
+    const { sonnet } = useModels(
+      [
+        () => {
+          throw new Error('overloaded');
+        },
+        READY,
+      ],
+      [text('Ok.')],
+    );
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const runId = await turn(ADMIN, 'How do I add a prompt?');
+    expect(stepsOf(runId)[0]).toMatchObject({ label: 'Read Ansvisor Help', status: 'error' });
+    expect(holds[0].release).toHaveBeenCalled();
+    expect(holds[0].charge).not.toHaveBeenCalled();
+    expect(sonnet.seen).toHaveLength(1);
+    expect(runRow(runId).status).toBe('done');
     vi.mocked(console.error).mockRestore();
   });
 });

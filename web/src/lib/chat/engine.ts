@@ -4,6 +4,7 @@ import { z } from 'zod';
 import messages from '../../../messages/en.json';
 import { PLANS } from '@/config/plans';
 import type { McpAuthContext } from '@/lib/mcp-auth';
+import { searchHelp } from '@/lib/help/search';
 import { platformName } from '@/lib/signals/names';
 import { SUBSCRIPTION_INACTIVE } from '@/lib/subscription-guard';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -42,6 +43,17 @@ import { maskIds, type ChatDenialCard, type ChatRunSummary, type ChatStepScope }
 import { HOLD_MAX, checkFigures, figureHold, figuresOfRun, type KnownFigures } from './facts';
 import { fitResult, toJson } from './fit';
 import { historyMessages, planHistory, type HistoryPlan, type HistoryRow } from './history';
+import {
+  HELP_SYSTEM,
+  articlesOf,
+  helpCacheKey,
+  helpMessage,
+  helpSources,
+  isHelpQuestion,
+  logHelpGap,
+  readHelpAnswer,
+  saveHelpAnswer,
+} from './help-answer';
 import { requestHash } from './idempotency';
 import {
   CHAT_MODES,
@@ -582,6 +594,9 @@ export async function driveRun(
       const outcome = await resumePending(rc, run.pending, resume);
       if (outcome !== 'continue') return;
     }
+    // A how-to question is answered from Help before any data is read (CHAT-19 §5).
+    const fresh = !resume && rc.progress.steps === 0 && rc.progress.modelSteps === 0;
+    if (fresh && (await helpTurn(rc)) === 'ended') return;
     await modelLoop(rc);
   } catch (err) {
     console.error('[chat/engine] a run failed:', err);
@@ -722,6 +737,155 @@ async function readHistory(run: LoadedRun, maxChars: number): Promise<HistoryPla
     .slice(0, Math.max(0, answerAt - 1))
     .map((row) => ({ role: row.role, content: row.content_md }));
   return planHistory(earlier, maxChars);
+}
+
+// ─── Help ───────────────────────────────────────────────────────────────────
+
+/** Answer text that skips the fact check: the app's own words (a source line), ids hidden. */
+function emitText(rc: RunContext, text: string) {
+  const out = maskIds(text);
+  rc.progress.text += out;
+  rc.sink.emit('text.delta', { text: out });
+}
+
+/**
+ * A how-to question (CHAT-19 §3, §5; W1-30), before any data is read: the
+ * answer from the approved Help articles, written by the small model from
+ * their matching sections only (no workspace data, no chat history), or the
+ * same answer given before with no model at all; then its source, "From
+ * Help: {title}" with a link that opens the article's page. The model is
+ * held and charged on the AI budget as every step. 'none' when Help has no
+ * good match (the gap is logged) or the model failed before it wrote a
+ * word: the run then goes on as any other question.
+ */
+async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
+  const question = rc.progress.question ?? '';
+  if (!isHelpQuestion(question)) return 'none';
+  const found = searchHelp(question);
+  if (found.matches.length === 0) {
+    await logHelpGap(question, found.best);
+    return 'none';
+  }
+  const articles = articlesOf(found.matches);
+  const titles = articles.map((article) => article.title).join(' · ');
+  const message = helpMessage(question, found.matches);
+  const started = Date.now();
+  let row = await insertStep(rc.run.id, {
+    position: ++rc.progress.steps,
+    kind: 'read',
+    status: 'running',
+    label: t('step.readHelp'),
+    detail: titles,
+    debug: { help: articles.map((article) => article.id) },
+  });
+  rc.sink.emit('step.started', { step: clientStep(row) });
+  const endStep = async (patch: Parameters<typeof updateStep>[1]) => {
+    row = await updateStep(row.id, patch);
+    rc.sink.emit('step.finished', { step: clientStep(row) });
+  };
+
+  const key = helpCacheKey(question);
+  const kept = key ? await readHelpAnswer(key) : null;
+  // The answer's figures may only be the question's and the sections' (CHAT-05 item 11).
+  const out = new TextOut(
+    rc,
+    figuresOfRun({ question: `${question}\n${todayLine()}`, history: [], reads: [message] }),
+  );
+  if (kept) {
+    out.push(kept.answer);
+    out.close();
+  } else {
+    const choice = rc.models.pick('read');
+    const messages: ModelMessage[] = [{ role: 'user', content: message }];
+    const reservation = await reserveChatStep({
+      organizationId: rc.run.organizationId,
+      runId: rc.run.id,
+      model: choice.budgetModel,
+      inputTokens: estimateInputTokens([HELP_SYSTEM, messages]),
+      maxOutputTokens: choice.maxOutputTokens,
+      source: rc.models.source,
+    });
+    if (!reservation.ok) {
+      await endStep({ status: 'skipped', detail: t('step.skipped') });
+      if (reservation.refusal === 'ai_limit') await pauseAtCap(rc);
+      else await failRun(rc, reservation.message);
+      return 'ended';
+    }
+    const { budget } = reservation;
+    const called = Date.now();
+    try {
+      const result = streamText({
+        model: choice.model,
+        system: HELP_SYSTEM,
+        messages,
+        maxOutputTokens: choice.maxOutputTokens,
+        providerOptions: choice.providerOptions,
+        abortSignal: rc.signal,
+      });
+      for await (const part of result.fullStream) {
+        if (part.type === 'text-delta') out.push(part.text);
+        else if (part.type === 'error') throw part.error;
+      }
+      out.close();
+      if (rc.signal.aborted) {
+        budget.keep();
+        await stopNow(rc);
+        return 'ended';
+      }
+      await budget.charge(stepUsage(await result.usage), Date.now() - called);
+      rc.progress.modelSteps += 1;
+    } catch (err) {
+      out.close();
+      if (rc.signal.aborted) {
+        budget.keep();
+        await stopNow(rc);
+        return 'ended';
+      }
+      await budget.release();
+      // Words already shown: the run ends in error (driveRun), what's shown kept.
+      if (rc.progress.text) throw err;
+      console.error('[chat/engine] a Help answer failed; Chat answers as usual:', err);
+      await endStep({
+        status: 'error',
+        detail: t('step.readFailed'),
+        measure: { latencyMs: Date.now() - started },
+      });
+      return 'none';
+    } finally {
+      await budget.release();
+    }
+    if (!rc.progress.text.trim()) {
+      await endStep({
+        status: 'error',
+        detail: t('step.readFailed'),
+        measure: { latencyMs: Date.now() - started },
+      });
+      return 'none';
+    }
+    // Kept for every workspace only when Ansvisor's model wrote it: a
+    // workspace's own key may run another model, and its words stay its own.
+    if (key && rc.models.source === 'ansvisor') {
+      await saveHelpAnswer(
+        key,
+        rc.progress.text,
+        articles.map((article) => article.id),
+        choice.budgetModel,
+      );
+    }
+  }
+
+  emitText(rc, `\n\n${await helpSources(toolContext(rc, rc.role), articles)}`);
+  await endStep({
+    status: 'done',
+    detail: titles,
+    measure: {
+      latencyMs: Date.now() - started,
+      cacheHit: !!kept,
+      resultTokens: tokensOf(message.length),
+    },
+  });
+  await finish(rc);
+  return 'ended';
 }
 
 // ─── The model loop ─────────────────────────────────────────────────────────

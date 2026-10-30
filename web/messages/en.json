@@ -3570,6 +3570,10 @@
       "all": "All time"
     }
   },
+  "chatHelp": {
+    "source": "From Help: {title}",
+    "open": "Open {page}"
+  },
   "chatDenial": {
     "asked": "You asked: {action}.",
     "askedTarget": "You asked: {action} · {target}.",
@@ -3623,7 +3627,8 @@
       "unknown": "Worked on a step",
       "checkedFacts": "Checked facts",
       "factsMatch": "Every figure matches the data",
-      "factsRemoved": "{count, plural, one {# figure wasn't in the data, so it was left out} other {# figures weren't in the data, so they were left out}}"
+      "factsRemoved": "{count, plural, one {# figure wasn't in the data, so it was left out} other {# figures weren't in the data, so they were left out}}",
+      "readHelp": "Read Ansvisor Help"
     },
     "error": {
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
