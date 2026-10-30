@@ -34,9 +34,14 @@ export function statusLine(
   return { key: 'other', values: { label: running.label } };
 }
 
-/** The ✓ chips above the answer (item 12d): each step done, thinking left out. */
+/**
+ * The ✓ chips above the answer (item 12d): each step done, thinking left
+ * out, and questions too: an answered one has its own line (CHAT-07 §A item 10).
+ */
 export const doneSteps = (steps: readonly ChatStep[]) =>
-  [...steps].sort((a, b) => a.n - b.n).filter((s) => s.status === 'done' && s.kind !== 'thinking');
+  [...steps]
+    .sort((a, b) => a.n - b.n)
+    .filter((s) => s.status === 'done' && s.kind !== 'thinking' && s.kind !== 'ask');
 
 export interface DataUsedChip {
   /** "Citations", or a page's address. */

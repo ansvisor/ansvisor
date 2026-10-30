@@ -7,6 +7,7 @@ import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import type { ChatStep } from '@/lib/chat/events';
 import { PlanCard, planStepPill, type PlanStep } from './plan-card';
 import { ApprovalCard, APPROVAL_CARD_STATUSES } from './approval-card';
+import { QuestionAnswered, QuestionCard } from './question-card';
 import { ResultCard } from './result-card';
 import { DenialCard } from './denial-card';
 import { ErrorCard } from './error-card';
@@ -17,7 +18,8 @@ import type { StepRow } from './step-list';
  * The run cards (Chat P0, D2; CHAT-mockup-v2 `#s-plan`, `#s-need`, `#s-done`,
  * `#s-denied`, `#s-failed`; CHAT-03; CHAT-20 §4c, §6; CHAT-23 G7, G8, P10):
  * each state, "Don't ask again" only where allowed, EXECUTE's one dark pill,
- * the denial's four parts, the read-only gate on every approve and send,
+ * the denial's four parts, the question card's picks and keys (CHAT-07), the
+ * read-only gate on every approve, answer and send,
  * screen readers hearing the steps, and no motion with reduced motion.
  */
 
@@ -719,6 +721,142 @@ describe('ErrorCard', () => {
   });
 });
 
+describe('QuestionCard', () => {
+  const ASK = {
+    n: 3,
+    question: 'Which page should the FAQ go on?',
+    options: [
+      { label: '/pricing', detail: 'Cited 18 times for pricing prompts', recommended: true },
+      { label: '/features', recommended: false, costMultiplier: 2 },
+    ],
+    allowOther: true,
+    multi: false,
+  };
+  const key = async (target: Element, k: string) => {
+    await act(async () => {
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+    });
+  };
+  const picked = () =>
+    $$('[data-action="question.pick"]').map((b) => b.getAttribute('aria-checked'));
+  const type = async (value: string) => {
+    await act(async () => {
+      const input = $<HTMLInputElement>('[data-action="question.other"]')!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+
+  it('shows the question, its options and Other…, the Recommended one picked, and takes focus', async () => {
+    await render(
+      <QuestionCard
+        ask={{ ...ASK, batch: { at: 1, of: 2 }, then: 'Then the draft' }}
+        onAnswer={() => {}}
+      />,
+    );
+    const card = $('[data-slot="question-card"]')!;
+    expect(card.dataset.tone).toBe('needsYou');
+    expect(document.activeElement).toBe(card);
+    expect(card.querySelector('h3')!.textContent).toBe('Which page should the FAQ go on?');
+    expect(card.textContent).toContain('1 of 2');
+    expect(card.textContent).toContain('Then the draft');
+    expect($('[role="radiogroup"]')).not.toBeNull();
+    const rows = $$('[data-action="question.pick"]');
+    expect(rows.map((r) => r.textContent)).toEqual([
+      '1/pricingRecommendedCited 18 times for pricing prompts',
+      '2/features2×',
+    ]);
+    expect(picked()).toEqual(['true', 'false']);
+    expect($<HTMLInputElement>('[data-action="question.other"]')!.placeholder).toBe('Other…');
+    expect(card.textContent).toContain('Press 1–3 to pick');
+  });
+
+  it('leaves the focus in a field the person is typing in', async () => {
+    const field = document.createElement('textarea');
+    document.body.appendChild(field);
+    field.focus();
+    await render(<QuestionCard ask={ASK} onAnswer={() => {}} />);
+    expect(document.activeElement).toBe(field);
+    field.remove();
+  });
+
+  it('picks with a click or a number key, and Enter is Next', async () => {
+    const onAnswer = vi.fn();
+    await render(<QuestionCard ask={ASK} onAnswer={onAnswer} />);
+    const card = $('[data-slot="question-card"]')!;
+    await key(card, '2');
+    expect(picked()).toEqual(['false', 'true']);
+    await key(card, '9');
+    expect(picked()).toEqual(['false', 'true']);
+    await key(card, 'Enter');
+    expect(onAnswer).toHaveBeenLastCalledWith({ selected: [1], other: null, skipped: false });
+    await click($$('[data-action="question.pick"]')[0]);
+    await click(action('question.next'));
+    expect(onAnswer).toHaveBeenLastCalledWith({ selected: [0], other: null, skipped: false });
+  });
+
+  it('leaves keys to the Other… field, and answers with its text', async () => {
+    const onAnswer = vi.fn();
+    await render(<QuestionCard ask={ASK} onAnswer={onAnswer} />);
+    await key($('[data-slot="question-card"]')!, '3');
+    const input = $<HTMLInputElement>('[data-action="question.other"]')!;
+    expect(document.activeElement).toBe(input);
+    expect(action('question.addOther')!.disabled).toBe(true);
+    await type('The blog');
+    // A number typed in the field stays text; Enter there adds it.
+    await key(input, '1');
+    expect(picked()).toEqual(['true', 'false']);
+    await key(input, 'Enter');
+    expect(onAnswer).not.toHaveBeenCalled();
+    expect(picked()).toEqual(['false', 'false']);
+    await click(action('question.next'));
+    expect(onAnswer).toHaveBeenCalledWith({ selected: [], other: 'The blog', skipped: false });
+  });
+
+  it('picks several when it may, Next off with none; Skip goes on with the Recommended', async () => {
+    const onAnswer = vi.fn();
+    await render(
+      <QuestionCard ask={{ ...ASK, multi: true, allowOther: false }} onAnswer={onAnswer} />,
+    );
+    expect($('[role="group"]')).not.toBeNull();
+    expect($$('[role="checkbox"]')).toHaveLength(2);
+    expect(action('question.other')).toBeNull();
+    await click($$('[data-action="question.pick"]')[1]);
+    expect(picked()).toEqual(['true', 'true']);
+    await click($$('[data-action="question.pick"]')[0]);
+    await click($$('[data-action="question.pick"]')[1]);
+    expect(action('question.next')!.disabled).toBe(true);
+    await click(action('question.skip'));
+    expect(onAnswer).toHaveBeenCalledWith({ selected: [], other: null, skipped: true });
+  });
+
+  it('answers nothing while the workspace is read-only: the upgrade dialog opens', async () => {
+    const onAnswer = vi.fn();
+    await render(<QuestionCard ask={ASK} onAnswer={onAnswer} />, { isLocked: true });
+    await click(action('question.next'));
+    await click(action('question.skip'));
+    expect(onAnswer).not.toHaveBeenCalled();
+    expect(openUpgrade).toHaveBeenCalledWith('Answering needs a plan');
+  });
+
+  it('is busy while saving, with the error under it', async () => {
+    await render(<QuestionCard ask={ASK} status="saving" onAnswer={() => {}} />);
+    expect(action('question.next')!.disabled).toBe(true);
+    expect(action('question.next')!.getAttribute('aria-busy')).toBe('true');
+    expect(action('question.skip')!.disabled).toBe(true);
+    await render(
+      <QuestionCard ask={ASK} status="error" error="Couldn’t send" onAnswer={() => {}} />,
+    );
+    expect($('[role="alert"]')!.textContent).toBe('Couldn’t send');
+  });
+
+  it('folds an answered question to one line: the question and the answer', async () => {
+    await render(<QuestionAnswered question="Which page?" answer="Skipped · used /pricing" />);
+    const line = $('[data-slot="question-answered"]')!;
+    expect(line.textContent).toBe('Which page?Skipped · used /pricing');
+  });
+});
+
 describe('every card', () => {
   async function renderAll() {
     await render(
@@ -771,6 +909,19 @@ describe('every card', () => {
           failedStep={1}
           retrying
         />
+        <QuestionCard
+          ask={{
+            n: 2,
+            question: 'Which page?',
+            options: [{ label: '/pricing', recommended: true }, { label: '/features' }],
+            allowOther: true,
+            multi: false,
+          }}
+          status="error"
+          error="Failed"
+          onAnswer={() => {}}
+        />
+        <QuestionAnswered question="Which page?" answer="/pricing" />
       </>,
     );
   }

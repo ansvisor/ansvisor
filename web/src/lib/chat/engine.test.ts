@@ -15,8 +15,9 @@ import {
  * Chat's engine (C3), with a scripted model and an in-memory database: a turn
  * streams as steps; Auto reads with Haiku and writes with Sonnet; a change
  * waits on its card, an EXECUTE on its click; Approve is bound to the card's
- * arguments; a refused hold starts nothing; a refusal is recorded; Stop and a
- * card left 7 days end the run; and no event names a tool or carries an id.
+ * arguments; a refused hold starts nothing; a refusal is recorded; a question
+ * card waits for its answer, once; Stop and a card left 7 days end the run;
+ * and no event names a tool or carries an id.
  */
 
 vi.mock('@/lib/supabase/admin', async () => ({
@@ -109,6 +110,7 @@ const { runFromEvents } = await import('./run-state');
 const { toClientStep } = await import('./steps');
 const { CHAT_TOOLS } = await import('./registry/tools');
 const { readPrecedenceContext } = await import('./precedence-context');
+const { ASK_TOOL } = await import('./asks');
 
 type ChatEvent = import('./events').ChatEvent;
 type ChatActor = import('./engine').ChatActor;
@@ -220,6 +222,7 @@ function seed() {
     chat_run_state: [],
     chat_run_steps: [],
     chat_run_events: [],
+    chat_asks: [],
   });
   let clock = Date.parse('2026-10-29T09:00:00.000Z');
   const at = () => new Date((clock += 1000)).toISOString();
@@ -240,6 +243,7 @@ function seed() {
       started_at: null,
       finished_at: null,
     }),
+    chat_asks: () => ({ answer_json: null, answered_at: null, created_at: at() }),
     chat_run_state: () => ({
       messages: [],
       pending: null,
@@ -322,6 +326,7 @@ function expectClean(events: ChatEvent[]) {
   const json = JSON.stringify(events, (key, value) => (key === 'href' ? undefined : value));
   for (const tool of CHAT_TOOLS) expect(json).not.toContain(tool.name);
   expect(json).not.toContain(engine.EXPLAIN_TOOL);
+  expect(json).not.toContain(ASK_TOOL);
   expect(json).not.toMatch(UUID);
   expect(json).not.toMatch(/"(id|brand_id|brandId|tool|toolName|input|output)"\s*:/);
 }
@@ -646,6 +651,280 @@ describe('changes wait for the person', () => {
     expect(stepsOf(runId)[0]).toMatchObject({ status: 'skipped', detail: 'Skipped' });
     expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('skipped');
     expect(runRow(runId).status).toBe('done');
+  });
+});
+
+describe('question cards (CHAT-07)', () => {
+  const ask = (question: string, extra: Record<string, unknown> = {}) => ({
+    question,
+    options: [
+      { label: '/pricing', detail: 'Cited 18 times for pricing prompts', recommended: true },
+      { label: '/features' },
+    ],
+    ...extra,
+  });
+  const asksOf = (runId: string) =>
+    db.tables.chat_asks
+      .filter((a) => a.run_id === runId)
+      .sort((a, b) => (a.position as number) - (b.position as number));
+  /** Answers the question the run waits on and drives on. */
+  async function answer(actor: ChatActor, runId: string, body: Record<string, unknown>) {
+    const n = ofType(await eventsOf(runId), 'ask.created').at(-1)!.data.n;
+    const prepared = await engine.prepareResume(actor, runId, 'answer', { n, ...body });
+    if (prepared.ok) await engine.driveRun(actor, runId, prepared.resume);
+    return prepared;
+  }
+
+  it('waits on the card without a model call, then goes on with the answer', async () => {
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(
+          toolCall(
+            'q1',
+            ASK_TOOL,
+            ask('Which page should the FAQ go on?', {
+              allow_other: true,
+              then: 'Then I’ll write the FAQ draft',
+            }),
+          ),
+        ),
+        text('Writing it for /features.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Write a FAQ', 'auto');
+    expect(sonnet.seen[0].tools?.map((tool) => tool.name)).toContain(ASK_TOOL);
+    expect(runRow(runId).status).toBe('waiting');
+    expect(sonnet.seen).toHaveLength(1);
+    expect(stepsOf(runId)[0]).toMatchObject({
+      kind: 'ask',
+      status: 'waiting',
+      label: 'Waiting for your answer',
+      detail: 'Then I’ll write the FAQ draft',
+    });
+    const created = ofType(await eventsOf(runId), 'ask.created');
+    expect(created.map((e) => e.data)).toEqual([
+      {
+        n: 1,
+        question: 'Which page should the FAQ go on?',
+        options: [
+          { label: '/pricing', detail: 'Cited 18 times for pricing prompts', recommended: true },
+          { label: '/features', recommended: false },
+        ],
+        allowOther: true,
+        multi: false,
+        then: 'Then I’ll write the FAQ draft',
+      },
+    ]);
+    expect(asksOf(runId)).toMatchObject([{ position: 1, answered_at: null }]);
+
+    expect(await answer(ADMIN, runId, { selected: [1] })).toMatchObject({ ok: true });
+    expect(stepsOf(runId)[0]).toMatchObject({
+      status: 'done',
+      label: 'Which page should the FAQ go on?',
+      detail: '/features',
+    });
+    expect(asksOf(runId)[0].answer_json).toEqual({
+      selected: [1],
+      other: null,
+      skipped: false,
+      via: 'card',
+    });
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('"selected":["/features"]');
+    expect(runRow(runId).status).toBe('done');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    const rebuilt = runFromEvents(events);
+    expect(rebuilt.question).toBeNull();
+    expect(rebuilt.text).toBe('Writing it for /features.');
+  });
+
+  it('goes on with the Recommended option when skipped, and says so on its line', async () => {
+    const { sonnet } = useModels(
+      [READY],
+      [calls(toolCall('q1', ASK_TOOL, ask('Which page?'))), text('Used /pricing.')],
+    );
+    const runId = await turn(ADMIN, 'Write a FAQ');
+    expect(await answer(ADMIN, runId, { skipped: true })).toMatchObject({ ok: true });
+    expect(stepsOf(runId)[0]).toMatchObject({
+      status: 'done',
+      detail: 'Skipped · used /pricing',
+    });
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('"skipped":true,"use":"/pricing"');
+  });
+
+  it('takes the composer’s text as the answer to any question', async () => {
+    const { sonnet } = useModels(
+      [READY],
+      [calls(toolCall('q1', ASK_TOOL, ask('Which page?'))), text('On the blog.')],
+    );
+    const runId = await turn(ADMIN, 'Write a FAQ');
+    // No Other… row on the card: the composer's message answers it all the same.
+    expect(await answer(ADMIN, runId, { other: 'card', via: 'card' })).toMatchObject({
+      ok: false,
+      status: 400,
+    });
+    expect(await answer(ADMIN, runId, { other: ' The blog ', via: 'composer' })).toMatchObject({
+      ok: true,
+    });
+    expect(stepsOf(runId)[0].detail).toBe('The blog');
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('The blog');
+  });
+
+  it('refuses an answer that doesn’t fit, a second answer and an approval for it', async () => {
+    useModels([READY], [calls(toolCall('q1', ASK_TOOL, ask('Which page?'))), text('Done.')]);
+    const runId = await turn(ADMIN, 'Write a FAQ');
+    const tries = [
+      { n: 1, selected: [0, 1] },
+      { n: 1, selected: [2] },
+      { n: 1 },
+      { n: 1, selected: [0], skipped: true },
+    ];
+    for (const body of tries) {
+      expect(await engine.prepareResume(ADMIN, runId, 'answer', body)).toMatchObject({
+        ok: false,
+        status: 400,
+      });
+    }
+    expect(await engine.prepareResume(ADMIN, runId, 'answer', { n: 2 })).toMatchObject({
+      code: 'not_waiting',
+    });
+    expect(
+      await engine.prepareResume(ADMIN, runId, 'approve', { n: 1, digest: '0123456789abcdef' }),
+    ).toMatchObject({ code: 'not_waiting' });
+    expect(await engine.prepareResume(ADMIN, runId, 'skip', { n: 1 })).toMatchObject({
+      code: 'not_waiting',
+    });
+    expect(await engine.prepareResume(ANALYST, runId, 'answer', { n: 1 })).toMatchObject({
+      status: 404,
+    });
+
+    const body = { n: 1, selected: [0] };
+    const [first, second] = await Promise.all([
+      engine.prepareResume(ADMIN, runId, 'answer', body),
+      engine.prepareResume(ADMIN, runId, 'answer', body),
+    ]);
+    expect([first.ok, second.ok].sort()).toEqual([false, true]);
+    expect([first, second].find((r) => !r.ok)).toMatchObject({ status: 409, code: 'answered' });
+    expect(asksOf(runId)[0].answer_json).toMatchObject({ selected: [0] });
+  });
+
+  it('counts the questions asked together: 1 of 2, then 2 of 2', async () => {
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(
+          toolCall('q1', ASK_TOOL, ask('Which page?')),
+          toolCall('q2', ASK_TOOL, {
+            question: 'Which questions?',
+            options: [
+              { label: 'Pricing', recommended: true },
+              { label: 'Setup' },
+              { label: 'Security' },
+            ],
+            multi: true,
+          }),
+        ),
+        text('Both noted.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Write a FAQ');
+    expect(ofType(await eventsOf(runId), 'ask.created').at(-1)!.data.batch).toEqual({
+      at: 1,
+      of: 2,
+    });
+    await answer(ADMIN, runId, { selected: [0] });
+    expect(runRow(runId).status).toBe('waiting');
+    expect(sonnet.seen).toHaveLength(1);
+    const second = ofType(await eventsOf(runId), 'ask.created').at(-1)!.data;
+    expect(second).toMatchObject({ n: 2, multi: true, batch: { at: 2, of: 2 } });
+    await answer(ADMIN, runId, { selected: [0, 2] });
+    expect(stepsOf(runId)[1].detail).toBe('Pricing, Security');
+    expect(asksOf(runId).map((a) => a.position)).toEqual([1, 2]);
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it('answers the questions asked together with one message from the composer', async () => {
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(
+          toolCall('q1', ASK_TOOL, ask('Which page?')),
+          toolCall('q2', ASK_TOOL, ask('How long?')),
+        ),
+        text('Done.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Write a FAQ');
+    const message = '/pricing, each answer under 60 words';
+    await answer(ADMIN, runId, { other: message, via: 'composer' });
+    // No second card: the message answered it too, and its line folds with it.
+    expect(ofType(await eventsOf(runId), 'ask.created')).toHaveLength(1);
+    expect(stepsOf(runId).map((s) => [s.kind, s.status, s.label, s.detail])).toEqual([
+      ['ask', 'done', 'Which page?', message],
+      ['ask', 'done', 'How long?', message],
+    ]);
+    expect(asksOf(runId)[1]).toMatchObject({
+      position: 2,
+      answer_json: { selected: [], other: message, skipped: false, via: 'composer' },
+    });
+    expect(asksOf(runId)[1].answered_at).not.toBeNull();
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('the same message');
+    expect(runRow(runId).status).toBe('done');
+    expectClean(await eventsOf(runId));
+  });
+
+  it('refuses a question without exactly one Recommended, and asks 4 a run at most', async () => {
+    const both = {
+      question: 'Which page?',
+      options: [
+        { label: '/pricing', recommended: true },
+        { label: '/features', recommended: true },
+      ],
+    };
+    const five = [1, 2, 3, 4, 5].map((i) => toolCall(`q${i}`, ASK_TOOL, ask(`Question ${i}?`)));
+    const { sonnet } = useModels(
+      [READY],
+      [calls(toolCall('bad', ASK_TOOL, both)), calls(...five), text('Went with /pricing.')],
+    );
+    const runId = await turn(ADMIN, 'Write a FAQ');
+    // The refused one tells the model why; no card, no row.
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('Mark exactly one option recommended.');
+    for (let i = 0; i < 4; i++) {
+      expect(runRow(runId).status).toBe('waiting');
+      await answer(ADMIN, runId, { skipped: true });
+    }
+    expect(asksOf(runId)).toHaveLength(4);
+    expect(JSON.stringify(sonnet.seen[2].prompt)).toContain('limit_reached');
+    expect(sonnet.seen[2].tools?.map((tool) => tool.name)).not.toContain(ASK_TOOL);
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it('keeps an open question as skipped on Stop, and refuses an answer while read-only', async () => {
+    useModels(
+      [READY, READY],
+      [
+        calls(toolCall('q1', ASK_TOOL, ask('Which page?'))),
+        calls(toolCall('q2', ASK_TOOL, ask('Which page?'))),
+      ],
+    );
+    const stopped = await turn(ADMIN, 'Write a FAQ');
+    await engine.stopChatRun(ADMIN, stopped);
+    expect(runRow(stopped).status).toBe('stopped');
+    expect(stepsOf(stopped)[0]).toMatchObject({ status: 'skipped', detail: 'Stopped' });
+    expect(asksOf(stopped)[0]).toMatchObject({
+      answer_json: { selected: [], other: null, skipped: true, via: 'card' },
+    });
+    expect(runFromEvents(await eventsOf(stopped)).question).toBeNull();
+
+    const locked = await turn(ADMIN, 'Write another');
+    db.tables.organizations[0].subscription_status = 'canceled';
+    expect(await answer(ADMIN, locked, { selected: [0] })).toMatchObject({
+      ok: false,
+      status: 402,
+    });
+    expect(asksOf(locked)[0].answered_at).toBeNull();
+    expect(runRow(locked).status).toBe('waiting');
   });
 });
 

@@ -5,10 +5,16 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { ApprovalCard } from '@/components/agentic/approval-card';
 import { DenialCard } from '@/components/agentic/denial-card';
+import {
+  QuestionAnswered,
+  QuestionCard,
+  type QuestionAnswerValue,
+} from '@/components/agentic/question-card';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { searchChatReferences } from '@/lib/actions/chat-references';
+import { composerAnswer, recommendedLabel } from '@/lib/chat/asks';
 import type { ChatEvent } from '@/lib/chat/events';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { readSse } from '@/lib/chat/run-hub';
@@ -53,6 +59,7 @@ const OPEN: ClientRunStatus[] = ['queued', 'running', 'waiting'];
 /** The events after which a run's stream ends: it waits on the person, or it ended. */
 const SETTLING = new Set<string>([
   'confirm.required',
+  'ask.created',
   'run.finished',
   'run.error',
   'run.paused_cap',
@@ -145,6 +152,8 @@ export function ChatThreadView({
 
   const last = turns[turns.length - 1];
   const working = !!last?.run && OPEN.includes(last.run.status);
+  // A question the run waits on: the composer's message answers it (CHAT-07 §A item 8).
+  const asking = last?.run?.question ?? null;
 
   useEffect(() => {
     if (!working) return;
@@ -287,6 +296,41 @@ export function ChatThreadView({
     await consume(turn.key, res.body, runId);
   }
 
+  /** An answer to the question card the run waits on: from the card, or the composer's text. */
+  async function answerQuestion(
+    turn: Turn,
+    value: QuestionAnswerValue,
+    via: 'card' | 'composer' = 'card',
+  ): Promise<boolean> {
+    const run = turn.run;
+    if (!turn.runId || !run?.question) return false;
+    const runId = turn.runId;
+    const res = await fetch(`/api/chat/runs/${runId}/answer?after=${run.lastSeq}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ n: run.question.n, ...value, via }),
+    }).catch(() => null);
+    if (!res?.ok || !res.body) {
+      const failed = (await res?.json().catch(() => null)) as {
+        error?: string;
+        code?: string;
+      } | null;
+      if (failed?.code === 'subscription_inactive') openUpgrade();
+      else toast.error(failed?.error ?? t('answerFailed'));
+      // Already answered elsewhere: the run's events show where it went.
+      const events = await fetch(`/api/chat/runs/${runId}/events?after=${run.lastSeq}`);
+      if (events.ok && events.body) await consume(turn.key, events.body, runId);
+      return false;
+    }
+    // The next question asked with it comes up: say so (CHAT-07 §A item 6).
+    const batch = run.question.batch;
+    if (via === 'card' && batch && batch.at < batch.of) {
+      toast(t('questionNext', { at: batch.at + 1, of: batch.of }));
+    }
+    await consume(turn.key, res.body, runId);
+    return true;
+  }
+
   async function stop() {
     if (!last?.runId) return;
     await fetch(`/api/chat/runs/${last.runId}/stop`, { method: 'POST' }).catch(() => null);
@@ -326,6 +370,7 @@ export function ChatThreadView({
                   reconnecting={reconnecting && turn === last}
                   onApprove={(dontAskAgain) => answer(turn, 'approve', dontAskAgain)}
                   onSkip={() => answer(turn, 'skip')}
+                  onAnswerQuestion={(value) => answerQuestion(turn, value)}
                   onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
                 />
               </li>
@@ -348,7 +393,8 @@ export function ChatThreadView({
           mode={mode}
           onModeChange={setMode}
           fullAutoOpen={fullAutoOpen}
-          running={working}
+          running={working && !asking}
+          ghost={asking ? recommendedLabel(asking) : undefined}
           sharedReadOnly={!!thread && !thread.mine}
           disabled={atCap}
           placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : undefined}
@@ -357,7 +403,11 @@ export function ChatThreadView({
           onRemoveChip={onRemoveChip}
           references={pageReferences}
           draft={draft}
-          onSend={send}
+          onSend={(message, sent) =>
+            asking && last
+              ? answerQuestion(last, composerAnswer(asking, message), 'composer')
+              : send(message, sent)
+          }
           onStop={() => void stop()}
           onSteer={async (message, sent) => {
             await stop();
@@ -385,6 +435,7 @@ function Answer({
   reconnecting,
   onApprove,
   onSkip,
+  onAnswerQuestion,
   onFiled,
 }: {
   turn: Turn;
@@ -392,9 +443,11 @@ function Answer({
   reconnecting: boolean;
   onApprove: (dontAskAgain: boolean) => Promise<void>;
   onSkip: () => Promise<void>;
+  onAnswerQuestion: (value: QuestionAnswerValue) => Promise<boolean>;
   onFiled: (fileId: string) => void;
 }) {
   const t = useTranslations('chatPage');
+  const [answering, setAnswering] = useState(false);
   const run = turn.run ?? { ...emptyRun('done'), text: turn.text };
   const workingMs = run.summary?.workingMs ?? (turn.startedAt ? now - turn.startedAt : 0);
   const confirmStep = run.confirm ? run.steps.find((s) => s.n === run.confirm!.n) : undefined;
@@ -421,6 +474,23 @@ function Answer({
           }}
         />
       ))}
+      {run.steps
+        .filter((step) => step.kind === 'ask' && step.status === 'done')
+        .map((step) => (
+          <QuestionAnswered key={step.n} question={step.label} answer={step.detail ?? ''} />
+        ))}
+      {run.question && (
+        <QuestionCard
+          key={run.question.n}
+          ask={run.question}
+          status={answering ? 'saving' : 'pending'}
+          onAnswer={async (value) => {
+            setAnswering(true);
+            await onAnswerQuestion(value);
+            setAnswering(false);
+          }}
+        />
+      )}
       {run.confirm && (
         <ApprovalCard
           kind={confirmStep?.kind === 'execute' ? 'execute' : 'write'}

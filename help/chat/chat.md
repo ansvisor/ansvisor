@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, question, chat asks, recommended option, skip question]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-30
@@ -54,6 +54,16 @@ The panel isn't on Chat's own pages, where **Ctrl J** takes you to the message b
 While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay.
 
 You can type while it works. Enter then stops the run and sends what you typed as the next message, so you can redirect it, for example "only blog pages".
+
+## When Chat asks you
+
+When an answer changes what Chat makes and isn't in your data, Chat stops and asks, with 2 to 4 options. The one marked **Recommended** is picked to start with; under each option it says why it fits. When Chat asks more than one thing at once, the card counts them, such as "1 of 2".
+
+Click an option, or press its number, then **Next** or Enter. Where you can pick several, click each one. **Other…** takes your own answer; click **Add**. **Skip** goes on with the Recommended option.
+
+You can also answer in the box below: it shows the Recommended option dim, and Tab puts it in. Press Enter to send. One message answers every question Chat asked with it.
+
+Once you answer, the card folds to one line with the question and your answer, and Chat goes on. Stopping the run leaves its question skipped.
 
 ## Shortcuts and your data
 
