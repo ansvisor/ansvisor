@@ -19,19 +19,10 @@ vi.mock('@/i18n/navigation', () => ({
   ),
 }));
 
-// An in-memory localStorage: the test environment has none.
-const store = new Map<string, string>();
-Object.defineProperty(window, 'localStorage', {
-  configurable: true,
-  value: {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => void store.set(key, value),
-    removeItem: (key: string) => void store.delete(key),
-    clear: () => store.clear(),
-  },
-});
+const prefs = vi.hoisted(() => ({ saveUsageNoticePeriod: vi.fn(async () => ({ ok: true })) }));
+vi.mock('@/lib/actions/chat-prefs', () => prefs);
 
-const { ChatUsageNotice, CHAT_USAGE_NOTICE_KEY, chatAtCap } = await import('./chat-usage');
+const { ChatUsageNotice, chatAtCap } = await import('./chat-usage');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -50,12 +41,12 @@ const usage = (over: Partial<AiUsage> = {}): AiUsage => ({
 
 let container: HTMLDivElement;
 let root: Root;
-async function render() {
+async function render(seenPeriod: string | null = null) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <RoleProvider role="admin">
-          <ChatUsageNotice />
+          <ChatUsageNotice seenPeriod={seenPeriod} />
         </RoleProvider>
       </NextIntlClientProvider>,
     );
@@ -63,7 +54,7 @@ async function render() {
 }
 
 beforeEach(() => {
-  store.clear();
+  prefs.saveUsageNoticePeriod.mockClear();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -84,25 +75,35 @@ describe('chatAtCap', () => {
 });
 
 describe('ChatUsageNotice', () => {
-  it('says 80% once a period, until it is closed', async () => {
+  it('says 80% once a period, keeps that on the person, and × closes it', async () => {
     state.usage = usage();
     await render();
     expect(container.textContent).toBe("You've used 84.6% of this month's AI limit.");
+    expect(prefs.saveUsageNoticePeriod).toHaveBeenCalledWith('2026-10-01');
     await act(async () =>
       container.querySelector<HTMLButtonElement>('[data-action="usage.closeNotice"]')!.click(),
     );
     expect(container.innerHTML).toBe('');
-    expect(store.get(CHAT_USAGE_NOTICE_KEY)).toBe('2026-10-01T00:00:00.000Z:growth');
 
+    // Seen this period, on this device or another: not said again.
     act(() => root.unmount());
     root = createRoot(container);
-    await render();
+    await render('2026-10-01');
     expect(container.innerHTML).toBe('');
+    expect(prefs.saveUsageNoticePeriod).toHaveBeenCalledTimes(1);
+  });
 
-    // A new period says it again.
+  it('says it again in a new period, and once per visit however many chats open', async () => {
     state.usage = usage({ periodStart: '2026-11-01T00:00:00.000Z' });
-    await render();
+    await render('2026-10-01');
     expect(container.textContent).toContain('84.6%');
+    expect(prefs.saveUsageNoticePeriod).toHaveBeenCalledWith('2026-11-01');
+
+    // Another chat on the same visit: the page's read is older than the save.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render('2026-10-01');
+    expect(container.innerHTML).toBe('');
   });
 
   it('shows the red banner with where to get more once used up, and nothing below 80%', async () => {

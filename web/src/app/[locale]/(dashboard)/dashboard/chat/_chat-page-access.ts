@@ -77,6 +77,8 @@ export interface ChatComposerSetup {
   defaultMode: ChatMode;
   /** Full auto (plan facts §7): Growth and up, paid. */
   fullAutoOpen: boolean;
+  /** The AI usage period whose 80% line the person already saw (CHAT-04 item 16). */
+  usageNoticeSeen: string | null;
 }
 
 /**
@@ -86,7 +88,11 @@ export interface ChatComposerSetup {
  * to the careful one.
  */
 export async function chatComposerSetup(): Promise<ChatComposerSetup> {
-  const fallback: ChatComposerSetup = { defaultMode: 'auto', fullAutoOpen: false };
+  const fallback: ChatComposerSetup = {
+    defaultMode: 'auto',
+    fullAutoOpen: false,
+    usageNoticeSeen: null,
+  };
   const supabase = await createClient();
   const {
     data: { user },
@@ -99,7 +105,11 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
     .maybeSingle();
   if (!profile?.organization_id) return fallback;
   const [{ data: prefs }, { data: org }] = await Promise.all([
-    supabase.from('chat_user_prefs').select('default_mode').eq('user_id', user.id).maybeSingle(),
+    supabase
+      .from('chat_user_prefs')
+      .select('default_mode, usage_notice_period')
+      .eq('user_id', user.id)
+      .maybeSingle(),
     supabase
       .from('organizations')
       .select(ORG_PLAN_COLUMNS)
@@ -113,5 +123,6 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
   return {
     defaultMode: defaultMode === 'full_auto' && !fullAutoOpen ? 'auto' : defaultMode,
     fullAutoOpen,
+    usageNoticeSeen: prefs?.usage_notice_period ?? null,
   };
 }

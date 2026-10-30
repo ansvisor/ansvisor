@@ -1,15 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, X } from 'lucide-react';
 import { AiUsageBanner } from '@/components/ai-usage/ai-usage-banner';
 import { AiUsageMeter } from '@/components/ai-usage/ai-usage-meter';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
-import { aiUsageTone, aiUsageToastMark, percentLabel, type AiUsage } from '@/lib/billing/ai-usage';
+import { saveUsageNoticePeriod } from '@/lib/actions/chat-prefs';
+import { aiUsageTone, percentLabel, type AiUsage } from '@/lib/billing/ai-usage';
 
-/** localStorage: the period whose 80% line above the composer was closed (CHAT-04 item 16). */
-export const CHAT_USAGE_NOTICE_KEY = 'aeo:chat-usage-notice';
+/**
+ * The first day of an AI usage period, as chat_user_prefs.usage_notice_period
+ * keeps the one whose 80% line the person saw (CHAT-04 item 16); null
+ * without a period.
+ */
+export function usagePeriodDay(usage: AiUsage): string | null {
+  return usage.periodStart ? usage.periodStart.slice(0, 10) : null;
+}
+
+/** The periods whose line this tab already showed: a new chat on the same visit says it no more. */
+const shownThisVisit = new Set<string>();
 
 /**
  * Whether Chat stops at the cap (CHAT-04 item 17): the allowance is used up
@@ -32,39 +42,34 @@ export function ComposerUsageMeter() {
 
 /**
  * What Chat says about the AI usage above its composer (CHAT-04 items
- * 16–17): from 80%, one amber line once a period, which × closes for the
- * period; used up, the red banner with where to get more (other members are
- * told to ask an Admin), while the composer is off.
+ * 16–17): from 80%, one amber line once per person per period, on every
+ * device: kept on the person (chat_user_prefs.usage_notice_period) the first
+ * time it shows, and × closes it; used up, the red banner with where to get
+ * more (other members are told to ask an Admin), while the composer is off.
+ * `seenPeriod` is the period the person already saw it in, as the page read
+ * it.
  */
-export function ChatUsageNotice() {
+export function ChatUsageNotice({ seenPeriod = null }: { seenPeriod?: string | null }) {
   const t = useTranslations('aiUsage.banner');
   const tChat = useTranslations('chatComposer.usage');
   const { usage } = useAiUsage();
-  // The usage is read in the browser after the first paint, so the server's
-  // render and the first one here both show nothing, whatever this reads.
-  const [closed, setClosed] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(CHAT_USAGE_NOTICE_KEY);
-    } catch {
-      return null;
-    }
-  });
+  const [closed, setClosed] = useState(false);
+  // What was seen when this opened: the line seen here stays until ×.
+  const [seenBefore] = useState(() => new Set([...shownThisVisit, seenPeriod ?? '']));
+  const tone = usage && !usage.unlimited ? aiUsageTone(usage) : null;
+  const period = usage ? usagePeriodDay(usage) : null;
+  const shown = tone === 'warning' && !closed && !(period && seenBefore.has(period));
 
-  if (!usage || usage.unlimited) return null;
-  const tone = aiUsageTone(usage);
+  // Shown: kept on the person, so it isn't said again this period.
+  useEffect(() => {
+    if (!shown || !period || shownThisVisit.has(period)) return;
+    shownThisVisit.add(period);
+    void saveUsageNoticePeriod(period);
+  }, [shown, period]);
+
+  if (!usage || tone === null) return null;
   if (tone === 'exhausted') return <AiUsageBanner />;
-  if (tone !== 'warning') return null;
-  const mark = aiUsageToastMark(usage);
-  if (closed === mark) return null;
-
-  const close = () => {
-    setClosed(mark);
-    try {
-      localStorage.setItem(CHAT_USAGE_NOTICE_KEY, mark);
-    } catch {
-      // Storage blocked: closed for this page.
-    }
-  };
+  if (!shown) return null;
 
   return (
     <p
@@ -80,7 +85,7 @@ export function ChatUsageNotice() {
       <button
         type="button"
         data-action="usage.closeNotice"
-        onClick={close}
+        onClick={() => setClosed(true)}
         aria-label={tChat('close')}
         className="flex size-5 shrink-0 items-center justify-center rounded hover:bg-amber-100 dark:hover:bg-amber-900/40"
       >

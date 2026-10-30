@@ -80,11 +80,14 @@ export function ChatThreadView({
   variant,
   defaultMode,
   fullAutoOpen,
+  usageNoticeSeen = null,
 }: {
   thread: ChatThread | null;
   variant: ComposerVariant;
   defaultMode: ChatMode;
   fullAutoOpen: boolean;
+  /** The AI usage period whose 80% line the person already saw. */
+  usageNoticeSeen?: string | null;
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
@@ -288,7 +291,7 @@ export function ChatThreadView({
             : 'sticky bottom-0 flex flex-col gap-2 bg-background pt-1 pb-2'
         }
       >
-        {(!thread || thread.mine) && <ChatUsageNotice />}
+        {(!thread || thread.mine) && <ChatUsageNotice seenPeriod={usageNoticeSeen} />}
         <ChatComposer
           variant={variant}
           mode={mode}
