@@ -125,6 +125,10 @@ describe('ChatFiles', () => {
     expect(a.textContent).toContain('FAQ block for /pricing');
     expect(a.textContent).toContain('HTML · Markdown · Word · PDF');
     expect(a.textContent).toContain('Used in Content draft');
+    // On its own line, so 1024px never cuts it off after the formats.
+    expect([...a.querySelectorAll('em')].map((em) => em.textContent)).toContain(
+      'Used in Content draft',
+    );
     expect(a.textContent).toContain('Agent');
     expect(a.querySelector('[data-action="files.openSourceChat"]')?.getAttribute('href')).toBe(
       `/dashboard/chat/${CHAT}`,
@@ -176,6 +180,15 @@ describe('ChatFiles', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/chat/files/a?format=md');
     expect(writeText).toHaveBeenCalledWith('# FAQ');
     expect(toast).toHaveBeenCalledWith('Copied');
+
+    // A failed read says so, never a silent copy (Safari's refusal included).
+    answer = () => new Response('Not found', { status: 404 });
+    await click(rows()[0].querySelector<HTMLElement>('[data-action="files.copy"]')!);
+    expect(toast.error).toHaveBeenCalledWith("Couldn't copy that. Try again.");
+    answer = (url) =>
+      url.startsWith('/api/chat/files?')
+        ? Response.json({ ok: true, ...page })
+        : new Response('# FAQ', { status: 200 });
 
     answer = () =>
       new Response('%PDF', {

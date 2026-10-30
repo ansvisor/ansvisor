@@ -30,7 +30,7 @@ import {
   type ComposerVariant,
 } from './composer/chat-composer';
 import { AnswerActions } from './run/answer-actions';
-import { DeliverableCard } from './run/deliverable-card';
+import { DeliverableCard, filedNumbers } from './run/deliverable-card';
 import { RunAnswer } from './run/run-answer';
 import { StaffDebug } from './run/staff-debug';
 import { useChatDebug } from './chat-debug';
@@ -473,6 +473,7 @@ function Answer({
   const run = turn.run ?? { ...emptyRun('done'), text: turn.text };
   const workingMs = run.summary?.workingMs ?? (turn.startedAt ? now - turn.startedAt : 0);
   const confirmStep = run.confirm ? run.steps.find((s) => s.n === run.confirm!.n) : undefined;
+  const filedAt = filedNumbers(run.deliverables);
 
   const cards = (
     <>
@@ -513,7 +514,8 @@ function Answer({
           <DeliverableCard
             key={`${deliverable.title}-${i}`}
             runId={turn.runId!}
-            n={i + 1}
+            // Its place among the filed ones, as the server counts them: one not filed has none.
+            n={filedAt[i] ?? 0}
             deliverable={deliverable}
           />
         ))}

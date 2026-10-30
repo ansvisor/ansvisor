@@ -62,6 +62,12 @@ describe('countDueActions', () => {
     ]);
   });
 
+  it('takes the demo brand’s id, made by hand and not an RFC 4122 one', async () => {
+    const demo = '33333333-3333-3333-3333-333333333333';
+    expect(await countDueActions(demo, '2026-11-01')).toEqual({ ok: true, count: 3 });
+    expect(db.filters).toContainEqual(['actions', 'eq', 'brand_id', demo]);
+  });
+
   it('reads nothing for a bad brand or date, signed out or with the new Chat off', async () => {
     expect(await countDueActions('nope', '2026-11-01')).toEqual({ ok: false });
     expect(await countDueActions(BRAND, 'Sunday')).toEqual({ ok: false });

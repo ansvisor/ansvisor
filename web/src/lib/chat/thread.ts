@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import {
   isChatEventType,
+  maskIds,
   type ChatDeliverable,
   type ChatRunSummary,
   type ChatStep,
@@ -167,7 +168,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
     madeByRun.set(f.run_id, [
       ...(madeByRun.get(f.run_id) ?? []),
       {
-        title: f.title,
+        title: maskIds(f.title),
         type: f.type,
         formats: f.formats,
         status: f.status,

@@ -145,7 +145,6 @@ export function ChatFiles() {
   }, [query]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load(filter, q);
   }, [load, filter, q]);
 
@@ -177,13 +176,23 @@ export function ChatFiles() {
     });
 
   async function copy(file: ChatFileItem) {
-    const res = await fetch(`/api/chat/files/${file.id}?format=md`).catch(() => null);
-    if (!res?.ok || !navigator.clipboard) {
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      // Safari copies only within the click: the item is written at once, its text to come.
+      const text = fetch(`/api/chat/files/${file.id}?format=md`).then((res) => {
+        if (!res.ok) throw new Error('Not read');
+        return res.text();
+      });
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+        const blob = text.then((value) => new Blob([value], { type: 'text/plain' }));
+        await navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })]);
+      } else {
+        await navigator.clipboard.writeText(await text);
+      }
+      toast(t('copied'));
+    } catch {
       toast.error(t('copyFailed'));
-      return;
     }
-    await navigator.clipboard.writeText(await res.text());
-    toast(t('copied'));
   }
 
   async function download(file: ChatFileItem, format: string) {
@@ -350,13 +359,8 @@ export function ChatFiles() {
             const Icon = DELIVERABLE_ICONS[file.type] ?? FileText;
             const formats = FORMAT_ORDER.filter((format) => file.formats.includes(format));
             const stamp = when(file);
-            const line = [
-              knownFormats(file.formats)
-                .map((format) => t(`formatNames.${format}`))
-                .join(' · '),
-              file.draftHref ? t('usedInDraft') : null,
-            ]
-              .filter(Boolean)
+            const line = knownFormats(file.formats)
+              .map((format) => t(`formatNames.${format}`))
               .join(' · ');
             return (
               <div
@@ -388,6 +392,12 @@ export function ChatFiles() {
                     <em className="block truncate text-xs not-italic text-muted-foreground">
                       {line}
                     </em>
+                    {/* Its own line, so a narrow table (1024px) never cuts it off. */}
+                    {file.draftHref && (
+                      <em className="block truncate text-xs not-italic text-muted-foreground">
+                        {t('usedInDraft')}
+                      </em>
+                    )}
                   </span>
                 </span>
                 <span className={cn('truncate text-[13px]', HIDE_NARROW)}>{maker(file)}</span>
