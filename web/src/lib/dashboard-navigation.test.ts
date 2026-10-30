@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import messages from '../../messages/en.json';
 import { dashboardNav } from '@/config/dashboard';
 import {
   activeChildHref,
+  CHAT_AGENTIC_HREF,
+  CHAT_HREF,
   childLinkHref,
   dashboardNavBadge,
   dashboardNavLabelKeys,
   getDashboardNavGroupLabel,
   getDashboardNavLabel,
+  navItemHref,
   shouldShowDashboardNavItem,
 } from '@/lib/dashboard-navigation';
 
@@ -43,11 +47,10 @@ describe('getDashboardNavLabel', () => {
 
   // Content Editor (CE-001): Content is a group, new as a whole, its pages in
   // the order the work goes; Opportunities keeps today's route.
-  it('lists Opportunities, the Plan, the Editor and the Library under Content, new', () => {
+  it('lists Opportunities, the Plan, the Editor and the Library under Content', () => {
     const items = dashboardNav.flatMap((group) => group.items);
     const content = items.find((item) => item.title === 'Content')!;
     expect(content.href).toBe('/dashboard/content');
-    expect(content.badge).toBe('New');
     expect(content.children).toEqual([
       { title: 'Opportunities', href: '/dashboard/content' },
       { title: 'Plan', href: '/dashboard/content/plan' },
@@ -78,11 +81,6 @@ describe('shouldShowDashboardNavItem', () => {
     expect(shouldShowDashboardNavItem(shopping, { shoppingModeEnabled: true })).toBe(true);
   });
 
-  // Product Visibility (ECOM-spec) is new as a whole.
-  it('marks Shopping new', () => {
-    expect(shopping.badge).toBe('New');
-  });
-
   it('hides a section off the viewer’s menu, by its route', () => {
     const content = dashboardNav
       .flatMap((group) => group.items)
@@ -99,12 +97,32 @@ describe('the Mentions item', () => {
   const analytics = dashboardNav.find((group) => group.title === 'Analytics')!.items;
   const index = (title: string) => analytics.findIndex((item) => item.title === title);
 
-  it('sits directly above Citations, marked New', () => {
+  it('sits directly above Citations', () => {
     expect(index('Mentions')).toBe(index('Citations') - 1);
-    expect(analytics[index('Mentions')]).toMatchObject({
-      href: '/dashboard/mentions',
-      badge: 'New',
+    expect(analytics[index('Mentions')]).toMatchObject({ href: '/dashboard/mentions' });
+  });
+});
+
+// Off the menu since #506 (only Brand Visibility's Leaderboard and Getting
+// started opened it), back on it right under Brand Visibility.
+describe('the Competitors item', () => {
+  const analytics = dashboardNav.find((group) => group.title === 'Analytics')!.items;
+  const index = (title: string) => analytics.findIndex((item) => item.title === title);
+
+  it('sits under Brand Visibility, gated by competitor tracking, with no badge', () => {
+    expect(index('Competitors')).toBe(index('Answer Engine Insights') + 1);
+    const item = analytics[index('Competitors')];
+    expect(item).toMatchObject({
+      href: '/dashboard/competitors',
+      requiredFeature: 'competitor_tracking',
     });
+    expect(item.badge).toBeUndefined();
+    expect(item.children).toBeUndefined();
+  });
+
+  it('reads Competitors from the nav namespace', () => {
+    expect(getDashboardNavLabel('Competitors', translateNav)).toBe('nav.competitors');
+    expect(messages.nav.competitors).toBe('Competitors');
   });
 });
 
@@ -222,6 +240,29 @@ describe('dashboardNavBadge', () => {
   });
 
   it("keeps every other item's own badge", () => {
-    expect(dashboardNavBadge(actionCenter, { chatSoon: 'Soon (next week)' })).toBe('New');
+    expect(
+      dashboardNavBadge({ ...actionCenter, badge: 'Beta' }, { chatSoon: 'Soon (next week)' }),
+    ).toBe('Beta');
+    expect(dashboardNavBadge(actionCenter, { chatSoon: 'Soon (next week)' })).toBeUndefined();
+  });
+
+  it('marks nothing in the menu as New', () => {
+    const badges = dashboardNav.flatMap((group) =>
+      group.items.flatMap((item) => [item.badge, ...(item.children ?? []).map((c) => c.badge)]),
+    );
+    expect(badges.filter(Boolean)).toEqual([]);
+  });
+});
+
+describe('navItemHref', () => {
+  const chat = { href: CHAT_HREF };
+  it('keeps Chat on its old address while the new Chat is off', () => {
+    expect(navItemHref(chat, false)).toBe('/dashboard/agent');
+  });
+  it('opens /dashboard/chat with the new Chat on, and leaves every other item alone', () => {
+    expect(navItemHref(chat, true)).toBe(CHAT_AGENTIC_HREF);
+    expect(navItemHref({ href: '/dashboard/action-center' }, true)).toBe(
+      '/dashboard/action-center',
+    );
   });
 });

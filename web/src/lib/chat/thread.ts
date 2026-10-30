@@ -30,15 +30,20 @@ export interface ChatThread {
   conversationId: string;
   title: string | null;
   brandId: string | null;
+  /** The person's own chat; false for a teammate's shared one, which they only read. */
+  mine: boolean;
   messages: ThreadMessage[];
 }
 
 /** The person's chat with its messages and runs; null when it isn't theirs or isn't there. */
 export async function loadChatThread(conversationId: string): Promise<ChatThread | null> {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const { data: chat, error } = await supabase
     .from('chat_conversations')
-    .select('id, title, brand_id')
+    .select('id, title, brand_id, user_id')
     .eq('id', conversationId)
     .maybeSingle();
   if (error) throw new Error(`Could not read the chat: ${error.message}`);
@@ -83,6 +88,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
     conversationId: chat.id,
     title: chat.title,
     brandId: chat.brand_id,
+    mine: !!user && chat.user_id === user.id,
     messages: (messages.data ?? []).map((message) => ({
       role: message.role as 'user' | 'assistant',
       text: message.content_md,

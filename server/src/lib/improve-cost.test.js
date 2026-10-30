@@ -7,6 +7,7 @@ import {
   generationCostUsd,
   medianCost,
   priceFor,
+  searchCostUsd,
   typicalCostUsd,
 } from './improve-cost.js';
 
@@ -34,6 +35,13 @@ describe('generationCostUsd', () => {
     expect(priceFor('openrouter/google/gemini-3-flash-preview')).toBe(
       MODEL_PRICES['google/gemini-3-flash-preview'],
     );
+  });
+
+  it('prices web searches at $10 per 1,000, and none as nothing', () => {
+    expect(searchCostUsd(5)).toBeCloseTo(0.05, 6);
+    expect(searchCostUsd(0)).toBe(0);
+    expect(searchCostUsd(undefined)).toBe(0);
+    expect(searchCostUsd(-2)).toBe(0);
   });
 
   it('treats missing usage as zero tokens', () => {

@@ -68,7 +68,7 @@ afterEach(() => {
   slot.remove();
 });
 
-async function render() {
+async function render(addTopic: { openAddTopic?: boolean; onAddTopicOpened?: () => void } = {}) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -81,6 +81,7 @@ async function render() {
             rangePreset="7d"
             customFrom=""
             customTo=""
+            {...addTopic}
           />
         </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
@@ -127,6 +128,77 @@ describe('Add Topic on a read-only workspace (plan not active)', () => {
     await act(async () => addTopic().click());
     expect(openUpgrade).not.toHaveBeenCalled();
     expect(dialog()?.textContent).toContain('Add Topic');
+  });
+});
+
+/**
+ * "Add a topic" from a prompt flow on a brand without topics links here with
+ * ?new=1: Add Topic opens once, and the link's param is cleared so a reload
+ * doesn't open it again.
+ */
+describe('Add Topic opened by a link (?new=1)', () => {
+  const dialog = () => document.querySelector('[role="dialog"]');
+
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('opens the Add Topic form and clears the param', async () => {
+    window.history.replaceState(null, '', '/dashboard/prompts/topics?new=1&range=30d');
+    await render();
+    expect(dialog()?.textContent).toContain('Add Topic');
+    expect(window.location.search).toBe('?range=30d');
+  });
+
+  it('opens nothing without the param', async () => {
+    window.history.replaceState(null, '', '/dashboard/prompts/topics');
+    await render();
+    expect(dialog()).toBeNull();
+  });
+
+  it("opens nothing for members who can't add topics", async () => {
+    canManage = false;
+    window.history.replaceState(null, '', '/dashboard/prompts/topics?new=1');
+    await render();
+    expect(dialog()).toBeNull();
+    expect(window.location.search).toBe('');
+  });
+
+  it('opens the upgrade dialog instead on a read-only workspace', async () => {
+    isLocked = true;
+    window.history.replaceState(null, '', '/dashboard/prompts/topics?new=1');
+    await render();
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Adding topics needs a plan');
+    expect(dialog()).toBeNull();
+  });
+});
+
+/**
+ * The Prompts page asks for Add Topic from one of its own tabs (Add prompt,
+ * Suggestions, Query Fan-out on a brand without topics): it opens once, and
+ * the request is handed back.
+ */
+describe('Add Topic asked for by the Prompts page', () => {
+  const dialog = () => document.querySelector('[role="dialog"]');
+
+  it('opens the Add Topic form and hands the request back', async () => {
+    const onAddTopicOpened = vi.fn();
+    await render({ openAddTopic: true, onAddTopicOpened });
+    expect(dialog()?.textContent).toContain('Add Topic');
+    expect(onAddTopicOpened).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens nothing unless asked', async () => {
+    await render({ openAddTopic: false });
+    expect(dialog()).toBeNull();
+  });
+
+  it("hands the request back without opening it for members who can't add topics", async () => {
+    canManage = false;
+    const onAddTopicOpened = vi.fn();
+    await render({ openAddTopic: true, onAddTopicOpened });
+    expect(dialog()).toBeNull();
+    expect(onAddTopicOpened).toHaveBeenCalledTimes(1);
   });
 });
 
