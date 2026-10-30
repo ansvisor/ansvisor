@@ -22,6 +22,7 @@ import { DemoBrandProvider } from '@/components/providers/demo-brand-provider';
 import { ReadOnlyBanner } from '@/components/billing/read-only-banner';
 import { DemoBanner } from '@/components/billing/demo-banner';
 import { TrackingJobHandoff } from '@/components/layout/tracking-job-handoff';
+import { FirstRunReady } from '@/components/layout/first-run-ready';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -158,6 +159,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                           <BrandGuard>{children}</BrandGuard>
                         </main>
                         <TrackingJobHandoff />
+                        <FirstRunReady />
                       </div>
                     </div>
                   </AiUsageProvider>
