@@ -190,6 +190,18 @@ describe('for an Admin', () => {
     expect(window.location.hash).toBe('#checkout');
   });
 
+  it('marks the picked tab black in light and white in dark, as the plan tabs (#1806)', async () => {
+    await render(addOns());
+    const picked = () =>
+      buttons()
+        .filter((b) => b.getAttribute('aria-pressed') === 'true')
+        .map((b) => [b.textContent, b.classList.contains('bg-primary')]);
+    expect(picked()).toEqual([['AI credits', true]]);
+    expect(button('Storage')?.classList.contains('bg-primary')).toBe(false);
+    await click(button('Storage'));
+    expect(picked()).toEqual([['Storage', true]]);
+  });
+
   it('confirms storage before adding it to the plan, as it is charged at once', async () => {
     vi.mocked(startAddOnPurchase).mockResolvedValue({ ok: true, next: 'added' });
     await render(addOns());
