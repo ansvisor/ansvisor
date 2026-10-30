@@ -42,10 +42,11 @@ function getMoreOpenedFor(period: string): boolean {
 
 /**
  * Whether Chat stops at the cap (CHAT-04 item 17): the allowance is used up
- * and Chat draws on it. On the workspace's own key it keeps working.
+ * and Chat draws on it. On the workspace's own key (`onOwnKey`, as the page
+ * read it) it keeps working: the server holds nothing on the budget for it.
  */
-export function chatAtCap(usage: AiUsage | null | undefined): boolean {
-  return !!usage && aiUsageTone(usage) === 'exhausted' && usage.chatMetered !== false;
+export function chatAtCap(usage: AiUsage | null | undefined, onOwnKey = false): boolean {
+  return !onOwnKey && !!usage && aiUsageTone(usage) === 'exhausted' && usage.chatMetered !== false;
 }
 
 /**

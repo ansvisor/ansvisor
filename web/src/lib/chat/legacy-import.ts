@@ -25,8 +25,8 @@ import type { ChatActor } from './engine';
 
 /** The person's newest conversations copied at most (the rest are older than any Recents shows). */
 export const LEGACY_IMPORT_MAX_CHATS = 1_000;
-/** Conversations whose messages are read together. */
-const CHATS_PER_READ = 50;
+/** Conversations copied together. */
+const CHATS_PER_BATCH = 50;
 /** Rows one read answers with (the API's page size). */
 const ROWS_PER_PAGE = 1_000;
 /** Rows one write sends. */
@@ -56,11 +56,18 @@ interface LegacyMessage {
   created_at: string;
 }
 
+/** The text's first `max` characters, never half of an emoji (a lone half can't be stored). */
+function cut(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const code = text.charCodeAt(max - 1);
+  return text.slice(0, code >= 0xd800 && code <= 0xdbff ? max - 1 : max);
+}
+
 /** A copied chat's title: none for Agent Chat's default or an empty one. */
 export function legacyTitle(title: string | null): string | null {
   const text = (title ?? '').trim();
   if (!text || text === LEGACY_DEFAULT_TITLE) return null;
-  return text.slice(0, TITLE_MAX);
+  return cut(text, TITLE_MAX);
 }
 
 /** A message as Chat keeps it, or null for a tool row or an answer with no words. */
@@ -72,7 +79,7 @@ export function legacyMessage(message: LegacyMessage) {
     id: message.id,
     conversation_id: message.conversation_id,
     role: message.role,
-    content_md: text.slice(0, CONTENT_MAX),
+    content_md: cut(text, CONTENT_MAX),
     // An answer's "Generated …": when Agent Chat wrote it.
     generated_at: message.role === 'assistant' ? message.created_at : null,
     created_at: message.created_at,
@@ -84,23 +91,50 @@ const chunks = <T>(list: T[], size: number): T[][] =>
     list.slice(i * size, (i + 1) * size),
   );
 
-/** Every message of these conversations, oldest first, page by page. */
-async function readMessages(chatIds: string[]): Promise<LegacyMessage[]> {
+/**
+ * A conversation's messages in the order Agent Chat showed them, page by
+ * page. Agent Chat wrote a conversation's whole thread again on every turn
+ * in one insert, so its messages mostly share one created_at: their order
+ * is the one its own page read them in (by created_at, ties as the index
+ * keeps them), so this reads them the same way, one conversation at a time
+ * and with no tiebreak (a tiebreak by id would shuffle them).
+ */
+async function readMessages(chatId: string): Promise<LegacyMessage[]> {
   const out: LegacyMessage[] = [];
   for (let from = 0; ; from += ROWS_PER_PAGE) {
     const { data, error } = await supabaseAdmin
       .from('agent_messages')
       .select('id, conversation_id, role, content, created_at')
-      .in('conversation_id', chatIds)
+      .eq('conversation_id', chatId)
       .in('role', ['user', 'assistant'])
       .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
       .range(from, from + ROWS_PER_PAGE - 1);
     if (error) throw new Error(`Could not read Agent Chat's messages: ${error.message}`);
     const page = (data ?? []) as LegacyMessage[];
     out.push(...page);
     if (page.length < ROWS_PER_PAGE) return out;
   }
+}
+
+/**
+ * The copied messages with created_at rising strictly, so Chat (which reads
+ * a chat by created_at) keeps their order: a time not after the one before
+ * becomes a millisecond after it. A time already in order stays as it was.
+ */
+export function inOrder<T extends { created_at: string; generated_at: string | null }>(
+  messages: T[],
+): T[] {
+  let previous = -Infinity;
+  return messages.map((message) => {
+    const at = Date.parse(message.created_at);
+    if (at > previous) {
+      previous = at;
+      return message;
+    }
+    previous += 1;
+    const created_at = new Date(previous).toISOString();
+    return { ...message, created_at, generated_at: message.generated_at ? created_at : null };
+  });
 }
 
 /** Writes rows that aren't there yet (by id), a slice at a time. */
@@ -135,12 +169,11 @@ export async function importLegacyChats(
 
     let chats = 0;
     let messages = 0;
-    for (const group of chunks(legacy, CHATS_PER_READ)) {
+    for (const group of chunks(legacy, CHATS_PER_BATCH)) {
       const byChat = new Map<string, NonNullable<ReturnType<typeof legacyMessage>>[]>();
-      for (const row of await readMessages(group.map((c) => c.id))) {
-        const message = legacyMessage(row);
-        if (message)
-          byChat.set(row.conversation_id, [...(byChat.get(row.conversation_id) ?? []), message]);
+      for (const chat of group) {
+        const list = (await readMessages(chat.id)).flatMap((row) => legacyMessage(row) ?? []);
+        if (list.length > 0) byChat.set(chat.id, inOrder(list));
       }
       // A conversation with nothing left to read stays behind.
       const kept = group.filter((c) => byChat.has(c.id));

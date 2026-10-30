@@ -23,7 +23,7 @@ When Action Center actions for the brand you have open are due by the end of thi
 
 Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.
 
-Next to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. Nothing is published or sent without your click, and every change is in the **Activity** log. **Full auto** needs the Growth plan.
+Next to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. Nothing is published or sent without your click, and every change is in the **Activity** log. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.
 
 Analysts and Agency partners only read: their box says **Read-only** with a link to what their role can do.
 

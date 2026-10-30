@@ -47,7 +47,8 @@ vi.mock('@/lib/agent/key-encryption', () => ({
   decryptApiKey: (envelope: string) => `plain(${envelope})`,
 }));
 
-const { ownKeyAllowed, ownKeyAccess, resolveChatModelKey } = await import('./key');
+const { chatRunsOnOwnKey, ownKeyAllowed, ownKeyAccess, resolveChatModelKey } =
+  await import('./key');
 
 const CUSTOMER = {
   provider: 'openai',
@@ -201,5 +202,39 @@ describe('resolveChatModelKey, Chat off', () => {
     vi.stubEnv('CHAT_AGENTIC', 'true');
     vi.stubEnv('CHAT_AGENTIC_ORGS', '33333333-3333-4333-8333-333333333333');
     expect(await resolveChatModelKey(ORG)).toBeNull();
+  });
+});
+
+describe('chatRunsOnOwnKey', () => {
+  it('says yes only where resolveChatModelKey would pick the workspace’s own key', async () => {
+    org = orgOn('enterprise');
+    ownKey = CUSTOMER;
+    expect(await chatRunsOnOwnKey(ORG)).toBe(true);
+
+    // No key saved, or the plan leaves it aside: Ansvisor's key, on the budget.
+    ownKey = null;
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    ownKey = CUSTOMER;
+    org = orgOn('growth');
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    org = orgOn('starter');
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+
+    // A key saved before Chat: its 30 days, then the budget.
+    org = orgOn('growth', true, new Date(Date.now() + DAY).toISOString());
+    expect(await chatRunsOnOwnKey(ORG)).toBe(true);
+    org = orgOn('growth', true, new Date(Date.now() - DAY).toISOString());
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+  });
+
+  it('is no with Chat off or self-hosted, where nothing is metered', async () => {
+    org = orgOn('enterprise');
+    ownKey = CUSTOMER;
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    expect(reads).toEqual([]);
   });
 });

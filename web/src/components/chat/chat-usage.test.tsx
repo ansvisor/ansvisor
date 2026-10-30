@@ -74,6 +74,8 @@ describe('chatAtCap', () => {
     expect(chatAtCap(usage())).toBe(false);
     expect(chatAtCap(usage({ unlimited: true, percentUsed: null }))).toBe(false);
     expect(chatAtCap(null)).toBe(false);
+    // Chat on the workspace's own key: the server holds nothing on the budget for it.
+    expect(chatAtCap(usage({ percentUsed: 100 }), true)).toBe(false);
   });
 });
 

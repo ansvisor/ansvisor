@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isCloud } from '@/config/plans';
 import { resolveAgentModelConfig } from '@/lib/agent/key';
 import type { AgentModelConfig } from '@/lib/agent/model';
+import { isAiProvider } from '@/lib/agent/providers';
 import { chatAgenticEnabled } from './flag';
 
 /**
@@ -143,4 +144,27 @@ export async function resolveChatModelKey(organizationId: string): Promise<ChatM
   return apiKey
     ? { source: 'ansvisor', config: { provider: 'anthropic', apiKey, settings: {} } }
     : null;
+}
+
+/**
+ * Whether the workspace's Chat runs on its own key, as resolveChatModelKey
+ * would pick it, without decrypting the key: its plan allows own keys (or a
+ * kept key's 30 days run) and
+ * Settings › AI Providers has an active one. Such steps never draw on the AI
+ * budget (reserve_chat_ai_usage writes them unchecked), so the composer
+ * stays on at the cap. False with Chat off or self-hosted, where nothing is
+ * metered, and when it can't be read: the server's hold still decides a run.
+ */
+export async function chatRunsOnOwnKey(organizationId: string): Promise<boolean> {
+  if (!isCloud() || !chatAgenticEnabled(organizationId)) return false;
+  // Same rule as resolveChatModelKey: Enterprise, or a kept key's 30 days.
+  const access = await ownKeyAccess(organizationId).catch(() => null);
+  if (access?.state !== 'plan' && access?.state !== 'kept') return false;
+  const { data: key } = await supabaseAdmin
+    .from('organization_ai_keys')
+    .select('provider, key_encrypted')
+    .eq('organization_id', organizationId)
+    .eq('active', true)
+    .maybeSingle();
+  return !!key?.key_encrypted && isAiProvider(key.provider);
 }

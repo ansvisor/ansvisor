@@ -80,7 +80,9 @@ const {
 }));
 
 vi.mock('next-intl', () => ({
-  useTranslations: () => (key: string) => key,
+  // Chat's "How do I finish …" names its action: the test reads which one.
+  useTranslations: () => (key: string, values?: { title?: string }) =>
+    key === 'actionHow' ? `${key}: ${values?.title}` : key,
 }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: { getActiveBrand: () => Brand }) => unknown) =>
@@ -518,5 +520,33 @@ describe('what Chat’s side panel sees (W1-08)', () => {
     act(() => root.unmount());
     expect(setPage).toHaveBeenLastCalledWith(null);
     root = createRoot(container);
+  });
+
+  it('asks how to finish the first of the Top actions, whatever order the list came in', async () => {
+    const opportunity = (id: string, title: string, priorityScore: number): ActionItem => ({
+      ...action,
+      id,
+      kind: 'content_opportunity',
+      payload: { title },
+      priorityScore,
+    });
+    getActions.mockResolvedValue([
+      opportunity('low', 'Low one', 20),
+      opportunity('high', 'High one', 95),
+      opportunity('mid', 'Mid one', 60),
+    ]);
+    const setPage = vi.fn();
+    await act(async () =>
+      root.render(
+        <ChatPageSetterContext.Provider value={setPage}>
+          <UpgradeDialogContext.Provider
+            value={{ isLocked: false, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <ActionCenterActionsPage />
+          </UpgradeDialogContext.Provider>
+        </ChatPageSetterContext.Provider>,
+      ),
+    );
+    expect(setPage.mock.lastCall![0].suggestions[0]).toBe('actionHow: High one');
   });
 });

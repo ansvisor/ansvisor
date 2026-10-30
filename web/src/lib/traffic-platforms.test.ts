@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import messages from '../../messages/en.json';
-import { getPlatformName, isPlatformSurface, platformTableRows } from './traffic-platforms';
+import {
+  getPlatformName,
+  isPlatformSurface,
+  movedPlatformOf,
+  platformTableRows,
+} from './traffic-platforms';
 import { getColor } from '@/app/[locale]/(dashboard)/dashboard/traffic/_charts';
 
 /**
@@ -81,5 +86,37 @@ describe('platformTableRows', () => {
       { platform: 'chatgpt.com', surface: 'shopping', visits: 11, visitsPrev: 4, analytics: ga },
       { platform: 'claude.ai', surface: null, visits: 3, visitsPrev: 0, analytics: null },
     ]);
+  });
+});
+
+describe('movedPlatformOf (Chat side panel, W1-08)', () => {
+  const row = (platform: string, visits: number, visitsPrev: number) => ({
+    platform,
+    visits,
+    visitsPrev,
+    analytics: null,
+    surfaces: [],
+  });
+
+  it('names the platform whose visits moved most, up or down', () => {
+    expect(
+      movedPlatformOf({
+        hasPreviousPeriod: true,
+        platformBreakdown: [row('chatgpt.com', 40, 30), row('perplexity.ai', 5, 25)],
+      }),
+    ).toEqual({ name: 'Perplexity', change: -20 });
+  });
+
+  it('only names a platform the page knows, and nothing without a previous period', () => {
+    expect(
+      movedPlatformOf({
+        hasPreviousPeriod: true,
+        platformBreakdown: [row('made-up-source', 500, 0), row('claude.ai', 3, 1)],
+      }),
+    ).toEqual({ name: 'Claude', change: 2 });
+    expect(
+      movedPlatformOf({ hasPreviousPeriod: false, platformBreakdown: [row('claude.ai', 3, 0)] }),
+    ).toBeNull();
+    expect(movedPlatformOf(null)).toBeNull();
   });
 });
