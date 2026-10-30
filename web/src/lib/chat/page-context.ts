@@ -107,3 +107,20 @@ export function rangeChipLabel(
   const days = Number.parseInt(preset, 10);
   return Number.isFinite(days) ? t('days', { days }) : t('all');
 }
+
+/**
+ * The row that moved most, up or down (CHAT-01 item 21: a suggestion from
+ * the page's largest drop or gain, on data it already loaded, no model
+ * call); null when nothing moved.
+ */
+export function largestMove<T extends { change: number | null }>(
+  rows: readonly T[] | null | undefined,
+): (T & { change: number }) | null {
+  let best: (T & { change: number }) | null = null;
+  for (const row of rows ?? []) {
+    const change = row.change;
+    if (change === null || change === 0 || !Number.isFinite(change)) continue;
+    if (!best || Math.abs(change) > Math.abs(best.change)) best = row as T & { change: number };
+  }
+  return best;
+}

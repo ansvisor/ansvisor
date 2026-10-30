@@ -32,7 +32,11 @@ export function AskAboutThis({
       data-action="page.askAboutThis"
       aria-label={label}
       title={label}
-      onClick={() => panel.ask(reference)}
+      onClick={(event) => {
+        // On a row that opens on a click, only the panel opens.
+        event.stopPropagation();
+        panel.ask(reference);
+      }}
       className={cn('text-muted-foreground hover:text-foreground', className)}
     >
       <MessageSquarePlus aria-hidden />

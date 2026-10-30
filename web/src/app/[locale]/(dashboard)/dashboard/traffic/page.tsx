@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getPlatformFilterItems } from './_charts';
-import { getPlatformName, platformTableRows } from '@/lib/traffic-platforms';
+import { getPlatformName, movedPlatformOf, platformTableRows } from '@/lib/traffic-platforms';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 const ReferralTrendChart = dynamic(() => import('./_charts').then((m) => m.ReferralTrendChart), {
@@ -19,6 +19,9 @@ const PlatformBreakdownChart = dynamic(
 );
 import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel } from '@/lib/chat/page-context';
 import type { Brand } from '@/types';
 import {
   type TrafficSources,
@@ -419,6 +422,8 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const tCommon = useTranslations('common');
   const tVisits = useTranslations('traffic.visits');
   const tTrend = useTranslations('traffic.trend');
+  const tChat = useTranslations('chatPanel.suggest');
+  const tChatRange = useTranslations('chatPanel.range');
   // The page opens on the member's last range, or the last 24 hours (AT-017,
   // spec §3.01). This only renders in the browser, once the brand has loaded,
   // so the stored choice is read before the first load rather than after it.
@@ -693,6 +698,41 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
     />
   );
 
+  // Chat's side panel sees the page (W1-08): its range and platform, the
+  // platform whose visits moved most, and the two tables to ask about.
+  const movedPlatform = movedPlatformOf(summary);
+  useChatPageContext({
+    dateRange: {
+      from: datePreset === 'custom' ? customFrom : datePreset,
+      to: datePreset === 'custom' ? customTo : null,
+      label: rangeChipLabel(datePreset, { from: customFrom, to: customTo }, (key, values) =>
+        tChatRange(key, values),
+      ),
+    },
+    filters: [
+      {
+        key: 'platform',
+        label: filters.platform ? getPlatformName(filters.platform) : tCommon('allPlatforms'),
+        value: filters.platform,
+      },
+    ],
+    suggestions: [
+      ...(movedPlatform
+        ? [
+            tChat(movedPlatform.change < 0 ? 'trafficDrop' : 'trafficRise', {
+              platform: movedPlatform.name,
+            }),
+          ]
+        : []),
+      tChat('trafficPages'),
+      tChat('actions'),
+    ],
+    referenceables: [
+      { type: 'table', id: 'traffic-platforms', label: t('chat.platformsTable') },
+      { type: 'table', id: 'traffic-pages', label: t('chat.pagesTable') },
+    ],
+  });
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -843,7 +883,16 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                 <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-2">
-                      <CardTitle className="text-sm font-medium">Referrals by Platform</CardTitle>
+                      <div className="flex items-center gap-1">
+                        <CardTitle className="text-sm font-medium">Referrals by Platform</CardTitle>
+                        <AskAboutThis
+                          reference={{
+                            type: 'table',
+                            id: 'traffic-platforms',
+                            label: t('chat.platformsTable'),
+                          }}
+                        />
+                      </div>
                       <TableExport exporter={exporter} section="platforms" />
                     </div>
                   </CardHeader>
@@ -921,7 +970,16 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                 <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-2">
-                      <CardTitle className="text-sm font-medium">Top Landing Pages</CardTitle>
+                      <div className="flex items-center gap-1">
+                        <CardTitle className="text-sm font-medium">Top Landing Pages</CardTitle>
+                        <AskAboutThis
+                          reference={{
+                            type: 'table',
+                            id: 'traffic-pages',
+                            label: t('chat.pagesTable'),
+                          }}
+                        />
+                      </div>
                       <TableExport exporter={exporter} section="pages" />
                     </div>
                   </CardHeader>
