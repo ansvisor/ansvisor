@@ -4,7 +4,7 @@
  * Pulls read-only metrics from the Public Metrics API (`/api/v1/*`, see
  * docs → API Reference → Metrics API) so agencies can blend AI visibility
  * data with GA4 / Search Console in one dashboard. Authenticates with an
- * Ansvisor API key (Settings → API Keys, prefix `ans_`).
+ * Ansvisor API key (Settings → MCP & API Keys, prefix `ans_`).
  *
  * Apps Script project — deploy with clasp or paste into script.google.com.
  * Self-hosters: change BASE_URL below AND the urlFetchWhitelist entry in
