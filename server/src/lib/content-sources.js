@@ -15,8 +15,8 @@ import { z } from 'zod';
  * is marked to that source. A claim (a %, a ×, a scale, a currency) must be
  * known with the same unit or sign: "crm for 50 users" never sources "50%".
  * A cited page's address is no words of its own. A suggestion with any
- * other number is not kept; a page the agent writes whole gets a
- * placeholder in its place.
+ * other number is not kept; a page the agent writes whole has it looked
+ * up, or loses its sentence (content-research.js).
  */
 
 /** The most sources one suggestion names (content_draft_suggestions.sources, 00248). */
@@ -40,7 +40,7 @@ export const marksField = z
   .describe('Each fact the change takes from your data, with its source.');
 
 /** The rule every prompt that uses the list gives the model. */
-export const SOURCES_RULE = `- Your data is numbered (S1, S2…) and listed by its words only: you don't see what a cited page says. Put the numbers of the ones a change uses in "sources", and mark the exact words each supports in "marks"; never write "S1" in the page's words. Add a number only when the page, the brand, the rules or your data's own words have it; otherwise write a placeholder in square brackets.`;
+export const SOURCES_RULE = `- Your data is numbered (S1, S2…) and listed by its words only: you don't see what a cited page says. Put the numbers of the ones a change uses in "sources", and mark the exact words each supports in "marks"; never write "S1" in the page's words. Add a number only when the page, the brand, the rules or your data's own words have it; otherwise ask for it to be looked up with {{find: …}}.`;
 
 /** A query as the Sources tab keys it: trimmed, spaces collapsed, lowercased (sources.ts normalizeQuery). */
 export function normalizeQuery(query) {
@@ -87,7 +87,7 @@ const KIND_NAMES = {
 };
 
 /** What the agent does with Brief › Your input, when the list has any (CE-048). */
-export const INPUT_RULE = `- Your input is the person's own: write their experience as first-hand ("we tested…") and add nothing to it; quote an expert word for word, with their name and title; cite Ansvisor data as its line says. Never invent people, quotes, customer stories, test results or numbers beyond what you were given: where one is missing, write a placeholder in square brackets.`;
+export const INPUT_RULE = `- Your input is the person's own: write their experience as first-hand ("we tested…") and add nothing to it; quote an expert word for word, with their name and title; cite Ansvisor data as its line says. Never invent people, quotes, customer stories, test results or numbers beyond what you were given: where one of the brand's own is missing, write {{ask: …}}.`;
 
 /** The numbered list as the model reads it, or '' with none. */
 export function sourcesPrompt(numbered) {
