@@ -1,4 +1,5 @@
 import type { TrafficEngagement, TrafficSummary } from '@/lib/actions/traffic';
+import { largestMove } from '@/lib/chat/page-context';
 
 /**
  * AI referrers by the name their platform goes by. Keys are the AI source
@@ -76,4 +77,21 @@ export function platformTableRows(
     { ...row, surface: null },
     ...surfaces.map((s) => ({ ...s, platform: row.platform })),
   ]);
+}
+
+/**
+ * The platform whose visits moved most against the previous period, for
+ * Chat's side panel (W1-08): only a platform the page can name, as the
+ * summary line does, and nothing without a previous period (all time),
+ * where every platform would read as a rise.
+ */
+export function movedPlatformOf(
+  summary: Pick<TrafficSummary, 'hasPreviousPeriod' | 'platformBreakdown'> | null | undefined,
+): { name: string; change: number } | null {
+  if (!summary?.hasPreviousPeriod) return null;
+  return largestMove(
+    summary.platformBreakdown
+      .filter((row) => isNamedPlatform(row.platform))
+      .map((row) => ({ name: getPlatformName(row.platform), change: row.visits - row.visitsPrev })),
+  );
 }

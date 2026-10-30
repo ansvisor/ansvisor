@@ -133,6 +133,29 @@ describe('RunAnswer', () => {
     expect([...text.querySelectorAll('td')].map((td) => td.textContent)).toEqual(['AIO', '19%']);
   });
 
+  it('links only http(s) addresses and pages of the app, and fetches no image', async () => {
+    await render({
+      run: run({
+        status: 'done',
+        text: [
+          'See [the guide](https://example.com/guide) and [Citations](/dashboard/citations).',
+          'Also [mail](mailto:someone@example.com), [rel](../x) and [proto](//example.org/x).',
+          '![a chart](https://example.org/chart.png?d=1)',
+        ].join('\n\n'),
+      }),
+    });
+    const links = [...container.querySelectorAll('[data-slot="run-text"] a')];
+    expect(links.map((a) => a.getAttribute('href'))).toEqual([
+      'https://example.com/guide',
+      '/dashboard/citations',
+    ]);
+    expect(links[0].getAttribute('target')).toBe('_blank');
+    expect(links[0].getAttribute('rel')).toContain('noopener');
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.textContent).toContain('a chart');
+    expect(container.textContent).toContain('mail, rel and proto');
+  });
+
   it('holds what follows while the run works, and says when it reconnects', async () => {
     await render({ run: run({ steps }), footer: <p>Next moves</p>, reconnecting: true });
     expect(container.textContent).not.toContain('Next moves');
