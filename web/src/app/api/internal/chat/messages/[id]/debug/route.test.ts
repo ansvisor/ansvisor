@@ -31,8 +31,8 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 vi.mock('@/lib/chat/engine', () => ({ driveRun: vi.fn() }));
 vi.mock('@/lib/chat/staff-debug', () => ({
-  readChatMessageDebug: vi.fn(async (id: string, organizationId: string) =>
-    id === MESSAGE && organizationId === ORG
+  readChatMessageDebug: vi.fn(async (id: string, viewer: { organizationId: string }) =>
+    id === MESSAGE && viewer.organizationId === ORG
       ? {
           status: 'done',
           model: 'auto',
@@ -44,8 +44,8 @@ vi.mock('@/lib/chat/staff-debug', () => ({
         }
       : null,
   ),
-  readChatStepOutput: vi.fn(async (id: string, organizationId: string, n: number) =>
-    id === MESSAGE && organizationId === ORG && n === 1 ? '{\n  "rows": []\n}' : null,
+  readChatStepOutput: vi.fn(async (id: string, viewer: { organizationId: string }, n: number) =>
+    id === MESSAGE && viewer.organizationId === ORG && n === 1 ? '{\n  "rows": []\n}' : null,
   ),
 }));
 
@@ -85,6 +85,15 @@ describe('GET /api/internal/chat/messages/{id}/debug', () => {
     expect(readChatMessageDebug).not.toHaveBeenCalled();
   });
 
+  it("is not there for staff whose workspace doesn't have the new Chat (CHAT_AGENTIC_ORGS)", async () => {
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '99999999-9999-4999-8999-999999999999');
+    expect((await get(MESSAGE)).status).toBe(404);
+    expect((await get(MESSAGE, '?full=1')).status).toBe(404);
+    expect(readChatMessageDebug).not.toHaveBeenCalled();
+    vi.stubEnv('CHAT_AGENTIC_ORGS', ORG);
+    expect((await get(MESSAGE)).status).toBe(200);
+  });
+
   it('asks for a session first', async () => {
     auth.user = null;
     expect((await get(MESSAGE)).status).toBe(401);
@@ -113,7 +122,10 @@ describe('GET /api/internal/chat/messages/{id}/debug', () => {
     expect(body.ok).toBe(true);
     expect(body.debug.steps[0].tool).toBe('list_citations');
     expect(body.debug.modelCalls[0].costUsd).toBe(0.0012);
-    expect(readChatMessageDebug).toHaveBeenCalledWith(MESSAGE, ORG);
+    expect(readChatMessageDebug).toHaveBeenCalledWith(MESSAGE, {
+      userId: 'staff-1',
+      organizationId: ORG,
+    });
     expect(info).toHaveBeenCalledWith('[chat/debug] staff view', {
       staffUserId: 'staff-1',
       organizationId: ORG,

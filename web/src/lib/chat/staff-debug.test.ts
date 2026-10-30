@@ -27,11 +27,17 @@ const ORG = '77777777-7777-4777-8777-777777777777';
 const OTHER_ORG = '88888888-8888-4888-8888-888888888888';
 const MESSAGE = '55555555-5555-4555-8555-555555555555';
 const BRAND = '22222222-2222-4222-8222-222222222222';
+const STAFF = '11111111-1111-4111-8111-111111111111';
+const TEAMMATE = '99999999-9999-4999-8999-999999999999';
+const ME = { userId: STAFF, organizationId: ORG };
+const ELSEWHERE = { userId: STAFF, organizationId: OTHER_ORG };
 const big = { rows: Array.from({ length: 2000 }, (_, i) => ({ url: `/page-${i}`, cited: i })) };
 
 beforeEach(() => {
   fake.db = createFakeSupabase();
-  fake.db.tables.chat_conversations = [{ id: CHAT, organization_id: ORG }];
+  fake.db.tables.chat_conversations = [
+    { id: CHAT, organization_id: ORG, user_id: STAFF, shared_at: null, deleted_at: null },
+  ];
   fake.db.tables.chat_runs = [
     {
       id: RUN,
@@ -104,7 +110,7 @@ beforeEach(() => {
 
 describe('readChatMessageDebug', () => {
   it("shows each step's tool, input, output and measure, and the run's model calls with cost", async () => {
-    const debug = (await readChatMessageDebug(MESSAGE, ORG))!;
+    const debug = (await readChatMessageDebug(MESSAGE, ME))!;
     expect(debug).toMatchObject({ status: 'done', model: 'auto', effort: 'normal', error: null });
     expect(debug.steps.map((s) => [s.n, s.tool])).toEqual([
       [1, 'list_citations'],
@@ -128,30 +134,46 @@ describe('readChatMessageDebug', () => {
   });
 
   it('shows the first 20 KB of a large output, and the whole one as a download', async () => {
-    const step = (await readChatMessageDebug(MESSAGE, ORG))!.steps[0];
+    const step = (await readChatMessageDebug(MESSAGE, ME))!.steps[0];
     const whole = JSON.stringify(big, null, 2);
     expect(step.outputCut).toBe(true);
     expect(step.outputBytes).toBe(new TextEncoder().encode(whole).length);
     expect(new TextEncoder().encode(step.output!).length).toBe(DEBUG_OUTPUT_BYTES);
     expect(whole.startsWith(step.output!)).toBe(true);
-    expect(await readChatStepOutput(MESSAGE, ORG, 1)).toBe(whole);
-    expect(await readChatStepOutput(MESSAGE, ORG, 2)).toBeNull();
-    expect(await readChatStepOutput(MESSAGE, ORG, 9)).toBeNull();
+    expect(await readChatStepOutput(MESSAGE, ME, 1)).toBe(whole);
+    expect(await readChatStepOutput(MESSAGE, ME, 2)).toBeNull();
+    expect(await readChatStepOutput(MESSAGE, ME, 9)).toBeNull();
   });
 
   it("finds the answer by its run's id too, and nothing for an unknown one", async () => {
-    expect((await readChatMessageDebug(RUN, ORG))!.steps).toHaveLength(2);
-    expect(await readChatMessageDebug('66666666-6666-4666-8666-666666666666', ORG)).toBeNull();
+    expect((await readChatMessageDebug(RUN, ME))!.steps).toHaveLength(2);
+    expect(await readChatMessageDebug('66666666-6666-4666-8666-666666666666', ME)).toBeNull();
   });
 
   it("reads nothing of another workspace's answer, even for staff", async () => {
-    expect(await readChatMessageDebug(MESSAGE, OTHER_ORG)).toBeNull();
-    expect(await readChatMessageDebug(RUN, OTHER_ORG)).toBeNull();
-    expect(await readChatStepOutput(MESSAGE, OTHER_ORG, 1)).toBeNull();
+    expect(await readChatMessageDebug(MESSAGE, ELSEWHERE)).toBeNull();
+    expect(await readChatMessageDebug(RUN, ELSEWHERE)).toBeNull();
+    expect(await readChatStepOutput(MESSAGE, ELSEWHERE, 1)).toBeNull();
     // Nor an answer whose chat is gone.
     fake.db.tables.chat_conversations = [];
-    expect(await readChatMessageDebug(MESSAGE, ORG)).toBeNull();
+    expect(await readChatMessageDebug(MESSAGE, ME)).toBeNull();
     expect(fake.db.log).not.toContainEqual(['prompt_improve_usage', 'select']);
+  });
+
+  it("reads a teammate's answer only when their chat is shared with the team, and never a deleted chat", async () => {
+    const chat = fake.db.tables.chat_conversations[0] as Record<string, unknown>;
+    chat.user_id = TEAMMATE;
+    expect(await readChatMessageDebug(MESSAGE, ME)).toBeNull();
+    expect(await readChatMessageDebug(RUN, ME)).toBeNull();
+    expect(await readChatStepOutput(MESSAGE, ME, 1)).toBeNull();
+    expect(fake.db.log).not.toContainEqual(['prompt_improve_usage', 'select']);
+    expect(fake.db.log).not.toContainEqual(['chat_run_steps', 'select']);
+    chat.shared_at = '2026-10-30T09:00:00.000Z';
+    expect((await readChatMessageDebug(MESSAGE, ME))!.steps).toHaveLength(2);
+    chat.deleted_at = '2026-10-30T10:00:00.000Z';
+    expect(await readChatMessageDebug(MESSAGE, ME)).toBeNull();
+    chat.user_id = STAFF;
+    expect(await readChatMessageDebug(MESSAGE, ME)).toBeNull();
   });
 
   it('reads only the step asked for, for Download full', async () => {
@@ -167,7 +189,7 @@ describe('readChatMessageDebug', () => {
       };
       return builder;
     };
-    await readChatStepOutput(MESSAGE, ORG, 1);
+    await readChatStepOutput(MESSAGE, ME, 1);
     expect(filters).toEqual([
       ['run_id', RUN],
       ['position', 1],
@@ -175,7 +197,7 @@ describe('readChatMessageDebug', () => {
   });
 
   it('can never go to the browser as an event', async () => {
-    const debug = (await readChatMessageDebug(MESSAGE, ORG))!;
+    const debug = (await readChatMessageDebug(MESSAGE, ME))!;
     const step = { n: 1, kind: 'read' as const, status: 'done' as const, label: 'Read Citations' };
     expect(() =>
       chatEvent('step.finished', 1, { step: { ...step, ...debug.steps[0] } as never }),

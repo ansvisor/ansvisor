@@ -10,8 +10,10 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
  * 00410; prompt_improve_usage, 00405). Server only, for the staff-only
  * endpoint (GET /api/internal/chat/messages/{id}/debug), which checks the
  * person first: none of it goes into an event, the conversation API or a
- * customer's page. Staff read their own workspace's answers only (privacy
- * first): an answer in another workspace reads as not there.
+ * customer's page. Staff read only the answers they could open themselves
+ * (privacy first): in their own workspace, in their own chat or one shared
+ * with the team, as the chat's policies give it (00407); any other reads as
+ * not there.
  */
 
 /** How much of a step's output the view shows; the rest is a download. */
@@ -103,13 +105,20 @@ interface LedgerRow {
 
 const RUN_COLUMNS = 'id, conversation_id, status, model, effort, error';
 
+/** The staff member who asks: their sign-in id and their workspace. */
+export interface ChatDebugViewer {
+  userId: string;
+  organizationId: string;
+}
+
 /**
  * The answer's run: `id` is the answer's message id, or its run's id (the
  * handle the page already has for its routes). Null when there is none, or
- * when its chat isn't in `organizationId`, the workspace of the staff member
- * who asks.
+ * when the staff member who asks couldn't open its chat: it isn't in their
+ * workspace, it was deleted, or it is a teammate's chat not shared with the
+ * team (the chat's own select policies, 00407, as the service role skips them).
  */
-async function runOf(id: string, organizationId: string): Promise<RunRow | null> {
+async function runOf(id: string, viewer: ChatDebugViewer): Promise<RunRow | null> {
   let run: RunRow | null = null;
   for (const column of ['message_id', 'id'] as const) {
     const { data, error } = await supabaseAdmin
@@ -126,12 +135,18 @@ async function runOf(id: string, organizationId: string): Promise<RunRow | null>
   if (!run) return null;
   const { data: chat, error } = await supabaseAdmin
     .from('chat_conversations')
-    .select('organization_id')
+    .select('organization_id, user_id, shared_at, deleted_at')
     .eq('id', run.conversation_id)
     .maybeSingle();
   if (error) throw new Error(`Could not read the run's chat: ${error.message}`);
-  const chatOrg = (chat as { organization_id: string } | null)?.organization_id;
-  return chatOrg && chatOrg === organizationId ? run : null;
+  const row = chat as {
+    organization_id: string;
+    user_id: string;
+    shared_at: string | null;
+    deleted_at: string | null;
+  } | null;
+  if (!row || row.organization_id !== viewer.organizationId || row.deleted_at) return null;
+  return row.user_id === viewer.userId || row.shared_at ? run : null;
 }
 
 /** The run's steps in order; with `n`, that step only. */
@@ -191,14 +206,14 @@ function debugStep(row: StepRow): ChatDebugStep {
 
 /**
  * The Debug view of an answer: its run's steps with their tool, input and
- * output, and its model calls; null when `id` names no answer's run in
- * `organizationId`.
+ * output, and its model calls; null when `id` names no answer's run that
+ * `viewer` can open.
  */
 export async function readChatMessageDebug(
   id: string,
-  organizationId: string,
+  viewer: ChatDebugViewer,
 ): Promise<ChatMessageDebug | null> {
-  const run = await runOf(id, organizationId);
+  const run = await runOf(id, viewer);
   if (!run) return null;
   const [steps, ledger] = await Promise.all([
     stepsOf(run.id),
@@ -242,14 +257,14 @@ export async function readChatMessageDebug(
 
 /**
  * "Download full": step `n`'s whole output as JSON text; null when the
- * answer (in `organizationId`), the step or its output isn't there.
+ * answer (one `viewer` can open), the step or its output isn't there.
  */
 export async function readChatStepOutput(
   id: string,
-  organizationId: string,
+  viewer: ChatDebugViewer,
   n: number,
 ): Promise<string | null> {
-  const run = await runOf(id, organizationId);
+  const run = await runOf(id, viewer);
   if (!run) return null;
   const [step] = await stepsOf(run.id, n);
   const output = step ? record(step.debug_json).output : undefined;

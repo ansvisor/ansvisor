@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { runFailure, runIdOf } from '@/lib/chat/run-api';
 import { isChatStaff } from '@/lib/chat/staff';
 import {
@@ -19,10 +20,12 @@ import { createClient } from '@/lib/supabase/server';
  *
  * Ansvisor staff only, checked here on the server (STAFF_EMAILS,
  * lib/chat/staff.ts): anyone else signed in gets 403, a customer's Admin
- * too. Staff see their own workspace's answers only (privacy first): one in
- * another workspace is 404, as a run that isn't the person's is on the run
+ * too. Staff see only the answers they could open themselves (privacy
+ * first): in their own workspace, in their own chat or one shared with the
+ * team; any other is 404, as a run that isn't the person's is on the run
  * routes. Each view is logged with who looked and in which workspace. Not
- * there (404) while the new Chat is off (CHAT_AGENTIC). Refusals as values
+ * there (404) while the new Chat is off for the staff member's workspace
+ * (CHAT_AGENTIC, CHAT_AGENTIC_ORGS), as on the run routes. Refusals as values
  * (#1777), never thrown.
  */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -45,7 +48,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       .maybeSingle();
     if (error) throw new Error(error.message);
     const organizationId = profile?.organization_id ?? null;
-    if (!organizationId) return runFailure(404, 'not_found', 'not_found', 'Not found');
+    if (!organizationId || !chatAgenticEnabled(organizationId)) {
+      return runFailure(404, 'not_found', 'not_found', 'Not found');
+    }
+    const viewer = { userId: user.id, organizationId };
 
     const full = new URL(req.url).searchParams.get('full');
     console.info('[chat/debug] staff view', {
@@ -57,8 +63,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     if (full !== null) {
       const n = Number(full);
-      const output =
-        Number.isInteger(n) && n > 0 ? await readChatStepOutput(id, organizationId, n) : null;
+      const output = Number.isInteger(n) && n > 0 ? await readChatStepOutput(id, viewer, n) : null;
       if (output === null) return runFailure(404, 'not_found', 'not_found', 'Not found');
       return new Response(output, {
         headers: {
@@ -69,7 +74,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       });
     }
 
-    const debug = await readChatMessageDebug(id, organizationId);
+    const debug = await readChatMessageDebug(id, viewer);
     if (!debug) return runFailure(404, 'not_found', 'not_found', 'Not found');
     return NextResponse.json<{ ok: true; debug: ChatMessageDebug }>(
       { ok: true, debug },
