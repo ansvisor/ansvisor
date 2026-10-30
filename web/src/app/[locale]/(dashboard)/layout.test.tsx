@@ -75,6 +75,8 @@ vi.mock('@/components/layout/sidebar', () => ({ Sidebar: none }));
 vi.mock('@/components/layout/sidebar-error-boundary', () => ({ SidebarErrorBoundary: pass }));
 vi.mock('@/components/layout/mobile-nav', () => ({ MobileNav: none }));
 vi.mock('@/components/layout/tracking-job-handoff', () => ({ TrackingJobHandoff: none }));
+// Chat's side panel has its own tests; here, only where the layout puts it.
+vi.mock('@/components/chat/panel/chat-side-panel', () => ({ ChatSidePanel: none }));
 vi.mock('@/components/providers/auth-provider', () => ({ AuthProvider: none }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({ AiUsageProvider: pass }));
 // The brands the layout hands the brand store (the store is marked loaded

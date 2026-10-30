@@ -6,6 +6,7 @@ import { Link } from '@/i18n/navigation';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { AiUsageBanner } from './ai-usage-banner';
 import { AiUsageGetMore } from './ai-usage-get-more';
+import { AskChatButton } from '@/components/chat/panel/ask-chat-button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover';
@@ -52,15 +53,19 @@ const LABEL_KEY = {
  * the right, so the row keeps the whole width for its buttons. From 80% of
  * the month's allowance the banner follows the row (spec §4), spaced as the
  * page spaces its parts; `banner={false}` leaves it to the page, for a row
- * with more of its header under it.
+ * with more of its header under it. Chat's "Ask Chat" follows the meter, at
+ * the top right of the page (CHAT-01 item 13); `askChat={false}` leaves it
+ * out, for a row in a drawer.
  */
 export function HeaderWithAiUsage({
   children,
   banner = true,
+  askChat = true,
   className,
 }: {
   children: ReactNode;
   banner?: boolean;
+  askChat?: boolean;
   /** On the header row: room for a drawer's close button, for one. */
   className?: string;
 }) {
@@ -69,6 +74,7 @@ export function HeaderWithAiUsage({
       <div className={cn('flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3', className)}>
         <div className="min-w-0 sm:flex-1">{children}</div>
         <AiUsageMeter className="self-end sm:self-auto" />
+        {askChat && <AskChatButton className="self-end sm:self-auto" />}
       </div>
       {banner && <AiUsageBanner />}
     </>

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { TeamRole } from '@/components/providers/role-provider';
 import { planFactsFromOrgRow, type OrgPlanRow, type PlanFacts } from './plan-facts';
 import {
+  chatDefaultModeOf,
   CHAT_MODES,
   CHAT_SURFACES,
   DEFAULT_CHAT_SETTINGS,
@@ -1302,5 +1303,18 @@ describe('the rest of the precedence', () => {
     );
     expect(off.length).toBeGreaterThan(0);
     expect(off.every((d) => d.ctx.role === 'manager' && d.tool.class === 'execute')).toBe(true);
+  });
+});
+
+describe('chatDefaultModeOf', () => {
+  it('starts in the saved mode, Auto when none or unknown', () => {
+    expect(chatDefaultModeOf('ask_first', false)).toBe('ask_first');
+    expect(chatDefaultModeOf(null, false)).toBe('auto');
+    expect(chatDefaultModeOf('reckless', true)).toBe('auto');
+  });
+
+  it('starts a saved Full auto as Auto once the plan no longer opens it', () => {
+    expect(chatDefaultModeOf('full_auto', true)).toBe('full_auto');
+    expect(chatDefaultModeOf('full_auto', false)).toBe('auto');
   });
 });

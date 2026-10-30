@@ -496,7 +496,11 @@ export function OpportunityDetail({
             the drawer, which covers the Content page's header; there it
             leaves room for the drawer's close button (top-3 right-3, 28 px).
             The banner follows the whole header block. */}
-        <HeaderWithAiUsage banner={false} className={inDrawer ? 'pr-8' : undefined}>
+        <HeaderWithAiUsage
+          banner={false}
+          askChat={!inDrawer}
+          className={inDrawer ? 'pr-8' : undefined}
+        >
           <div className="flex items-start gap-3">
             {!inDrawer && (
               <Link href="/dashboard/content">

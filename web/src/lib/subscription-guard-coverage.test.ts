@@ -59,6 +59,9 @@ const OPEN_ACTIONS: Record<string, string> = {
   'chat-uploads.ts:finishChatUpload':
     "marks the person's own file, already let up by prepareChatUpload, as arrived",
   'chat-uploads.ts:removeChatUpload': "takes the person's own draft file away, never adds one",
+  'chat-prefs.ts:saveChatMenuOpen': "the person's own Chat layout (menu shown), nothing that costs",
+  'chat-prefs.ts:saveChatPanelSize':
+    "the person's own Chat layout (panel size), nothing that costs",
   'chat-access-requests.ts:requestAccess':
     'asking an Admin costs nothing, and a read-only workspace is one of the things to ask about',
   'chat-access-requests.ts:withdrawAccessRequest': 'takes back a request, never gives access',

@@ -159,6 +159,22 @@ describe('ChatThreadView', () => {
     expect(window.location.pathname).toBe(`/dashboard/chat/${CHAT}`);
   });
 
+  it('in the side panel, keeps the page’s address and tells the panel the chat', async () => {
+    window.history.replaceState(null, '', '/dashboard/mentions');
+    const onConversation = vi.fn();
+    await render({
+      variant: 'panel',
+      onConversation,
+      empty: <p>Hi Sam, ask anything about this page.</p>,
+    });
+    expect(container.textContent).toContain('Hi Sam, ask anything about this page.');
+    await type('Why did mentions drop?');
+    await enter();
+    expect(window.location.pathname).toBe('/dashboard/mentions');
+    expect(onConversation).toHaveBeenCalledWith(CHAT);
+    expect(container.textContent).not.toContain('Hi Sam');
+  });
+
   it('keeps the text when the run API refuses it', async () => {
     fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });

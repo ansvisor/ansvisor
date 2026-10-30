@@ -2,9 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The chat menu's state on the person (CHAT-01 item 9d, DECISIONS N3):
- * written to their own chat_user_prefs row, only with the new Chat on, and
- * answered as a value — never thrown (#1777).
+ * The chat menu's state and the side panel's size on the person (CHAT-01
+ * items 9d, 16; DECISIONS N3): written to their own chat_user_prefs row,
+ * only with the new Chat on, and answered as a value — never thrown (#1777).
  */
 
 const db = vi.hoisted(() => ({
@@ -35,7 +35,7 @@ vi.mock('@/lib/supabase/server', () => ({
   },
 }));
 
-const { saveChatMenuOpen } = await import('./chat-prefs');
+const { saveChatMenuOpen, saveChatPanelSize } = await import('./chat-prefs');
 
 beforeEach(() => {
   vi.stubEnv('CHAT_AGENTIC', 'true');
@@ -70,5 +70,19 @@ describe('saveChatMenuOpen', () => {
     expect(await saveChatMenuOpen(true)).toEqual({ ok: false });
     db.throws = true;
     expect(await saveChatMenuOpen(true)).toEqual({ ok: false });
+  });
+});
+
+describe('saveChatPanelSize', () => {
+  it("keeps the panel's size on the person's own row", async () => {
+    expect(await saveChatPanelSize('wide')).toEqual({ ok: true });
+    expect(db.upserts).toEqual([
+      { row: { user_id: 'user-1', panel_size: 'wide' }, options: { onConflict: 'user_id' } },
+    ]);
+  });
+
+  it('keeps no size it does not know', async () => {
+    expect(await saveChatPanelSize('huge' as 'wide')).toEqual({ ok: false });
+    expect(db.upserts).toEqual([]);
   });
 });

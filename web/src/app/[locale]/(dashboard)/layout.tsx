@@ -10,6 +10,12 @@ import { RoleProvider, type TeamRole } from '@/components/providers/role-provide
 import { MenuAccessProvider } from '@/components/providers/menu-access-provider';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
+import { firstNameOf } from '@/lib/chat/home';
+import { panelSizeOf } from '@/lib/chat/panel';
+import { planFactsFromOrgRow } from '@/lib/chat/plan-facts';
+import { chatDefaultModeOf } from '@/lib/chat/precedence';
+import { ChatPanelPage, ChatPanelProvider } from '@/components/chat/panel/chat-panel-provider';
+import { ChatSidePanel } from '@/components/chat/panel/chat-side-panel';
 import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { GettingStartedPageOpened } from '@/components/getting-started/page-opened';
@@ -36,7 +42,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: profile } = await supabase
     .from('profiles')
     .select(
-      'organization_id, onboarding_completed, role, work_areas, work_areas_asked_at, menu_shown, menu_hidden, can_manage_menus',
+      'organization_id, onboarding_completed, role, full_name, work_areas, work_areas_asked_at, menu_shown, menu_hidden, can_manage_menus',
     )
     .eq('id', user.id)
     .single();
@@ -46,17 +52,27 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const role = (profile.role ?? 'analyst') as TeamRole;
+  const chatOn = chatAgenticEnabled(profile.organization_id);
 
-  const [{ data: org, error: orgError }, brands, roleHidden] = await Promise.all([
-    supabase
-      .from('organizations')
-      .select('plan, subscription_status, plan_overrides, stripe_subscription_id')
-      .eq('id', profile.organization_id)
-      .single(),
-    getBrands(profile.organization_id),
-    // The sections the viewer's role leaves out (menu access); no read for admins.
-    readRoleHidden(supabase, profile.organization_id, role),
-  ]);
+  const [{ data: org, error: orgError }, brands, roleHidden, { data: chatPrefs }] =
+    await Promise.all([
+      supabase
+        .from('organizations')
+        .select('plan, subscription_status, plan_overrides, stripe_subscription_id')
+        .eq('id', profile.organization_id)
+        .single(),
+      getBrands(profile.organization_id),
+      // The sections the viewer's role leaves out (menu access); no read for admins.
+      readRoleHidden(supabase, profile.organization_id, role),
+      // Chat's side panel on every page (CHAT-01 items 13–24): the person's choices for it.
+      chatOn
+        ? supabase
+            .from('chat_user_prefs')
+            .select('panel_on_pages, panel_size, default_mode')
+            .eq('user_id', user.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
   const menu = menuOfProfile({ ...profile, role }, roleHidden);
 
   // The organization's demo brand (sample data, 00380), shown or hidden: the
@@ -116,6 +132,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
     allowedModelIds = effective ? [...effective] : null;
   }
 
+  const fullAutoOpen = org ? planFactsFromOrgRow(org).fullAuto : false;
+  const metadataName = (user.user_metadata as { full_name?: unknown } | null)?.full_name;
+  const chatPanel = {
+    enabled: chatOn && chatPrefs?.panel_on_pages !== false,
+    size: panelSizeOf(chatPrefs?.panel_size),
+    firstName: firstNameOf(
+      profile.full_name ?? (typeof metadataName === 'string' ? metadataName : null),
+    ),
+    defaultMode: chatDefaultModeOf(chatPrefs?.default_mode, fullAutoOpen),
+    fullAutoOpen,
+  };
+
   return (
     <>
       <AuthProvider user={user} />
@@ -127,7 +155,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         subscriptionStatus={subscriptionStatus}
       >
         <RoleProvider role={role}>
-          <ChatAgenticProvider enabled={chatAgenticEnabled(profile.organization_id)}>
+          <ChatAgenticProvider enabled={chatOn}>
             <DemoBrandProvider
               demoBrand={
                 demoBrand ? { id: demoBrand.id, hidden: Boolean(demoBrand.demoHiddenAt) } : null
@@ -139,27 +167,30 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 <GettingStartedPageOpened />
                 <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
                   <AiUsageProvider>
-                    <div className="flex h-screen overflow-hidden">
-                      {/* Desktop sidebar */}
-                      <div className="relative hidden md:flex md:flex-shrink-0">
-                        <SidebarErrorBoundary>
-                          <Sidebar />
-                        </SidebarErrorBoundary>
-                      </div>
-
-                      {/* Main area */}
-                      <div className="flex flex-1 flex-col overflow-hidden">
-                        <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
-                          <MobileNav />
+                    <ChatPanelProvider setup={chatPanel}>
+                      <div className="flex h-screen overflow-hidden">
+                        {/* Desktop sidebar */}
+                        <div className="relative hidden md:flex md:flex-shrink-0">
+                          <SidebarErrorBoundary>
+                            <Sidebar />
+                          </SidebarErrorBoundary>
                         </div>
-                        <ReadOnlyBanner />
-                        <DemoBanner />
-                        <main className="flex-1 overflow-y-auto bg-background p-6">
-                          <BrandGuard>{children}</BrandGuard>
-                        </main>
-                        <TrackingJobHandoff />
+
+                        {/* Main area, beside Chat's side panel when it is open */}
+                        <ChatPanelPage className="flex flex-1 flex-col overflow-hidden">
+                          <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
+                            <MobileNav />
+                          </div>
+                          <ReadOnlyBanner />
+                          <DemoBanner />
+                          <main className="flex-1 overflow-y-auto bg-background p-6">
+                            <BrandGuard>{children}</BrandGuard>
+                          </main>
+                          <TrackingJobHandoff />
+                        </ChatPanelPage>
                       </div>
-                    </div>
+                      {chatPanel.enabled && <ChatSidePanel />}
+                    </ChatPanelProvider>
                   </AiUsageProvider>
                 </MenuAccessProvider>
               </UpgradeDialogProvider>

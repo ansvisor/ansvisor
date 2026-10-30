@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { firstNameOf } from '@/lib/chat/home';
 import { planFactsFromOrgRow } from '@/lib/chat/plan-facts';
-import { CHAT_MODES, type ChatMode } from '@/lib/chat/precedence';
+import { chatDefaultModeOf, type ChatMode } from '@/lib/chat/precedence';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
 
 /** Whether the signed-in person's workspace has the new Chat on (CHAT_AGENTIC). */
@@ -106,12 +106,6 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
       .eq('id', profile.organization_id)
       .maybeSingle(),
   ]);
-  const saved = prefs?.default_mode;
   const fullAutoOpen = org ? planFactsFromOrgRow(org).fullAuto : false;
-  const defaultMode = CHAT_MODES.find((m) => m === saved) ?? 'auto';
-  // A saved Full auto the plan no longer opens starts as Auto, ask before changes.
-  return {
-    defaultMode: defaultMode === 'full_auto' && !fullAutoOpen ? 'auto' : defaultMode,
-    fullAutoOpen,
-  };
+  return { defaultMode: chatDefaultModeOf(prefs?.default_mode, fullAutoOpen), fullAutoOpen };
 }

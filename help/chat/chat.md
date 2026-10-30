@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used]
+keywords: [chat, ask chat, side panel, chat panel, ctrl j, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-30
@@ -26,6 +26,18 @@ Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter a
 Next to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. Nothing is published or sent without your click, and every change is in the **Activity** log. **Full auto** needs the Growth plan.
 
 Analysts and Agency partners only read: their box says **Read-only** with a link to what their role can do.
+
+## Chat beside any page
+
+On most pages **Ask Chat** sits at the top right, next to the AI usage meter. Click it, or press **Ctrl J** (**⌘J** on a Mac), to open Chat in a panel on the right without leaving the page. Press it again, or click **✕**, to close the panel: the page stays exactly as you left it.
+
+At the top of the panel, start a **New chat**, open a recent one from **Chat history**, or pick **Compact**, **Wide** or **Full screen**. The panel keeps the size you picked. On a wide screen the page moves aside so nothing is covered; on a smaller screen the panel opens over the page.
+
+## Chats in the panel
+
+A chat you start in the panel is saved like any other: it is in **Chat**, where you can carry on with it. If you used a panel chat in the last 30 minutes, the panel opens on it again.
+
+The panel isn't on Chat's own pages, where **Ctrl J** takes you to the message box, or in the Content Editor, which has its own chat.
 
 ## Stop or steer
 

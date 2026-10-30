@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { chatShortcutOf, shortcutLabel } from './chat-shortcuts';
 
-/** The shell's keys (CHAT-23 P11): Ctrl+\ / ⌘\ and Ctrl+Shift+O / ⌘⇧O; Ctrl+B stays Bold. */
+/**
+ * The shell's keys (CHAT-23 P11): Ctrl+\ / ⌘\ and Ctrl+Shift+O / ⌘⇧O; Ctrl J / ⌘J for the side
+ * panel (CHAT-01 item 14); Ctrl+B stays Bold.
+ */
 
 const key = (key: string, mods: Partial<Record<'ctrl' | 'meta' | 'shift' | 'alt', boolean>>) => ({
   key,
@@ -19,6 +22,15 @@ describe('chatShortcutOf', () => {
     expect(chatShortcutOf(key('o', { meta: true, shift: true }))).toBe('new');
   });
 
+  it('reads the side panel key on both keyboards', () => {
+    expect(chatShortcutOf(key('j', { ctrl: true }))).toBe('panel');
+    expect(chatShortcutOf(key('J', { meta: true }))).toBe('panel');
+    expect(chatShortcutOf({ ...key('ö', { ctrl: true }), code: 'KeyJ' })).toBe('panel');
+    expect(chatShortcutOf(key('j', { ctrl: true, shift: true }))).toBeNull();
+    expect(chatShortcutOf(key('j', { ctrl: true, meta: true }))).toBeNull();
+    expect(chatShortcutOf(key('j', { meta: true, alt: true }))).toBeNull();
+  });
+
   it('leaves Bold, plain keys and other chords alone', () => {
     expect(chatShortcutOf(key('b', { ctrl: true }))).toBeNull();
     expect(chatShortcutOf(key('\\', {}))).toBeNull();
@@ -32,5 +44,7 @@ describe('shortcutLabel', () => {
     expect(shortcutLabel('menu', false)).toBe('Ctrl+\\');
     expect(shortcutLabel('menu', true)).toBe('⌘\\');
     expect(shortcutLabel('new', true)).toBe('⌘⇧O');
+    expect(shortcutLabel('panel', false)).toBe('Ctrl J');
+    expect(shortcutLabel('panel', true)).toBe('⌘J');
   });
 });

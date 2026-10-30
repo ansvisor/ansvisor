@@ -131,7 +131,9 @@ function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: R
       if (!shortcut) return;
       event.preventDefault();
       if (shortcut === 'menu') toggle();
-      else newChat();
+      else if (shortcut === 'new') newChat();
+      // On Chat's own routes the side panel's key goes to the composer (CHAT-01 item 14).
+      else document.querySelector<HTMLTextAreaElement>('[data-action="composer.input"]')?.focus();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
