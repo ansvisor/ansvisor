@@ -170,7 +170,7 @@ export type PlanChip =
 /** A line of "With {next plan} you'd also get" (§7a item 5), with its numbers. */
 export type PlanBenefit =
   | { key: 'morePlatforms'; count: number }
-  | { key: 'fullAuto' | 'mcpWrite' | 'claude' | 'contract' }
+  | { key: 'fullAuto' | 'mcpWrite' | 'claude' | 'ownKeys' | 'contract' }
   | { key: 'aiLimit'; times: number }
   | { key: 'keepEverything' | 'mcp' | 'monthlyLimit' | 'packs' };
 
@@ -222,7 +222,7 @@ function benefitsOf(from: PlanId, to: PlanId, afterTrial: boolean): PlanBenefit[
     out.push({ key: 'claude' });
   }
   if (to === 'enterprise') {
-    out.push({ key: 'contract' });
+    out.push({ key: 'ownKeys' }, { key: 'contract' });
   } else if (
     own.improveMonthlyBudgetUsd > 0 &&
     next.improveMonthlyBudgetUsd > own.improveMonthlyBudgetUsd
@@ -249,7 +249,8 @@ export function planCardOf(facts: PlanFacts): PlanCard | null {
   const all: PlanChip[] = [
     { key: 'platforms', count: limits.maxPlatforms, locked: null },
     { key: 'fullAuto', locked: facts.fullAuto ? null : 'growth' },
-    { key: 'ownKeys', locked: growthLock },
+    // Own AI keys are Enterprise's only (CHAT-16 item 19, lib/chat/key.ts).
+    { key: 'ownKeys', locked: facts.planId === 'enterprise' ? null : 'enterprise' },
     {
       key: 'mcp',
       access: mcpAccess,

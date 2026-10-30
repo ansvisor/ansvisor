@@ -110,6 +110,30 @@ describe('AiUsageBanner', () => {
     ]);
   });
 
+  it('offers an own key only on Enterprise once Chat draws on the allowance', async () => {
+    // Own AI keys are Enterprise's (CHAT-16 item 19, owner decision 2026-10-30).
+    state.usage = usage({ percentUsed: 100, chatMetered: true });
+    await render();
+    expect(links()).toEqual([['Get more AI usage', '/dashboard/settings/billing']]);
+
+    state.usage = usage({
+      plan: 'enterprise',
+      planName: 'Enterprise',
+      percentUsed: 100,
+      chatMetered: true,
+    });
+    await render();
+    expect(links()).toEqual([['Use your own key', '/dashboard/settings/ai-providers']]);
+
+    // Other members are asked for more usage only, with no own key below Enterprise.
+    state.usage = usage({ percentUsed: 100, chatMetered: true });
+    await render('analyst');
+    expect(container.textContent).toContain(
+      'To get more AI usage, ask an admin of your workspace.',
+    );
+    expect(container.textContent).not.toContain('use your own key');
+  });
+
   it('says in the free trial that starting the plan gives more, also when used up', async () => {
     state.usage = usage({ trial: true });
     await render();

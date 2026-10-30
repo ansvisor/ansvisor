@@ -92,6 +92,7 @@ describe('planCardOf', () => {
     expect(chip(starter, 'fullAuto')?.locked).toBe('growth');
     expect(chip(starter, 'mcp')).toEqual({ key: 'mcp', access: 'read', locked: 'growth' });
     expect(chip(starter, 'openPr')?.locked).toBe('growth');
+    expect(chip(starter, 'ownKeys')?.locked).toBe('enterprise');
     expect(starter.next).toEqual({
       planId: 'growth',
       planName: 'Growth',
@@ -112,10 +113,12 @@ describe('planCardOf', () => {
     expect(chip(growth, 'fullAuto')?.locked).toBeNull();
     expect(chip(growth, 'mcp')).toEqual({ key: 'mcp', access: 'read_write', locked: null });
     expect(chip(growth, 'claude')?.locked).toBe('enterprise');
+    // Own AI keys are Enterprise's (owner decision 2026-10-30).
+    expect(chip(growth, 'ownKeys')?.locked).toBe('enterprise');
     expect(growth.next).toMatchObject({
       planId: 'enterprise',
       priceDiff: null,
-      benefits: [{ key: 'claude' }, { key: 'contract' }],
+      benefits: [{ key: 'claude' }, { key: 'ownKeys' }, { key: 'contract' }],
     });
   });
 
@@ -123,6 +126,7 @@ describe('planCardOf', () => {
     const enterprise = card('enterprise');
     expect(enterprise.next).toBeNull();
     expect(enterprise.chips.every((c) => c.locked === null)).toBe(true);
+    expect(chip(enterprise, 'ownKeys')).toEqual({ key: 'ownKeys', locked: null });
     expect(chip(enterprise, 'claude')).toBeUndefined();
     const withClaude = card('enterprise', 'active', { allowedModels: ['claude-sonnet-5'] });
     expect(chip(withClaude, 'claude')).toEqual({ key: 'claude', locked: null });
