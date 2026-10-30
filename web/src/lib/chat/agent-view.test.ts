@@ -8,26 +8,18 @@ import {
   nextRunOf,
   outcomeCounts,
   percentOf,
-  rowAbilities,
   runDot,
   runMatches,
   triggerSummary,
+  triggerZone,
   whenParts,
 } from './agent-view';
 
 /**
  * Chat › Agents as the browser shows it (CHAT-21 §B, §C; CHAT-27 items
- * 24–25): the dot, what a row offers each role, shares as percents (never
- * dollars), triggers in parts, the next run and times as the lists say them.
+ * 24–25): the dot, shares as percents (never dollars), triggers in parts,
+ * the next run on its schedule's clock, and times as the lists say them.
  */
-
-const row = (extra: Partial<Parameters<typeof rowAbilities>[1]> = {}) => ({
-  status: 'active' as const,
-  mine: false,
-  visibility: 'workspace' as const,
-  skills: ['winback'],
-  ...extra,
-});
 
 describe('agentDot', () => {
   it('is green for Active, amber for Paused and grey for Draft and Archived', () => {
@@ -35,38 +27,6 @@ describe('agentDot', () => {
     expect(agentDot('paused')).toBe('paused');
     expect(agentDot('draft')).toBe('idle');
     expect(agentDot('archived')).toBe('idle');
-  });
-});
-
-describe('rowAbilities', () => {
-  it('gives Analysts and Agency partners nothing to press', () => {
-    for (const role of ['analyst', 'agency_partner'] as const) {
-      expect(rowAbilities(role, row({ mine: true }))).toEqual({
-        run: false,
-        pause: false,
-        resume: false,
-      });
-    }
-  });
-
-  it('lets a Manager run a workspace agent but pause only their own; an Admin any', () => {
-    expect(rowAbilities('manager', row())).toEqual({ run: true, pause: false, resume: false });
-    expect(rowAbilities('manager', row({ visibility: 'private' })).run).toBe(false);
-    expect(rowAbilities('manager', row({ mine: true }))).toEqual({
-      run: true,
-      pause: true,
-      resume: false,
-    });
-    expect(rowAbilities('admin', row({ status: 'paused', visibility: 'private' }))).toEqual({
-      run: true,
-      pause: false,
-      resume: true,
-    });
-  });
-
-  it('never runs an archived agent or one without a version', () => {
-    expect(rowAbilities('admin', row({ status: 'archived' })).run).toBe(false);
-    expect(rowAbilities('admin', row({ skills: [] })).run).toBe(false);
   });
 });
 
@@ -181,20 +141,43 @@ describe('triggerSummary', () => {
 });
 
 describe('nextRunOf', () => {
-  it('takes the soonest switched-on schedule, else an event trigger, else Run now only', () => {
+  const weekly = (nextFireAt: string, enabled = true, timezone = 'Europe/Istanbul') => ({
+    kind: 'schedule' as const,
+    config: { type: 'recurring', rrule: 'FREQ=WEEKLY;BYDAY=MO;BYHOUR=7;BYMINUTE=0', timezone },
+    enabled,
+    nextFireAt,
+  });
+
+  it('takes the soonest switched-on schedule with its zone, else an event trigger, else Run now only', () => {
     expect(
       nextRunOf([
-        { kind: 'schedule', enabled: true, nextFireAt: '2026-11-03T06:00:00Z' },
-        { kind: 'schedule', enabled: true, nextFireAt: '2026-11-02T06:00:00Z' },
-        { kind: 'schedule', enabled: false, nextFireAt: '2026-11-01T06:00:00Z' },
+        weekly('2026-11-03T06:00:00Z'),
+        weekly('2026-11-02T04:00:00Z', true, 'Asia/Tokyo'),
+        weekly('2026-11-01T06:00:00Z', false),
       ]),
-    ).toEqual({ kind: 'at', at: '2026-11-02T06:00:00Z' });
-    expect(nextRunOf([{ kind: 'signal', enabled: true, nextFireAt: null }])).toEqual({
+    ).toEqual({ kind: 'at', at: '2026-11-02T04:00:00Z', zone: 'Asia/Tokyo' });
+    expect(
+      nextRunOf([
+        {
+          kind: 'schedule',
+          config: { type: 'once', at: '2026-11-02T06:00:00Z' },
+          enabled: true,
+          nextFireAt: '2026-11-02T06:00:00Z',
+        },
+      ]),
+    ).toEqual({ kind: 'at', at: '2026-11-02T06:00:00Z', zone: null });
+    expect(nextRunOf([{ kind: 'signal', config: {}, enabled: true, nextFireAt: null }])).toEqual({
       kind: 'event',
     });
-    expect(nextRunOf([{ kind: 'signal', enabled: false, nextFireAt: null }])).toEqual({
+    expect(nextRunOf([{ kind: 'signal', config: {}, enabled: false, nextFireAt: null }])).toEqual({
       kind: 'manual',
     });
+  });
+
+  it("reads a recurring schedule's zone, and none for a one-off or an event trigger", () => {
+    expect(triggerZone(weekly('2026-11-02T04:00:00Z'))).toBe('Europe/Istanbul');
+    expect(triggerZone({ kind: 'schedule', config: { type: 'once', at: 'x' } })).toBeNull();
+    expect(triggerZone({ kind: 'kpi', config: { timezone: 'UTC' } })).toBeNull();
   });
 });
 

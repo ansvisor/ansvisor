@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { X } from 'lucide-react';
 import { DenialCard } from '@/components/agentic/denial-card';
@@ -158,12 +159,17 @@ export function FormulaChips({
 /**
  * The out-of-permission answer (CHAT-20 §4c) for a button the server
  * refused, with Ask your Admin, until it is closed or another button is
- * clicked.
+ * clicked: read out as it appears, and scrolled into view.
  */
 export function AgentDenial({ denial, onClose }: { denial: ChatDenialCard; onClose: () => void }) {
   const t = useTranslations('chatAgents');
+  const box = useRef<HTMLDivElement>(null);
+  // A card clicked far down the list: the answer above comes into view.
+  useEffect(() => {
+    box.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [denial]);
   return (
-    <div data-slot="agent-denial" className="relative mb-4 max-w-[640px]">
+    <div ref={box} role="alert" data-slot="agent-denial" className="relative mb-4 max-w-[640px]">
       <button
         type="button"
         data-action="denial.close"

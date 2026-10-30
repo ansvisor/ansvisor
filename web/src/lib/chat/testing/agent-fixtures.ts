@@ -30,11 +30,12 @@ export function listItem(extra: Partial<AgentListItem> = {}): AgentListItem {
         config: {
           type: 'recurring',
           rrule: 'FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0',
-          timezone: 'UTC',
+          // Its clock is Istanbul's (UTC+3); the tests' screen is UTC.
+          timezone: 'Europe/Istanbul',
         },
         enabled: true,
-        nextFireAt: '2026-11-02T09:00:00.000Z',
-        lastFiredAt: null,
+        nextFireAt: '2026-11-02T06:00:00.000Z',
+        lastFiredAt: '2026-10-26T06:00:00.000Z',
       },
       {
         kind: 'signal',
@@ -52,6 +53,7 @@ export function listItem(extra: Partial<AgentListItem> = {}): AgentListItem {
     maxMonthShare: null,
     version: 2,
     updatedAt: '2026-10-29T10:00:00.000Z',
+    can: { run: true, pause: true, resume: false },
     ...extra,
   };
 }

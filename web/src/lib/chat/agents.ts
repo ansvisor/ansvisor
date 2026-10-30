@@ -526,6 +526,8 @@ export interface AgentListItem {
   maxMonthShare: number | null;
   version: number;
   updatedAt: string;
+  /** The row's buttons the person may use now (§B item 7), as the detail's `can` decides them. */
+  can: Pick<AgentAbilities, 'run' | 'pause' | 'resume'>;
 }
 
 export interface AgentListResult {
@@ -628,6 +630,7 @@ function listItem(
   }
   const last = parts.runs[0];
   const scope = version?.scope ?? { brand_ids: [] };
+  const can = abilitiesOf(ctx, agent);
   return {
     id: row.id,
     name: row.name,
@@ -652,6 +655,7 @@ function listItem(
     maxMonthShare: row.max_month_share,
     version: row.version,
     updatedAt: row.updated_at,
+    can: { run: can.run, pause: can.pause, resume: can.resume },
   };
 }
 
@@ -725,7 +729,9 @@ export async function runViews(organizationId: string, runs: RunRow[]): Promise<
       .in(
         'agent_run_id',
         runs.map((r) => r.id),
-      ),
+      )
+      // A deleted chat (Delete with Undo, 00407) isn't opened from a run.
+      .is('deleted_at', null),
   ]);
   if (chats.error) throw new Error(`Could not read the runs' chats: ${chats.error.message}`);
   const brandNames = new Map(brands.map((b) => [b.id, b.name]));

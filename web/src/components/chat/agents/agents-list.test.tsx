@@ -107,6 +107,7 @@ beforeEach(() => {
         not_measurable: 0,
       },
       usage30d: null,
+      can: { run: true, pause: false, resume: true },
     }),
   ]);
   answer = (url) =>
@@ -144,14 +145,14 @@ describe('AgentsList', () => {
     expect(action('agents.filter')[2].getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('searches by name or skill once the typing stops', async () => {
+  it('searches by name or skill once the typing stops, a skill with or without its slash', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       await render();
       const input = action('agents.search')[0] as HTMLInputElement;
       await act(async () => {
         const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
-        set.call(input, 'winback');
+        set.call(input, '/winback');
         input.dispatchEvent(new Event('input', { bubbles: true }));
       });
       await act(async () => {
@@ -211,19 +212,34 @@ describe('AgentsList', () => {
     expect(container.textContent).not.toMatch(/\$/);
   });
 
-  it('gives a Manager New agent, Run now on a workspace agent and Pause on their own', async () => {
+  it("gives each card the Run now and Pause or Resume the server's `can` gives it, and a Manager New agent", async () => {
     await render('manager');
     expect(action('agents.new')[0].getAttribute('href')).toBe('/dashboard/chat/agents/new');
     const [first, second] = cards();
     expect(first.querySelector('[data-action="agents.run"]')).not.toBeNull();
     expect(first.querySelector('[data-action="agents.pauseResume"]')?.textContent).toBe('Pause');
-    // Someone else's paused workspace agent: Run now, but no Resume for a Manager.
-    expect(second.querySelector('[data-action="agents.run"]')).not.toBeNull();
-    expect(second.querySelector('[data-action="agents.pauseResume"]')).toBeNull();
+    expect(second.querySelector('[data-action="agents.pauseResume"]')?.textContent).toBe('Resume');
     expect(container.querySelector('[data-slot="agents-read-only"]')).toBeNull();
   });
 
+  it('shows no Resume the server wouldn’t take, whatever the role (workspace agents kept to Admins)', async () => {
+    page.agents[1] = {
+      ...page.agents[1],
+      mine: true,
+      can: { run: true, pause: false, resume: false },
+    };
+    await render('manager');
+    const second = cards()[1];
+    expect(second.querySelector('[data-action="agents.run"]')).not.toBeNull();
+    expect(second.querySelector('[data-action="agents.pauseResume"]')).toBeNull();
+  });
+
   it('shows Analysts and Agency partners no write buttons, a read-only line, and the Workspace tab first', async () => {
+    // What the server gives a reader: nothing to press.
+    page.agents = page.agents.map((a) => ({
+      ...a,
+      can: { run: false, pause: false, resume: false },
+    }));
     for (const role of ['analyst', 'agency_partner'] as const) {
       fetchMock.mockClear();
       await render(role);
@@ -259,6 +275,36 @@ describe('AgentsList', () => {
     );
     expect(toast).toHaveBeenCalledWith('Run queued for Ansvisor');
     expect(listCalls()).toHaveLength(2);
+  });
+
+  it('reads the tab shown again after a button, even when it changed meanwhile', async () => {
+    let finish: (res: Response) => void = () => undefined;
+    answer = (url) => {
+      if (url.endsWith('/pause')) {
+        return new Promise<Response>((resolve) => {
+          finish = resolve;
+        }) as unknown as Response;
+      }
+      return Response.json({ ok: true, ...page });
+    };
+    await render();
+    const pause = cards()[0].querySelector<HTMLElement>('[data-action="agents.pauseResume"]')!;
+    await act(async () => pause.click());
+    // While the pause is on its way, the person opens Paused.
+    await click(action('agents.filter')[2]);
+    expect(listCalls().at(-1)).toBe('/api/chat/agents?view=paused');
+    const before = listCalls().length;
+    await act(async () =>
+      finish(
+        Response.json({
+          ok: true,
+          agent: { ...listItem(), status: 'paused', name: 'Citation win-back' },
+        }),
+      ),
+    );
+    await settle();
+    expect(listCalls().slice(before)).toEqual(['/api/chat/agents?view=paused']);
+    expect(action('agents.filter')[2].getAttribute('aria-pressed')).toBe('true');
   });
 
   it("shows the server's out-of-permission answer for a refused button", async () => {

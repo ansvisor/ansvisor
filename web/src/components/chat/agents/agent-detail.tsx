@@ -22,7 +22,7 @@ import {
   percentOf,
   runDot,
   runMatches,
-  triggerSummary,
+  triggerZone,
   type RunFilter,
 } from '@/lib/chat/agent-view';
 import { cn } from '@/lib/utils';
@@ -89,7 +89,16 @@ function Row({ label, children, slot }: { label: string; children: ReactNode; sl
   );
 }
 
-function RunRow({ run, words }: { run: AgentRunView; words: AgentWords }) {
+function RunRow({
+  run,
+  words,
+  metered,
+}: {
+  run: AgentRunView;
+  words: AgentWords;
+  /** The workspace has an AI limit to share (none self-hosted): "—" otherwise. */
+  metered: boolean;
+}) {
   const t = useTranslations('chatAgents');
   const tRuns = useTranslations('chatAgents.detail.runs');
   const trigger =
@@ -110,24 +119,36 @@ function RunRow({ run, words }: { run: AgentRunView; words: AgentWords }) {
   const started = run.startedAt ?? run.queuedAt;
   const cells = (
     <>
-      <span className="min-w-0">
-        <b className="block truncate font-medium tabular-nums">{words.when(started)}</b>
+      <span role="cell" className="min-w-0">
+        {run.chatId ? (
+          // The whole row opens the run's chat; the link stays a link, in its cell.
+          <Link
+            href={`/dashboard/chat/${run.chatId}`}
+            data-action="agent.openRunRow"
+            title={tRuns('openChat')}
+            className="block truncate font-medium tabular-nums outline-none after:absolute after:inset-0 after:content-['']"
+          >
+            {words.when(started)}
+          </Link>
+        ) : (
+          <b className="block truncate font-medium tabular-nums">{words.when(started)}</b>
+        )}
         <em className={EM}>{tRuns('version', { version: run.version })}</em>
       </span>
-      <span className="min-w-0">
+      <span role="cell" className="min-w-0">
         <b className="block truncate font-medium" title={trigger}>
           {trigger}
         </b>
         <em className={EM}>{run.brand ?? tRuns('noBrand')}</em>
       </span>
-      <span className="flex min-w-0 items-start gap-1.5">
+      <span role="cell" className="flex min-w-0 items-start gap-1.5">
         <ListDot state={runDot(run.status)} decorative className="mt-px" />
         <span className="min-w-0">
           <span className="block truncate">{status}</span>
           {reason && <em className={EM}>{reason}</em>}
         </span>
       </span>
-      <span className={cn('min-w-0', HIDE_NARROW)}>
+      <span role="cell" className={cn('min-w-0', HIDE_NARROW)}>
         {run.outcome && OUTCOME_PILL[run.outcome] ? (
           <>
             <span
@@ -150,30 +171,26 @@ function RunRow({ run, words }: { run: AgentRunView; words: AgentWords }) {
         )}
       </span>
       <span
+        role="cell"
         data-slot="run-ai-use"
-        title={tRuns('aiUseTip', { used, cap })}
+        title={metered ? tRuns('aiUseTip', { used, cap }) : undefined}
         className="text-xs text-muted-foreground tabular-nums"
       >
-        {tRuns('aiUse', { used, cap })}
+        {metered ? tRuns('aiUse', { used, cap }) : tRuns('noOutcome')}
       </span>
     </>
   );
-  const row = cn(RUN_COLS, 'min-h-[52px] border-t py-2.5 text-[13px]');
-  return run.chatId ? (
-    <Link
-      href={`/dashboard/chat/${run.chatId}`}
+  return (
+    <div
+      role="row"
       data-slot="agent-run"
-      data-action="agent.openRunRow"
-      title={tRuns('openChat')}
       className={cn(
-        row,
-        'outline-none hover:bg-muted/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset',
+        RUN_COLS,
+        'relative min-h-[52px] border-t py-2.5 text-[13px]',
+        run.chatId &&
+          'hover:bg-muted/40 has-[a:focus-visible]:ring-[3px] has-[a:focus-visible]:ring-ring/50 has-[a:focus-visible]:ring-inset',
       )}
     >
-      {cells}
-    </Link>
-  ) : (
-    <div data-slot="agent-run" className={row}>
       {cells}
     </div>
   );
@@ -194,20 +211,30 @@ export function AgentDetail({
   const [state, setState] = useState<DetailState>({ status: 'loading' });
   const [runs, setRuns] = useState<AgentRunView[] | null | 'loading'>('loading');
   const [filter, setFilter] = useState<RunFilter>('all');
+  // Only the newest read lands: a slower, older one never covers a fresher answer.
   const asked = useRef(0);
+  const runsAsked = useRef(0);
 
   const load = useCallback(async () => {
     const ask = ++asked.current;
+    const runsAsk = ++runsAsked.current;
     const [agent, list] = await Promise.all([readAgent(id), readAgentRuns(id)]);
-    if (ask !== asked.current) return;
-    setState(
-      agent === 'missing'
-        ? { status: 'missing' }
-        : agent
-          ? { status: 'ready', agent }
-          : { status: 'error' },
-    );
-    setRuns(list);
+    if (ask === asked.current) {
+      setState(
+        agent === 'missing'
+          ? { status: 'missing' }
+          : agent
+            ? { status: 'ready', agent }
+            : { status: 'error' },
+      );
+    }
+    if (runsAsk === runsAsked.current) setRuns(list);
+  }, [id]);
+
+  const reloadRuns = useCallback(async () => {
+    const ask = ++runsAsked.current;
+    const list = await readAgentRuns(id);
+    if (ask === runsAsked.current) setRuns(list);
   }, [id]);
 
   useEffect(() => {
@@ -222,7 +249,13 @@ export function AgentDetail({
   const now = useMemo(() => nowProp ?? new Date(), [nowProp, state]); // eslint-disable-line react-hooks/exhaustive-deps
   const words = useAgentWords(now, timeZone);
   const actions = useAgentActions(words, {
-    onChanged: (fresh) => setState({ status: 'ready', agent: fresh }),
+    onChanged: (fresh, button) => {
+      // The server's answer is the newest: a read still on its way is dropped.
+      asked.current++;
+      setState({ status: 'ready', agent: fresh });
+      // Archiving cancels its waiting runs: read them again, so none stays "Queued".
+      if (button === 'archive') void reloadRuns();
+    },
     onRan: () => void load(),
     onDuplicated: (copy) => router.push(`/dashboard/chat/agents/${copy.id}`),
   });
@@ -483,22 +516,24 @@ export function AgentDetail({
               </p>
             )}
             {a.triggers.map((trigger, i) => {
-              const summary = triggerSummary(trigger);
-              const zone =
-                summary.kind === 'schedule' &&
-                summary.repeat !== 'once' &&
-                summary.repeat !== 'unknown'
-                  ? ((trigger.config as { timezone?: unknown } | null)?.timezone ?? null)
-                  : null;
+              // A schedule's times on its own clock, named (its rule reads that clock).
+              const zone = triggerZone(trigger);
+              const title = words.trigger(trigger);
               const detail = !trigger.enabled
                 ? t('trigger.off')
-                : trigger.kind === 'schedule'
-                  ? trigger.nextFireAt
-                    ? `${t('line.nextRun', { when: words.when(trigger.nextFireAt) })}${
-                        typeof zone === 'string' ? ` · ${t('trigger.timeZone', { zone })}` : ''
-                      }`
-                    : t('line.manual')
-                  : t(`trigger.firesWhen.${trigger.kind}`);
+                : a.status !== 'active'
+                  ? t('trigger.notFiring', { status: a.status })
+                  : trigger.kind === 'schedule'
+                    ? trigger.nextFireAt
+                      ? `${t('line.nextRun', { when: words.when(trigger.nextFireAt, zone) })}${
+                          zone ? ` · ${t('trigger.timeZone', { zone })}` : ''
+                        }`
+                      : t('trigger.onceDone')
+                    : t(`trigger.firesWhen.${trigger.kind}`);
+              const state = tDetail('triggerState', {
+                trigger: title,
+                state: trigger.enabled ? 'on' : 'off',
+              });
               return (
                 <div
                   key={i}
@@ -514,18 +549,18 @@ export function AgentDetail({
                     {t(`trigger.types.${trigger.kind}`)}
                   </span>
                   <div className="min-w-0">
-                    <b className="block truncate font-medium">{words.trigger(trigger)}</b>
+                    <b className="block truncate font-medium">{title}</b>
                     <em className={cn(EM, 'text-xs')}>
                       {detail}
                       {trigger.lastFiredAt &&
-                        ` · ${t('trigger.lastFired', { when: words.when(trigger.lastFiredAt) })}`}
+                        ` · ${t('trigger.lastFired', { when: words.when(trigger.lastFiredAt, zone) })}`}
                     </em>
                   </div>
                   {/* Its state; switching a trigger is in the agent's settings (W2-15). */}
                   <span
                     role="img"
-                    aria-label={tDetail(trigger.enabled ? 'triggerOn' : 'triggerOff')}
-                    title={tDetail(trigger.enabled ? 'triggerOn' : 'triggerOff')}
+                    aria-label={state}
+                    title={state}
                     className={cn(
                       'relative inline-block h-[18px] w-[30px] rounded-full',
                       trigger.enabled ? 'bg-foreground' : 'bg-foreground/20',
@@ -576,17 +611,31 @@ export function AgentDetail({
             data-slot="agent-runs"
             className="overflow-hidden rounded-[14px] border bg-card shadow-[0_1px_2px_rgba(10,10,10,.04)]"
           >
-            <div
-              className={cn(
-                RUN_COLS,
-                'bg-muted/50 py-2 text-[11px] tracking-[.3px] text-muted-foreground uppercase',
-              )}
-            >
-              <span>{tDetail('runs.columns.started')}</span>
-              <span>{tDetail('runs.columns.trigger')}</span>
-              <span>{tDetail('runs.columns.result')}</span>
-              <span className={HIDE_NARROW}>{tDetail('runs.columns.outcome')}</span>
-              <span>{tDetail('runs.columns.aiUse')}</span>
+            <div role="table" aria-label={tDetail('runs.title')}>
+              <div
+                role="row"
+                className={cn(
+                  RUN_COLS,
+                  'bg-muted/50 py-2 text-[11px] tracking-[.3px] text-muted-foreground uppercase',
+                )}
+              >
+                <span role="columnheader">{tDetail('runs.columns.started')}</span>
+                <span role="columnheader">{tDetail('runs.columns.trigger')}</span>
+                <span role="columnheader">{tDetail('runs.columns.result')}</span>
+                <span role="columnheader" className={HIDE_NARROW}>
+                  {tDetail('runs.columns.outcome')}
+                </span>
+                <span role="columnheader">{tDetail('runs.columns.aiUse')}</span>
+              </div>
+              {Array.isArray(runs) &&
+                filtered.map((run, i) => (
+                  <RunRow
+                    key={`${run.queuedAt}-${i}`}
+                    run={run}
+                    words={words}
+                    metered={a.usagePeriod !== null}
+                  />
+                ))}
             </div>
             {runs === 'loading' && (
               <div aria-hidden className="flex flex-col gap-2 border-t p-3.5">
@@ -607,7 +656,7 @@ export function AgentDetail({
                   data-action="agent.retryRuns"
                   onClick={() => {
                     setRuns('loading');
-                    void readAgentRuns(a.id).then(setRuns);
+                    void reloadRuns();
                   }}
                   className="underline underline-offset-2 hover:text-foreground"
                 >
@@ -615,10 +664,6 @@ export function AgentDetail({
                 </button>
               </p>
             )}
-            {Array.isArray(runs) &&
-              filtered.map((run, i) => (
-                <RunRow key={`${run.queuedAt}-${i}`} run={run} words={words} />
-              ))}
             {Array.isArray(runs) && filtered.length === 0 && (
               <p className="border-t px-3.5 py-6 text-center text-[13px] text-muted-foreground">
                 {runs.length === 0 ? tDetail('runs.empty') : tDetail('runs.emptyFiltered')}

@@ -14,7 +14,7 @@ import { Lock, Plus } from 'lucide-react';
 import { AgentAvatar } from '@/components/agentic/agent-avatar';
 import { ListDot } from '@/components/agentic/list-dot';
 import { AskAdminButton } from '@/components/chat-access/ask-admin-button';
-import { RoleContext, type TeamRole } from '@/components/providers/role-provider';
+import { RoleContext } from '@/components/providers/role-provider';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -27,7 +27,6 @@ import {
   averageShare,
   barWidth,
   percentOf,
-  rowAbilities,
   runDot,
   writesAgents,
 } from '@/lib/chat/agent-view';
@@ -41,11 +40,12 @@ import { useAgentActions } from './use-agent-actions';
  * Chat › Agents (CHAT-21 §B; governance mockup `#g-agents`; CHAT-27 item
  * 24): the agents the person may see, in the tabs Mine · Workspace ·
  * Paused · Archived with their counts, and a search by name or skill. One
- * card per agent: its state, skills · mode · connections · model, its
- * triggers in short, next run, scope, last run, the last 30 days' outcomes
- * and its AI use as a share of the monthly limit with a thin bar. Admins
- * and Managers get New agent, Run now and Pause / Resume; Analysts and
- * Agency partners read, with a line that says so and Ask your Admin.
+ * card per agent: its state, skills and mode, its triggers in short, next
+ * run, scope, last run, the last 30 days' outcomes and its AI use as a
+ * share of the monthly limit with a thin bar. Admins and Managers get New
+ * agent; each card's Run now and Pause / Resume are the ones the server's
+ * `can` gives the row. Analysts and Agency partners read, with a line that
+ * says so and Ask your Admin.
  */
 
 /** The search asks once the typing stops. */
@@ -109,17 +109,15 @@ function AiUseCell({ agent }: { agent: AgentListItem }) {
 function AgentCard({
   agent,
   words,
-  role,
   actions,
 }: {
   agent: AgentListItem;
   words: AgentWords;
-  role: TeamRole;
   actions: ReturnType<typeof useAgentActions>;
 }) {
   const t = useTranslations('chatAgents');
   const tList = useTranslations('chatAgents.list');
-  const can = rowAbilities(role, agent);
+  const can = agent.can;
   const live = liveRunOf(agent);
   const href = `/dashboard/chat/agents/${agent.id}`;
   const next = words.nextRun(agent.triggers);
@@ -240,6 +238,8 @@ export function AgentsList({ now: nowProp, timeZone }: { now?: Date; timeZone?: 
   const [query, setQuery] = useState('');
   const [q, setQ] = useState('');
   const [list, setList] = useState<ListState>({ status: 'loading', data: null });
+  // Read again after a button: the tab and search shown then, not those of the click.
+  const [reloads, setReloads] = useState(0);
   // Only the newest read lands: a slower, older one is dropped.
   const asked = useRef(0);
 
@@ -254,7 +254,8 @@ export function AgentsList({ now: nowProp, timeZone }: { now?: Date; timeZone?: 
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => setQ(query.trim()), SEARCH_DELAY_MS);
+    // "/winback" finds the agents with the /winback skill: skills are kept without the slash.
+    const timer = setTimeout(() => setQ(query.trim().replace(/^\/+/, '')), SEARCH_DELAY_MS);
     return () => clearTimeout(timer);
   }, [query]);
 
@@ -262,14 +263,14 @@ export function AgentsList({ now: nowProp, timeZone }: { now?: Date; timeZone?: 
     // The tab, read from the API (with its loading state) whenever the tab or search changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load(tab, q);
-  }, [load, tab, q]);
+  }, [load, tab, q, reloads]);
 
   // A fresh clock with every read, so "Today" and "Next run" stay right.
   const now = useMemo(() => nowProp ?? new Date(), [nowProp, list.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const words = useAgentWords(now, timeZone);
   const actions = useAgentActions(words, {
-    onChanged: () => void load(tab, q),
-    onRan: () => void load(tab, q),
+    onChanged: () => setReloads((n) => n + 1),
+    onRan: () => setReloads((n) => n + 1),
   });
 
   const data = list.data;
@@ -397,7 +398,7 @@ export function AgentsList({ now: nowProp, timeZone }: { now?: Date; timeZone?: 
           <button
             type="button"
             data-action="agents.retry"
-            onClick={() => void load(tab, q)}
+            onClick={() => setReloads((n) => n + 1)}
             className="underline underline-offset-2 hover:text-foreground"
           >
             {tList('retry')}
@@ -412,7 +413,7 @@ export function AgentsList({ now: nowProp, timeZone }: { now?: Date; timeZone?: 
           className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3"
         >
           {agents.map((agent) => (
-            <AgentCard key={agent.id} agent={agent} words={words} role={role} actions={actions} />
+            <AgentCard key={agent.id} agent={agent} words={words} actions={actions} />
           ))}
         </div>
       )}
