@@ -3,6 +3,8 @@ import { strFromU8, unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { answerMarkdown, type ExportAnswer } from './export';
 import { ANSWER_CONTENT_TYPES, exportAnswer } from './export-file';
+import { PDF_BLOCK_LIMIT, pdfBlocks } from './export-pdf';
+import type { DraftBlock } from '@/lib/content/draft-export';
 
 const MARKDOWN = `## Neden düştü?
 
@@ -159,4 +161,40 @@ describe('exportAnswer', () => {
     const pdf = Buffer.from(file!.body).toString('latin1');
     expect(pdf.match(/\/Type \/Page\b(?!s)/g)!.length).toBeGreaterThan(10);
   }, 60_000);
+
+  it('stops a long PDF at its limit, in seconds rather than minutes', async () => {
+    // Layout time grows with the square of the length: 6,000 rows (about 130,000 characters) took minutes.
+    const rows = Array.from({ length: 6_000 }, (_, i) => `| /page-${i} | ${i} |`).join('\n');
+    const markdown = `Every page.\n\n| Page | Lost |\n|---|---|\n${rows}`;
+    const started = Date.now();
+    const file = await exportAnswer({ ...NO_TABLE, markdown }, 'pdf');
+    expect(file?.body.byteLength).toBeGreaterThan(0);
+    expect(Date.now() - started).toBeLessThan(60_000);
+  }, 120_000);
+});
+
+describe('pdfBlocks', () => {
+  const p = (text: string): DraftBlock => ({ kind: 'paragraph', runs: [{ text }] });
+  const table = (n: number): DraftBlock => ({
+    kind: 'table',
+    rows: Array.from({ length: n }, (_, i) => ({ header: i === 0, cells: [[{ text: `r${i}` }]] })),
+  });
+
+  it('keeps a short answer whole', () => {
+    const blocks = [p('a'), table(5), p('b')];
+    expect(pdfBlocks(blocks)).toEqual({ blocks, cut: false });
+  });
+
+  it('counts each table row, and the blocks inside HTML, toward the limit', () => {
+    const html: DraftBlock = { kind: 'html', html: '<div>', blocks: [p('c'), p('d')] };
+    const { blocks, cut } = pdfBlocks([p('a'), table(4), html, p('e')], 6);
+    expect(cut).toBe(true);
+    expect(blocks).toEqual([p('a'), table(4), { ...html, blocks: [p('c')] }]);
+  });
+
+  it('cuts a long table, keeping its header row', () => {
+    const { blocks, cut } = pdfBlocks([table(PDF_BLOCK_LIMIT + 500)]);
+    expect(cut).toBe(true);
+    expect(blocks).toEqual([table(PDF_BLOCK_LIMIT)]);
+  });
 });
