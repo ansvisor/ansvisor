@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat]
+keywords: [chat, ask chat, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-30
@@ -18,6 +18,40 @@ Chat answers questions about your brand from your Ansvisor data, and can do work
 Chat opens on **Home**. It greets you by name, at your own time of day, and says when something needs you: click the link to open your **Inbox**. When nothing does, it says **All caught up.**
 
 When Action Center actions for the brand you have open are due by the end of this week, overdue ones included, Home says how many with **Complete with Chat**. Click it to start a new chat that works on them; the chat opens while it works.
+
+## Ask Chat
+
+Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.
+
+Next to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. Nothing is published or sent without your click, and every change is in the **Activity** log. **Full auto** needs the Growth plan.
+
+Analysts and Agency partners only read: their box says **Read-only** with a link to what their role can do.
+
+## Stop or steer
+
+While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay.
+
+You can type while it works. Enter then stops the run and sends what you typed as the next message, so you can redirect it, for example "only blog pages".
+
+## Shortcuts and your data
+
+Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message: **/analyze**, **/report** and **/create**.
+
+Type **@**, or click **@**, to point Chat at your data: charts and metrics on the page, tracked prompts, your pages and open Action Center tasks. Use the arrow keys and Enter, or click. Your pick shows as a chip above the text; **×** takes it off.
+
+## Attach files
+
+Click **＋** and **Attach files**, drop files on the box, or paste them. A message takes up to 5 files of 10 MB each: PDF, Word, Excel, CSV, text, Markdown and HTML files, and PNG, JPG or WEBP images. Each file shows as a chip while it uploads; the arrow waits until they are up. If a file can't go, the box says why, and **Retry** sends a failed one again.
+
+Attached files are data for Chat to read, not files you made: they don't show in **Files**, and they are kept for 90 days.
+
+In **＋**, **Connect a tool** opens **Settings › Integrations** for Admins; others send their Admin a request in one click.
+
+## Watch the work
+
+While Chat works, one line says what it is doing now, such as "Reading Citations…". Steps it finished show as chips with a check mark above the answer: click one for its detail, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.
+
+Under the answer, **Data used** names each source it read, with its rows, and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
 
 ## Inbox
 
@@ -49,7 +83,7 @@ Point at a chat in the menu and click **⋯**, or click **⋯** at the top right
 
 ## Share a chat with your team
 
-A chat is yours alone until you share it. **Share with team** lets everyone in your workspace open it and read it; they can't change it. **Stop sharing** makes it private again. A shared chat shows its author's initials in teammates' menus, and an Admin can delete it.
+A chat is yours alone until you share it. **Share with team** lets everyone in your workspace open it and read it; they can't change it, and their box says so, with **Start your own chat**. **Stop sharing** makes it private again. A shared chat shows its author's initials in teammates' menus, and an Admin can delete it.
 
 ## Old Agent links
 

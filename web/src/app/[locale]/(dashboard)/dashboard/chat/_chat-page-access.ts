@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { firstNameOf } from '@/lib/chat/home';
+import { planFactsFromOrgRow } from '@/lib/chat/plan-facts';
+import { CHAT_MODES, type ChatMode } from '@/lib/chat/precedence';
+import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
 
 /** Whether the signed-in person's workspace has the new Chat on (CHAT_AGENTIC). */
 export async function chatPageOpen(): Promise<boolean> {
@@ -67,4 +70,48 @@ export async function chatFirstName(): Promise<string | null> {
   return firstNameOf(
     profile?.full_name ?? (typeof metadataName === 'string' ? metadataName : null),
   );
+}
+
+/** What the composer opens with (W1-10): the person's default mode, and whether Full auto is open. */
+export interface ChatComposerSetup {
+  defaultMode: ChatMode;
+  /** Full auto (plan facts §7): Growth and up, paid. */
+  fullAutoOpen: boolean;
+}
+
+/**
+ * The composer's setup: the default mode the person chose in Chat's settings
+ * (chat_user_prefs.default_mode; Auto, ask before changes, when none), and
+ * Full auto from the workspace's plan. A value that can't be read falls back
+ * to the careful one.
+ */
+export async function chatComposerSetup(): Promise<ChatComposerSetup> {
+  const fallback: ChatComposerSetup = { defaultMode: 'auto', fullAutoOpen: false };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fallback;
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (!profile?.organization_id) return fallback;
+  const [{ data: prefs }, { data: org }] = await Promise.all([
+    supabase.from('chat_user_prefs').select('default_mode').eq('user_id', user.id).maybeSingle(),
+    supabase
+      .from('organizations')
+      .select(ORG_PLAN_COLUMNS)
+      .eq('id', profile.organization_id)
+      .maybeSingle(),
+  ]);
+  const saved = prefs?.default_mode;
+  const fullAutoOpen = org ? planFactsFromOrgRow(org).fullAuto : false;
+  const defaultMode = CHAT_MODES.find((m) => m === saved) ?? 'auto';
+  // A saved Full auto the plan no longer opens starts as Auto, ask before changes.
+  return {
+    defaultMode: defaultMode === 'full_auto' && !fullAutoOpen ? 'auto' : defaultMode,
+    fullAutoOpen,
+  };
 }
