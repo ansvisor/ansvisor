@@ -730,7 +730,13 @@ describe('question cards (CHAT-07)', () => {
       skipped: false,
       via: 'card',
     });
-    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('"selected":["/features"]');
+    // The person's own answer: the model follows it as their message, not as data.
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain(
+      '"from":"the person","selected":["/features"]',
+    );
+    expect(JSON.stringify(sonnet.seen[0].prompt)).toContain(
+      "result is the person's own answer, not data",
+    );
     expect(runRow(runId).status).toBe('done');
     const events = await eventsOf(runId);
     expectClean(events);
@@ -780,10 +786,12 @@ describe('question cards (CHAT-07)', () => {
       { n: 1 },
       { n: 1, selected: [0], skipped: true },
     ];
-    for (const body of tries) {
+    for (const body of [...tries, { n: 1, other: 'x'.repeat(501), via: 'composer' }]) {
       expect(await engine.prepareResume(ADMIN, runId, 'answer', body)).toMatchObject({
         ok: false,
         status: 400,
+        message:
+          "That answer doesn't fit this question. Pick one of its options, or write up to 500 characters.",
       });
     }
     expect(await engine.prepareResume(ADMIN, runId, 'answer', { n: 2 })).toMatchObject({
@@ -874,6 +882,49 @@ describe('question cards (CHAT-07)', () => {
     expectClean(await eventsOf(runId));
   });
 
+  it('runs no change asked with a question: the model calls it again with the answer', async () => {
+    const draftCall = toolCall('w1', 'create_draft', {
+      brand_id: BRAND,
+      title: 'Pricing FAQ',
+      page_type: 'docs_faq',
+      source: { kind: 'content' },
+    });
+    const { sonnet } = useModels(
+      [READY],
+      [calls(toolCall('q1', ASK_TOOL, ask('Which page?')), draftCall), text('I’ll draft it next.')],
+    );
+    const runId = await turn(ADMIN, 'Write a FAQ', 'full_auto');
+    await answer(ADMIN, runId, { selected: [1] });
+    expect(createContentDraft).not.toHaveBeenCalled();
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('not_run');
+    expect(JSON.stringify(sonnet.seen[0].prompt)).toContain(
+      "Don't call other tools in the same reply as a question",
+    );
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it('lets the answer go when the run stopped meanwhile, so nothing is kept half-way', async () => {
+    useModels([READY], [calls(toolCall('q1', ASK_TOOL, ask('Which page?')))]);
+    const runId = await turn(ADMIN, 'Write a FAQ');
+    // The run stops between the answer being kept and the run being taken back.
+    let rows = db.tables.chat_asks;
+    Object.defineProperty(db.tables, 'chat_asks', {
+      configurable: true,
+      enumerable: true,
+      get: () => rows,
+      set: (next: typeof rows) => {
+        if (next.some((a) => a.run_id === runId && a.answered_at)) {
+          runRow(runId).status = 'stopped';
+        }
+        rows = next;
+      },
+    });
+    expect(
+      await engine.prepareResume(ADMIN, runId, 'answer', { n: 1, selected: [0] }),
+    ).toMatchObject({ ok: false, status: 409, code: 'not_waiting' });
+    expect(asksOf(runId)[0]).toMatchObject({ answered_at: null, answer_json: null });
+  });
+
   it('refuses a question without exactly one Recommended, and asks 4 a run at most', async () => {
     const both = {
       question: 'Which page?',
@@ -890,6 +941,8 @@ describe('question cards (CHAT-07)', () => {
     const runId = await turn(ADMIN, 'Write a FAQ');
     // The refused one tells the model why; no card, no row.
     expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('Mark exactly one option recommended.');
+    // Of the five asked together, the four the run may ask are counted.
+    expect(ofType(await eventsOf(runId), 'ask.created')[0].data.batch).toEqual({ at: 1, of: 4 });
     for (let i = 0; i < 4; i++) {
       expect(runRow(runId).status).toBe('waiting');
       await answer(ADMIN, runId, { skipped: true });
@@ -911,7 +964,11 @@ describe('question cards (CHAT-07)', () => {
     const stopped = await turn(ADMIN, 'Write a FAQ');
     await engine.stopChatRun(ADMIN, stopped);
     expect(runRow(stopped).status).toBe('stopped');
-    expect(stepsOf(stopped)[0]).toMatchObject({ status: 'skipped', detail: 'Stopped' });
+    expect(stepsOf(stopped)[0]).toMatchObject({
+      status: 'skipped',
+      label: 'Question skipped',
+      detail: 'Stopped',
+    });
     expect(asksOf(stopped)[0]).toMatchObject({
       answer_json: { selected: [], other: null, skipped: true, via: 'card' },
     });

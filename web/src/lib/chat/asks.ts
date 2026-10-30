@@ -13,10 +13,14 @@ export const ASK_TOOL = 'ask_question';
 /** A run asks at most this many questions (§B; chat_asks.position 1–4). */
 export const MAX_ASKS_PER_RUN = 4;
 
+/** The longest answer typed in Other… or the composer. */
+export const ANSWER_MAX = 500;
+
 /** What the model asks with: 2–4 options, exactly one Recommended (00417's rule too). */
 export const askToolInput = z
   .object({
-    question: z.string().trim().min(1).max(300).describe('The question, in the person’s language.'),
+    // 200, as its step's label keeps it once answered (chat_asks takes 300).
+    question: z.string().trim().min(1).max(200).describe('The question, in the person’s language.'),
     options: z
       .array(
         z.object({
@@ -61,7 +65,7 @@ export interface AskAnswer {
 export const askAnswerInput = z.object({
   n: z.number().int().min(1),
   selected: z.array(z.number().int().min(0).max(3)).max(4).default([]),
-  other: z.string().trim().max(500).nullish(),
+  other: z.string().trim().max(ANSWER_MAX).nullish(),
   skipped: z.boolean().default(false),
   via: z.enum(['card', 'composer']).default('card'),
 });
@@ -88,19 +92,27 @@ export function answerFits(ask: AskShape, answer: AskAnswer): boolean {
   return !answer.other || ask.allowOther || answer.via === 'composer';
 }
 
+/** A label as typed: case, accents, Turkish dotted and dotless i, and spacing aside. */
+const folded = (text: string) =>
+  text
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/ı/g, 'i')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 /**
  * A message from the composer as an answer (§A item 8): an option's label
  * as typed (the ghost text, after Tab) picks that option; any other text is
- * the Other answer.
+ * the Other answer, which also answers the rest asked with it.
  */
 export function composerAnswer(
   ask: Pick<AskShape, 'options'>,
   text: string,
 ): { selected: number[]; other: string | null; skipped: false } {
   const typed = text.trim();
-  const i = ask.options.findIndex(
-    (option) => option.label.trim().toLowerCase() === typed.toLowerCase(),
-  );
+  const i = ask.options.findIndex((option) => folded(option.label) === folded(typed));
   return i >= 0
     ? { selected: [i], other: null, skipped: false }
     : { selected: [], other: typed, skipped: false };

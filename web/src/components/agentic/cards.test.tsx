@@ -797,6 +797,32 @@ describe('QuestionCard', () => {
     expect(onAnswer).toHaveBeenLastCalledWith({ selected: [0], other: null, skipped: false });
   });
 
+  it('leaves Enter on Skip, Add or an option to that button: only the card’s Enter is Next', async () => {
+    const onAnswer = vi.fn();
+    await render(<QuestionCard ask={ASK} onAnswer={onAnswer} />);
+    for (const id of ['question.skip', 'question.addOther']) await key(action(id)!, 'Enter');
+    await key($$('[data-action="question.pick"]')[1], 'Enter');
+    expect(onAnswer).not.toHaveBeenCalled();
+    await key($('[data-slot="question-card"]')!, 'Enter');
+    expect(onAnswer).toHaveBeenCalledOnce();
+  });
+
+  it('takes the text in Other… without Add, up to 500 characters', async () => {
+    const onAnswer = vi.fn();
+    await render(<QuestionCard ask={ASK} onAnswer={onAnswer} />);
+    expect($<HTMLInputElement>('[data-action="question.other"]')!.maxLength).toBe(500);
+    await type('The blog');
+    await click(action('question.next'));
+    // One pick only: the text typed is the answer, over the Recommended option.
+    expect(onAnswer).toHaveBeenLastCalledWith({ selected: [], other: 'The blog', skipped: false });
+    await render(
+      <QuestionCard key="multi" ask={{ ...ASK, n: 4, multi: true }} onAnswer={onAnswer} />,
+    );
+    await type('The blog');
+    await click(action('question.next'));
+    expect(onAnswer).toHaveBeenLastCalledWith({ selected: [0], other: 'The blog', skipped: false });
+  });
+
   it('leaves keys to the Other… field, and answers with its text', async () => {
     const onAnswer = vi.fn();
     await render(<QuestionCard ask={ASK} onAnswer={onAnswer} />);

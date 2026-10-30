@@ -3547,7 +3547,8 @@
       "limit": "Over this run's limit",
       "unknown": "Worked on a step",
       "ask": "Waiting for your answer",
-      "askSkipped": "Skipped · used {option}"
+      "askSkipped": "Skipped · used {option}",
+      "askStopped": "Question skipped"
     },
     "error": {
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
@@ -3557,6 +3558,7 @@
       "rateDay": "You've sent today's messages. Chat takes more tomorrow.",
       "notWaiting": "This run isn't waiting for an answer any more.",
       "answered": "This question was already answered.",
+      "answerInvalid": "That answer doesn't fit this question. Pick one of its options, or write up to 500 characters.",
       "approvalMismatch": "This changed after you approved it. Approve again?",
       "notFound": "This chat isn't there any more.",
       "attachments": "A file you attached isn't ready or isn't yours any more. Attach it again and send."
@@ -3651,6 +3653,7 @@
       "ghostHint": "Tab to accept · / skills · @ data",
       "readOnly": "@ data · read-only",
       "answering": "Answering · Esc to stop",
+      "answerQuestion": "Your message answers Chat's question · Esc stops the run",
       "steer": "Enter stops this run and sends your message"
     },
     "preview": {
