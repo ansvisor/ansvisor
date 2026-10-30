@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { firstNameOf } from '@/lib/chat/home';
 import { importLegacyChats } from '@/lib/chat/legacy-import';
-import { CHAT_MODES, type ChatMode, type PrecedenceContext } from '@/lib/chat/precedence';
+import { chatDefaultModeOf, type ChatMode, type PrecedenceContext } from '@/lib/chat/precedence';
 import { readPrecedenceContext } from '@/lib/chat/precedence-context';
 
 /** Whether the signed-in person's workspace has the new Chat on (CHAT_AGENTIC). */
@@ -114,12 +114,13 @@ export function composerSetupOf(
   savedMode: unknown,
   ctx: Pick<PrecedenceContext, 'role' | 'plan' | 'settings'> | null,
 ): Omit<ChatComposerSetup, 'usageNoticeSeen'> {
-  if (!ctx) return { defaultMode: 'auto', fullAutoOpen: false, fullAutoOffByAdmin: false };
+  if (!ctx) {
+    return { defaultMode: 'auto', fullAutoOpen: false, fullAutoOffByAdmin: false };
+  }
   const forRole = ctx.role === 'admin' || ctx.settings.fullAutoForMembers;
   const fullAutoOpen = ctx.plan.fullAuto && forRole;
-  const defaultMode = CHAT_MODES.find((m) => m === savedMode) ?? 'auto';
   return {
-    defaultMode: defaultMode === 'full_auto' && !fullAutoOpen ? 'auto' : defaultMode,
+    defaultMode: chatDefaultModeOf(savedMode, fullAutoOpen),
     fullAutoOpen,
     fullAutoOffByAdmin: ctx.plan.fullAuto && !forRole,
   };

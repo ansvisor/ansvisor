@@ -91,6 +91,7 @@ export function ChatThreadView({
   variant,
   defaultMode,
   fullAutoOpen,
+  fullAutoOffByAdmin = false,
   onConversation,
   empty,
   usageNoticeSeen = null,
@@ -99,12 +100,12 @@ export function ChatThreadView({
   pageReferences,
   pageRoute,
   draft,
-  fullAutoOffByAdmin = false,
 }: {
   thread: ChatThread | null;
   variant: ComposerVariant;
   defaultMode: ChatMode;
   fullAutoOpen: boolean;
+  fullAutoOffByAdmin?: boolean;
   /** In the side panel: the chat's id after each message it takes, instead of the address changing. */
   onConversation?: (conversationId: string) => void;
   /** What shows before the first message (the side panel's greeting). */
@@ -120,7 +121,6 @@ export function ChatThreadView({
   pageRoute?: string;
   /** A question or an object the page hands the box. */
   draft?: ComposerDraft | null;
-  fullAutoOffByAdmin?: boolean;
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
