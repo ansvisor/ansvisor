@@ -694,7 +694,10 @@ function ActionsContent({ brand }: { brand: Brand }) {
 
   // Chat's side panel sees the page (W1-08): its filters, the top action,
   // and the actions in view to ask about.
-  const topAction = (actions ?? []).find((action) => topIds.has(action.id));
+  // The first of the Top actions, as the card ranks them: the list comes unordered.
+  const topAction = (actions ?? [])
+    .filter((action) => topIds.has(action.id))
+    .sort(comparePriority)[0];
   const pageFilters: ChatPageFilter[] =
     category !== 'all' && category !== GETTING_STARTED
       ? [{ key: 'category', label: tCategories(category), value: category }]
