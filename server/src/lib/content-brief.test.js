@@ -1473,11 +1473,13 @@ describe('briefForWriter', () => {
     );
     // A table the writer can't make is a comparison set out point by point.
     expect(text).toContain('show as a comparison, the same points for each option in turn');
-    expect(text).toContain('(study, a placeholder until a source is found)');
+    // A fact the brief has no source for is looked up (content-research.js), never a placeholder.
+    expect(text).toContain('(study, look it up with {{find: …}})');
     expect(text).toContain('(statistic, from Your input "Forecast error by month")');
     expect(text).toContain(
-      'Proof to gather (write it only from Your input; else a placeholder): data:',
+      'Proof to gather (write it only from Your input; else {{ask: …}}): data:',
     );
+    expect(text).not.toContain('placeholder');
     expect(text).toContain(
       `Keep to one topic; these searches are for another page: ${sample.leftOut[0]}`,
     );

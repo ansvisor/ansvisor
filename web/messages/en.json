@@ -5114,7 +5114,7 @@
           "longTitle": "Title over 300 characters",
           "empty": "Nothing to publish yet",
           "tooLong": "Over a million characters",
-          "placeholders": "Placeholders to fill",
+          "placeholders": "Your input needed",
           "slug": "Needs a slug",
           "metaTitle": "Meta title over 300 characters",
           "metaDescription": "Meta description over 500 characters"
@@ -5463,7 +5463,7 @@
           "rulesAny": "Keeping to the rules",
           "sources": "Drawing on {count, plural, one {# source} other {# sources}}",
           "sourcesAny": "Drawing on your sources",
-          "placeholders": "Adding a [placeholder] for facts it lacks"
+          "placeholders": "Looking up facts it lacks, with their sources"
         }
       },
       "agentFailed": {
@@ -5502,7 +5502,7 @@
         "breaks": "would break {names}",
         "runFailed": "Content Agent couldn't finish",
         "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
-        "placeholders": "{count, plural, one {# placeholder} other {# placeholders}} to fill",
+        "placeholders": "{count, plural, one {# fact needs your input} other {# facts need your input}}",
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
         "gain": "Rules {met, number} → {after, number} of {total, number}",
         "review": "Review",
@@ -6611,11 +6611,11 @@
         "cancel": "Cancel"
       },
       "placeholders": {
-        "label": "Placeholders to fill",
-        "left": "{count, plural, =0 {No placeholders left to fill} one {# placeholder to fill} other {# placeholders to fill}}",
-        "onOf": "Placeholder {on} of {count}",
-        "previous": "Previous placeholder",
-        "next": "Next placeholder",
+        "label": "Your input needed",
+        "left": "{count, plural, =0 {No input needed} one {Your input needed: #} other {Your input needed: #}}",
+        "onOf": "Your input {on} of {count}",
+        "previous": "Previous input needed",
+        "next": "Next input needed",
         "showHidden": "Show in HTML",
         "hiddenHint": "In an image's alt text, the JSON-LD or an HTML block: the page doesn't show them.",
         "inHtmlView": "This placeholder is in an image's alt text, the JSON-LD or an HTML block. It's selected in the HTML view ({html}): type over it, then apply."
