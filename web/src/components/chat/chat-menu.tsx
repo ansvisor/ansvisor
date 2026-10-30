@@ -4,13 +4,16 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link, usePathname } from '@/i18n/navigation';
 import { DotLegend } from '@/components/agentic/dot-legend';
+import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { Skeleton } from '@/components/ui/skeleton';
+import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { AT_WORK_ROWS, chatMenuLists, needsYouCount, type DayGroup } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
 import { useChatList, type ChatListStatus } from './chat-list-provider';
 import { ChatRowMenu } from './chat-menus';
 import { ChatRow } from './chat-row';
+import { useChatSearch } from './chat-search';
 import { MenuToggleIcon, shortcutLabel, useIsMac } from './chat-shortcuts';
 
 /** The menu's sections the person folded, remembered in this browser. */
@@ -124,6 +127,39 @@ function MenuItem({
   );
 }
 
+/**
+ * The workspace's AI usage this month beside Settings (mockup `.usg2`): a
+ * 30px bar and its percent, amber from 80%, red when used up. Nothing where
+ * there is no allowance to meter (self-hosted) or before it is read.
+ */
+function UsageMeter() {
+  const t = useTranslations('chatShell.menu');
+  const { usage } = useAiUsage();
+  if (!usage || usage.percentUsed === null) return null;
+  const tone = aiUsageTone(usage);
+  return (
+    <span
+      title={t('usageTip')}
+      className="ml-auto inline-flex items-center gap-[5px] text-[11.5px] font-normal text-muted-foreground tabular-nums"
+    >
+      <span aria-hidden className="h-1 w-[30px] overflow-hidden rounded bg-foreground/10">
+        <i
+          className={cn(
+            'block h-full rounded',
+            tone === 'exhausted'
+              ? 'bg-red-600 dark:bg-red-400'
+              : tone === 'warning'
+                ? 'bg-amber-600 dark:bg-amber-400'
+                : 'bg-foreground',
+          )}
+          style={{ width: `${Math.min(100, usage.percentUsed)}%` }}
+        />
+      </span>
+      {percentLabel(usage.percentUsed)}
+    </span>
+  );
+}
+
 function groupLabel(group: DayGroup, t: ReturnType<typeof useTranslations>, now: Date): string {
   if (group.kind !== 'calendar') return t(`groups.${group.kind}`);
   return group.month.toLocaleDateString('en-US', {
@@ -136,6 +172,8 @@ export interface ChatMenuViewProps {
   status: ChatListStatus;
   chats: ChatListItem[];
   total: number;
+  /** The person's archived chats ("Archived · 2 ›"). */
+  archived?: number;
   pathname: string;
   /** Whether the menu is shown: its toggle says Hide or Show. */
   open: boolean;
@@ -153,18 +191,21 @@ export interface ChatMenuViewProps {
  * The chat menu, top to bottom (CHAT-01 items 6, 9a; agentic update; mockup
  * CHAT-mockup-v2.html, the menu on every #s-… screen): the toggle and
  * "＋ New chat"; Menu (Home; Inbox, with its count and an amber dot while
- * something needs the person); Governance (Activity, What Chat can do, Tool
+ * something needs the person; Settings, with the month's AI usage); Governance (Activity, What Chat can do, Tool
  * policy: the governance mockup's menu, #cnav); Agents at work (needs you,
  * running, unread results: three rows, See all, Show less, the dots'
- * legend); Chats with its count, Pinned, then by day. Items whose pages
- * aren't built yet stay out (Settings, Skills, Integrations, Scheduled,
- * Files, Search, All chats, Archived). Sections fold, remembered in this
+ * legend); Chats with its count, Search chats (typing lists the chats
+ * whose title or messages match, in place of the days; Ctrl K opens the
+ * palette under it), Pinned, then by day, and All chats and Archived at the
+ * end. Items whose pages aren't built yet stay out (Skills, Integrations,
+ * Scheduled, Files). Sections fold, remembered in this
  * browser.
  */
 export function ChatMenuView({
   status,
   chats,
   total,
+  archived = 0,
   pathname,
   open,
   onToggle,
@@ -183,6 +224,9 @@ export function ChatMenuView({
     chats: false,
   });
   const [allRuns, setAllRuns] = useState(false);
+  const [query, setQuery] = useState('');
+  const found = useChatSearch(query);
+  const searching = query.trim() !== '';
   useEffect(() => {
     // Browser storage exists only after hydration.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -302,6 +346,15 @@ export function ChatMenuView({
               </span>
             )}
           </MenuItem>
+          <MenuItem
+            href="/dashboard/chat/settings"
+            action="chatMenu.openSettings"
+            active={pathname === '/dashboard/chat/settings'}
+            onNavigate={onNavigate}
+          >
+            {t('settings')}
+            <UsageMeter />
+          </MenuItem>
         </div>
       )}
 
@@ -402,15 +455,79 @@ export function ChatMenuView({
                 </button>
               </p>
             )}
-            {status === 'ready' && groups.length === 0 && atWork.length === 0 && (
-              <p className="px-2 py-1 text-xs text-muted-foreground">{t('empty')}</p>
+            {status === 'ready' && (
+              <input
+                id="chat-menu-search"
+                type="search"
+                data-action="chatMenu.searchChats"
+                aria-label={t('searchLabel')}
+                title={t('searchTip', { keys: shortcutLabel('search', isMac) })}
+                placeholder={t('searchPlaceholder', { keys: shortcutLabel('search', isMac) })}
+                autoComplete="off"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape' && query) {
+                    event.stopPropagation();
+                    setQuery('');
+                  }
+                }}
+                className="mt-1.5 mb-1 block w-full rounded-lg border bg-background px-2.5 py-1.5 text-[12.5px] outline-none placeholder:text-muted-foreground focus:border-foreground/30 [&::-webkit-search-cancel-button]:hidden"
+              />
             )}
-            {groups.map((group) => (
-              <div key={group.key}>
-                <SectionHead>{groupLabel(group.group, t, now)}</SectionHead>
-                {group.chats.map(row)}
+            {searching ? (
+              <div role="region" aria-label={t('searchResults')} aria-live="polite">
+                {found.chats.map(row)}
+                {found.status === 'ready' && found.chats.length === 0 && (
+                  <p className="px-2 py-1 text-xs text-muted-foreground">
+                    {t('noMatch')}{' '}
+                    <button
+                      type="button"
+                      data-action="emptyState.clearFilters"
+                      onClick={() => setQuery('')}
+                      className="underline underline-offset-2 hover:text-foreground"
+                    >
+                      {t('clearSearch')}
+                    </button>
+                  </p>
+                )}
+                {found.status === 'error' && (
+                  <p className="px-2 py-1 text-xs text-muted-foreground">{t('searchFailed')}</p>
+                )}
               </div>
-            ))}
+            ) : (
+              <>
+                {status === 'ready' && groups.length === 0 && atWork.length === 0 && (
+                  <p className="px-2 py-1 text-xs text-muted-foreground">{t('empty')}</p>
+                )}
+                {groups.map((group) => (
+                  <div key={group.key}>
+                    <SectionHead>{groupLabel(group.group, t, now)}</SectionHead>
+                    {group.chats.map(row)}
+                  </div>
+                ))}
+              </>
+            )}
+            {status === 'ready' && (
+              <div className="mt-1">
+                <Link
+                  href="/dashboard/chat/all"
+                  data-action="chatMenu.openAllChats"
+                  onClick={onNavigate}
+                  className="block w-full rounded-lg p-2 text-[12.5px] text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  {t('allChats', { count: total })}
+                </Link>
+                <Link
+                  href="/dashboard/chat/all?tab=archived"
+                  data-action="chatMenu.openArchived"
+                  onClick={onNavigate}
+                  className="block w-full rounded-lg p-2 text-[12.5px] text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  {t('archivedLink', { count: archived })}
+                </Link>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -420,9 +537,12 @@ export function ChatMenuView({
 
 /** The chat menu with the person's chats from the shell's list. */
 export function ChatMenu(
-  props: Omit<ChatMenuViewProps, 'status' | 'chats' | 'total' | 'pathname' | 'onRetry'>,
+  props: Omit<
+    ChatMenuViewProps,
+    'status' | 'chats' | 'total' | 'archived' | 'pathname' | 'onRetry'
+  >,
 ) {
-  const { status, chats, total, refresh } = useChatList();
+  const { status, chats, total, archived, refresh } = useChatList();
   const pathname = usePathname();
   return (
     <ChatMenuView
@@ -431,6 +551,7 @@ export function ChatMenu(
       status={status}
       chats={chats}
       total={total}
+      archived={archived}
       pathname={pathname}
       onRetry={() => void refresh()}
     />

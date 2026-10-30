@@ -31,6 +31,9 @@ vi.mock('@/lib/actions/chat-references', () => ({
   searchChatReferences: vi.fn(async () => ({ ok: true, references: [] })),
 }));
 vi.mock('@/lib/chat/upload-client', () => ({ uploadChatFile: vi.fn(), dropChatUpload: vi.fn() }));
+vi.mock('@/lib/actions/chat-prefs', () => ({
+  saveUsageNoticePeriod: vi.fn(async () => ({ ok: true })),
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (s: { activeBrandId: string }) => unknown) =>
     selector({ activeBrandId: '22222222-2222-4222-8222-222222222222' }),

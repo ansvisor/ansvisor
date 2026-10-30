@@ -11,6 +11,7 @@ import { MenuAccessProvider } from '@/components/providers/menu-access-provider'
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { firstNameOf } from '@/lib/chat/home';
+import { importLegacyChats } from '@/lib/chat/legacy-import';
 import { panelSizeOf } from '@/lib/chat/panel';
 import { planFactsFromOrgRow } from '@/lib/chat/plan-facts';
 import { chatDefaultModeOf } from '@/lib/chat/precedence';
@@ -54,25 +55,36 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const role = (profile.role ?? 'analyst') as TeamRole;
   const chatOn = chatAgenticEnabled(profile.organization_id);
 
-  const [{ data: org, error: orgError }, brands, roleHidden, { data: chatPrefs }] =
-    await Promise.all([
-      supabase
-        .from('organizations')
-        .select('plan, subscription_status, plan_overrides, stripe_subscription_id')
-        .eq('id', profile.organization_id)
-        .single(),
-      getBrands(profile.organization_id),
-      // The sections the viewer's role leaves out (menu access); no read for admins.
-      readRoleHidden(supabase, profile.organization_id, role),
-      // Chat's side panel on every page (CHAT-01 items 13–24): the person's choices for it.
-      chatOn
-        ? supabase
-            .from('chat_user_prefs')
-            .select('panel_on_pages, panel_size, default_mode, usage_notice_period')
-            .eq('user_id', user.id)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
+  const [{ data: org, error: orgError }, brands, roleHidden, chatPrefsRead] = await Promise.all([
+    supabase
+      .from('organizations')
+      .select('plan, subscription_status, plan_overrides, stripe_subscription_id')
+      .eq('id', profile.organization_id)
+      .single(),
+    getBrands(profile.organization_id),
+    // The sections the viewer's role leaves out (menu access); no read for admins.
+    readRoleHidden(supabase, profile.organization_id, role),
+    // Chat's side panel on every page (CHAT-01 items 13–24): the person's choices for it.
+    chatOn
+      ? supabase
+          .from('chat_user_prefs')
+          .select(
+            'panel_on_pages, panel_size, default_mode, usage_notice_period, legacy_imported_at',
+          )
+          .eq('user_id', user.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+  const chatPrefs = chatPrefsRead.data;
+  // The side panel is Chat too: the person's Agent Chat conversations come
+  // over on their first visit with it, as they do on Chat's pages (W1-02).
+  if (chatOn && !chatPrefsRead.error && !chatPrefs?.legacy_imported_at) {
+    await importLegacyChats({
+      userId: user.id,
+      email: user.email ?? null,
+      organizationId: profile.organization_id,
+    });
+  }
   const menu = menuOfProfile({ ...profile, role }, roleHidden);
 
   // The organization's demo brand (sample data, 00380), shown or hidden: the

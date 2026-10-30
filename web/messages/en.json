@@ -451,7 +451,10 @@
     "contentEditor": "Editor",
     "toggleSubmenu": "Show or hide {label}",
     "menuOff": "{count, plural, one {# section} other {# sections}} off your menu.",
-    "menuOffChange": "Change"
+    "menuOffChange": "Change",
+    "expandRail": "Expand the Ansvisor menu",
+    "collapseRail": "Collapse the Ansvisor menu",
+    "railTip": "Ansvisor · hover or click to expand"
   },
   "actionCenter": {
     "dismissReason": {
@@ -3744,7 +3747,18 @@
         "doneAt": "Done · {time}",
         "failed": "Stopped",
         "failedAt": "Stopped · {time}"
-      }
+      },
+      "searchLabel": "Search chats",
+      "searchTip": "Search chats and pages · {keys}",
+      "searchPlaceholder": "Search chats · {keys}",
+      "searchResults": "Search results",
+      "noMatch": "No chats match.",
+      "clearSearch": "Clear filters",
+      "searchFailed": "Couldn't search your chats.",
+      "allChats": "All chats · {count} ›",
+      "archivedLink": "Archived · {count} ›",
+      "settings": "Settings",
+      "usageTip": "AI usage this month"
     },
     "actions": {
       "more": "More for {name}",
@@ -3769,7 +3783,7 @@
       "renamed": "Renamed",
       "shared": "Shared with your team",
       "unshared": "Stopped sharing",
-      "archived": "Archived",
+      "archived": "Archived · find it in All chats › Archived",
       "deleted": "Chat deleted",
       "undo": "Undo",
       "undone": "Undone",
@@ -3818,6 +3832,118 @@
       },
       "loadFailed": "Couldn't load your Inbox.",
       "retry": "Retry"
+    },
+    "search": {
+      "open": "Search",
+      "openTip": "Search chats and pages · {keys}",
+      "label": "Search chats",
+      "placeholder": "Search chats",
+      "chats": "Chats",
+      "pagesHead": "Pages",
+      "noMatch": "No chats match.",
+      "searching": "Searching…",
+      "failed": "Couldn't search your chats.",
+      "pages": {
+        "allChats": "All chats",
+        "settings": "Settings"
+      }
+    },
+    "allChats": {
+      "title": "All chats",
+      "tabs": {
+        "active": "Active",
+        "archived": "Archived"
+      },
+      "searchPlaceholder": "Search chats and results",
+      "filters": {
+        "all": "All",
+        "running": "Running",
+        "needsYou": "Needs you",
+        "done": "Done",
+        "mine": "Mine",
+        "team": "Team"
+      },
+      "columns": {
+        "chat": "Chat",
+        "skill": "Skill",
+        "owner": "Owner",
+        "updated": "Updated"
+      },
+      "select": "Select chat",
+      "selectFirst": "Select chats to change them together",
+      "archiveSelected": "Archive selected",
+      "unarchiveSelected": "Unarchive selected",
+      "archivedMany": "{count} archived · find them under Archived",
+      "unarchivedMany": "{count} unarchived · back in Chats",
+      "noMatch": "No chats match.",
+      "clearFilters": "Clear filters",
+      "noSkill": "—",
+      "ago": {
+        "now": "now",
+        "minutes": "{minutes} min",
+        "yesterday": "Yesterday"
+      },
+      "loadFailed": "Couldn't load your chats.",
+      "retry": "Retry"
+    },
+    "nav": {
+      "backToChat": "← Back to Chat",
+      "backChatTip": "Back to your last conversation",
+      "backHomeTip": "Back to Chat Home",
+      "breadcrumb": "Breadcrumb",
+      "chat": "Chat",
+      "pages": {
+        "inbox": "Inbox",
+        "allChats": "All chats",
+        "activity": "Activity",
+        "capabilities": "What Chat can do",
+        "settings": "Settings"
+      }
+    },
+    "settings": {
+      "title": "Settings",
+      "intro": "How Chat works for you and your team.",
+      "tabs": {
+        "general": "General"
+      },
+      "general": {
+        "title": "General",
+        "intro": "Your own preferences. Workspace rules are in <policy>Tool policy</policy>."
+      },
+      "defaultMode": {
+        "label": "Default mode",
+        "note": "How much the agent does on its own when you start a job. Nothing is published or sent without your click.",
+        "ask_first": "Ask me first",
+        "auto": "Auto, ask before changes",
+        "full_auto": "Full auto"
+      },
+      "fullAutoPlan": "Full auto needs the Growth plan",
+      "fullAutoAdmin": "Your Admin turned Full auto off for your role",
+      "language": {
+        "label": "Answer language",
+        "note": "The app stays in English; Chat answers in this language",
+        "same": "Same as my question",
+        "en": "English",
+        "tr": "Türkçe",
+        "de": "Deutsch"
+      },
+      "notify": {
+        "label": "Notify me when an agent needs me",
+        "note": "Inbox always; also email or Slack",
+        "inbox_email": "Inbox + email",
+        "inbox": "Inbox only",
+        "inbox_slack": "Inbox + Slack",
+        "slackSoon": "Inbox + Slack (connect Slack first)"
+      },
+      "thought": {
+        "label": "Show “Thought for N s”",
+        "note": "A short summary of the agent’s reasoning under answers"
+      },
+      "everyPage": {
+        "label": "Open Chat on every page",
+        "note": "Ask Chat · Ctrl J in each page header"
+      },
+      "failed": "Couldn't save that. Try again."
     }
   },
   "chatAccess": {

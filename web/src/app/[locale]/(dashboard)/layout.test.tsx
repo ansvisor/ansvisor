@@ -77,6 +77,9 @@ vi.mock('@/components/layout/mobile-nav', () => ({ MobileNav: none }));
 vi.mock('@/components/layout/tracking-job-handoff', () => ({ TrackingJobHandoff: none }));
 // Chat's side panel has its own tests; here, only where the layout puts it.
 vi.mock('@/components/chat/panel/chat-side-panel', () => ({ ChatSidePanel: none }));
+const legacy = vi.hoisted(() => ({ importLegacyChats: vi.fn(async () => ({ ok: true })) }));
+vi.mock('@/lib/chat/legacy-import', () => legacy);
+vi.mock('@/lib/actions/chat-prefs', () => ({ saveChatPanelSize: vi.fn() }));
 vi.mock('@/components/providers/auth-provider', () => ({ AuthProvider: none }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({ AiUsageProvider: pass }));
 // The brands the layout hands the brand store (the store is marked loaded
@@ -201,6 +204,17 @@ describe('the dashboard layout', () => {
   it('sends anyone who has not finished onboarding to it', async () => {
     profile = { ...profile, onboarding_completed: false };
     expect(await open()).toBe('/dashboard/onboarding');
+  });
+
+  it('brings Agent Chat conversations over on the first visit with the new Chat, as Chat does', async () => {
+    legacy.importLegacyChats.mockClear();
+    expect(await open()).toBeNull();
+    expect(legacy.importLegacyChats).not.toHaveBeenCalled();
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    expect(await open()).toBeNull();
+    expect(legacy.importLegacyChats).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u1', organizationId: profile!.organization_id }),
+    );
   });
 
   it('never locks self-hosted', async () => {
