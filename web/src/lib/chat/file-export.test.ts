@@ -35,6 +35,21 @@ describe('exportChatFile', () => {
     );
   });
 
+  it('cleans a page on the way out: no script, no handler (CHAT-06)', async () => {
+    const html = await exportChatFile(
+      {
+        ...page,
+        content:
+          '<h1>Pricing FAQ</h1><script>alert(1)</script><p onclick="alert(2)">Hi</p><img src="https://ansvisor.com/a.png" onerror="alert(3)">',
+      },
+      'html',
+    );
+    const body = text(html!.body);
+    expect(body).not.toMatch(/<script/i);
+    expect(body).not.toMatch(/onerror|onclick/i);
+    expect(body).toContain('<p>Hi</p>');
+  });
+
   it('writes a page as Word', async () => {
     const docx = await exportChatFile(page, 'docx');
     expect(docx?.fileName).toBe('pricing-faq-2026-10-30.docx');
