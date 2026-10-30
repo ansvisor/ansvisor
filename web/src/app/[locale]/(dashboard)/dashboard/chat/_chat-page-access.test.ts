@@ -160,6 +160,12 @@ describe('chatComposerSetup', () => {
     });
   });
 
+  it('keeps the usage period whose 80% line the person saw', async () => {
+    db.prefs = { default_mode: 'auto', usage_notice_period: '2026-10' };
+    facts.ctx = ctxOf('admin', true, false);
+    expect((await chatComposerSetup()).usageNoticeSeen).toBe('2026-10');
+  });
+
   it('falls back to the careful setup when the facts can’t be read', async () => {
     facts.fail = true;
     expect(await chatComposerSetup()).toEqual({
