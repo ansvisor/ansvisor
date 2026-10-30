@@ -10,6 +10,22 @@ import type { ChatMode } from '@/lib/chat/precedence';
 /** How long the preview's pretend run answers. */
 const RUN_MS = 6000;
 
+/** The mockup's chips and starters (CHAT-02 variants table). */
+const HOME_CHIPS = [
+  { key: 'brand', label: 'Ansvisor' },
+  { key: 'range', label: 'Last 30 days' },
+];
+const PANEL_CHIPS = [
+  { key: 'page', label: 'Visibility' },
+  { key: 'brand', label: 'Ansvisor' },
+  { key: 'range', label: 'Last 30 days' },
+  { key: 'platform', label: 'All platforms' },
+];
+const DOCK_CHIPS = [
+  { key: 'brand', label: 'Ansvisor' },
+  { key: 'area', label: 'Action Center' },
+];
+
 /**
  * The composer (W1-10) for design sign-off: Chat home's, an open chat's dock
  * with a pretend run (Stop and steering), and an Analyst's read-only one.
@@ -18,6 +34,8 @@ const RUN_MS = 6000;
 export function ComposerPreview() {
   const t = useTranslations('chatComposer.preview');
   const [mode, setMode] = useState<ChatMode>('auto');
+  const [homeChips, setHomeChips] = useState(HOME_CHIPS);
+  const [panelChips, setPanelChips] = useState(PANEL_CHIPS);
   const [running, setRunning] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -49,6 +67,9 @@ export function ComposerPreview() {
               mode={mode}
               onModeChange={setMode}
               fullAutoOpen
+              chips={homeChips}
+              onRemoveChip={(key) => setHomeChips((all) => all.filter((c) => c.key !== key))}
+              ghost={t('homeGhost')}
               onSend={(text) => {
                 toast(t('sent', { text }));
                 run();
@@ -66,6 +87,8 @@ export function ComposerPreview() {
               onModeChange={setMode}
               fullAutoOpen={false}
               running={running}
+              chips={DOCK_CHIPS}
+              ghost={t('dockGhost')}
               onSend={() => run()}
               onStop={stop}
               onSteer={(text) => {
@@ -84,6 +107,9 @@ export function ComposerPreview() {
                 mode="auto"
                 onModeChange={() => {}}
                 fullAutoOpen
+                chips={panelChips}
+                onRemoveChip={(key) => setPanelChips((all) => all.filter((c) => c.key !== key))}
+                ghost={t('panelGhost')}
                 onSend={() => run()}
               />
             </RoleProvider>
