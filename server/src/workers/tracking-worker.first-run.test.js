@@ -120,7 +120,8 @@ describe('processTrackingJob, a brand’s first run', () => {
     // Two tasks submitted; one answered by the second poll, both by the third.
     db.pendingPolls = [pending('t1', 't2'), pending('t2'), []];
 
-    await fullRun();
+    // Its stamp e-mails "Your first results are ready" (job-runner.js).
+    expect(await fullRun()).toMatchObject({ firstRun: true });
 
     expect(refreshRunDays).toHaveBeenCalledWith('b1', STARTED);
     const [, options] = settleTrackingRun.mock.calls[0];
@@ -138,7 +139,7 @@ describe('processTrackingJob, a brand’s first run', () => {
     db.stampedRuns = [{ id: 'yesterday' }];
     db.pendingPolls = [pending('t1', 't2'), pending('t2'), []];
 
-    await fullRun();
+    expect(await fullRun()).toMatchObject({ firstRun: false });
 
     expect(refreshRunDays).not.toHaveBeenCalled();
     expect(settleTrackingRun.mock.calls[0][1]).toBeUndefined();
