@@ -122,6 +122,7 @@ export function ChatComposer({
   mode,
   onModeChange,
   fullAutoOpen,
+  fullAutoOffByAdmin = false,
   running = false,
   onSend,
   onStop,
@@ -132,6 +133,7 @@ export function ChatComposer({
   references: pageReferences = [],
   searchReferences,
   uploader,
+  sharedReadOnly = false,
   placeholder,
   disabled = false,
   usage,
@@ -143,8 +145,10 @@ export function ChatComposer({
   /** The mode the next run starts in: the person's default mode until they pick one. */
   mode: ChatMode;
   onModeChange: (mode: ChatMode) => void;
-  /** Full auto is open to this workspace (plan facts: Growth and up, paid). */
+  /** Full auto is open to this person (plan facts: Growth and up, paid; and the Admin's switch). */
   fullAutoOpen: boolean;
+  /** Full auto is closed by the Admin's switch for non-Admins, not by the plan. */
+  fullAutoOffByAdmin?: boolean;
   /** A run answers: Send is Stop, and the box steers. */
   running?: boolean;
   onSend: (text: string, sent: ComposerSend) => boolean | void | Promise<boolean | void>;
@@ -167,6 +171,8 @@ export function ChatComposer({
   searchReferences?: (query: string) => Promise<ChatReference[]>;
   /** Attaching files: ＋ Attach files, drop and paste (W1-13); none without it. */
   uploader?: ComposerUploader;
+  /** A teammate's shared chat: read, never added to (00407). */
+  sharedReadOnly?: boolean;
   /** The empty box's line; "Ask anything…" by default. */
   placeholder?: string;
   /** No sending at all (the usage cap's state, W1-23). */
@@ -502,6 +508,24 @@ export function ChatComposer({
   const iconButton =
     'flex size-7 items-center justify-center rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground';
 
+  // A teammate's shared chat is read only: nothing goes into it.
+  if (sharedReadOnly) {
+    return (
+      <div className={cn('w-full', className)}>
+        <div className="flex flex-wrap items-center gap-2 rounded-[14px] border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
+          <span className="min-w-0 flex-1">{t('shared.note')}</span>
+          <Link
+            data-action="chat.new"
+            href="/dashboard/chat"
+            className="font-medium text-foreground underline underline-offset-2"
+          >
+            {t('shared.start')}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div ref={root} className={cn('w-full', className)}>
       <div
@@ -738,7 +762,12 @@ export function ChatComposer({
               {t('readOnly', { role: tRoles(role) })}
             </Link>
           ) : (
-            <ModeSwitch mode={mode} onChange={onModeChange} fullAutoOpen={fullAutoOpen} />
+            <ModeSwitch
+              mode={mode}
+              onChange={onModeChange}
+              fullAutoOpen={fullAutoOpen}
+              offByAdmin={fullAutoOffByAdmin}
+            />
           )}
           {running ? (
             <button

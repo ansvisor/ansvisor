@@ -3664,6 +3664,10 @@
     "modelAuto": "Auto",
     "modelAutoHow": "Haiku reads, Sonnet writes",
     "removeChip": "Remove {label}",
+    "shared": {
+      "note": "A teammate shared this chat with you: you can read it, not add to it.",
+      "start": "Start your own chat"
+    },
     "files": {
       "uploading": "Uploading…",
       "sendWaits": "Uploading · Send waits for your files",
@@ -3736,6 +3740,8 @@
       "full_auto": "Full auto",
       "needsGrowth": "Needs Growth",
       "fullAutoLocked": "Full auto · Needs Growth: agents apply changes for you, logged and undoable",
+      "offByAdmin": "Off by Admin",
+      "fullAutoOffByAdmin": "Full auto · Your Admin turned it off for your role in Settings › Chat",
       "toast": {
         "ask_first": "Ask me first: the agent asks before every step.",
         "auto": "Auto, ask before changes: the agent reads freely and asks before every change.",
@@ -3744,27 +3750,10 @@
     }
   },
   "chatPage": {
-    "title": "Chat",
-    "subtitle": "A test page for Chat's engine. The full Chat replaces it.",
-    "placeholder": "Ask about your brand…",
-    "send": "Send",
-    "stop": "Stop",
-    "newChat": "New chat",
     "you": "You",
-    "modeLabel": "Mode",
-    "modes": {
-      "ask_first": "Ask me first",
-      "auto": "Auto, ask before changes",
-      "full_auto": "Full auto"
-    },
-    "generated": "Generated {date}",
-    "dataAsOf": "Data as of {date}",
     "deniedTitle": "I can't do this for you",
-    "queued": "Waiting for a free slot…",
-    "reconnecting": "Reconnecting…",
     "sendFailed": "Couldn't send that. Try again.",
     "answerFailed": "Couldn't save your answer. Try again.",
-    "stopped": "Stopped. What's done so far is kept.",
     "pausedCap": "You've used this month's AI limit, so Chat stopped here."
   },
   "chatShell": {
