@@ -11,6 +11,8 @@ import { decideToolCall, type ChatSurface } from './precedence';
 import { readPrecedenceContext, readToolCall } from './precedence-context';
 import type { ChatTool } from './registry/define-tool';
 import { chatToolByKey } from './registry/tools';
+import { DAY_MS, asObject, check, textOf, type Snapshot } from './undo-parts';
+import { SETUP_UNDO_RULES } from './undo-setup';
 
 /**
  * Undo (CHAT-20 §10b): the inverse of each WRITE, stored when it ran (the
@@ -33,9 +35,6 @@ import { chatToolByKey } from './registry/tools';
  * still takes back the draft their own run saved. Server only.
  */
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-type Snapshot = { [key: string]: Json };
 
 /**
  * What the log row records about a change, read after it ran. Its brand is
@@ -68,17 +67,6 @@ export interface UndoRule {
 }
 
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
-
-const asObject = (value: unknown): Record<string, unknown> =>
-  value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-
-const textOf = (value: unknown): string | null => (typeof value === 'string' ? value : null);
-
-function check(error: { message: string } | null, what: string) {
-  if (error) throw new Error(`Could not read ${what} for Undo: ${error.message}`);
-}
 
 // ─── create_draft: archive the draft it saved (§9: 30 days, "move to trash") ─
 
@@ -335,6 +323,7 @@ export const UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   update_opportunity: updateOpportunity,
   dismiss_prompt_suggestion: dismissSuggestion,
   request_access: requestAccessRule,
+  ...SETUP_UNDO_RULES,
 };
 
 /** A tool's Undo, or null: a read or an EXECUTE has none (§10b). */

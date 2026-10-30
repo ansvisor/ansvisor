@@ -39,6 +39,9 @@ import {
 } from '@/lib/prompt-position-summary';
 import { assertWritable } from '@/lib/subscription-guard';
 
+/** A prompt's text as two are compared: case and spacing aside (the natural key, CHAT-20 §11c). */
+const textKey = (text: string) => text.trim().toLowerCase().replace(/\s+/g, ' ');
+
 function filterByPlan(plan: Plan, platforms: string[], models: string[]) {
   const allowedScrapers = plan.limits.allowedScrapers
     ? new Set(plan.limits.allowedScrapers)
@@ -897,7 +900,7 @@ export async function importPrompts(
     supabase.from('topics').select('id, name').eq('brand_id', brandId),
   ]);
   const shopping = !!brandRow?.shopping_mode_enabled;
-  const keyOf = (t: string) => t.trim().toLowerCase().replace(/\s+/g, ' ');
+  const keyOf = textKey;
   const seen = new Set((existing ?? []).map((p) => keyOf(p.text as string)));
   const topicIds = new Map((topicRows ?? []).map((t) => [keyOf(t.name as string), t.id as string]));
 
@@ -956,6 +959,156 @@ export async function importPrompts(
   const { started } = await analyzeNewPrompts(brandId, promptIds);
   revalidatePath('/dashboard/prompts');
   return { importedIdx: imported.map((r) => r.idx), promptIds, analysisStarted: started };
+}
+
+export type AddTopicPromptsResult =
+  | {
+      ok: true;
+      /** partial: some weren't added (CHAT-20 §11a), each with why. */
+      code: 'ok' | 'partial';
+      added: { id: string; text: string }[];
+      skipped: { text: string; reason: 'duplicate' | 'plan_limit' | 'invalid' }[];
+      analysisStarted: boolean;
+    }
+  | {
+      ok: false;
+      reason: 'not_found' | 'duplicate' | 'quota_exceeded' | 'failed';
+      message: string;
+    };
+
+/**
+ * Add prompts to one of a brand's topics: Chat's add_prompts (CHAT-20 §9
+ * row 20). The topic comes first: one of the brand's active topics (a new
+ * one is add_topic's). Each prompt is tracked as the brand's newest active
+ * prompt is (its platforms and models, else ChatGPT) at the brand's
+ * location, through importPrompts: the same checks, the same locked write
+ * that stops at the plan's locations, and the first run. A text the brand
+ * already tracks is skipped (the natural key, §11c). Errors come back as
+ * values (#427).
+ */
+export async function addTopicPrompts(
+  brandId: string,
+  topicId: string,
+  texts: string[],
+): Promise<AddTopicPromptsResult> {
+  await assertWritable({ brandId });
+  const supabase = await createClient();
+  const [topicRead, existingRead, latestRead] = await Promise.all([
+    supabase
+      .from('topics')
+      .select('id, name')
+      .eq('id', topicId)
+      .eq('brand_id', brandId)
+      .eq('is_active', true)
+      .maybeSingle(),
+    supabase
+      .from('prompts')
+      .select('text, prompt_sets!inner(brand_id)')
+      .eq('prompt_sets.brand_id', brandId),
+    supabase
+      .from('prompts')
+      .select('platforms, models, prompt_sets!inner(brand_id)')
+      .eq('prompt_sets.brand_id', brandId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const readError = topicRead.error ?? existingRead.error ?? latestRead.error;
+  if (readError) return { ok: false, reason: 'failed', message: readError.message };
+  const topic = topicRead.data;
+  if (!topic) {
+    return {
+      ok: false,
+      reason: 'not_found',
+      message: "That topic isn't one of this brand's topics. Add the topic first.",
+    };
+  }
+
+  const { organizationId, region } = await getBrandContext(supabase, brandId);
+  const latest = latestRead.data;
+  const platforms =
+    Array.isArray(latest?.platforms) && latest.platforms.length > 0
+      ? (latest.platforms as string[])
+      : ['chatgpt-web'];
+  const models = Array.isArray(latest?.models) ? (latest.models as string[]) : [];
+  const tracked = new Set((existingRead.data ?? []).map((p) => textKey(p.text as string)));
+  const rows: ImportPromptRow[] = [];
+  const skipped: Extract<AddTopicPromptsResult, { ok: true }>['skipped'] = [];
+  for (const raw of texts) {
+    const text = raw.trim().replace(/\s+/g, ' ');
+    if (!text || text.length > 500) skipped.push({ text: raw, reason: 'invalid' });
+    else if (tracked.has(textKey(text))) skipped.push({ text, reason: 'duplicate' });
+    else {
+      tracked.add(textKey(text));
+      rows.push({ idx: rows.length, text, topic: topic.name as string, platforms, models, regions: [region] });
+    }
+  }
+  if (rows.length === 0) {
+    return skipped.every((s) => s.reason === 'duplicate')
+      ? { ok: false, reason: 'duplicate', message: 'The brand already tracks these prompts.' }
+      : { ok: false, reason: 'failed', message: 'There was no prompt text to add.' };
+  }
+
+  const result = await importPrompts(brandId, rows);
+  if ('error' in result) return { ok: false, reason: 'failed', message: result.error };
+  const added = result.importedIdx.map((idx, i) => ({ id: result.promptIds[i], text: rows[idx].text }));
+  const addedIdx = new Set(result.importedIdx);
+  // What the locked write left out: the plan's locations ran out.
+  for (const row of rows) {
+    if (!addedIdx.has(row.idx)) skipped.push({ text: row.text, reason: 'plan_limit' });
+  }
+  if (added.length === 0) {
+    const [plan, usage] = await Promise.all([
+      getOrgPlan(organizationId),
+      getOrgLocationUsage(supabase, organizationId),
+    ]);
+    return {
+      ok: false,
+      reason: 'quota_exceeded',
+      message:
+        locationLimitMessage(plan, usage.total, 1) ??
+        "Your plan's prompt locations are used up, so no prompt was added.",
+    };
+  }
+  return {
+    ok: true,
+    code: skipped.length > 0 ? 'partial' : 'ok',
+    added,
+    skipped,
+    analysisStarted: result.analysisStarted,
+  };
+}
+
+export type PauseBrandPromptsResult =
+  | { ok: true; paused: string[] }
+  | { ok: false; reason: 'not_found' | 'failed'; message: string };
+
+/**
+ * Pause some of a brand's prompts: Chat's pause_prompts (CHAT-20 §9 row 22,
+ * its "archive": a paused prompt stops being tracked, frees its locations
+ * and keeps its history). Only the brand's prompts among the ids, through
+ * setPromptsActive, as the table's bulk Pause. Errors come back as values.
+ */
+export async function pauseBrandPrompts(
+  brandId: string,
+  ids: string[],
+): Promise<PauseBrandPromptsResult> {
+  await assertWritable({ brandId });
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('prompts')
+    .select('id, prompt_sets!inner(brand_id)')
+    .eq('prompt_sets.brand_id', brandId)
+    .in('id', ids);
+  if (error) return { ok: false, reason: 'failed', message: error.message };
+  const own = (data ?? []).map((row) => row.id as string);
+  if (own.length === 0) {
+    return { ok: false, reason: 'not_found', message: "None of these prompts is this brand's." };
+  }
+  const result = await setPromptsActive(own, false);
+  if ('error' in result) return { ok: false, reason: 'failed', message: result.error };
+  return { ok: true, paused: own };
 }
 
 export async function deletePrompt(id: string): Promise<void> {
