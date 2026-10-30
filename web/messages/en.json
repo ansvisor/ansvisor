@@ -3568,6 +3568,13 @@
     "modelAuto": "Auto",
     "modelAutoHow": "Haiku reads, Sonnet writes",
     "removeChip": "Remove {label}",
+    "usage": {
+      "close": "Close"
+    },
+    "limit": {
+      "trial": "Your trial AI limit is used up",
+      "paid": "AI limit reached · models on your own key still work"
+    },
     "shared": {
       "note": "A teammate shared this chat with you: you can read it, not add to it.",
       "start": "Start your own chat"

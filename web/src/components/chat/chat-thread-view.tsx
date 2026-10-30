@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { ApprovalCard } from '@/components/agentic/approval-card';
 import { DenialCard } from '@/components/agentic/denial-card';
+import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { searchChatReferences } from '@/lib/actions/chat-references';
@@ -22,6 +23,7 @@ import { dropChatUpload, uploadChatFile } from '@/lib/chat/upload-client';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { ChatComposer, type ComposerSend, type ComposerVariant } from './composer/chat-composer';
 import { RunAnswer } from './run/run-answer';
+import { ChatUsageNotice, ComposerUsageMeter, chatAtCap } from './chat-usage';
 
 interface Turn {
   key: string;
@@ -85,8 +87,12 @@ export function ChatThreadView({
   fullAutoOpen: boolean;
 }) {
   const t = useTranslations('chatPage');
+  const tLimit = useTranslations('chatComposer.limit');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const { isLocked, openUpgrade } = useUpgradeGate();
+  // At the AI limit, Chat pauses: the composer is off (CHAT-04 item 17).
+  const { usage } = useAiUsage();
+  const atCap = chatAtCap(usage);
   const [turns, setTurns] = useState<Turn[]>(() => turnsOf(thread));
   const [conversationId, setConversationId] = useState<string | null>(
     thread?.conversationId ?? null,
@@ -275,7 +281,14 @@ export function ChatThreadView({
           )}
         </ol>
       )}
-      <div className={variant === 'home' ? undefined : 'sticky bottom-0 bg-background pt-1 pb-2'}>
+      <div
+        className={
+          variant === 'home'
+            ? 'flex flex-col gap-2'
+            : 'sticky bottom-0 flex flex-col gap-2 bg-background pt-1 pb-2'
+        }
+      >
+        {(!thread || thread.mine) && <ChatUsageNotice />}
         <ChatComposer
           variant={variant}
           mode={mode}
@@ -283,6 +296,9 @@ export function ChatThreadView({
           fullAutoOpen={fullAutoOpen}
           running={working}
           sharedReadOnly={!!thread && !thread.mine}
+          disabled={atCap}
+          placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : undefined}
+          usage={<ComposerUsageMeter />}
           onSend={send}
           onStop={() => void stop()}
           onSteer={async (message, sent) => {

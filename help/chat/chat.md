@@ -53,6 +53,12 @@ While Chat works, one line says what it is doing now, such as "Reading Citations
 
 Under the answer, **Data used** names each source it read, with its rows, and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
 
+## AI usage
+
+Chat draws on your workspace's monthly AI usage, shared by every seat. The meter under the box shows how much is used; click it for what used it and when it resets. From 80% it turns amber, and a line above the box says so once a month; **×** closes it.
+
+Once the usage is used up, Chat pauses: the box is off, and a red line above it says until when. Admins can get more AI usage or use their own key from there; others are asked to ask an Admin. In the free trial, starting the plan gives its full monthly AI usage. Chat on your workspace's own AI key keeps working.
+
 ## Inbox
 
 **Inbox** in the chat menu lists what your agents did: chats waiting for your OK first, with **Review**, then chats still working, with their progress and **Watch**, then results you haven't opened yet, with **Open**. Click a row to open its chat. A result leaves the Inbox once you open it. The count next to **Inbox** shows how many items there are, with an amber dot when something needs you.
