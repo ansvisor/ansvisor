@@ -236,11 +236,21 @@ describe('the Get more window', () => {
     expect(ai.refresh).toHaveBeenCalled();
   });
 
-  it('switches tabs in place', async () => {
+  it('switches tabs in place, the picked one marked', async () => {
     await openWindow();
-    await click(button('Storage'));
+    const tab = (label: string) =>
+      [...(dialog()?.querySelectorAll('[data-action="getMore.tab"]') ?? [])].find(
+        (b) => b.textContent === label,
+      )!;
+    expect(tab('AI credits').getAttribute('aria-pressed')).toBe('true');
+    expect(tab('AI credits').className).toContain('bg-primary');
+    expect(tab('Storage').getAttribute('aria-pressed')).toBe('false');
+    await click(tab('Storage'));
     expect(dialog()?.querySelector('h2')?.textContent).toBe('Get more storage');
     expect(cards()).toHaveLength(1);
+    expect(tab('Storage').getAttribute('aria-pressed')).toBe('true');
+    expect(tab('Storage').className).toContain('text-primary-foreground');
+    expect(tab('AI credits').getAttribute('aria-pressed')).toBe('false');
   });
 
   it('shows the packs to other members, with Ask your Admin instead of payment', async () => {

@@ -185,8 +185,9 @@ function GetMoreBody({
               onClick={() => onTab(kind)}
               className={cn(
                 'rounded-md px-3 py-1 text-sm font-medium transition-colors',
+                // Picked: black in light, white in dark, as Billing's plan tabs (#1806).
                 tab === kind
-                  ? 'bg-background text-foreground shadow-sm'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
