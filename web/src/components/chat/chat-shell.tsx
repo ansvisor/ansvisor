@@ -3,13 +3,14 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
 import { useTranslations } from 'next-intl';
-import { usePathname, useRouter } from '@/i18n/navigation';
+import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { RunsTray } from '@/components/agentic/runs-tray';
 import { StatusPill, type StatusPillState } from '@/components/agentic/status-pill';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -18,6 +19,7 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { cn } from '@/lib/utils';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { ChatActionsProvider, useChatActions } from './chat-actions';
+import { inboxItems } from './chat-inbox';
 import { useChatList } from './chat-list-provider';
 import { ChatMenu } from './chat-menu';
 import { ChatHeaderMenu, RenameField } from './chat-menus';
@@ -56,7 +58,7 @@ const PILL_OF: Partial<Record<string, StatusPillState>> = {
  * beside the page, and the 52px header. The menu's toggle and `Ctrl+\`
  * hide or show it, and the choice is kept on the person (all devices);
  * hidden, the page takes the whole width and the header starts with a
- * strip — toggle · New chat · runs pill — that is gone again once the menu
+ * strip — toggle · New chat · runs pill · Inbox — that is gone again once the menu
  * is back. Below 1100px the menu is a drawer the same toggle opens, which
  * leaves the saved choice alone. `Ctrl+Shift+O` starts a new chat. The app
  * sidebar beside it is untouched.
@@ -90,6 +92,7 @@ function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: R
   const isMac = useIsMac();
   const brandId = useBrandStore((s) => s.activeBrandId);
   const { chats } = useChatList();
+  const inbox = useMemo(() => inboxItems(chats).length, [chats]);
   const [open, setOpen] = useState(menuOpen);
   const [drawer, setDrawer] = useState(false);
   const stripToggle = useRef<HTMLButtonElement>(null);
@@ -189,6 +192,19 @@ function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: R
                 {t('newChat')}
               </button>
               {runs}
+              <Link
+                href="/dashboard/chat/inbox"
+                data-action="chatMenu.openInbox"
+                onClick={() => setDrawer(false)}
+                className="flex h-7 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs font-medium outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                {t('inbox')}
+                {inbox > 0 && (
+                  <span className="min-w-[22px] rounded-md bg-foreground/10 px-1.5 text-center text-[11px] leading-[18px] text-foreground/80 tabular-nums">
+                    {inbox}
+                  </span>
+                )}
+              </Link>
               <span aria-hidden className="mx-1 h-5 w-px bg-border" />
             </div>
           )}

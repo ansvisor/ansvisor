@@ -6,7 +6,7 @@ import { Link, usePathname } from '@/i18n/navigation';
 import { DotLegend } from '@/components/agentic/dot-legend';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ChatListItem } from '@/lib/chat/conversations';
-import { AT_WORK_ROWS, chatMenuLists, needsYouCount, type DayGroup } from '@/lib/chat/menu-groups';
+import { AT_WORK_ROWS, chatMenuLists, type DayGroup } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
 import { useChatList, type ChatListStatus } from './chat-list-provider';
 import { ChatRowMenu } from './chat-menus';
@@ -96,18 +96,22 @@ function MenuItem({
   action,
   active,
   onNavigate,
+  label,
   children,
 }: {
   href: string;
   action: string;
   active: boolean;
   onNavigate?: () => void;
+  /** Its name for a screen reader when the visible words and counts don't say it all. */
+  label?: string;
   children: ReactNode;
 }) {
   return (
     <Link
       href={href}
       data-action={action}
+      aria-label={label}
       aria-current={active ? 'page' : undefined}
       onClick={onNavigate}
       className={cn(
@@ -148,13 +152,14 @@ export interface ChatMenuViewProps {
 /**
  * The chat menu, top to bottom (CHAT-01 items 6, 9a; agentic update; mockup
  * CHAT-mockup-v2.html, the menu on every #s-… screen): the toggle and
- * "＋ New chat"; Menu (Home, with the count of what needs the person);
- * Governance (Activity, What Chat can do, Tool policy: the governance
- * mockup's menu, #cnav); Agents at work (needs you, running, unread results: three
- * rows, See all, Show less, the dots' legend); Chats with its count, Pinned,
- * then by day. Items whose pages aren't built yet stay out (Inbox,
- * Settings, Skills, Integrations, Scheduled, Files, Search, All chats,
- * Archived). Sections fold, remembered in this browser.
+ * "＋ New chat"; Menu (Home; Inbox, with its count and an amber dot while
+ * something needs the person); Governance (Activity, What Chat can do, Tool
+ * policy: the governance mockup's menu, #cnav); Agents at work (needs you,
+ * running, unread results: three rows, See all, Show less, the dots'
+ * legend); Chats with its count, Pinned, then by day. Items whose pages
+ * aren't built yet stay out (Settings, Skills, Integrations, Scheduled,
+ * Files, Search, All chats, Archived). Sections fold, remembered in this
+ * browser.
  */
 export function ChatMenuView({
   status,
@@ -196,7 +201,14 @@ export function ChatMenuView({
     const at = nowProp ?? new Date();
     return { now: at, ...chatMenuLists(chats, at) };
   }, [chats, nowProp]);
-  const needsYou = needsYouCount(chats);
+  // The Inbox holds the person's own chats in Agents at work: its count, with
+  // an amber dot while any needs them.
+  const inboxRows = atWork.filter((chat) => chat.mine);
+  const needsYou = inboxRows.filter((chat) => chat.state === 'needsYou').length;
+  const inbox = inboxRows.length;
+  const inboxLabel = needsYou
+    ? t('inboxLabelNeedsYou', { count: inbox, needsYou })
+    : t('inboxLabel', { count: inbox });
   const shownRuns = allRuns ? atWork : atWork.slice(0, AT_WORK_ROWS);
   const row = (chat: ChatListItem) => (
     <ChatRow
@@ -240,11 +252,20 @@ export function ChatMenuView({
 
       <SectionHead className="mt-0">
         {t('menu')}
-        {folded.menu && needsYou > 0 && (
-          <span className="ml-auto inline-flex items-center gap-1 rounded-md bg-foreground/10 px-1.5 text-[10.5px] leading-4 tracking-normal text-foreground/80 normal-case">
-            <span aria-hidden className="size-1.5 rounded-full bg-amber-600 dark:bg-amber-400" />
-            {needsYou}
-          </span>
+        {folded.menu && inbox > 0 && (
+          <Link
+            href="/dashboard/chat/inbox"
+            data-action="chatMenu.openInbox"
+            aria-label={inboxLabel}
+            title={inboxLabel}
+            onClick={onNavigate}
+            className="ml-auto inline-flex items-center gap-1 rounded-md bg-foreground/10 px-1.5 text-[10.5px] leading-4 tracking-normal text-foreground/80 normal-case outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            {needsYou > 0 && (
+              <span aria-hidden className="size-1.5 rounded-full bg-amber-600 dark:bg-amber-400" />
+            )}
+            {inbox}
+          </Link>
         )}
         <FoldButton
           folded={folded.menu}
@@ -263,17 +284,26 @@ export function ChatMenuView({
             onNavigate={onNavigate}
           >
             {t('home')}
-            {needsYou > 0 && (
-              <span
-                className="ml-auto inline-flex items-center gap-1.5"
-                aria-label={tAttention('needsYou', { count: needsYou })}
-              >
-                <span
-                  aria-hidden
-                  className="size-[7px] rounded-full bg-amber-600 dark:bg-amber-400"
-                />
+          </MenuItem>
+          <MenuItem
+            href="/dashboard/chat/inbox"
+            action="chatMenu.openInbox"
+            active={pathname === '/dashboard/chat/inbox'}
+            onNavigate={onNavigate}
+            label={inbox > 0 ? inboxLabel : undefined}
+          >
+            {t('inbox')}
+            {inbox > 0 && (
+              <span className="ml-auto inline-flex items-center gap-1.5">
+                {needsYou > 0 && (
+                  <span
+                    aria-hidden
+                    title={tAttention('needsYou', { count: needsYou })}
+                    className="size-[7px] rounded-full bg-amber-600 dark:bg-amber-400"
+                  />
+                )}
                 <span className="min-w-[22px] rounded-md bg-foreground/10 px-1.5 text-center text-[11px] leading-[18px] text-foreground/80 tabular-nums">
-                  {needsYou}
+                  {inbox}
                 </span>
               </span>
             )}

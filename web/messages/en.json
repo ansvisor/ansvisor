@@ -3784,6 +3784,9 @@
       "menu": "Menu",
       "toggleMenu": "Show or hide the Menu section",
       "home": "Home",
+      "inbox": "Inbox",
+      "inboxLabel": "Inbox · {count, plural, one {# item} other {# items}}",
+      "inboxLabelNeedsYou": "Inbox · {count, plural, one {# item} other {# items}} · {needsYou, plural, one {# needs you} other {# need you}}",
       "governance": "Governance",
       "activity": "Activity",
       "capabilities": "What Chat can do",
@@ -3852,6 +3855,46 @@
       "deleteTitle": "Delete this chat?",
       "deleteBody": "“{name}” will be deleted for everyone. Files it made stay in Files. A running agent is stopped first.",
       "cancel": "Cancel"
+    },
+    "home": {
+      "greeting": {
+        "morning": "Good morning, {name}",
+        "afternoon": "Good afternoon, {name}",
+        "evening": "Good evening, {name}"
+      },
+      "greetingNoName": {
+        "morning": "Good morning",
+        "afternoon": "Good afternoon",
+        "evening": "Good evening"
+      },
+      "workedWhileAway": "Your agents worked while you were away.",
+      "needsYou": "{count, plural, one {# thing needs you} other {# things need you}}",
+      "caughtUp": "All caught up.",
+      "dueTasks": "{count, plural, one {# Action Center task is due this week} other {# Action Center tasks are due this week}}",
+      "completeWithChat": "Complete with Chat",
+      "completeTasksMessage": "Complete this week's Action Center tasks.",
+      "startFailed": "Couldn't start that. Try again."
+    },
+    "inbox": {
+      "title": "Inbox",
+      "lands": "Results from your agents land here.",
+      "summary": {
+        "needsYou": "{count, plural, one {# needs you} other {# need you}}",
+        "running": "{count} running",
+        "doneToday": "{count} done today"
+      },
+      "empty": "Nothing needs you. Results from your agents land here.",
+      "review": "Review",
+      "watch": "Watch",
+      "open": "Open",
+      "ago": {
+        "now": "Just now",
+        "minutes": "{minutes} min ago",
+        "today": "Today",
+        "yesterday": "Yesterday"
+      },
+      "loadFailed": "Couldn't load your Inbox.",
+      "retry": "Retry"
     }
   },
   "chatAccess": {
