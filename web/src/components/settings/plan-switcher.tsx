@@ -182,6 +182,8 @@ export function PlanSwitcher({
         cancelAtPeriodEnd: data.cancelAtPeriodEnd,
         currentPeriodEnd: data.currentPeriodEnd,
       });
+      // The layout reads the plan again: every page says when it ends.
+      router.refresh();
       toast.success(t('subscriptionCanceled'));
       return true;
     } catch (err) {

@@ -125,6 +125,7 @@ describe('checkout.session.completed', () => {
       stripe_customer_id: 'cus1',
       stripe_subscription_id: 'sub1',
       subscription_ends_at: '2027-01-15T08:00:00.000Z',
+      cancel_at_period_end: false,
     });
     expect(db.eq).toHaveBeenCalledWith('id', 'org1');
     expect(align).toHaveBeenCalledWith('org1', 'growth');
@@ -259,6 +260,7 @@ describe('customer.subscription.updated', () => {
     await deliver('customer.subscription.updated', subscription('active', 1_800_000_000));
     expect(db.update).toHaveBeenCalledWith({
       subscription_status: 'active',
+      cancel_at_period_end: false,
       subscription_ends_at: '2027-01-15T08:00:00.000Z',
       plan: 'growth',
     });
@@ -266,7 +268,39 @@ describe('customer.subscription.updated', () => {
 
     db.update.mockClear();
     await deliver('customer.subscription.updated', subscription('past_due'));
-    expect(db.update).toHaveBeenCalledWith({ subscription_status: 'past_due', plan: 'growth' });
+    expect(db.update).toHaveBeenCalledWith({
+      subscription_status: 'past_due',
+      cancel_at_period_end: false,
+      plan: 'growth',
+    });
+  });
+
+  it('writes whether the plan ends at its period end, for the app-wide band', async () => {
+    await deliver('customer.subscription.updated', {
+      ...subscription('active', 1_800_000_000),
+      cancel_at_period_end: true,
+    });
+    expect(db.update.mock.calls[0][0]).toMatchObject({
+      cancel_at_period_end: true,
+      subscription_ends_at: '2027-01-15T08:00:00.000Z',
+    });
+
+    // Resumed.
+    db.update.mockClear();
+    await deliver('customer.subscription.updated', {
+      ...subscription('active', 1_800_000_000),
+      cancel_at_period_end: false,
+    });
+    expect(db.update.mock.calls[0][0]).toMatchObject({ cancel_at_period_end: false });
+  });
+
+  it('clears it once the subscription has ended', async () => {
+    await deliver('customer.subscription.deleted', subscription('canceled'));
+    expect(db.update).toHaveBeenCalledWith({
+      subscription_status: 'canceled',
+      plan: 'starter',
+      cancel_at_period_end: false,
+    });
   });
 
   it('writes the first paid period’s end when a trial is bought, so the AI usage starts again', async () => {
@@ -280,6 +314,7 @@ describe('customer.subscription.updated', () => {
     expect(db.update).toHaveBeenCalledWith({
       subscription_status: 'active',
       subscription_ends_at: '2027-02-14T08:00:00.000Z',
+      cancel_at_period_end: false,
       plan: 'growth',
     });
     expect(db.eq).toHaveBeenCalledWith('stripe_customer_id', 'cus1');
