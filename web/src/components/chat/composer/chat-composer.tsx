@@ -138,6 +138,7 @@ export function ChatComposer({
   mode,
   onModeChange,
   fullAutoOpen,
+  fullAutoOffByAdmin = false,
   running = false,
   onSend,
   onStop,
@@ -161,8 +162,10 @@ export function ChatComposer({
   /** The mode the next run starts in: the person's default mode until they pick one. */
   mode: ChatMode;
   onModeChange: (mode: ChatMode) => void;
-  /** Full auto is open to this workspace (plan facts: Growth and up, paid). */
+  /** Full auto is open to this person (plan facts: Growth and up, paid; and the Admin's switch). */
   fullAutoOpen: boolean;
+  /** Full auto is closed by the Admin's switch for non-Admins, not by the plan. */
+  fullAutoOffByAdmin?: boolean;
   /** A run answers: Send is Stop, and the box steers. */
   running?: boolean;
   onSend: (text: string, sent: ComposerSend) => boolean | void | Promise<boolean | void>;
@@ -800,7 +803,12 @@ export function ChatComposer({
               {t('readOnly', { role: tRoles(role) })}
             </Link>
           ) : (
-            <ModeSwitch mode={mode} onChange={onModeChange} fullAutoOpen={fullAutoOpen} />
+            <ModeSwitch
+              mode={mode}
+              onChange={onModeChange}
+              fullAutoOpen={fullAutoOpen}
+              offByAdmin={fullAutoOffByAdmin}
+            />
           )}
           {running ? (
             <button

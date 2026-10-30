@@ -38,9 +38,12 @@ vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (s: { activeBrandId: string }) => unknown) =>
     selector({ activeBrandId: '22222222-2222-4222-8222-222222222222' }),
 }));
-const aiUsage = vi.hoisted(() => ({ usage: null as Record<string, unknown> | null }));
+const aiUsage = vi.hoisted(() => ({
+  usage: null as Record<string, unknown> | null,
+  refresh: vi.fn(),
+}));
 vi.mock('@/components/providers/ai-usage-provider', () => ({
-  useAiUsage: () => ({ usage: aiUsage.usage, refresh: () => {} }),
+  useAiUsage: () => ({ usage: aiUsage.usage, refresh: aiUsage.refresh }),
 }));
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
@@ -77,7 +80,7 @@ const finished = [
 ];
 
 let calls: { url: string; init?: RequestInit }[];
-const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+async function answerFetch(url: string, init?: RequestInit) {
   calls.push({ url, init });
   if (url === '/api/chat/runs') {
     return new Response(stream(finished), {
@@ -86,7 +89,8 @@ const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     });
   }
   return new Response('{}', { status: 200 });
-});
+}
+const fetchMock = vi.fn(answerFetch);
 
 let container: HTMLDivElement;
 let root: Root;
@@ -125,8 +129,11 @@ async function enter() {
 
 beforeEach(() => {
   aiUsage.usage = null;
+  aiUsage.refresh.mockClear();
   calls = [];
-  fetchMock.mockClear();
+  fetchMock.mockReset();
+  fetchMock.mockImplementation(answerFetch);
+  toast.error.mockClear();
   vi.stubGlobal('fetch', fetchMock);
   window.history.replaceState(null, '', '/dashboard/chat');
   container = document.createElement('div');
@@ -282,6 +289,48 @@ describe('ChatThreadView', () => {
     });
   });
 
+  it('keeps the steer’s text, and sends nothing, when the Stop isn’t taken', async () => {
+    const thread = {
+      conversationId: CHAT,
+      title: 'Citations',
+      brandId: null,
+      mine: true,
+      messages: [
+        { role: 'user', text: 'Find the drop', generatedAt: null, dataAsOf: null, timezone: null },
+        {
+          role: 'assistant',
+          text: '',
+          generatedAt: null,
+          dataAsOf: null,
+          timezone: 'UTC',
+          run: { runId: RUN, status: 'running', steps: [] },
+        },
+      ],
+    } as unknown as ChatThread;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      if (url.endsWith('/stop')) return Response.json({ ok: false }, { status: 500 });
+      return new Response(new ReadableStream({ start: () => {} }), { status: 200 });
+    });
+    await render({ thread, variant: 'dock' });
+    await type('only blog pages');
+    await enter();
+    expect(calls.some((c) => c.url === `/api/chat/runs/${RUN}/stop`)).toBe(true);
+    expect(calls.some((c) => c.url === '/api/chat/runs')).toBe(false);
+    expect(box().value).toBe('only blog pages');
+    expect(toast.error).toHaveBeenCalledWith("Couldn't send that. Try again.");
+  });
+
+  it('says the Admin, not the plan, closed Full auto for this person', async () => {
+    await render({ fullAutoOpen: false, fullAutoOffByAdmin: true });
+    const fullAuto = [...container.querySelectorAll('[role="radio"]')].find((el) =>
+      el.textContent?.startsWith('Full auto'),
+    )!;
+    expect(fullAuto.getAttribute('aria-disabled')).toBe('true');
+    expect(fullAuto.textContent).toContain('Off by Admin');
+    expect(fullAuto.textContent).not.toContain('Needs Growth');
+  });
+
   it('only reads a teammate’s shared chat', async () => {
     const thread = {
       conversationId: CHAT,
@@ -317,5 +366,31 @@ describe('ChatThreadView', () => {
     aiUsage.usage = { ...aiUsage.usage, trial: true };
     await render();
     expect(box().placeholder).toBe('Your trial AI limit is used up');
+  });
+
+  it('keeps the composer on at the limit when Chat runs on the workspace’s own key', async () => {
+    aiUsage.usage = {
+      plan: 'enterprise',
+      planName: 'Enterprise',
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      unlimited: false,
+      percentUsed: 100,
+      features: [],
+      chatMetered: true,
+    };
+    await render({ onOwnKey: true });
+    expect(box().disabled).toBe(false);
+    expect(box().placeholder).not.toBe('AI limit reached · models on your own key still work');
+  });
+
+  it('reads the AI usage again once a run stops working, not before', async () => {
+    await render();
+    expect(aiUsage.refresh).not.toHaveBeenCalled();
+    await type('What changed this week?');
+    await enter();
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(container.textContent).toContain('Two pages lost most of it.');
+    expect(aiUsage.refresh).toHaveBeenCalledTimes(1);
   });
 });
