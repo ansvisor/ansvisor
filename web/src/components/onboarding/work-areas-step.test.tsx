@@ -59,9 +59,9 @@ describe('WorkAreasStep', () => {
     await render(<WorkAreasStep title="What do you work on?" lede="Pick." onDone={onDone} />);
     expect(container.querySelectorAll('button[aria-pressed]')).toHaveLength(9);
     expect(button('Founders & leaders').textContent).toContain(
-      'Action Center · Chat · Brand Visibility · Mentions · AI Referral Traffic · Reports',
+      'Action Center · Chat · Brand Visibility · Competitors · Mentions · AI Referral Traffic · Reports',
     );
-    expect(container.textContent).toContain('11 of 11 sections');
+    expect(container.textContent).toContain('12 of 12 sections');
   });
 
   it('narrows the menu as areas are picked, and saves them on Continue', async () => {
@@ -69,7 +69,9 @@ describe('WorkAreasStep', () => {
     act(() => button('Brand & PR').click());
     act(() => button('Developers').click());
     expect(button('Brand & PR').getAttribute('aria-pressed')).toBe('true');
-    expect(container.textContent).toContain('9 of 11 sections');
+    expect(container.textContent).toContain('10 of 12 sections');
+    // Brand & PR keeps Competitors.
+    expect(menu()).toContain('Competitors');
     expect(menu()).not.toContain('Content');
     expect(menu()).not.toContain('Product Visibility');
 
@@ -99,7 +101,7 @@ describe('WorkAreasStep', () => {
     await render(
       <WorkAreasStep title="t" lede="l" hiddenByAdmin={['content', 'audit']} onDone={onDone} />,
     );
-    expect(container.textContent).toContain('9 of 11 sections');
+    expect(container.textContent).toContain('10 of 12 sections');
     expect(container.textContent).toContain('2 hidden by your admin');
   });
 });

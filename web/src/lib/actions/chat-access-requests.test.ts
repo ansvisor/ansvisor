@@ -132,6 +132,17 @@ describe('requestAccess', () => {
     );
   });
 
+  it('takes ids made by hand, like the demo brand’s, and refuses what isn’t an id', async () => {
+    answers['brands.select'] = { data: { id: 'demo' }, error: null };
+    const demo = '33333333-3333-3333-3333-333333333333';
+    expect(await requestAccess({ ...ask, brandId: demo })).toEqual({ ok: true, id: REQUEST });
+    expect(inserted()).toMatchObject({ brand_id: demo });
+    expect(await requestAccess({ ...ask, brandId: 'not-an-id' })).toEqual({
+      ok: false,
+      reason: 'invalid',
+    });
+  });
+
   it('refuses past ten waiting requests, and the same ask twice a day', async () => {
     answers['chat_access_requests.count'] = { count: 10, error: null };
     expect(await requestAccess(ask)).toEqual({ ok: false, reason: 'too_many' });

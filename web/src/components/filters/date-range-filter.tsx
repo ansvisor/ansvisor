@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import type { DateRangePreset } from '@/config/date-presets';
 
 /**
  * The one date range control (#713).
@@ -18,16 +19,7 @@ import { cn } from '@/lib/utils';
  * not pretending every page answers the same question.
  */
 
-export type DateRangePreset = '24h' | '7d' | '30d' | '90d' | 'all' | 'custom';
-
-export const ALL_DATE_PRESETS: readonly DateRangePreset[] = [
-  '24h',
-  '7d',
-  '30d',
-  '90d',
-  'all',
-  'custom',
-];
+export { ALL_DATE_PRESETS, type DateRangePreset } from '@/config/date-presets';
 
 export function dateRangePresetLabel(preset: DateRangePreset, t: (key: string) => string): string {
   if (preset === 'custom') return t('custom');

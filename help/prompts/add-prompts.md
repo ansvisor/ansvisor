@@ -4,14 +4,18 @@ route: /dashboard/prompts/tracked
 keywords: [add prompt, bulk import, track prompts, new prompt]
 synonyms: [add a question, add queries, track a search]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-30
+last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
 approved: false
 sources: [docs/guides/prompts.mdx]
 ---
 A prompt is a question Ansvisor asks the AI engines for your brand every day, such as "best project management tool for agencies". Its answers show where your brand is named and cited. You can add prompts one at a time, many at once, or from suggestions.
+
+## Add a topic first
+
+Prompts are grouped under topics, so a brand needs at least one topic before it can have prompts. Without one, **Add prompt**, **Bulk import**, **Track** and suggestions say **Add a topic first**. Admins and managers get an **Add a topic** button that opens **Prompts › Topics** with **Add Topic**. Other roles are asked to have an admin or a manager add one.
 
 ## Add one prompt
 

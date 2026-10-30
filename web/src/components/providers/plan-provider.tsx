@@ -33,6 +33,11 @@ interface PlanContextValue {
   subscriptionActive: boolean;
   /** Stripe's subscription status, for why it isn't active; null self-hosted. */
   subscriptionStatus: string | null;
+  /**
+   * When a canceled plan ends: it runs to the end of its paid period (00386),
+   * and every page says so. Null when it renews, and self-hosted.
+   */
+  planEndsAt: string | null;
 }
 
 const PlanContext = createContext<PlanContextValue>({
@@ -42,6 +47,7 @@ const PlanContext = createContext<PlanContextValue>({
   allowedModelIds: null,
   subscriptionActive: true,
   subscriptionStatus: null,
+  planEndsAt: null,
 });
 
 export function PlanProvider({
@@ -49,12 +55,14 @@ export function PlanProvider({
   allowedModelIds = null,
   subscriptionActive = true,
   subscriptionStatus = null,
+  planEndsAt = null,
   children,
 }: {
   planId: PlanId;
   allowedModelIds?: string[] | null;
   subscriptionActive?: boolean;
   subscriptionStatus?: string | null;
+  planEndsAt?: string | null;
   children: React.ReactNode;
 }) {
   const isCloud = process.env.NEXT_PUBLIC_IS_CLOUD === 'true';
@@ -76,6 +84,7 @@ export function PlanProvider({
         allowedModelIds: isCloud ? shownModels : null,
         subscriptionActive: isCloud ? subscriptionActive : true,
         subscriptionStatus: isCloud ? subscriptionStatus : null,
+        planEndsAt: isCloud ? planEndsAt : null,
       }}
     >
       {children}

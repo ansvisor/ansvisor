@@ -25,9 +25,9 @@ export const HANDOFF_CHECKS = {
     'A heading every 200–300 words: add an H2 or H3 where a section runs long, named for what it covers',
   'readability:passiveJargon': 'Active voice and plain words: rewrite passive sentences and jargon',
   'readability:typeRules':
-    "The page type's own rules named here, each with its aim and how the page reads now (a specs table, a side-by-side table, an intro, a buying FAQ, how-to steps): meet each aim from the page and your data only; a table of facts (specs, sizes) gets only the facts given, a placeholder in each cell you can't fill, never one made up; an answer the page and your data don't give (fit, sizes, shipping, returns, prices) is a placeholder too, never one made up",
+    "The page type's own rules named here, each with its aim and how the page reads now (a specs table, a side-by-side table, an intro, a buying FAQ, how-to steps): meet each aim from the page and your data only; a table of facts (specs, sizes) gets only the facts given, {{ask: …}} in a cell you can't fill, never one made up; an answer the page and your data don't give (fit, sizes, shipping, returns, prices) is {{ask: …}} too, never one made up",
   'trust:claimsSourced':
-    'Every figure or claim has a source in its paragraph: link one from your data; where you have none, write the figure as a placeholder or soften the claim, never make one up',
+    'Every figure or claim has a source in its paragraph: link one from your data; where you have none, ask for it to be looked up with {{find: …}} or soften the claim, never make one up',
   'trust:brandFacts':
     "Match the brand's approved facts named here (prices, trial length, founding year) where the page differs",
   'trust:freshSources':
@@ -39,7 +39,7 @@ export const HANDOFF_CHECKS = {
   'trust:disclosure':
     "The page recommends the brand's own product: add the disclosure line given here, as it is, under the page's opening paragraph",
   'trust:balanced':
-    "Balance: say where the brand's own product falls short, or where another option is the better pick, from the page and your data only; where you don't know, write a placeholder",
+    "Balance: say where the brand's own product falls short, or where another option is the better pick, from the page and your data only; where you don't know, leave it out",
   'trust:noBrokenLinks':
     "Links that don't answer: link a working source from your data for the same point instead, or soften the claim",
 };
