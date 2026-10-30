@@ -84,7 +84,9 @@ export type ToolArea =
   | 'content'
   | 'reports'
   /** Opening a page of the app (CHAT-19 §2). */
-  | 'navigation';
+  | 'navigation'
+  /** Opening a page on the web (CHAT-10 §B). */
+  | 'web';
 
 /**
  * What the plan decides about a call (CHAT-20 §7), null when nothing. The
@@ -113,9 +115,13 @@ export interface ToolFlags {
 
 /**
  * Who a tool acts as: the signed-in user, resolved into the shape the MCP
- * data functions scope by (lib/agent/auth.ts resolveAgentAuth).
+ * data functions scope by (lib/agent/auth.ts resolveAgentAuth). A page read
+ * (fetch_page) gets the run's sites too, which its redirects must stay on:
+ * the engine's, never the model's.
  */
-export type ChatToolContext = McpAuthContext;
+export type ChatToolContext = McpAuthContext & {
+  pageSites?: { hosts: readonly string[]; domains: readonly string[] };
+};
 
 interface ToolFields<S extends z.ZodObject> {
   /** The internal name. Never shown to customers: steps show the label (CHAT-03). */

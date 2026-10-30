@@ -3332,6 +3332,7 @@
     "sendToCms": { "name": "Send drafts to your CMS", "step": "Sent draft to your CMS" },
     "makeReport": { "name": "Make reports", "step": "Made report" },
     "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
+    "webPage": { "name": "Open web pages", "step": "Open page" },
     "agents": { "name": "Create and run agents", "step": "Changed an agent" }
   },
   "agentic": {
@@ -3689,7 +3690,24 @@
       "readHelp": "Read Ansvisor Help",
       "ask": "Waiting for your answer",
       "askSkipped": "Skipped · used {option}",
-      "askStopped": "Question skipped"
+      "askStopped": "Question skipped",
+      "opened": "Opened {page}",
+      "notOpened": "Couldn't open {page}"
+    },
+    "pageRefused": {
+      "no_access": "No workspace to open pages for",
+      "invalid_url": "Not an address Chat opens",
+      "blocked": "Not a public address",
+      "not_allowed": "Goes to a site Chat may not open",
+      "too_many_redirects": "Redirects too many times",
+      "not_html": "Not a web page",
+      "too_large": "Too large to read",
+      "too_deep": "Built too deeply to read",
+      "http_error": "The page answered with an error",
+      "http_status": "The page answered {status}",
+      "timeout": "Timed out",
+      "unreachable": "Couldn't be reached",
+      "busy": "Other pages are opening. Try again in a moment."
     },
     "costs": {
       "siteAudit": "{count, plural, one {Uses # audit} other {Uses # audits}} of {left} left this month",
@@ -4753,7 +4771,8 @@
         "action_center": "Action Center",
         "content": "Content",
         "reports": "Reports",
-        "navigation": "Navigation"
+        "navigation": "Navigation",
+        "web": "Web"
       }
     }
   },
