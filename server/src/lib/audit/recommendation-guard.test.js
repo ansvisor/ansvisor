@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAX_COPY_CHARS,
+  MAX_INPUT_PLACEHOLDERS,
   buildKnownFacts,
   cutAtWord,
   cutToLength,
@@ -33,18 +34,105 @@ const rec = (over = {}) => ({
 });
 
 describe('guardFacts', () => {
-  it("replaces the spec's invented customer and percentage with placeholders", () => {
-    const { rec: out, hits } = guardFacts(
+  it("takes the spec's invented percentage out with its sentence, and leaves the customer to the brand", () => {
+    const { rec: out } = guardFacts(
       rec({
         draft:
           "Join brands like TechFlow, which saw a 34% increase in 'Recommended' citations with Growth.",
       }),
       known,
     );
-    expect(out.draft).toBe(
-      "Join brands like [customer name], which saw a [real metric] increase in 'Recommended' citations with Growth.",
+    // No figure to research is left: the sentence had nothing else to say.
+    expect(out.draft).toBeNull();
+
+    const { rec: kept } = guardFacts(
+      rec({
+        draft:
+          "Join brands like TechFlow. TechFlow saw a 34% increase in 'Recommended' citations with Growth.",
+      }),
+      known,
     );
-    expect(hits).toBe(2);
+    expect(kept.draft).toBe('Join brands like [customer name].');
+  });
+
+  it('never leaves a placeholder for a public fact: a source, a statistic, a claim', () => {
+    const { rec: out } = guardFacts(
+      rec({
+        recommendation: 'Cite an industry survey on the plans. Link [source URL] for it.',
+        draft:
+          'Most teams track AI answers [statistic]. Link [source URL] where the page states [claim].\nTracking starts the day you sign up.',
+      }),
+      known,
+    );
+    expect(out.recommendation).toBe('Cite an industry survey on the plans.');
+    expect(out.draft).toBe('Tracking starts the day you sign up.');
+  });
+
+  it('keeps the brand’s own placeholders for the person, three at most', () => {
+    expect(MAX_INPUT_PLACEHOLDERS).toBe(3);
+    const { rec: out } = guardFacts(
+      rec({
+        recommendation: 'Add a result from [your customer name].',
+        draft:
+          '[your customer name] switched to [your plan] and saw [your result]. Our team said [your quote].\nPlans fit every team.',
+      }),
+      known,
+    );
+    expect(out.recommendation).toBe('Add a result from [your customer name].');
+    // Two left after the explanation's: the draft's first sentence would take three, so it goes.
+    expect(out.draft).toBe('Our team said [your quote].\nPlans fit every team.');
+  });
+
+  it('drops a recommendation whose explanation had only an invented figure', () => {
+    const { rec: out } = guardFacts(rec({ recommendation: 'Say 87% of teams use it.' }), known);
+    expect(out.recommendation).toBe('');
+  });
+
+  it('keeps build instructions in the explanation: image sizes, file sizes, load times', () => {
+    for (const recommendation of [
+      'Add an og:image of 1200×630 pixels so shared links show a preview.',
+      'Add an og:image at 1200 x 630 px.',
+      'Shrink the hero image below 200 KB.',
+      'Compress images so the page loads in under 2.5 seconds.',
+    ]) {
+      const { rec: out, hits } = guardFacts(rec({ recommendation }), known);
+      expect(out.recommendation).toBe(recommendation);
+      expect(hits).toBe(0);
+    }
+    // In the draft, a load time the page lacks is still a claim.
+    expect(
+      guardFacts(rec({ draft: 'Our pages load in 2.5 seconds.' }), known).rec.draft,
+    ).toBeNull();
+  });
+
+  it('takes a list item out with its number, not leaving the number behind', () => {
+    const { rec: out } = guardFacts(
+      rec({ draft: '1. Pick a plan.\n2. Track 75 prompts a day.\n3. Read the report.' }),
+      known,
+    );
+    expect(out.draft).toBe('1. Pick a plan.\n3. Read the report.');
+  });
+
+  it('takes a Q&A pair out whole when either half goes', () => {
+    const { rec: out } = guardFacts(
+      rec({
+        draft:
+          'Q: How long is the trial?\nA: The trial lasts 21 days.\n\nQ: Is there a 97% uptime?\nA: Yes.\n\nQ: What does Starter cost?\nA: Starter is $49 per month.',
+      }),
+      known,
+    );
+    expect(out.draft).toBe('Q: What does Starter cost?\nA: Starter is $49 per month.');
+  });
+
+  it('reads a link’s text as a link and "e.g." as no sentence end', () => {
+    const draft = 'See the [structured data guide](https://developers.google.com/search) first.';
+    expect(guardFacts(rec({ draft }), known).rec.draft).toBe(draft);
+    const { rec: out } = guardFacts(
+      rec({ recommendation: 'Cite a source, e.g. Google documentation from 2019.' }),
+      known,
+    );
+    // One sentence with an invented year: it goes whole, never as "Cite a source, e.g."
+    expect(out.recommendation).toBe('');
   });
 
   it('replaces a price the page does not show and keeps the ones it does', () => {
@@ -69,6 +157,12 @@ describe('guardFacts', () => {
     );
   });
 
+  it('ends a name at the end of its sentence', () => {
+    expect(replaceUnknownNames('Join brands like TechFlow. Their teams grew.', known).text).toBe(
+      'Join brands like [customer name]. Their teams grew.',
+    );
+  });
+
   it('turns a list of unknown customers into one placeholder', () => {
     const { rec: out, hits } = guardFacts(
       rec({ draft: 'Trusted by Acme Corp, Zenith and Bolt Labs to track AI answers.' }),
@@ -89,7 +183,8 @@ describe('guardFacts', () => {
     expect(out.recommendation).toBe(
       'Write a 120–150 character meta description and add 3–5 FAQ questions.',
     );
-    expect(out.draft).toBe('Answer [real metric] common questions about plans.');
+    // A count the page doesn't have, in the draft: its sentence goes.
+    expect(out.draft).toBeNull();
   });
 
   it('keeps list numbering and the numbers the page has', () => {
@@ -107,9 +202,7 @@ describe('guardFacts', () => {
       }),
       known,
     );
-    expect(out.draft).toBe(
-      'Updated October 2026. Launched in [date] and rated best tool of [date].',
-    );
+    expect(out.draft).toBe('Updated October 2026.');
   });
 
   it('keeps the names of AI crawlers and Open Graph', () => {
@@ -123,9 +216,9 @@ describe('guardFacts', () => {
     expect(out.recommendation).toContain('OpenGraph');
   });
 
-  it('leaves URLs, domains and existing placeholders alone', () => {
+  it('leaves URLs, domains and the brand’s own placeholders alone', () => {
     const draft =
-      'Cite developers.google.com/search/docs/2024 and https://example.org/report-2025?id=7 for [real metric].';
+      'Cite developers.google.com/search/docs/2024 and https://example.org/report-2025?id=7 for [your result].';
     const { rec: out, hits } = guardFacts(rec({ draft }), known);
     expect(out.draft).toBe(draft);
     expect(hits).toBe(0);
@@ -148,8 +241,9 @@ describe('guardFacts', () => {
     const { rec: out } = guardFacts(rec({ code }), known);
     const parsed = JSON.parse(out.code);
     expect(parsed.offers.price).toBe('[price]');
-    expect(parsed.aggregateRating.ratingValue).toBe('[real metric]');
-    expect(parsed.aggregateRating.reviewCount).toBe('[real metric]');
+    // The brand's own figures, for the person: its markup needs a value.
+    expect(parsed.aggregateRating.ratingValue).toBe('[your figure]');
+    expect(parsed.aggregateRating.reviewCount).toBe('[your figure]');
     expect(parsed.datePublished).toBe('[date]');
     expect(parsed.itemListElement[0].position).toBe(1);
     expect(parsed['@context']).toBe('https://schema.org');
@@ -193,7 +287,7 @@ describe('replaceUnknownValues', () => {
     ).toBe('Expand the guide to about 2000 words.');
     expect(
       replaceUnknownValues('A 2000 word guide, updated since 2019.', page, { field: 'draft' }).text,
-    ).toBe('A [real metric] word guide, updated since [date].');
+    ).toBe('A [your figure] word guide, updated since [date].');
   });
 
   it('needs a percentage or price to be one on the page, not just the same number', () => {
@@ -204,7 +298,7 @@ describe('replaceUnknownValues', () => {
       replaceUnknownValues('48% reorder, 30% save and 20% off; from $48, over $30.', page, {
         field: 'draft',
       }).text,
-    ).toBe('[real metric] reorder, [real metric] save and 20% off; from [price], over $30.');
+    ).toBe('[your figure] reorder, [your figure] save and 20% off; from [price], over $30.');
   });
 
   it('keeps score targets in the explanation', () => {
@@ -223,7 +317,7 @@ describe('replaceUnknownValues', () => {
       'Join 1200 roasters.',
     );
     expect(replaceUnknownValues('Join 5,000+ roasters.', page, { field: 'draft' }).text).toBe(
-      'Join [real metric] roasters.',
+      'Join [your figure] roasters.',
     );
   });
 
@@ -231,7 +325,7 @@ describe('replaceUnknownValues', () => {
     const { text, hits } = replaceUnknownValues('Grew 3x to 40k visits, up 25 percent.', page, {
       field: 'draft',
     });
-    expect(text).toBe('Grew [real metric] to [real metric] visits, up [real metric].');
+    expect(text).toBe('Grew [your figure] to [your figure] visits, up [your figure].');
     expect(hits).toBe(3);
   });
 
