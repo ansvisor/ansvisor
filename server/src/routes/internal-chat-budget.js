@@ -15,6 +15,11 @@
  * POST /api/internal/chat/budget/release { orgId, usageId }
  *   → 200: the hold went (nothing was billed). Safe to repeat.
  * A step a Stop aborted calls neither: its hold stays as its cost.
+ * GET /api/internal/chat/budget/agent-shares?orgId=&days=
+ *   → 200 { unlimited, since, shares: [{ agentId, share, ownKeyShare, runs }] }:
+ *     each agent's share of the AI limit this period, or over the last
+ *     `days` (1–90), for the Agents list and detail (CHAT-27 items 24–30).
+ *   → 402 plan_limit: no active plan. 403 chat_off.
  *
  * Dollars never leave the server: no answer carries one. Calls with the
  * secret aren't counted by the API's per-IP limiter (isInternalChatBudgetCall
@@ -27,17 +32,21 @@ import { z } from 'zod';
 import {
   CHAT_BUDGET_FEATURES,
   ChatBudgetError,
+  agentUsageShares,
   chargeChatStep,
   releaseChatStep,
   reserveChatStep,
 } from '../lib/chat-budget.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
+import { webhookSecretsMatch } from '../lib/webhook-secret.js';
 
 const router = Router();
 
+// The secret is compared in constant time (webhookSecretsMatch), as the rate limiter does.
 router.use((req, res, next) => {
-  const secret = req.headers.authorization?.replace('Bearer ', '');
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+  const auth = req.headers.authorization;
+  const secret = typeof auth === 'string' && auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!webhookSecretsMatch(process.env.CRON_SECRET, secret)) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
   return next();
@@ -66,6 +75,11 @@ const chargeSchema = z.strictObject({
 });
 
 const releaseSchema = z.strictObject({ orgId: z.guid(), usageId: z.guid() });
+
+const sharesSchema = z.strictObject({
+  orgId: z.guid(),
+  days: z.coerce.number().int().min(1).max(90).optional(),
+});
 
 /** The body as `schema` reads it, or null once a 400 is sent. */
 function parse(schema, req, res) {
@@ -136,6 +150,21 @@ router.post('/release', async (req, res) => {
     return res.json({ success: true });
   } catch (err) {
     return fail(err, req, res, 'release');
+  }
+});
+
+router.get('/agent-shares', async (req, res) => {
+  const query = sharesSchema.safeParse(req.query ?? {});
+  if (!query.success) {
+    return res
+      .status(400)
+      .json({ success: false, error: 'invalid_request', message: 'Invalid request' });
+  }
+  try {
+    const shares = await agentUsageShares(query.data.orgId, { days: query.data.days ?? null });
+    return res.json({ success: true, ...shares });
+  } catch (err) {
+    return fail(err, req, res, 'agent shares');
   }
 });
 

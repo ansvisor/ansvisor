@@ -51,7 +51,7 @@ interface Builder extends PromiseLike<Result> {
    */
   or(terms: string): Builder;
   /**
-   * A full-text match (`fts`): every `word:*` term of `query`, joined by `&`,
+   * A full-text match (`fts`): every `'word':*` term of `query`, joined by `&`,
    * starts a word of the row's `column` — a test row holds its search
    * column as plain words.
    */
@@ -265,11 +265,22 @@ export function createFakeSupabase(): FakeSupabase {
           return builder;
         },
         textSearch(column, query) {
-          const terms = query.split('&').map((term) => term.trim().replace(/:\*$/, ''));
+          // Words as Postgres's parser keeps them, roughly: split on spaces,
+          // punctuation trimmed from the ends ("nike.com" stays one word).
+          const wordOf = (text: string) =>
+            text.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+          const terms = query.split(' & ').map((term) =>
+            wordOf(
+              term
+                .trim()
+                .replace(/^'(.*)':\*$/, '$1')
+                .replace(/''/g, "'"),
+            ),
+          );
           filters.push((row) => {
             const words = String(row[column] ?? '')
-              .toLowerCase()
-              .split(/[^\p{L}\p{N}]+/u);
+              .split(/\s+/)
+              .map(wordOf);
             return terms.every((term) => words.some((word) => word.startsWith(term)));
           });
           return builder;

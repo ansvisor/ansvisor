@@ -641,6 +641,36 @@ describe('the tracking setup, by role and mode (W2-06, CHAT-20 §9 rows 20–32)
       });
     }
   });
+
+  it('keeps the competitor rows to plans with competitor tracking, as the Competitors page is', async () => {
+    for (const name of ['add_competitors', 'remove_competitor']) {
+      const tool = chatTool(name)!;
+      const ctx = await readPrecedenceContext({
+        userId: PEOPLE.admin,
+        organizationId: ORG,
+        mode: 'full_auto',
+        surface: 'chat',
+      });
+      const without = {
+        ...ctx!,
+        plan: {
+          ...ctx!.plan,
+          features: ctx!.plan.features.filter((f) => f !== 'competitor_tracking'),
+        },
+      };
+      const call = await readToolCall(
+        without,
+        tool,
+        INPUTS[name] as Record<string, unknown>,
+        false,
+      );
+      expect(decideToolCall(tool, without, call), name).toMatchObject({
+        kind: 'deny',
+        denial: { code: 'plan_locked' },
+      });
+      expect(decideToolCall(tool, ctx!, call), name).not.toMatchObject({ kind: 'deny' });
+    }
+  });
 });
 
 describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 rows 37–64)', () => {

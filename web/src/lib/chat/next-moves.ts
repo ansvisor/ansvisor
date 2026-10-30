@@ -20,10 +20,26 @@ export const NEXT_MOVE_KINDS = ['continue', 'deepen', 'act', 'repeat', 'reuse'] 
 /** Roles that only read: a write or an EXECUTE move is never theirs, as a card or as ghost text (§C item 4). */
 const READ_ONLY_ROLES: readonly TeamRole[] = ['analyst', 'agency_partner'];
 
+/**
+ * A link in a move's words: an address with a scheme, www., mailto: or a
+ * Markdown link. A move names a page of the workspace ("/features"), never
+ * an outside address a page Chat read could have put there.
+ */
+const LINK = /[a-z][a-z0-9+.-]*:\/\/|\bwww\.|\bmailto:|\]\(/i;
+
+/** A move's label and prompt are this long at most (00417), so a prompt fits as ghost text. */
+export const MOVE_PROMPT_MAX = 80;
+const moveText = z
+  .string()
+  .trim()
+  .min(1)
+  .max(MOVE_PROMPT_MAX)
+  .refine((text) => !LINK.test(text));
+
 /** One move as it is kept: each is checked on its own, so a bad one loses only itself. */
 export const nextMoveItem = z.object({
-  label: z.string().trim().min(1).max(80),
-  prompt: z.string().trim().min(1).max(80),
+  label: moveText,
+  prompt: moveText,
   kind: z.enum(NEXT_MOVE_KINDS),
   class: z.enum(['read', 'write', 'execute']),
   continues_this_run: z.boolean().optional(),

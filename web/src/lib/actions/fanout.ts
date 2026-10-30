@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { addPromptToSet } from '@/lib/actions/prompt';
+import { addPromptToSet, type PromptAddFailureCode } from '@/lib/actions/prompt';
 import { API_BASE_URL } from '@/config/api';
 import { FANOUT_MIN_SILENT_ANSWERS, FANOUT_SHARING_PLATFORMS } from '@/config/fanout-platforms';
 
@@ -486,9 +486,12 @@ async function engineCoverage(
  * Promote an observed sub-query into a tracked prompt for the brand. Mirrors
  * the Insights "accept suggestion" flow: add to the brand's earliest prompt
  * set, deriving platforms/models from its most recent active prompt.
- * `addPromptToSet` enforces the plan's `maxPrompts` limit.
+ * `addPromptToSet` enforces the plan's `maxPrompts` limit, and refuses a
+ * brand with no topic yet (`no_topics`).
  */
-export type TrackFanoutResult = { promptId: string } | { error: string };
+export type TrackFanoutResult =
+  | { promptId: string }
+  | { error: string; code?: PromptAddFailureCode };
 
 export async function trackFanoutQuery(brandId: string, query: string): Promise<TrackFanoutResult> {
   const supabase = await createClient();
@@ -522,7 +525,7 @@ export async function trackFanoutQuery(brandId: string, query: string): Promise<
   const models = Array.isArray(defaults?.models) ? (defaults!.models as string[]) : [];
 
   const created = await addPromptToSet({ promptSetId: ps.id as string, text, platforms, models });
-  if ('error' in created) return { error: created.error };
+  if ('error' in created) return { error: created.error, code: created.code };
 
   revalidatePath('/dashboard/prompts');
   return { promptId: created.prompt.id };

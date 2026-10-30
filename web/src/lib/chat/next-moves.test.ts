@@ -134,4 +134,18 @@ describe('nextMovesInput and validMoves', () => {
     ]);
     expect(nextMovesInput.safeParse({ moves: Array(7).fill(move()) }).success).toBe(false);
   });
+
+  it('drops a move that carries a link to an outside address, in its label or its prompt', () => {
+    const linked = [
+      move({ prompt: 'Audit https://example.com/?q=1' }),
+      move({ prompt: 'Open www.example.com' }),
+      move({ label: 'See [the guide](https://example.com)' }),
+      move({ label: 'Email mailto:someone@example.com' }),
+      move({ prompt: 'Read HTTP://EXAMPLE.COM' }),
+    ];
+    expect(validMoves(linked)).toEqual([]);
+    // A page of the workspace, or a site named by its domain, is no link.
+    const kept = [move(), move({ prompt: 'Compare our /pricing with example.com' })];
+    expect(validMoves(kept)).toEqual(kept);
+  });
 });
