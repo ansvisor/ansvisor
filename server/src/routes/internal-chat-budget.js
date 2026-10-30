@@ -38,12 +38,15 @@ import {
   reserveChatStep,
 } from '../lib/chat-budget.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
+import { webhookSecretsMatch } from '../lib/webhook-secret.js';
 
 const router = Router();
 
+// The secret is compared in constant time (webhookSecretsMatch), as the rate limiter does.
 router.use((req, res, next) => {
-  const secret = req.headers.authorization?.replace('Bearer ', '');
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+  const auth = req.headers.authorization;
+  const secret = typeof auth === 'string' && auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!webhookSecretsMatch(process.env.CRON_SECRET, secret)) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
   return next();

@@ -32,6 +32,7 @@ vi.mock('./agent-shares', () => ({ readAgentShares: vi.fn(async () => usage.shar
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const agents = await import('./agents');
+const runs = await import('./agent-runs');
 const { createAgentInput, updateAgentInput } = await import('./agent-rules');
 
 const NOW = new Date('2026-10-29T12:00:00.000Z');
@@ -367,6 +368,83 @@ describe('changing an agent', () => {
     expect(admin.ok).toBe(true);
   });
 
+  it('keeps KPI and Signal triggers whose settings came back in another key order', async () => {
+    const kpi = {
+      kind: 'kpi',
+      config: {
+        kpi: 'citations',
+        direction: 'down',
+        threshold: 10,
+        unit: 'percent',
+        period: 'week',
+      },
+    };
+    const signal = {
+      kind: 'signal',
+      config: {
+        category: 'recover',
+        definition_ids: ['win_back_citations'],
+        entity_filter: { engines: ['chatgpt-web'], prompt_tags: ['pricing'] },
+      },
+    };
+    const { id } = await create(PEOPLE.manager, { triggers: [kpi, signal] });
+    // jsonb keeps its own key order: shorter keys first, then by bytes.
+    const reorder = (value: unknown): unknown =>
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? Object.fromEntries(
+            Object.entries(value as Record<string, unknown>)
+              .reverse()
+              .map(([k, v]) => [k, reorder(v)]),
+          )
+        : value;
+    for (const trigger of rows('chat_agent_triggers')) {
+      trigger.config_json = reorder(trigger.config_json);
+      trigger.last_fired_at = '2026-10-28T08:00:00.000Z';
+      trigger.cooldown_until = '2026-10-28T14:00:00.000Z';
+    }
+    const before = rows('chat_agent_triggers').map((t) => t.id);
+    const result = await agents.updateAgent(
+      await ctxOf(PEOPLE.manager),
+      id,
+      updateAgentInput.parse({ triggers: [kpi, signal] }),
+    );
+    expect(result.ok).toBe(true);
+    expect(rows('chat_agent_triggers').map((t) => t.id)).toEqual(before);
+    expect(rows('chat_agent_triggers').map((t) => [t.last_fired_at, t.cooldown_until])).toEqual([
+      ['2026-10-28T08:00:00.000Z', '2026-10-28T14:00:00.000Z'],
+      ['2026-10-28T08:00:00.000Z', '2026-10-28T14:00:00.000Z'],
+    ]);
+    // Nothing changed: no log row for it.
+    expect(logRows('agentUpdated')).toEqual([]);
+  });
+
+  it('lets a one-off that already fired come back with a save, but not a new one in the past', async () => {
+    const once = { kind: 'schedule', config: { type: 'once', at: '2026-11-02T09:00:00.000Z' } };
+    const { id } = await create(PEOPLE.manager, { triggers: [once] });
+    const later = new Date('2026-11-10T12:00:00.000Z');
+    const ctx = await ctxOf(PEOPLE.manager);
+    const kept = await agents.updateAgent(
+      ctx,
+      id,
+      updateAgentInput.parse({ name: 'Renamed', triggers: [once] }),
+      later,
+    );
+    expect(kept).toMatchObject({ ok: true, value: { name: 'Renamed' } });
+    if (kept.ok) expect(kept.value.triggers[0].nextFireAt).toBeNull();
+    const past = await agents.updateAgent(
+      ctx,
+      id,
+      updateAgentInput.parse({
+        triggers: [
+          once,
+          { kind: 'schedule', config: { type: 'once', at: '2026-11-05T09:00:00Z' } },
+        ],
+      }),
+      later,
+    );
+    expect(past).toMatchObject({ ok: false, refusal: { code: 'schedule_past' } });
+  });
+
   it('keeps a trigger kept as it was, with its last fire, and replaces the rest', async () => {
     const weekly = {
       kind: 'schedule',
@@ -529,6 +607,74 @@ describe('states', () => {
   });
 });
 
+describe('taking over', () => {
+  it('lets an Admin take over an agent whose owner lost the role, and turns it on again', async () => {
+    const { id } = await create(PEOPLE.manager, { visibility: 'workspace' });
+    await agents.changeAgentState(await ctxOf(PEOPLE.manager), id, 'activate');
+    await agents.pauseAgentForSystem(ORG, id, 'owner_role');
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.role = 'analyst';
+    const admin = await ctxOf(PEOPLE.admin);
+    expect(await agents.changeAgentState(admin, id, 'resume')).toMatchObject({
+      ok: false,
+      refusal: { code: 'owner_role' },
+    });
+    const before = await agents.readAgent(admin, id, NOW);
+    expect(before?.can.takeOver).toBe(true);
+
+    const taken = await agents.takeOverAgent(admin, id, NOW);
+    expect(taken).toMatchObject({ ok: true, value: { status: 'active', pausedReason: null } });
+    expect(agentRow(id)).toMatchObject({
+      owner_id: PEOPLE.admin,
+      status: 'active',
+      activated_at: NOW.toISOString(),
+    });
+    expect(logRows('agentTakenOver')).toEqual([
+      expect.objectContaining({ agent_id: id, user_id: PEOPLE.admin }),
+    ]);
+  });
+
+  it('runs the activation checks under the new owner first, and changes nothing when they fail', async () => {
+    const { id } = await create(PEOPLE.manager);
+    await agents.changeAgentState(await ctxOf(PEOPLE.manager), id, 'activate');
+    usage.percent = 100;
+    expect(await agents.takeOverAgent(await ctxOf(PEOPLE.admin), id, NOW)).toMatchObject({
+      ok: false,
+      refusal: { code: 'ai_limit' },
+    });
+    expect(agentRow(id).owner_id).toBe(PEOPLE.manager);
+    // A draft or a person's pause only changes hands.
+    usage.percent = 10;
+    const draft = await create(PEOPLE.manager, { name: 'Draft' });
+    usage.percent = 100;
+    expect(await agents.takeOverAgent(await ctxOf(PEOPLE.admin), draft.id, NOW)).toMatchObject({
+      ok: true,
+      value: { status: 'draft' },
+    });
+    expect(agentRow(draft.id).owner_id).toBe(PEOPLE.admin);
+  });
+
+  it('is an Admin’s only, never on an archived agent', async () => {
+    const { id } = await create(PEOPLE.manager, { visibility: 'workspace' });
+    expect(await agents.takeOverAgent(await ctxOf(PEOPLE.otherManager), id, NOW)).toMatchObject({
+      ok: false,
+      refusal: {
+        kind: 'denied',
+        code: 'forbidden_role',
+        denial: { asked: 'You asked: Take over an agent.', whoCan: 'Admins can do this.' },
+      },
+    });
+    expect(await agents.takeOverAgent(await ctxOf(PEOPLE.manager), id, NOW)).toMatchObject({
+      ok: false,
+      refusal: { code: 'forbidden_role' },
+    });
+    await agents.changeAgentState(await ctxOf(PEOPLE.manager), id, 'archive');
+    expect(await agents.takeOverAgent(await ctxOf(PEOPLE.admin), id, NOW)).toMatchObject({
+      ok: false,
+      refusal: { code: 'archived' },
+    });
+  });
+});
+
 describe('duplicating', () => {
   it('copies the current version as a draft “{name} copy”, its triggers switched off', async () => {
     const { id } = await create(PEOPLE.admin, {
@@ -556,6 +702,28 @@ describe('duplicating', () => {
       name: 'Win back citations copy',
       from: 'Win back citations',
     });
+  });
+});
+
+describe('duplicating what the plan or the workspace no longer allows', () => {
+  it('refuses a copy in Full auto below Growth, and one whose brand is gone', async () => {
+    const fullAuto = await create(PEOPLE.admin, { mode: 'full_auto' });
+    db.tables.organizations[0].plan = 'starter';
+    expect(await agents.duplicateAgent(await ctxOf(PEOPLE.admin), fullAuto.id, NOW)).toMatchObject({
+      ok: false,
+      refusal: { kind: 'denied', code: 'plan_locked' },
+    });
+    db.tables.organizations[0].plan = 'growth';
+    const { id } = await create(PEOPLE.manager, {
+      name: 'Brand B only',
+      scope: { brand_ids: [BRAND_2] },
+    });
+    db.tables.brands = db.tables.brands.filter((b) => b.id !== BRAND_2);
+    expect(await agents.duplicateAgent(await ctxOf(PEOPLE.manager), id, NOW)).toMatchObject({
+      ok: false,
+      refusal: { code: 'brand_not_found' },
+    });
+    expect(rows('chat_agents')).toHaveLength(2);
   });
 });
 
@@ -591,6 +759,51 @@ describe('reading', () => {
     }
   });
 
+  it('shows an Admin every agent in use on Workspace, others’ private ones included', async () => {
+    const theirs = await create(PEOPLE.manager, { name: 'Manager private' });
+    const shared = await create(PEOPLE.otherManager, { name: 'Shared', visibility: 'workspace' });
+    const own = await create(PEOPLE.admin, { name: 'Admin private' });
+    const archived = await create(PEOPLE.manager, { name: 'Old' });
+    await agents.changeAgentState(await ctxOf(PEOPLE.manager), archived.id, 'archive');
+    const admin = await ctxOf(PEOPLE.admin);
+    const list = await agents.listAgents(admin, { view: 'workspace' }, NOW);
+    expect(list.agents.map((a) => a.id).sort()).toEqual([theirs.id, shared.id].sort());
+    expect(list.counts).toEqual({ mine: 1, workspace: 2, paused: 0, archived: 1 });
+    expect((await agents.listAgents(admin, { view: 'mine' }, NOW)).agents.map((a) => a.id)).toEqual(
+      [own.id],
+    );
+    // A Manager's Workspace stays the shared ones.
+    const manager = await agents.listAgents(
+      await ctxOf(PEOPLE.manager),
+      { view: 'workspace' },
+      NOW,
+    );
+    expect(manager.agents.map((a) => a.id)).toEqual([shared.id]);
+  });
+
+  it('answers not found for another workspace’s agent and for a teammate’s private one', async () => {
+    const theirs = await create(PEOPLE.otherManager);
+    const foreign = await create(PEOPLE.manager, { name: 'Moved away' });
+    // The agent moves to another workspace: its id means nothing here.
+    agentRow(foreign.id).organization_id = OTHER_ORG;
+    const ctx = await ctxOf(PEOPLE.manager);
+    for (const id of [theirs.id, foreign.id]) {
+      expect(await runs.runAgentNow(ctx, id, {}, NOW, null)).toMatchObject({
+        ok: false,
+        refusal: { status: 404 },
+      });
+      expect(await agents.listAgentRuns(ctx, id, 50)).toBeNull();
+      expect(await agents.duplicateAgent(ctx, id, NOW)).toMatchObject({
+        ok: false,
+        refusal: { status: 404 },
+      });
+    }
+    expect(
+      await agents.updateAgent(ctx, foreign.id, updateAgentInput.parse({ name: 'x' })),
+    ).toMatchObject({ ok: false, refusal: { status: 404 } });
+    expect(rows('chat_agent_runs')).toEqual([]);
+  });
+
   it('hides a private agent of someone else as not there', async () => {
     const theirs = await create(PEOPLE.otherManager);
     expect(await agents.readAgent(await ctxOf(PEOPLE.manager), theirs.id)).toBeNull();
@@ -619,6 +832,7 @@ describe('reading', () => {
       delete: false,
       duplicate: false,
       run: false,
+      takeOver: false,
     });
     const owner = await agents.readAgent(await ctxOf(PEOPLE.manager), id, NOW);
     expect(owner?.can).toMatchObject({ edit: true, activate: true, run: true, pause: false });

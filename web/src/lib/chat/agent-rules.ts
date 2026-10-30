@@ -458,6 +458,7 @@ export type AgentAsk =
   | 'delete'
   | 'duplicate'
   | 'run'
+  | 'takeOver'
   | 'workspace'
   | 'monthCap'
   | 'fullAuto'
@@ -535,8 +536,8 @@ const ADMINS_ONLY_ACTS: readonly AgentAct[] = ['edit', 'activate', 'resume'];
  * Admins anything; Managers their own agents, and Run now on any workspace
  * agent; Analysts and Agency partners nothing. While only Admins may keep
  * workspace agents, a Manager's own workspace agent can still be paused,
- * archived, restored, deleted and run, but not changed or turned on. Null
- * when they may.
+ * archived, restored, deleted and run, but not changed or turned on. Take
+ * over is an Admin's alone. Null when they may.
  */
 export function agentActDenial(
   act: AgentAct,
@@ -544,6 +545,10 @@ export function agentActDenial(
   agent: AgentFacts | null,
   settings: AgentSettings,
 ): AgentDenial | null {
+  // Take over is an Admin's, whoever owns the agent (§G item 34, §K item 51).
+  if (act === 'takeOver') {
+    return viewer.role === 'admin' ? null : forbidden(viewer.role, ['admin'], act);
+  }
   if (!canWriteAgents(viewer.role)) return forbidden(viewer.role, ['admin', 'manager'], act);
   if (viewer.role === 'admin' || !agent || act === 'create' || act === 'duplicate') return null;
   if (act === 'run' && agent.visibility === 'workspace') return null;

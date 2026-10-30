@@ -50,6 +50,7 @@ vi.mock('@/lib/chat/agents', async (original) => {
     updateAgent: vi.fn(),
     changeAgentState: vi.fn(async () => ({ ok: true, value: { id: AGENT, status: 'paused' } })),
     duplicateAgent: vi.fn(),
+    takeOverAgent: vi.fn(async () => ({ ok: true, value: { id: AGENT, status: 'active' } })),
     listAgentRuns: vi.fn(async () => []),
   };
 });
@@ -71,6 +72,7 @@ const resume = await import('./[id]/resume/route');
 const archive = await import('./[id]/archive/route');
 const restore = await import('./[id]/restore/route');
 const duplicate = await import('./[id]/duplicate/route');
+const takeOver = await import('./[id]/take-over/route');
 const run = await import('./[id]/run/route');
 const runsRoute = await import('./[id]/runs/route');
 const lib = await import('@/lib/chat/agents');
@@ -123,11 +125,13 @@ describe('/api/chat/agents', () => {
       archive.POST(new Request(url()), params()),
       restore.POST(new Request(url()), params()),
       duplicate.POST(new Request(url()), params()),
+      takeOver.POST(new Request(url()), params()),
       run.POST(new Request(url(), post({})), params()),
     ];
     for (const res of await Promise.all(writes)) expect(res.status).toBe(402);
     expect(lib.createAgent).not.toHaveBeenCalled();
     expect(lib.changeAgentState).not.toHaveBeenCalled();
+    expect(lib.takeOverAgent).not.toHaveBeenCalled();
     expect(runAgentNow).not.toHaveBeenCalled();
   });
 
@@ -253,6 +257,15 @@ describe('/api/chat/agents/{id}', () => {
       code: 'wrong_status',
       error: "This agent is a draft, so it can't do that now.",
     });
+  });
+});
+
+describe('/api/chat/agents/{id}/take-over', () => {
+  it('hands the agent to the Admin, and answers 404 for a bad id', async () => {
+    const res = await takeOver.POST(new Request(url()), params());
+    expect(await res.json()).toEqual({ ok: true, agent: { id: AGENT, status: 'active' } });
+    expect(lib.takeOverAgent).toHaveBeenCalledWith(CTX, AGENT);
+    expect((await takeOver.POST(new Request(url()), params('nope'))).status).toBe(404);
   });
 });
 

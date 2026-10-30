@@ -4564,6 +4564,7 @@
       "agentRestored": "Restored the agent “{name}”",
       "agentDeleted": "Deleted the agent “{name}”",
       "agentDuplicated": "Copied the agent “{from}” as “{name}”",
+      "agentTakenOver": "Took over the agent “{name}”",
       "agentRunQueued": "Asked the agent “{name}” to run for {brand}"
     },
     "undo": {
@@ -4590,6 +4591,7 @@
       "delete": "Delete an agent",
       "duplicate": "Duplicate an agent",
       "run": "Run an agent now",
+      "takeOver": "Take over an agent",
       "workspace": "Share an agent with the workspace",
       "monthCap": "Set an agent's monthly AI cap",
       "fullAuto": "Run an agent in Full auto",

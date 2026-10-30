@@ -207,6 +207,52 @@ describe('Run now', () => {
     expect(runRows()).toHaveLength(3);
   });
 
+  it('queues one run for two clicks at once by the same person', async () => {
+    const id = await agentOf(PEOPLE.manager, { scope: { brand_ids: [BRAND] } });
+    const ctx = await ctxOf(PEOPLE.manager);
+    const [a, b] = await Promise.all([
+      runs.runAgentNow(ctx, id, {}, NOW, null),
+      runs.runAgentNow(ctx, id, {}, NOW, null),
+    ]);
+    expect(runRows()).toHaveLength(1);
+    expect([a, b].map((r) => (r.ok ? r.value.runs[0].repeated : null)).sort()).toEqual([
+      false,
+      true,
+    ]);
+    expect(
+      db.tables.chat_activity_log.filter((r) => r.summary_key === 'agentRunQueued'),
+    ).toHaveLength(1);
+  });
+
+  it('keeps 3 waiting when two people click at once on a queue of 2', async () => {
+    const id = await agentOf(PEOPLE.admin, {
+      visibility: 'workspace',
+      scope: { brand_ids: [BRAND] },
+    });
+    for (const [n, person] of [PEOPLE.admin, PEOPLE.otherManager].entries()) {
+      db.tables.chat_agent_runs.push({
+        id: `00000000-0000-4000-8000-00000000000${n}`,
+        agent_id: id,
+        brand_id: BRAND,
+        trigger_kind: 'schedule',
+        acting_user_id: person,
+        status: 'queued',
+        queued_at: '2026-10-29T11:00:00.000Z',
+      });
+    }
+    const [a, b] = await Promise.all([
+      runs.runAgentNow(await ctxOf(PEOPLE.manager), id, {}, NOW, null),
+      runs.runAgentNow(await ctxOf(PEOPLE.admin), id, {}, NOW, null),
+    ]);
+    expect(runRows().filter((r) => r.status === 'queued')).toHaveLength(3);
+    const results = [a, b].map((r) => (r.ok ? r.value.runs[0] : null));
+    expect(results.filter((r) => r?.coalesced)).toHaveLength(1);
+    // Only the run that stayed is in the log.
+    expect(
+      db.tables.chat_activity_log.filter((r) => r.summary_key === 'agentRunQueued'),
+    ).toHaveLength(1);
+  });
+
   it('refuses Analysts, a teammate’s private agent, and an archived agent', async () => {
     const id = await agentOf(PEOPLE.manager, { visibility: 'workspace' });
     expect(await runs.runAgentNow(await ctxOf(PEOPLE.analyst), id, {}, NOW, null)).toMatchObject({

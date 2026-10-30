@@ -326,6 +326,16 @@ describe('who sees and changes an agent', () => {
     ).toBeNull();
   });
 
+  it('keeps Take over to Admins, whoever owns the agent', () => {
+    expect(agentActDenial('takeOver', viewer('admin', OTHER), agent(), settings)).toBeNull();
+    for (const role of ['manager', 'analyst', 'agency_partner'] as const) {
+      expect(agentActDenial('takeOver', viewer(role), agent(), settings)).toEqual({
+        denial: { code: 'forbidden_role', role, roles: ['admin'] },
+        asked: 'takeOver',
+      });
+    }
+  });
+
   it('keeps workspace agents to Admins when Settings › Chat says so', () => {
     const adminsOnly = { ...settings, workspaceAgentsAdminsOnly: true };
     const mine = agent({ visibility: 'workspace' });

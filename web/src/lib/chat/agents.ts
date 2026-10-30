@@ -52,6 +52,7 @@ import {
 import { nextScheduleFire } from './agent-schedule';
 import { readAgentShares } from './agent-shares';
 import { buildActionDenial } from './denial';
+import { canonicalJson } from './idempotency';
 import type { ChatActor } from './engine';
 import type { ChatDenialCard } from './events';
 import { resolveChatModelKey } from './key';
@@ -679,6 +680,7 @@ function abilitiesOf(ctx: AgentContext, agent: LoadedAgent): AgentAbilities {
     restore: to('restore'),
     delete: to('delete'),
     duplicate: may('duplicate') && agent.version !== null,
+    takeOver: may('takeOver') && status !== 'archived' && agent.row.owner_id !== ctx.actor.userId,
     run: may('run') && status !== 'archived' && agent.version !== null,
   };
 }
@@ -751,9 +753,9 @@ export async function runsOf(agentId: string, limit: number): Promise<RunRow[]> 
 
 /**
  * The Agents list (§B): every agent the person may see, filtered to a tab —
- * Mine (theirs, not archived), Workspace (shared, not archived), Paused,
- * Archived — and by a search on its name or skills, newest change first,
- * with each tab's count.
+ * Mine (theirs, not archived), Workspace (shared, not archived; for an
+ * Admin, others' private ones too), Paused, Archived — and by a search on
+ * its name or skills, newest change first, with each tab's count.
  */
 export async function listAgents(
   ctx: AgentContext,
@@ -797,7 +799,12 @@ export async function listAgents(
       case 'mine':
         return owner_id === ctx.actor.userId && status !== 'archived';
       case 'workspace':
-        return visibility === 'workspace' && status !== 'archived';
+        // An Admin's: every agent in use, others' private ones too (§K item 51, edge case 1).
+        return (
+          status !== 'archived' &&
+          (visibility === 'workspace' ||
+            (ctx.viewer.role === 'admin' && owner_id !== ctx.actor.userId))
+        );
       case 'paused':
         return status === 'paused';
       case 'archived':
@@ -1083,6 +1090,7 @@ type AgentSummaryKey =
   | 'agentRestored'
   | 'agentDeleted'
   | 'agentDuplicated'
+  | 'agentTakenOver'
   | 'agentRunQueued';
 
 /**
@@ -1142,8 +1150,12 @@ const triggerInsert = (agentId: string, trigger: AgentTriggerInput, enabled = tr
   enabled,
 });
 
-/** A trigger's identity for keeping its row (its last fire, its cooldown) across a save. */
-const triggerKey = (kind: string, config: unknown) => `${kind}:${JSON.stringify(config)}`;
+/**
+ * A trigger's identity for keeping its row (its last fire, its cooldown)
+ * across a save: its kind and settings, keys sorted, since jsonb keeps its
+ * own key order, not the one written.
+ */
+const triggerKey = (kind: string, config: unknown) => `${kind}:${canonicalJson(config)}`;
 
 /**
  * A new agent, saved as a draft (§D item 17): Admins and Managers only
@@ -1238,7 +1250,13 @@ export async function updateAgent(
 
   const next = nextVersion(agent.version, patch);
   const result = next ?? agent.version;
-  const triggers = patch.triggers ?? triggerInputs(await triggersOf([row.id]));
+  const currentTriggers = await triggersOf([row.id]);
+  const triggers = patch.triggers ?? triggerInputs(currentTriggers);
+  // Only a new or changed trigger is held to the clock: a one-off that already fired stays.
+  const kept = new Set(currentTriggers.map((t) => triggerKey(t.kind, t.config_json)));
+  const changedTriggers = (patch.triggers ?? []).filter(
+    (t) => !kept.has(triggerKey(t.kind, t.config)),
+  );
   const visibilityChanged = patch.visibility !== undefined && patch.visibility !== row.visibility;
   const monthChanged =
     patch.maxMonthShare !== undefined && patch.maxMonthShare !== row.max_month_share;
@@ -1250,7 +1268,7 @@ export async function updateAgent(
   ]);
   if (denial) return denial;
   const problem =
-    (patch.triggers ? triggersRefusal(patch.triggers, now) : null) ??
+    triggersRefusal(changedTriggers, now) ??
     (next && (patch.scope || patch.notifyUserIds)
       ? await referencesRefusal(ctx.actor.organizationId, next)
       : null);
@@ -1304,7 +1322,9 @@ export async function updateAgent(
     updated = toAgentRow((data ?? [])[0] as Record<string, unknown>);
   }
 
-  const triggersChanged = patch.triggers ? await replaceTriggers(row.id, patch.triggers) : false;
+  const triggersChanged = patch.triggers
+    ? await replaceTriggers(row.id, currentTriggers, patch.triggers)
+    : false;
   if (Object.keys(agentPatch).length > 0 || triggersChanged) {
     await logAgentChange(ctx, updated, 'agentUpdated');
   }
@@ -1331,8 +1351,11 @@ async function highestVersion(agentId: string): Promise<number> {
  * row, its last fire and cooldown (only its on/off follows); the rest go and
  * the new come. Answers whether anything changed.
  */
-async function replaceTriggers(agentId: string, wanted: AgentTriggerInput[]): Promise<boolean> {
-  const current = await triggersOf([agentId]);
+async function replaceTriggers(
+  agentId: string,
+  current: TriggerRow[],
+  wanted: AgentTriggerInput[],
+): Promise<boolean> {
   const byKey = new Map(current.map((t) => [triggerKey(t.kind, t.config_json), t]));
   const keep = new Set<string>();
   const add: AgentTriggerInput[] = [];
@@ -1460,6 +1483,62 @@ export async function changeAgentState(
 }
 
 /**
+ * Take over (§G item 34, edge case 1): an Admin becomes the agent's owner,
+ * the one its triggered runs act as — after its owner left the workspace or
+ * lost the role, or whenever an Admin chooses. An agent that is on, or
+ * paused because of its owner, first passes the activation checks under its
+ * new owner (item 21); one paused because of its owner then turns on again.
+ * Not an archived agent (restore it first). Answers its detail.
+ */
+export async function takeOverAgent(
+  ctx: AgentContext,
+  id: string,
+  now = new Date(),
+): Promise<AgentResult<AgentDetail>> {
+  const found = await agentForAct(ctx, id, 'takeOver');
+  if (!found.ok) return found;
+  const { agent } = found;
+  const { row } = agent;
+  if (row.status === 'archived') return refused('archived');
+  if (row.owner_id === ctx.actor.userId) {
+    return { ok: true, value: await detailOf(ctx, agent, now) };
+  }
+  const org = ctx.actor.organizationId;
+  const backOn = row.status === 'paused' && row.paused_reason === 'owner_role';
+  const patch: Record<string, unknown> = { owner_id: ctx.actor.userId };
+  if (row.status === 'active' || backOn) {
+    const limit = agentPlanLimits(ctx.plan).activeAgents;
+    if (backOn && limit !== null && (await activeCount(org, row.id)) >= limit) {
+      return refused('agent_limit', { limit });
+    }
+    const failing = await runChecks(
+      ctx,
+      agent,
+      ctx.viewer.role,
+      triggerInputs(await triggersOf([row.id])),
+    );
+    if (failing) return failing;
+    if (backOn) {
+      patch.status = 'active';
+      patch.paused_reason = null;
+      patch.activated_at = now.toISOString();
+    }
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('chat_agents')
+    .update(patch)
+    .eq('id', row.id)
+    .eq('status', row.status)
+    .select(AGENT_COLUMNS);
+  if (error) throw new Error(`Could not take the agent over: ${error.message}`);
+  if ((data ?? []).length === 0) return refused('wrong_status', { status: row.status });
+  const updated = toAgentRow((data ?? [])[0] as Record<string, unknown>);
+  await logAgentChange(ctx, updated, 'agentTakenOver');
+  return { ok: true, value: await detailOf(ctx, { row: updated, version: agent.version }, now) };
+}
+
+/**
  * Pauses an active agent for a reason of the system's (§G item 34): the
  * trigger runner's (W2-16) when a check before a run fails. Nothing else
  * changes; a person resumes it (only `cap` comes back by itself). Answers
@@ -1535,6 +1614,15 @@ export async function duplicateAgent(
   if (!agent.version) return refused('failed');
   const org = ctx.actor.organizationId;
   const { row } = agent;
+  // A copy is a new agent: it is held to what creating one is.
+  const sourceTriggers = await triggersOf([row.id]);
+  const denial = await firstDenial(ctx, [
+    modeDenial(agent.version.mode, ctx.plan, ctx.settings, ctx.viewer.role),
+    enginesDenial(ctx.plan, enginesNamed(agent.version.scope, triggerInputs(sourceTriggers))),
+  ]);
+  if (denial) return denial;
+  const problem = await referencesRefusal(org, agent.version);
+  if (problem) return problem;
   const { data: names, error: namesError } = await supabaseAdmin
     .from('chat_agents')
     .select('name')
@@ -1569,10 +1657,9 @@ export async function duplicateAgent(
       .from('chat_agent_versions')
       .insert(versionInsert(copy.id, 1, agent.version, ctx.actor.userId));
     if (written.error) throw new Error(written.error.message);
-    const triggers = await triggersOf([row.id]);
-    if (triggers.length > 0) {
+    if (sourceTriggers.length > 0) {
       const copied = await supabaseAdmin.from('chat_agent_triggers').insert(
-        triggers.map((t) => ({
+        sourceTriggers.map((t) => ({
           agent_id: copy.id,
           kind: t.kind,
           config_json: t.config_json,

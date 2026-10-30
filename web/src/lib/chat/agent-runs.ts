@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { MAX_QUEUED_PER_BRAND, RUN_NOW_REPEAT_MS, agentPlanLimits } from './agent-rules';
+import { idempotencyKey, requestHash, sweepExpiredKeys, withIdempotencyKey } from './idempotency';
 import {
   agentForAct,
   logAgentChange,
@@ -9,6 +10,7 @@ import {
   runnableBrands,
   type AgentContext,
   type AgentResult,
+  type LoadedAgent,
 } from './agents';
 
 /**
@@ -16,7 +18,10 @@ import {
  * queued, then started when the workspace has room. Each brand of its scope
  * gets its own run (§H item 41); one run at a time per agent and brand, at
  * most 3 waiting (§M item 58: a fourth joins the last); a second click by
- * the same person within a minute is the first (edge case 14). A manual run
+ * the same person within a minute is the first (edge case 14): the click
+ * claims an idempotency key (agent, brand, person, minute; idempotency.ts),
+ * so two at once queue one run, and a run counted past the 3 after its
+ * insert (others' clicks at the same moment) goes again. A manual run
  * acts as the person who clicked (§H item 38) and goes before triggered
  * runs (§M item 59, chat_start_next_agent_run).
  *
@@ -123,67 +128,43 @@ export async function runAgentNow(
 
   const runs: RunNowItem[] = [];
   const ours: string[] = [];
+  let claimed = false;
   for (const brand of brands) {
-    const { data, error } = await supabaseAdmin
-      .from('chat_agent_runs')
-      .select('id, acting_user_id, trigger_kind, queued_at')
-      .eq('agent_id', row.id)
-      .eq('brand_id', brand.id)
-      .eq('status', 'queued')
-      .order('queued_at', { ascending: true });
-    if (error) throw new Error(`Could not read the agent's queue: ${error.message}`);
-    const waiting = (data ?? []) as QueuedRow[];
-    const repeat = waiting.find(
-      (r) =>
-        r.trigger_kind === 'manual' &&
-        r.acting_user_id === ctx.actor.userId &&
-        now.getTime() - Date.parse(r.queued_at) < RUN_NOW_REPEAT_MS,
+    // One click per person, agent and brand a minute (edge case 14): two at once claim one key.
+    const minute = String(Math.floor(now.getTime() / RUN_NOW_REPEAT_MS));
+    const outcome = await withIdempotencyKey<QueuedOutcome>(
+      {
+        organizationId: org,
+        key: idempotencyKey('agentRunNow', [row.id, brand.id, ctx.actor.userId, minute]),
+        requestHash: requestHash('agentRunNow', { agent: row.id, brand: brand.id }),
+      },
+      async () => ({ result: await queueRun(ctx, row, brand, now), activityId: null }),
     );
-    if (repeat) {
-      ours.push(repeat.id);
-      runs.push({ brand: brand.name, status: 'queued', repeated: true, coalesced: false });
-      continue;
-    }
-    if (waiting.length >= MAX_QUEUED_PER_BRAND) {
-      ours.push(waiting[waiting.length - 1].id);
-      runs.push({ brand: brand.name, status: 'queued', repeated: false, coalesced: true });
-      continue;
-    }
-    const { data: inserted, error: insertError } = await supabaseAdmin
-      .from('chat_agent_runs')
-      .insert({
-        organization_id: org,
-        agent_id: row.id,
-        agent_version: row.version,
-        brand_id: brand.id,
-        trigger_kind: 'manual',
-        acting_user_id: ctx.actor.userId,
+    if (outcome.kind === 'ran' || outcome.kind === 'repeat') {
+      claimed ||= outcome.kind === 'ran';
+      const { runId, kind } = outcome.result;
+      ours.push(runId);
+      runs.push({
+        brand: brand.name,
         status: 'queued',
-        max_share: row.max_run_share,
-        queued_at: now.toISOString(),
-      })
-      .select('id')
-      .single();
-    if (insertError || !inserted) {
-      throw new Error(`Could not queue the agent's run: ${insertError?.message}`);
+        repeated: outcome.kind === 'repeat' || kind === 'repeated',
+        coalesced: kind === 'coalesced',
+      });
+    } else {
+      // The first click is still queuing it: this one is that one.
+      runs.push({ brand: brand.name, status: 'queued', repeated: true, coalesced: false });
+      ours.push('');
     }
-    const runId = (inserted as { id: string }).id;
-    ours.push(runId);
-    runs.push({ brand: brand.name, status: 'queued', repeated: false, coalesced: false });
-    await logAgentChange(ctx, row, 'agentRunQueued', {
-      params: { brand: brand.name },
-      brandId: brand.id,
-      agentRunId: runId,
-    });
   }
+  if (claimed) await sweepExpiredKeys(org);
 
   await startQueuedAgentRuns(org, agentPlanLimits(ctx.plan).runsAtOnce, driver);
   // What the start made of them: running once a slot took them, else still queued.
-  if (ours.length > 0) {
+  if (ours.some(Boolean)) {
     const { data, error } = await supabaseAdmin
       .from('chat_agent_runs')
       .select('id, status')
-      .in('id', ours);
+      .in('id', ours.filter(Boolean));
     if (error) throw new Error(`Could not read the agent's runs: ${error.message}`);
     const status = new Map(
       ((data ?? []) as { id: string; status: string }[]).map((r) => [r.id, r.status]),
@@ -193,4 +174,77 @@ export async function runAgentNow(
     });
   }
   return { ok: true, value: { runs } };
+}
+
+/** What queuing a brand's run came to; kept as the click's result for its repeats. */
+type QueuedOutcome = { runId: string; kind: 'queued' | 'repeated' | 'coalesced' };
+
+/**
+ * Queues one brand's run, or finds the one this click is: the person's own
+ * within the minute (a click in the minute before), or the last of the 3
+ * waiting (§M item 58). A run that came in past the 3, beside another
+ * request's at the same moment, goes again and joins the last.
+ */
+async function queueRun(
+  ctx: AgentContext,
+  row: LoadedAgent['row'],
+  brand: { id: string; name: string },
+  now: Date,
+): Promise<QueuedOutcome> {
+  const waiting = await waitingRuns(row.id, brand.id);
+  const repeat = waiting.find(
+    (r) =>
+      r.trigger_kind === 'manual' &&
+      r.acting_user_id === ctx.actor.userId &&
+      now.getTime() - Date.parse(r.queued_at) < RUN_NOW_REPEAT_MS,
+  );
+  if (repeat) return { runId: repeat.id, kind: 'repeated' };
+  if (waiting.length >= MAX_QUEUED_PER_BRAND) {
+    return { runId: waiting[waiting.length - 1].id, kind: 'coalesced' };
+  }
+  const { data, error } = await supabaseAdmin
+    .from('chat_agent_runs')
+    .insert({
+      organization_id: ctx.actor.organizationId,
+      agent_id: row.id,
+      agent_version: row.version,
+      brand_id: brand.id,
+      trigger_kind: 'manual',
+      acting_user_id: ctx.actor.userId,
+      status: 'queued',
+      max_share: row.max_run_share,
+      queued_at: now.toISOString(),
+    })
+    .select('id')
+    .single();
+  if (error || !data) throw new Error(`Could not queue the agent's run: ${error?.message}`);
+  const runId = (data as { id: string }).id;
+
+  // Read again: others' clicks at the same moment may have queued too. Past the 3, this one goes.
+  const after = await waitingRuns(row.id, brand.id);
+  const place = after.findIndex((r) => r.id === runId);
+  if (place >= MAX_QUEUED_PER_BRAND) {
+    await supabaseAdmin.from('chat_agent_runs').delete().eq('id', runId).eq('status', 'queued');
+    return { runId: after[MAX_QUEUED_PER_BRAND - 1].id, kind: 'coalesced' };
+  }
+  await logAgentChange(ctx, row, 'agentRunQueued', {
+    params: { brand: brand.name },
+    brandId: brand.id,
+    agentRunId: runId,
+  });
+  return { runId, kind: 'queued' };
+}
+
+/** An agent's waiting runs on a brand, in the order they start (fire order, then id). */
+async function waitingRuns(agentId: string, brandId: string): Promise<QueuedRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_agent_runs')
+    .select('id, acting_user_id, trigger_kind, queued_at')
+    .eq('agent_id', agentId)
+    .eq('brand_id', brandId)
+    .eq('status', 'queued')
+    .order('queued_at', { ascending: true })
+    .order('id', { ascending: true });
+  if (error) throw new Error(`Could not read the agent's queue: ${error.message}`);
+  return (data ?? []) as QueuedRow[];
 }

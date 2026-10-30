@@ -91,9 +91,25 @@ describe('POST /api/internal/chat/budget/*', () => {
     for (const path of ['reserve', 'charge', 'release']) {
       expect((await post(path, reserveBody(), 'nope')).status).toBe(401);
     }
+    // A secret of another length, or the right one without its Bearer, is refused too.
+    expect((await post('reserve', reserveBody(), 'shhh')).status).toBe(401);
+    const bare = await fetch(`${baseUrl}/reserve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'shh' },
+      body: JSON.stringify(reserveBody()),
+    });
+    expect(bare.status).toBe(401);
     vi.stubEnv('CRON_SECRET', '');
     expect((await post('reserve', reserveBody(), '')).status).toBe(401);
     expect(reserveChatStep).not.toHaveBeenCalled();
+  });
+
+  it('compares the secret in constant time', async () => {
+    const crypto = await import('node:crypto');
+    const spy = vi.spyOn(crypto.default, 'timingSafeEqual');
+    expect((await post('reserve', reserveBody(), 'shx')).status).toBe(401);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 
   it('holds a step and answers its row, a Chat step on Ansvisor’s key unless it says otherwise', async () => {
