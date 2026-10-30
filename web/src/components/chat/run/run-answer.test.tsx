@@ -156,9 +156,73 @@ describe('RunAnswer', () => {
     expect(container.textContent).toContain('mail, rel and proto');
   });
 
-  it('holds what follows while the run works, and says when it reconnects', async () => {
+  it('holds what follows while the run works, and says in its header when it reconnects', async () => {
     await render({ run: run({ steps }), footer: <p>Next moves</p>, reconnecting: true });
     expect(container.textContent).not.toContain('Next moves');
+    const header = container.querySelector('[data-action="answer.toggleSteps"]')!;
+    expect(header.textContent).toContain('Reconnecting…');
+    // Said once: the status line doesn't repeat the header.
+    expect(status()).not.toBe('Reconnecting…');
+
+    // No steps yet, so no header: the status line says it.
+    await render({ run: run({}), reconnecting: true });
     expect(status()).toBe('Reconnecting…');
+  });
+
+  it('says why a run failed with a red ×, and Retry sends its question again (W1-15)', async () => {
+    const onRetry = vi.fn();
+    const reason = "Chat couldn't check your AI usage just now, so it didn't start this step.";
+    await render({
+      run: run({ status: 'error', text: 'So far: two pages.', errorReason: reason }),
+      onRetry,
+    });
+    const box = container.querySelector('[data-slot="run-error"]')!;
+    // No steps, so no header: the box names it.
+    expect(box.textContent).toContain('Stopped: something went wrong');
+    expect(box.textContent).toContain(reason);
+    expect(container.textContent).toContain('So far: two pages.');
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-action="run.retry"]')!.click(),
+    );
+    expect(onRetry).toHaveBeenCalledTimes(1);
+
+    // With steps, their header names it; the box gives the reason. No Retry without one.
+    await render({
+      run: run({
+        status: 'error',
+        steps: [
+          { n: 1, kind: 'read', label: 'Read Citations', status: 'error', detail: 'Timed out' },
+        ],
+        errorReason: reason,
+      }),
+    });
+    const failed = container.querySelector('[data-slot="run-error"]')!;
+    expect(failed.textContent).toBe(reason);
+    expect(failed.querySelector('[data-action="run.retry"]')).toBeNull();
+    expect(container.querySelector('[data-action="answer.toggleSteps"]')!.textContent).toContain(
+      'Stopped: something went wrong',
+    );
+  });
+
+  it('says "Stopped after 41s · 5 steps" after a Stop, its stopped step skipped, its text kept', async () => {
+    await render({
+      run: run({
+        status: 'stopped',
+        text: 'So far: two pages.',
+        steps: [
+          ...steps,
+          { n: 5, kind: 'read', label: 'Read Mentions', status: 'skipped', detail: 'Stopped' },
+        ],
+        summary: { workingMs: 41_000, stepCount: 5, sources: [] },
+      }),
+    });
+    const header = container.querySelector('[data-action="answer.toggleSteps"]')!;
+    expect(header.textContent).toContain('Stopped after 41s');
+    expect(header.textContent).toContain('5 steps');
+    await act(async () => (header as HTMLButtonElement).click());
+    const stopped = container.querySelector('[data-state="skipped"]')!;
+    expect(stopped.textContent).toBe('5Read MentionsStopped');
+    expect(container.textContent).toContain('So far: two pages.');
+    expect(container.querySelector('[data-slot="run-error"]')).toBeNull();
   });
 });

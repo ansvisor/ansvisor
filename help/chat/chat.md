@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-30
@@ -51,7 +51,7 @@ The panel isn't on Chat's own pages, where **Ctrl J** takes you to the message b
 
 ## Stop or steer
 
-While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay.
+While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay, and so does the answer so far. The step it was on shows **Stopped**, and the line with the steps says how long it worked, such as **Stopped after 41s · 5 steps**.
 
 You can type while it works. Enter then stops the run and sends what you typed as the next message, so you can redirect it, for example "only blog pages".
 
@@ -105,11 +105,19 @@ While Chat works, one line says what it is doing now, such as "Reading Citations
 
 Under the answer, **Data used** names each source it read, with its rows, and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
 
+## When something goes wrong
+
+A step that fails shows a red mark and why, such as **Timed out**. Chat goes on where it can, and the answer says what it couldn't read.
+
+If the whole answer stops on an error, it says **Stopped: something went wrong** and why, and it still says so after you reload the page. Click **Retry** to send your message again.
+
+If your connection drops while Chat works, the line with the steps says **Reconnecting…**. Chat keeps working meanwhile and picks up where it was; reloading the page shows where it is too. When the monthly AI usage runs out mid-answer, the step it was on shows **Stopped at the AI limit**.
+
 ## AI usage
 
 Chat draws on your workspace's monthly AI usage, shared by every seat. The meter under the box shows how much is used; click it for what used it and when it resets. From 80% it turns amber, and a line above the box says so once a month, on whichever device you are on; **×** closes it.
 
-Once the usage is used up, Chat pauses: the box is off, and a red line above it says until when. Admins can get more AI usage or use their own key from there; others are asked to ask an Admin. In the free trial, starting the plan gives its full monthly AI usage. Chat on your workspace's own AI key keeps working.
+Once the usage is used up, Chat pauses: the box is off, and a red line above it says until when. **Get more AI credits** there opens a window with your plan and the credit packs, and it opens once by itself the first time Chat stops. Admins buy packs; everyone else sees them and can **Ask your Admin**. On Enterprise, admins can also use their own AI key. In the free trial, starting the plan gives its full monthly AI usage.
 
 ## Inbox
 
@@ -159,7 +167,7 @@ Every role can copy, download and save answers it can open.
 
 ## What Chat makes
 
-When Chat makes something for you, such as a page saved as a Content draft, it shows under the answer as a card with its name and type. It is also kept in **Files** for your whole workspace, and the card says **In Files**. From the card, **Copy** copies it, **Download** gives it in the formats it has (for a page: HTML, Markdown, Word or PDF), and **Open in Content Editor** opens the page to keep working on it. When storage is full, the card says it wasn't saved to Files. Click **Files** in the chat menu to find, copy or download everything kept there.
+When Chat makes something for you, such as a page saved as a Content draft, it shows under the answer as a card with its name and type. It is also kept in **Files** for your whole workspace, and the card says **In Files**. From the card, **Copy** copies it, **Download** gives it in the formats it has (for a page: HTML, Markdown, Word or PDF), and **Open in Content Editor** opens the page to keep working on it. When storage is full, the card says it wasn't saved to Files, with **Get more storage** to add a storage pack. Click **Files** in the chat menu to find, copy or download everything kept there.
 
 The pen button under an answer, **Open in Content Editor**, turns the answer itself into a new Content draft in your brand and opens it.
 

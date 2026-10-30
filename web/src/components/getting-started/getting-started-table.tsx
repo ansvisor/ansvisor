@@ -31,10 +31,14 @@ import { ACTION_STATUS_BADGE } from '@/components/action-center/action-table';
 import { labelInitials, memberLabel } from '@/lib/action-center/display';
 import { formatRelative } from '@/lib/format-relative';
 import type { TeamMember } from '@/lib/actions/team';
-import type {
-  GettingStartedState,
-  GettingStartedStep,
-  GettingStartedStepKey,
+import type { FirstRun } from '@/hooks/use-first-run';
+import {
+  firstRunOrder,
+  needsFirstAnswers,
+  readyNow,
+  type GettingStartedState,
+  type GettingStartedStep,
+  type GettingStartedStepKey,
 } from '@/lib/getting-started/steps';
 import { cn } from '@/lib/utils';
 
@@ -70,10 +74,20 @@ export const STEP_STATUS_BADGE: Record<GettingStartedState, string> = {
 export const GETTING_STARTED_CHIP =
   'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400';
 const OPTIONAL_CHIP = ACTION_STATUS_BADGE.on_hold;
+const READY_NOW_CHIP = ACTION_STATUS_BADGE.in_progress;
 
 /** When a step's data is ready, as the Ready column says it. */
 export function readyWhenKey(step: GettingStartedStep) {
   return step.key === 'data_prompts' ? 'dataPrompts' : step.stage;
+}
+
+/**
+ * A step whose page the brand's first run is filling right now: its card
+ * says how far the run is, instead of opening a page that is still empty.
+ * The act steps wait for the suggestions that come after it, as before.
+ */
+export function arrivingStep(step: GettingStartedStep, firstRun: FirstRun | null): boolean {
+  return firstRun !== null && needsFirstAnswers(step) && step.state !== 'done';
 }
 
 export function StepStatusBadge({ state }: { state: GettingStartedState }) {
@@ -116,6 +130,7 @@ export function GettingStartedTable({
   onSelect,
   selectedKey,
   showNote,
+  firstRun,
 }: {
   steps: GettingStartedStep[];
   members: TeamMember[];
@@ -124,6 +139,11 @@ export function GettingStartedTable({
   selectedKey: string | null;
   /** Says where the AI actions will appear, while there are none yet. */
   showNote: boolean;
+  /**
+   * The brand's first tracking run while it goes on: the steps ready now
+   * come first, marked, and the ones it brings the data for say so.
+   */
+  firstRun: FirstRun | null;
 }) {
   const t = useTranslations('actionCenter.gettingStarted');
   const tPage = useTranslations('actionCenter.actionsPage');
@@ -143,9 +163,11 @@ export function GettingStartedTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {steps.map((step) => {
+          {(firstRun ? firstRunOrder(steps) : steps).map((step) => {
             const Icon = STEP_ICONS[step.key];
-            const waiting = step.state === 'waiting';
+            const arriving = arrivingStep(step, firstRun);
+            // A step waiting for the first run's data opens its card, which says how far it is.
+            const waiting = step.state === 'waiting' && !arriving;
             const done = step.state === 'done';
             return (
               <TableRow
@@ -176,7 +198,7 @@ export function GettingStartedTable({
                       <p
                         className={cn(
                           'truncate text-sm font-medium',
-                          (waiting || done) && 'text-muted-foreground',
+                          (step.state === 'waiting' || done) && 'text-muted-foreground',
                         )}
                       >
                         {t(`steps.${step.key}.title`)}
@@ -191,6 +213,11 @@ export function GettingStartedTable({
                         >
                           {t('category')}
                         </Badge>
+                        {firstRun && readyNow(step) && (
+                          <Badge variant="outline" className={cn('text-[10px]', READY_NOW_CHIP)}>
+                            {t('readyNow')}
+                          </Badge>
+                        )}
                         {step.optional && (
                           <Badge variant="outline" className={cn('text-[10px]', OPTIONAL_CHIP)}>
                             {t('optional')}
@@ -225,7 +252,7 @@ export function GettingStartedTable({
                   <WorkspaceAvatars members={members} />
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
-                  {t(`readyWhen.${readyWhenKey(step)}`)}
+                  {arriving ? t('readyWhen.arriving') : t(`readyWhen.${readyWhenKey(step)}`)}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {step.updatedAt ? formatRelative(step.updatedAt, tCommon) : '—'}

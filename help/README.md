@@ -39,3 +39,7 @@ sources: [docs/guides/prompts.mdx]
 - Only what the app does today. When a feature changes, its article changes in the same pull request ("Help article updated").
 
 `web/src/lib/help/validate.test.ts` checks every article against these rules.
+
+## How Chat reads them
+
+Chat matches a how-to question's words against the approved articles' `keywords`, `synonyms` and titles, and answers from their best two or three sections, with "From Help: {title}" and a link to the article's `route`. Questions with no good match go to the gap list. The web app can't read this folder, so the approved articles are copied into `web/src/lib/help/approved-articles.json`: after approving an article or changing an approved one, run `yarn test -u src/lib/help` in `web/` and commit the file. `web/src/lib/help/search.test.ts` fails while it is out of date.

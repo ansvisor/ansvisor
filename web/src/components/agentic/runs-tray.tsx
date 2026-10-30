@@ -193,7 +193,19 @@ export function RunsTrayView({
  * while it is open (less often while closed, not while the tab is hidden),
  * so a run's step and state keep up.
  */
-export function RunsTray({ brandId, className }: { brandId?: string | null; className?: string }) {
+export function RunsTray({
+  brandId,
+  readAgain,
+  className,
+}: {
+  brandId?: string | null;
+  /**
+   * A value that changes when a run starts or ends on the page (the Content
+   * Editor's own agent): the tray reads at once, not at its next poll.
+   */
+  readAgain?: string;
+  className?: string;
+}) {
   const [data, setData] = useState<TrayResponse | null>(null);
   const [load, setLoad] = useState<TrayLoad>('loading');
   const [failure, setFailure] = useState<ApiFailure | null>(null);
@@ -252,7 +264,7 @@ export function RunsTray({ brandId, className }: { brandId?: string | null; clas
       clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [read, open]);
+  }, [read, open, readAgain]);
 
   return (
     <RunsTrayView

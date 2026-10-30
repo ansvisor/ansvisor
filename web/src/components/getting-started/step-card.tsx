@@ -21,10 +21,13 @@ import type { TeamMember } from '@/lib/actions/team';
 import type { GettingStartedStep } from '@/lib/getting-started/steps';
 import { cn } from '@/lib/utils';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { FirstRunEmptyState } from '@/components/first-run/first-run-empty-state';
+import type { FirstRun } from '@/hooks/use-first-run';
 import {
   GETTING_STARTED_CHIP,
   StepStatusBadge,
   WorkspaceAvatars,
+  arrivingStep,
   readyWhenKey,
 } from './getting-started-table';
 
@@ -41,7 +44,9 @@ const SHOW_STEP_VIDEOS = false;
  * page: why the step matters, how to do it, and when it counts as done. Its
  * button opens the step's page in a new tab; an optional step can be skipped
  * after a last-chance question. Not modal: the list stays usable beside it
- * and makes room for it on wide screens.
+ * and makes room for it on wide screens. While the brand's first run brings
+ * a step's data, the card says how far it is instead of opening a page that
+ * is still empty.
  */
 export function GettingStartedStepCard({
   brandId,
@@ -51,6 +56,7 @@ export function GettingStartedStepCard({
   onClose,
   onChanged,
   onReady,
+  firstRun,
 }: {
   brandId: string;
   step: GettingStartedStep;
@@ -62,6 +68,8 @@ export function GettingStartedStepCard({
   onChanged: () => void;
   /** The last step's button: on to the actions. */
   onReady: () => void;
+  /** The brand's first tracking run while it goes on. */
+  firstRun: FirstRun | null;
 }) {
   const t = useTranslations('actionCenter.gettingStarted');
   const [opened, setOpened] = useState(false);
@@ -111,6 +119,9 @@ export function GettingStartedStepCard({
   const footer = () => {
     if (step.key === 'ready' && step.state !== 'waiting') {
       return <Button onClick={onReady}>{text('open')}</Button>;
+    }
+    if (firstRun && arrivingStep(step, firstRun)) {
+      return <FirstRunEmptyState run={firstRun} className="w-full" />;
     }
     if (step.state === 'done') {
       return (

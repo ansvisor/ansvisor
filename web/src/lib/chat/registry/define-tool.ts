@@ -82,7 +82,9 @@ export type ToolArea =
   | 'site_audit'
   | 'action_center'
   | 'content'
-  | 'reports';
+  | 'reports'
+  /** Opening a page of the app (CHAT-19 §2). */
+  | 'navigation';
 
 /**
  * What the plan decides about a call (CHAT-20 §7), null when nothing. The

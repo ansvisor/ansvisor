@@ -1,7 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { subscriptionActiveFor, subscriptionInactiveResponse } from '@/lib/mcp/subscription-gate';
+import {
+  mcpWriteAccess,
+  planRequiredResponse,
+  subscriptionInactiveResponse,
+} from '@/lib/mcp/subscription-gate';
 import type { UserRole } from '@/types';
 
 export const API_KEY_PREFIX = 'ans_';
@@ -38,8 +42,9 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * intentionally don't fall back to the dashboard's session cookie.
  *
  * On Ansvisor Cloud, a write (POST, PUT, PATCH, DELETE) for an organization
- * whose plan isn't active answers 402 subscription_inactive, so a new write
- * route is gated without asking. The MCP endpoint, where every call is a
+ * whose plan isn't active answers 402 subscription_inactive, and on a plan
+ * without MCP writes (Starter, a free trial) 402 plan_required, so a new
+ * write route is gated without asking. The MCP endpoint, where every call is a
  * POST, passes `gateWrites: false` and gates its tools instead.
  */
 export async function authenticateMcpRequest(
@@ -73,12 +78,10 @@ export async function authenticateMcpRequest(
     .maybeSingle();
 
   const organizationId = (profile?.organization_id as string | null | undefined) ?? null;
-  if (
-    gateWrites &&
-    WRITE_METHODS.has(req.method.toUpperCase()) &&
-    !(await subscriptionActiveFor(organizationId))
-  ) {
-    return subscriptionInactiveResponse();
+  if (gateWrites && WRITE_METHODS.has(req.method.toUpperCase())) {
+    const access = await mcpWriteAccess(organizationId);
+    if (access === 'inactive') return subscriptionInactiveResponse();
+    if (access === 'plan') return planRequiredResponse();
   }
 
   // Best-effort touch — failing here shouldn't block the request.
