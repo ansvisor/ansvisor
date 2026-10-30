@@ -4,8 +4,9 @@ import { useMemo, useState, type ReactElement } from 'react';
 import { useTranslations } from 'next-intl';
 import { Marked } from 'marked';
 import { toast } from 'sonner';
-import { Check, Copy, Download, FolderCheck, FolderPlus } from 'lucide-react';
+import { Check, Copy, Download, FolderCheck, FolderPlus, PenLine } from 'lucide-react';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useRouter } from '@/i18n/navigation';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { answerFormats, type AnswerExportFormat } from '@/lib/chat/export';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
+import { useBrandStore } from '@/stores/use-brand-store';
 
 const escapeHtml = (text: string) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -49,8 +51,9 @@ function Tip({ label, children }: { label: string; children: ReactElement }) {
  * where only text goes). Download offers Markdown, Word and PDF, and CSV
  * and Excel when the answer has a table; the server renders the file from
  * the stored answer, so nothing is kept and no AI is used. Save to Files
- * files it for the workspace, once: then it reads "In Files". Every role
- * may use all three.
+ * files it for the workspace, once: then it reads "In Files". Open in
+ * Content Editor makes a Content draft of it and opens it (item 6). Every
+ * role may use them all.
  */
 export function AnswerActions({
   runId,
@@ -66,7 +69,10 @@ export function AnswerActions({
 }) {
   const t = useTranslations('chatAnswer');
   const { openUpgrade } = useUpgradeGate();
+  const router = useRouter();
+  const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const [saving, setSaving] = useState(false);
+  const [opening, setOpening] = useState(false);
   const formats = useMemo(() => answerFormats(markdown), [markdown]);
   const extensions = formats.map((format) => `.${format}`).join(' ');
 
@@ -126,6 +132,25 @@ export function AnswerActions({
     }
   }
 
+  async function openInEditor() {
+    if (opening) return;
+    setOpening(true);
+    const res = await fetch(`/api/chat/runs/${runId}/content-draft`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId: activeBrandId }),
+    }).catch(() => null);
+    setOpening(false);
+    // A read-only workspace, or the demo brand: both ask for a plan.
+    if (res?.status === 402) {
+      openUpgrade();
+      return;
+    }
+    const body = (await res?.json().catch(() => null)) as { href?: string; code?: string } | null;
+    if (res?.ok && body?.href) router.push(body.href);
+    else toast.error(t(body?.code === 'no_brand' ? 'openEditorNoBrand' : 'openEditorFailed'));
+  }
+
   return (
     <div role="toolbar" aria-label={t('label')} className="flex items-center gap-0.5">
       <Tip label={t('copy')}>
@@ -179,6 +204,18 @@ export function AnswerActions({
           ) : (
             <FolderPlus className="size-4" aria-hidden />
           )}
+        </button>
+      </Tip>
+      <Tip label={t('openEditor')}>
+        <button
+          type="button"
+          data-action="answer.openInEditor"
+          aria-label={t('openEditor')}
+          aria-disabled={opening}
+          onClick={() => void openInEditor()}
+          className={ICON}
+        >
+          <PenLine className={cn('size-4', opening && 'animate-pulse')} aria-hidden />
         </button>
       </Tip>
     </div>

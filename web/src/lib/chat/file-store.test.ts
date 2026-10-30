@@ -16,10 +16,14 @@ vi.mock('@/lib/supabase/admin', async () => ({
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
 const access = vi.hoisted(() => ({ chat: null as Record<string, unknown> | null }));
 vi.mock('./conversations', () => ({ readChat: vi.fn(async () => access.chat) }));
+const DRAFT = 'dddddddd-0000-4000-8000-000000000001';
+const drafts = vi.hoisted(() => ({ createContentDraft: vi.fn() }));
+vi.mock('@/lib/actions/content-drafts', () => drafts);
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase & { storage: unknown };
 const store = await import('./file-store');
+const { readChatStorage } = await import('./file-output');
 
 const ACTOR = { userId: PEOPLE.admin, email: null, organizationId: ORG };
 const CHAT = 'cccccccc-0000-4000-8000-000000000001';
@@ -27,13 +31,16 @@ const RUN = 'aaaaaaaa-0000-4000-8000-000000000001';
 const ANSWER = 'aaaaaaaa-0000-4000-8000-0000000000a2';
 
 let uploads: { path: string; size: number }[];
+let stored: Record<string, string>;
 let uploadError: { message: string } | null;
 let errorLog: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   uploads = [];
+  stored = {};
   uploadError = null;
+  drafts.createContentDraft.mockReset().mockResolvedValue(DRAFT);
   errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   db.storage = {
     from: () => ({
@@ -42,6 +49,10 @@ beforeEach(() => {
         uploads.push({ path, size: body.byteLength });
         return { error: null };
       },
+      download: async (path: string) =>
+        path in stored
+          ? { data: new Blob([stored[path]]), error: null }
+          : { data: null, error: { message: 'missing' } },
     }),
   };
   access.chat = { id: CHAT, title: 'Citations drop', mine: true };
@@ -87,7 +98,7 @@ describe('readChatStorage', () => {
       { organization_id: ORG, bytes: 25 * GB, active_until: '2999-01-01T00:00:00.000Z' },
       { organization_id: ORG, bytes: 100 * GB, active_until: '2020-01-01T00:00:00.000Z' },
     ];
-    expect(await store.readChatStorage(ORG)).toEqual({
+    expect(await readChatStorage(ORG)).toEqual({
       usedBytes: GB,
       fileCount: 3,
       limitBytes: 50 * GB,
@@ -96,7 +107,7 @@ describe('readChatStorage', () => {
 
   it('keeps the free trial to 1 GB', async () => {
     db.tables.organizations[0].subscription_status = 'trialing';
-    expect((await store.readChatStorage(ORG)).limitBytes).toBe(GB);
+    expect((await readChatStorage(ORG)).limitBytes).toBe(GB);
   });
 });
 
@@ -173,5 +184,87 @@ describe('readChatExport', () => {
       '## You\n\nWhy did citations drop?\n\nTwo pages lost most of it.\n\n| Page | Lost |\n|---|---|\n| /a | 14 |',
     );
     expect(chat?.question).toBe('Citations drop');
+  });
+});
+
+describe('answerToDraft', () => {
+  it('makes the answer a Content draft in the chat’s brand, marked on its file', async () => {
+    await store.saveRunAnswer(ACTOR, RUN);
+    expect(await store.answerToDraft(ACTOR, RUN, null)).toEqual({ draftId: DRAFT });
+    const [brandId, start] = drafts.createContentDraft.mock.calls[0];
+    expect(brandId).toBe(BRAND);
+    expect(start).toMatchObject({
+      method: 'create',
+      title: 'Why did citations drop?',
+      source: { kind: 'content' },
+    });
+    expect(start.bodyHtml).toContain('<table>');
+    expect(db.tables.chat_files[0].content_draft_id).toBe(DRAFT);
+  });
+
+  it('keeps an answer’s images as their alt text and its raw HTML as text, as the answer shows them', async () => {
+    db.tables.chat_messages[1].content_md =
+      'See ![the chart](https://example.com/c.png?d=1) and [the page](https://example.com/p).\n\n<img src="https://example.com/x.png">\n';
+    await store.answerToDraft(ACTOR, RUN, null);
+    const html = drafts.createContentDraft.mock.calls[0][1].bodyHtml as string;
+    expect(html).not.toMatch(/<img/i);
+    expect(html).toContain('the chart');
+    expect(html).toContain('&lt;img src=');
+    expect(html).toContain('<a href="https://example.com/p">the page</a>');
+  });
+
+  it('takes the brand open for a chat about none, and asks for one without it', async () => {
+    db.tables.chat_conversations[0].brand_id = null;
+    const other = '33333333-3333-4333-8333-333333333333';
+    await store.answerToDraft(ACTOR, RUN, other);
+    expect(drafts.createContentDraft.mock.calls[0][0]).toBe(other);
+    expect(await store.answerToDraft(ACTOR, RUN, null)).toEqual({ failure: 'no_brand' });
+    access.chat = null;
+    expect(await store.answerToDraft(ACTOR, RUN, other)).toEqual({ failure: 'not_found' });
+  });
+});
+
+describe('readRunFile', () => {
+  it('reads the run’s n-th deliverable from Files, never an answer saved to it', async () => {
+    db.tables.chat_files = [
+      {
+        id: 'saved',
+        organization_id: ORG,
+        run_id: RUN,
+        message_id: ANSWER,
+        title: 'The answer',
+        mime_type: 'text/markdown',
+        formats: ['md'],
+        storage_path: 'saved.md',
+        generated_at: '2026-10-30T09:01:00.000Z',
+        data_as_of: null,
+        timezone: 'UTC',
+        created_at: '2026-10-30T09:01:00.000Z',
+      },
+      {
+        id: 'made',
+        organization_id: ORG,
+        run_id: RUN,
+        message_id: null,
+        title: 'Pricing FAQ',
+        mime_type: 'text/html',
+        formats: ['html', 'md'],
+        storage_path: 'page.html',
+        generated_at: '2026-10-30T09:01:00.000Z',
+        data_as_of: null,
+        timezone: 'UTC',
+        created_at: '2026-10-30T09:01:00.000Z',
+      },
+    ];
+    stored['page.html'] = '<h1>Pricing FAQ</h1>';
+    expect(await store.readRunFile(ACTOR, RUN, 1, null)).toMatchObject({
+      title: 'Pricing FAQ',
+      mimeType: 'text/html',
+      content: '<h1>Pricing FAQ</h1>',
+      stamp: 'Generated Oct 30, 2026 · 09:01 GMT+0',
+    });
+    expect(await store.readRunFile(ACTOR, RUN, 2, null)).toBeNull();
+    access.chat = null;
+    expect(await store.readRunFile(ACTOR, RUN, 1, null)).toBeNull();
   });
 });

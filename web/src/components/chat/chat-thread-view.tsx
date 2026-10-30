@@ -30,6 +30,7 @@ import {
   type ComposerVariant,
 } from './composer/chat-composer';
 import { AnswerActions } from './run/answer-actions';
+import { DeliverableCard, filedNumbers } from './run/deliverable-card';
 import { RunAnswer } from './run/run-answer';
 import { ChatUsageNotice, ComposerUsageMeter, chatAtCap } from './chat-usage';
 
@@ -68,6 +69,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
       turn.run = {
         ...emptyRun(message.run.status as ClientRunStatus),
         steps: message.run.steps,
+        deliverables: message.run.deliverables ?? [],
         text: message.text,
         generatedAt: message.generatedAt,
         dataAsOf: message.dataAsOf,
@@ -419,6 +421,7 @@ function Answer({
   const run = turn.run ?? { ...emptyRun('done'), text: turn.text };
   const workingMs = run.summary?.workingMs ?? (turn.startedAt ? now - turn.startedAt : 0);
   const confirmStep = run.confirm ? run.steps.find((s) => s.n === run.confirm!.n) : undefined;
+  const filedAt = filedNumbers(run.deliverables);
 
   const cards = (
     <>
@@ -454,6 +457,16 @@ function Answer({
           onSkip={() => void onSkip()}
         />
       )}
+      {turn.runId &&
+        run.deliverables.map((deliverable, i) => (
+          <DeliverableCard
+            key={`${deliverable.title}-${i}`}
+            runId={turn.runId!}
+            // Its place among the filed ones, as the server counts them: one not filed has none.
+            n={filedAt[i] ?? 0}
+            deliverable={deliverable}
+          />
+        ))}
       {run.status === 'paused_cap' && (
         <p className="text-sm text-amber-700 dark:text-amber-400">{t('pausedCap')}</p>
       )}

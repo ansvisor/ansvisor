@@ -215,7 +215,7 @@ describe('ChatThreadView', () => {
     });
   });
 
-  it('puts Copy, Download and Save to Files under a finished answer, In Files once filed', async () => {
+  it('puts its actions under a finished answer, In Files once filed, and what it made as cards', async () => {
     const thread = {
       conversationId: CHAT,
       title: 'Citations',
@@ -229,7 +229,22 @@ describe('ChatThreadView', () => {
           generatedAt: '2026-10-30T09:14:00.000Z',
           dataAsOf: null,
           timezone: 'UTC',
-          run: { runId: RUN, status: 'done', steps: [], fileId: 'f1' },
+          run: {
+            runId: RUN,
+            status: 'done',
+            steps: [],
+            fileId: 'f1',
+            deliverables: [
+              {
+                title: 'Pricing FAQ',
+                type: 'document',
+                formats: ['html', 'md'],
+                status: 'draft',
+                href: '/dashboard/content/editor/d1',
+                filed: 'in_files',
+              },
+            ],
+          },
         },
       ],
     } as unknown as ChatThread;
@@ -237,7 +252,11 @@ describe('ChatThreadView', () => {
     const bar = container.querySelector('[role="toolbar"][aria-label="Answer actions"]')!;
     expect(
       [...bar.querySelectorAll('[aria-label]')].map((b) => b.getAttribute('aria-label')),
-    ).toEqual(['Copy', 'Download', 'In Files']);
+    ).toEqual(['Copy', 'Download', 'In Files', 'Open in Content Editor']);
+    // What the run made shows as its card, its page open in the editor.
+    const card = container.querySelector('[data-slot="deliverable-card"]')!;
+    expect(card.getAttribute('aria-label')).toBe('Pricing FAQ');
+    expect(card.querySelector('a')!.getAttribute('href')).toBe('/dashboard/content/editor/d1');
   });
 
   it('keeps the text when the run API refuses it', async () => {

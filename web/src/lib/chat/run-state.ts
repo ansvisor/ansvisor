@@ -1,4 +1,11 @@
-import type { ChatConfirm, ChatDenialCard, ChatEvent, ChatRunSummary, ChatStep } from './events';
+import type {
+  ChatConfirm,
+  ChatDeliverable,
+  ChatDenialCard,
+  ChatEvent,
+  ChatRunSummary,
+  ChatStep,
+} from './events';
 import { isChatEventType } from './events';
 
 /**
@@ -28,6 +35,8 @@ export interface ClientRun {
   confirm: ChatConfirm | null;
   /** Out-of-permission answers, in order. */
   denials: ChatDenialCard[];
+  /** What it made, in order (CHAT-06 item 1): the n-th is the run's file n. */
+  deliverables: ChatDeliverable[];
   summary: ChatRunSummary | null;
   generatedAt: string | null;
   dataAsOf: string | null;
@@ -44,6 +53,7 @@ export function emptyRun(status: ClientRunStatus = 'running'): ClientRun {
     text: '',
     confirm: null,
     denials: [],
+    deliverables: [],
     summary: null,
     generatedAt: null,
     dataAsOf: null,
@@ -83,6 +93,9 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
     case 'confirm.required':
       next.confirm = event.data;
       next.status = 'waiting';
+      return next;
+    case 'deliverable.created':
+      next.deliverables = [...run.deliverables, event.data];
       return next;
     case 'access.denied':
       next.denials = [...run.denials, event.data];

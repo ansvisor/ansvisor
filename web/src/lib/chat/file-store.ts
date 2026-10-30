@@ -1,59 +1,39 @@
-import { randomUUID } from 'node:crypto';
+import { Marked } from 'marked';
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
-import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
+import { createContentDraft } from '@/lib/actions/content-drafts';
+import { escapeHtml } from '@/lib/content/attachments';
+import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { readChat } from './conversations';
 import type { ChatActor } from './engine';
 import { answerFormats, answerTitle, type ExportAnswer } from './export';
-import { CHAT_FILES_BUCKET, storageFits, storageLimitBytes, type ChatStorage } from './files';
-import { planFactsFromOrgRow, type OrgPlanRow } from './plan-facts';
+import type { StoredChatFile } from './file-export';
+import { fileChatOutput } from './file-output';
+import { CHAT_FILES_BUCKET } from './files';
 import { fileStamp } from './stamp';
 
 /**
- * Files on the server (CHAT-06 items 26–37): a workspace's storage as its
- * plan and packs allow, an answer read for its downloads, and Save to
- * Files. The rows and the bucket are the server's to write (00411); the
+ * Answers and chats as files, on the server (CHAT-06 items 30–37): an
+ * answer read for its downloads, Save to Files, and Export chat. Filing
+ * itself, and the storage it counts against, is file-output's. The rows and the bucket are the server's to write (00411); the
  * person's access is read as them: a chat is theirs or shared with them.
  */
 
-const tStamp = createTranslator({ locale: 'en', messages, namespace: 'agentic.resultCard' });
+/**
+ * The answer's Markdown as a page; the draft's own sanitizing keeps only what a page may hold.
+ * As the answer shows them (run-answer): an image as its alt text, so the editor fetches no
+ * address the model wrote, and raw HTML as its text.
+ */
+const draftMarked = new Marked({
+  renderer: {
+    image: ({ text }) => escapeHtml(text),
+    html: ({ text }) => escapeHtml(text),
+  },
+});
 
-/** The workspace's Files: bytes and files kept, and its limit (plan + active storage packs). */
-export async function readChatStorage(organizationId: string): Promise<ChatStorage> {
-  const now = new Date().toISOString();
-  const [org, usage, grants] = await Promise.all([
-    supabaseAdmin
-      .from('organizations')
-      .select(ORG_PLAN_COLUMNS)
-      .eq('id', organizationId)
-      .maybeSingle(),
-    supabaseAdmin
-      .from('chat_storage_usage')
-      .select('bytes_used, file_count')
-      .eq('organization_id', organizationId)
-      .maybeSingle(),
-    supabaseAdmin
-      .from('storage_grants')
-      .select('bytes')
-      .eq('organization_id', organizationId)
-      .gt('active_until', now),
-  ]);
-  if (org.error) throw new Error(`Could not read the plan: ${org.error.message}`);
-  if (usage.error) throw new Error(`Could not read the storage used: ${usage.error.message}`);
-  if (grants.error) throw new Error(`Could not read the storage packs: ${grants.error.message}`);
-  const facts = planFactsFromOrgRow((org.data ?? {}) as OrgPlanRow);
-  const granted = (grants.data ?? []).reduce((sum, row) => sum + Number(row.bytes ?? 0), 0);
-  return {
-    usedBytes: Number(usage.data?.bytes_used ?? 0),
-    fileCount: Number(usage.data?.file_count ?? 0),
-    limitBytes: storageLimitBytes(
-      { isTrial: facts.isTrial, maxStorageGb: facts.limits.maxStorageGb },
-      granted,
-    ),
-  };
-}
+const tStamp = createTranslator({ locale: 'en', messages, namespace: 'agentic.resultCard' });
 
 /** A run's answer, as its downloads and Save to Files read it. */
 export interface RunAnswerRead {
@@ -149,78 +129,6 @@ export type SaveFileResult =
   | { ok: true; file: { id: string; title: string }; already: boolean }
   | { ok: false; failure: SaveFileFailure };
 
-/** Something Chat made, to file for the workspace (CHAT-06 item 9). */
-export interface ChatOutput {
-  organizationId: string;
-  createdBy: string | null;
-  brandId: string | null;
-  title: string;
-  type: 'document' | 'table' | 'code' | 'image' | 'report';
-  /** The formats it downloads in, its main one first. */
-  formats: string[];
-  /** The canonical content (CHAT-06 data notes: Markdown for a document) and its type. */
-  body: Uint8Array;
-  mimeType: string;
-  /** Its object's name under {organization}/{file}/. */
-  fileName: string;
-  origin: 'task' | 'chat' | 'schedule' | 'editor';
-  conversationId: string | null;
-  messageId: string | null;
-  runId: string | null;
-  generatedAt: string;
-  dataAsOf: string | null;
-  timezone: string | null;
-}
-
-/**
- * Files something Chat made (CHAT-06 items 9, 26–29): its row, then its
- * content in chat-files. It counts toward storage (the row's trigger), and
- * a full workspace files nothing new. Save to Files files an answer with
- * it; a run's deliverables are filed with it as they are made. Answers as
- * a value; content that didn't go up leaves no row.
- */
-export async function fileChatOutput(
-  output: ChatOutput,
-): Promise<{ ok: true; id: string } | { ok: false; failure: 'storage_full' | 'failed' }> {
-  const storage = await readChatStorage(output.organizationId);
-  if (!storageFits(storage, output.body.byteLength)) return { ok: false, failure: 'storage_full' };
-
-  const id = randomUUID();
-  const path = `${output.organizationId}/${id}/${output.fileName}`;
-  const { error: rowError } = await supabaseAdmin.from('chat_files').insert({
-    id,
-    organization_id: output.organizationId,
-    brand_id: output.brandId,
-    created_by: output.createdBy,
-    title: output.title.slice(0, 200),
-    type: output.type,
-    formats: output.formats,
-    mime_type: output.mimeType,
-    storage_path: path,
-    size_bytes: output.body.byteLength,
-    origin: output.origin,
-    conversation_id: output.conversationId,
-    message_id: output.messageId,
-    run_id: output.runId,
-    generated_at: output.generatedAt,
-    data_as_of: output.dataAsOf,
-    timezone: output.timezone,
-  });
-  if (rowError) {
-    console.error('[chat-files] could not file it:', rowError.message);
-    return { ok: false, failure: 'failed' };
-  }
-  const { error: uploadError } = await supabaseAdmin.storage
-    .from(CHAT_FILES_BUCKET)
-    .upload(path, output.body, { contentType: output.mimeType, upsert: false });
-  if (uploadError) {
-    console.error('[chat-files] could not keep its content:', uploadError.message);
-    await supabaseAdmin.from('chat_files').delete().eq('id', id);
-    return { ok: false, failure: 'failed' };
-  }
-  return { ok: true, id };
-}
-
 /**
  * Save to Files (items 36–37): the answer filed as a document of the
  * workspace, origin Chat, its Markdown kept and its formats offered later.
@@ -309,4 +217,93 @@ export async function readChatExport(
     ),
     appOrigin,
   };
+}
+
+/**
+ * A run's n-th deliverable (CHAT-06 item 1), as its card downloads it: the
+ * file Chat filed as it made it, its content read from chat-files. Null
+ * when the person can't open the run's chat, or there is no such file.
+ */
+export async function readRunFile(
+  actor: ChatActor,
+  runId: string,
+  n: number,
+  appOrigin: string | null,
+): Promise<StoredChatFile | null> {
+  const { data: run, error } = await supabaseAdmin
+    .from('chat_runs')
+    .select('conversation_id')
+    .eq('id', runId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the run: ${error.message}`);
+  if (!run?.conversation_id) return null;
+  if (!(await readChat(await createClient(), actor, run.conversation_id))) return null;
+
+  const { data: files, error: filesError } = await supabaseAdmin
+    .from('chat_files')
+    .select('title, mime_type, formats, storage_path, generated_at, data_as_of, timezone')
+    .eq('organization_id', actor.organizationId)
+    .eq('run_id', runId)
+    .is('message_id', null)
+    .order('created_at', { ascending: true });
+  if (filesError) throw new Error(`Could not read Files: ${filesError.message}`);
+  const file = (files ?? [])[n - 1];
+  if (!file) return null;
+
+  const { data: blob, error: downloadError } = await supabaseAdmin.storage
+    .from(CHAT_FILES_BUCKET)
+    .download(file.storage_path);
+  if (downloadError || !blob) {
+    throw new Error(`Could not read the file: ${downloadError?.message ?? 'missing'}`);
+  }
+  return {
+    title: file.title,
+    mimeType: file.mime_type,
+    formats: file.formats,
+    generatedAt: file.generated_at,
+    timezone: file.timezone,
+    stamp: fileStamp(
+      (key, values) => tStamp(key, values),
+      file.generated_at,
+      file.data_as_of,
+      file.timezone,
+    ),
+    content: await blob.text(),
+    appOrigin,
+  };
+}
+
+/**
+ * Open in Content Editor on an answer (CHAT-06 item 6, CHAT-25): a new
+ * Content draft with the answer as its page, in the chat's brand (or the
+ * brand the person has open, for a chat about none), marked on the
+ * answer's file when it is in Files ("Used in Content draft"). The draft is
+ * made as the person (createContentDraft: their plan and the demo brand's
+ * rule). Null for an answer they can't open.
+ */
+export async function answerToDraft(
+  actor: ChatActor,
+  runId: string,
+  fallbackBrandId: string | null,
+): Promise<{ draftId: string } | { failure: 'not_found' | 'no_brand' }> {
+  const read = await readRunAnswer(actor, runId, null);
+  if (!read) return { failure: 'not_found' };
+  const brandId = read.brandId ?? fallbackBrandId;
+  if (!brandId) return { failure: 'no_brand' };
+  const html = draftMarked.parse(read.answer.markdown, { async: false }) as string;
+  const draftId = await createContentDraft(brandId, {
+    method: 'create',
+    title: answerTitle(read.answer).slice(0, MAX_TITLE_LENGTH),
+    pageType: 'blog_post',
+    typePicked: false,
+    source: { kind: 'content' },
+    bodyHtml: html.slice(0, MAX_BODY_HTML_LENGTH),
+  });
+  const { error } = await supabaseAdmin
+    .from('chat_files')
+    .update({ content_draft_id: draftId })
+    .eq('organization_id', actor.organizationId)
+    .eq('message_id', read.messageId);
+  if (error) console.error('[chat-files] could not mark the file as used:', error.message);
+  return { draftId };
 }

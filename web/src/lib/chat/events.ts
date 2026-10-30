@@ -172,6 +172,12 @@ export interface ChatDeliverable {
   status: 'draft' | 'attached' | 'done';
   /** Its card's Open (CHAT-06): the file, or the page's draft in the editor. */
   href?: ChatHref;
+  /**
+   * Whether it is in Files (CHAT-06 item 9): filed as it was made, or not,
+   * the workspace's storage being full (item 29) or filing failing. Its
+   * file is the run's n-th deliverable, never named by its id here.
+   */
+  filed?: 'in_files' | 'storage_full' | 'failed';
 }
 
 /** A next move: a chip that fills the composer (CHAT-07). In rank order. */

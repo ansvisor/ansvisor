@@ -57,6 +57,29 @@ describe('the run in the browser', () => {
     expect(approved).toMatchObject({ status: 'running', confirm: null });
   });
 
+  it('keeps what the run made, in order: each one its card (CHAT-06 item 1)', () => {
+    const made = {
+      title: 'Pricing FAQ',
+      type: 'document' as const,
+      formats: ['html', 'md'],
+      status: 'draft' as const,
+      href: '/dashboard/content/editor/x' as const,
+      filed: 'in_files' as const,
+    };
+    const run = applyChatEvent(
+      applyChatEvent(emptyRun(), chatEvent('deliverable.created', 1, made)),
+      chatEvent('deliverable.created', 2, {
+        ...made,
+        title: 'Pricing table',
+        filed: 'storage_full',
+      }),
+    );
+    expect(run.deliverables.map((d) => [d.title, d.filed])).toEqual([
+      ['Pricing FAQ', 'in_files'],
+      ['Pricing table', 'storage_full'],
+    ]);
+  });
+
   it('skips an event it already has, or a type it doesn’t know', () => {
     const run = runFromEvents(events);
     expect(applyChatEvent(run, events[2])).toBe(run);
