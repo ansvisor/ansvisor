@@ -10176,6 +10176,73 @@
       "chatMetered": "Chat uses this allowance too. Chat on your own AI key isn't counted.",
       "failed": "Couldn't read this period's AI usage. Try again later."
     },
+    "addOns": {
+      "title": "Add-ons",
+      "description": "Extra AI credits and storage for when your plan's limits run out.",
+      "credit": "AI credit: {amount} left · expires {date}",
+      "tabs": {
+        "label": "Pack type",
+        "ai": "AI credits",
+        "storage": "Storage"
+      },
+      "packsLabel": "{kind, select, storage {Storage packs} other {AI credit packs}}",
+      "mostPicked": "Most picked",
+      "addsShare": "+{percent}% of the monthly limit",
+      "addsLimits": "{count, plural, one {+# monthly limit} other {+# monthly limits}}",
+      "addsStorage": "+{gb} GB of storage",
+      "validMonths": "Valid {months} months",
+      "monthly": "Monthly",
+      "notOnSale": "Not on sale yet",
+      "monthlyLimitNote": "Monthly limit = your workspace's included AI usage, shared by every seat.",
+      "storageNote": "Storage packs renew with your plan each month until you remove them.",
+      "paidWith": "Paid with Stripe. Added to your plan right after payment and shown on your invoice.",
+      "continue": "Continue to payment",
+      "starting": "Opening…",
+      "askAdmin": "Only admins can buy packs. Ask an admin of your workspace.",
+      "trial": "Trials can't buy packs. Choose a plan to buy them.",
+      "noPlan": "Packs can be bought while your plan is active.",
+      "paidNote": "Payment received. Your credits show here as soon as Stripe confirms it.",
+      "storageAdded": "Added to your plan. The storage counts as soon as the payment goes through.",
+      "storageConfirm": {
+        "title": "Add {gb} GB to your plan?",
+        "description": "{price} a month, renewed with your plan. The rest of this period is charged now to the card on file.",
+        "confirm": "Add to plan",
+        "cancel": "Cancel"
+      },
+      "errors": {
+        "unavailable": "This pack can't be bought right now.",
+        "payment_failed": "The payment didn't go through.",
+        "admin_only": "Only admins can buy packs.",
+        "trial": "Trials can't buy packs. Choose a plan to buy them.",
+        "no_plan": "Packs can be bought while your plan is active.",
+        "chat_off": "Packs aren't available right now.",
+        "failed": "Couldn't start the purchase. Try again."
+      },
+      "readFailed": "Couldn't read your add-ons. Try again later.",
+      "history": {
+        "title": "Purchases",
+        "date": "Date",
+        "pack": "Pack",
+        "price": "Price",
+        "status": "Status",
+        "left": "Left",
+        "invoice": "Invoice",
+        "download": "Download invoice",
+        "none": "No packs bought yet.",
+        "packAi": "AI credits · {price}",
+        "packStorage": "Storage · +{gb} GB",
+        "creditLeft": "{amount} left",
+        "until": "Until {date}",
+        "states": {
+          "processing": "Processing",
+          "active": "Active",
+          "used_up": "Used up",
+          "expired": "Expired",
+          "ended": "Ended",
+          "refunded": "Refunded"
+        }
+      }
+    },
     "cancelsOn": "Subscription ends on {date}",
     "changePlan": "Change Plan",
     "upgradeTo": "Upgrade to {plan}",

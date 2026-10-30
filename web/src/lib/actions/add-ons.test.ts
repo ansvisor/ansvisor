@@ -36,7 +36,7 @@ vi.mock('@/lib/stripe', () => ({
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { startAddOnPurchase } = await import('./add-ons');
+const { getBillingAddOns, startAddOnPurchase } = await import('./add-ons');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 
@@ -259,5 +259,125 @@ describe('is refused', () => {
     db.failures = { add_on_purchases: { message: 'down' } };
     await expect(startAddOnPurchase('ai_50')).resolves.toEqual({ ok: false, failure: 'failed' });
     expect(stripeApi.createSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('Billing’s Add-ons', () => {
+  const NOW = new Date('2026-10-30T12:00:00Z');
+  const purchase = (id: string, product_id: string, status: string, over = {}) => ({
+    id,
+    organization_id: ORG,
+    product_id,
+    status,
+    created_at: '2026-10-01T10:00:00.000Z',
+    amount_paid_cents: status === 'pending' ? null : 5000,
+    currency: 'usd',
+    stripe_invoice_id: status === 'pending' ? null : `in_${id}`,
+    ...over,
+  });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    db.tables.organizations[0] = {
+      ...db.tables.organizations[0],
+      plan: 'growth',
+      plan_overrides: null,
+    };
+    db.tables.add_on_products = [
+      pack('ai_10', 'ai', 'price_ai10', { price_cents: 1000, grant_ai_usd: 5, sort: 1 }),
+      pack('ai_50', 'ai', 'price_ai50', { highlight: true, sort: 2 }),
+      pack('ai_250', 'ai', null, { price_cents: 25000, grant_ai_usd: 125, sort: 3 }),
+      pack('storage_25', 'storage', 'price_st25', { highlight: true }),
+      pack('storage_100', 'storage', 'price_st100', { active: false }),
+    ];
+    db.tables.add_on_purchases = [
+      purchase('p1', 'ai_50', 'paid'),
+      purchase('p2', 'storage_25', 'paid', { amount_paid_cents: 350 }),
+      // A Checkout just opened, and one left a week ago: only the first is listed.
+      purchase('p3', 'ai_10', 'pending', { created_at: '2026-10-30T11:50:00.000Z' }),
+      purchase('p4', 'ai_10', 'pending', { created_at: '2026-10-23T11:50:00.000Z' }),
+    ];
+    db.tables.ai_credit_grants = [
+      {
+        organization_id: ORG,
+        purchase_id: 'p1',
+        usd_total: 25,
+        usd_used: 0.9,
+        expires_at: '2027-10-01T10:00:00.000Z',
+      },
+    ];
+    db.tables.storage_grants = [
+      { organization_id: ORG, purchase_id: 'p2', active_until: '2026-11-20T09:00:00.000Z' },
+    ];
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows the packs with what each adds to this plan, the credit left, and the purchases', async () => {
+    const read = await getBillingAddOns();
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    const { addOns } = read;
+    expect(addOns).toMatchObject({ isAdmin: true, buy: 'open' });
+    // Active packs, AI first; Growth's $25 monthly limit; no Stripe price, not on sale.
+    expect(addOns.packs.map((p) => [p.id, p.adds, p.mostPicked, p.available])).toEqual([
+      ['ai_10', { kind: 'share', percent: 20 }, false, true],
+      ['ai_50', { kind: 'limits', count: 1 }, true, true],
+      ['ai_250', { kind: 'limits', count: 5 }, false, false],
+      ['storage_25', { kind: 'storage', gb: 25 }, true, true],
+    ]);
+    // $24.10 of model cost left on a $50 pack: $48.20 at its price.
+    expect(addOns.credit).toEqual({ leftCents: 4820, expiresAt: '2027-10-01T10:00:00.000Z' });
+    // Newest first.
+    expect(addOns.purchases).toEqual([
+      expect.objectContaining({ id: 'p3', state: 'processing', hasInvoice: false }),
+      expect.objectContaining({
+        id: 'p1',
+        kind: 'ai',
+        state: 'active',
+        creditLeftCents: 4820,
+        hasInvoice: true,
+      }),
+      expect.objectContaining({
+        id: 'p2',
+        kind: 'storage',
+        state: 'active',
+        gb: 25,
+        paidCents: 350,
+        until: '2026-11-20T09:00:00.000Z',
+      }),
+    ]);
+    // Nothing a browser gets carries the model cost.
+    expect(JSON.stringify(addOns)).not.toMatch(/usd_|grant_ai|24\.1/);
+  });
+
+  it('shows others the packs and the credit, never the purchases', async () => {
+    auth.user = { id: 'u_manager', email: 'm@example.com' };
+    const read = await getBillingAddOns();
+    expect(read).toMatchObject({ ok: true, addOns: { isAdmin: false, purchases: null } });
+    if (read.ok) expect(read.addOns.credit?.leftCents).toBe(4820);
+  });
+
+  it('says when the workspace can’t buy: the trial, a plan not active', async () => {
+    db.tables.organizations[0].subscription_status = 'trialing';
+    expect(await getBillingAddOns()).toMatchObject({ ok: true, addOns: { buy: 'trial' } });
+    db.tables.organizations[0].subscription_status = 'canceled';
+    expect(await getBillingAddOns()).toMatchObject({ ok: true, addOns: { buy: 'no_plan' } });
+  });
+
+  it('is off while Chat is off, and off the cloud', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await getBillingAddOns()).toEqual({ ok: false, failure: 'off' });
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    expect(await getBillingAddOns()).toEqual({ ok: false, failure: 'off' });
+  });
+
+  it('never throws when the database fails', async () => {
+    db.failures = { ai_credit_grants: { message: 'down' } };
+    expect(await getBillingAddOns()).toEqual({ ok: false, failure: 'failed' });
   });
 });
