@@ -101,4 +101,4 @@ function MarkdownComponent({
 const Markdown = memo(MarkdownComponent);
 Markdown.displayName = 'Markdown';
 
-export { Markdown };
+export { Markdown, INITIAL_COMPONENTS as MARKDOWN_COMPONENTS };

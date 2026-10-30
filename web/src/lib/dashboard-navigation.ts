@@ -10,6 +10,7 @@ export const dashboardNavLabelKeys: Record<string, string> = {
   Chat: 'chat',
   'Action Center': 'actionCenter',
   'Answer Engine Insights': 'insights',
+  Competitors: 'competitors',
   'AI Referral Traffic': 'traffic',
   Prompts: 'prompts',
   'Tracked Prompts': 'trackedPrompts',
@@ -91,6 +92,18 @@ export function shouldShowDashboardNavItem(
 
 /** Chat's menu item: its route stays /dashboard/agent. */
 export const CHAT_HREF = '/dashboard/agent';
+
+/** Chat's address with the new Chat on for the workspace (CHAT_AGENTIC, CHAT-01 item 1). */
+export const CHAT_AGENTIC_HREF = '/dashboard/chat';
+
+/**
+ * Where a menu item links. With the new Chat on, Chat opens /dashboard/chat
+ * (its old address would only redirect there) and is the current page on
+ * every Chat route; the item keeps CHAT_HREF for its badge and menu section.
+ */
+export function navItemHref(item: Pick<NavItem, 'href'>, chatAgentic: boolean): string {
+  return chatAgentic && item.href === CHAT_HREF ? CHAT_AGENTIC_HREF : item.href;
+}
 
 /**
  * The badge beside a menu item. Chat has its own: while the demo brand is

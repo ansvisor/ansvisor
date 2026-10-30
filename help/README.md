@@ -4,7 +4,7 @@ The product knowledge base Chat answers how-to questions from (CHAT-19 §4): one
 
 ## Where
 
-`help/{area}/{slug}.md`, one folder per area: `getting-started`, `visibility`, `prompts`, `mentions`, `citations`, `competitors`, `content`, `site-audit`, `action-center`, `ai-traffic`, `reports`, `settings`. The slug is the file name, in kebab-case.
+`help/{area}/{slug}.md`, one folder per area: `getting-started`, `visibility`, `prompts`, `mentions`, `citations`, `competitors`, `content`, `site-audit`, `action-center`, `ai-traffic`, `reports`, `settings`, `chat`. The slug is the file name, in kebab-case.
 
 ## Front matter
 
