@@ -363,6 +363,29 @@ describe('ChatThreadView', () => {
             headers: { 'x-chat-conversation': CHAT, 'x-chat-run': RUN },
           });
         }
+        if (url.startsWith(`/api/chat/runs/${RUN}/events`)) {
+          // After a Stop: the question's step skipped, and the run stopped.
+          return new Response(
+            stream([
+              chatEvent('step.finished', 3, {
+                step: {
+                  n: 1,
+                  kind: 'ask',
+                  status: 'skipped',
+                  label: 'Question skipped',
+                  detail: 'Stopped',
+                },
+              }),
+              chatEvent('run.stopped', 4, {
+                workingMs: 4000,
+                stepCount: 1,
+                sources: [],
+                reason: 'person',
+              }),
+            ]),
+            { status: 200 },
+          );
+        }
         if (url.startsWith(`/api/chat/runs/${RUN}/answer`)) {
           const body = JSON.parse(String(init!.body)) as { selected: number[]; other?: string };
           return new Response(
@@ -387,10 +410,15 @@ describe('ChatThreadView', () => {
       expect(card.querySelector('h3')!.textContent).toBe('Which page should the FAQ go on?');
       // The stream settled on the card: no reconnect.
       expect(calls.filter((c) => c.url.includes('/events'))).toHaveLength(0);
-      // The composer offers the Recommended option as its ghost, with Send, not Stop.
+      // The composer offers the Recommended option as its ghost, with Send, Stop beside it,
+      // and an answer's length; no files or @ data go with an answer.
       expect(
         container.querySelector('[data-action="composer.acceptGhost"]')!.textContent,
       ).toContain('/pricing');
+      expect(container.querySelector('[data-action="composer.send"]')).not.toBeNull();
+      expect(container.querySelector('[data-action="composer.stop"]')).not.toBeNull();
+      expect(box().maxLength).toBe(500);
+      expect(container.textContent).toContain("Your message answers Chat's question");
       await act(async () => {
         container.querySelectorAll<HTMLElement>('[data-action="question.pick"]')[1].click();
       });
@@ -441,6 +469,21 @@ describe('ChatThreadView', () => {
         other: null,
         via: 'composer',
       });
+    });
+
+    it('stops the run from the composer while it asks: the question is left skipped', async () => {
+      await render();
+      await type('Write a pricing FAQ');
+      await enter();
+      await act(async () => {
+        box().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      });
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      expect(calls.map((c) => c.url)).toContain(`/api/chat/runs/${RUN}/stop`);
+      expect(container.querySelector('[data-slot="question-card"]')).toBeNull();
+      expect(calls.some((c) => c.url.includes('/answer'))).toBe(false);
+      // Stopped: Send again, no Stop.
+      expect(container.querySelector('[data-action="composer.stop"]')).toBeNull();
     });
 
     it('takes the composer’s message as the answer, without a new run or a Stop', async () => {

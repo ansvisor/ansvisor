@@ -101,6 +101,12 @@ describe('composerAnswer', () => {
       other: null,
       skipped: false,
     });
+    // Case, spacing, accents and Turkish dotted and dotless i aside.
+    const turkish = {
+      options: [{ label: 'İletişim  Sayfası', recommended: true }, { label: 'x' }],
+    };
+    expect(composerAnswer(turkish, 'iletişim sayfasi').selected).toEqual([0]);
+    expect(composerAnswer(turkish, 'ILETIŞIM SAYFASI').selected).toEqual([0]);
     expect(composerAnswer(ASK, 'The blog, under 60 words')).toEqual({
       selected: [],
       other: 'The blog, under 60 words',

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { Check, Loader2, MessageCircleQuestion } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { ANSWER_MAX } from '@/lib/chat/asks';
 import type { ChatAsk } from '@/lib/chat/events';
 import { cn } from '@/lib/utils';
 import { AgentCard, AgentCardBody, AgentCardFooter, AgentCardHeader, CardPill } from './agent-card';
@@ -21,13 +22,15 @@ export interface QuestionAnswerValue {
  * The question card (CHAT-07 §A): the question, with its place in a batch
  * ("1 of 2"), and 2–4 options, each with its key, label, detail and cost
  * multiplier, the Recommended one marked and picked to start with; an
- * Other… row with Add when the card offers it. One option, or several when
- * `multi`: each row then has a check box, and the footer says "Pick one or
- * more" (the mockup's words). Number keys pick a row (the Other row's focuses its field), Enter
- * is Next, keys do nothing while a field has focus; the card takes focus
- * when it appears, unless the person is typing. Skip goes on with the Recommended option; Next is off
- * with nothing picked; both go through the read-only gate. Built on the
- * approval card's parts (`#s-need`).
+ * Other… row with Add when the card offers it, whose text counts without
+ * Add. One option, or several when `multi`: each row then has a check box,
+ * and the footer says "Pick one or more" (the mockup's words). Number keys
+ * pick a row (the Other row's focuses its field); Enter on the card is Next,
+ * on a button that button's own; keys do nothing while a field has focus.
+ * The card takes focus when it appears, unless the person is typing. Skip
+ * goes on with the Recommended option; Next is off with nothing picked; both
+ * go through the read-only gate. Built on the approval card's parts
+ * (`#s-need`).
  */
 export function QuestionCard({
   ask,
@@ -54,7 +57,9 @@ export function QuestionCard({
   const [other, setOther] = useState<string | null>(null);
   const busy = status === 'saving';
   const rows = ask.options.length + (ask.allowOther ? 1 : 0);
-  const chosen = picked.length > 0 || !!other;
+  // Text in Other… counts once typed, Add or not: Next takes it.
+  const typed = other ?? (draft.trim() || null);
+  const chosen = picked.length > 0 || !!typed;
 
   // The card takes focus as it appears, for its keys (§A item 3), unless the
   // person is typing in a field: their text stays where it is.
@@ -84,7 +89,9 @@ export function QuestionCard({
   });
   const next = () => {
     if (!chosen || busy) return;
-    answer({ selected: picked, other, skipped: false });
+    // One pick only: text typed in Other… is the answer over the option picked.
+    const selected = typed && !ask.multi ? [] : picked;
+    answer({ selected, other: typed, skipped: false });
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
@@ -92,6 +99,8 @@ export function QuestionCard({
     // Keys belong to a field while it has focus.
     if (target.closest('input, textarea, [contenteditable="true"]')) return;
     if (event.key === 'Enter') {
+      // Enter on Skip, Add or an option is that button's own: only the card's is Next.
+      if (target !== event.currentTarget && target.closest('button, a')) return;
       event.preventDefault();
       next();
       return;
@@ -209,6 +218,7 @@ export function QuestionCard({
                 data-action="question.other"
                 aria-label={t('otherLabel')}
                 placeholder={t('other')}
+                maxLength={ANSWER_MAX}
                 value={draft}
                 disabled={busy}
                 onChange={(event) => setDraft(event.target.value)}

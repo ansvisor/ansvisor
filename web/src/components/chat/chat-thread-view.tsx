@@ -14,7 +14,7 @@ import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { searchChatReferences } from '@/lib/actions/chat-references';
-import { composerAnswer, recommendedLabel } from '@/lib/chat/asks';
+import { ANSWER_MAX, composerAnswer, recommendedLabel } from '@/lib/chat/asks';
 import { ghostOf } from '@/lib/chat/next-moves';
 import type { ChatEvent } from '@/lib/chat/events';
 import type { ChatMode } from '@/lib/chat/precedence';
@@ -333,7 +333,8 @@ export function ChatThreadView({
     if (via === 'card' && batch && batch.at < batch.of) {
       toast(t('questionNext', { at: batch.at + 1, of: batch.of }));
     }
-    await consume(turn.key, res.body, runId);
+    // The run goes on as it streams: the composer is free again at once.
+    void consume(turn.key, res.body, runId);
     return true;
   }
 
@@ -413,14 +414,17 @@ export function ChatThreadView({
           onModeChange={setMode}
           fullAutoOpen={fullAutoOpen}
           running={working && !asking}
+          answering={!!asking}
+          maxLength={asking ? ANSWER_MAX : undefined}
           ghost={asking ? recommendedLabel(asking) : ghostOf(nextMoves)}
           sharedReadOnly={!!thread && !thread.mine}
           disabled={atCap}
           placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : undefined}
           usage={<ComposerUsageMeter />}
-          chips={chips}
+          // An answer is its text only: no page chips, @ data or files go with it.
+          chips={asking ? undefined : chips}
           onRemoveChip={onRemoveChip}
-          references={pageReferences}
+          references={asking ? undefined : pageReferences}
           draft={draft}
           onSend={(message, sent) =>
             asking && last
@@ -433,14 +437,18 @@ export function ChatThreadView({
             return send(message, sent);
           }}
           searchReferences={
-            brandId
+            brandId && !asking
               ? (q) => searchChatReferences(brandId, q).then((r) => (r.ok ? r.references : []))
               : undefined
           }
-          uploader={{
-            upload: (file) => uploadChatFile(file, conversationId),
-            remove: dropChatUpload,
-          }}
+          uploader={
+            asking
+              ? undefined
+              : {
+                  upload: (file) => uploadChatFile(file, conversationId),
+                  remove: dropChatUpload,
+                }
+          }
         />
       </div>
     </div>
@@ -466,8 +474,11 @@ function Answer({
   onFiled: (fileId: string) => void;
 }) {
   const t = useTranslations('chatPage');
-  const [answering, setAnswering] = useState(false);
   const run = turn.run ?? { ...emptyRun('done'), text: turn.text };
+  // The question being answered: saving lasts until it goes (its answer
+  // streams in) or the answer failed.
+  const [answeringN, setAnsweringN] = useState<number | null>(null);
+  const answering = answeringN !== null && answeringN === run.question?.n;
   const workingMs = run.summary?.workingMs ?? (turn.startedAt ? now - turn.startedAt : 0);
   const confirmStep = run.confirm ? run.steps.find((s) => s.n === run.confirm!.n) : undefined;
   const filedAt = filedNumbers(run.deliverables);
@@ -504,9 +515,9 @@ function Answer({
           ask={run.question}
           status={answering ? 'saving' : 'pending'}
           onAnswer={async (value) => {
-            setAnswering(true);
-            await onAnswerQuestion(value);
-            setAnswering(false);
+            const n = run.question!.n;
+            setAnsweringN(n);
+            if (!(await onAnswerQuestion(value))) setAnsweringN(null);
           }}
         />
       )}
