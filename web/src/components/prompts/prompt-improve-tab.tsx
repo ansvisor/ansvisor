@@ -498,8 +498,11 @@ function QuotaNote({
         quota.exhausted ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground',
         className,
       )}
+      // The trial credit names no share (trial AI credit, 2026-10-29).
       title={
-        quota.percentLeft !== null ? t('percentLeft', { percent: quota.percentLeft }) : undefined
+        quota.percentLeft !== null && !quota.trial
+          ? t('percentLeft', { percent: quota.percentLeft })
+          : undefined
       }
     >
       {quota.exhausted ? t('usedUp') : t('left', { count: quota.generationsLeft ?? 0 })}

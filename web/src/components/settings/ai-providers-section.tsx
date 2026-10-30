@@ -8,8 +8,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CheckCircle2, Cloud, Loader2, Lock, Route, Sparkles, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Cloud,
+  Loader2,
+  Lock,
+  Route,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { AIProviderAvatar } from '@/components/ai-provider-avatar';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -33,6 +43,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+
+/**
+ * What own keys do for the workspace (lib/chat/key.ts ownKeyAccess): `open`
+ * with Chat off (today's Agent Chat, any plan); `plan` on Enterprise; `kept`
+ * for a key saved before Chat, until `until`; `locked` below Enterprise.
+ */
+type OwnKeyAccess = { state: 'open' | 'plan' | 'locked' } | { state: 'kept'; until: string | null };
 
 interface SavedProvider {
   provider: AiProvider;
@@ -71,12 +88,18 @@ function ProviderIcon({ provider }: { provider: AiProvider }) {
  * The plaintext is never returned from the server — `last4` is enough to
  * render the "…abcd" chip without a decrypt round-trip. On every change we
  * just refetch.
+ *
+ * With Chat on, own keys are Enterprise's (CHAT-16 items 19 and 28): below
+ * it the page says Chat runs on the plan's AI limit and offers only Remove;
+ * a key kept from before Chat can still be replaced or switched to until its
+ * date. The API refuses the rest too.
  */
 export function AiProvidersSection() {
   const t = useTranslations('settings');
   const tCommon = useTranslations('common');
   const { canAdmin } = useUserRole();
   const [saved, setSaved] = useState<SavedProvider[] | null>(null);
+  const [access, setAccess] = useState<OwnKeyAccess>({ state: 'open' });
   const [editing, setEditing] = useState<AiProvider | null>(null);
   const [switching, setSwitching] = useState<AiProvider | null>(null);
   // The key the remove dialog asks about; kept while the dialog fades out.
@@ -94,9 +117,14 @@ export function AiProvidersSection() {
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/settings/ai-providers');
-      const body = (await res.json()) as { providers?: SavedProvider[]; error?: string };
+      const body = (await res.json()) as {
+        providers?: SavedProvider[];
+        access?: OwnKeyAccess;
+        error?: string;
+      };
       if (!res.ok) throw new Error(body.error || 'Failed to load');
       setSaved(body.providers ?? []);
+      setAccess(body.access ?? { state: 'open' });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load');
       setSaved((current) => current ?? []);
@@ -145,6 +173,7 @@ export function AiProvidersSection() {
   };
 
   const byProvider = new Map((saved ?? []).map((row) => [row.provider, row]));
+  const locked = access.state === 'locked';
 
   return (
     <Card>
@@ -153,15 +182,46 @@ export function AiProvidersSection() {
           <Sparkles className="h-4 w-4" />
           {t('aiProviders')}
         </CardTitle>
-        <CardDescription>{t('agent_description')}</CardDescription>
+        <CardDescription>
+          {t(access.state === 'open' ? 'agent_description' : 'agent_descriptionMetered')}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {saved === null ? (
           <Skeleton className="h-64 w-full" />
         ) : (
           <>
-            {!saved.some((row) => row.active) && (
+            {/* Only today's Agent Chat stays locked without a key. */}
+            {access.state === 'open' && !saved.some((row) => row.active) && (
               <p className="text-sm text-muted-foreground">{t('agent_noKey')}</p>
+            )}
+            {access.state === 'kept' && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>
+                  {t('agent_kept', { date: formatDate(access.until) })}{' '}
+                  <Link
+                    href="/dashboard/settings/billing"
+                    className="font-medium underline underline-offset-4"
+                  >
+                    {t('agent_comparePlans')}
+                  </Link>
+                </p>
+              </div>
+            )}
+            {locked && (
+              <div className="flex items-start gap-3 rounded-md border bg-muted/40 p-3 text-sm">
+                <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <p>
+                  {t('agent_locked')}{' '}
+                  <Link
+                    href="/dashboard/settings/billing"
+                    className="font-medium underline underline-offset-4"
+                  >
+                    {t('agent_comparePlans')}
+                  </Link>
+                </p>
+              </div>
             )}
             <div className="divide-y rounded-lg border">
               {AI_PROVIDERS.map((provider) => {
@@ -176,7 +236,9 @@ export function AiProvidersSection() {
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-medium">{name(provider)}</p>
-                            {row?.active ? (
+                            {row && locked ? (
+                              <Badge variant="secondary">{t('agent_notUsed')}</Badge>
+                            ) : row?.active ? (
                               <Badge
                                 variant="outline"
                                 className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
@@ -210,7 +272,7 @@ export function AiProvidersSection() {
 
                       {canAdmin && editing !== provider && (
                         <div className="flex shrink-0 items-center gap-2 pl-13 @lg:pl-0">
-                          {row && !row.active && (
+                          {row && !row.active && !locked && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -225,15 +287,18 @@ export function AiProvidersSection() {
                               {t('agent_useForChat')}
                             </Button>
                           )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={guard(() => setEditing(provider), {
-                              action: tActions('saveAiKeys'),
-                            })}
-                          >
-                            {row ? t('agent_replace') : t('agent_addKey')}
-                          </Button>
+                          {/* A kept key is replaced, not joined by another provider's. */}
+                          {!locked && (row || access.state !== 'kept') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={guard(() => setEditing(provider), {
+                                action: tActions('saveAiKeys'),
+                              })}
+                            >
+                              {row ? t('agent_replace') : t('agent_addKey')}
+                            </Button>
+                          )}
                           {row && (
                             <Button
                               variant="ghost"

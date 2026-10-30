@@ -51,7 +51,7 @@ const firstAnswer = [
     signalKey: 'case-study-evidence',
     priority: 'medium',
     recommendation: 'Add one real customer result next to the plans.',
-    draft: "Join brands like TechFlow, which saw a 34% increase in 'Recommended' citations.",
+    draft: "Join brands like TechFlow. TechFlow saw a 34% increase in 'Recommended' citations.",
     code: null,
   },
   {
@@ -78,7 +78,7 @@ beforeEach(() => {
 });
 
 describe('generateRecommendations', () => {
-  it('replaces invented facts, rewrites the long item once and keeps the rest', async () => {
+  it('takes invented figures out, leaves the brand its own facts, rewrites the long item once and keeps the rest', async () => {
     modelReturns(firstAnswer, [
       {
         ref: '1',
@@ -97,8 +97,8 @@ describe('generateRecommendations', () => {
     expect(recs[0]).toMatchObject({
       label: expect.any(String),
       category: 'eeat',
-      draft:
-        "Join brands like [customer name], which saw a [real metric] increase in 'Recommended' citations.",
+      // The customer is the brand's to name; the figure no page has goes with its sentence.
+      draft: 'Join brands like [customer name].',
       code: null,
     });
     expect(recs[1]).toMatchObject({
@@ -118,7 +118,7 @@ describe('generateRecommendations', () => {
     expect(rewritePrompt).not.toContain('FAQPage", "mainEntity');
 
     expect(logger.info).toHaveBeenCalledWith(
-      expect.objectContaining({ auditId: 'a1', facts: 3, tooLong: 1, rewritten: 1, cuts: 0 }),
+      expect.objectContaining({ auditId: 'a1', facts: 5, tooLong: 1, rewritten: 1, cuts: 0 }),
       expect.any(String),
     );
   });
@@ -130,7 +130,10 @@ describe('generateRecommendations', () => {
     const { system, prompt } = generateObject.mock.calls[0][0];
     expect(system).toContain('Never invent customers');
     expect(system).toContain(`at most ${MAX_COPY_CHARS} characters`);
-    expect(system).toContain('[customer name], [real metric], [price], [date], [source URL]');
+    // A fact anyone could look up is never left to the person; the brand's own may be, three at most.
+    expect(system).toContain('is never a placeholder: write the sentence without it');
+    expect(system).toContain('[your customer name], [your price], [your result]. At most 3');
+    expect(system).not.toContain('[source URL]');
     expect(prompt).toContain('BRAND DATA');
     expect(prompt).toContain('- Name: Ansvisor');
     expect(prompt).toContain('- Description: AI visibility platform');

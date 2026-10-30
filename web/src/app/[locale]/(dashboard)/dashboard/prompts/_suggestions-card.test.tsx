@@ -28,6 +28,7 @@ vi.mock('sonner', () => ({ toast }));
 
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 // The viewer's role: an admin unless a test says otherwise.
@@ -66,7 +67,11 @@ const onAccepted = vi.fn();
 let isLocked = false;
 const openUpgrade = vi.fn();
 
-async function render(count: number, planId: 'starter' | 'growth' = 'starter') {
+async function render(
+  count: number,
+  planId: 'starter' | 'growth' = 'starter',
+  onAddTopic?: () => void,
+) {
   actions.getPromptSuggestions.mockResolvedValue({
     ok: true,
     suggestions: Array.from({ length: count }, (_, i) => suggestion(i + 1)),
@@ -81,6 +86,7 @@ async function render(count: number, planId: 'starter' | 'growth' = 'starter') {
           <SuggestionsCard
             brandId="b1"
             onAccepted={onAccepted}
+            onAddTopic={onAddTopic}
             sourceStates={null}
             planId={planId}
             limitActions={<button type="button">Upgrade plan</button>}
@@ -387,6 +393,138 @@ describe('SuggestionsCard on a read-only workspace (plan not active)', () => {
     await act(async () => button('Add to tracked prompts').click());
     expect(actions.acceptSuggestion).toHaveBeenCalledWith('s1');
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('SuggestionsCard on a brand without topics', () => {
+  const button = (name: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === name || b.getAttribute('aria-label') === name,
+    )!;
+  // The dialog renders in a portal, outside the card.
+  const askedForTopic = () => document.body.textContent?.includes('Add a topic first') ?? false;
+  const addTopicHref = () =>
+    [...document.body.querySelectorAll('a')]
+      .find((a) => a.textContent === 'Add a topic')
+      ?.getAttribute('href');
+  const noTopics = {
+    error: 'Add a topic first: prompts are grouped under topics.',
+    code: 'no_topics',
+  };
+
+  it('asks for a topic first when Generate Suggestions finds none, and opens Add Topic in place', async () => {
+    actions.refreshPromptSuggestions.mockResolvedValue({ ok: false, failure: 'no_topics' });
+    const onAddTopic = vi.fn();
+    await render(0, 'starter', onAddTopic);
+    await act(async () => button('Generate Suggestions').click());
+    expect(askedForTopic()).toBe(true);
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+    // On the Prompts page a button, not a link: the page switches to its Topics tab.
+    const addTopic = [...document.body.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Add a topic',
+    )!;
+    await act(async () => addTopic.click());
+    expect(onAddTopic).toHaveBeenCalledTimes(1);
+    expect(askedForTopic()).toBe(false);
+  });
+
+  it('links to the Topics tab when no page gives a way in', async () => {
+    actions.refreshPromptSuggestions.mockResolvedValue({ ok: false, failure: 'no_topics' });
+    await render(0);
+    await act(async () => button('Generate Suggestions').click());
+    expect(addTopicHref()).toBe('/dashboard/prompts/topics?new=1');
+  });
+
+  it('asks for a topic first when New finds none, and keeps the list', async () => {
+    actions.refreshPromptSuggestions.mockResolvedValue({ ok: false, failure: 'no_topics' });
+    await render(2);
+    await act(async () => button('New').click());
+    expect(askedForTopic()).toBe(true);
+    expect(rows()).toHaveLength(2);
+  });
+
+  it('asks for a topic first when adding a suggestion finds none, and keeps it listed', async () => {
+    actions.acceptSuggestion.mockResolvedValue(noTopics);
+    await render(2);
+    await act(async () => button('Add to tracked prompts').click());
+    expect(askedForTopic()).toBe(true);
+    expect(rows()).toHaveLength(2);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('asks for a topic first when Add All finds none', async () => {
+    actions.trackSuggestions.mockResolvedValue({ trackedIds: [], skippedIds: [], ...noTopics });
+    await render(3);
+    await clickAddAll();
+    expect(askedForTopic()).toBe(true);
+    expect(rows()).toHaveLength(3);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('generates as before once the brand has a topic', async () => {
+    actions.refreshPromptSuggestions.mockResolvedValue({ ok: true, suggestions: [suggestion(7)] });
+    await render(0);
+    await act(async () => button('Generate Suggestions').click());
+    expect(rows()).toHaveLength(1);
+    expect(askedForTopic()).toBe(false);
+    expect(toast.success).toHaveBeenCalledWith('Suggestions refreshed');
+  });
+});
+
+/**
+ * A failed generation says why in plain words (apiFailure), never the
+ * message production hides: a used-up allowance, a read-only workspace or
+ * the demo brand (the upgrade dialog), a role refusal or an outage.
+ */
+describe('SuggestionsCard — a failed generation', () => {
+  const generate = async () => {
+    await render(0);
+    const button = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Generate Suggestions',
+    )!;
+    await act(async () => button.click());
+  };
+
+  it("says this month's allowance is used up", async () => {
+    actions.refreshPromptSuggestions.mockResolvedValue({
+      ok: false,
+      failure: 'limit',
+      retryable: false,
+    });
+    await generate();
+    expect(toast.error).toHaveBeenCalledWith(
+      "You've used this month's allowance. Upgrade, or wait until it resets.",
+      expect.objectContaining({ action: expect.objectContaining({ label: 'Upgrade' }) }),
+    );
+  });
+
+  it('opens the upgrade dialog for a read-only workspace or the demo brand', async () => {
+    actions.refreshPromptSuggestions.mockResolvedValue({
+      ok: false,
+      failure: 'subscription',
+      retryable: false,
+    });
+    await generate();
+    expect(openUpgrade).toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('says something went wrong for a refusal or an outage, and when the request itself fails', async () => {
+    actions.refreshPromptSuggestions.mockResolvedValue({
+      ok: false,
+      failure: 'failed',
+      retryable: true,
+    });
+    await generate();
+    expect(toast.error).toHaveBeenLastCalledWith('Something went wrong. Try again.', {});
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    actions.refreshPromptSuggestions.mockRejectedValue(new Error('masked in production'));
+    await generate();
+    expect(toast.error).toHaveBeenLastCalledWith('Something went wrong. Try again.', {});
+    expect(toast.error).not.toHaveBeenCalledWith('masked in production');
   });
 });
 

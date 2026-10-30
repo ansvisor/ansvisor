@@ -19,7 +19,9 @@ vi.mock('@/lib/guards/plan-guard', () => ({
   getOrgPlan: async () => ({ limits: { maxBrands: 2 } }),
 }));
 const cloud = vi.hoisted(() => ({ on: false }));
-vi.mock('@/config/plans', () => ({
+// Partial, so modules the page reaches (e.g. the trial's Start my plan now) still get the rest.
+vi.mock('@/config/plans', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getPlan: () => ({ limits: { maxBrands: 2 } }),
   isCloud: () => cloud.on,
 }));
