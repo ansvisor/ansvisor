@@ -56,7 +56,12 @@ vi.mock('@/lib/actions/prompt', () => actions);
 vi.mock('@/lib/actions/brand', () => ({ getBrandById: async () => brand }));
 vi.mock('@/lib/actions/topic', () => ({ getTopics: async () => loaded.topics }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'brand-id' }) }));
-vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('@/i18n/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+  Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
+    <a href={href}>{children}</a>
+  ),
+}));
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     auth: { getSession: async () => ({ data: { session: loaded.session } }) },
@@ -222,5 +227,56 @@ describe('Manage prompts on a read-only workspace', () => {
     await act(async () => include().click());
     expect(actions.setPromptActive).toHaveBeenCalledWith('p1', false);
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A brand without topics: prompts are grouped under topics, so both cards say
+ * to add one first, with a way to the Topics tab, and Add Prompt asks for one
+ * instead of adding a prompt without a topic.
+ */
+describe('Manage prompts on a brand without topics', () => {
+  beforeEach(() => {
+    loaded.topics = [];
+    loaded.session = null;
+    actions.getPromptSets.mockResolvedValue([{ id: 'set-1', prompts: [] }]);
+  });
+
+  const addTopicLinks = () =>
+    [...document.body.querySelectorAll('a')].filter((a) => a.textContent === 'Add a topic');
+
+  it('says to add a topic first in Add Prompt and AI Generate', async () => {
+    await render(false);
+    expect(container.textContent).toContain('Add a topic first');
+    expect(container.textContent).not.toContain('Add topics in brand settings');
+    const links = addTopicLinks();
+    expect(links).toHaveLength(2);
+    // This brand's own topics: the active brand may be another one.
+    expect(links.map((a) => a.getAttribute('href'))).toEqual([
+      '/dashboard/brands/brand-id/topics#add-topic',
+      '/dashboard/brands/brand-id/topics#add-topic',
+    ]);
+  });
+
+  it('asks for a topic first when Add Prompt is pressed, and adds nothing', async () => {
+    await render(false);
+    const input = container.querySelector<HTMLInputElement>(
+      'input[placeholder="e.g. Best project management tools for startups"]',
+    )!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(input, 'Best espresso beans?');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => button('Add Prompt').click());
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain('Add a topic first');
+    expect(
+      [...(dialog?.querySelectorAll('a') ?? [])]
+        .find((a) => a.textContent === 'Add a topic')
+        ?.getAttribute('href'),
+    ).toBe('/dashboard/brands/brand-id/topics#add-topic');
+    expect(actions.addPromptToSet).not.toHaveBeenCalled();
+    expect(actions.savePromptSet).not.toHaveBeenCalled();
   });
 });

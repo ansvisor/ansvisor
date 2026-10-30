@@ -10,8 +10,11 @@
  *   → 429 ai_limit { trial }: the budget can't cover the step; it doesn't start.
  *   → 402 plan_limit: no active plan. 404 not_found: the run isn't the
  *     workspace's. 403 chat_off: Chat is off for the workspace.
- * POST /api/internal/chat/budget/charge  { orgId, usageId, model, usage }
- *   → 200: the row holds the step's real cost. 404 when it is gone.
+ * POST /api/internal/chat/budget/charge
+ *   { orgId, usageId, model, usage: { inputTokens, outputTokens, cacheReadTokens?,
+ *     cacheWriteTokens? }, latencyMs? }
+ *   → 200: the row holds the step's real cost, its prompt cache's reads and
+ *     writes priced at their own rates. 404 when it is gone.
  * POST /api/internal/chat/budget/release { orgId, usageId }
  *   → 200: the hold went (nothing was billed). Safe to repeat.
  * A step a Stop aborted calls neither: its hold stays as its cost.
@@ -62,7 +65,15 @@ const chargeSchema = z.strictObject({
   orgId: z.guid(),
   usageId: z.guid(),
   model,
-  usage: z.strictObject({ inputTokens: tokens.optional(), outputTokens: tokens.optional() }),
+  usage: z.strictObject({
+    inputTokens: tokens.optional(),
+    outputTokens: tokens.optional(),
+    // Of the input tokens, those read from and written to the prompt cache.
+    cacheReadTokens: tokens.optional(),
+    cacheWriteTokens: tokens.optional(),
+  }),
+  // How long the model call took, for staff; an hour at most.
+  latencyMs: z.number().int().min(0).max(3_600_000).optional(),
 });
 
 const releaseSchema = z.strictObject({ orgId: z.guid(), usageId: z.guid() });
@@ -121,7 +132,11 @@ router.post('/charge', async (req, res) => {
   const body = parse(chargeSchema, req, res);
   if (!body) return undefined;
   try {
-    await chargeChatStep(body.orgId, body.usageId, { modelId: body.model, usage: body.usage });
+    await chargeChatStep(body.orgId, body.usageId, {
+      modelId: body.model,
+      usage: body.usage,
+      latencyMs: body.latencyMs,
+    });
     return res.json({ success: true });
   } catch (err) {
     return fail(err, req, res, 'charge');

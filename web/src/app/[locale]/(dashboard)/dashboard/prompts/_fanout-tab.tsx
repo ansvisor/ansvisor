@@ -31,6 +31,8 @@ import {
 import { Check, ChevronRight, Plus, Loader2, Search } from 'lucide-react';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useTopicFirstDialog } from '@/components/prompts/topic-first';
+import { isNoTopics } from '@/lib/topics-required';
 import {
   FanoutEngineNotices,
   FanoutEngineStrip,
@@ -58,6 +60,8 @@ type QueryFanoutTabProps = {
   range: PromptRange | null;
   rangeLabel: string;
   onTracked?: () => void | Promise<void>;
+  /** "Add a topic" on a brand without one: the page's Topics tab, with Add Topic open. */
+  onAddTopic?: () => void;
 };
 
 /**
@@ -88,7 +92,13 @@ function userErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryFanoutTabProps) {
+export function QueryFanoutTab({
+  brandId,
+  range,
+  rangeLabel,
+  onTracked,
+  onAddTopic,
+}: QueryFanoutTabProps) {
   const [data, setData] = useState<QueryFanoutData | null>(null);
   const [loading, setLoading] = useState(true);
   const [addingKey, setAddingKey] = useState<string | null>(null);
@@ -102,6 +112,8 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
   // instead, and the intents (an AI call the API refuses then) aren't asked.
   const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  // A brand with no topic yet: Track asks for one first.
+  const topicFirst = useTopicFirstDialog({ onAddTopic });
 
   // Mirror of `intents` for the async classification chain (avoids stale
   // closures), plus a run counter so a reload/brand switch/unmount cancels
@@ -280,7 +292,8 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
     try {
       const result = await trackFanoutQuery(brandId, query);
       if ('error' in result) {
-        toast.error(result.error);
+        if (isNoTopics(result)) topicFirst.show();
+        else toast.error(result.error);
         return;
       }
       toast.success('Added as a tracked prompt');
@@ -405,6 +418,7 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
             recent ones are missing — counts and coverage here are a lower bound.
           </p>
         )}
+        {topicFirst.dialog}
       </CardContent>
     </Card>
   );

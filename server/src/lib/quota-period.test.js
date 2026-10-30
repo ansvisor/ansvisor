@@ -57,6 +57,17 @@ describe('anchoredPeriodStart', () => {
     expect(start.toISOString()).toBe('2026-10-21T09:00:00.000Z');
   });
 
+  it('a trial bought now: the window starts at the purchase, leaving the trial behind', () => {
+    // In the trial, ends_at is the trial's end and the window covers the
+    // whole trial. Bought on Oct 20 at 15:30, Stripe ends the trial and the
+    // first period runs to Nov 20: the window starts at the purchase, so the
+    // AI usage (and every monthly quota) of the trial no longer counts.
+    const trial = anchoredPeriodStart(iso('2026-10-29T08:00:00Z'), iso('2026-10-20T15:30:00Z'));
+    expect(trial.toISOString()).toBe('2026-09-29T08:00:00.000Z');
+    const bought = anchoredPeriodStart(iso('2026-11-20T15:30:00Z'), iso('2026-10-20T15:30:05Z'));
+    expect(bought.toISOString()).toBe('2026-10-20T15:30:00.000Z');
+  });
+
   it('anchor day clamping across short months', () => {
     // Billing day 31: the window containing mid-March starts on Feb 28.
     const start = anchoredPeriodStart(iso('2026-03-31T00:00:00Z'), iso('2026-03-15T00:00:00Z'));
