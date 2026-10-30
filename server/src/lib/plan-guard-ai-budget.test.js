@@ -175,6 +175,18 @@ describe('reserveAiBudget', () => {
     });
   });
 
+  it('charges the web searches a call ran on top of its tokens', async () => {
+    const budget = await guard.reserveAiBudget('o1', {
+      feature: 'content',
+      modelId: 'google/gemini-3-flash-preview',
+      draftId: 'd1',
+      holdUsd: 0.06,
+    });
+    // $0.002 of tokens and three searches at $0.01.
+    await budget.charge({ inputTokens: 1000, outputTokens: 500 }, { searches: 3 });
+    expect(ops[0].value.cost_usd).toBeCloseTo(0.032, 6);
+  });
+
   it('lets the hold go when nothing was charged', async () => {
     const budget = await guard.reserveAiBudget('o1', {
       feature: 'improve',

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
+import { onFirstRunFinished, useFirstRun } from '@/hooks/use-first-run';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import type { Brand } from '@/types';
 import {
@@ -64,6 +65,7 @@ import { ActionTable } from '@/components/action-center/action-table';
 import { ActionDrawer } from '@/components/action-center/action-drawer';
 import {
   GettingStartedTable,
+  arrivingStep,
   readyWhenKey,
 } from '@/components/getting-started/getting-started-table';
 import { GettingStartedSummaryCard } from '@/components/getting-started/summary-card';
@@ -119,6 +121,13 @@ type CardFocus = keyof typeof CARD_FILTERS | 'top';
  */
 const GETTING_STARTED = 'getting_started';
 type CategoryChoice = ActionCategory | 'all' | typeof GETTING_STARTED;
+
+/**
+ * How long after the first run finishes the list is read once more: the
+ * brand's first signal pass starts when the run stamps, and writes the first
+ * actions within a minute or so.
+ */
+const FIRST_SIGNALS_MS = 90_000;
 
 /** URL params that ask for the actions themselves, not Getting started. */
 const ACTIONS_PARAMS = [
@@ -338,9 +347,31 @@ function ActionsContent({ brand }: { brand: Brand }) {
     };
   }, [startedActive, refreshSteps]);
 
-  // A step opens its card; one still waiting for its data says when it opens.
+  // The brand's first tracking run while it goes on (the line under the
+  // tabs reads the same): the steps ready now come first, and the ones it
+  // brings the data for say how far it is.
+  const firstRun = useFirstRun();
+
+  // Once it's done, the steps it unlocked and the first actions: read again
+  // now, and once more when the first signal pass has had time to write them.
+  useEffect(() => {
+    let later: ReturnType<typeof setTimeout> | undefined;
+    const stop = onFirstRunFinished((finished) => {
+      if (finished !== brand.id) return;
+      void load();
+      clearTimeout(later);
+      later = setTimeout(() => void load(), FIRST_SIGNALS_MS);
+    });
+    return () => {
+      stop();
+      clearTimeout(later);
+    };
+  }, [brand.id, load]);
+
+  // A step opens its card; one still waiting for its data says when it
+  // opens, unless the first run is bringing it (its card says how far).
   const openStep = (step: GettingStartedStep) => {
-    if (step.state === 'waiting') {
+    if (step.state === 'waiting' && !arrivingStep(step, firstRun)) {
       toast(tStarted('opensWhenReady', { when: tStarted(`readyWhen.${readyWhenKey(step)}`) }));
       return;
     }
@@ -928,6 +959,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           onSelect={openStep}
           selectedKey={openCard?.key ?? null}
           showNote={noActions}
+          firstRun={firstRun}
         />
       ) : visible.length > 0 ? (
         <ActionTable
@@ -959,6 +991,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
             closeStep();
             setCategory('all');
           }}
+          firstRun={firstRun}
         />
       )}
 

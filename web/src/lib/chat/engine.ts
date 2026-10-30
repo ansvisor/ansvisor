@@ -213,10 +213,11 @@ export function engineTools(
 
 // ─── Start ──────────────────────────────────────────────────────────────────
 
+// guid, not uuid: ids made by hand (the demo brand's) aren't RFC 4122 ones.
 export const startRunInput = z.object({
   message: z.string().trim().min(1).max(20_000),
-  conversationId: z.string().uuid().optional(),
-  brandId: z.string().uuid().nullable().optional(),
+  conversationId: z.guid().optional(),
+  brandId: z.guid().nullable().optional(),
   mode: z.enum(CHAT_MODES).default('auto'),
   timezone: z.string().trim().max(64).optional(),
 });

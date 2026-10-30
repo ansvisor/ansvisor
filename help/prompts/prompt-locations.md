@@ -4,8 +4,8 @@ route: /dashboard/prompts/tracked
 keywords: [locations, add location, remove location, locations view, countries, us states, cities]
 synonyms: [track in another country, regional tracking, geo tracking, stop tracking a location]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-30
+last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -45,7 +45,7 @@ If the choice would pass your plan's limit, the dialog says how many it needs an
 
 A location you just added has no answers until the next daily run asks it. Until then, its cells say:
 
-- **Within 24h**: it's tracked there, and the first results come with the next daily run.
+- **Within 24h**: it's tracked there, and the first results come with the next daily run. While a new brand's first tracking runs, **Arriving now**: that tracking is asking it.
 - **Paused**: the prompt is paused, so it isn't asked anywhere until you resume it.
 - **No engine here**: none of the prompt's engines answers from that place. Add an engine that does, or remove the location.
 
