@@ -21,6 +21,7 @@ import { processTrackingJob } from '../workers/tracking-worker.js';
 import { processContentJob } from '../workers/content-worker.js';
 import { generatePulseForBrand } from './pulse/engine.js';
 import { runFirstSignalPass, runSignalPass } from './signals/pass.js';
+import { sendFirstResultsEmail } from './first-results-email.js';
 import logger from './logger.js';
 
 // Concurrency counters (the default of 2 per queue is inherited from the Bull
@@ -167,6 +168,13 @@ async function attemptTrackingJob(jobId, io, priority = false) {
     // exactly once, after the stamp, so it reads the finished window.
     const afterStamp = () => {
       if (!fullRun) return;
+      // The brand's first run: its results are in, and the people who
+      // waited for them may have left the app (once per person).
+      if (result.firstRun) {
+        sendFirstResultsEmail(brandId).catch((err) => {
+          logger.error({ err, brandId }, 'first results e-mail failed');
+        });
+      }
       if (!immediate) {
         // Daily Pulse (#540): after a full daily run only — never for manual
         // runs or single-prompt refreshes. The engine is self-contained:
