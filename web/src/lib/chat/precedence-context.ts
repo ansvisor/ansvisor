@@ -15,7 +15,12 @@ import {
   type PrecedenceContext,
   type ToolCall,
 } from './precedence';
-import { EXECUTE_GROUPS, type ChatTool, type ExecuteGroup } from './registry/define-tool';
+import {
+  EXECUTE_GROUPS,
+  overBatchCard,
+  type ChatTool,
+  type ExecuteGroup,
+} from './registry/define-tool';
 
 /**
  * What the approval precedence decides on, read fresh for each tool call:
@@ -187,11 +192,12 @@ export async function resolveCallBrand(
 /**
  * A call as the precedence takes it: its brand found in the workspace, and
  * that brand's demo flag, read only for a brand in the person's scope (one
- * outside it is refused before its state matters).
+ * outside it is refused before its state matters); and whether it carries
+ * more items than its row runs without a card.
  */
 export async function readToolCall(
   ctx: PrecedenceContext,
-  tool: Pick<ChatTool, 'brandOf'>,
+  tool: Pick<ChatTool, 'brandOf' | 'batch'>,
   input: Record<string, unknown>,
   tainted: boolean,
 ): Promise<ToolCall> {
@@ -202,5 +208,6 @@ export async function readToolCall(
     brandId,
     brandIsDemo: inScope ? await readBrandIsDemo(brandId) : false,
     tainted,
+    ...(overBatchCard(tool, input) ? { overBatch: true } : {}),
   };
 }

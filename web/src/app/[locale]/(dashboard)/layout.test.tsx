@@ -111,6 +111,7 @@ const ownKey = vi.hoisted(() => ({ chatRunsOnOwnKey: vi.fn(async () => false) })
 vi.mock('@/lib/chat/key', () => ownKey);
 vi.mock('@/components/providers/auth-provider', () => ({ AuthProvider: none }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({ AiUsageProvider: pass }));
+vi.mock('@/components/ai-usage/get-more', () => ({ GetMoreProvider: pass }));
 // The brands the layout hands the brand store (the store is marked loaded
 // in beforeEach, as BrandLoader leaves it).
 let loaded: { id: string }[] = [];

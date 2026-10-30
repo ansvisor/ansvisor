@@ -66,3 +66,22 @@ export function reopenChatId(stored: string | null, now: number): string | null 
     return null;
   }
 }
+
+/** The full chat page's query parameter for the page a panel chat was opened from (CHAT-22). */
+export const PANEL_FROM_PARAM = 'from';
+
+/**
+ * Where "↙ Back to {page}" returns (CHAT-22: the panel's ⤢ and back): the
+ * app page the chat was opened from, with its query, as the full chat
+ * page got it; null for anything else: another site, Chat itself, a path
+ * outside the dashboard.
+ */
+export function panelReturnOf(from: string | null | undefined): string | null {
+  if (!from || from.length > 2000 || !from.startsWith('/dashboard/')) return null;
+  if (/[\s\\]/.test(from) || from.includes('//')) return null;
+  const path = from.split(/[?#]/)[0];
+  // A `.` or `..` segment (also as %2e) resolves to another path: out of
+  // the dashboard, or into Chat.
+  if (path.split('/').some((segment) => /^(\.|%2e){1,2}$/i.test(segment))) return null;
+  return panelRouteOf(path) === 'page' ? from : null;
+}

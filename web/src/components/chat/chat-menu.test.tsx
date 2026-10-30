@@ -16,6 +16,8 @@ import type { ChatListItem } from '@/lib/chat/conversations';
  */
 
 const nav = vi.hoisted(() => ({ pathname: '/dashboard/chat', push: vi.fn() }));
+const search = vi.hoisted(() => ({ value: '' }));
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(search.value) }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>
@@ -44,6 +46,7 @@ vi.mock('@/components/providers/ai-usage-provider', () => ({
 
 const { ChatMenuView } = await import('./chat-menu');
 const { ChatShell } = await import('./chat-shell');
+const { useChatCrumb } = await import('./chat-crumb');
 const { saveChatMenuOpen } = await import('@/lib/actions/chat-prefs');
 const { useChatRailStore } = await import('@/stores/use-chat-rail-store');
 
@@ -147,7 +150,11 @@ describe('ChatMenuView', () => {
     // No allowance to meter: no usage beside Settings.
     expect(action('chatMenu.openSettings')[0].textContent).toBe('Settings');
     expect(action('chatMenu.openInbox')[0].getAttribute('href')).toBe('/dashboard/chat/inbox');
-    for (const unbuilt of ['chatMenu.openSkills', 'chatMenu.openScheduled', 'chatMenu.openFiles']) {
+    expect(action('chatMenu.openFiles')[0].getAttribute('href')).toBe('/dashboard/chat/files');
+    // Agents, with "New" until it is first opened (governance mockup #cnav).
+    expect(action('chatMenu.openAgents')[0].getAttribute('href')).toBe('/dashboard/chat/agents');
+    expect(action('chatMenu.openAgents')[0].textContent).toBe('AgentsNew');
+    for (const unbuilt of ['chatMenu.openSkills', 'chatMenu.openScheduled']) {
       expect(action(unbuilt)).toHaveLength(0);
     }
     expect(text()).toContain('No chats yet.');
@@ -353,6 +360,9 @@ describe('ChatShell', () => {
     expect(popup.querySelector('[data-action="search.openPage"]')?.textContent).toContain(
       'All chats',
     );
+    expect(
+      [...popup.querySelectorAll('[data-action="search.openPage"]')].map((b) => b.textContent),
+    ).toEqual(['☰All chats', '✦Agents', '▤Files', '⚙Settings']);
     await act(async () =>
       (popup.querySelector('[data-action="search.openPage"]') as HTMLElement).click(),
     );
@@ -405,6 +415,61 @@ describe('ChatShell', () => {
     await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
     expect(action('nav.backToChat')).toHaveLength(0);
     expect(host.querySelector('header h1')?.textContent).toBe('Settings');
+  });
+
+  it("names Agents and an agent's detail in the breadcrumb, and drops Agents' New once opened", async () => {
+    // A browser's storage, where the pill's "seen" is kept.
+    const kept = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => kept.get(key) ?? null,
+      setItem: (key: string, value: string) => void kept.set(key, value),
+      removeItem: (key: string) => void kept.delete(key),
+      clear: () => kept.clear(),
+    });
+    nav.pathname = '/dashboard/chat/agents';
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    expect(host.querySelector('header nav')?.textContent).toBe('Chat›Agents');
+    const item = host.querySelector<HTMLElement>('#chat-menu [data-action="chatMenu.openAgents"]')!;
+    expect(item.getAttribute('aria-current')).toBe('page');
+    expect(item.textContent).toBe('Agents');
+
+    // The detail names the agent; its Agents goes back to the list.
+    function Named() {
+      useChatCrumb('Citation win-back');
+      return <p>detail</p>;
+    }
+    nav.pathname = '/dashboard/chat/agents/aaaaaaaa-0000-4000-8000-000000000001';
+    await render(
+      <ChatShell menuOpen>
+        <Named />
+      </ChatShell>,
+    );
+    expect(host.querySelector('header nav')?.textContent).toBe('Chat›Agents›Citation win-back');
+    expect(action('nav.breadcrumb')[1].getAttribute('href')).toBe('/dashboard/chat/agents');
+
+    // Opened once, the pill stays gone on other pages.
+    nav.pathname = '/dashboard/chat/inbox';
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    expect(host.querySelector('#chat-menu [data-action="chatMenu.openAgents"]')?.textContent).toBe(
+      'Agents',
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it('leads a chat opened as a full page back to the app page it came from (CHAT-22)', async () => {
+    const id = 'cccccccc-0000-4000-8000-000000000002';
+    nav.pathname = `/dashboard/chat/${id}`;
+    search.value = `from=${encodeURIComponent('/dashboard/mentions?platform=chatgpt-web')}`;
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    const back = action('nav.backToPage')[0];
+    expect(back.textContent).toBe('↙ Back to Mentions');
+    expect(back.getAttribute('href')).toBe('/dashboard/mentions?platform=chatgpt-web');
+
+    // Never anywhere else.
+    search.value = `from=${encodeURIComponent('https://example.com/dashboard/x')}`;
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    expect(action('nav.backToPage')).toHaveLength(0);
+    search.value = '';
   });
 
   it('closes only the palette with Esc, and never navigates', async () => {

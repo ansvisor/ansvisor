@@ -140,6 +140,8 @@ export function ChatComposer({
   fullAutoOpen,
   fullAutoOffByAdmin = false,
   running = false,
+  answering = false,
+  maxLength,
   onSend,
   onStop,
   onSteer,
@@ -168,6 +170,13 @@ export function ChatComposer({
   fullAutoOffByAdmin?: boolean;
   /** A run answers: Send is Stop, and the box steers. */
   running?: boolean;
+  /**
+   * The run waits on a question (CHAT-07 §A items 8–9): the message answers
+   * it, so Send stays, with Stop beside it, and Esc, to end the run.
+   */
+  answering?: boolean;
+  /** The most the box takes (an answer's 500 characters); no limit by default. */
+  maxLength?: number;
   onSend: (text: string, sent: ComposerSend) => boolean | void | Promise<boolean | void>;
   onStop?: () => void;
   /** Stops the run and sends the text: without it, Enter waits for the run. */
@@ -529,11 +538,13 @@ export function ChatComposer({
     ? hasText && onSteer
       ? t('under.steer')
       : t('under.answering')
-    : readOnly
-      ? t('under.readOnly')
-      : ghostShown
-        ? t('under.ghostHint')
-        : t('under.hint');
+    : answering
+      ? t('under.answerQuestion')
+      : readOnly
+        ? t('under.readOnly')
+        : ghostShown
+          ? t('under.ghostHint')
+          : t('under.hint');
 
   const shownChips: (ComposerChip & { remove?: () => void })[] = [
     ...chips.map((chip) => ({
@@ -684,6 +695,7 @@ export function ChatComposer({
             value={text}
             rows={variant === 'home' ? 2 : 1}
             disabled={disabled}
+            maxLength={maxLength}
             aria-label={t('message')}
             aria-describedby={ghostShown ? ghostId : undefined}
             placeholder={
@@ -724,6 +736,7 @@ export function ChatComposer({
                 composing: e.nativeEvent.isComposing || e.keyCode === 229,
                 coarse: window.matchMedia?.('(pointer: coarse)')?.matches ?? false,
                 running,
+                stoppable: answering,
                 hasText,
                 canSteer: !!onSteer,
                 ghost: ghostShown,
@@ -810,18 +823,29 @@ export function ChatComposer({
               offByAdmin={fullAutoOffByAdmin}
             />
           )}
-          {running ? (
+          {(running || answering) && (
+            // While a question waits, Stop sits beside Send, outlined: Send answers.
             <button
               type="button"
               data-action="composer.stop"
               onClick={onStop}
               aria-label={t('stop')}
               title={t('stop')}
-              className="ml-auto flex size-8 items-center justify-center rounded-[10px] bg-foreground text-background"
+              className={cn(
+                'ml-auto flex size-8 items-center justify-center rounded-[10px]',
+                running ? 'bg-foreground text-background' : 'border hover:bg-muted',
+              )}
             >
-              <i className="block size-2.5 rounded-[2px] bg-background" aria-hidden />
+              <i
+                className={cn(
+                  'block size-2.5 rounded-[2px]',
+                  running ? 'bg-background' : 'bg-foreground',
+                )}
+                aria-hidden
+              />
             </button>
-          ) : (
+          )}
+          {!running && (
             <button
               type="button"
               data-action="composer.send"
@@ -829,7 +853,10 @@ export function ChatComposer({
               disabled={!hasText || sending || disabled || uploading}
               aria-label={t('send')}
               title={t('send')}
-              className="ml-auto flex size-8 items-center justify-center rounded-[10px] bg-foreground text-background disabled:cursor-not-allowed disabled:opacity-35"
+              className={cn(
+                'flex size-8 items-center justify-center rounded-[10px] bg-foreground text-background disabled:cursor-not-allowed disabled:opacity-35',
+                !answering && 'ml-auto',
+              )}
             >
               <ArrowUp className="size-4" aria-hidden />
             </button>

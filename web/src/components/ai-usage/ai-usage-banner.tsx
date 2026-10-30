@@ -79,16 +79,14 @@ export function AiUsageBanner({ className }: { className?: string }) {
           </>
         )}
       </p>
-      {canAdmin && (
-        <div className="flex flex-wrap gap-1.5">
-          <AiUsageGetMore
-            plan={usage.plan}
-            trial={usage.trial}
-            chatMetered={usage.chatMetered}
-            primary
-          />
-        </div>
-      )}
+      <div className="flex flex-wrap gap-1.5 empty:hidden">
+        <AiUsageGetMore
+          plan={usage.plan}
+          trial={usage.trial}
+          chatMetered={usage.chatMetered}
+          primary
+        />
+      </div>
     </div>
   );
 }

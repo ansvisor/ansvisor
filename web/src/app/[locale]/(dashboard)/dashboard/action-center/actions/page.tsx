@@ -17,6 +17,8 @@ import {
   X,
 } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import type { ChatPageFilter } from '@/lib/chat/page-context';
 import { useUserRole } from '@/hooks/use-user-role';
 import { onFirstRunFinished, useFirstRun } from '@/hooks/use-first-run';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -184,6 +186,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const common = useTranslations('common');
   const tTexts = useTranslations('actionCenter.actionTexts');
   const tCategories = useTranslations('actionCenter.actionCategories');
+  const tChat = useTranslations('chatPanel.suggest');
   const tStarted = useTranslations('actionCenter.gettingStarted');
 
   const [actions, setActions] = useState<ActionItem[] | null>(null);
@@ -719,6 +722,40 @@ function ActionsContent({ brand }: { brand: Brand }) {
       </Dialog>
     </div>
   );
+
+  // Chat's side panel sees the page (W1-08): its filters, the top action,
+  // and the actions in view to ask about.
+  // The first of the Top actions, as the card ranks them: the list comes unordered.
+  const topAction = (actions ?? [])
+    .filter((action) => topIds.has(action.id))
+    .sort(comparePriority)[0];
+  const pageFilters: ChatPageFilter[] =
+    category !== 'all' && category !== GETTING_STARTED
+      ? [{ key: 'category', label: tCategories(category), value: category }]
+      : [];
+  if (priority !== 'all') {
+    pageFilters.push({
+      key: 'priority',
+      label: t(`priority.levels.${priority}`),
+      value: priority,
+    });
+  }
+  if (status !== 'all')
+    pageFilters.push({ key: 'status', label: t(`status.${status}`), value: status });
+  useChatPageContext({
+    pageName: t('title'),
+    filters: pageFilters,
+    suggestions: [
+      ...(topAction ? [tChat('actionHow', { title: actionTexts(topAction, tTexts).title })] : []),
+      tChat('actionsImpact'),
+      tChat('actionsWeek'),
+    ],
+    referenceables: visible.slice(0, 5).map((action) => ({
+      type: 'task' as const,
+      id: action.id,
+      label: actionTexts(action, tTexts).title,
+    })),
+  });
 
   if (isLoading) {
     return frame(

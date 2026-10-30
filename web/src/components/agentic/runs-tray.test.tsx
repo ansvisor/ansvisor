@@ -196,6 +196,25 @@ describe('RunsTray', () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
+  it('reads at once when the page says a run started or ended, not at its next poll', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ ok: true, ...TRAY }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    await render(<RunsTray brandId="brand-1" readAgain="false:" />);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await render(<RunsTray brandId="brand-1" readAgain="true:" />);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await render(<RunsTray brandId="brand-1" readAgain="true:run-1" />);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // The same value: no extra read, only the poll's.
+    await render(<RunsTray brandId="brand-1" readAgain="true:run-1" />);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await act(async () => vi.advanceTimersByTimeAsync(TRAY_POLL_CLOSED_MS));
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
   it('reads nothing while the tab is hidden, and says when it couldn’t read', async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(

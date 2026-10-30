@@ -30,7 +30,9 @@ import { useChatList } from './chat-list-provider';
  * after a confirm with Undo, Open in a new window. Each change shows at
  * once in the menu and is then sent; a refused one is put back and says so.
  * The author changes their chat; a teammate's shared chat only opens, and
- * an Admin may delete it.
+ * an Admin may delete it. Outside the shell (Chat's side panel), the page
+ * hears of a chat's new row (`onUpdated`) and of one archived or deleted
+ * (`onGone`).
  */
 
 /** A toast with Undo stays this long (CHAT-23 P6). */
@@ -63,7 +65,17 @@ const ChatActionsContext = createContext<ChatActions | null>(null);
 
 const chatHref = (chat: Pick<ChatListItem, 'id'>) => `/dashboard/chat/${chat.id}`;
 
-export function ChatActionsProvider({ children }: { children: ReactNode }) {
+export function ChatActionsProvider({
+  children,
+  onUpdated,
+  onGone,
+}: {
+  children: ReactNode;
+  /** A change kept: the chat's row as it is now. */
+  onUpdated?: (chat: ChatListItem) => void;
+  /** Archived or deleted: no longer open. */
+  onGone?: (chat: ChatListItem) => void;
+}) {
   const t = useTranslations('chatShell.actions');
   const router = useRouter();
   const pathname = usePathname();
@@ -98,9 +110,10 @@ export function ChatActionsProvider({ children }: { children: ReactNode }) {
         return null;
       }
       replace(chat.id, body.chat);
+      onUpdated?.(body.chat);
       return body.chat;
     },
-    [refresh, replace, t],
+    [refresh, replace, t, onUpdated],
   );
 
   const togglePin = useCallback(
@@ -129,10 +142,11 @@ export function ChatActionsProvider({ children }: { children: ReactNode }) {
     async (chat: ChatListItem) => {
       update((chats) => chats.filter((c) => c.id !== chat.id));
       if (!(await send(chat, { archived: true }))) return;
+      onGone?.(chat);
       void refresh();
       toast(t('archived'), { duration: TOAST_MS });
     },
-    [refresh, send, t, update],
+    [refresh, send, t, update, onGone],
   );
 
   const rename = useCallback(
@@ -175,6 +189,7 @@ export function ChatActionsProvider({ children }: { children: ReactNode }) {
       return;
     }
     update((chats) => chats.filter((c) => c.id !== chat.id));
+    onGone?.(chat);
     // The chat that was open goes away: Chat Home instead.
     if (pathname === chatHref(chat)) router.push('/dashboard/chat');
     void refresh();
@@ -182,7 +197,7 @@ export function ChatActionsProvider({ children }: { children: ReactNode }) {
       duration: DELETE_UNDO_TOAST_MS,
       action: { label: t('undo'), onClick: () => void restore(chat) },
     });
-  }, [busy, deleting, pathname, refresh, restore, router, t, update]);
+  }, [busy, deleting, pathname, refresh, restore, router, t, update, onGone]);
 
   const value = useMemo<ChatActions>(
     () => ({

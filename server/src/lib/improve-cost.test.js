@@ -79,6 +79,28 @@ describe('generationCostUsd', () => {
   });
 });
 
+describe("the table's prompt-cache read rates", () => {
+  it("price a Claude model's cache read at a tenth of its input, as Anthropic does", () => {
+    // Chat's models with no synced price (the table is what prices them then).
+    for (const id of [
+      'anthropic/claude-haiku-4-5',
+      'anthropic/claude-haiku-5-5',
+      'anthropic/claude-sonnet-5-5',
+    ]) {
+      const price = MODEL_PRICES[id];
+      expect(price.cacheRead).toBeCloseTo(price.input / 10, 12);
+    }
+    // Chat's writer, by the id it's charged under: 1M tokens read from the cache cost $0.20.
+    expect(
+      generationCostUsd('anthropic/claude-sonnet-5.5', {
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 1_000_000,
+      }),
+    ).toBeCloseTo(0.2, 12);
+  });
+});
+
 describe('priceFor with synced prices (CHAT-16 §A)', () => {
   afterEach(() => setSyncedPrices([]));
 

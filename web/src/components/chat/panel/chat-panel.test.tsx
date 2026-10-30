@@ -16,9 +16,10 @@ import type { ChatPanelSetup, PanelDraft } from './chat-panel-context';
  * page's context as chips, its suggestions and Ask about this (W1-08).
  */
 
-const route = vi.hoisted(() => ({ pathname: '/dashboard/mentions' }));
+const route = vi.hoisted(() => ({ pathname: '/dashboard/mentions', push: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
   usePathname: () => route.pathname,
+  useRouter: () => ({ push: route.push, refresh: vi.fn() }),
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>
       {children}
@@ -27,7 +28,7 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 const prefs = vi.hoisted(() => ({ saveChatPanelSize: vi.fn(async () => ({ ok: true })) }));
 vi.mock('@/lib/actions/chat-prefs', () => prefs);
-const toast = vi.hoisted(() => vi.fn());
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 // The chat itself is ChatThreadView's (its own tests): here, what the panel hands it.
 vi.mock('@/stores/use-brand-store', () => ({
@@ -143,8 +144,12 @@ const chatRow = (id: string, title: string | null) => ({
 });
 
 let calls: string[];
-const fetchMock = vi.fn(async (url: string) => {
-  calls.push(url);
+const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+  calls.push(init?.method ? `${init.method} ${url}` : url);
+  if (init?.method === 'PATCH') {
+    const patch = JSON.parse(String(init.body)) as Record<string, unknown>;
+    return Response.json({ ok: true, chat: { ...chatRow(CHAT, 'Citations drop'), ...patch } });
+  }
   if (url.startsWith('/api/chat/conversations?')) {
     return Response.json({
       ok: true,
@@ -223,6 +228,7 @@ async function pressCtrlJ(target: Element = document.body) {
 
 beforeEach(() => {
   route.pathname = '/dashboard/mentions';
+  route.push.mockClear();
   pageContext = null;
   calls = [];
   fetchMock.mockClear();
@@ -508,5 +514,69 @@ describe('the page’s context (W1-08)', () => {
   it('has no Ask about this where the panel isn’t', async () => {
     await render({ enabled: false });
     expect(container.querySelector('[data-action="page.askAboutThis"]')).toBeNull();
+  });
+});
+
+describe('the panel’s ⋯ and the full page (W1-07b)', () => {
+  async function openMenu() {
+    const trigger = container.querySelector<HTMLButtonElement>('[data-action="panel.more"]')!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    await settle();
+    return [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  }
+  async function openFromHistory() {
+    await click(container.querySelector('[data-action="panel.history"]'));
+    await click(container.querySelector('[data-action="panel.openChat"]'));
+  }
+
+  it('has no ⋯ before the panel has a chat', async () => {
+    await render();
+    await click(ask());
+    expect(container.querySelector('[data-action="panel.more"]')).toBeNull();
+  });
+
+  it('opens the chat as a full page that leads back here, and reads it again on the way back', async () => {
+    await render();
+    await click(ask());
+    await openFromHistory();
+    const items = await openMenu();
+    expect(items.map((item) => item.getAttribute('data-action'))).toEqual([
+      'panel.openFullPage',
+      'chat.openNewWindow',
+      'chat.pin',
+      'chat.rename',
+      'chat.share',
+      'chat.archive',
+      'chat.delete',
+    ]);
+    await click(items[0]);
+    expect(route.push).toHaveBeenCalledExactlyOnceWith(
+      `/dashboard/chat/${CHAT}?from=%2Fdashboard%2Fmentions`,
+    );
+
+    // On Chat's page the panel is off; back on the page, the chat is read again.
+    const reads = () => calls.filter((c) => c === `/api/chat/conversations/${CHAT}`).length;
+    const before = reads();
+    route.pathname = `/dashboard/chat/${CHAT}`;
+    await render();
+    expect(shown()).toBe(false);
+    route.pathname = '/dashboard/mentions';
+    await render();
+    expect(shown()).toBe(true);
+    expect(reads()).toBe(before + 1);
+  });
+
+  it('starts empty again once its chat is archived', async () => {
+    await render();
+    await click(ask());
+    await openFromHistory();
+    const items = await openMenu();
+    await click(items.find((item) => item.getAttribute('data-action') === 'chat.archive')!);
+    expect(calls).toContain(`PATCH /api/chat/conversations/${CHAT}`);
+    expect(panel()!.textContent).toContain('Hi Sam');
+    expect(container.querySelector('[data-action="panel.more"]')).toBeNull();
   });
 });

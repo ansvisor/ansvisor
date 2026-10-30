@@ -14,6 +14,7 @@ import {
   isTimeZone,
   nextDay,
   startOfDayIn,
+  zonedInstant,
 } from './time-zone';
 
 describe('dayIn', () => {
@@ -78,6 +79,21 @@ describe('isTimeZone', () => {
     expect(isTimeZone('Mars/Olympus')).toBe(false);
     expect(isTimeZone('')).toBe(false);
     expect(isTimeZone(42)).toBe(false);
+  });
+});
+
+describe('zonedInstant', () => {
+  test("is the instant a zone's clock reads a time on a day", () => {
+    expect(zonedInstant('2026-11-02', 9, 0, 'Europe/Istanbul')).toBe('2026-11-02T06:00:00.000Z');
+    expect(zonedInstant('2026-07-01', 23, 45, 'America/New_York')).toBe('2026-07-02T03:45:00.000Z');
+    expect(zonedInstant('2026-01-31', 0, 0, 'UTC')).toBe('2026-01-31T00:00:00.000Z');
+  });
+
+  test('takes the first of a time passed twice, and moves a skipped one past the jump', () => {
+    // New York falls back at 02:00 EDT on 1 November 2026: 01:30 comes twice.
+    expect(zonedInstant('2026-11-01', 1, 30, 'America/New_York')).toBe('2026-11-01T05:30:00.000Z');
+    // It springs forward at 02:00 EST on 8 March 2026: 02:30 never shows; 03:30 EDT does.
+    expect(zonedInstant('2026-03-08', 2, 30, 'America/New_York')).toBe('2026-03-08T07:30:00.000Z');
   });
 });
 

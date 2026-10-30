@@ -53,6 +53,7 @@ vi.mock('@/components/settings/ai-usage-card', async () => {
     },
   };
 });
+vi.mock('@/components/settings/add-ons-card', () => ({ AddOnsCard: () => null }));
 vi.mock('@/components/settings/invoice-list', () => ({ InvoiceList: () => null }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =

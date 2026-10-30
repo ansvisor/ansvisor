@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { contextChips, menuTitleOf, rangeChipLabel, type ChatPageContext } from './page-context';
+import {
+  contextChips,
+  largestMove,
+  menuTitleOf,
+  rangeChipLabel,
+  type ChatPageContext,
+} from './page-context';
 
 /** A page's context as the side panel's chips (CHAT-01 items 20–22). */
 
@@ -63,5 +69,22 @@ describe('rangeChipLabel', () => {
     );
     expect(rangeChipLabel('custom', { from: '2026-10-01' }, t)).toBe('customOpen');
     expect(rangeChipLabel('all', {}, t)).toBe('all');
+  });
+});
+
+describe('largestMove', () => {
+  it('finds the row that moved most, down or up', () => {
+    const rows = [
+      { name: 'ChatGPT', change: 4 },
+      { name: 'Perplexity', change: -9 },
+      { name: 'Gemini', change: null },
+    ];
+    expect(largestMove(rows)?.name).toBe('Perplexity');
+    expect(largestMove([{ name: 'Claude', change: 2 }])?.change).toBe(2);
+  });
+
+  it('finds nothing when nothing moved', () => {
+    expect(largestMove([{ change: 0 }, { change: null }])).toBeNull();
+    expect(largestMove(null)).toBeNull();
   });
 });

@@ -261,6 +261,12 @@ describe('createChat', () => {
       false,
     );
   });
+
+  it('takes the demo brand’s id, made by hand, and refuses what isn’t an id', () => {
+    const demo = '33333333-3333-3333-3333-333333333333';
+    expect(chats.createInput.parse({ brandId: demo }).brandId).toBe(demo);
+    expect(chats.createInput.safeParse({ brandId: '3333-3333' }).success).toBe(false);
+  });
 });
 
 describe('deleteChat and restoreChat', () => {

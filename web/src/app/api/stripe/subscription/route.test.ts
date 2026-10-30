@@ -240,6 +240,33 @@ describe('changing a paid plan', () => {
     expect(db.update.mock.calls[0][0]).not.toHaveProperty('cancel_at_period_end');
   });
 
+  it('changes the plan’s item, never a storage pack’s beside it (CHAT-18)', async () => {
+    const withPack = (sub: ReturnType<typeof subscription>) => ({
+      ...sub,
+      items: {
+        data: [
+          {
+            id: 'si_pack',
+            current_period_end: 1_800_000_000,
+            metadata: { add_on_purchase_id: 'a0000000-0000-4000-8000-000000000001' },
+            price: { unit_amount: 500, recurring: { interval: 'month' } },
+          },
+          ...sub.items.data,
+        ],
+      },
+    });
+    stripeApi.retrieve.mockResolvedValue(withPack(subscription('active')));
+    stripeApi.update.mockResolvedValue(withPack(subscription('active', 'month', 24900)));
+
+    const res = await patch({ newPlanId: 'growth', interval: 'month' });
+
+    expect(res.status).toBe(200);
+    expect(stripeApi.update.mock.calls[0][1].items).toEqual([
+      { id: 'si1', price: 'price_growth_month' },
+    ]);
+    expect(await res.json()).toMatchObject({ planId: 'growth', priceAmount: 249 });
+  });
+
   it('keeps the plan as it was when the new period’s invoice is declined', async () => {
     stripeApi.retrieve.mockResolvedValue(subscription('active'));
     stripeApi.update.mockRejectedValue(new Error('Your card was declined.'));

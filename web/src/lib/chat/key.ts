@@ -155,6 +155,7 @@ export async function resolveChatModelKey(organizationId: string): Promise<ChatM
  * metered, and when it can't be read: the server's hold still decides a run.
  */
 export async function chatRunsOnOwnKey(organizationId: string): Promise<boolean> {
+  if (!isCloud() || !chatAgenticEnabled(organizationId)) return false;
   // Same rule as resolveChatModelKey: Enterprise, or a kept key's 30 days.
   const access = await ownKeyAccess(organizationId).catch(() => null);
   if (access?.state !== 'plan' && access?.state !== 'kept') return false;

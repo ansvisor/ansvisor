@@ -11,6 +11,8 @@ import { decideToolCall, type ChatSurface } from './precedence';
 import { readPrecedenceContext, readToolCall } from './precedence-context';
 import type { ChatTool } from './registry/define-tool';
 import { chatToolByKey } from './registry/tools';
+import { DAY_MS, asObject, check, textOf, type Snapshot } from './undo-parts';
+import { SETUP_UNDO_RULES } from './undo-setup';
 
 /**
  * Undo (CHAT-20 §10b): the inverse of each WRITE, stored when it ran (the
@@ -33,10 +35,6 @@ import { chatToolByKey } from './registry/tools';
  * still takes back the draft their own run saved. Server only.
  */
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-type Snapshot = { [key: string]: Json };
-
 /**
  * What the log row records about a change, read after it ran. Its brand is
  * the call's, as the precedence found it (resolveCallBrand).
@@ -49,8 +47,16 @@ export interface WriteRecord {
   undo: Snapshot | null;
 }
 
-/** How an inverse went: done, the target changed since, or it is gone. */
-export type InverseResult = 'ok' | 'changed' | 'gone';
+/**
+ * How an inverse went: done, the target changed since, it is gone, or the
+ * plan has no room for it now (resuming prompts is metered, §11a): nothing
+ * changed, and Undo may be tried again once there is.
+ */
+export type InverseResult =
+  | 'ok'
+  | 'changed'
+  | 'gone'
+  | { refused: 'quota_exceeded'; message: string };
 
 export interface UndoRule {
   /** The target's type in the log. */
@@ -68,17 +74,6 @@ export interface UndoRule {
 }
 
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
-
-const asObject = (value: unknown): Record<string, unknown> =>
-  value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-
-const textOf = (value: unknown): string | null => (typeof value === 'string' ? value : null);
-
-function check(error: { message: string } | null, what: string) {
-  if (error) throw new Error(`Could not read ${what} for Undo: ${error.message}`);
-}
 
 // ─── create_draft: archive the draft it saved (§9: 30 days, "move to trash") ─
 
@@ -335,6 +330,7 @@ export const UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   update_opportunity: updateOpportunity,
   dismiss_prompt_suggestion: dismissSuggestion,
   request_access: requestAccessRule,
+  ...SETUP_UNDO_RULES,
 };
 
 /** A tool's Undo, or null: a read or an EXECUTE has none (§10b). */
@@ -368,6 +364,8 @@ export type UndoOutcome =
   | { code: 'not_found' }
   | { code: 'in_progress' }
   | { code: 'denied'; denial: ChatDenial }
+  /** The plan has no room for it now (§11a): nothing changed; Undo works again once it has. */
+  | { code: 'quota_exceeded'; message: string }
   /** Something failed on the way (a read, a write): nothing was undone, Undo may try again. */
   | { code: 'failed' };
 
@@ -385,6 +383,8 @@ export function undoMessage(outcome: UndoOutcome): string {
       return undoT(outcome.reason === 'gone' ? 'gone' : 'changed');
     case 'denied':
       return outcome.denial.rule.detail;
+    case 'quota_exceeded':
+      return outcome.message;
     case 'expired':
       return undoT('expired');
     case 'not_undoable':
@@ -528,7 +528,10 @@ async function undo(req: UndoRequest): Promise<UndoResult> {
   };
   const targetType = row.target_type;
   // Set inside the work: a conflict answers this click, and its key goes back.
-  const found: { conflict: InverseResult | null } = { conflict: null };
+  const found: {
+    conflict: 'changed' | 'gone' | null;
+    refused: { message: string } | null;
+  } = { conflict: null, refused: null };
   const outcome = await withIdempotencyKey<StoredUndo>(
     {
       organizationId: req.organizationId,
@@ -537,6 +540,11 @@ async function undo(req: UndoRequest): Promise<UndoResult> {
     },
     async () => {
       const inverse = await rule.inverse(target);
+      // No room on the plan: nothing changed, nothing marked; it may be tried again.
+      if (typeof inverse === 'object') {
+        found.refused = inverse;
+        return { result: { code: 'ok', activityId: null }, activityId: null };
+      }
       if (inverse !== 'ok') {
         found.conflict = inverse;
         await markChange(row.id, { status: 'undo_conflict' });
@@ -570,13 +578,14 @@ async function undo(req: UndoRequest): Promise<UndoResult> {
       return { result: { code: 'ok', activityId }, activityId };
     },
     // A conflict isn't kept: once the target is back as it was, Undo may try again.
-    { keep: () => found.conflict === null },
+    { keep: () => found.conflict === null && found.refused === null },
   );
 
   if (outcome.kind === 'mismatch' || outcome.kind === 'busy')
     return result({ code: 'in_progress' });
+  if (found.refused) return result({ code: 'quota_exceeded', message: found.refused.message });
   const { conflict } = found;
-  if (conflict && conflict !== 'ok') {
+  if (conflict) {
     return result({
       code: 'conflict',
       reason: conflict,

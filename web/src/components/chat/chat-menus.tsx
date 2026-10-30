@@ -3,16 +3,23 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
+import { toast } from 'sonner';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { ChatListItem } from '@/lib/chat/conversations';
+import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { useChatActions } from './chat-actions';
+import { useChatDebug } from './chat-debug';
 
 /** The menus' look (mockup `.pop2`, `.mi2`): opaque, 14px corners, soft shadow. */
 const MENU =
@@ -129,8 +136,9 @@ export function ChatRowMenu({ chat }: { chat: ChatListItem }) {
 /**
  * The open chat's ⋯ in the header (CHAT-23 `header.more`, G10): Chat
  * settings (Chat's Settings page, CHAT-01 owner update), Open in new window; for the author Pin, Rename (in the title),
- * Share with team; Export chat (shown, not yet working); Activity log;
- * Archive and Delete. Split view, Schedule this and Save as agent come later.
+ * Share with team; Export chat; Activity log; for Ansvisor staff only, the
+ * Debug switch (CHAT-03 item 25, W1-15); Archive and Delete. Split view,
+ * Schedule this and Save as agent come later.
  */
 export function ChatHeaderMenu({ chat }: { chat: ChatListItem }) {
   const t = useTranslations('chatShell.actions');
@@ -176,10 +184,7 @@ export function ChatHeaderMenu({ chat }: { chat: ChatListItem }) {
             </Item>
           </>
         )}
-        {/* Export joins the answer exports (W1-24/W1-25); until then it says so. */}
-        <Item glyph="⤓" action="chat.export" disabled note={t('exportSoon')}>
-          {t('export')}
-        </Item>
+        <ExportChatItem chat={chat} />
         <Item
           glyph="☰"
           action="activity.open"
@@ -187,6 +192,130 @@ export function ChatHeaderMenu({ chat }: { chat: ChatListItem }) {
         >
           {t('activity')}
         </Item>
+        <DebugItem />
+        {(editable || actions.canDelete(chat)) && <DropdownMenuSeparator />}
+        {editable && (
+          <Item glyph="▤" action="chat.archive" onClick={() => void actions.archive(chat)}>
+            {t('archive')}
+          </Item>
+        )}
+        {actions.canDelete(chat) && (
+          <Item glyph="✕" action="chat.delete" danger onClick={() => actions.askDelete(chat)}>
+            {t('delete')}
+          </Item>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * Debug (CHAT-03 item 25): Ansvisor staff only, never rendered for anyone
+ * else. On, each answer shows its steps' tools, inputs, outputs and cost.
+ */
+function DebugItem() {
+  const t = useTranslations('chatShell.actions');
+  const debug = useChatDebug();
+  if (!debug?.staff) return null;
+  return (
+    <DropdownMenuCheckboxItem
+      data-action="chat.debug"
+      checked={debug.on}
+      onCheckedChange={debug.toggle}
+      className={cn(ITEM, 'pr-8')}
+    >
+      <span aria-hidden className="w-3.5 shrink-0 text-center text-foreground">
+        ⚙
+      </span>
+      <span className="flex-1">
+        {t('debug')}
+        <span className="block text-[11.5px] text-muted-foreground">{t('debugNote')}</span>
+      </span>
+    </DropdownMenuCheckboxItem>
+  );
+}
+
+const CHAT_EXPORT_FORMATS = ['md', 'docx', 'pdf'] as const;
+
+/**
+ * ⤓ Export chat (CHAT-23 `chat.export`): the whole chat as Markdown, Word
+ * or PDF, rendered on the server from what is stored, nothing kept.
+ */
+function ExportChatItem({ chat }: { chat: ChatListItem }) {
+  const t = useTranslations('chatShell.actions');
+  async function download(format: (typeof CHAT_EXPORT_FORMATS)[number]) {
+    const res = await fetch(`/api/chat/conversations/${chat.id}/export?format=${format}`).catch(
+      () => null,
+    );
+    if (!res?.ok) {
+      toast.error(t('exportFailed'));
+      return;
+    }
+    const named = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '');
+    const name = named?.[1] ?? `chat.${format}`;
+    saveBlob(await res.blob(), name);
+    toast(t('exported', { name }));
+  }
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger data-action="chat.export" className={ITEM}>
+        <span aria-hidden className="w-3.5 shrink-0 text-center text-foreground">
+          ⤓
+        </span>
+        <span className="flex-1">{t('export')}</span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="w-40 rounded-[14px] p-1.5">
+        {CHAT_EXPORT_FORMATS.map((format) => (
+          <DropdownMenuItem
+            key={format}
+            data-action="chat.exportAs"
+            data-format={format}
+            onClick={() => void download(format)}
+            className={ITEM}
+          >
+            {t(`exportAs.${format}`)}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
+
+/**
+ * The side panel's ⋯ (CHAT-23 `panel.more`, CHAT-01 item 24): Open as full
+ * page, Open in new window; for the author, Pin, Rename, Share with team,
+ * Archive; Delete for the author, or an Admin on a shared chat.
+ */
+export function ChatPanelMenu({
+  chat,
+  onOpenFullPage,
+}: {
+  chat: ChatListItem;
+  onOpenFullPage: () => void;
+}) {
+  const t = useTranslations('chatShell.actions');
+  const tPanel = useTranslations('chatPanel');
+  const actions = useChatActions();
+  if (!actions) return null;
+  const editable = actions.canEdit(chat);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        data-action="panel.more"
+        aria-label={tPanel('more')}
+        title={tPanel('more')}
+        className="flex size-7 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        ⋯
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className={MENU}>
+        <Item glyph="⤢" action="panel.openFullPage" onClick={onOpenFullPage}>
+          {tPanel('openFullPage')}
+        </Item>
+        <Item glyph="⧉" action="chat.openNewWindow" onClick={() => actions.openNewWindow(chat)}>
+          {t('openNewWindow')}
+        </Item>
+        <EditItems chat={chat} />
         {(editable || actions.canDelete(chat)) && <DropdownMenuSeparator />}
         {editable && (
           <Item glyph="▤" action="chat.archive" onClick={() => void actions.archive(chat)}>

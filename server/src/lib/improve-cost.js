@@ -13,6 +13,13 @@
  * can only use the budget up faster, never overspend it. A model here priced
  * higher for a long prompt has its `long` rate, for a call whose input tokens
  * pass `over`.
+ *
+ * A Chat step's input read from the provider's prompt cache is priced at the
+ * model's cache-read rate (`cacheRead`, CHAT-04 §D: a tenth of the input
+ * price for Claude) and input written to it at
+ * CACHE_WRITE_MULTIPLIER times the input price. A model without a known
+ * cache-read rate has its cache reads priced in full: never less than they
+ * cost.
  */
 
 import { syncedPriceFor } from './model-price-cache.js';
@@ -21,15 +28,23 @@ export const MODEL_PRICES = {
   'google/gemini-3-flash-preview': { input: 0.5, output: 3 },
   'google/gemini-3-flash': { input: 0.5, output: 3 },
   'openai/gpt-5-mini': { input: 0.25, output: 2 },
-  'anthropic/claude-haiku-4-5': { input: 1, output: 5 },
+  'anthropic/claude-haiku-4-5': { input: 1, output: 5, cacheRead: 0.1 },
   // The Content Editor's with an Anthropic key (content-brief.js): Haiku reads, Sonnet writes.
   'anthropic/claude-haiku-5-5': {
     input: 0.1,
     output: 0.5,
+    cacheRead: 0.01,
     long: { over: 100_000, input: 0.5, output: 2.5 },
   },
-  'anthropic/claude-sonnet-5-5': { input: 2, output: 10 },
+  'anthropic/claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.2 },
 };
+
+/**
+ * A prompt-cache write costs this many times the input price: Anthropic's
+ * 5-minute cache, the one Chat writes (CHAT-04 §D item 26), and the most any
+ * provider Chat uses charges, so a write is never priced below its cost.
+ */
+export const CACHE_WRITE_MULTIPLIER = 1.25;
 
 export const FALLBACK_PRICE = { input: 5, output: 25 };
 
@@ -80,14 +95,50 @@ export function priceFor(modelId, { promptTokens = 0, synced = false } = {}) {
 }
 
 /**
+ * The input a call read from and wrote to the prompt cache, within its
+ * input tokens (which count both): a provider's count past the input is
+ * held to it, so the rest is never priced below what it was.
+ */
+export function cacheSplit(usage) {
+  const count = (n) => Math.max(0, Number(n) || 0);
+  const input = count(usage?.inputTokens);
+  const read = Math.min(input, count(usage?.cacheReadTokens));
+  const written = Math.min(input - read, count(usage?.cacheWriteTokens));
+  return { input, read, written };
+}
+
+/**
+ * A price's cache-read rate: its own, when it has one above $0 (a `:free`
+ * model's $0 included) and no higher than its input rate; else the input
+ * rate, so a cache read is never priced below its cost.
+ */
+function cacheReadRate(modelId, price) {
+  const rate = Number(price.cacheRead);
+  const usable =
+    price.cacheRead != null &&
+    Number.isFinite(rate) &&
+    (rate > 0 || String(modelId ?? '').endsWith(':free'));
+  return usable ? Math.min(rate, price.input) : price.input;
+}
+
+/**
  * USD cost of one call from the AI SDK's `usage`. `synced`: a Chat step,
- * priced from the synced catalog first (priceFor).
+ * priced from the synced catalog first (priceFor). Its input read from the
+ * prompt cache (`cacheReadTokens`) is priced at the cache-read rate, and
+ * input written to it (`cacheWriteTokens`) at CACHE_WRITE_MULTIPLIER.
  */
 export function generationCostUsd(modelId, usage, { synced = false } = {}) {
-  const input = Number(usage?.inputTokens) || 0;
+  const { input, read, written } = cacheSplit(usage);
   const price = priceFor(modelId, { promptTokens: input, synced });
   const output = Number(usage?.outputTokens) || 0;
-  return (input * price.input + output * price.output) / 1_000_000;
+  const plain = input - read - written;
+  return (
+    (plain * price.input +
+      written * price.input * CACHE_WRITE_MULTIPLIER +
+      read * cacheReadRate(modelId, price) +
+      output * price.output) /
+    1_000_000
+  );
 }
 
 /**

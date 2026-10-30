@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-30
@@ -37,21 +37,53 @@ At the top of the panel, start a **New chat**, open a recent one from **Chat his
 
 The box in the panel starts with chips for what you have on screen: the page, your brand, the date range and the filters you picked. Chat takes them as the scope of your question. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.
 
-An empty panel offers a few questions about the page. Click one to put it in the box, then edit it or send it.
+An empty panel offers a few questions about the page, some from what the page shows, such as the platform that moved most. Click one to put it in the box, then edit it or send it.
 
-On charts and tables, the speech bubble icon next to the title opens the panel with that chart or table attached, so you can ask about it directly. Mentions & Sentiment has them first; more pages follow.
+The speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Brand Visibility, Mentions & Sentiment, Citations, AI Referral Traffic, Prompts and Action Center.
 
 ## Chats in the panel
 
 A chat you start in the panel is saved like any other: it is in **Chat**, where you can carry on with it. If you used a panel chat in the last 30 minutes, the panel opens on it again.
 
+Once the panel has a chat, its **⋯** menu offers **Open as full page**, **Open in new window**, and for your own chats **Pin**, **Rename**, **Share with team**, **Archive** and **Delete**. On the full page, **↙ Back to** the page you came from takes you back there, with the chat in the panel as it is now.
+
 The panel isn't on Chat's own pages, where **Ctrl J** takes you to the message box, or in the Content Editor, which has its own chat.
 
 ## Stop or steer
 
-While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay.
+While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay, and so does the answer so far. The step it was on shows **Stopped**, and the line with the steps says how long it worked, such as **Stopped after 41s · 5 steps**.
 
 You can type while it works. Enter then stops the run and sends what you typed as the next message, so you can redirect it, for example "only blog pages".
+
+## When Chat asks you
+
+When an answer changes what Chat makes and isn't in your data, Chat stops and asks, with 2 to 4 options. The one marked **Recommended** is picked to start with; under each option it says why it fits. When Chat asks more than one thing at once, the card counts them, such as "1 of 2".
+
+Click an option, or press its number, then **Next** or Enter. Where the card says **Pick one or more**, click each one. Type your own answer in **Other…**. **Skip** goes on with the Recommended option.
+
+Once answered, the card folds to one line with the question and your answer, and Chat goes on.
+
+## Answer in the box
+
+While Chat asks, you can also answer in the box below. It shows the Recommended option dim; Tab puts it in, and Enter sends it. A message that isn't one of the options answers every question Chat asked with it. An answer is text only, up to 500 characters.
+
+**Stop** beside the arrow, or Esc, ends the run and leaves its question skipped.
+
+## Change what you track
+
+Admins and Managers can ask Chat to track new prompts in a topic, pause prompts, add or rename a topic, and add or remove competitors. A prompt goes into a topic the brand already has, so Chat adds a new topic first. A prompt, topic or competitor the brand already has is skipped. Your plan's prompt locations still apply: Chat says so when they run out.
+
+Chat asks first, except in **Full auto**. Removing a competitor, or pausing more than five prompts at once, always asks.
+
+Each change is in the **Activity** log, with **Undo** for 7 days (30 days for paused prompts). Undo leaves alone anything someone changed since, and says so. Undoing new prompts pauses them; their first answers, and what they cost, stay. A removed competitor comes back without its timeline events.
+
+## Next moves
+
+When Chat finishes an answer, **Next moves** under it suggests up to three things to do next, such as "Do the same for /features". Click one to send it as your next message. A change it leads to still asks you first where it should.
+
+When the first move carries on with what this answer worked on, the box shows it dim: Tab puts it in, and Enter sends it. Nothing is sent by itself.
+
+Analysts and Agency partners see only moves that read data. Next moves show under the latest answer, and come back when you open the chat again.
 
 ## Shortcuts and your data
 
@@ -73,11 +105,19 @@ While Chat works, one line says what it is doing now, such as "Reading Citations
 
 Under the answer, **Data used** names each source it read, with its rows, and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
 
+## When something goes wrong
+
+A step that fails shows a red mark and why, such as **Timed out**. Chat goes on where it can, and the answer says what it couldn't read.
+
+If the whole answer stops on an error, it says **Stopped: something went wrong** and why, and it still says so after you reload the page. Click **Retry** to send your message again.
+
+If your connection drops while Chat works, the line with the steps says **Reconnecting…**. Chat keeps working meanwhile and picks up where it was; reloading the page shows where it is too. When the monthly AI usage runs out mid-answer, the step it was on shows **Stopped at the AI limit**.
+
 ## AI usage
 
 Chat draws on your workspace's monthly AI usage, shared by every seat. The meter under the box shows how much is used; click it for what used it and when it resets. From 80% it turns amber, and a line above the box says so once a month, on whichever device you are on; **×** closes it.
 
-Once the usage is used up, Chat pauses: the box is off, and a red line above it says until when. Admins can get more AI usage or use their own key from there; others are asked to ask an Admin. In the free trial, starting the plan gives its full monthly AI usage. Chat on your workspace's own AI key keeps working.
+Once the usage is used up, Chat pauses: the box is off, and a red line above it says until when. **Get more AI credits** there opens a window with your plan and the credit packs, and it opens once by itself the first time Chat stops. Admins buy packs; everyone else sees them and can **Ask your Admin**. On Enterprise, admins can also use their own AI key. In the free trial, starting the plan gives its full monthly AI usage.
 
 ## Inbox
 
@@ -113,7 +153,23 @@ Point at a chat in the menu and click **⋯**, or click **⋯** at the top right
 - **Delete** asks first, then deletes the chat for everyone. Click **Undo** within a few seconds to bring it back. A chat that is still working is stopped first.
 - **Open in new window** opens it in another browser window.
 
-**Export chat** is coming soon.
+**Export chat** downloads the whole chat as **Markdown**, **Word** or **PDF**: each question under "You" and its answer after it.
+
+## Copy, download or save an answer
+
+Under every finished answer, three small buttons show their names when you point at them:
+
+- **Copy** copies the answer, with its formatting where you paste it.
+- **Download** gives the answer as **Markdown**, **Word** or **PDF**, and as **CSV** or **Excel** when it has a table (one sheet per table). The file is named after your question and the day, and it carries when the answer was made and how fresh its data was. Downloads aren't kept and use no AI.
+- **Save to Files** keeps the answer for your whole workspace; it then reads **In Files**. Saved answers count toward your workspace's storage: 1 GB in the free trial, 5 GB on Starter, 25 GB on Growth, and what your contract says on Enterprise. When storage is full, the answer isn't saved, and the button says so.
+
+Every role can copy, download and save answers it can open.
+
+## What Chat makes
+
+When Chat makes something for you, such as a page saved as a Content draft, it shows under the answer as a card with its name and type. It is also kept in **Files** for your whole workspace, and the card says **In Files**. From the card, **Copy** copies it, **Download** gives it in the formats it has (for a page: HTML, Markdown, Word or PDF), and **Open in Content Editor** opens the page to keep working on it. When storage is full, the card says it wasn't saved to Files, with **Get more storage** to add a storage pack. Click **Files** in the chat menu to find, copy or download everything kept there.
+
+The pen button under an answer, **Open in Content Editor**, turns the answer itself into a new Content draft in your brand and opens it.
 
 ## Share a chat with your team
 

@@ -80,6 +80,9 @@ const OPEN_ACTIONS: Record<string, string> = {
   'chat-settings.ts:setManagerExecute': 'checks ctx.plan.writable itself, answering read_only',
   'chat-settings.ts:removeAutoChoice':
     "removes the person's own Don't ask again tick: takes an auto-approval back, never gives one",
+  // An add-on pack (CHAT-18): only on an active, paid plan.
+  'add-ons.ts:startAddOnPurchase':
+    'checks the plan itself (subscription_status active), answering trial or no_plan',
 };
 
 /** Actions that take a brand's own id under another name: file:function → the parameter. */
@@ -119,7 +122,9 @@ const OPEN_ROUTES: Record<string, string> = {
   'chat/runs:POST': 'the engine refuses a read-only workspace with the 402 body (startChatRun)',
   'chat/runs/[id]/approve:POST': 'the engine answers 402 (prepareResume), but for Ask your Admin',
   'chat/runs/[id]/skip:POST': 'saying no to a change starts no cost',
+  'chat/runs/[id]/answer:POST': 'the engine answers 402 (prepareResume) while read-only',
   'chat/runs/[id]/stop:POST': 'stopping a run starts no cost',
+  'chat/files/zip:POST': 'reads only: the picked files as one .zip, nothing kept',
 };
 
 /** What checks a route's plan before it writes. */

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { PANEL_REOPEN_MS, nextPanelSize, panelRouteOf, panelSizeOf, reopenChatId } from './panel';
+import {
+  PANEL_REOPEN_MS,
+  nextPanelSize,
+  panelReturnOf,
+  panelRouteOf,
+  panelSizeOf,
+  reopenChatId,
+} from './panel';
 
 /** The side panel's rules (CHAT-01 items 13–24). */
 
@@ -45,5 +52,42 @@ describe('reopenChatId', () => {
     expect(reopenChatId(null, now)).toBeNull();
     expect(reopenChatId('not json', now)).toBeNull();
     expect(reopenChatId(JSON.stringify({ id: 4, at: now }), now)).toBeNull();
+  });
+});
+
+describe('panelReturnOf', () => {
+  it('returns to the app page the chat was opened from, with its filters', () => {
+    expect(panelReturnOf('/dashboard/mentions?platform=chatgpt-web')).toBe(
+      '/dashboard/mentions?platform=chatgpt-web',
+    );
+    expect(panelReturnOf('/dashboard/action-center/actions')).toBe(
+      '/dashboard/action-center/actions',
+    );
+    // A dot inside a name, or in the query, is fine.
+    expect(panelReturnOf('/dashboard/citations?domain=example.com&q=..')).toBe(
+      '/dashboard/citations?domain=example.com&q=..',
+    );
+  });
+
+  it('returns nowhere else: another site, Chat, the editor, outside the dashboard', () => {
+    for (const from of [
+      null,
+      '',
+      'https://example.com/dashboard/mentions',
+      '//example.com/dashboard/x',
+      '/dashboard//example.com',
+      '/dashboard/chat/abc',
+      '/dashboard/content/editor/d1',
+      '/sign-in',
+      '/dashboard/mentions\\x',
+      // Dot segments resolve elsewhere: out of the dashboard, or into Chat.
+      '/dashboard/../sign-in',
+      '/dashboard/./chat/abc',
+      '/dashboard/%2e%2e/%2E%2e/settings',
+      '/dashboard/x/%2e%2e/chat/abc',
+      '/dashboard/x/.%2E?tab=1',
+    ]) {
+      expect(panelReturnOf(from)).toBeNull();
+    }
   });
 });

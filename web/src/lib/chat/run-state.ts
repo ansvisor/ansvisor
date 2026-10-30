@@ -1,4 +1,13 @@
-import type { ChatConfirm, ChatDenialCard, ChatEvent, ChatRunSummary, ChatStep } from './events';
+import type {
+  ChatAsk,
+  ChatConfirm,
+  ChatNextMove,
+  ChatDeliverable,
+  ChatDenialCard,
+  ChatEvent,
+  ChatRunSummary,
+  ChatStep,
+} from './events';
 import { isChatEventType } from './events';
 
 /**
@@ -26,8 +35,14 @@ export interface ClientRun {
   text: string;
   /** The card the run waits on; null when none. */
   confirm: ChatConfirm | null;
+  /** The question card the run waits on (CHAT-07); null when none. */
+  question: ChatAsk | null;
+  /** What could come next, once it finished (CHAT-07 §C): best first. */
+  nextMoves: ChatNextMove[];
   /** Out-of-permission answers, in order. */
   denials: ChatDenialCard[];
+  /** What it made, in order (CHAT-06 item 1): the n-th is the run's file n. */
+  deliverables: ChatDeliverable[];
   summary: ChatRunSummary | null;
   generatedAt: string | null;
   dataAsOf: string | null;
@@ -43,7 +58,10 @@ export function emptyRun(status: ClientRunStatus = 'running'): ClientRun {
     steps: [],
     text: '',
     confirm: null,
+    question: null,
+    nextMoves: [],
     denials: [],
+    deliverables: [],
     summary: null,
     generatedAt: null,
     dataAsOf: null,
@@ -74,7 +92,15 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
       ) {
         next.confirm = null;
       }
-      if (next.status === 'waiting' && !next.confirm) next.status = 'running';
+      // An answered question's step closes on its answer: the card folds into it.
+      if (
+        run.question &&
+        event.data.step.n === run.question.n &&
+        event.data.step.status !== 'waiting'
+      ) {
+        next.question = null;
+      }
+      if (next.status === 'waiting' && !next.confirm && !next.question) next.status = 'running';
       return next;
     }
     case 'text.delta':
@@ -84,25 +110,50 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
       next.confirm = event.data;
       next.status = 'waiting';
       return next;
+    case 'ask.created':
+      next.question = event.data;
+      next.status = 'waiting';
+      return next;
+    case 'deliverable.created':
+      next.deliverables = [...run.deliverables, event.data];
+      return next;
+    case 'next_moves':
+      next.nextMoves = event.data.moves;
+      return next;
     case 'access.denied':
       next.denials = [...run.denials, event.data];
       return next;
     case 'run.finished': {
       const { generatedAt, dataAsOf, ...summary } = event.data;
-      return { ...next, status: 'done', confirm: null, summary, generatedAt, dataAsOf };
+      return {
+        ...next,
+        status: 'done',
+        confirm: null,
+        question: null,
+        summary,
+        generatedAt,
+        dataAsOf,
+      };
     }
     case 'run.stopped': {
       const { reason: _reason, ...summary } = event.data;
       void _reason;
-      return { ...next, status: 'stopped', confirm: null, summary };
+      return { ...next, status: 'stopped', confirm: null, question: null, summary };
     }
     case 'run.error': {
       const { code: _code, reason, ...summary } = event.data;
       void _code;
-      return { ...next, status: 'error', confirm: null, summary, errorReason: reason ?? null };
+      return {
+        ...next,
+        status: 'error',
+        confirm: null,
+        question: null,
+        summary,
+        errorReason: reason ?? null,
+      };
     }
     case 'run.paused_cap':
-      return { ...next, status: 'paused_cap', confirm: null, summary: event.data };
+      return { ...next, status: 'paused_cap', confirm: null, question: null, summary: event.data };
     default:
       return next;
   }

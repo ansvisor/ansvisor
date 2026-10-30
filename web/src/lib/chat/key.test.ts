@@ -207,7 +207,7 @@ describe('resolveChatModelKey, Chat off', () => {
 
 describe('chatRunsOnOwnKey', () => {
   it('says yes only where resolveChatModelKey would pick the workspace’s own key', async () => {
-    org = { plan: 'enterprise', legacy_key_grandfathered: false, legacy_key_until: null };
+    org = orgOn('enterprise');
     ownKey = CUSTOMER;
     expect(await chatRunsOnOwnKey(ORG)).toBe(true);
 
@@ -215,28 +215,20 @@ describe('chatRunsOnOwnKey', () => {
     ownKey = null;
     expect(await chatRunsOnOwnKey(ORG)).toBe(false);
     ownKey = CUSTOMER;
-    org = { plan: 'growth', legacy_key_grandfathered: false, legacy_key_until: null };
+    org = orgOn('growth');
     expect(await chatRunsOnOwnKey(ORG)).toBe(false);
-    org = { plan: 'starter', legacy_key_grandfathered: false, legacy_key_until: null };
+    org = orgOn('starter');
     expect(await chatRunsOnOwnKey(ORG)).toBe(false);
 
-    // A kept key, for its 30 days only.
-    org = {
-      plan: 'growth',
-      legacy_key_grandfathered: true,
-      legacy_key_until: new Date(Date.now() + DAY).toISOString(),
-    };
+    // A key saved before Chat: its 30 days, then the budget.
+    org = orgOn('growth', true, new Date(Date.now() + DAY).toISOString());
     expect(await chatRunsOnOwnKey(ORG)).toBe(true);
-    org = {
-      plan: 'growth',
-      legacy_key_grandfathered: true,
-      legacy_key_until: new Date(Date.now() - DAY).toISOString(),
-    };
+    org = orgOn('growth', true, new Date(Date.now() - DAY).toISOString());
     expect(await chatRunsOnOwnKey(ORG)).toBe(false);
   });
 
   it('is no with Chat off or self-hosted, where nothing is metered', async () => {
-    org = { plan: 'enterprise', legacy_key_grandfathered: false, legacy_key_until: null };
+    org = orgOn('enterprise');
     ownKey = CUSTOMER;
     vi.stubEnv('CHAT_AGENTIC', 'false');
     expect(await chatRunsOnOwnKey(ORG)).toBe(false);

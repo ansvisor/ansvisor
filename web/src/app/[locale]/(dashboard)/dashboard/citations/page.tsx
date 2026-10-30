@@ -25,6 +25,10 @@ import {
 import { toast } from 'sonner';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel } from '@/lib/chat/page-context';
+import { formatRegionDisplay } from '@/lib/region';
 import { Link } from '@/i18n/navigation';
 import { AddCompetitorButton } from '@/components/citations/add-competitor-button';
 import {
@@ -852,6 +856,8 @@ function writeFiltersToUrl(f: UIFilters) {
 export default function CitationsPage() {
   const t = useTranslations('citations');
   const tCommon = useTranslations('common');
+  const tChat = useTranslations('chatPanel.suggest');
+  const tChatRange = useTranslations('chatPanel.range');
   const { getActiveBrand } = useBrandStore();
   const brand = getActiveBrand();
 
@@ -1200,6 +1206,71 @@ export default function CitationsPage() {
     }
   }, [brand, data, gaps, sourceTab]);
 
+  // Chat's side panel sees the page (W1-08): its dates and filters, the
+  // source cited most, and the sources table to ask about.
+  const scopeLabel = {
+    all: tCommon('sourceAll'),
+    own: tCommon('sourceBrand'),
+    competitors: tCommon('sourceCompetitors'),
+    third_party: tCommon('sourceThirdParty'),
+  }[filters.sourceScope];
+  const topSource = data?.rows.reduce<CitationDomainRow | null>(
+    (best, row) => (!best || row.totalCitations > best.totalCitations ? row : best),
+    null,
+  );
+  const topicName = topics.find((topic) => topic.id === filters.topic)?.name;
+  const promptText = prompts.find((prompt) => prompt.id === filters.prompt)?.text;
+  useChatPageContext(
+    brand
+      ? {
+          pageName: t('title'),
+          dateRange: {
+            from: filters.datePreset === 'custom' ? filters.dateFrom : filters.datePreset,
+            to: filters.datePreset === 'custom' ? filters.dateTo : null,
+            label: rangeChipLabel(
+              filters.datePreset,
+              { from: filters.dateFrom, to: filters.dateTo },
+              (key, values) => tChatRange(key, values),
+            ),
+          },
+          filters: [
+            {
+              key: 'platform',
+              label: filters.platform
+                ? (availablePlatforms.find((p) => p.value === filters.platform)?.label ??
+                  getGroupedPlatformLabel(filters.platform))
+                : tCommon('allPlatforms'),
+              value: filters.platform,
+            },
+            ...(filters.region
+              ? [
+                  {
+                    key: 'region',
+                    label: formatRegionDisplay(filters.region),
+                    value: filters.region,
+                  },
+                ]
+              : []),
+            ...(filters.topic && topicName
+              ? [{ key: 'topic', label: topicName, value: filters.topic }]
+              : []),
+            ...(filters.prompt && promptText
+              ? [{ key: 'prompt', label: promptText, value: filters.prompt }]
+              : []),
+            { key: 'sources', label: scopeLabel, value: filters.sourceScope },
+          ],
+          suggestions: [
+            ...(topSource && topSource.totalCitations > 0
+              ? [tChat('citedMost', { domain: topSource.domain })]
+              : []),
+            tChat('citeRivals'),
+            tChat('actions'),
+          ],
+          referenceables: [{ type: 'table', id: 'citations-sources', label: t('sourcesTitle') }],
+        }
+      : null,
+  );
+
   const exportDisabled =
     isExporting ||
     isLoading ||
@@ -1278,7 +1349,12 @@ export default function CitationsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">{t('sourcesTitle')}</CardTitle>
+                <div className="flex items-center gap-1">
+                  <CardTitle className="text-base">{t('sourcesTitle')}</CardTitle>
+                  <AskAboutThis
+                    reference={{ type: 'table', id: 'citations-sources', label: t('sourcesTitle') }}
+                  />
+                </div>
               </CardHeader>
               <CardContent>
                 {/* Only Domains and URLs are scoped by it — Competitor Gaps and
