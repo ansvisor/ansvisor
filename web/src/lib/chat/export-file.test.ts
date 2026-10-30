@@ -150,4 +150,13 @@ describe('exportAnswer', () => {
       '/URI (https://app.ansvisor.com/dashboard/citations?platform=perplexity)',
     );
   }, 30_000);
+
+  it('writes a long answer to a PDF of many pages, each numbered', async () => {
+    // Past ten pages, the page number used to throw "unsupported number".
+    const paragraph = `Perplexity ${'citations dropped on the pricing page '.repeat(10)}`;
+    const markdown = Array.from({ length: 150 }, () => paragraph).join('\n\n');
+    const file = await exportAnswer({ ...NO_TABLE, markdown }, 'pdf');
+    const pdf = Buffer.from(file!.body).toString('latin1');
+    expect(pdf.match(/\/Type \/Page\b(?!s)/g)!.length).toBeGreaterThan(10);
+  }, 60_000);
 });
