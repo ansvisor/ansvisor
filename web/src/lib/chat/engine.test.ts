@@ -503,6 +503,82 @@ describe("a read's scope (W1-17)", () => {
   });
 });
 
+describe('the prompt, for the cache (W1-18)', () => {
+  const MARK = { anthropic: { cacheControl: { type: 'ephemeral' } } };
+  type Sent = { role: string; content: unknown; providerOptions?: unknown };
+  const sent = (options: CallOptions) => options.prompt as unknown as Sent[];
+
+  it('puts the core rules and the workspace first, marked, with the day only in the turn', async () => {
+    const { haiku, sonnet } = useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Ok.')],
+    );
+    await turn(ADMIN, 'How are we doing?');
+    for (const options of [haiku.seen[0], sonnet.seen[0]]) {
+      const systems = sent(options).filter((m) => m.role === 'system');
+      expect(systems).toHaveLength(2);
+      for (const system of systems) {
+        expect(system.providerOptions).toEqual(MARK);
+        expect(String(system.content)).not.toMatch(/Today is|2026-/);
+      }
+      expect(String(systems[1].content)).toContain("The person's role is admin");
+      const turnText = JSON.stringify(sent(options).find((m) => m.role === 'user'));
+      expect(turnText).toMatch(/Today is \d{4}-\d{2}-\d{2}\./);
+    }
+    // The reader's second step reads its first back: its last message is marked.
+    expect(sent(haiku.seen[1]).at(-1)?.providerOptions).toEqual(MARK);
+  });
+
+  it('gives the writer the chat so far, marked at its end, and the reader a few lines of it', async () => {
+    useModels([READY], [text('Visibility is 42.')]);
+    const first = await engine.startChatRun(ADMIN, { message: 'First question?', brandId: BRAND });
+    if (!first.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, first.runId);
+
+    const { haiku, sonnet } = useModels([READY], [text('Still 42.')]);
+    const second = await engine.startChatRun(ADMIN, {
+      message: 'And now?',
+      conversationId: first.conversationId,
+    });
+    if (!second.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, second.runId);
+
+    const write = sent(sonnet.seen[0]).filter((m) => m.role !== 'system');
+    expect(write).toHaveLength(3);
+    expect(JSON.stringify(write[0].content)).toContain('First question?');
+    expect(write[1]).toMatchObject({ role: 'assistant', providerOptions: MARK });
+    expect(JSON.stringify(write[1].content)).toContain('Visibility is 42.');
+    const read = sent(haiku.seen[0]).filter((m) => m.role !== 'system');
+    expect(read).toHaveLength(1);
+    expect(JSON.stringify(read[0].content)).toContain('Asked: First question?');
+    expect(JSON.stringify(read[0].content)).toContain('And now?');
+  });
+
+  it("charges a cache write's premium on top of what the step read", async () => {
+    useModels(
+      [READY],
+      [
+        [
+          { type: 'text-start', id: 't' },
+          { type: 'text-delta', id: 't', delta: 'Ok.' },
+          { type: 'text-end', id: 't' },
+          {
+            type: 'finish',
+            finishReason: { unified: 'stop', raw: 'end_turn' },
+            usage: {
+              inputTokens: { total: 1_120, noCache: 20, cacheRead: 1_000, cacheWrite: 100 },
+              outputTokens: { total: 30, text: 30, reasoning: 0 },
+            },
+          },
+        ],
+      ],
+    );
+    await turn(ADMIN, 'How are we doing?');
+    expect(holds.at(-1)!.charge).toHaveBeenCalledWith({ inputTokens: 1_145, outputTokens: 30 });
+    expect(engine.chargedInputTokens({ inputTokens: undefined })).toBeUndefined();
+  });
+});
+
 describe('changes wait for the person', () => {
   it('never runs an EXECUTE without the click, even in Full auto', async () => {
     const { sonnet } = useModels(
