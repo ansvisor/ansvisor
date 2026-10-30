@@ -15,6 +15,10 @@ vi.mock('@/lib/actions/cancel-feedback', () => ({
 }));
 const refresh = vi.hoisted(() => vi.fn());
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
+const refreshAiUsage = vi.hoisted(() => vi.fn());
+vi.mock('@/components/providers/ai-usage-provider', () => ({
+  useAiUsage: () => ({ usage: null, refresh: refreshAiUsage }),
+}));
 
 (
   globalThis as typeof globalThis & {
@@ -319,6 +323,8 @@ describe('buying during the free trial', () => {
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'active' }));
     // The layout reads the plan again: a read-only workspace opens up.
     expect(refresh).toHaveBeenCalledTimes(1);
+    // The header meter reads the AI usage again: the paid period starts at 0.
+    expect(refreshAiUsage).toHaveBeenCalledTimes(1);
   });
 
   it('buys a year without a code', async () => {
@@ -350,6 +356,7 @@ describe('buying during the free trial', () => {
       action: { label: 'Update card', onClick: expect.any(Function) },
     });
     expect(onUpdate).not.toHaveBeenCalled();
+    expect(refreshAiUsage).not.toHaveBeenCalled();
     // The dialog stays open to try again.
     expect(document.body.textContent).toContain('Buy Starter now?');
   });
