@@ -169,6 +169,18 @@ describe('ChatMenuView', () => {
     expect(action('chatMenu.openChat')).toHaveLength(4);
   });
 
+  it("leaves a teammate's shared chat out of the Inbox: it waits on its author", async () => {
+    await render(
+      menu([
+        chat('a', { state: 'running' }),
+        chat('t', { mine: false, shared: true, ownerInitials: 'SL', state: 'needsYou' }),
+      ]),
+    );
+    const inbox = action('chatMenu.openInbox')[0];
+    expect(inbox.textContent).toBe('Inbox1');
+    expect(inbox.getAttribute('aria-label')).toBe('Inbox · 1 item');
+  });
+
   it('groups the other chats by day, bold while unread, and folds Chats', async () => {
     await render(
       menu([

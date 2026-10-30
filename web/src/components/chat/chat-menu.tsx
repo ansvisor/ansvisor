@@ -6,7 +6,7 @@ import { Link, usePathname } from '@/i18n/navigation';
 import { DotLegend } from '@/components/agentic/dot-legend';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ChatListItem } from '@/lib/chat/conversations';
-import { AT_WORK_ROWS, chatMenuLists, needsYouCount, type DayGroup } from '@/lib/chat/menu-groups';
+import { AT_WORK_ROWS, chatMenuLists, type DayGroup } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
 import { useChatList, type ChatListStatus } from './chat-list-provider';
 import { ChatRowMenu } from './chat-menus';
@@ -197,9 +197,11 @@ export function ChatMenuView({
 
   const now = useMemo(() => nowProp ?? new Date(), [nowProp]);
   const { atWork, groups } = useMemo(() => chatMenuLists(chats, now), [chats, now]);
-  const needsYou = needsYouCount(chats);
-  // The Inbox holds what Agents at work lists: its count, with an amber dot while any needs you.
-  const inbox = atWork.length;
+  // The Inbox holds the person's own chats in Agents at work: its count, with
+  // an amber dot while any needs them.
+  const inboxRows = atWork.filter((chat) => chat.mine);
+  const needsYou = inboxRows.filter((chat) => chat.state === 'needsYou').length;
+  const inbox = inboxRows.length;
   const inboxLabel = needsYou
     ? t('inboxLabelNeedsYou', { count: inbox, needsYou })
     : t('inboxLabel', { count: inbox });
