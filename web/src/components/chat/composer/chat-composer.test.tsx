@@ -151,6 +151,7 @@ describe('ChatComposer', () => {
     expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('Why did our citations drop?', {
       context: [],
       references: [],
+      attachments: [],
     });
     expect(box().value).toBe('');
   });
@@ -179,6 +180,7 @@ describe('ChatComposer', () => {
     expect(handlers.onSteer).toHaveBeenCalledExactlyOnceWith('only blog pages', {
       context: [],
       references: [],
+      attachments: [],
     });
     expect(handlers.onSend).not.toHaveBeenCalled();
   });
@@ -276,6 +278,7 @@ describe('ChatComposer: context chips and the ghost suggestion (W1-11)', () => {
     expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('What changed?', {
       context: chips,
       references: [],
+      attachments: [],
     });
   });
 
@@ -293,7 +296,11 @@ describe('ChatComposer: context chips and the ghost suggestion (W1-11)', () => {
     expect(shown()).toBeNull();
     expect(handlers.onSend).not.toHaveBeenCalled();
     await press('Enter');
-    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith(ghost, { context: [], references: [] });
+    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith(ghost, {
+      context: [],
+      references: [],
+      attachments: [],
+    });
   });
 
   it('gives way to typing, comes back on an empty box, and fills the box on a click', async () => {
@@ -412,6 +419,7 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('Explain this', {
       context: [],
       references: [chart],
+      attachments: [],
     });
     expect(container.querySelector('[data-action="composer.removeChip"]')).toBeNull();
   });
@@ -438,17 +446,18 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
   });
 
   it('attaches files and connects a tool from ＋ for an Admin', async () => {
-    const onAttach = vi.fn();
-    await render({ onAttach });
+    const pick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
+    await render({ uploader: { upload: vi.fn(), remove: vi.fn() } });
     await act(async () => button('Attach, read a page or connect a tool')!.click());
     expect(options()).toEqual([
-      'Attach files',
+      'Attach filesUp to 5 files, 10 MB each',
       'Connect a toolAdmins connect · others ask an Admin',
     ]);
     await act(async () =>
       container.querySelector<HTMLButtonElement>('[data-action="plusMenu.attachFiles"]')!.click(),
     );
-    expect(onAttach).toHaveBeenCalledOnce();
+    expect(pick).toHaveBeenCalledOnce();
+    pick.mockRestore();
 
     await act(async () => button('Attach, read a page or connect a tool')!.click());
     await act(async () =>
@@ -471,5 +480,87 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
       ruleKind: 'role',
     });
     expect(toast.success).toHaveBeenCalledWith('Sent to your Admins');
+  });
+});
+
+describe('ChatComposer: attached files (W1-13)', () => {
+  const MB = 1024 * 1024;
+  const file = (name: string, type: string, size: number) => {
+    const f = new File(['x'], name, { type });
+    Object.defineProperty(f, 'size', { value: size });
+    return f;
+  };
+  async function pick(...files: File[]) {
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(input, 'files', { configurable: true, value: files });
+    await act(async () => input.dispatchEvent(new Event('change', { bubbles: true })));
+  }
+  const fileChips = () =>
+    [...container.querySelectorAll<HTMLElement>('[data-slot="composer-file"]')].map((c) => [
+      c.dataset.status,
+      c.textContent,
+    ]);
+  const alert = () => container.querySelector('[role="alert"]')?.textContent ?? null;
+
+  it('shows each file as a chip while it goes up, and sends the ready ones with the message', async () => {
+    let finish: (value: { ok: true; id: string }) => void = () => {};
+    const upload = vi.fn(
+      () => new Promise<{ ok: true; id: string }>((resolve) => (finish = resolve)),
+    );
+    await render({ uploader: { upload, remove: vi.fn() } });
+    await type('Read this brief');
+    await pick(file('brief.pdf', 'application/pdf', 2 * MB));
+    expect(fileChips()).toEqual([['uploading', 'PDFbrief.pdfUploading…×']]);
+    // Send waits for the file.
+    expect(button('Send')!.disabled).toBe(true);
+    expect(under()).toContain('Send waits for your files');
+
+    await act(async () => finish({ ok: true, id: 'up-1' }));
+    expect(fileChips()).toEqual([['ready', 'PDFbrief.pdf×']]);
+    await press('Enter');
+    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('Read this brief', {
+      context: [],
+      references: [],
+      attachments: ['up-1'],
+    });
+    expect(fileChips()).toEqual([]);
+  });
+
+  it('says why a file can’t go: its type, over 10 MB, or a sixth', async () => {
+    const upload = vi.fn(async () => ({ ok: true as const, id: 'up' }));
+    await render({ uploader: { upload, remove: vi.fn() } });
+    await pick(file('setup.exe', 'application/x-msdownload', MB));
+    expect(alert()).toBe("This file type isn't supported.");
+    await pick(file('big.pdf', 'application/pdf', 12 * MB));
+    expect(alert()).toBe('Files must be 10 MB or smaller.');
+    await pick(...['a', 'b', 'c', 'd', 'e', 'f'].map((n) => file(`${n}.csv`, 'text/csv', 100)));
+    expect(alert()).toBe('You can attach up to 5 files.');
+    expect(fileChips()).toHaveLength(5);
+    expect(upload).toHaveBeenCalledTimes(5);
+  });
+
+  it('offers Retry for a file that failed, and takes a file away with ×', async () => {
+    const upload = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, failure: 'failed' })
+      .mockResolvedValueOnce({ ok: true, id: 'up-2' });
+    const remove = vi.fn();
+    await render({ uploader: { upload, remove } });
+    await pick(file('data.csv', 'text/csv', 100));
+    expect(alert()).toBe('Upload failed.Retry');
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-action="composer.retryUpload"]')!.click(),
+    );
+    expect(fileChips()).toEqual([['ready', 'CSVdata.csv×']]);
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-action="composer.removeFile"]')!.click(),
+    );
+    expect(fileChips()).toEqual([]);
+    expect(remove).toHaveBeenCalledWith('up-2');
+  });
+
+  it('attaches nothing without the page’s uploader', async () => {
+    await render();
+    expect(container.querySelector('input[type="file"]')).toBeNull();
   });
 });

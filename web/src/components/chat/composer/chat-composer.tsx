@@ -9,6 +9,13 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { MAX_REFERENCES, type ChatReference } from '@/lib/chat/references';
+import {
+  CHAT_UPLOAD_TYPES,
+  UPLOAD_ACCEPT,
+  uploadProblem,
+  uploadTypeOf,
+  type UploadProblem,
+} from '@/lib/chat/uploads';
 import { cn } from '@/lib/utils';
 import { composerKeyAction } from './composer-keys';
 import {
@@ -46,10 +53,29 @@ export interface ComposerChip {
   label: string;
 }
 
-/** What goes with a sent text: the chips still in the box, and the data referenced with @. */
+/** What goes with a sent text: the chips still in the box, the data referenced with @, and the files attached. */
 export interface ComposerSend {
   context: ComposerChip[];
   references: ChatReference[];
+  /** The attachments' ids (chat_uploads), each up and ready. */
+  attachments: string[];
+}
+
+/**
+ * How the composer attaches a file (W1-13): the page's, for the chat it is
+ * in (uploadChatFile, dropChatUpload). Without it, nothing is attached.
+ */
+export interface ComposerUploader {
+  upload: (file: File) => Promise<{ ok: true; id: string } | { ok: false; failure: string }>;
+  remove: (id: string) => void | Promise<void>;
+}
+
+/** A file in the box: going up, up (its id), or failed (Retry). */
+interface AttachedFile {
+  key: string;
+  file: File;
+  status: 'uploading' | 'ready' | 'failed';
+  id?: string;
 }
 
 /** A chip's label as it shows: cut at CHIP_LABEL characters. */
@@ -105,7 +131,7 @@ export function ChatComposer({
   ghost,
   references: pageReferences = [],
   searchReferences,
-  onAttach,
+  uploader,
   placeholder,
   disabled = false,
   usage,
@@ -139,8 +165,8 @@ export function ChatComposer({
   references?: ChatReference[];
   /** The brand's matches for "@…" (searchChatReferences); none without it. */
   searchReferences?: (query: string) => Promise<ChatReference[]>;
-  /** Attach files in the ＋ menu (W1-13); not listed without it. */
-  onAttach?: () => void;
+  /** Attaching files: ＋ Attach files, drop and paste (W1-13); none without it. */
+  uploader?: ComposerUploader;
   /** The empty box's line; "Ask anything…" by default. */
   placeholder?: string;
   /** No sending at all (the usage cap's state, W1-23). */
@@ -165,9 +191,14 @@ export function ChatComposer({
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [active, setActive] = useState(0);
   const [found, setFound] = useState<{ query: string; refs: ChatReference[] } | null>(null);
+  const [files, setFiles] = useState<AttachedFile[]>([]);
+  const [fileProblem, setFileProblem] = useState<UploadProblem | null>(null);
+  const picker = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const hasText = text.trim().length > 0;
+  const uploading = files.some((f) => f.status === 'uploading');
+  const failedFiles = files.some((f) => f.status === 'failed');
   // The ghost shows in an empty box, not while a run answers or the box is off.
   const ghostShown = !!ghost && text === '' && !running && !disabled;
   const ghostId = useId();
@@ -230,15 +261,16 @@ export function ChatComposer({
   const atLoading = menu?.kind === 'at' && !!searchReferences && found?.query !== menu.query;
 
   const plusItems: PlusItem[] = [
-    ...(onAttach
+    ...(uploader
       ? [
           {
             key: 'attach' as const,
             mark: '⤒',
             label: t('plus.attach'),
+            note: t('plus.attachNote'),
             onPick: () => {
               setMenu(null);
-              onAttach();
+              picker.current?.click();
             },
           },
         ]
@@ -264,6 +296,59 @@ export function ChatComposer({
         : menu?.kind === 'plus'
           ? plusItems.length
           : 0;
+
+  /** One file going up: its chip turns ready, or failed with Retry. */
+  function send(entry: AttachedFile) {
+    if (!uploader) return;
+    void uploader
+      .upload(entry.file)
+      .catch(() => ({ ok: false as const, failure: 'failed' }))
+      .then((result) => {
+        setFiles((all) =>
+          all.map((f) =>
+            f.key !== entry.key
+              ? f
+              : result.ok
+                ? { ...f, status: 'ready', id: result.id }
+                : { ...f, status: 'failed' },
+          ),
+        );
+      });
+  }
+
+  /** Files picked, dropped or pasted: each one that may go up starts; the first problem shows. */
+  function attach(list: FileList | File[]) {
+    if (!uploader) return;
+    let count = files.length;
+    let problem: UploadProblem | null = null;
+    const added: AttachedFile[] = [];
+    for (const file of Array.from(list)) {
+      const why = uploadProblem(file, count);
+      if (why) {
+        problem ??= why;
+        continue;
+      }
+      count += 1;
+      added.push({ key: `${Date.now()}-${count}-${file.name}`, file, status: 'uploading' });
+    }
+    setFileProblem(problem);
+    if (added.length === 0) return;
+    setFiles((all) => [...all, ...added]);
+    added.forEach(send);
+  }
+
+  /** × on a file: gone from the box, and from the server once it was up. */
+  function dropFile(entry: AttachedFile) {
+    setFiles((all) => all.filter((f) => f.key !== entry.key));
+    if (entry.id) void uploader?.remove(entry.id);
+  }
+
+  /** Retry: every failed file goes up again. */
+  function retryFiles() {
+    const failed = files.filter((f) => f.status === 'failed');
+    setFiles((all) => all.map((f) => (f.status === 'failed' ? { ...f, status: 'uploading' } : f)));
+    failed.forEach(send);
+  }
 
   /** One click asks the workspace's Admins to connect a tool (B2's requests). */
   async function askToConnect() {
@@ -362,23 +447,31 @@ export function ChatComposer({
 
   async function submit(steer: boolean) {
     const message = text.trim();
-    if (!message || sending || disabled) return;
+    if (!message || sending || disabled || uploading) return;
     const handler = steer ? onSteer : onSend;
     if (!handler) return;
     const sentRefs = refs;
+    const sentFiles = files;
     setSending(true);
     setText('');
     setRefs([]);
+    setFiles([]);
+    setFileProblem(null);
     setMenu(null);
-    try {
-      const sent = await handler(message, { context: chips, references: sentRefs });
-      if (sent === false) {
-        setText(message);
-        setRefs(sentRefs);
-      }
-    } catch {
+    const restore = () => {
       setText(message);
       setRefs(sentRefs);
+      setFiles(sentFiles);
+    };
+    try {
+      const sent = await handler(message, {
+        context: chips,
+        references: sentRefs,
+        attachments: sentFiles.flatMap((f) => (f.status === 'ready' && f.id ? [f.id] : [])),
+      });
+      if (sent === false) restore();
+    } catch {
+      restore();
     } finally {
       setSending(false);
       box.current?.focus();
@@ -412,11 +505,33 @@ export function ChatComposer({
   return (
     <div ref={root} className={cn('w-full', className)}>
       <div
+        onDragOver={(e) => {
+          if (uploader && e.dataTransfer.types.includes('Files')) e.preventDefault();
+        }}
+        onDrop={(e) => {
+          if (!uploader || e.dataTransfer.files.length === 0) return;
+          e.preventDefault();
+          attach(e.dataTransfer.files);
+        }}
         className={cn(
           'relative rounded-[14px] border bg-card shadow-[0_1px_2px_rgba(10,10,10,.04)] transition-colors focus-within:border-foreground/25',
           disabled && 'bg-muted/40',
         )}
       >
+        {uploader && (
+          <input
+            ref={picker}
+            type="file"
+            multiple
+            hidden
+            accept={UPLOAD_ACCEPT}
+            data-action="composer.pickFiles"
+            onChange={(e) => {
+              if (e.target.files) attach(e.target.files);
+              e.target.value = '';
+            }}
+          />
+        )}
         {menu?.kind === 'slash' && (
           <SlashMenu shortcuts={shortcuts} active={active} onPick={pickShortcut} />
         )}
@@ -456,6 +571,43 @@ export function ChatComposer({
             })}
           </div>
         )}
+        {files.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 px-2.5 pt-2">
+            {files.map((entry) => {
+              const type = uploadTypeOf(entry.file);
+              return (
+                <span
+                  key={entry.key}
+                  data-slot="composer-file"
+                  data-status={entry.status}
+                  title={entry.file.name}
+                  className={cn(
+                    'inline-flex h-[22px] max-w-[220px] items-center gap-1 rounded-[7px] border bg-muted/60 pr-1 pl-1.5 text-[11.5px] text-foreground/80',
+                    entry.status === 'failed' &&
+                      'border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300',
+                  )}
+                >
+                  <b className="text-[10px] font-semibold">
+                    {type ? CHAT_UPLOAD_TYPES[type].tag : ''}
+                  </b>
+                  <span className="truncate">{entry.file.name}</span>
+                  {entry.status === 'uploading' && (
+                    <span className="shrink-0 text-muted-foreground">{t('files.uploading')}</span>
+                  )}
+                  <button
+                    type="button"
+                    data-action="composer.removeFile"
+                    onClick={() => dropFile(entry)}
+                    aria-label={t('removeChip', { label: entry.file.name })}
+                    className="inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        )}
         <div className="relative">
           <textarea
             ref={box}
@@ -473,6 +625,11 @@ export function ChatComposer({
                   : (placeholder ?? t('placeholder'))
             }
             onChange={(e) => textChanged(e.target.value, e.target.selectionStart ?? 0)}
+            onPaste={(e) => {
+              if (!uploader || e.clipboardData.files.length === 0) return;
+              e.preventDefault();
+              attach(e.clipboardData.files);
+            }}
             onKeyDown={(e) => {
               if (menu) {
                 if (e.key === 'Escape') {
@@ -595,7 +752,7 @@ export function ChatComposer({
               type="button"
               data-action="composer.send"
               onClick={() => void submit(false)}
-              disabled={!hasText || sending || disabled}
+              disabled={!hasText || sending || disabled || uploading}
               aria-label={t('send')}
               title={t('send')}
               className="ml-auto flex size-8 items-center justify-center rounded-[10px] bg-foreground text-background disabled:cursor-not-allowed disabled:opacity-35"
@@ -605,8 +762,26 @@ export function ChatComposer({
           )}
         </div>
       </div>
+      {(fileProblem || failedFiles) && (
+        <p
+          role="alert"
+          className="mt-1.5 flex flex-wrap items-center gap-2 px-0.5 text-xs text-red-700 dark:text-red-400"
+        >
+          {fileProblem ? t(`files.${fileProblem}`) : t('files.failed')}
+          {!fileProblem && failedFiles && (
+            <button
+              type="button"
+              data-action="composer.retryUpload"
+              onClick={retryFiles}
+              className="font-medium underline underline-offset-2"
+            >
+              {t('files.retry')}
+            </button>
+          )}
+        </p>
+      )}
       <div className="mt-1.5 flex flex-wrap items-center gap-2 px-0.5 text-[11.5px] text-muted-foreground">
-        <span>{under}</span>
+        <span>{uploading ? t('files.sendWaits') : under}</span>
         <span className="ml-auto flex items-center gap-2.5">
           {usage}
           {onOpenModel ? (

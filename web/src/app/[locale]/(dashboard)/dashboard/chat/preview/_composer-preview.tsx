@@ -44,6 +44,15 @@ const searchReferences = (query: string) =>
     ),
   );
 
+/** The preview's files go nowhere: each is "up" after a moment. */
+const previewUploader = {
+  upload: (file: File) =>
+    new Promise<{ ok: true; id: string }>((resolve) =>
+      setTimeout(() => resolve({ ok: true, id: `preview-${file.name}` }), 1200),
+    ),
+  remove: () => {},
+};
+
 const DOCK_CHIPS = [
   { key: 'brand', label: 'Ansvisor' },
   { key: 'area', label: 'Action Center' },
@@ -95,7 +104,7 @@ export function ComposerPreview() {
               ghost={t('homeGhost')}
               references={PAGE_REFERENCES}
               searchReferences={searchReferences}
-              onAttach={() => toast(t('attach'))}
+              uploader={previewUploader}
               onSend={(text) => {
                 toast(t('sent', { text }));
                 run();
