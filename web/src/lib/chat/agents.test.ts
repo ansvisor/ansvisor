@@ -279,6 +279,39 @@ describe('creating an agent', () => {
 });
 
 describe('changing an agent', () => {
+  it('holds an Admin’s change to a Manager’s agent that is on to the mode its owner may use', async () => {
+    db.tables.chat_settings = [
+      {
+        organization_id: ORG,
+        agent_run_share_default: 0.1,
+        agents_full_auto: true,
+        workspace_agents_admins_only: false,
+        full_auto_for_members: false,
+      },
+    ];
+    const { id } = await create(PEOPLE.manager);
+    const on = await agents.changeAgentState(await ctxOf(PEOPLE.manager), id, 'activate', NOW);
+    expect(on).toMatchObject({ ok: true, value: { status: 'active' } });
+    const fullAuto = updateAgentInput.parse({ mode: 'full_auto' });
+
+    // Its triggered runs act as the Manager, who may not use Full auto here.
+    expect(await agents.updateAgent(await ctxOf(PEOPLE.admin), id, fullAuto, NOW)).toMatchObject({
+      ok: false,
+      refusal: { kind: 'denied', code: 'policy_never' },
+    });
+    expect(agentRow(id).version).toBe(1);
+    expect(rows('chat_agent_versions')).toHaveLength(1);
+
+    // Once the Admin owns it, it is theirs to choose.
+    expect(await agents.takeOverAgent(await ctxOf(PEOPLE.admin), id, NOW)).toMatchObject({
+      ok: true,
+    });
+    expect(await agents.updateAgent(await ctxOf(PEOPLE.admin), id, fullAuto, NOW)).toMatchObject({
+      ok: true,
+      value: { mode: 'full_auto', version: 2 },
+    });
+  });
+
   it('writes a new immutable version for a change to what it does, and keeps the old one', async () => {
     const { id } = await create(PEOPLE.manager);
     const ctx = await ctxOf(PEOPLE.manager);
