@@ -174,6 +174,9 @@ interface RunScope {
   brandIsDemo: boolean;
 }
 
+/** The rows an Admin is never offered: a request to the Admins (CHAT-20 row 80a). */
+const NOT_FOR_ADMINS: ReadonlySet<string> = new Set(['request_access']);
+
 /**
  * The rows the model gets (allowedTools, with ALWAYS_OPEN_TOOLS), and the
  * ones left out with why, which the model may only explain.
@@ -186,6 +189,9 @@ export function engineTools(
   const offered: ChatTool[] = [];
   const refused: { tool: ChatTool; denial: ToolDenial }[] = [];
   for (const tool of CHAT_TOOLS) {
+    // Admins have no one to ask (CHAT-20 access table: "not needed"): neither offered nor
+    // explained. Not the row's excludeRoles, which never leaves an Admin out.
+    if (ctx.role === 'admin' && NOT_FOR_ADMINS.has(tool.name)) continue;
     if (allowed.has(tool.name)) {
       offered.push(tool);
       continue;
