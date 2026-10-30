@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { sendDraftToCms } from '@/lib/actions/cms-send';
 import { updateContentDraft } from '@/lib/actions/content-drafts';
+import { CHAT_CMS_TARGETS, CMS_NAMES } from '@/lib/content/cms-names';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { contentUuid } from '@/lib/mcp/content-schemas';
 import { FIXTURE_IDS, defineTool } from './define-tool';
-import { draftTitle } from './targets';
+import { draftPage, draftTitle, pageChanges } from './targets';
 
 /**
  * Chat's Content Library WRITE rows beyond create_draft (CHAT-20 §9 rows 55,
@@ -17,16 +18,6 @@ import { draftTitle } from './targets';
  */
 
 const ITEM = FIXTURE_IDS.item;
-
-/** The CMSs a page goes to, as the Send dialog offers them (cms-send-client CmsTarget). */
-const CMS_TARGETS = ['webflow', 'wordpress', 'framer', 'wix', 'webhook'] as const;
-const CMS_NAMES: Record<(typeof CMS_TARGETS)[number], string> = {
-  webflow: 'Webflow',
-  wordpress: 'WordPress',
-  framer: 'Framer',
-  wix: 'Wix',
-  webhook: 'Webhook',
-};
 
 export const CONTENT_TOOLS = [
   defineTool({
@@ -61,9 +52,16 @@ export const CONTENT_TOOLS = [
     run: (_ctx, input) =>
       updateContentDraft(input.draft_id, { title: input.title, bodyHtml: input.body_html }),
     target: async (input) => {
-      const now = await draftTitle(input.draft_id);
+      const now = await draftPage(input.draft_id);
       if (!now) return input.title ? `“${input.title}”` : null;
-      return input.title && input.title !== now ? `“${now}” → “${input.title}”` : `“${now}”`;
+      const title =
+        input.title && input.title !== now.title
+          ? `“${now.title}” → “${input.title}”`
+          : `“${now.title}”`;
+      // What the page's change does, in short: its words and headings.
+      return input.body_html !== undefined
+        ? `${title} · ${pageChanges(now.bodyHtml, input.body_html)}`
+        : title;
     },
     fixture: { input: { draft_id: ITEM, title: 'Pricing FAQ for teams' } },
   }),
@@ -72,7 +70,7 @@ export const CONTENT_TOOLS = [
     class: 'write',
     area: 'content',
     description:
-      "Send a Library draft to the brand's connected CMS as a draft there (Webflow, WordPress, Framer, Wix or the brand's webhook): nothing goes live. Its slug and meta are what it kept from its last send, else the page's. Only when the person asked for this page to go to that CMS.",
+      "Send a Library draft to the brand's connected CMS as a draft there (Webflow, WordPress, Framer or Wix): nothing goes live. A page that is live already, or a send to the brand's webhook, goes from the Content Editor. Its slug and meta are what it kept from its last send, else the page's. Only when the person asked for this page to go to that CMS.",
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
     minRole: 'manager',
@@ -86,7 +84,7 @@ export const CONTENT_TOOLS = [
     specRow: '58',
     inputSchema: z.object({
       draft_id: contentUuid.describe('The draft, from list_content_drafts.'),
-      destination: z.enum(CMS_TARGETS).describe('The CMS the brand connected.'),
+      destination: z.enum(CHAT_CMS_TARGETS).describe('The CMS the brand connected.'),
     }),
     run: (_ctx, input) => sendDraftToCms(input.draft_id, input.destination),
     target: async (input) => {

@@ -2,16 +2,18 @@
 
 import { API_BASE_URL } from '@/config/api';
 import { bulkCmsItems, type BulkProblem, type CmsFields } from '@/lib/content/cms-send';
-import type { CmsDelivery, CmsTarget } from '@/lib/content/cms-send-client';
+import { CHAT_CMS_TARGETS, type ChatCmsTarget } from '@/lib/content/cms-names';
+import type { CmsDelivery } from '@/lib/content/cms-send-client';
 import { readCmsSources } from '@/lib/content/cms-sources';
 import { withContentDom } from '@/lib/content/server-dom';
+import { isManager } from '@/lib/session-role';
 import { assertWritable } from '@/lib/subscription-guard';
 import { createClient } from '@/lib/supabase/server';
 
 export type SendDraftToCmsResult =
   | {
       ok: true;
-      target: CmsTarget;
+      target: ChatCmsTarget;
       /** As the API answers the page's send: sent, still on its way, or already live. */
       status: CmsDelivery['status'];
       /** Its CMS item (or draft post) was updated, not made. */
@@ -21,7 +23,15 @@ export type SendDraftToCmsResult =
     }
   | {
       ok: false;
-      reason: 'not_found' | 'not_connected' | 'invalid' | 'quota_exceeded' | 'conflict' | 'failed';
+      reason:
+        | 'not_found'
+        | 'not_connected'
+        | 'invalid'
+        | 'quota_exceeded'
+        | 'conflict'
+        | 'forbidden_role'
+        | 'live_item'
+        | 'failed';
       message: string;
     };
 
@@ -56,27 +66,73 @@ const NOT_CONNECTED = new Set([
 
 /**
  * Send one Library draft to the brand's CMS as a draft: Chat's push_cms_draft
- * (CHAT-20 §9 row 58). The page is made ready as the Library's bulk send
- * makes each (readCmsSources, bulkCmsItems: its author and byline, the slug
- * and meta it kept from its last send, else the page's) and goes through the
- * API's own send, as the signed-in member: its role check (Admins and
- * Managers), its connections and its daily limit. Nothing goes live: the CMS
- * keeps it as a draft (DECISIONS 1). Errors come back as values (#427).
+ * (CHAT-20 §9 row 58). Admins and Managers, checked here as the API checks
+ * them. A page that went live (published_url, or a send published) isn't
+ * sent: its CMS item would change on the live site, with the CMS's next
+ * publish (live_item; the Content Editor sends it). The page is made ready
+ * as the Library's bulk send makes each (readCmsSources, bulkCmsItems: its
+ * author and byline, the slug and meta it kept from its last send, else the
+ * page's) and goes through the API's own send, as the signed-in member: its
+ * connections and its daily limit. Nothing goes live: the CMS keeps it as a
+ * draft (DECISIONS 1). Errors come back as values (#427).
  */
 export async function sendDraftToCms(
   draftId: string,
-  target: CmsTarget,
+  target: ChatCmsTarget,
 ): Promise<SendDraftToCmsResult> {
-  await assertWritable();
+  try {
+    await assertWritable();
+    return await sendOne(draftId, target);
+  } catch (err) {
+    console.error('Failed to send the page to the CMS:', err);
+    return { ok: false, reason: 'failed', message: 'The page couldn’t be sent. Try again.' };
+  }
+}
+
+async function sendOne(draftId: string, target: ChatCmsTarget): Promise<SendDraftToCmsResult> {
+  if (!CHAT_CMS_TARGETS.includes(target)) {
+    return {
+      ok: false,
+      reason: 'invalid',
+      message: 'Chat sends to Webflow, WordPress, Framer or Wix. Send it from the Content Editor.',
+    };
+  }
   const supabase = await createClient();
-  const { data: draft, error } = await supabase
-    .from('content_drafts')
-    .select('id, brand_id, slug, meta_title, meta_description, archived_at, brands(name, language)')
-    .eq('id', draftId)
-    .maybeSingle();
+  if (!(await isManager(supabase))) {
+    return {
+      ok: false,
+      reason: 'forbidden_role',
+      message: 'Only an admin or a manager can send a page to the CMS.',
+    };
+  }
+  const [{ data: draft, error }, published] = await Promise.all([
+    supabase
+      .from('content_drafts')
+      .select(
+        'id, brand_id, slug, meta_title, meta_description, published_url, archived_at, brands(name, language)',
+      )
+      .eq('id', draftId)
+      .maybeSingle(),
+    supabase
+      .from('content_draft_deliveries')
+      .select('id')
+      .eq('draft_id', draftId)
+      .eq('status', 'published')
+      .limit(1)
+      .maybeSingle(),
+  ]);
   if (error) return { ok: false, reason: 'failed', message: error.message };
   if (!draft || draft.archived_at) {
     return { ok: false, reason: 'not_found', message: 'That draft isn’t in the Library.' };
+  }
+  // Whether it is live can't be told: nothing is sent.
+  if (published.error) return { ok: false, reason: 'failed', message: published.error.message };
+  if (draft.published_url || published.data) {
+    return {
+      ok: false,
+      reason: 'live_item',
+      message: 'This page is live; send it from the Content Editor.',
+    };
   }
   const brand = (Array.isArray(draft.brands) ? draft.brands[0] : draft.brands) as {
     name?: string;
@@ -139,9 +195,15 @@ export async function sendDraftToCms(
   if (!res.ok) {
     const code = body.code ?? '';
     const message = body.error || 'The page couldn’t be sent.';
-    if (NOT_CONNECTED.has(code)) return { ok: false, reason: 'not_connected', message };
+    // The CMS refused its connection's key: it is connected again in Settings › Integrations.
+    if (NOT_CONNECTED.has(code) || code.endsWith('_refused')) {
+      return { ok: false, reason: 'not_connected', message };
+    }
     if (code === 'daily_limit') return { ok: false, reason: 'quota_exceeded', message };
     if (code === 'in_progress') return { ok: false, reason: 'conflict', message };
+    if (res.status === 403) return { ok: false, reason: 'forbidden_role', message };
+    if (res.status === 404) return { ok: false, reason: 'not_found', message };
+    if (res.status === 400 || res.status === 422) return { ok: false, reason: 'invalid', message };
     return { ok: false, reason: 'failed', message };
   }
   const [delivery] = body.deliveries ?? [];

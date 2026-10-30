@@ -252,6 +252,8 @@ export function fakeUpdateContentDraft(db: FakeSupabase) {
       draft_id: id,
       title: row.title,
       body_html: row.body_html,
+      origin: 'agent_before',
+      created_at: iso(),
     });
     row.title = change.title ?? row.title;
     row.body_html = change.bodyHtml ?? row.body_html;
@@ -265,16 +267,21 @@ export function fakeUpdateContentDraft(db: FakeSupabase) {
   };
 }
 
-/** content_draft_restore (00215): the version's title and page back on its draft. */
-export function fakeRestoreDraftVersion(db: FakeSupabase) {
-  return ({ p_version_id }: Record<string, unknown>) => {
-    const version = db.tables.content_draft_versions.find((v) => v.id === p_version_id);
-    const draft = version && db.tables.content_drafts.find((d) => d.id === version.draft_id);
-    if (!version || !draft) return null;
-    draft.title = version.title;
-    draft.body_html = version.body_html;
-    draft.updated_at = iso();
-    return { title: draft.title, bodyHtml: draft.body_html, updatedAt: draft.updated_at };
+/** content_draft_keep_version (00215): the draft as it is now, kept as a version. */
+export function fakeKeepDraftVersion(db: FakeSupabase) {
+  return ({ p_draft_id, p_origin }: Record<string, unknown>) => {
+    const draft = db.tables.content_drafts.find((d) => d.id === p_draft_id);
+    if (!draft) return null;
+    const id = fakeId();
+    db.tables.content_draft_versions.push({
+      id,
+      draft_id: draft.id,
+      title: draft.title,
+      body_html: draft.body_html,
+      origin: p_origin,
+      created_at: iso(),
+    });
+    return id;
   };
 }
 

@@ -1119,7 +1119,13 @@ const TRUSTED_READS = new Set([
 async function callFacts(rc: RunContext, tool: ChatTool, input: Record<string, unknown>) {
   const ctx = await contextFor(rc);
   const call: ToolCall = ctx
-    ? await readToolCall(ctx, tool, input, rc.progress.tainted === true)
+    ? await readToolCall(
+        ctx,
+        tool,
+        input,
+        rc.progress.tainted === true,
+        rc.progress.writes[tool.name] ?? 0,
+      )
     : { brandId: null, brandIsDemo: false, tainted: false };
   return { ctx, call };
 }
@@ -1255,7 +1261,7 @@ export function targetOf(input: Record<string, unknown>): string | null {
  * (its `target`, read from the data), else the input's, and the brand.
  */
 async function cardTarget(
-  rc: RunContext,
+  runBrand: RunContext['brand'],
   tool: ChatTool,
   input: Record<string, unknown>,
   brandId: string | null,
@@ -1268,10 +1274,17 @@ async function cardTarget(
       console.error('[chat/engine] could not name a card’s target:', err);
     }
   }
-  const brand = brandId && rc.brand && rc.brand.id === brandId ? rc.brand.name : null;
+  const brand = brandId && runBrand && runBrand.id === brandId ? runBrand.name : null;
   return [own ? maskIds(own) : targetOf(input), tool.brandOf ? brand : null]
     .filter(Boolean)
     .join(' · ');
+}
+
+/** What a card says beside its target: that its change can't be undone (§9), and its row's note. */
+function cardNotes(tool: ChatTool): { noUndo?: true; note?: string } {
+  const noUndo = tool.class === 'write' && !undoRule(tool)?.windowMs;
+  const note = toolNote(tool);
+  return { ...(noUndo ? { noUndo: true as const } : {}), ...(note ? { note } : {}) };
 }
 
 /** The hash of the arguments a card shows: what an approval is bound to (CHAT-20 §6). */
@@ -1290,7 +1303,7 @@ async function openCard(
 ): Promise<CallOutcome> {
   const n = ++rc.progress.steps;
   const execute = decision.kind === 'click';
-  const target = await cardTarget(rc, tool, input, facts.brandId);
+  const target = await cardTarget(rc.brand, tool, input, facts.brandId);
   const row = await insertStep(rc.run.id, {
     position: n,
     kind: execute ? 'execute' : 'write',
@@ -1303,17 +1316,14 @@ async function openCard(
   rc.sink.emit('step.started', { step: clientStep(row) });
   const digest = cardDigest(tool, input);
   const offerDontAskAgain = decision.kind === 'ask' && decision.offerDontAskAgain;
-  // A WRITE whose change can't be undone once made (§9) says so on its card.
-  const noUndo = tool.class === 'write' && !undoRule(tool)?.windowMs;
-  const note = toolNote(tool);
   rc.sink.emit('confirm.required', {
     n,
     action: toolWords(tool, 'name'),
     target,
     digest,
     canDontAskAgain: offerDontAskAgain,
-    ...(noUndo ? { noUndo: true as const } : {}),
-    ...(note ? { note } : {}),
+    // A WRITE whose change can't be undone once made (§9) says so on its card.
+    ...cardNotes(tool),
   });
   return {
     kind: 'pause',
@@ -1718,6 +1728,8 @@ const SAID_FAILURES: Record<string, string> = {
   conflict: 'conflict',
   invalid: 'invalid_input',
   forbidden_role: 'forbidden_role',
+  // A page live in its CMS: the Content Editor sends it (push_cms_draft).
+  live_item: 'live_item',
 };
 
 /**
@@ -1747,7 +1759,7 @@ async function writeCall(
   approval: Exclude<ActivityApproval, { kind: 'run' }>,
   cardStepId: string | null,
 ): Promise<CallOutcome> {
-  const target = await cardTarget(rc, tool, input, facts.brandId);
+  const target = await cardTarget(rc.brand, tool, input, facts.brandId);
   let row;
   if (cardStepId) {
     row = await updateStep(cardStepId, { status: 'running' });
@@ -1789,6 +1801,7 @@ async function writeCall(
       target,
       digest,
       canDontAskAgain: false,
+      ...cardNotes(tool),
     });
     return {
       kind: 'pause',
@@ -2185,12 +2198,14 @@ export async function prepareResume(
         ? await readBrand(progress.brandId, actor.organizationId)
         : null;
       const input = (call.input ?? {}) as Record<string, unknown>;
+      // The card as it was: its target in its own words (and cost), and what it says beside.
       sink.emit('confirm.required', {
         n: pending.n,
         action: toolWords(tool, 'name'),
-        target: [targetOf(input), tool.brandOf ? brand?.name : null].filter(Boolean).join(' · '),
+        target: await cardTarget(brand, tool, input, brand?.id ?? null),
         digest: pending.digest,
         canDontAskAgain: pending.offerDontAskAgain,
+        ...cardNotes(tool),
       });
       await sink.flush();
       publishRunEnd(runId);

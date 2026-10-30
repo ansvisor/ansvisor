@@ -73,7 +73,7 @@ While Chat asks, you can also answer in the box below. It shows the Recommended 
 
 Admins and Managers can ask Chat to track new prompts in a topic, pause prompts, add or rename a topic, and add or remove competitors. A prompt goes into a topic the brand already has, so Chat adds a new topic first. A prompt, topic or competitor the brand already has is skipped. Your plan's prompt locations still apply: Chat says so when they run out.
 
-Chat asks first, except in **Full auto**. Removing a competitor, or pausing more than five prompts at once, always asks.
+Chat asks first, except in **Full auto**. Removing a competitor, or pausing more than five prompts in one run, always asks.
 
 Each change is in the **Activity** log, with **Undo** for 7 days (30 days for paused prompts). Undo leaves alone anything someone changed since, and says so. Undoing new prompts pauses them; their first answers, and what they cost, stay. A removed competitor comes back without its timeline events.
 
@@ -83,7 +83,7 @@ Admins and Managers can also ask Chat to change a draft in the Library, send a d
 
 A draft Chat changes keeps the page before in **History**; **Undo** puts it back for 30 days. A report Chat makes can be undone for 30 days too.
 
-A page sent to your CMS arrives there as a draft: nothing goes live, and publishing stays yours, in the CMS. The card says the send can't be undone from Chat. Auditing several pages always asks first, and the card says how many of the month's audits they use. Audits have no Undo.
+A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives there as a draft: nothing goes live, and publishing stays yours, in the CMS. A page that's already live, or a send to your webhook, goes from the Content Editor instead. The card says the send can't be undone from Chat. Starting an audit always asks first, and the card says how many of the month's audits it uses. Audits have no Undo.
 
 ## Next moves
 

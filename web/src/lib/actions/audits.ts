@@ -346,7 +346,16 @@ export async function startSiteAudits(
   brandId: string,
   urls: string[],
 ): Promise<StartSiteAuditsResult> {
-  await assertWritable({ brandId });
+  try {
+    await assertWritable({ brandId });
+    return await startAudits(brandId, urls);
+  } catch (err) {
+    console.error('Failed to start the audits:', err);
+    return { ok: false, reason: 'failed', message: 'The audits couldn’t be started. Try again.' };
+  }
+}
+
+async function startAudits(brandId: string, urls: string[]): Promise<StartSiteAuditsResult> {
   if (!(await isManager(await createClient()))) {
     return {
       ok: false,

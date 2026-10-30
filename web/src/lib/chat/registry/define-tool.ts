@@ -100,7 +100,10 @@ export interface PlanGate {
 export interface ToolFlags {
   /** A WRITE that shows a card in every mode, Full auto included; its policy tops out at Ask. */
   alwaysCard: boolean;
-  /** The cost estimate (percent of the AI limit) is shown before the first call. */
+  /**
+   * A WRITE with a cost: a card in every mode, which says what it uses
+   * before it runs (the month's Site Audit audits). Its policy tops out at Ask.
+   */
   costCard: boolean;
   /** A READ an Admin may switch off for the workspace (CHAT-20 §9 ¹). */
   adminMayTurnOff: boolean;
@@ -276,8 +279,8 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
   if (writeRank(def.defaultPolicy) > writeRank(def.maxPolicy)) {
     throw new Error(`${def.name}: its default policy is past its maximum`);
   }
-  if (flags.alwaysCard && def.maxPolicy !== 'ask') {
-    throw new Error(`${def.name}: an always_card write never runs without a card`);
+  if ((flags.alwaysCard || flags.costCard) && def.maxPolicy !== 'ask') {
+    throw new Error(`${def.name}: an always_card or cost_card write never runs without a card`);
   }
   return { ...def, flags, excludeRoles, executeGroup: null };
 }
@@ -289,11 +292,16 @@ export function batchSize(tool: Pick<ChatTool, 'batch'>, input: Record<string, u
   return Array.isArray(items) ? items.length : 1;
 }
 
-/** A call with more items than its row runs without a card (CHAT-20 §9 row 22). */
+/**
+ * A call that takes the run past the items its row runs without a card
+ * (CHAT-20 §9 row 22), counting those the run's earlier calls of it made
+ * (`before`): six pauses of one prompt ask from the sixth.
+ */
 export function overBatchCard(
   tool: Pick<ChatTool, 'batch'>,
   input: Record<string, unknown>,
+  before = 0,
 ): boolean {
   const above = tool.batch?.askAbove;
-  return above !== undefined && batchSize(tool, input) > above;
+  return above !== undefined && before + batchSize(tool, input) > above;
 }

@@ -80,3 +80,57 @@ export async function draftTitle(draftId: string): Promise<string | null> {
   if (error) throw new Error(`Could not read the draft: ${error.message}`);
   return (data?.title as string | undefined) ?? null;
 }
+
+/** A Library draft's title and page; null when it isn't there. */
+export async function draftPage(
+  draftId: string,
+): Promise<{ title: string; bodyHtml: string } | null> {
+  const { data, error } = await supabaseAdmin
+    .from('content_drafts')
+    .select('title, body_html')
+    .eq('id', draftId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the draft: ${error.message}`);
+  return data ? { title: String(data.title ?? ''), bodyHtml: String(data.body_html ?? '') } : null;
+}
+
+/** HTML's text, roughly: its tags and entities dropped, its spaces folded. No DOM on the server. */
+const plainText = (html: string) =>
+  html
+    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&[a-z0-9#]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/** A page's words and its H1–H3 headings' texts, from its HTML. */
+function pageShape(html: string): { words: number; headings: string[] } {
+  const text = plainText(html);
+  const headings = Array.from(html.matchAll(/<h([1-3])\b[^>]*>([\s\S]*?)<\/h\1>/gi), (match) =>
+    plainText(match[2]),
+  ).filter(Boolean);
+  return { words: text ? text.split(' ').length : 0, headings };
+}
+
+/**
+ * What a change does to a page, for its card (update_draft): "Page changes:
+ * 820 → 940 words · headings: +“Pricing for teams”, −“Old FAQ”". The full
+ * difference is the editor's History.
+ */
+export function pageChanges(before: string, after: string): string {
+  const was = pageShape(before);
+  const now = pageShape(after);
+  const added = now.headings.filter((heading) => !was.headings.includes(heading));
+  const removed = was.headings.filter((heading) => !now.headings.includes(heading));
+  const headings =
+    added.length + removed.length === 0
+      ? 'headings unchanged'
+      : `headings: ${[
+          ...added.slice(0, 2).map((heading) => `+${listWords([heading])}`),
+          ...removed.slice(0, 2).map((heading) => `−${listWords([heading])}`),
+          ...(added.length + removed.length > 4
+            ? [`+${added.length + removed.length - 4} more`]
+            : []),
+        ].join(', ')}`;
+  return `Page changes: ${was.words} → ${now.words} words · ${headings}`;
+}

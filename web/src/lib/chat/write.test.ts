@@ -16,7 +16,7 @@ import {
   TOPIC,
   fakeCreateDraft,
   fakeCreateReport,
-  fakeRestoreDraftVersion,
+  fakeKeepDraftVersion,
   fakeSendDraftToCms,
   fakeStartSiteAudits,
   fakeUpdateContentDraft,
@@ -123,7 +123,7 @@ beforeEach(() => {
   vi.mocked(sendDraftToCms).mockImplementation(fakeSendDraftToCms() as never);
   vi.mocked(createReport).mockImplementation(fakeCreateReport(db) as never);
   vi.mocked(startSiteAudits).mockImplementation(fakeStartSiteAudits() as never);
-  db.rpcs.content_draft_restore = fakeRestoreDraftVersion(db);
+  db.rpcs.content_draft_keep_version = fakeKeepDraftVersion(db);
   vi.mocked(updateOpportunityStatus).mockImplementation(fakeUpdateOpportunity(db) as never);
   vi.mocked(dismissSuggestion).mockImplementation(fakeDismissSuggestion(db) as never);
   vi.mocked(addTopicPrompts).mockImplementation(fakeAddTopicPrompts(db) as never);
@@ -168,7 +168,9 @@ async function runAs(
 describe('every WRITE that ran is in the Activity log (§21)', () => {
   // Ask your Admin is always a card, in Full auto too (CHAT-20 row 80a).
   it.each(
-    WRITES.filter((tool) => !tool.flags.alwaysCard).map((tool) => [tool.name, tool] as const),
+    WRITES.filter((tool) => !tool.flags.alwaysCard && !tool.flags.costCard).map(
+      (tool) => [tool.name, tool] as const,
+    ),
   )(
     '%s in Full auto: mode, approval, Undo window, label key, target and summary',
     async (name, tool) => {
@@ -642,11 +644,17 @@ describe('the tracking setup, by role and mode (W2-06, CHAT-20 §9 rows 20–32)
 });
 
 describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 rows 37–64)', () => {
-  const OUTPUT = ['update_draft', 'push_cms_draft', 'build_report', 'run_site_audit'];
-  async function decide(userId: string, name: string, mode: ChatMode, input = INPUTS[name]) {
+  const OUTPUT = ['update_draft', 'push_cms_draft', 'build_report'];
+  async function decide(
+    userId: string,
+    name: string,
+    mode: ChatMode,
+    input = INPUTS[name],
+    before = 0,
+  ) {
     const tool = chatTool(name)!;
     const ctx = await readPrecedenceContext({ userId, organizationId: ORG, mode, surface: 'chat' });
-    const call = await readToolCall(ctx!, tool, input as Record<string, unknown>, false);
+    const call = await readToolCall(ctx!, tool, input as Record<string, unknown>, false, before);
     return decideToolCall(tool, ctx!, call);
   }
   beforeEach(() => seedDraft(db));
@@ -680,14 +688,83 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
     });
   });
 
-  it('audits several pages only from a card, with its cost, Full auto too (§9 row 37)', async () => {
+  it('starts an audit only from a card, with its cost, in every mode (§9 row 37)', async () => {
     expect(chatTool('run_site_audit')!.flags.costCard).toBe(true);
-    expect(
-      await decide(PEOPLE.admin, 'run_site_audit', 'full_auto', {
-        brand_id: BRAND,
-        urls: ['https://acme.example/pricing', 'https://acme.example/features'],
-      }),
-    ).toMatchObject({ kind: 'ask', reason: 'always_card' });
+    for (const userId of [PEOPLE.admin, PEOPLE.manager]) {
+      for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+        expect(await decide(userId, 'run_site_audit', mode)).toMatchObject({
+          kind: 'ask',
+          reason: 'always_card',
+          offerDontAskAgain: false,
+        });
+      }
+    }
+    for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+      expect(await decide(PEOPLE.analyst, 'run_site_audit', mode)).toMatchObject({
+        kind: 'deny',
+        denial: { code: 'forbidden_role', roles: ['admin', 'manager'] },
+      });
+    }
+  });
+
+  it('an audit approved on its card is in the Activity log, with no Undo', async () => {
+    const { decision, outcome } = await runAs(
+      PEOPLE.admin,
+      chatTool('run_site_audit')!,
+      'full_auto',
+      {
+        approved: true,
+      },
+    );
+    expect(decision).toMatchObject({ kind: 'ask', reason: 'always_card' });
+    expect(outcome).toMatchObject({ code: 'ok' });
+    expect(db.tables.chat_activity_log[0]).toMatchObject({
+      tool_key: 'startAudit',
+      approval_kind: 'ask',
+      undo_json: null,
+    });
+  });
+
+  it('counts the run’s earlier pauses: one prompt at a time asks from the sixth (§9 row 22)', async () => {
+    const one = { brand_id: BRAND, prompt_ids: [PROMPT] };
+    expect(await decide(PEOPLE.admin, 'pause_prompts', 'full_auto', one, 4)).toMatchObject({
+      kind: 'run',
+    });
+    expect(await decide(PEOPLE.admin, 'pause_prompts', 'full_auto', one, 5)).toMatchObject({
+      kind: 'ask',
+      reason: 'always_card',
+    });
+  });
+
+  it.each([...OUTPUT, 'run_site_audit'])(
+    '%s: refused on another workspace’s brand or draft, and on a read-only workspace',
+    async (name) => {
+      db.tables.brands.push({ id: 'b-elsewhere', organization_id: OTHER_ORG });
+      const theirDraft = '88888888-8888-4888-8888-888888888888';
+      db.tables.content_drafts.push({ id: theirDraft, brand_id: 'b-elsewhere', title: 'Theirs' });
+      const input = INPUTS[name] as Record<string, unknown>;
+      const theirs =
+        'draft_id' in input
+          ? { ...input, draft_id: theirDraft }
+          : { ...input, brand_id: 'b-elsewhere' };
+      expect(await decide(PEOPLE.admin, name, 'full_auto', theirs)).toMatchObject({
+        kind: 'deny',
+        denial: { code: 'brand_scope' },
+      });
+      db.tables.organizations[0].subscription_status = 'canceled';
+      expect(await decide(PEOPLE.admin, name, 'full_auto')).toMatchObject({
+        kind: 'deny',
+        denial: { code: 'subscription_inactive' },
+      });
+    },
+  );
+
+  it('sends to no webhook: it goes out of Ansvisor, so only the editor sends there', () => {
+    const tool = chatTool('push_cms_draft')!;
+    expect(tool.inputSchema.safeParse({ draft_id: DRAFT, destination: 'webhook' }).success).toBe(
+      false,
+    );
+    expect(tool.description).not.toMatch(/webhook\)/);
   });
 
   it('has no row that goes live in a CMS: publishing stays the person’s, in the CMS', () => {

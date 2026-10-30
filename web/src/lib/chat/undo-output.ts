@@ -1,3 +1,5 @@
+import { CMS_NAMES } from '@/lib/content/cms-names';
+import type { CmsTarget } from '@/lib/content/cms-send-client';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { summaryValue } from './activity';
 import { draftTitle, listWords } from './registry/targets';
@@ -61,6 +63,10 @@ const buildReport: UndoRule = {
 
 // ─── push_cms_draft: recorded, no Undo (the CMS keeps its draft item) ───────
 
+/** A CMS as the app names it ("Webflow"), never its key. */
+const cmsName = (key: string | null) =>
+  key && Object.hasOwn(CMS_NAMES, key) ? CMS_NAMES[key as CmsTarget] : null;
+
 const pushCmsDraft: UndoRule = {
   ...NO_UNDO,
   targetType: 'content_draft',
@@ -71,7 +77,7 @@ const pushCmsDraft: UndoRule = {
       target: { type: 'content_draft', id: textOf(id) },
       summaryParams: {
         title: summaryValue(title),
-        cms: summaryValue(textOf(asObject(output).target) ?? destination),
+        cms: summaryValue(cmsName(textOf(asObject(output).target) ?? textOf(destination))),
       },
       undo: null,
     };

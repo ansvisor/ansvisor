@@ -1288,6 +1288,32 @@ describe('the tracking setup (W2-06)', () => {
     expect(runRow(runId).status).toBe('done');
   });
 
+  it('counts the run’s earlier pauses: one prompt at a time, the sixth asks', async () => {
+    const six = Array.from(
+      { length: 6 },
+      (_, i) => `66666666-6666-4666-8666-0000000001${String(i).padStart(2, '0')}`,
+    );
+    vi.mocked(pauseBrandPrompts).mockImplementation(async (_brand, ids) => ({
+      ok: true,
+      paused: ids,
+    }));
+    useModels(
+      [READY],
+      [
+        calls(
+          ...six.map((id, i) =>
+            toolCall(`w${i}`, 'pause_prompts', { brand_id: BRAND, prompt_ids: [id] }),
+          ),
+        ),
+        text('Paused 6.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Pause these six, one by one', 'full_auto');
+    // Five ran without a card; the sixth takes the run past 5, so it asks.
+    expect(pauseBrandPrompts).toHaveBeenCalledTimes(5);
+    expect(runRow(runId).status).toBe('waiting');
+  });
+
   it('names on its card what a list or an id stands for, from the data', async () => {
     useModels(
       [READY, READY],
@@ -1373,6 +1399,73 @@ describe('content, reports and Site Audit (W2-07)', () => {
       'https://acme.example/pricing',
       'https://acme.example/features',
     ]);
+  });
+
+  it('starts even one audit only from a card, and says when it won’t fit the month', async () => {
+    vi.mocked(getAuditQuota).mockResolvedValue({ used: 499, limit: 500, remaining: 1 } as never);
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'run_site_audit', {
+            brand_id: BRAND,
+            // Two spellings of one page are one audit, as the API counts them.
+            urls: [
+              'https://acme.example/pricing',
+              'https://www.acme.example/pricing/',
+              'https://acme.example/features',
+            ],
+          }),
+        ),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Audit these', 'full_auto');
+    expect(runRow(runId).status).toBe('waiting');
+    const [card] = ofType(await eventsOf(runId), 'confirm.required');
+    expect(card.data.target).toBe(
+      "“https://acme.example/pricing”, “https://acme.example/features” · Needs 2 audits, 1 left this month: it won't start · Northwind",
+    );
+    // An approval for other arguments shows the same card again: its cost and its no-Undo too.
+    expect(await approve(ADMIN, runId, { digest: 'f'.repeat(32) })).toMatchObject({
+      code: 'approval_mismatch',
+    });
+    const again = ofType(await eventsOf(runId), 'confirm.required')[1].data;
+    expect(again).toMatchObject({ target: card.data.target, noUndo: true });
+    expect(startSiteAudits).not.toHaveBeenCalled();
+  });
+
+  it('keeps the cost line when the month’s audits can’t be read', async () => {
+    vi.mocked(getAuditQuota).mockRejectedValue(new Error('down'));
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'run_site_audit', { brand_id: BRAND, urls: ['https://acme.example/a'] }),
+        ),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Audit it', 'auto');
+    expect(ofType(await eventsOf(runId), 'confirm.required')[0].data.target).toBe(
+      "“https://acme.example/a” · Uses 1 of this month's audits · Northwind",
+    );
+  });
+
+  it('says on a page change’s card what it does to the words and headings', async () => {
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'update_draft', {
+            draft_id: DRAFT,
+            body_html: '<h1>Pricing FAQ</h1><h2>Plans for teams</h2><p>Starter is $49 a month.</p>',
+          }),
+        ),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Add a teams section', 'ask_first');
+    expect(ofType(await eventsOf(runId), 'confirm.required')[0].data.target).toBe(
+      '“Pricing FAQ” · Page changes: 2 → 10 words · headings: +“Plans for teams” · Northwind',
+    );
   });
 
   it('names a draft it changes by its title now, and a new title beside it', async () => {

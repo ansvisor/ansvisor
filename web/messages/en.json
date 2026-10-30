@@ -3566,7 +3566,9 @@
       "askStopped": "Question skipped"
     },
     "costs": {
-      "siteAudit": "{count, plural, one {Uses # audit} other {Uses # audits}} of {left} left this month"
+      "siteAudit": "{count, plural, one {Uses # audit} other {Uses # audits}} of {left} left this month",
+      "siteAuditOver": "{count, plural, one {Needs # audit} other {Needs # audits}}, {left} left this month: it won't start",
+      "siteAuditUnknown": "{count, plural, one {Uses # of this month's audits} other {Uses # of this month's audits}}"
     },
     "error": {
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",

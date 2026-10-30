@@ -15,7 +15,7 @@ import {
   TOPIC,
   fakeCreateDraft,
   fakeCreateReport,
-  fakeRestoreDraftVersion,
+  fakeKeepDraftVersion,
   fakeSendDraftToCms,
   fakeStartSiteAudits,
   fakeUpdateContentDraft,
@@ -84,7 +84,7 @@ beforeEach(() => {
   vi.mocked(sendDraftToCms).mockImplementation(fakeSendDraftToCms() as never);
   vi.mocked(createReport).mockImplementation(fakeCreateReport(db) as never);
   vi.mocked(startSiteAudits).mockImplementation(fakeStartSiteAudits() as never);
-  db.rpcs.content_draft_restore = fakeRestoreDraftVersion(db);
+  db.rpcs.content_draft_keep_version = fakeKeepDraftVersion(db);
   vi.mocked(updateOpportunityStatus).mockImplementation(fakeUpdateOpportunity(db) as never);
   vi.mocked(dismissSuggestion).mockImplementation(fakeDismissSuggestion(db) as never);
   vi.mocked(addTopicPrompts).mockImplementation(fakeAddTopicPrompts(db) as never);
@@ -745,6 +745,51 @@ describe('content, reports and Site Audit (W2-07)', () => {
     expect(theDraft().body_html).toContain('Edited by hand.');
   });
 
+  it('update_draft: keeps the page now in History, then restores only over the page it read', async () => {
+    const row = await change(PEOPLE.manager, 'update_draft', {
+      draft_id: DRAFT,
+      body_html: '<h1>Pricing FAQ</h1><p>New.</p>',
+    });
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    // History has the page Chat made, kept before the Undo, as a restore does.
+    expect(db.tables.content_draft_versions.at(-1)).toMatchObject({
+      draft_id: DRAFT,
+      body_html: '<h1>Pricing FAQ</h1><p>New.</p>',
+      origin: 'restore',
+    });
+  });
+
+  it('update_draft: leaves a page the agent is writing, or one saved in between, alone', async () => {
+    const row = await change(PEOPLE.manager, 'update_draft', {
+      draft_id: DRAFT,
+      body_html: '<h1>Pricing FAQ</h1><p>New.</p>',
+    });
+    theDraft().agent_state = 'writing';
+    expect(await undo(row.id)).toMatchObject({ code: 'conflict', reason: 'changed' });
+    theDraft().agent_state = null;
+    // A save lands while the Undo keeps the page now: the save wins.
+    db.rpcs.content_draft_keep_version = () => {
+      theDraft().updated_at = '2099-01-01T00:00:00.000Z';
+      return 'version-x';
+    };
+    expect(await undo(row.id)).toMatchObject({ code: 'conflict', reason: 'changed' });
+    expect(theDraft().body_html).toContain('New.');
+  });
+
+  it('update_draft: brings back only a version of this draft, within History’s 90 days', async () => {
+    const row = await change(PEOPLE.manager, 'update_draft', {
+      draft_id: DRAFT,
+      body_html: '<h1>Pricing FAQ</h1><p>New.</p>',
+    });
+    const version = db.tables.content_draft_versions[0];
+    version.draft_id = '99999999-9999-4999-8999-999999999999';
+    expect(await undo(row.id)).toMatchObject({ code: 'conflict', reason: 'gone' });
+    version.draft_id = DRAFT;
+    version.created_at = new Date(Date.now() - 91 * DAY).toISOString();
+    expect(await undo(row.id)).toMatchObject({ code: 'conflict', reason: 'gone' });
+    expect(theDraft().body_html).toContain('New.');
+  });
+
   it('build_report: takes the report out of Reports', async () => {
     const row = await change(PEOPLE.manager, 'build_report', {
       brand_id: BRAND,
@@ -755,6 +800,14 @@ describe('content, reports and Site Audit (W2-07)', () => {
     expect(row.summary_params).toEqual({ title: 'Weekly Visibility Summary' });
     expect(await undo(row.id)).toMatchObject({ code: 'ok' });
     expect(db.tables.reports).toEqual([]);
+  });
+
+  it('push_cms_draft: names the CMS in Activity as the app does, never its key', async () => {
+    const row = await change(PEOPLE.manager, 'push_cms_draft', {
+      draft_id: DRAFT,
+      destination: 'wordpress',
+    });
+    expect(row.summary_params).toEqual({ title: 'Pricing FAQ', cms: 'WordPress' });
   });
 
   it.each([

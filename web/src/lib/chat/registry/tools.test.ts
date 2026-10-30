@@ -323,8 +323,8 @@ describe('approval policies', () => {
     for (const tool of CHAT_TOOLS) {
       if (tool.class === 'read') {
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['on', 'on']);
-      } else if (tool.class === 'write' && tool.flags.alwaysCard) {
-        // Ask your Admin: only the person's click sends it (CHAT-20 row 80a).
+      } else if (tool.class === 'write' && (tool.flags.alwaysCard || tool.flags.costCard)) {
+        // Ask your Admin, or a cost said first: a card in every mode (CHAT-20 rows 37, 80a).
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask', 'ask']);
       } else if (tool.class === 'write') {
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask_full_auto', 'always']);

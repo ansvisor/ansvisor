@@ -5,10 +5,11 @@ import type { FakeSupabase } from '@/lib/chat/testing/fake-supabase';
 /**
  * The server actions Chat's content rows call (W2-07), as they run against
  * the member's own client: a page goes to the CMS as the Library sends it
- * (its kept slug, a page with placeholders refused) and the API's answers
- * come back as Chat's codes (not_connected, quota_exceeded, failed); audits
- * start on the API's one-page or bulk route, its quota said back; and a
- * draft's change, like the audits, is an Admin's or a Manager's.
+ * (its kept slug, a page with placeholders refused), never to the webhook
+ * and never over a live page, and the API's answers come back as Chat's
+ * codes; audits start on the API's one-page or bulk route, its quota said
+ * back; a draft's change keeps the page before in History first, or isn't
+ * made; each is an Admin's or a Manager's; and none throws.
  */
 
 const fake = vi.hoisted(() => ({ db: null as unknown as FakeSupabase }));
@@ -42,6 +43,7 @@ beforeEach(() => {
   fake.db = createFakeSupabase();
   Object.assign(fake.db.tables, {
     profiles: [{ id: 'u1', role: 'manager' }],
+    content_draft_deliveries: [],
     content_drafts: [
       {
         id: DRAFT,
@@ -51,12 +53,16 @@ beforeEach(() => {
         updated_at: '2026-10-30T09:00:00.000Z',
         archived_at: null,
         slug: 'pricing-faq',
+        published_url: null,
+        agent_state: null,
+        agent_state_at: null,
         meta_title: null,
         meta_description: null,
         brands: { name: 'Acme', language: 'en' },
       },
     ],
   });
+  readCmsSources.mockClear();
   readCmsSources.mockImplementation(async ({ draftIds }: { draftIds: string[] }) => {
     const draft = fake.db.tables.content_drafts.find((d) => d.id === draftIds[0]);
     return new Map(
@@ -113,14 +119,20 @@ describe('sendDraftToCms', () => {
   });
 
   it('says the API’s refusals as Chat’s codes', async () => {
-    for (const [code, reason] of [
-      ['no_webflow', 'not_connected'],
-      ['wordpress_not_configured', 'not_connected'],
-      ['daily_limit', 'quota_exceeded'],
-      ['in_progress', 'conflict'],
-      ['webflow_refused', 'failed'],
+    for (const [status, code, reason] of [
+      [400, 'no_webflow', 'not_connected'],
+      [400, 'wordpress_not_configured', 'not_connected'],
+      // The CMS refused the connection's key: connected again in Integrations.
+      [400, 'webflow_refused', 'not_connected'],
+      [429, 'daily_limit', 'quota_exceeded'],
+      [409, 'in_progress', 'conflict'],
+      [403, 'forbidden', 'forbidden_role'],
+      [400, 'invalid_page', 'invalid'],
+      [422, 'too_long', 'invalid'],
+      [404, 'not_found', 'not_found'],
+      [500, 'server', 'failed'],
     ] as const) {
-      answer = { status: 400, body: { code, error: `Refused: ${code}` } };
+      answer = { status, body: { code, error: `Refused: ${code}` } };
       expect(await sendDraftToCms(DRAFT, 'webflow')).toEqual({
         ok: false,
         reason,
@@ -131,7 +143,7 @@ describe('sendDraftToCms', () => {
       status: 200,
       body: { deliveries: [{ id: 'd1', draftId: DRAFT, status: 'failed', error: 'Timed out' }] },
     };
-    expect(await sendDraftToCms(DRAFT, 'webhook')).toMatchObject({
+    expect(await sendDraftToCms(DRAFT, 'wordpress')).toMatchObject({
       ok: false,
       reason: 'failed',
       message: 'Timed out',
@@ -147,6 +159,41 @@ describe('sendDraftToCms', () => {
     });
     fake.db.tables.content_drafts[0].archived_at = '2026-10-30T10:00:00.000Z';
     expect(await sendDraftToCms(DRAFT, 'webflow')).toMatchObject({ reason: 'not_found' });
+    expect(requests).toEqual([]);
+  });
+
+  it('never sends to the webhook: it goes out of Ansvisor, so the editor sends it', async () => {
+    expect(await sendDraftToCms(DRAFT, 'webhook' as never)).toMatchObject({
+      ok: false,
+      reason: 'invalid',
+    });
+    expect(requests).toEqual([]);
+  });
+
+  it('sends nothing over a live page: the Content Editor sends it', async () => {
+    fake.db.tables.content_drafts[0].published_url = 'https://acme.example/pricing-faq';
+    expect(await sendDraftToCms(DRAFT, 'framer')).toEqual({
+      ok: false,
+      reason: 'live_item',
+      message: 'This page is live; send it from the Content Editor.',
+    });
+    fake.db.tables.content_drafts[0].published_url = null;
+    fake.db.tables.content_draft_deliveries = [
+      { id: 'd0', draft_id: DRAFT, status: 'published', target: 'webflow' },
+    ];
+    expect(await sendDraftToCms(DRAFT, 'webflow')).toMatchObject({ reason: 'live_item' });
+    expect(requests).toEqual([]);
+  });
+
+  it('refuses an Analyst before reading the page, and says a failure as a value', async () => {
+    asRole('analyst');
+    expect(await sendDraftToCms(DRAFT, 'webflow')).toMatchObject({ reason: 'forbidden_role' });
+    expect(readCmsSources).not.toHaveBeenCalled();
+    asRole('manager');
+    readCmsSources.mockRejectedValueOnce(new Error('dom down'));
+    expect(await sendDraftToCms(DRAFT, 'webflow')).toMatchObject({ ok: false, reason: 'failed' });
+    fake.db.failures.profiles = { message: 'db down' };
+    expect(await sendDraftToCms(DRAFT, 'webflow')).toMatchObject({ ok: false, reason: 'failed' });
     expect(requests).toEqual([]);
   });
 });
@@ -194,9 +241,61 @@ describe('startSiteAudits', () => {
     });
     expect(requests).toHaveLength(1);
   });
+
+  it('says a failure as a value, never a throw', async () => {
+    fake.db.failures.profiles = { message: 'db down' };
+    expect(await startSiteAudits(BRAND, ['https://acme.example/a'])).toMatchObject({
+      ok: false,
+      reason: 'failed',
+    });
+    expect(requests).toEqual([]);
+  });
 });
 
 describe('updateContentDraft', () => {
+  const draft = () => fake.db.tables.content_drafts[0];
+  let kept: { origin: unknown; body: unknown }[];
+  beforeEach(() => {
+    kept = [];
+    fake.db.rpcs = {
+      content_draft_snapshot: ({ p_origin }) => {
+        kept.push({ origin: p_origin, body: draft().body_html });
+        return 'version-1';
+      },
+    };
+  });
+
+  it('keeps the page before in History first, then saves it cleaned as the editor does', async () => {
+    const result = await updateContentDraft(DRAFT, {
+      bodyHtml:
+        '<h1>Pricing FAQ</h1><p onclick="steal()">Plans start at $59.</p><script>alert(1)</script><img src="x" onerror="alert(1)">',
+    });
+    expect(result).toMatchObject({ ok: true, beforeVersionId: 'version-1' });
+    expect(kept).toEqual([
+      { origin: 'agent_before', body: '<h1>Pricing FAQ</h1><p>Plans start at $49.</p>' },
+    ]);
+    expect(draft().body_html).toContain('Plans start at $59.');
+    expect(draft().body_html).not.toMatch(/<script|onerror|onclick|alert/);
+  });
+
+  it('changes nothing when the page before can’t be kept: Undo would have nothing', async () => {
+    fake.db.rpcs = {};
+    expect(await updateContentDraft(DRAFT, { title: 'New' })).toMatchObject({
+      ok: false,
+      reason: 'failed',
+    });
+    expect(draft().title).toBe('Pricing FAQ');
+  });
+
+  it('is a conflict while the Content Agent writes the page', async () => {
+    Object.assign(draft(), { agent_state: 'writing', agent_state_at: new Date().toISOString() });
+    expect(await updateContentDraft(DRAFT, { bodyHtml: '<h1>Mine</h1>' })).toMatchObject({
+      ok: false,
+      reason: 'conflict',
+    });
+    expect(draft().body_html).toContain('$49');
+  });
+
   it('refuses an Analyst, a draft that isn’t one, and one in the archive', async () => {
     asRole('analyst');
     expect(await updateContentDraft(DRAFT, { title: 'New' })).toMatchObject({

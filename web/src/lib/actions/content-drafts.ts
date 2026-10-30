@@ -35,7 +35,8 @@ import {
   bodyHash,
   type SaveDraftResult,
 } from '@/lib/content/editor';
-import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-types';
+import { BRAND_SITE, brandSiteType, followRestoredPageType } from '@/lib/content/draft-page-type';
+import { detectPageType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { matchPagePrompts } from '@/lib/content/page-prompts';
 import { pageKey, type CatalogMatch } from '@/lib/content/feed-match';
@@ -264,23 +265,6 @@ const keptSource = z
   .string()
   .max(2048)
   .regex(/^https?:\/\//i);
-
-/** What a draft row embeds of its brand: enough to know its site type. */
-const BRAND_SITE = 'brands(site_type, industry, shopping_mode_enabled)';
-
-function brandSiteType(
-  brand: {
-    site_type: string | null;
-    industry: string | null;
-    shopping_mode_enabled: boolean;
-  } | null,
-): SiteType {
-  return siteTypeOf({
-    siteType: brand?.site_type,
-    industry: brand?.industry,
-    shoppingModeEnabled: brand?.shopping_mode_enabled,
-  });
-}
 
 /** One draft for the editor (CE-004), or null when it isn't the member's to read. */
 export async function getContentDraft(id: string): Promise<ContentDraft | null> {
@@ -1413,11 +1397,11 @@ export type UpdateContentDraftResult =
       updatedAt: string;
       bodyHash: string;
       /** History's version of the page before the change, which Undo restores. */
-      beforeVersionId: string | null;
+      beforeVersionId: string;
     }
   | {
       ok: false;
-      reason: 'forbidden_role' | 'not_found' | 'conflict' | 'invalid';
+      reason: 'forbidden_role' | 'not_found' | 'conflict' | 'invalid' | 'failed';
       message: string;
     };
 
@@ -1434,7 +1418,19 @@ export async function updateContentDraft(
   id: string,
   change: { title?: string; bodyHtml?: string },
 ): Promise<UpdateContentDraftResult> {
-  await assertWritable();
+  try {
+    await assertWritable();
+    return await updateOneDraft(id, change);
+  } catch (err) {
+    console.error('Failed to change the draft from Chat:', err);
+    return { ok: false, reason: 'failed', message: 'The draft couldn’t be changed. Try again.' };
+  }
+}
+
+async function updateOneDraft(
+  id: string,
+  change: { title?: string; bodyHtml?: string },
+): Promise<UpdateContentDraftResult> {
   if (!draftId.safeParse(id).success) {
     return { ok: false, reason: 'invalid', message: 'That isn’t a draft’s id.' };
   }
@@ -1451,16 +1447,23 @@ export async function updateContentDraft(
     .select('title, body_html, updated_at, archived_at')
     .eq('id', id)
     .maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) return { ok: false, reason: 'failed', message: 'The draft couldn’t be read.' };
   if (!current || current.archived_at) {
     return { ok: false, reason: 'not_found', message: 'That draft isn’t in the Library.' };
   }
+  // The page before goes to History first: without it, Undo couldn't bring it back.
   const { data: version, error: versionError } = await supabase.rpc('content_draft_snapshot', {
     p_draft_id: id,
     p_origin: 'agent_before',
   });
-  if (versionError)
-    console.error('Failed to keep the draft before Chat’s change:', versionError.message);
+  if (versionError || typeof version !== 'string') {
+    if (versionError) console.error('Failed to keep the draft before Chat’s change:', versionError);
+    return {
+      ok: false,
+      reason: 'failed',
+      message: 'The page before couldn’t be kept in History, so nothing was changed. Try again.',
+    };
+  }
   const saved = await saveContentDraft(id, {
     title: change.title ?? current.title,
     bodyHtml: change.bodyHtml ?? current.body_html,
@@ -1488,7 +1491,7 @@ export async function updateContentDraft(
     ok: true,
     updatedAt: saved.updatedAt,
     bodyHash: saved.bodyHash,
-    beforeVersionId: typeof version === 'string' ? version : null,
+    beforeVersionId: version,
   };
 }
 
@@ -1988,37 +1991,7 @@ export async function restoreDraftVersion(id: string, versionId: string): Promis
   if (error) throw new Error(error.message);
   if (!data) throw new Error('not_found');
   const restored = data as unknown as RestoredDraft;
-  let updatedAt = restored.updatedAt;
-
-  // Read back, so the type is detected only on the draft the version restored.
-  const { data: row, error: rowError } = await supabase
-    .from('content_drafts')
-    .select(`page_type, page_type_source, body_html, source_url, ${BRAND_SITE}`)
-    .eq('id', id)
-    .maybeSingle();
-  if (rowError) {
-    console.error('Failed to read the restored draft:', rowError.message);
-  } else if (row?.page_type_source === 'detected' && row.body_html === restored.bodyHtml) {
-    const detected = detectPageType(
-      { title: restored.title, html: restored.bodyHtml, url: row.source_url },
-      brandSiteType(row.brands),
-    );
-    // A page that shows no type keeps the one it had, as on a save.
-    if (detected && detected !== row.page_type) {
-      const { data: typed, error: typeError } = await supabase
-        .from('content_drafts')
-        .update({ page_type: detected })
-        .eq('id', id)
-        .eq('page_type_source', 'detected')
-        // Only over the restore, as after a save.
-        .eq('updated_at', restored.updatedAt)
-        .select('updated_at')
-        .maybeSingle();
-      // The page is restored; its type catches up on the next save.
-      if (typeError) console.error('Failed to update the detected page type:', typeError.message);
-      else if (typed) updatedAt = typed.updated_at;
-    }
-  }
+  const updatedAt = await followRestoredPageType(supabase, id, restored);
   return {
     title: restored.title,
     bodyHtml: restored.bodyHtml,

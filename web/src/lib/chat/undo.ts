@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
+import { followRestoredPageType } from '@/lib/content/draft-page-type';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
 import { logActivity, summaryValue, type ActivityPlace } from './activity';
@@ -79,6 +80,8 @@ const sha256 = (text: string) => createHash('sha256').update(text).digest('hex')
 // ─── create_draft: archive the draft it saved (§9: 30 days, "move to trash") ─
 
 const DRAFT_COLUMNS = 'id, brand_id, title, body_html, status, archived_at, updated_at';
+/** How long History keeps a version (00215): content_draft_restore's 90 days. */
+const HISTORY_DAYS = 90;
 
 /** What a draft looks like to a person: its title, page and status. */
 function draftState(row: Record<string, unknown>): Snapshot {
@@ -177,25 +180,65 @@ const updateDraft: UndoRule = {
     };
   },
   async inverse({ id, brandId, data }) {
-    let read = supabaseAdmin.from('content_drafts').select(DRAFT_COLUMNS).eq('id', id);
+    let read = supabaseAdmin
+      .from('content_drafts')
+      .select(`${DRAFT_COLUMNS}, agent_state`)
+      .eq('id', id);
     if (brandId) read = read.eq('brand_id', brandId);
     const { data: draft, error } = await read.maybeSingle();
     check(error, 'the draft');
     if (!draft) return 'gone';
-    // Edited, renamed or archived since: the person's to restore from History.
+    // Edited, renamed, archived or being written by the agent since: the person's to restore from History.
     const after = asObject(data.after);
     const now = draftState(draft);
-    if (draft.archived_at || now.title !== after.title || now.bodyHash !== after.bodyHash) {
+    if (
+      draft.archived_at ||
+      draft.agent_state === 'writing' ||
+      now.title !== after.title ||
+      now.bodyHash !== after.bodyHash
+    ) {
       return 'changed';
     }
-    // History's restore: the page now is kept first, then the version comes back (00215).
-    const { data: restored, error: restoreError } = await supabaseAdmin.rpc(
-      'content_draft_restore',
-      { p_version_id: data.versionId as string },
-    );
+    // The version kept before the change: this draft's, within History's 90 days (00215).
+    const { data: version, error: versionError } = await supabaseAdmin
+      .from('content_draft_versions')
+      .select('draft_id, title, body_html, created_at')
+      .eq('id', textOf(data.versionId) ?? '')
+      .maybeSingle();
+    check(versionError, 'the draft’s version');
+    if (
+      !version ||
+      version.draft_id !== id ||
+      Date.parse(version.created_at as string) < Date.now() - HISTORY_DAYS * DAY_MS
+    ) {
+      return 'gone';
+    }
+    // History's restore (content_draft_restore), only over the page just read: the page now
+    // is kept first, then the version comes back; a write in between wins.
+    const { error: keepError } = await supabaseAdmin.rpc('content_draft_keep_version', {
+      p_draft_id: id,
+      p_origin: 'restore',
+    });
+    if (keepError) throw new Error(`Could not keep the draft before Undo: ${keepError.message}`);
+    const { data: restored, error: restoreError } = await supabaseAdmin
+      .from('content_drafts')
+      .update({
+        title: version.title,
+        body_html: version.body_html,
+        restored_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('updated_at', draft.updated_at)
+      .select('updated_at')
+      .maybeSingle();
     if (restoreError) throw new Error(`Could not restore the draft: ${restoreError.message}`);
-    // The version is past History's 90 days, or gone with its draft.
-    return restored ? 'ok' : 'gone';
+    if (!restored) return 'changed';
+    await followRestoredPageType(supabaseAdmin, id, {
+      title: version.title as string,
+      bodyHtml: version.body_html as string,
+      updatedAt: restored.updated_at as string,
+    });
+    return 'ok';
   },
   href: (id) => `/dashboard/content/editor/${id}`,
 };
