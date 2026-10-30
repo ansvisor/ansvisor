@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { AlertTriangle, X } from 'lucide-react';
 import { AiUsageBanner } from '@/components/ai-usage/ai-usage-banner';
 import { AiUsageMeter } from '@/components/ai-usage/ai-usage-meter';
+import { useGetMore } from '@/components/ai-usage/get-more-context';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { saveUsageNoticePeriod } from '@/lib/actions/chat-prefs';
 import { aiUsageTone, percentLabel, type AiUsage } from '@/lib/billing/ai-usage';
@@ -20,6 +21,24 @@ export function usagePeriodDay(usage: AiUsage): string | null {
 
 /** The periods whose line this tab already showed: a new chat on the same visit says it no more. */
 const shownThisVisit = new Set<string>();
+
+/** The period whose cap opened the Get more window in this browser (CHAT-18 agentic update). */
+const GET_MORE_OPENED_KEY = 'ansvisor.chat.getMoreOpened';
+/** The periods whose cap opened it on this visit, for a browser without storage. */
+const getMoreOpenedThisVisit = new Set<string>();
+
+/** Whether the Get more window opened for this period's cap here already; marks it when not. */
+function getMoreOpenedFor(period: string): boolean {
+  if (getMoreOpenedThisVisit.has(period)) return true;
+  getMoreOpenedThisVisit.add(period);
+  try {
+    if (window.localStorage.getItem(GET_MORE_OPENED_KEY) === period) return true;
+    window.localStorage.setItem(GET_MORE_OPENED_KEY, period);
+  } catch {
+    // Without storage it may open again on another visit: still once a visit.
+  }
+  return false;
+}
 
 /**
  * Whether Chat stops at the cap (CHAT-04 item 17): the allowance is used up
@@ -59,6 +78,14 @@ export function ChatUsageNotice({ seenPeriod = null }: { seenPeriod?: string | n
   const tone = usage && !usage.unlimited ? aiUsageTone(usage) : null;
   const period = usage ? usagePeriodDay(usage) : null;
   const shown = tone === 'warning' && !closed && !(period && seenBefore.has(period));
+  const openGetMore = useGetMore();
+  const atCap = chatAtCap(usage) && !usage?.trial;
+
+  // At the cap, the Get more window opens once a period (the trial can't buy packs).
+  useEffect(() => {
+    if (!atCap || !openGetMore || !period || getMoreOpenedFor(period)) return;
+    openGetMore('ai');
+  }, [atCap, openGetMore, period]);
 
   // Shown: kept on the person, so it isn't said again this period.
   useEffect(() => {

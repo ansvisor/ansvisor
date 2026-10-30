@@ -19,6 +19,8 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+const getMore = vi.hoisted(() => ({ open: null as ((tab?: string) => void) | null }));
+vi.mock('@/components/ai-usage/get-more-context', () => ({ useGetMore: () => getMore.open }));
 const download = vi.hoisted(() => ({ saveBlob: vi.fn() }));
 vi.mock('@/lib/download', () => download);
 
@@ -112,5 +114,15 @@ describe('DeliverableCard', () => {
     expect(action('deliverable.download')).toBeNull();
     expect(action('deliverable.copy')).toBeNull();
     expect(action('deliverable.openEditor')).toBeNull();
+    // No Get more window here (Chat off, self-hosted): only the line.
+    expect(action('deliverable.getMoreStorage')).toBeNull();
+  });
+
+  it('offers Get more storage when storage is full, where the window is', async () => {
+    getMore.open = vi.fn();
+    await render({ ...page, href: undefined, filed: 'storage_full' });
+    await click(action('deliverable.getMoreStorage')!);
+    expect(getMore.open).toHaveBeenCalledWith('storage');
+    getMore.open = null;
   });
 });

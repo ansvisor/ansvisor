@@ -6,6 +6,7 @@ import { MobileNav } from '@/components/layout/mobile-nav';
 import { AuthProvider } from '@/components/providers/auth-provider';
 import { PlanProvider } from '@/components/providers/plan-provider';
 import { AiUsageProvider } from '@/components/providers/ai-usage-provider';
+import { GetMoreProvider } from '@/components/ai-usage/get-more';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import { MenuAccessProvider } from '@/components/providers/menu-access-provider';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
@@ -180,30 +181,33 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 <GettingStartedPageOpened />
                 <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
                   <AiUsageProvider>
-                    <ChatPanelProvider setup={chatPanel}>
-                      <div className="flex h-screen overflow-hidden">
-                        {/* Desktop sidebar */}
-                        <div className="relative hidden md:flex md:flex-shrink-0">
-                          <SidebarErrorBoundary>
-                            <Sidebar />
-                          </SidebarErrorBoundary>
-                        </div>
-
-                        {/* Main area, beside Chat's side panel when it is open */}
-                        <ChatPanelPage className="flex flex-1 flex-col overflow-hidden">
-                          <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
-                            <MobileNav />
+                    {/* The Get more window, for every limit on the page (CHAT-18 §B item 6). */}
+                    <GetMoreProvider>
+                      <ChatPanelProvider setup={chatPanel}>
+                        <div className="flex h-screen overflow-hidden">
+                          {/* Desktop sidebar */}
+                          <div className="relative hidden md:flex md:flex-shrink-0">
+                            <SidebarErrorBoundary>
+                              <Sidebar />
+                            </SidebarErrorBoundary>
                           </div>
-                          <ReadOnlyBanner />
-                          <DemoBanner />
-                          <main className="flex-1 overflow-y-auto bg-background p-6">
-                            <BrandGuard>{children}</BrandGuard>
-                          </main>
-                          <TrackingJobHandoff />
-                        </ChatPanelPage>
-                      </div>
-                      {chatPanel.enabled && <ChatSidePanel />}
-                    </ChatPanelProvider>
+
+                          {/* Main area, beside Chat's side panel when it is open */}
+                          <ChatPanelPage className="flex flex-1 flex-col overflow-hidden">
+                            <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
+                              <MobileNav />
+                            </div>
+                            <ReadOnlyBanner />
+                            <DemoBanner />
+                            <main className="flex-1 overflow-y-auto bg-background p-6">
+                              <BrandGuard>{children}</BrandGuard>
+                            </main>
+                            <TrackingJobHandoff />
+                          </ChatPanelPage>
+                        </div>
+                        {chatPanel.enabled && <ChatSidePanel />}
+                      </ChatPanelProvider>
+                    </GetMoreProvider>
                   </AiUsageProvider>
                 </MenuAccessProvider>
               </UpgradeDialogProvider>

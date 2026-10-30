@@ -24,8 +24,30 @@
     "askAdmin": "To get more AI usage or use your own key, ask an admin of your workspace.",
     "getMore": {
       "plan": "Get more AI usage",
+      "credits": "Get more AI credits",
       "ownKey": "Use your own key",
       "startPlan": "Start your plan"
+    },
+    "getMoreWindow": {
+      "titleAi": "Get more AI credits",
+      "titleStorage": "Get more storage",
+      "description": "Your plan, where your limits stand, and the packs that add more.",
+      "readFailed": "Couldn't read your plan and packs. Try again later.",
+      "trial": "Trial",
+      "aiLine": "AI usage this month: {percent} · {plan} · resets {date}",
+      "aiLineNoDate": "AI usage this month: {percent} · {plan}",
+      "added": "Added. You can continue.",
+      "ownKey": "Use your own key",
+      "askAi": "Buy an AI credit pack",
+      "askStorage": "Buy a storage pack",
+      "estimates": {
+        "title": "What a pack can cover, roughly",
+        "pack": "Pack",
+        "answers": "≈ Chat answers",
+        "articles": "≈ Articles",
+        "examples": "Answers and articles are only examples. Credits work for everything Chat does: reports, audits, content optimization, images and scheduled jobs.",
+        "warning": "Estimates on Auto. Expensive models (e.g. Claude Opus 5.5) give fewer, low-cost models (e.g. Claude Haiku 5.5) give more. Long tasks, High or Max effort and images use more."
+      }
     },
     "popover": {
       "title": "AI usage this month · {plan} plan",
@@ -3689,6 +3711,7 @@
     "saved": "Saved to Files",
     "inFiles": "In Files",
     "storageFull": "Not saved to Files · Storage is full",
+    "getMoreStorage": "Get more storage",
     "saveFailed": "Couldn't save that to Files. Try again.",
     "openEditor": "Open in Content Editor",
     "openEditorNoBrand": "Pick a brand first: the draft goes to its Content Library.",
@@ -3706,6 +3729,7 @@
     "usedInDraft": "In Files · Used in Content draft",
     "storageFull": "Not saved to Files · Storage is full",
     "notFiled": "Not saved to Files",
+    "getMoreStorage": "Get more storage",
     "copy": "Copy",
     "copied": "Copied",
     "copyFailed": "Couldn't copy that. Try again.",
@@ -3726,6 +3750,8 @@
     "storageNoLimit": "Storage {used} GB",
     "storageTip": "Files are kept for 1 year",
     "storageFull": "Storage is full. New work still shows in its chat, but isn't saved to Files.",
+    "storageFullGetMore": "Storage is full. Get more storage to keep filing new work.",
+    "getMoreStorage": "Get more storage",
     "searchPlaceholder": "Filter by name…",
     "filters": {
       "all": "All",

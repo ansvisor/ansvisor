@@ -22,6 +22,8 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+const getMore = vi.hoisted(() => ({ open: null as ((tab?: string) => void) | null }));
+vi.mock('@/components/ai-usage/get-more-context', () => ({ useGetMore: () => getMore.open }));
 const download = vi.hoisted(() => ({ saveBlob: vi.fn() }));
 vi.mock('@/lib/download', () => download);
 
@@ -242,6 +244,21 @@ describe('ChatFiles', () => {
       "Storage is full. New work still shows in its chat, but isn't saved to Files.",
     );
     expect(container.textContent).not.toContain('Get more');
+  });
+
+  it('opens Get more storage from the meter and the full line, where the window is', async () => {
+    getMore.open = vi.fn();
+    page.storage = { usedBytes: 25 * GB, limitBytes: 25 * GB, fileCount: 24 };
+    await render();
+    expect(container.querySelector('[data-slot="storage-full"]')!.textContent).toBe(
+      'Storage is full. Get more storage to keep filing new work.Get more storage',
+    );
+    const [meter, line] = action('files.getMoreStorage');
+    await click(meter);
+    await click(line);
+    expect(getMore.open).toHaveBeenCalledTimes(2);
+    expect(getMore.open).toHaveBeenCalledWith('storage');
+    getMore.open = null;
   });
 
   it('pages 50 at a time with Show more', async () => {

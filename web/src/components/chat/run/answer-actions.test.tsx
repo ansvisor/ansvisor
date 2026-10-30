@@ -17,6 +17,8 @@ const download = vi.hoisted(() => ({ saveBlob: vi.fn() }));
 vi.mock('@/lib/download', () => download);
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => router }));
+const getMore = vi.hoisted(() => ({ open: null as ((tab?: string) => void) | null }));
+vi.mock('@/components/ai-usage/get-more-context', () => ({ useGetMore: () => getMore.open }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (pick: (s: { activeBrandId: string }) => unknown) =>
     pick({ activeBrandId: '22222222-2222-4222-8222-222222222222' }),
@@ -157,6 +159,22 @@ describe('AnswerActions', () => {
     answer = () => Response.json({ ok: false, code: 'subscription_inactive' }, { status: 402 });
     await click(button('answer.saveToFiles'));
     expect(openUpgrade).toHaveBeenCalled();
+  });
+
+  it('offers Get more storage on a full workspace, where the window is', async () => {
+    getMore.open = vi.fn();
+    answer = () => Response.json({ ok: false, code: 'storage_full' }, { status: 409 });
+    await render();
+    await click(button('answer.saveToFiles'));
+    const [text, options] = toast.mock.calls.at(-1)! as unknown as [
+      string,
+      { action: { label: string; onClick: () => void } },
+    ];
+    expect(text).toBe('Not saved to Files · Storage is full');
+    expect(options.action.label).toBe('Get more storage');
+    options.action.onClick();
+    expect(getMore.open).toHaveBeenCalledWith('storage');
+    getMore.open = null;
   });
 
   it('opens the answer in the Content Editor as a new draft, in the brand open', async () => {

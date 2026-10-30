@@ -298,6 +298,7 @@ export function AiUsageMeter({
           <AiUsageGetMore
             plan={usage.plan}
             trial={usage.trial}
+            chatMetered={usage.chatMetered}
             primary={pressing}
             onFollow={close}
           />
