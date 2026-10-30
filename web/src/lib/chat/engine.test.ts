@@ -1857,6 +1857,11 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'rename_topic',
     'add_competitors',
     'remove_competitor',
+    // W2-07's content rows: Admins and Managers only.
+    'update_draft',
+    'push_cms_draft',
+    'build_report',
+    'run_site_audit',
   ];
   const dismiss = toolCall('w1', 'update_opportunity', {
     opportunity_id: OPPORTUNITY,
