@@ -192,6 +192,8 @@ beforeEach(() => {
   // The model as a server without an Anthropic key picks it, whatever the shell has.
   vi.stubEnv('ANTHROPIC_API_KEY', '');
   vi.stubEnv('CONTENT_WRITE_MODEL', '');
+  // The facts pass searches on Anthropic only (content-research.js searchesCapped).
+  vi.stubEnv('CONTENT_READ_MODEL', 'anthropic/claude-haiku-5-5');
 });
 afterEach(() => vi.unstubAllEnvs());
 

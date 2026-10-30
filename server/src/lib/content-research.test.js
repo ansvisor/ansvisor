@@ -383,6 +383,23 @@ describe('lookUpFacts', () => {
     expect(generateText).not.toHaveBeenCalled();
   });
 
+  it('never searches on a provider whose searches it can’t cap or count (Google, OpenAI)', async () => {
+    const forPerson = [
+      'Social media tools compared',
+      'AI use in social media keeps growing: [share of marketers using AI for social media]. Pick a tool that fits.',
+      'Compare seats and profiles: [Hootsuite Professional plan price per month].',
+      'Check client workspace limits: [Hootsuite plan limits for client workspaces].',
+    ];
+    for (const modelId of ['google/gemini-3-flash-preview', 'openai/gpt-5-mini']) {
+      generateText.mockClear();
+      reserveAiBudget.mockClear();
+      const { settled } = await research(PAGE, knownNumbers('2026'), { modelId });
+      expect(settled.map((t) => t.text)).toEqual(forPerson);
+      expect(generateText).not.toHaveBeenCalled();
+      expect(reserveAiBudget).not.toHaveBeenCalled();
+    }
+  });
+
   it('leaves the gaps for the person when the answer is cut off (pause_turn, max tokens)', async () => {
     generateText.mockResolvedValue(
       answer([], {

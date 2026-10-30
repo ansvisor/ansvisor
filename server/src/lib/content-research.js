@@ -593,6 +593,9 @@ export function readFindings(text, gaps, sources, known, own = new Set()) {
   return found;
 }
 
+/** Whether a model's web search is capped per call and counted: Anthropic's only. */
+export const searchesCapped = (modelId) => String(modelId ?? '').startsWith('anthropic/');
+
 /** How many web searches a call ran: Anthropic's count, else its search calls. */
 export function searchesOf(result) {
   const counted = result?.providerMetadata?.anthropic?.usage?.server_tool_use?.web_search_requests;
@@ -613,7 +616,12 @@ export function searchesOf(result) {
  * through.
  */
 async function research({ gaps, orgId, draftId, modelId, run, context }) {
-  const tools = webSearchTools(modelId, { maxUses: MAX_RESEARCH_SEARCHES });
+  // Only Anthropic's search takes a cap (maxUses) and reports how many it
+  // ran: Google's grounding and OpenAI's search take neither, so their
+  // searches would run uncapped and go uncharged (searchesOf counts none).
+  const tools = searchesCapped(modelId)
+    ? webSearchTools(modelId, { maxUses: MAX_RESEARCH_SEARCHES })
+    : null;
   if (!tools) {
     logger.info({ draftId, modelId }, '[content-research] no web search on this model');
     return null;
