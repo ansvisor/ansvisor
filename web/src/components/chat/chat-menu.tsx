@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link, usePathname } from '@/i18n/navigation';
 import { DotLegend } from '@/components/agentic/dot-legend';
+import { NewPill } from '@/components/agentic/new-pill';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
@@ -35,6 +36,25 @@ function saveFolded(folded: Record<Section, boolean>) {
     window.localStorage.setItem(SECTIONS_KEY, JSON.stringify(folded));
   } catch {
     // Private windows and full storage: it is only folded for this visit.
+  }
+}
+
+/** Agents was opened in this browser: its "New" pill is gone (CHAT-21 §A item 1). */
+const AGENTS_SEEN_KEY = 'ansvisor.chatMenu.agentsSeen';
+
+function readAgentsSeen(): boolean {
+  try {
+    return window.localStorage.getItem(AGENTS_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function saveAgentsSeen() {
+  try {
+    window.localStorage.setItem(AGENTS_SEEN_KEY, '1');
+  } catch {
+    // Private windows and full storage: the pill shows again next visit.
   }
 }
 
@@ -191,7 +211,8 @@ export interface ChatMenuViewProps {
  * The chat menu, top to bottom (CHAT-01 items 6, 9a; agentic update; mockup
  * CHAT-mockup-v2.html, the menu on every #s-… screen): the toggle and
  * "＋ New chat"; Menu (Home; Inbox, with its count and an amber dot while
- * something needs the person; Settings, with the month's AI usage; Files); Governance (Activity, What Chat can do, Tool
+ * something needs the person; Agents, with "New" until it is first opened
+ * (governance mockup #cnav); Settings, with the month's AI usage; Files); Governance (Activity, What Chat can do, Tool
  * policy: the governance mockup's menu, #cnav); Agents at work (needs you,
  * running, unread results: three rows, See all, Show less, the dots'
  * legend); Chats with its count, Search chats (typing lists the chats
@@ -227,11 +248,19 @@ export function ChatMenuView({
   const [query, setQuery] = useState('');
   const found = useChatSearch(query);
   const searching = query.trim() !== '';
+  // The "New" pill beside Agents, until Agents is first opened in this browser.
+  const [agentsNew, setAgentsNew] = useState(false);
+  const onAgents = pathname.startsWith('/dashboard/chat/agents');
   useEffect(() => {
     // Browser storage exists only after hydration.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFolded(readFolded());
   }, []);
+  useEffect(() => {
+    if (onAgents) saveAgentsSeen();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAgentsNew(!onAgents && !readAgentsSeen());
+  }, [onAgents]);
   const fold = (section: Section) =>
     setFolded((was) => {
       const next = { ...was, [section]: !was[section] };
@@ -345,6 +374,15 @@ export function ChatMenuView({
                 </span>
               </span>
             )}
+          </MenuItem>
+          <MenuItem
+            href="/dashboard/chat/agents"
+            action="chatMenu.openAgents"
+            active={onAgents}
+            onNavigate={onNavigate}
+          >
+            {t('agents')}
+            {agentsNew && <NewPill className="ml-auto" />}
           </MenuItem>
           <MenuItem
             href="/dashboard/chat/settings"
