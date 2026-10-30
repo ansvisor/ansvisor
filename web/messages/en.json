@@ -191,6 +191,8 @@
       "deletePrompts": "Deleting prompts needs a plan",
       "pausePrompts": "Pausing prompts needs a plan",
       "resumePrompts": "Resuming prompts needs a plan",
+      "pauseDailySuggestions": "Pausing daily suggestions needs a plan",
+      "resumeDailySuggestions": "Turning daily suggestions back on needs a plan",
       "trackPrompts": "Tracking prompts needs a plan",
       "generatePrompts": "Generating prompts needs a plan",
       "analyzePrompts": "Analyzing prompts needs a plan",
@@ -4167,12 +4169,50 @@
     "inbox": {
       "title": "Inbox",
       "lands": "Results from your agents land here.",
+      "landsWithSuggestions": "Results from your agents and daily suggestions land here.",
+      "nothingNeedsYou": "Nothing needs you.",
       "summary": {
         "needsYou": "{count, plural, one {# needs you} other {# need you}}",
         "running": "{count} running",
-        "doneToday": "{count} done today"
+        "doneToday": "{count} done today",
+        "suggestions": "{count, plural, one {# suggestion} other {# suggestions}} this week"
       },
       "empty": "Nothing needs you. Results from your agents land here.",
+      "tabs": {
+        "label": "Inbox topics",
+        "all": "All",
+        "suggestions": "Daily suggestions",
+        "needsYou": "Needs you",
+        "runs": "Runs"
+      },
+      "tabEmpty": "Nothing here.",
+      "suggestions": {
+        "note": "Up to 7 a week, picked from what waits in your Action Center. This list shows the last 7 days and renews every 14 days.",
+        "pause": "Pause daily suggestions",
+        "started": "Daily suggestions are on for you: one action a day from your Action Center, starting tomorrow morning.",
+        "empty": "No daily suggestions in the last 7 days.",
+        "dot": {
+          "new": "New",
+          "seen": "Seen",
+          "started": "Started"
+        },
+        "today": "Today · {date}",
+        "how": {
+          "startNow": "Content Editor or Chat · about {minutes} min",
+          "chat": "Chat",
+          "startedEditor": "started in Content Editor {date}",
+          "startedChat": "started in Chat {date}"
+        },
+        "open": "Open",
+        "paused": {
+          "title": "Daily suggestions are paused",
+          "body": "None was opened or used in 30 days, so we stopped picking them. Your Action Center is unchanged.",
+          "offBody": "You paused them. Your Action Center is unchanged.",
+          "resume": "Turn back on"
+        },
+        "next": "Turned back on, the first suggestion arrives tomorrow morning.",
+        "changeFailed": "Couldn't change your daily suggestions. Try again."
+      },
       "review": "Review",
       "watch": "Watch",
       "open": "Open",

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useTranslations } from 'next-intl';
 import { Inbox as InboxIcon } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -11,7 +11,8 @@ import type { ChatListItem } from '@/lib/chat/conversations';
 import { agoOf } from '@/lib/chat/home';
 import { chatMenuLists } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
-import { useChatList, type ChatListStatus } from './chat-list-provider';
+import type { ChatListStatus } from './chat-list-provider';
+import { INBOX_ROW, SuggestionRow, SuggestionsPanel, type InboxDaily } from './inbox-suggestions';
 
 /**
  * The Inbox's rows: what needs the person, what runs, and unread results —
@@ -38,6 +39,37 @@ export function inboxCounts(items: ChatListItem[], now = new Date()) {
   };
 }
 
+/**
+ * The Inbox's topics (CHAT-26 §2.1): everything, the daily suggestions, what
+ * needs the person, and their agents' runs. Reports and Alerts stay hidden
+ * until they have something to hold (scheduled reports, CHAT-12; watch
+ * rules, CHAT-22).
+ */
+export const INBOX_TABS = ['all', 'suggestions', 'needsYou', 'runs'] as const;
+export type InboxTab = (typeof INBOX_TABS)[number];
+
+/** Each topic's rows: Needs you and Runs split the chats; All holds them and the suggestions. */
+export function inboxTabCounts(
+  items: ChatListItem[],
+  suggestions: number,
+): Record<InboxTab, number> {
+  const needsYou = items.filter((c) => c.state === 'needsYou').length;
+  return {
+    all: items.length + suggestions,
+    suggestions,
+    needsYou,
+    runs: items.length - needsYou,
+  };
+}
+
+/** The chats a topic lists: none on Daily suggestions. */
+export function inboxTabChats(items: ChatListItem[], tab: InboxTab): ChatListItem[] {
+  if (tab === 'suggestions') return [];
+  if (tab === 'needsYou') return items.filter((c) => c.state === 'needsYou');
+  if (tab === 'runs') return items.filter((c) => c.state !== 'needsYou');
+  return items;
+}
+
 /** The person's clock, read after hydration: null while rendering on the server. */
 function useNow(): Date | null {
   const minute = useSyncExternalStore(
@@ -50,10 +82,6 @@ function useNow(): Date | null {
   );
   return useMemo(() => (minute === null ? null : new Date(minute * 60_000)), [minute]);
 }
-
-/** The Inbox's rows' grid (mockup `.inbox .ib`): dot · text · time or progress · button. */
-const ROW =
-  'grid min-h-[62px] cursor-pointer grid-cols-[8px_minmax(0,1fr)_112px_84px] items-center gap-3 rounded-[14px] border bg-card px-[13px] py-[11px] shadow-[0_1px_2px_rgba(10,10,10,.04)] transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-px hover:shadow-[0_4px_14px_rgba(10,10,10,.06)] motion-reduce:transition-none motion-reduce:hover:translate-y-0';
 
 function InboxRow({ chat, now }: { chat: ChatListItem; now: Date | null }) {
   const t = useTranslations('chatShell.inbox');
@@ -99,7 +127,7 @@ function InboxRow({ chat, now }: { chat: ChatListItem; now: Date | null }) {
         }
       }}
       className={cn(
-        ROW,
+        INBOX_ROW,
         'outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
         needs && 'border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/20',
       )}
@@ -157,15 +185,27 @@ export interface ChatInboxViewProps {
   items: ChatListItem[];
   now: Date | null;
   onRetry: () => void;
+  /**
+   * The person's daily suggestions (CHAT-26): the topic tabs and the
+   * suggestions' rows. Absent while the new Chat is off for the workspace
+   * or they couldn't be read: the Inbox is then as it was.
+   */
+  daily?: InboxDaily | null;
 }
 
 /**
  * The Inbox (mockup #s-inbox; CHAT-01 agentic update): results from the
  * person's agents land here — what needs their OK first (Review), then what
  * runs (its progress, Watch), then results they haven't opened (Open). A
- * row opens its chat. One line and an icon when there is nothing.
+ * row opens its chat. One line and an icon when there is nothing. With the
+ * daily suggestions, the same in topic tabs (mockup #d-inbox).
  */
-export function ChatInboxView({ status, items, now, onRetry }: ChatInboxViewProps) {
+export function ChatInboxView({ daily, ...props }: ChatInboxViewProps) {
+  return daily ? <TabbedInboxView {...props} daily={daily} /> : <PlainInboxView {...props} />;
+}
+
+/** The Inbox before its topic tabs (CHAT-01): one list. */
+function PlainInboxView({ status, items, now, onRetry }: Omit<ChatInboxViewProps, 'daily'>) {
   const t = useTranslations('chatShell.inbox');
   const counts = inboxCounts(items, now ?? new Date());
   const summary = [
@@ -221,12 +261,138 @@ export function ChatInboxView({ status, items, now, onRetry }: ChatInboxViewProp
   );
 }
 
-/** The Inbox with the person's chats from the shell's list. */
-export function ChatInbox() {
-  const { status, chats, refresh } = useChatList();
-  const now = useNow();
-  const items = useMemo(() => inboxItems(chats), [chats]);
-  return <ChatInboxView status={status} items={items} now={now} onRetry={() => void refresh()} />;
+/**
+ * The Inbox in topic tabs (CHAT-26 §2.1, §2.2; mockup #d-inbox): the
+ * subtitle keeps its counts, with the week's suggestions; each tab shows
+ * its count and only its rows. All opens first. The suggestions on screen
+ * (All or Daily suggestions) are marked seen. An Analyst, who gets no daily
+ * suggestions, has no Daily suggestions tab.
+ */
+function TabbedInboxView({
+  status,
+  items,
+  now,
+  onRetry,
+  daily,
+}: Omit<ChatInboxViewProps, 'daily'> & { daily: InboxDaily }) {
+  const t = useTranslations('chatShell.inbox');
+  const [tab, setTab] = useState<InboxTab>('all');
+  const gets = daily.read.roleFeed !== 'never';
+  const suggestions = gets ? daily.read.suggestions : [];
+  const tabs = INBOX_TABS.filter((name) => gets || name !== 'suggestions');
+  const ready = status === 'ready';
+  const counts = inboxCounts(items, now ?? new Date());
+  const tabCounts = inboxTabCounts(items, suggestions.length);
+  const summary = [
+    counts.needsYou ? t('summary.needsYou', { count: counts.needsYou }) : null,
+    counts.running ? t('summary.running', { count: counts.running }) : null,
+    counts.doneToday ? t('summary.doneToday', { count: counts.doneToday }) : null,
+    suggestions.length ? t('summary.suggestions', { count: suggestions.length }) : null,
+  ].filter(Boolean);
+
+  const onScreen = tab === 'all' || tab === 'suggestions' ? suggestions : [];
+  const unseen = onScreen
+    .filter((suggestion) => !suggestion.seenAt)
+    .map((suggestion) => suggestion.id)
+    .join(',');
+  const { onSeen } = daily;
+  useEffect(() => {
+    if (unseen) onSeen(unseen.split(','));
+  }, [unseen, onSeen]);
+
+  const chats = inboxTabChats(items, tab);
+  const rows = tab === 'all' ? chats.length + suggestions.length : chats.length;
+
+  return (
+    <div className="max-w-[880px]">
+      <div className="mb-3.5 flex items-center gap-3">
+        <h1 className="text-2xl font-bold tracking-[-.6px]">{t('title')}</h1>
+      </div>
+      {ready && (
+        <p className="-mt-1 mb-3.5 text-[13px] text-muted-foreground">
+          {summary.length > 0 ? `${summary.join(' · ')}. ` : `${t('nothingNeedsYou')} `}
+          {t(gets ? 'landsWithSuggestions' : 'lands')}
+        </p>
+      )}
+      <div role="tablist" aria-label={t('tabs.label')} className="mb-4 flex flex-wrap gap-1">
+        {tabs.map((name) => (
+          <button
+            key={name}
+            type="button"
+            role="tab"
+            data-action="inbox.tab"
+            data-tab={name}
+            aria-selected={tab === name}
+            onClick={() => setTab(name)}
+            className={cn(
+              'rounded-lg px-2.5 py-1 text-[12.5px] text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              tab === name && 'bg-muted font-medium text-foreground',
+            )}
+          >
+            {t(`tabs.${name}`)}
+            {(ready || name === 'suggestions') && (
+              <span className="ml-[5px] text-muted-foreground tabular-nums">
+                {tabCounts[name].toLocaleString('en-US')}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+      {daily.justStarted && (
+        <p className="-mt-1.5 mb-3 text-[12.5px] text-muted-foreground">
+          {t('suggestions.started')}
+        </p>
+      )}
+      {tab === 'suggestions' ? (
+        <SuggestionsPanel daily={daily} now={now} />
+      ) : (
+        <>
+          {status === 'loading' && (
+            <div className="mb-2 flex flex-col gap-2" aria-hidden>
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} className="h-[62px] w-full rounded-[14px]" />
+              ))}
+            </div>
+          )}
+          {status === 'error' && (
+            <p className="mb-2 text-sm text-muted-foreground">
+              {t('loadFailed')}{' '}
+              <button
+                type="button"
+                onClick={onRetry}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                {t('retry')}
+              </button>
+            </p>
+          )}
+          {rows > 0 ? (
+            <div className="flex flex-col gap-2">
+              {chats.map((chat) => (
+                <InboxRow key={chat.id} chat={chat} now={now} />
+              ))}
+              {tab === 'all' &&
+                suggestions.map((suggestion) => (
+                  <SuggestionRow
+                    key={suggestion.id}
+                    suggestion={suggestion}
+                    now={now}
+                    onOpen={daily.onOpen}
+                  />
+                ))}
+            </div>
+          ) : (
+            ready && (
+              <div className="flex items-center gap-2 rounded-[14px] border border-dashed px-4 py-6 text-sm text-muted-foreground">
+                <InboxIcon aria-hidden className="size-4" />
+                {t('tabEmpty')}
+              </div>
+            )
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 export { useNow };

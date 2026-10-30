@@ -123,6 +123,8 @@ Once the usage is used up, Chat pauses: the box is off, and a red line above it 
 
 **Inbox** in the chat menu lists what your agents did: chats waiting for your OK first, with **Review**, then chats still working, with their progress and **Watch**, then results you haven't opened yet, with **Open**. Click a row to open its chat. A result leaves the Inbox once you open it. The count next to **Inbox** shows how many items there are, with an amber dot when something needs you.
 
+Tabs on top, each with its count, show **All**, your **Daily suggestions**, what **Needs you** and your **Runs**.
+
 ## The chat menu
 
 The chat menu on the left of Chat lists your chats. **New chat** starts a new one. **Home** and **Inbox** come first. **Governance** opens the **Activity** log, **What Chat can do** and the **Tool policy**.
