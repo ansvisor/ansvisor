@@ -728,8 +728,18 @@ function runView(
   };
 }
 
-/** Runs as the detail and the Runs tab show them, with their brand, person and chat. */
-export async function runViews(organizationId: string, runs: RunRow[]): Promise<AgentRunView[]> {
+/**
+ * Runs as the detail and the Runs tab show them, with their brand, person
+ * and chat. A run's chat is given only when the person can open it as the
+ * chat page reads chats today (`readChat`): their own, or shared with the
+ * team. Anyone else's private chat would open on "This chat isn't
+ * available".
+ */
+export async function runViews(
+  organizationId: string,
+  viewerId: string,
+  runs: RunRow[],
+): Promise<AgentRunView[]> {
   if (runs.length === 0) return [];
   const [brands, people, chats] = await Promise.all([
     brandsOf(organizationId),
@@ -739,7 +749,8 @@ export async function runViews(organizationId: string, runs: RunRow[]): Promise<
     ),
     supabaseAdmin
       .from('chat_conversations')
-      .select('id, agent_run_id')
+      .select('id, agent_run_id, user_id, shared_at')
+      .eq('organization_id', organizationId)
       .in(
         'agent_run_id',
         runs.map((r) => r.id),
@@ -750,8 +761,17 @@ export async function runViews(organizationId: string, runs: RunRow[]): Promise<
   if (chats.error) throw new Error(`Could not read the runs' chats: ${chats.error.message}`);
   const brandNames = new Map(brands.map((b) => [b.id, b.name]));
   const chatOf = new Map(
-    ((chats.data ?? []) as { id: string; agent_run_id: string | null }[]).flatMap((c) =>
-      c.agent_run_id ? [[c.agent_run_id, c.id] as const] : [],
+    (
+      (chats.data ?? []) as {
+        id: string;
+        agent_run_id: string | null;
+        user_id: string | null;
+        shared_at: string | null;
+      }[]
+    ).flatMap((c) =>
+      c.agent_run_id && (c.user_id === viewerId || c.shared_at !== null)
+        ? [[c.agent_run_id, c.id] as const]
+        : [],
     ),
   );
   return runs.map((run) => runView(run, brandNames, people, chatOf));
@@ -935,7 +955,7 @@ async function detailOf(ctx: AgentContext, agent: LoadedAgent, now: Date): Promi
     brands: version
       ? scopeBrands(version.scope, brands).map((b) => ({ id: b.id, name: b.name }))
       : [],
-    recentRuns: await runViews(org, runs),
+    recentRuns: await runViews(org, ctx.actor.userId, runs),
     usagePeriod: usageOf(period, row.id),
     can: abilitiesOf(ctx, agent),
     limits: agentPlanLimits(ctx.plan),
@@ -950,7 +970,7 @@ export async function listAgentRuns(
 ): Promise<AgentRunView[] | null> {
   const agent = await visibleAgent(ctx, id);
   if (!agent) return null;
-  return runViews(ctx.actor.organizationId, await runsOf(agent.row.id, limit));
+  return runViews(ctx.actor.organizationId, ctx.actor.userId, await runsOf(agent.row.id, limit));
 }
 
 // ─── Checks before a write ───────────────────────────────────────────────────
@@ -1342,10 +1362,17 @@ export async function updateAgent(
   const visibilityChanged = patch.visibility !== undefined && patch.visibility !== row.visibility;
   const monthChanged =
     patch.maxMonthShare !== undefined && patch.maxMonthShare !== row.max_month_share;
+  // An Admin's change to someone else's agent that is on (or paused, to come back) is held to
+  // the mode its owner may use too: its triggered runs act as the owner, as Resume checks.
+  const ownerRole =
+    next && row.status !== 'draft' && row.owner_id && row.owner_id !== ctx.actor.userId
+      ? await ownerRoleOf(ctx.actor.organizationId, row)
+      : null;
   const denial = await firstDenial(ctx, [
     visibilityChanged ? visibilityDenial(patch.visibility!, ctx.viewer, ctx.settings) : null,
     monthChanged ? monthCapDenial(ctx.viewer) : null,
     next ? modeDenial(result.mode, ctx.plan, ctx.settings, ctx.viewer.role) : null,
+    ownerRole ? modeDenial(result.mode, ctx.plan, ctx.settings, ownerRole) : null,
     next || patch.triggers ? enginesDenial(ctx.plan, enginesNamed(result.scope, triggers)) : null,
   ]);
   if (denial) return denial;

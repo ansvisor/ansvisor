@@ -22,6 +22,10 @@ export interface ChatPanelSetup {
   /** What the panel's composer starts with (W1-10). */
   defaultMode: ChatMode;
   fullAutoOpen: boolean;
+  /** Full auto closed by the Admin's switch, not the plan (CHAT-23). */
+  fullAutoOffByAdmin: boolean;
+  /** Chat runs on the workspace's own key: a used-up allowance doesn't pause it. */
+  onOwnKey: boolean;
   /** The AI usage period whose 80% line the person already saw (CHAT-04 item 16). */
   usageNoticeSeen: string | null;
 }

@@ -9,7 +9,7 @@ import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import type { ChatListItem } from '@/lib/chat/conversations';
-import { AT_WORK_ROWS, chatMenuLists, needsYouCount, type DayGroup } from '@/lib/chat/menu-groups';
+import { AT_WORK_ROWS, chatMenuLists, type DayGroup } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
 import { useChatList, type ChatListStatus } from './chat-list-provider';
 import { ChatRowMenu } from './chat-menus';
@@ -268,11 +268,17 @@ export function ChatMenuView({
       return next;
     });
 
-  const now = useMemo(() => nowProp ?? new Date(), [nowProp]);
-  const { atWork, groups } = useMemo(() => chatMenuLists(chats, now), [chats, now]);
-  const needsYou = needsYouCount(chats);
-  // The Inbox holds what Agents at work lists: its count, with an amber dot while any needs you.
-  const inbox = atWork.length;
+  // Read the clock again with every list read, so a menu left open past
+  // midnight moves Today's chats to Yesterday.
+  const { now, atWork, groups } = useMemo(() => {
+    const at = nowProp ?? new Date();
+    return { now: at, ...chatMenuLists(chats, at) };
+  }, [chats, nowProp]);
+  // The Inbox holds the person's own chats in Agents at work: its count, with
+  // an amber dot while any needs them.
+  const inboxRows = atWork.filter((chat) => chat.mine);
+  const needsYou = inboxRows.filter((chat) => chat.state === 'needsYou').length;
+  const inbox = inboxRows.length;
   const inboxLabel = needsYou
     ? t('inboxLabelNeedsYou', { count: inbox, needsYou })
     : t('inboxLabel', { count: inbox });
