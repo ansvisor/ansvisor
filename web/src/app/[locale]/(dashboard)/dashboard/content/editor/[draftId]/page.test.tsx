@@ -6858,8 +6858,11 @@ describe('the side panel', () => {
         expect(pill()!.dataset.state).toBe('needsYou');
         expect(container.querySelector('header [data-action="runs.toggleTray"]')).not.toBeNull();
         expect(trayCalls(fetch).map(([url]) => url)).toContain('/api/chat/runs/tray?brand=b1');
+        const readsBefore = trayCalls(fetch).length;
         await runFix();
         expect(pill()!.dataset.state).toBe('working');
+        // The tray reads again as Fix starts: its run shows without waiting for the next poll.
+        expect(trayCalls(fetch).length).toBeGreaterThan(readsBefore);
         expect(button('1 running')).toBeUndefined();
         // Fix is the server's now: the page can be left.
         expect(container.textContent).toContain("You can leave this page. I'll keep going.");

@@ -3814,7 +3814,13 @@ export function DraftEditor({
             )}
             {/* With Chat on, the person's own Chat runs and this brand's Content Agent runs,
                 this page's among them (Chat agentic plan §2–3): the same tray as Chat's header. */}
-            {chatOn && <RunsTray brandId={draft.brandId} />}
+            {chatOn && (
+              <RunsTray
+                brandId={draft.brandId}
+                // Read again as the page's agent starts, its run is on the server, and it ends.
+                readAgain={`${agentWorking}:${agentRun?.id ?? ''}`}
+              />
+            )}
             {/* The agent at work on this page: a click opens the basket, with its steps and Stop. */}
             {/* Fix open rules or the brief at work: the basket shows their steps and Stop. */}
             {!chatOn && qualityOn && agentWorking && (
