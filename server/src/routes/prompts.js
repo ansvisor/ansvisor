@@ -533,6 +533,30 @@ async function replaceNewSuggestions(brandId, rows, log) {
 const SUGGEST_PROMPTS_REFUSAL = 'Only admins and managers can generate prompt suggestions.';
 const IMPROVE_REFUSAL = 'Only admins and managers can use Improve.';
 
+/**
+ * Prompts are grouped under topics, so suggesting prompts for a brand with no
+ * topic yet is refused before anything is generated: the person adds a topic
+ * first. 409 with `no_topics`, which the web reads as its own failure.
+ */
+const NO_TOPICS_REFUSAL = 'Add a topic first: prompts are grouped under topics.';
+
+/** Whether the brand has an active topic, as the dashboard's topic lists read them. */
+async function brandHasTopics(brandId) {
+  const { data, error } = await supabaseAdmin
+    .from('topics')
+    .select('id')
+    .eq('brand_id', brandId)
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return !!data;
+}
+
+function refuseNoTopics(res) {
+  return res.status(409).json({ error: NO_TOPICS_REFUSAL, code: 'no_topics' });
+}
+
 router.post(
   '/suggestions/:brandId/refresh',
   requireFeature('prompt_suggestions'),
@@ -540,6 +564,7 @@ router.post(
     try {
       const { brand } = await assertBrandAccess(req.params.brandId, req.user.id);
       await assertRole(req.user.id, MANAGER_ROLES, SUGGEST_PROMPTS_REFUSAL);
+      if (!(await brandHasTopics(req.params.brandId))) return refuseNoTopics(res);
       const { suggestions, gscCandidates, gaCandidates, catalogCandidates } =
         await generateSuggestions(req.params.brandId, {
           orgId: brand.organization_id,
@@ -665,6 +690,7 @@ router.post(
       }
       await assertBrandAccess(req.params.brandId, req.user.id);
       await assertRole(req.user.id, MANAGER_ROLES, SUGGEST_PROMPTS_REFUSAL);
+      if (!(await brandHasTopics(req.params.brandId))) return refuseNoTopics(res);
       const context = await loadSuggestionContext(req.params.brandId);
       const result = await suggestPromptsForPage(req.params.brandId, { ...parsed.data, context });
       return res.json(result);

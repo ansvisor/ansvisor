@@ -72,6 +72,10 @@ export interface ActivityEntry {
   undo: { data: { [key: string]: Json }; until: Date } | null;
   /** The change this row undoes. */
   undoesId?: string;
+  /** The agent it was for, or whose run made it (CHAT-21, CHAT-27 item 29): its Activity filter. */
+  agentId?: string | null;
+  /** The agent run that made it, or that a Run now queued. */
+  agentRunId?: string | null;
 }
 
 /** Writes a change's row, or an Undo's (undoesId), and returns its id. */
@@ -103,6 +107,8 @@ export async function logActivity(entry: ActivityEntry): Promise<string> {
       undo_json: entry.undo?.data ?? null,
       undo_until: entry.undo?.until.toISOString() ?? null,
       undoes_id: entry.undoesId ?? null,
+      agent_id: entry.agentId ?? null,
+      agent_run_id: entry.agentRunId ?? null,
     })
     .select('id')
     .single();

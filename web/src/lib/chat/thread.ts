@@ -1,6 +1,15 @@
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
-import { maskIds, type ChatDeliverable, type ChatNextMove, type ChatStep } from './events';
+import {
+  isChatEventType,
+  maskIds,
+  type ChatDeliverable,
+  type ChatNextMove,
+  type ChatRunSummary,
+  type ChatStep,
+} from './events';
 import { clientMove } from './next-moves';
+import { applyChatEvent, emptyRun } from './run-state';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
 
 /**
@@ -8,7 +17,10 @@ import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from '.
  * messages, and each answer's run with the steps as kept (toClientStep: no
  * tool, no debug record). Read as the person, so the chat's policy holds: a
  * chat is its author's only (CHAT-20 §16c). A run still under way is rebuilt
- * by the page from its events (`…/events?after=0`), and keeps streaming.
+ * by the page from its events (`…/events?after=0`), and keeps streaming. A
+ * run that ended keeps what its end event told the browser (W1-15): its
+ * header's time, steps and sources, and why it ended in error, in the same
+ * words, so a reload shows "Stopped after 41s" and the reason with Retry.
  * A finished run's next moves come back from chat_next_moves, in the
  * person's own chat only; a failed read of them loses the moves, not the chat.
  */
@@ -22,6 +34,10 @@ export interface ThreadRun {
   fileId: string | null;
   /** What it made, as filed (CHAT-06 item 1), in the order it made them. */
   deliverables: ChatDeliverable[];
+  /** Its end, as its end event said it (CHAT-03 items 10, 18–19); null while it works. */
+  summary: ChatRunSummary | null;
+  /** Why it ended in error, in its run.error event's words; null without them. */
+  errorReason: string | null;
   /** What could come next once it finished (CHAT-07 §C), best first. */
   nextMoves: ChatNextMove[];
 }
@@ -33,6 +49,12 @@ export interface ThreadMessage {
   dataAsOf: string | null;
   timezone: string | null;
   run: ThreadRun | null;
+  /**
+   * A question Retry may send again as it was (W1-15): one without files
+   * (each goes with one message only) and without a page scope (its chips
+   * and @ references stay on the server). Questions only.
+   */
+  resendable?: boolean;
 }
 
 export interface ChatThread {
@@ -54,6 +76,49 @@ interface FileRow {
   formats: string[];
   status: ChatDeliverable['status'];
   content_draft_id: string | null;
+}
+
+/** A run's end as the browser was told it: the event that ended it. */
+const END_EVENTS = ['run.finished', 'run.stopped', 'run.error', 'run.paused_cap'];
+const ENDED: readonly string[] = ['done', 'stopped', 'error', 'paused_cap'];
+
+/**
+ * The ended runs' last end events, as the run's answer applies them live
+ * (applyChatEvent): the summary, and an error's reason. The events are the
+ * server's (chat_run_events: service role only), read here for runs the
+ * person already read; each was made safe for the browser when it was sent
+ * (chatEvent). A read that fails leaves them out: the chat still opens.
+ */
+async function readRunEnds(
+  runIds: string[],
+): Promise<Map<string, { summary: ChatRunSummary | null; errorReason: string | null }>> {
+  const ends = new Map<string, { summary: ChatRunSummary | null; errorReason: string | null }>();
+  if (runIds.length === 0) return ends;
+  const { data, error } = await supabaseAdmin
+    .from('chat_run_events')
+    .select('run_id, seq, type, data')
+    .in('run_id', runIds)
+    .in('type', END_EVENTS)
+    .order('seq', { ascending: true });
+  if (error) {
+    console.error("[chat/thread] could not read the runs' ends:", error.message);
+    return ends;
+  }
+  for (const row of (data ?? []) as {
+    run_id: string;
+    seq: number;
+    type: string;
+    data: unknown;
+  }[]) {
+    if (!isChatEventType(row.type) || !row.data || typeof row.data !== 'object') continue;
+    const run = applyChatEvent(emptyRun(), {
+      type: row.type,
+      seq: row.seq,
+      data: row.data,
+    } as Parameters<typeof applyChatEvent>[1]);
+    ends.set(row.run_id, { summary: run.summary, errorReason: run.errorReason });
+  }
+  return ends;
 }
 
 /** A finished run's next move, as the thread reads it. */
@@ -82,7 +147,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   const [messages, runs] = await Promise.all([
     supabase
       .from('chat_messages')
-      .select('id, role, content_md, generated_at, data_as_of, timezone, created_at')
+      .select('id, role, content_md, context_json, generated_at, data_as_of, timezone, created_at')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true }),
     supabase
@@ -93,9 +158,23 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   if (messages.error) throw new Error(`Could not read the chat: ${messages.error.message}`);
   if (runs.error) throw new Error(`Could not read the chat's runs: ${runs.error.message}`);
 
+  const questionIds = (messages.data ?? []).filter((m) => m.role === 'user').map((m) => m.id);
+  const uploads = questionIds.length
+    ? await supabase.from('chat_uploads').select('message_id').in('message_id', questionIds)
+    : { data: [], error: null };
+  // Unread, every question counts as having files: Retry stays off rather than send it short.
+  if (uploads.error)
+    console.error('[chat/thread] could not read the files sent:', uploads.error.message);
+  const withFiles = new Set(
+    uploads.error
+      ? questionIds
+      : (uploads.data ?? []).map((row) => row.message_id).filter((id): id is string => !!id),
+  );
+
   const runIds = (runs.data ?? []).map((run) => run.id);
+  const endedIds = (runs.data ?? []).filter((run) => ENDED.includes(run.status)).map((r) => r.id);
   const mine = !!user && chat.user_id === user.id;
-  const [steps, files, moves] = runIds.length
+  const [steps, files, ends, moves] = runIds.length
     ? await Promise.all([
         supabase
           .from('chat_run_steps')
@@ -107,6 +186,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
           .select('id, run_id, message_id, title, type, formats, status, content_draft_id')
           .in('run_id', runIds)
           .order('created_at', { ascending: true }),
+        readRunEnds(endedIds),
         // A teammate's shared chat shows no moves: they are the author's to take.
         mine
           ? supabase
@@ -116,11 +196,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
               .order('rank', { ascending: true })
           : { data: [], error: null },
       ])
-    : [
-        { data: [], error: null },
-        { data: [], error: null },
-        { data: [], error: null },
-      ];
+    : [{ data: [], error: null }, { data: [], error: null }, new Map(), { data: [], error: null }];
   if (steps.error) throw new Error(`Could not read the chat's steps: ${steps.error.message}`);
   if (files.error) throw new Error(`Could not read the chat's files: ${files.error.message}`);
   if (moves.error)
@@ -165,6 +241,8 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         steps: stepsByRun.get(run.id) ?? [],
         fileId: fileByRun.get(run.id) ?? null,
         deliverables: madeByRun.get(run.id) ?? [],
+        summary: ends.get(run.id)?.summary ?? null,
+        errorReason: ends.get(run.id)?.errorReason ?? null,
         nextMoves: movesByRun.get(run.id) ?? [],
       },
     ]),
@@ -182,6 +260,9 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
       dataAsOf: message.data_as_of,
       timezone: message.timezone,
       run: runByMessage.get(message.id) ?? null,
+      ...(message.role === 'user'
+        ? { resendable: !message.context_json && !withFiles.has(message.id) }
+        : {}),
     })),
   };
 }
