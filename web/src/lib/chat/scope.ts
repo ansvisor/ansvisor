@@ -124,6 +124,7 @@ export function resolveDates(
   // The model's own strings where they stand, so a timestamp keeps its time.
   let fromText = start === null ? null : (from as string);
   let toText = end === null ? null : (to as string);
+  if (start !== null && start > today) [start, fromText] = [today, dayOf(today)];
   if (end !== null && end > today) [end, toText] = [today, dayOf(today)];
   if (start !== null && end !== null && start > end) {
     [start, end] = [end, start];
@@ -191,16 +192,16 @@ const slugsOf = (value: unknown): string[] =>
 
 /**
  * The AI models a brand's answers name (prompt_results.model_used), which a
- * `model` filter matches: what holds a read to the plan's platforms. Empty
- * when it can't be read.
+ * `model` filter matches: what holds a read to the plan's platforms. Null
+ * when it can't be read: the read then fails rather than reading nothing.
  */
-export async function brandModels(brandId: string): Promise<string[]> {
+export async function brandModels(brandId: string): Promise<string[] | null> {
   const { data, error } = await supabaseAdmin.rpc('insights_filter_options', {
     p_brand_id: brandId,
   });
   if (error) {
     console.error('[chat/scope] could not read the brand’s models:', error.message);
-    return [];
+    return null;
   }
   const row = (Array.isArray(data) ? data[0] : data) as { models?: unknown } | null;
   return Array.isArray(row?.models)
@@ -235,8 +236,8 @@ export interface ScopeFacts {
   limits: PlatformLimits | null;
   planName: string;
   now?: Date;
-  /** The brand's AI models (brandModels); a test's own. */
-  modelsOf?: (brandId: string) => Promise<readonly string[]>;
+  /** The brand's AI models (brandModels); a test's own. Null: they couldn't be read. */
+  modelsOf?: (brandId: string) => Promise<readonly string[] | null>;
 }
 
 export type ScopedRead =
@@ -249,7 +250,9 @@ export type ScopedRead =
       /** The rows its lists are cut to, and whether a longer list means "more, count unknown". */
       cap: RowCap;
     }
-  | { kind: 'not_on_plan'; result: NotOnPlan };
+  | { kind: 'not_on_plan'; result: NotOnPlan }
+  /** The plan's platforms couldn't be matched to the brand's rows: not read, never read as empty. */
+  | { kind: 'failed' };
 
 export interface RowCap {
   rows: number;
@@ -306,6 +309,8 @@ export async function scopeRead(
     if (!platforms && plan.someScrapers && tool.planGate?.platforms && hasField(tool, 'model')) {
       const seen =
         input.brand_id && facts.modelsOf ? await facts.modelsOf(String(input.brand_id)) : [];
+      // Not read: holding to the plan's ids below would make the read come back empty.
+      if (seen === null) return { kind: 'failed' };
       const own = seen.filter((slug) => onPlan(plan, slug));
       // None of theirs seen yet: the plan's own ids, which match its rows or none.
       platforms = own.length > 0 ? own : [...plan.scrapers, ...plan.models];
@@ -361,16 +366,32 @@ export async function scopeRead(
 
 // ─── Rows ───────────────────────────────────────────────────────────────────
 
+/** A row's day (`date` or `day`), for a series. */
+const dayOfRow = (row: Json): string | null => {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
+  const value = (row as Record<string, Json>).date ?? (row as Record<string, Json>).day;
+  return typeof value === 'string' ? value : null;
+};
+
+/** A series oldest first (a trend's days or weeks): it keeps its latest rows, not its first. */
+function oldestFirst(list: Json[]): boolean {
+  const first = dayOfRow(list[0]);
+  const last = dayOfRow(list[list.length - 1]);
+  return first !== null && last !== null && first < last;
+}
+
 /** Cuts one list; how many it left out, null when a probe says "more" without a count. */
 function cutList(list: Json[], cap: RowCap): { items: Json[]; more: number | null } | null {
   if (list.length <= cap.rows) return null;
   const more = cap.probe !== null && list.length === cap.probe ? null : list.length - cap.rows;
-  return { items: list.slice(0, cap.rows), more };
+  const items = oldestFirst(list) ? list.slice(-cap.rows) : list.slice(0, cap.rows);
+  return { items, more };
 }
 
 /**
  * A read's output with every list cut to its row limit (CHAT-04 item 6):
- * the first rows, `{list}_more` (how many were left out; null when there
+ * the first rows (a series oldest first: its latest), `{list}_more` (how
+ * many were left out; null when there
  * were more but their count isn't known) and `truncated: true`. Lists one
  * level down (a `totals` or `data` object's) are cut too; lists inside rows
  * stay as they are.
