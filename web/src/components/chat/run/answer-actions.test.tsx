@@ -121,7 +121,11 @@ describe('AnswerActions', () => {
     await click(button('answer.download'));
     await click(document.querySelector<HTMLElement>('[data-format="pdf"]')!);
     expect(fetchMock).toHaveBeenCalledWith(`/api/chat/runs/${RUN}/export?format=pdf`);
-    expect(download.saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'why-2026-10-30.pdf');
+    // The body's Blob is Node's (fetch), not the test page's: match it by its size.
+    expect(download.saveBlob).toHaveBeenCalledWith(
+      expect.objectContaining({ size: 4 }),
+      'why-2026-10-30.pdf',
+    );
     expect(toast).toHaveBeenCalledWith('Downloaded why-2026-10-30.pdf');
   });
 

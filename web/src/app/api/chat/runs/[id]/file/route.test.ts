@@ -35,6 +35,7 @@ vi.mock('@/lib/chat/export-file', () => exporter);
 
 const fileRoute = await import('./route');
 const exportRoute = await import('../export/route');
+const chatExportRoute = await import('../../../conversations/[id]/export/route');
 
 const params = (id = RUN) => ({ params: Promise.resolve({ id }) });
 
@@ -112,5 +113,11 @@ describe('GET /api/chat/runs/{id}/export', () => {
     files.readRunAnswer.mockResolvedValueOnce(read);
     exporter.exportAnswer.mockResolvedValueOnce(null);
     expect((await get('csv')).status).toBe(404);
+  });
+
+  it('gives a PDF time to render: an answer or a chat may run to many pages', () => {
+    // A 1,000-row table takes about 14 s to lay out, and a chat holds many answers.
+    expect(exportRoute.maxDuration).toBe(300);
+    expect(chatExportRoute.maxDuration).toBe(300);
   });
 });
