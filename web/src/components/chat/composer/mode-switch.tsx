@@ -11,17 +11,21 @@ export const COMPOSER_MODES: readonly ChatMode[] = ['ask_first', 'auto', 'full_a
 /**
  * The run mode in the composer (mockup modeInner): Ask me first · Auto, ask
  * before changes · Full auto. Full auto needs Growth and a paid plan
- * (`fullAutoOpen`, plan facts §7): locked, it says so and can't be picked.
- * Each pick says in a toast what the mode does.
+ * (`fullAutoOpen`, plan facts §7), and for non-Admins the Admin's "Full auto
+ * for members" switch (`offByAdmin`): locked, it says which and can't be
+ * picked. Each pick says in a toast what the mode does.
  */
 export function ModeSwitch({
   mode,
   onChange,
   fullAutoOpen,
+  offByAdmin = false,
 }: {
   mode: ChatMode;
   onChange: (mode: ChatMode) => void;
   fullAutoOpen: boolean;
+  /** Full auto is closed by the Admin's switch, not the plan. */
+  offByAdmin?: boolean;
 }) {
   const t = useTranslations('chatComposer.mode');
   return (
@@ -41,7 +45,7 @@ export function ModeSwitch({
             role="radio"
             aria-checked={on}
             aria-disabled={locked || undefined}
-            title={locked ? t('fullAutoLocked') : undefined}
+            title={locked ? t(offByAdmin ? 'fullAutoOffByAdmin' : 'fullAutoLocked') : undefined}
             onClick={() => {
               if (locked || on) return;
               onChange(m);
@@ -56,7 +60,7 @@ export function ModeSwitch({
             {t(m)}
             {locked && (
               <i className="rounded-[5px] border px-1 text-[10px] text-muted-foreground not-italic">
-                {t('needsGrowth')}
+                {t(offByAdmin ? 'offByAdmin' : 'needsGrowth')}
               </i>
             )}
           </button>
