@@ -34,7 +34,7 @@ function from(table: string) {
     insert: (row: unknown) => Object.assign(call, { op: 'insert', row }) && chain,
     update: (row: unknown) => Object.assign(call, { op: 'update', row }) && chain,
     ...Object.fromEntries(
-      ['eq', 'in', 'or', 'order', 'limit'].map((name) => [
+      ['eq', 'in', 'is', 'or', 'order', 'limit'].map((name) => [
         name,
         (...args: unknown[]) => {
           call.filters.push([name, ...args]);
@@ -126,8 +126,21 @@ describe('requestAccess', () => {
       expect.arrayContaining([
         ['eq', 'user_id', ME],
         ['eq', 'organization_id', ORG],
+        // A deleted chat (its Undo still open) isn't one to attach (00407).
+        ['is', 'deleted_at', null],
       ]),
     );
+  });
+
+  it('takes ids made by hand, like the demo brand’s, and refuses what isn’t an id', async () => {
+    answers['brands.select'] = { data: { id: 'demo' }, error: null };
+    const demo = '33333333-3333-3333-3333-333333333333';
+    expect(await requestAccess({ ...ask, brandId: demo })).toEqual({ ok: true, id: REQUEST });
+    expect(inserted()).toMatchObject({ brand_id: demo });
+    expect(await requestAccess({ ...ask, brandId: 'not-an-id' })).toEqual({
+      ok: false,
+      reason: 'invalid',
+    });
   });
 
   it('refuses past ten waiting requests, and the same ask twice a day', async () => {

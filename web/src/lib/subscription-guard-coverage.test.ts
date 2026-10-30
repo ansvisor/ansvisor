@@ -40,6 +40,12 @@ const SCHEMA = join(__dirname, '../../../supabase/schema.sql');
  */
 const OPEN_ACTIONS: Record<string, string> = {
   'organization.ts:updateAccountName': "the person's own profile",
+  'chat-prefs.ts:saveChatMenuOpen': "the person's own Chat layout, no cost",
+  'chat-prefs.ts:saveChatRailOpen': "the person's own Chat layout, no cost",
+  'chat-prefs.ts:saveChatGeneralSettings':
+    "the person's own Chat settings, no cost; a run they start is checked by the engine",
+  'chat-prefs.ts:saveUsageNoticePeriod':
+    "the person's own record of a notice seen, nothing that costs",
   'team.ts:acceptInvitation': "the invited person's own account joins",
   'team.ts:revokeInvitation': 'takes back access, never gives it',
   'team.ts:removeMember': 'takes back access, never gives it',
@@ -54,6 +60,13 @@ const OPEN_ACTIONS: Record<string, string> = {
     'a column layout: costs nothing, and read-only shows the data the same way',
   'menu-access.ts:setMyWorkAreas':
     'the person\'s own profile; it answers "What do you work on?", which /dashboard/welcome waits on',
+  'chat-uploads.ts:prepareChatUpload':
+    'checks the plan itself (isSubscriptionActive), to answer read_only instead of throwing',
+  'chat-uploads.ts:finishChatUpload':
+    "marks the person's own file, already let up by prepareChatUpload, as arrived",
+  'chat-uploads.ts:removeChatUpload': "takes the person's own draft file away, never adds one",
+  'chat-prefs.ts:saveChatPanelSize':
+    "the person's own Chat layout (panel size), nothing that costs",
   'chat-access-requests.ts:requestAccess':
     'asking an Admin costs nothing, and a read-only workspace is one of the things to ask about',
   'chat-access-requests.ts:withdrawAccessRequest': 'takes back a request, never gives access',
@@ -98,6 +111,14 @@ const OPEN_ROUTES: Record<string, string> = {
   'traffic/read:POST': 'reads only',
   // Chat's runs: the engine answers 402 with the server's body itself
   // (startChatRun, prepareResume), but for a request to the Admins.
+  'chat/conversations:POST':
+    'an empty chat of your own starts no cost; its first message is a run, which the engine refuses with 402',
+  'chat/conversations/[id]:PATCH':
+    'pinning, renaming, sharing or archiving your own chat starts no cost',
+  'chat/conversations/[id]:DELETE':
+    'deleting your own chat starts no cost, as the old Agent chats (#1613)',
+  'chat/conversations/[id]/read:POST': 'marking your own chat read starts no cost',
+  'chat/conversations/[id]/restore:POST': 'undoing a delete starts no cost',
   'chat/runs:POST': 'the engine refuses a read-only workspace with the 402 body (startChatRun)',
   'chat/runs/[id]/approve:POST': 'the engine answers 402 (prepareResume), but for Ask your Admin',
   'chat/runs/[id]/skip:POST': 'saying no to a change starts no cost',

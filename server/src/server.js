@@ -42,6 +42,7 @@ import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
 import { purgeRemovedCatalogProducts } from './lib/catalog/purge.js';
+import { sweepExpiredChatUploads } from './lib/chat-uploads-sweep.js';
 import { sweepIdleDemoBrands } from './lib/demo/idle-sweep.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
 import { sweepShoppingCardMatches } from './lib/catalog/card-match.js';
@@ -346,6 +347,11 @@ async function runDailyTracking() {
   // Content Editor versions past their 90 days (CE-018).
   pruneContentVersions().catch((err) => {
     logger.error({ err }, '[content-history] daily prune failed');
+  });
+
+  // Chat's attachments past their 90 days (00409): each file, then its row.
+  sweepExpiredChatUploads().catch((err) => {
+    logger.error({ err }, '[chat-uploads] daily sweep failed');
   });
 
   // Demo brands nobody opened for two weeks (00380): their sample rows go,

@@ -9,7 +9,11 @@
 
 type Row = Record<string, unknown>;
 type Filter = (row: Row) => boolean;
-type Result = { data: unknown; error: { code?: string; message: string } | null };
+type Result = {
+  data: unknown;
+  error: { code?: string; message: string } | null;
+  count?: number | null;
+};
 
 export interface FakeSupabase {
   tables: Record<string, Row[]>;
@@ -28,9 +32,9 @@ export interface FakeSupabase {
 }
 
 interface Builder extends PromiseLike<Result> {
-  select(columns?: string): Builder;
+  select(columns?: string, options?: { count?: 'exact'; head?: boolean }): Builder;
   insert(rows: Row | Row[]): Builder;
-  /** Postgres's insert … on conflict: the row is merged in, or left as it is with ignoreDuplicates. */
+  /** Insert, or on a clash of `onConflict`'s columns update (or with `ignoreDuplicates`, keep) the row. */
   upsert(rows: Row | Row[], options?: { onConflict?: string; ignoreDuplicates?: boolean }): Builder;
   update(patch: Row): Builder;
   delete(): Builder;
@@ -38,10 +42,19 @@ interface Builder extends PromiseLike<Result> {
   neq(column: string, value: unknown): Builder;
   in(column: string, values: unknown[]): Builder;
   is(column: string, value: null): Builder;
+  not(column: string, operator: 'is', value: null): Builder;
   lt(column: string, value: string): Builder;
   gt(column: string, value: unknown): Builder;
+  /**
+   * A full-text match (`fts`): every `'word':*` term of `query`, joined by `&`,
+   * starts a word of the row's `column` — a test row holds its search
+   * column as plain words.
+   */
+  textSearch(column: string, query: string, options?: { config?: string }): Builder;
   order(column: string, options?: { ascending?: boolean }): Builder;
   limit(count: number): Builder;
+  /** Rows `from` to `to`, both included, after the order. */
+  range(from: number, to: number): Builder;
   maybeSingle(): Promise<Result>;
   single(): Promise<Result>;
 }
@@ -72,13 +85,14 @@ export function createFakeSupabase(): FakeSupabase {
     },
     from(table) {
       let kind: 'select' | 'insert' | 'upsert' | 'update' | 'delete' = 'select';
+      let conflict: { columns: string[]; ignore: boolean } = { columns: ['id'], ignore: false };
       let payload: Row | Row[] | null = null;
-      let conflict: string[] = [];
-      let ignoreDuplicates = false;
       let returning = false;
       const filters: Filter[] = [];
-      let sort: { column: string; ascending: boolean } | null = null;
+      const sorts: { column: string; ascending: boolean }[] = [];
       let max: number | null = null;
+      let offset = 0;
+      let counting: { head: boolean } | null = null;
 
       const rows = () => (fake.tables[table] ??= []);
       const clash = (row: Row, others: Row[]) =>
@@ -93,14 +107,19 @@ export function createFakeSupabase(): FakeSupabase {
         if (failure) return { data: null, error: failure };
         const matching = rows().filter((row) => filters.every((f) => f(row)));
         if (kind === 'select') {
-          const sorted = sort
-            ? [...matching].sort((a, b) => {
-                const x = a[sort!.column] as string | number;
-                const y = b[sort!.column] as string | number;
-                return (x < y ? -1 : x > y ? 1 : 0) * (sort!.ascending ? 1 : -1);
-              })
-            : matching;
-          const limited = max === null ? sorted : sorted.slice(0, max);
+          const sorted = [...matching].sort((a, b) => {
+            for (const sort of sorts) {
+              const x = a[sort.column] as string | number;
+              const y = b[sort.column] as string | number;
+              if (x !== y) return (x < y ? -1 : 1) * (sort.ascending ? 1 : -1);
+            }
+            return 0;
+          });
+          const limited = sorted.slice(offset, max === null ? undefined : offset + max);
+          if (counting) {
+            const data = counting.head ? null : limited.map((row) => ({ ...row }));
+            return { data, error: null, count: matching.length };
+          }
           return { data: limited.map((row) => ({ ...row })), error: null };
         }
         if (kind === 'delete') {
@@ -116,17 +135,17 @@ export function createFakeSupabase(): FakeSupabase {
           fake.tables[table] = after;
           return { data: returning ? patched.map((row) => ({ ...row })) : null, error: null };
         }
-        const incoming = Array.isArray(payload) ? payload : [payload!];
         if (kind === 'upsert') {
-          let after = rows();
           const written: Row[] = [];
-          for (const row of incoming) {
-            const existing = after.find((other) => conflict.every((c) => other[c] === row[c]));
-            if (existing) {
-              if (ignoreDuplicates) continue;
-              const merged = { ...existing, ...row };
-              after = after.map((other) => (other === existing ? merged : other));
-              written.push(merged);
+          let after = [...rows()];
+          for (const row of Array.isArray(payload) ? payload : [payload!]) {
+            const at = after.findIndex((other) =>
+              conflict.columns.every((c) => other[c] === row[c]),
+            );
+            if (at >= 0) {
+              if (conflict.ignore) continue;
+              after[at] = { ...after[at], ...row };
+              written.push(after[at]);
             } else {
               const added = { id: fakeId(), ...(fake.defaults[table]?.() ?? {}), ...row };
               after = [...after, added];
@@ -139,7 +158,7 @@ export function createFakeSupabase(): FakeSupabase {
           fake.tables[table] = after;
           return { data: returning ? written.map((row) => ({ ...row })) : null, error: null };
         }
-        const added = incoming.map((row) => ({
+        const added = (Array.isArray(payload) ? payload : [payload!]).map((row) => ({
           id: fakeId(),
           ...(fake.defaults[table]?.() ?? {}),
           ...row,
@@ -162,8 +181,9 @@ export function createFakeSupabase(): FakeSupabase {
       };
 
       const builder: Builder = {
-        select() {
+        select(_columns, options) {
           if (kind !== 'select') returning = true;
+          else if (options?.count) counting = { head: options.head ?? false };
           return builder;
         },
         insert(rowsIn) {
@@ -174,8 +194,10 @@ export function createFakeSupabase(): FakeSupabase {
         upsert(rowsIn, options) {
           kind = 'upsert';
           payload = rowsIn;
-          conflict = (options?.onConflict ?? 'id').split(',').map((c) => c.trim());
-          ignoreDuplicates = options?.ignoreDuplicates ?? false;
+          conflict = {
+            columns: (options?.onConflict ?? 'id').split(',').map((c) => c.trim()),
+            ignore: options?.ignoreDuplicates ?? false,
+          };
           return builder;
         },
         update(patch) {
@@ -203,6 +225,10 @@ export function createFakeSupabase(): FakeSupabase {
           filters.push((row) => (row[column] ?? null) === value);
           return builder;
         },
+        not(column, _operator, value) {
+          filters.push((row) => (row[column] ?? null) !== value);
+          return builder;
+        },
         lt(column, value) {
           filters.push(
             (row) =>
@@ -215,12 +241,38 @@ export function createFakeSupabase(): FakeSupabase {
           filters.push((row) => (row[column] as number) > (value as number));
           return builder;
         },
+        textSearch(column, query) {
+          // Words as Postgres's parser keeps them, roughly: split on spaces,
+          // punctuation trimmed from the ends ("nike.com" stays one word).
+          const wordOf = (text: string) =>
+            text.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+          const terms = query.split(' & ').map((term) =>
+            wordOf(
+              term
+                .trim()
+                .replace(/^'(.*)':\*$/, '$1')
+                .replace(/''/g, "'"),
+            ),
+          );
+          filters.push((row) => {
+            const words = String(row[column] ?? '')
+              .split(/\s+/)
+              .map(wordOf);
+            return terms.every((term) => words.some((word) => word.startsWith(term)));
+          });
+          return builder;
+        },
         order(column, options) {
-          sort = { column, ascending: options?.ascending ?? true };
+          sorts.push({ column, ascending: options?.ascending ?? true });
           return builder;
         },
         limit(count) {
           max = count;
+          return builder;
+        },
+        range(from, to) {
+          offset = from;
+          max = to - from + 1;
           return builder;
         },
         maybeSingle: () => one(false),

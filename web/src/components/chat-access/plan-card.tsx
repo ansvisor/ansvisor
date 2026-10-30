@@ -5,7 +5,7 @@ import { Lock } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { PLANS } from '@/config/plans';
-import { percentLabel } from '@/lib/billing/ai-usage';
+import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import type { PlanCard, PlanChip } from '@/lib/chat/access';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,7 @@ const BILLING = '/dashboard/settings/billing';
  */
 export function YourPlanCard({ plan, isAdmin }: { plan: PlanCard; isAdmin: boolean }) {
   const t = useTranslations('chatAccess.plan');
+  const tUsage = useTranslations('aiUsage');
   const tAsk = useTranslations('chatAccess.askAdmin');
   const format = useFormatter();
   const { usage } = useAiUsage();
@@ -33,7 +34,7 @@ export function YourPlanCard({ plan, isAdmin }: { plan: PlanCard; isAdmin: boole
       case 'platforms':
         return t('chips.platforms', { count: chip.count });
       case 'mcp':
-        return t('chips.mcp', { access: chip.access ?? 'none' });
+        return t('chips.mcp', { access: chip.access });
       default:
         return t(`chips.${chip.key}`);
     }
@@ -86,7 +87,10 @@ export function YourPlanCard({ plan, isAdmin }: { plan: PlanCard; isAdmin: boole
             <div className="text-right">
               <p className="text-xs text-muted-foreground">{t('aiLimit')}</p>
               <p className="text-sm font-medium tabular-nums">
-                {t('aiUsed', { percent: percentLabel(usage.percentUsed) })}
+                {/* The trial credit names no share (trial AI credit, 2026-10-29). */}
+                {usage.trial && aiUsageTone(usage) !== 'unlimited'
+                  ? tUsage(`popover.trialState.${aiUsageTone(usage)}`)
+                  : t('aiUsed', { percent: percentLabel(usage.percentUsed) })}
               </p>
             </div>
           )}
