@@ -8,6 +8,7 @@ import {
   ORG,
   OTHER_ORG,
   PEOPLE,
+  PROMPT,
   COMPETITOR,
   TOPIC,
   SUGGESTION,
@@ -132,6 +133,8 @@ const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { requestAccess } = await import('@/lib/actions/chat-access-requests');
 const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
+const { addBrandTopic, renameBrandTopic } = await import('@/lib/actions/topic');
+const { addCompetitors, removeBrandCompetitor } = await import('@/lib/actions/competitor');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
 const engine = await import('./engine');
@@ -1665,6 +1668,13 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'dismiss_prompt_suggestion',
     'request_access',
     'publish_page',
+    // W2-06's setup rows: Admins and Managers only.
+    'add_prompts',
+    'pause_prompts',
+    'add_topic',
+    'rename_topic',
+    'add_competitors',
+    'remove_competitor',
   ];
   const dismiss = toolCall('w1', 'update_opportunity', {
     opportunity_id: OPPORTUNITY,
@@ -2000,6 +2010,54 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
         data: expect.objectContaining({ rule: expect.objectContaining({ kind: 'policy' }) }),
       }),
     ]);
+  });
+
+  it('keeps the setup rows (prompts, topics, competitors) to Admins and Managers, on a card outside Full auto', async () => {
+    const setup = [
+      toolCall('s1', 'add_prompts', { brand_id: BRAND, topic_id: TOPIC, prompts: ['best crm'] }),
+      toolCall('s2', 'pause_prompts', { brand_id: BRAND, prompt_ids: [PROMPT] }),
+      toolCall('s3', 'add_topic', { brand_id: BRAND, name: 'Integrations' }),
+      toolCall('s4', 'rename_topic', { topic_id: TOPIC, name: 'Plans' }),
+      toolCall('s5', 'add_competitors', {
+        brand_id: BRAND,
+        competitors: [{ name: 'Otterly', domain: 'otterly.ai' }],
+      }),
+      toolCall('s6', 'remove_competitor', { brand_id: BRAND, competitor_id: COMPETITOR }),
+    ];
+    const actions = [
+      addTopicPrompts,
+      pauseBrandPrompts,
+      addBrandTopic,
+      renameBrandTopic,
+      addCompetitors,
+      removeBrandCompetitor,
+    ];
+    for (const role of ['analyst', 'agency_partner'] as const) {
+      for (const mode of MODES) {
+        for (const call of setup) {
+          const tried = await attempt(role, mode, call);
+          // Not offered (called anyway: no card, nothing reaches the server).
+          expect(tried.offered, `${role} ${mode}`).toEqual(
+            role === 'analyst'
+              ? ['create_draft', 'dismiss_prompt_suggestion', 'request_access']
+              : ['create_draft', 'request_access'],
+          );
+          expect(tried, `${role} ${mode}`).toMatchObject({ waits: false, cards: 0 });
+        }
+      }
+    }
+    for (const role of ['admin', 'manager'] as const) {
+      for (const mode of ['ask_first', 'auto'] as const) {
+        for (const call of setup) {
+          const tried = await attempt(role, mode, call);
+          expect(tried, `${role} ${mode}`).toMatchObject({ waits: true, cards: 1, denials: [] });
+        }
+      }
+    }
+    for (const action of actions) expect(action).not.toHaveBeenCalled();
+    // Removing a competitor shows its card in Full auto too.
+    expect(await attempt('admin', 'full_auto', setup[5])).toMatchObject({ waits: true, cards: 1 });
+    expect(removeBrandCompetitor).not.toHaveBeenCalled();
   });
 
   it('changes nothing on the demo brand for any role in any mode, and still reads it', async () => {

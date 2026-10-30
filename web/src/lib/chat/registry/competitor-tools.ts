@@ -23,8 +23,9 @@ export const COMPETITOR_TOOLS = [
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
     minRole: 'manager',
-    // No competitor limit on any plan today; at most 5 a run (§9, run-limits.ts).
-    planGate: null,
+    // The Competitors page's feature (no competitor limit on any plan today); at most 5 a run
+    // (§9, run-limits.ts).
+    planGate: { feature: 'competitor_tracking' },
     brandOf: { input: 'brand_id' },
     costClass: 'C0',
     labelKey: 'trackCompetitors',
@@ -59,7 +60,7 @@ export const COMPETITOR_TOOLS = [
     maxPolicy: 'ask',
     flags: { alwaysCard: true },
     minRole: 'manager',
-    planGate: null,
+    planGate: { feature: 'competitor_tracking' },
     // The brand from the input: once removed, the competitor's row no longer says it (Undo).
     brandOf: { input: 'brand_id' },
     costClass: 'C0',
