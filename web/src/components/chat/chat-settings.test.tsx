@@ -12,12 +12,14 @@ import type { ChatGeneralAccess, ChatGeneralSettings } from '@/lib/chat/general-
  * Inbox + Slack waits for Slack.
  */
 
+const router = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>
       {children}
     </a>
   ),
+  useRouter: () => router,
 }));
 const toasts = vi.hoisted(() => ({ calls: [] as string[] }));
 vi.mock('sonner', () => {
@@ -54,6 +56,7 @@ beforeEach(() => {
   saved.ok = true;
   saved.patches = [];
   toasts.calls = [];
+  router.refresh.mockClear();
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -128,6 +131,8 @@ describe('ChatSettings', () => {
     ]);
     expect(action('chatSettings.toggleThinking')[0].getAttribute('aria-checked')).toBe('false');
     expect(toasts.calls).toEqual([]);
+    // Ask Chat on every page: the layout reads it again, so every page follows.
+    expect(router.refresh).toHaveBeenCalledTimes(1);
   });
 
   it("puts a pick back when it wasn't kept, and says so", async () => {

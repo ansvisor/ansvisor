@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { ApprovalCard } from '@/components/agentic/approval-card';
@@ -73,7 +73,10 @@ function turnsOf(thread: ChatThread | null): Turn[] {
  * when the page opens is rebuilt from its events and keeps streaming; a
  * dropped stream reconnects from its last event. Steering stops the run,
  * its done steps kept, and sends the text as the next message (decided
- * 2026-10-30). A teammate's shared chat is read only.
+ * 2026-10-30). A teammate's shared chat is read only. In the side panel
+ * (`variant="panel"`, CHAT-01 items 15–24) the page's address stays: the
+ * panel is told the chat's id with every message it takes, and `empty`
+ * shows until the first one.
  */
 export function ChatThreadView({
   thread,
@@ -81,6 +84,8 @@ export function ChatThreadView({
   defaultMode,
   fullAutoOpen,
   fullAutoOffByAdmin = false,
+  onConversation,
+  empty,
   usageNoticeSeen = null,
   onOwnKey = false,
 }: {
@@ -89,6 +94,10 @@ export function ChatThreadView({
   defaultMode: ChatMode;
   fullAutoOpen: boolean;
   fullAutoOffByAdmin?: boolean;
+  /** In the side panel: the chat's id after each message it takes, instead of the address changing. */
+  onConversation?: (conversationId: string) => void;
+  /** What shows before the first message (the side panel's greeting). */
+  empty?: ReactNode;
   /** The AI usage period whose 80% line the person already saw. */
   usageNoticeSeen?: string | null;
   /** Chat runs on the workspace's own key: a used-up allowance doesn't pause it. */
@@ -219,8 +228,10 @@ export function ChatThreadView({
     const runId = res.headers.get('x-chat-run');
     if (chatId && !conversationId) {
       setConversationId(chatId);
-      window.history.replaceState(null, '', `/dashboard/chat/${chatId}`);
+      if (!onConversation) window.history.replaceState(null, '', `/dashboard/chat/${chatId}`);
     }
+    const id = chatId ?? conversationId;
+    if (id) onConversation?.(id);
     updateRun(answerKey, (turn) => ({ ...turn, runId }));
     if (runId) void consume(answerKey, res.body, runId);
     return true;
@@ -275,9 +286,12 @@ export function ChatThreadView({
       className={
         variant === 'home'
           ? 'mx-auto flex w-full max-w-[720px] flex-col gap-5 px-5 pb-6'
-          : 'mx-auto flex w-full max-w-[760px] flex-col gap-5 px-5 py-6'
+          : variant === 'panel'
+            ? 'flex w-full flex-1 flex-col gap-4 px-4 pt-4'
+            : 'mx-auto flex w-full max-w-[760px] flex-col gap-5 px-5 py-6'
       }
     >
+      {turns.length === 0 && empty}
       {turns.length > 0 && (
         <ol className="m-0 flex list-none flex-col gap-5 p-0">
           {turns.map((turn) =>
@@ -306,7 +320,9 @@ export function ChatThreadView({
         className={
           variant === 'home'
             ? 'flex flex-col gap-2'
-            : 'sticky bottom-0 flex flex-col gap-2 bg-background pt-1 pb-2'
+            : variant === 'panel'
+              ? 'sticky bottom-0 mt-auto flex flex-col gap-2 bg-background pt-1 pb-3'
+              : 'sticky bottom-0 flex flex-col gap-2 bg-background pt-1 pb-2'
         }
       >
         {(!thread || thread.mine) && <ChatUsageNotice seenPeriod={usageNoticeSeen} />}

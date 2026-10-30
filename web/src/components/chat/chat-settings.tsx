@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Link } from '@/i18n/navigation';
+import { Link, useRouter } from '@/i18n/navigation';
 import { saveChatGeneralSettings } from '@/lib/actions/chat-prefs';
 import type {
   AnswerLanguage,
@@ -88,6 +88,7 @@ export function ChatSettings({
   access: ChatGeneralAccess;
 }) {
   const t = useTranslations('chatShell.settings');
+  const router = useRouter();
   const [settings, setSettings] = useState(initial);
 
   /** Shows the pick at once and keeps it; a refusal puts the old value back. */
@@ -98,6 +99,9 @@ export function ChatSettings({
     if (!saved.ok) {
       setSettings(before);
       toast.error(t('failed'));
+    } else if (patch.panelOnPages !== undefined) {
+      // The dashboard's layout reads it: Ask Chat and Ctrl J follow on every page.
+      router.refresh();
     }
   };
 

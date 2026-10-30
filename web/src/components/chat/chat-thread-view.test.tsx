@@ -31,6 +31,9 @@ vi.mock('@/lib/actions/chat-references', () => ({
   searchChatReferences: vi.fn(async () => ({ ok: true, references: [] })),
 }));
 vi.mock('@/lib/chat/upload-client', () => ({ uploadChatFile: vi.fn(), dropChatUpload: vi.fn() }));
+vi.mock('@/lib/actions/chat-prefs', () => ({
+  saveUsageNoticePeriod: vi.fn(async () => ({ ok: true })),
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (s: { activeBrandId: string }) => unknown) =>
     selector({ activeBrandId: '22222222-2222-4222-8222-222222222222' }),
@@ -164,6 +167,22 @@ describe('ChatThreadView', () => {
     // Stamped in the person's own time zone.
     expect(container.textContent).toContain('Generated Oct 30, 2026 · ');
     expect(window.location.pathname).toBe(`/dashboard/chat/${CHAT}`);
+  });
+
+  it('in the side panel, keeps the page’s address and tells the panel the chat', async () => {
+    window.history.replaceState(null, '', '/dashboard/mentions');
+    const onConversation = vi.fn();
+    await render({
+      variant: 'panel',
+      onConversation,
+      empty: <p>Hi Sam, ask anything about this page.</p>,
+    });
+    expect(container.textContent).toContain('Hi Sam, ask anything about this page.');
+    await type('Why did mentions drop?');
+    await enter();
+    expect(window.location.pathname).toBe('/dashboard/mentions');
+    expect(onConversation).toHaveBeenCalledWith(CHAT);
+    expect(container.textContent).not.toContain('Hi Sam');
   });
 
   it('keeps the text when the run API refuses it', async () => {

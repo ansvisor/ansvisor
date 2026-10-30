@@ -8,6 +8,7 @@ import {
   generalPatchRow,
   readChatGeneral,
 } from '@/lib/chat/general-settings';
+import { PANEL_SIZES, type PanelSize } from '@/lib/chat/panel';
 
 /**
  * A person's Chat settings that follow them to every device (DECISIONS N3;
@@ -38,20 +39,30 @@ async function chatPerson(): Promise<Person | null> {
   return { client, userId: user.id, orgId: orgId ?? '' };
 }
 
-/** Keeps these columns on the person's own row; logs and answers a failure. */
-async function keep(
-  person: Person,
+/**
+ * Keeps these columns on the person's own row (the person read here unless
+ * given); false when it isn't theirs to keep. Logs a failure, never throws.
+ */
+async function keepPref(
   row: Record<string, string | boolean | null>,
   what: string,
+  person?: Person,
 ): Promise<ChatPrefResult> {
-  const { error } = await person.client
-    .from('chat_user_prefs')
-    .upsert({ user_id: person.userId, ...row }, { onConflict: 'user_id' });
-  if (error) {
-    console.error(`[chat-prefs] could not keep ${what}:`, error.message);
+  try {
+    const who = person ?? (await chatPerson());
+    if (!who) return { ok: false };
+    const { error } = await who.client
+      .from('chat_user_prefs')
+      .upsert({ user_id: who.userId, ...row }, { onConflict: 'user_id' });
+    if (error) {
+      console.error(`[chat-prefs] could not keep ${what}:`, error.message);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error(`[chat-prefs] could not keep ${what}:`, error);
     return { ok: false };
   }
-  return { ok: true };
 }
 
 /**
@@ -59,15 +70,8 @@ async function keep(
  * `Ctrl+\`), kept on the person for every Chat route and device.
  */
 export async function saveChatMenuOpen(open: boolean): Promise<ChatPrefResult> {
-  try {
-    if (typeof open !== 'boolean') return { ok: false };
-    const person = await chatPerson();
-    if (!person) return { ok: false };
-    return await keep(person, { menu_open: open }, 'the menu state');
-  } catch (error) {
-    console.error('[chat-prefs] could not keep the menu state:', error);
-    return { ok: false };
-  }
+  if (typeof open !== 'boolean') return { ok: false };
+  return keepPref({ menu_open: open }, 'the menu state');
 }
 
 /**
@@ -75,15 +79,28 @@ export async function saveChatMenuOpen(open: boolean): Promise<ChatPrefResult> {
  * 4f: a click on the logo), kept on the person for every device.
  */
 export async function saveChatRailOpen(open: boolean): Promise<ChatPrefResult> {
-  try {
-    if (typeof open !== 'boolean') return { ok: false };
-    const person = await chatPerson();
-    if (!person) return { ok: false };
-    return await keep(person, { rail_open: open }, 'the rail state');
-  } catch (error) {
-    console.error('[chat-prefs] could not keep the rail state:', error);
-    return { ok: false };
-  }
+  if (typeof open !== 'boolean') return { ok: false };
+  return keepPref({ rail_open: open }, 'the rail state');
+}
+
+/**
+ * The side panel's size (CHAT-01 item 16: compact, wide or full screen),
+ * kept on the person so the panel opens at its last size on every page and
+ * device.
+ */
+export async function saveChatPanelSize(size: PanelSize): Promise<ChatPrefResult> {
+  if (!PANEL_SIZES.includes(size)) return { ok: false };
+  return keepPref({ panel_size: size }, 'the panel size');
+}
+
+/**
+ * The AI usage period whose 80% line above the composer the person saw
+ * (CHAT-04 item 16; chat_user_prefs.usage_notice_period, its first day),
+ * so the line shows once per person per period, on every device.
+ */
+export async function saveUsageNoticePeriod(period: string): Promise<ChatPrefResult> {
+  if (typeof period !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(period)) return { ok: false };
+  return keepPref({ usage_notice_period: period }, 'the usage notice');
 }
 
 /**
@@ -101,42 +118,9 @@ export async function saveChatGeneralSettings(patch: unknown): Promise<ChatPrefR
     if (!person?.orgId) return { ok: false };
     const general = await readChatGeneral({ userId: person.userId, organizationId: person.orgId });
     if (!general || generalPatchRefusal(parsed.data, general.access)) return { ok: false };
-    return await keep(person, generalPatchRow(parsed.data), 'a General setting');
+    return await keepPref(generalPatchRow(parsed.data), 'a General setting', person);
   } catch (error) {
     console.error('[chat-prefs] could not keep a General setting:', error);
-    return { ok: false };
-  }
-}
-
-/**
- * The AI usage period whose 80% line above the composer the person saw
- * (CHAT-04 item 16; chat_user_prefs.usage_notice_period, its first day),
- * so the line shows once per person per period, on every device.
- */
-export async function saveUsageNoticePeriod(period: string): Promise<ChatPrefResult> {
-  try {
-    if (typeof period !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(period)) return { ok: false };
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false };
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', user.id)
-      .maybeSingle();
-    if (!chatAgenticEnabled(profile?.organization_id ?? null)) return { ok: false };
-    const { error } = await supabase
-      .from('chat_user_prefs')
-      .upsert({ user_id: user.id, usage_notice_period: period }, { onConflict: 'user_id' });
-    if (error) {
-      console.error('[chat-prefs] could not keep the usage notice:', error.message);
-      return { ok: false };
-    }
-    return { ok: true };
-  } catch (error) {
-    console.error('[chat-prefs] could not keep the usage notice:', error);
     return { ok: false };
   }
 }

@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatGeneralAccess } from '@/lib/chat/general-settings';
 
 /**
- * The person's Chat settings (CHAT-01 items 4f, 9d; Settings › General;
- * DECISIONS N3): written to their own chat_user_prefs row, only with the new
+ * The person's Chat settings (CHAT-01 items 4f, 9d, 16; CHAT-04 item 16;
+ * Settings › General; DECISIONS N3): written to their own chat_user_prefs row, only with the new
  * Chat on, only what they may pick, and answered as a value — never thrown
  * (#1777).
  */
@@ -47,8 +47,13 @@ vi.mock('@/lib/chat/general-settings', async (original) => ({
   readChatGeneral: vi.fn(async () => (db.access ? { settings: {}, access: db.access } : null)),
 }));
 
-const { saveChatGeneralSettings, saveChatMenuOpen, saveChatRailOpen, saveUsageNoticePeriod } =
-  await import('./chat-prefs');
+const {
+  saveChatGeneralSettings,
+  saveChatMenuOpen,
+  saveChatPanelSize,
+  saveChatRailOpen,
+  saveUsageNoticePeriod,
+} = await import('./chat-prefs');
 const { readChatGeneral } = await import('@/lib/chat/general-settings');
 
 let errorLog: ReturnType<typeof vi.spyOn>;
@@ -162,6 +167,20 @@ describe('saveChatGeneralSettings', () => {
     vi.mocked(readChatGeneral).mockRejectedValueOnce(new Error('down'));
     db.throws = false;
     expect(await saveChatGeneralSettings({ showThought: true })).toEqual({ ok: false });
+  });
+});
+
+describe('saveChatPanelSize', () => {
+  it("keeps the panel's size on the person's own row", async () => {
+    expect(await saveChatPanelSize('wide')).toEqual({ ok: true });
+    expect(db.upserts).toEqual([
+      { row: { user_id: 'user-1', panel_size: 'wide' }, options: { onConflict: 'user_id' } },
+    ]);
+  });
+
+  it('keeps no size it does not know', async () => {
+    expect(await saveChatPanelSize('huge' as 'wide')).toEqual({ ok: false });
+    expect(db.upserts).toEqual([]);
   });
 });
 
