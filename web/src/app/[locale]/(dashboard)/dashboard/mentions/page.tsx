@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getCompetitors } from '@/lib/actions/competitor';
 import { getTopics } from '@/lib/actions/topic';
 import { getBrandFilterOptions } from '@/lib/actions/tracking';
+import { rangeChipLabel } from '@/lib/chat/page-context';
 import {
   DEFAULT_MENTIONS_FILTERS,
   DEFAULT_MENTIONS_TAB,
@@ -15,6 +17,8 @@ import {
   type MentionsFilters,
   type MentionsTab,
 } from '@/lib/mentions-filters';
+import { POSITION_PLATFORMS } from '@/lib/prompt-positions';
+import { formatRegionDisplay } from '@/lib/region';
 import { writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Competitor, Topic } from '@/types';
@@ -33,7 +37,9 @@ import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
  *
  * Top-down as the spec orders it: the header's Copy summary, Export CSV and
  * Reports, the tabs, then the filters every tab shares, then the tab's
- * content. Tab and filters live in the URL.
+ * content. Tab and filters live in the URL. Chat's side panel sees the
+ * page's name, dates and filters, three questions about it, and its trend
+ * chart and platform table (W1-08).
  */
 export default function MentionsPage() {
   const t = useTranslations('mentions');
@@ -86,6 +92,49 @@ export default function MentionsPage() {
       cancelled = true;
     };
   }, [activeBrandId]);
+
+  const tRange = useTranslations('chatPanel.range');
+  const tFilters = useTranslations('mentions.filters');
+  const tTrend = useTranslations('mentions.overview.trend');
+  const tPlatforms = useTranslations('mentions.overview.platforms');
+  const platformName = POSITION_PLATFORMS.find((p) => p.id === filters.platform)?.label;
+  const topicName = topics.find((topic) => topic.id === filters.topic)?.name;
+  useChatPageContext(
+    activeBrandId
+      ? {
+          pageName: t('title'),
+          dateRange: {
+            from: filters.range === 'custom' ? filters.from : filters.range,
+            to: filters.range === 'custom' ? filters.to : null,
+            label: rangeChipLabel(filters.range, filters, (key, values) => tRange(key, values)),
+          },
+          filters: [
+            {
+              key: 'platform',
+              label: platformName ?? tFilters('allPlatforms'),
+              value: filters.platform,
+            },
+            ...(filters.region
+              ? [
+                  {
+                    key: 'region',
+                    label: formatRegionDisplay(filters.region),
+                    value: filters.region,
+                  },
+                ]
+              : []),
+            ...(filters.topic && topicName
+              ? [{ key: 'topic', label: topicName, value: filters.topic }]
+              : []),
+          ],
+          suggestions: [t('chat.leastPlatform'), t('chat.insteadOfUs'), t('chat.actions')],
+          referenceables: [
+            { type: 'chart', id: 'mentions-trend', label: tTrend('title') },
+            { type: 'table', id: 'mentions-by-platform', label: tPlatforms('title') },
+          ],
+        }
+      : null,
+  );
 
   const exporter = useMentionsExport({
     brandId: activeBrandId ?? '',

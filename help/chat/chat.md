@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, side panel, chat panel, ctrl j, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used]
+keywords: [chat, ask chat, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-30
@@ -32,6 +32,14 @@ Analysts and Agency partners only read: their box says **Read-only** with a link
 On most pages **Ask Chat** sits at the top right, next to the AI usage meter. Click it, or press **Ctrl J** (**⌘J** on a Mac), to open Chat in a panel on the right without leaving the page. Press it again, or click **✕**, to close the panel: the page stays exactly as you left it.
 
 At the top of the panel, start a **New chat**, open a recent one from **Chat history**, or pick **Compact**, **Wide** or **Full screen**. The panel keeps the size you picked. On a wide screen the page moves aside so nothing is covered; on a smaller screen the panel opens over the page.
+
+## What the panel looks at
+
+The box in the panel starts with chips for what you have on screen: the page, your brand, the date range and the filters you picked. Chat takes them as the scope of your question. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.
+
+An empty panel offers a few questions about the page. Click one to put it in the box, then edit it or send it.
+
+On charts and tables, the speech bubble icon next to the title opens the panel with that chart or table attached, so you can ask about it directly. Mentions & Sentiment has them first; more pages follow.
 
 ## Chats in the panel
 

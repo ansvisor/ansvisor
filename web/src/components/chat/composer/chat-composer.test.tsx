@@ -282,6 +282,28 @@ describe('ChatComposer: context chips and the ghost suggestion (W1-11)', () => {
     });
   });
 
+  it('takes a page’s hand-off once: a question in the box, unsent, or an object as an @ chip (W1-08)', async () => {
+    const chart = { type: 'chart' as const, id: 'mentions-trend', label: 'Mentions over time' };
+    await render({ draft: { nonce: 1, text: 'Turn this page into actions' } });
+    expect(box().value).toBe('Turn this page into actions');
+    expect(handlers.onSend).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(box());
+
+    await render({ draft: { nonce: 2, reference: chart } });
+    expect(chipTexts()).toEqual(['Mentions over time×']);
+    // The same hand-off again is not taken twice.
+    await render({ draft: { nonce: 2, reference: chart } });
+    await render({ draft: { nonce: 3, reference: chart } });
+    expect(chipTexts()).toEqual(['Mentions over time×']);
+
+    await press('Enter');
+    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('Turn this page into actions', {
+      context: [],
+      references: [chart],
+      attachments: [],
+    });
+  });
+
   it('keeps the focus in the composer when a chip is removed from the keyboard', async () => {
     let shownChips = chips;
     const onRemoveChip = vi.fn((key: string) => {

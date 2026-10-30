@@ -7,8 +7,9 @@ import { ArrowLeft, History, MessageSquareOff, Plus, X } from 'lucide-react';
 import { AgentAvatar } from '@/components/agentic/agent-avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Link } from '@/i18n/navigation';
+import { Link, usePathname } from '@/i18n/navigation';
 import type { ChatListItem } from '@/lib/chat/conversations';
+import { MAX_SUGGESTIONS, contextChips, menuTitleOf } from '@/lib/chat/page-context';
 import {
   PANEL_LAST_CHAT_KEY,
   PANEL_SIZES,
@@ -17,7 +18,9 @@ import {
   type PanelSize,
 } from '@/lib/chat/panel';
 import type { ChatThread, ThreadMessage } from '@/lib/chat/thread';
+import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import { cn } from '@/lib/utils';
+import { useBrandStore } from '@/stores/use-brand-store';
 import { ChatThreadView } from '../chat-thread-view';
 import { shortcutLabel, useIsMac } from '../chat-shortcuts';
 import { useChatPanel } from './chat-panel-context';
@@ -102,11 +105,20 @@ function SizeIcon({ size }: { size: PanelSize }) {
  * minutes (item 24). A panel chat is a chat like any other: in Recents, and
  * on the full page with everything in it. Closed, it stays as it was, a
  * run under way included, until it opens again.
+ *
+ * The page's context (W1-08, items 20–22) is in its box as chips: the page,
+ * the brand, the date range and filters, following the page while it is
+ * open; × keeps one off on this page until New chat. The empty panel offers
+ * the page's suggestions, which fill the box; Ask about this attaches its
+ * object as an @ chip.
  */
 export function ChatSidePanel() {
   const t = useTranslations('chatPanel');
   const tUnavailable = useTranslations('chatShell.unavailable');
+  const tNav = useTranslations('nav');
   const panel = useChatPanel();
+  const pathname = usePathname();
+  const brand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const isMac = useIsMac();
   const [started, setStarted] = useState(false);
   const [view, setView] = useState<PanelView>({ kind: 'chat', key: 0, thread: null });
@@ -116,7 +128,24 @@ export function ChatSidePanel() {
   const root = useRef<HTMLElement>(null);
   /** The chat asked for last: an earlier one that answers later is dropped. */
   const asked = useRef<string | null>(null);
+  /** The chips × took off, on the page they were taken off on. */
+  const [removed, setRemoved] = useState<{ route: string; keys: string[] }>({
+    route: pathname,
+    keys: [],
+  });
+  /** Hand-offs up to this one belong to a chat no longer in the panel. */
+  const [draftFloor, setDraftFloor] = useState(0);
+  const [seenDraft, setSeenDraft] = useState(0);
   const open = !!panel?.open;
+  const draft = panel?.draft ?? null;
+
+  // A new hand-off (Ask about this) goes to the chat: History closes, and a
+  // chat that isn't available makes way for a new one.
+  if (draft && draft.nonce !== seenDraft) {
+    setSeenDraft(draft.nonce);
+    setHistory(null);
+    if (view.kind === 'unavailable') setView({ kind: 'chat', key: view.key + 1, thread: null });
+  }
 
   const remember = useCallback((id: string) => {
     keep(id);
@@ -146,9 +175,11 @@ export function ChatSidePanel() {
     forget();
     setHistory(null);
     setView((was) => ({ kind: 'chat', key: was.key + 1, thread: null }));
+    setRemoved({ route: pathname, keys: [] });
+    setDraftFloor(draft?.nonce ?? 0);
     if (chatId) toast(t('newChatToast'));
     setChatId(null);
-  }, [chatId, t]);
+  }, [chatId, t, pathname, draft]);
 
   // The first time it opens on this visit: its last chat, when recent.
   useEffect(() => {
@@ -194,7 +225,17 @@ export function ChatSidePanel() {
   }
 
   if (!panel || !started) return null;
-  const { size, setup } = panel;
+  const { size, setup, page } = panel;
+  const menuTitle = menuTitleOf(pathname);
+  const chips = contextChips(
+    page,
+    {
+      pageName: menuTitle ? getDashboardNavLabel(menuTitle, tNav) : null,
+      brand: brand ? { id: brand.id, name: brand.name } : null,
+    },
+    new Set(removed.route === pathname ? removed.keys : []),
+  );
+  const suggestions = (page?.suggestions ?? []).slice(0, MAX_SUGGESTIONS);
 
   return (
     <aside
@@ -308,7 +349,10 @@ export function ChatSidePanel() {
                   key={chat.id}
                   type="button"
                   data-action="panel.openChat"
-                  onClick={() => void openChat(chat.id)}
+                  onClick={() => {
+                    setDraftFloor(draft?.nonce ?? 0);
+                    void openChat(chat.id);
+                  }}
                   className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-muted"
                 >
                   <span className={cn('min-w-0 flex-1 truncate', chat.unread && 'font-semibold')}>
@@ -362,10 +406,40 @@ export function ChatSidePanel() {
               onOwnKey={setup.onOwnKey}
               usageNoticeSeen={setup.usageNoticeSeen}
               onConversation={remember}
+              chips={chips}
+              onRemoveChip={(key) =>
+                setRemoved((was) => ({
+                  route: pathname,
+                  keys: [...(was.route === pathname ? was.keys : []), key],
+                }))
+              }
+              pageReferences={page?.referenceables}
+              pageRoute={pathname}
+              draft={draft && draft.nonce > draftFloor ? draft : null}
               empty={
-                <p className="pt-6 text-center text-sm text-muted-foreground">
-                  {setup.firstName ? t('greeting', { name: setup.firstName }) : t('greetingNoName')}
-                </p>
+                <div className="flex flex-col items-center gap-3 pt-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    {setup.firstName
+                      ? t('greeting', { name: setup.firstName })
+                      : t('greetingNoName')}
+                  </p>
+                  {suggestions.length > 0 && (
+                    <ul className="m-0 flex list-none flex-col items-center gap-2 p-0">
+                      {suggestions.map((question) => (
+                        <li key={question}>
+                          <button
+                            type="button"
+                            data-action="panel.suggestion"
+                            onClick={() => panel.fill(question)}
+                            className="rounded-full border bg-background px-3 py-1.5 text-left text-[13px] hover:bg-muted"
+                          >
+                            {question}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               }
             />
           )}

@@ -51,6 +51,19 @@ const INTEGRATIONS_HREF = '/dashboard/settings/integrations';
 export interface ComposerChip {
   key: string;
   label: string;
+  /** What the run reads for it (a platform id, a date range); never shown. */
+  value?: string;
+}
+
+/**
+ * Something a page hands the box (CHAT-01 items 21–22): a question to put
+ * in it, unsent, or an object to attach as an @ reference. A new `nonce`
+ * is a new hand-off.
+ */
+export interface ComposerDraft {
+  nonce: number;
+  text?: string;
+  reference?: ChatReference;
 }
 
 /** What goes with a sent text: the chips still in the box, the data referenced with @, and the files attached. */
@@ -116,6 +129,9 @@ const refKey = (ref: ChatReference) => `ref:${ref.type}:${ref.id}`;
  * button, references data (the page's own first, then the brand's prompts,
  * pages and open tasks), the pick a chip; ＋ attaches files and connects a
  * tool. ↑ ↓ move, Enter picks, Esc closes and keeps the text.
+ *
+ * A `draft` from the page (W1-08) puts its question in the box, or attaches
+ * its object as an @ chip, and the cursor goes to the end.
  */
 export function ChatComposer({
   variant = 'dock',
@@ -129,6 +145,7 @@ export function ChatComposer({
   onSteer,
   chips = [],
   onRemoveChip,
+  draft,
   ghost,
   references: pageReferences = [],
   searchReferences,
@@ -159,6 +176,8 @@ export function ChatComposer({
   chips?: ComposerChip[];
   /** × on a chip: the page drops it for this chat. */
   onRemoveChip?: (key: string) => void;
+  /** A question or an object the page hands the box (Ask about this, a suggestion). */
+  draft?: ComposerDraft | null;
   /**
    * One suggestion for the empty box: the variant's starter before the first
    * message, then a clear follow-up only (CHAT-07). A READ one for Analysts
@@ -201,6 +220,20 @@ export function ChatComposer({
   const [fileProblem, setFileProblem] = useState<UploadProblem | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
+  // The page's last hand-off taken in: each one once.
+  const [taken, setTaken] = useState<number | null>(null);
+  if (draft && draft.nonce !== taken) {
+    setTaken(draft.nonce);
+    if (draft.text !== undefined) setText(draft.text);
+    const reference = draft.reference;
+    if (reference) {
+      setRefs((all) =>
+        all.length >= MAX_REFERENCES || all.some((r) => refKey(r) === refKey(reference))
+          ? all
+          : [...all, reference],
+      );
+    }
+  }
   const box = useRef<HTMLTextAreaElement>(null);
   const hasText = text.trim().length > 0;
   const uploading = files.some((f) => f.status === 'uploading');
@@ -217,6 +250,14 @@ export function ChatComposer({
     el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
     el.style.overflowY = el.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
   }, [text]);
+
+  // A hand-off from the page: the cursor at the end of the box, to go on typing.
+  useEffect(() => {
+    if (taken === null) return;
+    const el = box.current;
+    el?.focus();
+    el?.setSelectionRange(el.value.length, el.value.length);
+  }, [taken]);
 
   // A menu closes on a click outside the composer.
   useEffect(() => {
