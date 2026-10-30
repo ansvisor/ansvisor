@@ -15,7 +15,7 @@ export default async function ChatLayout({ children }: { children: ReactNode }) 
   if (!prefs) return children;
   return (
     <ChatListProvider>
-      <ChatShell menuOpen={prefs.menuOpen} railOpen={prefs.railOpen}>
+      <ChatShell menuOpen={prefs.menuOpen} railOpen={prefs.railOpen} staff={prefs.staff}>
         {children}
       </ChatShell>
     </ChatListProvider>

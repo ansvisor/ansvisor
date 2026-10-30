@@ -17,8 +17,11 @@
  *   - With no budget to hold against (self-hosted), it is written unchecked.
  * The charge then turns the row into the step's real cost: 1x, what the
  * model costs at the price in effect (generationCostUsd: the synced catalog
- * price first, for Chat's steps only, and never a $0 one for a paid model).
- * The margin on purchased AI credits (CHAT-16 30a) is never here.
+ * price first, for Chat's steps only, and never a $0 one for a paid model),
+ * input read from the prompt cache at its cache-read rate and input written
+ * to it at the write premium (CHAT-04 §D items 28–29). The row also keeps
+ * the step's cache read and write tokens and how long its call took, for
+ * staff. The margin on purchased AI credits (CHAT-16 30a) is never here.
  *
  * The trial's budget is the plan's in its trial (applyTrialAiBudget), over a
  * period that runs the whole trial (aiBudgetOf): it never resets.
@@ -32,7 +35,7 @@
 import supabaseAdmin from '../config/supabase.js';
 import { chatAgenticEnabled } from './chat-flag.js';
 import { drawCredits } from './ai-credits.js';
-import { generationCostUsd } from './improve-cost.js';
+import { cacheSplit, generationCostUsd } from './improve-cost.js';
 import { CHAT_AI_FEATURES, aiBudgetOf, aiBudgetUsedUp } from './plan-guard.js';
 import { logger } from './logger.js';
 
@@ -108,26 +111,33 @@ export async function reserveChatStep(
 
 /**
  * The step's real cost in place of its hold: what its model used, priced 1x
- * (generationCostUsd). Only the workspace's own Chat rows: ChatBudgetError
- * 404 when the row is gone (released) or isn't one. A step that called the
- * model more than once (a retry) is charged its total usage. A provider
- * that reported no usage leaves the hold as the step's cost: over, never
- * under. The cost past the included budget is then drawn from the credits.
+ * (generationCostUsd), its prompt cache's reads at the cache-read rate and
+ * writes at the write premium. Only the workspace's own Chat rows:
+ * ChatBudgetError 404 when the row is gone (released) or isn't one. A step
+ * that called the model more than once (a retry) is charged its total
+ * usage. A provider that didn't report both its input and its output leaves
+ * the hold as the step's cost: over, never under. `latencyMs`, how long the
+ * call took, is kept for staff. The cost past the included budget is then
+ * drawn from the credits.
  */
-export async function chargeChatStep(orgId, usageId, { modelId, usage }) {
-  const reported = usage?.inputTokens != null || usage?.outputTokens != null;
+export async function chargeChatStep(orgId, usageId, { modelId, usage, latencyMs }) {
+  const reported = usage?.inputTokens != null && usage?.outputTokens != null;
+  const latency = latencyMs != null ? { latency_ms: latencyMs } : {};
+  let charged = { model: modelId, ...latency };
+  if (reported) {
+    const { read, written } = cacheSplit(usage);
+    charged = {
+      ...charged,
+      input_tokens: usage.inputTokens,
+      output_tokens: usage.outputTokens,
+      cache_read_tokens: usage.cacheReadTokens != null ? read : null,
+      cache_write_tokens: usage.cacheWriteTokens != null ? written : null,
+      cost_usd: generationCostUsd(modelId, usage, { synced: true }),
+    };
+  }
   const { data, error } = await supabaseAdmin
     .from('prompt_improve_usage')
-    .update(
-      reported
-        ? {
-            model: modelId,
-            input_tokens: usage.inputTokens ?? null,
-            output_tokens: usage.outputTokens ?? null,
-            cost_usd: generationCostUsd(modelId, usage, { synced: true }),
-          }
-        : { model: modelId },
-    )
+    .update(charged)
     .eq('id', usageId)
     .eq('organization_id', orgId)
     .in('feature', CHAT_BUDGET_FEATURES)
@@ -168,4 +178,36 @@ export async function releaseChatStep(orgId, usageId) {
     .eq('organization_id', orgId)
     .in('feature', CHAT_BUDGET_FEATURES);
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Each agent's share of the AI limit (CHAT-27 items 24–30), for the web's
+ * Agents list and agent detail: what its runs spent on the budget and on the
+ * workspace's own key, over the budget, and how many runs spent anything
+ * (chat_agent_usage_shares, 00419). Since the period's start (the meter's,
+ * aiBudgetOf), or over the last `days` days against the same budget. Shares
+ * only: the budget stays here. No budget to share (self-hosted): unlimited,
+ * no rows.
+ */
+export async function agentUsageShares(orgId, { days = null } = {}) {
+  assertChatOn(orgId);
+  const { budgetUsd, since } = await aiBudgetOf(orgId);
+  if (budgetUsd === null || !(budgetUsd > 0)) return { unlimited: true, since: null, shares: [] };
+  const from = days ? new Date(Date.now() - days * 86_400_000).toISOString() : since;
+  const { data, error } = await supabaseAdmin.rpc('chat_agent_usage_shares', {
+    p_organization_id: orgId,
+    p_since: from,
+    p_budget: budgetUsd,
+  });
+  if (error) throw new Error(error.message);
+  return {
+    unlimited: false,
+    since: from,
+    shares: (data ?? []).map((row) => ({
+      agentId: row.agent_id ?? null,
+      share: Number(row.share) || 0,
+      ownKeyShare: Number(row.own_key_share) || 0,
+      runs: Number(row.runs) || 0,
+    })),
+  };
 }

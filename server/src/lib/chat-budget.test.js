@@ -162,6 +162,7 @@ function query(table) {
 
 let budget;
 let guard;
+let agentShareRows;
 
 beforeEach(async () => {
   vi.resetModules();
@@ -179,6 +180,7 @@ beforeEach(async () => {
   rpcCalls = [];
   runs = new Set([RUN]);
   nextId = 1;
+  agentShareRows = [];
   lock = Promise.resolve();
   vi.doMock('../config/supabase.js', () => ({
     default: {
@@ -188,6 +190,7 @@ beforeEach(async () => {
         if (fn === 'reserve_chat_ai_usage') return reserveChatAiUsage(args);
         if (fn === 'reserve_ai_usage') return reserveAiUsage(args);
         if (fn === 'ai_usage_by_feature') return aiUsageByFeature(args);
+        if (fn === 'chat_agent_usage_shares') return { data: agentShareRows, error: null };
         return { data: null, error: { message: `no ${fn}` } };
       },
     },
@@ -374,6 +377,66 @@ describe('a Chat step on the AI budget', () => {
   it('keeps the hold as the cost when the provider reported no usage: over, never under', async () => {
     const id = await budget.reserveChatStep('o1', step());
     await budget.chargeChatStep('o1', id, { modelId: MODEL, usage: {} });
+    expect(ledger).toEqual([expect.objectContaining({ id, cost_usd: 0.007 })]);
+  });
+
+  it("prices the prompt cache's reads below the input and its writes above it, and keeps both", async () => {
+    const id = await budget.reserveChatStep('o1', step());
+    // 2,000 tokens in: 1,500 read from the cache, 300 written to it, 200 plain; 400 out.
+    await budget.chargeChatStep('o1', id, {
+      modelId: MODEL,
+      usage: { inputTokens: 2000, outputTokens: 400, cacheReadTokens: 1500, cacheWriteTokens: 300 },
+      latencyMs: 2140,
+    });
+    // Haiku 4.5: $1 in, $0.10 a cache read, $1.25 a cache write, $5 out (per million).
+    const cost = (200 * 1 + 300 * 1.25 + 1500 * 0.1 + 400 * 5) / 1_000_000;
+    expect(ledger).toEqual([
+      expect.objectContaining({
+        id,
+        input_tokens: 2000,
+        output_tokens: 400,
+        cache_read_tokens: 1500,
+        cache_write_tokens: 300,
+        latency_ms: 2140,
+      }),
+    ]);
+    expect(ledger[0].cost_usd).toBeCloseTo(cost, 12);
+    // Below the same step with no cache, which its hold assumed.
+    expect(ledger[0].cost_usd).toBeLessThan((2000 * 1 + 400 * 5) / 1_000_000);
+  });
+
+  it('never prices a cache read below its cost: an unknown rate is the input rate, and counts are held to the input', async () => {
+    const cache = await import('./model-price-cache.js');
+    const SONNET = 'anthropic/claude-sonnet-5.5';
+    // Synced without a cache-read rate: its reads cost the input price.
+    cache.setSyncedPrices([{ model_id: SONNET, input_per_m: 3, output_per_m: 15, overrides: [] }]);
+    const id = await budget.reserveChatStep('o1', step({ modelId: SONNET }));
+    await budget.chargeChatStep('o1', id, {
+      modelId: SONNET,
+      usage: { inputTokens: 1000, outputTokens: 0, cacheReadTokens: 1000 },
+    });
+    expect(ledger.find((r) => r.id === id).cost_usd).toBeCloseTo(0.003, 12);
+    // Synced with one: $0.30 a cache read.
+    cache.setSyncedPrices([
+      { model_id: SONNET, input_per_m: 3, output_per_m: 15, cache_read_per_m: 0.3, overrides: [] },
+    ]);
+    const second = await budget.reserveChatStep('o1', step({ modelId: SONNET }));
+    // A provider's cache count past the input: held to the input.
+    await budget.chargeChatStep('o1', second, {
+      modelId: SONNET,
+      usage: { inputTokens: 1000, outputTokens: 0, cacheReadTokens: 5000, cacheWriteTokens: 50 },
+    });
+    expect(ledger.find((r) => r.id === second)).toMatchObject({
+      cache_read_tokens: 1000,
+      cache_write_tokens: 0,
+    });
+    expect(ledger.find((r) => r.id === second).cost_usd).toBeCloseTo(0.0003, 12);
+    cache.setSyncedPrices([]);
+  });
+
+  it('keeps the hold when only one of input and output was reported', async () => {
+    const id = await budget.reserveChatStep('o1', step());
+    await budget.chargeChatStep('o1', id, { modelId: MODEL, usage: { outputTokens: 10 } });
     expect(ledger).toEqual([expect.objectContaining({ id, cost_usd: 0.007 })]);
   });
 
@@ -609,5 +672,44 @@ describe('with purchased AI credits (CHAT-18 §F)', () => {
     ).rejects.toMatchObject({ statusCode: 429 });
     expect(rpcCalls.find((c) => c.fn === 'reserve_ai_usage').args.p_budget).toBe(5);
     expect(usedOf('g1')).toBe(0);
+  });
+});
+
+describe('each agent’s share of the AI limit', () => {
+  it('reads the shares this period, or over the last days, against the budget, and answers no dollars', async () => {
+    const AGENT = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c09';
+    agentShareRows = [
+      { agent_id: AGENT, share: '0.0320', own_key_share: '0.0000', runs: 4 },
+      { agent_id: null, share: '0.0100', own_key_share: '0.0050', runs: 1 },
+    ];
+    const period = await budget.agentUsageShares('o1');
+    expect(rpcCalls.at(-1)).toEqual({
+      fn: 'chat_agent_usage_shares',
+      args: { p_organization_id: 'o1', p_since: '2026-10-20T09:00:00.000Z', p_budget: 5 },
+    });
+    expect(period).toEqual({
+      unlimited: false,
+      since: '2026-10-20T09:00:00.000Z',
+      shares: [
+        { agentId: AGENT, share: 0.032, ownKeyShare: 0, runs: 4 },
+        { agentId: null, share: 0.01, ownKeyShare: 0.005, runs: 1 },
+      ],
+    });
+
+    const days = await budget.agentUsageShares('o1', { days: 30 });
+    expect(rpcCalls.at(-1).args.p_since).toBe('2026-09-29T12:00:00.000Z');
+    expect(days.since).toBe('2026-09-29T12:00:00.000Z');
+  });
+
+  it('has nothing to share without a budget (self-hosted), and nothing while Chat is off', async () => {
+    vi.stubEnv('IS_CLOUD', 'false');
+    expect(await budget.agentUsageShares('o1')).toEqual({
+      unlimited: true,
+      since: null,
+      shares: [],
+    });
+    expect(rpcCalls).toEqual([]);
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    await expect(budget.agentUsageShares('o1')).rejects.toMatchObject({ code: 'chat_off' });
   });
 });

@@ -7,20 +7,24 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { PlanCard } from '@/components/agentic/plan-card';
 import { RunSteps } from '@/components/agentic/run-steps';
 import { ApprovalCard } from '@/components/agentic/approval-card';
+import { QuestionAnswered, QuestionCard } from '@/components/agentic/question-card';
 import { AgentHead } from '@/components/agentic/agent-card';
 import { ResultCard } from '@/components/agentic/result-card';
 import { DenialCard } from '@/components/agentic/denial-card';
 import { ErrorCard } from '@/components/agentic/error-card';
 import { RunsTray, RunsTrayView } from '@/components/agentic/runs-tray';
+import { NextMoves } from '@/components/chat/run/next-moves';
 import {
   APPROVAL,
   APPROVAL_HEAD,
   DENIAL_FOOTNOTE,
   DENIALS,
   FAILED,
+  NEXT_MOVES,
   PUBLISH,
   PUSH_APPROVAL,
   QUALITY_PLAN,
+  QUESTIONS,
   RESULT,
   RUN_STEPS,
   SHOPPING_PLAN,
@@ -136,6 +140,27 @@ export function CardsPreview() {
         </State>
       </Group>
 
+      <Group title={t('sections.question')}>
+        <State caption={s('questionPending')}>
+          <QuestionCard ask={QUESTIONS.page} onAnswer={noop} />
+        </State>
+        <State caption={s('questionMulti')}>
+          <QuestionCard ask={QUESTIONS.topics} onAnswer={noop} />
+        </State>
+        <State caption={s('saving')}>
+          <QuestionCard ask={QUESTIONS.page} status="saving" onAnswer={noop} />
+        </State>
+        <State caption={s('questionAnswered')}>
+          <QuestionAnswered question={QUESTIONS.page.question} answer="/features" />
+        </State>
+        <State caption={s('questionSkipped')}>
+          <QuestionAnswered
+            question={QUESTIONS.topics.question}
+            answer="Skipped · used Plans and prices"
+          />
+        </State>
+      </Group>
+
       <Group title={t('sections.execute')}>
         <State caption={s('executePending')}>
           <ApprovalCard
@@ -166,6 +191,9 @@ export function CardsPreview() {
       </Group>
 
       <Group title={t('sections.result')}>
+        <State caption={s('nextMoves')}>
+          <NextMoves moves={NEXT_MOVES} onPick={noop} />
+        </State>
         <State caption={s('resultDone')}>
           <ResultCard
             state="done"

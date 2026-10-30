@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PlanSwitcher } from '@/components/settings/plan-switcher';
 import { InvoiceList } from '@/components/settings/invoice-list';
 import { AiUsageCard } from '@/components/settings/ai-usage-card';
+import { PLAN_STARTED_EVENT } from '@/lib/billing/plan-started';
 import { AddOnsCard } from '@/components/settings/add-ons-card';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useDemoBrand } from '@/components/providers/demo-brand-provider';
@@ -66,6 +67,9 @@ export function BillingSection() {
   // For a new subscription's Checkout, once the old one has ended.
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Plan changes made on this page: each has the AI usage card read again,
+  // since a trial bought starts a new period with its usage at 0.
+  const [planChanges, setPlanChanges] = useState(0);
 
   useEffect(() => {
     async function loadSubscription() {
@@ -132,6 +136,18 @@ export function BillingSection() {
     loadSubscription();
   }, [contextPlanId]);
 
+  // A trial's plan started from the AI usage band or card (Start my plan
+  // now): the plan card shows it, and the AI usage card reads it again.
+  useEffect(() => {
+    const onStarted = (event: Event) => {
+      const started = (event as CustomEvent<SubscriptionData>).detail;
+      if (started?.planId) setSubscription(started);
+      setPlanChanges((n) => n + 1);
+    };
+    window.addEventListener(PLAN_STARTED_EVENT, onStarted);
+    return () => window.removeEventListener(PLAN_STARTED_EVENT, onStarted);
+  }, []);
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -180,7 +196,10 @@ export function BillingSection() {
       <CardContent>
         <PlanSwitcher
           subscription={subscription}
-          onUpdate={(data) => setSubscription({ ...subscription, ...data })}
+          onUpdate={(data) => {
+            setSubscription({ ...subscription, ...data });
+            setPlanChanges((n) => n + 1);
+          }}
           organizationId={organizationId}
           trialOffered={noPlanYet}
         />
@@ -235,7 +254,7 @@ export function BillingSection() {
         </CardContent>
       </Card>
 
-      <AiUsageCard />
+      <AiUsageCard key={planChanges} />
 
       {/* AI credit and storage packs (CHAT-18): nothing while Chat is off. */}
       <AddOnsCard />

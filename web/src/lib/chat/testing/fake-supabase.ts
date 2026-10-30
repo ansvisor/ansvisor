@@ -34,7 +34,7 @@ export interface FakeSupabase {
 interface Builder extends PromiseLike<Result> {
   select(columns?: string, options?: { count?: 'exact'; head?: boolean }): Builder;
   insert(rows: Row | Row[]): Builder;
-  /** Postgres's insert … on conflict: the row is merged in, or left as it is with ignoreDuplicates. */
+  /** Insert, or on a clash of `onConflict`'s columns update (or with `ignoreDuplicates`, keep) the row. */
   upsert(rows: Row | Row[], options?: { onConflict?: string; ignoreDuplicates?: boolean }): Builder;
   update(patch: Row): Builder;
   delete(): Builder;
@@ -85,9 +85,8 @@ export function createFakeSupabase(): FakeSupabase {
     },
     from(table) {
       let kind: 'select' | 'insert' | 'upsert' | 'update' | 'delete' = 'select';
+      let conflict: { columns: string[]; ignore: boolean } = { columns: ['id'], ignore: false };
       let payload: Row | Row[] | null = null;
-      let conflict: string[] = [];
-      let ignoreDuplicates = false;
       let returning = false;
       const filters: Filter[] = [];
       const sorts: { column: string; ascending: boolean }[] = [];
@@ -136,17 +135,17 @@ export function createFakeSupabase(): FakeSupabase {
           fake.tables[table] = after;
           return { data: returning ? patched.map((row) => ({ ...row })) : null, error: null };
         }
-        const incoming = Array.isArray(payload) ? payload : [payload!];
         if (kind === 'upsert') {
-          let after = rows();
           const written: Row[] = [];
-          for (const row of incoming) {
-            const existing = after.find((other) => conflict.every((c) => other[c] === row[c]));
-            if (existing) {
-              if (ignoreDuplicates) continue;
-              const merged = { ...existing, ...row };
-              after = after.map((other) => (other === existing ? merged : other));
-              written.push(merged);
+          let after = [...rows()];
+          for (const row of Array.isArray(payload) ? payload : [payload!]) {
+            const at = after.findIndex((other) =>
+              conflict.columns.every((c) => other[c] === row[c]),
+            );
+            if (at >= 0) {
+              if (conflict.ignore) continue;
+              after[at] = { ...after[at], ...row };
+              written.push(after[at]);
             } else {
               const added = { id: fakeId(), ...(fake.defaults[table]?.() ?? {}), ...row };
               after = [...after, added];
@@ -159,7 +158,7 @@ export function createFakeSupabase(): FakeSupabase {
           fake.tables[table] = after;
           return { data: returning ? written.map((row) => ({ ...row })) : null, error: null };
         }
-        const added = incoming.map((row) => ({
+        const added = (Array.isArray(payload) ? payload : [payload!]).map((row) => ({
           id: fakeId(),
           ...(fake.defaults[table]?.() ?? {}),
           ...row,
@@ -195,8 +194,10 @@ export function createFakeSupabase(): FakeSupabase {
         upsert(rowsIn, options) {
           kind = 'upsert';
           payload = rowsIn;
-          conflict = (options?.onConflict ?? 'id').split(',').map((c) => c.trim());
-          ignoreDuplicates = options?.ignoreDuplicates ?? false;
+          conflict = {
+            columns: (options?.onConflict ?? 'id').split(',').map((c) => c.trim()),
+            ignore: options?.ignoreDuplicates ?? false,
+          };
           return builder;
         },
         update(patch) {

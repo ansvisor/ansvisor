@@ -31,7 +31,9 @@ import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-pro
 import { DemoBrandProvider } from '@/components/providers/demo-brand-provider';
 import { ReadOnlyBanner } from '@/components/billing/read-only-banner';
 import { DemoBanner } from '@/components/billing/demo-banner';
+import { PlanEndsBanner } from '@/components/billing/plan-ends-banner';
 import { TrackingJobHandoff } from '@/components/layout/tracking-job-handoff';
+import { FirstRunReady } from '@/components/layout/first-run-ready';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -68,7 +70,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ] = await Promise.all([
     supabase
       .from('organizations')
-      .select('plan, subscription_status, plan_overrides, stripe_subscription_id')
+      .select(
+        'plan, subscription_status, plan_overrides, stripe_subscription_id, subscription_ends_at, cancel_at_period_end',
+      )
       .eq('id', profile.organization_id)
       .single(),
     getBrands(profile.organization_id),
@@ -205,6 +209,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         allowedModelIds={allowedModelIds}
         subscriptionActive={subscriptionActive}
         subscriptionStatus={subscriptionStatus}
+        planEndsAt={org?.cancel_at_period_end ? (org.subscription_ends_at as string | null) : null}
       >
         <RoleProvider role={role}>
           <ChatAgenticProvider enabled={chatOn}>
@@ -236,11 +241,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
                               <MobileNav />
                             </div>
                             <ReadOnlyBanner />
+                            <PlanEndsBanner />
                             <DemoBanner />
                             <main className="flex-1 overflow-y-auto bg-background p-6">
                               <BrandGuard>{children}</BrandGuard>
                             </main>
                             <TrackingJobHandoff />
+                            <FirstRunReady />
                           </ChatPanelPage>
                         </div>
                         {chatPanel.enabled && <ChatSidePanelSlot />}

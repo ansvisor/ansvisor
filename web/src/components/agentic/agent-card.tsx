@@ -29,6 +29,7 @@ export function AgentCard({
   tone?: AgentCardTone;
   className?: string;
   children: ReactNode;
+  ref?: React.Ref<HTMLElement>;
 } & Omit<React.HTMLAttributes<HTMLElement>, 'className' | 'children'>) {
   return (
     <section

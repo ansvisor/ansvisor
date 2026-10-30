@@ -204,7 +204,10 @@ describe('ChatFiles', () => {
     ).toEqual(['html', 'md', 'docx', 'pdf']);
     await click(document.querySelector<HTMLElement>('[data-format="pdf"]')!);
     expect(fetchMock).toHaveBeenCalledWith('/api/chat/files/a?format=pdf');
-    expect(download.saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'faq-2026-10-26.pdf');
+    expect(download.saveBlob).toHaveBeenCalledWith(
+      expect.objectContaining({ size: expect.any(Number) }),
+      'faq-2026-10-26.pdf',
+    );
   });
 
   it('downloads the picked files as one .zip and says how many', async () => {
@@ -224,7 +227,10 @@ describe('ChatFiles', () => {
     const [url, init] = fetchMock.mock.calls.at(-1)!;
     expect(url).toBe('/api/chat/files/zip');
     expect(JSON.parse(String(init!.body))).toEqual({ ids: ['a', 'b'] });
-    expect(download.saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'files-2026-10-30.zip');
+    expect(download.saveBlob).toHaveBeenCalledWith(
+      expect.objectContaining({ size: expect.any(Number) }),
+      'files-2026-10-30.zip',
+    );
     expect(toast).toHaveBeenCalledWith('Downloaded 2 files (.zip)');
     expect(button.disabled).toBe(true);
 

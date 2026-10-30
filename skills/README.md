@@ -40,7 +40,7 @@ fetches numbers — typed tool calls vs. inline Python HTTP requests.
 
 You need an **Ansvisor API key** in either flavour:
 
-1. Open your Ansvisor dashboard → **Settings → API Keys**
+1. Open your Ansvisor dashboard → **Settings → MCP & API Keys**
 2. Click **New key**, give it a memorable name (e.g. _Claude — laptop_)
 3. Copy the token (`ans_...`). It's shown **once** — store it in your
    password manager

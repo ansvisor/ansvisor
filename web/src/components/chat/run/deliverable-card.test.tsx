@@ -104,7 +104,10 @@ describe('DeliverableCard', () => {
     ).toEqual(['html', 'md', 'docx', 'pdf']);
     await click(document.querySelector('[data-format="md"]')!);
     expect(fetchMock).toHaveBeenCalledWith(`/api/chat/runs/${RUN}/files/2?format=md`);
-    expect(download.saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'pricing-faq-2026-10-30.md');
+    expect(download.saveBlob).toHaveBeenCalledWith(
+      expect.objectContaining({ size: expect.any(Number) }),
+      'pricing-faq-2026-10-30.md',
+    );
     expect(toast).toHaveBeenCalledWith('Downloaded pricing-faq-2026-10-30.md');
   });
 

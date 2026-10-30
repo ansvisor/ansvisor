@@ -23,6 +23,7 @@ vi.mock('@/i18n/navigation', () => ({
       {children}
     </a>
   ),
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
 }));
 const read = vi.hoisted(() => ({ getGetMore: vi.fn() }));
 vi.mock('@/lib/actions/get-more', () => read);
@@ -346,7 +347,8 @@ describe('Get more AI credits in the meter and the banner', () => {
 
   it('keeps starting the plan in the trial, and the old links with Chat off', async () => {
     await getMore({ trial: true });
-    expect(button('Start your plan')?.getAttribute('href')).toBe('/dashboard/settings/billing');
+    // The trial's own way to more: Start my plan now (the trial can't buy packs).
+    expect(button('Start my plan now')).toBeDefined();
     expect(button('Get more AI credits')).toBeUndefined();
     act(() => root.unmount());
     chat.on = false;

@@ -148,8 +148,7 @@ export async function resolveChatModelKey(organizationId: string): Promise<ChatM
 
 /**
  * Whether the workspace's Chat runs on its own key, as resolveChatModelKey
- * would pick it, without decrypting the key: its plan allows own keys (or a
- * kept key's 30 days run) and
+ * would pick it, without decrypting the key: ownKeyAccess allows own keys and
  * Settings › AI Providers has an active one. Such steps never draw on the AI
  * budget (reserve_chat_ai_usage writes them unchecked), so the composer
  * stays on at the cap. False with Chat off or self-hosted, where nothing is
