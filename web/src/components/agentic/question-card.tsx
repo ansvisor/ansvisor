@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { Loader2, MessageCircleQuestion } from 'lucide-react';
+import { Check, Loader2, MessageCircleQuestion } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import type { ChatAsk } from '@/lib/chat/events';
@@ -22,7 +22,8 @@ export interface QuestionAnswerValue {
  * ("1 of 2"), and 2–4 options, each with its key, label, detail and cost
  * multiplier, the Recommended one marked and picked to start with; an
  * Other… row with Add when the card offers it. One option, or several when
- * `multi`. Number keys pick a row (the Other row's focuses its field), Enter
+ * `multi`: each row then has a check box, and the footer says "Pick one or
+ * more" (the mockup's words). Number keys pick a row (the Other row's focuses its field), Enter
  * is Next, keys do nothing while a field has focus; the card takes focus
  * when it appears, unless the person is typing. Skip goes on with the Recommended option; Next is off
  * with nothing picked; both go through the read-only gate. Built on the
@@ -142,7 +143,7 @@ export function QuestionCard({
                 disabled={busy}
                 onClick={() => pick(i)}
                 className={cn(
-                  'grid min-h-[44px] w-full grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left text-[13px] outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50',
+                  'grid min-h-[44px] w-full grid-cols-[22px_minmax(0,1fr)_auto_auto] items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left text-[13px] outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50',
                   on && 'border-foreground bg-muted/40',
                 )}
               >
@@ -166,10 +167,26 @@ export function QuestionCard({
                     <span className="block text-xs text-muted-foreground">{option.detail}</span>
                   )}
                 </span>
-                {option.costMultiplier !== undefined && (
+                {option.costMultiplier !== undefined ? (
                   <span className="text-xs text-muted-foreground tabular-nums">
                     {t('multiplier', { times: option.costMultiplier })}
                   </span>
+                ) : (
+                  <span aria-hidden />
+                )}
+                {ask.multi ? (
+                  <span
+                    aria-hidden
+                    data-slot="question-check"
+                    className={cn(
+                      'flex size-4 items-center justify-center rounded-[4px] border',
+                      on && 'border-foreground bg-foreground text-background',
+                    )}
+                  >
+                    {on && <Check className="size-3" strokeWidth={3} />}
+                  </span>
+                ) : (
+                  <span aria-hidden />
                 )}
               </button>
             );
@@ -222,7 +239,7 @@ export function QuestionCard({
           </p>
         )}
       </AgentCardBody>
-      <AgentCardFooter note={t('pressToPick', { max: rows })}>
+      <AgentCardFooter note={t(ask.multi ? 'pickSeveral' : 'pressToPick', { max: rows })}>
         <Button
           type="button"
           variant="link"

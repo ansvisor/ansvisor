@@ -3351,6 +3351,7 @@
       "otherLabel": "Your own answer",
       "add": "Add",
       "pressToPick": "Press 1–{max} to pick",
+      "pickSeveral": "Pick one or more · Press 1–{max} to pick",
       "skip": "Skip",
       "next": "Next",
       "answerNeedsPlan": "Answering needs a plan"

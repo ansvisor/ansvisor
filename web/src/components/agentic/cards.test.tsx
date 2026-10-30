@@ -769,6 +769,8 @@ describe('QuestionCard', () => {
     expect(picked()).toEqual(['true', 'false']);
     expect($<HTMLInputElement>('[data-action="question.other"]')!.placeholder).toBe('Other…');
     expect(card.textContent).toContain('Press 1–3 to pick');
+    expect(card.textContent).not.toContain('Pick one or more');
+    expect($('[data-slot="question-check"]')).toBeNull();
   });
 
   it('leaves the focus in a field the person is typing in', async () => {
@@ -820,6 +822,12 @@ describe('QuestionCard', () => {
     );
     expect($('[role="group"]')).not.toBeNull();
     expect($$('[role="checkbox"]')).toHaveLength(2);
+    // Several may be picked, and it says so: a box on each row, "Pick one or more" under them.
+    expect($('[data-slot="question-card"]')!.textContent).toContain(
+      'Pick one or more · Press 1–2 to pick',
+    );
+    expect($$('[data-slot="question-check"]')).toHaveLength(2);
+    expect($$('[data-slot="question-check"] svg')).toHaveLength(1);
     expect(action('question.other')).toBeNull();
     await click($$('[data-action="question.pick"]')[1]);
     expect(picked()).toEqual(['true', 'true']);

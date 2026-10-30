@@ -59,11 +59,11 @@ You can type while it works. Enter then stops the run and sends what you typed a
 
 When an answer changes what Chat makes and isn't in your data, Chat stops and asks, with 2 to 4 options. The one marked **Recommended** is picked to start with; under each option it says why it fits. When Chat asks more than one thing at once, the card counts them, such as "1 of 2".
 
-Click an option, or press its number, then **Next** or Enter. Where you can pick several, click each one. **Other…** takes your own answer; click **Add**. **Skip** goes on with the Recommended option.
+Click an option, or press its number, then **Next** or Enter. Where the card says **Pick one or more**, click each one. **Other…** takes your own answer; click **Add**. **Skip** goes on with the Recommended option.
 
 You can also answer in the box below: it shows the Recommended option dim, and Tab puts it in. Press Enter to send. One message answers every question Chat asked with it.
 
-Once you answer, the card folds to one line with the question and your answer, and Chat goes on. Stopping the run leaves its question skipped.
+Once answered, the card folds to one line with the question and your answer, and Chat goes on. Stopping the run leaves its question skipped.
 
 ## Shortcuts and your data
 
