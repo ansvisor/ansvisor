@@ -63,7 +63,10 @@ const PLATFORM = (param: string): RouteFilter => ({ key: 'platform', param, valu
 
 /** What each page's address keeps (the pages' readUrlParam / readUrlChoice), by id. */
 const FILTERS: Record<string, readonly RouteFilter[]> = {
-  insights: [RANGE('range', ALL_DATE_PRESETS), PLATFORM('model')],
+  // No platform: Insights' `model` is the answers' model slugs (model_used,
+  // "gpt-5-5,gpt-5-3-mini"), not a platform id, so `model=chatgpt-web`
+  // would open an empty page.
+  insights: [RANGE('range', ALL_DATE_PRESETS)],
   citations: [RANGE('preset', ['24h', '7d', '30d', '90d', 'all']), PLATFORM('platform')],
   prompts: [RANGE('range', PROMPT_RANGE_PRESETS)],
   'prompts/tracked': [RANGE('range', PROMPT_RANGE_PRESETS)],
@@ -188,6 +191,8 @@ export function routeRegistry({ cloud = isCloud() }: { cloud?: boolean } = {}): 
     }
   }
   for (const page of EXTRA_PAGES) {
+    // A page the sidebar lists (Competitors, once it's back on it) is there already.
+    if (out.some((r) => r.href === page.href)) continue;
     out.push(route(page.href, page.name, page.section, page.requiredFeature));
   }
   out.push(route('/dashboard/settings', navT('settings'), null));

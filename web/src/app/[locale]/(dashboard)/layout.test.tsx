@@ -75,6 +75,7 @@ vi.mock('@/components/layout/sidebar', () => ({ Sidebar: none }));
 vi.mock('@/components/layout/sidebar-error-boundary', () => ({ SidebarErrorBoundary: pass }));
 vi.mock('@/components/layout/mobile-nav', () => ({ MobileNav: none }));
 vi.mock('@/components/layout/tracking-job-handoff', () => ({ TrackingJobHandoff: none }));
+vi.mock('@/components/layout/first-run-ready', () => ({ FirstRunReady: none }));
 vi.mock('@/components/providers/auth-provider', () => ({ AuthProvider: none }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({ AiUsageProvider: pass }));
 // The brands the layout hands the brand store (the store is marked loaded

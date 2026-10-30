@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import type { Prompt } from '@/types';
+import type { FirstRun } from '@/hooks/use-first-run';
 
 /**
  * Tracked Prompts on a read-only workspace (plan not active): Add prompt,
@@ -58,6 +59,9 @@ vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
+// The brand's first run: null unless a test says it goes on.
+const firstRun = vi.hoisted(() => ({ run: null as FirstRun | null }));
+vi.mock('@/hooks/use-first-run', () => ({ useFirstRun: () => firstRun.run }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (select: (state: unknown) => unknown) =>
     select({ activeBrandId: 'b1', brands: [{ id: 'b1', slug: 'acme', name: 'Acme' }] }),
@@ -133,6 +137,7 @@ const dialog = () => document.querySelector('[role="dialog"]');
 beforeEach(() => {
   vi.clearAllMocks();
   nav.pathname = '/dashboard/prompts/tracked';
+  firstRun.run = null;
   contentUsage.value = null;
   getOpenSuggestionForPrompt.mockResolvedValue(null);
   vi.stubGlobal(
@@ -156,6 +161,25 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+});
+
+describe("Tracked Prompts during the brand's first run", () => {
+  it('says the first answers are arriving above the table, and nothing once it is done', async () => {
+    firstRun.run = {
+      brandId: 'b1',
+      queued: false,
+      progress: { current: 18, total: 40 },
+      left: { minutes: 6 },
+    };
+    await render(false);
+    expect(container.textContent).toContain(
+      'Your first answers are arriving (18 of 40) · ~6 min. This fills in when tracking finishes.',
+    );
+
+    firstRun.run = null;
+    await render(false);
+    expect(container.textContent).not.toContain('Your first answers are arriving');
+  });
 });
 
 describe('Tracked Prompts on a read-only workspace', () => {
