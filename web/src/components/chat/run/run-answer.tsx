@@ -2,10 +2,11 @@
 
 import { useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { Check } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { AgentAvatar, type AgentAvatarState } from '@/components/agentic/agent-avatar';
 import { stampParts } from '@/components/agentic/result-card';
 import { RunSteps, type RunStepsStatus } from '@/components/agentic/run-steps';
+import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
 import type { ClientRun, ClientRunStatus } from '@/lib/chat/run-state';
 import { cn } from '@/lib/utils';
@@ -44,14 +45,18 @@ const avatarState = (status: ClientRunStatus): AgentAvatarState =>
  * then "Data used" names each source with its rows, and "Generated … · Data
  * as of …" is stamped in the person's time zone. What follows the answer
  * (cards, next moves, its actions: `footer`) fades in once the run is done.
- * With reduced motion nothing animates. No tool name, input or ID reaches
- * it: the steps carry the label registry's words.
+ * A run that ended in error says so with a red × and its reason, and Retry
+ * (`onRetry`) sends its question again (item 18, W1-15); while the stream
+ * reconnects, the header says "Reconnecting…" (item 21). With reduced
+ * motion nothing animates. No tool name, input or ID reaches it: the steps
+ * carry the label registry's words.
  */
 export function RunAnswer({
   run,
   workingMs,
   timezone,
   reconnecting = false,
+  onRetry,
   cards,
   footer,
   className,
@@ -63,6 +68,8 @@ export function RunAnswer({
   timezone?: string | null;
   /** The stream dropped, and the page is reconnecting (item 21). */
   reconnecting?: boolean;
+  /** Retry on a run that ended in error: sends its question again (item 18). */
+  onRetry?: () => void;
   /** The run's own cards (an approval, a denial), under the answer. */
   cards?: ReactNode;
   /** What follows a finished answer: next moves and its actions (item 12f). */
@@ -104,7 +111,10 @@ export function RunAnswer({
             data-slot="run-status"
             className="text-[13px] text-muted-foreground"
           >
-            {reconnecting ? t('status.reconnecting') : t(`status.${status.key}`, status.values)}
+            {/* With steps, their header says it. */}
+            {reconnecting && run.steps.length === 0
+              ? t('status.reconnecting')
+              : t(`status.${status.key}`, status.values)}
           </p>
         )}
         <RunSteps
@@ -112,6 +122,7 @@ export function RunAnswer({
           steps={run.steps}
           workingMs={workingMs}
           sources={sources.length}
+          reconnecting={reconnecting}
         />
         {chips.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
@@ -139,6 +150,35 @@ export function RunAnswer({
         {run.text && (
           <div data-slot="run-text" className="text-sm">
             <Markdown>{run.text}</Markdown>
+          </div>
+        )}
+        {run.status === 'error' && (
+          <div
+            data-slot="run-error"
+            className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-900 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+          >
+            <span className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400">
+              <X className="size-3" aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
+              {/* The steps' header says it already, unless there are none. */}
+              {(run.steps.length === 0 || !run.errorReason) && (
+                <p className="font-medium">{tSteps('failed')}</p>
+              )}
+              {run.errorReason && <p>{run.errorReason}</p>}
+            </div>
+            {onRetry && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                data-action="run.retry"
+                onClick={onRetry}
+                className="shrink-0"
+              >
+                {t('retry')}
+              </Button>
+            )}
           </div>
         )}
         {cards}

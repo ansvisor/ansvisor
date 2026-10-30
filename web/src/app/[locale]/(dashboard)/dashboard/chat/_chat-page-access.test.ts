@@ -14,12 +14,17 @@ const db = vi.hoisted(() => ({
     legacy_imported_at: string | null;
   } | null,
   prefsError: null as { message: string } | null,
+  confirmedAt: null as string | null,
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: {
-      getUser: async () => ({ data: { user: { id: 'user-1', email: 'jo@example.com' } } }),
+      getUser: async () => ({
+        data: {
+          user: { id: 'user-1', email: 'jo@example.com', email_confirmed_at: db.confirmedAt },
+        },
+      }),
     },
     from: (table: string) => ({
       select: () => ({
@@ -44,13 +49,14 @@ beforeEach(() => {
   vi.stubEnv('CHAT_AGENTIC', 'true');
   db.prefs = null;
   db.prefsError = null;
+  db.confirmedAt = null;
   vi.mocked(importLegacyChats).mockClear();
 });
 afterEach(() => vi.unstubAllEnvs());
 
 describe('chatShellPrefs', () => {
   it("copies the person's Agent Chat conversations on their first visit, and opens even when that fails", async () => {
-    expect(await chatShellPrefs()).toEqual({ menuOpen: true, railOpen: false });
+    expect(await chatShellPrefs()).toEqual({ menuOpen: true, railOpen: false, staff: false });
     expect(importLegacyChats).toHaveBeenCalledWith({
       userId: 'user-1',
       email: 'jo@example.com',
@@ -64,11 +70,20 @@ describe('chatShellPrefs', () => {
       rail_open: true,
       legacy_imported_at: '2026-10-30T09:00:00.000Z',
     };
-    expect(await chatShellPrefs()).toEqual({ menuOpen: false, railOpen: true });
+    expect(await chatShellPrefs()).toEqual({ menuOpen: false, railOpen: true, staff: false });
     db.prefs = null;
     db.prefsError = { message: 'down' };
-    expect(await chatShellPrefs()).toEqual({ menuOpen: true, railOpen: false });
+    expect(await chatShellPrefs()).toEqual({ menuOpen: true, railOpen: false, staff: false });
     expect(importLegacyChats).not.toHaveBeenCalled();
+  });
+
+  it('says whether the person is Ansvisor staff: a confirmed e-mail in STAFF_EMAILS (W1-15)', async () => {
+    vi.stubEnv('STAFF_EMAILS', 'ops@ansvisor.com, Jo@Example.com');
+    expect((await chatShellPrefs())?.staff).toBe(false);
+    db.confirmedAt = '2026-10-01T09:00:00.000Z';
+    expect((await chatShellPrefs())?.staff).toBe(true);
+    vi.stubEnv('STAFF_EMAILS', 'ops@ansvisor.com');
+    expect((await chatShellPrefs())?.staff).toBe(false);
   });
 
   it('does nothing while the new Chat is off', async () => {

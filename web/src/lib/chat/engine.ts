@@ -1831,9 +1831,14 @@ async function finish(rc: RunContext): Promise<void> {
   });
 }
 
-/** The month's AI limit is used (CHAT-04 item 17): the next step doesn't start; what's done stays. */
+/**
+ * The month's AI limit is used (CHAT-04 item 17, CHAT-03 item 20): the next
+ * step doesn't start, a step still open turns skipped ("Stopped at the AI
+ * limit"); what's done stays.
+ */
 async function pauseAtCap(rc: RunContext): Promise<void> {
   if (!(await moveRun(rc.run.id, ['running'], 'paused_cap'))) return stopNow(rc);
+  await skipOpenSteps(rc.run.id, rc.sink, t('step.pausedCap'));
   const workingMs = workedMs(rc);
   await saveAnswer(rc.run.messageId, { text: rc.progress.text });
   await saveState(rc.run.id, { messages: rc.messages, progress: rc.progress, workingMs });
@@ -1880,13 +1885,7 @@ async function finishStopped(
   reason: 'person' | 'expired',
   workingMs: number,
 ): Promise<void> {
-  for (const step of await openSteps(run.id)) {
-    const row = await updateStep(step.id, {
-      status: 'skipped',
-      detail: reason === 'expired' ? t('step.expired') : t('step.stopped'),
-    });
-    sink.emit('step.finished', { step: clientStep(row) });
-  }
+  await skipOpenSteps(run.id, sink, reason === 'expired' ? t('step.expired') : t('step.stopped'));
   await saveAnswer(run.messageId, {
     text: run.progress.text,
     generatedAt: new Date().toISOString(),
@@ -1896,6 +1895,14 @@ async function finishStopped(
   await saveState(run.id, { pending: null, waitingSince: null, workingMs, progress: run.progress });
   sink.emit('run.stopped', { ...summaryOf(run.progress, workingMs), reason });
   await sink.flush();
+}
+
+/** A run's steps still open (running, waiting) turn skipped, with why. */
+async function skipOpenSteps(runId: string, sink: RunEventSink, detail: string): Promise<void> {
+  for (const step of await openSteps(runId)) {
+    const row = await updateStep(step.id, { status: 'skipped', detail });
+    sink.emit('step.finished', { step: clientStep(row) });
+  }
 }
 
 /**

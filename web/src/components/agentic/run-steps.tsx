@@ -29,8 +29,9 @@ export function runClock(ms: number): string {
  * it runs: "Working on it", "{N} steps · m:ss", open. Once done, it folds to
  * "Worked for 1m 12s" and "{N} steps · {M} sources"; a run of one step (not
  * counting thinking) shows that step's own line and its rows instead. Stopped:
- * "Stopped after 41s"; failed: "Stopped: something went wrong". A click opens
- * and closes it (aria-expanded). Screen readers hear each new step as it
+ * "Stopped after 41s"; failed: "Stopped: something went wrong"; while its
+ * stream reconnects, "Reconnecting…" (W1-15). A click opens and closes it
+ * (aria-expanded). Screen readers hear each new step as it
  * starts, and the end (aria-live, polite). No steps, nothing.
  *
  * `workingMs` is the run's working time, which pauses while a step waits for
@@ -41,6 +42,7 @@ export function RunSteps({
   steps,
   workingMs,
   sources = 0,
+  reconnecting = false,
   className,
 }: {
   status: RunStepsStatus;
@@ -48,6 +50,8 @@ export function RunSteps({
   workingMs: number;
   /** How many "Data used" chips the run has. */
   sources?: number;
+  /** The stream dropped and is reconnecting (CHAT-03 item 21). */
+  reconnecting?: boolean;
   className?: string;
 }) {
   const t = useTranslations('agentic.runSteps');
@@ -74,7 +78,7 @@ export function RunSteps({
   let title: string;
   let end: string;
   if (active) {
-    title = t('working');
+    title = reconnecting ? t('reconnecting') : t('working');
     end = t('stepsClock', { steps: count, clock: runClock(workingMs) });
   } else if (single) {
     title = single.detail ? `${single.label} · ${single.detail}` : single.label;
@@ -90,11 +94,12 @@ export function RunSteps({
     end = t('steps', { count });
   }
 
-  const announce = active
-    ? current
-      ? t('now', { n: current.n, label: current.label })
-      : t('working')
-    : title;
+  const announce =
+    active && !reconnecting
+      ? current
+        ? t('now', { n: current.n, label: current.label })
+        : t('working')
+      : title;
 
   return (
     <div data-slot="run-steps" data-status={status} className={className}>

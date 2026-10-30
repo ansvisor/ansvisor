@@ -727,6 +727,41 @@ describe('the AI budget', () => {
     expect(runRow(runId).status).toBe('paused_cap');
     expect(ofType(await eventsOf(runId), 'run.paused_cap')).toHaveLength(1);
   });
+
+  it('turns a step still open skipped when it pauses at the cap (CHAT-03 item 20)', async () => {
+    useModels([READY], [text('never')]);
+    fakes.reserve.mockImplementationOnce(async ({ runId }: { runId: string }) => {
+      // A step under way when the limit is reached.
+      db.tables.chat_run_steps.push({
+        id: 'open-step',
+        run_id: runId,
+        position: 1,
+        kind: 'read',
+        status: 'running',
+        label: 'Read Citations',
+        detail: null,
+        scope_json: null,
+        row_count: null,
+        data_as_of: null,
+        started_at: new Date().toISOString(),
+        finished_at: null,
+      });
+      return { ok: false, refusal: 'ai_limit', trial: false, retryable: false, message: 'x' };
+    });
+    const runId = await turn(ADMIN, 'Hello');
+    expect(runRow(runId).status).toBe('paused_cap');
+    expect(stepsOf(runId)).toEqual([
+      expect.objectContaining({ status: 'skipped', detail: 'Stopped at the AI limit' }),
+    ]);
+    const events = await eventsOf(runId);
+    expect(ofType(events, 'step.finished').at(-1)!.data.step).toMatchObject({
+      n: 1,
+      status: 'skipped',
+      detail: 'Stopped at the AI limit',
+    });
+    expect(events.at(-1)!.type).toBe('run.paused_cap');
+    expectClean(events);
+  });
 });
 
 describe('refusals', () => {

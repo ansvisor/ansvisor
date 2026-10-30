@@ -4,6 +4,7 @@ import { firstNameOf } from '@/lib/chat/home';
 import { importLegacyChats } from '@/lib/chat/legacy-import';
 import { planFactsFromOrgRow } from '@/lib/chat/plan-facts';
 import { chatDefaultModeOf, type ChatMode } from '@/lib/chat/precedence';
+import { isChatStaff } from '@/lib/chat/staff';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
 
 /** Whether the signed-in person's workspace has the new Chat on (CHAT_AGENTIC). */
@@ -27,6 +28,8 @@ export interface ChatShellPrefs {
   menuOpen: boolean;
   /** The app sidebar expanded beside Chat, or the rail (the default; CHAT-01 4f). */
   railOpen: boolean;
+  /** Ansvisor staff (STAFF_EMAILS): the chat's ⋯ menu offers Debug (CHAT-03 item 25). */
+  staff: boolean;
 }
 
 /**
@@ -58,7 +61,11 @@ export async function chatShellPrefs(): Promise<ChatShellPrefs | null> {
   if (organizationId && !error && !prefs?.legacy_imported_at) {
     await importLegacyChats({ userId: user.id, email: user.email ?? null, organizationId });
   }
-  return { menuOpen: prefs?.menu_open ?? true, railOpen: prefs?.rail_open ?? false };
+  return {
+    menuOpen: prefs?.menu_open ?? true,
+    railOpen: prefs?.rail_open ?? false,
+    staff: isChatStaff(user),
+  };
 }
 
 /**

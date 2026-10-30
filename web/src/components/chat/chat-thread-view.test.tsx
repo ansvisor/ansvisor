@@ -301,6 +301,174 @@ describe('ChatThreadView', () => {
     });
   });
 
+  it('after a reload, still says why a run failed, and Retry sends the question again (W1-15)', async () => {
+    const reason = "Chat couldn't check your AI usage just now, so it didn't start this step.";
+    const thread = {
+      conversationId: CHAT,
+      title: 'Citations',
+      brandId: null,
+      mine: true,
+      messages: [
+        { role: 'user', text: 'Find the drop', generatedAt: null, dataAsOf: null, timezone: null },
+        {
+          role: 'assistant',
+          text: '',
+          generatedAt: null,
+          dataAsOf: null,
+          timezone: 'UTC',
+          run: {
+            runId: RUN,
+            status: 'error',
+            steps: [],
+            fileId: null,
+            deliverables: [],
+            summary: { workingMs: 3000, stepCount: 0, sources: [] },
+            errorReason: reason,
+          },
+        },
+      ],
+    } as unknown as ChatThread;
+    await render({ thread, variant: 'dock' });
+    const box = container.querySelector('[data-slot="run-error"]')!;
+    expect(box.textContent).toContain('Stopped: something went wrong');
+    expect(box.textContent).toContain(reason);
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-action="run.retry"]')!.click(),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const sent = calls.find((c) => c.url === '/api/chat/runs')!;
+    expect(JSON.parse(String(sent.init!.body))).toMatchObject({
+      message: 'Find the drop',
+      conversationId: CHAT,
+    });
+    expect(container.textContent).toContain('Two pages lost most of it.');
+    // Retry is on the latest answer only: the failed one has none now.
+    expect(container.querySelector('[data-slot="run-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-action="run.retry"]')).toBeNull();
+
+    // A teammate's shared chat only reads: no Retry.
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render({ thread: { ...thread, mine: false }, variant: 'dock' });
+    expect(container.querySelector('[data-action="run.retry"]')).toBeNull();
+  });
+
+  it('says "Reconnecting…" when the stream drops, and resumes after the last event', async () => {
+    const started = chatEvent('step.started', 1, {
+      step: { n: 1, kind: 'read', label: 'Read Citations', status: 'running' },
+    });
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      // The connection breaks after the first events, with no end.
+      const text = [started, chatEvent('text.delta', 2, { text: 'Two pages ' })]
+        .map((e) => `id: ${e.seq}\nevent: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`)
+        .join('');
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(text));
+          setTimeout(() => controller.error(new TypeError('network error')), 0);
+        },
+      });
+      return new Response(body, {
+        status: 200,
+        headers: { 'x-chat-conversation': CHAT, 'x-chat-run': RUN },
+      });
+    });
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(
+        stream([
+          chatEvent('step.finished', 3, {
+            step: { n: 1, kind: 'read', label: 'Read Citations', status: 'done', rowCount: 18 },
+          }),
+          chatEvent('text.delta', 4, { text: 'lost most of it.' }),
+          chatEvent('run.finished', 5, {
+            workingMs: 8000,
+            stepCount: 1,
+            sources: [{ label: 'Citations', count: 18 }],
+            generatedAt: '2026-10-30T09:14:00.000Z',
+            dataAsOf: null,
+          }),
+        ]),
+        { status: 200 },
+      );
+    });
+    await render();
+    await type('Why did citations drop?');
+    await enter();
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    const header = () => container.querySelector('[data-action="answer.toggleSteps"]')!;
+    expect(header().textContent).toContain('Reconnecting…');
+    expect(container.textContent).toContain('Two pages');
+
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 1100)));
+    expect(calls.map((c) => c.url)).toContain(`/api/chat/runs/${RUN}/events?after=2`);
+    expect(container.textContent).not.toContain('Reconnecting…');
+    expect(container.textContent).toContain('Two pages lost most of it.');
+    expect(header().textContent).toContain('Read Citations');
+  });
+
+  it('after a reload, shows the kept steps and keeps streaming from the run’s events', async () => {
+    const thread = {
+      conversationId: CHAT,
+      title: 'Citations',
+      brandId: null,
+      mine: true,
+      messages: [
+        { role: 'user', text: 'Find the drop', generatedAt: null, dataAsOf: null, timezone: null },
+        {
+          role: 'assistant',
+          text: '',
+          generatedAt: null,
+          dataAsOf: null,
+          timezone: 'UTC',
+          run: {
+            runId: RUN,
+            status: 'running',
+            steps: [{ n: 1, kind: 'read', label: 'Read Citations', status: 'running' }],
+            fileId: null,
+            deliverables: [],
+            summary: null,
+            errorReason: null,
+          },
+        },
+      ],
+    } as unknown as ChatThread;
+    let open: ReadableStreamDefaultController<Uint8Array> | null = null;
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            open = controller;
+          },
+        }),
+        { status: 200 },
+      );
+    });
+    await render({ thread, variant: 'dock' });
+    // The kept step shows while the events come.
+    expect(container.textContent).toContain('Read Citations');
+    expect(calls.map((c) => c.url)).toContain(`/api/chat/runs/${RUN}/events?after=0`);
+    const frame = (e: ChatEvent) =>
+      new TextEncoder().encode(`id: ${e.seq}\nevent: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
+    await act(async () => {
+      open!.enqueue(
+        frame(
+          chatEvent('step.started', 1, {
+            step: { n: 1, kind: 'read', label: 'Read Citations', status: 'running' },
+          }),
+        ),
+      );
+      open!.enqueue(frame(chatEvent('text.delta', 2, { text: 'Two pages lost most of it.' })));
+      open!.enqueue(frame({ ...finished[1], seq: 3 }));
+      open!.close();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(container.textContent).toContain('Two pages lost most of it.');
+    expect(container.textContent).toContain('Generated Oct 30, 2026');
+  });
+
   it('only reads a teammate’s shared chat', async () => {
     const thread = {
       conversationId: CHAT,
