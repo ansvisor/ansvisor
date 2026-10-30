@@ -12,7 +12,8 @@ import { AuditReport } from './audit-report';
   }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-const NOTE = 'Replace placeholders in [brackets] with your real data before publishing.';
+const NOTE =
+  'Your input needed: replace each highlighted [bracket] with your own details before you publish.';
 
 const rec = (over: Partial<AuditRecommendation> = {}): AuditRecommendation => ({
   signalKey: 'case-study-evidence',
@@ -76,13 +77,17 @@ afterEach(() => {
 });
 
 describe('AuditReport recommendations', () => {
-  it('highlights the placeholders in a draft and says to replace them', () => {
-    render([rec({ draft: '[customer name] grew AI citations by [real metric] with Growth.' })]);
+  it('highlights the brand’s own facts in a draft as its input needed', () => {
+    render([rec({ draft: '[customer name] grew AI citations by [your result] with Growth.' })]);
 
     expect(container.querySelector('pre')?.textContent).toBe(
-      '[customer name] grew AI citations by [real metric] with Growth.',
+      '[customer name] grew AI citations by [your result] with Growth.',
     );
-    expect(marks()).toEqual(['[customer name]', '[real metric]']);
+    expect(marks()).toEqual(['[customer name]', '[your result]']);
+    expect([...container.querySelectorAll('mark')].map((m) => m.getAttribute('title'))).toEqual([
+      'Your input needed',
+      'Your input needed',
+    ]);
     expect(container.textContent).toContain(NOTE);
   });
 

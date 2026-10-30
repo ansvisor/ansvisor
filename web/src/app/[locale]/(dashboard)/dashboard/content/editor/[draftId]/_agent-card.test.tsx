@@ -240,7 +240,9 @@ describe('AgentCard', () => {
     });
     await render([page], false);
     // Two new: the one the page had isn't the run's.
-    expect(container.textContent).toContain('answered each heading first · 2 placeholders to fill');
+    expect(container.textContent).toContain(
+      'answered each heading first · 2 facts need your input',
+    );
     // A list the agent wrote without paragraphs in its items: read by their words.
     await render(
       [
@@ -254,7 +256,7 @@ describe('AgentCard', () => {
       ],
       false,
     );
-    expect(container.textContent).toContain('kept the list · 1 placeholder to fill');
+    expect(container.textContent).toContain('kept the list · 1 fact needs your input');
     await render(
       [
         suggestion({ afterText: 'look at [figure, source]' }),
@@ -262,7 +264,7 @@ describe('AgentCard', () => {
       ],
       false,
     );
-    expect(container.textContent).toContain('1 placeholder to fill');
+    expect(container.textContent).toContain('1 fact needs your input');
   });
 
   it('reads a rewrite against the Length, not the agent’s say, and says what it kept', async () => {

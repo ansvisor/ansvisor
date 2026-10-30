@@ -10,6 +10,7 @@ import {
   ShoppingBag,
   Sparkles,
   Target,
+  Users,
 } from 'lucide-react';
 import type { Feature } from '@/config/plans';
 
@@ -67,7 +68,6 @@ export const dashboardNav: NavGroup[] = [
         title: 'Action Center',
         href: '/dashboard/action-center',
         icon: Target,
-        badge: 'New',
       },
       // Right under Action Center: Chat is where you ask, or let the agent do
       // the work. The route stays /dashboard/agent: renaming the URL would
@@ -90,7 +90,6 @@ export const dashboardNav: NavGroup[] = [
         href: '/dashboard/content',
         icon: FileText,
         requiredFeature: 'content_optimization',
-        badge: 'New',
         children: [
           { title: 'Opportunities', href: '/dashboard/content' },
           { title: 'Plan', href: '/dashboard/content/plan' },
@@ -116,6 +115,14 @@ export const dashboardNav: NavGroup[] = [
         icon: BarChart3,
         requiredFeature: 'basic_insights',
       },
+      // Head-to-head with each competitor, right under Brand Visibility,
+      // whose Leaderboard opens it too. Off the menu since #506, back on it.
+      {
+        title: 'Competitors',
+        href: '/dashboard/competitors',
+        icon: Users,
+        requiredFeature: 'competitor_tracking',
+      },
       {
         title: 'Prompts',
         href: '/dashboard/prompts',
@@ -134,7 +141,6 @@ export const dashboardNav: NavGroup[] = [
         title: 'Mentions',
         href: '/dashboard/mentions',
         icon: MessageCircleMore,
-        badge: 'New',
       },
       {
         title: 'Citations',
@@ -149,7 +155,6 @@ export const dashboardNav: NavGroup[] = [
         icon: ShoppingBag,
         requiredFeature: 'shopping_analytics',
         requiresBrandPref: 'shoppingModeEnabled',
-        badge: 'New',
       },
       {
         title: 'AI Referral Traffic',

@@ -250,7 +250,7 @@ export function SettingsView({ section }: { section: SettingsSection }) {
 
           {active === 'integrations' && <IntegrationsSection />}
 
-          {/* API Keys */}
+          {/* MCP & API Keys */}
           {active === 'api-keys' && <ApiKeysSection />}
 
           {/* AI Providers (cloud BYOK) */}
