@@ -14,6 +14,20 @@
  * purchase's id in its metadata, so the webhook finds it again.
  */
 
+import type Stripe from 'stripe';
+
+/**
+ * The Stripe client, loaded only when a pack's purchase or webhook needs it;
+ * null without STRIPE_SECRET_KEY (local development, self-hosted). lib/
+ * stripe.ts makes its client when it is loaded and throws without the key,
+ * so importing it at the top of a module that Settings loads (a server
+ * action's bundle) would break every action beside it.
+ */
+export async function loadStripe(): Promise<Stripe | null> {
+  if (!process.env.STRIPE_SECRET_KEY) return null;
+  return (await import('@/lib/stripe')).stripe;
+}
+
 /** The metadata key that names the add_on_purchases row on a pack's Stripe objects. */
 export const ADD_ON_PURCHASE_KEY = 'add_on_purchase_id';
 

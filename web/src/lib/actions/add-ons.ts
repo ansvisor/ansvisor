@@ -3,13 +3,13 @@
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { stripe } from '@/lib/stripe';
 import { PLANS, getPlan, isCloud } from '@/config/plans';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import {
   ADD_ON_PRODUCT_COLUMNS,
   ADD_ON_PURCHASE_KEY,
   addOnOnSale,
+  loadStripe,
   planItemOf,
   type AddOnKind,
   type AddOnProductRow,
@@ -42,8 +42,10 @@ import {
  *   - trial: the free trial can't buy packs ("Choose a plan").
  *   - no_plan: the plan isn't active (ended, past due).
  *   - unavailable: the pack isn't on sale here (no Stripe price on this
- *     deployment, switched off), or storage on a plan it can't join (one
- *     billed yearly, or without a Stripe subscription).
+ *     deployment, switched off, no Stripe key at all), or storage on a plan
+ *     it can't join (one billed yearly, or without a Stripe subscription).
+ * Stripe is loaded only here, when a purchase starts (loadStripe): without
+ * its key the module still loads, and so do the actions bundled with it.
  *   - payment_failed: the card on file was declined for storage; `message`
  *     is Stripe's, for the page to show.
  *   - failed: anything else (Stripe or the database didn't answer).
@@ -83,7 +85,10 @@ export async function startAddOnPurchase(productId: string): Promise<AddOnPurcha
   }
 }
 
+type StripeClient = NonNullable<Awaited<ReturnType<typeof loadStripe>>>;
+
 interface Buyer {
+  stripe: StripeClient;
   userId: string;
   email: string | null;
   organizationId: string;
@@ -125,8 +130,12 @@ async function start(productId: unknown): Promise<AddOnPurchaseStart> {
     .eq('id', parsed.data)
     .maybeSingle();
   if (!product || !addOnOnSale(product as AddOnProductRow)) return refuse('unavailable');
+  // Without its key, Stripe sells nothing here.
+  const stripe = await loadStripe();
+  if (!stripe) return refuse('unavailable');
 
   const buyer: Buyer = {
+    stripe,
     userId: user.id,
     email: user.email ?? null,
     organizationId,
@@ -164,7 +173,7 @@ const metadataOf = (purchaseId: string, buyer: Buyer, pack: AddOnProductRow) => 
 /** The workspace's Stripe customer; one is made for a workspace without (Enterprise set up by hand). */
 async function customerOf(buyer: Buyer): Promise<string> {
   if (buyer.customerId) return buyer.customerId;
-  const customer = await stripe.customers.create({
+  const customer = await buyer.stripe.customers.create({
     ...(buyer.email ? { email: buyer.email } : {}),
     metadata: { organization_id: buyer.organizationId, supabase_user_id: buyer.userId },
   });
@@ -185,7 +194,7 @@ async function startAiCheckout(buyer: Buyer, pack: AddOnProductRow): Promise<Add
   const purchaseId = await newPurchase(buyer, pack);
   const metadata = metadataOf(purchaseId, buyer, pack);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const session = await stripe.checkout.sessions.create(
+  const session = await buyer.stripe.checkout.sessions.create(
     {
       mode: 'payment',
       customer,
@@ -223,14 +232,14 @@ function declined(err: unknown): err is { message: string } {
  */
 async function addStorageItem(buyer: Buyer, pack: AddOnProductRow): Promise<AddOnPurchaseStart> {
   if (!buyer.subscriptionId) return refuse('unavailable');
-  const subscription = await stripe.subscriptions.retrieve(buyer.subscriptionId);
+  const subscription = await buyer.stripe.subscriptions.retrieve(buyer.subscriptionId);
   if (planItemOf(subscription.items.data)?.price?.recurring?.interval !== 'month') {
     return refuse('unavailable');
   }
   const purchaseId = await newPurchase(buyer, pack);
   let itemId: string;
   try {
-    const item = await stripe.subscriptionItems.create(
+    const item = await buyer.stripe.subscriptionItems.create(
       {
         subscription: subscription.id,
         price: pack.stripe_price_id as string,
