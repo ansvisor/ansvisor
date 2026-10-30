@@ -19,6 +19,10 @@ The header shows the title, which you can click to rename the page, and whether 
 
 On the right are the month's AI usage and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**, and a button to show or hide the side panel.
 
+## Status and runs
+
+Where your workspace has Chat, a pill next to the title says where the page stands: **Working** while the Content Agent works on it, **Needs you** while its suggestions wait or the page is in review, **Ready**, **Done** once published, or **Draft**. **Runs** at the top lists your own Chat runs and this brand's Content Agent runs, this page's among them; click one to open it. Once the agent's work has started on the server, its card says you can leave the page: it keeps going.
+
 ## Write and paste
 
 The page starts with its H1, which is also its title. A page has one H1: the toolbar won't add a second one. A paste keeps headings, lists, links and tables, and drops fonts, colors and styles. Press Command or Ctrl + Shift + V to paste plain text.

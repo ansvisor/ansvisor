@@ -26,7 +26,8 @@ export interface PageNow {
  * selection" or Impact's "Use lost prompts": the sources kept (as the
  * editor has them, or read afresh once prompts were added), the page as
  * written now, and the brief the server writes from them, metered from the
- * AI usage budget.
+ * AI usage budget. `onServer` is on once that write is the server's: before
+ * it, the browser still adds the prompts and reads the sources.
  */
 export function useBriefRebuild({
   draft,
@@ -46,6 +47,8 @@ export function useBriefRebuild({
   const t = useTranslations('contentEditor.editor.brief');
   const tCard = useTranslations('contentEditor.editor.agentCard');
   const [rebuilding, setRebuilding] = useState(false);
+  // The brief is the server's to write now: the page can be left (Chat on).
+  const [onServer, setOnServer] = useState(false);
   // A read-only workspace (plan not active): each way in (Brief, Sources,
   // Impact, Next step's Build brief) opens the upgrade dialog instead.
   const { isLocked, openUpgrade } = useUpgradeGate();
@@ -82,6 +85,7 @@ export function useBriefRebuild({
       }
       if (!read) throw new Error('not_found');
       const page = pageNow();
+      setOnServer(true);
       const result = await rebuildDraftBrief(
         draft.id,
         draft.brandId,
@@ -108,8 +112,9 @@ export function useBriefRebuild({
       return false;
     } finally {
       setRebuilding(false);
+      setOnServer(false);
     }
   };
 
-  return { rebuilding, rebuild };
+  return { rebuilding, onServer, rebuild };
 }
