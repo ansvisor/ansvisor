@@ -2,6 +2,7 @@ import { Marked } from 'marked';
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { createContentDraft } from '@/lib/actions/content-drafts';
+import { escapeHtml } from '@/lib/content/attachments';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
@@ -20,8 +21,17 @@ import { fileStamp } from './stamp';
  * person's access is read as them: a chat is theirs or shared with them.
  */
 
-/** The answer's Markdown as a page; the draft's own sanitizing keeps only what a page may hold. */
-const draftMarked = new Marked();
+/**
+ * The answer's Markdown as a page; the draft's own sanitizing keeps only what a page may hold.
+ * As the answer shows them (run-answer): an image as its alt text, so the editor fetches no
+ * address the model wrote, and raw HTML as its text.
+ */
+const draftMarked = new Marked({
+  renderer: {
+    image: ({ text }) => escapeHtml(text),
+    html: ({ text }) => escapeHtml(text),
+  },
+});
 
 const tStamp = createTranslator({ locale: 'en', messages, namespace: 'agentic.resultCard' });
 
