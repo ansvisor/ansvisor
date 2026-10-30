@@ -377,6 +377,66 @@ describe('a Chat step on the AI budget', () => {
     expect(ledger).toEqual([expect.objectContaining({ id, cost_usd: 0.007 })]);
   });
 
+  it("prices the prompt cache's reads below the input and its writes above it, and keeps both", async () => {
+    const id = await budget.reserveChatStep('o1', step());
+    // 2,000 tokens in: 1,500 read from the cache, 300 written to it, 200 plain; 400 out.
+    await budget.chargeChatStep('o1', id, {
+      modelId: MODEL,
+      usage: { inputTokens: 2000, outputTokens: 400, cacheReadTokens: 1500, cacheWriteTokens: 300 },
+      latencyMs: 2140,
+    });
+    // Haiku 4.5: $1 in, $0.10 a cache read, $1.25 a cache write, $5 out (per million).
+    const cost = (200 * 1 + 300 * 1.25 + 1500 * 0.1 + 400 * 5) / 1_000_000;
+    expect(ledger).toEqual([
+      expect.objectContaining({
+        id,
+        input_tokens: 2000,
+        output_tokens: 400,
+        cache_read_tokens: 1500,
+        cache_write_tokens: 300,
+        latency_ms: 2140,
+      }),
+    ]);
+    expect(ledger[0].cost_usd).toBeCloseTo(cost, 12);
+    // Below the same step with no cache, which its hold assumed.
+    expect(ledger[0].cost_usd).toBeLessThan((2000 * 1 + 400 * 5) / 1_000_000);
+  });
+
+  it('never prices a cache read below its cost: an unknown rate is the input rate, and counts are held to the input', async () => {
+    const cache = await import('./model-price-cache.js');
+    const SONNET = 'anthropic/claude-sonnet-5.5';
+    // Synced without a cache-read rate: its reads cost the input price.
+    cache.setSyncedPrices([{ model_id: SONNET, input_per_m: 3, output_per_m: 15, overrides: [] }]);
+    const id = await budget.reserveChatStep('o1', step({ modelId: SONNET }));
+    await budget.chargeChatStep('o1', id, {
+      modelId: SONNET,
+      usage: { inputTokens: 1000, outputTokens: 0, cacheReadTokens: 1000 },
+    });
+    expect(ledger.find((r) => r.id === id).cost_usd).toBeCloseTo(0.003, 12);
+    // Synced with one: $0.30 a cache read.
+    cache.setSyncedPrices([
+      { model_id: SONNET, input_per_m: 3, output_per_m: 15, cache_read_per_m: 0.3, overrides: [] },
+    ]);
+    const second = await budget.reserveChatStep('o1', step({ modelId: SONNET }));
+    // A provider's cache count past the input: held to the input.
+    await budget.chargeChatStep('o1', second, {
+      modelId: SONNET,
+      usage: { inputTokens: 1000, outputTokens: 0, cacheReadTokens: 5000, cacheWriteTokens: 50 },
+    });
+    expect(ledger.find((r) => r.id === second)).toMatchObject({
+      cache_read_tokens: 1000,
+      cache_write_tokens: 0,
+    });
+    expect(ledger.find((r) => r.id === second).cost_usd).toBeCloseTo(0.0003, 12);
+    cache.setSyncedPrices([]);
+  });
+
+  it('keeps the hold when only one of input and output was reported', async () => {
+    const id = await budget.reserveChatStep('o1', step());
+    await budget.chargeChatStep('o1', id, { modelId: MODEL, usage: { outputTokens: 10 } });
+    expect(ledger).toEqual([expect.objectContaining({ id, cost_usd: 0.007 })]);
+  });
+
   it('lets a hold go when the step billed nothing, and never another feature’s row', async () => {
     const id = await budget.reserveChatStep('o1', step());
     ledger.push({
