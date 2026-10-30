@@ -156,6 +156,21 @@ describe('sentenceSpans', () => {
   it('never ends one inside a marker or a placeholder', () => {
     expect(sentenceSpans('Costs {{find: price. per month}}. Done.')).toHaveLength(2);
   });
+
+  it('reads a long line of short sentences quickly: each end in place, not on a copy of the line', () => {
+    // A line as long as a write's whole answer can be, with an end, an
+    // abbreviation, a marker or a placeholder every few words (seconds each
+    // when every end read the line again).
+    const unit = 'Dr. Smith e.g. pays {{find: price}}. It is [plan limits]. ';
+    const line = unit.repeat(Math.ceil(120_000 / unit.length));
+    const started = Date.now();
+    const spans = sentenceSpans(line);
+    gapsIn(line, knownNumbers('2026'));
+    settler()(line, false);
+    sweeper()(line, false);
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(spans).toHaveLength(Math.ceil(120_000 / unit.length) * 2);
+  });
 });
 
 describe('gapsIn', () => {
