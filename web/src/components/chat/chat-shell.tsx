@@ -51,8 +51,11 @@ function useIsWide(): boolean {
 }
 
 const CHAT_PATH = /^\/dashboard\/chat\/([0-9a-f-]{36})$/i;
-/** An agent's detail: "Chat › Agents › {its name}" (governance mockup CRUMB). */
-const AGENT_PATH = /^\/dashboard\/chat\/agents\/[0-9a-f-]{36}$/i;
+/**
+ * An agent's detail, its Edit and New agent: "Chat › Agents › {its name}",
+ * "Chat › Agents › New agent" (governance mockup CRUMB).
+ */
+const AGENT_PATH = /^\/dashboard\/chat\/agents\/(?:new|[0-9a-f-]{36}(?:\/edit)?)$/i;
 
 /**
  * Where the palette opens while the menu is shown: under its Search chats

@@ -32,6 +32,7 @@ import {
   versionFromRow,
   visibilityDenial,
   type AgentAct,
+  type AgentAsk,
   type AgentDenial,
   type AgentFacts,
   type AgentLifecycleAction,
@@ -169,8 +170,18 @@ export type AgentRefusalCode =
   | 'failed';
 
 export type AgentRefusal =
-  /** The out-of-permission answer (CHAT-20 §4c): a role, the plan or a Settings › Chat switch. */
-  | { kind: 'denied'; status: 402 | 403; code: ToolDenial['code']; denial: ChatDenialCard }
+  /**
+   * The out-of-permission answer (CHAT-20 §4c): a role, the plan or a
+   * Settings › Chat switch; `asked`, what it refused, so the create flow
+   * shows it on its step (Full auto on the modes, sharing on the last).
+   */
+  | {
+      kind: 'denied';
+      status: 402 | 403;
+      code: ToolDenial['code'];
+      denial: ChatDenialCard;
+      asked?: AgentAsk;
+    }
   | {
       kind: 'refused';
       status: number;
@@ -252,7 +263,7 @@ async function denied(ctx: AgentContext, { denial, asked }: AgentDenial): Promis
   );
   return {
     ok: false,
-    refusal: { kind: 'denied', status: answer.status, code: denial.code, denial: card },
+    refusal: { kind: 'denied', status: answer.status, code: denial.code, denial: card, asked },
   };
 }
 

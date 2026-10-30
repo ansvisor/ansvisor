@@ -1,0 +1,22 @@
+import { notFound } from 'next/navigation';
+import { AgentForm } from '@/components/chat/agents/agent-form';
+import { readAgentEdit } from '@/lib/chat/agent-form-setup';
+import { agentPageId } from '@/lib/chat/agent-view';
+import { chatPageOpen } from '../../../_chat-page-access';
+
+/**
+ * Edit an agent (CHAT-21 §C item 14, §D): the four steps filled with its
+ * current version; a change to what it does saves a new version. Only with
+ * the new Chat on for the workspace (CHAT_AGENTIC), and only for an agent
+ * the person can see; otherwise not found. Without the right to change it
+ * (`can.edit`), a read-only line instead of the form.
+ */
+export default async function EditAgentPage({ params }: { params: Promise<{ id: string }> }) {
+  if (!(await chatPageOpen())) notFound();
+  const id = agentPageId((await params).id);
+  if (!id) notFound();
+  const found = await readAgentEdit(id);
+  if (!found) notFound();
+  // Keyed by the agent and its version: a saved change opens fresh.
+  return <AgentForm key={`${id}:${found.agent.version}`} setup={found.setup} agent={found.agent} />;
+}
