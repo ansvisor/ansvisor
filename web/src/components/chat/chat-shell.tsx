@@ -139,9 +139,7 @@ function ChatShellFrame({
   const t = useTranslations('chatShell.menu');
   const tNav = useTranslations('chatShell.nav');
   const tMenu = useTranslations('nav');
-  // Opened as a full page from the side panel (CHAT-22): ↙ Back to that page.
-  const backToPage = panelReturnOf(useSearchParams()?.get(PANEL_FROM_PARAM));
-  const backToTitle = backToPage ? menuTitleOf(backToPage.split(/[?#]/)[0]) : null;
+  const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const isWide = useIsWide();
@@ -155,6 +153,9 @@ function ChatShellFrame({
   const [lastChat, setLastChat] = useState<string | null>(null);
   const stripToggle = useRef<HTMLButtonElement>(null);
   const focusAfterToggle = useRef(false);
+  // Opened as a full page from the side panel (CHAT-22): ↙ Back to that page.
+  const backToPage = panelReturnOf(searchParams?.get(PANEL_FROM_PARAM) ?? null);
+  const backToTitle = backToPage ? menuTitleOf(backToPage.split(/[?#]/)[0]) : null;
 
   const toggle = useCallback(() => {
     if (!window.matchMedia(WIDE_QUERY).matches) {
