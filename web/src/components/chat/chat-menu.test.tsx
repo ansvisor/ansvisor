@@ -200,6 +200,23 @@ describe('ChatMenuView', () => {
     expect(action('chatMenu.openChat')).toHaveLength(0);
   });
 
+  it("moves Today's chats to Yesterday once the menu, left open, passes midnight", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-10-30T23:50:00'));
+      const at = chat('late', { lastMessageAt: '2026-10-30T23:40:00' });
+      await render(menu([at], { now: undefined }));
+      expect(text()).toContain('Today');
+      vi.setSystemTime(new Date('2026-10-31T00:10:00'));
+      // The next read of the list: the same chat, a new array.
+      await render(menu([{ ...at }], { now: undefined }));
+      expect(text()).toContain('Yesterday');
+      expect(text()).not.toContain('Today');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('says when the list could not be read, with Retry', async () => {
     const onRetry = vi.fn();
     await render(menu([], { status: 'error', onRetry }));

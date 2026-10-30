@@ -195,8 +195,12 @@ export function ChatMenuView({
       return next;
     });
 
-  const now = useMemo(() => nowProp ?? new Date(), [nowProp]);
-  const { atWork, groups } = useMemo(() => chatMenuLists(chats, now), [chats, now]);
+  // Read the clock again with every list read, so a menu left open past
+  // midnight moves Today's chats to Yesterday.
+  const { now, atWork, groups } = useMemo(() => {
+    const at = nowProp ?? new Date();
+    return { now: at, ...chatMenuLists(chats, at) };
+  }, [chats, nowProp]);
   // The Inbox holds the person's own chats in Agents at work: its count, with
   // an amber dot while any needs them.
   const inboxRows = atWork.filter((chat) => chat.mine);
