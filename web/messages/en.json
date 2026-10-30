@@ -3217,6 +3217,21 @@
     "draft": { "name": "Read a draft", "step": "Read draft" },
     "reports": { "name": "Read reports", "step": "Read Reports" },
     "goToPage": { "name": "Go to a page", "step": "Opened a page" },
+    "fanouts": { "name": "Read query fan-outs", "step": "Read Query Fan-outs" },
+    "aiAnswers": { "name": "Read a prompt's AI answers", "step": "Read AI answers" },
+    "promptInsights": { "name": "Read prompt insights", "step": "Read Prompts · Insights" },
+    "overviewSummary": { "name": "Read the brand overview", "step": "Read Brand Visibility" },
+    "actionCenterKpis": { "name": "Read Action Center KPIs", "step": "Read KPIs" },
+    "onboardingProgress": {
+      "name": "Read Getting started progress",
+      "step": "Read Getting started"
+    },
+    "gscSummary": { "name": "Read Google Search Console", "step": "Read Search Console" },
+    "gaSummary": { "name": "Read Google Analytics", "step": "Read Google Analytics" },
+    "members": { "name": "Read team members", "step": "Read Team" },
+    "connections": { "name": "Read connected tools", "step": "Read Integrations" },
+    "chatPolicy": { "name": "Read Chat's rules", "step": "Read Settings › Chat" },
+    "planFacts": { "name": "Read your plan", "step": "Read Billing" },
     "saveDraft": { "name": "Save drafts in Content", "step": "Saved draft in Content" },
     "opportunityStatus": {
       "name": "Review or dismiss opportunities",

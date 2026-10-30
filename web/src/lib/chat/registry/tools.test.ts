@@ -51,6 +51,21 @@ vi.mock('@/lib/mcp/account', async (importOriginal) =>
 vi.mock('@/lib/mcp/navigation', async (importOriginal) =>
   tracked.all('mcp/navigation', await importOriginal<Record<string, unknown>>()),
 );
+vi.mock('@/lib/mcp/prompt-reads', async (importOriginal) =>
+  tracked.all('mcp/prompt-reads', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/overview-reads', async (importOriginal) =>
+  tracked.all('mcp/overview-reads', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/action-center-reads', async (importOriginal) =>
+  tracked.all('mcp/action-center-reads', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/google-reads', async (importOriginal) =>
+  tracked.all('mcp/google-reads', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/workspace-reads', async (importOriginal) =>
+  tracked.all('mcp/workspace-reads', await importOriginal<Record<string, unknown>>()),
+);
 vi.mock('@/lib/actions/content', () => ({
   updateOpportunityStatus: tracked.track('actions/content.updateOpportunityStatus'),
 }));
