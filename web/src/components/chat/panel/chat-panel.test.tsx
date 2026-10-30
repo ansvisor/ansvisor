@@ -5,12 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
 import type { ChatThread } from '@/lib/chat/thread';
 import { PANEL_LAST_CHAT_KEY } from '@/lib/chat/panel';
-import type { ChatPanelSetup } from './chat-panel-context';
+import type { ChatPageContext } from '@/lib/chat/page-context';
+import type { ChatReference } from '@/lib/chat/references';
+import type { ChatPanelSetup, PanelDraft } from './chat-panel-context';
 
 /**
  * Chat's side panel on every app page (CHAT-01 items 13–26): Ask Chat at
  * the top right and Ctrl J, the sizes and the page's padding, Close back
- * to Ask Chat, the greeting, History, and the last chat reopened.
+ * to Ask Chat, the greeting, History, and the last chat reopened; the
+ * page's context as chips, its suggestions and Ask about this (W1-08).
  */
 
 const route = vi.hoisted(() => ({ pathname: '/dashboard/mentions' }));
@@ -27,20 +30,48 @@ vi.mock('@/lib/actions/chat-prefs', () => prefs);
 const toast = vi.hoisted(() => vi.fn());
 vi.mock('sonner', () => ({ toast }));
 // The chat itself is ChatThreadView's (its own tests): here, what the panel hands it.
+vi.mock('@/stores/use-brand-store', () => ({
+  useBrandStore: (pick: (s: unknown) => unknown) =>
+    pick({ brands: [{ id: 'brand-1', name: 'Acme Coffee' }], activeBrandId: 'brand-1' }),
+}));
 vi.mock('../chat-thread-view', () => ({
   ChatThreadView: ({
     thread,
     variant,
     empty,
     onConversation,
+    chips,
+    onRemoveChip,
+    pageReferences,
+    pageRoute,
+    draft,
   }: {
     thread: ChatThread | null;
     variant: string;
     empty?: ReactNode;
     onConversation?: (id: string) => void;
+    chips?: { key: string; label: string; value?: string }[];
+    onRemoveChip?: (key: string) => void;
+    pageReferences?: ChatReference[];
+    pageRoute?: string;
+    draft?: PanelDraft | null;
   }) => (
-    <div data-testid="thread" data-variant={variant}>
+    <div data-testid="thread" data-variant={variant} data-route={pageRoute}>
       {(thread?.messages.length ?? 0) === 0 && empty}
+      <ul data-testid="chips">
+        {chips?.map((chip) => (
+          <li key={chip.key}>
+            {chip.label}
+            <button type="button" data-chip={chip.key} onClick={() => onRemoveChip?.(chip.key)}>
+              ×
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p data-testid="refs">{pageReferences?.map((r) => r.label).join('|')}</p>
+      <p data-testid="draft">
+        {draft ? `${draft.text ?? ''}${draft.reference ? `@${draft.reference.label}` : ''}` : ''}
+      </p>
       {thread?.messages.map((m, i) => (
         <p key={i}>{m.text}</p>
       ))}
@@ -67,6 +98,16 @@ Object.defineProperty(window, 'localStorage', {
 const { ChatPanelPage, ChatPanelProvider } = await import('./chat-panel-provider');
 const { ChatSidePanel } = await import('./chat-side-panel');
 const { AskChatButton } = await import('./ask-chat-button');
+const { AskAboutThis } = await import('./ask-about-this');
+const { useChatPageContext } = await import('./chat-panel-context');
+
+const CHART: ChatReference = { type: 'chart', id: 'mentions-trend', label: 'Mentions over time' };
+/** What the page on screen tells the panel; none by default. */
+let pageContext: ChatPageContext | null = null;
+function Page() {
+  useChatPageContext(pageContext);
+  return <AskAboutThis reference={CHART} />;
+}
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -141,6 +182,7 @@ async function render(over: Partial<ChatPanelSetup> = {}) {
               <AskChatButton />
             </header>
             <input aria-label="Search prompts" />
+            <Page />
           </ChatPanelPage>
           <ChatSidePanel />
         </ChatPanelProvider>
@@ -179,6 +221,7 @@ async function pressCtrlJ(target: Element = document.body) {
 
 beforeEach(() => {
   route.pathname = '/dashboard/mentions';
+  pageContext = null;
   calls = [];
   fetchMock.mockClear();
   prefs.saveChatPanelSize.mockClear();
@@ -383,5 +426,85 @@ describe('below 760px', () => {
     await click(back);
     expect(shown()).toBe(false);
     expect(document.activeElement).toBe(ask());
+  });
+});
+
+describe('the page’s context (W1-08)', () => {
+  const chipLabels = () =>
+    [...container.querySelectorAll('[data-testid="chips"] li')].map((li) =>
+      li.textContent!.replace('×', ''),
+    );
+  const mentions = (platform: string): ChatPageContext => ({
+    pageName: 'Mentions & Sentiment',
+    dateRange: { from: '30d', to: null, label: 'Last 30 days' },
+    filters: [{ key: 'platform', label: platform, value: '' }],
+    suggestions: ['Which AI platform mentions us least?', 'Turn this page into actions', 'A', 'B'],
+    referenceables: [CHART],
+  });
+
+  it('names the menu’s page and the brand on a page that says nothing', async () => {
+    await render();
+    await click(ask());
+    expect(chipLabels()).toEqual(['Mentions', 'Acme Coffee']);
+    expect(container.querySelector('[data-testid="thread"]')!.getAttribute('data-route')).toBe(
+      '/dashboard/mentions',
+    );
+  });
+
+  it('shows the page’s chips, follows its filters, and keeps × off until New chat', async () => {
+    pageContext = mentions('All platforms');
+    await render();
+    await click(ask());
+    expect(chipLabels()).toEqual([
+      'Mentions & Sentiment',
+      'Acme Coffee',
+      'Last 30 days',
+      'All platforms',
+    ]);
+    expect(container.querySelector('[data-testid="refs"]')!.textContent).toBe('Mentions over time');
+
+    await click(container.querySelector('[data-chip="dates"]'));
+    pageContext = mentions('ChatGPT');
+    await render();
+    expect(chipLabels()).toEqual(['Mentions & Sentiment', 'Acme Coffee', 'ChatGPT']);
+
+    await click(container.querySelector('[data-action="panel.newChat"][aria-label]'));
+    expect(chipLabels()).toContain('Last 30 days');
+  });
+
+  it('offers three of the page’s questions in the empty panel; one fills the box, unsent', async () => {
+    pageContext = mentions('All platforms');
+    await render();
+    await click(ask());
+    const offered = [...container.querySelectorAll('[data-action="panel.suggestion"]')];
+    expect(offered.map((b) => b.textContent)).toEqual([
+      'Which AI platform mentions us least?',
+      'Turn this page into actions',
+      'A',
+    ]);
+    await click(offered[1]);
+    expect(container.querySelector('[data-testid="draft"]')!.textContent).toBe(
+      'Turn this page into actions',
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it('opens the panel from Ask about this with the object attached', async () => {
+    await render();
+    const icon = container.querySelector('[data-action="page.askAboutThis"]')!;
+    expect(icon.getAttribute('aria-label')).toBe('Ask about Mentions over time');
+    await click(icon);
+    expect(shown()).toBe(true);
+    expect(container.querySelector('[data-testid="draft"]')!.textContent).toBe(
+      '@Mentions over time',
+    );
+    // New chat leaves the object with the chat it was for.
+    await click(container.querySelector('[data-action="panel.newChat"][aria-label]'));
+    expect(container.querySelector('[data-testid="draft"]')!.textContent).toBe('');
+  });
+
+  it('has no Ask about this where the panel isn’t', async () => {
+    await render({ enabled: false });
+    expect(container.querySelector('[data-action="page.askAboutThis"]')).toBeNull();
   });
 });

@@ -947,6 +947,50 @@ describe('starting', () => {
     expect(db.tables.chat_uploads.find((r) => r.id === PENDING)?.message_id).toBeNull();
   });
 
+  it('keeps what the page scoped a message to, and gives it to the models as data', async () => {
+    const { haiku, sonnet } = useModels([READY], [text('Two pages lost most of it.')]);
+    const context = {
+      route: '/dashboard/mentions',
+      chips: [
+        { key: 'page', label: 'Mentions & Sentiment' },
+        { key: 'filter:platform', label: 'ChatGPT', value: 'chatgpt-web' },
+      ],
+    };
+    const references = [
+      { type: 'chart' as const, id: 'mentions-trend', label: 'Mentions over time' },
+    ];
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Why did mentions drop?',
+      brandId: BRAND,
+      context,
+      references,
+    });
+    if (!started.ok) throw new Error('not started');
+    const question = db.tables.chat_messages.find((m) => m.content_md === 'Why did mentions drop?');
+    expect(question?.context_json).toEqual({ context, references });
+    await engine.driveRun(ADMIN, started.runId);
+    for (const prompt of [haiku.seen[0].prompt, sonnet.seen[0].prompt]) {
+      const seen = JSON.stringify(prompt);
+      expect(seen).toContain('<page_context>');
+      expect(seen).toContain('chatgpt-web');
+      expect(seen).toContain('mentions-trend');
+    }
+  });
+
+  it('keeps no scope on a message without one', async () => {
+    const { haiku } = useModels([READY], [text('Hi.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Hello there',
+      brandId: BRAND,
+      context: { chips: [] },
+    });
+    if (!started.ok) throw new Error('not started');
+    const question = db.tables.chat_messages.find((m) => m.content_md === 'Hello there');
+    expect(question?.context_json ?? null).toBeNull();
+    await engine.driveRun(ADMIN, started.runId);
+    expect(JSON.stringify(haiku.seen[0].prompt)).not.toContain('<page_context>');
+  });
+
   it('queues a run while every slot is busy', async () => {
     useModels([READY], [text('Hi.')]);
     db.rpcs.chat_run_limits = () => ({

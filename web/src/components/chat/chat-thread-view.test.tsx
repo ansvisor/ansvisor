@@ -178,6 +178,34 @@ describe('ChatThreadView', () => {
     expect(container.textContent).not.toContain('Hi Sam');
   });
 
+  it('sends the page’s chips and the @ objects with the message, as its scope (W1-08)', async () => {
+    const chart = { type: 'chart' as const, id: 'mentions-trend', label: 'Mentions over time' };
+    await render({
+      variant: 'panel',
+      onConversation: vi.fn(),
+      chips: [
+        { key: 'page', label: 'Mentions & Sentiment' },
+        { key: 'filter:platform', label: 'ChatGPT', value: 'chatgpt-web' },
+      ],
+      pageRoute: '/dashboard/mentions',
+      draft: { nonce: 1, reference: chart },
+    });
+    await type('Why the drop?');
+    await enter();
+    const sent = calls.find((c) => c.url === '/api/chat/runs')!;
+    expect(JSON.parse(String(sent.init!.body))).toMatchObject({
+      message: 'Why the drop?',
+      context: {
+        route: '/dashboard/mentions',
+        chips: [
+          { key: 'page', label: 'Mentions & Sentiment' },
+          { key: 'filter:platform', label: 'ChatGPT', value: 'chatgpt-web' },
+        ],
+      },
+      references: [chart],
+    });
+  });
+
   it('keeps the text when the run API refuses it', async () => {
     fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });

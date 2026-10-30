@@ -11,14 +11,18 @@ import {
 } from 'react';
 import { usePathname } from '@/i18n/navigation';
 import { saveChatPanelSize } from '@/lib/actions/chat-prefs';
+import type { ChatPageContext } from '@/lib/chat/page-context';
 import { PANEL_WIDTHS, nextPanelSize, panelRouteOf, type PanelSize } from '@/lib/chat/panel';
+import type { ChatReference } from '@/lib/chat/references';
 import { cn } from '@/lib/utils';
 import { chatShortcutOf } from '../chat-shortcuts';
 import {
+  ChatPageSetterContext,
   ChatPanelContext,
   useChatPanel,
   type ChatPanelSetup,
   type ChatPanelState,
+  type PanelDraft,
 } from './chat-panel-context';
 
 /** Ask Chat, where focus goes back when the panel closes (item 19). */
@@ -29,7 +33,9 @@ const ASK_CHAT = '[data-action="panel.open"]';
  * closed, its size, and `Ctrl J` (`⌘J`), which opens and closes it from
  * anywhere on the page, a page input included. Off on Chat's own routes
  * (their shell sends the key to the composer) and in the Content Editor,
- * which has its own Chat (CHAT-15). Read once by the dashboard's layout:
+ * which has its own Chat (CHAT-15). It also carries the page's context
+ * (useChatPageContext) and what a page hands the panel's box: Ask about
+ * this, a suggestion chip (items 20–22). Read once by the dashboard's layout:
  * whether the new Chat is on for the workspace, the person's "Ask Chat on
  * pages" (chat_user_prefs.panel_on_pages, set in Chat's settings) and the
  * size the panel had last.
@@ -47,6 +53,20 @@ export function ChatPanelProvider({
   const [open, setOpen] = useState(false);
   const [size, setSize] = useState<PanelSize>(setup.size);
   const before = useRef<Exclude<PanelSize, 'full'>>(setup.size === 'full' ? 'compact' : setup.size);
+  const [page, setPage] = useState<ChatPageContext | null>(null);
+  const [draft, setDraft] = useState<PanelDraft | null>(null);
+  const handoffs = useRef(0);
+
+  const ask = useCallback((reference: ChatReference) => {
+    handoffs.current += 1;
+    setDraft({ nonce: handoffs.current, reference });
+    setOpen(true);
+  }, []);
+
+  const fill = useCallback((text: string) => {
+    handoffs.current += 1;
+    setDraft({ nonce: handoffs.current, text });
+  }, []);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -83,10 +103,27 @@ export function ChatPanelProvider({
   }, [available, toggle]);
 
   const value = useMemo<ChatPanelState>(
-    () => ({ setup, available, open: available && open, size, toggle, close, resize }),
-    [setup, available, open, size, toggle, close, resize],
+    () => ({
+      setup,
+      available,
+      open: available && open,
+      size,
+      toggle,
+      close,
+      resize,
+      page,
+      setPage,
+      draft,
+      ask,
+      fill,
+    }),
+    [setup, available, open, size, toggle, close, resize, page, draft, ask, fill],
   );
-  return <ChatPanelContext.Provider value={value}>{children}</ChatPanelContext.Provider>;
+  return (
+    <ChatPageSetterContext.Provider value={setPage}>
+      <ChatPanelContext.Provider value={value}>{children}</ChatPanelContext.Provider>
+    </ChatPageSetterContext.Provider>
+  );
 }
 
 /**

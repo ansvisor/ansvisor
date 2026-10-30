@@ -21,7 +21,14 @@ import {
 import type { ChatThread } from '@/lib/chat/thread';
 import { dropChatUpload, uploadChatFile } from '@/lib/chat/upload-client';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { ChatComposer, type ComposerSend, type ComposerVariant } from './composer/chat-composer';
+import type { ChatReference } from '@/lib/chat/references';
+import {
+  ChatComposer,
+  type ComposerChip,
+  type ComposerDraft,
+  type ComposerSend,
+  type ComposerVariant,
+} from './composer/chat-composer';
 import { RunAnswer } from './run/run-answer';
 import { ChatUsageNotice, ComposerUsageMeter, chatAtCap } from './chat-usage';
 
@@ -76,7 +83,8 @@ function turnsOf(thread: ChatThread | null): Turn[] {
  * 2026-10-30). A teammate's shared chat is read only. In the side panel
  * (`variant="panel"`, CHAT-01 items 15–24) the page's address stays: the
  * panel is told the chat's id with every message it takes, and `empty`
- * shows until the first one.
+ * shows until the first one; the page's context chips and @ references go
+ * with each message as its scope (W1-08, CHAT-04 item 8).
  */
 export function ChatThreadView({
   thread,
@@ -86,6 +94,11 @@ export function ChatThreadView({
   onConversation,
   empty,
   usageNoticeSeen = null,
+  chips,
+  onRemoveChip,
+  pageReferences,
+  pageRoute,
+  draft,
 }: {
   thread: ChatThread | null;
   variant: ComposerVariant;
@@ -97,6 +110,15 @@ export function ChatThreadView({
   empty?: ReactNode;
   /** The AI usage period whose 80% line the person already saw. */
   usageNoticeSeen?: string | null;
+  /** The page's context as chips (the side panel, CHAT-01 item 20). */
+  chips?: ComposerChip[];
+  onRemoveChip?: (key: string) => void;
+  /** What on the page can be asked about, first in the @ menu. */
+  pageReferences?: ChatReference[];
+  /** The page the message is sent from, kept with it. */
+  pageRoute?: string;
+  /** A question or an object the page hands the box. */
+  draft?: ComposerDraft | null;
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
@@ -199,6 +221,8 @@ export function ChatThreadView({
         brandId: conversationId ? undefined : (brandId ?? undefined),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(sent.attachments.length > 0 ? { attachmentIds: sent.attachments } : {}),
+        ...(sent.context.length > 0 ? { context: { route: pageRoute, chips: sent.context } } : {}),
+        ...(sent.references.length > 0 ? { references: sent.references } : {}),
       }),
     }).catch(() => null);
     if (!res?.ok || !res.body) {
@@ -318,6 +342,10 @@ export function ChatThreadView({
           disabled={atCap}
           placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : undefined}
           usage={<ComposerUsageMeter />}
+          chips={chips}
+          onRemoveChip={onRemoveChip}
+          references={pageReferences}
+          draft={draft}
           onSend={send}
           onStop={() => void stop()}
           onSteer={async (message, sent) => {

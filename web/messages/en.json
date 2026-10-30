@@ -3675,6 +3675,7 @@
     "newChat": "New chat here",
     "newChatToast": "New chat in the panel · this one stays in your list",
     "backToPage": "Back to the page",
+    "askAbout": "Ask about {name}",
     "history": "Chat history",
     "sizes": "Panel size",
     "size": {
@@ -3691,7 +3692,14 @@
     "noChats": "No chats yet.",
     "historyFailed": "Couldn't load your chats. Try again in a moment.",
     "allChats": "All chats",
-    "loading": "Opening the chat"
+    "loading": "Opening the chat",
+    "range": {
+      "day": "Last 24 hours",
+      "days": "Last {days} days",
+      "custom": "{from} – {to}",
+      "customOpen": "Custom range",
+      "all": "All time"
+    }
   },
   "chatShell": {
     "unavailable": {
@@ -9307,6 +9315,11 @@
     }
   },
   "mentions": {
+    "chat": {
+      "leastPlatform": "Which AI platform mentions us least, and why?",
+      "insteadOfUs": "Which competitors get mentioned instead of us?",
+      "actions": "Turn this page into actions"
+    },
     "title": "Mentions & Sentiment",
     "description": "Where AI mentions your brand, how it describes you, why, and what to do about it.",
     "selectBrand": "Select a brand to see its mentions.",
