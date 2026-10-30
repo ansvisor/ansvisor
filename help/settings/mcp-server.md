@@ -4,18 +4,18 @@ route: /dashboard/settings/api-keys
 keywords: [mcp, mcp server, api key, claude, cursor, codex, connect assistant]
 synonyms: [model context protocol, use ansvisor in claude, ai assistant integration, connector]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-30
+last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
 approved: false
-sources: [docs/guides/mcp-server.mdx]
+sources: [docs/guides/mcp-server.mdx, web/messages/en.json]
 ---
-Ansvisor has an MCP (Model Context Protocol) server, so AI assistants such as Claude, Codex, Cursor, VS Code, Windsurf, Gemini CLI and Zed can query your Ansvisor data in a normal conversation. There is nothing to install: the assistant connects with an API key from **Settings › API Keys**.
+Ansvisor has an MCP (Model Context Protocol) server, so AI assistants such as Claude, Codex, Cursor, VS Code, Windsurf, Gemini CLI and Zed can query your Ansvisor data in a normal conversation. There is nothing to install: the assistant connects with an API key from **Settings › MCP & API Keys**.
 
 ## Create an API key
 
-1. Open **Settings › API Keys**.
+1. Open **Settings › MCP & API Keys**.
 2. Click **New key** and give it a name you'll recognize, such as "MCP — my laptop".
 3. Click **Create** and copy the key. It's shown only once, so store it somewhere safe, such as your password manager.
 
@@ -42,6 +42,10 @@ Ask in plain words, for example:
 
 The assistant can read visibility, mentions, citations, prompts, AI traffic, saved reports, content, Site Audits, product visibility and the Action Center. Some requests change data, such as accepting a suggested prompt, writing a content draft or recording a task's progress. Assistants are told to make a change only when you ask for it.
 
+## What your plan includes
+
+On Ansvisor Cloud, every plan can read over MCP, the free trial included. Changes, runs and anything that uses credits, such as accepting a suggestion, writing a content draft or starting a Site Audit, need the Growth plan or above, paid. On Starter and in the free trial, the assistant still sees those requests, but Ansvisor refuses them and says they need Growth, so it can tell you why. The same applies to the API and to every assistant: Claude, ChatGPT, Cursor and the others. An admin can upgrade in **Settings › Billing**. A self-hosted instance can do everything.
+
 ## What your key may do
 
 A key acts as the person who created it, with their role. Reading, drafts and suggestions in the Content Editor, Site Audits, task progress and an opportunity's progress are open to every role.
@@ -58,4 +62,4 @@ On Ansvisor Cloud, a workspace without an active plan is read-only. Its API keys
 
 ## Revoke a key
 
-If a key leaks or you stop using an assistant, open **Settings › API Keys** and click the trash icon next to the key. Assistants using it lose access immediately.
+If a key leaks or you stop using an assistant, open **Settings › MCP & API Keys** and click the trash icon next to the key. Assistants using it lose access immediately.

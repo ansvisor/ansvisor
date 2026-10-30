@@ -5,6 +5,7 @@ import { writeRefusal } from '@/lib/subscription-guard';
 import { encryptApiKey, last4 } from '@/lib/agent/key-encryption';
 import { isAiProvider, parseProviderSettings, type AiProvider } from '@/lib/agent/providers';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
+import { ownKeyAccess, type OwnKeyAccess } from '@/lib/chat/key';
 
 /**
  * GET / PUT / PATCH / DELETE /api/settings/ai-providers
@@ -14,7 +15,8 @@ import { chatAgenticEnabled } from '@/lib/chat/flag';
  * return the plaintext — GET surfaces only the metadata the Settings UI
  * needs to render each provider (last4, set_at, who saved it, its settings).
  *
- * - GET: the saved providers, and whether Chat has one to use.
+ * - GET: the saved providers, whether Chat has one to use, and what own keys
+ *   do for the workspace (`access`, lib/chat/key.ts ownKeyAccess).
  * - PUT { provider, apiKey, settings }: saves (or replaces) a provider's key;
  *   the first one saved becomes the one Chat uses.
  * - PATCH { provider }: makes a saved provider the one Chat uses.
@@ -23,6 +25,11 @@ import { chatAgenticEnabled } from '@/lib/chat/flag';
  *
  * While the workspace is read-only (cloud, plan not active), PUT and PATCH
  * answer 402 subscription_inactive; DELETE stays open.
+ *
+ * With Chat on, own keys are Enterprise's (CHAT-16 item 19): below it, PUT
+ * and PATCH answer 403 own_keys_enterprise, except that a key kept from
+ * before Chat (item 28) can be replaced or switched to during its 30 days.
+ * DELETE stays open.
  *
  * Auth model:
  * - GET: any signed-in org member can see which keys are configured.
@@ -98,9 +105,9 @@ async function clearLegacyAnthropicKey(organizationId: string) {
 
 /**
  * A key saved while Chat is still off for the workspace keeps working for
- * Chat once it is on, on Starter or in a Growth free trial too (CHAT-16 item
- * 28; 00405 marked the workspaces that had one then). With Chat on, own
- * keys are Growth's and Enterprise's (lib/chat/key.ts), so nothing is marked.
+ * Chat for 30 days once it is on, on any plan but Enterprise, whose plan
+ * includes own keys (CHAT-16 item 28; 00405 / 00414 marked the workspaces
+ * that had one then). With Chat on, nothing is marked.
  */
 async function markLegacyKey(organizationId: string) {
   if (chatAgenticEnabled(organizationId)) return { error: null };
@@ -108,7 +115,49 @@ async function markLegacyKey(organizationId: string) {
     .from('organizations')
     .update({ legacy_key_grandfathered: true })
     .eq('id', organizationId)
-    .or('plan.eq.starter,and(plan.eq.growth,subscription_status.eq.trialing)');
+    .neq('plan', 'enterprise');
+}
+
+/** Own keys need Enterprise once Chat is on (CHAT-16 item 19). */
+function ownKeysRefused() {
+  return NextResponse.json(
+    { error: 'Own AI keys come with the Enterprise plan', code: 'own_keys_enterprise' },
+    { status: 403 },
+  );
+}
+
+/**
+ * Whether the admin may save `provider`'s key or have Chat use it: always
+ * with Chat off or on Enterprise; for a kept key's 30 days, only a provider
+ * already saved (replaced or switched to, not added).
+ */
+async function keyChangeAllowed(organizationId: string, provider: AiProvider): Promise<boolean> {
+  const access = await ownKeyAccess(organizationId);
+  if (access.state === 'open' || access.state === 'plan') return true;
+  if (access.state === 'locked') return false;
+  const { data, error } = await supabaseAdmin
+    .from('organization_ai_keys')
+    .select('provider')
+    .eq('organization_id', organizationId)
+    .eq('provider', provider)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return !!data;
+}
+
+/** The answer refusing a change to `provider`'s key, or null when it may go ahead. */
+async function keyChangeRefusal(
+  organizationId: string,
+  provider: AiProvider,
+): Promise<NextResponse | null> {
+  try {
+    return (await keyChangeAllowed(organizationId, provider)) ? null : ownKeysRefused();
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to read the plan' },
+      { status: 500 },
+    );
+  }
 }
 
 export async function GET() {
@@ -141,8 +190,19 @@ export async function GET() {
     ),
   );
 
+  let access: OwnKeyAccess;
+  try {
+    access = await ownKeyAccess(ctx.profile.organization_id);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to read the plan' },
+      { status: 500 },
+    );
+  }
+
   const rows = (data ?? []).filter((row) => isAiProvider(row.provider));
   return NextResponse.json({
+    access,
     // Whether Chat has a key to use — what the sidebar badge and Chat ask.
     configured: rows.some((row) => row.active),
     providers: rows.map((row) => ({
@@ -188,6 +248,9 @@ export async function PUT(req: Request) {
       { status: 400 },
     );
   }
+
+  const notAllowed = await keyChangeRefusal(ctx.profile.organization_id, provider);
+  if (notAllowed) return notAllowed;
 
   let encrypted: string;
   try {
@@ -246,6 +309,8 @@ export async function PATCH(req: Request) {
   if (!isAiProvider(body.provider)) {
     return NextResponse.json({ error: 'Unknown provider' }, { status: 400 });
   }
+  const notAllowed = await keyChangeRefusal(ctx.profile.organization_id, body.provider);
+  if (notAllowed) return notAllowed;
   const { data, error } = await setActive(ctx.profile.organization_id, body.provider);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

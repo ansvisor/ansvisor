@@ -12,14 +12,20 @@ import type { SourceCategory } from '@/lib/citations/classify';
  * unique URLs under it do (#745).
  */
 
-const { getCitationsOverview } = vi.hoisted(() => ({ getCitationsOverview: vi.fn() }));
+const { getCitationsOverview, getBrandFilterOptions } = vi.hoisted(() => ({
+  getCitationsOverview: vi.fn(),
+  getBrandFilterOptions: vi.fn(),
+}));
 vi.mock('@/lib/actions/citations', () => ({
   getCitationsOverview,
   getCitationGaps: vi.fn(async () => null),
   brandHasCitations: vi.fn(async () => true),
 }));
 vi.mock('@/lib/actions/topic', () => ({ getTopics: vi.fn(async () => []) }));
-vi.mock('@/lib/actions/tracking', () => ({ getBrandPrompts: vi.fn(async () => []) }));
+vi.mock('@/lib/actions/tracking', () => ({
+  getBrandPrompts: vi.fn(async () => []),
+  getBrandFilterOptions,
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: () => ({ getActiveBrand: () => ({ id: 'b1', name: 'Acme', slug: 'acme' }) }),
 }));
@@ -67,8 +73,8 @@ const overview = (urls: number): CitationsOverview => ({
 let container: HTMLDivElement;
 let root: Root;
 
-async function render(scope: string) {
-  window.history.replaceState(null, '', `/dashboard/citations?scope=${scope}`);
+async function render(scope: string, query = '') {
+  window.history.replaceState(null, '', `/dashboard/citations?scope=${scope}${query}`);
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -87,6 +93,10 @@ function card(title: string): string {
 
 beforeEach(() => {
   getCitationsOverview.mockReset();
+  getBrandFilterOptions.mockReset().mockResolvedValue({
+    regions: [],
+    models: ['chatgpt-web', 'gpt-5-chat-latest', 'perplexity-web'],
+  });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -120,5 +130,42 @@ describe('CitationsPage: Unique Domains', () => {
     getCitationsOverview.mockResolvedValue(overview(12));
     await render('third_party');
     expect(card('Unique Domains')).toBe('Unique Domains212 unique URLs');
+  });
+});
+
+describe('CitationsPage: a platform from an address', () => {
+  it('reads one model of a family as the family, as the dropdown sets it', async () => {
+    getCitationsOverview.mockResolvedValue(overview(7));
+    await render('all', '&platform=chatgpt-web');
+    await act(async () => {});
+    expect(getBrandFilterOptions).toHaveBeenCalledExactlyOnceWith('b1');
+    // Only the family is read: no load with the one model first.
+    expect(getCitationsOverview.mock.calls.map(([, filters]) => filters.platforms)).toEqual([
+      ['chatgpt-web,gpt-5-chat-latest'],
+    ]);
+    expect(new URL(window.location.href).searchParams.get('platform')).toBe(
+      'chatgpt-web,gpt-5-chat-latest',
+    );
+    // The dropdown names it, though no row of this window came from it.
+    expect(container.textContent).toContain('ChatGPT');
+  });
+
+  it('keeps a family, and a model with no family, asking the brand’s models only for one model', async () => {
+    getCitationsOverview.mockResolvedValue(overview(7));
+    await render('all', '&platform=chatgpt-web%2Cgpt-5-chat-latest');
+    expect(getBrandFilterOptions).not.toHaveBeenCalled();
+    expect(getCitationsOverview).toHaveBeenLastCalledWith(
+      'b1',
+      expect.objectContaining({ platforms: ['chatgpt-web,gpt-5-chat-latest'] }),
+    );
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    getCitationsOverview.mockClear();
+    await render('all', '&platform=perplexity-web');
+    await act(async () => {});
+    expect(getCitationsOverview.mock.calls.map(([, filters]) => filters.platforms)).toEqual([
+      ['perplexity-web'],
+    ]);
   });
 });

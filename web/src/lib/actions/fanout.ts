@@ -2,7 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { addPromptToSet } from '@/lib/actions/prompt';
+import { dbClient } from '@/lib/supabase/scoped';
+import { addPromptToSet, type PromptAddFailureCode } from '@/lib/actions/prompt';
 import { API_BASE_URL } from '@/config/api';
 import { FANOUT_MIN_SILENT_ANSWERS, FANOUT_SHARING_PLATFORMS } from '@/config/fanout-platforms';
 
@@ -141,6 +142,8 @@ async function fetchFanoutRows(
   since: string,
   promptId?: string,
   until?: string,
+  /** Only these platforms' answers (Chat's read keeps the plan's); all when absent. */
+  platforms?: readonly string[],
 ): Promise<{ rows: FanoutResultRow[]; truncated: boolean }> {
   const rows: FanoutResultRow[] = [];
   for (let from = 0; from < FANOUT_MAX_ROWS; from += FANOUT_PAGE_SIZE) {
@@ -155,6 +158,7 @@ async function fetchFanoutRows(
       .range(from, from + FANOUT_PAGE_SIZE - 1);
     if (until) query = query.lte('created_at', until);
     if (promptId) query = query.eq('prompt_id', promptId);
+    if (platforms) query = query.in('platform', [...platforms]);
 
     const { data, error } = await query;
     if (error) throw new Error(error.message);
@@ -234,9 +238,9 @@ function normalizeQuery(raw: string): string {
  */
 export async function getQueryFanout(
   brandId: string,
-  opts?: { days?: number; from?: string; to?: string },
+  opts?: { days?: number; from?: string; to?: string; platforms?: readonly string[] },
 ): Promise<QueryFanoutData> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   // Clamp the window to a sane range so a crafted call can't force an
   // unbounded prompt_results scan + in-memory aggregation. The custom range
   // (#713) is clamped by the caller to the same ceiling, and re-clamped here
@@ -252,7 +256,14 @@ export async function getQueryFanout(
   // PostgREST is unreliable, and rows with an empty fan-out contribute nothing
   // to the sub-query aggregation below (the item loop skips them) — but they do
   // count toward coverage, which is the whole point of the denominator.
-  const { rows, truncated } = await fetchFanoutRows(supabase, brandId, since, undefined, opts?.to);
+  const { rows, truncated } = await fetchFanoutRows(
+    supabase,
+    brandId,
+    since,
+    undefined,
+    opts?.to,
+    opts?.platforms,
+  );
 
   interface Acc {
     display: string;
@@ -486,9 +497,12 @@ async function engineCoverage(
  * Promote an observed sub-query into a tracked prompt for the brand. Mirrors
  * the Insights "accept suggestion" flow: add to the brand's earliest prompt
  * set, deriving platforms/models from its most recent active prompt.
- * `addPromptToSet` enforces the plan's `maxPrompts` limit.
+ * `addPromptToSet` enforces the plan's `maxPrompts` limit, and refuses a
+ * brand with no topic yet (`no_topics`).
  */
-export type TrackFanoutResult = { promptId: string } | { error: string };
+export type TrackFanoutResult =
+  | { promptId: string }
+  | { error: string; code?: PromptAddFailureCode };
 
 export async function trackFanoutQuery(brandId: string, query: string): Promise<TrackFanoutResult> {
   const supabase = await createClient();
@@ -522,7 +536,7 @@ export async function trackFanoutQuery(brandId: string, query: string): Promise<
   const models = Array.isArray(defaults?.models) ? (defaults!.models as string[]) : [];
 
   const created = await addPromptToSet({ promptSetId: ps.id as string, text, platforms, models });
-  if ('error' in created) return { error: created.error };
+  if ('error' in created) return { error: created.error, code: created.code };
 
   revalidatePath('/dashboard/prompts');
   return { promptId: created.prompt.id };
