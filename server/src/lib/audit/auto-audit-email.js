@@ -1,11 +1,14 @@
 import supabaseAdmin from '../../config/supabase.js';
+import { brandReaders } from '../access.js';
 import { sendEmail } from '../email.js';
 
 /**
  * The e-mail after an auto-audit run (SA-006), when the org turned it on in
  * Site Audit settings: "25 pages audited · 6 critical issues · next run Oct
  * 28", per brand when the run covered several. Sent through Resend
- * (email.js), a silent no-op where it isn't configured.
+ * (email.js), a silent no-op where it isn't configured. Each person reads
+ * only the brands they can see (brand access, spec §5.4): with All brands,
+ * everyone gets the one e-mail, as before.
  */
 
 /** The dashboard's origin, for the e-mail's links. */
@@ -80,25 +83,42 @@ export function renderAutoAuditEmail({ brands, nextRunAt }) {
   return { subject: `Site Audit: ${summary(total)}`, html };
 }
 
-/** Every member's e-mail address, as Daily Pulse sends to by default. */
-async function orgMemberEmails(orgId) {
-  const { data: members, error } = await supabaseAdmin
-    .from('profiles')
-    .select('id')
-    .eq('organization_id', orgId);
-  if (error) throw new Error(error.message);
-  const emails = [];
-  for (const member of members ?? []) {
-    const { data } = await supabaseAdmin.auth.admin.getUserById(member.id);
-    if (data?.user?.email) emails.push(data.user.email);
+/**
+ * The members who can see the run's brands, grouped by the brands they see:
+ * one e-mail per group, listing those brands. Each group's addresses.
+ */
+async function recipientGroups(orgId, brands) {
+  const readers = await brandReaders(
+    orgId,
+    brands.map((brand) => brand.id),
+  );
+  const groups = new Map();
+  for (const [id, seen] of readers) {
+    const key = brands
+      .filter((brand) => seen.has(brand.id))
+      .map((brand) => brand.id)
+      .join(',');
+    const { data } = await supabaseAdmin.auth.admin.getUserById(id);
+    if (!data?.user?.email) continue;
+    groups.set(key, [...(groups.get(key) ?? []), data.user.email]);
   }
-  return emails;
+  return [...groups].map(([key, to]) => ({
+    brands: brands.filter((brand) => key.split(',').includes(brand.id)),
+    to,
+  }));
 }
 
-/** Render and send the run's e-mail to the org's members. True when accepted. */
+/**
+ * Render and send the run's e-mail to the members who can see its brands,
+ * each the brands they see. True when every e-mail was accepted.
+ */
 export async function sendAutoAuditEmail(orgId, run) {
-  const to = await orgMemberEmails(orgId);
-  if (to.length === 0) return false;
-  const { subject, html } = renderAutoAuditEmail(run);
-  return sendEmail({ to, subject, html });
+  const groups = await recipientGroups(orgId, run.brands);
+  if (groups.length === 0) return false;
+  let accepted = true;
+  for (const group of groups) {
+    const { subject, html } = renderAutoAuditEmail({ ...run, brands: group.brands });
+    if (!(await sendEmail({ to: group.to, subject, html }))) accepted = false;
+  }
+  return accepted;
 }

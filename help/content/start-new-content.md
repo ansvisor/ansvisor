@@ -1,14 +1,14 @@
 ---
 title: Start a page in New content
-route: /dashboard/content/editor
+route: /dashboard/content/library
 keywords: [new content, create page, optimize page, content agent, import page]
 synonyms: [write a new article, start a draft, new page, improve an existing page]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/content-editor.mdx]
 ---
 **New content** starts a page, either a new one or one you already have, written by you, the Content Agent or a teammate. It opens from the Plan and the Library, from a Plan row's button, from **Send to Editor** on an opportunity, and from **Create content** in a prompt's menu on Tracked Prompts. **Editor** in the sidebar opens it too when you have no draft to go back to, or when that draft was deleted or archived.
@@ -45,4 +45,4 @@ For a new page, **Overview** lists your pages AI already cites for the same prom
 
 ## If the agent can't start
 
-If this month's AI usage is spent, or the agent is already writing another of your team's drafts, the agent doesn't start. The draft stays in the Library for you to write yourself.
+If this month's AI usage is spent, there's no active subscription, or the agent is already writing another of your team's drafts, the agent doesn't start. The draft stays in the Library for you to write yourself.

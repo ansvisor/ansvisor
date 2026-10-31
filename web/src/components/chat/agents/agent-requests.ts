@@ -1,5 +1,6 @@
 import { API_FAILURES, apiFailure, type ApiFailure } from '@/lib/api-failure';
 import type { ChatDenialCard } from '@/lib/chat/events';
+import type { CompatibleAgents } from '@/lib/chat/agent-action';
 import type { AgentDetail, AgentListResult, AgentRunView } from '@/lib/chat/agents';
 import type { AgentListView } from '@/lib/chat/agent-rules';
 import type { RunNowItem } from '@/lib/chat/agent-runs';
@@ -18,6 +19,10 @@ export type AgentRefused = {
   /** The server's words for a plain refusal ("This agent is archived…"); null for none. */
   message: string | null;
   denial: ChatDenialCard | null;
+  /** The refusal's code (`name_taken`, `plan_locked`…); null when none came back. */
+  code: string | null;
+  /** What a denial refused (chatAgents.asked: `fullAuto`, `workspace`…); null for none. */
+  asked: string | null;
 };
 
 /** A change of state, as its route is named. */
@@ -70,6 +75,8 @@ async function send<T>(url: string, init: RequestInit): Promise<({ ok: true } & 
     // A 500's words are the log's, not the person's.
     message: res && res.status < 500 && typeof body?.error === 'string' ? body.error : null,
     denial: (body?.denial as ChatDenialCard | undefined) ?? null,
+    code: typeof body?.code === 'string' ? body.code : null,
+    asked: typeof body?.asked === 'string' ? body.asked : null,
   };
 }
 
@@ -84,3 +91,58 @@ export const duplicateAgent = (id: string) =>
 /** Run now: each brand's run, queued. */
 export const runAgentNow = (id: string) =>
   send<{ runs: RunNowItem[] }>(`/api/chat/agents/${id}/run`, { body: '{}' });
+
+/** Save as draft (CHAT-21 §D item 17): the new agent's detail. */
+export const createAgent = (input: Record<string, unknown>) =>
+  send<{ agent: AgentDetail }>('/api/chat/agents', { body: JSON.stringify(input) });
+
+/** A change from Edit (§C item 14): a new version when what it does changed. */
+export const updateAgent = (id: string, patch: Record<string, unknown>) =>
+  send<{ agent: AgentDetail }>(`/api/chat/agents/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+
+/** Delete, once archived (§B item 7): its runs, chats and files stay. */
+export const deleteAgent = (id: string) => send(`/api/chat/agents/${id}`, { method: 'DELETE' });
+
+/**
+ * Run agent's picker on an Action Center action (CHAT-21 §F item 27): the
+ * agents for it, or the server's refusal (an action closed or gone, the
+ * out-of-permission answer).
+ */
+export async function readCompatibleAgents(
+  actionId: string,
+): Promise<({ ok: true } & CompatibleAgents) | AgentRefused> {
+  const res = await fetch(`/api/chat/agents/compatible?actionId=${encodeURIComponent(actionId)}`, {
+    cache: 'no-store',
+  }).catch(() => null);
+  const body = (await res?.json().catch(() => null)) as Record<string, unknown> | null;
+  if (res?.ok && body?.ok === true) return body as unknown as { ok: true } & CompatibleAgents;
+  return {
+    ok: false,
+    failure: isFailure(body?.failure) ? body.failure : apiFailure(res?.status ?? 0, body ?? {}),
+    message: res && res.status < 500 && typeof body?.error === 'string' ? body.error : null,
+    denial: (body?.denial as ChatDenialCard | undefined) ?? null,
+    code: typeof body?.code === 'string' ? body.code : null,
+    asked: typeof body?.asked === 'string' ? body.asked : null,
+  };
+}
+
+/** Run agent on an action: its run, the run's chat once it started, or why it didn't. */
+export const runAgentOnAction = (id: string, actionId: string) =>
+  send<{ runs: RunNowItem[]; chatId: string | null; stopReason?: string | null }>(
+    `/api/chat/agents/${id}/run`,
+    {
+      body: JSON.stringify({ actionId }),
+    },
+  );
+
+/** Run with Chat on an action: the person's chat on it, started or queued, or the one from a minute ago. */
+export const runChatOnAction = (actionId: string, timezone?: string) =>
+  send<{ chatId: string; queued: boolean; repeated?: boolean }>(
+    `/api/chat/actions/${actionId}/chat`,
+    {
+      body: JSON.stringify(timezone ? { timezone } : {}),
+    },
+  );

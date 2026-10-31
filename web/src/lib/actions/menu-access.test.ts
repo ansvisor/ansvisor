@@ -130,6 +130,16 @@ describe('getMyMenu', () => {
     signedInAs({ role: 'manager', can_manage_menus: true, work_areas_asked_at: '2026-10-28' });
     expect(await getMyMenu()).toMatchObject({ canManageMenus: true, workAreasAsked: true });
   });
+
+  it('has Agent Center only with the new Chat on for the workspace', async () => {
+    signedInAs({ role: 'admin', work_areas: ['aeo'] });
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect((await getMyMenu()).hidden).not.toContain('agents');
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', ORG);
+    expect((await getMyMenu()).hidden).toEqual(expect.arrayContaining(['agent', 'agents']));
+    vi.unstubAllEnvs();
+  });
 });
 
 describe('setRoleMenu', () => {

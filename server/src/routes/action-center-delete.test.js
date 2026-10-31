@@ -65,7 +65,30 @@ vi.mock('../lib/action-center/task-send.js', () => ({
   sendTaskToWebhook: vi.fn(),
 }));
 
-const { deleteAction } = await import('./action-center.js');
+const { default: router, deleteAction } = await import('./action-center.js');
+
+/** DELETE /api/action-center/actions/:id, as Express calls it. */
+async function deleteRoute(id) {
+  const handle = router.stack.find(
+    (layer) => layer.route?.path === '/actions/:id' && layer.route.methods.delete,
+  ).route.stack[0].handle;
+  const res = {
+    statusCode: 200,
+    body: null,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload) {
+      this.body = payload;
+      return this;
+    },
+  };
+  await handle({ params: { id }, user: { id: 'u1' }, log: { error: vi.fn() } }, res);
+  return res;
+}
+
+const ACTION_ID = '33333333-3333-3333-3333-333333333333';
 
 beforeEach(() => {
   action = { id: 'a1', brand_id: 'b1', status: 'in_progress', deleted_at: null };
@@ -122,5 +145,32 @@ describe('deleteAction', () => {
     action = { id: 'a1', brand_id: 'b1', status: 'dismissed', deleted_at: '2026-10-18T00:00:00Z' };
     await expect(deleteAction('a1', 'u1')).rejects.toMatchObject({ status: 404 });
     expect(writes).toEqual([]);
+  });
+});
+
+describe('DELETE /api/action-center/actions/:id', () => {
+  it("answers a brand refusal with the server's code, which the web reads", async () => {
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error("You don't have access to this brand"), {
+        status: 403,
+        code: 'no_brand_access',
+      }),
+    );
+    const res = await deleteRoute(ACTION_ID);
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({
+      error: "You don't have access to this brand",
+      code: 'no_brand_access',
+    });
+    expect(writes).toEqual([]);
+  });
+
+  it('keeps a failure in its own words, without a code', async () => {
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error('connection reset'), { code: '08006' }),
+    );
+    const res = await deleteRoute(ACTION_ID);
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ error: 'Failed to delete the action.' });
   });
 });

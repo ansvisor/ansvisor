@@ -263,6 +263,18 @@ export function ChatSidePanel() {
     if (id) void openChat(id);
   }, [open, started, openChat]);
 
+  // A chat handed over by the page (Run agent on an action, CHAT-21 §F item
+  // 29): opened in place of the last one, each hand-off once.
+  const openedHandoff = useRef(0);
+  const chatHandoff = draft?.chatId ? draft : null;
+  useEffect(() => {
+    if (!chatHandoff?.chatId || chatHandoff.nonce <= openedHandoff.current) return;
+    openedHandoff.current = chatHandoff.nonce;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStarted(true);
+    void openChat(chatHandoff.chatId);
+  }, [chatHandoff, openChat]);
+
   // Opened: the composer has focus, ready to type.
   useEffect(() => {
     if (!open) return;
@@ -480,6 +492,7 @@ export function ChatSidePanel() {
                 fullAutoOffByAdmin={setup.fullAutoOffByAdmin}
                 onOwnKey={setup.onOwnKey}
                 usageNoticeSeen={setup.usageNoticeSeen}
+                skills={setup.skills}
                 onConversation={remember}
                 chips={chips}
                 onRemoveChip={(key) =>

@@ -4,11 +4,11 @@ route: /dashboard/content
 keywords: [content brief, generate brief, brief generated, outline, target keywords, send to workflow, webhook settings]
 synonyms: [writing brief, article brief, content outline, brief for writers, rebuild brief]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/content-optimization.mdx, docs/guides/content-editor.mdx]
 ---
 A content brief tells a writer what to write to close an opportunity's gap: the title, the type of content, the outline and the keywords. Ansvisor writes it with AI from the opportunity's data, in your brand's language. You can then write the page in the Content Editor, or hand the work on to the Action Center or your workflow tool.
@@ -31,7 +31,7 @@ A brief is written once per opportunity: the button then reads **Brief Generated
 
 ## Write it, or hand it on
 
-- **Send to Editor** starts the page in the Content Editor, with the brief's outline and keywords as its brief.
+- **Send to Editor** opens **New content** with the opportunity picked; the draft starts with the brief's outline and keywords.
 - **Send to Actions** puts the work in the Action Center.
 - **Send to Workflow** sends it to your workflow tool.
 
