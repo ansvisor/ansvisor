@@ -26,7 +26,7 @@ import {
 import type { ContentDraftListItem } from '@/lib/content/drafts';
 import { CmsTargetPicker, CmsTargetUnchecked, useCmsTarget } from '@/components/content/cms-target';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
-import { readCmsSources } from './_cms-sources';
+import { readCmsSources } from '@/lib/content/cms-sources';
 
 /** How often the sends going on in the background are read. */
 const POLL_MS = 2_000;

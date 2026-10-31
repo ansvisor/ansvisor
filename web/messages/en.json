@@ -77,6 +77,9 @@
       "exhausted": "Used up. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "Used up. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
       "exhaustedTrial": "Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working.",
+      "exhaustedChat": "Used up. AI features stop until {date}; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedNoDateChat": "Used up. AI features stop until it resets; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedTrialChat": "Start your plan now for its full monthly AI usage; Chat keeps working only where it runs on your workspace's own AI key.",
       "none": "No AI usage yet this month.",
       "ownKey": "Agent Chat, on your own AI key",
       "notCounted": "Not counted",
@@ -92,7 +95,10 @@
       "seeUsage": "See usage",
       "exhausted": "You've used this month's AI limit. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "You've used this month's AI limit. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
-      "exhaustedTrial": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working."
+      "exhaustedTrial": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working.",
+      "exhaustedChat": "You've used this month's AI limit. AI features stop until {date}; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedNoDateChat": "You've used this month's AI limit. AI features stop until it resets; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedTrialChat": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Chat keeps working only where it runs on your workspace's own AI key."
     },
     "startNow": {
       "button": "Start my plan now",
@@ -116,6 +122,7 @@
   "chatBudget": {
     "ai_limit": "You've used this month's AI limit, so Chat stopped here. What's done so far is kept.",
     "ai_limit_trial": "Your trial AI limit is used up, so Chat stopped here. What's done so far is kept.",
+    "run_cap": "This run reached its limit, so Chat stopped here. What's done so far is kept.",
     "plan_limit": "This workspace's plan isn't active, so Chat can't run. Choose a plan to use it again.",
     "not_found": "This chat's work is gone. Ask your question again.",
     "chat_off": "Chat isn't on for this workspace.",
@@ -191,6 +198,10 @@
       "deletePrompts": "Deleting prompts needs a plan",
       "pausePrompts": "Pausing prompts needs a plan",
       "resumePrompts": "Resuming prompts needs a plan",
+      "pauseDailySuggestions": "Pausing daily suggestions needs a plan",
+      "resumeDailySuggestions": "Turning daily suggestions back on needs a plan",
+      "snoozeSuggestion": "Putting a suggestion off needs a plan",
+      "removeSuggestion": "Removing a suggestion needs a plan",
       "trackPrompts": "Tracking prompts needs a plan",
       "generatePrompts": "Generating prompts needs a plan",
       "analyzePrompts": "Analyzing prompts needs a plan",
@@ -238,6 +249,7 @@
       "deleteContent": "Deleting content needs a plan",
       "editContent": "Editing the page needs a plan",
       "runAgent": "Running the Content Agent needs a plan",
+      "runAgentOnAction": "Running an agent on an action needs a plan",
       "fixRules": "Fixing rules needs a plan",
       "rewritePage": "Rewriting the page needs a plan",
       "reviewSuggestions": "Reviewing suggestions needs a plan",
@@ -291,6 +303,8 @@
       "setProductFeed": "Changing the product feed setting needs a plan",
       "generateReports": "Generating reports needs a plan",
       "deleteReports": "Deleting reports needs a plan",
+      "markTaskDone": "Marking a task done needs a plan",
+      "attachFiles": "Attaching files needs a plan",
       "startChat": "Starting a chat needs a plan",
       "sendChat": "Chatting with the agent needs a plan",
       "addBrands": "Adding brands needs a plan",
@@ -502,6 +516,7 @@
   "nav": {
     "overview": "Overview",
     "chat": "Chat",
+    "agentCenter": "Agent Center",
     "actionCenter": "Action Center",
     "insights": "Brand Visibility",
     "traffic": "AI Referral Traffic",
@@ -1713,7 +1728,14 @@
         "dueDate": "Due date",
         "statusLabel": "Status",
         "events": {
-          "created": "Action created",
+          "created": "{source, select, chat {Action created from Chat} other {Action created}}",
+          "evidence_attached": "Finding added from Chat: “{finding}”",
+          "evidence_withdrawn": "Finding from Chat withdrawn with Undo: “{finding}”",
+          "file_attached": "Attached from Chat to {task}{title}: “{file}”",
+          "file_detached": "Attachment from Chat taken off {task}{title} with Undo: “{file}”",
+          "task_ready_for_review": "Ready for review, from Chat: {task}{title}",
+          "task_review_withdrawn": "Ready for review taken back with Undo: {task}{title}",
+          "cancelled": "Cancelled from Chat by {by} · undo",
           "reopened": "Action reopened — its condition is firing again",
           "signals_linked": "{count, plural, one {1 new signal} other {# new signals}} linked",
           "status_changed": "Status changed to {to}",
@@ -1731,7 +1753,15 @@
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
           "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}",
-          "outcome_measured": "{day, plural, =0 {} other {Day #{final, select, yes {, final} other {}} · }}{outcome, select, improved {Result: metrics improved after this action closed} mixed {Result: mixed after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
+          "outcome_measured": "{day, plural, =0 {} other {Day #{final, select, yes {, final} other {}} · }}{outcome, select, improved {Result: metrics improved after this action closed} mixed {Result: mixed after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}",
+          "agent_run_started": "Agent run started{named, select, yes { · {agent}} other {}}",
+          "agent_run_completed": "{to, select, done {Agent run completed} failed {Agent run failed} stopped {Agent run stopped} skipped {Agent run skipped} other {Agent run ended}}{named, select, yes { · {agent}} other {}}{reason, select, action_closed { · action closed} other {}}",
+          "chat_started": "Chat started on this action"
+        },
+        "eventParts": {
+          "note": "Note: {note}",
+          "sources": "From: {sources}",
+          "someone": "a teammate"
         },
         "deleteTask": "Delete task",
         "addTask": "Add task",
@@ -1840,6 +1870,14 @@
           "optimize": "Optimize",
           "openDraft": "Open draft",
           "pagesToOptimize": "Pages to optimize",
+          "attachedFromChat": {
+            "title": "Attached from Chat",
+            "by": "{name} · {date}",
+            "someone": "A teammate",
+            "open": "Open",
+            "openDraft": "Open draft",
+            "count": "{count, plural, one {# file attached from Chat} other {# files attached from Chat}}"
+          },
           "draftFailed": "Couldn't open the Content Editor. Try again.",
           "pageNotRead": "Couldn't read the live page, so the draft starts with its title. Paste the page into the editor.",
           "competitor": {
@@ -1948,6 +1986,17 @@
         "noSignalsTrafficPages": "This action was sent from AI Traffic Analytics, so it has no detection signals. Its evidence is the pages and figures on the Overview tab.",
         "noSignalsAuditPage": "This action was sent from a Site Audit report, so it has no detection signals. Its evidence is the page and the checks it fails on the Overview tab.",
         "noSignalsShoppingLinks": "This action comes from the catalog check after each sync, so it has no detection signals. Its evidence is the page and the products on the Overview tab.",
+        "noSignalsChat": "This action was sent from Chat, so it has no detection signals. Its evidence is the finding on the Overview tab, and any added later in History.",
+        "chatFinding": {
+          "source": "Source",
+          "sourceValue": "Chat",
+          "openChat": "Open the chat",
+          "sentWith": "Sent with",
+          "prompts": "{count, plural, one {# prompt} other {# prompts}}",
+          "pages": "{count, plural, one {# page} other {# pages}}",
+          "competitors": "{count, plural, one {# competitor} other {# competitors}}",
+          "platforms": "Platforms"
+        },
         "topicOpportunity": {
           "source": "Source",
           "sourceValue": "Insights › Opportunities",
@@ -2016,6 +2065,32 @@
           "rangeAll": "All time",
           "pages": "Pages when sent",
           "figures": "{citations, plural, one {# citation} other {# citations}} · {sessions, plural, one {# session} other {# sessions}} · {aiVisits, plural, one {# AI visit} other {# AI visits}}"
+        }
+      },
+      "runAgent": {
+        "button": "Run agent",
+        "buttonLabel": "Run agent · {title}",
+        "pickerTitle": "Run on AC-{no}",
+        "pickerHint": "Starts a Chat run scoped to this action. Closing its tasks stays your click.",
+        "agents": "Agents",
+        "loading": "Loading agents…",
+        "failed": "Couldn’t load the agents. Try again.",
+        "noAgents": "No agent covers this brand yet.",
+        "paused": "Paused",
+        "usedHere": "Used on {category} actions",
+        "runWithChat": "Run with Chat",
+        "runWithChatHint": "No agent · Chat works this action’s tasks in your default mode",
+        "createAgent": "Create an agent for this kind of action",
+        "toast": {
+          "started": "{agent} is working on AC-{no}",
+          "queued": "{agent} is queued for AC-{no}. It starts when a run slot frees up.",
+          "repeated": "Already asked a minute ago · no second run",
+          "coalesced": "Three runs already wait for {agent} on this brand · this one joins the last",
+          "chatStarted": "Chat is working on AC-{no}",
+          "chatQueued": "Chat is queued for AC-{no}. It starts when a run slot frees up.",
+          "openRun": "Open run",
+          "didntStart": "{reason, select, action_closed {The action was closed, so the run didn’t start.} brand_gone {The action’s brand is no longer in the agent’s scope, so the run didn’t start.} other {The run didn’t start. The agent’s Runs tab says why.}}",
+          "failed": "Couldn’t start the run. Try again."
         }
       }
     },
@@ -2739,6 +2814,12 @@
         "noAiDescription": "Sent from AI Traffic Analytics: {count, plural, one {a page} other {# pages}} with visitors or in your sitemap that got no AI visit in the range.",
         "goal": "Earn AI-referred visits to these pages."
       },
+      "chat_finding": {
+        "title": "Act on a finding from Chat for {targets}",
+        "titleGeneric": "Act on a finding from Chat",
+        "description": "Sent from Chat: a finding and the tasks that act on it, as you approved them.",
+        "goal": "Do the tasks, so the prompts and pages this finding names move in AI answers."
+      },
       "audit_page": {
         "title": "Fix the issues Site Audit found on {targets}",
         "titleGeneric": "Fix the issues Site Audit found on a page",
@@ -3240,6 +3321,65 @@
     "planGateTitle": "Agent is a {plan} feature",
     "planGateBody": "Upgrade your plan to chat with your dashboard about visibility, competitors, citations, and content gaps."
   },
+  "chatWhy": {
+    "aria": "Why did it move",
+    "metrics": {
+      "visibility": "Visibility",
+      "visibility_score": "Visibility score",
+      "mention_rate": "Mention rate",
+      "share_of_voice": "Share of voice",
+      "citations": "Citation rate",
+      "avg_position": "Average position"
+    },
+    "metricOn": "{engine} {metric}",
+    "units": { "pts": "pts", "positions": "positions" },
+    "change": "{delta} · {days, plural, one {# day} other {# days}}",
+    "withinSwing": "Within normal swing (±{band} at this sample size)",
+    "notEnoughData": "Not enough data",
+    "explains": "What explains the {delta}",
+    "about": "about {points} {unit}",
+    "offset": "partly offset the change",
+    "nowCite": "{count, plural, one {# prompt now cites} other {# prompts now cite}} {page}",
+    "kinds": {
+      "site_change": "Site change · {page}",
+      "lost_citation_to_competitor": "Lost citation · {page}",
+      "lost_citation": "Lost citation · {page}",
+      "competitor_entered": "Competitor entered the answers",
+      "won_citation_from_competitor": "Won citation · {page}",
+      "gained_citation": "New citation · {page}",
+      "competitor_left": "Competitor left the answers",
+      "engines_changed": "Engine added or dropped",
+      "prompt_set_changed": "Prompt set changed",
+      "not_mentioned": "Not named in one period",
+      "not_enough_data": "Not enough data",
+      "other": "Other",
+      "normal_swing": "Normal swing",
+      "unexplained": "Unexplained"
+    },
+    "prompt": "Prompt",
+    "citedBefore": "Cited before",
+    "citedNow": "Cited now",
+    "date": "Date",
+    "answer": "Answer",
+    "openAnswer": "Open the answer for {prompt}",
+    "partial": "Some answers couldn't be read, so part of the change is unexplained.",
+    "notCited": "not cited",
+    "noRows": "No single prompt explains this part.",
+    "detection": "Detection from stored snapshots, no model reads",
+    "confidence": {
+      "high": "High confidence",
+      "medium": "Medium confidence",
+      "low": "Low confidence"
+    },
+    "totalSub": "{runs, number} tracked runs · {kind, select, prompts {{cells, number} tracked prompts} other {{cells, number} prompt-engine pairs}}",
+    "periodValue": "{value} · {runs, number} runs",
+    "band": "Normal band",
+    "sample": "Sample",
+    "sampleValue": "{stable, number} compared · {excluded, number} with too little data",
+    "answerSub": "An answer from scheduled tracking",
+    "loading": "Loading…",
+    "answerFailed": "This answer couldn't be loaded."
+  },
   "chatTools": {
     "profile": { "name": "Read your profile", "step": "Read your profile" },
     "aiUsage": { "name": "Read AI usage", "step": "Read AI usage" },
@@ -3323,11 +3463,27 @@
     "newTopic": { "name": "Add topics", "step": "Added topic" },
     "topicName": { "name": "Rename topics", "step": "Renamed topic" },
     "trackCompetitors": { "name": "Add competitors", "step": "Added competitors" },
+    "sendToActions": { "name": "Send findings to Action Center", "step": "Sent to Action Center" },
+    "addToAction": {
+      "name": "Add findings to Action Center actions",
+      "step": "Added to an Action Center action"
+    },
+    "attachToTask": { "name": "Attach files to Action Center tasks", "step": "Attached to a task" },
+    "taskReadyForReview": {
+      "name": "Set Action Center tasks to Ready for review",
+      "step": "Set to Ready for review"
+    },
     "dropCompetitor": {
       "name": "Remove competitors",
       "step": "Removed competitor",
       "note": "Its timeline events go with it. Undo brings the competitor back, not those events."
     },
+    "reviseDraft": { "name": "Change drafts in Content", "step": "Changed draft in Content" },
+    "sendToCms": { "name": "Send drafts to your CMS", "step": "Sent draft to your CMS" },
+    "makeReport": { "name": "Make reports", "step": "Made report" },
+    "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
+    "webPage": { "name": "Open web pages", "step": "Open page" },
+    "whyChange": { "name": "Explain why a number changed", "step": "Read why it changed" },
     "agents": { "name": "Create and run agents", "step": "Changed an agent" }
   },
   "agentic": {
@@ -3532,7 +3688,7 @@
       "motion": "With Reduce motion on, nothing moves.",
       "sections": {
         "avatar": "Agent avatar",
-        "avatarList": "Agent avatar in the Agents list",
+        "avatarList": "Agent avatar in the Agent Center list",
         "statusPill": "Status pill",
         "approvalPill": "Approval pills",
         "steps": "Step states",
@@ -3661,6 +3817,11 @@
     }
   },
   "chatEngine": {
+    "actionCard": {
+      "tasks": "{count, plural, one {# task} other {# tasks}}",
+      "doneWhen": "Done when: {text}",
+      "dailyLimit": "This is one of the {limit} new actions the brand gets today, so Action Center's own new actions wait until tomorrow."
+    },
     "allTime": "All time",
     "lastDays": "Last {count} days",
     "since": "Since {date}",
@@ -3676,6 +3837,8 @@
       "failed": "Something went wrong",
       "readFailed": "Couldn't read this",
       "timedOut": "Timed out",
+      "stoppedAtLimit": "Stopped at its limit",
+      "actionClosed": "This action was closed. Nothing more was changed.",
       "limit": "Over this run's limit",
       "pausedCap": "Stopped at the AI limit",
       "unknown": "Worked on a step",
@@ -3685,7 +3848,31 @@
       "readHelp": "Read Ansvisor Help",
       "ask": "Waiting for your answer",
       "askSkipped": "Skipped · used {option}",
-      "askStopped": "Question skipped"
+      "askStopped": "Question skipped",
+      "opened": "Opened {page}",
+      "notOpened": "Couldn't open {page}",
+      "usedSkill": "Used skill: {title}",
+      "skillFromLibrary": "Ansvisor library"
+    },
+    "pageRefused": {
+      "no_access": "No workspace to open pages for",
+      "invalid_url": "Not an address Chat opens",
+      "blocked": "Not a public address",
+      "not_allowed": "Goes to a site Chat may not open",
+      "too_many_redirects": "Redirects too many times",
+      "not_html": "Not a web page",
+      "too_large": "Too large to read",
+      "too_deep": "Built too deeply to read",
+      "http_error": "The page answered with an error",
+      "http_status": "The page answered {status}",
+      "timeout": "Timed out",
+      "unreachable": "Couldn't be reached",
+      "busy": "Other pages are opening. Try again in a moment."
+    },
+    "costs": {
+      "siteAudit": "{count, plural, one {Uses # audit} other {Uses # audits}} of {left} left this month",
+      "siteAuditOver": "{count, plural, one {Needs # audit} other {Needs # audits}}, {left} left this month: it won't start",
+      "siteAuditUnknown": "{count, plural, one {Uses # of this month's audits} other {Uses # of this month's audits}}"
     },
     "error": {
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
@@ -3702,6 +3889,43 @@
     }
   },
   "chatRun": {
+    "tasks": {
+      "title": "{due, plural, =0 {Action Center tasks} other {Action Center tasks · # due}}",
+      "progress": "Tasks ready",
+      "ready": "{ready, number} of {total, number} ready",
+      "priority": "Priority {score, number}",
+      "untitled": "An Action Center task",
+      "status": {
+        "queued": "Queued",
+        "writing": "Writing",
+        "ready_for_review": "Ready for review",
+        "done": "Done"
+      },
+      "closeNote": "You close tasks in Action Center. I never mark them done.",
+      "close": "Close tasks in Action Center"
+    },
+    "proposal": {
+      "goal": "Goal",
+      "sentWith": "Sent with",
+      "prompts": "Prompts",
+      "pages": "Pages",
+      "competitors": "Competitors",
+      "platforms": "Platforms",
+      "newText": "New text",
+      "showAll": "Show all",
+      "showLess": "Show less"
+    },
+    "actionSent": {
+      "created": "Sent to Action Center · AC-{no}",
+      "added": "Added to AC-{no}",
+      "createdLabel": "Sent to Action Center",
+      "addedLabel": "Added to an Action Center action",
+      "createdNote": "Action Center sets its Priority Score. You close its tasks there.",
+      "addedNote": "Added as evidence. Its targets don't change.",
+      "open": "Open in Actions",
+      "toastCreated": "Sent to Action Center",
+      "toastAdded": "Added to the action in Action Center"
+    },
     "status": {
       "thinking": "Thinking…",
       "writing": "Writing the answer…",
@@ -3756,6 +3980,8 @@
       "title": "Shortcuts",
       "keys": "type to filter · ↑↓ · Enter",
       "none": "No shortcuts match",
+      "noneWithSkills": "No shortcuts or skills match",
+      "skills": "Skills",
       "shortcuts": {
         "analyze": { "name": "Analyze", "starter": "Analyze" },
         "report": { "name": "Reports", "starter": "Create a report on" },
@@ -3825,12 +4051,14 @@
     }
   },
   "chatPage": {
+    "sendToActionCenterPrompt": "Send this finding to Action Center as an action.",
     "you": "You",
     "deniedTitle": "I can't do this for you",
     "sendFailed": "Couldn't send that. Try again.",
     "answerFailed": "Couldn't save your answer. Try again.",
     "questionNext": "Answer saved · question {at} of {of} next",
     "nextMoves": "Next moves",
+    "noUndo": "This can’t be undone from Chat once it’s done.",
     "pausedCap": "You've used this month's AI limit, so Chat stopped here.",
     "connectionLost": "Lost the connection to Chat. It keeps working: reload the page to see where it is.",
     "untitledExport": "Chat"
@@ -3863,6 +4091,7 @@
     "unknown": "–"
   },
   "chatAnswer": {
+    "sendToActionCenter": "Send to Action Center",
     "label": "Answer actions",
     "copy": "Copy",
     "copied": "Copied",
@@ -3908,7 +4137,27 @@
     "download": "Download",
     "downloaded": "Downloaded {name}",
     "downloadFailed": "Couldn't download that. Try again.",
-    "openEditor": "Open in Content Editor"
+    "openEditor": "Open in Content Editor",
+    "task": {
+      "line": "Task: {title}",
+      "untitled": "An Action Center task",
+      "markDone": "Attach to task & mark done",
+      "more": "More for this file",
+      "attachOnly": "Attach only",
+      "doneAttached": "Done · attached to task",
+      "doneInActionCenter": "Done in Action Center",
+      "markedDone": "Task marked done in Action Center",
+      "undo": "Undo",
+      "undone": "Task open again in Action Center",
+      "attached": "Attached to the task",
+      "failed": {
+        "not_found": "That file or task isn't there any more.",
+        "forbidden": "Only an Admin or a Manager can close tasks from Chat.",
+        "closed": "Its action is closed in Action Center.",
+        "changed": "It changed in Action Center since, so nothing was undone.",
+        "failed": "Couldn't change the task. Try again."
+      }
+    }
   },
   "chatFiles": {
     "title": "Files",
@@ -4102,7 +4351,7 @@
       "settings": "Settings",
       "usageTip": "AI usage this month",
       "files": "Files",
-      "agents": "Agents"
+      "agents": "Agent Center"
     },
     "actions": {
       "more": "More for {name}",
@@ -4159,20 +4408,146 @@
       "workedWhileAway": "Your agents worked while you were away.",
       "needsYou": "{count, plural, one {# thing needs you} other {# things need you}}",
       "caughtUp": "All caught up.",
-      "dueTasks": "{count, plural, one {# Action Center task is due this week} other {# Action Center tasks are due this week}}",
-      "completeWithChat": "Complete with Chat",
-      "completeTasksMessage": "Complete this week's Action Center tasks.",
-      "startFailed": "Couldn't start that. Try again."
+      "startFailed": "Couldn't start that. Try again.",
+      "forYou": {
+        "title": "For you now",
+        "askAnything": "Ask anything",
+        "tasks": "Complete tasks",
+        "tasksCount": "{count, number} due",
+        "tasksMessage": "/tasks Work through this week's Action Center tasks by priority and prepare what each one needs. I'll close the tasks.",
+        "winBack": "Win back citations",
+        "winBackCount": "{count, plural, one {# page} other {# pages}}",
+        "winBackMessage": "Win back the citations we lost on {count, plural, one {# page} other {# pages}}: refresh them against what AI cites now.",
+        "winBackReadMessage": "Show the {count, plural, one {# page} other {# pages}} that lost citations and what AI cites instead.",
+        "publish": "Ready to publish",
+        "publishCount": "{count, number}",
+        "publishMessage": "Check the {count, plural, one {# ready draft} other {# ready drafts}}, fill their page fields and send them to our CMS as drafts. Going live stays my click.",
+        "more": "More"
+      },
+      "since": {
+        "left": "Since you left",
+        "oneWin": "One win",
+        "when": "{day} → yesterday",
+        "lastVisit": "Your last visit was {date}",
+        "citations": "{engine} citations",
+        "down": "down {count, number}",
+        "up": "up {count, number}",
+        "why": "Why?",
+        "whichOnes": "Which ones?",
+        "whyMessage": "Why did our {engine} citations drop since {day}?",
+        "winMessage": "Which {engine} citations did we win since {day}?"
+      }
     },
     "inbox": {
       "title": "Inbox",
       "lands": "Results from your agents land here.",
+      "landsWithSuggestions": "Results from your agents and daily suggestions land here.",
+      "nothingNeedsYou": "Nothing needs you.",
       "summary": {
         "needsYou": "{count, plural, one {# needs you} other {# need you}}",
         "running": "{count} running",
-        "doneToday": "{count} done today"
+        "doneToday": "{count} done today",
+        "suggestions": "{count, plural, one {# suggestion} other {# suggestions}} this week"
       },
       "empty": "Nothing needs you. Results from your agents land here.",
+      "tabs": {
+        "label": "Inbox topics",
+        "all": "All",
+        "suggestions": "Daily suggestions",
+        "needsYou": "Needs you",
+        "runs": "Runs"
+      },
+      "tabEmpty": "Nothing here.",
+      "suggestions": {
+        "note": "Up to 7 a week, picked from what waits in your Action Center. This list shows the last 7 days and renews every 14 days.",
+        "pause": "Pause daily suggestions",
+        "started": "Daily suggestions are on for you: one action a day from your Action Center, starting tomorrow morning.",
+        "empty": "No daily suggestions in the last 7 days.",
+        "showing": "Showing the newest {shown} of {total}.",
+        "untitled": "An action from your Action Center",
+        "brandMissing": "This brand isn't in your brand list.",
+        "closed": {
+          "completed": "Done",
+          "dismissed": "Dismissed"
+        },
+        "dot": {
+          "new": "New",
+          "seen": "Seen",
+          "started": "Started"
+        },
+        "today": "Today · {date}",
+        "how": {
+          "startNow": "Content Editor or Chat · about {minutes} min",
+          "chat": "Chat",
+          "startedEditor": "started in Content Editor {date}",
+          "startedChat": "started in Chat {date}"
+        },
+        "open": "Open",
+        "paused": {
+          "title": "Daily suggestions are paused",
+          "body": "None was opened or used in 30 days, so we stopped picking them. Your Action Center is unchanged.",
+          "offBody": "You paused them. Your Action Center is unchanged.",
+          "resume": "Turn back on"
+        },
+        "next": "Turned back on, the first suggestion arrives tomorrow morning.",
+        "changeFailed": "Couldn't change your daily suggestions. Try again."
+      },
+      "suggestion": {
+        "crumb": "Daily suggestion · {date}",
+        "from": "from",
+        "source": "Daily suggestion · {date} · Action Center {number}",
+        "pickedToday": "Picked for you today · no AI cost",
+        "picked": "Picked for you {date} · no AI cost",
+        "tools": {
+          "label": "What was read",
+          "read": "Read {number}",
+          "pages": "{count, plural, one {# page} other {# pages}}",
+          "prompts": "{count, plural, one {# prompt} other {# prompts}}",
+          "ranked": "Ranked your open actions",
+          "priority": "priority {score, number}",
+          "waiting": "waiting {days, plural, one {# day} other {# days}}",
+          "audited": "Checked the pages",
+          "auditedOn": "Site Audit, {date}"
+        },
+        "whyNow": "Why now: {reason}",
+        "takes": "With the agent, it takes about {minutes, number} minutes.",
+        "card": {
+          "title": "From your Action Center",
+          "waiting": "Waiting {days, plural, one {# day} other {# days}}",
+          "tasks": "{count, plural, one {# task} other {# tasks}}",
+          "unassigned": "Unassigned",
+          "opened": "opened {date}",
+          "open": "Open",
+          "openLabel": "Open {number} in Action Center",
+          "morePages": "+{count, number} more",
+          "noCost": "No extra cost to pick",
+          "mode": "Mode: {mode}",
+          "editor": "Content Editor",
+          "chat": "Do it with Chat",
+          "closed": {
+            "completed": "Done",
+            "dismissed": "Dismissed"
+          }
+        },
+        "next": {
+          "firstPage": "Start with {page}",
+          "firstPageSub": "{count, plural, one {The action's page} other {The first of its # pages}}",
+          "firstPageMessage": "Start with {page}.",
+          "snooze": "Not now",
+          "snoozeSub": "Back in a week if it's still open",
+          "remove": "Remove this suggestion",
+          "removeSub": "The action stays in Action Center"
+        },
+        "doMessage": "Let's do {number} from my Action Center: {title}",
+        "pageChip": "Daily suggestion",
+        "snoozed": "Not now: back in a week, if it's still open.",
+        "removed": "Removed from your Inbox. The action stays in Action Center.",
+        "changeFailed": "Couldn't change this suggestion. Try again.",
+        "startFailed": "Couldn't start the chat. Try again.",
+        "editorFailed": "Couldn't open the Content Editor. Try again.",
+        "unavailable": "This suggestion isn't available.",
+        "backToInbox": "Back to Inbox"
+      },
       "review": "Review",
       "watch": "Watch",
       "open": "Open",
@@ -4197,7 +4572,7 @@
       "failed": "Couldn't search your chats.",
       "pages": {
         "allChats": "All chats",
-        "agents": "Agents",
+        "agents": "Agent Center",
         "files": "Files",
         "settings": "Settings"
       }
@@ -4255,7 +4630,6 @@
         "activity": "Activity",
         "capabilities": "What Chat can do",
         "files": "Files",
-        "agents": "Agents",
         "settings": "Settings"
       }
     },
@@ -4743,7 +5117,8 @@
         "action_center": "Action Center",
         "content": "Content",
         "reports": "Reports",
-        "navigation": "Navigation"
+        "navigation": "Navigation",
+        "web": "Web"
       }
     }
   },
@@ -4769,6 +5144,20 @@
       "trackCompetitorsUndo": "Removed the competitors added: {competitors}",
       "dropCompetitor": "Removed the competitor {competitor}",
       "dropCompetitorUndo": "Brought back the competitor {competitor}, without its timeline events from before",
+      "sendToActions": "Sent “{title}” to Action Center as {no}",
+      "sendToActionsUndo": "Cancelled {no} “{title}”, sent from Chat",
+      "addToAction": "Added a finding to {no}: {finding}",
+      "addToActionUndo": "Withdrew the finding added to {no}",
+      "attachToTask": "Attached “{file}” to {task}",
+      "attachToTaskUndo": "Took “{file}” off {task}",
+      "taskReadyForReview": "Set {task} to Ready for review",
+      "taskReadyForReviewUndo": "Took {task} back from Ready for review",
+      "reviseDraft": "Changed the draft “{title}”",
+      "reviseDraftUndo": "Put the draft “{title}” back as it was",
+      "sendToCms": "Sent the draft “{title}” to {cms}",
+      "makeReport": "Made the report “{title}”",
+      "makeReportUndo": "Removed the report “{title}” from Reports",
+      "startAudit": "Started Site Audit on {pages}",
       "accessDenied": "Not allowed: {tool}",
       "agentCreated": "Created the agent “{name}”",
       "agentUpdated": "Changed the agent “{name}”",
@@ -4780,7 +5169,8 @@
       "agentDeleted": "Deleted the agent “{name}”",
       "agentDuplicated": "Copied the agent “{from}” as “{name}”",
       "agentTakenOver": "Took over the agent “{name}”",
-      "agentRunQueued": "Asked the agent “{name}” to run for {brand}"
+      "agentRunQueued": "Asked the agent “{name}” to run for {brand}",
+      "agentRunOnAction": "Asked the agent “{name}” to run on the action AC-{action}"
     },
     "undo": {
       "ok": "Undone.",
@@ -4810,12 +5200,14 @@
       "workspace": "Share an agent with the workspace",
       "monthCap": "Set an agent's monthly AI cap",
       "fullAuto": "Run an agent in Full auto",
-      "engines": "Use these engines in an agent"
+      "engines": "Use these engines in an agent",
+      "runWithChat": "Run Chat on an Action Center action"
     },
     "refusal": {
       "invalid": "Some of this agent's settings aren't valid. Check them and try again.",
       "not_found": "This agent isn't available.",
       "name_taken": "An agent named “{name}” already exists in this workspace. Pick another name.",
+      "name_taken_hidden": "That name is taken in this workspace. Try another.",
       "wrong_status": "{status, select, draft {This agent is a draft} active {This agent is on} paused {This agent is paused} other {This agent is archived}}, so it can't do that now.",
       "archived": "This agent is archived. Restore it first.",
       "version_conflict": "This agent was changed since you opened it. Reload to see its latest version.",
@@ -4828,6 +5220,9 @@
       "no_brand": "None of this agent's brands is left. Pick a brand in its scope.",
       "ai_limit": "This month's AI limit is used up, so the agent can't start. It can run again once the limit resets.",
       "owner_role": "This agent's owner can't run agents any more. An Admin can take it over.",
+      "action_not_found": "This action isn't available.",
+      "action_closed": "This action is closed. Reopen it in Action Center to run an agent on it.",
+      "queue_full": "{count, plural, one {# run already waits} other {# runs already wait}} for this agent on this brand. Try again once one has started.",
       "failed": "Something went wrong with this agent. Try again."
     },
     "status": {
@@ -4957,6 +5352,31 @@
       "medium": "Medium confidence",
       "high": "High confidence"
     },
+    "runner": {
+      "title": "{agent} · {brand}",
+      "actionTitle": "{agent} · {action}",
+      "message": "Run the agent “{agent}” for {brand}: {skills}.",
+      "skill": "/{skill}",
+      "then": ", then ",
+      "instructions": "Its instructions: {text}",
+      "started": "{trigger, select, schedule {It started on its schedule.} signal {It started because Action Center found {count, plural, one {a new signal} other {# new signals}}.} kpi {It started because a KPI changed.} watch_rule {It started because a watch rule fired.} action {It started from an Action Center action.} other {It started with Run now.}}",
+      "earlier": "{count, plural, one {One more fire came while it waited (cooldown or daily limit): it's in the scope too.} other {# more fires came while it waited (cooldown or daily limit): they're in the scope too.}}",
+      "action": "It works on one Action Center action, AC-{no} ({category}); its title and open tasks when the run was asked for are in the scope. Read it with its tasks first and keep to its targets: never add new ones. Closing tasks stays the person’s click.",
+      "background": "This run works in the background. When a question comes up, take the recommended option and list your assumptions at the top of the answer. Changes still wait for approval as the agent's mode says.",
+      "chip": {
+        "agent": "Agent",
+        "brand": "Brand",
+        "trigger": "Trigger",
+        "signal": "Signal",
+        "slot": "Scheduled for",
+        "earlier": "Earlier fires",
+        "action": "Action"
+      }
+    },
+    "runWithChat": {
+      "message": "Work on the Action Center action AC-{no} ({category}): read it and its open tasks, then draft what each task needs. Keep to its targets. I close tasks myself.",
+      "chip": "Action · {title}"
+    },
     "runStatus": {
       "queued": "Queued",
       "running": "Running",
@@ -5000,7 +5420,9 @@
       "takeOver": "Take over",
       "open": "Open",
       "openRun": "Open run",
-      "more": "More agent options"
+      "more": "More agent options",
+      "edit": "Edit",
+      "delete": "Delete"
     },
     "toast": {
       "ran": "{count, plural, one {Run queued for {brand}} other {# runs queued, one a brand}}",
@@ -5014,12 +5436,319 @@
       "restored": "{name} restored · it stays paused until you resume it",
       "duplicated": "Copied as a draft · {name}",
       "tookOver": "You own {name} now · its triggered runs act as you",
-      "failed": "Couldn't do that. Try again."
+      "failed": "Couldn't do that. Try again.",
+      "deleted": "{name} deleted · its runs and files stay",
+      "savedDraft": "Saved as a draft · {name}",
+      "saved": "Saved · {name}",
+      "nothingChanged": "Nothing changed"
+    },
+    "deleteDialog": {
+      "title": "Delete this agent?",
+      "body": "“{name}” will be deleted. Its past runs and files stay.",
+      "cancel": "Cancel",
+      "confirm": "Delete"
+    },
+    "skills": {
+      "winback": "Win back lost citations",
+      "tasks": "Complete this week’s tasks",
+      "quality": "Quality pass",
+      "faq": "FAQ from fan-outs",
+      "report": "Weekly report",
+      "beat": "Beat a competitor",
+      "refresh": "Refresh for this year",
+      "publish": "Ready to publish",
+      "shopping": "AI shopping readiness",
+      "wrongclaim": "Fix wrong claims about us",
+      "answerfirst": "Answer-first rewrite",
+      "facts": "Brand facts check",
+      "compare": "Comparison page",
+      "translate": "Translate a page"
+    },
+    "form": {
+      "titleNew": "New agent",
+      "titleEdit": "Edit · {name}",
+      "cancel": "Cancel",
+      "stepsLabel": "Steps",
+      "steps": {
+        "skill": "Skill",
+        "trigger": "Trigger",
+        "mode": "Mode & approvals",
+        "connections": "Connections & model"
+      },
+      "stepOf": "Step {step} of 4",
+      "stepTitle": "Step {step} of 4 · {name}",
+      "alert": "{count, plural, one {One thing on this step needs fixing.} other {# things on this step need fixing.}}",
+      "back": "Back",
+      "next": "Next",
+      "saveDraft": "Save as draft",
+      "turnOn": "Turn on",
+      "saveChanges": "Save changes",
+      "savedNotOn": "Saved as a draft. It isn’t on yet.",
+      "reload": "Reload",
+      "failed": "Couldn’t save the agent. Try again.",
+      "readOnly": {
+        "title": "You see agents read-only ({role})",
+        "detail": "Only Admins and Managers create and change agents",
+        "notOwnerTitle": "You can’t change this agent",
+        "notOwnerDetail": "Only its owner or an Admin can change it",
+        "archivedTitle": "This agent is archived",
+        "archivedDetail": "Restore it on its page to change it",
+        "askedCreate": "Create an agent",
+        "askedEdit": "Change an agent",
+        "back": "Back to Agent Center",
+        "backToAgent": "Back to the agent"
+      },
+      "skill": {
+        "sourcesLabel": "Where skills come from",
+        "sources": {
+          "ansvisor": "Ansvisor skills",
+          "mine": "My skills",
+          "marketplace": "Marketplace"
+        },
+        "empty": {
+          "mine": "Skills you save show here.",
+          "marketplace": "Library skills an Admin adds show here."
+        },
+        "uses": "Uses {connections}",
+        "noConnection": "No connection needed",
+        "followOn": "Follow-on skills",
+        "followOnNote": "Run in order after /{skill}, up to 2",
+        "addFollowOn": "Add a follow-on skill",
+        "removeSkill": "Remove /{skill}",
+        "instructions": "Instructions",
+        "instructionsNote": "Optional. Read with the skill; it can’t change the agent’s tools or approvals.",
+        "instructionsPlaceholder": "For example: keep the tone friendly and leave the pricing page alone",
+        "count": "{count} / 2,000"
+      },
+      "trigger": {
+        "options": {
+          "manual": "Manual",
+          "schedule": "Schedule",
+          "signal": "Signal created",
+          "kpi": "KPI changed",
+          "watch_rule": "Watch rule"
+        },
+        "notes": {
+          "manual": "Run from Chat or an action",
+          "schedule": "Daily, weekly, monthly",
+          "signal": "A new Action Center signal",
+          "kpi": "A KPI moves past a threshold",
+          "watch_rule": "WHEN · FOR · THEN"
+        },
+        "watchRuleNone": "Set on a watch rule: its THEN runs the agent",
+        "list": "Triggers",
+        "count": "{count} of 5",
+        "add": "Add trigger",
+        "alwaysOn": "Always on",
+        "kindLabel": "Trigger type",
+        "max": "An agent has up to 5 triggers. Remove one to add another.",
+        "remove": "Remove this trigger",
+        "select": "Edit this trigger",
+        "switch": "Trigger on",
+        "kw": {
+          "when": "WHEN",
+          "every": "EVERY",
+          "once": "ONCE",
+          "for": "FOR",
+          "then": "THEN"
+        },
+        "manualWhen": "You press Run, or Run agent on an action",
+        "repeatLabel": "How often",
+        "repeat": {
+          "daily": "Day",
+          "weekdays": "Weekday",
+          "MO": "Monday",
+          "TU": "Tuesday",
+          "WE": "Wednesday",
+          "TH": "Thursday",
+          "FR": "Friday",
+          "SA": "Saturday",
+          "SU": "Sunday",
+          "month_first": "1st of the month",
+          "month_last": "Last day of the month",
+          "once": "Once",
+          "custom": "Its own schedule"
+        },
+        "at": "at",
+        "on": "on",
+        "timeLabel": "Time",
+        "dateLabel": "Date",
+        "categoryLabel": "Signal category",
+        "signalWhen": "signal is created in Action Center",
+        "kpiLabel": "KPI",
+        "directionLabel": "Which way",
+        "direction": {
+          "down": "drops",
+          "up": "rises",
+          "any": "moves"
+        },
+        "by": "by",
+        "thresholdLabel": "Threshold",
+        "unitLabel": "Unit",
+        "unit": {
+          "percent": "%",
+          "absolute": "pts"
+        },
+        "periodLabel": "Period",
+        "period": {
+          "day": "in a day",
+          "week": "in a week",
+          "month": "in a month"
+        },
+        "watchRuleWhen": "Its watch rule fires",
+        "runAgent": "Run agent"
+      },
+      "scope": {
+        "brands": "Brands",
+        "allBrands": "All brands",
+        "brandCount": "{count, plural, one {# brand} other {# brands}}",
+        "noBrand": "Pick a brand",
+        "engines": "Platforms",
+        "allEngines": "All platforms",
+        "engineCount": "{count, plural, one {# platform} other {# platforms}}",
+        "topics": "Topics",
+        "anyTopic": "Any topic",
+        "topicCount": "{count, plural, one {# topic} other {# topics}}",
+        "noTopics": "These brands have no topics yet.",
+        "tags": "Prompt tags",
+        "anyTag": "Any tag",
+        "tagCount": "{count, plural, one {# tag} other {# tags}}",
+        "tagsNote": "One tag per line",
+        "urls": "URLs",
+        "anyUrl": "Any URL",
+        "urlCount": "{count, plural, one {# URL} other {# URLs}}",
+        "urlsNote": "One address per line, starting with https://"
+      },
+      "mode": {
+        "notes": {
+          "ask_first": "Every WRITE shows a card",
+          "auto": "Reads run · WRITEs show a card",
+          "full_auto": "Allowed WRITEs run, logged, undoable"
+        },
+        "lockTag": "Needs {plan} · you’re on {current}",
+        "gate": "Full auto · Needs {plan} · you’re on {current} — agents run approved changes for you, logged and undoable",
+        "upgrade": "Upgrade",
+        "for": "For {skill}",
+        "class": "Class",
+        "approval": "Approval",
+        "rows": {
+          "read": "Read data the skill needs",
+          "draft": "Update a draft",
+          "cms": "Update a CMS draft",
+          "check": "Follow-up check",
+          "publish": "Publish, push, send"
+        },
+        "outcome": {
+          "free": "Runs freely",
+          "card": "Approval card",
+          "auto": "Auto · logged with Undo",
+          "cmsFull": "Approval card · policy is Ask",
+          "oneClick": "One-click card",
+          "click": "Needs your click"
+        }
+      },
+      "connections": {
+        "title": "Connections",
+        "requiredBy": "Required by /{skill}",
+        "use": "Use {name}"
+      },
+      "model": {
+        "title": "Model",
+        "options": {
+          "auto": "Auto",
+          "fast": "Fast",
+          "writing": "Best writing",
+          "picked": "Picked model"
+        },
+        "notes": {
+          "auto": "Picks per step · Ansvisor limit",
+          "fast": "Cheaper, for reads and checks",
+          "writing": "For drafts and rewrites",
+          "picked": "Kept from this agent’s settings"
+        },
+        "ownKey": "Runs on your {provider} key · doesn’t use your limit",
+        "limit": "Uses your monthly AI limit"
+      },
+      "agent": {
+        "title": "Agent",
+        "name": "Name",
+        "nameNote": "1–60 characters, unique in your workspace",
+        "visibility": "Shared",
+        "visibilityOptions": {
+          "private": "Private",
+          "workspace": "Workspace"
+        },
+        "visibilityNotes": {
+          "private": "You and your Admins see it",
+          "workspace": "Everyone sees it · Admins and Managers can run it"
+        },
+        "adminsOnly": "Admins only",
+        "adminsOnlyNote": "Your Admin keeps workspace agents to Admins",
+        "maxRun": "Max per run",
+        "maxRunNote": "The most one run may use of the monthly AI limit, 1–50%",
+        "monthCap": "Monthly cap",
+        "monthCapNote": "The most this agent may use of the monthly AI limit a month, 1–100%",
+        "monthCapSet": "Set by an Admin · {cap} a month"
+      },
+      "summary": {
+        "title": "Agent",
+        "rows": {
+          "name": "Name",
+          "skill": "Skill",
+          "trigger": "Trigger",
+          "scope": "Scope",
+          "mode": "Mode",
+          "connections": "Connections",
+          "model": "Model",
+          "shared": "Shared",
+          "runsAs": "Runs as",
+          "approvals": "Approvals",
+          "outcome": "Outcome",
+          "publishing": "Publishing",
+          "cost": "Cost"
+        },
+        "none": "—",
+        "manual": "Manual",
+        "runsAs": "You · {role}",
+        "approvals": "Wait 7 days, then the run stops",
+        "outcome": "Checks on day 7 · 14 · 30 · 90",
+        "publishing": "Needs your click",
+        "cost": "Up to {share} of monthly limit per run"
+      },
+      "errors": {
+        "skill_required": "Pick a skill.",
+        "instructions_long": "Instructions can be at most 2,000 characters.",
+        "triggers_many": "An agent has up to 5 triggers.",
+        "triggers_same": "Two triggers are the same. Remove one.",
+        "trigger_invalid": "This trigger isn’t complete.",
+        "time_required": "Pick a time.",
+        "date_required": "Pick a date.",
+        "schedule_past": "A one-time schedule has to be in the future.",
+        "schedule_too_far": "A one-time schedule can be at most a year ahead.",
+        "category_required": "Pick a signal category.",
+        "kpi_required": "Pick a KPI.",
+        "threshold": "Enter a number above 0.",
+        "threshold_percent": "A percent threshold is at most 1,000%.",
+        "watch_rule_required": "Pick a watch rule.",
+        "brand_required": "Pick at least one brand.",
+        "no_brands": "Add a brand to your workspace first.",
+        "scope_invalid": "Check the brands and topics this agent works on.",
+        "engines_many": "Pick at most 10 platforms.",
+        "tags_invalid": "Use up to 20 tags of at most 50 characters each.",
+        "urls_invalid": "Use up to 20 addresses that start with https:// or http://.",
+        "full_auto_plan": "Full auto needs {plan}. Pick another mode.",
+        "full_auto_off": "Your Admin turned Full auto off. Pick another mode.",
+        "name_required": "Give the agent a name.",
+        "name_long": "A name can be at most 60 characters.",
+        "run_share": "Enter a whole number from 1 to 50.",
+        "month_share": "Enter a whole number from 1 to 100.",
+        "workspace_admins_only": "Only Admins can share agents with the workspace here."
+      }
     },
     "deniedTitle": "I can't do this for you",
     "closeDenial": "Close",
     "list": {
-      "title": "Agents",
+      "title": "Agent Center",
       "formula": {
         "skill": "skill",
         "mode": "mode",
@@ -5141,7 +5870,7 @@
         "notMetered": "—"
       },
       "notFound": "This agent isn't available. It may have been deleted, or it isn't shared with you.",
-      "backToAgents": "Back to Agents",
+      "backToAgents": "Back to Agent Center",
       "loadFailed": "Couldn't load this agent.",
       "retry": "Retry"
     }
@@ -5230,6 +5959,7 @@
       "empty": "No pages to audit right now. Opportunities come from Google Analytics (valuable pages without AI traffic), from prompts where a competitor is cited and you aren't, and from your site's pages that were never audited or not in {days} days.",
       "showMore": "Show more",
       "prefsFailed": "Couldn't update the pages",
+      "prefsManagersOnly": "Only admins and managers can pin, exclude or restore pages.",
       "templatePages": "· {pages} pages",
       "templateFixOnce": "Fix once, applies to {pages} pages",
       "templateAudited": "{audited} of {pages}",
@@ -9594,6 +10324,7 @@
       "totalSub": "from {google} Google searches",
       "averageTitle": "Avg. AI Volume",
       "averageSub": "per prompt",
+      "chartCaption": "Total estimated AI-answered queries across all topic clusters (Google volume × the {rate} AI adoption rate), split by answer-engine share: Google AI Overviews, Google AI Mode and standalone chatbots.",
       "googleColumn": "Google Vol.",
       "googleTip": "The prompt's monthly Google searches: the median of its related keywords that have search data.",
       "aiColumn": "Est. AI Vol.",
@@ -11493,7 +12224,9 @@
       "aiUsage": "{count}x AI usage",
       "aiUsageCustom": "Custom AI usage, from {count}x",
       "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. The free trial comes with a smaller allowance.",
-      "aiUsageCustomHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. Ansvisor sets the amount with you."
+      "aiUsageCustomHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. Ansvisor sets the amount with you.",
+      "aiUsageHintChat": "A monthly allowance for Ansvisor's AI features: Chat and agents, Improve suggestions, the Content Editor's AI and the Action Center's task writing. Your own AI key comes with Enterprise only. The free trial comes with a smaller allowance.",
+      "aiUsageCustomHintChat": "A monthly allowance for Ansvisor's AI features: Chat and agents, Improve suggestions, the Content Editor's AI and the Action Center's task writing. On Enterprise, Chat can also run on your own AI key. Ansvisor sets the amount with you."
     },
     "contactUs": "Contact Us",
     "integrations": "Integrations",

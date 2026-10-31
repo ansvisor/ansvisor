@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Paperclip } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,7 @@ import { pagePath } from '@/lib/content/overlap';
 import { cn } from '@/lib/utils';
 import type { CompetitorFindings } from '@/lib/action-center/competitor-findings';
 import type { WinningFindings } from '@/lib/action-center/winning-findings';
+import type { TaskAttachment } from '@/lib/action-center/chat-attachments';
 import { CompetitorFindingsView } from './competitor-findings';
 import { WinningFindingsView } from './winning-findings';
 
@@ -44,6 +45,67 @@ export function TaskTypeBadge({ type }: { type: ActionTaskDetails['type'] }) {
     <Badge variant="outline" className="shrink-0 text-[10px]">
       {tTypes(type)}
     </Badge>
+  );
+}
+
+/**
+ * Attached from Chat (CHAT-09 items 13, 16; the owner's decision of
+ * 2026-10-31): the files and drafts Chat attached to the task, each with
+ * who attached it, when, and Open: a draft in the Content Editor, any other
+ * file downloaded. Read only: attaching is Chat's, marking the task done
+ * stays the person's click.
+ */
+export function AttachedFromChat({ attachments }: { attachments: TaskAttachment[] }) {
+  const t = useTranslations('actionCenter.actionsPage.drawer.task.attachedFromChat');
+  const format = useFormatter();
+  if (attachments.length === 0) return null;
+  return (
+    <section aria-label={t('title')} className="space-y-1">
+      <p className="text-xs font-medium text-muted-foreground">{t('title')}</p>
+      <ul className="space-y-1">
+        {attachments.map((file) => (
+          <li
+            key={file.fileId}
+            className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs"
+          >
+            <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium" title={file.title}>
+                {file.title}
+              </span>
+              <span className="block truncate text-muted-foreground">
+                {t('by', {
+                  name: file.attachedBy ?? t('someone'),
+                  date: format.dateTime(new Date(file.attachedAt), {
+                    month: 'short',
+                    day: 'numeric',
+                  }),
+                })}
+              </span>
+            </span>
+            {file.draft ? (
+              <Link
+                href={file.href}
+                data-action="task.openAttachment"
+                className="inline-flex shrink-0 items-center gap-0.5 font-medium underline-offset-2 hover:underline"
+              >
+                {t('openDraft')}
+                <ArrowUpRight className="h-3 w-3" aria-hidden />
+              </Link>
+            ) : (
+              <a
+                href={file.href}
+                data-action="task.openAttachment"
+                className="inline-flex shrink-0 items-center gap-0.5 font-medium underline-offset-2 hover:underline"
+              >
+                {t('open')}
+                <ArrowUpRight className="h-3 w-3" aria-hidden />
+              </a>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -139,6 +201,7 @@ export function TaskDetailView({
   check,
   competitor = null,
   winning = null,
+  attachments = [],
 }: {
   details: ActionTaskDetails | null;
   disabled: boolean;
@@ -152,6 +215,8 @@ export function TaskDetailView({
   competitor?: CompetitorFindings | null;
   /** What Find what sets your winning pages apart found (learning C4). */
   winning?: WinningFindings | null;
+  /** What Chat attached to it (CHAT-09 items 13, 16). */
+  attachments?: TaskAttachment[];
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.task');
   const tChecks = useTranslations('actionCenter.taskChecks');
@@ -258,6 +323,7 @@ export function TaskDetailView({
       ) : (
         !details && <p className="text-xs text-muted-foreground">{t('empty')}</p>
       )}
+      <AttachedFromChat attachments={attachments} />
       {(sentContent || sentWebhook) && (
         <div className="space-y-0.5 text-xs text-muted-foreground">
           {sentContent && (

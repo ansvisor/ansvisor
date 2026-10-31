@@ -10,6 +10,7 @@ import {
 } from './events';
 import type { ChatPhase } from './engine-model';
 import type { NextMoveInput } from './next-moves';
+import type { PageSites } from './page-sites';
 import type { ChatMode } from './precedence';
 import { publishRunEvent, type TailSource } from './run-hub';
 import type { ChatEffort } from './run-limits';
@@ -80,6 +81,13 @@ export interface PendingCalls {
   offerDontAskAgain: boolean;
 }
 
+/**
+ * Why a run stopped: the person's Stop, a card left 7 days, its agent run's
+ * cap, or the Action Center action its run worked on closed (CHAT-21 edge
+ * case 7).
+ */
+export type ChatStopReason = 'person' | 'expired' | 'limit' | 'action_closed';
+
 /** A run's phase, counters and what it read so far (CHAT-04 item 5, CHAT-20 §14). */
 export interface RunProgress {
   phase: ChatPhase;
@@ -88,6 +96,14 @@ export interface RunProgress {
   dataChars: number;
   /** Writes made, by tool name. */
   writes: Record<string, number>;
+  /** Reads made, by tool name, for the reads READ_CAPS caps (pages opened). */
+  toolReads?: Record<string, number>;
+  /**
+   * The sites the run's reads listed in their structured fields (competitors'
+   * domains, cited and audited pages): with the person's and the brand's, a
+   * page may be opened on these (CHAT-10 item 11, page-sites.ts).
+   */
+  pageSites?: PageSites;
   /** What the read phase read, for the writing model. */
   readLog: { tool: string; input: unknown; result: Json; source?: string; untrusted?: boolean }[];
   /** Steps so far: the next one is n = steps + 1. */
@@ -102,13 +118,16 @@ export interface RunProgress {
   brandId: string | null;
   /**
    * A read this run returned text from outside the workspace's own numbers
-   * (AI answers, cited pages, drafts, generated tasks): every change after
-   * it shows a card, in every mode (CHAT-20 §16a).
+   * (AI answers, cited pages, drafts, generated tasks), or the run started
+   * so (a tainted run's next move, a chat where a read aimed words at AI):
+   * every change after it shows a card, in every mode (CHAT-20 §16a).
    */
   tainted?: boolean;
   /**
-   * A read returned text written to steer an AI assistant (CHAT-05 item 12):
-   * ignored, said so in the answer, and the rest of the run asks first.
+   * A read returned text written to steer an AI assistant (CHAT-05 item
+   * 12), or a page this run opened aimed words at AI (§16a rule 3): ignored,
+   * said so in the answer, and the rest of the run asks first and opens only
+   * pages given exactly; a later run of the chat starts tainted.
    */
   injection?: boolean;
   /**
@@ -116,10 +135,33 @@ export interface RunProgress {
    * run's data, and the ones taken out (a placeholder in their place).
    */
   facts?: { checked: number; replaced: string[] };
+  /**
+   * The question is a next move a tainted run suggested: no site comes from
+   * its words, here or in a later turn (its row's context_json says so too).
+   */
+  fromTaintedMove?: boolean;
   /** Question cards asked so far (CHAT-07 §B: at most 4 a run). */
   asks?: number;
+  /** Why did it move analyses kept so far: the next one's card is n = whys + 1. */
+  whys?: number;
   /** The next moves the model suggested last (CHAT-07 §C), kept once the run ends. */
   nextMoves?: NextMoveInput[];
+  /** The limit a run at paused_cap reached: the month's AI limit, or its agent run's cap. */
+  capHit?: 'run' | 'month';
+  /** Why a stopped run stopped (its run.stopped reason), for its agent run (CHAT-21 §H). */
+  stoppedFor?: ChatStopReason;
+  /**
+   * Its scope holds text from outside the workspace's own numbers (an Action
+   * Center action's title and tasks, CHAT-21 §F): the models read it as
+   * untrusted data, never as instructions (CHAT-20 §16a).
+   */
+  scopeUntrusted?: boolean;
+  /** The skills loaded for this run, by name, in order (CHAT-13 item 4: at most 3). */
+  skills?: string[];
+  /** The run put Action Center tasks in its chat's task strip (CHAT-09 §B): it shows it as it ends. */
+  taskStrip?: boolean;
+  /** The action a /tasks run opened last (get_action): what it files next is for its task. */
+  taskAction?: string;
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {

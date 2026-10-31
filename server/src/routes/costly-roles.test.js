@@ -209,3 +209,28 @@ describe('the costly AI routes', () => {
     }
   });
 });
+
+describe('the content routes, for a brand the caller was not given', () => {
+  it('refuse /generate and /:id/brief with no_brand_access, before anything is queued', async () => {
+    role = 'manager';
+    assertBrandAccess.mockRejectedValue(
+      Object.assign(new Error("You don't have access to this brand"), {
+        status: 403,
+        code: 'no_brand_access',
+      }),
+    );
+    for (const [path, body] of [
+      ['/content/generate', { brandId: 'b1' }],
+      ['/content/o1/brief', {}],
+    ]) {
+      const res = await post(path, body);
+      expect(res.status, path).toBe(403);
+      expect(await res.json(), path).toEqual({
+        error: "You don't have access to this brand",
+        code: 'no_brand_access',
+      });
+    }
+    expect(createJob).not.toHaveBeenCalled();
+    expect(generateObject).not.toHaveBeenCalled();
+  });
+});

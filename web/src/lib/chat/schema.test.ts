@@ -3,9 +3,10 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { CHAT_MODES } from './precedence';
+import { WHY_METRICS } from './why/explain';
 
 /**
- * Chat's Wave 1 (00407–00413) and Wave 2 (00417–00422) tables as the
+ * Chat's Wave 1 (00407–00413) and Wave 2 (00417–00423) tables as the
  * migrations leave them: who reads them, what stays with the server, and the
  * limits the specs set. Read from the SQL, as events.test.ts reads the step
  * kinds: the repository has no database tests.
@@ -240,7 +241,7 @@ describe('add-on packs', () => {
   });
 });
 
-const WAVE_2 = ['00417', '00418', '00419', '00420', '00421', '00422'];
+const WAVE_2 = ['00417', '00418', '00419', '00420', '00421', '00422', '00423'];
 const wave2 = WAVE_2.map(migration).join('\n');
 
 /** The tables Wave 2 creates. */
@@ -299,11 +300,12 @@ describe('Wave 2 tables', () => {
     expect(wave2).not.toMatch(/create policy[^;]*for (insert|update|delete|all)\b/);
   });
 
-  it('keeps the agent queue, the holds and the agents’ shares with the server', () => {
+  it('keeps the agent queue, the holds, the agents’ shares and Why’s counts with the server', () => {
     for (const fn of [
       'chat_start_next_agent_run',
       'reserve_chat_ai_usage',
       'chat_agent_usage_shares',
+      'chat_why_cells',
     ]) {
       expect(wave2, fn).toMatch(
         new RegExp(
@@ -314,6 +316,75 @@ describe('Wave 2 tables', () => {
         new RegExp(`grant execute on function public\\.${fn}\\([^)]*\\)\\s+to authenticated`),
       );
     }
+  });
+});
+
+describe('Why’s counts (00423)', () => {
+  const why = migration('00423');
+
+  it('read as the caller, on a pinned search path, and change nothing', () => {
+    expect(why).toMatch(/create or replace function public\.chat_why_cells\(/);
+    expect(why).not.toMatch(/security definer/);
+    expect(why).toMatch(/\bstable\b/);
+    expect(why).toMatch(/set search_path = ''/);
+    expect(why).not.toMatch(/\b(insert into|update public|delete from)\b/);
+    expect(why).toMatch(
+      /grant execute on function public\.chat_why_cells\([^)]*\)\s+to service_role/,
+    );
+  });
+
+  it('read 92 days at most a call, period a before period b', () => {
+    expect(why).toMatch(/p_a_from > p_a_to or p_b_from > p_b_to/);
+    expect(why).toMatch(/p_a_to >= p_b_from/);
+    expect(why).toMatch(/p_series_from > p_b_to/);
+    expect(why).toMatch(
+      /p_a_to - p_a_from > 92 or p_b_to - p_b_from > 92 or p_b_to - p_series_from > 92/,
+    );
+  });
+
+  it('read both rollups by brand and day, and sum the competitors on their own', () => {
+    for (const table of ['insights_prompt_daily d', 'insights_competitor_prompt_daily c']) {
+      expect(why).toContain(`from public.${table}`);
+    }
+    expect(why.match(/\.brand_id = p_brand_id/g)).toHaveLength(2);
+    expect(why.match(/day between p_series_from and p_b_to\)/g)).toHaveLength(2);
+    // Grouped before they meet: one row a side, so no join repeats a count.
+    expect(why).toMatch(/competitor_cells as \([\s\S]*?group by/);
+    expect(why).toMatch(/left join competitor_cells c/);
+    // Share of voice and visibility as Insights counts them, and whether old rows were read.
+    expect(why).toContain('sum(r.total_mentions)');
+    expect(why).toContain('sum(r.mention_count)');
+    expect(why).toMatch(
+      /count\(distinct r\.prompt_id\) filter \(where r\.has_mention or r\.has_citation\)/,
+    );
+    expect(why).toMatch(/'complete', not exists/);
+    expect(why).toContain("'[]'::jsonb");
+  });
+
+  it('return the Visibility score’s position factor, per cell and per day', () => {
+    // Insights' Visibility card: 0.6 × mention rate + 0.25 × citation rate +
+    // 0.15 × (sum of 1/position ÷ positions), as ai_visibility_aggregates_daily.
+    expect(why.match(/sum\(r\.sum_inv_position\) as sum_inv_position/g)).toHaveLength(2);
+    expect(why.match(/'sum_inv_position', b\.sum_inv_position/g)).toHaveLength(2);
+  });
+
+  it('read each rollup on one day range of its (brand_id, day) index', () => {
+    for (const t of ['d', 'c']) {
+      expect(why).toContain(`and ${t}.day between least(p_a_from, p_series_from) and p_b_to`);
+    }
+  });
+});
+
+describe('Why analyses (00420, 00427)', () => {
+  it('keep every metric explain_change explains, the Visibility score too', () => {
+    // The last migration that sets the metric check is the one in force.
+    const sets = files.filter((file) =>
+      /chat_why_analyses[\s\S]*metric in \(/.test(
+        readFileSync(`${dir}/${file}`, 'utf8').replace(/--[^\n]*/g, ''),
+      ),
+    );
+    const latest = migration(sets[sets.length - 1].slice(0, 5));
+    expect(allowed(latest, 'metric').sort()).toEqual([...WHY_METRICS].sort());
   });
 });
 
@@ -498,6 +569,56 @@ describe('the impact ledger', () => {
   it('is read by every member of the workspace', () => {
     expect(policy('ship_events: member select', wave2)).toContain(
       'organization_id in ( select p.organization_id from public.profiles p where p.id = auth.uid() )',
+    );
+  });
+
+  it('writes one ship event per CMS send, and notes a page published again (00425)', () => {
+    const delivery = migration('00425');
+    expect(delivery).toMatch(
+      /add column if not exists content_draft_delivery_id uuid\s+references public\.content_draft_deliveries\(id\) on delete set null/,
+    );
+    expect(delivery).toMatch(/add column if not exists republished_at timestamptz/);
+    // A plain unique index: PostgREST's on_conflict can't name a partial one's predicate.
+    expect(delivery).toMatch(
+      /create unique index if not exists ship_events_content_draft_delivery_uidx\s+on public\.ship_events \(content_draft_delivery_id\);/,
+    );
+    expect(delivery).not.toMatch(/grant [^;]*to authenticated/);
+  });
+
+  it('decides a CMS publish under a lock on its draft, into a cms_publish only (00428)', () => {
+    const ship = migration('00428');
+    expect(ship).toMatch(
+      /pg_advisory_xact_lock\(hashtext\('ship_cms_publish:' \|\| p_content_draft_id::text\)\)/,
+    );
+    // The window is the server's (REPUBLISH_DAYS), passed in: set in one place.
+    expect(ship).toMatch(
+      /and s\.kind = 'cms_publish'\s+and s\.shipped_at >= p_shipped_at - make_interval\(days => p_republish_days\)\s+and s\.shipped_at <= p_shipped_at \+ make_interval\(days => p_republish_days\)/,
+    );
+    expect(ship).toMatch(/p_execution_mode text,\s+p_republish_days integer\s*\)/);
+    expect(ship).not.toMatch(/interval '\d+ days'/);
+    // The latest before the send first, else the nearest after it.
+    expect(ship).toMatch(
+      /order by s\.shipped_at > p_shipped_at,\s+greatest\(s\.shipped_at - p_shipped_at, p_shipped_at - s\.shipped_at\)/,
+    );
+    expect(ship).toMatch(/on conflict \(content_draft_delivery_id\) do nothing/);
+    expect(ship).toMatch(/set search_path = ''/);
+    expect(ship).toMatch(
+      /revoke all on function public\.ship_cms_publish\([^)]*\)\s+from public, anon, authenticated;/,
+    );
+    expect(ship).toMatch(
+      /grant execute on function public\.ship_cms_publish\([^)]*\)\s+to service_role;/,
+    );
+    expect(ship).toMatch(/check \(cardinality\(republished_delivery_ids\) <= 50\)/);
+  });
+
+  it('finds a send noted on a cms_publish by its id, before the draft lookup (00428)', () => {
+    const ship = migration('00428');
+    // A deleted draft sets content_draft_id null: only the noted ids tie the send to it.
+    const noted = ship.indexOf('where s.republished_delivery_ids @> array[p_delivery_id]');
+    expect(noted).toBeGreaterThan(-1);
+    expect(noted).toBeLessThan(ship.indexOf('and s.content_draft_id = p_content_draft_id'));
+    expect(ship).toMatch(
+      /create index if not exists ship_events_republished_delivery_ids_idx\s+on public\.ship_events using gin \(republished_delivery_ids\);/,
     );
   });
 });

@@ -1,6 +1,8 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { assertWritable } from '@/lib/subscription-guard';
+import { isManager } from '@/lib/session-role';
 import { API_BASE_URL } from '@/config/api';
 import type { SiteTrust } from '@/lib/content/site-trust';
 import type { NoPlanMark } from '@/lib/billing/no-plan';
@@ -326,6 +328,75 @@ export async function runAuditsBulk(brandId: string, urls: string[]): Promise<{ 
 
   const data = await res.json();
   return { started: (data.audits ?? []).length };
+}
+
+export type StartSiteAuditsResult =
+  | { ok: true; started: number; audits: { id: string; url: string }[] }
+  | { ok: false; reason: 'forbidden_role' | 'quota_exceeded' | 'failed'; message: string };
+
+/**
+ * Start audits of a brand's pages: Chat's run_site_audit (CHAT-20 §9 row
+ * 37). Admins and Managers, checked here (DECISIONS T). One page as Run
+ * audit starts it, several as the Pages tab's Re-audit
+ * (the API's bulk route: every page fits the month's Site Audit quota, or
+ * none starts). The quota is the API's check, said back as quota_exceeded.
+ * Errors come back as values (#427).
+ */
+export async function startSiteAudits(
+  brandId: string,
+  urls: string[],
+): Promise<StartSiteAuditsResult> {
+  try {
+    await assertWritable({ brandId });
+    return await startAudits(brandId, urls);
+  } catch (err) {
+    console.error('Failed to start the audits:', err);
+    return { ok: false, reason: 'failed', message: 'The audits couldn’t be started. Try again.' };
+  }
+}
+
+async function startAudits(brandId: string, urls: string[]): Promise<StartSiteAuditsResult> {
+  if (!(await isManager(await createClient()))) {
+    return {
+      ok: false,
+      reason: 'forbidden_role',
+      message: 'Only an admin or a manager can start audits from Chat.',
+    };
+  }
+  const session = await getSession();
+  const many = urls.length > 1;
+  let res: Response;
+  try {
+    res = await fetch(`${AEO_SERVER_URL}/api/audits${many ? '/bulk' : ''}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(many ? { brandId, urls } : { brandId, url: urls[0] }),
+    });
+  } catch (err) {
+    console.error('Failed to start the audits:', err);
+    return { ok: false, reason: 'failed', message: 'Site Audit couldn’t be reached. Try again.' };
+  }
+  const body = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    message?: string;
+    audit?: { id: string; url: string };
+    audits?: { id: string; url: string }[];
+  };
+  if (!res.ok) {
+    return {
+      ok: false,
+      reason: body.error === 'quota_exceeded' ? 'quota_exceeded' : 'failed',
+      message: body.message || `Server error: ${res.status}`,
+    };
+  }
+  const audits = (many ? (body.audits ?? []) : body.audit ? [body.audit] : []).map((a) => ({
+    id: a.id,
+    url: a.url,
+  }));
+  return { ok: true, started: audits.length, audits };
 }
 
 /** One of the most common Authority / E-E-A-T gaps across the audited pages. */

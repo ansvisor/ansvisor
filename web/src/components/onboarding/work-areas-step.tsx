@@ -22,7 +22,6 @@ import { cn } from '@/lib/utils';
 import { dashboardNav } from '@/config/dashboard';
 import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import {
-  MENU_SECTIONS,
   WORK_AREAS,
   WORK_AREA_IDS,
   hiddenWithWorkAreas,
@@ -30,6 +29,7 @@ import {
   type WorkAreaId,
 } from '@/lib/menu-access';
 import { setMyWorkAreas } from '@/lib/actions/menu-access';
+import { useMenuSections } from '@/components/providers/menu-access-provider';
 
 const AREA_ICONS: Record<WorkAreaId, LucideIcon> = {
   leaders: Crown,
@@ -77,7 +77,9 @@ export function WorkAreasStep({
   const tNav = useTranslations('nav');
   const [picked, setPicked] = useState<WorkAreaId[]>([]);
   const [saving, setSaving] = useState<'continue' | 'skip' | null>(null);
-  const hidden = hiddenWithWorkAreas(hiddenByAdmin, picked);
+  // Agent Center only with the new Chat on (none outside the dashboard).
+  const sections = useMenuSections();
+  const hidden = hiddenWithWorkAreas(hiddenByAdmin, picked, sections);
   const label = (title: string) => getDashboardNavLabel(title, tNav);
 
   const toggle = (area: WorkAreaId) =>
@@ -136,6 +138,7 @@ export function WorkAreasStep({
                 </span>
                 <span className="text-[11px] text-muted-foreground/80">
                   {area.sections
+                    .filter((section) => sections.includes(section))
                     .map((section) => label(SECTIONS.find((s) => s.section === section)!.title))
                     .join(' · ')}
                 </span>
@@ -149,24 +152,20 @@ export function WorkAreasStep({
             {t('yourMenu')}
             <span className="text-xs font-normal text-muted-foreground">
               {tAreas('sectionCount', {
-                count: MENU_SECTIONS.length - hidden.length,
-                total: MENU_SECTIONS.length,
+                count: sections.length - hidden.length,
+                total: sections.length,
               })}
             </span>
           </p>
           <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3 lg:grid-cols-4">
-            {SECTIONS.filter(({ section }) => !hidden.includes(section)).map(
-              ({ section, title, icon: Icon }) => (
-                <li
-                  key={section}
-                  data-section={section}
-                  className="flex items-center gap-2 text-sm"
-                >
-                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{label(title)}</span>
-                </li>
-              ),
-            )}
+            {SECTIONS.filter(
+              ({ section }) => sections.includes(section) && !hidden.includes(section),
+            ).map(({ section, title, icon: Icon }) => (
+              <li key={section} data-section={section} className="flex items-center gap-2 text-sm">
+                <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="truncate">{label(title)}</span>
+              </li>
+            ))}
           </ul>
           {hiddenByAdmin.length > 0 && (
             <p className="mt-2 text-xs text-muted-foreground">
