@@ -7,6 +7,10 @@ import type { ContentAuthor } from '@/lib/content/authors';
 import type { PasteChecks } from '@/lib/content/ready-to-publish';
 
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));
+// No white label kit: downloads keep Ansvisor's names (export-name.test.ts has a kit's).
+vi.mock('@/lib/actions/white-label', () => ({
+  getExportBranding: async () => ({ ok: true, branding: null }),
+}));
 vi.mock('sonner', () => ({ toast }));
 const saveBlob = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/download', () => ({ saveBlob }));
@@ -335,6 +339,8 @@ describe('ExportDialog', () => {
         }),
         front: expect.objectContaining({ slug: 'pour-over', author: 'Ada Lovelace' }),
       }),
+      null,
+      undefined,
     );
     expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'ansvisor_content_pour-over.docx');
     expect(localStorage.getItem('aeo:content-export-destination')).toBe('docx');
@@ -423,6 +429,8 @@ describe('ExportDialog', () => {
       'Pour-over',
       '<p>Done.</p>',
       expect.objectContaining({ front: expect.objectContaining({ slug: 'pour-over' }) }),
+      null,
+      undefined,
     );
     expect(saveBlob).toHaveBeenLastCalledWith(expect.any(Blob), 'ansvisor_content_pour-over.xlsx');
     await act(async () => destination('CSV').click());
@@ -432,6 +440,8 @@ describe('ExportDialog', () => {
       'Pour-over',
       '<p>Done.</p>',
       expect.anything(),
+      null,
+      undefined,
     );
     expect(saveBlob).toHaveBeenLastCalledWith(expect.any(Blob), 'ansvisor_content_pour-over.csv');
   });
@@ -471,6 +481,8 @@ describe('ExportDialog', () => {
       'Pour-over',
       '<h1>Pour-over</h1><p>By Ada Lovelace</p><p>Done.</p>',
       expect.anything(),
+      null,
+      undefined,
     );
     await act(async () => destination('HTML').click());
     await act(async () => button('Copy HTML')!.click());
@@ -490,6 +502,8 @@ describe('ExportDialog', () => {
       'Pour-over',
       '<p>Done.</p>',
       expect.anything(),
+      null,
+      undefined,
     );
   });
 });

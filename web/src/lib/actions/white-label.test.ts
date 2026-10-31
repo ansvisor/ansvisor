@@ -424,3 +424,28 @@ describe('getReportBranding', () => {
     });
   });
 });
+
+describe('getExportBranding', () => {
+  it('gives the company while the kit is in use, and none on Starter or without a kit', async () => {
+    kit = { company_name: 'Acme Agency', logo_path: null };
+    expect(await actions.getExportBranding()).toEqual({
+      ok: true,
+      branding: { companyName: 'Acme Agency' },
+    });
+    kit = { company_name: null, logo_path: kitLogo };
+    expect(await actions.getExportBranding()).toEqual({
+      ok: true,
+      branding: { companyName: null },
+    });
+    kit = { company_name: null, logo_path: null };
+    expect(await actions.getExportBranding()).toEqual({ ok: true, branding: null });
+    planId = 'starter';
+    kit = { company_name: 'Acme Agency', logo_path: null };
+    expect(await actions.getExportBranding()).toEqual({ ok: true, branding: null });
+  });
+
+  it('says it failed when no one is signed in', async () => {
+    user = null;
+    expect(await actions.getExportBranding()).toEqual({ ok: false, failure: 'failed' });
+  });
+});

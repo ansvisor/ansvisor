@@ -22,6 +22,7 @@ import type {
   TrafficTrendPoint,
 } from '@/lib/actions/traffic';
 import { csvLine } from '@/lib/csv';
+import { withFileWord } from '@/lib/white-label/kit';
 import { getPlatformName, platformTableRows } from '@/lib/traffic-platforms';
 import { pageStatuses } from '@/lib/traffic-pages';
 import { conversionRate } from '@/lib/traffic-conversions';
@@ -685,7 +686,8 @@ export function fileSlug(value: string): string {
 
 /**
  * ansvisor-ai-traffic-{brand}-{from}_{to}.{ext} (spec §3.9); a single table
- * adds its name. All time has no first day.
+ * adds its name. All time has no first day. A white label kit's word takes
+ * Ansvisor's place (00429), or none.
  */
 export function trafficExportFileName({
   brand,
@@ -693,6 +695,7 @@ export function trafficExportFileName({
   to,
   ext,
   table,
+  word = 'ansvisor',
 }: {
   brand: string;
   from: string | null;
@@ -700,8 +703,15 @@ export function trafficExportFileName({
   ext: 'xlsx' | 'zip' | 'csv';
   /** The table's sheet name, for a single table. */
   table?: string;
+  /** The word the name starts with (fileWord). */
+  word?: string | null;
 }): string {
   const range = from ? `${from}_${to}` : `all-time_${to}`;
-  const parts = ['ansvisor-ai-traffic', fileSlug(brand), table && fileSlug(table), range];
+  const parts = [
+    withFileWord(word, 'ai-traffic', '-'),
+    fileSlug(brand),
+    table && fileSlug(table),
+    range,
+  ];
   return `${parts.filter(Boolean).join('-')}.${ext}`;
 }

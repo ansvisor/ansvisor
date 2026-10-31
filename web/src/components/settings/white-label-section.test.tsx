@@ -21,6 +21,8 @@ const actions = vi.hoisted(() => ({
 vi.mock('@/lib/actions/white-label', () => actions);
 const uploadLogo = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/white-label/logo-upload', () => ({ uploadLogo }));
+const forgetExportBranding = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/white-label/export-name', () => ({ forgetExportBranding }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
 }));
@@ -134,6 +136,8 @@ describe('WhiteLabelSection', () => {
       footerText: 'acme.com',
     });
     expect(toast.success).toHaveBeenCalledWith('White label saved.');
+    // Downloads are named after the kit: read again on the next one.
+    expect(forgetExportBranding).toHaveBeenCalled();
   });
 
   it('says a color it can’t read, and warns when a light one is darkened for text', async () => {

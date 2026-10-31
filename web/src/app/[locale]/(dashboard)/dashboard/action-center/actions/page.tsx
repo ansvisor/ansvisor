@@ -94,6 +94,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { BYTE_ORDER_MARK, actionListCsv } from '@/lib/action-center/export';
 import { saveBlob } from '@/lib/download';
+import { exportFileName } from '@/lib/white-label/export-name';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const isOpen = (action: ActionItem) => OPEN_ACTION_STATUSES.includes(action.status);
@@ -541,7 +542,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
     const slug = brand.slug ?? 'brand';
     saveBlob(
       new Blob([BYTE_ORDER_MARK, csv], { type: 'text/csv;charset=utf-8;' }),
-      `ansvisor_${slug}_actions_${date}.csv`,
+      await exportFileName(`${slug}_actions_${date}.csv`),
     );
   }, [brand.id, brand.slug, visible, tTexts, tCategories, t]);
 

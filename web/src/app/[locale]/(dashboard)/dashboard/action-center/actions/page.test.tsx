@@ -83,6 +83,10 @@ const {
   firstRun: { run: null as FirstRun | null, finished: new Set<(brandId: string) => void>() },
 }));
 
+// No white label kit: downloads keep Ansvisor's names (export-name.test.ts has a kit's).
+vi.mock('@/lib/actions/white-label', () => ({
+  getExportBranding: async () => ({ ok: true, branding: null }),
+}));
 vi.mock('next-intl', () => ({
   // Chat's "How do I finish …" names its action: the test reads which one.
   useTranslations: () => (key: string, values?: { title?: string }) =>

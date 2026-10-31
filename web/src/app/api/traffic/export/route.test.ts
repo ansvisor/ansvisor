@@ -12,6 +12,9 @@ const auth = vi.hoisted(() => ({
   user: { id: 'u1' } as { id: string } | null,
   brand: { id: 'b1', name: 'Acme Coffee', slug: 'acme-coffee' } as Record<string, string> | null,
 }));
+// The workspace's white label kit for its downloads (00429): none unless a test sets one.
+const kit = vi.hoisted(() => ({ read: { ok: true, branding: null } as unknown }));
+vi.mock('@/lib/actions/white-label', () => ({ getExportBranding: async () => kit.read }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: auth.user } }) },
@@ -60,6 +63,7 @@ function get(params: Record<string, string>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  kit.read = { ok: true, branding: null };
   auth.user = { id: 'u1' };
   auth.brand = { id: BRAND, name: 'Acme Coffee', slug: 'acme-coffee' };
   loaders.getTrafficSummary.mockResolvedValue({
@@ -137,6 +141,19 @@ async function csvOf(res: Response) {
 }
 
 describe('GET /api/traffic/export', () => {
+  it('names the file after a white label kit’s company, or neither when it can’t be read', async () => {
+    kit.read = { ok: true, branding: { companyName: 'Acme Agency' } };
+    const branded = await get({ format: 'xlsx', from: WINDOW.dateFrom });
+    expect(branded.headers.get('Content-Disposition')).toMatch(
+      /^attachment; filename="acme-agency-ai-traffic-acme-coffee-2026-10-11_/,
+    );
+    kit.read = { ok: false, failure: 'failed' };
+    const unread = await get({ format: 'xlsx', from: WINDOW.dateFrom });
+    expect(unread.headers.get('Content-Disposition')).toMatch(
+      /^attachment; filename="ai-traffic-acme-coffee-2026-10-11_/,
+    );
+  });
+
   it('builds the whole page as Excel, one sheet per section after Filters', async () => {
     const res = await get({ format: 'xlsx', from: WINDOW.dateFrom });
 

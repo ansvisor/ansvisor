@@ -36,6 +36,7 @@ import {
 import { ExportFormatIcon } from '@/components/content/export-format-icon';
 import { saveBlob } from '@/lib/download';
 import { getFaviconUrl } from '@/lib/favicon';
+import { exportAuthor, exportFileWord } from '@/lib/white-label/export-name';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from './_html-block';
 
@@ -334,8 +335,8 @@ export function ExportDialog({
     const name = title.trim() || t('untitled');
     try {
       saveBlob(
-        await draftExportBlob(format, name, withLine, exportFields),
-        draftExportFileName(name, format),
+        await draftExportBlob(format, name, withLine, exportFields, null, await exportAuthor()),
+        draftExportFileName(name, format, await exportFileWord()),
       );
     } catch (err) {
       console.error('Failed to export the page:', err);
