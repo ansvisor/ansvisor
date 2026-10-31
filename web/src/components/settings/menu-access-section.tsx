@@ -37,7 +37,7 @@ import {
   type MenuAccessSettings,
   type MenuRole,
 } from '@/lib/actions/menu-access';
-import { useCanManageMenus } from '@/components/providers/menu-access-provider';
+import { useCanManageMenus, useMenuSections } from '@/components/providers/menu-access-provider';
 import { MenuManagersCard, MenuPeopleCard } from '@/components/settings/menu-access-people';
 
 const MENU_ROLES: MenuRole[] = ['manager', 'analyst', 'agency_partner'];
@@ -82,6 +82,12 @@ function MenuAccessSettingsView() {
   const t = useTranslations('settings.menuAccess');
   const tSettings = useTranslations('settings');
   const tNav = useTranslations('nav');
+  // The rows: the sections the workspace has (Agent Center only with the new Chat on).
+  const sections = useMenuSections();
+  const groups = GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => sections.includes(item.section)),
+  }));
   const [settings, setSettings] = useState<MenuAccessSettings | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -214,7 +220,7 @@ function MenuAccessSettingsView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {GROUPS.map((group, i) => [
+                {groups.map((group, i) => [
                   // Chat, first and in no group, sits above the headings as on the menu.
                   (group.title || i > 0) && (
                     <TableRow key={`group-${i}`} className="hover:bg-transparent">

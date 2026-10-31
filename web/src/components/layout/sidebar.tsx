@@ -196,7 +196,7 @@ export function Sidebar() {
     .map((group) => ({
       ...group,
       items: group.items.filter((item) =>
-        shouldShowDashboardNavItem(item, brandPrefs, hiddenSections),
+        shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic),
       ),
     }))
     .filter((group) => group.items.length > 0);

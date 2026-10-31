@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { AgentForm } from '@/components/chat/agents/agent-form';
 import { readAgentFormSetup } from '@/lib/chat/agent-form-setup';
-import { chatPageOpen } from '../../_chat-page-access';
+import { chatPageOpen } from '../../chat/_chat-page-access';
 
 /**
  * Create an agent (CHAT-21 §D; governance mockup #g-agent-new): four steps

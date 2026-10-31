@@ -505,6 +505,7 @@
   "nav": {
     "overview": "Overview",
     "chat": "Chat",
+    "agentCenter": "Agent Center",
     "actionCenter": "Action Center",
     "insights": "Brand Visibility",
     "traffic": "AI Referral Traffic",
@@ -3600,7 +3601,7 @@
       "motion": "With Reduce motion on, nothing moves.",
       "sections": {
         "avatar": "Agent avatar",
-        "avatarList": "Agent avatar in the Agents list",
+        "avatarList": "Agent avatar in the Agent Center list",
         "statusPill": "Status pill",
         "approvalPill": "Approval pills",
         "steps": "Step states",
@@ -4198,7 +4199,7 @@
       "settings": "Settings",
       "usageTip": "AI usage this month",
       "files": "Files",
-      "agents": "Agents"
+      "agents": "Agent Center"
     },
     "actions": {
       "more": "More for {name}",
@@ -4363,7 +4364,7 @@
       "failed": "Couldn't search your chats.",
       "pages": {
         "allChats": "All chats",
-        "agents": "Agents",
+        "agents": "Agent Center",
         "files": "Files",
         "settings": "Settings"
       }
@@ -4421,7 +4422,6 @@
         "activity": "Activity",
         "capabilities": "What Chat can do",
         "files": "Files",
-        "agents": "Agents",
         "settings": "Settings"
       }
     },
@@ -5238,8 +5238,7 @@
     },
     "form": {
       "titleNew": "New agent",
-      "titleEdit": "Edit agent",
-      "crumbEdit": "Edit · {name}",
+      "titleEdit": "Edit · {name}",
       "cancel": "Cancel",
       "stepsLabel": "Steps",
       "steps": {
@@ -5268,7 +5267,7 @@
         "archivedDetail": "Restore it on its page to change it",
         "askedCreate": "Create an agent",
         "askedEdit": "Change an agent",
-        "back": "Back to Agents",
+        "back": "Back to Agent Center",
         "backToAgent": "Back to the agent"
       },
       "skill": {
@@ -5521,7 +5520,7 @@
     "deniedTitle": "I can't do this for you",
     "closeDenial": "Close",
     "list": {
-      "title": "Agents",
+      "title": "Agent Center",
       "formula": {
         "skill": "skill",
         "mode": "mode",
@@ -5643,7 +5642,7 @@
         "notMetered": "—"
       },
       "notFound": "This agent isn't available. It may have been deleted, or it isn't shared with you.",
-      "backToAgents": "Back to Agents",
+      "backToAgents": "Back to Agent Center",
       "loadFailed": "Couldn't load this agent.",
       "retry": "Retry"
     }

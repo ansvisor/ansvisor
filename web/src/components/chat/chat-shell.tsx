@@ -25,7 +25,6 @@ import { PANEL_FROM_PARAM, panelReturnOf } from '@/lib/chat/panel';
 import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import { ChatActionsProvider, useChatActions } from './chat-actions';
 import { ChatDebugProvider } from './chat-debug';
-import { ChatCrumbContext } from './chat-crumb';
 import { inboxItems } from './chat-inbox';
 import { useChatList } from './chat-list-provider';
 import { ChatMenu } from './chat-menu';
@@ -52,11 +51,6 @@ function useIsWide(): boolean {
 }
 
 const CHAT_PATH = /^\/dashboard\/chat\/([0-9a-f-]{36})$/i;
-/**
- * An agent's detail, its Edit and New agent: "Chat › Agents › {its name}",
- * "Chat › Agents › New agent" (governance mockup CRUMB).
- */
-const AGENT_PATH = /^\/dashboard\/chat\/agents\/(?:new|[0-9a-f-]{36}(?:\/edit)?)$/i;
 
 /**
  * Where the palette opens while the menu is shown: under its Search chats
@@ -80,7 +74,6 @@ const SUB_PAGES: Record<string, string> = {
   '/dashboard/chat/activity': 'activity',
   '/dashboard/chat/capabilities': 'capabilities',
   '/dashboard/chat/files': 'files',
-  '/dashboard/chat/agents': 'agents',
 };
 /** Chat's own pages the header names (mockup: Settings, right under Home). */
 const TITLED_PAGES: Record<string, string> = { '/dashboard/chat/settings': 'settings' };
@@ -171,8 +164,6 @@ function ChatShellFrame({
   const [drawer, setDrawer] = useState(false);
   const [searching, setSearching] = useState(false);
   const [lastChat, setLastChat] = useState<string | null>(null);
-  // The breadcrumb's last part a page names, as an agent's detail does.
-  const [crumbTail, setCrumbTail] = useState<string | null>(null);
   const stripToggle = useRef<HTMLButtonElement>(null);
   const focusAfterToggle = useRef(false);
   // Opened as a full page from the side panel (CHAT-22): ↙ Back to that page.
@@ -246,8 +237,7 @@ function ChatShellFrame({
     lastChat && (status !== 'ready' || chats.some((chat) => chat.id === lastChat))
       ? `/dashboard/chat/${lastChat}`
       : '/dashboard/chat';
-  const agentPage = AGENT_PATH.test(pathname);
-  const subPage = SUB_PAGES[pathname] ?? (agentPage ? 'agents' : undefined);
+  const subPage = SUB_PAGES[pathname];
   const titled = TITLED_PAGES[pathname];
   const current = chatId ? chats.find((chat) => chat.id === chatId) : undefined;
   const pill = current ? PILL_OF[current.state] : undefined;
@@ -349,27 +339,7 @@ function ChatShellFrame({
                 <span aria-hidden className="mx-1.5 font-normal text-muted-foreground/70">
                   ›
                 </span>
-                {agentPage ? (
-                  <>
-                    <Link
-                      href="/dashboard/chat/agents"
-                      data-action="nav.breadcrumb"
-                      className="font-medium text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
-                    >
-                      {tNav(`pages.${subPage}`)}
-                    </Link>
-                    {crumbTail && (
-                      <>
-                        <span aria-hidden className="mx-1.5 font-normal text-muted-foreground/70">
-                          ›
-                        </span>
-                        <span aria-current="page">{crumbTail}</span>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <span aria-current="page">{tNav(`pages.${subPage}`)}</span>
-                )}
+                <span aria-current="page">{tNav(`pages.${subPage}`)}</span>
               </nav>
             </>
           )}
@@ -409,7 +379,7 @@ function ChatShellFrame({
           </div>
         </header>
         <div className={cn('chat-scroll min-h-0 flex-1 overflow-y-auto', padded && 'p-6')}>
-          <ChatCrumbContext.Provider value={setCrumbTail}>{children}</ChatCrumbContext.Provider>
+          {children}
         </div>
       </div>
 

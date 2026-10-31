@@ -237,9 +237,11 @@ describe('handing a started run to Chat', () => {
     expect(state).toMatchObject({ user_id: PEOPLE.admin, mode: 'auto' });
     const progress = state.progress as {
       brandId: string;
-      scope: { context: { chips: unknown[] } };
+      scope: { context: { route: string; chips: unknown[] } };
     };
     expect(progress.brandId).toBe(BRAND);
+    // The page an agent's run is about: Agent Center, out of Chat.
+    expect(progress.scope.context.route).toBe('/dashboard/agents');
     expect(progress.scope.context.chips).toContainEqual(
       expect.objectContaining({ key: 'slot', value: 'schedule:2026-11-02T06:00:00.000Z' }),
     );
