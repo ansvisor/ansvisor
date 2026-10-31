@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, for you now, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-31
@@ -17,7 +17,7 @@ Chat answers questions about your brand from your Ansvisor data, and can do work
 
 Chat opens on **Home**. It greets you by name, at your own time of day, and says when something needs you: click the link to open your **Inbox**. When nothing does, it says **All caught up.**
 
-When Action Center actions for the brand you have open are due by the end of this week, overdue ones included, Home says how many with **Complete with Chat**. Click it to start a new chat that works on them; the chat opens while it works.
+Under it, **For you now** starts common jobs. **Ask anything** takes you to the box, and **More** opens every shortcut. The others show only with something to do, counted for the brand you have open: **Complete tasks** for Action Center actions due by the end of this week, overdue ones included (Chat prepares the work, you close the tasks); **Win back citations** for pages that lost citations; **Ready to publish** for drafts marked ready (Chat sends them to your CMS as drafts, going live stays your click). Click one to start a new chat on it. If your role can't make changes, you see only the jobs that read, and no **More**.
 
 ## Ask Chat
 
