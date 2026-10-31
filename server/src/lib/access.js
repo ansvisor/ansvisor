@@ -142,8 +142,17 @@ async function memberReach(orgId, brandIds) {
       .select('id, organization_id, is_demo')
       .eq('organization_id', orgId)
       .in('id', [...new Set(brandIds)]),
-    readWithBrandScope((scope) =>
-      supabaseAdmin.from('profiles').select(`id, role${scope}`).eq('organization_id', orgId),
+    // Page by page: past PostgREST's 1000 rows the rest would be dropped,
+    // and a narrowed person among them would not be named an outsider.
+    readWithBrandScope(async (scope) =>
+      readAllRpcRows('profiles', (from, to) =>
+        supabaseAdmin
+          .from('profiles')
+          .select(`id, role${scope}`)
+          .eq('organization_id', orgId)
+          .order('id')
+          .range(from, to),
+      ),
     ),
   ]);
   if (brandsRead.error) throw new Error(brandsRead.error.message);

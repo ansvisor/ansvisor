@@ -83,9 +83,12 @@ vi.mock('../config/supabase.js', () => ({
                 : state.membersError
                   ? { data: null, error: state.membersError }
                   : {
-                      data: filtered(state.members, where).map(({ brand_scope, ...rest }) =>
-                        state.noBrandScope ? rest : { ...rest, brand_scope },
-                      ),
+                      // PostgREST's max_rows: 1000 a read, the rest dropped.
+                      data: filtered(state.members, where)
+                        .slice(...(slice ?? [0, 1000]))
+                        .map(({ brand_scope, ...rest }) =>
+                          state.noBrandScope ? rest : { ...rest, brand_scope },
+                        ),
                       error: null,
                     }
               : table === 'member_brands' && selected.includes('user_id')
@@ -510,6 +513,20 @@ describe('brandOutsiders', () => {
 
   it('names the people who may not reach the brand', async () => {
     expect(await brandOutsiders('org-1', 'b1')).toEqual(['narrow']);
+  });
+
+  it('reads every person, past PostgREST’s 1000 rows', async () => {
+    state.members = [
+      ...Array.from({ length: 1000 }, (_, i) => ({
+        id: `p${String(i).padStart(4, '0')}`,
+        role: 'analyst',
+        brand_scope: 'all',
+        organization_id: 'org-1',
+      })),
+      { id: 'zz-narrow', role: 'analyst', brand_scope: 'selected', organization_id: 'org-1' },
+    ];
+    expect(await brandOutsiders('org-1', 'b1')).toEqual(['zz-narrow']);
+    expect(profileReads()).toBe(2);
   });
 
   it('names none while everyone has All brands', async () => {
