@@ -2084,7 +2084,8 @@ export default function PromptsPage() {
         {/* Filter bar — same shape and position as Visibility and Citations
             (#713). It sits outside the tab panels because the range governs
             All Prompts, Topics and Query Fan-out. Location doesn't apply to
-            Topics, so it is left off there.
+            Topics or Query Fan-out (it reads every location), so it is left
+            off there.
             Hidden on Insights: that tab shows keyword volume estimates, which
             carry no date dimension, so a range there would be a control that
             changes nothing. */}
@@ -2100,7 +2101,7 @@ export default function PromptsPage() {
               onToChange={setCustomTo}
             />
 
-            {availableRegions.length > 1 && tab !== 'topics' && (
+            {availableRegions.length > 1 && tab !== 'topics' && tab !== 'fanout' && (
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
                   Location
