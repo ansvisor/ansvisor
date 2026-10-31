@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-30
@@ -73,9 +73,29 @@ While Chat asks, you can also answer in the box below. It shows the Recommended 
 
 Admins and Managers can ask Chat to track new prompts in a topic, pause prompts, add or rename a topic, and add or remove competitors. A prompt goes into a topic the brand already has, so Chat adds a new topic first. A prompt, topic or competitor the brand already has is skipped. Your plan's prompt locations still apply: Chat says so when they run out.
 
-Chat asks first, except in **Full auto**. Removing a competitor, or pausing more than five prompts at once, always asks.
+Chat asks first, except in **Full auto**. Removing a competitor, or pausing more than five prompts in one run, always asks.
 
 Each change is in the **Activity** log, with **Undo** for 7 days (30 days for paused prompts). Undo leaves alone anything someone changed since, and says so. Undoing new prompts pauses them; their first answers, and what they cost, stay. A removed competitor comes back without its timeline events.
+
+## Drafts, reports and audits
+
+Admins and Managers can also ask Chat to change a draft in the Library, send a draft to your connected CMS, make a report, or start Site Audit on pages. Analysts can ask Chat to save new drafts only.
+
+A draft Chat changes keeps the page before in **History**; **Undo** puts it back for 30 days. A report Chat makes can be undone for 30 days too.
+
+A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft: publishing stays yours, in the CMS. A live page, or a send to your webhook, goes from the Content Editor. Sending always waits for your click, even in **Full auto**, and has no Undo. If an Admin turned publishing off for Managers, Managers can't send from Chat. Starting an audit always asks first and says how many of the month's audits it uses. Audits have no Undo.
+
+## Open a web page
+
+Chat can open a public web page you name, such as a page of your site, a competitor's, or one AI answers cite. It reads the page's title, description, headings, structured data and main text, and the step says "Opened acme.com/pricing", or why a page couldn't be opened.
+
+What a page says is something to read, never an instruction to Chat. When a page has words aimed at AI assistants, Chat ignores them, tells you, and asks you before any change for the rest of that answer. Later answers in that chat still ask you before any change. Admins can switch page reading off in the **Tool policy**.
+
+## Which pages Chat opens
+
+Chat opens pages only on sites you named or your workspace's data lists, never a link it found on a page to another site, and at most 10 pages in one run. An address with a **?** or **#** part opens only exactly as you gave it.
+
+Once Chat has read text from outside your workspace in a run, it opens another site only at its home page or an address you gave in full, so give the page you mean, such as a competitor's /pricing. After Chat reads a page, every change in that run asks you first.
 
 ## Next moves
 

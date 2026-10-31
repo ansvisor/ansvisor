@@ -7,6 +7,7 @@ const {
   MESSAGES_PER_HOUR,
   RUNS_PER_USER,
   readBudget,
+  readCap,
   startDecision,
   workspaceRunLimit,
   writeCap,
@@ -56,5 +57,10 @@ describe('run limits', () => {
     expect(writeCap('create_draft')).toBe(10);
     expect(writeCap('add_competitors')).toBe(5);
     expect(writeCap('dismiss_prompt_suggestion')).toBe(10);
+  });
+
+  it('cap the pages a run opens at 10, and no other read past its budget', () => {
+    expect(readCap('fetch_page')).toBe(10);
+    expect(readCap('list_citations')).toBeNull();
   });
 });
