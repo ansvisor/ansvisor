@@ -4239,7 +4239,7 @@
           "audited": "Checked the pages",
           "auditedOn": "Site Audit, {date}"
         },
-        "whyNow": "Why now: {reason}.",
+        "whyNow": "Why now: {reason}",
         "takes": "With the agent, it takes about {minutes, number} minutes.",
         "card": {
           "title": "From your Action Center",

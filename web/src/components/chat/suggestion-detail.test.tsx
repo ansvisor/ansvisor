@@ -286,6 +286,8 @@ describe('SuggestionDetailView', () => {
       'Ranked your open actions · priority 81, waiting 6 days',
     ]);
     expect($('[data-slot="lead"]')?.textContent).toMatch(/^Why this\. Why now: .+\.$/);
+    // The reason is a sentence already: one full stop, not two.
+    expect($('[data-slot="lead"]')?.textContent).not.toContain('..');
     expect($('[data-action="suggestion.openEditor"]')).toBeNull();
     expect($('[data-action="nextMove.open"]')).toBeNull();
     expect(text()).not.toContain('/ridge-45l');
