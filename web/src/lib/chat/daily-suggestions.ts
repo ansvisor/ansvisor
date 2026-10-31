@@ -1,6 +1,8 @@
 import type { TeamRole } from '@/components/providers/role-provider';
 import { storedPriorityLevel, type PriorityLevel } from '@/lib/action-center/priority';
 import { CLOSED_ACTION_STATUSES, type ActionStatus } from '@/lib/action-center/registry';
+import { TASK_DONE, actionPages, draftMethodForTask } from '@/lib/content/action-drafts';
+import type { DraftMethod } from '@/lib/content/drafts';
 import { formatMonthDay } from '@/lib/format';
 
 /**
@@ -227,4 +229,68 @@ export function sentDay(sentOn: string, today: string | null): { date: string; t
     date: formatMonthDay(`${sentOn}T00:00:00Z`, 'UTC'),
     today: today === sentOn,
   };
+}
+
+// ─── The suggestion's page (§2.3, mockup #d-detail) ─────────────────────────
+
+/** Not now puts a suggestion off this many days: back in a week if its action is still open. */
+export const SNOOZE_DAYS = 7;
+
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A suggestion's id from its page's address, or null. */
+export const suggestionPageId = (value: string) => (GUID.test(value) ? value : null);
+
+/** How the nightly job ranked it (W2-24's ranking): the action's priority and days waiting. */
+export interface SuggestionPick {
+  /** The action's priority score as it was picked; null when it had none. */
+  score: number | null;
+  waitingDays: number | null;
+}
+
+/** The pick as the summary kept it, read defensively as parseSuggestionSummary reads the rest. */
+export function suggestionPick(value: unknown): SuggestionPick {
+  const summary = isRecord(value) ? value : {};
+  const priority = isRecord(summary.priority) ? summary.priority : {};
+  const score = priority.score;
+  const days = summary.waitingDays;
+  return {
+    score: typeof score === 'number' && Number.isFinite(score) ? Math.round(score) : null,
+    waitingDays:
+      typeof days === 'number' && Number.isFinite(days) && days >= 0 ? Math.floor(days) : null,
+  };
+}
+
+/** Where "Content Editor" starts: the writing task, its draft and the page it optimizes. */
+export interface SuggestionStart {
+  taskId: string;
+  method: DraftMethod;
+  /** The page an optimize draft opens on: the action's first; null for a new page. */
+  page: string | null;
+}
+
+/**
+ * The writing task "Content Editor" opens, as the nightly job picks its
+ * Start now (loadStartNow): one still to do, a new page's first, else an
+ * existing page's, in the tasks' order. Null without one: the page then
+ * offers Chat alone.
+ */
+export function suggestionStart(
+  tasks: readonly { id: string; taskKey: string | null; status: string }[],
+  payload: Record<string, unknown>,
+): SuggestionStart | null {
+  const open = tasks.filter((task) => !TASK_DONE.includes(task.status));
+  const of = (method: DraftMethod) =>
+    open.find((task) => draftMethodForTask(task.taskKey) === method);
+  const create = of('create');
+  if (create) return { taskId: create.id, method: 'create', page: null };
+  const optimize = of('optimize');
+  if (!optimize) return null;
+  return { taskId: optimize.id, method: 'optimize', page: actionPages(payload)[0] ?? null };
+}
+
+/** The prompts an action names (payload.promptIds, else its count), for "Read AC-2841 · 14 prompts". */
+export function actionPromptCount(payload: Record<string, unknown>): number {
+  if (Array.isArray(payload.promptIds)) return payload.promptIds.length;
+  return positive(payload.promptCount) ?? 0;
 }
