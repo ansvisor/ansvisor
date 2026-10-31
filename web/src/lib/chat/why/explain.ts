@@ -127,6 +127,21 @@ export interface CellEvidence {
   answersB: EvidenceRef[];
   /** Not all its answers could be read: no cause is drawn from it. */
   partial?: boolean;
+  /** The prompt's text, for the cause's rows. */
+  prompt?: string;
+}
+
+/** One prompt a cause shows (§1 item 4's table): what was cited before and now, and when. */
+export interface CauseRow {
+  prompt: string;
+  /** The page cited in the earlier period, or null. */
+  before: string | null;
+  /** The page cited in the later one, or null when none of the brand's or a rival's was. */
+  now: string | null;
+  /** The newest answer of the later period, ISO date. */
+  date: string | null;
+  /** That answer, for the evidence drawer. */
+  answer: EvidenceRef | null;
 }
 
 export type CauseKind =
@@ -172,6 +187,8 @@ export interface WhyCause {
   fix_skill: string | null;
   /** The pages it is about (own pages lost or gained, a changed page). */
   urls?: string[];
+  /** The prompts that show it, up to 10. */
+  rows?: CauseRow[];
 }
 
 /** The explain_change contract (§1 item 6), engine weather aside (not in Wave 2). */
@@ -330,6 +347,31 @@ export function cellCause(
   worse: boolean,
 ): { kind: CauseKind; urls: string[]; refs: EvidenceRef[] } | null {
   if (!evidence || evidence.partial) return null;
+  return causeOf(evidence, worse);
+}
+
+/** A cell's row for its cause's table. */
+function rowOf(evidence: CellEvidence, kind: CauseKind): CauseRow | null {
+  if (!evidence.prompt) return null;
+  const latest = evidence.answersB[0] ?? null;
+  const gained = kind === 'won_citation_from_competitor' || kind === 'gained_citation';
+  return {
+    prompt: evidence.prompt,
+    before: gained
+      ? (evidence.competitorCitedA[0] ?? null)
+      : (minus(evidence.ownCitedA, evidence.ownCitedB)[0] ?? evidence.ownCitedA[0] ?? null),
+    now: gained
+      ? (minus(evidence.ownCitedB, evidence.ownCitedA)[0] ?? evidence.ownCitedB[0] ?? null)
+      : (evidence.competitorCitedB[0] ?? evidence.ownCitedB[0] ?? null),
+    date: latest?.date ?? null,
+    answer: latest,
+  };
+}
+
+function causeOf(
+  evidence: CellEvidence,
+  worse: boolean,
+): { kind: CauseKind; urls: string[]; refs: EvidenceRef[] } | null {
   const lost = minus(evidence.ownCitedA, evidence.ownCitedB);
   const gained = minus(evidence.ownCitedB, evidence.ownCitedA);
   const site = evidence.siteChanges.filter(
@@ -527,7 +569,13 @@ export function explainChange(input: {
   const denB = stable.reduce((s, c) => s + ratioOf(metric, c.b!).den, 0);
   const byKind = new Map<
     CauseKind,
-    { contribution: number; cells: number; refs: EvidenceRef[]; urls: Set<string> }
+    {
+      contribution: number;
+      cells: number;
+      refs: EvidenceRef[];
+      urls: Set<string>;
+      rows: CauseRow[];
+    }
   >();
   for (const cell of stable) {
     const ra = ratioOf(metric, cell.a!);
@@ -537,14 +585,18 @@ export function explainChange(input: {
     const weight = (ra.den / denA + rb.den / denB) / 2;
     const own = weight * (rateB - rateA) * scale;
     if (own === 0) continue;
-    const cause = cellCause(input.evidence.get(cell.key), (rateB - rateA) * sign < 0);
-    if (!cause) continue;
+    const found = input.evidence.get(cell.key);
+    const cause = cellCause(found, (rateB - rateA) * sign < 0);
+    if (!cause || !found) continue;
     const entry = byKind.get(cause.kind) ?? {
       contribution: 0,
       cells: 0,
       refs: [],
       urls: new Set<string>(),
+      rows: [],
     };
+    const row = rowOf(found, cause.kind);
+    if (row && entry.rows.length < MAX_REFS) entry.rows.push(row);
     entry.contribution += own;
     entry.cells += 1;
     for (const ref of cause.refs) if (entry.refs.length < MAX_REFS) entry.refs.push(ref);
@@ -561,6 +613,7 @@ export function explainChange(input: {
     evidence_refs: entry.refs,
     fix_skill: FIX_SKILL[kind] ?? null,
     ...(entry.urls.size > 0 ? { urls: [...entry.urls].slice(0, 5) } : {}),
+    ...(entry.rows.length > 0 ? { rows: entry.rows } : {}),
   }));
   // The set changed: an engine, or a prompt, tracked in one period only.
   // Arithmetic, not inference: the set did change.

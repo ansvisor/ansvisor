@@ -23,6 +23,8 @@
  * (isChatEventType), so a newer server never breaks an open page.
  */
 
+import type { ChatWhy } from './why/view';
+
 // ─── Steps ──────────────────────────────────────────────────────────────────
 
 /**
@@ -230,6 +232,8 @@ export interface ChatEventPayloads {
   'text.delta': { text: string };
   'ask.created': ChatAsk;
   'deliverable.created': ChatDeliverable;
+  /** A Why did it move analysis the run kept (CHAT-22 §1, "why.ready"): its card's numbers. */
+  'why.ready': ChatWhy;
   'confirm.required': ChatConfirm;
   next_moves: { moves: ChatNextMove[] };
   'usage.updated': ChatUsage;
@@ -273,6 +277,7 @@ const EVENT_TYPES: Record<ChatEventType, true> = {
   'text.delta': true,
   'ask.created': true,
   'deliverable.created': true,
+  'why.ready': true,
   'confirm.required': true,
   next_moves: true,
   'usage.updated': true,

@@ -1,10 +1,10 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
-updated: 2026-10-30
+updated: 2026-10-31
 last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
@@ -104,6 +104,10 @@ Ask Chat why a number moved, such as "Why did ChatGPT visibility drop last week?
 The answer gives both values and the change, and says first when the change is within the normal swing for that much data. It names the day the line broke, and how much prompts added or removed explain. Then it ranks the causes Chat found in the tracked answers, such as a citation lost to a competitor or a page whose Site Audit got worse. Each comes with its share of the change and how sure Chat is. Chat never says a cause made it happen.
 
 Everything comes from your scheduled tracking. Chat never asks an AI engine anything new for it.
+
+## What explains the change
+
+Under the answer, a card shows the same numbers. Click the two values for the periods, the tracking runs compared and the normal swing. Each cause shows its share of the change, or its points when it partly offset it. Open a cause to see its prompts, the page cited before and the one cited now, and the day. **Answer** opens that tracked answer, with your brand marked and the pages it cited.
 
 ## Next moves
 

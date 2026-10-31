@@ -100,6 +100,7 @@ import { readBrandIsDemo, readPrecedenceContext, readToolCall } from './preceden
 import type { ExplainChangeOutput } from '@/lib/mcp/why';
 import { stepPrompt, todayLine } from './prompt';
 import { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
+import { whyView } from './why/view';
 import { batchSize, type ChatTool, type ChatToolContext } from './registry/define-tool';
 import { CHAT_TOOLS, chatTool, chatToolByKey } from './registry/tools';
 import { abortDriver, publishRunEnd, registerDriver, unregisterDriver } from './run-hub';
@@ -2417,7 +2418,19 @@ async function keepWhyAnalysis(rc: RunContext, input: Record<string, unknown>, v
     result_json: toJson(analysis),
     data_as_of: output.data_as_of ?? null,
   });
-  if (error) console.error('[chat/engine] could not keep a Why analysis:', error.message);
+  if (error) {
+    console.error('[chat/engine] could not keep a Why analysis:', error.message);
+    return;
+  }
+  // Its card, as the thread shows it once kept: the n-th of the run's analyses.
+  rc.progress.whys = (rc.progress.whys ?? 0) + 1;
+  rc.sink.emit(
+    'why.ready',
+    whyView(rc.progress.whys, analysis, {
+      engines: output.scope?.engines,
+      runs_compared: output.runs_compared,
+    }),
+  );
 }
 
 /** What staff see of an opened page (CHAT-10 "debug_json"): where it went and its size, not its words. */

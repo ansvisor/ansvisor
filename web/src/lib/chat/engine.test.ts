@@ -2736,7 +2736,18 @@ describe('why a number changed (W2-18)', () => {
     expect(system).toContain('explains about N% of the change');
     // The result itself, as the writer reads it (escaped inside the prompt's JSON).
     expect(system).toContain('\\"delta\\":-8');
-    expectClean(await eventsOf(runId));
+    const events = await eventsOf(runId);
+    // Its card reaches the browser as the thread shows it: numbered, no ids.
+    expect(ofType(events, 'why.ready').map((e) => e.data)).toEqual([
+      expect.objectContaining({
+        n: 1,
+        metric: 'visibility',
+        delta: -8,
+        engines: ['gpt-5'],
+        runs: { a: 280, b: 280, cells: 0 },
+      }),
+    ]);
+    expectClean(events);
   });
 
   it('keeps nothing for periods it refused, and says why', async () => {

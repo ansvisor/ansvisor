@@ -11,6 +11,8 @@ import {
 import { clientMove } from './next-moves';
 import { applyChatEvent, emptyRun } from './run-state';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
+import type { WhyResult } from './why/explain';
+import { whyView, type ChatWhy } from './why/view';
 
 /**
  * A saved chat as its page opens it (CHAT-01, CHAT-03 item 21): its
@@ -40,6 +42,8 @@ export interface ThreadRun {
   errorReason: string | null;
   /** What could come next once it finished (CHAT-07 §C), best first. */
   nextMoves: ChatNextMove[];
+  /** The Why did it move analyses it kept (CHAT-22 §1), in order. */
+  why: ChatWhy[];
 }
 
 export interface ThreadMessage {
@@ -174,7 +178,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   const runIds = (runs.data ?? []).map((run) => run.id);
   const endedIds = (runs.data ?? []).filter((run) => ENDED.includes(run.status)).map((r) => r.id);
   const mine = !!user && chat.user_id === user.id;
-  const [steps, files, ends, moves] = runIds.length
+  const [steps, files, ends, moves, whys] = runIds.length
     ? await Promise.all([
         supabase
           .from('chat_run_steps')
@@ -195,12 +199,38 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
               .in('run_id', runIds)
               .order('rank', { ascending: true })
           : { data: [], error: null },
+        // Readable where the chat is (00420); the card's numbers, never its ids.
+        supabase
+          .from('chat_why_analyses')
+          .select('run_id, scope_json, result_json')
+          .in('run_id', runIds)
+          .order('created_at', { ascending: true }),
       ])
-    : [{ data: [], error: null }, { data: [], error: null }, new Map(), { data: [], error: null }];
+    : [
+        { data: [], error: null },
+        { data: [], error: null },
+        new Map(),
+        { data: [], error: null },
+        { data: [], error: null },
+      ];
   if (steps.error) throw new Error(`Could not read the chat's steps: ${steps.error.message}`);
   if (files.error) throw new Error(`Could not read the chat's files: ${files.error.message}`);
   if (moves.error)
     console.error("[chat/thread] could not read the chat's next moves:", moves.error.message);
+  // A failed read of the analyses loses their cards, not the chat.
+  if (whys.error)
+    console.error("[chat/thread] could not read the chat's Why analyses:", whys.error.message);
+  const whyByRun = new Map<string, ChatWhy[]>();
+  for (const row of (whys.error ? [] : (whys.data ?? [])) as unknown as {
+    run_id: string | null;
+    scope_json: Record<string, unknown>;
+    result_json: WhyResult;
+  }[]) {
+    if (!row.run_id) continue;
+    const list = whyByRun.get(row.run_id) ?? [];
+    list.push(whyView(list.length + 1, row.result_json, row.scope_json));
+    whyByRun.set(row.run_id, list);
+  }
   const movesByRun = new Map<string, ChatNextMove[]>();
   for (const m of (moves.error ? [] : (moves.data ?? [])) as NextMoveRow[]) {
     const move = clientMove({ label: m.label, prompt: m.prompt, ghostOk: m.ghost_ok });
@@ -244,6 +274,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         summary: ends.get(run.id)?.summary ?? null,
         errorReason: ends.get(run.id)?.errorReason ?? null,
         nextMoves: movesByRun.get(run.id) ?? [],
+        why: whyByRun.get(run.id) ?? [],
       },
     ]),
   );
