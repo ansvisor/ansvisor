@@ -304,7 +304,13 @@ export function ChatComposer({
   }, [atSearch, searchReferences]);
 
   const shortcutName = (s: Shortcut) => t(`slash.shortcuts.${s.key}.name`);
-  const shortcuts = menu?.kind === 'slash' ? matchShortcuts(menu.query, shortcutName) : [];
+  // A skill with a shortcut's command (/report) takes its place: the message calls the skill.
+  const shortcuts =
+    menu?.kind === 'slash'
+      ? matchShortcuts(menu.query, shortcutName).filter(
+          (s) => !skills.some((skill) => `/${skill.name}` === s.command),
+        )
+      : [];
   const skillRows = menu?.kind === 'slash' ? matchSkills(menu.query, skills) : [];
   const atRefs = (() => {
     if (menu?.kind !== 'at') return [];

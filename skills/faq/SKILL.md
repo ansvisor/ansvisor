@@ -1,13 +1,13 @@
 ---
-name: faq-schema
-description: "Writes an FAQ block for a page from the questions buyers ask AI engines, with FAQPage schema that matches it word for word. Use when the person asks for an FAQ, FAQ schema, or answers to the questions people ask AI about a page or topic."
+name: faq
+description: "An FAQ block from the top fan-outs and your brand facts, with FAQPage schema."
 license: MIT
 metadata:
-  title: "FAQ + schema writer"
-  category: create
+  title: "FAQ from fan-outs"
+  filters: "content visibility"
 ---
 
-# FAQ + schema writer
+# FAQ from fan-outs
 
 An FAQ block that answers the questions AI engines search for, and the FAQPage structured data that goes with it.
 
@@ -23,20 +23,17 @@ An FAQ block that answers the questions AI engines search for, and the FAQPage s
 3. `list_ai_answers` for one or two of those prompts: what AI says now, and what it gets wrong or leaves out.
 4. `get_draft` when the person names a draft: its passages, so the FAQ doesn't repeat them.
 
-## How to write
+## Steps
 
-- Pick 5 to 8 questions. Merge near-duplicates, and phrase each the way a buyer would ask it.
-- Answer each in 40 to 80 words. The first sentence answers the question on its own; the rest adds detail.
-- Use only facts from the person's messages, the brand's own pages read in this chat, or the draft. Any other fact is a [placeholder], such as [plan limits] or [support hours].
-- The schema repeats each question and answer exactly as the visible FAQ says them.
+1. Pick the top fan-outs for the page: 5 to 8 questions. Merge near-duplicates, and phrase each the way a buyer would ask it.
+2. Write the answers from the brand's facts: 40 to 80 words each, the first sentence answering on its own. Use only facts from the person's messages, the brand's approved facts they give, its own pages read in this chat, or the draft. Any other fact is a [placeholder], such as [plan limits] or [support hours].
+3. Save the FAQ and its FAQPage schema as a draft when the person wants it kept, with `create_draft`; the app asks them first when it should.
 
 ## Output
 
 1. The FAQ as HTML: a heading, then each question as a subheading with its answer.
-2. The FAQPage structured data as JSON-LD, in a code block, ready to paste in the page's head.
+2. The FAQPage structured data as JSON-LD, in a code block, repeating each question and answer exactly as the visible FAQ says them.
 3. One line on where the questions came from (fan-outs, prompts).
-
-When the person wants it kept, save it as a draft with `create_draft`; the app asks them first when it should.
 
 ## Don't
 

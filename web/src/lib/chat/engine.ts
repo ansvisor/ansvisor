@@ -840,15 +840,14 @@ function runSkills(
   const enabled = enabledSkills(organizationId);
   if (enabled.length === 0) return { enabled, listed: [] };
   const question = progress.question ?? '';
+  const names = (text: string) => typedSkills(text, enabled).map((skill) => skill.name);
   const earlier = history.recent
     .filter((message) => message.role === 'user')
-    .map(messageText)
-    .join('\n');
+    .flatMap((message) => names(messageText(message)));
   const page = progress.scope?.context;
-  const names = (text: string) => typedSkills(text, enabled).map((skill) => skill.name);
   const listed = skillsForPrompt(enabled, {
     typed: names(question),
-    used: [...(progress.skills ?? []), ...names(earlier)],
+    used: [...(progress.skills ?? []), ...earlier],
     request: [question, page?.route ?? '', ...(page?.chips ?? []).map((chip) => chip.label)].join(
       ' ',
     ),

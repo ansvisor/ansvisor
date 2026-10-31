@@ -1,7 +1,7 @@
 ---
 title: Skills in Chat
 route: /dashboard/chat
-keywords: [skills, skill, slash menu, ansvisor library, used skill, faq schema, llms.txt, citation gap, visibility drop]
+keywords: [skills, skill, slash menu, ansvisor skills, used skill, faq from fan-outs, weekly report, win back citations, ready to publish]
 synonyms: [slash commands, playbooks, how-tos, templates]
 plan: all
 updated: 2026-10-31
@@ -11,13 +11,13 @@ app_version: 0.3.0
 approved: false
 sources: [web/messages/en.json, skills/README.md]
 ---
-Skills teach Chat how to do a task the way Ansvisor recommends: what to read, how to work and what the result looks like. Chat has fifteen skills from the Ansvisor library, such as **Why did visibility drop?**, **Citation gap analysis**, **FAQ + schema writer** and **llms.txt builder**.
+Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has fourteen Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Ready to publish** and **Weekly report**.
 
 ## Use a skill
 
-Type **/** at the start of an empty box, or click **/**. Under the shortcuts, **Skills** lists each skill by its command and name. Type to filter, such as **/fa** for **/faq-schema**, then press Enter or click. The command goes first in the box: finish your message after it and send.
+Type **/** at the start of an empty box, or click **/**. Under the shortcuts, **Skills** lists each skill by its command and name. Type to filter, such as **/fa** for **/faq**, then press Enter or click. The command goes first in the box: finish your message after it and send.
 
-You can also type a skill's command yourself. One answer uses up to three skills.
+You can also type a skill's command yourself, at the start of your message. One answer uses up to three skills. **/report** is the **Weekly report** skill.
 
 ## When Chat picks a skill
 
@@ -27,12 +27,8 @@ Analysts and Agency partners have no **/** menu, but Chat still uses a skill for
 
 ## What a skill can't change
 
-A skill shapes how Chat works, not what it may do. It gives Chat no new tools, doesn't skip the card a change waits on, and publishes nothing. Your role, your plan and your workspace's Chat settings still decide what Chat can change, and a change still asks you first where it should.
+A skill shapes how Chat works, not what it may do. It gives Chat no new tools, doesn't skip the card a change waits on, and publishes nothing: going live is always your own click. Your role, your plan and your workspace's Chat settings still decide what Chat can change, and a change still asks you first where it should.
 
-## The Ansvisor library
+## The Ansvisor skills
 
-- **Analyze:** Why did visibility drop?, Citation gap analysis, Share of voice report, Weekly visibility report.
-- **Create:** FAQ + schema writer, AEO content brief, Comparison page writer.
-- **Optimize:** Content refresh, Answer-first rewrite.
-- **Technical:** llms.txt builder, Schema markup generator, AI crawler access check.
-- **Off-site:** Fix wrong AI claims, Reddit thread finder, Digital PR targets.
+Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page and Translate a page.

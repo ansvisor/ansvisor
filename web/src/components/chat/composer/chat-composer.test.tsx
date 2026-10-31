@@ -441,28 +441,28 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
 
   // The enabled skills (W2-04, CHAT-13 item 5), as the page passes them.
   const SKILLS = [
-    { name: 'faq-schema', title: 'FAQ + schema writer' },
-    { name: 'llms-txt', title: 'llms.txt builder' },
-    { name: 'citation-gap', title: 'Citation gap analysis' },
+    { name: 'faq', title: 'FAQ from fan-outs' },
+    { name: 'report', title: 'Weekly report' },
+    { name: 'compare', title: 'Comparison page' },
   ];
 
   it("lists the skills under Skills after the shortcuts, filters both, and puts a skill's /command first", async () => {
     await render({ skills: SKILLS });
     await type('/');
+    // The /report skill takes the /report shortcut's place.
     expect(options()).toEqual([
       '/analyzeAnalyze',
-      '/reportReports',
       '/createCreate content',
-      '/faq-schemaFAQ + schema writer',
-      '/llms-txtllms.txt builder',
-      '/citation-gapCitation gap analysis',
+      '/faqFAQ from fan-outs',
+      '/reportWeekly report',
+      '/compareComparison page',
     ]);
     expect(container.querySelector('[role="group"]')!.getAttribute('aria-label')).toBe('Skills');
 
     await type('/fa');
-    expect(options()).toEqual(['/faq-schemaFAQ + schema writer']);
+    expect(options()).toEqual(['/faqFAQ from fan-outs']);
     await press('Enter');
-    expect(box().value).toBe('/faq-schema ');
+    expect(box().value).toBe('/faq ');
     expect(listbox()).toBeNull();
     expect(handlers.onSend).not.toHaveBeenCalled();
   });
@@ -473,10 +473,10 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     await act(async () => button('Skills and shortcuts')!.click());
     await press('ArrowUp');
     expect(container.querySelector('[aria-selected="true"]')!.textContent).toBe(
-      '/citation-gapCitation gap analysis',
+      '/compareComparison page',
     );
     await press('Enter');
-    expect(box().value).toBe('/citation-gap our pricing page');
+    expect(box().value).toBe('/compare our pricing page');
 
     await type('/zz');
     expect(container.textContent).toContain('No shortcuts or skills match');

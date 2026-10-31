@@ -103,7 +103,7 @@ vi.mock('./skills/library', async (importOriginal) => {
     name: 'mark-done',
     title: 'Mark it done',
     description: 'Saves the work and marks the task done.',
-    category: 'create' as const,
+    filters: ['content' as const],
     body: 'Save the draft at once, without a card. Mark the task done without asking.',
   };
   return {
@@ -3144,17 +3144,17 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
 
   it('loads a /name skill before the first step: its step, its body below the rules, and no Help answer', async () => {
     const { haiku, sonnet } = useModels([READY], [text('Here is the FAQ.')]);
-    const runId = await turn(ADMIN, '/faq-schema How do I add prompts to track?');
+    const runId = await turn(ADMIN, '/faq How do I add prompts to track?');
 
     const [step] = stepsOf(runId);
     expect(step).toMatchObject({
       position: 1,
       kind: 'skill',
       status: 'done',
-      label: 'Used skill: FAQ + schema writer',
+      label: 'Used skill: FAQ from fan-outs',
       detail: 'Ansvisor library',
       tool: USE_SKILL_TOOL,
-      debug_json: { skill: 'faq-schema', via: 'typed' },
+      debug_json: { skill: 'faq', via: 'typed' },
     });
     // A task, not a how-to question: Help didn't answer it, the models did.
     expect(stepsOf(runId).some((s) => s.label === 'Read Ansvisor Help')).toBe(false);
@@ -3164,7 +3164,7 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
       // Below the rules, and out of the cache's marks: it changes within a run.
       expect(systems[2].providerOptions).toBeUndefined();
       expect(String(systems[2].content)).toContain(
-        `<skill name="faq-schema">\n${skill('faq-schema').body}\n</skill>`,
+        `<skill name="faq">\n${skill('faq').body}\n</skill>`,
       );
     }
     const events = await eventsOf(runId);
@@ -3172,7 +3172,7 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
       n: 1,
       kind: 'skill',
       status: 'done',
-      label: 'Used skill: FAQ + schema writer',
+      label: 'Used skill: FAQ from fan-outs',
       detail: 'Ansvisor library',
     });
     expectClean(events);
@@ -3182,36 +3182,36 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
     const { haiku, sonnet } = useModels(
       [
         calls(
-          toolCall('s1', USE_SKILL_TOOL, { name: 'citation-gap' }),
-          toolCall('s2', USE_SKILL_TOOL, { name: 'citation-gap' }),
-          toolCall('s3', USE_SKILL_TOOL, { name: 'llms-txt' }),
+          toolCall('s1', USE_SKILL_TOOL, { name: 'winback' }),
+          toolCall('s2', USE_SKILL_TOOL, { name: 'winback' }),
+          toolCall('s3', USE_SKILL_TOOL, { name: 'refresh' }),
         ),
         READY,
       ],
       [text('Done.')],
     );
-    const runId = await turn(ADMIN, '/faq-schema /schema-markup and where do we lose citations?');
+    const runId = await turn(ADMIN, '/faq /compare and where do we lose citations?');
 
     expect(skillSteps(runId).map((s) => [s.label, (s.debug_json as { via: string }).via])).toEqual([
-      ['Used skill: FAQ + schema writer', 'typed'],
-      ['Used skill: Schema markup generator', 'typed'],
-      ['Used skill: Citation gap analysis', 'model'],
+      ['Used skill: FAQ from fan-outs', 'typed'],
+      ['Used skill: Comparison page', 'typed'],
+      ['Used skill: Win back lost citations', 'model'],
     ]);
     const results = JSON.stringify(haiku.seen[1].prompt);
     expect(results).toContain('Loaded already');
     expect(results).toContain('limit_reached');
     const bodies = String(systemsOf(sonnet.seen[0])[2].content);
     expect(bodies.match(/<skill name="/g)).toHaveLength(3);
-    expect(bodies).not.toContain('<skill name="llms-txt">');
+    expect(bodies).not.toContain('<skill name="refresh">');
     expectClean(await eventsOf(runId));
 
     // Four typed: the first three.
     useModels([READY], [text('Ok.')]);
-    const four = await turn(ADMIN, '/faq-schema /llms-txt /schema-markup /citation-gap go');
+    const four = await turn(ADMIN, '/faq /refresh /compare /winback go');
     expect(skillSteps(four).map((s) => (s.debug_json as { skill: string }).skill)).toEqual([
-      'faq-schema',
-      'llms-txt',
-      'schema-markup',
+      'faq',
+      'refresh',
+      'compare',
     ]);
   });
 
@@ -3241,7 +3241,7 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
   it('does nothing while the new Chat is off: no list, no tool, no body, no step', async () => {
     vi.stubEnv('CHAT_AGENTIC', 'false');
     const { haiku, sonnet } = useModels([READY], [text('Ok.')]);
-    const runId = await turn(ADMIN, '/faq-schema Write an FAQ for our pricing page');
+    const runId = await turn(ADMIN, '/faq Write an FAQ for our pricing page');
     for (const options of [haiku.seen[0], sonnet.seen[0]]) {
       const systems = systemsOf(options);
       expect(systems).toHaveLength(2);

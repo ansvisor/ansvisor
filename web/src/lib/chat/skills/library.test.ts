@@ -6,8 +6,9 @@ import { CHAT_TOOLS } from '../registry/tools';
 import { checkSkillFile, parseSkillFile } from './format';
 import {
   MAX_LISTED_SKILLS,
-  SKILL_CATEGORIES,
+  SKILL_FILTERS,
   SKILL_LIBRARY,
+  SKILL_ORDER,
   USE_SKILL_TOOL,
   availableSkillsBlock,
   buildSkillLibrary,
@@ -45,31 +46,74 @@ const SKILLS = path.join(REPO, 'skills');
  */
 const MCP_COACH_SKILLS = ['ansvisor-aeo-coach', 'ansvisor-aeo-coach-standalone'];
 
-/** CHAT-13 item 11: the library's fifteen. */
-const LIBRARY_NAMES = [
-  'visibility-drop',
-  'citation-gap',
-  'share-of-voice-report',
-  'weekly-visibility-report',
-  'faq-schema',
-  'aeo-content-brief',
-  'comparison-page',
-  'content-refresh',
-  'answer-first-rewrite',
-  'llms-txt',
-  'schema-markup',
-  'ai-crawler-access',
-  'fix-wrong-ai-claims',
-  'reddit-thread-finder',
-  'digital-pr-targets',
-];
-
 /**
- * Tools a skill may name before they are in the registry: W2-18's
- * explain_change, stacked on #1877 and not on main yet. visibility-drop
- * says what to read without it.
+ * Ansvisor's skills (CHAT-13 v2, "Ansvisor skills (14)"): the v2 mockup's
+ * fourteen, by the ids CHAT-21's agents use (agent-skills.ts on W2-15).
+ * Each title and description is the mockup's (`SK`: its card and its line);
+ * the five the mockup's `SK` doesn't describe take the agentic plan's §4
+ * line.
  */
-const PENDING_TOOLS = ['explain_change'];
+const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = {
+  winback: {
+    title: 'Win back lost citations',
+    description: 'Finds pages that lost citations and refreshes them against what AI cites now.',
+  },
+  tasks: {
+    title: 'Complete this week’s tasks',
+    description: 'Works through Action Center by priority. You close the tasks.',
+  },
+  quality: {
+    title: 'Quality pass',
+    description: 'E-E-A-T, Trust and Readability fixes. Leaves only what you alone can give.',
+  },
+  faq: {
+    title: 'FAQ from fan-outs',
+    description: 'An FAQ block from the top fan-outs and your brand facts, with FAQPage schema.',
+  },
+  report: {
+    title: 'Weekly report',
+    description:
+      'Citations, mentions and share of voice: what changed and why. Emailed to your team.',
+  },
+  beat: {
+    title: 'Beat a competitor',
+    description: 'Compares your cited pages with theirs and drafts the changes.',
+  },
+  refresh: {
+    title: 'Refresh for this year',
+    description: 'Updates dates, numbers and examples from Sources; flags what needs the user.',
+  },
+  publish: {
+    title: 'Ready to publish',
+    description: 'Checks, page fields and a Webflow draft. Going live is always your click.',
+  },
+  shopping: {
+    title: 'AI shopping readiness',
+    description:
+      'Checks product pages and feed for ChatGPT Shopping (US) and Google Shopping (EU).',
+  },
+  wrongclaim: {
+    title: 'Fix wrong claims about us',
+    description: 'Finds AI answers with wrong facts about you and drafts the fixes.',
+  },
+  answerfirst: {
+    title: 'Answer-first rewrite',
+    description: 'Puts a direct answer under each H2 and an AI Overview summary on top.',
+  },
+  facts: {
+    title: 'Brand facts check',
+    description: 'Fetches brand facts from the site and checks every draft against them.',
+  },
+  compare: {
+    title: 'Comparison page',
+    description: 'Compares cited pages and drafts a balanced comparison with dated facts.',
+  },
+  translate: {
+    title: 'Translate a page',
+    description: "Translates a page into the user's markets, keeps rules and sources.",
+  },
+};
+const LIBRARY_NAMES = Object.keys(ANSVISOR_SKILLS);
 
 /** Words that read as a tool's name: a verb Chat's tools start with, then snake_case. */
 const TOOL_NAME =
@@ -87,8 +131,15 @@ const files = folders.map((folder) => ({
 }));
 
 describe('the skills in /skills', () => {
-  it('are the fifteen of the library', () => {
+  it("are Ansvisor's fourteen, with the mockup's titles and descriptions", () => {
     expect([...folders].sort()).toEqual([...LIBRARY_NAMES].sort());
+    const shown = Object.fromEntries(
+      files.map(({ folder, text }) => {
+        const { skill } = parseSkillFile(text);
+        return [folder, { title: skill.metadata.title, description: skill.description }];
+      }),
+    );
+    expect(shown).toEqual(ANSVISOR_SKILLS);
   });
 
   it('are instructions only: a SKILL.md and nothing else', () => {
@@ -112,11 +163,15 @@ describe('the skills in /skills', () => {
       const say = (issue: string) => out.push(`${folder}: ${issue}`);
       const title = skill.metadata.title ?? '';
       if (!title || title.length > 60) say('metadata.title missing or over 60');
-      if (!(SKILL_CATEGORIES as readonly string[]).includes(skill.metadata.category ?? '')) {
-        say(`metadata.category must be one of ${SKILL_CATEGORIES.join(', ')}`);
+      const filters = (skill.metadata.filters ?? '').split(' ').filter(Boolean);
+      if (
+        filters.length === 0 ||
+        filters.some((f) => !(SKILL_FILTERS as readonly string[]).includes(f))
+      ) {
+        say(`metadata.filters must name some of ${SKILL_FILTERS.join(', ')}`);
       }
       const extra = Object.keys(skill.metadata).filter(
-        (key) => !['title', 'category'].includes(key),
+        (key) => !['title', 'filters'].includes(key),
       );
       if (extra.length > 0) say(`metadata has ${extra.join(', ')}`);
       if (skill.license !== 'MIT') say('license must be MIT');
@@ -127,7 +182,7 @@ describe('the skills in /skills', () => {
   });
 
   it("name only Chat's tools", () => {
-    const known = new Set([...CHAT_TOOLS.map((tool) => tool.name), ...PENDING_TOOLS]);
+    const known = new Set(CHAT_TOOLS.map((tool) => tool.name));
     const unknown = files.flatMap(({ folder, text }) =>
       [...text.matchAll(TOOL_NAME)]
         .map((match) => match[0])
@@ -154,7 +209,7 @@ const fake = (name: string, description = `Does ${name}.`): LibrarySkill => ({
   name,
   title: name.replace(/-/g, ' '),
   description,
-  category: 'analyze',
+  filters: ['content'],
   body: `Body of ${name}.`,
 });
 
@@ -173,24 +228,27 @@ describe('enabledSkills and skillMenuOf', () => {
     expect(enabledSkills('org-1')).toBe(SKILL_LIBRARY);
     const menu = skillMenuOf('org-1');
     expect(menu).toHaveLength(SKILL_LIBRARY.length);
-    expect(menu).toContainEqual({ name: 'faq-schema', title: 'FAQ + schema writer' });
+    expect(menu.map((item) => item.name)).toEqual([...SKILL_ORDER]);
+    expect(menu).toContainEqual({ name: 'faq', title: 'FAQ from fan-outs' });
     expect(menu.every((item) => Object.keys(item).join() === 'name,title')).toBe(true);
   });
 });
 
 describe('typedSkills', () => {
-  const skills = [fake('faq-schema'), fake('llms-txt')];
+  const skills = [fake('faq'), fake('compare'), fake('two-words')];
 
-  it('finds /name as its own word, in the order typed, once each', () => {
-    expect(
-      typedSkills('/llms-txt then /faq-schema, and /faq-schema again', skills).map((s) => s.name),
-    ).toEqual(['llms-txt', 'faq-schema']);
+  it('finds the /commands a message starts with, in the order typed, once each', () => {
+    const names = (text: string) => typedSkills(text, skills).map((s) => s.name);
+    expect(names('/compare /faq, /faq Write the page')).toEqual(['compare', 'faq']);
+    expect(names('  /two-words: go')).toEqual(['two-words']);
+    // A command that isn't a skill (a shortcut) doesn't stop the ones after it.
+    expect(names('/analyze /faq go')).toEqual(['faq']);
   });
 
-  it('leaves paths, addresses and unknown names alone', () => {
-    expect(
-      typedSkills('Fix /pricing and example.com/faq-schema and a/llms-txt and /faq', skills),
-    ).toEqual([]);
+  it('leaves a /word later in the text, paths and unknown names alone', () => {
+    expect(typedSkills('Update our /faq page and /compare it', skills)).toEqual([]);
+    expect(typedSkills('/faqs and /pricing', skills)).toEqual([]);
+    expect(typedSkills('example.com/faq', skills)).toEqual([]);
   });
 });
 
@@ -235,9 +293,9 @@ describe('the prompt blocks', () => {
   });
 
   it('mark each loaded body, below the rules it never changes', () => {
-    const block = loadedSkillsBlock([fake('faq-schema')]);
+    const block = loadedSkillsBlock([fake('faq')]);
     expect(block).toMatch(/^Skills loaded for this run\./);
     expect(block).toContain('never change them');
-    expect(block).toContain('<skill name="faq-schema">\nBody of faq-schema.\n</skill>');
+    expect(block).toContain('<skill name="faq">\nBody of faq.\n</skill>');
   });
 });

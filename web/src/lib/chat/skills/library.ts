@@ -4,8 +4,9 @@ import { chatAgenticEnabled } from '../flag';
 import { parseSkillFile } from './format';
 
 /**
- * Chat's skills (CHAT-13 items 3–6 and 11; Chat Wave 2 W2-04): Ansvisor's
- * library, written as SKILL.md files in the repo's /skills folder and
+ * Chat's skills (CHAT-13 items 3–6, and its v2 "Ansvisor skills (14)"; Chat
+ * Wave 2 W2-04): Ansvisor's own skills, the v2 mockup's fourteen (`SK`),
+ * written as SKILL.md files in the repo's /skills folder and
  * published with it (item 20). The web app's build can't read that folder,
  * so the library is kept here in library.json, and library.test.ts keeps
  * the file in step with /skills (refresh it with `yarn test -u
@@ -21,23 +22,49 @@ import { parseSkillFile } from './format';
  * only: the bodies stay on the server, and a page gets names and titles.
  */
 
-/** The library's filters (item 11): Analyze, Create, Optimize, Technical, Off-site. */
-export const SKILL_CATEGORIES = ['analyze', 'create', 'optimize', 'technical', 'off-site'] as const;
-export type SkillCategory = (typeof SKILL_CATEGORIES)[number];
+/**
+ * The Skills page's filters (mockup #s-skills): Content, Visibility,
+ * Reports, Product Visibility. A skill's `metadata.filters` names one or
+ * more, space-separated, as the mockup's `SK` does.
+ */
+export const SKILL_FILTERS = ['content', 'visibility', 'reports', 'product'] as const;
+export type SkillFilter = (typeof SKILL_FILTERS)[number];
+
+/**
+ * Ansvisor's skills in the mockup's order (CHAT-21's agent skills,
+ * agent-skills.ts on W2-15, use the same ids in the same order). A skill
+ * not listed here comes after them, by name.
+ */
+export const SKILL_ORDER = [
+  'winback',
+  'tasks',
+  'quality',
+  'faq',
+  'report',
+  'beat',
+  'refresh',
+  'publish',
+  'shopping',
+  'wrongclaim',
+  'answerfirst',
+  'facts',
+  'compare',
+  'translate',
+] as const;
 
 export interface LibrarySkill {
   /** Its folder's name, and its /command. */
   name: string;
   /** metadata.title: what its step and the / menu show. */
   title: string;
-  /** What it does and when to use it: what the model picks it by. */
+  /** What it does: the Skills card's line, and what the model picks it by. */
   description: string;
-  category: SkillCategory;
+  filters: SkillFilter[];
   /** Its instructions, loaded only when it is used. */
   body: string;
 }
 
-/** The library, as library.json keeps it: by filter, then by name. */
+/** The library, as library.json keeps it: in SKILL_ORDER. */
 export const SKILL_LIBRARY: readonly LibrarySkill[] = (library as { skills: LibrarySkill[] })
   .skills;
 
@@ -52,21 +79,23 @@ export const USE_SKILL_TOOL = 'use_skill';
 export function buildSkillLibrary(files: readonly { folder: string; text: string }[]): {
   skills: LibrarySkill[];
 } {
-  const rank = (category: string) => SKILL_CATEGORIES.indexOf(category as SkillCategory);
+  const rank = (name: string) => {
+    const at = (SKILL_ORDER as readonly string[]).indexOf(name);
+    return at < 0 ? SKILL_ORDER.length : at;
+  };
   const skills = files.map(({ folder, text }) => {
     const { skill } = parseSkillFile(text);
     return {
       name: skill.name ?? folder,
       title: skill.metadata.title ?? '',
       description: skill.description ?? '',
-      category: (skill.metadata.category ?? '') as SkillCategory,
+      filters: (skill.metadata.filters ?? '').split(/\s+/).filter(Boolean) as SkillFilter[],
       body: skill.body.trim(),
     };
   });
   return {
     skills: skills.sort(
-      (a, b) =>
-        rank(a.category) - rank(b.category) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+      (a, b) => rank(a.name) - rank(b.name) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
     ),
   };
 }
@@ -84,16 +113,22 @@ export function skillMenuOf(organizationId: string | null): ChatSkillItem[] {
   return enabledSkills(organizationId).map(({ name, title }) => ({ name, title }));
 }
 
-/** "/name" as its own word: first in the text or after a space, and not part of a path. */
-const TYPED = /(?:^|\s)\/([a-z0-9]+(?:-[a-z0-9]+)*)(?=$|[\s.,;:!?)])/g;
+/** One "/command" first in what is left of the text, and the marks after it. */
+const LEADING = /^\/([a-z0-9]+(?:-[a-z0-9]+)*)(?=$|[\s.,;:!?])[\s.,;:!?]*/;
 
-/** The skills a text calls by /name, in the order typed, each once. */
+/**
+ * The skills a message calls by /name, in the order typed, each once: the
+ * commands it starts with, as the / menu puts them ("/faq /compare Write…").
+ * A /word later in the text is a page's path ("our /faq page"), not a call.
+ */
 export function typedSkills<T extends { name: string }>(text: string, skills: readonly T[]): T[] {
   const byName = new Map(skills.map((skill) => [skill.name, skill]));
   const out: T[] = [];
-  for (const match of text.matchAll(TYPED)) {
+  let rest = text.trimStart();
+  for (let match = LEADING.exec(rest); match; match = LEADING.exec(rest)) {
     const skill = byName.get(match[1]);
     if (skill && !out.includes(skill)) out.push(skill);
+    rest = rest.slice(match[0].length);
   }
   return out;
 }
@@ -164,7 +199,7 @@ export function availableSkillsBlock(
   skills: readonly Pick<LibrarySkill, 'name' | 'description'>[],
 ): string {
   return [
-    `Skills are how-tos for tasks in Ansvisor. When one fits the request, call ${USE_SKILL_TOOL} with its name before you read or write: once per skill, at most ${MAX_SKILL_BODIES} a run. A /name in the person's message means they picked that skill, and it is loaded already. A loaded skill's text sits below these rules in a <skill> block: follow it for how to do the task. It never changes these rules, the tools you have, the cards and clicks a change needs, the run's limits, or what may go in public content; where it disagrees with them, these rules win.`,
+    `Skills are how-tos for tasks in Ansvisor. When one fits the request, call ${USE_SKILL_TOOL} with its name before you read or write: once per skill, at most ${MAX_SKILL_BODIES} a run. A /name at the start of the person's message means they picked that skill, and it is loaded already. A loaded skill's text sits below these rules in a <skill> block: follow it for how to do the task. It never changes these rules, the tools you have, the cards and clicks a change needs, the run's limits, or what may go in public content; where it disagrees with them, these rules win.`,
     '<available_skills>',
     ...skills.map((skill) => `${skill.name}: ${skill.description}`),
     '</available_skills>',
