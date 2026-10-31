@@ -52,6 +52,7 @@ const {
   saveChatMenuOpen,
   saveChatPanelSize,
   saveChatRailOpen,
+  saveHomeSeen,
   saveUsageNoticePeriod,
 } = await import('./chat-prefs');
 const { readChatGeneral } = await import('@/lib/chat/general-settings');
@@ -199,5 +200,20 @@ describe('saveUsageNoticePeriod', () => {
     expect(await saveUsageNoticePeriod('2026-10-01T00:00:00Z')).toEqual({ ok: false });
     expect(await saveUsageNoticePeriod(7 as unknown as string)).toEqual({ ok: false });
     expect(db.upserts).toEqual([]);
+  });
+});
+
+describe('saveHomeSeen', () => {
+  it('keeps when the person left Chat Home on their own row', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-31T09:00:00Z'));
+    expect(await saveHomeSeen()).toEqual({ ok: true });
+    vi.useRealTimers();
+    expect(db.upserts).toEqual([
+      {
+        row: { user_id: 'user-1', home_seen_at: '2026-10-31T09:00:00.000Z' },
+        options: { onConflict: 'user_id' },
+      },
+    ]);
   });
 });

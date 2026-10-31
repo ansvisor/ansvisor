@@ -104,14 +104,17 @@ describe('the Mentions item', () => {
 });
 
 // Off the menu since #506 (only Brand Visibility's Leaderboard and Getting
-// started opened it), back on it right under Brand Visibility.
+// started opened it), back on it under Brand Visibility, then moved right
+// under Reports so Prompts follows Brand Visibility and Analytics stays short.
 describe('the Competitors item', () => {
   const analytics = dashboardNav.find((group) => group.title === 'Analytics')!.items;
+  const reports = dashboardNav[dashboardNav.length - 1].items;
   const index = (title: string) => analytics.findIndex((item) => item.title === title);
 
-  it('sits under Brand Visibility, gated by competitor tracking, with no badge', () => {
-    expect(index('Competitors')).toBe(index('Answer Engine Insights') + 1);
-    const item = analytics[index('Competitors')];
+  it('sits right under Reports, gated by competitor tracking, with no badge', () => {
+    expect(index('Competitors')).toBe(-1);
+    expect(reports.map((item) => item.title)).toEqual(['Reports', 'Competitors']);
+    const item = reports[1];
     expect(item).toMatchObject({
       href: '/dashboard/competitors',
       requiredFeature: 'competitor_tracking',
@@ -120,22 +123,29 @@ describe('the Competitors item', () => {
     expect(item.children).toBeUndefined();
   });
 
+  it('leaves Prompts right under Brand Visibility', () => {
+    expect(index('Prompts')).toBe(index('Answer Engine Insights') + 1);
+  });
+
   it('reads Competitors from the nav namespace', () => {
     expect(getDashboardNavLabel('Competitors', translateNav)).toBe('nav.competitors');
     expect(messages.nav.competitors).toBe('Competitors');
   });
 });
 
-// New Ansvisor: Execution (do the work) above Analytics (measure it); the
-// Optimization group is gone, its items moved under Execution.
+// New Ansvisor: Chat on its own above the groups, then Execution (do the
+// work) above Analytics (measure it); the Optimization group is gone, its
+// items moved under Execution.
 describe('the sidebar groups', () => {
-  it('runs Execution, Analytics, then Reports', () => {
+  it('runs Chat, Execution, Analytics, then Reports', () => {
     expect(dashboardNav.map((group) => group.title ?? null)).toEqual([
+      null,
       'Execution',
       'Analytics',
       null,
     ]);
-    expect(dashboardNav[2].items.map((item) => item.title)).toEqual(['Reports']);
+    expect(dashboardNav[0].items.map((item) => item.href)).toEqual(['/dashboard/agent']);
+    expect(dashboardNav[3].items.map((item) => item.title)).toEqual(['Reports', 'Competitors']);
   });
 
   it('leaves the brands page to the brand switcher', () => {
@@ -143,11 +153,10 @@ describe('the sidebar groups', () => {
     expect(hrefs).not.toContain('/dashboard/brands');
   });
 
-  it('puts Action Center, Chat, Content and Audit under Execution, in that order', () => {
+  it('puts Action Center, Content and Audit under Execution, in that order', () => {
     const execution = dashboardNav.find((group) => group.title === 'Execution')!;
     expect(execution.items.map((item) => item.href)).toEqual([
       '/dashboard/action-center',
-      '/dashboard/agent',
       '/dashboard/content',
       '/dashboard/audit',
     ]);

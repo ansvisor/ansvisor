@@ -24,17 +24,20 @@ vi.mock('../config/supabase.js', () => ({
               data: { id: BRAND, organization_id: 'o1', name: 'Northwind', site_type: 'b2c' },
               error: null,
             }
-          : name === 'content_drafts'
-            ? { data: draftRow, error: null }
-            : name === 'brand_facts'
-              ? { data: [{ quote: 'Bluesign certified' }], error: null }
-              : {
-                  data: [
-                    { domain: 'https://www.Northwind.example/' },
-                    { domain: 'northwind.shop' },
-                  ],
-                  error: null,
-                };
+          : name === 'profiles'
+            ? // The caller, with All brands (lib/access.js reads it once).
+              { data: { organization_id: org, role: 'manager', brand_scope: 'all' }, error: null }
+            : name === 'content_drafts'
+              ? { data: draftRow, error: null }
+              : name === 'brand_facts'
+                ? { data: [{ quote: 'Bluesign certified' }], error: null }
+                : {
+                    data: [
+                      { domain: 'https://www.Northwind.example/' },
+                      { domain: 'northwind.shop' },
+                    ],
+                    error: null,
+                  };
       const asked = (calls ??= {})[name] ?? (calls[name] = []);
       const chain = {
         select: () => chain,

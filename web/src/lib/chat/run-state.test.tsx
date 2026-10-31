@@ -134,6 +134,40 @@ describe('the run in the browser', () => {
     ]);
   });
 
+  it('keeps each Why analysis once, by its number (CHAT-22 §1 item 4)', () => {
+    const why = {
+      n: 1,
+      metric: 'citations' as const,
+      unit: 'pts' as const,
+      periodA: { from: '2026-10-12', to: '2026-10-18' },
+      periodB: { from: '2026-10-19', to: '2026-10-25' },
+      valueA: 58,
+      valueB: 52,
+      delta: -6,
+      se: 0.8,
+      noise: 'beyond_normal_swing' as const,
+      direction: 'declined' as const,
+      changeDay: null,
+      causes: [],
+      remainder: { kind: 'unexplained' as const, points: -6, share: 100 },
+      excludedCells: 0,
+      stableCells: 40,
+      partial: false,
+      engines: [],
+      runs: { a: 10, b: 10, cells: 40 },
+    };
+    const run = [
+      chatEvent('why.ready', 1, why),
+      chatEvent('why.ready', 2, { ...why, n: 2, metric: 'visibility' as const }),
+      chatEvent('why.ready', 3, { ...why, valueB: 50 }),
+    ].reduce(applyChatEvent, emptyRun());
+    expect(run.why.map((w) => [w.n, w.metric, w.valueB])).toEqual([
+      [2, 'visibility', 52],
+      [1, 'citations', 50],
+    ]);
+    expect(emptyRun().why).toEqual([]);
+  });
+
   it('skips an event it already has, or a type it doesn’t know', () => {
     const run = runFromEvents(events);
     expect(applyChatEvent(run, events[2])).toBe(run);

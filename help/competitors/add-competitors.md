@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [docs/guides/competitors.mdx, docs/guides/citations.mdx, docs/guides/add-your-first-brand.mdx]
 ---
-Competitors are the brands Ansvisor compares with yours in AI answers to your tracked prompts. You add and remove them on the **Competitors** page, under **Analytics** in the sidebar, and each one then appears in **Tracked Competitors** for a head-to-head comparison.
+Competitors are the brands Ansvisor compares with yours in AI answers to your tracked prompts. You add and remove them on the **Competitors** page, right under **Reports** in the sidebar, and each one then appears in **Tracked Competitors** for a head-to-head comparison.
 
 ## Open the Competitors page
 
