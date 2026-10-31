@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import type { ChatReference, ChatReferenceType } from '@/lib/chat/references';
@@ -8,8 +8,9 @@ import { cn } from '@/lib/utils';
 
 /**
  * The composer's menus (CHAT-02 items 11–17, agentic update; mockup #slash,
- * #atmenu, #plusmenu): each opens above the box. Which row is active, and
- * what a pick does, is the composer's; these draw them.
+ * #atmenu, #plusmenu): each opens above the box, or below it when there's
+ * no room above (menuPlacement). Which row is active, and what a pick does,
+ * is the composer's; these draw them.
  */
 
 /**
@@ -65,21 +66,78 @@ const REFERENCE_MARK: Record<ChatReferenceType, string> = {
   task: '◎',
 };
 
+/** The tallest a menu gets (mockup: 300px). */
+export const MENU_MAX = 300;
+/** The gap between the box and its menu (mb-2, mt-2). */
+const MENU_GAP = 8;
+/** The overflow values that clip what sticks out of a box. */
+const CLIPS = /^(auto|scroll|hidden|clip)$/;
+
+/**
+ * Where a menu opens and how tall it may be: above the box when its rows
+ * fit there, else below when there's more room below (Chat Home's box sits
+ * high on the page). The room ends at every box that clips the menu (the
+ * page's scrolling area, under the header) and at the window. The menu is
+ * absolutely placed against its parent, the composer's box.
+ */
+export function menuPlacement(panel: HTMLElement): { down: boolean; maxHeight: number } {
+  const anchor = panel.parentElement;
+  if (!anchor) return { down: false, maxHeight: MENU_MAX };
+  const box = anchor.getBoundingClientRect();
+  let top = 0;
+  let bottom = window.innerHeight;
+  for (let node = anchor.parentElement; node; node = node.parentElement) {
+    if (!CLIPS.test(getComputedStyle(node).overflowY)) continue;
+    const clip = node.getBoundingClientRect();
+    top = Math.max(top, clip.top);
+    bottom = Math.min(bottom, clip.bottom);
+  }
+  const above = box.top - top;
+  const below = bottom - box.bottom;
+  const need = Math.min(MENU_MAX, panel.scrollHeight) + MENU_GAP;
+  const down = above < need && below > above;
+  const room = (down ? below : above) - MENU_GAP;
+  return { down, maxHeight: Math.max(0, Math.min(MENU_MAX, room)) };
+}
+
 function Panel({
   label,
   className,
+  active,
   children,
 }: {
   label: string;
   className?: string;
+  /** The active row's index: kept in view as the arrows move it. */
+  active?: number;
   children: ReactNode;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState({ down: false, maxHeight: MENU_MAX });
+  // Its side is picked as it opens, before it paints, and again when the window changes size.
+  useLayoutEffect(() => {
+    const panel = ref.current;
+    if (!panel) return;
+    const fit = () => setPlace(menuPlacement(panel));
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, []);
+  useEffect(() => {
+    ref.current
+      ?.querySelector<HTMLElement>('[aria-selected="true"]')
+      ?.scrollIntoView?.({ block: 'nearest' });
+  }, [active]);
   return (
     <div
+      ref={ref}
       role="listbox"
       aria-label={label}
+      data-side={place.down ? 'below' : 'above'}
+      style={{ maxHeight: place.maxHeight }}
       className={cn(
-        'absolute bottom-full left-0 z-30 mb-2 max-h-[300px] min-w-[240px] overflow-auto rounded-[14px] border bg-popover p-1.5 text-popover-foreground shadow-[0_12px_32px_rgba(10,10,10,.12)]',
+        'absolute left-0 z-30 min-w-[240px] overflow-auto rounded-[14px] border bg-popover p-1.5 text-popover-foreground shadow-[0_12px_32px_rgba(10,10,10,.12)]',
+        place.down ? 'top-full mt-2' : 'bottom-full mb-2',
         className,
       )}
     >
@@ -116,7 +174,7 @@ export function SlashMenu({
 }) {
   const t = useTranslations('chatComposer.slash');
   return (
-    <Panel label={t('label')} className="w-[min(520px,calc(100vw-2rem))]">
+    <Panel label={t('label')} active={active} className="w-[min(520px,calc(100vw-2rem))]">
       <div className="flex px-2 py-1.5 text-xs font-semibold">
         {t('title')}
         <span className="ml-auto font-normal text-muted-foreground">{t('keys')}</span>
@@ -186,7 +244,7 @@ export function ReferenceMenu({
 }) {
   const t = useTranslations('chatComposer.reference');
   return (
-    <Panel label={t('title')} className="w-[260px]">
+    <Panel label={t('title')} active={active} className="w-[260px]">
       <div className="px-2 pt-2 pb-1 text-[11px] tracking-[.4px] text-muted-foreground uppercase">
         {t('title')}
       </div>
@@ -233,7 +291,7 @@ export interface PlusItem {
 export function PlusMenu({ items, active }: { items: PlusItem[]; active: number }) {
   const t = useTranslations('chatComposer.plus');
   return (
-    <Panel label={t('label')} className="w-[240px]">
+    <Panel label={t('label')} active={active} className="w-[240px]">
       {items.map((item, i) => (
         <button
           key={item.key}

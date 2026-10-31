@@ -588,6 +588,102 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
   });
 });
 
+describe("ChatComposer: a menu's side and height (W2-04)", () => {
+  // The page's scrolling area, under a 53px header, in a 1024×768 window (jsdom's height).
+  const SCROLLER = { top: 53, bottom: 768 };
+  const SKILLS = Array.from({ length: 14 }, (_, i) => ({
+    name: `skill-${i}`,
+    title: `Skill ${i}`,
+  }));
+  const listbox = () => container.querySelector<HTMLElement>('[role="listbox"]')!;
+
+  /** The composer's box at `box`, and the menu's rows `content` px tall. */
+  function layout(box: { top: number; bottom: number }, content = 500) {
+    container.style.overflowY = 'auto';
+    vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(content);
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      const isBox = [...this.children].some((child) => child.getAttribute('role') === 'listbox');
+      const r = this === container ? SCROLLER : isBox ? box : { top: 0, bottom: 0 };
+      return {
+        ...r,
+        left: 0,
+        right: 0,
+        x: 0,
+        y: r.top,
+        width: 0,
+        height: r.bottom - r.top,
+      } as DOMRect;
+    });
+  }
+  afterEach(() => vi.restoreAllMocks());
+
+  it("opens below when the room above the box (under the header, not the window's top) can't hold it", async () => {
+    // Chat Home: the box 210px under the header.
+    layout({ top: 263, bottom: 363 });
+    await render({ skills: SKILLS });
+    await type('/');
+    expect(listbox().dataset.side).toBe('below');
+    expect(listbox().className).toContain('top-full');
+    expect(listbox().className).not.toContain('bottom-full');
+    expect(listbox().style.maxHeight).toBe('300px');
+  });
+
+  it('opens above when its rows fit there, as in a chat and the side panel', async () => {
+    layout({ top: 600, bottom: 700 });
+    await render({ skills: SKILLS });
+    await type('/');
+    expect(listbox().dataset.side).toBe('above');
+    expect(listbox().className).toContain('bottom-full');
+    expect(listbox().style.maxHeight).toBe('300px');
+
+    // A short menu fits above Chat Home's box too.
+    act(() => root.unmount());
+    root = createRoot(container);
+    layout({ top: 263, bottom: 363 }, 120);
+    await render();
+    await type('/');
+    expect(listbox().dataset.side).toBe('above');
+  });
+
+  it('keeps to the room it has: above when there is less below, as tall as the room less the gap', async () => {
+    // 147px above the box, 68px below it.
+    layout({ top: 200, bottom: 700 });
+    await render({ skills: SKILLS });
+    await type('/');
+    expect(listbox().dataset.side).toBe('above');
+    expect(listbox().style.maxHeight).toBe(`${200 - 53 - 8}px`);
+  });
+
+  it('picks its side again when the window changes size, and keeps the active row in view', async () => {
+    const box = { top: 263, bottom: 363 };
+    layout(box);
+    const scrolled = vi.fn();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      value: scrolled,
+      configurable: true,
+    });
+    try {
+      await render({ skills: SKILLS });
+      await type('/');
+      expect(listbox().dataset.side).toBe('below');
+      box.top = 600;
+      box.bottom = 700;
+      await act(async () => window.dispatchEvent(new Event('resize')));
+      expect(listbox().dataset.side).toBe('above');
+
+      await press('ArrowUp');
+      const selected = container.querySelector('[aria-selected="true"]')!;
+      expect(selected.textContent).toBe('/skill-13Skill 13');
+      expect(scrolled.mock.contexts.at(-1)).toBe(selected);
+      expect(scrolled).toHaveBeenLastCalledWith({ block: 'nearest' });
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+});
+
 describe('ChatComposer: attached files (W1-13)', () => {
   const MB = 1024 * 1024;
   const file = (name: string, type: string, size: number) => {
