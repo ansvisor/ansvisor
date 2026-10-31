@@ -4,20 +4,20 @@ route: /dashboard/insights
 keywords: [first results, after onboarding, first run, first tracking, visibility zero, brand name prompts, tracking snippet]
 synonyms: [no data yet, empty dashboard, why is my score zero, what happens next, how long until results]
 plan: all
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/add-your-first-brand.mdx]
 ---
-When you finish setting up a brand, the first round of questions to the AI engines starts on its own and the dashboard opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step, whether you start a free trial there or buy the plan.
+When you finish setting up a brand, the first round of questions to the AI engines starts on its own and the dashboard opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step, whether you start a free trial there or buy the plan. If you explore the demo brand instead, your brand's first run starts when you pick a plan.
 
 ## How long the first run takes
 
 The first run can take anywhere from a few minutes to one or two hours at busy times. **Brand Visibility** shows that the first tracking is in progress, and fills in with your results as they come back.
 
-You can leave the page: the run keeps going in the background. When your workspace's first results are ready, everyone in it gets one e-mail, **Your first results are ready**. It's sent once, not for every brand you add.
+You can leave the page: the run keeps going in the background. When your workspace's first results are ready, everyone in it gets one e-mail, **Your first results are ready**, where e-mail is set up, as on the cloud. It's sent once, not for every brand you add.
 
 ## Where results appear first
 

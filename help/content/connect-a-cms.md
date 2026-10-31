@@ -4,11 +4,11 @@ route: /dashboard/settings/integrations
 keywords: [connect cms, webflow, wordpress, framer, wix, integrations, application password]
 synonyms: [cms integration, link my blog, set up send to cms, connect my website]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/send-to-cms.mdx]
 ---
 To send Content Editor pages straight to your CMS, connect it in **Settings › Integrations** with the brand selected. Each brand connects its own Webflow site, WordPress site, Framer project or Wix site. Only admins and managers can connect, change or disconnect a CMS; members see where the brand's pages go.
@@ -17,7 +17,7 @@ To send Content Editor pages straight to your CMS, connect it in **Settings › 
 
 In the **Webflow** card, open **How to get a site token** and follow its steps to generate a site token in Webflow. Webflow shows the token only once. Paste it in **Site token** and click **Connect**.
 
-Then pick the **Collection** your pages go to, your blog's for example. Under **Which field takes what**, choose the field for the page content and, if you like, the meta title, meta description, structured data and date. The page's title and slug always go to the item's Name and Slug. Click **Save**. If the collection requires a field Ansvisor doesn't fill, **Save** names it: make it optional in Webflow first.
+Then pick the **Collection** your pages go to, your blog's for example. If the token reaches more than one site, pick the **Site** first. Under **Which field takes what**, choose the field for the page content and, if you like, the meta title, meta description, structured data and date. The page's title and slug always go to the item's Name and Slug. Click **Save**. If the collection requires a field Ansvisor doesn't fill, **Save** names it: make it optional in Webflow first.
 
 ## Connect WordPress
 

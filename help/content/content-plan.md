@@ -5,10 +5,10 @@ keywords: [content plan, priority list, priority score, create optimize protect,
 synonyms: [what to write next, content roadmap, content priorities, editorial plan]
 plan: all
 updated: 2026-10-29
-last_checked: 2026-10-29
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/content-editor.mdx]
 ---
 The **Content plan**, **Plan** under **Content** in the sidebar, ranks what to create, optimize or protect next. It covers the last 7, 30 or 90 days: pick the period at the top right.
