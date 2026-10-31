@@ -540,3 +540,54 @@ describe('TaskDetailView with winning-page findings', () => {
     expect(container.textContent).not.toContain('Compared with');
   });
 });
+
+/** What Chat attached to a task (CHAT-09 items 13, 16; the owner's decision of 2026-10-31). */
+describe('TaskDetailView with files attached from Chat', () => {
+  const attachments = [
+    {
+      fileId: 'f1',
+      title: 'Pricing FAQ',
+      type: 'document' as const,
+      attachedAt: '2026-10-30T09:00:00Z',
+      attachedBy: 'Cihan Geyik',
+      href: '/dashboard/content/editor/d1',
+      draft: true,
+    },
+    {
+      fileId: 'f2',
+      title: 'FAQPage schema',
+      type: 'code' as const,
+      attachedAt: '2026-10-31T09:00:00Z',
+      attachedBy: null,
+      href: '/api/chat/files/f2',
+      draft: false,
+    },
+  ];
+
+  it('lists each with who attached it, when, and where it opens', () => {
+    render(
+      <TaskDetailView
+        details={null}
+        disabled={false}
+        onEdit={() => {}}
+        attachments={attachments}
+      />,
+    );
+    const list = container.querySelector('section[aria-label="Attached from Chat"]')!;
+    expect(list.textContent).toContain('Attached from Chat');
+    const rows = [...list.querySelectorAll('li')].map((li) => li.textContent);
+    expect(rows).toEqual([
+      'Pricing FAQCihan Geyik · Oct 30Open draft',
+      'FAQPage schemaA teammate · Oct 31Open',
+    ]);
+    expect([...list.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual([
+      '/dashboard/content/editor/d1',
+      '/api/chat/files/f2',
+    ]);
+  });
+
+  it('shows nothing when Chat attached nothing', () => {
+    render(<TaskDetailView details={null} disabled={false} onEdit={() => {}} />);
+    expect(container.textContent).not.toContain('Attached from Chat');
+  });
+});

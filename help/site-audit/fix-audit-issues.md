@@ -4,18 +4,18 @@ route: /dashboard/audit
 keywords: [ai recommendations, fix audit issues, placeholders, your input needed, send to action center, re-audit]
 synonyms: [audit fixes, improve audit score, fix failed signals, raise page score]
 plan: all
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/site-audit.mdx]
 ---
 An audit report doesn't only score a page: it writes fixes for what failed. Start with the **AI Recommendations**, then open the failing signals. When you've made your changes, click the re-run icon at the top of the report to audit the page again.
 
 ## AI Recommendations
 
-**AI Recommendations**, at the top of the report, collects the fixes written for this page, ordered by priority: **high**, **medium** or **low**. Each names the signal and says what to change in one sentence. Where it helps, it gives a ready-to-paste draft, such as a meta description, an H1, an opening paragraph, FAQ questions and answers or sources to cite, and code, such as an FAQ schema block.
+**AI Recommendations**, right under the score, collects the fixes written for this page, ordered by priority: **high**, **medium** or **low**. Each names the signal and says what to change in one sentence. Where it helps, it gives a ready-to-paste draft, such as a meta description, an H1, an opening paragraph, FAQ questions and answers or sources to cite, and code, such as an FAQ schema block.
 
 Mechanical signals, such as HTTPS, the viewport tag, alt text or a video embed, keep their general fix.
 
@@ -27,7 +27,7 @@ Only what your brand alone knows is left in square brackets for you, three at mo
 
 ## Copy drafts and code
 
-Each draft and code block has a copy icon in its corner, **Copy draft** or **Copy code**. It copies the block exactly as shown, placeholders included, and a **Copied** message confirms it.
+Each draft and code block has a copy icon in its corner. It copies the block exactly as shown, placeholders included, and a **Copied** message confirms it.
 
 ## Send a page to the Action Center
 

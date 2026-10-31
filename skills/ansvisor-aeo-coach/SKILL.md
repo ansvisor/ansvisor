@@ -373,6 +373,14 @@ refused. Tell the user their plan has ended and that an admin can choose
 a plan (or update the payment method) in **Settings → Billing**. Don't
 retry, and don't try another write tool instead.
 
+If a tool fails with `"code": "plan_required"` (with `"required_plan":
+"growth"`), the workspace is on Starter or in its free trial: on those
+plans MCP reads, and changes, runs and anything that uses credits need
+the Growth plan or above. Tell the user that this needs Growth and that
+an admin can upgrade in **Settings → Billing**; keep answering with the
+`list_` and `get_` tools. Don't retry, and don't try another write tool
+instead.
+
 ## Core workflows
 
 ### 1. Brand snapshot ("how am I doing?")

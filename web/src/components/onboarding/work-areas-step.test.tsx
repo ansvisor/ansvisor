@@ -16,6 +16,7 @@ const actions = vi.hoisted(() => ({ setMyWorkAreas: vi.fn() }));
 vi.mock('@/lib/actions/menu-access', () => actions);
 
 const { WorkAreasStep } = await import('./work-areas-step');
+const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
 const { WelcomeView } = await import('@/app/[locale]/(onboarding)/dashboard/welcome/_welcome-view');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -62,6 +63,23 @@ describe('WorkAreasStep', () => {
       'Action Center · Chat · Brand Visibility · Competitors · Mentions · AI Referral Traffic · Reports',
     );
     expect(container.textContent).toContain('12 of 12 sections');
+    // No Agent Center while the new Chat is off (and outside the dashboard).
+    expect(container.textContent).not.toContain('Agent Center');
+  });
+
+  it('shows Agent Center right after Chat with the new Chat on', async () => {
+    await render(
+      <ChatAgenticProvider enabled>
+        <WorkAreasStep title="t" lede="l" onDone={onDone} />
+      </ChatAgenticProvider>,
+    );
+    expect(button('Founders & leaders').textContent).toContain(
+      'Action Center · Chat · Agent Center · Brand Visibility',
+    );
+    expect(container.textContent).toContain('13 of 13 sections');
+    act(() => button('Developers').click());
+    expect(menu()).not.toContain('Agent Center');
+    expect(container.textContent).toContain('6 of 13 sections');
   });
 
   it('narrows the menu as areas are picked, and saves them on Continue', async () => {
