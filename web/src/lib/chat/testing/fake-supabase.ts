@@ -53,8 +53,9 @@ interface Builder extends PromiseLike<Result> {
   /** At or after: an ISO time, or a number. */
   gte(column: string, value: unknown): Builder;
   /**
-   * PostgREST's `or`: comma-separated `column.eq.value` conditions or
-   * `and(…)` groups of them, any one of which matches.
+   * PostgREST's `or`: a row passes any of the comma-separated `column.op.value`
+   * terms (eq, neq, is null, lt a date — as saveContentDraft's agent check) or
+   * `and(…)` groups of them.
    */
   or(filter: string): Builder;
   /**
@@ -260,13 +261,16 @@ export function createFakeSupabase(): FakeSupabase {
           return builder;
         },
         or(filter) {
-          // Split at the commas outside parentheses.
+          // Split at the commas outside parentheses and quotes.
           const top = (text: string) => {
             const parts: string[] = [];
             let depth = 0;
+            let quoted = false;
             let start = 0;
             [...text].forEach((ch, i) => {
-              if (ch === '(') depth += 1;
+              if (ch === '"') quoted = !quoted;
+              else if (quoted) return;
+              else if (ch === '(') depth += 1;
               else if (ch === ')') depth -= 1;
               else if (ch === ',' && depth === 0) {
                 parts.push(text.slice(start, i));
@@ -276,14 +280,25 @@ export function createFakeSupabase(): FakeSupabase {
             parts.push(text.slice(start));
             return parts;
           };
+          // One `column.op.value` term: eq, neq, is null, lt a date.
+          const term = (condition: string) => {
+            const [column, op, ...rest] = condition.split('.');
+            const raw = rest.join('.').replace(/^"|"$/g, '');
+            const value = raw === 'null' ? null : raw;
+            return (row: Row) => {
+              const cell = row[column] ?? null;
+              if (op === 'is' || (op === 'eq' && value === null)) return cell === value;
+              if (op === 'eq') return cell !== null && String(cell) === value;
+              if (op === 'neq') return cell !== null && String(cell) !== value;
+              if (op === 'lt') {
+                return typeof cell === 'string' && Date.parse(cell) < Date.parse(String(value));
+              }
+              throw new Error(`The fake has no or-operator ${op}`);
+            };
+          };
           const groups = top(filter).map((group) => {
             const inner = /^and\((.*)\)$/.exec(group);
-            return (inner ? top(inner[1]) : [group]).map((condition) => {
-              const [column, operator, ...rest] = condition.split('.');
-              if (operator !== 'eq') throw new Error(`fake or(): no ${operator}`);
-              const value = rest.join('.');
-              return (row: Row) => String(row[column]) === value;
-            });
+            return (inner ? top(inner[1]) : [group]).map(term);
           });
           filters.push((row) => groups.some((conditions) => conditions.every((c) => c(row))));
           return builder;

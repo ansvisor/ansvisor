@@ -10,9 +10,11 @@ import {
   PEOPLE,
   PROMPT,
   COMPETITOR,
+  DRAFT,
   TOPIC,
   SUGGESTION,
   fakeCreateDraft,
+  seedDraft,
   seedWorkspace,
 } from './testing/chat-fixtures';
 
@@ -29,7 +31,13 @@ import {
 vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('@/lib/chat/testing/fake-supabase')).createFakeSupabase(),
 }));
-vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }));
+vi.mock('@/lib/actions/content-drafts', () => ({
+  createContentDraft: vi.fn(),
+  updateContentDraft: vi.fn(),
+}));
+vi.mock('@/lib/actions/cms-send', () => ({ sendDraftToCms: vi.fn() }));
+vi.mock('@/lib/actions/reports', () => ({ createReport: vi.fn() }));
+vi.mock('@/lib/actions/audits', () => ({ startSiteAudits: vi.fn(), getAuditQuota: vi.fn() }));
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
 vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: vi.fn() }));
@@ -173,6 +181,8 @@ const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { requestAccess } = await import('@/lib/actions/chat-access-requests');
 const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
+const { sendDraftToCms } = await import('@/lib/actions/cms-send');
+const { getAuditQuota, startSiteAudits } = await import('@/lib/actions/audits');
 const { addBrandTopic, renameBrandTopic } = await import('@/lib/actions/topic');
 const { addCompetitors, removeBrandCompetitor } = await import('@/lib/actions/competitor');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
@@ -2003,6 +2013,32 @@ describe('the tracking setup (W2-06)', () => {
     expect(runRow(runId).status).toBe('done');
   });
 
+  it('counts the run’s earlier pauses: one prompt at a time, the sixth asks', async () => {
+    const six = Array.from(
+      { length: 6 },
+      (_, i) => `66666666-6666-4666-8666-0000000001${String(i).padStart(2, '0')}`,
+    );
+    vi.mocked(pauseBrandPrompts).mockImplementation(async (_brand, ids) => ({
+      ok: true,
+      paused: ids,
+    }));
+    useModels(
+      [READY],
+      [
+        calls(
+          ...six.map((id, i) =>
+            toolCall(`w${i}`, 'pause_prompts', { brand_id: BRAND, prompt_ids: [id] }),
+          ),
+        ),
+        text('Paused 6.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Pause these six, one by one', 'full_auto');
+    // Five ran without a card; the sixth takes the run past 5, so it asks.
+    expect(pauseBrandPrompts).toHaveBeenCalledTimes(5);
+    expect(runRow(runId).status).toBe('waiting');
+  });
+
   it('names on its card what a list or an id stands for, from the data', async () => {
     useModels(
       [READY, READY],
@@ -2021,6 +2057,152 @@ describe('the tracking setup (W2-06)', () => {
       'Pricing · “crm for agencies”, “crm for law firms” +1 · Northwind',
     );
     expectClean([...(await eventsOf(removing)), ...(await eventsOf(adding))]);
+  });
+});
+
+describe('content, reports and Site Audit (W2-07)', () => {
+  beforeEach(() => seedDraft(db));
+
+  it('says on a CMS send’s card that it can’t be undone, and why it didn’t go', async () => {
+    vi.mocked(sendDraftToCms).mockResolvedValue({
+      ok: false,
+      reason: 'not_connected',
+      message: 'Connect Webflow in Settings › Integrations first.',
+    });
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'push_cms_draft', { draft_id: DRAFT, destination: 'webflow' })),
+        text('Webflow isn’t connected.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Send the FAQ to Webflow', 'auto');
+    const card = ofType(await eventsOf(runId), 'confirm.required')[0].data;
+    expect(card).toMatchObject({
+      action: 'Send drafts to your CMS',
+      target: '“Pricing FAQ” → Webflow · Northwind',
+      noUndo: true,
+    });
+    await approve(ADMIN, runId);
+    expect(stepsOf(runId)[0]).toMatchObject({
+      status: 'error',
+      detail: 'Connect Webflow in Settings › Integrations first.',
+    });
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('"code":"not_connected"');
+    expect(db.tables.chat_activity_log).toEqual([]);
+  });
+
+  it('starts several audits only from a card that says what they use of the month', async () => {
+    vi.mocked(getAuditQuota).mockResolvedValue({
+      used: 120,
+      limit: 500,
+      remaining: 380,
+    } as never);
+    vi.mocked(startSiteAudits).mockResolvedValue({ ok: true, started: 2, audits: [] });
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'run_site_audit', {
+            brand_id: BRAND,
+            urls: ['https://acme.example/pricing', 'https://acme.example/features'],
+          }),
+        ),
+        text('Started.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Audit both pages', 'full_auto');
+    expect(runRow(runId).status).toBe('waiting');
+    expect(ofType(await eventsOf(runId), 'confirm.required')[0].data).toMatchObject({
+      target:
+        '“https://acme.example/pricing”, “https://acme.example/features” · Uses 2 audits of 380 left this month · Northwind',
+      noUndo: true,
+    });
+    expect(startSiteAudits).not.toHaveBeenCalled();
+    await approve(ADMIN, runId);
+    expect(startSiteAudits).toHaveBeenCalledWith(BRAND, [
+      'https://acme.example/pricing',
+      'https://acme.example/features',
+    ]);
+  });
+
+  it('starts even one audit only from a card, and says when it won’t fit the month', async () => {
+    vi.mocked(getAuditQuota).mockResolvedValue({ used: 499, limit: 500, remaining: 1 } as never);
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'run_site_audit', {
+            brand_id: BRAND,
+            // Two spellings of one page are one audit, as the API counts them.
+            urls: [
+              'https://acme.example/pricing',
+              'https://www.acme.example/pricing/',
+              'https://acme.example/features',
+            ],
+          }),
+        ),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Audit these', 'full_auto');
+    expect(runRow(runId).status).toBe('waiting');
+    const [card] = ofType(await eventsOf(runId), 'confirm.required');
+    expect(card.data.target).toBe(
+      "“https://acme.example/pricing”, “https://acme.example/features” · Needs 2 audits, 1 left this month: it won't start · Northwind",
+    );
+    // An approval for other arguments shows the same card again: its cost and its no-Undo too.
+    expect(await approve(ADMIN, runId, { digest: 'f'.repeat(32) })).toMatchObject({
+      code: 'approval_mismatch',
+    });
+    const again = ofType(await eventsOf(runId), 'confirm.required')[1].data;
+    expect(again).toMatchObject({ target: card.data.target, noUndo: true });
+    expect(startSiteAudits).not.toHaveBeenCalled();
+  });
+
+  it('keeps the cost line when the month’s audits can’t be read', async () => {
+    vi.mocked(getAuditQuota).mockRejectedValue(new Error('down'));
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'run_site_audit', { brand_id: BRAND, urls: ['https://acme.example/a'] }),
+        ),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Audit it', 'auto');
+    expect(ofType(await eventsOf(runId), 'confirm.required')[0].data.target).toBe(
+      "“https://acme.example/a” · Uses 1 of this month's audits · Northwind",
+    );
+  });
+
+  it('says on a page change’s card what it does to the words and headings', async () => {
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'update_draft', {
+            draft_id: DRAFT,
+            body_html: '<h1>Pricing FAQ</h1><h2>Plans for teams</h2><p>Starter is $49 a month.</p>',
+          }),
+        ),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Add a teams section', 'ask_first');
+    expect(ofType(await eventsOf(runId), 'confirm.required')[0].data.target).toBe(
+      '“Pricing FAQ” · Page changes: 2 → 10 words · headings: +“Plans for teams” · Northwind',
+    );
+  });
+
+  it('names a draft it changes by its title now, and a new title beside it', async () => {
+    useModels(
+      [READY],
+      [calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, title: 'Pricing FAQ for teams' }))],
+    );
+    const runId = await turn(ADMIN, 'Rename the FAQ', 'ask_first');
+    const card = ofType(await eventsOf(runId), 'confirm.required')[0].data;
+    expect(card.target).toBe('“Pricing FAQ” → “Pricing FAQ for teams” · Northwind');
+    // Its Undo puts the page back: no "can't be undone".
+    expect(card).not.toHaveProperty('noUndo');
   });
 });
 
@@ -2351,6 +2533,11 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'rename_topic',
     'add_competitors',
     'remove_competitor',
+    // W2-07's content rows: Admins and Managers only.
+    'update_draft',
+    'push_cms_draft',
+    'build_report',
+    'run_site_audit',
   ];
   const dismiss = toolCall('w1', 'update_opportunity', {
     opportunity_id: OPPORTUNITY,
@@ -2681,6 +2868,80 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     settings({ manager_execute_off: ['publishing'] });
     await approve(as('manager'), tried.runId);
     expect(fakes.publishRun).not.toHaveBeenCalled();
+    expect(ofType(await eventsOf(tried.runId), 'access.denied')).toEqual([
+      expect.objectContaining({
+        data: expect.objectContaining({ rule: expect.objectContaining({ kind: 'policy' }) }),
+      }),
+    ]);
+  });
+
+  it('sends a draft to a CMS only on a click, and never for a Manager the Admin turned publishing off for', async () => {
+    seedDraft(db);
+    vi.mocked(sendDraftToCms).mockResolvedValue({
+      ok: true,
+      target: 'webflow',
+      status: 'sent',
+      updated: false,
+      live: false,
+    });
+    const send = toolCall('c1', 'push_cms_draft', { draft_id: DRAFT, destination: 'webflow' });
+    // An Admin's Always lifts nothing: a click card for Admins and Managers in every mode.
+    settings({ tool_policies: { sendToCms: 'always' } });
+    for (const role of ['admin', 'manager'] as const) {
+      for (const mode of MODES) {
+        const tried = await attempt(role, mode, send);
+        expect(tried, `${role} ${mode}`).toMatchObject({ waits: true, cards: 1, denials: [] });
+        expect(tried.offered, `${role} ${mode}`).toContain('push_cms_draft');
+        expect(stepsOf(tried.runId)[0], `${role} ${mode}`).toMatchObject({ kind: 'execute' });
+      }
+    }
+    // Analysts and Agency partners only read: not offered, and called anyway, no card.
+    for (const role of ['analyst', 'agency_partner'] as const) {
+      for (const mode of MODES) {
+        const called = await attempt(role, mode, send);
+        expect(called, `${role} ${mode}`).toMatchObject({ waits: false, cards: 0 });
+        expect(called.offered, `${role} ${mode}`).not.toContain('push_cms_draft');
+      }
+    }
+    expect(sendDraftToCms).not.toHaveBeenCalled();
+
+    // Publishing off for Managers: not offered to a Manager, and the explainer says why.
+    settings({ manager_execute_off: ['publishing'] });
+    const manager = await attempt(
+      'manager',
+      'full_auto',
+      toolCall('x1', engine.EXPLAIN_TOOL, { capability: 'sendToCms', target: 'Pricing FAQ' }),
+    );
+    expect(manager.offered).not.toContain('push_cms_draft');
+    expect(manager.denials).toEqual([
+      expect.objectContaining({
+        rule: expect.objectContaining({
+          kind: 'policy',
+          detail: 'An Admin turned publishing off for Managers.',
+        }),
+        whoCan: 'Admins can do this.',
+      }),
+    ]);
+    // Called anyway: it isn't in their list, so no card to click, and nothing is sent.
+    const called = await attempt('manager', 'full_auto', send);
+    expect(called).toMatchObject({ waits: false, cards: 0 });
+    expect(sendDraftToCms).not.toHaveBeenCalled();
+    // The Admin still clicks it through, and it is sent then.
+    const admin = await attempt('admin', 'auto', send);
+    expect(admin).toMatchObject({ waits: true, cards: 1 });
+    await approve(as('admin'), admin.runId);
+    expect(sendDraftToCms).toHaveBeenCalledTimes(1);
+    expect(sendDraftToCms).toHaveBeenCalledWith(DRAFT, 'webflow');
+  });
+
+  it("refuses a Manager's CMS send clicked after the Admin turned publishing off while it waited (§4)", async () => {
+    seedDraft(db);
+    const send = toolCall('c1', 'push_cms_draft', { draft_id: DRAFT, destination: 'webflow' });
+    const tried = await attempt('manager', 'auto', send);
+    expect(tried).toMatchObject({ waits: true, cards: 1 });
+    settings({ manager_execute_off: ['publishing'] });
+    await approve(as('manager'), tried.runId);
+    expect(sendDraftToCms).not.toHaveBeenCalled();
     expect(ofType(await eventsOf(tried.runId), 'access.denied')).toEqual([
       expect.objectContaining({
         data: expect.objectContaining({ rule: expect.objectContaining({ kind: 'policy' }) }),
