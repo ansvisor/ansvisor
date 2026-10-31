@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
-import { slugify } from '@/lib/slug';
+import { insertOrganization } from '@/lib/organization-insert';
 import { assertWritable } from '@/lib/subscription-guard';
 
 // ---------------------------------------------------------------------------
@@ -155,31 +155,23 @@ export async function createOrganization(name: string) {
 
   if (!user || authError) throw new Error('Unauthorized');
 
-  let slug = slugify(name);
-  if (!slug) slug = `org-${Date.now()}`;
-
-  const { data: existing } = await supabase
-    .from('organizations')
-    .select('id')
-    .eq('slug', slug)
-    .maybeSingle();
-
-  if (existing) slug = `${slug}-${Date.now()}`;
-
-  const { data: org, error } = await supabase
-    .from('organizations')
-    .insert({ name: name.trim(), slug })
-    .select()
-    .single();
-
-  if (error || !org) throw new Error(error?.message ?? 'Failed to create organization');
+  const orgId = await insertOrganization(supabase, name);
 
   const { error: profileError } = await supabase
     .from('profiles')
-    .update({ organization_id: org.id })
+    .update({ organization_id: orgId })
     .eq('id', user.id);
 
   if (profileError) throw new Error(profileError.message);
+
+  // A member now: the organization reads back with the person's session.
+  const { data: org, error } = await supabase
+    .from('organizations')
+    .select()
+    .eq('id', orgId)
+    .single();
+
+  if (error || !org) throw new Error(error?.message ?? 'Failed to create organization');
 
   revalidatePath('/dashboard');
   return org;

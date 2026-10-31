@@ -87,7 +87,9 @@ async function resumeCapPausedAgents(now: Date): Promise<number> {
       if (agent.max_month_share !== null) {
         const mine = shares?.byAgent.get(agent.id);
         // Unread shares wait for the next sweep rather than resume past the cap.
-        if (!shares || (mine && mine.share + mine.ownKeyShare >= Number(agent.max_month_share))) {
+        // As agentMonthCapReached: a hair under (floating point) counts as reached.
+        const used = mine ? mine.share + mine.ownKeyShare : 0;
+        if (!shares || used >= Number(agent.max_month_share) - 1e-9) {
           continue;
         }
       }

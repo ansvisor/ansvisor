@@ -4,10 +4,12 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 
 /**
  * Citations' "Add as competitor" on a read-only workspace (plan not active):
- * the upgrade dialog opens instead of its own, and nothing is added.
+ * the upgrade dialog opens instead of its own, and nothing is added. Only
+ * admins and managers see it.
  */
 
 const addCompetitor = vi.hoisted(() => vi.fn());
@@ -38,15 +40,17 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-async function render(isLocked: boolean) {
+async function render(isLocked: boolean, role: TeamRole = 'manager') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <UpgradeDialogContext.Provider
-          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
-        >
-          <AddCompetitorButton brandId="b1" domain="rival.com" onAdded={onAdded} />
-        </UpgradeDialogContext.Provider>
+        <RoleProvider role={role}>
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <AddCompetitorButton brandId="b1" domain="rival.com" onAdded={onAdded} />
+          </UpgradeDialogContext.Provider>
+        </RoleProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -77,5 +81,10 @@ describe('AddCompetitorButton', () => {
     await act(async () => add.click());
     expect(addCompetitor).toHaveBeenCalledWith('b1', { name: 'Rival', domain: 'rival.com' });
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+
+  it.each(['analyst', 'agency_partner'] as const)('is not shown to an %s', async (role) => {
+    await render(false, role);
+    expect(container.querySelector('button')).toBeNull();
   });
 });

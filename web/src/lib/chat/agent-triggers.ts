@@ -272,13 +272,30 @@ async function enabledTriggers(
  * that can't be read let it fire: each step is held on the budget anyway.
  */
 async function monthCapUsed(agent: FiringAgent): Promise<boolean> {
-  if (agent.maxMonthShare === null) return false;
-  const shares = await readAgentShares(agent.organizationId, 'period');
-  const mine = shares?.byAgent.get(agent.id);
-  if (!mine) return false;
-  if (mine.share + mine.ownKeyShare < agent.maxMonthShare) return false;
+  if (!(await agentMonthCapReached(agent.organizationId, agent.id, agent.maxMonthShare))) {
+    return false;
+  }
   await pauseAgentForSystem(agent.organizationId, agent.id, 'cap');
   return true;
+}
+
+/**
+ * Whether an agent's monthly cap (max_month_share; null: none) is used this
+ * period, own-key steps included. Read on a fire, and again before every
+ * run starts, Run now's too (agent-driver.ts). Shares that can't be read
+ * answer false: each step is held on the budget anyway.
+ */
+export async function agentMonthCapReached(
+  organizationId: string,
+  agentId: string,
+  maxMonthShare: number | null,
+): Promise<boolean> {
+  if (maxMonthShare === null) return false;
+  const shares = await readAgentShares(organizationId, 'period');
+  const mine = shares?.byAgent.get(agentId);
+  if (!mine) return false;
+  // A hair under counts as reached: 0.18 + 0.02 is 0.19999… in floating point.
+  return mine.share + mine.ownKeyShare >= Number(maxMonthShare) - 1e-9;
 }
 
 // ─── Queuing a fire ──────────────────────────────────────────────────────────
