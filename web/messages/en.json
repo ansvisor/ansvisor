@@ -12212,7 +12212,7 @@
       "growth": {
         "tagline": "For growing teams that want to monitor AI visibility and optimize content for AI search.",
         "engines": "ChatGPT, Perplexity, Gemini, Microsoft Copilot, Google AI Mode and Google AI Overviews tracking",
-        "extras": ["Multi-region tracking", "White-label reports & Looker Studio"]
+        "extras": ["Multi-region tracking", "Looker Studio"]
       },
       "brands": "{count, plural, one {# brand} other {# brands}}",
       "unlimitedBrands": "Unlimited brands",
