@@ -4,6 +4,8 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
+import { ChatPanelContext, type ChatPanelState } from '@/components/chat/panel/chat-panel-context';
+import { Button } from '@/components/ui/button';
 import type { AiUsage, UsageLimits } from '@/lib/billing/ai-usage';
 import { readAiUsage, readDraftAiUsage, readUsageLimits } from '@/lib/billing/ai-usage-client';
 
@@ -427,6 +429,35 @@ describe('HeaderWithAiUsage', () => {
     expect(row.lastElementChild).toBe(trigger());
     expect(trigger()!.className).toContain('self-end');
     expect(row.className).toContain('sm:flex-row');
+  });
+
+  it('lines Ask Chat and the meter up with the page’s header buttons, at the top or the bottom', async () => {
+    const panel = { available: true, open: false, toggle: () => {} } as unknown as ChatPanelState;
+    const header = (align?: 'start' | 'end') => (
+      <ChatPanelContext.Provider value={panel}>
+        <HeaderWithAiUsage align={align}>
+          <h1>Reports</h1>
+          <Button>Generate Report</Button>
+        </HeaderWithAiUsage>
+      </ChatPanelContext.Provider>
+    );
+    // The h-* classes: the same one on all three, a default button's.
+    const heights = (el: Element) => el.className.split(/\s+/).filter((c) => /^h-/.test(c));
+    await render('admin', header());
+    const row = container.firstElementChild!;
+    const [page, meter, ask] = [...row.querySelectorAll('button')];
+    expect(page.textContent).toBe('Generate Report');
+    expect(meter.getAttribute('aria-label')).toBe('AI 21.4% used this month');
+    expect(ask.getAttribute('data-action')).toBe('panel.open');
+    expect(heights(page)).toEqual(['h-8']);
+    expect(heights(meter)).toEqual(['h-8']);
+    expect(heights(ask)).toEqual(['h-8']);
+    expect(row.className).toContain('sm:items-start');
+
+    // Beside a date range, whose label sits above its buttons.
+    await render('admin', header('end'));
+    expect(container.firstElementChild!.className).toContain('sm:items-end');
+    expect(container.firstElementChild!.className).not.toContain('sm:items-start');
   });
 
   it('leaves room on the row for a drawer’s close button', async () => {

@@ -205,7 +205,7 @@ export default function ReportDetailPage() {
   return (
     <div className="space-y-6">
       <HeaderWithAiUsage>
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
             <Link
               href="/dashboard/reports"
