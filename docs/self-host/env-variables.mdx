@@ -47,7 +47,7 @@ Fed to the Express API + workers.
 | `COMPETITOR_SUGGESTION_MODEL` | optional | LLM for competitor suggestions |
 | `CONTENT_READ_MODEL` | optional | LLM the Content Editor reads and judges with: the brief (**Rebuild outline**) and Quality's checks. Default: `anthropic/claude-haiku-5-5` when `ANTHROPIC_API_KEY` is set, else `IMPROVE_SUGGESTION_MODEL`, then `DEFAULT_SUGGESTION_MODEL`, then `google/gemini-3-flash-preview`. `QUALITY_CHECK_MODEL`, when set, still picks Quality's model. |
 | `CONTENT_WRITE_MODEL` | optional | LLM the Content Agent writes with: pages written or rewritten whole and its suggestions. Default: `anthropic/claude-sonnet-5-5` when `ANTHROPIC_API_KEY` is set, else the same fallbacks as `CONTENT_READ_MODEL`. A Claude model must support structured outputs (Claude 4.5 models or newer). |
-| `AUDIT_LLM_MODEL` | optional | LLM for the Site Audit's LLM-judged signals + AI recommendations (default: `google/gemini-3-flash-preview`) |
+| `AUDIT_LLM_MODEL` | optional | LLM for the Site Audit's LLM-judged signals + AI recommendations. Use a pinned, versioned id, not a `-preview` or `-latest` alias: each signal's verdict is kept by model id and judged again only when the page or the model changes. Default: `google/gemini-3.8-flash` for the signals, `google/gemini-3-flash-preview` for the recommendations |
 | `ALLOWED_ORIGINS` | ✅ | Comma-separated list of web origins allowed to call the API (for CORS) |
 | `IS_CLOUD` | optional | `"true"` only for the official cloud build |
 | `DATAFORSEO_LOGIN` | optional | DataForSEO login (for prompt volume analysis) |
