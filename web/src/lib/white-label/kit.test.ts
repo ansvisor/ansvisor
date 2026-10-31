@@ -22,18 +22,17 @@ const BRAND = '22222222-2222-4222-8222-222222222222';
 const ID = '33333333-3333-4333-8333-333333333333';
 
 describe('the plans', () => {
-  it('give white label to Growth and Enterprise, and not to Starter', () => {
+  it('give white label to Growth, Enterprise and a self-host, and not to Starter', () => {
     expect(hasFeature(PLANS.starter, 'white_label')).toBe(false);
     expect(hasFeature(PLANS.growth, 'white_label')).toBe(true);
     expect(hasFeature(PLANS.enterprise, 'white_label')).toBe(true);
+    expect(hasFeature(PLANS.self_hosted, 'white_label')).toBe(true);
     expect(getMinimumPlanForFeature('white_label')).toBe('growth');
   });
 
-  it('offer it on the cloud, and on a self-host only once its plan has it', () => {
+  it('offer it on the cloud and on a self-host', () => {
     expect(whiteLabelOffered({ isCloud: true })).toBe(true);
-    expect(whiteLabelOffered({ isCloud: false })).toBe(
-      hasFeature(PLANS.self_hosted, 'white_label'),
-    );
+    expect(whiteLabelOffered({ isCloud: false })).toBe(true);
   });
 });
 

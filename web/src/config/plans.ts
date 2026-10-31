@@ -172,6 +172,7 @@ export const PLANS: Record<PlanId, Plan> = {
         'ai_agent',
         'shopping_analytics',
         'prompt_improve',
+        'white_label',
       ],
       // Self-host runs against the operator's own infrastructure / API
       // keys — no platform quota to enforce.

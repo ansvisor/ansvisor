@@ -39,6 +39,7 @@ export const PLANS = {
         'ai_agent',
         'shopping_analytics',
         'prompt_improve',
+        'white_label',
       ],
     },
   },
