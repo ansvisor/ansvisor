@@ -183,6 +183,9 @@ describe('who sees Run agent', () => {
     );
     await render({ role: 'manager', variant: 'drawer' });
     expect(trigger()?.textContent).toBe('Run agent');
+    // The drawer's top row makes room for it; the size of Copy Data and Export beside it.
+    expect(trigger()?.hasAttribute('data-run-agent')).toBe(true);
+    expect(trigger()?.className).toContain('h-7');
   });
 
   it('hides it from Analysts and Agency partners, with Chat off, and on a closed action', async () => {

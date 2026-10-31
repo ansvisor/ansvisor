@@ -425,7 +425,9 @@ export function ActionDrawer({
       <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         {/* pt-3: the top row's buttons line up with the sheet's close button. */}
         <SheetHeader className="border-b px-6 pt-3 pb-4 pr-12">
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          {/* One row at 1024px too: with Run agent in a narrow drawer, the action's
+              number alone, its "Action ID" label kept for screen readers (W2-17). */}
+          <div className="group/top @container flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className="text-[10px]">
               {tCategories(action.category)}
             </Badge>
@@ -441,8 +443,14 @@ export function ActionDrawer({
                 volumes={volumes}
                 story={story}
               />
-              <span className="text-muted-foreground">
-                {t('drawer.actionId')}: AC-{action.actionNo}
+              <span
+                className="whitespace-nowrap text-muted-foreground"
+                title={`${t('drawer.actionId')}: AC-${action.actionNo}`}
+              >
+                <span className="@max-[36rem]:group-has-[[data-run-agent]]/top:sr-only">
+                  {t('drawer.actionId')}:{' '}
+                </span>
+                AC-{action.actionNo}
               </span>
             </div>
           </div>

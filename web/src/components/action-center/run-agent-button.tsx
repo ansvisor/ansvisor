@@ -79,6 +79,8 @@ function RunAgentMenu({ action, title, variant, className }: RunAgentProps) {
     >
       <PopoverTrigger
         data-action="actionCenter.runAgent"
+        // The drawer's top row makes room for it (action-drawer.tsx).
+        data-run-agent=""
         aria-label={label}
         title={label}
         className={cn(
@@ -87,13 +89,14 @@ function RunAgentMenu({ action, title, variant, className }: RunAgentProps) {
                 buttonVariants({ variant: 'ghost', size: 'icon-xs' }),
                 'text-muted-foreground hover:text-foreground',
               )
-            : buttonVariants({ variant: 'default', size: 'xs' }),
+            : // The size of the drawer's Copy Data and Export beside it.
+              cn(buttonVariants({ variant: 'default', size: 'sm' }), 'h-7 gap-1.5 text-xs'),
           className,
         )}
         // On a row that opens on a click, only the picker opens.
         onClick={(event) => event.stopPropagation()}
       >
-        <Bot aria-hidden />
+        <Bot aria-hidden className={variant === 'drawer' ? 'h-3 w-3' : undefined} />
         {variant === 'drawer' && t('button')}
       </PopoverTrigger>
       <PopoverContent
