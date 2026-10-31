@@ -28,7 +28,7 @@ export function chatAgenticDeployed() {
 }
 
 /** CHAT_AGENTIC_ORGS as a list: trimmed, lower-cased, blanks dropped. */
-function chatAgenticOrgs() {
+export function chatAgenticOrgs() {
   return (process.env.CHAT_AGENTIC_ORGS ?? '')
     .split(',')
     .map((id) => id.trim().toLowerCase())

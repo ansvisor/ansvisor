@@ -32,25 +32,30 @@ export function promptLocationCount(regions: readonly unknown[] | null | undefin
 }
 
 export interface OrgLocationUsage {
-  /** Active locations across every prompt in the org; paused prompts don't count (00128). */
+  /**
+   * Active locations across every prompt in the org, whatever brands the
+   * caller can see; paused prompts don't count (00128).
+   */
   total: number;
   /**
-   * Tracked locations per brand — for replace-style saves (savePromptSet
-   * swaps a brand's whole set, so that brand's current locations don't count
-   * against its own re-save) and for the wizards' capacity display.
+   * Tracked locations per brand the caller can access — for replace-style
+   * saves (savePromptSet swaps a brand's whole set, so that brand's current
+   * locations don't count against its own re-save) and for the wizards'
+   * capacity display.
    */
   byBrand: Map<string, number>;
 }
 
 /** Pure aggregation half of {@link getOrgLocationUsage}, split out for tests. */
 export function summarizeLocationRows(
-  rows: { brand_id: string; locations: number }[],
+  rows: { brand_id: string | null; locations: number }[],
 ): OrgLocationUsage {
   const byBrand = new Map<string, number>();
   let total = 0;
   for (const row of rows) {
     total += row.locations;
-    byBrand.set(row.brand_id, row.locations);
+    // The brands the caller can't access come as one row with no brand (00390).
+    if (row.brand_id) byBrand.set(row.brand_id, row.locations);
   }
   return { total, byBrand };
 }
@@ -61,8 +66,10 @@ export function summarizeLocationRows(
  * would look equivalent but isn't: PostgREST silently caps an un-paginated
  * select at 1000 rows (the #427/#450/#464 trap), and a truncated sum
  * UNDER-counts — the guard would wave an over-limit org through with no
- * error anywhere. The RPC is security invoker, so RLS scopes it to orgs the
- * caller belongs to.
+ * error anywhere. The RPC is security definer (00390): it counts the whole
+ * organization for its members (and the server), so a person who sees only
+ * some of its brands can't get past the plan's limit, and nothing for anyone
+ * else.
  */
 export async function getOrgLocationUsage(
   supabase: ServerSupabase,
