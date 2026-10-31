@@ -11,6 +11,9 @@ import { runAgentNow, type RunNowItem } from '@/lib/chat/agent-runs';
 import { runNowInput } from '@/lib/chat/agent-rules';
 import { chatActor, runFailure } from '@/lib/chat/run-api';
 
+// A run that starts is driven past the answer (the agent run driver's after()), within this.
+export const maxDuration = 300;
+
 /**
  * POST /api/chat/agents/{id}/run `{ brandId? }`
  *

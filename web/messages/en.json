@@ -116,6 +116,7 @@
   "chatBudget": {
     "ai_limit": "You've used this month's AI limit, so Chat stopped here. What's done so far is kept.",
     "ai_limit_trial": "Your trial AI limit is used up, so Chat stopped here. What's done so far is kept.",
+    "run_cap": "This run reached its limit, so Chat stopped here. What's done so far is kept.",
     "plan_limit": "This workspace's plan isn't active, so Chat can't run. Choose a plan to use it again.",
     "not_found": "This chat's work is gone. Ask your question again.",
     "chat_off": "Chat isn't on for this workspace.",
@@ -3242,6 +3243,65 @@
     "planGateTitle": "Agent is a {plan} feature",
     "planGateBody": "Upgrade your plan to chat with your dashboard about visibility, competitors, citations, and content gaps."
   },
+  "chatWhy": {
+    "aria": "Why did it move",
+    "metrics": {
+      "visibility": "Visibility",
+      "visibility_score": "Visibility score",
+      "mention_rate": "Mention rate",
+      "share_of_voice": "Share of voice",
+      "citations": "Citation rate",
+      "avg_position": "Average position"
+    },
+    "metricOn": "{engine} {metric}",
+    "units": { "pts": "pts", "positions": "positions" },
+    "change": "{delta} · {days, plural, one {# day} other {# days}}",
+    "withinSwing": "Within normal swing (±{band} at this sample size)",
+    "notEnoughData": "Not enough data",
+    "explains": "What explains the {delta}",
+    "about": "about {points} {unit}",
+    "offset": "partly offset the change",
+    "nowCite": "{count, plural, one {# prompt now cites} other {# prompts now cite}} {page}",
+    "kinds": {
+      "site_change": "Site change · {page}",
+      "lost_citation_to_competitor": "Lost citation · {page}",
+      "lost_citation": "Lost citation · {page}",
+      "competitor_entered": "Competitor entered the answers",
+      "won_citation_from_competitor": "Won citation · {page}",
+      "gained_citation": "New citation · {page}",
+      "competitor_left": "Competitor left the answers",
+      "engines_changed": "Engine added or dropped",
+      "prompt_set_changed": "Prompt set changed",
+      "not_mentioned": "Not named in one period",
+      "not_enough_data": "Not enough data",
+      "other": "Other",
+      "normal_swing": "Normal swing",
+      "unexplained": "Unexplained"
+    },
+    "prompt": "Prompt",
+    "citedBefore": "Cited before",
+    "citedNow": "Cited now",
+    "date": "Date",
+    "answer": "Answer",
+    "openAnswer": "Open the answer for {prompt}",
+    "partial": "Some answers couldn't be read, so part of the change is unexplained.",
+    "notCited": "not cited",
+    "noRows": "No single prompt explains this part.",
+    "detection": "Detection from stored snapshots, no model reads",
+    "confidence": {
+      "high": "High confidence",
+      "medium": "Medium confidence",
+      "low": "Low confidence"
+    },
+    "totalSub": "{runs, number} tracked runs · {kind, select, prompts {{cells, number} tracked prompts} other {{cells, number} prompt-engine pairs}}",
+    "periodValue": "{value} · {runs, number} runs",
+    "band": "Normal band",
+    "sample": "Sample",
+    "sampleValue": "{stable, number} compared · {excluded, number} with too little data",
+    "answerSub": "An answer from scheduled tracking",
+    "loading": "Loading…",
+    "answerFailed": "This answer couldn't be loaded."
+  },
   "chatTools": {
     "profile": { "name": "Read your profile", "step": "Read your profile" },
     "aiUsage": { "name": "Read AI usage", "step": "Read AI usage" },
@@ -3330,6 +3390,12 @@
       "step": "Removed competitor",
       "note": "Its timeline events go with it. Undo brings the competitor back, not those events."
     },
+    "reviseDraft": { "name": "Change drafts in Content", "step": "Changed draft in Content" },
+    "sendToCms": { "name": "Send drafts to your CMS", "step": "Sent draft to your CMS" },
+    "makeReport": { "name": "Make reports", "step": "Made report" },
+    "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
+    "webPage": { "name": "Open web pages", "step": "Open page" },
+    "whyChange": { "name": "Explain why a number changed", "step": "Read why it changed" },
     "agents": { "name": "Create and run agents", "step": "Changed an agent" }
   },
   "agentic": {
@@ -3678,6 +3744,7 @@
       "failed": "Something went wrong",
       "readFailed": "Couldn't read this",
       "timedOut": "Timed out",
+      "stoppedAtLimit": "Stopped at its limit",
       "limit": "Over this run's limit",
       "pausedCap": "Stopped at the AI limit",
       "unknown": "Worked on a step",
@@ -3687,7 +3754,31 @@
       "readHelp": "Read Ansvisor Help",
       "ask": "Waiting for your answer",
       "askSkipped": "Skipped · used {option}",
-      "askStopped": "Question skipped"
+      "askStopped": "Question skipped",
+      "opened": "Opened {page}",
+      "notOpened": "Couldn't open {page}",
+      "usedSkill": "Used skill: {title}",
+      "skillFromLibrary": "Ansvisor library"
+    },
+    "pageRefused": {
+      "no_access": "No workspace to open pages for",
+      "invalid_url": "Not an address Chat opens",
+      "blocked": "Not a public address",
+      "not_allowed": "Goes to a site Chat may not open",
+      "too_many_redirects": "Redirects too many times",
+      "not_html": "Not a web page",
+      "too_large": "Too large to read",
+      "too_deep": "Built too deeply to read",
+      "http_error": "The page answered with an error",
+      "http_status": "The page answered {status}",
+      "timeout": "Timed out",
+      "unreachable": "Couldn't be reached",
+      "busy": "Other pages are opening. Try again in a moment."
+    },
+    "costs": {
+      "siteAudit": "{count, plural, one {Uses # audit} other {Uses # audits}} of {left} left this month",
+      "siteAuditOver": "{count, plural, one {Needs # audit} other {Needs # audits}}, {left} left this month: it won't start",
+      "siteAuditUnknown": "{count, plural, one {Uses # of this month's audits} other {Uses # of this month's audits}}"
     },
     "error": {
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
@@ -3758,6 +3849,8 @@
       "title": "Shortcuts",
       "keys": "type to filter · ↑↓ · Enter",
       "none": "No shortcuts match",
+      "noneWithSkills": "No shortcuts or skills match",
+      "skills": "Skills",
       "shortcuts": {
         "analyze": { "name": "Analyze", "starter": "Analyze" },
         "report": { "name": "Reports", "starter": "Create a report on" },
@@ -3833,6 +3926,7 @@
     "answerFailed": "Couldn't save your answer. Try again.",
     "questionNext": "Answer saved · question {at} of {of} next",
     "nextMoves": "Next moves",
+    "noUndo": "This can’t be undone from Chat once it’s done.",
     "pausedCap": "You've used this month's AI limit, so Chat stopped here.",
     "connectionLost": "Lost the connection to Chat. It keeps working: reload the page to see where it is.",
     "untitledExport": "Chat"
@@ -4161,10 +4255,35 @@
       "workedWhileAway": "Your agents worked while you were away.",
       "needsYou": "{count, plural, one {# thing needs you} other {# things need you}}",
       "caughtUp": "All caught up.",
-      "dueTasks": "{count, plural, one {# Action Center task is due this week} other {# Action Center tasks are due this week}}",
-      "completeWithChat": "Complete with Chat",
-      "completeTasksMessage": "Complete this week's Action Center tasks.",
-      "startFailed": "Couldn't start that. Try again."
+      "startFailed": "Couldn't start that. Try again.",
+      "forYou": {
+        "title": "For you now",
+        "askAnything": "Ask anything",
+        "tasks": "Complete tasks",
+        "tasksCount": "{count, number} due",
+        "tasksMessage": "Work through this week's Action Center tasks by priority and prepare what each one needs. I'll close the tasks.",
+        "winBack": "Win back citations",
+        "winBackCount": "{count, plural, one {# page} other {# pages}}",
+        "winBackMessage": "Win back the citations we lost on {count, plural, one {# page} other {# pages}}: refresh them against what AI cites now.",
+        "winBackReadMessage": "Show the {count, plural, one {# page} other {# pages}} that lost citations and what AI cites instead.",
+        "publish": "Ready to publish",
+        "publishCount": "{count, number}",
+        "publishMessage": "Check the {count, plural, one {# ready draft} other {# ready drafts}}, fill their page fields and send them to our CMS as drafts. Going live stays my click.",
+        "more": "More"
+      },
+      "since": {
+        "left": "Since you left",
+        "oneWin": "One win",
+        "when": "{day} → yesterday",
+        "lastVisit": "Your last visit was {date}",
+        "citations": "{engine} citations",
+        "down": "down {count, number}",
+        "up": "up {count, number}",
+        "why": "Why?",
+        "whichOnes": "Which ones?",
+        "whyMessage": "Why did our {engine} citations drop since {day}?",
+        "winMessage": "Which {engine} citations did we win since {day}?"
+      }
     },
     "inbox": {
       "title": "Inbox",
@@ -4790,7 +4909,8 @@
         "action_center": "Action Center",
         "content": "Content",
         "reports": "Reports",
-        "navigation": "Navigation"
+        "navigation": "Navigation",
+        "web": "Web"
       }
     }
   },
@@ -4816,6 +4936,12 @@
       "trackCompetitorsUndo": "Removed the competitors added: {competitors}",
       "dropCompetitor": "Removed the competitor {competitor}",
       "dropCompetitorUndo": "Brought back the competitor {competitor}, without its timeline events from before",
+      "reviseDraft": "Changed the draft “{title}”",
+      "reviseDraftUndo": "Put the draft “{title}” back as it was",
+      "sendToCms": "Sent the draft “{title}” to {cms}",
+      "makeReport": "Made the report “{title}”",
+      "makeReportUndo": "Removed the report “{title}” from Reports",
+      "startAudit": "Started Site Audit on {pages}",
       "accessDenied": "Not allowed: {tool}",
       "agentCreated": "Created the agent “{name}”",
       "agentUpdated": "Changed the agent “{name}”",
@@ -4863,6 +4989,7 @@
       "invalid": "Some of this agent's settings aren't valid. Check them and try again.",
       "not_found": "This agent isn't available.",
       "name_taken": "An agent named “{name}” already exists in this workspace. Pick another name.",
+      "name_taken_hidden": "That name is taken in this workspace. Try another.",
       "wrong_status": "{status, select, draft {This agent is a draft} active {This agent is on} paused {This agent is paused} other {This agent is archived}}, so it can't do that now.",
       "archived": "This agent is archived. Restore it first.",
       "version_conflict": "This agent was changed since you opened it. Reload to see its latest version.",
@@ -5004,6 +5131,24 @@
       "medium": "Medium confidence",
       "high": "High confidence"
     },
+    "runner": {
+      "title": "{agent} · {brand}",
+      "message": "Run the agent “{agent}” for {brand}: {skills}.",
+      "skill": "/{skill}",
+      "then": ", then ",
+      "instructions": "Its instructions: {text}",
+      "started": "{trigger, select, schedule {It started on its schedule.} signal {It started because Action Center found {count, plural, one {a new signal} other {# new signals}}.} kpi {It started because a KPI changed.} watch_rule {It started because a watch rule fired.} action {It started from an Action Center action.} other {It started with Run now.}}",
+      "earlier": "{count, plural, one {One more fire came while it waited (cooldown or daily limit): it's in the scope too.} other {# more fires came while it waited (cooldown or daily limit): they're in the scope too.}}",
+      "background": "This run works in the background. When a question comes up, take the recommended option and list your assumptions at the top of the answer. Changes still wait for approval as the agent's mode says.",
+      "chip": {
+        "agent": "Agent",
+        "brand": "Brand",
+        "trigger": "Trigger",
+        "signal": "Signal",
+        "slot": "Scheduled for",
+        "earlier": "Earlier fires"
+      }
+    },
     "runStatus": {
       "queued": "Queued",
       "running": "Running",
@@ -5047,7 +5192,9 @@
       "takeOver": "Take over",
       "open": "Open",
       "openRun": "Open run",
-      "more": "More agent options"
+      "more": "More agent options",
+      "edit": "Edit",
+      "delete": "Delete"
     },
     "toast": {
       "ran": "{count, plural, one {Run queued for {brand}} other {# runs queued, one a brand}}",
@@ -5061,7 +5208,315 @@
       "restored": "{name} restored · it stays paused until you resume it",
       "duplicated": "Copied as a draft · {name}",
       "tookOver": "You own {name} now · its triggered runs act as you",
-      "failed": "Couldn't do that. Try again."
+      "failed": "Couldn't do that. Try again.",
+      "deleted": "{name} deleted · its runs and files stay",
+      "savedDraft": "Saved as a draft · {name}",
+      "saved": "Saved · {name}",
+      "nothingChanged": "Nothing changed"
+    },
+    "deleteDialog": {
+      "title": "Delete this agent?",
+      "body": "“{name}” will be deleted. Its past runs and files stay.",
+      "cancel": "Cancel",
+      "confirm": "Delete"
+    },
+    "skills": {
+      "winback": "Win back lost citations",
+      "tasks": "Complete this week’s tasks",
+      "quality": "Quality pass",
+      "faq": "FAQ from fan-outs",
+      "report": "Weekly report",
+      "beat": "Beat a competitor",
+      "refresh": "Refresh for this year",
+      "publish": "Ready to publish",
+      "shopping": "AI shopping readiness",
+      "wrongclaim": "Fix wrong claims about us",
+      "answerfirst": "Answer-first rewrite",
+      "facts": "Brand facts check",
+      "compare": "Comparison page",
+      "translate": "Translate a page"
+    },
+    "form": {
+      "titleNew": "New agent",
+      "titleEdit": "Edit agent",
+      "crumbEdit": "Edit · {name}",
+      "cancel": "Cancel",
+      "stepsLabel": "Steps",
+      "steps": {
+        "skill": "Skill",
+        "trigger": "Trigger",
+        "mode": "Mode & approvals",
+        "connections": "Connections & model"
+      },
+      "stepOf": "Step {step} of 4",
+      "stepTitle": "Step {step} of 4 · {name}",
+      "alert": "{count, plural, one {One thing on this step needs fixing.} other {# things on this step need fixing.}}",
+      "back": "Back",
+      "next": "Next",
+      "saveDraft": "Save as draft",
+      "turnOn": "Turn on",
+      "saveChanges": "Save changes",
+      "savedNotOn": "Saved as a draft. It isn’t on yet.",
+      "reload": "Reload",
+      "failed": "Couldn’t save the agent. Try again.",
+      "readOnly": {
+        "title": "You see agents read-only ({role})",
+        "detail": "Only Admins and Managers create and change agents",
+        "notOwnerTitle": "You can’t change this agent",
+        "notOwnerDetail": "Only its owner or an Admin can change it",
+        "archivedTitle": "This agent is archived",
+        "archivedDetail": "Restore it on its page to change it",
+        "askedCreate": "Create an agent",
+        "askedEdit": "Change an agent",
+        "back": "Back to Agents",
+        "backToAgent": "Back to the agent"
+      },
+      "skill": {
+        "sourcesLabel": "Where skills come from",
+        "sources": {
+          "ansvisor": "Ansvisor skills",
+          "mine": "My skills",
+          "marketplace": "Marketplace"
+        },
+        "empty": {
+          "mine": "Skills you save show here.",
+          "marketplace": "Library skills an Admin adds show here."
+        },
+        "uses": "Uses {connections}",
+        "noConnection": "No connection needed",
+        "followOn": "Follow-on skills",
+        "followOnNote": "Run in order after /{skill}, up to 2",
+        "addFollowOn": "Add a follow-on skill",
+        "removeSkill": "Remove /{skill}",
+        "instructions": "Instructions",
+        "instructionsNote": "Optional. Read with the skill; it can’t change the agent’s tools or approvals.",
+        "instructionsPlaceholder": "For example: keep the tone friendly and leave the pricing page alone",
+        "count": "{count} / 2,000"
+      },
+      "trigger": {
+        "options": {
+          "manual": "Manual",
+          "schedule": "Schedule",
+          "signal": "Signal created",
+          "kpi": "KPI changed",
+          "watch_rule": "Watch rule"
+        },
+        "notes": {
+          "manual": "Run from Chat or an action",
+          "schedule": "Daily, weekly, monthly",
+          "signal": "A new Action Center signal",
+          "kpi": "A KPI moves past a threshold",
+          "watch_rule": "WHEN · FOR · THEN"
+        },
+        "watchRuleNone": "Set on a watch rule: its THEN runs the agent",
+        "list": "Triggers",
+        "count": "{count} of 5",
+        "add": "Add trigger",
+        "alwaysOn": "Always on",
+        "kindLabel": "Trigger type",
+        "max": "An agent has up to 5 triggers. Remove one to add another.",
+        "remove": "Remove this trigger",
+        "select": "Edit this trigger",
+        "switch": "Trigger on",
+        "kw": {
+          "when": "WHEN",
+          "every": "EVERY",
+          "once": "ONCE",
+          "for": "FOR",
+          "then": "THEN"
+        },
+        "manualWhen": "You press Run, or Run agent on an action",
+        "repeatLabel": "How often",
+        "repeat": {
+          "daily": "Day",
+          "weekdays": "Weekday",
+          "MO": "Monday",
+          "TU": "Tuesday",
+          "WE": "Wednesday",
+          "TH": "Thursday",
+          "FR": "Friday",
+          "SA": "Saturday",
+          "SU": "Sunday",
+          "month_first": "1st of the month",
+          "month_last": "Last day of the month",
+          "once": "Once",
+          "custom": "Its own schedule"
+        },
+        "at": "at",
+        "on": "on",
+        "timeLabel": "Time",
+        "dateLabel": "Date",
+        "categoryLabel": "Signal category",
+        "signalWhen": "signal is created in Action Center",
+        "kpiLabel": "KPI",
+        "directionLabel": "Which way",
+        "direction": {
+          "down": "drops",
+          "up": "rises",
+          "any": "moves"
+        },
+        "by": "by",
+        "thresholdLabel": "Threshold",
+        "unitLabel": "Unit",
+        "unit": {
+          "percent": "%",
+          "absolute": "pts"
+        },
+        "periodLabel": "Period",
+        "period": {
+          "day": "in a day",
+          "week": "in a week",
+          "month": "in a month"
+        },
+        "watchRuleWhen": "Its watch rule fires",
+        "runAgent": "Run agent"
+      },
+      "scope": {
+        "brands": "Brands",
+        "allBrands": "All brands",
+        "brandCount": "{count, plural, one {# brand} other {# brands}}",
+        "noBrand": "Pick a brand",
+        "engines": "Platforms",
+        "allEngines": "All platforms",
+        "engineCount": "{count, plural, one {# platform} other {# platforms}}",
+        "topics": "Topics",
+        "anyTopic": "Any topic",
+        "topicCount": "{count, plural, one {# topic} other {# topics}}",
+        "noTopics": "These brands have no topics yet.",
+        "tags": "Prompt tags",
+        "anyTag": "Any tag",
+        "tagCount": "{count, plural, one {# tag} other {# tags}}",
+        "tagsNote": "One tag per line",
+        "urls": "URLs",
+        "anyUrl": "Any URL",
+        "urlCount": "{count, plural, one {# URL} other {# URLs}}",
+        "urlsNote": "One address per line, starting with https://"
+      },
+      "mode": {
+        "notes": {
+          "ask_first": "Every WRITE shows a card",
+          "auto": "Reads run · WRITEs show a card",
+          "full_auto": "Allowed WRITEs run, logged, undoable"
+        },
+        "lockTag": "Needs {plan} · you’re on {current}",
+        "gate": "Full auto · Needs {plan} · you’re on {current} — agents run approved changes for you, logged and undoable",
+        "upgrade": "Upgrade",
+        "for": "For {skill}",
+        "class": "Class",
+        "approval": "Approval",
+        "rows": {
+          "read": "Read data the skill needs",
+          "draft": "Update a draft",
+          "cms": "Update a CMS draft",
+          "check": "Follow-up check",
+          "publish": "Publish, push, send"
+        },
+        "outcome": {
+          "free": "Runs freely",
+          "card": "Approval card",
+          "auto": "Auto · logged with Undo",
+          "cmsFull": "Approval card · policy is Ask",
+          "oneClick": "One-click card",
+          "click": "Needs your click"
+        }
+      },
+      "connections": {
+        "title": "Connections",
+        "requiredBy": "Required by /{skill}",
+        "use": "Use {name}"
+      },
+      "model": {
+        "title": "Model",
+        "options": {
+          "auto": "Auto",
+          "fast": "Fast",
+          "writing": "Best writing",
+          "picked": "Picked model"
+        },
+        "notes": {
+          "auto": "Picks per step · Ansvisor limit",
+          "fast": "Cheaper, for reads and checks",
+          "writing": "For drafts and rewrites",
+          "picked": "Kept from this agent’s settings"
+        },
+        "ownKey": "Runs on your {provider} key · doesn’t use your limit",
+        "limit": "Uses your monthly AI limit"
+      },
+      "agent": {
+        "title": "Agent",
+        "name": "Name",
+        "nameNote": "1–60 characters, unique in your workspace",
+        "visibility": "Shared",
+        "visibilityOptions": {
+          "private": "Private",
+          "workspace": "Workspace"
+        },
+        "visibilityNotes": {
+          "private": "You and your Admins see it",
+          "workspace": "Everyone sees it · Admins and Managers can run it"
+        },
+        "adminsOnly": "Admins only",
+        "adminsOnlyNote": "Your Admin keeps workspace agents to Admins",
+        "maxRun": "Max per run",
+        "maxRunNote": "The most one run may use of the monthly AI limit, 1–50%",
+        "monthCap": "Monthly cap",
+        "monthCapNote": "The most this agent may use of the monthly AI limit a month, 1–100%",
+        "monthCapSet": "Set by an Admin · {cap} a month"
+      },
+      "summary": {
+        "title": "Agent",
+        "rows": {
+          "name": "Name",
+          "skill": "Skill",
+          "trigger": "Trigger",
+          "scope": "Scope",
+          "mode": "Mode",
+          "connections": "Connections",
+          "model": "Model",
+          "shared": "Shared",
+          "runsAs": "Runs as",
+          "approvals": "Approvals",
+          "outcome": "Outcome",
+          "publishing": "Publishing",
+          "cost": "Cost"
+        },
+        "none": "—",
+        "manual": "Manual",
+        "runsAs": "You · {role}",
+        "approvals": "Wait 7 days, then the run stops",
+        "outcome": "Checks on day 7 · 14 · 30 · 90",
+        "publishing": "Needs your click",
+        "cost": "Up to {share} of monthly limit per run"
+      },
+      "errors": {
+        "skill_required": "Pick a skill.",
+        "instructions_long": "Instructions can be at most 2,000 characters.",
+        "triggers_many": "An agent has up to 5 triggers.",
+        "triggers_same": "Two triggers are the same. Remove one.",
+        "trigger_invalid": "This trigger isn’t complete.",
+        "time_required": "Pick a time.",
+        "date_required": "Pick a date.",
+        "schedule_past": "A one-time schedule has to be in the future.",
+        "schedule_too_far": "A one-time schedule can be at most a year ahead.",
+        "category_required": "Pick a signal category.",
+        "kpi_required": "Pick a KPI.",
+        "threshold": "Enter a number above 0.",
+        "threshold_percent": "A percent threshold is at most 1,000%.",
+        "watch_rule_required": "Pick a watch rule.",
+        "brand_required": "Pick at least one brand.",
+        "no_brands": "Add a brand to your workspace first.",
+        "scope_invalid": "Check the brands and topics this agent works on.",
+        "engines_many": "Pick at most 10 platforms.",
+        "tags_invalid": "Use up to 20 tags of at most 50 characters each.",
+        "urls_invalid": "Use up to 20 addresses that start with https:// or http://.",
+        "full_auto_plan": "Full auto needs {plan}. Pick another mode.",
+        "full_auto_off": "Your Admin turned Full auto off. Pick another mode.",
+        "name_required": "Give the agent a name.",
+        "name_long": "A name can be at most 60 characters.",
+        "run_share": "Enter a whole number from 1 to 50.",
+        "month_share": "Enter a whole number from 1 to 100.",
+        "workspace_admins_only": "Only Admins can share agents with the workspace here."
+      }
     },
     "deniedTitle": "I can't do this for you",
     "closeDenial": "Close",

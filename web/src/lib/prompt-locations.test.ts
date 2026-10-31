@@ -36,6 +36,15 @@ describe('summarizeLocationRows', () => {
     expect(usage.byBrand.get('b')).toBe(1);
   });
 
+  it("counts the brands the caller can't access in the total, but names none of them (00390)", () => {
+    const usage = summarizeLocationRows([
+      { brand_id: 'a', locations: 3 },
+      { brand_id: null, locations: 7 },
+    ]);
+    expect(usage.total).toBe(10);
+    expect([...usage.byBrand]).toEqual([['a', 3]]);
+  });
+
   it('returns zero usage for no rows', () => {
     const usage = summarizeLocationRows([]);
     expect(usage.total).toBe(0);

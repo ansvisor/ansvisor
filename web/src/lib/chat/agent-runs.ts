@@ -27,9 +27,9 @@ import {
  *
  * Starting is the database's (chat_start_next_agent_run: the plan's runs at
  * once, in order); running a started run as a Chat run is the agent run
- * driver's (W2-16). Until there is one, nothing is started: a run left
- * `running` with no driver would hold its place and a slot for good, so the
- * runs wait queued. Server only.
+ * driver's (agent-driver.ts, W2-16). Without a driver nothing is started: a
+ * run left `running` with no driver would hold its place and a slot for
+ * good, so the runs wait queued. Server only.
  */
 
 /**
@@ -38,8 +38,13 @@ import {
  */
 export type AgentRunDriver = (run: { id: string; organizationId: string }) => Promise<void>;
 
-/** The driver the trigger runner (W2-16) brings; none yet, so runs wait queued. */
-export const AGENT_RUN_DRIVER: AgentRunDriver | null = null;
+/**
+ * The agent run driver (agent-driver.ts): read when a run starts, so this
+ * module and the driver, which starts the next queued run once one ends,
+ * don't load each other.
+ */
+export const AGENT_RUN_DRIVER: AgentRunDriver | null = async (run) =>
+  (await import('./agent-driver')).agentRunDriver(run);
 
 /**
  * Starts the workspace's next queued agent runs while it has room
