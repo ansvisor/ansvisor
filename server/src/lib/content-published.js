@@ -1,6 +1,7 @@
 import supabaseAdmin from '../config/supabase.js';
 import { logger } from './logger.js';
 import { onBrandDomain } from './audit/host.js';
+import { shipCmsPublish } from './impact-ledger/ship.js';
 
 /**
  * A sent page now live at `url` (Send to CMS #1331), as a webhook's
@@ -14,7 +15,8 @@ import { onBrandDomain } from './audit/host.js';
  * CMS id it now names. A new delivery of a page live at the same address
  * (the post updated in place) is the page as published again. The delivery
  * is written last: a write before it that fails throws, and the next try,
- * finding it not yet published, does it all again.
+ * finding it not yet published, does it all again. Then the publish goes
+ * into the impact ledger as a shipped change (shipCmsPublish).
  *
  * @param {{ id: string, draft_id: string|null, status: string, published_url: string|null }} delivery
  * @param {string} url
@@ -50,6 +52,9 @@ export async function markDeliveryPublished(delivery, url, { externalId = null }
     .update({ status: 'published', published_url: url, published_at: now, ...own })
     .eq('id', delivery.id);
   if (deliveryError) throw new Error(deliveryError.message);
+  // A shipped change for the impact ledger (CHAT-22 §2), measured at 7, 14,
+  // 30 and 90 days: behind CHAT_AGENTIC, once per send, and never throws.
+  await shipCmsPublish({ deliveryId: delivery.id, url, publishedAt: now });
 }
 
 const MAX_URL = 2048;
@@ -58,12 +63,12 @@ const PAGE_WRITES = 3;
 /** A task a person or the system can still complete: not done, skipped, failed or waiting. */
 const OPEN_TASKS = ['todo', 'in_progress'];
 /** The library tasks a draft is the work of, by its method (the web's DRAFT_TASK_KEYS). */
-const DRAFT_TASK_KEYS = {
+export const DRAFT_TASK_KEYS = {
   create: ['create_content_draft'],
   optimize: ['optimize_content', 'refresh_content'],
 };
 /** A task no longer outstanding work (the web's TASK_DONE). */
-const TASK_DONE = ['completed', 'skipped', 'failed'];
+export const TASK_DONE = ['completed', 'skipped', 'failed'];
 /** A draft whose writing is done. */
 const DRAFT_DONE = ['ready', 'published'];
 
