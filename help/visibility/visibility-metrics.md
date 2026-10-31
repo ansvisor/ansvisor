@@ -4,18 +4,18 @@ route: /dashboard/insights
 keywords: [visibility score, position, mentions, citations, coverage, share of voice, citation rate, net sentiment, performance]
 synonyms: [metrics explained, what is visibility, ranking in AI answers, why is my score zero, what is coverage, what is share of voice]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/answer-engine-insights.mdx, docs/concepts/visibility-scoring.mdx, docs/guides/prompts.mdx, docs/guides/add-your-first-brand.mdx]
 ---
 Ansvisor describes how AI answers treat your brand with a few metrics: visibility, mentions, citations, position and the rates built on them. They are counted from real AI answers, not estimated, so they never carry an **Estimate** badge.
 
 ## Read your visibility score
 
-Visibility is a score from 0 to 100, not a percentage. It blends how often AI answers mention your brand, how often they cite your site and how early they name you; **Formulas** on **Brand Visibility** shows the exact formula. A rough guide:
+Visibility is a score from 0 to 100, not a percentage. It blends how often AI answers mention your brand, how often they cite your site and how early they name you; **Formulas** on **Brand Visibility** shows the exact formula. A rough guide, not bands the app shows:
 
 - **Under 15**: cold start. AI engines barely know the brand on these prompts.
 - **15 to 35**: emerging presence. AI sometimes mentions you, but competitors dominate.
@@ -55,11 +55,11 @@ Position is where your brand is named among the brands an AI answer lists; named
 - **Late**: in the last third.
 - **Missing**: named in fewer than half the answers.
 
-A prompt with no answers in the range, such as a new one, has no performance yet. The dots in the **Positions** column show each platform on its own.
+A prompt with no answers in the range, such as a new one, has no performance yet. The **Positions** column shows your average position and its change; hover it for each platform.
 
 ## Mentions and citations
 
-A mention is an AI answer naming your brand. The **Mentions** card counts how often answers named you. Mention detection ignores upper and lower case, so name the brand exactly as it's named in the wild, not by an abbreviation.
+A mention is each time an AI answer names your brand or your domain; one answer can add several. The **Mentions** card counts them. Mention detection ignores upper and lower case, so name the brand exactly as it's named in the wild, not by an abbreviation.
 
 A citation is a source page that comes with an AI answer. The **Citations** card counts how often answers cited your pages, and the **Citations** page shows which domains and pages AI engines cite for your prompts.
 

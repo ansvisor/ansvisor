@@ -15,7 +15,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import logger from '../lib/logger.js';
-import { assertBrandAccess } from '../lib/access.js';
+import { assertAllBrands, assertBrandAccess } from '../lib/access.js';
 import {
   requireFeature,
   enforceSiteAuditQuota,
@@ -1015,7 +1015,11 @@ function sendAuditError(req, res, err, message) {
   if (err instanceof PlanLimitError) {
     return res.status(err.statusCode).json({ success: false, message: err.message });
   }
-  if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+  if (err.status) {
+    return res
+      .status(err.status)
+      .json({ success: false, message: err.message, ...(err.code ? { code: err.code } : {}) });
+  }
   req.log.error({ err }, message);
   return res.status(500).json({ success: false, message: err.message });
 }
@@ -1083,6 +1087,9 @@ router.put('/settings', async (req, res) => {
 
     const now = new Date().toISOString();
     if (autoAudit !== undefined || emailAfterRun !== undefined) {
+      // The switch and the e-mail are the organization's, for every brand:
+      // a person with Selected brands changes only their brand's patterns.
+      await assertAllBrands(userId);
       const { error } = await supabaseAdmin.from('site_audit_settings').upsert(
         {
           organization_id: orgId,

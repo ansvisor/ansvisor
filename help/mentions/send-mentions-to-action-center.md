@@ -4,18 +4,18 @@ route: /dashboard/mentions
 keywords: [send to action center, suggest content, act on mentions, negative mentions]
 synonyms: [improve how AI describes us, fix negative answers, turn mentions into tasks, create action from mentions]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/mentions.mdx]
 ---
 From the **Mentions** tab of the Mentions & Sentiment page, you can turn answers that name your brand into work: one Action Center action for a set of answers, or a content suggestion for an answer's prompt.
 
 ## Send answers to the Action Center
 
-Tick the rows you want; the box in the table header selects every answer on the page. A bar appears with **Send to Action Center**, **Export** for a file of just the selected rows, and **Clear**. You can also send a single answer from its side panel. One send takes up to 100 answers, a full page. Sending the same answers again doesn't create a second action: the notification says **Already in the Action Center** and opens the existing one.
+Tick the rows you want; the box in the table header selects every answer on the page. A bar appears with **Send to Action Center**, **Export** for a file of just the selected rows, and **Clear**. You can also send a single answer from its side panel. One send takes up to 100 answers, a full page. Sending the same answers again while their action is still open doesn't create a second one: the notification says **Already in the Action Center** and opens the existing one.
 
 ## What the action contains
 
@@ -23,4 +23,4 @@ The selected answers become one action, titled *Improve how AI describes you for
 
 ## Suggest content
 
-**Suggest content** in an answer's side panel writes a content suggestion for the answer's prompt. When it is ready, the notification opens it in Content. If the prompt already has a suggestion, **Open existing** takes you there instead. Suggestions count toward your monthly content limit. A prompt can't get a suggestion until it has tracked answers and a prompt group; both arrive with its next tracking run.
+**Suggest content** in an answer's side panel writes a content suggestion for the answer's prompt. When it is ready, the notification opens it in Content. If the prompt already has a suggestion, **Open existing** takes you there instead. Suggestions count toward your monthly content limit. Only admins and managers see **Suggest content**. A prompt can't get a suggestion until it has tracked answers and a prompt group; both arrive with its next tracking run.

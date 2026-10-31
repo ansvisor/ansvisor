@@ -5,10 +5,10 @@ keywords: [history, action results, scorecard, success rate, measured outcome]
 synonyms: [what worked, past actions, completed actions, did it work]
 plan: all
 updated: 2026-10-29
-last_checked: 2026-10-29
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/action-center.mdx]
 ---
 The **History** tab lists actions once they are In Progress, On Hold, Completed or Dismissed, with what they were meant to do and what has been measured since. A result is measured after the action, not proven to be caused by it.

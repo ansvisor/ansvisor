@@ -4,11 +4,11 @@ route: /dashboard/prompts/topics
 keywords: [topics, topic, add topic, delete topic, rename topic, manage topics, topic suggestions, topic leaderboard, topic visibility, top competitor]
 synonyms: [themes, prompt groups, clusters, categories]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/topics.mdx, docs/guides/prompts.mdx, docs/guides/add-your-first-brand.mdx]
 ---
 **Topics** is a tab of the **Prompts** page. It groups your tracked prompts by theme, so you can see how your brand does in AI answers at a higher level than single prompts.
@@ -21,8 +21,8 @@ Four cards sum up your topics:
 
 - **Tracked topics**: how many topics you have, and how many prompts have no topic yet.
 - **Best performer**: the topic with the highest Visibility score.
-- **Biggest gap**: the topic with the lowest score.
-- **Top mover**: the topic whose score rose most, in points.
+- **Biggest gap**: the topic with the lowest score, among those above 0.
+- **Top mover**: the topic whose score rose most, in points; when every topic fell, the one that fell least.
 
 ## The Topic leaderboard
 
@@ -57,7 +57,7 @@ A topic's page shows all of its results, not only the date range picked on the T
 
 ## Topic Suggestions
 
-The **Topic Suggestions** card on the Topics tab starts folded. Open it to see AI-generated topic ideas for your brand. Topics you already track and ideas you dismissed don't come back.
+The **Topic Suggestions** card on the Topics tab starts folded, and remembers whether you left it open. Open it to see AI-generated topic ideas for your brand. Topics you already track and ideas you dismissed don't come back.
 
 Admins and managers can **Refresh** for new ideas, add an idea to your topics, or dismiss it. A new topic starts empty: assign prompts to it to start tracking it.
 
@@ -78,6 +78,6 @@ The prompts aren't deleted: they keep their tracking and results, and move to pr
 
 ## Use topics for planning
 
-- **Editorial planning**: pick the topic with the lowest score and the weakest competitor lead; that's your next content sprint.
+- **Editorial planning**: pick the topic with the lowest score and the weakest competitor lead; it's a good candidate for your next content sprint.
 - **Reporting**: topic-level stories, such as which themes you own and which you're losing, are easier to share than prompt-level metrics.
 - **Spotting drift**: a topic that drops while others stay flat usually signals one competitor's surge or content that has aged.

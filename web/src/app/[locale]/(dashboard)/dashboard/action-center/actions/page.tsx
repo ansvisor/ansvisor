@@ -145,7 +145,20 @@ const ACTIONS_PARAMS = [
 
 export default function ActionCenterActionsPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
+  const brands = useBrandStore((s) => s.brands);
+  const setActiveBrand = useBrandStore((s) => s.setActiveBrand);
   const t = useTranslations('actionCenter.actionsPage');
+
+  // A link to an action on another brand (Chat's Open in Actions, actions/[id]) names
+  // its brand: switch to it once, when it's one of the person's, so its drawer opens.
+  // A brand picked afterwards stays picked.
+  const brandFromUrl = useRef(false);
+  useEffect(() => {
+    if (brandFromUrl.current || brands.length === 0) return;
+    brandFromUrl.current = true;
+    const named = new URLSearchParams(window.location.search).get('brand');
+    if (named && brands.some((b) => b.id === named)) setActiveBrand(named);
+  }, [brands, setActiveBrand]);
 
   return (
     <div className="space-y-6">

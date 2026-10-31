@@ -1,14 +1,14 @@
 ---
 title: Action tasks and how they are checked
 route: /dashboard/action-center/actions
-keywords: [tasks, task status, check now, regenerate tasks, done when, how we check]
+keywords: [tasks, task status, check now, regenerate tasks, done when, how we check, attached from chat, ready for review]
 synonyms: [steps, subtasks, to-do items, task checks]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/action-center.mdx]
 ---
 Each action comes with tasks: concrete steps such as "Refresh content for these prompts" or "Add structured data to these pages". You find them on the action's **Tasks** tab.
@@ -48,7 +48,7 @@ A task you reopen after it passed stays open: the call is yours.
 
 ## Task status
 
-A task's status is **To Do**, **In Progress**, **Completed** or **Skipped** (with a reason). Skipped tasks leave the count, so they don't hold an action short of done. Use **Add task** for work of your own, and delete tasks you don't need.
+A task's status is **To Do**, **In Progress**, **Completed**, **Skipped** (with a reason), **Waiting Approval**, or **Failed** when Ansvisor couldn't carry it out itself and it needs doing by hand. Skipped tasks leave the count, so they don't hold an action short of done. Use **Add task** for work of your own, and delete tasks you don't need.
 
 ## Hand a task on
 
@@ -57,6 +57,12 @@ From a task you can:
 - **Create content** or **Optimize page**: open a draft in the Content Editor for this task. **Open draft** returns to it, and marking the draft ready completes the task.
 - **Send to Content**: send a content task to Content as an opportunity, where a brief can be written for it.
 - **Send to webhook**: post the task to the brand's webhook, for a workflow outside Ansvisor. Set it up under **Content › Webhook Settings** with the **Action Center task sent** event selected.
+
+## Files attached from Chat
+
+When Chat attaches a file or a draft to a task, the task's details list it under **Attached from Chat**: its name, who attached it, when, and **Open**. A draft opens in the Content Editor; any other file downloads. A paperclip with a count shows on the task row.
+
+Each attachment is also a line in the action's **History**, as is a task Chat set to **Ready for review**. Neither changes the task's status: you mark it done yourself.
 
 ## Regenerate tasks
 

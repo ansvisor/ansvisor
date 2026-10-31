@@ -261,7 +261,7 @@ export async function sendTrafficDigestForBrand(
   // Nothing to send to, or Resend isn't set up: the week is done all the same.
   let outcome = 'skipped';
   try {
-    recipients = await resolveRecipients(brand.organization_id, settings);
+    recipients = await resolveRecipients(brand.organization_id, settings, brandId);
     if (recipients.length) {
       const settingsUrl = `${appUrl()}/dashboard/settings?tab=notifications`;
       const { subject, html } = renderTrafficDigestEmail({

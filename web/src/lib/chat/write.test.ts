@@ -10,10 +10,16 @@ import {
   OTHER_ORG,
   PEOPLE,
   COMPETITOR,
+  DRAFT,
   PROMPT,
   SUGGESTION,
   TOPIC,
   fakeCreateDraft,
+  fakeCreateReport,
+  fakeKeepDraftVersion,
+  fakeSendDraftToCms,
+  fakeStartSiteAudits,
+  fakeUpdateContentDraft,
   fakeAddBrandTopic,
   fakeAddCompetitors,
   fakeAddTopicPrompts,
@@ -22,6 +28,7 @@ import {
   fakeRenameBrandTopic,
   fakeDismissSuggestion,
   fakeUpdateOpportunity,
+  seedDraft,
   seedWorkspace,
 } from './testing/chat-fixtures';
 
@@ -34,7 +41,13 @@ import {
 vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('@/lib/chat/testing/fake-supabase')).createFakeSupabase(),
 }));
-vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }));
+vi.mock('@/lib/actions/content-drafts', () => ({
+  createContentDraft: vi.fn(),
+  updateContentDraft: vi.fn(),
+}));
+vi.mock('@/lib/actions/cms-send', () => ({ sendDraftToCms: vi.fn() }));
+vi.mock('@/lib/actions/reports', () => ({ createReport: vi.fn() }));
+vi.mock('@/lib/actions/audits', () => ({ startSiteAudits: vi.fn(), getAuditQuota: vi.fn() }));
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
 vi.mock('@/lib/actions/prompt', () => ({ addTopicPrompts: vi.fn(), pauseBrandPrompts: vi.fn() }));
@@ -43,18 +56,30 @@ vi.mock('@/lib/actions/competitor', () => ({
   addCompetitors: vi.fn(),
   removeBrandCompetitor: vi.fn(),
 }));
+vi.mock('@/lib/actions/chat-action-center', () => ({
+  createChatAction: vi.fn(),
+  attachToAction: vi.fn(),
+  attachFileToTask: vi.fn(),
+  setTaskReadyForReview: vi.fn(),
+  checkChatActionCover: vi.fn(),
+}));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { createContentDraft } = await import('@/lib/actions/content-drafts');
+const { createContentDraft, updateContentDraft } = await import('@/lib/actions/content-drafts');
+const { sendDraftToCms } = await import('@/lib/actions/cms-send');
+const { createReport } = await import('@/lib/actions/reports');
+const { startSiteAudits } = await import('@/lib/actions/audits');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
 const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
 const { addBrandTopic, renameBrandTopic } = await import('@/lib/actions/topic');
 const { addCompetitors, removeBrandCompetitor } = await import('@/lib/actions/competitor');
+const chatActionCenter = await import('@/lib/actions/chat-action-center');
+const acFixtures = await import('./testing/action-center-fixtures');
 const { runLoggedWrite } = await import('./write');
 const { activitySummary, approvalFor, logActivity, recordActivity } = await import('./activity');
-const { decideToolCall } = await import('./precedence');
+const { allowedTools, decideToolCall, listingDenial } = await import('./precedence');
 const { readPrecedenceContext, readToolCall } = await import('./precedence-context');
 const { chatTool, CHAT_TOOLS } = await import('./registry/tools');
 const { UNDO_RULES } = await import('./undo');
@@ -82,7 +107,48 @@ const INPUTS: Record<string, unknown> = {
     competitors: [{ name: 'Profound', domain: 'tryprofound.com' }],
   },
   remove_competitor: { brand_id: BRAND, competitor_id: COMPETITOR },
+  // W2-10: Chat's Action Center changes (testing/action-center-fixtures.ts).
+  create_action: {
+    brand_id: BRAND,
+    title: 'Win back pricing citations on /pricing',
+    category: 'recover',
+    why: 'Google AI Overviews stopped citing /pricing.',
+    pages: ['/pricing'],
+    prompt_ids: [],
+    competitor_ids: [],
+    platforms: [],
+    create_anyway: false,
+    tasks: [
+      {
+        title: 'Add a pricing FAQ block to /pricing',
+        type: 'on_page',
+        url: '/pricing',
+        done_when: 'The FAQ block is live',
+      },
+    ],
+  },
+  attach_to_action: {
+    action_id: '88888888-8888-4888-8888-888888888888',
+    finding: 'Lost 6 citations.',
+  },
+  attach_file_to_task: {
+    brand_id: BRAND,
+    task_id: '99999999-9999-4999-8999-999999999999',
+    file_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  },
+  set_task_ready_for_review: { brand_id: BRAND, task_id: '99999999-9999-4999-8999-999999999999' },
+  update_draft: { draft_id: DRAFT, title: 'Pricing FAQ for teams' },
+  push_cms_draft: { draft_id: DRAFT, destination: 'webflow' },
+  build_report: {
+    brand_id: BRAND,
+    template: 'weekly_visibility',
+    date_from: '2026-10-01',
+    date_to: '2026-10-07',
+  },
+  run_site_audit: { brand_id: BRAND, urls: ['https://acme.example/pricing'] },
 };
+/** The rows that change or send a Library draft find one. */
+const NEEDS_DRAFT = new Set(['update_draft', 'push_cms_draft']);
 const toolCtx = {} as never;
 let step = 0;
 const nextStep = () => `step-${++step}`;
@@ -92,6 +158,11 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   seedWorkspace(db);
   vi.mocked(createContentDraft).mockImplementation(fakeCreateDraft(db) as never);
+  vi.mocked(updateContentDraft).mockImplementation(fakeUpdateContentDraft(db) as never);
+  vi.mocked(sendDraftToCms).mockImplementation(fakeSendDraftToCms() as never);
+  vi.mocked(createReport).mockImplementation(fakeCreateReport(db) as never);
+  vi.mocked(startSiteAudits).mockImplementation(fakeStartSiteAudits() as never);
+  db.rpcs.content_draft_keep_version = fakeKeepDraftVersion(db);
   vi.mocked(updateOpportunityStatus).mockImplementation(fakeUpdateOpportunity(db) as never);
   vi.mocked(dismissSuggestion).mockImplementation(fakeDismissSuggestion(db) as never);
   vi.mocked(addTopicPrompts).mockImplementation(fakeAddTopicPrompts(db) as never);
@@ -100,6 +171,19 @@ beforeEach(() => {
   vi.mocked(renameBrandTopic).mockImplementation(fakeRenameBrandTopic(db) as never);
   vi.mocked(addCompetitors).mockImplementation(fakeAddCompetitors(db) as never);
   vi.mocked(removeBrandCompetitor).mockImplementation(fakeRemoveBrandCompetitor(db) as never);
+  acFixtures.seedActionCenter(db);
+  vi.mocked(chatActionCenter.createChatAction).mockImplementation(
+    acFixtures.fakeCreateChatAction(db) as never,
+  );
+  vi.mocked(chatActionCenter.attachToAction).mockImplementation(
+    acFixtures.fakeAttachToAction(db) as never,
+  );
+  vi.mocked(chatActionCenter.attachFileToTask).mockImplementation(
+    acFixtures.fakeAttachFileToTask(db) as never,
+  );
+  vi.mocked(chatActionCenter.setTaskReadyForReview).mockImplementation(
+    acFixtures.fakeSetTaskReadyForReview(db) as never,
+  );
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -136,10 +220,13 @@ async function runAs(
 describe('every WRITE that ran is in the Activity log (§21)', () => {
   // Ask your Admin is always a card, in Full auto too (CHAT-20 row 80a).
   it.each(
-    WRITES.filter((tool) => !tool.flags.alwaysCard).map((tool) => [tool.name, tool] as const),
+    WRITES.filter((tool) => !tool.flags.alwaysCard && !tool.flags.costCard).map(
+      (tool) => [tool.name, tool] as const,
+    ),
   )(
     '%s in Full auto: mode, approval, Undo window, label key, target and summary',
     async (name, tool) => {
+      if (NEEDS_DRAFT.has(name)) seedDraft(db);
       const { decision, outcome } = await runAs(PEOPLE.admin, tool, 'full_auto');
       expect(decision).toEqual({ kind: 'run', via: 'full_auto' });
       expect(outcome).toMatchObject({ code: 'ok', repeated: false });
@@ -164,10 +251,15 @@ describe('every WRITE that ran is in the Activity log (§21)', () => {
       // The label key, never the tool's name (CHAT-03 item 22).
       expect(JSON.stringify(row)).not.toContain(name);
       expect(row.target_id).toEqual(expect.any(String));
-      expect(row.undo_json).toEqual(expect.any(Object));
-      const window = Date.parse(row.undo_until as string) - Date.now();
-      expect(window).toBeGreaterThan(UNDO_RULES[name].windowMs - 60_000);
-      expect(window).toBeLessThanOrEqual(UNDO_RULES[name].windowMs);
+      if (UNDO_RULES[name].windowMs === 0) {
+        // §9 gives it no Undo (a page sent to a CMS, an audit): recorded, nothing to put back.
+        expect(row).toMatchObject({ undo_json: null, undo_until: null });
+      } else {
+        expect(row.undo_json).toEqual(expect.any(Object));
+        const window = Date.parse(row.undo_until as string) - Date.now();
+        expect(window).toBeGreaterThan(UNDO_RULES[name].windowMs - 60_000);
+        expect(window).toBeLessThanOrEqual(UNDO_RULES[name].windowMs);
+      }
       expect(outcome && 'activityId' in outcome && outcome.activityId).toBe(row.id);
       expect(activitySummary(row.summary_key as string, row.summary_params as never)).not.toBe('');
     },
@@ -630,5 +722,233 @@ describe('the tracking setup, by role and mode (W2-06, CHAT-20 §9 rows 20–32)
       });
       expect(decideToolCall(tool, ctx!, call), name).not.toMatchObject({ kind: 'deny' });
     }
+  });
+});
+
+describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 rows 37–64)', () => {
+  const OUTPUT = ['update_draft', 'build_report'];
+  async function decide(
+    userId: string,
+    name: string,
+    mode: ChatMode,
+    input = INPUTS[name],
+    before = 0,
+  ) {
+    const tool = chatTool(name)!;
+    const ctx = await readPrecedenceContext({ userId, organizationId: ORG, mode, surface: 'chat' });
+    const call = await readToolCall(ctx!, tool, input as Record<string, unknown>, false, before);
+    return decideToolCall(tool, ctx!, call);
+  }
+  beforeEach(() => seedDraft(db));
+
+  it.each(OUTPUT)(
+    '%s: Admins and Managers, from a card unless Full auto; an Analyst is refused in every mode',
+    async (name) => {
+      for (const userId of [PEOPLE.admin, PEOPLE.manager]) {
+        expect(await decide(userId, name, 'ask_first')).toMatchObject({ kind: 'ask' });
+        expect(await decide(userId, name, 'auto')).toMatchObject({ kind: 'ask' });
+        expect(await decide(userId, name, 'full_auto')).toMatchObject({
+          kind: 'run',
+          via: 'full_auto',
+        });
+      }
+      for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+        expect(await decide(PEOPLE.analyst, name, mode)).toMatchObject({
+          kind: 'deny',
+          denial: { code: 'forbidden_role', roles: ['admin', 'manager'] },
+        });
+      }
+    },
+  );
+
+  /** An Admin's Chat settings row (00401): a stored Always, and the go-live groups off for Managers. */
+  const cmsSettings = (managerExecuteOff: string[]) => {
+    db.tables.chat_settings = [
+      {
+        organization_id: ORG,
+        tool_policies: { [chatTool('push_cms_draft')!.labelKey]: 'always' },
+        full_auto_for_members: true,
+        dont_ask_again: true,
+        manager_execute_off: managerExecuteOff,
+      },
+    ];
+  };
+  const AGENCY = 'aaaaaaaa-0000-4000-8000-000000000005';
+
+  it('sends a draft to a CMS as an EXECUTE in the publishing group: only on a click, even under an Admin Always', async () => {
+    expect(chatTool('push_cms_draft')).toMatchObject({
+      class: 'execute',
+      executeGroup: 'publishing',
+      defaultPolicy: 'click',
+      maxPolicy: 'click',
+    });
+    // An Admin's stored Always lifts nothing: an EXECUTE is a click.
+    cmsSettings([]);
+    for (const userId of [PEOPLE.admin, PEOPLE.manager]) {
+      for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+        expect(await decide(userId, 'push_cms_draft', mode), `${userId} ${mode}`).toEqual({
+          kind: 'click',
+        });
+      }
+    }
+  });
+
+  it('refuses a Manager’s CMS send once an Admin turned publishing off for Managers; an Admin still clicks', async () => {
+    cmsSettings(['publishing']);
+    for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+      expect(await decide(PEOPLE.manager, 'push_cms_draft', mode)).toEqual({
+        kind: 'deny',
+        denial: { code: 'execute_off', group: 'publishing' },
+      });
+      expect(await decide(PEOPLE.admin, 'push_cms_draft', mode)).toEqual({ kind: 'click' });
+    }
+    // Not offered to that Manager either, with the reason the explainer gives.
+    const ctx = await readPrecedenceContext({
+      userId: PEOPLE.manager,
+      organizationId: ORG,
+      mode: 'full_auto',
+      surface: 'chat',
+    });
+    const scope = { brandId: BRAND, brandIsDemo: false };
+    const tool = chatTool('push_cms_draft')!;
+    expect(allowedTools([tool], ctx!, scope)).toEqual([]);
+    expect(listingDenial(tool, ctx!, scope)).toEqual({ code: 'execute_off', group: 'publishing' });
+    // Another group switched off leaves publishing to Managers.
+    cmsSettings(['email_outreach', 'code_prs', 'feeds']);
+    expect(await decide(PEOPLE.manager, 'push_cms_draft', 'auto')).toEqual({ kind: 'click' });
+  });
+
+  it('never offers a CMS send to an Analyst or an Agency partner, in any mode', async () => {
+    db.tables.profiles.push({ id: AGENCY, role: 'agency_partner', organization_id: ORG });
+    const tool = chatTool('push_cms_draft')!;
+    for (const userId of [PEOPLE.analyst, AGENCY]) {
+      for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+        expect(await decide(userId, 'push_cms_draft', mode)).toMatchObject({
+          kind: 'deny',
+          denial: { code: 'forbidden_role', roles: ['admin', 'manager'] },
+        });
+        const ctx = await readPrecedenceContext({
+          userId,
+          organizationId: ORG,
+          mode,
+          surface: 'chat',
+        });
+        expect(allowedTools([tool], ctx!, { brandId: BRAND, brandIsDemo: false })).toEqual([]);
+      }
+    }
+  });
+
+  it('a CMS send clicked through is in the Activity log as an EXECUTE, with no Undo', async () => {
+    const tool = chatTool('push_cms_draft')!;
+    const { decision, outcome } = await runAs(PEOPLE.manager, tool, 'full_auto');
+    expect(decision).toEqual({ kind: 'click' });
+    expect(outcome).toMatchObject({ code: 'ok' });
+    expect(sendDraftToCms).toHaveBeenCalledWith(DRAFT, 'webflow');
+    expect(db.tables.chat_activity_log).toHaveLength(1);
+    expect(db.tables.chat_activity_log[0]).toMatchObject({
+      tool_key: 'sendToCms',
+      class: 'execute',
+      approval_kind: 'click',
+      target_type: 'content_draft',
+      target_id: DRAFT,
+      summary_params: { cms: 'Webflow' },
+      undo_json: null,
+      undo_until: null,
+    });
+  });
+
+  it('an Analyst still saves a draft (DECISIONS T), but changes none', async () => {
+    expect(await decide(PEOPLE.analyst, 'create_draft', 'full_auto')).toMatchObject({
+      kind: 'run',
+    });
+    expect(await decide(PEOPLE.analyst, 'update_draft', 'full_auto')).toMatchObject({
+      kind: 'deny',
+    });
+  });
+
+  it('starts an audit only from a card, with its cost, in every mode (§9 row 37)', async () => {
+    expect(chatTool('run_site_audit')!.flags.costCard).toBe(true);
+    for (const userId of [PEOPLE.admin, PEOPLE.manager]) {
+      for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+        expect(await decide(userId, 'run_site_audit', mode)).toMatchObject({
+          kind: 'ask',
+          reason: 'always_card',
+          offerDontAskAgain: false,
+        });
+      }
+    }
+    for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+      expect(await decide(PEOPLE.analyst, 'run_site_audit', mode)).toMatchObject({
+        kind: 'deny',
+        denial: { code: 'forbidden_role', roles: ['admin', 'manager'] },
+      });
+    }
+  });
+
+  it('an audit approved on its card is in the Activity log, with no Undo', async () => {
+    const { decision, outcome } = await runAs(
+      PEOPLE.admin,
+      chatTool('run_site_audit')!,
+      'full_auto',
+      {
+        approved: true,
+      },
+    );
+    expect(decision).toMatchObject({ kind: 'ask', reason: 'always_card' });
+    expect(outcome).toMatchObject({ code: 'ok' });
+    expect(db.tables.chat_activity_log[0]).toMatchObject({
+      tool_key: 'startAudit',
+      approval_kind: 'ask',
+      undo_json: null,
+    });
+  });
+
+  it('counts the run’s earlier pauses: one prompt at a time asks from the sixth (§9 row 22)', async () => {
+    const one = { brand_id: BRAND, prompt_ids: [PROMPT] };
+    expect(await decide(PEOPLE.admin, 'pause_prompts', 'full_auto', one, 4)).toMatchObject({
+      kind: 'run',
+    });
+    expect(await decide(PEOPLE.admin, 'pause_prompts', 'full_auto', one, 5)).toMatchObject({
+      kind: 'ask',
+      reason: 'always_card',
+    });
+  });
+
+  it.each([...OUTPUT, 'push_cms_draft', 'run_site_audit'])(
+    '%s: refused on another workspace’s brand or draft, and on a read-only workspace',
+    async (name) => {
+      db.tables.brands.push({ id: 'b-elsewhere', organization_id: OTHER_ORG });
+      const theirDraft = '88888888-8888-4888-8888-888888888888';
+      db.tables.content_drafts.push({ id: theirDraft, brand_id: 'b-elsewhere', title: 'Theirs' });
+      const input = INPUTS[name] as Record<string, unknown>;
+      const theirs =
+        'draft_id' in input
+          ? { ...input, draft_id: theirDraft }
+          : { ...input, brand_id: 'b-elsewhere' };
+      expect(await decide(PEOPLE.admin, name, 'full_auto', theirs)).toMatchObject({
+        kind: 'deny',
+        denial: { code: 'brand_scope' },
+      });
+      db.tables.organizations[0].subscription_status = 'canceled';
+      expect(await decide(PEOPLE.admin, name, 'full_auto')).toMatchObject({
+        kind: 'deny',
+        denial: { code: 'subscription_inactive' },
+      });
+    },
+  );
+
+  it('sends to no webhook: it goes out of Ansvisor, so only the editor sends there', () => {
+    const tool = chatTool('push_cms_draft')!;
+    expect(tool.inputSchema.safeParse({ draft_id: DRAFT, destination: 'webhook' }).success).toBe(
+      false,
+    );
+    expect(tool.description).not.toMatch(/webhook\)/);
+  });
+
+  it('has no row that goes live in a CMS: its one EXECUTE sends a draft, and publishing stays the person’s', () => {
+    expect(CHAT_TOOLS.filter((tool) => tool.class === 'execute').map((tool) => tool.name)).toEqual([
+      'push_cms_draft',
+    ]);
+    expect(chatTool('publish_cms')).toBeUndefined();
   });
 });

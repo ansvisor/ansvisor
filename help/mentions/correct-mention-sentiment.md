@@ -5,10 +5,10 @@ keywords: [sentiment is wrong, correct sentiment, sentiment correction, wrong to
 synonyms: [fix sentiment, change sentiment, answer marked negative by mistake, misclassified mention]
 plan: all
 updated: 2026-10-29
-last_checked: 2026-10-29
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/mentions.mdx]
 ---
 Every answer that names your brand is tagged Positive, Neutral or Negative toward your brand. If an answer's tone is tagged wrongly, you can correct it from the answer's side panel on the Mentions & Sentiment page, and every figure then counts it with the new sentiment.

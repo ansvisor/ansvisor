@@ -6,11 +6,13 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { readMemberEmails } from '@/lib/member-emails';
 import { assertWritable } from '@/lib/subscription-guard';
+import { chatAgenticEnabled } from '@/lib/chat/flag';
 import {
   WORK_AREA_IDS,
   canManageMenus,
   cleanMenuSections,
   menuOfProfile,
+  menuSectionsFor,
   readRoleHidden,
   workAreasOf,
   type MenuProfile,
@@ -109,6 +111,7 @@ export async function getMyMenu(): Promise<MyMenu> {
   return menuOfProfile(
     profile,
     await readRoleHidden(supabase, profile.organization_id, profile.role),
+    menuSectionsFor(chatAgenticEnabled(profile.organization_id)),
   );
 }
 

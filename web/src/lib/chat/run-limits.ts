@@ -108,6 +108,19 @@ export function writeCap(toolName: string): number {
   return WRITE_CAPS[toolName] ?? DEFAULT_WRITE_CAP;
 }
 
+/**
+ * READ caps per run (§14), by tool name, on top of the read budget: pages
+ * opened (fetch_page, CHAT-10 item 12), whatever the effort. A read not
+ * named here has only the budget.
+ */
+export const READ_CAPS: Readonly<Record<string, number>> = {
+  fetch_page: 10,
+};
+
+export function readCap(toolName: string): number | null {
+  return READ_CAPS[toolName] ?? null;
+}
+
 /** Model steps one run may take before it answers with what it has. */
 export const MAX_MODEL_STEPS = 16;
 
