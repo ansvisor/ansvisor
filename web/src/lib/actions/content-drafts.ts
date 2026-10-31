@@ -119,6 +119,7 @@ import {
 } from '@/lib/content/sources';
 import { assertWritable } from '@/lib/subscription-guard';
 import { isManager } from '@/lib/session-role';
+import { refreshYears } from '@/lib/content/current-year';
 
 /**
  * Content drafts (Content Editor, CE-002), read through the signed-in member's
@@ -469,7 +470,7 @@ export async function getContentStartOptions(brandId: string): Promise<DraftStar
       const suggested = (o.brief as { suggestedTitle?: unknown } | null)?.suggestedTitle;
       return {
         id: o.id,
-        title: o.title,
+        title: refreshYears(o.title),
         decision: o.decision,
         pageTitle: typeof suggested === 'string' && suggested.trim() ? suggested.trim() : null,
         assetType: typeof o.assetType === 'string' ? o.assetType : null,

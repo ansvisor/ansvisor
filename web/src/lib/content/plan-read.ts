@@ -12,6 +12,7 @@ import type {
   PlanPeriod,
   PlanTracking,
 } from '@/lib/content/plan';
+import { refreshYears } from '@/lib/content/current-year';
 
 /**
  * What the Content plan (CE-014) is built from: the brand's pages as AI cites
@@ -149,7 +150,8 @@ export async function readContentPlan(
         : undefined;
       return {
         id: o.id,
-        title: o.title,
+        // A past year in it reads as this year (current-year.ts).
+        title: refreshYears(o.title),
         pageTitle: text(brief?.suggestedTitle) || null,
         decision: o.decision,
         score: Number(o.opportunity_score ?? 0),
