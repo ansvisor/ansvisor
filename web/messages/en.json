@@ -3334,6 +3334,7 @@
     "makeReport": { "name": "Make reports", "step": "Made report" },
     "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
     "webPage": { "name": "Open web pages", "step": "Open page" },
+    "whyChange": { "name": "Explain why a number changed", "step": "Read why it changed" },
     "agents": { "name": "Create and run agents", "step": "Changed an agent" }
   },
   "agentic": {

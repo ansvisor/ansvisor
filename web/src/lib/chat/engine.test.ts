@@ -109,9 +109,12 @@ const fakes = vi.hoisted(() => ({
   reserve: vi.fn(),
   resolveModels: vi.fn(),
   openPage: vi.fn(),
+  explain: vi.fn(),
 }));
 // fetch_page as it is, opening pages through a fake of the API's internal route.
 vi.mock('@/lib/mcp/pages', () => ({ openPageFor: fakes.openPage }));
+// explain_change as it is, reading through a fake of its data layer.
+vi.mock('@/lib/mcp/why', () => ({ explainChangeFor: fakes.explain }));
 vi.mock('./budget', () => ({ reserveChatStep: fakes.reserve }));
 vi.mock('./engine-model', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./engine-model')>()),
@@ -171,7 +174,9 @@ vi.mock('./registry/tools', async (importOriginal) => {
     readVisibility,
     ownNumbers,
     citations,
-    ...real.CHAT_TOOLS.filter((t) => t.class !== 'read' || t.name === 'fetch_page'),
+    ...real.CHAT_TOOLS.filter(
+      (t) => t.class !== 'read' || t.name === 'fetch_page' || t.name === 'explain_change',
+    ),
     publishPage,
   ];
   return {
@@ -460,6 +465,7 @@ describe('a turn', () => {
       'get_visibility_summary',
       'list_citations',
       'fetch_page',
+      'explain_change',
     ]);
     expect(read.responseFormat).toMatchObject({ type: 'json' });
     expect(read.toolChoice).toEqual({ type: 'auto' });
@@ -2641,6 +2647,126 @@ describe('opening a page (W2-08)', () => {
     const { haiku } = useModels([READY], [text('Done.')]);
     await turn(ADMIN, `What does ${PRICING} say?`);
     expect(haiku.seen[0].tools?.map((t) => t.name)).not.toContain('fetch_page');
+  });
+});
+
+describe('why a number changed (W2-18)', () => {
+  const analysis = {
+    metric: 'visibility',
+    unit: 'pts',
+    period_a: { from: '2026-10-05', to: '2026-10-11' },
+    period_b: { from: '2026-10-12', to: '2026-10-18' },
+    value_a: 41,
+    value_b: 33,
+    delta: -8,
+    se: 1.4,
+    noise_verdict: 'beyond_normal_swing',
+    direction: 'declined',
+    change_point: { date: '2026-10-14', before: 41, after: 33 },
+    mix_effect: {
+      contribution: 0,
+      share: 0,
+      prompts_added: 0,
+      prompts_removed: 0,
+      engines_added: [],
+      engines_removed: [],
+    },
+    causes: [
+      {
+        kind: 'lost_citation_to_competitor',
+        share: 62,
+        contribution: -4.96,
+        confidence: 'high',
+        cells: 14,
+        evidence_refs: [],
+        fix_skill: 'winback',
+      },
+    ],
+    excluded_cells: 2,
+    stable_cells: 40,
+    unexplained: { kind: 'unexplained', contribution: -3.04, share: 38 },
+  };
+
+  beforeEach(() => {
+    db.tables.chat_why_analyses = [];
+    fakes.explain.mockResolvedValue({
+      analysis,
+      scope: { brand: 'Northwind', engines: ['gpt-5'], region: null, topic: null },
+      runs_compared: { a: 280, b: 280 },
+      data_as_of: DATA_AS_OF,
+    });
+  });
+
+  it('reads why it changed for any role, keeps the analysis with its chat, and words it without "caused"', async () => {
+    const { sonnet } = useModels(
+      [calls(toolCall('r1', 'explain_change', { brand_id: BRAND, metric: 'visibility' })), READY],
+      [text('Visibility fell 8 points; a lost citation explains about 62%.')],
+    );
+    const runId = await turn(ANALYST, 'Why did ChatGPT visibility drop last week?');
+
+    expect(fakes.explain).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: PEOPLE.analyst, organizationId: ORG }),
+      expect.objectContaining({ brandId: BRAND, metric: 'visibility' }),
+    );
+    expect(stepsOf(runId)[0]).toMatchObject({
+      kind: 'read',
+      status: 'done',
+      label: 'Read why it changed',
+    });
+    const conversationId = runRow(runId).conversation_id;
+    expect(db.tables.chat_why_analyses).toEqual([
+      expect.objectContaining({
+        conversation_id: conversationId,
+        run_id: runId,
+        brand_id: BRAND,
+        metric: 'visibility',
+        period_a_start: '2026-10-05',
+        period_a_end: '2026-10-11',
+        period_b_start: '2026-10-12',
+        period_b_end: '2026-10-18',
+        result_json: expect.objectContaining({ delta: -8, causes: analysis.causes }),
+        scope_json: expect.objectContaining({
+          engines: ['gpt-5'],
+          runs_compared: { a: 280, b: 280 },
+        }),
+        data_as_of: DATA_AS_OF,
+      }),
+    ]);
+    const system = JSON.stringify(sonnet.seen[0].prompt);
+    expect(system).toContain('explains about N% of the change');
+    // The result itself, as the writer reads it (escaped inside the prompt's JSON).
+    expect(system).toContain('\\"delta\\":-8');
+    expectClean(await eventsOf(runId));
+  });
+
+  it('keeps nothing for periods it refused, and says why', async () => {
+    fakes.explain.mockResolvedValue({
+      ok: false,
+      code: 'invalid_input',
+      message: 'The first period ends before the second.',
+    });
+    useModels(
+      [
+        calls(
+          toolCall('r1', 'explain_change', {
+            brand_id: BRAND,
+            metric: 'visibility',
+            period_a_from: '2026-10-10',
+            period_a_to: '2026-10-12',
+            period_b_from: '2026-10-11',
+            period_b_to: '2026-10-14',
+          }),
+        ),
+        READY,
+      ],
+      [text('Those periods overlap.')],
+    );
+    const runId = await turn(ADMIN, 'Compare Oct 10–12 with Oct 11–14');
+    expect(stepsOf(runId)[0]).toMatchObject({
+      status: 'error',
+      detail: 'The first period ends before the second.',
+    });
+    expect(db.tables.chat_why_analyses).toEqual([]);
   });
 });
 
