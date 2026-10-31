@@ -10,7 +10,7 @@ vi.mock('../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: 
 
 const { logger } = await import('../logger.js');
 const { MAX_TARGET_PROMPTS } = await import('./method.js');
-const { recordCmsPublish, resolveTargets } = await import('./ship.js');
+const { REPUBLISH_DAYS, resolveTargets, shipCmsPublish } = await import('./ship.js');
 
 /**
  * A page the CMS confirmed live, into the impact ledger (CHAT-22 §2 item
@@ -58,8 +58,9 @@ function world(overrides = {}) {
   };
 }
 
-const record = (db, deliveryId = 'x1', publishedAt = PUBLISHED) =>
-  recordCmsPublish({ deliveryId, url: LIVE, publishedAt, db });
+/** The ship event's id shipCmsPublish says, or null. */
+const record = async (db, deliveryId = 'x1', publishedAt = PUBLISHED) =>
+  (await shipCmsPublish({ deliveryId, url: LIVE, publishedAt, db })).id;
 
 /** A second send of the same draft. */
 const sentAgain = (id) => ({
@@ -89,7 +90,7 @@ afterEach(() => {
   delete process.env.CHAT_AGENTIC_ORGS;
 });
 
-describe('recordCmsPublish', () => {
+describe('shipCmsPublish', () => {
   it('writes the publish as a shipped change, with its Pending measurement on the draft’s prompts', async () => {
     const db = useDb(world());
     const id = await record(db);
@@ -220,6 +221,15 @@ describe('recordCmsPublish', () => {
     await record(fresh);
     await record(fresh, 'x4', '2026-10-20T08:00:00.000Z');
     expect(fresh.tables.ship_events[0].republished_at ?? null).toBeNull();
+  });
+
+  it('passes the republish window to ship_cms_publish, the one place it is set', async () => {
+    const db = useDb(world());
+    const calls = [];
+    db.beforeShip = (args) => calls.push(args.p_republish_days);
+    await record(db);
+    expect(REPUBLISH_DAYS).toBe(90);
+    expect(calls).toEqual([REPUBLISH_DAYS]);
   });
 
   it('writes a new ship event for a draft published again after 90 days', async () => {

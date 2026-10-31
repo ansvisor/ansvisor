@@ -8286,6 +8286,7 @@ export type Database = {
           p_delivery_id: string
           p_execution_mode: string
           p_organization_id: string
+          p_republish_days: number
           p_shipped_at: string
           p_shipped_by: string
           p_title: string

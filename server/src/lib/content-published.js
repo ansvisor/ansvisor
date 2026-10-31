@@ -1,7 +1,7 @@
 import supabaseAdmin from '../config/supabase.js';
 import { logger } from './logger.js';
 import { onBrandDomain } from './audit/host.js';
-import { recordCmsPublish } from './impact-ledger/ship.js';
+import { shipCmsPublish } from './impact-ledger/ship.js';
 
 /**
  * A sent page now live at `url` (Send to CMS #1331), as a webhook's
@@ -16,7 +16,7 @@ import { recordCmsPublish } from './impact-ledger/ship.js';
  * (the post updated in place) is the page as published again. The delivery
  * is written last: a write before it that fails throws, and the next try,
  * finding it not yet published, does it all again. Then the publish goes
- * into the impact ledger as a shipped change (recordCmsPublish).
+ * into the impact ledger as a shipped change (shipCmsPublish).
  *
  * @param {{ id: string, draft_id: string|null, status: string, published_url: string|null }} delivery
  * @param {string} url
@@ -54,7 +54,7 @@ export async function markDeliveryPublished(delivery, url, { externalId = null }
   if (deliveryError) throw new Error(deliveryError.message);
   // A shipped change for the impact ledger (CHAT-22 §2), measured at 7, 14,
   // 30 and 90 days: behind CHAT_AGENTIC, once per send, and never throws.
-  await recordCmsPublish({ deliveryId: delivery.id, url, publishedAt: now });
+  await shipCmsPublish({ deliveryId: delivery.id, url, publishedAt: now });
 }
 
 const MAX_URL = 2048;

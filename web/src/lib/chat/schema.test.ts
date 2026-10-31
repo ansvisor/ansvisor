@@ -519,9 +519,12 @@ describe('the impact ledger', () => {
     expect(ship).toMatch(
       /pg_advisory_xact_lock\(hashtext\('ship_cms_publish:' \|\| p_content_draft_id::text\)\)/,
     );
+    // The window is the server's (REPUBLISH_DAYS), passed in: set in one place.
     expect(ship).toMatch(
-      /and s\.kind = 'cms_publish'\s+and s\.shipped_at >= p_shipped_at - interval '90 days'\s+and s\.shipped_at <= p_shipped_at \+ interval '90 days'/,
+      /and s\.kind = 'cms_publish'\s+and s\.shipped_at >= p_shipped_at - make_interval\(days => p_republish_days\)\s+and s\.shipped_at <= p_shipped_at \+ make_interval\(days => p_republish_days\)/,
     );
+    expect(ship).toMatch(/p_execution_mode text,\s+p_republish_days integer\s*\)/);
+    expect(ship).not.toMatch(/interval '\d+ days'/);
     // The latest before the send first, else the nearest after it.
     expect(ship).toMatch(
       /order by s\.shipped_at > p_shipped_at,\s+greatest\(s\.shipped_at - p_shipped_at, p_shipped_at - s\.shipped_at\)/,

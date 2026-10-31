@@ -11,7 +11,7 @@
  *   * seedMeasurements: one Pending measurement per ship event that has
  *     none, first read at day 7. The nightly job (job.js) seeds what a
  *     writer didn't, so a ship event written anywhere is measured.
- *   * recordCmsPublish: a publish the CMS confirmed (Send to CMS: the
+ *   * shipCmsPublish: a publish the CMS confirmed (Send to CMS: the
  *     webhook's callback or the CMS's own status), written once per send,
  *     and once for a draft published again within REPUBLISH_DAYS.
  *
@@ -204,7 +204,11 @@ export async function seedMeasurements(db, ships) {
   return written;
 }
 
-/** A draft live again within this many days is the same shipped change, still measured (00425, 00428). */
+/**
+ * A draft live again within this many days is the same shipped change,
+ * still measured (00425, 00428): ship_cms_publish takes it as
+ * p_republish_days, so this is the one place it is set.
+ */
 export const REPUBLISH_DAYS = 90;
 /** Most sends a ship event notes by id (republished_delivery_ids, 00428): past it, by date only. */
 export const MAX_REPUBLISHED_IDS = 50;
@@ -303,6 +307,7 @@ export async function shipCmsPublish({ deliveryId, url, publishedAt, db = supaba
       p_shipped_at: publishedAt,
       p_shipped_by: delivery.sent_by ?? null,
       p_execution_mode: delivery.sent_by ? 'assisted' : 'automated',
+      p_republish_days: REPUBLISH_DAYS,
     });
     if (shipError) throw new ImpactDbError('ship event write', shipError);
     const row = (Array.isArray(shipped) ? shipped : [shipped]).find(Boolean);
@@ -326,14 +331,4 @@ export async function shipCmsPublish({ deliveryId, url, publishedAt, db = supaba
     );
     return { id: null, created: false, failed: true };
   }
-}
-
-/**
- * The ship event of a publish the CMS confirmed (shipCmsPublish), as
- * markDeliveryPublished asks for it: its id, or null.
- *
- * @returns {Promise<string|null>}
- */
-export async function recordCmsPublish(args) {
-  return (await shipCmsPublish(args)).id;
 }

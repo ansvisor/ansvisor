@@ -72,14 +72,17 @@ export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISO
     fail: null,
     /**
      * ship_cms_publish (00428), as its SQL decides, in one step (the draft's
-     * lock): the send's own, else the one it is noted on, else the draft's cms_publish within 90 days
-     * (the latest before it, else the nearest after it), noted, else a new
-     * ship event. `beforeShip` runs first,
-     * so a test can make another call land while this one waits.
+     * lock): the send's own, else the one it is noted on, else the draft's
+     * cms_publish within p_republish_days (the latest before it, else the
+     * nearest after it), noted, else a new ship event. `beforeShip` runs
+     * first, so a test can make another call land while this one waits.
      */
     beforeShip: null,
     async rpc(name, args) {
       if (name !== 'ship_cms_publish') throw new Error(`unexpected rpc ${name}`);
+      if (!Number.isInteger(args.p_republish_days) || args.p_republish_days < 1) {
+        throw new Error('ship_cms_publish needs p_republish_days');
+      }
       await db.beforeShip?.(args);
       calls.push({ table: 'ship_events', op: 'rpc' });
       if (db.fail?.('ship_events', 'rpc')) {
@@ -100,7 +103,7 @@ export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISO
               row.brand_id === args.p_brand_id &&
               row.content_draft_id === args.p_content_draft_id &&
               row.kind === 'cms_publish' &&
-              Math.abs(Date.parse(row.shipped_at) - at) <= 90 * 86_400_000,
+              Math.abs(Date.parse(row.shipped_at) - at) <= args.p_republish_days * 86_400_000,
           )
           .sort((a, b) => {
             const [x, y] = [Date.parse(a.shipped_at), Date.parse(b.shipped_at)];

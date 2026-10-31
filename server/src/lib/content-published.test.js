@@ -62,9 +62,9 @@ vi.mock('./logger.js', () => ({
 }));
 const shipped = [];
 vi.mock('./impact-ledger/ship.js', () => ({
-  recordCmsPublish: async (args) => {
+  shipCmsPublish: async (args) => {
     shipped.push(args);
-    return 'ship-1';
+    return { id: 'ship-1', created: true, failed: false };
   },
 }));
 
