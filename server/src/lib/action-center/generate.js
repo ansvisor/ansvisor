@@ -221,7 +221,7 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   // firing does not reopen as a fresh action the very next night.
   const { data: closedRows, error: closedErr } = await supabaseAdmin
     .from('actions')
-    .select('dedup_key, completed_at, updated_at, created_at')
+    .select('dedup_key, kind, completed_at, updated_at, created_at')
     .eq('brand_id', brandId)
     .in('status', ['completed', 'dismissed'])
     .order('created_at', { ascending: false })
@@ -238,9 +238,10 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   // The day's budget, counted from rows already fetched rather than asked
   // for separately. An action raised this morning and dismissed by lunch
   // still spent its slot: the brand was told about it.
+  // An action sent from Chat is a person's (CHAT-20 §12 rule 2): it doesn't take one of the five.
   const dayStart = startOfUtcDay(now);
   const createdToday = [...(activeRows ?? []), ...(closedRows ?? [])].filter(
-    (row) => (Date.parse(row.created_at ?? '') || 0) >= dayStart,
+    (row) => (Date.parse(row.created_at ?? '') || 0) >= dayStart && row.kind !== 'chat_finding',
   ).length;
 
   const nowIso = now.toISOString();

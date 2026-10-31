@@ -575,7 +575,8 @@ async function measureReading(
   // Content Editor (CE-015) on its prompts and its page, and a product or
   // category sent from Product Visibility (ECOM-013) on its shopping
   // questions and the product's page. A page sent from a Site Audit report
-  // (learning D2) on that page.
+  // (learning D2) on that page. A finding sent from Chat (CHAT-09 §E) on the
+  // prompts and pages it named.
   if (
     action.kind === 'content_opportunity' ||
     action.kind === 'content_draft' ||
@@ -586,7 +587,8 @@ async function measureReading(
     action.kind === 'traffic_pages' ||
     action.kind === 'shopping_product' ||
     action.kind === 'shopping_category' ||
-    action.kind === 'audit_page'
+    action.kind === 'audit_page' ||
+    action.kind === 'chat_finding'
   ) {
     const scope = await basketScope(action);
     const [before, after] = await Promise.all([

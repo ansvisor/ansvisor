@@ -459,6 +459,22 @@ describe('the daily cap', () => {
     expect(writes.inserted.filter((w) => w.table === 'actions')).toHaveLength(1);
   });
 
+  /** A finding sent from Chat is a person's (CHAT-20 §12 rule 2): it takes none of the five. */
+  it("leaves actions sent from Chat out of the day's count", async () => {
+    const fromChat = Array.from({ length: maxNewActionsPerDay }, (_, i) => ({
+      id: `chat-${i}`,
+      dedup_key: `chat_finding:fix:${i}`,
+      kind: 'chat_finding',
+      status: 'new',
+      created_at: NOW.toISOString(),
+    }));
+    mockDb({ signals: oneOfEachKind(), activeActions: fromChat });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    expect(summary.created).toBe(maxNewActionsPerDay);
+  });
+
   it('ignores actions raised on earlier days', async () => {
     const yesterday = Array.from({ length: maxNewActionsPerDay }, (_, i) => ({
       id: `old-${i}`,
