@@ -3,6 +3,7 @@ import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
+import { connectionGaps, readBrandConnections } from './agent-connections';
 import { canWriteAgents, versionFromRow, type AgentPausedReason } from './agent-rules';
 import { startQueuedAgentRuns, type AgentRunDriver } from './agent-runs';
 import {
@@ -38,7 +39,10 @@ import { chatAgenticEnabled } from './flag';
  * (owner_role). The checks before a run (§D item 21)
  * are read again for that person: a check that fails ends the run before
  * it starts, and pauses a triggered agent with the reason (plan,
- * brand_gone, cap; §G item 34). A read-only workspace starts nothing. Then
+ * brand_gone, cap; §G item 34). So does a Required connection the run's
+ * brand lacks (connection, §H item 42; agent-connections.ts); a missing
+ * Optional one is said in the run's message, and the run does the rest.
+ * A read-only workspace starts nothing. Then
  * the run gets a chat of its own (origin agent, agent_run_id; §H item 36),
  * owned by the person it acts as, so it shows in their chat list and Inbox:
  * the agent's skills, instructions and what fired it as the message, the
@@ -63,6 +67,10 @@ import { chatAgenticEnabled } from './flag';
 
 const runnerT = createTranslator({ locale: 'en', messages, namespace: 'chatAgents.runner' });
 const triggerT = createTranslator({ locale: 'en', messages, namespace: 'chatAgents.runTrigger' });
+const CONNECTION_NAMES: Record<string, string> = messages.chatAgents.connections.names;
+
+/** A connection's name as the app shows it: "Any CMS", "Google Search Console". */
+const connectionName = (key: string) => CONNECTION_NAMES[key] ?? key;
 
 /** A started run with no chat after this long lost its driver: it fails. */
 export const HANDOVER_GRACE_MS = 5 * 60_000;
@@ -174,9 +182,10 @@ const skillsLine = (skills: readonly string[]) =>
 
 /**
  * The run's message: the agent and its brand, its skills in order, what
- * started it, its instructions, and for a triggered run how to work with
- * nobody watching (CHAT-12 item 12). Plain words; the evidence's ids go in
- * the run's scope, never in the message.
+ * started it, each Optional connection the brand lacks (done without, and
+ * said so: §H item 42), its instructions, and for a triggered run how to
+ * work with nobody watching (CHAT-12 item 12). Plain words; the evidence's
+ * ids go in the run's scope, never in the message.
  */
 export function agentRunMessage(input: {
   agent: string;
@@ -185,6 +194,8 @@ export function agentRunMessage(input: {
   instructions: string | null;
   triggerKind: string;
   evidence: AgentEvidence;
+  /** The Optional connections the brand lacks, by key. */
+  missing?: readonly string[];
 }): string {
   const signals = input.evidence.fires.filter((f) => f.kind === 'signal').length;
   const lines = [
@@ -197,6 +208,9 @@ export function agentRunMessage(input: {
   ];
   if (input.evidence.earlier.length > 0) {
     lines.push(runnerT('earlier', { count: input.evidence.earlier.length }));
+  }
+  for (const key of input.missing ?? []) {
+    lines.push(runnerT('notConnected', { name: connectionName(key) }));
   }
   if (input.instructions) lines.push(runnerT('instructions', { text: input.instructions }));
   if (isTriggered(input.triggerKind)) lines.push(runnerT('background'));
@@ -334,6 +348,12 @@ export async function openAgentRun(
     (b) => b.id === run.brand_id,
   );
   if (!brand) return endBeforeStart(run, 'stopped', { stopReason: 'brand_gone', now });
+  // What the brand has connected (§H item 42): without a Required connection nothing starts,
+  // and a triggered agent pauses (connection); an Optional one missing is said in the run.
+  const gaps = connectionGaps(version.connections, await readBrandConnections(brand.id));
+  if (gaps.required.length > 0) {
+    return endBeforeStart(run, 'stopped', { pause: 'connection', now });
+  }
 
   const evidence = evidenceOf(run.evidence_json);
   const timezone = validTimezone(evidence.fires.find((f) => f.timezone)?.timezone);
@@ -343,6 +363,7 @@ export async function openAgentRun(
     skills: version.skill_ids,
     instructions: version.instructions,
     evidence,
+    missing: gaps.optional,
   });
 
   let conversationId: string;

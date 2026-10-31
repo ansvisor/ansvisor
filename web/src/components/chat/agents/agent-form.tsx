@@ -43,6 +43,8 @@ import {
   ANSVISOR_SKILLS,
   MAX_FOLLOW_ON_SKILLS,
   OPTIONAL_CONNECTIONS,
+  requiredBy as skillNeeding,
+  type SkillConnection,
 } from '@/lib/chat/agent-skills';
 import { engineName, nextRunOf, percentOf, writesAgents } from '@/lib/chat/agent-view';
 import type { AgentDetail } from '@/lib/chat/agents';
@@ -693,8 +695,7 @@ function AgentFormBody({
       ...state.connections.filter((c) => !c.required).map((c) => c.key),
     ]),
   ].filter((key) => !required.some((c) => c.key === key));
-  const requiredBy = (key: string) =>
-    state.skills.find((id) => ANSVISOR_SKILLS.find((s) => s.id === id)?.uses.includes(key)) ?? null;
+  const requiredBy = (key: string) => skillNeeding(state.skills, key);
   const models = [
     'auto',
     FAST_MODEL,
@@ -835,7 +836,7 @@ function AgentFormBody({
                     {[
                       // A skill kept from elsewhere (a library skill) shows first.
                       ...(primary && !ANSVISOR_SKILLS.some((s) => s.id === primary)
-                        ? [{ id: primary, uses: [] as readonly string[] }]
+                        ? [{ id: primary, uses: [] as readonly SkillConnection[] }]
                         : []),
                       ...ANSVISOR_SKILLS,
                     ].map((skill, i) => {
@@ -859,7 +860,9 @@ function AgentFormBody({
                           <em className={EM}>
                             {skill.uses.length > 0
                               ? t('skill.uses', {
-                                  connections: skill.uses.map(words.connection).join(', '),
+                                  connections: skill.uses
+                                    .map((use) => words.connection(use.key))
+                                    .join(', '),
                                 })
                               : t('skill.noConnection')}
                           </em>
@@ -1108,6 +1111,12 @@ function AgentFormBody({
                       >
                         <div className="min-w-0 flex-1">
                           <b className="font-medium">{words.connection(key)}</b>
+                          {/* "Any CMS": which ones count. */}
+                          {tAgents.has(`connections.counts.${key}`) && (
+                            <em data-slot="connection-counts" className={cn(EM, 'text-xs')}>
+                              {tAgents(`connections.counts.${key}`)}
+                            </em>
+                          )}
                           <em className={cn(EM, 'text-xs')}>
                             {need
                               ? by

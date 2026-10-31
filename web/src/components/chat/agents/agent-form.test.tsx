@@ -199,7 +199,7 @@ describe('AgentForm: new agent', () => {
     expect(errors()).toEqual([]);
     // Its name is the skill's, with the brand: the title alone is taken (§O).
     expect(summary('name')).toBe('Win back lost citations · Ansvisor');
-    expect(summary('connections')).toBe('Google Search Console, Webflow');
+    expect(summary('connections')).toBe('Google Search Console, Any CMS');
     await next();
     expect(step()).toBe('1');
     // Monday 07:00 to start, with its next run and its clock.
@@ -300,6 +300,27 @@ describe('AgentForm: new agent', () => {
     expect(one('[data-slot="agent-form-gate"]')).toBeNull();
   });
 
+  it('asks for any CMS, saying which count, Optional for /winback and Required once /publish sends the page', async () => {
+    await render();
+    await toLastStep();
+    const cms = one('[data-connection="cms"]')!;
+    expect(cms.querySelector('b')?.textContent).toBe('Any CMS');
+    expect(cms.querySelector('[data-slot="connection-counts"]')?.textContent).toBe(
+      'Webflow, WordPress, Framer, Wix or a workflow webhook',
+    );
+    expect(cms.textContent).toContain('Optional');
+    expect(one('[data-connection="google_search_console"]')!.textContent).toContain('Optional');
+    // An Optional one can be switched off.
+    expect(cms.querySelector('[data-action="agentNew.toggleConnection"]')).not.toBeNull();
+
+    await click(one('[data-step-button="0"]')!);
+    await type(one('[data-action="agentNew.addFollowOn"]')!, 'publish');
+    await click(one('[data-step-button="3"]')!);
+    const needed = one('[data-connection="cms"]')!;
+    expect(needed.textContent).toContain('Required by /publish');
+    expect(needed.querySelector('[data-action="agentNew.toggleConnection"]')).toBeNull();
+  });
+
   it('saves a draft the API takes, then opens it', async () => {
     await render();
     await toLastStep();
@@ -314,8 +335,8 @@ describe('AgentForm: new agent', () => {
       mode: 'auto',
       model: 'auto',
       connections: [
-        { key: 'google_search_console', required: true },
-        { key: 'webflow', required: true },
+        { key: 'google_search_console', required: false },
+        { key: 'cms', required: false },
       ],
       scope: { brand_ids: [BRAND] },
       triggers: [

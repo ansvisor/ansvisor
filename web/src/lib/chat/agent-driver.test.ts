@@ -363,6 +363,73 @@ describe('handing a started run to Chat', () => {
     expect(await driver.openAgentRun(under, ORG, NOW)).not.toBeNull();
   });
 
+  it('pauses a triggered agent whose brand lacks a Required connection, and starts nothing', async () => {
+    db.tables.chat_agent_versions[0].connections = [{ key: 'cms', required: true }];
+    // A Webflow site whose sign-in failed isn't a connected CMS.
+    db.tables.brand_cms_connections = [
+      { brand_id: BRAND, provider: 'webflow', status: 'auth_failed' },
+    ];
+    const id = queueRun();
+    expect(await driver.openAgentRun(id, ORG, NOW)).toBeNull();
+    expect(runRow(id)).toMatchObject({ status: 'stopped', stop_reason: null });
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'connection' });
+    expect(db.tables.chat_conversations).toEqual([]);
+
+    // Run now stops the same, and leaves the agent as it is.
+    Object.assign(agentRow(), { status: 'active', paused_reason: null });
+    const manual = queueRun({ trigger_kind: 'manual', acting_user_id: PEOPLE.manager });
+    expect(await driver.openAgentRun(manual, ORG, NOW)).toBeNull();
+    expect(runRow(manual).status).toBe('stopped');
+    expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
+  });
+
+  it('takes any CMS and any catalog source the brand has: WordPress, a workflow webhook, Merchant Center', async () => {
+    db.tables.chat_agent_versions[0].connections = [
+      { key: 'cms', required: true },
+      { key: 'catalog', required: true },
+    ];
+    db.tables.brand_cms_connections = [
+      { brand_id: BRAND, provider: 'wordpress', status: 'connected' },
+    ];
+    db.tables.catalog_sources = [{ brand_id: BRAND, kind: 'merchant_center', last_status: 'ok' }];
+    const id = queueRun();
+    expect(await driver.openAgentRun(id, ORG, NOW)).not.toBeNull();
+
+    // No CMS site, but a webhook that takes sent pages; an agent saved when it said Webflow.
+    runRow(id).status = 'done';
+    db.tables.chat_agent_versions[0].connections = [{ key: 'webflow', required: true }];
+    db.tables.brand_cms_connections = [];
+    db.tables.webhook_configs = [
+      { brand_id: BRAND, is_active: true, events: ['content_draft.sent'] },
+    ];
+    const webhook = queueRun();
+    expect(await driver.openAgentRun(webhook, ORG, NOW)).not.toBeNull();
+    expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
+  });
+
+  it('runs without an Optional connection and says so in its message', async () => {
+    db.tables.chat_agent_versions[0].connections = [
+      { key: 'google_search_console', required: false },
+      { key: 'cms', required: false },
+    ];
+    const id = queueRun();
+    expect(await driver.openAgentRun(id, ORG, NOW)).not.toBeNull();
+    const message = db.tables.chat_messages[0].content_md as string;
+    expect(message).toContain(
+      'Google Search Console isn’t connected for this brand. Do everything else without it',
+    );
+    expect(message).toContain('“Any CMS isn’t connected. I can do everything else without it.”');
+    expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
+
+    // Connected: nothing to say.
+    runRow(id).status = 'done';
+    db.tables.brands[0].gsc_property = 'sc-domain:brand-a.example';
+    db.tables.brand_cms_connections = [{ brand_id: BRAND, provider: 'wix', status: 'connected' }];
+    const again = queueRun();
+    await driver.openAgentRun(again, ORG, NOW);
+    expect(db.tables.chat_messages.at(-2)!.content_md).not.toContain('isn’t connected');
+  });
+
   it('stops a run whose brand left its scope, and with Chat off starts nothing', async () => {
     db.tables.chat_agent_versions[0].scope = { brand_ids: [] };
     const id = queueRun();

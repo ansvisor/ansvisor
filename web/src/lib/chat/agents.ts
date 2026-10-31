@@ -1117,9 +1117,9 @@ export async function runnableBrands(
  * Whether the agent may run with these settings now (§D item 21: on
  * Activate, on Resume and before a run): the plan and Settings › Chat allow
  * its mode and engines for the person it acts as, a brand of its scope is
- * there, and the AI limit isn't used up. Its skills (CHAT-13) and its
- * Required connections are the trigger runner's to check (W2-16) once
- * those registries exist.
+ * there, and the AI limit isn't used up. Its Required connections are
+ * checked for the run's brand before the run (agent-driver.ts,
+ * agent-connections.ts); its skills (CHAT-13) once their registry exists.
  */
 export async function runChecks(
   ctx: AgentContext,
