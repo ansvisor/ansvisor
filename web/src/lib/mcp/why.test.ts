@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import type { FakeSupabase } from '@/lib/chat/testing/fake-supabase';
@@ -80,10 +82,10 @@ beforeEach(() => {
   rpcArgs = [];
   Object.assign(db.tables, {
     brands: [
-      { id: BRAND, organization_id: ORG, name: 'Acme', domain: 'acme.example' },
-      { id: THEIR_BRAND, organization_id: 'org-2', name: 'Theirs', domain: 'theirs.example' },
+      { id: BRAND, organization_id: ORG, name: 'Acme' },
+      { id: THEIR_BRAND, organization_id: 'org-2', name: 'Theirs' },
     ],
-    brand_domains: [],
+    brand_domains: [{ brand_id: BRAND, domain: 'acme.example' }],
     competitors: [{ id: 'c1', brand_id: BRAND, name: 'Rival', domain: 'rival.example' }],
     topics: [],
     prompt_results: [],
@@ -288,6 +290,42 @@ describe('explainChangeFor', () => {
     // Period a's page was full: its cell's answers weren't all read, so no cause from them.
     expect(out.analysis.evidence_partial).toBe(true);
     expect(out.analysis.causes).toEqual([]);
+  });
+});
+
+describe('explainChangeFor, the brand read', () => {
+  // The fake answers whatever is selected; PostgREST refuses a column the
+  // table doesn't have, and the read then finds no brand. brands has no
+  // domain column (its sites are brand_domains), so name only real ones.
+  const brandColumns = () => {
+    const types = readFileSync(join(__dirname, '../../types/supabase.ts'), 'utf8');
+    const start = types.indexOf('      brands: {\n        Row: {');
+    const block = types.slice(start, types.indexOf('\n        }', start));
+    return new Set([...block.matchAll(/^ {10}(\w+)\??:/gm)].map((m) => m[1]));
+  };
+
+  it("selects only the brands table's own columns", async () => {
+    const selected: string[] = [];
+    const from = db.from.bind(db);
+    const spy = vi.spyOn(db, 'from').mockImplementation((table: string) => {
+      const builder = from(table);
+      if (table !== 'brands') return builder;
+      const select = builder.select.bind(builder);
+      builder.select = (columns?: string, options?: Parameters<typeof select>[1]) => {
+        selected.push(...(columns ?? '').split(',').map((c) => c.trim()));
+        return select(columns, options);
+      };
+      return builder;
+    });
+    try {
+      await explainChangeFor(auth, { brandId: BRAND, metric: 'mention_rate' }, NOW);
+    } finally {
+      spy.mockRestore();
+    }
+    const columns = brandColumns();
+    expect(columns.has('name')).toBe(true);
+    expect(selected.length).toBeGreaterThan(0);
+    expect(selected.filter((c) => !columns.has(c))).toEqual([]);
   });
 });
 

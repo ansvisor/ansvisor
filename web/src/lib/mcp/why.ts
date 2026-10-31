@@ -250,7 +250,7 @@ export async function explainChangeFor(
   if (!auth.organizationId) return null;
   const { data: brand } = await supabaseAdmin
     .from('brands')
-    .select('id, name, domain')
+    .select('id, name')
     .eq('id', params.brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
@@ -340,10 +340,9 @@ export async function explainChangeFor(
           .maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
-  const ownSites = [
-    brand.domain,
-    ...((brandDomains.data ?? []) as { domain: string }[]).map((d) => d.domain),
-  ]
+  // The brand's own sites are its brand_domains: brands has no domain column.
+  const ownSites = ((brandDomains.data ?? []) as { domain: string }[])
+    .map((d) => d.domain)
     .map(siteOf)
     .filter((site): site is string => !!site);
   const competitorSites = ((competitors.data ?? []) as { domain: string | null }[])
