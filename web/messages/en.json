@@ -297,6 +297,8 @@
       "setProductFeed": "Changing the product feed setting needs a plan",
       "generateReports": "Generating reports needs a plan",
       "deleteReports": "Deleting reports needs a plan",
+      "markTaskDone": "Marking a task done needs a plan",
+      "attachFiles": "Attaching files needs a plan",
       "startChat": "Starting a chat needs a plan",
       "sendChat": "Chatting with the agent needs a plan",
       "addBrands": "Adding brands needs a plan",
@@ -4129,7 +4131,27 @@
     "download": "Download",
     "downloaded": "Downloaded {name}",
     "downloadFailed": "Couldn't download that. Try again.",
-    "openEditor": "Open in Content Editor"
+    "openEditor": "Open in Content Editor",
+    "task": {
+      "line": "Task: {title}",
+      "untitled": "An Action Center task",
+      "markDone": "Attach to task & mark done",
+      "more": "More for this file",
+      "attachOnly": "Attach only",
+      "doneAttached": "Done · attached to task",
+      "doneInActionCenter": "Done in Action Center",
+      "markedDone": "Task marked done in Action Center",
+      "undo": "Undo",
+      "undone": "Task open again in Action Center",
+      "attached": "Attached to the task",
+      "failed": {
+        "not_found": "That file or task isn't there any more.",
+        "forbidden": "Only an Admin or a Manager can close tasks from Chat.",
+        "closed": "Its action is closed in Action Center.",
+        "changed": "It changed in Action Center since, so nothing was undone.",
+        "failed": "Couldn't change the task. Try again."
+      }
+    }
   },
   "chatFiles": {
     "title": "Files",

@@ -39,6 +39,12 @@ vi.mock('@/components/providers/upgrade-gate', async (importOriginal) => ({
   useUpgradeGate: () => gate,
 }));
 vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: vi.fn() }));
+// A deliverable's task clicks (W2-12): the server's, not these tests'.
+vi.mock('@/lib/actions/chat-task-card', () => ({
+  markTaskDoneFromCard: vi.fn(),
+  attachOnlyFromCard: vi.fn(),
+  undoTaskDoneFromCard: vi.fn(),
+}));
 vi.mock('@/lib/actions/chat-references', () => ({
   searchChatReferences: vi.fn(async () => ({ ok: true, references: [] })),
 }));
