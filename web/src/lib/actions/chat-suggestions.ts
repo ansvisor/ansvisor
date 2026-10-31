@@ -270,8 +270,10 @@ export async function openDailySuggestion(id: string): Promise<SuggestionsWriteR
     if (!parsed.success) return { ok: false, failure: 'not_found' };
     const me = await chatPerson();
     if (!me) return { ok: false, failure: 'chat_off' };
-    // Not one whose action was deleted: nothing to open, and no use of the feed.
-    const { data: row, error: readError } = await supabaseAdmin
+    // Read through the person's session (their own, in a brand they can
+    // see), and not one whose action was deleted: nothing to open, and no
+    // use of the feed.
+    const { data: row, error: readError } = await me.client
       .from('chat_suggestions')
       .select(
         'id, brand_id, seen_at, opened_at, actions!chat_suggestions_action_id_fkey!inner(deleted_at)',
@@ -315,12 +317,16 @@ export async function openDailySuggestion(id: string): Promise<SuggestionsWriteR
   }
 }
 
-/** The workspace's brands that get suggestions: active, and not the demo brand (§6). */
-async function suggestionBrands(orgId: string): Promise<string[] | null> {
-  const { data, error } = await supabaseAdmin
+/**
+ * The workspace's brands that get the person's suggestions: active, not the
+ * demo brand (§6), and read through their session, so only the brands they
+ * can see (brands: member select, which brand access narrows).
+ */
+async function suggestionBrands(me: Person): Promise<string[] | null> {
+  const { data, error } = await me.client
     .from('brands')
     .select('id')
-    .eq('organization_id', orgId)
+    .eq('organization_id', me.orgId)
     .eq('is_active', true)
     .eq('is_demo', false);
   if (error) {
@@ -359,7 +365,7 @@ export async function setDailySuggestions(on: boolean): Promise<SuggestionsWrite
       logFailure(`turn daily suggestions ${status}`, error);
       return { ok: false, failure: 'failed' };
     }
-    const brands = await suggestionBrands(me.orgId);
+    const brands = await suggestionBrands(me);
     if (!brands) return { ok: false, failure: 'failed' };
     if (brands.length) {
       const { error: insertError } = await supabaseAdmin.from('chat_suggestion_feeds').upsert(
@@ -411,7 +417,7 @@ export async function startDailySuggestions(): Promise<SuggestionsStartResult> {
       return { ok: false, failure: 'failed' };
     }
     if ((feeds ?? []).length) return { ok: true, made: 0 };
-    const brands = await suggestionBrands(me.orgId);
+    const brands = await suggestionBrands(me);
     if (!brands) return { ok: false, failure: 'failed' };
     if (!brands.length) return { ok: true, made: 0 };
     const { data: made, error } = await supabaseAdmin
