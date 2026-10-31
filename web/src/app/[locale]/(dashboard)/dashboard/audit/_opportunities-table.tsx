@@ -160,6 +160,7 @@ function ExcludedList({
           ))}
         </ul>
       )}
+      {open && !onRestore && <p className="mt-2">{t('prefsManagersOnly')}</p>}
     </div>
   );
 }

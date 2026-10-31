@@ -255,6 +255,9 @@ describe('OpportunitiesTable', () => {
     act(() => button('Show')!.click());
     expect(container.textContent).toContain('/legal');
     expect(button('Restore')).toBeUndefined();
+    expect(container.textContent).toContain(
+      'Only admins and managers can pin, exclude or restore pages.',
+    );
   });
 
   it('says where opportunities come from when there are none', () => {

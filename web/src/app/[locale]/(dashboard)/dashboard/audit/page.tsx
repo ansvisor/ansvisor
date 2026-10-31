@@ -874,6 +874,11 @@ export default function SiteAuditPage() {
                           </Button>
                         </>
                       )}
+                      {!canManage && (
+                        <span className="text-xs text-muted-foreground">
+                          {t('opportunities.prefsManagersOnly')}
+                        </span>
+                      )}
                     </AuditBulkBar>
                   )
                 }

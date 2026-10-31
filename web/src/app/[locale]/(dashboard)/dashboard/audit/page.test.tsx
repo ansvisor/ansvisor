@@ -224,6 +224,9 @@ describe('SiteAuditPage Opportunities', () => {
     expect(named('Pin')).toBeDefined();
     expect(named('Exclude')).toBeDefined();
     expect(inbox.props!.onRestore).toBeTypeOf('function');
+    expect(container.textContent).not.toContain(
+      'Only admins and managers can pin, exclude or restore pages.',
+    );
   });
 
   it('gives other members no Pin, Exclude or Restore: they hold for the whole brand', async () => {
@@ -232,5 +235,8 @@ describe('SiteAuditPage Opportunities', () => {
     expect(named('Pin')).toBeUndefined();
     expect(named('Exclude')).toBeUndefined();
     expect(inbox.props!.onRestore).toBeUndefined();
+    expect(container.textContent).toContain(
+      'Only admins and managers can pin, exclude or restore pages.',
+    );
   });
 });
