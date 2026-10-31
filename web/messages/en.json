@@ -5223,6 +5223,7 @@
       "action_not_found": "This action isn't available.",
       "action_closed": "This action is closed. Reopen it in Action Center to run an agent on it.",
       "queue_full": "{count, plural, one {# run already waits} other {# runs already wait}} for this agent on this brand. Try again once one has started.",
+      "connection_missing": "This agent needs {name}, and {brand} doesn’t have it connected. Connect it for that brand, then run the agent again.",
       "failed": "Something went wrong with this agent. Try again."
     },
     "status": {
@@ -5319,6 +5320,8 @@
       "required": "Required",
       "optional": "Optional",
       "names": {
+        "cms": "Any CMS",
+        "catalog": "Any catalog source",
         "google_search_console": "Google Search Console",
         "gsc": "Google Search Console",
         "google_analytics": "Google Analytics",
@@ -5331,6 +5334,10 @@
         "hubspot": "HubSpot",
         "github": "GitHub",
         "merchant_center": "Merchant Center"
+      },
+      "counts": {
+        "cms": "Webflow, WordPress, Framer, Wix or a workflow webhook",
+        "catalog": "Merchant Center, a product feed or a store"
       }
     },
     "outcomes": {
@@ -5363,6 +5370,7 @@
       "earlier": "{count, plural, one {One more fire came while it waited (cooldown or daily limit): it's in the scope too.} other {# more fires came while it waited (cooldown or daily limit): they're in the scope too.}}",
       "action": "It works on one Action Center action, AC-{no} ({category}); its title and open tasks when the run was asked for are in the scope. Read it with its tasks first and keep to its targets: never add new ones. Closing tasks stays the person’s click.",
       "background": "This run works in the background. When a question comes up, take the recommended option and list your assumptions at the top of the answer. Changes still wait for approval as the agent's mode says.",
+      "notConnected": "{name} isn’t connected for this brand. Do everything else without it, and say so in one line: “{name} isn’t connected. I can do everything else without it.”",
       "chip": {
         "agent": "Agent",
         "brand": "Brand",
