@@ -474,6 +474,28 @@ describe('ChatShell', () => {
     vi.unstubAllGlobals();
   });
 
+  it("names the Inbox and a daily suggestion's page in the breadcrumb, which fills the page (CHAT-26)", async () => {
+    function Named() {
+      useChatCrumb('Daily suggestion · Oct 29');
+      return <p>suggestion</p>;
+    }
+    nav.pathname = '/dashboard/chat/inbox/55555555-5555-4555-8555-555555555555';
+    await render(
+      <ChatShell menuOpen>
+        <Named />
+      </ChatShell>,
+    );
+    expect(host.querySelector('header nav')?.textContent).toBe(
+      'Chat›Inbox›Daily suggestion · Oct 29',
+    );
+    // Its Inbox goes back to the Daily suggestions.
+    expect(action('nav.breadcrumb')[1].getAttribute('href')).toBe(
+      '/dashboard/chat/inbox?tab=suggestions',
+    );
+    // A chat to be: no page padding around it.
+    expect(host.querySelector('.chat-scroll')?.className).not.toContain('p-6');
+  });
+
   it('leads a chat opened as a full page back to the app page it came from (CHAT-22)', async () => {
     const id = 'cccccccc-0000-4000-8000-000000000002';
     nav.pathname = `/dashboard/chat/${id}`;

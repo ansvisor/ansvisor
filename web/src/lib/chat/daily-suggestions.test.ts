@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ALWAYS_ON_SECTION, hiddenMenuSections } from '@/lib/menu-access';
 import {
   SHOWN_DAYS,
+  actionPromptCount,
   closedStatus,
   dayIn,
   feedsState,
@@ -11,6 +12,9 @@ import {
   sentDay,
   shownSince,
   suggestionDot,
+  suggestionPageId,
+  suggestionPick,
+  suggestionStart,
 } from './daily-suggestions';
 
 /**
@@ -198,5 +202,64 @@ describe('sentDay', () => {
 
   it("is never today when the read couldn't date it", () => {
     expect(sentDay('2026-10-29', null)).toEqual({ date: 'Oct 29', today: false });
+  });
+});
+
+describe('the suggestion’s page (§2.3)', () => {
+  it('takes a suggestion’s id from its address, and nothing else', () => {
+    expect(suggestionPageId('55555555-5555-4555-8555-555555555555')).toBe(
+      '55555555-5555-4555-8555-555555555555',
+    );
+    // The demo's ids are made by hand, not RFC 4122 ones.
+    expect(suggestionPageId('33333333-3333-3333-3333-333333333333')).not.toBeNull();
+    expect(suggestionPageId('new')).toBeNull();
+  });
+
+  it('reads the pick as the job kept it, and a missing or odd part as none', () => {
+    expect(suggestionPick({ priority: { score: 80.6 }, waitingDays: 6 })).toEqual({
+      score: 81,
+      waitingDays: 6,
+    });
+    expect(suggestionPick({ priority: { score: '81' }, waitingDays: -1 })).toEqual({
+      score: null,
+      waitingDays: null,
+    });
+    expect(suggestionPick(null)).toEqual({ score: null, waitingDays: null });
+  });
+
+  it('starts the Content Editor on a new page’s task first, else an existing page’s, on its first page', () => {
+    const payload = { pages: ['https://acme.example/ridge', 'https://acme.example/crest'] };
+    const tasks = [
+      { id: 't1', taskKey: 'review_findings', status: 'new' },
+      { id: 't2', taskKey: 'optimize_content', status: 'new' },
+      { id: 't3', taskKey: 'create_content_draft', status: 'in_progress' },
+    ];
+    expect(suggestionStart(tasks, payload)).toEqual({ taskId: 't3', method: 'create', page: null });
+    expect(suggestionStart(tasks.slice(0, 2), payload)).toEqual({
+      taskId: 't2',
+      method: 'optimize',
+      page: 'https://acme.example/ridge',
+    });
+    expect(suggestionStart(tasks.slice(0, 2), {})).toEqual({
+      taskId: 't2',
+      method: 'optimize',
+      page: null,
+    });
+  });
+
+  it('starts none when the writing is done, skipped or failed, or there is none', () => {
+    const done = ['completed', 'skipped', 'failed'].map((status, i) => ({
+      id: `t${i}`,
+      taskKey: 'refresh_content',
+      status,
+    }));
+    expect(suggestionStart(done, {})).toBeNull();
+    expect(suggestionStart([{ id: 't1', taskKey: null, status: 'new' }], {})).toBeNull();
+  });
+
+  it('counts the prompts an action names, its list first', () => {
+    expect(actionPromptCount({ promptIds: ['a', 'b'], promptCount: 9 })).toBe(2);
+    expect(actionPromptCount({ promptCount: 9 })).toBe(9);
+    expect(actionPromptCount({ promptCount: 'nine' })).toBe(0);
   });
 });
