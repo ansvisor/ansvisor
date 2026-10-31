@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
-import { MANAGER_ROLES, assertRole } from '../lib/access.js';
+import { MANAGER_ROLES, assertBrandAccess, assertRole } from '../lib/access.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { decide, isDeciderConfigured } from '../lib/decider.js';
 import { classifyQueryIntents, normalizeIntentQuery } from '../lib/intent-extraction.js';
@@ -46,29 +46,8 @@ import { brandPromptKeys, demandResponse } from '../lib/prompt-demand.js';
 
 const router = Router();
 
-async function assertBrandAccess(brandId, userId) {
-  const { data: brand } = await supabaseAdmin
-    .from('brands')
-    .select('id, name, description, organization_id, language')
-    .eq('id', brandId)
-    .single();
-  if (!brand) {
-    const err = new Error('Brand not found');
-    err.status = 404;
-    throw err;
-  }
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('organization_id, role')
-    .eq('id', userId)
-    .single();
-  if (!profile || profile.organization_id !== brand.organization_id) {
-    const err = new Error('Unauthorized');
-    err.status = 403;
-    throw err;
-  }
-  return { brand, profile };
-}
+/** The brand's fields Improve reads, with its access check (lib/access.js). */
+const BRAND_COLUMNS = { columns: 'name, description, language' };
 
 async function loadSuggestionContext(brandId) {
   const [
@@ -657,7 +636,9 @@ router.post(
     } catch (error) {
       const status = error.status || 500;
       req.log.error({ err: error }, 'prompt-suggestions refresh error');
-      return res.status(status).json({ error: error.message || 'Failed to generate suggestions' });
+      return res
+        .status(status)
+        .json({ error: error.message || 'Failed to generate suggestions', code: error.code });
     }
   },
 );
@@ -697,9 +678,10 @@ router.post(
     } catch (error) {
       const status = error.status || 500;
       req.log.error({ err: error }, 'page prompt suggestions error');
-      return res
-        .status(status)
-        .json({ error: error.message || 'Failed to suggest prompts for this page' });
+      return res.status(status).json({
+        error: error.message || 'Failed to suggest prompts for this page',
+        code: error.code,
+      });
     }
   },
 );
@@ -723,7 +705,9 @@ router.get('/suggestions/:brandId', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'prompt-suggestions list error');
-    return res.status(status).json({ error: error.message || 'Failed to load suggestions' });
+    return res
+      .status(status)
+      .json({ error: error.message || 'Failed to load suggestions', code: error.code });
   }
 });
 
@@ -759,7 +743,9 @@ router.get('/untracked-queries/:brandId', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'untracked queries error');
-    return res.status(status).json({ error: error.message || 'Failed to read Google queries' });
+    return res
+      .status(status)
+      .json({ error: error.message || 'Failed to read Google queries', code: error.code });
   }
 });
 
@@ -790,7 +776,9 @@ router.post('/suggestions/:id/dismiss', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'prompt-suggestions dismiss error');
-    return res.status(status).json({ error: error.message || 'Failed to dismiss' });
+    return res
+      .status(status)
+      .json({ error: error.message || 'Failed to dismiss', code: error.code });
   }
 });
 
@@ -823,7 +811,9 @@ router.post('/suggestions/:id/accept', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'prompt-suggestions accept error');
-    return res.status(status).json({ error: error.message || 'Failed to accept' });
+    return res
+      .status(status)
+      .json({ error: error.message || 'Failed to accept', code: error.code });
   }
 });
 
@@ -1106,7 +1096,7 @@ async function loadImprovePrompt(promptId, userId) {
     throw err;
   }
   const brandId = prompt.prompt_sets.brand_id;
-  const { brand } = await assertBrandAccess(brandId, userId);
+  const { brand } = await assertBrandAccess(brandId, userId, BRAND_COLUMNS);
   return { prompt, brand, brandId };
 }
 
@@ -1229,7 +1219,7 @@ router.get('/:promptId/improve', readImprove, async (req, res) => {
     req.log.error({ err: error }, 'prompt improve read error');
     return res
       .status(error.status || 500)
-      .json({ error: error.message || 'Failed to load suggestions' });
+      .json({ error: error.message || 'Failed to load suggestions', code: error.code });
   }
 });
 
@@ -1261,7 +1251,7 @@ router.get('/:promptId/demand', async (req, res) => {
     req.log.error({ err: error }, 'prompt demand read error');
     return res
       .status(error.status || 500)
-      .json({ error: error.status ? error.message : 'Failed to load demand' });
+      .json({ error: error.status ? error.message : 'Failed to load demand', code: error.code });
   }
 });
 
@@ -1451,7 +1441,7 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
     req.log.error({ err: error }, 'prompt improve generate error');
     return res
       .status(error.status || 500)
-      .json({ error: error.message || 'Failed to generate suggestions' });
+      .json({ error: error.message || 'Failed to generate suggestions', code: error.code });
   }
 });
 
@@ -1594,7 +1584,7 @@ router.post('/:promptId/improve/action', requireFeature('prompt_improve'), async
     req.log.error({ err: error }, 'prompt improve send error');
     return res
       .status(error.status || 500)
-      .json({ error: error.message || 'Failed to send to Action Center' });
+      .json({ error: error.message || 'Failed to send to Action Center', code: error.code });
   }
 });
 

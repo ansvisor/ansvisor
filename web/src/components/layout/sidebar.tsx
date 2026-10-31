@@ -85,6 +85,14 @@ function submenuKey(href: string) {
   return `ansvisor.sidebar.${href.split('/').pop()}Open`;
 }
 
+/** Where a titled group's open/closed state is remembered: ansvisor.sidebar.group.executionOpen. */
+function groupKey(title: string) {
+  return `ansvisor.sidebar.group.${title.toLowerCase()}Open`;
+}
+
+/** The titled groups (Execution, Analytics), which fold under their title. */
+const GROUP_TITLES = dashboardNav.flatMap((group) => (group.title ? [group.title] : []));
+
 /**
  * Arrow keys in the sidebar's links (PROMPT-001): up and down move between
  * them; right opens a submenu (or enters it), left leaves or closes it.
@@ -152,6 +160,15 @@ export function Sidebar() {
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
   const isSubmenuOpen = (href: string) => openMenus[href] ?? true;
   const underMenu = EXPANDABLE_HREFS.find((href) => pathname.startsWith(href)) ?? null;
+  // Each titled group (Execution, Analytics) folds under its title the same
+  // way: remembered per browser, open until closed, and open whenever one of
+  // its pages is showing.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const isGroupOpen = (title: string) => openGroups[title] ?? true;
+  const underGroup =
+    dashboardNav.find(
+      (group) => group.title && group.items.some((item) => pathname.startsWith(item.href)),
+    )?.title ?? null;
   const [trackedCount, setTrackedCount] = useState<number | null>(null);
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const t = useTranslations('nav');
@@ -226,12 +243,27 @@ export function Sidebar() {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpenMenus((prev) => ({ ...stored, ...prev }));
+    const storedGroups: Record<string, boolean> = {};
+    for (const title of GROUP_TITLES) {
+      try {
+        const value = localStorage.getItem(groupKey(title));
+        if (value !== null) storedGroups[title] = value === '1';
+      } catch {
+        // Storage can be unavailable (private mode); the default stands.
+      }
+    }
+    setOpenGroups((prev) => ({ ...storedGroups, ...prev }));
   }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (underMenu) setOpenMenus((prev) => ({ ...prev, [underMenu]: true }));
   }, [underMenu]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (underGroup) setOpenGroups((prev) => ({ ...prev, [underGroup]: true }));
+  }, [underGroup]);
 
   // The count beside Tracked Prompts, refreshed on brand switch and on every
   // page change so adding or deleting prompts shows up. Not read while
@@ -252,6 +284,15 @@ export function Sidebar() {
     setOpenMenus((prev) => ({ ...prev, [href]: open }));
     try {
       localStorage.setItem(submenuKey(href), open ? '1' : '0');
+    } catch {
+      // Not remembered this time; nothing else depends on it.
+    }
+  };
+
+  const setGroupOpen = (title: string, open: boolean) => {
+    setOpenGroups((prev) => ({ ...prev, [title]: open }));
+    try {
+      localStorage.setItem(groupKey(title), open ? '1' : '0');
     } catch {
       // Not remembered this time; nothing else depends on it.
     }
@@ -403,10 +444,27 @@ export function Sidebar() {
         >
           {visibleNav.map((group, i) => (
             <div key={i} className="mb-4">
+              {/* A titled group folds under its title, the chevron on the
+                right. Icons alone (compact) have no titles to fold, so they
+                show every item. */}
               {group.title && !compact && (
-                <p className="mb-1 px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <button
+                  type="button"
+                  aria-expanded={isGroupOpen(group.title)}
+                  aria-controls={isGroupOpen(group.title) ? `nav-group-${i}` : undefined}
+                  data-nav-group={group.title}
+                  onClick={() => setGroupOpen(group.title!, !isGroupOpen(group.title!))}
+                  className="mb-1 flex w-full items-center justify-between rounded-md px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
                   {getDashboardNavGroupLabel(group.title, t)}
-                </p>
+                  <ChevronDown
+                    aria-hidden
+                    className={cn(
+                      'h-3.5 w-3.5 shrink-0 transition-transform',
+                      !isGroupOpen(group.title) && '-rotate-90',
+                    )}
+                  />
+                </button>
               )}
               {/* A group with no title has no header to set it apart, so it
                 carries a rule instead — without one its items read as the tail
@@ -414,184 +472,189 @@ export function Sidebar() {
                 precedes it. */}
               {!group.title && i > 0 && <Separator className="mb-2" />}
               {group.title && compact && i > 0 && <Separator className="my-2" />}
-              <nav className="space-y-0.5">
-                {group.items.map((item) => {
-                  const href = navItemHref(item, chatAgentic);
-                  const isActive =
-                    item.href === '/dashboard'
-                      ? pathname === '/dashboard'
-                      : pathname.startsWith(href);
-                  const label = getDashboardNavLabel(item.title, t);
+              {(!group.title || compact || isGroupOpen(group.title)) && (
+                <nav id={`nav-group-${i}`} className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const href = navItemHref(item, chatAgentic);
+                    const isActive =
+                      item.href === '/dashboard'
+                        ? pathname === '/dashboard'
+                        : pathname.startsWith(href);
+                    const label = getDashboardNavLabel(item.title, t);
 
-                  // Chat's own badge: "Soon (next week)" on the demo brand,
-                  // "Set up" when the org has no provider key for it (cloud only).
-                  const effectiveBadge = dashboardNavBadge(item, { chatSoon, agentKeyMissing });
+                    // Chat's own badge: "Soon (next week)" on the demo brand,
+                    // "Set up" when the org has no provider key for it (cloud only).
+                    const effectiveBadge = dashboardNavBadge(item, { chatSoon, agentKeyMissing });
 
-                  const isLocked =
-                    isCloud && item.requiredFeature != null && !canUse(item.requiredFeature);
+                    const isLocked =
+                      isCloud && item.requiredFeature != null && !canUse(item.requiredFeature);
 
-                  if (isLocked) {
-                    return (
-                      <span
-                        key={item.href}
-                        className={cn(
-                          'flex cursor-not-allowed items-center gap-3 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground/50',
-                          compact && 'justify-center',
-                        )}
-                        title={
-                          compact
-                            ? `${label} (${requiredPlanFor(item.requiredFeature!)})`
-                            : undefined
-                        }
-                      >
-                        <item.icon className="h-4 w-4 shrink-0" />
-                        {!compact && (
-                          <>
-                            <span className="flex-1 truncate">{label}</span>
-                            <Badge
-                              variant="outline"
-                              className="ml-auto h-5 shrink-0 gap-0.5 px-1.5 text-[10px] font-normal"
-                            >
-                              <Crown className="h-2.5 w-2.5" />
-                              {requiredPlanFor(item.requiredFeature!)}
-                            </Badge>
-                          </>
-                        )}
-                        {compact && (
-                          <Lock className="absolute right-1 top-1 h-2.5 w-2.5 text-muted-foreground/40" />
-                        )}
-                      </span>
-                    );
-                  }
-
-                  if (item.children?.length && !compact) {
-                    // Expandable item (PROMPT-001): the row toggles the
-                    // submenu, whose links are the item's views.
-                    const carry =
-                      underPrompts && item.href === PROMPTS_BASE
-                        ? carriedParams(searchParams.toString())
-                        : '';
-                    const submenuId = `submenu-${item.href.replace(/\W+/g, '-')}`;
-                    const submenuOpen = isSubmenuOpen(item.href);
-                    const currentChild = activeChildHref(item.children, pathname);
-                    return (
-                      <div key={item.href}>
-                        <button
-                          type="button"
-                          data-nav-item="parent"
-                          data-submenu={item.href}
-                          aria-expanded={submenuOpen}
-                          aria-controls={submenuId}
-                          onClick={() => setSubmenuOpen(item.href, !submenuOpen)}
+                    if (isLocked) {
+                      return (
+                        <span
+                          key={item.href}
                           className={cn(
-                            'flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-                            isActive
-                              ? 'text-primary'
-                              : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                            'flex cursor-not-allowed items-center gap-3 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground/50',
+                            compact && 'justify-center',
                           )}
+                          title={
+                            compact
+                              ? `${label} (${requiredPlanFor(item.requiredFeature!)})`
+                              : undefined
+                          }
                         >
                           <item.icon className="h-4 w-4 shrink-0" />
-                          <span className="flex-1 truncate">{label}</span>
-                          {effectiveBadge && (
-                            <Badge
-                              variant="secondary"
-                              className="h-5 shrink-0 px-1.5 text-[10px] font-normal"
-                            >
-                              {effectiveBadge}
-                            </Badge>
+                          {!compact && (
+                            <>
+                              <span className="flex-1 truncate">{label}</span>
+                              <Badge
+                                variant="outline"
+                                className="ml-auto h-5 shrink-0 gap-0.5 px-1.5 text-[10px] font-normal"
+                              >
+                                <Crown className="h-2.5 w-2.5" />
+                                {requiredPlanFor(item.requiredFeature!)}
+                              </Badge>
+                            </>
                           )}
-                          <ChevronDown
-                            className={cn(
-                              'h-3.5 w-3.5 shrink-0 transition-transform',
-                              !submenuOpen && '-rotate-90',
-                            )}
-                          />
-                        </button>
-                        {submenuOpen && (
-                          <ul id={submenuId} className="mt-0.5 ml-[18px] space-y-0.5 border-l pl-2">
-                            {item.children.map((child) => {
-                              const childActive = child.href === currentChild;
-                              return (
-                                <li key={child.href}>
-                                  <Link
-                                    href={`${childLinkHref(child, pathname)}${carry}`}
-                                    data-nav-item="child"
-                                    aria-current={childActive ? 'page' : undefined}
-                                    className={cn(
-                                      'flex items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-                                      childActive
-                                        ? 'bg-primary/10 font-medium text-primary'
-                                        : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                                    )}
-                                  >
-                                    <span className="flex-1 truncate">
-                                      {getDashboardNavLabel(child.title, t)}
-                                    </span>
-                                    {child.badge && (
-                                      <Badge
-                                        variant="secondary"
-                                        className="h-4 shrink-0 px-1.5 text-[10px] font-normal"
-                                      >
-                                        {child.badge}
-                                      </Badge>
-                                    )}
-                                    {child.href.endsWith('/tracked') && trackedCount !== null && (
-                                      <span className="text-[11px] tabular-nums text-muted-foreground">
-                                        {formatNumber(trackedCount)}
-                                      </span>
-                                    )}
-                                  </Link>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
-                      </div>
-                    );
-                  }
+                          {compact && (
+                            <Lock className="absolute right-1 top-1 h-2.5 w-2.5 text-muted-foreground/40" />
+                          )}
+                        </span>
+                      );
+                    }
 
-                  return (
-                    <Link
-                      key={item.href}
-                      href={href}
-                      data-nav-item="link"
-                      aria-current={isActive ? 'page' : undefined}
-                    >
-                      <span
-                        className={cn(
-                          'flex items-center gap-3 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors',
-                          isActive
-                            ? 'bg-primary/10 text-primary'
-                            : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                          compact && 'justify-center',
-                        )}
-                        title={
-                          compact
-                            ? effectiveBadge
-                              ? `${label} (${effectiveBadge})`
-                              : label
-                            : undefined
-                        }
-                      >
-                        <item.icon className="h-4 w-4 shrink-0" />
-                        {!compact && (
-                          <>
+                    if (item.children?.length && !compact) {
+                      // Expandable item (PROMPT-001): the row toggles the
+                      // submenu, whose links are the item's views.
+                      const carry =
+                        underPrompts && item.href === PROMPTS_BASE
+                          ? carriedParams(searchParams.toString())
+                          : '';
+                      const submenuId = `submenu-${item.href.replace(/\W+/g, '-')}`;
+                      const submenuOpen = isSubmenuOpen(item.href);
+                      const currentChild = activeChildHref(item.children, pathname);
+                      return (
+                        <div key={item.href}>
+                          <button
+                            type="button"
+                            data-nav-item="parent"
+                            data-submenu={item.href}
+                            aria-expanded={submenuOpen}
+                            aria-controls={submenuId}
+                            onClick={() => setSubmenuOpen(item.href, !submenuOpen)}
+                            className={cn(
+                              'flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                              isActive
+                                ? 'text-primary'
+                                : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                            )}
+                          >
+                            <item.icon className="h-4 w-4 shrink-0" />
                             <span className="flex-1 truncate">{label}</span>
                             {effectiveBadge && (
                               <Badge
                                 variant="secondary"
-                                className="ml-auto h-5 shrink-0 px-1.5 text-[10px] font-normal"
+                                className="h-5 shrink-0 px-1.5 text-[10px] font-normal"
                               >
                                 {effectiveBadge}
                               </Badge>
                             )}
-                          </>
-                        )}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </nav>
+                            <ChevronDown
+                              className={cn(
+                                'h-3.5 w-3.5 shrink-0 transition-transform',
+                                !submenuOpen && '-rotate-90',
+                              )}
+                            />
+                          </button>
+                          {submenuOpen && (
+                            <ul
+                              id={submenuId}
+                              className="mt-0.5 ml-[18px] space-y-0.5 border-l pl-2"
+                            >
+                              {item.children.map((child) => {
+                                const childActive = child.href === currentChild;
+                                return (
+                                  <li key={child.href}>
+                                    <Link
+                                      href={`${childLinkHref(child, pathname)}${carry}`}
+                                      data-nav-item="child"
+                                      aria-current={childActive ? 'page' : undefined}
+                                      className={cn(
+                                        'flex items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                                        childActive
+                                          ? 'bg-primary/10 font-medium text-primary'
+                                          : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                                      )}
+                                    >
+                                      <span className="flex-1 truncate">
+                                        {getDashboardNavLabel(child.title, t)}
+                                      </span>
+                                      {child.badge && (
+                                        <Badge
+                                          variant="secondary"
+                                          className="h-4 shrink-0 px-1.5 text-[10px] font-normal"
+                                        >
+                                          {child.badge}
+                                        </Badge>
+                                      )}
+                                      {child.href.endsWith('/tracked') && trackedCount !== null && (
+                                        <span className="text-[11px] tabular-nums text-muted-foreground">
+                                          {formatNumber(trackedCount)}
+                                        </span>
+                                      )}
+                                    </Link>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <Link
+                        key={item.href}
+                        href={href}
+                        data-nav-item="link"
+                        aria-current={isActive ? 'page' : undefined}
+                      >
+                        <span
+                          className={cn(
+                            'flex items-center gap-3 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors',
+                            isActive
+                              ? 'bg-primary/10 text-primary'
+                              : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                            compact && 'justify-center',
+                          )}
+                          title={
+                            compact
+                              ? effectiveBadge
+                                ? `${label} (${effectiveBadge})`
+                                : label
+                              : undefined
+                          }
+                        >
+                          <item.icon className="h-4 w-4 shrink-0" />
+                          {!compact && (
+                            <>
+                              <span className="flex-1 truncate">{label}</span>
+                              {effectiveBadge && (
+                                <Badge
+                                  variant="secondary"
+                                  className="ml-auto h-5 shrink-0 px-1.5 text-[10px] font-normal"
+                                >
+                                  {effectiveBadge}
+                                </Badge>
+                              )}
+                            </>
+                          )}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </nav>
+              )}
             </div>
           ))}
         </ScrollArea>

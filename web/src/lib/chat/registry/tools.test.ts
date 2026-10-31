@@ -66,11 +66,28 @@ vi.mock('@/lib/mcp/google-reads', async (importOriginal) =>
 vi.mock('@/lib/mcp/workspace-reads', async (importOriginal) =>
   tracked.all('mcp/workspace-reads', await importOriginal<Record<string, unknown>>()),
 );
+vi.mock('@/lib/mcp/pages', async (importOriginal) =>
+  tracked.all('mcp/pages', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/why', async (importOriginal) =>
+  tracked.all('mcp/why', await importOriginal<Record<string, unknown>>()),
+);
 vi.mock('@/lib/actions/content', () => ({
   updateOpportunityStatus: tracked.track('actions/content.updateOpportunityStatus'),
 }));
 vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: tracked.track('actions/content-drafts.createContentDraft'),
+  updateContentDraft: tracked.track('actions/content-drafts.updateContentDraft'),
+}));
+vi.mock('@/lib/actions/cms-send', () => ({
+  sendDraftToCms: tracked.track('actions/cms-send.sendDraftToCms'),
+}));
+vi.mock('@/lib/actions/reports', () => ({
+  createReport: tracked.track('actions/reports.createReport'),
+}));
+vi.mock('@/lib/actions/audits', () => ({
+  startSiteAudits: tracked.track('actions/audits.startSiteAudits'),
+  getAuditQuota: tracked.track('actions/audits.getAuditQuota'),
 }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({
   dismissSuggestion: tracked.track('actions/prompt-suggestions.dismissSuggestion'),
@@ -291,6 +308,15 @@ describe('the Chat tool registry', () => {
     await runInChat('attach_to_action', { action_id: item, finding: 'Lost 6 citations.' });
     await runInChat('attach_file_to_task', { brand_id: brand, task_id: item, file_id: item });
     await runInChat('set_task_ready_for_review', { brand_id: brand, task_id: item });
+    await run('update_draft', { draft_id: item, body_html: '<h1>FAQ</h1>' });
+    await run('push_cms_draft', { draft_id: item, destination: 'wordpress' });
+    await run('build_report', {
+      brand_id: brand,
+      template: 'competitor_benchmark',
+      date_from: '2026-10-01',
+      date_to: '2026-10-31',
+    });
+    await run('run_site_audit', { brand_id: brand, urls: [' https://acme.example/a '] });
 
     expect(calls.map((call) => [call.from, call.args])).toEqual([
       ['actions/prompt-suggestions.dismissSuggestion', [item]],
@@ -345,6 +371,16 @@ describe('the Chat tool registry', () => {
       ],
       ['actions/chat-action-center.attachFileToTask', [brand, item, item, place]],
       ['actions/chat-action-center.setTaskReadyForReview', [brand, item, place]],
+      [
+        'actions/content-drafts.updateContentDraft',
+        [item, { title: undefined, bodyHtml: '<h1>FAQ</h1>' }],
+      ],
+      ['actions/cms-send.sendDraftToCms', [item, 'wordpress']],
+      [
+        'actions/reports.createReport',
+        [brand, { dateFrom: '2026-10-01', dateTo: '2026-10-31', template: 'competitor_benchmark' }],
+      ],
+      ['actions/audits.startSiteAudits', [brand, ['https://acme.example/a']]],
     ]);
   });
 
@@ -469,8 +505,8 @@ describe('approval policies', () => {
     for (const tool of CHAT_TOOLS) {
       if (tool.class === 'read') {
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['on', 'on']);
-      } else if (tool.class === 'write' && tool.flags.alwaysCard) {
-        // Ask your Admin: only the person's click sends it (CHAT-20 row 80a).
+      } else if (tool.class === 'write' && (tool.flags.alwaysCard || tool.flags.costCard)) {
+        // Ask your Admin, or a cost said first: a card in every mode (CHAT-20 rows 37, 80a).
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask', 'ask']);
       } else if (tool.class === 'write') {
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask_full_auto', 'always']);
@@ -498,6 +534,11 @@ describe('approval policies', () => {
       attach_to_action: ['admin', 'manager'],
       attach_file_to_task: ['admin', 'manager'],
       set_task_ready_for_review: ['admin', 'manager'],
+      // Content, reports and Site Audit (W2-07, DECISIONS T): an Analyst only saves drafts.
+      update_draft: ['admin', 'manager'],
+      push_cms_draft: ['admin', 'manager'],
+      build_report: ['admin', 'manager'],
+      run_site_audit: ['admin', 'manager'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);
@@ -697,7 +738,8 @@ describe("the model's tool list on the registry's rows", () => {
     ).map((tool) => tool.name);
 
   const reads = CHAT_TOOLS.filter((tool) => tool.class === 'read').map((tool) => tool.name);
-  const writes = CHAT_TOOLS.filter((tool) => tool.class === 'write').map((tool) => tool.name);
+  // The WRITEs and the EXECUTE (push_cms_draft), in the registry's order.
+  const writes = CHAT_TOOLS.filter((tool) => tool.class !== 'read').map((tool) => tool.name);
   const starter = facts({ plan: 'starter', subscription_status: 'active' });
   const growth = facts({ plan: 'growth', subscription_status: 'active' });
   const withoutShopping = reads.filter((name) => name !== 'get_shopping_visibility');

@@ -61,10 +61,10 @@ export type PromptUsageRow =
 
 /**
  * The RPC's row for one brand, or null when the brand doesn't exist or the
- * caller can't see it (the RPC is security invoker, so a session client only
- * sees its own organization's brands). Takes the session client on the page
- * and the service-role client in the MCP server, which checks the brand's
- * organization itself.
+ * caller can't access it (00390: the RPC answers the server, or a person with
+ * access to the brand, and totals the whole Account either way). Takes the
+ * session client on the page and the service-role client in the MCP server,
+ * which checks the brand's organization itself.
  */
 export async function fetchPromptUsageRow(
   client: Pick<SupabaseClient, 'rpc'>,
