@@ -25,7 +25,7 @@ import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { GettingStartedPageOpened } from '@/components/getting-started/page-opened';
 import { getBrands } from '@/lib/actions/brand';
-import { menuOfProfile, readRoleHidden } from '@/lib/menu-access';
+import { menuOfProfile, menuSectionsFor, readRoleHidden } from '@/lib/menu-access';
 import { getPlan, isCloud, toPlanId } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
@@ -112,7 +112,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
       organizationId: profile.organization_id,
     });
   }
-  const menu = menuOfProfile({ ...profile, role }, roleHidden);
+  // Of the sections the workspace has: Agent Center only with the new Chat on.
+  const menu = menuOfProfile({ ...profile, role }, roleHidden, menuSectionsFor(chatOn));
 
   // The organization's demo brand (sample data, 00380), shown or hidden: the
   // dialog's offer reads whether the organization ever subscribed. Hidden

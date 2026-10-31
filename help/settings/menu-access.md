@@ -15,7 +15,7 @@ sources: [docs/guides/menu-access.mdx]
 
 ## Fold a group on your menu
 
-Click a group's title on the left menu, **Execution** or **Analytics**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** sits above the groups, and **Reports** and **Competitors** below them, so they don't fold.
+Click a group's title on the left menu, **Execution** or **Analytics**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** and **Agent Center** sit above the groups, and **Reports** and **Competitors** below them, so they don't fold.
 
 ## Who can change menus
 

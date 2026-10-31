@@ -4,14 +4,14 @@ route: /dashboard/prompts/insights
 keywords: [ai search volume, estimate, confidence, volume range, estimate badge]
 synonyms: [how many people ask, monthly AI searches, AI volume, est. ai volume]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/prompts.mdx]
 ---
-AI assistants don't publish how often people ask them something, so every AI search volume in Ansvisor is an estimate. It is shown as a range, such as 540–2k, never as a single number, and carries a dashed **Estimate** badge.
+AI assistants don't publish how often people ask them something, so every AI search volume in Ansvisor is an estimate. It is shown as a range, such as 540–2k, never as a single number. Totals, averages and a prompt's own page add a dashed **Estimate** badge; in tables the range alone marks an estimate.
 
 ## How it's estimated
 
@@ -39,15 +39,15 @@ A low-confidence estimate is grey, its badge reads **Estimate · low confidence*
 
 Hover or focus a range or its badge to open the method note. It says how the estimate was built, how many of the related keywords have Google search data, the sources and their month, and the confidence with its date.
 
-Measured numbers never carry the badge: your visibility, mentions and citations, Search Console clicks and impressions, or a suggestion's Analytics sessions. If a number has no **Estimate** badge, it was counted, not estimated.
+Measured numbers never carry the badge: your visibility, mentions and citations, Search Console clicks and impressions, or a suggestion's Analytics sessions. A range is always an estimate, with or without the badge; a single number without a range was counted, not estimated.
 
 ## Totals, single keywords and AI guesses
 
 Some estimates are built differently, and their note says so:
 
-- **Totals and averages** (**Total Est. AI Volume**, **Avg. AI Volume**, and Similar Topics' **Est. AI Volume**): the sum of the lows to the sum of the highs. A total is high-confidence when at least 80% of its volume is, low when more than half is low-confidence, and medium otherwise. The note gives the mix.
-- **One keyword** (each row of Similar Topics): the Google volume is measured and only the AI share is assumed, so it is Medium with a ±25% range.
-- **An AI's guess** (suggestions from Ansvisor Agents, and the Brand Visibility page's Opportunities): always Low, from half to twice the guess. Track the prompt to get an estimate from its keywords' Google searches.
+- **Totals and averages** (**Total Est. AI Volume**, **Avg. AI Volume**, and Similar Topics' **Est. AI Volume**): the sum of the lows to the sum of the highs; an average divides both by the prompt count. A total is high-confidence when at least 80% of its volume is, low when more than half is low-confidence, and medium otherwise. The note gives the mix.
+- **One keyword** (each row of Similar Topics): only the AI share is assumed, so it is Medium with a ±25% range, or Low when it has no volume or is over six months old.
+- **An AI's guess** (suggestions from Ansvisor Agents, the Brand Visibility page's Opportunities, and the Action Center's topic opportunities): always Low, from half to twice the guess. Track the prompt to get an estimate from its keywords' Google searches.
 
 ## Compare prompts by their ranges
 

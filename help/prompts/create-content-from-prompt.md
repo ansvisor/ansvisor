@@ -4,21 +4,21 @@ route: /dashboard/prompts/tracked
 keywords: [create content, optimize content, improve position, open draft, content for a prompt]
 synonyms: [write a page for a prompt, improve ranking, start a draft from a prompt]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/prompts.mdx]
 ---
-Each row in **Tracked Prompts** has a **…** menu with **Create content** and **Improve position…**. Use them to start a page written for the prompt, or to improve a page of yours that AI engines already cite.
+For admins and managers, each row in **Tracked Prompts** has a **…** menu with **Create content** and **Improve position…**. Use them to start a page written for the prompt, or to improve a page of yours that AI engines already cite.
 
 ## Start a page with Create content
 
 1. Click **Create content**. It opens **New content** at its Start step, titled with the prompt.
 2. Pick a page type. Ansvisor picks one from the title; change it if it's wrong, now or later in the editor.
-3. Check the overlap. Start reads your pages AI already cites for the prompt. If one already answers it, you can optimize that page instead of choosing **Create a new page**.
-4. Choose who does it: **Me** opens the Content Editor, **Agent** writes a draft for you to review, and **Team** sends it to the Action Center.
+3. Choose **Who does it**: **Me** opens the Content Editor, **Agent** writes a draft for you to review, and **Team** sends it to the Action Center.
+4. Check the overlap. Start reads your pages AI already cites for the prompt. If one already answers it, you can optimize that page instead of choosing **Create a new page**.
 
 ## When a draft already exists
 
@@ -41,4 +41,4 @@ The **Improve** tab's suggestions per platform are written from the answers' evi
 
 ## Suggestions that use competitor pages
 
-When the Action Center's **Analyze competitor content** has read the pages cited for the prompt in the last month, the **Improve** tab's suggestions also see what Site Audit's checks found on them: which checks each competitor page passes, and which they pass that your cited page doesn't.
+When the Action Center's **Compare competitor content and coverage** task has read pages cited for the prompt in the last four weeks, the **Improve** tab's suggestions also see what Site Audit's checks found on them: which checks each competitor page passes, and which they pass that your cited page doesn't.

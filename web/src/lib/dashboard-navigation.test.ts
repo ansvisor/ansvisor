@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { Bot, Sparkles } from 'lucide-react';
 import messages from '../../messages/en.json';
 import { dashboardNav } from '@/config/dashboard';
 import {
@@ -91,6 +92,21 @@ describe('shouldShowDashboardNavItem', () => {
     expect(shouldShowDashboardNavItem(content, prefs, new Set(['audit']))).toBe(true);
     expect(shouldShowDashboardNavItem(shopping, prefs, new Set(['shopping']))).toBe(false);
   });
+
+  it('shows Agent Center only with the new Chat on, and not when the viewer’s menu hides it', () => {
+    const items = dashboardNav.flatMap((group) => group.items);
+    const agentCenter = items.find((item) => item.href === '/dashboard/agents')!;
+    const chat = items.find((item) => item.href === CHAT_HREF)!;
+    const prefs = { shoppingModeEnabled: false };
+
+    expect(shouldShowDashboardNavItem(agentCenter, prefs)).toBe(false);
+    expect(shouldShowDashboardNavItem(agentCenter, prefs, new Set(), false)).toBe(false);
+    expect(shouldShowDashboardNavItem(agentCenter, prefs, new Set(), true)).toBe(true);
+    expect(shouldShowDashboardNavItem(agentCenter, prefs, new Set(['agents']), true)).toBe(false);
+    // Chat stays either way: its old page answers while the new Chat is off.
+    expect(shouldShowDashboardNavItem(chat, prefs, new Set(), false)).toBe(true);
+    expect(shouldShowDashboardNavItem(chat, prefs, new Set(['agents']), true)).toBe(true);
+  });
 });
 
 describe('the Mentions item', () => {
@@ -133,19 +149,38 @@ describe('the Competitors item', () => {
   });
 });
 
-// New Ansvisor: Chat on its own above the groups, then Execution (do the
-// work) above Analytics (measure it); the Optimization group is gone, its
-// items moved under Execution.
+// New Ansvisor: Chat and Agent Center on their own above the groups, then
+// Execution (do the work) above Analytics (measure it); the Optimization
+// group is gone, its items moved under Execution.
 describe('the sidebar groups', () => {
-  it('runs Chat, Execution, Analytics, then Reports', () => {
+  it('runs Chat and Agent Center, Execution, Analytics, then Reports', () => {
     expect(dashboardNav.map((group) => group.title ?? null)).toEqual([
       null,
       'Execution',
       'Analytics',
       null,
     ]);
-    expect(dashboardNav[0].items.map((item) => item.href)).toEqual(['/dashboard/agent']);
+    expect(dashboardNav[0].items.map((item) => item.href)).toEqual([
+      '/dashboard/agent',
+      '/dashboard/agents',
+    ]);
     expect(dashboardNav[3].items.map((item) => item.title)).toEqual(['Reports', 'Competitors']);
+  });
+
+  // Was Chat › Agents (/dashboard/chat/agents, which redirects there).
+  it('puts Agent Center right under Chat, gated as Chat is, with the new Chat on only', () => {
+    const [chat, agentCenter] = dashboardNav[0].items;
+    expect(chat).toMatchObject({ title: 'Chat', icon: Sparkles, requiredFeature: 'ai_agent' });
+    expect(agentCenter).toEqual({
+      title: 'Agent Center',
+      href: '/dashboard/agents',
+      icon: Bot,
+      requiredFeature: chat.requiredFeature,
+      requiresChatAgentic: true,
+    });
+    expect(chat.requiresChatAgentic).toBeUndefined();
+    expect(getDashboardNavLabel('Agent Center', translateNav)).toBe('nav.agentCenter');
+    expect(messages.nav.agentCenter).toBe('Agent Center');
   });
 
   it('leaves the brands page to the brand switcher', () => {
@@ -273,5 +308,6 @@ describe('navItemHref', () => {
     expect(navItemHref({ href: '/dashboard/action-center' }, true)).toBe(
       '/dashboard/action-center',
     );
+    expect(navItemHref({ href: '/dashboard/agents' }, true)).toBe('/dashboard/agents');
   });
 });

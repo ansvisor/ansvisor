@@ -4,11 +4,11 @@ route: /dashboard/traffic
 keywords: [ai bots, crawlers, gptbot, claudebot, perplexitybot, cloudflare, vercel]
 synonyms: [bot logs, ai crawlers, who crawls my site, bot traffic]
 plan: growth
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/ai-traffic-analytics.mdx]
 ---
 The **AI bots reading your site** section of **AI Traffic Analytics** shows which AI bots read your pages, from your own Cloudflare or Vercel. Only verified bots count: the bot's name and its operator's published addresses must both match. Today that's the bots of OpenAI, Anthropic and Perplexity.
@@ -27,7 +27,7 @@ Click **Create connection** and follow the numbered steps. Copy the settings rig
 
 ## Manage connections
 
-**Manage** on the card lists your connections with their last request, lets you **Revoke** one, and shows this month's use. Cloud plans store a monthly number of detailed rows; past it, detailed rows pause until the next month and the totals are still counted. Only requests to your brand's own domains, or their subdomains, are kept.
+**Manage** on the card lists your connections with their last request, lets you **Revoke** one, and shows this month's use. Cloud plans store a monthly number of detailed rows; past it, detailed rows pause until the next month and the totals are still counted. Cloudflare Logpush and Vercel Drain also have a monthly number of log records; past it, they aren't read until the next month. Only requests to your brand's own domains, or their subdomains, are kept.
 
 ## Dates and sample data
 

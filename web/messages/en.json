@@ -194,6 +194,8 @@
       "resumePrompts": "Resuming prompts needs a plan",
       "pauseDailySuggestions": "Pausing daily suggestions needs a plan",
       "resumeDailySuggestions": "Turning daily suggestions back on needs a plan",
+      "snoozeSuggestion": "Putting a suggestion off needs a plan",
+      "removeSuggestion": "Removing a suggestion needs a plan",
       "trackPrompts": "Tracking prompts needs a plan",
       "generatePrompts": "Generating prompts needs a plan",
       "analyzePrompts": "Analyzing prompts needs a plan",
@@ -505,6 +507,7 @@
   "nav": {
     "overview": "Overview",
     "chat": "Chat",
+    "agentCenter": "Agent Center",
     "actionCenter": "Action Center",
     "insights": "Brand Visibility",
     "traffic": "AI Referral Traffic",
@@ -3647,7 +3650,7 @@
       "motion": "With Reduce motion on, nothing moves.",
       "sections": {
         "avatar": "Agent avatar",
-        "avatarList": "Agent avatar in the Agents list",
+        "avatarList": "Agent avatar in the Agent Center list",
         "statusPill": "Status pill",
         "approvalPill": "Approval pills",
         "steps": "Step states",
@@ -4289,7 +4292,7 @@
       "settings": "Settings",
       "usageTip": "AI usage this month",
       "files": "Files",
-      "agents": "Agents"
+      "agents": "Agent Center"
     },
     "actions": {
       "more": "More for {name}",
@@ -4430,6 +4433,62 @@
         "next": "Turned back on, the first suggestion arrives tomorrow morning.",
         "changeFailed": "Couldn't change your daily suggestions. Try again."
       },
+      "suggestion": {
+        "crumb": "Daily suggestion · {date}",
+        "from": "from",
+        "source": "Daily suggestion · {date} · Action Center {number}",
+        "pickedToday": "Picked for you today · no AI cost",
+        "picked": "Picked for you {date} · no AI cost",
+        "tools": {
+          "label": "What was read",
+          "read": "Read {number}",
+          "pages": "{count, plural, one {# page} other {# pages}}",
+          "prompts": "{count, plural, one {# prompt} other {# prompts}}",
+          "ranked": "Ranked your open actions",
+          "priority": "priority {score, number}",
+          "waiting": "waiting {days, plural, one {# day} other {# days}}",
+          "audited": "Checked the pages",
+          "auditedOn": "Site Audit, {date}"
+        },
+        "whyNow": "Why now: {reason}",
+        "takes": "With the agent, it takes about {minutes, number} minutes.",
+        "card": {
+          "title": "From your Action Center",
+          "waiting": "Waiting {days, plural, one {# day} other {# days}}",
+          "tasks": "{count, plural, one {# task} other {# tasks}}",
+          "unassigned": "Unassigned",
+          "opened": "opened {date}",
+          "open": "Open",
+          "openLabel": "Open {number} in Action Center",
+          "morePages": "+{count, number} more",
+          "noCost": "No extra cost to pick",
+          "mode": "Mode: {mode}",
+          "editor": "Content Editor",
+          "chat": "Do it with Chat",
+          "closed": {
+            "completed": "Done",
+            "dismissed": "Dismissed"
+          }
+        },
+        "next": {
+          "firstPage": "Start with {page}",
+          "firstPageSub": "{count, plural, one {The action's page} other {The first of its # pages}}",
+          "firstPageMessage": "Start with {page}.",
+          "snooze": "Not now",
+          "snoozeSub": "Back in a week if it's still open",
+          "remove": "Remove this suggestion",
+          "removeSub": "The action stays in Action Center"
+        },
+        "doMessage": "Let's do {number} from my Action Center: {title}",
+        "pageChip": "Daily suggestion",
+        "snoozed": "Not now: back in a week, if it's still open.",
+        "removed": "Removed from your Inbox. The action stays in Action Center.",
+        "changeFailed": "Couldn't change this suggestion. Try again.",
+        "startFailed": "Couldn't start the chat. Try again.",
+        "editorFailed": "Couldn't open the Content Editor. Try again.",
+        "unavailable": "This suggestion isn't available.",
+        "backToInbox": "Back to Inbox"
+      },
       "review": "Review",
       "watch": "Watch",
       "open": "Open",
@@ -4454,7 +4513,7 @@
       "failed": "Couldn't search your chats.",
       "pages": {
         "allChats": "All chats",
-        "agents": "Agents",
+        "agents": "Agent Center",
         "files": "Files",
         "settings": "Settings"
       }
@@ -4512,7 +4571,6 @@
         "activity": "Activity",
         "capabilities": "What Chat can do",
         "files": "Files",
-        "agents": "Agents",
         "settings": "Settings"
       }
     },
@@ -5337,8 +5395,7 @@
     },
     "form": {
       "titleNew": "New agent",
-      "titleEdit": "Edit agent",
-      "crumbEdit": "Edit · {name}",
+      "titleEdit": "Edit · {name}",
       "cancel": "Cancel",
       "stepsLabel": "Steps",
       "steps": {
@@ -5367,7 +5424,7 @@
         "archivedDetail": "Restore it on its page to change it",
         "askedCreate": "Create an agent",
         "askedEdit": "Change an agent",
-        "back": "Back to Agents",
+        "back": "Back to Agent Center",
         "backToAgent": "Back to the agent"
       },
       "skill": {
@@ -5620,7 +5677,7 @@
     "deniedTitle": "I can't do this for you",
     "closeDenial": "Close",
     "list": {
-      "title": "Agents",
+      "title": "Agent Center",
       "formula": {
         "skill": "skill",
         "mode": "mode",
@@ -5742,7 +5799,7 @@
         "notMetered": "—"
       },
       "notFound": "This agent isn't available. It may have been deleted, or it isn't shared with you.",
-      "backToAgents": "Back to Agents",
+      "backToAgents": "Back to Agent Center",
       "loadFailed": "Couldn't load this agent.",
       "retry": "Retry"
     }

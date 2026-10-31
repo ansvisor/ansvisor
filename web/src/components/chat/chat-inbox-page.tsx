@@ -8,7 +8,6 @@ import { useRouter } from '@/i18n/navigation';
 import { useUpgradeDialog } from '@/components/providers/upgrade-gate';
 import {
   markDailySuggestionsSeen,
-  openDailySuggestion,
   readDailySuggestions,
   setDailySuggestions,
   startDailySuggestions,
@@ -33,14 +32,15 @@ import type { InboxDaily, SuggestionBrand } from './inbox-suggestions';
  *
  * - An Agency partner's first Inbox makes their feeds (startDailySuggestions)
  *   and shows the line explaining them.
- * - Rows on screen are marked seen; opening one marks it opened and its feed
- *   used, then opens the action in the Action Center, on its brand. A row
- *   whose brand isn't in the person's list doesn't open (it would on the
- *   brand on screen); with more than one brand, each row names its own.
+ * - Rows on screen are marked seen; opening one opens its page (W2-26), on
+ *   its brand, which marks it opened and its feed used. A row whose brand
+ *   isn't in the person's list doesn't open (it would on the brand on
+ *   screen); with more than one brand, each row names its own.
  * - Pause and Turn back on change every feed of theirs, then read again.
  *
  * In a read-only workspace the list shows, and nothing is written: seeing
- * and opening only read, and Pause and Turn back on open the plan dialog.
+ * and opening only read (the page too), and Pause and Turn back on open
+ * the plan dialog.
  */
 export function useInboxDaily(
   initial: SuggestionsReadResult | null | undefined,
@@ -59,8 +59,6 @@ export function useInboxDaily(
   const [busy, setBusy] = useState(false);
   const seen = useRef(new Set<string>());
   const starting = useRef(false);
-  // One Open at a time: a double click marks it and navigates once.
-  const opening = useRef(false);
 
   const brandOf = useMemo(() => {
     const names = new Map(brands.map((brand) => [brand.id, brand.name]));
@@ -101,20 +99,12 @@ export function useInboxDaily(
   );
 
   const onOpen = useCallback(
-    async (suggestion: DailySuggestion) => {
-      if (opening.current || !brands.some((brand) => brand.id === suggestion.brandId)) return;
-      opening.current = true;
-      try {
-        // Marking it opened is a use, never a gate: the action opens whatever it answers.
-        if (!readOnly) await openDailySuggestion(suggestion.id).catch(() => undefined);
-        if (suggestion.brandId !== activeBrandId) setActiveBrand(suggestion.brandId);
-        // The Action Center's drawer until W2-26's suggestion page takes over.
-        router.push(`/dashboard/action-center/actions?action=${suggestion.actionId}`);
-      } finally {
-        opening.current = false;
-      }
+    (suggestion: DailySuggestion) => {
+      if (!brands.some((brand) => brand.id === suggestion.brandId)) return;
+      if (suggestion.brandId !== activeBrandId) setActiveBrand(suggestion.brandId);
+      router.push(`/dashboard/chat/inbox/${suggestion.id}`);
     },
-    [readOnly, activeBrandId, brands, setActiveBrand, router],
+    [activeBrandId, brands, setActiveBrand, router],
   );
 
   const change = useCallback(
@@ -148,7 +138,7 @@ export function useInboxDaily(
     brandOf,
     justStarted,
     busy,
-    onOpen: (suggestion) => void onOpen(suggestion),
+    onOpen,
     onSeen,
     onPause: () => void change(false),
     onResume: () => void change(true),

@@ -1,7 +1,7 @@
 ---
 title: Get daily suggestions in your Chat Inbox
 route: /dashboard/chat/inbox
-keywords: [daily suggestions, inbox, suggestion, pause daily suggestions, turn back on, action center, one action a day, inbox tabs]
+keywords: [daily suggestions, inbox, suggestion, pause daily suggestions, turn back on, action center, one action a day, inbox tabs, do it with chat, not now, remove this suggestion]
 synonyms: [daily tips, what should I do today, suggested action, stop suggestions, daily nudge]
 plan: all
 updated: 2026-10-31
@@ -9,7 +9,7 @@ last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
 approved: false
-sources: [web/messages/en.json, web/src/lib/chat/daily-suggestions.ts]
+sources: [web/messages/en.json, web/src/lib/chat/daily-suggestions.ts, web/src/components/chat/suggestion-detail.tsx]
 ---
 Each morning Chat can pick one action that waits in your Action Center and put it in your **Inbox**, with what it would take, so your open actions get done. It picks from what is already there, by its priority, and adds no new work. Picking costs no AI usage.
 
@@ -32,7 +32,20 @@ The dot shows where it stands: blue while it's new, no longer blue once you've s
 
 When the action is done or dismissed in the Action Center, its row stays, faded, with **Done** or **Dismissed**. When the action is deleted, its suggestion leaves the list.
 
-Click a row, or **Open**, to open the action in the Action Center, on its brand.
+Click a row, or **Open**, to open the suggestion's page, on its brand.
+
+## The suggestion's page
+
+The page asks the action's title as a question and answers it: **Picked for you today · no AI cost**, what Chat read, then why this action, why now and how long it takes.
+
+The **From your Action Center** card shows the action, its tasks and its pages. **Open** opens it in the Action Center. Two buttons start the work:
+
+- **Content Editor**: opens the action's draft, when it has writing to do.
+- **Do it with Chat**: starts a chat about the action, in your Chat mode.
+
+You can also tell Chat what to do in the box at the bottom. That starts the same chat, which counts toward your AI usage like any chat.
+
+**Not now** brings it back in a week if the action is still open. **Remove this suggestion** takes it off your **Inbox**: the action stays in the Action Center.
 
 ## Who gets them
 
@@ -42,6 +55,6 @@ Daily suggestions come from the Action Center, which is in everyone's menu, so m
 
 Click **Pause daily suggestions**, on the **Daily suggestions** tab, to stop them for all your brands. Your Action Center is unchanged.
 
-When you haven't opened or used any brand's suggestion for 30 days, Chat stops picking them for that brand and says **Daily suggestions are paused**. Seeing them in the **Inbox** doesn't count as using them.
+When you haven't opened, started, put off or removed any brand's suggestion for 30 days, Chat stops picking them for that brand and says **Daily suggestions are paused**. Seeing them in the **Inbox** doesn't count as using them.
 
 Click **Turn back on** to start them again for all your brands: the first one arrives the next morning.
