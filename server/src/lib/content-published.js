@@ -1,4 +1,5 @@
 import supabaseAdmin from '../config/supabase.js';
+import { assertBrandAccess } from './access.js';
 import { logger } from './logger.js';
 import { onBrandDomain } from './audit/host.js';
 
@@ -331,7 +332,8 @@ export async function publishDraft(draft, url, actorId) {
 /**
  * The same mark for an MCP API key (`mark_content_draft_published`): the key
  * carries no session, so the web MCP layer passes the key's organization and
- * user. As the route, the draft must be the organization's and not archived;
+ * user. As the route, the draft must be the organization's, of a brand the
+ * user reaches, and not archived;
  * null when it isn't (another's reads as not there). A page already
  * published at `url` is left as it is, its live-since time kept, so a call
  * made again changes nothing (the tool says it is idempotent).
@@ -350,6 +352,14 @@ export async function publishDraftForKeyUser({ draftId, url, userId, orgId }) {
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!draft || draft.archived_at) return null;
+  // The key's user must reach the draft's brand (Selected brands, as the
+  // route has it); a brand they weren't given reads as not there.
+  try {
+    await assertBrandAccess(draft.brand_id, userId);
+  } catch (err) {
+    if (err.status === 403 || err.status === 404) return null;
+    throw err;
+  }
   if (draft.status === 'published' && draft.published_url === url) {
     return {
       publishedUrl: url,

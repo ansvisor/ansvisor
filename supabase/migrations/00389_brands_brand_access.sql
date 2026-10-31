@@ -23,14 +23,14 @@
 -- How the rules are written:
 --   * select: All brands (admins included) match on the row's own
 --     organization_id, as before; Selected brands on user_brand_ids(). A
---     brand being added has to pass too: `insert … returning` (the web's
---     createBrand, .insert().select()) checks the select policy against the
+--     brand being added has to pass too: `insert … returning` (any
+--     .insert().select() with a person's session) checks the select policy against the
 --     new row before it is stored, so a rule that looks the brand up by id,
 --     such as can_access_brand(id), would refuse every new brand.
 --   * A Selected-brands manager's new brand still can't read itself back in
 --     that same insert: the creator's grant is added after the row is
---     stored. The web adds it with an id of its own and reads it after the
---     insert; that change ships with the Team screen that narrows anyone.
+--     stored. The web's createBrand therefore adds it with an id of its own
+--     and reads it after the insert (no returning).
 --   * update and delete: the row is there, so the scope is
 --     `id in (select public.user_brand_ids())`, next to the role checks.
 --   * `id in (select public.user_brand_ids())` isn't correlated with the row,
