@@ -301,6 +301,11 @@ export function actionEventText(
     // (learning B1); none for one measured once before.
     day: Number(event.data.day ?? 0),
     final: event.data.final === true ? 'yes' : 'no',
+    // The Chat agent a run on the action was (CHAT-21 §F item 31), by its name
+    // then, and why it stopped; a deleted agent's line ends without a name.
+    agent: String(event.data.agent ?? ''),
+    named: event.data.agent ? 'yes' : 'no',
+    reason: String(event.data.stop_reason ?? ''),
   });
   if (event.event !== 'evidence_attached') return text;
   // A finding added from Chat says its note and where it was read, when it has them.

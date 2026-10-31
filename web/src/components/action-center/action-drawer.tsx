@@ -66,6 +66,7 @@ import { ActionIcon, PriorityBadge } from './action-table';
 import { priorityReasonText } from '@/lib/action-center/priority';
 import { OpportunityContext } from './opportunity-context';
 import { ActionExportButtons } from './action-export-buttons';
+import { RunAgentButton } from './run-agent-button';
 import { SupportingSignals } from './supporting-signals';
 import { AffectedTab } from './affected-tab';
 import { affectedChips, affectedTotal } from '@/lib/action-center/affected';
@@ -425,7 +426,9 @@ export function ActionDrawer({
       <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         {/* pt-3: the top row's buttons line up with the sheet's close button. */}
         <SheetHeader className="border-b px-6 pt-3 pb-4 pr-12">
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          {/* One row at 1024px too (W2-17): beside Run agent the action's number
+              alone, its "Action ID" label kept for hover and screen readers. */}
+          <div className="group/top flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className="text-[10px]">
               {tCategories(action.category)}
             </Badge>
@@ -433,6 +436,7 @@ export function ActionDrawer({
               <PriorityBadge score={action.priorityScore} level={action.priorityLevel} />
             )}
             <div className="ml-auto flex items-center gap-2">
+              <RunAgentButton action={action} title={texts.title} variant="drawer" />
               <ActionExportButtons
                 action={action}
                 detail={ready ? detail : null}
@@ -440,8 +444,14 @@ export function ActionDrawer({
                 volumes={volumes}
                 story={story}
               />
-              <span className="text-muted-foreground">
-                {t('drawer.actionId')}: AC-{action.actionNo}
+              <span
+                className="whitespace-nowrap text-muted-foreground"
+                title={`${t('drawer.actionId')}: AC-${action.actionNo}`}
+              >
+                <span className="group-has-[[data-run-agent]]/top:sr-only">
+                  {t('drawer.actionId')}:{' '}
+                </span>
+                AC-{action.actionNo}
               </span>
             </div>
           </div>

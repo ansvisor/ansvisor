@@ -1,8 +1,8 @@
 ---
 title: Work with Action Center actions
 route: /dashboard/action-center/actions
-keywords: [actions, action status, assign action, dismiss action, export actions, top actions]
-synonyms: [recommendations, work items, to-dos, action list]
+keywords: [actions, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat]
+synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action]
 plan: all
 updated: 2026-10-31
 last_checked: 2026-10-31
@@ -50,6 +50,14 @@ Click a row to open the action. Under its title you set **Status**, **Assignee**
 - **Tasks**: the work, step by step.
 - **Signals**: the evidence. Click one to open it on the Signals tab.
 - **History**: every change, from status and assignee changes to tasks updated or sent.
+
+## Run an agent on an action
+
+When Chat is on, Admins and Managers see **Run agent** on each open action: an agent button next to its title in the list, and at the top of the open action.
+
+It lists your agents that work on the action's brand, the ones used on this kind of action first. Pick one, and Chat starts a run on this action alone and opens it beside the action. **Run with Chat** does the same without an agent, in your default mode. **Create an agent for this kind of action** starts a new agent from a fitting skill.
+
+The run drafts the work, but closing tasks stays your click. If the action is completed or dismissed, an agent's run stops; a **Run with Chat** run doesn't. The action's **History** shows when a run started and ended, and who started it.
 
 ## Assign work
 

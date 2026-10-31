@@ -309,9 +309,10 @@ export interface ChatEventPayloads {
    * The run stopped before its end (CHAT-03 item 19, "Stopped after …"): the
    * person's Stop, a card left unanswered for 7 days (`expired`), or a
    * triggered agent run at its cap (`limit`, "Stopped at its limit",
-   * CHAT-27 item 22).
+   * CHAT-27 item 22), or the Action Center action an agent run worked on
+   * closed (`action_closed`, CHAT-21 edge case 7).
    */
-  'run.stopped': ChatRunSummary & { reason: 'person' | 'expired' | 'limit' };
+  'run.stopped': ChatRunSummary & { reason: 'person' | 'expired' | 'limit' | 'action_closed' };
   /** A call refused: the out-of-permission answer (CHAT-20 §4c). */
   'access.denied': ChatDenialCard;
   /** Sent to Action Center, or added to an action there (CHAT-09 item 19). */

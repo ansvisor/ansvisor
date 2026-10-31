@@ -456,6 +456,44 @@ describe('actionEventText', () => {
     );
   });
 
+  it('names a Chat agent run on the action, how it ended, and Run with Chat (W2-17)', () => {
+    expect(
+      actionEventText(
+        event('agent_run_started', { source: 'chat', agent: 'Citation win-back' }),
+        tPage,
+        t,
+      ),
+    ).toBe('Agent run started · Citation win-back');
+    expect(
+      actionEventText(
+        event('agent_run_completed', { agent: 'Citation win-back', to: 'done' }),
+        tPage,
+        t,
+      ),
+    ).toBe('Agent run completed · Citation win-back');
+    expect(
+      actionEventText(
+        event('agent_run_completed', {
+          agent: 'Citation win-back',
+          to: 'stopped',
+          stop_reason: 'action_closed',
+        }),
+        tPage,
+        t,
+      ),
+    ).toBe('Agent run stopped · Citation win-back · action closed');
+    expect(actionEventText(event('chat_started', { source: 'chat' }), tPage, t)).toBe(
+      'Chat started on this action',
+    );
+    // A deleted agent's lines end without a name, and without an empty separator.
+    expect(actionEventText(event('agent_run_started', { agent: null }), tPage, t)).toBe(
+      'Agent run started',
+    );
+    expect(
+      actionEventText(event('agent_run_completed', { agent: null, to: 'failed' }), tPage, t),
+    ).toBe('Agent run failed');
+  });
+
   it('reads the 30-day position result with its counts', () => {
     expect(
       actionEventText(event('position_outcome_recorded', { improved: 2, measurable: 3 }), tPage, t),

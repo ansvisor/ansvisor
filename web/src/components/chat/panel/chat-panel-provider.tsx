@@ -68,6 +68,12 @@ export function ChatPanelProvider({
     setDraft({ nonce: handoffs.current, text });
   }, []);
 
+  const openChat = useCallback((chatId: string) => {
+    handoffs.current += 1;
+    setDraft({ nonce: handoffs.current, chatId });
+    setOpen(true);
+  }, []);
+
   const close = useCallback(() => {
     setOpen(false);
     // After the panel is gone: Ask Chat on the page the person was on.
@@ -116,8 +122,9 @@ export function ChatPanelProvider({
       draft,
       ask,
       fill,
+      openChat,
     }),
-    [setup, available, open, size, toggle, close, resize, page, draft, ask, fill],
+    [setup, available, open, size, toggle, close, resize, page, draft, ask, fill, openChat],
   );
   return (
     <ChatPageSetterContext.Provider value={setPage}>
