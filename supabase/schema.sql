@@ -44739,6 +44739,883 @@ create policy "competitors: admin/manager delete" on public.competitors
   );
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00388_brand_access.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00388: brand access — which of the organization's brands a person sees
+-- ============================================================================
+-- One Account (organization) holds several brands, and different teams or
+-- agencies work on different ones (BRAND-ACCESS). A person joins with one
+-- role and either All brands or Selected brands. Admins always have All
+-- brands, and so does everyone here before this migration: nothing anyone
+-- sees changes until the Team screen lets an admin narrow someone.
+--
+-- This migration only stores the choice and answers "may this person see
+-- this brand?". The rules that apply it come after it: the brands policies
+-- (00389), the brand tables whose policies skip brands, the functions that
+-- check the organization themselves, and the server, MCP and Chat paths.
+--
+--   * profiles.brand_scope: 'all' or 'selected'. Set by the server (the
+--     00228/00374 guard below), like role. An admin is always 'all' (a
+--     check, and the reset below on promotion). Leaving the organization
+--     resets it to 'all', so whoever creates or joins one next starts from
+--     the default; a move straight into another organization keeps the scope
+--     the update gives but never the brands shared in the old one, so a move
+--     can't widen anyone's access by itself.
+--   * member_brands: the brands shared with a Selected-brands person, in the
+--     person's own organization (a trigger checks both). A person reads their
+--     own rows and an admin reads the organization's; only the server writes
+--     them. Deleting the brand, the person or the organization deletes them.
+--   * invitations.brand_scope / brand_ids: the choice the invitation keeps
+--     until it is accepted. Ids of a brand deleted since then stay in the
+--     array: whoever accepts it shares only the brands still there.
+--   * can_access_brand(brand, person) and user_brand_ids(): the rule, in one
+--     place. A brand of the person's organization, and the person is an
+--     admin, has All brands, has it shared, or it is the demo brand (00380,
+--     sample data everyone in the organization reads). Both bypass RLS
+--     (security definer), so the brands policies can call them without
+--     recursing. Only the service role may ask about someone else.
+--   * A new brand is shared with whoever added it when they have Selected
+--     brands (a Selected-brands manager may add brands).
+--
+-- A profile without an organization sees no brand here, as under today's
+-- policies (brands.organization_id is never null). The API server compares
+-- organizations itself with a plain !== for self-hosted installs
+-- (server/src/lib/access.js); it applies the scope on top of that, so this
+-- rule doesn't change who a self-hosted install lets in.
+
+-- ── profiles.brand_scope ────────────────────────────────────────────────────
+
+alter table public.profiles
+  add column if not exists brand_scope text not null default 'all';
+
+alter table public.profiles
+  drop constraint if exists profiles_brand_scope_check;
+alter table public.profiles
+  add constraint profiles_brand_scope_check
+  check (brand_scope in ('all', 'selected'));
+
+-- Admins always have All brands.
+alter table public.profiles
+  drop constraint if exists profiles_admin_all_brands_check;
+alter table public.profiles
+  add constraint profiles_admin_all_brands_check
+  check (role <> 'admin' or brand_scope = 'all');
+
+comment on column public.profiles.brand_scope is
+  'Brand access (00388): ''all'' = every brand of the organization, ''selected'' = the brands in member_brands (and the demo brand). Admins are always ''all''. Set by the server.';
+
+-- 00374's guard, plus brand_scope: a person's own update can't widen (or
+-- narrow) the brands they see.
+create or replace function public.guard_profile_server_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+  if new.role is distinct from old.role then
+    raise exception 'profile role is managed server-side' using errcode = '42501';
+  end if;
+  if new.organization_id is distinct from old.organization_id
+     and (
+       old.organization_id is not null
+       or new.organization_id is null
+       or public.organization_has_other_members(new.organization_id, new.id)
+     )
+  then
+    raise exception 'profile organization is managed server-side' using errcode = '42501';
+  end if;
+  if new.menu_shown is distinct from old.menu_shown
+     or new.menu_hidden is distinct from old.menu_hidden
+     or new.can_manage_menus is distinct from old.can_manage_menus
+  then
+    raise exception 'profile menu access is managed server-side' using errcode = '42501';
+  end if;
+  if new.brand_scope is distinct from old.brand_scope then
+    raise exception 'profile brand access is managed server-side' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+-- Whoever makes the change: a new admin has All brands, and so does a person
+-- who left the organization (no brand to see; the next organization starts
+-- from the default). A move straight into another organization keeps the
+-- scope the update gives: a removed-and-invited person is reset on the way
+-- out, and an update can't tell "set to Selected again" from "not set", so
+-- resetting there could hand All brands to someone invited with Selected.
+-- The brands shared in the old organization go either way (the trigger after
+-- the update). Fires after the guard (triggers run in name order), so the
+-- guard checks what the person asked for, not this reset.
+create or replace function public.reset_profile_brand_scope()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.role = 'admin' or new.organization_id is null then
+    new.brand_scope := 'all';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_reset_brand_scope on public.profiles;
+create trigger profiles_reset_brand_scope
+  before update of organization_id, role on public.profiles
+  for each row execute function public.reset_profile_brand_scope();
+
+-- ── member_brands ───────────────────────────────────────────────────────────
+
+create table if not exists public.member_brands (
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  granted_by uuid references auth.users(id) on delete set null,
+  granted_at timestamptz not null default now(),
+  primary key (user_id, brand_id)
+);
+
+-- The primary key serves the helpers' (user_id, brand_id) look-ups; these
+-- serve a brand's people (Brand settings) and an organization's list (Team).
+create index if not exists member_brands_brand_id_idx on public.member_brands (brand_id);
+create index if not exists member_brands_organization_id_idx on public.member_brands (organization_id);
+
+comment on table public.member_brands is
+  'Brand access (00388): the brands shared with a Selected-brands person, in their own organization. Rows mean nothing for All-brands people and go when the person leaves, moves organization, becomes an admin or gets All brands. Read by the person (own rows) and admins; written by the server.';
+
+-- The brand and the person both belong to the row's organization.
+create or replace function public.check_member_brand_organization()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if not exists (
+    select 1 from public.brands b
+    where b.id = new.brand_id and b.organization_id = new.organization_id
+  ) then
+    raise exception 'member_brands: brand % is not in organization %', new.brand_id, new.organization_id
+      using errcode = '23514';
+  end if;
+  if not exists (
+    select 1 from public.profiles p
+    where p.id = new.user_id and p.organization_id = new.organization_id
+  ) then
+    raise exception 'member_brands: person % is not in organization %', new.user_id, new.organization_id
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists member_brands_check_organization on public.member_brands;
+create trigger member_brands_check_organization
+  before insert or update on public.member_brands
+  for each row execute function public.check_member_brand_organization();
+
+-- The shared brands go when the person moves or leaves the organization
+-- (their rows name the old one) and when they end up with All brands (a new
+-- admin, or the server widening them). Security definer: a person's own
+-- update (joining the organization they just created, in onboarding) fires
+-- it, and people can't write member_brands.
+create or replace function public.forget_profile_member_brands()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  delete from public.member_brands mb
+  where mb.user_id = new.id
+    and (new.brand_scope = 'all' or mb.organization_id is distinct from new.organization_id);
+  return null;
+end;
+$$;
+
+revoke all on function public.forget_profile_member_brands() from public, anon, authenticated;
+
+drop trigger if exists profiles_forget_member_brands on public.profiles;
+create trigger profiles_forget_member_brands
+  after update of organization_id, role, brand_scope on public.profiles
+  for each row
+  when (
+    old.organization_id is distinct from new.organization_id
+    or (new.brand_scope = 'all' and old.brand_scope = 'selected')
+  )
+  execute function public.forget_profile_member_brands();
+
+-- ── The rule ────────────────────────────────────────────────────────────────
+
+-- May the person see the brand? Their organization's brand, and they are an
+-- admin, have All brands, have it shared, or it is the demo brand. Asking
+-- about someone else needs the service role (the API server, MCP, Chat);
+-- anyone else gets false. Call it with a brand argument (functions that take
+-- p_brand_id); in a policy over many rows prefer user_brand_ids(), which runs
+-- once per query.
+create or replace function public.can_access_brand(
+  p_brand_id uuid,
+  p_user_id uuid default auth.uid()
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select case
+    when p_brand_id is null or p_user_id is null then false
+    when p_user_id is distinct from auth.uid()
+      and coalesce(auth.role(), '') <> 'service_role' then false
+    else exists (
+      select 1
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where b.id = p_brand_id
+        and p.id = p_user_id
+        and (
+          p.role = 'admin'
+          or p.brand_scope = 'all'
+          or b.is_demo
+          or exists (
+            select 1 from public.member_brands mb
+            where mb.user_id = p.id and mb.brand_id = b.id
+          )
+        )
+    )
+  end;
+$$;
+
+revoke all on function public.can_access_brand(uuid, uuid) from public, anon;
+grant execute on function public.can_access_brand(uuid, uuid) to authenticated, service_role;
+
+comment on function public.can_access_brand(uuid, uuid) is
+  'Brand access (00388): whether the person (default: the caller) may see the brand: their organization''s, and they are an admin, have All brands, have it shared (member_brands) or it is the demo brand. Another person''s id only with the service role; false otherwise.';
+
+-- The ids of the brands the caller may see, by the same rule. In a policy,
+-- `brand_id in (select public.user_brand_ids())` runs it once per query.
+create or replace function public.user_brand_ids()
+returns setof uuid
+language sql
+stable
+security definer
+set search_path = ''
+rows 20
+as $$
+  select b.id
+  from public.profiles p
+  join public.brands b on b.organization_id = p.organization_id
+  where p.id = auth.uid()
+    and (
+      p.role = 'admin'
+      or p.brand_scope = 'all'
+      or b.is_demo
+      or exists (
+        select 1 from public.member_brands mb
+        where mb.user_id = p.id and mb.brand_id = b.id
+      )
+    );
+$$;
+
+revoke all on function public.user_brand_ids() from public, anon;
+grant execute on function public.user_brand_ids() to authenticated, service_role;
+
+comment on function public.user_brand_ids() is
+  'Brand access (00388): the ids of the brands the caller (auth.uid()) may see, by can_access_brand''s rule. For policies: brand_id in (select public.user_brand_ids()).';
+
+-- ── member_brands policies ──────────────────────────────────────────────────
+-- A person reads the brands shared with them, an admin those of everyone in
+-- the organization; the server writes them (service role).
+
+alter table public.member_brands enable row level security;
+revoke all on table public.member_brands from anon, authenticated;
+grant select on table public.member_brands to authenticated;
+grant all on table public.member_brands to service_role;
+
+drop policy if exists "member_brands: own or admin select" on public.member_brands;
+create policy "member_brands: own or admin select" on public.member_brands
+  for select
+  to authenticated
+  using (
+    brand_id in (select public.user_brand_ids())
+    and (
+      user_id = auth.uid()
+      or organization_id in (
+        select p.organization_id
+        from public.profiles p
+        where p.id = auth.uid() and p.role = 'admin'
+      )
+    )
+  );
+
+-- ── A new brand is shared with whoever added it ─────────────────────────────
+-- A Selected-brands manager may add brands and sees the ones they add. The
+-- server's own inserts (service role, no person) and the demo brand (every
+-- member's) add nothing; a server path that adds a brand for a person shares
+-- it itself.
+--
+-- It runs after the row is stored, so it can't help the insert read its own
+-- row back: PostgreSQL checks `insert … returning` against the select policy
+-- before storing the row and before this trigger. Under 00389 a
+-- Selected-brands person therefore adds a brand without asking for it back
+-- (web createBrand: its own id, then a read) — see 00389.
+create or replace function public.grant_brand_to_creator()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.is_demo then
+    return null;
+  end if;
+  insert into public.member_brands (organization_id, user_id, brand_id, granted_by)
+  select new.organization_id, p.id, new.id, p.id
+  from public.profiles p
+  where p.id = auth.uid()
+    and p.organization_id = new.organization_id
+    and p.brand_scope = 'selected'
+  on conflict (user_id, brand_id) do nothing;
+  return null;
+end;
+$$;
+
+revoke all on function public.grant_brand_to_creator() from public, anon, authenticated;
+
+drop trigger if exists brands_grant_creator on public.brands;
+create trigger brands_grant_creator
+  after insert on public.brands
+  for each row execute function public.grant_brand_to_creator();
+
+-- ── invitations ─────────────────────────────────────────────────────────────
+
+alter table public.invitations
+  add column if not exists brand_scope text not null default 'all',
+  add column if not exists brand_ids uuid[] not null default '{}';
+
+alter table public.invitations
+  drop constraint if exists invitations_brand_scope_check;
+alter table public.invitations
+  add constraint invitations_brand_scope_check
+  check (brand_scope in ('all', 'selected'));
+
+-- Brand ids only for Selected brands, and never for an admin.
+alter table public.invitations
+  drop constraint if exists invitations_brand_ids_check;
+alter table public.invitations
+  add constraint invitations_brand_ids_check
+  check (brand_scope = 'selected' or cardinality(brand_ids) = 0);
+
+alter table public.invitations
+  drop constraint if exists invitations_admin_all_brands_check;
+alter table public.invitations
+  add constraint invitations_admin_all_brands_check
+  check (role <> 'admin' or brand_scope = 'all');
+
+comment on column public.invitations.brand_scope is
+  'Brand access (00388): ''all'' or ''selected'', given to the person when they accept. Admins: always ''all''.';
+comment on column public.invitations.brand_ids is
+  'Brand access (00388): the brands shared on acceptance when brand_scope = ''selected''. Checked against the organization when set; a brand deleted since stays here and is skipped on acceptance.';
+
+-- The brands named belong to the invitation's organization, when they are
+-- set (an invitation accepted after one of them was deleted still updates).
+create or replace function public.check_invitation_brands()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if exists (
+    select 1
+    from unnest(new.brand_ids) as ids(brand_id)
+    where not exists (
+      select 1 from public.brands b
+      where b.id = ids.brand_id and b.organization_id = new.organization_id
+    )
+  ) then
+    raise exception 'invitation brands must belong to its organization' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists invitations_check_brands on public.invitations;
+create trigger invitations_check_brands
+  before insert or update of organization_id, brand_ids on public.invitations
+  for each row execute function public.check_invitation_brands();
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00389_brands_brand_access.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00389: brands — read, change and delete only the brands you can access
+-- ============================================================================
+-- 00388 stored which brands a person sees. This applies it to the brands
+-- table: its select, update and delete policies add the person's brand
+-- access to the organization and role checks they had (00001, 00380). The
+-- insert policy stays as it was (an admin or a manager of the organization,
+-- never a demo brand), and a Selected-brands person who adds a brand gets it
+-- shared (00388's trigger).
+--
+-- Every policy on a brand's rows reaches the brand through a subquery on
+-- public.brands, and PostgreSQL applies the brands policies inside that
+-- subquery too: the 147 policies on 83 tables that read brands narrow with
+-- this change. Brand tables whose policies look only at the organization or
+-- the person, and the security definer functions that check the organization
+-- themselves, follow in later migrations; server/src/lib/
+-- brand-access-policies.test.js lists the tables and fails on a new one.
+--
+-- Nothing changes yet: everyone has All brands until the Team screen narrows
+-- someone, and for All-brands people each policy below passes exactly the
+-- rows it passed before.
+--
+-- How the rules are written:
+--   * select: All brands (admins included) match on the row's own
+--     organization_id, as before; Selected brands on user_brand_ids(). A
+--     brand being added has to pass too: `insert … returning` (any
+--     .insert().select() with a person's session) checks the select policy against the
+--     new row before it is stored, so a rule that looks the brand up by id,
+--     such as can_access_brand(id), would refuse every new brand.
+--   * A Selected-brands manager's new brand still can't read itself back in
+--     that same insert: the creator's grant is added after the row is
+--     stored. The web's createBrand therefore adds it with an id of its own
+--     and reads it after the insert (no returning).
+--   * update and delete: the row is there, so the scope is
+--     `id in (select public.user_brand_ids())`, next to the role checks.
+--   * `id in (select public.user_brand_ids())` isn't correlated with the row,
+--     so it runs once per query (a hashed SubPlan), where
+--     `(select public.can_access_brand(id))` would run once per row. The
+--     look-ups inside use member_brands' primary key (user_id, brand_id) and
+--     brands' organization_id index; no new index is needed.
+--   * To authenticated: anon may not run the helpers, and with no profile it
+--     matched no brand before either.
+--
+-- Performance, to measure on the development database before and after (as
+-- a signed-in member: set local role authenticated plus request.jwt.claims):
+--   * Insights (insights_aggregates_daily, insights_kpi_series, the
+--     *_daily rollups) and Citations' invoker functions read through these
+--     policies; Perception (mentions_perception) and the citations functions
+--     with their own organization check are security definer and don't.
+--   * Expect each brand-table policy's brands subquery to keep its plan,
+--     with the brands filter showing `hashed SubPlan` and user_brand_ids()
+--     run at most once per subquery (loops=1). They took 6–9 s before 00290.
+
+drop policy if exists "brands: member select" on public.brands;
+create policy "brands: member select" on public.brands
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and (p.role = 'admin' or p.brand_scope = 'all')
+    )
+    or id in (select public.user_brand_ids())
+  );
+
+drop policy if exists "brands: admin/manager update" on public.brands;
+create policy "brands: admin/manager update" on public.brands
+  for update
+  to authenticated
+  using (
+    not is_demo
+    and organization_id in (
+      select profiles.organization_id
+      from public.profiles
+      where profiles.id = auth.uid()
+        and profiles.role = any (array['admin'::public.user_role, 'manager'::public.user_role])
+    )
+    and id in (select public.user_brand_ids())
+  )
+  with check (
+    not is_demo
+    and organization_id in (
+      select profiles.organization_id
+      from public.profiles
+      where profiles.id = auth.uid()
+        and profiles.role = any (array['admin'::public.user_role, 'manager'::public.user_role])
+    )
+    and id in (select public.user_brand_ids())
+  );
+
+drop policy if exists "brands: admin delete" on public.brands;
+create policy "brands: admin delete" on public.brands
+  for delete
+  to authenticated
+  using (
+    not is_demo
+    and organization_id in (
+      select profiles.organization_id
+      from public.profiles
+      where profiles.id = auth.uid()
+        and profiles.role = 'admin'::public.user_role
+    )
+    and id in (select public.user_brand_ids())
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00390_brand_access_account_tables.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00390: brand access — the Account-level brand tables, quotas, invitations
+-- ============================================================================
+-- 00388 stored which brands a person sees and 00389 applied it to the brands
+-- table, which every policy that reads its brand through brands follows. This
+-- migration takes the brand tables whose policies look only at the
+-- organization or the person, and the paths that would count or show less (or
+-- more) once someone has Selected brands. Chat's tables, created from 00400
+-- on, follow in 00424, after them.
+--
+-- Nothing changes yet: everyone has All brands until the Team screen narrows
+-- someone, and for All-brands people every rule below passes the same rows as
+-- before (their user_brand_ids() is every brand of their organization), with
+-- one exception, below.
+--
+--   * user_has_all_brands(): whether the caller is an admin or has All
+--     brands. A row with no brand (a chat or file about the whole workspace)
+--     may still hold any brand's data, so where other people's rows have none
+--     (00424) only they read it.
+--   * prompt_usage_counters, content_draft_deliveries, agent_conversations
+--     (and agent_messages, through it): a row is read only by someone who can
+--     access its brand. The organization and person checks stay. A person's
+--     own old Agent chat about a brand they no longer see is hidden, not
+--     deleted, and comes back with the access.
+--   * The exception: agent_conversations never checked the organization, so
+--     someone who moved to another organization still read their own Agent
+--     chats from the old one. Those about one of the old organization's
+--     brands are hidden now (its brands are none of theirs); those with no
+--     brand stay.
+--   * content_draft_member(), which ten policies on a draft's inputs,
+--     confirmations, images and ready log and three functions (snapshot,
+--     restore, decide suggestions) call: the draft's brand must be one the
+--     person can access, not just one of their organization. Its policies
+--     are for signed-in people only (anon can't run it; it never could).
+--   * The plan's quotas count the whole Account, whatever the person sees:
+--     org_prompt_location_usage and prompt_usage_summary become security
+--     definer with their own membership or brand check, and the brand count
+--     behind maxBrands is org_brand_count(). A Selected-brands person can't
+--     get past a limit by seeing fewer brands, and sees the Account's totals
+--     (the usage cards, as shares) but no other brand's figure: the location
+--     usage of brands they can't access comes back as one row with no brand.
+--   * invitations: only admins read them, so the brands an invitation shares
+--     stay with the admins. Settings › Team lists the pending invitations for
+--     everyone from the server (web lib/actions/team.ts), without those
+--     columns.
+--   * member_brands' check locks the person's profile (for share), so a move
+--     to another organization running at the same time either waits for the
+--     grant (and then deletes it) or is seen by it (and refuses it).
+--
+-- Policies here call the access rule as `brand_id in (select
+-- public.user_brand_ids())`: not correlated with the row, so it runs once per
+-- query, and only for authenticated (anon may not run it). Functions that look
+-- at one brand use can_access_brand(brand).
+
+-- ── user_has_all_brands ─────────────────────────────────────────────────────
+-- An admin, or All brands, in an organization: the people who may read a row
+-- of the organization that names no brand. A policy calls it as
+-- `(select public.user_has_all_brands())`, once per query.
+
+create or replace function public.user_has_all_brands()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.organization_id is not null
+      and (p.role = 'admin' or p.brand_scope = 'all')
+  );
+$$;
+
+revoke all on function public.user_has_all_brands() from public, anon;
+grant execute on function public.user_has_all_brands() to authenticated, service_role;
+
+comment on function public.user_has_all_brands() is
+  'Brand access (00390): whether the caller (auth.uid()) is an admin or has All brands in their organization. For policies on rows with no brand: brand_id is null and (select public.user_has_all_brands()).';
+
+-- ── prompt_usage_counters ───────────────────────────────────────────────────
+
+drop policy if exists "prompt_usage_counters: member select" on public.prompt_usage_counters;
+create policy "prompt_usage_counters: member select" on public.prompt_usage_counters
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and brand_id in (select public.user_brand_ids())
+  );
+
+-- ── content_draft_deliveries ────────────────────────────────────────────────
+
+drop policy if exists "content_draft_deliveries: member select" on public.content_draft_deliveries;
+create policy "content_draft_deliveries: member select" on public.content_draft_deliveries
+  for select
+  to authenticated
+  using (
+    organization_id in (select p.organization_id from public.profiles p where p.id = auth.uid())
+    and brand_id in (select public.user_brand_ids())
+  );
+
+-- ── agent_conversations (the old Agent; agent_messages follows it) ──────────
+-- brand_id is the brand a chat was opened on, or null (none pinned). Only the
+-- person who wrote a chat reads it, so one with no brand stays theirs.
+
+drop policy if exists "Users read own conversations" on public.agent_conversations;
+create policy "Users read own conversations" on public.agent_conversations
+  for select
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+drop policy if exists "Users write own conversations" on public.agent_conversations;
+create policy "Users write own conversations" on public.agent_conversations
+  for all
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  )
+  with check (
+    user_id = auth.uid()
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+-- ── content_draft_member ────────────────────────────────────────────────────
+-- A draft the caller may work on: its brand is one they can access, or the
+-- caller is the server. It answers for one draft, row by row in the policies,
+-- so it asks can_access_brand about that draft's brand (one indexed look-up)
+-- rather than listing every brand the person sees.
+
+create or replace function public.content_draft_member(p_draft_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select auth.role() = 'service_role' or exists (
+    select 1
+    from public.content_drafts d
+    where d.id = p_draft_id
+      and public.can_access_brand(d.brand_id)
+  );
+$$;
+
+revoke all on function public.content_draft_member(uuid) from public, anon;
+grant execute on function public.content_draft_member(uuid) to authenticated, service_role;
+
+comment on function public.content_draft_member(uuid) is
+  'Whether the caller may work on the draft (00215): the server, or a person who can access its brand (00390, can_access_brand). Backs the policies of content_draft_inputs, _confirmations, _own_images and _ready_log, and content_draft_snapshot, _restore and _decide_suggestions.';
+
+alter policy "content_draft_inputs: member select" on public.content_draft_inputs to authenticated;
+alter policy "content_draft_inputs: member insert" on public.content_draft_inputs to authenticated;
+alter policy "content_draft_inputs: member update" on public.content_draft_inputs to authenticated;
+alter policy "content_draft_inputs: member delete" on public.content_draft_inputs to authenticated;
+alter policy "content_draft_confirmations: member select" on public.content_draft_confirmations to authenticated;
+alter policy "content_draft_confirmations: member insert" on public.content_draft_confirmations to authenticated;
+alter policy "content_draft_own_images: member select" on public.content_draft_own_images to authenticated;
+alter policy "content_draft_own_images: member insert" on public.content_draft_own_images to authenticated;
+alter policy "content_draft_ready_log: member select" on public.content_draft_ready_log to authenticated;
+alter policy "content_draft_ready_log: member insert" on public.content_draft_ready_log to authenticated;
+
+-- ── The plan's prompt-location quota (00128, 00380), Account-wide ──────────
+-- savePromptSet, the prompt dialogs, the Tracked Prompts KPI and
+-- import_prompts count through this, as the person. It counts every brand of
+-- the organization when the caller belongs to it (or is the server); anyone
+-- else gets no rows, as RLS gave them before. A brand the caller can't access
+-- is counted in a single row with no brand id: the total is the Account's,
+-- and no hidden brand's usage shows.
+
+create or replace function public.org_prompt_location_usage(p_organization_id uuid)
+returns table (brand_id uuid, locations bigint)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with per_brand as (
+    select b.id, sum(greatest(coalesce(array_length(p.regions, 1), 0), 1))::bigint as locations
+    from public.prompts p
+    join public.prompt_sets ps on ps.id = p.prompt_set_id
+    join public.brands b on b.id = ps.brand_id
+    where b.organization_id = p_organization_id
+      and not b.is_demo
+      and p.is_active
+      and (
+        coalesce(auth.role(), '') = 'service_role'
+        or exists (
+          select 1 from public.profiles pf
+          where pf.id = auth.uid() and pf.organization_id = p_organization_id
+        )
+      )
+    group by b.id
+  ),
+  shown as (
+    select
+      case
+        when coalesce(auth.role(), '') = 'service_role'
+          or u.id in (select public.user_brand_ids())
+        then u.id
+      end as brand_id,
+      u.locations
+    from per_brand u
+  )
+  select s.brand_id, sum(s.locations)::bigint
+  from shown s
+  group by s.brand_id;
+$$;
+
+revoke all on function public.org_prompt_location_usage(uuid) from public, anon;
+grant execute on function public.org_prompt_location_usage(uuid) to authenticated, service_role;
+
+comment on function public.org_prompt_location_usage(uuid) is
+  'Active prompt locations per brand for one org (#691, 00128) — the plan-quota unit, one per region entry per active prompt, minimum one; paused prompts and the demo brand (00380) don''t count. Security definer (00390): the whole organization for its members and the server, nothing for anyone else; the brands the caller can''t access come back as one row with a null brand_id.';
+
+-- ── The usage cards' Account totals (00139, 00380), Account-wide ────────────
+-- One brand's counts, and its Account's prompts, brands and locations, which
+-- the plan limits. For the server, or a person who can access the brand; the
+-- Account's totals count every brand, whatever the person sees.
+
+create or replace function public.prompt_usage_summary(p_brand_id uuid)
+returns table (
+  brand_active integer,
+  brand_paused integer,
+  account_active integer,
+  account_brands integer,
+  account_locations integer
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select
+    coalesce(bc.active_prompts, 0),
+    coalesce(bc.paused_prompts, 0),
+    coalesce(acct.active_prompts, 0)::integer,
+    (
+      select count(*)
+      from public.brands b2
+      where b2.organization_id = b.organization_id
+        and not b2.is_demo
+    )::integer,
+    coalesce(acct.active_locations, 0)::integer
+  from public.brands b
+  left join public.prompt_usage_counters bc on bc.brand_id = b.id
+  left join lateral (
+    select sum(c.active_prompts) as active_prompts, sum(c.active_locations) as active_locations
+    from public.prompt_usage_counters c
+    join public.brands cb on cb.id = c.brand_id
+    where c.organization_id = b.organization_id
+      and not cb.is_demo
+  ) acct on true
+  where b.id = p_brand_id
+    and (coalesce(auth.role(), '') = 'service_role' or public.can_access_brand(b.id));
+$$;
+
+revoke all on function public.prompt_usage_summary(uuid) from public, anon;
+grant execute on function public.prompt_usage_summary(uuid) to authenticated, service_role;
+
+comment on function public.prompt_usage_summary(uuid) is
+  'One brand''s active/paused prompts and its account''s active prompts, brands and active prompt locations, from prompt_usage_counters only (PROMPT-012); the account totals leave out the demo brand (00380). Security definer (00390): for the server or a person who can access the brand; the account totals count every brand.';
+
+-- ── The plan's brand count (maxBrands), Account-wide ────────────────────────
+-- The Brands page and createBrand (web) compare it with the plan. The
+-- organization's brands but the demo brand, for its members and the server;
+-- 0 for anyone else, as RLS gave them before.
+
+create or replace function public.org_brand_count(p_organization_id uuid)
+returns integer
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select count(*)::integer
+  from public.brands b
+  where b.organization_id = p_organization_id
+    and not b.is_demo
+    and (
+      coalesce(auth.role(), '') = 'service_role'
+      or exists (
+        select 1 from public.profiles pf
+        where pf.id = auth.uid() and pf.organization_id = p_organization_id
+      )
+    );
+$$;
+
+revoke all on function public.org_brand_count(uuid) from public, anon;
+grant execute on function public.org_brand_count(uuid) to authenticated, service_role;
+
+comment on function public.org_brand_count(uuid) is
+  'Brand access (00390): the organization''s brands the plan counts (maxBrands), the demo brand left out, whatever brands the caller sees. For its members and the server; 0 for anyone else.';
+
+-- ── invitations: admins only ────────────────────────────────────────────────
+-- An invitation names the brands it shares (00388). Admins manage
+-- invitations (00002) and are the only ones who read them now; the pending
+-- list everyone sees in Settings › Team comes from the server.
+
+drop policy if exists "Members can view org invitations" on public.invitations;
+drop policy if exists "Admins can view org invitations" on public.invitations;
+create policy "Admins can view org invitations" on public.invitations
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  );
+
+-- ── member_brands: the person stays in the organization while shared ───────
+-- 00388's check, with the person's profile locked (for share) until the grant
+-- commits. A move to another organization updates that row: it waits for the
+-- grant, and its own trigger then deletes it; or it went first, and the check
+-- reads the moved row and refuses the grant.
+
+create or replace function public.check_member_brand_organization()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if not exists (
+    select 1 from public.brands b
+    where b.id = new.brand_id and b.organization_id = new.organization_id
+  ) then
+    raise exception 'member_brands: brand % is not in organization %', new.brand_id, new.organization_id
+      using errcode = '23514';
+  end if;
+  perform 1 from public.profiles p
+  where p.id = new.user_id and p.organization_id = new.organization_id
+  for share;
+  if not found then
+    raise exception 'member_brands: person % is not in organization %', new.user_id, new.organization_id
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00400_chat_core.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -48733,6 +49610,456 @@ create policy "chat_suggestions: own select"
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00423_chat_why_cells.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00423: Why did it move — the counts explain_change reads
+-- ============================================================================
+-- Why did it move (CHAT-22 §1, explain_change) compares a metric between two
+-- periods prompt × engine by prompt × engine, from scheduled tracking only
+-- (Addendum 2 G). chat_why_cells sums the Insights rollups for it in one
+-- call, so the web never pages through day rows (max_rows 1000):
+--
+--   * cells: per prompt, platform, model and location, and period (a or b):
+--     the tracked day rows (runs) and those where the brand was named or
+--     cited (visible_runs); answers, those naming the brand and those citing
+--     its pages; its mentions and its tracked competitors' (share of voice as
+--     Insights counts it: total_mentions against the competitors'
+--     mention_count); the positions where it was named (sum, sum of 1/position
+--     for the Visibility score's position factor, and count); and the newest
+--     answer.
+--   * daily: the same sums per day from p_series_from to p_b_to, with the
+--     prompts named or cited and those tracked (visibility as Insights counts
+--     it), for the change point (§1 item 5.2).
+--   * complete: false while a row read predates 00130/00131's columns (its
+--     sums count as 0 until the daily refresh rewrites its day), as
+--     insights_kpi_series says it.
+--
+-- From insights_prompt_daily and insights_competitor_prompt_daily, on their
+-- (brand_id, day) index, each with its own day ranges; the competitors' sums
+-- are grouped on their own before they meet the brand's, so no join repeats a
+-- row. Server only, behind CHAT_AGENTIC: the web checks the brand is the
+-- caller's workspace's first (as the MCP data functions do), then calls it as
+-- the service role. Periods and the series are 92 days at most, a before b,
+-- so one call stays small. plpgsql for those checks; it reads only.
+
+create or replace function public.chat_why_cells(
+  p_brand_id uuid,
+  p_a_from date,
+  p_a_to date,
+  p_b_from date,
+  p_b_to date,
+  p_series_from date,
+  p_models text[] default null,
+  p_region text default null,
+  p_topic_id uuid default null
+)
+returns jsonb
+language plpgsql
+stable
+set search_path = ''
+as $$
+declare
+  v_result jsonb;
+begin
+  if p_brand_id is null or p_a_from is null or p_a_to is null or p_b_from is null
+     or p_b_to is null or p_series_from is null then
+    raise exception 'chat_why_cells: the brand and every date are needed' using errcode = '22023';
+  end if;
+  if p_a_from > p_a_to or p_b_from > p_b_to then
+    raise exception 'chat_why_cells: a period ends before it starts' using errcode = '22023';
+  end if;
+  if p_a_to >= p_b_from then
+    raise exception 'chat_why_cells: period a ends before period b starts' using errcode = '22023';
+  end if;
+  if p_series_from > p_b_to then
+    raise exception 'chat_why_cells: the series starts after period b ends' using errcode = '22023';
+  end if;
+  if p_a_to - p_a_from > 92 or p_b_to - p_b_from > 92 or p_b_to - p_series_from > 92 then
+    raise exception 'chat_why_cells: a period or the series is over 92 days' using errcode = '22023';
+  end if;
+
+  with brand_rows as (
+    select d.day, d.prompt_id, d.platform, d.model_used, d.region,
+           case
+             when d.day between p_a_from and p_a_to then 'a'
+             when d.day between p_b_from and p_b_to then 'b'
+           end as period,
+           d.answer_count, d.has_mention, d.has_citation,
+           coalesce(d.mention_answers, 0) as mention_answers,
+           coalesce(d.citation_answers, 0) as citation_answers,
+           coalesce(d.total_mentions, 0) as total_mentions,
+           coalesce(d.sum_position, 0) as sum_position,
+           coalesce(d.sum_inv_position, 0) as sum_inv_position,
+           coalesce(d.position_count, 0) as position_count,
+           d.max_created_at,
+           -- A row the daily refresh hasn't rewritten since 00130/00131.
+           (d.mention_answers is null or d.negative_count is null) as stale
+    from public.insights_prompt_daily d
+    where d.brand_id = p_brand_id
+      -- One range on the (brand_id, day) index; the periods narrow it below.
+      and d.day between least(p_a_from, p_series_from) and p_b_to
+      and (d.day between p_a_from and p_a_to
+           or d.day between p_b_from and p_b_to
+           or d.day between p_series_from and p_b_to)
+      and (p_models is null or d.model_used = any (p_models))
+      and (p_region is null or d.region = p_region)
+      and (p_topic_id is null
+           or d.prompt_id in (select p.id from public.prompts p where p.topic_id = p_topic_id))
+  ),
+  competitor_rows as (
+    select c.day, c.prompt_id, c.platform, c.model_used, c.region,
+           case
+             when c.day between p_a_from and p_a_to then 'a'
+             when c.day between p_b_from and p_b_to then 'b'
+           end as period,
+           c.mention_count
+    from public.insights_competitor_prompt_daily c
+    where c.brand_id = p_brand_id
+      -- One range on the (brand_id, day) index; the periods narrow it below.
+      and c.day between least(p_a_from, p_series_from) and p_b_to
+      and (c.day between p_a_from and p_a_to
+           or c.day between p_b_from and p_b_to
+           or c.day between p_series_from and p_b_to)
+      and (p_models is null or c.model_used = any (p_models))
+      and (p_region is null or c.region = p_region)
+      and (p_topic_id is null
+           or c.prompt_id in (select p.id from public.prompts p where p.topic_id = p_topic_id))
+  ),
+  brand_cells as (
+    select r.prompt_id, r.platform, r.model_used, r.region, r.period,
+           count(*)::integer as runs,
+           (count(*) filter (where r.has_mention or r.has_citation))::integer as visible_runs,
+           sum(r.answer_count)::integer as answers,
+           sum(r.mention_answers)::integer as mention_answers,
+           sum(r.citation_answers)::integer as citation_answers,
+           sum(r.total_mentions)::integer as brand_mentions,
+           sum(r.sum_position) as sum_position,
+           sum(r.sum_inv_position) as sum_inv_position,
+           sum(r.position_count)::integer as position_count,
+           max(r.max_created_at) as last_at
+    from brand_rows r
+    where r.period is not null
+    group by r.prompt_id, r.platform, r.model_used, r.region, r.period
+  ),
+  competitor_cells as (
+    select r.prompt_id, r.platform, r.model_used, r.region, r.period,
+           sum(r.mention_count)::integer as competitor_mentions
+    from competitor_rows r
+    where r.period is not null
+    group by r.prompt_id, r.platform, r.model_used, r.region, r.period
+  ),
+  brand_daily as (
+    select r.day,
+           count(*)::integer as runs,
+           (count(*) filter (where r.has_mention or r.has_citation))::integer as visible_runs,
+           sum(r.answer_count)::integer as answers,
+           sum(r.mention_answers)::integer as mention_answers,
+           sum(r.citation_answers)::integer as citation_answers,
+           sum(r.total_mentions)::integer as brand_mentions,
+           sum(r.sum_position) as sum_position,
+           sum(r.sum_inv_position) as sum_inv_position,
+           sum(r.position_count)::integer as position_count,
+           -- Visibility as Insights counts it: prompts named or cited, of those tracked.
+           (count(distinct r.prompt_id) filter (where r.has_mention or r.has_citation))::integer
+             as visible_prompts,
+           count(distinct r.prompt_id)::integer as active_prompts
+    from brand_rows r
+    where r.day between p_series_from and p_b_to
+    group by r.day
+  ),
+  competitor_daily as (
+    select r.day, sum(r.mention_count)::integer as competitor_mentions
+    from competitor_rows r
+    where r.day between p_series_from and p_b_to
+    group by r.day
+  )
+  select jsonb_build_object(
+    -- As insights_kpi_series: false while a row read predates 00130/00131's columns.
+    'complete', not exists (select 1 from brand_rows r where r.stale),
+    'cells', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'prompt_id', b.prompt_id,
+        'platform', b.platform,
+        'model_used', b.model_used,
+        'region', b.region,
+        'period', b.period,
+        'runs', b.runs,
+        'visible_runs', b.visible_runs,
+        'answers', b.answers,
+        'mention_answers', b.mention_answers,
+        'citation_answers', b.citation_answers,
+        'brand_mentions', b.brand_mentions,
+        'sum_position', b.sum_position,
+        'sum_inv_position', b.sum_inv_position,
+        'position_count', b.position_count,
+        'competitor_mentions', coalesce(c.competitor_mentions, 0),
+        'last_at', b.last_at
+      ) order by b.prompt_id, b.platform, b.model_used, b.region, b.period)
+      from brand_cells b
+      left join competitor_cells c
+        on c.prompt_id = b.prompt_id
+       and c.platform is not distinct from b.platform
+       and c.model_used is not distinct from b.model_used
+       and c.region is not distinct from b.region
+       and c.period = b.period
+    ), '[]'::jsonb),
+    'daily', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'day', b.day,
+        'runs', b.runs,
+        'visible_runs', b.visible_runs,
+        'answers', b.answers,
+        'mention_answers', b.mention_answers,
+        'citation_answers', b.citation_answers,
+        'brand_mentions', b.brand_mentions,
+        'sum_position', b.sum_position,
+        'sum_inv_position', b.sum_inv_position,
+        'position_count', b.position_count,
+        'visible_prompts', b.visible_prompts,
+        'active_prompts', b.active_prompts,
+        'competitor_mentions', coalesce(c.competitor_mentions, 0)
+      ) order by b.day)
+      from brand_daily b
+      left join competitor_daily c on c.day = b.day
+    ), '[]'::jsonb)
+  )
+  into v_result;
+
+  return v_result;
+end;
+$$;
+
+comment on function public.chat_why_cells(uuid, date, date, date, date, date, text[], text, uuid) is
+  'Why did it move (CHAT-22 §1, 00423): the Insights rollups summed per prompt × engine × location × period (a, b) and per day from p_series_from, for explain_change. Periods and the series are 92 days at most. Server only: the web checks the brand is the caller''s first.';
+
+revoke all on function public.chat_why_cells(uuid, date, date, date, date, date, text[], text, uuid)
+  from public, anon, authenticated;
+grant execute on function public.chat_why_cells(uuid, date, date, date, date, date, text[], text, uuid)
+  to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00424_brand_access_chat_tables.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00424: brand access — Chat's brand tables
+-- ============================================================================
+-- 00390 took the brand tables whose policies look only at the organization or
+-- the person, up to 00390. These are Chat's (00400–00422), so they come after
+-- the migrations that create them: a chat, a filed file, a change that went
+-- live, a person's daily suggestions, Chat's change log and access requests,
+-- an agent's runs and a why-it-moved analysis are read only by someone who can
+-- access their brand. Every condition they had stays.
+--
+-- Nothing changes yet: everyone has All brands until the Team screen narrows
+-- someone, and for All-brands people every rule passes the same rows as
+-- before.
+--
+--   * A row with no brand (a chat or file about the whole workspace, a run
+--     whose brand was deleted) may still hold any brand's data: a chat with
+--     no brand lets each tool call pick its own. Someone else's such row is
+--     read only by admins and All-brands people (user_has_all_brands(),
+--     00390). The person's own rows with no brand stay theirs: their own
+--     chat, their own Chat changes and access requests (with the admins').
+--   * A person's own chat about a brand they can't access is hidden, not
+--     deleted, and comes back with the access (BRAND-ACCESS §9 Q4). So is a
+--     shared one, and an agent run's.
+--   * What follows these tables keeps following them: a chat's messages, runs,
+--     steps, questions, next moves, task state and attachments; a file's task
+--     links; a change's measurements and their control sets.
+--   * The rule is `brand_id in (select public.user_brand_ids())`, once per
+--     query, for authenticated only (anon may not run it).
+--
+-- server/src/lib/brand-access-policies.test.js checks every brand table and
+-- the tables that follow one.
+
+-- ── chat_conversations ──────────────────────────────────────────────────────
+
+-- The author's own chat with no brand stays theirs, whatever brands they see
+-- (Q4 hides only chats about a brand): they wrote every question in it, and
+-- an answer there that read a brand they have since lost is still the one
+-- they were given.
+drop policy if exists "chat_conversations: author select" on public.chat_conversations;
+create policy "chat_conversations: author select"
+  on public.chat_conversations
+  for select
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+drop policy if exists "chat_conversations: shared select" on public.chat_conversations;
+create policy "chat_conversations: shared select"
+  on public.chat_conversations
+  for select
+  to authenticated
+  using (
+    shared_at is not null
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
+  );
+
+drop policy if exists "chat_conversations: agent run select" on public.chat_conversations;
+create policy "chat_conversations: agent run select"
+  on public.chat_conversations
+  for select
+  to authenticated
+  using (
+    agent_run_id in (select r.id from public.chat_agent_runs r)
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
+  );
+
+-- ── chat_agent_runs ─────────────────────────────────────────────────────────
+
+drop policy if exists "chat_agent_runs: agent select" on public.chat_agent_runs;
+create policy "chat_agent_runs: agent select"
+  on public.chat_agent_runs
+  for select
+  to authenticated
+  using (
+    (
+      agent_id in (select a.id from public.chat_agents a)
+      or organization_id in (
+        select p.organization_id
+        from public.profiles p
+        where p.id = auth.uid()
+          and (p.role = 'admin' or chat_agent_runs.acting_user_id = auth.uid())
+      )
+    )
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
+  );
+
+-- ── chat_why_analyses ───────────────────────────────────────────────────────
+
+drop policy if exists "chat_why_analyses: chat select" on public.chat_why_analyses;
+create policy "chat_why_analyses: chat select"
+  on public.chat_why_analyses
+  for select
+  to authenticated
+  using (
+    conversation_id in (select c.id from public.chat_conversations c)
+    and brand_id in (select public.user_brand_ids())
+  );
+
+-- ── chat_files ──────────────────────────────────────────────────────────────
+
+drop policy if exists "chat_files: member select" on public.chat_files;
+create policy "chat_files: member select"
+  on public.chat_files
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
+  );
+
+-- ── chat_activity_log, chat_access_requests ─────────────────────────────────
+-- Read by the person who acted (or asked) and the admins, who have All brands:
+-- a row with no brand stays readable to them.
+
+drop policy if exists "chat_activity_log: own or admin select" on public.chat_activity_log;
+create policy "chat_activity_log: own or admin select"
+  on public.chat_activity_log
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and (p.role = 'admin' or chat_activity_log.user_id = auth.uid())
+    )
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+drop policy if exists "chat_access_requests: own or admin select" on public.chat_access_requests;
+create policy "chat_access_requests: own or admin select"
+  on public.chat_access_requests
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and (p.role = 'admin' or chat_access_requests.requester_id = auth.uid())
+    )
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+-- ── ship_events (impact_measurements and impact_control_sets follow) ───────
+
+drop policy if exists "ship_events: member select" on public.ship_events;
+create policy "ship_events: member select"
+  on public.ship_events
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and brand_id in (select public.user_brand_ids())
+  );
+
+-- ── chat_suggestion_feeds, chat_suggestions ─────────────────────────────────
+
+drop policy if exists "chat_suggestion_feeds: own select" on public.chat_suggestion_feeds;
+create policy "chat_suggestion_feeds: own select"
+  on public.chat_suggestion_feeds
+  for select
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and brand_id in (select public.user_brand_ids())
+  );
+
+drop policy if exists "chat_suggestions: own select" on public.chat_suggestions;
+create policy "chat_suggestions: own select"
+  on public.chat_suggestions
+  for select
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and brand_id in (select public.user_brand_ids())
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00425_ship_events_delivery.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -48771,6 +50098,33 @@ comment on column public.ship_events.republished_at is
   'The last time the same draft went live again within 90 days of this ship event: no second ship event is written, the first measurement goes on (00425).';
 
 notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00427_chat_why_analyses_visibility_score.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00427: Why did it move — keep a Visibility score analysis
+-- ============================================================================
+-- explain_change can now explain the Insights Visibility score
+-- (metric visibility_score, why/score.ts). chat_why_analyses (00420) allowed
+-- only the five v1 metrics, so keeping such an analysis failed its check and
+-- the result wasn't kept. Same check, with visibility_score added. A
+-- constraint swap on a small table: no rewrite, existing rows already pass.
+
+alter table public.chat_why_analyses
+  drop constraint if exists chat_why_analyses_metric_check;
+
+alter table public.chat_why_analyses
+  add constraint chat_why_analyses_metric_check check (
+    metric in (
+      'visibility',
+      'mention_rate',
+      'share_of_voice',
+      'citations',
+      'avg_position',
+      'visibility_score'
+    )
+  );
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00428_ship_cms_publish.sql

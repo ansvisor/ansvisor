@@ -212,6 +212,29 @@ describe('fetchPage against a local site', () => {
     await expect(get('/loop')).rejects.toMatchObject({ code: 'too_many_redirects' });
   });
 
+  it('asks a caller’s own check of every address, the first one included, only when given', async () => {
+    const seen = [];
+    const allowUrl = (url) => {
+      seen.push(url.pathname);
+      return url.pathname !== '/page';
+    };
+    await expect(get('/hop', { allowUrl })).rejects.toMatchObject({
+      code: 'not_allowed',
+      message: 'The address is not one this read may open',
+    });
+    expect(seen).toEqual(['/hop', '/page']);
+    await expect(get('/page', { allowUrl: () => false })).rejects.toMatchObject({
+      code: 'not_allowed',
+    });
+    // Without one, nothing changes.
+    await expect(get('/hop')).resolves.toMatchObject({ url: `http://site.test:${port}/page` });
+  });
+
+  it('never says a page’s own content type back', async () => {
+    const refused = await get('/pdf').catch((err) => err);
+    expect(refused).toMatchObject({ code: 'not_html', message: 'The address is not a web page' });
+  });
+
   it('opens compressed pages', async () => {
     await expect(get('/gzip')).resolves.toMatchObject({ html: '<p>squeezed</p>' });
   });

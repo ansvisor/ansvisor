@@ -9,7 +9,7 @@ import { qualityPhase } from '@/lib/content/quality';
  * own: their author, the team and the brand's byline line in the page's
  * language once Quality is live. Read a
  * slice at a time, as the Library's Export reads them; a page gone meanwhile
- * is left out.
+ * is left out. The Library's bulk send and Chat's push_cms_draft read here.
  */
 export async function readCmsSources({
   brandId,

@@ -63,12 +63,12 @@ const PAGE_WRITES = 3;
 /** A task a person or the system can still complete: not done, skipped, failed or waiting. */
 const OPEN_TASKS = ['todo', 'in_progress'];
 /** The library tasks a draft is the work of, by its method (the web's DRAFT_TASK_KEYS). */
-const DRAFT_TASK_KEYS = {
+export const DRAFT_TASK_KEYS = {
   create: ['create_content_draft'],
   optimize: ['optimize_content', 'refresh_content'],
 };
 /** A task no longer outstanding work (the web's TASK_DONE). */
-const TASK_DONE = ['completed', 'skipped', 'failed'];
+export const TASK_DONE = ['completed', 'skipped', 'failed'];
 /** A draft whose writing is done. */
 const DRAFT_DONE = ['ready', 'published'];
 
