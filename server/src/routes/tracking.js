@@ -9,6 +9,25 @@ import { selectInChunks } from '../lib/chunked-in.js';
 const router = Router();
 
 /**
+ * The brand, once the caller may reach it (lib/access.js); else its refusal,
+ * answered in this router's shape, and null. `columns`: more of its columns.
+ */
+async function brandFor(res, brandId, userId, columns) {
+  try {
+    const { brand } = await assertBrandAccess(brandId, userId, columns ? { columns } : {});
+    return brand;
+  } catch (err) {
+    if (!err.status) throw err;
+    res.status(err.status).json({
+      success: false,
+      message: err.message,
+      ...(err.code ? { code: err.code } : {}),
+    });
+    return null;
+  }
+}
+
+/**
  * POST /api/tracking/check
  * Body: { brandId, platformId?, promptId? }
  * Enqueues an immediate tracking job.
@@ -21,26 +40,9 @@ router.post('/check', async (req, res) => {
       return res.status(400).json({ success: false, message: 'brandId is required' });
     }
 
-    // Verify the user owns this brand
-    const { data: brand, error: brandErr } = await supabaseAdmin
-      .from('brands')
-      .select('id, organization_id, is_active')
-      .eq('id', brandId)
-      .single();
-
-    if (brandErr || !brand) {
-      return res.status(404).json({ success: false, message: 'Brand not found' });
-    }
-
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', req.user.id)
-      .single();
-
-    if (!profile || profile.organization_id !== brand.organization_id) {
-      return res.status(403).json({ success: false, message: 'Unauthorized' });
-    }
+    // The caller's brand, and whether it is paused.
+    const brand = await brandFor(res, brandId, req.user.id, 'is_active');
+    if (!brand) return;
 
     // A paused brand spends nothing — block on-demand runs too, not just the
     // daily cron. Resume the brand to track it again.
@@ -92,25 +94,8 @@ router.post('/analyze-new', async (req, res) => {
       return res.status(400).json({ success: false, message: 'brandId is required' });
     }
 
-    const { data: brand, error: brandErr } = await supabaseAdmin
-      .from('brands')
-      .select('id, organization_id, is_active')
-      .eq('id', brandId)
-      .single();
-
-    if (brandErr || !brand) {
-      return res.status(404).json({ success: false, message: 'Brand not found' });
-    }
-
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', req.user.id)
-      .single();
-
-    if (!profile || profile.organization_id !== brand.organization_id) {
-      return res.status(403).json({ success: false, message: 'Unauthorized' });
-    }
+    const brand = await brandFor(res, brandId, req.user.id, 'is_active');
+    if (!brand) return;
 
     // A paused brand spends nothing — block on-demand runs too, not just the
     // daily cron. Resume the brand to track it again.
@@ -280,26 +265,7 @@ router.get('/results/:brandId', async (req, res) => {
     const offset = parseInt(req.query.offset || '0', 10);
     const { promptId, platform } = req.query;
 
-    // Verify ownership
-    const { data: brand } = await supabaseAdmin
-      .from('brands')
-      .select('id, organization_id')
-      .eq('id', brandId)
-      .single();
-
-    if (!brand) {
-      return res.status(404).json({ success: false, message: 'Brand not found' });
-    }
-
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', req.user.id)
-      .single();
-
-    if (!profile || profile.organization_id !== brand.organization_id) {
-      return res.status(403).json({ success: false, message: 'Unauthorized' });
-    }
+    if (!(await brandFor(res, brandId, req.user.id))) return;
 
     let query = supabaseAdmin
       .from('prompt_results')

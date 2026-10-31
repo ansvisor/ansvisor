@@ -18,6 +18,7 @@ import { planFactsFromOrgRow } from '@/lib/chat/plan-facts';
 import { DEFAULT_CHAT_SETTINGS, parseTeamRole } from '@/lib/chat/precedence';
 import { composerSetupOf } from '@/lib/chat/composer-setup';
 import { chatRunsOnOwnKey } from '@/lib/chat/key';
+import { skillMenuOf } from '@/lib/chat/skills/library';
 import { ChatPanelPage, ChatPanelProvider } from '@/components/chat/panel/chat-panel-provider';
 import { ChatSidePanelSlot } from '@/components/chat/panel/chat-side-panel-slot';
 import { BrandLoader } from '@/components/providers/brand-loader';
@@ -199,6 +200,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ...composerModes,
     usageNoticeSeen: chatPrefs?.usage_notice_period ?? null,
     onOwnKey: chatOnOwnKey,
+    skills: skillMenuOf(profile.organization_id),
   };
 
   return (

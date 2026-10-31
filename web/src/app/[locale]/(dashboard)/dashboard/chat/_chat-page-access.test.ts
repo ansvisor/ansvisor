@@ -137,6 +137,9 @@ describe('chatShellPrefs', () => {
   });
 });
 
+/** The / menu's skills with the new Chat on: the library's, by name and title (W2-04). */
+const SKILL_MENU = expect.arrayContaining([{ name: 'faq', title: 'FAQ from fan-outs' }]);
+
 function ctxOf(
   role: PrecedenceContext['role'],
   fullAuto: boolean,
@@ -162,6 +165,7 @@ describe('chatComposerSetup', () => {
       fullAutoOffByAdmin: true,
       usageNoticeSeen: null,
       onOwnKey: false,
+      skills: SKILL_MENU,
     });
   });
 
@@ -173,6 +177,7 @@ describe('chatComposerSetup', () => {
       fullAutoOffByAdmin: false,
       usageNoticeSeen: null,
       onOwnKey: false,
+      skills: SKILL_MENU,
     });
   });
 
@@ -189,6 +194,7 @@ describe('chatComposerSetup', () => {
       fullAutoOffByAdmin: false,
       usageNoticeSeen: null,
       onOwnKey: false,
+      skills: SKILL_MENU,
     });
   });
 
@@ -206,7 +212,17 @@ describe('chatComposerSetup', () => {
       fullAutoOffByAdmin: false,
       usageNoticeSeen: null,
       onOwnKey: false,
+      skills: SKILL_MENU,
     });
+  });
+
+  it("lists the library's skills for the / menu, by name and title, and none with the new Chat off", async () => {
+    facts.ctx = ctxOf('manager', true, true);
+    const { skills } = await chatComposerSetup();
+    expect(skills).toHaveLength(14);
+    expect(skills.every((skill) => Object.keys(skill).join() === 'name,title')).toBe(true);
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect((await chatComposerSetup()).skills).toEqual([]);
   });
 
   it('passes on the period whose 80% line was seen, and whether Chat runs on its own key', async () => {

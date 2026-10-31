@@ -57,6 +57,16 @@ describe('apiFailure', () => {
     expect(apiFailure(403, { error: 'Unauthorized' })).toBe('workspace');
     // Any other 403 is no workspace, and no plan.
     expect(apiFailure(403, { error: 'Only admins can do this' })).toBe('failed');
+    expect(apiFailure(403, { error: 'Only admins can do this', code: 'forbidden' })).toBe('failed');
+  });
+
+  it("reads a brand of the workspace the person wasn't given as one to switch from", () => {
+    // Selected brands (BRAND-ACCESS): the server's no_brand_access.
+    expect(
+      apiFailure(403, { error: "You don't have access to this brand", code: 'no_brand_access' }),
+    ).toBe('workspace');
+    // A session that expired is still a session first.
+    expect(apiFailure(401, { code: 'no_brand_access' })).toBe('session');
   });
 
   it("doesn't take an account without an organization for a plan to upgrade", () => {

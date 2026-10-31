@@ -267,6 +267,7 @@ export function ChatMenuView({
       active={pathname === `/dashboard/chat/${chat.id}`}
       onOpen={onNavigate}
       actions={rowActions?.(chat)}
+      now={now}
     />
   );
 
