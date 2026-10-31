@@ -88,9 +88,22 @@ let warnedNoBrandScope = false;
  * starts them: the profile is read without it, and that is said once.
  */
 async function readProfile(userId) {
-  const read = (columns) =>
-    supabaseAdmin.from('profiles').select(columns).eq('id', userId).maybeSingle();
-  const { data, error } = await read('organization_id, role, brand_scope');
+  return readWithBrandScope((scope) =>
+    supabaseAdmin
+      .from('profiles')
+      .select(`organization_id, role${scope}`)
+      .eq('id', userId)
+      .maybeSingle(),
+  );
+}
+
+/**
+ * Profiles read with `brand_scope`, or without it before 00388, as All
+ * brands (said once). `read(scope)` asks for the columns with `scope`
+ * appended (", brand_scope" or nothing).
+ */
+async function readWithBrandScope(read) {
+  const { data, error } = await read(', brand_scope');
   if (!error) return data;
   if (!MISSING_COLUMN_CODES.has(error.code)) throw new Error(error.message);
   if (!warnedNoBrandScope) {
@@ -100,9 +113,73 @@ async function readProfile(userId) {
       '[access] profiles.brand_scope is missing: everyone counts as All brands until 00388 is applied',
     );
   }
-  const fallback = await read('organization_id, role');
+  const fallback = await read('');
   if (fallback.error) throw new Error(fallback.error.message);
-  return fallback.data ? { ...fallback.data, brand_scope: 'all' } : null;
+  const all = (row) => ({ ...row, brand_scope: 'all' });
+  if (Array.isArray(fallback.data)) return fallback.data.map(all);
+  return fallback.data ? all(fallback.data) : null;
+}
+
+/**
+ * The organization's people who may reach the brands of `brandIds`, each
+ * with those they may, by brandAccessOf's rule for one person: an Admin, All
+ * brands, the demo brand, or a grant. Read from the tables as the service
+ * role, so the server picks e-mail and job recipients itself
+ * (can_access_brand answers for another person only with a service-role JWT,
+ * spec §10). Another organization's brands count for no one; without an
+ * organization, no one.
+ * @param {string|null} orgId
+ * @param {string[]} brandIds
+ * @returns {Promise<Map<string, Set<string>>>} person id → the brands they may reach; people with none left out
+ */
+export async function brandReaders(orgId, brandIds) {
+  const readers = new Map();
+  if (!orgId || brandIds.length === 0) return readers;
+  const [brandsRead, members] = await Promise.all([
+    supabaseAdmin
+      .from('brands')
+      .select('id, organization_id, is_demo')
+      .eq('organization_id', orgId)
+      .in('id', [...new Set(brandIds)]),
+    readWithBrandScope((scope) =>
+      supabaseAdmin.from('profiles').select(`id, role${scope}`).eq('organization_id', orgId),
+    ),
+  ]);
+  if (brandsRead.error) throw new Error(brandsRead.error.message);
+  const brands = brandsRead.data ?? [];
+  if (brands.length === 0) return readers;
+
+  // Grants matter only to the people with Selected brands.
+  const narrowed = (members ?? [])
+    .filter((m) => m.role !== 'admin' && m.brand_scope === 'selected')
+    .map((m) => m.id);
+  const granted = new Map();
+  if (narrowed.length > 0) {
+    const { data: grants, error } = await supabaseAdmin
+      .from('member_brands')
+      .select('user_id, brand_id')
+      .eq('organization_id', orgId)
+      .in('user_id', narrowed)
+      .in(
+        'brand_id',
+        brands.map((b) => b.id),
+      );
+    if (error) throw new Error(error.message);
+    for (const grant of grants ?? []) {
+      granted.set(grant.user_id, (granted.get(grant.user_id) ?? new Set()).add(grant.brand_id));
+    }
+  }
+
+  for (const member of members ?? []) {
+    const access = {
+      orgId,
+      all: member.role === 'admin' || member.brand_scope !== 'selected',
+      brandIds: granted.get(member.id) ?? new Set(),
+    };
+    const reach = new Set(brands.filter((b) => !refusalFor(access, b)).map((b) => b.id));
+    if (reach.size > 0) readers.set(member.id, reach);
+  }
+  return readers;
 }
 
 /**

@@ -1,6 +1,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { isCloud, isSubscriptionActive } from '../../config/plans.js';
+import { brandReaders } from '../access.js';
 import { dispatchBrandWebhook } from '../webhook-dispatch.js';
 import { computePulseMetrics } from './metrics.js';
 import { renderPulseEmail, sendPulseEmail } from './email.js';
@@ -39,19 +40,19 @@ export function appUrl() {
   }
 }
 
-/** Recipient emails: explicit list from settings, else every org member.
- *  The AI Traffic weekly digest (AT-013) sends to the same people. */
-export async function resolveRecipients(organizationId, settings) {
+/**
+ * Recipient emails: the explicit list from settings, as an Admin typed it,
+ * else every member who can see the brand (brand access, spec §5.4: with
+ * All brands, every member). The AI Traffic weekly digest (AT-013) sends to
+ * the same people.
+ */
+export async function resolveRecipients(organizationId, settings, brandId) {
   if (settings?.recipients?.length) return settings.recipients;
 
-  const { data: members } = await supabaseAdmin
-    .from('profiles')
-    .select('id')
-    .eq('organization_id', organizationId);
-
+  const readers = await brandReaders(organizationId, [brandId]);
   const emails = [];
-  for (const member of members ?? []) {
-    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(member.id);
+  for (const id of readers.keys()) {
+    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(id);
     if (authUser?.user?.email) emails.push(authUser.user.email);
   }
   return emails;
@@ -264,7 +265,7 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
     let emailSent = false;
     let recipientCount = 0;
     if (isCloud()) {
-      const recipients = await resolveRecipients(brand.organization_id, settings);
+      const recipients = await resolveRecipients(brand.organization_id, settings, brand.id);
       recipientCount = recipients.length;
       if (recipients.length) {
         const { subject, html } = renderPulseEmail({

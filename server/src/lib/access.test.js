@@ -22,6 +22,9 @@ const state = vi.hoisted(() => ({
   grantsError: null,
   opps: [],
   prompts: [],
+  // The organization's people, and their grants, as brandReaders reads them.
+  members: [],
+  memberGrants: [],
   reads: [],
   filters: [],
 }));
@@ -54,16 +57,29 @@ vi.mock('../config/supabase.js', () => ({
         },
         then: (resolve) =>
           resolve(
-            table === 'member_brands'
-              ? {
-                  data: state.grantsError ? null : state.grants.map((brand_id) => ({ brand_id })),
-                  error: state.grantsError,
-                }
-              : table === 'brands'
-                ? { data: state.brands, error: null }
-                : table === 'content_opportunities'
-                  ? { data: state.opps, error: null }
-                  : { data: state.prompts, error: null },
+            table === 'profiles'
+              ? state.noBrandScope && selected.includes('brand_scope')
+                ? { data: null, error: { code: '42703', message: 'column does not exist' } }
+                : {
+                    data: state.members.map(({ brand_scope, ...rest }) =>
+                      state.noBrandScope ? rest : { ...rest, brand_scope },
+                    ),
+                    error: null,
+                  }
+              : table === 'member_brands' && selected.includes('user_id')
+                ? { data: state.memberGrants, error: null }
+                : table === 'member_brands'
+                  ? {
+                      data: state.grantsError
+                        ? null
+                        : state.grants.map((brand_id) => ({ brand_id })),
+                      error: state.grantsError,
+                    }
+                  : table === 'brands'
+                    ? { data: state.brands, error: null }
+                    : table === 'content_opportunities'
+                      ? { data: state.opps, error: null }
+                      : { data: state.prompts, error: null },
           ),
       };
       return chain;
@@ -77,6 +93,7 @@ const {
   assertOpportunitiesAccess,
   assertPromptAccess,
   assertRole,
+  brandReaders,
   MANAGER_ROLES,
   NOT_IN_WORKSPACE,
   NO_BRAND_ACCESS,
@@ -103,6 +120,8 @@ beforeEach(() => {
   state.grantsError = null;
   state.opps = [];
   state.prompts = [];
+  state.members = [];
+  state.memberGrants = [];
   state.reads = [];
   state.filters = [];
   logger.warn.mockClear();
@@ -347,5 +366,60 @@ describe('assertRole', () => {
   it('fails, not refuses, when the profile cannot be read', async () => {
     state.profileError = { message: 'connection reset' };
     await expect(assertRole('u1', MANAGER_ROLES, 'No.')).rejects.toThrow('connection reset');
+  });
+});
+
+describe('brandReaders', () => {
+  const brand = (id, more = {}) => ({ id, organization_id: 'org-1', is_demo: false, ...more });
+  const listed = (readers) =>
+    Object.fromEntries([...readers].map(([id, seen]) => [id, [...seen].sort()]));
+
+  beforeEach(() => {
+    state.brands = [brand('b1'), brand('b2'), brand('demo', { is_demo: true })];
+    state.members = [
+      { id: 'all', role: 'manager', brand_scope: 'all' },
+      { id: 'admin', role: 'admin', brand_scope: 'selected' },
+      { id: 'narrow', role: 'analyst', brand_scope: 'selected' },
+      { id: 'none', role: 'analyst', brand_scope: 'selected' },
+    ];
+    state.memberGrants = [{ user_id: 'narrow', brand_id: 'b2' }];
+  });
+
+  it('gives each person the brands they may reach, as one person’s check does', async () => {
+    expect(listed(await brandReaders('org-1', ['b1', 'b2', 'demo']))).toEqual({
+      all: ['b1', 'b2', 'demo'],
+      admin: ['b1', 'b2', 'demo'],
+      // A grant, and the demo brand everyone sees.
+      narrow: ['b2', 'demo'],
+      none: ['demo'],
+    });
+    // Grants are read for the narrowed people, within the organization.
+    expect(state.filters).toContainEqual(['member_brands', 'organization_id', 'org-1']);
+  });
+
+  it('leaves out the people who reach none, and another organization’s brand for all', async () => {
+    state.brands = [brand('b1'), brand('other', { organization_id: 'org-2' })];
+    expect(listed(await brandReaders('org-1', ['b1', 'other']))).toEqual({
+      all: ['b1'],
+      admin: ['b1'],
+    });
+  });
+
+  it('reads nobody without an organization or brands', async () => {
+    expect((await brandReaders(null, ['b1'])).size).toBe(0);
+    expect((await brandReaders('org-1', [])).size).toBe(0);
+    expect(state.reads).toEqual([]);
+  });
+
+  it('counts everyone as All brands before 00388', async () => {
+    state.noBrandScope = true;
+    state.brands = [brand('b1')];
+    expect(listed(await brandReaders('org-1', ['b1']))).toEqual({
+      all: ['b1'],
+      admin: ['b1'],
+      narrow: ['b1'],
+      none: ['b1'],
+    });
+    expect(state.reads.some(([table]) => table === 'member_brands')).toBe(false);
   });
 });
