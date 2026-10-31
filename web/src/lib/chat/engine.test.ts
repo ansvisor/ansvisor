@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import type { FakeSupabase } from './testing/fake-supabase';
 import {
   BRAND,
@@ -3587,5 +3588,139 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
       expect(options.tools?.map((t) => t.name) ?? []).not.toContain(USE_SKILL_TOOL);
     }
     expect(skillSteps(runId)).toEqual([]);
+  });
+});
+
+describe('the /tasks task strip (W2-11, CHAT-09 §B)', () => {
+  // The mocked registry's own list: the aliases join it for these tests only.
+  const tools = CHAT_TOOLS as (typeof CHAT_TOOLS)[number][];
+  // The Action Center's reads, as the test's read under their names: the hooks key on them.
+  const aliases = () => {
+    const read = CHAT_TOOLS.find((t) => t.name === 'read_visibility')!;
+    return [
+      { ...read, name: 'list_action_center_tasks' },
+      // get_action reads its action by id: the hook marks that action's tasks Writing.
+      {
+        ...read,
+        name: 'get_action',
+        inputSchema: z.object({ brand_id: z.string(), action_id: z.string() }),
+      },
+    ] as typeof CHAT_TOOLS;
+  };
+  const parent = (id: string, priority: number, due: string | null) => ({
+    id,
+    brand_id: BRAND,
+    status: 'new',
+    deleted_at: null,
+    priority_score: priority,
+    due_date: due,
+    category: 'fix',
+  });
+  const task = (id: string, actionId: string, position: number, title: string) => {
+    const a = db.tables.actions.find((row) => row.id === actionId)!;
+    return {
+      id,
+      action_id: actionId,
+      position,
+      task_key: null,
+      title,
+      title_params: null,
+      status: 'todo',
+      actions: { category: a.category, priority_score: a.priority_score, due_date: a.due_date },
+    };
+  };
+  const strip = () =>
+    [...db.tables.chat_task_state]
+      .sort((a, b) => Number(a.position) - Number(b.position))
+      .map((row) => [row.action_task_id, row.chat_status]);
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    tools.push(...aliases());
+    db.tables.actions = [parent('a-top', 86, '2026-01-01'), parent('a-next', 40, null)];
+    db.tables.action_tasks = [
+      task('t-faq', 'a-top', 1, 'Add FAQ block + schema to /pricing'),
+      task('t-links', 'a-top', 2, 'Fix 2 broken links on /pricing'),
+      task('t-guide', 'a-next', 1, 'Refresh the setup guide'),
+    ];
+    db.tables.chat_task_state = [];
+    db.unique.chat_task_state = [['conversation_id', 'action_task_id']];
+  });
+  afterEach(() => {
+    for (const alias of ['list_action_center_tasks', 'get_action']) {
+      tools.splice(
+        tools.findIndex((t) => t.name === alias),
+        1,
+      );
+    }
+  });
+
+  it('queues the week’s tasks, marks the opened action Writing, and settles as the run ends', async () => {
+    useModels(
+      [
+        calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })),
+        calls(toolCall('r2', 'get_action', { brand_id: BRAND, action_id: 'a-top' })),
+        READY,
+      ],
+      [text('I drafted the FAQ for /pricing.')],
+    );
+    const runId = await turn(ADMIN, "/tasks Complete this week's Action Center tasks.");
+    const updates = ofType(await eventsOf(runId), 'tasks.updated').map((e) => e.data);
+    expect(updates.map((u) => u.tasks.map((t) => t.status))).toEqual([
+      ['queued', 'queued', 'queued'],
+      ['writing', 'writing', 'queued'],
+      // The run ended: what it was still writing waits for the next one.
+      ['queued', 'queued', 'queued'],
+    ]);
+    expect(updates[0]).toMatchObject({
+      tasks: [
+        {
+          at: 1,
+          title: 'Add FAQ block + schema to /pricing',
+          priority: 86,
+          category: 'fix',
+          due: '2026-01-01',
+        },
+        { at: 2, title: 'Fix 2 broken links on /pricing' },
+        { at: 3, title: 'Refresh the setup guide', priority: 40 },
+      ],
+      ready: 0,
+      total: 3,
+      due: 2,
+    });
+    expect(strip()).toEqual([
+      ['t-faq', 'queued'],
+      ['t-links', 'queued'],
+      ['t-guide', 'queued'],
+    ]);
+    expect(db.tables.chat_task_state.every((row) => row.run_id === runId)).toBe(true);
+    // The Action Center's own tasks are as they were.
+    expect(db.tables.action_tasks.map((t) => t.status)).toEqual(['todo', 'todo', 'todo']);
+    expectClean(await eventsOf(runId));
+  });
+
+  it('keeps no strip for a run without the /tasks skill', async () => {
+    useModels(
+      [calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })), READY],
+      [text('You have 2 open actions.')],
+    );
+    const runId = await turn(ADMIN, 'What is open in my Action Center?');
+    expect(ofType(await eventsOf(runId), 'tasks.updated')).toEqual([]);
+    expect(db.tables.chat_task_state).toEqual([]);
+  });
+
+  it('answers all the same when the strip can’t be kept', async () => {
+    db.failures.chat_task_state = { message: 'down' };
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    useModels(
+      [calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })), READY],
+      [text('Here is the plan.')],
+    );
+    const runId = await turn(ADMIN, '/tasks Start the top task.');
+    expect(runRow(runId).status).toBe('done');
+    expect(ofType(await eventsOf(runId), 'tasks.updated')).toEqual([]);
+    logged.mockRestore();
+    delete db.failures.chat_task_state;
   });
 });

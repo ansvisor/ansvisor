@@ -39,6 +39,7 @@ import {
 } from './composer/chat-composer';
 import { useUserRole } from '@/hooks/use-user-role';
 import { ActionSentCard } from './run/action-sent-card';
+import { TaskStrip } from './run/task-strip';
 import { ProposalDetails } from './run/proposal-details';
 import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
@@ -103,6 +104,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         steps: message.run.steps,
         deliverables: message.run.deliverables ?? [],
         sent: message.run.sent ?? [],
+        tasks: message.run.tasks ?? null,
         nextMoves: message.run.nextMoves ?? [],
         text: message.text,
         generatedAt: message.generatedAt,
@@ -711,6 +713,7 @@ function Answer({
 
   const cards = (
     <>
+      {run.tasks && <TaskStrip strip={run.tasks} ended={!OPEN.includes(run.status)} />}
       {run.denials.map((denial, i) => (
         <DenialCard
           key={i}

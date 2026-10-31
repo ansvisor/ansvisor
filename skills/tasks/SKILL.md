@@ -23,6 +23,7 @@ Work through the brand's Action Center actions, highest priority first, and prep
 3. `list_citations` for the last 30 days, when an action is about citations: which pages are cited, and which lost citations.
 4. `get_site_audit_summary`, then `list_site_audit_issues`, for the pages the tasks name: the failed checks, as AI engines would see the page.
 5. `get_fanouts` when a task asks for questions to answer.
+6. `get_onboarding_progress`, once the actions are worked through: the open Getting started steps, in stage order.
 
 ## Steps
 
@@ -31,6 +32,8 @@ Work through the brand's Action Center actions, highest priority first, and prep
 3. Prepare each task's work: an FAQ block, a rewritten passage, schema code or a new page, as its How says. Show a change to a passage AI cites before it is made.
 4. Save page work as a draft with `create_draft`; the app asks the person first when it should.
 5. Sending a draft to the site's CMS, and publishing it, are the person's: they use **Send to CMS** in the Content Library, and going live is always their **Publish** click.
+6. When a task's work is finished, set it Ready for review with `set_task_ready_for_review`, so the person sees it in the task strip under your answer.
+7. Then help with the open Getting started steps, in stage order: say what each step needs and link its page, with short steps for anything the person connects themselves (Search Console, Analytics, the AI Traffic snippet). Add competitors, topics or prompts a step asks for only with the tools that do it, and the app asks the person first.
 
 ## Output
 
@@ -39,5 +42,6 @@ A list of the actions worked on, each with what was made (and where it is), what
 ## Don't
 
 - Never close, complete or dismiss an Action Center task: the person does, once its "Done when" is met.
+- Never mark a Getting started step done or skip it: it completes through its own check, and the person skips an optional one in Action Center.
 - Don't invent facts, quotes or figures for a draft: use [placeholders] the person fills.
 - Never claim a task's work will move a number; say what to watch after it goes live.

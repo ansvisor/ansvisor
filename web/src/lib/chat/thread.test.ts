@@ -105,6 +105,74 @@ describe('loadChatThread', () => {
     });
   });
 
+  it('rebuilds a /tasks run’s task strip as it stands, Done as Action Center has it (CHAT-09 §B)', async () => {
+    seed([{ id: 'run-1', status: 'done' }]);
+    fake.db.tables.chat_run_steps = [];
+    fake.db.tables.chat_run_events = [];
+    fake.db.tables.chat_task_state = [
+      {
+        conversation_id: CHAT,
+        action_task_id: 't1',
+        position: 1,
+        chat_status: 'ready_for_review',
+        run_id: 'run-1',
+      },
+      {
+        conversation_id: CHAT,
+        action_task_id: 't2',
+        position: 2,
+        chat_status: 'queued',
+        run_id: 'run-1',
+      },
+    ];
+    const parent = { category: 'fix', priority_score: 86, due_date: '2026-10-30' };
+    fake.db.tables.action_tasks = [
+      {
+        id: 't1',
+        task_key: null,
+        title: 'Add FAQ block to /pricing',
+        title_params: null,
+        status: 'todo',
+        actions: parent,
+      },
+      // The person completed it in Action Center after the run.
+      {
+        id: 't2',
+        task_key: null,
+        title: 'Fix 2 broken links',
+        title_params: null,
+        status: 'completed',
+        actions: parent,
+      },
+    ];
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run?.tasks).toMatchObject({
+      tasks: [
+        {
+          at: 1,
+          title: 'Add FAQ block to /pricing',
+          priority: 86,
+          category: 'fix',
+          status: 'ready_for_review',
+        },
+        { at: 2, title: 'Fix 2 broken links', status: 'done' },
+      ],
+      ready: 2,
+      total: 2,
+    });
+  });
+
+  it('opens the chat without its strip when the strip can’t be read', async () => {
+    seed([{ id: 'run-1', status: 'done' }]);
+    fake.db.tables.chat_run_steps = [];
+    fake.db.tables.chat_run_events = [];
+    fake.db.failures.chat_task_state = { message: 'down' };
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run?.tasks).toBeNull();
+    logged.mockRestore();
+  });
+
   it('keeps what a run sent to the Action Center, after a reload (CHAT-09 item 19)', async () => {
     seed([{ id: 'run-1', status: 'done' }]);
     fake.db.tables.chat_run_steps = [];

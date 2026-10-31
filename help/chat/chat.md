@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, send to action center, add to action, attach to task, ready for review]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-31
@@ -84,6 +84,21 @@ Admins and Managers see **Send to Action Center** under Chat's latest answer. Ch
 If an open action already covers these prompts, pages or competitors, Chat offers to add the finding to it instead. That action's targets don't change. **Create anyway** is offered only when the new finding covers something the open action doesn't.
 
 Chat can also attach a file or draft to a task, and set a task it finished to **Ready for review**. It never marks a task done: you do that in Action Center. Each change has **Undo** in the **Activity** log.
+
+## Work through your Action Center tasks
+
+Type **/tasks**, or click **Complete with Chat** on Chat Home, and Chat works through the brand's Action Center tasks: those due this week first, highest Priority Score first.
+
+Under the answer, **Action Center tasks** lists up to 4 tasks it takes on and how many are ready ("1 of 3 ready"). Each row shows the task, "Priority 86 · Fix" and where Chat's work stands:
+
+- **Queued**: not started yet.
+- **Writing**: Chat is working on it now.
+- **Ready for review**: Chat finished its part, for you to check.
+- **Done**: you completed it in Action Center.
+
+These show Chat's work, not the task's Action Center status. Once the run ends, **Close tasks in Action Center** opens your actions: Chat never marks a task done.
+
+After the tasks, Chat helps with your open **Getting started** steps. It never marks a step done or skips one.
 
 ## Next moves
 

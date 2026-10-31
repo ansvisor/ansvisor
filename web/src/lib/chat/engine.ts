@@ -128,6 +128,14 @@ import { fileChatOutput } from './file-output';
 import { originPageSchema } from './origin';
 import { CHAT_REFERENCE_TYPES, MAX_REFERENCES } from './references';
 import {
+  pickTasks,
+  queueTasks,
+  readStrips,
+  settleStrip,
+  startAction,
+  weekEndIn,
+} from './task-strip';
+import {
   MAX_SKILL_BODIES,
   USE_SKILL_TOOL,
   availableSkillsBlock,
@@ -2412,9 +2420,68 @@ async function readCall(
     },
   });
   rc.sink.emit('step.finished', { step: clientStep(row) });
+  await followTaskReads(rc, tool.name, input, brandId);
   const outcomeOf = result(call, fitted.value);
   if (outcomeOf.kind === 'result') Object.assign(outcomeOf.result, { untrusted, source });
   return outcomeOf;
+}
+
+/** The skill whose runs keep the task strip (CHAT-09 §B, CHAT-13 /tasks). */
+const TASKS_SKILL = 'tasks';
+
+/**
+ * What a /tasks run's reads put in its chat's task strip (CHAT-09 §B):
+ * reading the Action Center's actions queues the week's tasks, at most 4,
+ * due first and by priority (task-strip.ts pickTasks); opening an action
+ * (get_action) marks its tasks Writing. Only in a run that loaded the
+ * /tasks skill, on its brand. Never stops the run: a failed write loses
+ * the strip's update, not the answer.
+ */
+async function followTaskReads(
+  rc: RunContext,
+  toolName: string,
+  input: Record<string, unknown>,
+  brandId: string | null,
+): Promise<void> {
+  if (!brandId || !(rc.progress.skills ?? []).includes(TASKS_SKILL)) return;
+  if (toolName !== 'list_action_center_tasks' && toolName !== 'get_action') return;
+  try {
+    if (toolName === 'list_action_center_tasks') {
+      const weekEnd = weekEndIn(new Date(), rc.progress.timezone);
+      const { taskIds } = await pickTasks(supabaseAdmin, brandId, weekEnd);
+      await queueTasks(rc.run.conversationId, rc.run.id, taskIds);
+    } else if (typeof input.action_id === 'string') {
+      await startAction(supabaseAdmin, rc.run.conversationId, rc.run.id, input.action_id);
+    }
+    rc.progress.taskStrip = true;
+  } catch (err) {
+    console.error('[chat/engine] could not keep the task strip:', err);
+    return;
+  }
+  await showStrip({ ...rc.run, progress: rc.progress }, rc.sink);
+}
+
+/**
+ * The run's task strip as it stands (`tasks.updated`, the whole strip each
+ * time), read as the server keeps it; `settle` first turns what the run was
+ * still writing back to Queued, as it ends. Only for a run that kept one.
+ */
+async function showStrip(
+  run: Pick<LoadedRun, 'id' | 'conversationId' | 'progress'>,
+  sink: RunEventSink,
+  settle = false,
+): Promise<void> {
+  if (!run.progress.taskStrip) return;
+  try {
+    if (settle) await settleStrip(run.conversationId, run.id);
+    const weekEnd = weekEndIn(new Date(), run.progress.timezone);
+    const strip = (await readStrips(supabaseAdmin, run.conversationId, weekEnd, run.id)).get(
+      run.id,
+    );
+    if (strip) sink.emit('tasks.updated', strip);
+  } catch (err) {
+    console.error('[chat/engine] could not show the task strip:', err);
+  }
 }
 
 /** A read's output with the scope it covered, first: a list becomes `items`. */
@@ -2565,6 +2632,11 @@ async function writeCall(
   const output = outcome.code === 'ok' ? outcome.output : null;
   const fileId = await deliver(rc, tool, input, output, facts.brandId);
   showResultCard(rc, tool, input, output);
+  // Ready for review (W2-10) is Chat's status in the strip: it shows it.
+  if (tool.name === 'set_task_ready_for_review') {
+    rc.progress.taskStrip = true;
+    await showStrip({ ...rc.run, progress: rc.progress }, rc.sink);
+  }
   return result(call, {
     code: 'ok',
     output: fitResult(output, rc.budget.resultChars).value,
@@ -3035,6 +3107,7 @@ async function finish(rc: RunContext): Promise<void> {
     pending: null,
   });
   await offerNextMoves(rc);
+  await showStrip({ ...rc.run, progress: rc.progress }, rc.sink, true);
   rc.sink.emit('run.finished', {
     ...summaryOf(rc.progress, workingMs),
     generatedAt,
@@ -3138,6 +3211,7 @@ async function endInError(
   }
   await saveAnswer(run.messageId, { text: progress.text });
   await saveState(run.id, { progress, workingMs, pending: null, waitingSince: null });
+  await showStrip({ ...run, progress }, sink, true);
   sink.emit('run.error', { ...summaryOf(progress, workingMs), code: 'failed', reason });
 }
 
@@ -3153,7 +3227,7 @@ async function stopNow(rc: RunContext): Promise<void> {
  * answer, and `run.stopped` says how long it worked.
  */
 async function finishStopped(
-  run: Pick<LoadedRun, 'id' | 'messageId' | 'progress'>,
+  run: Pick<LoadedRun, 'id' | 'conversationId' | 'messageId' | 'progress'>,
   sink: RunEventSink,
   reason: 'person' | 'expired',
   workingMs: number,
@@ -3197,6 +3271,7 @@ async function finishStopped(
     timezone: run.progress.timezone,
   });
   await saveState(run.id, { pending: null, waitingSince: null, workingMs, progress: run.progress });
+  await showStrip(run, sink, true);
   sink.emit('run.stopped', { ...summaryOf(run.progress, workingMs), reason });
   await sink.flush();
 }

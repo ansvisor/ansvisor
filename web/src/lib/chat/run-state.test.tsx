@@ -165,6 +165,33 @@ describe('the run in the browser', () => {
     ]);
   });
 
+  it('keeps the task strip as the last tasks.updated says it (CHAT-09 §B)', () => {
+    const row = {
+      at: 1,
+      title: 'Add FAQ block + schema to /pricing',
+      priority: 86,
+      category: 'fix' as const,
+      status: 'writing' as const,
+    };
+    const writing = applyChatEvent(
+      emptyRun(),
+      chatEvent('tasks.updated', 1, { tasks: [row], ready: 0, total: 1, due: 1 }),
+    );
+    expect(writing.tasks?.tasks.map((t) => t.status)).toEqual(['writing']);
+    const ready = applyChatEvent(
+      writing,
+      chatEvent('tasks.updated', 2, {
+        tasks: [{ ...row, status: 'ready_for_review' }],
+        ready: 1,
+        total: 1,
+        due: 1,
+      }),
+    );
+    expect(ready.tasks).toMatchObject({ ready: 1, total: 1 });
+    expect(ready.tasks?.tasks[0].status).toBe('ready_for_review');
+    expect(emptyRun().tasks).toBeNull();
+  });
+
   it('skips an event it already has, or a type it doesn’t know', () => {
     const run = runFromEvents(events);
     expect(applyChatEvent(run, events[2])).toBe(run);

@@ -3756,6 +3756,21 @@
     }
   },
   "chatRun": {
+    "tasks": {
+      "title": "{due, plural, =0 {Action Center tasks} other {Action Center tasks · # due}}",
+      "progress": "Tasks ready",
+      "ready": "{ready, number} of {total, number} ready",
+      "priority": "Priority {score, number}",
+      "untitled": "An Action Center task",
+      "status": {
+        "queued": "Queued",
+        "writing": "Writing",
+        "ready_for_review": "Ready for review",
+        "done": "Done"
+      },
+      "closeNote": "You close tasks in Action Center. I never mark them done.",
+      "close": "Close tasks in Action Center"
+    },
     "proposal": {
       "goal": "Goal",
       "sentWith": "Sent with",
@@ -4241,7 +4256,7 @@
       "caughtUp": "All caught up.",
       "dueTasks": "{count, plural, one {# Action Center task is due this week} other {# Action Center tasks are due this week}}",
       "completeWithChat": "Complete with Chat",
-      "completeTasksMessage": "Complete this week's Action Center tasks.",
+      "completeTasksMessage": "/tasks Complete this week's Action Center tasks.",
       "startFailed": "Couldn't start that. Try again."
     },
     "inbox": {

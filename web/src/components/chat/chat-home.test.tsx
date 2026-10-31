@@ -177,7 +177,7 @@ describe('ChatHome', () => {
     expect(calls[0]).toMatchObject({
       url: '/api/chat/runs',
       body: {
-        message: "Complete this week's Action Center tasks.",
+        message: "/tasks Complete this week's Action Center tasks.",
         brandId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       },
     });

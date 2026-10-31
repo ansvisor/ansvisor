@@ -8,6 +8,7 @@ import type {
   ChatEvent,
   ChatRunSummary,
   ChatStep,
+  ChatTaskStrip,
 } from './events';
 import { isChatEventType } from './events';
 
@@ -46,6 +47,8 @@ export interface ClientRun {
   deliverables: ChatDeliverable[];
   /** What it sent to the Action Center, in order (CHAT-09 item 19). */
   sent: ChatActionSent[];
+  /** The Action Center tasks it works on (CHAT-09 §B); null when it has none. */
+  tasks: ChatTaskStrip | null;
   summary: ChatRunSummary | null;
   generatedAt: string | null;
   dataAsOf: string | null;
@@ -66,6 +69,7 @@ export function emptyRun(status: ClientRunStatus = 'running'): ClientRun {
     denials: [],
     deliverables: [],
     sent: [],
+    tasks: null,
     summary: null,
     generatedAt: null,
     dataAsOf: null,
@@ -123,6 +127,9 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
       return next;
     case 'action.sent':
       next.sent = [...run.sent, event.data];
+      return next;
+    case 'tasks.updated':
+      next.tasks = event.data;
       return next;
     case 'next_moves':
       next.nextMoves = event.data.moves;

@@ -122,6 +122,8 @@ export interface RunProgress {
   nextMoves?: NextMoveInput[];
   /** The skills loaded for this run, by name, in order (CHAT-13 item 4: at most 3). */
   skills?: string[];
+  /** The run put Action Center tasks in its chat's task strip (CHAT-09 §B): it shows it as it ends. */
+  taskStrip?: boolean;
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {
