@@ -352,6 +352,18 @@ describe('ImpactReportView', () => {
     }
   });
 
+  it('names each checkpoint box for screen readers, not only on hover', async () => {
+    await render();
+    const boxes = [...$('[data-row="r1"]')!.querySelectorAll('[data-checkpoint]')];
+    // A name on a plain span isn't read out: each box is an image with its name.
+    expect(boxes.map((b) => [b.getAttribute('role'), b.getAttribute('aria-label')])).toEqual([
+      ['img', 'Day 7: Pending'],
+      ['img', 'Day 14: Improved'],
+      ['img', 'Day 30, due Nov 2'],
+      ['img', 'Day 90, due Jan 1'],
+    ]);
+  });
+
   it('downloads the month as CSV', async () => {
     await render();
     await click($('[data-action="impact.export"]')!);

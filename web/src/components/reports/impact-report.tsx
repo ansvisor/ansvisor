@@ -549,6 +549,7 @@ function CheckpointStrip({ marks }: { marks: readonly CheckpointMark[] }) {
               data-checkpoint={mark.checkpoint}
               data-state="due"
               title={label}
+              role="img"
               aria-label={label}
               className={cn(CHECKPOINT, 'border border-dashed text-muted-foreground')}
             >
@@ -564,6 +565,7 @@ function CheckpointStrip({ marks }: { marks: readonly CheckpointMark[] }) {
               data-checkpoint={mark.checkpoint}
               data-state="none"
               title={label}
+              role="img"
               aria-label={label}
               className={cn(CHECKPOINT, 'text-muted-foreground')}
             >
@@ -578,6 +580,7 @@ function CheckpointStrip({ marks }: { marks: readonly CheckpointMark[] }) {
             data-checkpoint={mark.checkpoint}
             data-state="measured"
             title={label}
+            role="img"
             aria-label={label}
             className={cn(CHECKPOINT, 'border', OUTCOME_PILL[mark.outcome])}
           >
