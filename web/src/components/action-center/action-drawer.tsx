@@ -66,6 +66,7 @@ import { ActionIcon, PriorityBadge } from './action-table';
 import { priorityReasonText } from '@/lib/action-center/priority';
 import { OpportunityContext } from './opportunity-context';
 import { ActionExportButtons } from './action-export-buttons';
+import { RunAgentButton } from './run-agent-button';
 import { SupportingSignals } from './supporting-signals';
 import { AffectedTab } from './affected-tab';
 import { affectedChips, affectedTotal } from '@/lib/action-center/affected';
@@ -432,6 +433,7 @@ export function ActionDrawer({
               <PriorityBadge score={action.priorityScore} level={action.priorityLevel} />
             )}
             <div className="ml-auto flex items-center gap-2">
+              <RunAgentButton action={action} title={texts.title} variant="drawer" />
               <ActionExportButtons
                 action={action}
                 detail={ready ? detail : null}

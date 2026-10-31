@@ -21,6 +21,7 @@ const fakes = vi.hoisted(() => ({
   usage: vi.fn(),
   drive: vi.fn(),
   endHeld: vi.fn(),
+  stopChat: vi.fn(),
 }));
 vi.mock('@/lib/mcp/account', () => ({ getAiUsageFor: fakes.usage }));
 vi.mock('./key', () => ({ resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })) }));
@@ -30,6 +31,7 @@ vi.mock('./engine', () => ({
   validTimezone: (value?: string) => value ?? 'UTC',
   driveRun: fakes.drive,
   endHeldRun: fakes.endHeld,
+  stopChatRun: fakes.stopChat,
   sweepChatRuns: vi.fn(async () => ({ expired: 0, lost: 0 })),
 }));
 
@@ -493,5 +495,157 @@ describe('the driver', () => {
     await expect(tasks[0]()).rejects.toThrow('boom');
     expect(runRow(id).status).toBe('failed');
     expect(agentRow().fail_count).toBe(1);
+  });
+});
+
+describe('a run on an Action Center action (Run agent)', () => {
+  const ACTION = 'acacacac-0000-4000-8000-000000000001';
+  const snapshot = {
+    id: ACTION,
+    no: 1258,
+    title: 'Win back citations for /blog/what-is-aeo',
+    category: 'recover',
+    kind: 'prompt_improve',
+    at: NOW.toISOString(),
+    tasks: ['Refresh /blog/what-is-aeo', 'Publish the page'],
+  };
+  const actionRun = (over: Record<string, unknown> = {}) =>
+    queueRun({
+      trigger_kind: 'action',
+      trigger_ref: ACTION,
+      action_id: ACTION,
+      acting_user_id: PEOPLE.manager,
+      evidence_json: { action: snapshot },
+      ...over,
+    });
+  const events = () => db.tables.action_events;
+
+  beforeEach(() => {
+    db.tables.actions = [{ id: ACTION, brand_id: BRAND, status: 'in_progress', deleted_at: null }];
+    db.tables.action_events = [];
+    fakes.stopChat.mockImplementation(async (_actor: unknown, chatRunId: string) => {
+      const run = db.tables.chat_runs.find((r) => r.id === chatRunId);
+      if (run) run.status = 'stopped';
+      return { ok: true };
+    });
+  });
+
+  it('names its chat after the agent and the action, scopes it to the action and writes Agent run started', async () => {
+    const id = actionRun();
+    const opened = await driver.openAgentRun(id, ORG, NOW);
+    expect(opened?.actor.userId).toBe(PEOPLE.manager);
+    expect(db.tables.chat_conversations).toEqual([
+      expect.objectContaining({
+        user_id: PEOPLE.manager,
+        title: 'Citation win-back · Win back citations for /blog/what-is-aeo',
+        agent_run_id: id,
+      }),
+    ]);
+    const question = db.tables.chat_messages[0];
+    expect(question.content_md).toContain('It started from an Action Center action.');
+    expect(question.content_md).toContain(
+      'AC-1258 “Win back citations for /blog/what-is-aeo” (Recover)',
+    );
+    expect(question.content_md).toContain('“Refresh /blog/what-is-aeo”, “Publish the page”');
+    expect(question.content_md).toContain('never add new ones');
+    expect(question.content_md).not.toMatch(UUID);
+    // On screen, its number and title; for the run, its id and the action as an @ reference.
+    expect(JSON.stringify(question.context_json)).not.toContain(ACTION);
+    expect(question.context_json).toMatchObject({
+      context: {
+        chips: expect.arrayContaining([
+          {
+            key: 'action',
+            label: 'Action',
+            value: 'AC-1258 · Win back citations for /blog/what-is-aeo',
+          },
+        ]),
+      },
+    });
+    const progress = db.tables.chat_run_state[0].progress as {
+      scope: { references: unknown[]; context: { chips: unknown[] } };
+    };
+    expect(progress.scope.references).toEqual([
+      { type: 'task', id: ACTION, label: 'Win back citations for /blog/what-is-aeo' },
+    ]);
+    expect(progress.scope.context.chips).toContainEqual({
+      key: 'action',
+      label: 'Action',
+      value: `AC-1258 ${ACTION}`,
+    });
+    expect(events()).toEqual([
+      {
+        action_id: ACTION,
+        id: expect.any(String),
+        event: 'agent_run_started',
+        actor_id: PEOPLE.manager,
+        data: {
+          source: 'chat',
+          run_id: id,
+          agent_id: AGENT,
+          agent: 'Citation win-back',
+          conversation_id: db.tables.chat_conversations[0].id,
+          mode: 'auto',
+        },
+      },
+    ]);
+  });
+
+  it('doesn’t start on an action closed since the click', async () => {
+    db.tables.actions[0].status = 'completed';
+    const id = actionRun();
+    expect(await driver.openAgentRun(id, ORG, NOW)).toBeNull();
+    expect(runRow(id)).toMatchObject({ status: 'stopped', stop_reason: 'action_closed' });
+    expect(agentRow().status).toBe('active');
+    expect(db.tables.chat_conversations).toEqual([]);
+    expect(events()).toEqual([]);
+  });
+
+  it('stops when the action closes while it runs, and writes how it ended', async () => {
+    const id = actionRun();
+    const chatRun = chatOf(id, 'running');
+    db.tables.actions[0].status = 'dismissed';
+    expect(await driver.settleAgentRun(id, { now: NOW })).toBe('stopped');
+    expect(fakes.stopChat).toHaveBeenCalledWith(
+      { userId: PEOPLE.manager, email: null, organizationId: ORG },
+      chatRun,
+    );
+    expect(runRow(id)).toMatchObject({ status: 'stopped', stop_reason: 'action_closed' });
+    expect(events()).toEqual([
+      expect.objectContaining({
+        event: 'agent_run_completed',
+        actor_id: PEOPLE.manager,
+        data: expect.objectContaining({
+          run_id: id,
+          agent: 'Citation win-back',
+          to: 'stopped',
+          stop_reason: 'action_closed',
+        }),
+      }),
+    ]);
+    // Settled again: nothing more.
+    expect(await driver.settleAgentRun(id, { now: NOW })).toBe('stopped');
+    expect(events()).toHaveLength(1);
+  });
+
+  it('writes Agent run completed when its Chat run ends, and nothing while it waits', async () => {
+    const id = actionRun();
+    const chatRun = chatOf(id, 'waiting');
+    expect(await driver.settleAgentRun(id, { now: NOW })).toBe('needs_you');
+    expect(events()).toEqual([]);
+    db.tables.chat_runs.find((r) => r.id === chatRun)!.status = 'done';
+    expect(await driver.settleAgentRun(id, { now: NOW })).toBe('done');
+    expect(events()).toEqual([
+      expect.objectContaining({
+        event: 'agent_run_completed',
+        data: expect.objectContaining({ to: 'done', stop_reason: null }),
+      }),
+    ]);
+    // A run not on an action writes no History line.
+    const other = queueRun({ brand_id: BRAND, agent_version: 1 });
+    runRow(id).status = 'done';
+    chatOf(other, 'done');
+    await driver.settleAgentRun(other, { now: NOW });
+    expect(events()).toHaveLength(1);
   });
 });

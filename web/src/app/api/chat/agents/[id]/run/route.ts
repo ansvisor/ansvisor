@@ -7,7 +7,7 @@ import {
   invalidAgentResponse,
   type AgentParams,
 } from '@/lib/chat/agent-api';
-import { runAgentNow, type RunNowItem } from '@/lib/chat/agent-runs';
+import { runAgentNow, runAgentOnAction, type RunNowItem } from '@/lib/chat/agent-runs';
 import { runNowInput } from '@/lib/chat/agent-rules';
 import { chatActor, runFailure } from '@/lib/chat/run-api';
 
@@ -15,7 +15,7 @@ import { chatActor, runFailure } from '@/lib/chat/run-api';
 export const maxDuration = 300;
 
 /**
- * POST /api/chat/agents/{id}/run `{ brandId? }`
+ * POST /api/chat/agents/{id}/run `{ brandId? } | { actionId }`
  *
  * Run now (CHAT-21 §E Manual): a run per brand of the agent's scope, or
  * for the one brand named, queued and acting as the person; started when
@@ -23,6 +23,12 @@ export const maxDuration = 300;
  * first; past 3 waiting, it joins the last. Admins and Managers (a
  * Manager's own private agent, or any workspace agent); never an archived
  * agent. 202 with each brand's run state, never a run's id.
+ *
+ * With `actionId`, Run agent on an Action Center action (CHAT-21 §F): one
+ * run on the action's brand, scoped to the action. 202 with its state and,
+ * once it started, its chat (`chatId`, the person's own) for the side
+ * panel. 404 an action the person can't see, 409 a closed one, 402 the
+ * demo brand's, 400 an agent whose scope doesn't cover its brand.
  *
  * Refusals as values (#1777): 400 a bad body or a brand outside its scope,
  * 402 read-only, 403 the out-of-permission answer (CHAT-20 §4c), 404, 409
@@ -40,6 +46,26 @@ export async function POST(req: Request, { params }: AgentParams) {
     if (!input.success) return invalidAgentResponse();
     const ctx = await agentContextFor(actor);
     if (ctx instanceof NextResponse) return ctx;
+    if (input.data.actionId) {
+      const onAction = await runAgentOnAction(ctx, id, input.data.actionId);
+      if (!onAction.ok) return agentRefusalResponse(onAction.refusal);
+      const { run } = onAction.value;
+      return NextResponse.json<{ ok: true; runs: RunNowItem[]; chatId: string | null }>(
+        {
+          ok: true,
+          runs: [
+            {
+              brand: run.brand,
+              status: run.status,
+              repeated: run.repeated,
+              coalesced: run.coalesced,
+            },
+          ],
+          chatId: run.chatId,
+        },
+        { status: 202 },
+      );
+    }
     const result = await runAgentNow(ctx, id, input.data);
     if (!result.ok) return agentRefusalResponse(result.refusal);
     return NextResponse.json<{ ok: true; runs: RunNowItem[] }>(

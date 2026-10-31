@@ -319,6 +319,136 @@ describe('Run now', () => {
   });
 });
 
+describe('Run agent on an action', () => {
+  const ACTION = 'acacacac-0000-4000-8000-000000000001';
+
+  beforeEach(() => {
+    db.tables.actions = [
+      {
+        id: ACTION,
+        action_no: 1258,
+        brand_id: BRAND_2,
+        category: 'recover',
+        kind: 'prompt_improve',
+        status: 'new',
+        payload: { title: 'Win back citations for /pricing' },
+        deleted_at: null,
+      },
+    ];
+    db.tables.action_tasks = [
+      {
+        action_id: ACTION,
+        position: 1,
+        title: 'Refresh /pricing',
+        title_params: {},
+        status: 'todo',
+      },
+    ];
+    db.rpcs.action_entity_counts = () => [];
+  });
+
+  it('queues one run on the action’s brand, scoped to it, as the person who clicked', async () => {
+    const id = await agentOf(PEOPLE.manager, { name: 'Citation win-back' });
+    const result = await runs.runAgentOnAction(await ctxOf(PEOPLE.manager), id, ACTION, NOW, null);
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        run: {
+          brand: 'Brand B',
+          status: 'queued',
+          repeated: false,
+          coalesced: false,
+          chatId: null,
+        },
+      },
+    });
+    expect(runRows()).toEqual([
+      expect.objectContaining({
+        agent_id: id,
+        brand_id: BRAND_2,
+        trigger_kind: 'action',
+        trigger_ref: ACTION,
+        action_id: ACTION,
+        acting_user_id: PEOPLE.manager,
+        status: 'queued',
+        evidence_json: {
+          action: {
+            id: ACTION,
+            no: 1258,
+            title: 'Win back citations for /pricing',
+            category: 'recover',
+            kind: 'prompt_improve',
+            at: NOW.toISOString(),
+            tasks: ['Refresh /pricing'],
+          },
+        },
+      }),
+    ]);
+    const logged = db.tables.chat_activity_log.filter((r) => r.summary_key === 'agentRunOnAction');
+    expect(logged.map((r) => [r.agent_run_id, r.summary_params])).toEqual([
+      [runRows()[0].id, { name: 'Citation win-back', action: '1258' }],
+    ]);
+  });
+
+  it('answers a second click on the same action within a minute with the first run', async () => {
+    const id = await agentOf(PEOPLE.manager);
+    const ctx = await ctxOf(PEOPLE.manager);
+    await runs.runAgentOnAction(ctx, id, ACTION, NOW, null);
+    const again = await runs.runAgentOnAction(
+      ctx,
+      id,
+      ACTION,
+      new Date(NOW.getTime() + 20_000),
+      null,
+    );
+    expect(again).toMatchObject({ ok: true, value: { run: { repeated: true } } });
+    // Run now on the same brand is another click: its own run.
+    await runs.runAgentNow(ctx, id, { brandId: BRAND_2 }, new Date(NOW.getTime() + 30_000), null);
+    expect(runRows().map((r) => r.trigger_kind)).toEqual(['action', 'manual']);
+  });
+
+  it('answers the run’s chat once a driver started it', async () => {
+    const id = await agentOf(PEOPLE.manager);
+    const driver = vi.fn(async ({ id: runId }: { id: string }) => {
+      db.tables.chat_conversations.push({
+        id: 'chat-1',
+        user_id: PEOPLE.manager,
+        agent_run_id: runId,
+      });
+    });
+    const result = await runs.runAgentOnAction(
+      await ctxOf(PEOPLE.manager),
+      id,
+      ACTION,
+      NOW,
+      driver,
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      value: { run: { status: 'running', chatId: 'chat-1' } },
+    });
+  });
+
+  it('refuses a closed action, an agent that doesn’t cover its brand, and Analysts', async () => {
+    const ctx = await ctxOf(PEOPLE.manager);
+    const narrow = await agentOf(PEOPLE.manager, { scope: { brand_ids: [BRAND] } });
+    expect(await runs.runAgentOnAction(ctx, narrow, ACTION, NOW, null)).toMatchObject({
+      ok: false,
+      refusal: { code: 'brand_not_found' },
+    });
+    const wide = await agentOf(PEOPLE.manager, { visibility: 'workspace' });
+    expect(
+      await runs.runAgentOnAction(await ctxOf(PEOPLE.analyst), wide, ACTION, NOW, null),
+    ).toMatchObject({ ok: false, refusal: { kind: 'denied', code: 'forbidden_role' } });
+    db.tables.actions[0].status = 'completed';
+    expect(await runs.runAgentOnAction(ctx, wide, ACTION, NOW, null)).toMatchObject({
+      ok: false,
+      refusal: { code: 'action_closed' },
+    });
+    expect(runRows()).toEqual([]);
+  });
+});
+
 describe('starting queued runs', () => {
   it('starts nothing without a driver, and stops at the first empty answer', async () => {
     expect(await runs.startQueuedAgentRuns(ORG, 5, null)).toEqual([]);
