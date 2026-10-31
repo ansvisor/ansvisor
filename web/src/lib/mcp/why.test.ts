@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import type { FakeSupabase } from '@/lib/chat/testing/fake-supabase';
+import type { ExplainChangeOutput } from './why';
 
 /**
  * explain_change's reads (CHAT-22 §1): the brand must be the caller's
@@ -188,6 +189,9 @@ describe('explainChangeFor', () => {
       },
       { around: '2026-13-45' },
       { around: '2026-02-30' },
+      // Today, or a day to come: not tracked yet.
+      { around: '2026-10-19' },
+      { around: '2026-10-25' },
     ]) {
       const out = await explainChangeFor(
         auth,
@@ -198,6 +202,10 @@ describe('explainChangeFor', () => {
       said.push((out as { message: string }).message);
     }
     expect(said[1]).toBe('The earlier period has to end before the later one starts.');
+    expect(said.slice(-2)).toEqual([
+      'The later period can’t go past yesterday: today isn’t tracked yet.',
+      'The later period can’t go past yesterday: today isn’t tracked yet.',
+    ]);
     expect(rpcArgs).toEqual([]);
   });
 
@@ -280,6 +288,29 @@ describe('explainChangeFor', () => {
     // Period a's page was full: its cell's answers weren't all read, so no cause from them.
     expect(out.analysis.evidence_partial).toBe(true);
     expect(out.analysis.causes).toEqual([]);
+  });
+});
+
+describe('explainChangeFor on visibility', () => {
+  it('compares prompts on the engines tracked in both periods, an added one its own part', async () => {
+    db.rpcs.chat_why_cells = () => ({
+      cells: Array.from({ length: 10 }, (_, i) => [
+        rpcCell(`p${i}`, 'a', i < 3 ? 2 : 0),
+        rpcCell(`p${i}`, 'b', i < 3 ? 2 : 0),
+        // Gemini, tracked in b only, names the brand in 5 more prompts.
+        { ...rpcCell(`p${i}`, 'b', i < 8 ? 3 : 0, 7, 'gemini-web'), model_used: 'gemini-web' },
+      ]).flat(),
+      daily: [],
+      complete: true,
+    });
+    const out = await explainChangeFor(auth, { brandId: BRAND, metric: 'visibility' }, NOW);
+    const { analysis } = out as ExplainChangeOutput;
+    expect(analysis).toMatchObject({
+      value_a: 30,
+      value_b: 80,
+      mix_effect: { contribution: 50, engines_added: ['gemini-web'], engines_removed: [] },
+    });
+    expect(analysis.causes.map((c) => c.kind)).toEqual(['engines_changed']);
   });
 });
 

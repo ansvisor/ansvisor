@@ -16,19 +16,24 @@
  *      with few cells it can't be measured.
  *   2. Change point: the day the daily series splits into the two most
  *      different halves (at least 3 days each).
- *   3. Mix effect: the change minus the change on the cells tracked in
- *      both periods (prompts and engines added or removed). Cells in both
- *      with fewer than 3 runs in a period are "not enough data", a line of
- *      their own.
+ *   3. Mix effect: what the set's change explains. First the engines
+ *      tracked in one period only (the change minus the change counted on
+ *      the engines in both; visibility's prompts are recounted on those),
+ *      then the prompts (minus the change on the cells tracked in both).
+ *      Cells tracked in both but counted in one only (the brand not named,
+ *      for the average position or share of voice) are a line of their own,
+ *      never a set change; cells in both with fewer than 3 runs in a period
+ *      are "not enough data", one more.
  *   4. Attribution: each stable cell's own rate change (at its average
  *      weight) goes to one cause, first rule that matches its evidence (a
  *      site change, a citation lost to a competitor, a citation lost, a
  *      competitor entering), or gained ones; its change of weight stays in
  *      the remainder. A cell whose answers couldn't all be read gets none.
  *   5. Engine weather: not in Wave 2 (no benchmark panel yet).
- *   6. Shares of the change, against the parts that moved its way (0–100%);
- *      a part that moved the other way partly offset it, in points. Within
- *      normal swing, no shares. The rest is normal swing or unexplained.
+ *   6. Shares of the change, against the parts that moved its way: whole
+ *      percents that add up to 100 (largest remainder); a part that moved
+ *      the other way partly offset it, in points. Within normal swing, no
+ *      shares. The rest is normal swing or unexplained.
  *   7. Confidence by the cells that show the cause.
  * Never "caused": the words are the answer's, from these shares (§ shared 2).
  */
@@ -132,7 +137,9 @@ export type CauseKind =
   | 'won_citation_from_competitor'
   | 'gained_citation'
   | 'competitor_left'
+  | 'engines_changed'
   | 'prompt_set_changed'
+  | 'not_mentioned'
   | 'not_enough_data'
   | 'other';
 
@@ -400,12 +407,43 @@ export function movedCells(metric: WhyMetric, cells: WhyCell[], count: number): 
     .map((cell) => cell.key);
 }
 
+/** A number's sign, a float's leftover (±1e−14) counting as none. */
+const signOf = (value: number) => (Math.abs(value) < 1e-9 ? 0 : Math.sign(value));
+
+/**
+ * Whole percents that add up as the parts do (100 for all of the change):
+ * each rounded down, the percents left to the largest remainders. A null
+ * part keeps none.
+ */
+export function wholeShares(raw: (number | null)[]): (number | null)[] {
+  const floors = raw.map((share) => (share === null ? null : Math.floor(share)));
+  const given = floors.reduce<number>((sum, share) => sum + (share ?? 0), 0);
+  const target = Math.round(raw.reduce<number>((sum, share) => sum + (share ?? 0), 0));
+  const order = raw
+    .map((share, i) => ({ i, rest: share === null ? -1 : share - Math.floor(share) }))
+    .filter((part) => part.rest >= 0)
+    .sort((x, y) => y.rest - x.rest);
+  const out = [...floors];
+  for (let k = 0; k < target - given && k < order.length; k++) {
+    out[order[k].i] = (out[order[k].i] ?? 0) + 1;
+  }
+  return out;
+}
+
 /** The analysis, from the cells, the daily series and the moved cells' evidence. */
 export function explainChange(input: {
   metric: WhyMetric;
   periodA: { from: string; to: string };
   periodB: { from: string; to: string };
   cells: WhyCell[];
+  /** The engines tracked in each period; else read from the cells (visibility's don't name theirs). */
+  engines?: { a: string[]; b: string[] };
+  /**
+   * The cells counted on the engines tracked in both periods only: what the
+   * periods are compared on (visibility's prompts recounted without an added
+   * or a dropped engine). Else the cells of those engines.
+   */
+  sameEngineCells?: WhyCell[];
   daily: { day: string; counts: DayCounts }[];
   evidence: Map<string, CellEvidence>;
 }): WhyResult {
@@ -427,19 +465,43 @@ export function explainChange(input: {
   );
   const delta = valueA !== null && valueB !== null ? valueB - valueA : null;
 
-  // In both periods; of those, with enough runs in each (stable).
-  const both = cells.filter((c) => inBoth(metric, c));
+  // The engines in each period; the periods are compared on those in both.
+  const enginesIn = (period: 'a' | 'b') =>
+    new Set(
+      input.engines?.[period] ?? cells.filter((c) => tracked(c[period])).map((c) => c.engine),
+    );
+  const [ea, eb] = [enginesIn('a'), enginesIn('b')];
+  const enginesChanged = [...ea].some((e) => !eb.has(e)) || [...eb].some((e) => !ea.has(e));
+  const same = input.sameEngineCells ?? cells.filter((c) => ea.has(c.engine) && eb.has(c.engine));
+
+  // Of those: tracked in both periods; counted in both; with enough runs in each (stable).
+  const trackedBoth = same.filter((c) => tracked(c.a) && tracked(c.b));
+  const both = trackedBoth.filter((c) => inBoth(metric, c));
   const stable = both.filter((c) => isStable(metric, c));
   const partsA = (list: WhyCell[]) => list.map((c) => ratioOf(metric, c.a!));
   const partsB = (list: WhyCell[]) => list.map((c) => ratioOf(metric, c.b!));
-  const changeOf = (list: WhyCell[]) => {
-    const a = valueOf(metric, partsA(list));
-    const b = valueOf(metric, partsB(list));
+  /** The change over some cells, each period counting the cells it can. */
+  const changeIn = (list: WhyCell[]) => {
+    const a = valueOf(
+      metric,
+      list.flatMap((c) => (counted(c.a) ? [ratioOf(metric, c.a)] : [])),
+    );
+    const b = valueOf(
+      metric,
+      list.flatMap((c) => (counted(c.b) ? [ratioOf(metric, c.b)] : [])),
+    );
     return a !== null && b !== null ? b - a : 0;
   };
-  const deltaBoth = changeOf(both);
-  const deltaStable = changeOf(stable);
-  const mix = delta === null ? 0 : delta - deltaBoth;
+  const deltaSame = changeIn(same);
+  const deltaTracked = changeIn(trackedBoth);
+  const deltaBoth = changeIn(both);
+  const deltaStable = changeIn(stable);
+  // The set's change: engines added or dropped, then prompts (§1 item 5.3).
+  const engineMix = delta === null ? 0 : delta - deltaSame;
+  const promptMix = delta === null ? 0 : deltaSame - deltaTracked;
+  const mix = engineMix + promptMix;
+  // Tracked in both, counted in one only: the brand not named there.
+  const unmentioned = deltaTracked - deltaBoth;
   const notEnough = deltaBoth - deltaStable;
   const se = stable.length > 0 ? changeSe(metric, partsA(stable), partsB(stable)) : null;
   const noise: WhyResult['noise_verdict'] =
@@ -453,12 +515,10 @@ export function explainChange(input: {
             ? 'within_normal_swing'
             : 'beyond_normal_swing';
 
-  // What changed in the set: prompts and engines tracked in one period only.
+  // What changed in the set: prompts tracked in one period only.
   const promptsIn = (period: 'a' | 'b') =>
     new Set(cells.filter((c) => tracked(c[period])).map((c) => c.promptId));
-  const enginesIn = (period: 'a' | 'b') =>
-    new Set(cells.filter((c) => tracked(c[period])).map((c) => c.engine));
-  const [pa, pb, ea, eb] = [promptsIn('a'), promptsIn('b'), enginesIn('a'), enginesIn('b')];
+  const [pa, pb] = [promptsIn('a'), promptsIn('b')];
 
   // Each stable cell's part of the stable change, split: its own rate's
   // change at its average weight (what evidence explains), and its change
@@ -502,17 +562,43 @@ export function explainChange(input: {
     fix_skill: FIX_SKILL[kind] ?? null,
     ...(entry.urls.size > 0 ? { urls: [...entry.urls].slice(0, 5) } : {}),
   }));
-  // The set changed: a prompt or an engine tracked in one period only.
-  const setChanged = cells.some((c) => tracked(c.a) !== tracked(c.b));
-  if (setChanged && round(mix, 2) !== 0) {
+  // The set changed: an engine, or a prompt, tracked in one period only.
+  // Arithmetic, not inference: the set did change.
+  const promptSetChanged = same.some((c) => tracked(c.a) !== tracked(c.b));
+  const setChanged = enginesChanged || promptSetChanged;
+  if (enginesChanged && round(engineMix, 2) !== 0) {
+    const sameByKey = new Map(same.map((c) => [c.key, c]));
+    parts.push({
+      kind: 'engines_changed',
+      contribution: engineMix,
+      confidence: 'high',
+      // The cells an added or dropped engine counts in.
+      cells: cells.filter((c) => {
+        const kept = sameByKey.get(c.key);
+        return !kept || kept.a?.runs !== c.a?.runs || kept.b?.runs !== c.b?.runs;
+      }).length,
+      evidence_refs: [],
+      fix_skill: null,
+    });
+  }
+  if (promptSetChanged && round(promptMix, 2) !== 0) {
     parts.push({
       kind: 'prompt_set_changed',
-      contribution: mix,
-      // Arithmetic, not inference: the set did change.
+      contribution: promptMix,
       confidence: 'high',
-      cells: cells.filter((c) => tracked(c.a) !== tracked(c.b)).length,
+      cells: same.filter((c) => tracked(c.a) !== tracked(c.b)).length,
       evidence_refs: [],
       fix_skill: FIX_SKILL.prompt_set_changed ?? null,
+    });
+  }
+  if (round(unmentioned, 2) !== 0) {
+    parts.push({
+      kind: 'not_mentioned',
+      contribution: unmentioned,
+      confidence: 'low',
+      cells: trackedBoth.length - both.length,
+      evidence_refs: [],
+      fix_skill: null,
     });
   }
   if (round(notEnough, 2) !== 0) {
@@ -530,15 +616,16 @@ export function explainChange(input: {
   const residualPart = (delta ?? 0) - parts.reduce((s, p) => s + p.contribution, 0);
 
   // Shares among what moved the change's way, 0–100; none within normal swing or without a stable set.
-  const way = Math.sign(delta ?? 0);
+  const way = signOf(delta ?? 0);
   const towards = [...parts.map((p) => p.contribution), residualPart].filter(
-    (c) => Math.sign(c) === way && way !== 0,
+    (c) => signOf(c) === way && way !== 0,
   );
   const total = towards.reduce((s, c) => s + c, 0);
   const sharing = noise === 'beyond_normal_swing' && stable.length > 0 && total !== 0;
+  /** Its share before rounding; null when it didn't move the change's way. */
   const shareOf = (contribution: number) =>
-    sharing && Math.sign(contribution) === way
-      ? Math.min(100, Math.max(0, round((contribution / total) * 100)))
+    sharing && signOf(contribution) === way
+      ? Math.min(100, Math.max(0, (contribution / total) * 100))
       : null;
 
   // Largest first, at most 5 bars: past 4, or under 10%, into "other".
@@ -555,7 +642,7 @@ export function explainChange(input: {
     ...p,
     contribution: round(p.contribution, 2),
     share: shareOf(p.contribution),
-    offset: way !== 0 && Math.sign(p.contribution) === -way,
+    offset: way !== 0 && signOf(p.contribution) === -way,
   }));
   if (folded.length > 0) {
     const contribution = folded.reduce((s, p) => s + p.contribution, 0);
@@ -563,13 +650,18 @@ export function explainChange(input: {
       kind: 'other',
       contribution: round(contribution, 2),
       share: shareOf(contribution),
-      offset: way !== 0 && Math.sign(contribution) === -way,
+      offset: way !== 0 && signOf(contribution) === -way,
       confidence: 'low',
       cells: folded.reduce((s, p) => s + p.cells, 0),
       evidence_refs: folded.flatMap((p) => p.evidence_refs).slice(0, MAX_REFS),
       fix_skill: null,
     });
   }
+  // The bars and the rest, in whole percents that add up to 100.
+  const shares = wholeShares([...causes.map((c) => c.share), shareOf(residualPart)]);
+  causes.forEach((cause, i) => (cause.share = shares[i]));
+  const residualShare = shares[causes.length];
+  const mixShare = shareOf(mix);
 
   return {
     metric,
@@ -586,7 +678,7 @@ export function explainChange(input: {
     change_point: changePoint(metric, input.daily),
     mix_effect: {
       contribution: round(mix, 2),
-      share: setChanged ? shareOf(mix) : null,
+      share: setChanged && mixShare !== null ? Math.round(mixShare) : null,
       prompts_added: minus([...pb], [...pa]).length,
       prompts_removed: minus([...pa], [...pb]).length,
       engines_added: minus([...eb], [...ea]),
@@ -603,7 +695,7 @@ export function explainChange(input: {
     unexplained: {
       kind: se !== null && Math.abs(residualPart) <= 2 * se ? 'normal_swing' : 'unexplained',
       contribution: round(residualPart, 2),
-      share: shareOf(residualPart),
+      share: residualShare,
     },
   };
 }

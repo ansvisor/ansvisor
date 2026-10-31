@@ -5,6 +5,7 @@ import {
   confidenceOf,
   explainChange,
   movedCells,
+  wholeShares,
   type CellCounts,
   type CellEvidence,
   type DayCounts,
@@ -18,9 +19,10 @@ import {
  * points of its true share and with High confidence; a change inside 2 × SE
  * is within normal swing (no change at all always is); 12 prompts added is a
  * "prompt set changed" cause equal to Δ_total − Δ_in-both. And what review
- * found: a cell where the brand wasn't named isn't a removed prompt, shares
- * stay 0–100 with offsets in points, "other" is one of 5 bars, and a cell
- * whose answers weren't all read gets no cause.
+ * found: a cell where the brand wasn't named isn't a removed prompt (nor
+ * its move a set change), an engine added is its own part, shares are whole
+ * percents adding up to 100 with offsets in points, "other" is one of 5 bars,
+ * and a cell whose answers weren't all read gets no cause.
  */
 
 const A = { from: '2026-10-05', to: '2026-10-11' };
@@ -69,8 +71,17 @@ function explain(
   cells: WhyCell[],
   found = new Map<string, CellEvidence>(),
   metric: WhyMetric = 'mention_rate',
+  more: Pick<Parameters<typeof explainChange>[0], 'engines' | 'sameEngineCells'> = {},
 ) {
-  return explainChange({ metric, periodA: A, periodB: B, cells, daily: [], evidence: found });
+  return explainChange({
+    metric,
+    periodA: A,
+    periodB: B,
+    cells,
+    daily: [],
+    evidence: found,
+    ...more,
+  });
 }
 
 describe('explainChange', () => {
@@ -191,6 +202,77 @@ describe('explainChange', () => {
     expect(result.causes.find((c) => c.kind === 'prompt_set_changed')).toBeUndefined();
   });
 
+  it('gives prompts the brand stopped being named in their own line, not a set change (average position)', () => {
+    const at = (position: number, named = 10) =>
+      counts(named, 10, { sumPosition: position * named, positionCount: named });
+    const cells = [
+      // 6 prompts at position 3 in both periods.
+      ...Array.from({ length: 6 }, (_, i) => cell(`p${i}|chatgpt`, at(3), at(3))),
+      // 4 at position 1, then not named at all.
+      ...Array.from({ length: 4 }, (_, i) => cell(`top${i}|chatgpt`, at(1), at(1, 0))),
+      // One neutral prompt added, at position 3.
+      cell('new|chatgpt', null, at(3)),
+    ];
+    const result = explain(cells, new Map(), 'avg_position');
+    expect(result).toMatchObject({ value_a: 2.2, value_b: 3, direction: 'declined' });
+    expect(result.mix_effect).toMatchObject({ contribution: 0, prompts_added: 1 });
+    expect(result.causes.find((c) => c.kind === 'prompt_set_changed')).toBeUndefined();
+    expect(result.causes.find((c) => c.kind === 'not_mentioned')).toMatchObject({
+      contribution: 0.8,
+      confidence: 'low',
+      cells: 4,
+    });
+  });
+
+  it('gives the cells nobody was named in their own line, not a set change (share of voice)', () => {
+    const named = (brand: number, rivals: number) =>
+      counts(brand > 0 ? 7 : 0, 7, { brandMentions: brand, competitorMentions: rivals });
+    const cells = [
+      ...Array.from({ length: 6 }, (_, i) => cell(`p${i}|chatgpt`, named(60, 40), named(50, 50))),
+      ...Array.from({ length: 4 }, (_, i) => cell(`q${i}|chatgpt`, named(80, 20), named(0, 0))),
+      cell('new|chatgpt', null, named(50, 50)),
+    ];
+    const result = explain(cells, new Map(), 'share_of_voice');
+    // 68 → 50: −8 from the prompts nobody was named in, −10 from the rest.
+    expect(result).toMatchObject({ value_a: 68, value_b: 50, delta: -18 });
+    expect(result.causes.find((c) => c.kind === 'prompt_set_changed')).toBeUndefined();
+    const unnamed = result.causes.find((c) => c.kind === 'not_mentioned')!;
+    expect(unnamed).toMatchObject({ contribution: -8, share: 44, confidence: 'low' });
+    expect(result.unexplained).toMatchObject({ contribution: -10, share: 56 });
+  });
+
+  it('gives an engine added in the later period its own part, not the prompts’ (visibility)', () => {
+    // 20 prompts: 5 visible on ChatGPT in both periods; with Gemini added, 13 in b.
+    const prompt = (i: number, runs: number, visible: boolean) => counts(visible ? 1 : 0, runs);
+    const cells = Array.from({ length: 20 }, (_, i) =>
+      cell(`p${i}`, prompt(i, 7, i < 5), prompt(i, 14, i < 13), 'all'),
+    );
+    const sameEngineCells = Array.from({ length: 20 }, (_, i) =>
+      cell(`p${i}`, prompt(i, 7, i < 5), prompt(i, 7, i < 5), 'all'),
+    );
+    const found = new Map(
+      cells.map((c) => [c.key, evidence({ ownCitedB: ['acme.example/faq'] })] as const),
+    );
+    const result = explain(cells, found, 'visibility', {
+      engines: { a: ['gpt-5'], b: ['gpt-5', 'gemini-web'] },
+      sameEngineCells,
+    });
+    expect(result).toMatchObject({ value_a: 25, value_b: 65, delta: 40 });
+    expect(result.mix_effect).toMatchObject({
+      contribution: 40,
+      engines_added: ['gemini-web'],
+      engines_removed: [],
+      prompts_added: 0,
+    });
+    expect(result.causes[0]).toMatchObject({
+      kind: 'engines_changed',
+      contribution: 40,
+      share: 100,
+      fix_skill: null,
+    });
+    expect(result.causes.find((c) => c.kind === 'gained_citation')).toBeUndefined();
+  });
+
   it('keeps shares 0–100 among what moved the change’s way, and gives an offset in points', () => {
     const cells: WhyCell[] = [];
     const found = new Map<string, CellEvidence>();
@@ -213,6 +295,24 @@ describe('explainChange', () => {
       if (cause.share !== null) expect(cause.share).toBeGreaterThanOrEqual(0);
       if (cause.share !== null) expect(cause.share).toBeLessThanOrEqual(100);
     }
+  });
+
+  it('gives whole percents that add up to 100, and no share to a float’s leftover', () => {
+    expect(wholeShares([100 / 3, 100 / 3, 100 / 3])).toEqual([34, 33, 33]);
+    expect(wholeShares([62.4, null, 37.6])).toEqual([62, null, 38]);
+    expect(wholeShares([null, null])).toEqual([null, null]);
+    // Every cell's move explained: the rest is a float's leftover, with no share.
+    const cells: WhyCell[] = [];
+    const found = new Map<string, CellEvidence>();
+    for (let i = 0; i < 12; i++) {
+      cells.push(cell(`lost${i}|chatgpt`, counts(10, 10), counts(3, 10)));
+      found.set(`lost${i}|chatgpt`, lostToCompetitor);
+    }
+    const result = explain(cells, found);
+    const shared = result.causes.reduce((sum, c) => sum + (c.share ?? 0), 0);
+    expect(shared + (result.unexplained.share ?? 0)).toBe(100);
+    expect(result.causes[0]).toMatchObject({ kind: 'lost_citation_to_competitor', share: 100 });
+    expect(result.unexplained.share).toBeNull();
   });
 
   it('shows 5 bars at most, "other" one of them', () => {

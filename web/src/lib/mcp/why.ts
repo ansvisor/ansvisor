@@ -135,16 +135,17 @@ export function whyPeriods(
   if (![a.from, a.to, b.from, b.to].every(isDay)) {
     throw new ExplainChangeInputError('A day isn’t a date.');
   }
+  // First, so a day the person named today or later says why (around: b would end before it starts).
+  if (dayOf(b.from) > yesterday || dayOf(b.to) > yesterday) {
+    throw new ExplainChangeInputError(
+      'The later period can’t go past yesterday: today isn’t tracked yet.',
+    );
+  }
   if (a.from > a.to || b.from > b.to) {
     throw new ExplainChangeInputError('A period ends before it starts.');
   }
   if (a.to >= b.from) {
     throw new ExplainChangeInputError('The earlier period has to end before the later one starts.');
-  }
-  if (dayOf(b.to) > yesterday) {
-    throw new ExplainChangeInputError(
-      'The later period can’t go past yesterday: today isn’t tracked yet.',
-    );
   }
   if (daysBetween(a.from, a.to) > MAX_PERIOD_DAYS || daysBetween(b.from, b.to) > MAX_PERIOD_DAYS) {
     throw new ExplainChangeInputError(`A period is ${MAX_PERIOD_DAYS} days at most.`);
@@ -283,32 +284,49 @@ export async function explainChangeFor(
   const read = (data ?? {}) as { cells?: RpcCell[]; daily?: RpcDay[]; complete?: boolean };
   const rows = (read.cells ?? []).filter((row) => !LEFT_OUT_PLATFORMS.has(row.platform ?? ''));
 
-  const cells = new Map<string, Cell>();
-  const engines = new Set<string>();
-  let dataAsOf: string | null = null;
-  for (const row of rows) {
-    const key = keyFor(params.metric, row);
-    const engine = row.model_used ?? row.platform ?? 'unknown';
-    engines.add(engine);
-    const cell = cells.get(key) ?? {
-      key,
-      promptId: row.prompt_id,
-      engine: params.metric === 'visibility' ? 'all' : engine,
-      a: null,
-      b: null,
-      platforms: new Set<string>(),
-      models: new Set<string>(),
-      regions: new Set<string>(),
-    };
-    cell[row.period] = addCounts(cell[row.period], countsOf(row));
-    if (row.platform) cell.platforms.add(row.platform);
-    if (row.model_used) cell.models.add(row.model_used);
-    if (row.region) cell.regions.add(row.region);
-    cells.set(key, cell);
-    if (row.last_at && (!dataAsOf || row.last_at > dataAsOf)) dataAsOf = row.last_at;
-  }
+  const engineOf = (row: RpcCell) => row.model_used ?? row.platform ?? 'unknown';
+  const engines = new Set(rows.map(engineOf));
+  const dataAsOf = rows.reduce<string | null>(
+    (latest, row) => (row.last_at && (!latest || row.last_at > latest) ? row.last_at : latest),
+    null,
+  );
+  // The engines tracked in each period: the periods are compared on those in both.
+  const enginesIn = { a: new Set<string>(), b: new Set<string>() };
+  for (const row of rows) if (n(row.runs) > 0) enginesIn[row.period].add(engineOf(row));
+  const inBothPeriods = (engine: string) => enginesIn.a.has(engine) && enginesIn.b.has(engine);
+
+  const cellsOf = (from: RpcCell[]) => {
+    const out = new Map<string, Cell>();
+    for (const row of from) {
+      const key = keyFor(params.metric, row);
+      const cell = out.get(key) ?? {
+        key,
+        promptId: row.prompt_id,
+        engine: params.metric === 'visibility' ? 'all' : engineOf(row),
+        a: null,
+        b: null,
+        platforms: new Set<string>(),
+        models: new Set<string>(),
+        regions: new Set<string>(),
+      };
+      cell[row.period] = addCounts(cell[row.period], countsOf(row));
+      if (row.platform) cell.platforms.add(row.platform);
+      if (row.model_used) cell.models.add(row.model_used);
+      if (row.region) cell.regions.add(row.region);
+      out.set(key, cell);
+    }
+    return out;
+  };
+  const cells = cellsOf(rows);
   const list = [...cells.values()];
-  const moved = movedCells(params.metric, list, EVIDENCE_CELLS);
+  // What the periods are compared on: visibility's prompts recounted on the
+  // engines in both periods, the others' cells of those engines.
+  const same =
+    params.metric === 'visibility'
+      ? cellsOf(rows.filter((row) => inBothPeriods(engineOf(row))))
+      : new Map([...cells].filter(([, cell]) => inBothPeriods(cell.engine)));
+  const sameList = [...same.values()];
+  const moved = movedCells(params.metric, sameList, EVIDENCE_CELLS);
 
   const [competitors, brandDomains, topic] = await Promise.all([
     supabaseAdmin.from('competitors').select('domain').eq('brand_id', params.brandId),
@@ -335,7 +353,7 @@ export async function explainChangeFor(
   const evidence = await readEvidence({
     brandId: params.brandId,
     metric: params.metric,
-    cells: moved.map((key) => cells.get(key)!).filter(Boolean),
+    cells: moved.map((key) => same.get(key)!).filter(Boolean),
     periods,
     ownSites,
     competitorSites,
@@ -346,6 +364,14 @@ export async function explainChangeFor(
     periodA: periods.a,
     periodB: periods.b,
     cells: list.map(({ key, promptId, engine, a, b }) => ({ key, promptId, engine, a, b })),
+    engines: { a: [...enginesIn.a], b: [...enginesIn.b] },
+    sameEngineCells: sameList.map(({ key, promptId, engine, a, b }) => ({
+      key,
+      promptId,
+      engine,
+      a,
+      b,
+    })),
     daily: (read.daily ?? []).map((day) => ({
       day: day.day,
       counts: {
