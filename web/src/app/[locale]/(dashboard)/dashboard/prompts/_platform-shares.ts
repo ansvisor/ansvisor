@@ -1,14 +1,15 @@
 /**
  * The Prompt Volumes chart's split of AI-answered queries by answer engine,
- * apart from the chart so the page can say AI Overviews' share without
- * loading the chart's library.
+ * with the figures its weights were derived from.
  */
 
 /**
  * The share of Google searches that show an AI Overview (Semrush / Pew
- * estimates): what AI Overviews' weight in the chart rests on, as the
- * chart's caption says. Not the AI adoption rate the volumes are estimated
- * with (AI_ADOPTION_RATE in lib/volume-estimate.ts), which sizes the total.
+ * estimates) when the weights were set: what AI Overviews' weight in the
+ * chart rests on. Not the AI adoption rate the volumes are estimated with
+ * (AI_ADOPTION_RATE in lib/volume-estimate.ts), which sizes the total and
+ * is the rate the chart's caption says; the caption gives no AI Overviews
+ * share, so the two figures don't read as contradicting each other.
  */
 export const AIO_SEARCH_SHARE = 0.35;
 

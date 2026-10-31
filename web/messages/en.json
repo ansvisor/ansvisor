@@ -10295,7 +10295,7 @@
       "totalSub": "from {google} Google searches",
       "averageTitle": "Avg. AI Volume",
       "averageSub": "per prompt",
-      "chartCaption": "Total estimated AI-answered queries across all topic clusters, split by answer-engine share. Weights include Google AI Overviews (~{share} of Google searches), Google AI Mode, and standalone chatbots.",
+      "chartCaption": "Total estimated AI-answered queries across all topic clusters (Google volume × the {rate} AI adoption rate), split by answer-engine share: Google AI Overviews, Google AI Mode and standalone chatbots.",
       "googleColumn": "Google Vol.",
       "googleTip": "The prompt's monthly Google searches: the median of its related keywords that have search data.",
       "aiColumn": "Est. AI Vol.",
