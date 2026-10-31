@@ -5,10 +5,10 @@ keywords: [send to cms, webflow, wordpress, framer, draft post, last send]
 synonyms: [push to cms, publish to blog, send to website, export to cms]
 plan: all
 updated: 2026-10-29
-last_checked: 2026-10-29
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/send-to-cms.mdx, docs/guides/content-editor.mdx]
 ---
 **Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site or your Wix site's Blog as a draft post, or to your workflow tool, which creates the post in your CMS. Ansvisor never publishes on its own: you publish in your CMS. Only admins and managers can send pages.

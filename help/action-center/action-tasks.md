@@ -4,11 +4,11 @@ route: /dashboard/action-center/actions
 keywords: [tasks, task status, check now, regenerate tasks, done when, how we check]
 synonyms: [steps, subtasks, to-do items, task checks]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/action-center.mdx]
 ---
 Each action comes with tasks: concrete steps such as "Refresh content for these prompts" or "Add structured data to these pages". You find them on the action's **Tasks** tab.
@@ -48,7 +48,7 @@ A task you reopen after it passed stays open: the call is yours.
 
 ## Task status
 
-A task's status is **To Do**, **In Progress**, **Completed** or **Skipped** (with a reason). Skipped tasks leave the count, so they don't hold an action short of done. Use **Add task** for work of your own, and delete tasks you don't need.
+A task's status is **To Do**, **In Progress**, **Completed**, **Skipped** (with a reason), **Waiting Approval**, or **Failed** when Ansvisor couldn't carry it out itself and it needs doing by hand. Skipped tasks leave the count, so they don't hold an action short of done. Use **Add task** for work of your own, and delete tasks you don't need.
 
 ## Hand a task on
 

@@ -4,11 +4,11 @@ route: /dashboard/insights
 keywords: [brand visibility, answer engine insights, visibility score, key metrics, leaderboard, by AI platform, topics vs competitors, opportunities, filters]
 synonyms: [AI visibility report, analytics hub, insights page, dashboard overview, visibility dashboard]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/answer-engine-insights.mdx, docs/guides/competitors.mdx, docs/guides/prompts.mdx]
 ---
 **Brand Visibility** in the sidebar opens **Answer Engine Insights**, the main analytics page for a brand. It's your daily view of how AI answers treat your brand across your tracked prompts, and where to act next.
@@ -25,13 +25,13 @@ A self-hosted instance also has **Test Single Prompt** and **Run All**, to start
 
 ## The summary line
 
-Under the header, one line sums up your Visibility score and its change, your rank and the gap to the brand next to you, and the platforms that moved most. The copy button puts the line on your clipboard, ready to paste into a message or a report.
+Below the filters, one line sums up your Visibility score and its change, your rank and the gap to the brand next to you, and the platforms that moved most. The copy button puts the line on your clipboard, ready to paste into a message or a report.
 
 ## The key metric cards
 
 Nine cards follow. Most show their change **vs previous period** and a small daily line:
 
-- **Visibility**: your score from 0 to 100, and your rank among the tracked brands. Click it to open the **Visibility Breakdown** panel.
+- **Visibility**: your score from 0 to 100, and your rank among the tracked brands, or, before you track competitors, how many prompts you appeared in. Click it to open the **Visibility Breakdown** panel.
 - **Tracked prompts**: the prompts answered in the period. On plans with a limit, a bar shows how many prompt locations your workspace uses. Click it to open Prompts.
 - **Mentions** and **Citations**: how often answers named your brand and cited your pages. They open the Mentions and Citations pages.
 - **Net sentiment**: the positive minus the negative share of the answers that name you. It opens Mentions.
@@ -96,4 +96,4 @@ The filters apply to everything on the page except **Opportunities**, which list
 1. Set the range to **7d**. Is your Visibility up or down? If it's down, **Why it changed** shows which platforms, topics and prompts moved it.
 2. In **By AI platform**, find the platform with the lowest score or the highlighted biggest drop: that's your next investment.
 3. Look at the suggested topics and prompts in **Opportunities**, and track one to three of them.
-4. From **Opportunities** under **Content** in the sidebar, generate a brief for the prompt that did worst this week.
+4. From **Opportunities** under **Content** in the sidebar, open the opportunity for the topic that did worst this week and click **Generate Brief**.
