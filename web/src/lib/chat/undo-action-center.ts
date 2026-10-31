@@ -175,22 +175,26 @@ const attachToAction: UndoRule = {
 
 // ─── attach_file_to_task: take the file off the task (§9, 7 days) ───────────
 
-/** A task's action, its number and how it is named in History. */
-async function readTask(taskId: string) {
+/**
+ * A task's action, its number and how it is named in History; null when it
+ * isn't the logged brand's (the service role reads past the policies).
+ */
+async function readTask(taskId: string, brandId: string | null = null) {
   const { data, error } = await supabaseAdmin
     .from('action_tasks')
-    .select('id, action_id, task_key, title, status, actions!inner(action_no)')
+    .select('id, action_id, task_key, title, status, actions!inner(action_no, brand_id)')
     .eq('id', taskId)
     .maybeSingle();
   check(error, 'the task');
-  return data as {
+  const row = data as {
     id: string;
     action_id: string;
     task_key: string | null;
     title: string | null;
     status: string;
-    actions: { action_no: number } | null;
+    actions: { action_no: number; brand_id: string } | null;
   } | null;
+  return row && (!brandId || row.actions?.brand_id === brandId) ? row : null;
 }
 
 /** A task as the Activity log names it: "AC-1258 “Add a pricing FAQ…”". */
@@ -235,13 +239,13 @@ const attachFileToTask: UndoRule = {
           : null,
     };
   },
-  async inverse({ id, data, userId }) {
+  async inverse({ id, brandId, data, userId }) {
     const after = asObject(data.after);
     const fileId = textOf(after.fileId);
     if (!fileId) return 'gone';
     const [{ data: file, error: fileError }, task] = await Promise.all([
       supabaseAdmin.from('chat_files').select('id, status').eq('id', fileId).maybeSingle(),
-      readTask(id),
+      readTask(id, brandId),
     ]);
     check(fileError, 'the file');
     if (!file || !task) return 'gone';
