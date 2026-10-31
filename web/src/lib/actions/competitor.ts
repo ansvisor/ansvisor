@@ -86,10 +86,10 @@ export type AddCompetitorsResult =
 
 /**
  * Add competitors to a brand: Chat's add_competitors (CHAT-20 §9 row 30).
- * Admins and Managers, checked here (the table's policy lets every member
- * in). A domain (or, without one, a name) the brand already has is skipped
- * (the natural key, §11c); each of the rest through addCompetitor, as the
- * Competitors page adds one. Errors come back as values (#427).
+ * Admins and Managers, checked here (as the table's policy does). A domain
+ * (or, without one, a name) the brand already has is skipped (the natural
+ * key, §11c); each of the rest through addCompetitor, as the Competitors page
+ * adds one. Errors come back as values (#427).
  */
 export async function addCompetitors(
   brandId: string,
@@ -224,8 +224,11 @@ export async function deleteCompetitor(id: string): Promise<void> {
   await assertWritable();
   const supabase = await createClient();
 
-  const { error } = await supabase.from('competitors').delete().eq('id', id);
+  // A delete the row rules don't allow removes nothing rather than failing:
+  // say so instead of reporting it removed.
+  const { data, error } = await supabase.from('competitors').delete().eq('id', id).select('id');
   if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("The competitor couldn't be removed.");
 
   revalidatePath('/dashboard/brands');
 }
