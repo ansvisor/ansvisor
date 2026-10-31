@@ -55,6 +55,107 @@ const HIDDEN =
   '[hidden]:not([hidden="until-found"]), [style*="display:none"], [style*="display: none"]';
 
 /**
+ * All a page hides from its reader, for a reader that keeps nothing hidden
+ * (Chat's fetch_page, `dropHidden`): what the browser hides, what only a
+ * screen reader reads, an FAQ's collapsed answers too.
+ */
+const ALL_HIDDEN =
+  '[hidden], [aria-hidden="true"], .sr-only, .visually-hidden, .screen-reader-text';
+/**
+ * Classes that hide a block (Tailwind's, Bootstrap's): unless a class on
+ * it shows it again on a wider screen (`hidden md:block`, `d-none
+ * d-lg-block`, `invisible md:visible`), which a desktop reader sees.
+ */
+const HIDDEN_CLASSES = '.hidden, .d-none, .invisible';
+const SHOWN_CLASS =
+  /^(?:(?:sm|md|lg|xl|2xl):(?:block|flex|grid|inline|inline-block|inline-flex|inline-grid|table|contents|visible)|d-(?:sm|md|lg|xl|xxl)-(?:block|flex|grid|inline|inline-block|inline-flex|table)|visible)$/;
+/**
+ * Styles that hide text from a reader: gone, see-through, zero-sized,
+ * off-screen or clipped. A property's own name only: `margin-left`,
+ * `background-clip: text` (a gradient heading) show what they style.
+ */
+const HIDDEN_STYLE =
+  /display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(?:\.0+)?\s*(?:;|!|$)|font-size\s*:\s*0(?:\.0+)?(?:px|em|rem|%|pt)?\s*(?:;|!|$)|(?<![\w-])(?:left|top|text-indent)\s*:\s*-\d{3,}|(?<![\w-])clip\s*:\s*rect/i;
+
+/** Whether a class hides the block for every screen: none of its others shows it again. */
+const hiddenByClass = ($, el) =>
+  !String($(el).attr('class') ?? '')
+    .split(/\s+/)
+    .some((name) => SHOWN_CLASS.test(name));
+
+/** The blocks a text reads apart: a space after each, so their words don't run together. */
+const TEXT_BLOCKS = new Set([
+  'p',
+  'li',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'div',
+  'section',
+  'article',
+  'blockquote',
+  'pre',
+  'td',
+  'th',
+  'dt',
+  'dd',
+  'br',
+  'figcaption',
+  'tr',
+  'ul',
+  'ol',
+  'table',
+]);
+
+const BLOCK_END = Symbol('block end');
+
+/** Elements whose text is code, not words a reader sees: never read as text. */
+const NOT_WORDS = new Set(['script', 'style']);
+
+/**
+ * An element's words, each block apart, in one walk (no recursion: a deep
+ * page is fine). A script's or a style's code isn't words.
+ */
+export function plainTextOf(root) {
+  const parts = [];
+  const stack = [root];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (node === BLOCK_END) {
+      parts.push(' ');
+    } else if (node.type === 'text') {
+      parts.push(node.data);
+    } else if (isElement(node) && NOT_WORDS.has(node.name)) {
+      // Its code, skipped.
+    } else if (node.children) {
+      if (isElement(node) && TEXT_BLOCKS.has(node.name)) stack.push(BLOCK_END);
+      for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
+    }
+  }
+  return clean(parts.join(''));
+}
+
+/**
+ * The blocks under `root` that hide their words from a reader (ALL_HIDDEN,
+ * HIDDEN_CLASSES, HIDDEN_STYLE): what `dropHidden` removes, and what a
+ * reader for a model checks apart (page-open.js).
+ */
+export function hiddenBlocksIn($, root) {
+  return [
+    ...findIn($, root, ALL_HIDDEN).toArray(),
+    ...findIn($, root, HIDDEN_CLASSES)
+      .toArray()
+      .filter((el) => hiddenByClass($, el)),
+    ...findIn($, root, '[style]')
+      .toArray()
+      .filter((el) => HIDDEN_STYLE.test($(el).attr('style') ?? '')),
+  ];
+}
+
+/**
  * A question an accordion's hidden answer follows: an FAQ beside the text
  * (after the post, in the page's main block) keeps its answers too.
  */
@@ -765,10 +866,20 @@ export function textLength(html) {
 /**
  * @param {string} html the page as fetched
  * @param {string} pageUrl the page's address after redirects, for its links
- * @returns {{ title: string, html: string }} html: the content, then its JSON-LD scripts
+ * @param {{ $?: import('cheerio').CheerioAPI, dropHidden?: boolean, withText?: boolean }} [opts]
+ *   `$`: the page already parsed, read once by a caller that reads it too
+ *   (it is changed: the frame and furniture go). `dropHidden`: all the page
+ *   hides goes first, with no FAQ answers kept (a reader for a model).
+ *   `withText`: the content's words too.
+ * @returns {{ title: string, html: string, text?: string }} html: the content,
+ *   then its JSON-LD scripts; text (withText): its words, each block apart
  */
-export function extractPageContent(html, pageUrl) {
-  const $ = cheerio.load(html);
+export function extractPageContent(
+  html,
+  pageUrl,
+  { $: parsed, dropHidden = false, withText = false } = {},
+) {
+  const $ = parsed ?? cheerio.load(html);
 
   const jsonLd = $('script[type="application/ld+json"]')
     .map((_, el) => $(el).text().trim())
@@ -805,6 +916,7 @@ export function extractPageContent(html, pageUrl) {
 
   const body = $('body');
   removeAll(findIn($, body[0], FRAME).toArray());
+  if (dropHidden) removeAll(hiddenBlocksIn($, body[0]));
 
   // The root: the page's main block when it holds the text; else the part
   // of the page holding the text and its H1; else the text area alone.
@@ -982,5 +1094,9 @@ export function extractPageContent(html, pageUrl) {
   const schema = jsonLd
     .map((text) => `<script type="application/ld+json">${text.replace(/</g, '\\u003c')}</script>`)
     .join('');
-  return { title, html: `${content}${schema}` };
+  return {
+    title,
+    html: `${content}${schema}`,
+    ...(withText ? { text: plainTextOf(root[0]) } : {}),
+  };
 }

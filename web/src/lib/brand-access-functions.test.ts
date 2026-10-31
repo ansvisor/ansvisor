@@ -439,13 +439,15 @@ function sourceFiles(dir: string): string[] {
  * brand_scope, whatever the value (the Team screen, BRAND-ACCESS PR 12), in the
  * web, the server or a migration after 00388 (whose own grant only follows a
  * Selected person). A brand_scope key in an object counts (an insert or update
- * payload); Chat's `case 'brand_scope':` denial code doesn't.
+ * payload); Chat's `case 'brand_scope':` denial code doesn't, and nor does a
+ * key set to the literal 'all' (the server's All-brands default for a profile
+ * read before 00388): it can only widen, never narrow.
  */
 function narrowingCode(): string[] {
   const writes = new RegExp(
     [
       String.raw`\bfrom\(\s*['"]member_brands['"]\s*\)\s*\.\s*(?:insert|upsert|update)\b`,
-      String.raw`(?<!\bcase\s+['"])\bbrand_scope['"]?\s*:(?!:)`,
+      String.raw`(?<!\bcase\s+['"])\bbrand_scope['"]?\s*:(?!:)(?!\s*['"]all['"])`,
       String.raw`\binsert\s+into\s+(?:public\.)?(?:member_brands\b|profiles\s*\([^)]*\bbrand_scope\b)`,
       String.raw`\bupdate\s+(?:public\.)?profiles\s+set\b[^;]*?\bbrand_scope\s*=`,
     ].join('|'),

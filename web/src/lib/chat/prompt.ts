@@ -8,7 +8,9 @@ import type { ModelMessage, SystemModelMessage } from 'ai';
  *      until a release (cache mark 1, on the core system block; the tools
  *      render before the system, so the mark covers them too);
  *   2. the workspace block: the person's role, the plan, the chat's brand,
- *      what isn't available to them (cache mark 2);
+ *      what isn't available to them, the skills they may use (cache mark 2);
+ *      then the bodies of the skills loaded for this run, below the system
+ *      rules (CHAT-13 item 6), unmarked: they change within a run;
  *   3. the chat so far: its summary and recent turns, which only grow at the
  *      end (cache mark 3, on its last message; the writing model only);
  *   4. this turn: the day, the question, what was read, and the step's own
@@ -38,6 +40,8 @@ export interface StepPromptParts {
   core: string;
   /** (2) The workspace block. */
   workspace: string;
+  /** (2b) The loaded skills' block, when a skill is loaded (CHAT-13 item 6). */
+  skills?: string;
   /** (3) The chat so far, oldest first; empty for the reading model. */
   history: ModelMessage[];
   /** (4) This turn's message from the person: the day, the question, what was read. */
@@ -64,9 +68,12 @@ export function stepPrompt(parts: StepPromptParts): {
 } {
   const core: SystemModelMessage = { role: 'system', content: parts.core };
   const workspace: SystemModelMessage = { role: 'system', content: parts.workspace };
+  const skills: SystemModelMessage[] = parts.skills
+    ? [{ role: 'system', content: parts.skills }]
+    : [];
   if (!parts.cache) {
     return {
-      system: [core, workspace],
+      system: [core, workspace, ...skills],
       messages: [...parts.history, parts.turn, ...parts.steps],
       marks: 0,
     };
@@ -83,7 +90,7 @@ export function stepPrompt(parts: StepPromptParts): {
     marks += 1;
   }
   return {
-    system: [marked(core), marked(workspace)],
+    system: [marked(core), marked(workspace), ...skills],
     messages: [...history, parts.turn, ...steps],
     marks,
   };

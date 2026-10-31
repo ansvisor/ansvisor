@@ -170,6 +170,26 @@ describe('reserveChatStep', () => {
     expect(calls[0].body).toMatchObject({ ownKey: true, feature: 'image', stepId: null });
   });
 
+  it('names an agent run’s step with its run, and says when the run reached its own cap', async () => {
+    const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c09';
+    held();
+    budgetOf(await reserveChatStep(step({ feature: 'agent', agentRunId: AGENT_RUN })));
+    expect(calls[0].body).toMatchObject({ feature: 'agent', agentRunId: AGENT_RUN });
+    // A person's own chat sends no agent run.
+    held();
+    budgetOf(await reserveChatStep(step()));
+    expect(calls[1].body).not.toHaveProperty('agentRunId');
+
+    answers.push({ status: 429, body: { success: false, error: 'run_cap' } });
+    expect(await reserveChatStep(step({ agentRunId: AGENT_RUN }))).toEqual({
+      ok: false,
+      refusal: 'run_cap',
+      trial: false,
+      retryable: false,
+      message: "This run reached its limit, so Chat stopped here. What's done so far is kept.",
+    });
+  });
+
   it('says the AI limit is used up, in the trial’s words in the free trial, and starts nothing', async () => {
     answers.push({ status: 429, body: { success: false, error: 'ai_limit', trial: false } });
     expect(await reserveChatStep(step())).toEqual({

@@ -124,22 +124,32 @@ export async function createBrand(input: CreateBrandInput): Promise<CreateBrandR
 
   const slug = slugify(input.name) || `brand-${Date.now()}`;
 
+  // The id is chosen here and the row is read back after the insert, never
+  // with `insert … returning`: that checks the select policy before the row
+  // is stored, and a Selected-brands person (00388/00389) only sees the brand
+  // once the creator grant, which runs after the insert, has shared it.
+  const brandId = crypto.randomUUID();
+  const { error: insertError } = await supabase.from('brands').insert({
+    id: brandId,
+    organization_id: input.organizationId,
+    name: input.name.trim(),
+    slug,
+    logo_url: input.logoUrl || null,
+    industry: input.industry || null,
+    description: input.description || null,
+    region: input.region || 'US',
+    // State only makes sense for US brands; drop it silently otherwise so
+    // a stale value from a region switch can't leak into the row.
+    state: (input.region || 'US') === 'US' ? input.state || null : null,
+    language: input.language || 'en',
+  });
+
+  if (insertError) throw new Error(insertError.message);
+
   const { data: brand, error } = await supabase
     .from('brands')
-    .insert({
-      organization_id: input.organizationId,
-      name: input.name.trim(),
-      slug,
-      logo_url: input.logoUrl || null,
-      industry: input.industry || null,
-      description: input.description || null,
-      region: input.region || 'US',
-      // State only makes sense for US brands; drop it silently otherwise so
-      // a stale value from a region switch can't leak into the row.
-      state: (input.region || 'US') === 'US' ? input.state || null : null,
-      language: input.language || 'en',
-    })
-    .select()
+    .select('*')
+    .eq('id', brandId)
     .single();
 
   if (error || !brand) throw new Error(error?.message ?? 'Failed to create brand');

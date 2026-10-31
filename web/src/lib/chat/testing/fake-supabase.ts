@@ -27,6 +27,11 @@ export interface FakeSupabase {
   log: [string, string][];
   /** Database functions by name, for rpc(). */
   rpcs: Record<string, (args: Record<string, unknown>) => unknown>;
+  /**
+   * PostgREST's max_rows: a select returns at most this many rows, whatever
+   * its limit, as the real API cuts them without an error. Unset: no cap.
+   */
+  maxRows?: number;
   from(table: string): Builder;
   rpc(name: string, args?: Record<string, unknown>): Promise<Result>;
 }
@@ -45,6 +50,14 @@ interface Builder extends PromiseLike<Result> {
   not(column: string, operator: 'is', value: null): Builder;
   lt(column: string, value: string): Builder;
   gt(column: string, value: unknown): Builder;
+  /** At or after: an ISO time, or a number. */
+  gte(column: string, value: unknown): Builder;
+  /**
+   * PostgREST's `or`: a row passes any of the comma-separated `column.op.value`
+   * terms (eq, neq, is null, lt a date — as saveContentDraft's agent check) or
+   * `and(…)` groups of them.
+   */
+  or(filter: string): Builder;
   /**
    * A full-text match (`fts`): every `'word':*` term of `query`, joined by `&`,
    * starts a word of the row's `column` — a test row holds its search
@@ -67,6 +80,29 @@ export const fakeId = () => {
 };
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+/**
+ * A select's JSON fields (`alias:column->key`), as PostgREST reads them:
+ * each comes with the row under its alias, else its last key, beside the
+ * row's own columns.
+ */
+function jsonFields(columns: string | undefined): ((row: Row) => Row)[] {
+  return (columns ?? '').split(',').flatMap((entry) => {
+    const match = entry.trim().match(/^(?:(\w+):)?(\w+)((?:->\w+)+)$/);
+    if (!match) return [];
+    const [, alias, column, path] = match;
+    const keys = path.split('->').filter(Boolean);
+    return [
+      (row: Row) => {
+        let value: unknown = row[column];
+        for (const key of keys) {
+          value = value && typeof value === 'object' ? (value as Row)[key] : undefined;
+        }
+        return { [alias ?? keys[keys.length - 1]]: value ?? null };
+      },
+    ];
+  });
+}
 
 export function createFakeSupabase(): FakeSupabase {
   const fake: FakeSupabase = {
@@ -93,6 +129,9 @@ export function createFakeSupabase(): FakeSupabase {
       let max: number | null = null;
       let offset = 0;
       let counting: { head: boolean } | null = null;
+      let fields: ((row: Row) => Row)[] = [];
+      const read = (row: Row) =>
+        fields.reduce<Row>((out, field) => ({ ...out, ...field(row) }), { ...row });
 
       const rows = () => (fake.tables[table] ??= []);
       const clash = (row: Row, others: Row[]) =>
@@ -115,12 +154,13 @@ export function createFakeSupabase(): FakeSupabase {
             }
             return 0;
           });
-          const limited = sorted.slice(offset, max === null ? undefined : offset + max);
+          const cap = Math.min(max ?? Infinity, fake.maxRows ?? Infinity);
+          const limited = sorted.slice(offset, cap === Infinity ? undefined : offset + cap);
           if (counting) {
-            const data = counting.head ? null : limited.map((row) => ({ ...row }));
+            const data = counting.head ? null : limited.map(read);
             return { data, error: null, count: matching.length };
           }
-          return { data: limited.map((row) => ({ ...row })), error: null };
+          return { data: limited.map(read), error: null };
         }
         if (kind === 'delete') {
           fake.tables[table] = rows().filter((row) => !matching.includes(row));
@@ -181,9 +221,12 @@ export function createFakeSupabase(): FakeSupabase {
       };
 
       const builder: Builder = {
-        select(_columns, options) {
+        select(columns, options) {
           if (kind !== 'select') returning = true;
-          else if (options?.count) counting = { head: options.head ?? false };
+          else {
+            fields = jsonFields(columns);
+            if (options?.count) counting = { head: options.head ?? false };
+          }
           return builder;
         },
         insert(rowsIn) {
@@ -239,6 +282,54 @@ export function createFakeSupabase(): FakeSupabase {
         },
         gt(column, value) {
           filters.push((row) => (row[column] as number) > (value as number));
+          return builder;
+        },
+        gte(column, value) {
+          const at = (v: unknown) => (typeof v === 'string' ? Date.parse(v) : (v as number));
+          filters.push((row) => row[column] !== null && at(row[column]) >= at(value));
+          return builder;
+        },
+        or(filter) {
+          // Split at the commas outside parentheses and quotes.
+          const top = (text: string) => {
+            const parts: string[] = [];
+            let depth = 0;
+            let quoted = false;
+            let start = 0;
+            [...text].forEach((ch, i) => {
+              if (ch === '"') quoted = !quoted;
+              else if (quoted) return;
+              else if (ch === '(') depth += 1;
+              else if (ch === ')') depth -= 1;
+              else if (ch === ',' && depth === 0) {
+                parts.push(text.slice(start, i));
+                start = i + 1;
+              }
+            });
+            parts.push(text.slice(start));
+            return parts;
+          };
+          // One `column.op.value` term: eq, neq, is null, lt a date.
+          const term = (condition: string) => {
+            const [column, op, ...rest] = condition.split('.');
+            const raw = rest.join('.').replace(/^"|"$/g, '');
+            const value = raw === 'null' ? null : raw;
+            return (row: Row) => {
+              const cell = row[column] ?? null;
+              if (op === 'is' || (op === 'eq' && value === null)) return cell === value;
+              if (op === 'eq') return cell !== null && String(cell) === value;
+              if (op === 'neq') return cell !== null && String(cell) !== value;
+              if (op === 'lt') {
+                return typeof cell === 'string' && Date.parse(cell) < Date.parse(String(value));
+              }
+              throw new Error(`The fake has no or-operator ${op}`);
+            };
+          };
+          const groups = top(filter).map((group) => {
+            const inner = /^and\((.*)\)$/.exec(group);
+            return (inner ? top(inner[1]) : [group]).map(term);
+          });
+          filters.push((row) => groups.some((conditions) => conditions.every((c) => c(row))));
           return builder;
         },
         textSearch(column, query) {

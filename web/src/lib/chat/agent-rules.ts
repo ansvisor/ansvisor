@@ -202,6 +202,12 @@ export const agentTriggersSchema = z
 /** A new agent, saved as a draft (§D item 17). */
 export const createAgentInput = z.strictObject({
   name: agentNameSchema,
+  /**
+   * `name` is the primary skill's title, not one the person typed: the
+   * server names it by §O against every agent of the workspace (with its
+   * brand, then " 2"…), private ones it can't show the person included.
+   */
+  autoName: z.boolean().default(false),
   visibility: z.enum(AGENT_VISIBILITIES).default('private'),
   /** Left out: the workspace's default (chat_settings.agent_run_share_default). */
   maxRunShare: runShareSchema.optional(),
@@ -227,6 +233,11 @@ export type CreateAgentInput = z.output<typeof createAgentInput>;
 export const updateAgentInput = z
   .strictObject({
     expectedVersion: z.number().int().min(1).optional(),
+    /**
+     * The agent's `updatedAt` the editor opened: any save since (a name,
+     * sharing, a cap or triggers, which make no new version) refuses this one.
+     */
+    expectedUpdatedAt: z.string().min(1).max(64).optional(),
     name: agentNameSchema.optional(),
     visibility: z.enum(AGENT_VISIBILITIES).optional(),
     maxRunShare: runShareSchema.optional(),
@@ -243,7 +254,8 @@ export const updateAgentInput = z
     triggers: agentTriggersSchema.optional(),
   })
   .refine(
-    (patch) => Object.keys(patch).some((key) => key !== 'expectedVersion'),
+    (patch) =>
+      Object.keys(patch).some((key) => key !== 'expectedVersion' && key !== 'expectedUpdatedAt'),
     'Nothing to change',
   );
 export type UpdateAgentInput = z.output<typeof updateAgentInput>;
@@ -394,6 +406,33 @@ export function versionFromRow(row: {
 
 /** A name's key for the workspace's one-per-name rule (chat_agents_name_uidx). */
 export const nameKey = (name: string) => name.toLowerCase();
+
+/**
+ * A new agent's name (§O): the primary skill's title; taken in the
+ * workspace (whatever the case), with its brand ("Win back lost citations
+ * · Brand A"), then " 2", " 3". At most 60 characters.
+ */
+export function defaultAgentName(
+  title: string,
+  brand: string | null,
+  taken: readonly string[],
+): string {
+  const used = new Set(taken.map(nameKey));
+  const fit = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, 60).trimEnd();
+  const free = (text: string) => !used.has(nameKey(text));
+  const first = fit(title);
+  if (free(first)) return first;
+  if (brand) {
+    const withBrand = fit(`${title} · ${brand}`);
+    if (free(withBrand)) return withBrand;
+  }
+  for (let n = 2; n < 1000; n++) {
+    const suffix = ` ${n}`;
+    const candidate = `${first.slice(0, 60 - suffix.length).trimEnd()}${suffix}`;
+    if (free(candidate)) return candidate;
+  }
+  return first;
+}
 
 /**
  * A duplicate's name (edge case 12): "{name} copy", then " 2", " 3"… past
