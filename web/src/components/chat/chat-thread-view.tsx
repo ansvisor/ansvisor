@@ -15,6 +15,7 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { searchChatReferences } from '@/lib/actions/chat-references';
 import { ANSWER_MAX, composerAnswer, recommendedLabel } from '@/lib/chat/asks';
+import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import { ghostOf } from '@/lib/chat/next-moves';
 import type { ChatEvent } from '@/lib/chat/events';
 import type { ChatMode } from '@/lib/chat/precedence';
@@ -41,6 +42,7 @@ import { ActionSentCard } from './run/action-sent-card';
 import { ProposalDetails } from './run/proposal-details';
 import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
+import { WhyCard } from './run/why-card';
 import { NextMoves } from './run/next-moves';
 import { RunAnswer } from './run/run-answer';
 import { StaffDebug } from './run/staff-debug';
@@ -103,6 +105,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         deliverables: message.run.deliverables ?? [],
         sent: message.run.sent ?? [],
         nextMoves: message.run.nextMoves ?? [],
+        why: message.run.why ?? [],
         text: message.text,
         generatedAt: message.generatedAt,
         dataAsOf: message.dataAsOf,
@@ -169,6 +172,7 @@ export function ChatThreadView({
   pageRoute,
   draft,
   onOwnKey = false,
+  skills,
 }: {
   thread: ChatThread | null;
   variant: ComposerVariant;
@@ -192,6 +196,8 @@ export function ChatThreadView({
   draft?: ComposerDraft | null;
   /** Chat runs on the workspace's own key: a used-up allowance doesn't pause it. */
   onOwnKey?: boolean;
+  /** The enabled skills, for the / menu (CHAT-13 item 5). */
+  skills?: ChatSkillItem[];
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
@@ -635,6 +641,7 @@ export function ChatThreadView({
           chips={asking ? undefined : chips}
           onRemoveChip={onRemoveChip}
           references={asking ? undefined : pageReferences}
+          skills={skills}
           draft={draft}
           onSend={(message, sent) =>
             asking && last
@@ -752,13 +759,17 @@ function Answer({
           summary={confirmStep?.kind === 'execute' ? run.confirm.target : undefined}
           actionLabel={confirmStep?.kind === 'execute' ? run.confirm.action : undefined}
           canDontAskAgain={run.confirm.canDontAskAgain}
-          note={run.confirm.note}
+          note={
+            [run.confirm.note, run.confirm.noUndo ? t('noUndo') : null].filter(Boolean).join(' ') ||
+            undefined
+          }
           onApprove={(answer) => void onApprove(answer.dontAskAgain)}
           onSkip={() => void onSkip()}
         >
           <ProposalDetails confirm={run.confirm} />
         </ApprovalCard>
       )}
+      {turn.runId && run.why.map((why) => <WhyCard key={why.n} runId={turn.runId!} why={why} />)}
       {turn.runId &&
         run.deliverables.map((deliverable, i) => (
           <DeliverableCard

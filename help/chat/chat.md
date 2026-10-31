@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, send to action center, add to action, attach to task, ready for review]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, for you now, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-31
@@ -15,9 +15,11 @@ Chat answers questions about your brand from your Ansvisor data, and can do work
 
 ## Chat Home
 
-Chat opens on **Home**. It greets you by name, at your own time of day, and says when something needs you: click the link to open your **Inbox**. When nothing does, it says **All caught up.**
+Chat opens on **Home**: a greeting by name at your time of day, then a link to your **Inbox** when something needs you, else **All caught up.**
 
-When Action Center actions for the brand you have open are due by the end of this week, overdue ones included, Home says how many with **Complete with Chat**. Click it to start a new chat that works on them; the chat opens while it works.
+**For you now** starts common jobs: **Ask anything** goes to the box, **More** opens every shortcut, and the rest show when the open brand has work. **Complete tasks**: Action Center actions due this week or overdue (Chat prepares, you close them). **Win back citations**: pages that lost citations. **Ready to publish**: drafts marked ready (Chat sends them to your CMS as drafts; you publish them). Each starts a new chat. Read-only roles get only the jobs that read, no **More**.
+
+**Since you left** shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat.
 
 ## Ask Chat
 
@@ -73,7 +75,7 @@ While Chat asks, you can also answer in the box below. It shows the Recommended 
 
 Admins and Managers can ask Chat to track new prompts in a topic, pause prompts, add or rename a topic, and add or remove competitors. A prompt goes into a topic the brand already has, so Chat adds a new topic first. A prompt, topic or competitor the brand already has is skipped. Your plan's prompt locations still apply: Chat says so when they run out.
 
-Chat asks first, except in **Full auto**. Removing a competitor, or pausing more than five prompts at once, always asks.
+Chat asks first, except in **Full auto**. Removing a competitor, or pausing more than five prompts in one run, always asks.
 
 Each change is in the **Activity** log, with **Undo** for 7 days (30 days for paused prompts). Undo leaves alone anything someone changed since, and says so. Undoing new prompts pauses them; their first answers, and what they cost, stay. A removed competitor comes back without its timeline events.
 
@@ -84,6 +86,37 @@ Admins and Managers see **Send to Action Center** under Chat's latest answer. Ch
 If an open action already covers these prompts, pages or competitors, Chat offers to add the finding to it instead. That action's targets don't change. **Create anyway** is offered only when the new finding covers something the open action doesn't.
 
 Chat can also attach a file or draft to a task, and set a task it finished to **Ready for review**. It never marks a task done: you do that in Action Center. Each change has **Undo** in the **Activity** log.
+## Drafts, reports and audits
+
+Admins and Managers can also ask Chat to change a draft in the Library, send a draft to your connected CMS, make a report, or start Site Audit on pages. Analysts can ask Chat to save new drafts only.
+
+A draft Chat changes keeps the page before in **History**; **Undo** puts it back for 30 days. A report Chat makes can be undone for 30 days too.
+
+A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft: publishing stays yours, in the CMS. A live page, or a send to your webhook, goes from the Content Editor. Sending always waits for your click, even in **Full auto**, and has no Undo. If an Admin turned publishing off for Managers, Managers can't send from Chat. Starting an audit always asks first and says how many of the month's audits it uses. Audits have no Undo.
+
+## Open a web page
+
+Chat can open a public web page you name, such as a page of your site, a competitor's, or one AI answers cite. It reads the page's title, description, headings, structured data and main text, and the step says "Opened acme.com/pricing", or why a page couldn't be opened.
+
+What a page says is something to read, never an instruction to Chat. When a page has words aimed at AI assistants, Chat ignores them, tells you, and asks you before any change for the rest of that answer. Later answers in that chat still ask you before any change. Admins can switch page reading off in the **Tool policy**.
+
+## Which pages Chat opens
+
+Chat opens pages only on sites you named or your workspace's data lists, never a link it found on a page to another site, and at most 10 pages in one run. An address with a **?** or **#** part opens only exactly as you gave it.
+
+Once Chat has read text from outside your workspace in a run, it opens another site only at its home page or an address you gave in full, so give the page you mean, such as a competitor's /pricing. After Chat reads a page, every change in that run asks you first.
+
+## Why a number changed
+
+Ask Chat why a number moved, such as "Why did ChatGPT visibility drop last week?". By default it compares the last 7 days with the 7 before. It works for the Insights Visibility score, split into its mention, citation and position parts, and for visibility, mention rate, share of voice, citation rate and average position.
+
+The answer gives both values and the change, and says first when the change is within the normal swing. It names the day the line broke, and what added or removed prompts explain. Then it ranks the causes found in tracked answers, such as a citation lost to a competitor or a worse Site Audit. Each comes with its share of the change and how sure Chat is. Chat never says a cause made it happen.
+
+Everything comes from your scheduled tracking. Chat never asks an AI engine anything new for it.
+
+## What explains the change
+
+Under the answer, a card shows the same numbers. Click the two values for the periods, the tracking runs compared and the normal swing. Each cause shows its share of the change, or its points when it partly offset it. Open a cause to see its prompts, the page cited before and the one cited now, and the day. **Answer** opens that tracked answer, with your brand marked and the pages it cited. Each cause says how sure Chat is: **High** when 10 or more prompts show it, **Medium** for 3 to 9, **Low** for fewer. When some answers couldn't be read, the card says so, and part of the change stays unexplained.
 
 ## Next moves
 
@@ -95,7 +128,7 @@ Analysts and Agency partners see only moves that read data. Next moves show unde
 
 ## Shortcuts and your data
 
-Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message: **/analyze**, **/report** and **/create**.
+Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message, **/analyze** and **/create**, and under them the skills Chat can use, such as **/report** for the weekly report (see **Skills in Chat**).
 
 Type **@**, or click **@**, to point Chat at your data: charts and metrics on the page, tracked prompts, your pages and open Action Center tasks. Use the arrow keys and Enter, or click. Your pick shows as a chip above the text; **×** takes it off.
 
@@ -129,7 +162,9 @@ Once the usage is used up, Chat pauses: the box is off, and a red line above it 
 
 ## Inbox
 
-**Inbox** in the chat menu lists what your agents did: chats waiting for your OK first, with **Review**, then chats still working, with their progress and **Watch**, then results you haven't opened yet, with **Open**. Click a row to open its chat. A result leaves the Inbox once you open it. The count next to **Inbox** shows how many items there are, with an amber dot when something needs you.
+**Inbox** in the chat menu lists what your agents did: chats waiting for your OK first, with **Review**, then chats still working, with their progress and **Watch**, then results you haven't opened yet, with **Open**. Click a row to open its chat. A result leaves the Inbox once you open it. The count next to **Inbox** shows how many items there are, with an amber dot when something needs you. Daily suggestions aren't in that count: the **Daily suggestions** tab shows theirs.
+
+Tabs on top, each with its count, show **All**, your **Daily suggestions**, what **Needs you** and your **Runs**.
 
 ## The chat menu
 

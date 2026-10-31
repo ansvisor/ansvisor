@@ -355,6 +355,125 @@ describe('loadChatThread, next moves', () => {
     expect(fake.db.log.some(([table]) => table === 'chat_next_moves')).toBe(false);
   });
 
+  it('brings a run’s Why analyses back as their cards, in order, with no ids', async () => {
+    const result = (valueB: number) => ({
+      metric: 'citations',
+      unit: 'pts',
+      period_a: { from: '2026-10-12', to: '2026-10-18' },
+      period_b: { from: '2026-10-19', to: '2026-10-25' },
+      value_a: 58,
+      value_b: valueB,
+      delta: valueB - 58,
+      se: 0.8,
+      noise_verdict: 'beyond_normal_swing',
+      direction: 'declined',
+      change_point: null,
+      causes: [
+        {
+          kind: 'lost_citation_to_competitor',
+          share: 100,
+          contribution: valueB - 58,
+          offset: false,
+          confidence: 'high',
+          cells: 3,
+          evidence_refs: [{ type: 'answer', id: 'answer-secret', date: '2026-10-20', period: 'b' }],
+          fix_skill: 'winback',
+          urls: ['https://www.acme.example/blog/aeo'],
+          rows: [
+            {
+              prompt: 'what is aeo',
+              before: 'https://acme.example/blog/aeo',
+              now: null,
+              date: '2026-10-20',
+              answer: { type: 'answer', id: 'answer-secret', date: '2026-10-20', period: 'b' },
+            },
+          ],
+        },
+      ],
+      excluded_cells: 0,
+      stable_cells: 40,
+      unexplained: { kind: 'unexplained', contribution: 0, share: 0 },
+      evidence_partial: false,
+    });
+    fake.db.tables.chat_why_analyses = [
+      {
+        id: 'w2',
+        run_id: 'r1',
+        scope_json: { engines: ['google-aio'], runs_compared: { a: 9, b: 8, cells: 40 } },
+        result_json: result(50),
+        created_at: '2026-10-30T09:00:03.000Z',
+      },
+      {
+        id: 'w1',
+        run_id: 'r1',
+        scope_json: {},
+        result_json: result(52),
+        created_at: '2026-10-30T09:00:02.000Z',
+      },
+    ];
+    const why = (await loadChatThread(CHAT))!.messages[1].run!.why;
+    expect(why.map((w) => [w.n, w.valueB])).toEqual([
+      [1, 52],
+      [2, 50],
+    ]);
+    expect(why[1]).toMatchObject({ engines: ['google-aio'], runs: { a: 9, b: 8, cells: 40 } });
+    expect(why[0].causes[0].urls).toEqual(['acme.example/blog/aeo']);
+    expect(why[0].causes[0].rows[0]).toEqual({
+      prompt: 'what is aeo',
+      before: 'acme.example/blog/aeo',
+      now: null,
+      date: '2026-10-20',
+      answer: true,
+    });
+    expect(JSON.stringify(why)).not.toContain('answer-secret');
+  });
+
+  it('leaves out an analysis it can’t show, keeping the next one’s place for its drawer', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    fake.db.tables.chat_why_analyses = [
+      // Kept broken, or by a version that kept another shape.
+      {
+        id: 'w1',
+        run_id: 'r1',
+        scope_json: null,
+        result_json: null,
+        created_at: '2026-10-30T09:00:02.000Z',
+      },
+      {
+        id: 'w2',
+        run_id: 'r1',
+        scope_json: null,
+        // Old enough to lack most parts: they read as none.
+        result_json: { metric: 'citations', unit: 'pts', value_a: 40, value_b: 35, delta: -5 },
+        created_at: '2026-10-30T09:00:03.000Z',
+      },
+    ];
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].text).toBe('Two pages lost most of it.');
+    const why = thread!.messages[1].run!.why;
+    expect(why).toHaveLength(1);
+    expect(why[0]).toMatchObject({
+      n: 2,
+      valueA: 40,
+      causes: [],
+      periodB: { from: '', to: '' },
+      remainder: { points: 0, share: null },
+      partial: false,
+      engines: [],
+    });
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
+  it('opens the chat without Why cards when they can’t be read', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    fake.db.failures.chat_why_analyses = { message: 'relation does not exist' };
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run!.why).toEqual([]);
+    expect(thread!.messages[1].text).toBe('Two pages lost most of it.');
+    logged.mockRestore();
+  });
+
   it('gives a run without moves none', async () => {
     fake.db.tables.chat_next_moves = [];
     const thread = await loadChatThread(CHAT);

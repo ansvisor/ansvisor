@@ -9,10 +9,16 @@ import {
   OTHER_ORG,
   PEOPLE,
   COMPETITOR,
+  DRAFT,
   PROMPT,
   SUGGESTION,
   TOPIC,
   fakeCreateDraft,
+  fakeCreateReport,
+  fakeKeepDraftVersion,
+  fakeSendDraftToCms,
+  fakeStartSiteAudits,
+  fakeUpdateContentDraft,
   fakeAddBrandTopic,
   fakeAddCompetitors,
   fakeAddTopicPrompts,
@@ -21,6 +27,7 @@ import {
   fakeRenameBrandTopic,
   fakeDismissSuggestion,
   fakeUpdateOpportunity,
+  seedDraft,
   seedWorkspace,
 } from './testing/chat-fixtures';
 
@@ -34,7 +41,13 @@ import {
 vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('@/lib/chat/testing/fake-supabase')).createFakeSupabase(),
 }));
-vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }));
+vi.mock('@/lib/actions/content-drafts', () => ({
+  createContentDraft: vi.fn(),
+  updateContentDraft: vi.fn(),
+}));
+vi.mock('@/lib/actions/cms-send', () => ({ sendDraftToCms: vi.fn() }));
+vi.mock('@/lib/actions/reports', () => ({ createReport: vi.fn() }));
+vi.mock('@/lib/actions/audits', () => ({ startSiteAudits: vi.fn(), getAuditQuota: vi.fn() }));
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
 vi.mock('@/lib/actions/prompt', () => ({ addTopicPrompts: vi.fn(), pauseBrandPrompts: vi.fn() }));
@@ -46,7 +59,10 @@ vi.mock('@/lib/actions/competitor', () => ({
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { createContentDraft } = await import('@/lib/actions/content-drafts');
+const { createContentDraft, updateContentDraft } = await import('@/lib/actions/content-drafts');
+const { sendDraftToCms } = await import('@/lib/actions/cms-send');
+const { createReport } = await import('@/lib/actions/reports');
+const { startSiteAudits } = await import('@/lib/actions/audits');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
 const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
@@ -64,6 +80,11 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   seedWorkspace(db);
   vi.mocked(createContentDraft).mockImplementation(fakeCreateDraft(db) as never);
+  vi.mocked(updateContentDraft).mockImplementation(fakeUpdateContentDraft(db) as never);
+  vi.mocked(sendDraftToCms).mockImplementation(fakeSendDraftToCms() as never);
+  vi.mocked(createReport).mockImplementation(fakeCreateReport(db) as never);
+  vi.mocked(startSiteAudits).mockImplementation(fakeStartSiteAudits() as never);
+  db.rpcs.content_draft_keep_version = fakeKeepDraftVersion(db);
   vi.mocked(updateOpportunityStatus).mockImplementation(fakeUpdateOpportunity(db) as never);
   vi.mocked(dismissSuggestion).mockImplementation(fakeDismissSuggestion(db) as never);
   vi.mocked(addTopicPrompts).mockImplementation(fakeAddTopicPrompts(db) as never);
@@ -86,7 +107,9 @@ async function change(userId: string, name: string, input: unknown) {
     brandId: BRAND,
     surface: 'chat',
     mode: 'full_auto',
-    approval: { kind: 'auto', via: 'full_auto' },
+    // An EXECUTE (a page sent to a CMS) runs on the person's click only.
+    approval:
+      chatTool(name)!.class === 'execute' ? { kind: 'click' } : { kind: 'auto', via: 'full_auto' },
     place: { conversationId: null, runId: null, stepId: null },
     approvalKey: `step-${++step}`,
   });
@@ -119,9 +142,10 @@ const opportunity = () => db.tables.content_opportunities[0];
 const suggestion = () => db.tables.prompt_suggestions[0];
 const logRow = (id: unknown) => db.tables.chat_activity_log.find((row) => row.id === id)!;
 
-describe('every WRITE row has an Undo', () => {
+describe('every WRITE row is recorded, with its Undo where §9 gives one', () => {
   it('with its §9 window, and words for the change and its Undo', () => {
-    const writes = CHAT_TOOLS.filter((tool) => tool.class === 'write');
+    // An EXECUTE's row only records (push_cms_draft): it has no Undo (§10b).
+    const writes = CHAT_TOOLS.filter((tool) => tool.class !== 'read');
     expect(writes.map((tool) => tool.name).sort()).toEqual(Object.keys(UNDO_RULES).sort());
     expect(UNDO_RULES.create_draft.windowMs).toBe(30 * DAY);
     expect(UNDO_RULES.update_opportunity.windowMs).toBe(7 * DAY);
@@ -137,10 +161,17 @@ describe('every WRITE row has an Undo', () => {
     ]) {
       expect(UNDO_RULES[name].windowMs).toBe(7 * DAY);
     }
+    // §9 rows 55, 64: a changed draft and a report, 30 days; rows 37, 58: no Undo.
+    expect(UNDO_RULES.update_draft.windowMs).toBe(30 * DAY);
+    expect(UNDO_RULES.build_report.windowMs).toBe(30 * DAY);
+    expect(UNDO_RULES.push_cms_draft.windowMs).toBe(0);
+    expect(UNDO_RULES.run_site_audit.windowMs).toBe(0);
     for (const tool of writes) {
       expect(undoRule(tool)).not.toBeNull();
       expect(messages.chatActivity.summary).toHaveProperty(tool.labelKey);
-      expect(messages.chatActivity.summary).toHaveProperty(`${tool.labelKey}Undo`);
+      if (undoRule(tool)!.windowMs > 0) {
+        expect(messages.chatActivity.summary).toHaveProperty(`${tool.labelKey}Undo`);
+      }
     }
     expect(undoRule(CHAT_TOOLS.find((tool) => tool.class === 'read')!)).toBeNull();
   });
@@ -680,5 +711,114 @@ describe('the tracking setup: prompts, topics and competitors (W2-06)', () => {
     const row = await change(PEOPLE.analyst, 'add_topic', { brand_id: BRAND, name: 'Security' });
     expect(await undo(row.id, PEOPLE.analyst)).toMatchObject({ code: 'denied' });
     expect(topicNamed('Security')).toBeDefined();
+  });
+});
+
+describe('content, reports and Site Audit (W2-07)', () => {
+  const theDraft = () => db.tables.content_drafts.find((row) => row.id === DRAFT)!;
+  beforeEach(() => seedDraft(db));
+
+  it('update_draft: puts the page before back from History', async () => {
+    const row = await change(PEOPLE.manager, 'update_draft', {
+      draft_id: DRAFT,
+      title: 'Pricing FAQ for teams',
+      body_html: '<h1>Pricing FAQ for teams</h1><p>New.</p>',
+    });
+    expect(row).toMatchObject({
+      target_type: 'content_draft',
+      target_id: DRAFT,
+      summary_key: 'reviseDraft',
+      summary_params: { title: 'Pricing FAQ for teams' },
+    });
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    expect(theDraft()).toMatchObject({ title: 'Pricing FAQ', body_html: '<h1>Pricing FAQ</h1>' });
+  });
+
+  it('update_draft: leaves a page edited since alone, and links it', async () => {
+    const row = await change(PEOPLE.manager, 'update_draft', {
+      draft_id: DRAFT,
+      body_html: '<h1>Pricing FAQ</h1><p>New.</p>',
+    });
+    theDraft().body_html = '<h1>Pricing FAQ</h1><p>Edited by hand.</p>';
+    expect(await undo(row.id)).toMatchObject({
+      code: 'conflict',
+      reason: 'changed',
+      href: `/dashboard/content/editor/${DRAFT}`,
+    });
+    expect(theDraft().body_html).toContain('Edited by hand.');
+  });
+
+  it('update_draft: keeps the page now in History, then restores only over the page it read', async () => {
+    const row = await change(PEOPLE.manager, 'update_draft', {
+      draft_id: DRAFT,
+      body_html: '<h1>Pricing FAQ</h1><p>New.</p>',
+    });
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    // History has the page Chat made, kept before the Undo, as a restore does.
+    expect(db.tables.content_draft_versions.at(-1)).toMatchObject({
+      draft_id: DRAFT,
+      body_html: '<h1>Pricing FAQ</h1><p>New.</p>',
+      origin: 'restore',
+    });
+  });
+
+  it('update_draft: leaves a page the agent is writing, or one saved in between, alone', async () => {
+    const row = await change(PEOPLE.manager, 'update_draft', {
+      draft_id: DRAFT,
+      body_html: '<h1>Pricing FAQ</h1><p>New.</p>',
+    });
+    theDraft().agent_state = 'writing';
+    expect(await undo(row.id)).toMatchObject({ code: 'conflict', reason: 'changed' });
+    theDraft().agent_state = null;
+    // A save lands while the Undo keeps the page now: the save wins.
+    db.rpcs.content_draft_keep_version = () => {
+      theDraft().updated_at = '2099-01-01T00:00:00.000Z';
+      return 'version-x';
+    };
+    expect(await undo(row.id)).toMatchObject({ code: 'conflict', reason: 'changed' });
+    expect(theDraft().body_html).toContain('New.');
+  });
+
+  it('update_draft: brings back only a version of this draft, within History’s 90 days', async () => {
+    const row = await change(PEOPLE.manager, 'update_draft', {
+      draft_id: DRAFT,
+      body_html: '<h1>Pricing FAQ</h1><p>New.</p>',
+    });
+    const version = db.tables.content_draft_versions[0];
+    version.draft_id = '99999999-9999-4999-8999-999999999999';
+    expect(await undo(row.id)).toMatchObject({ code: 'conflict', reason: 'gone' });
+    version.draft_id = DRAFT;
+    version.created_at = new Date(Date.now() - 91 * DAY).toISOString();
+    expect(await undo(row.id)).toMatchObject({ code: 'conflict', reason: 'gone' });
+    expect(theDraft().body_html).toContain('New.');
+  });
+
+  it('build_report: takes the report out of Reports', async () => {
+    const row = await change(PEOPLE.manager, 'build_report', {
+      brand_id: BRAND,
+      template: 'weekly_visibility',
+      date_from: '2026-10-01',
+      date_to: '2026-10-07',
+    });
+    expect(row.summary_params).toEqual({ title: 'Weekly Visibility Summary' });
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    expect(db.tables.reports).toEqual([]);
+  });
+
+  it('push_cms_draft: names the CMS in Activity as the app does, never its key', async () => {
+    const row = await change(PEOPLE.manager, 'push_cms_draft', {
+      draft_id: DRAFT,
+      destination: 'wordpress',
+    });
+    expect(row.summary_params).toEqual({ title: 'Pricing FAQ', cms: 'WordPress' });
+  });
+
+  it.each([
+    ['push_cms_draft', { draft_id: DRAFT, destination: 'webflow' }],
+    ['run_site_audit', { brand_id: BRAND, urls: ['https://acme.example/pricing'] }],
+  ])('%s: recorded, with no Undo (§9)', async (name, input) => {
+    const row = await change(PEOPLE.manager, name, input);
+    expect(row).toMatchObject({ undo_json: null, undo_until: null });
+    expect(await undo(row.id)).toMatchObject({ code: 'not_undoable' });
   });
 });

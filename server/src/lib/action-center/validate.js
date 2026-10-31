@@ -323,8 +323,8 @@ const TARGET_BASKETS = new Set(['prompts', 'pages']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The brand's primary domain as a host, for a page target written as a path. */
-async function primaryHost(brandId) {
-  const { data, error } = await supabaseAdmin
+async function primaryHost(brandId, { db = supabaseAdmin } = {}) {
+  const { data, error } = await db
     .from('brand_domains')
     .select('domain')
     .eq('brand_id', brandId)
@@ -346,7 +346,7 @@ async function primaryHost(brandId) {
  * domain. Null for another kind of target, or none: such an action is
  * measured brand-wide, as before.
  */
-export async function targetScope(action) {
+export async function targetScope(action, { db = supabaseAdmin } = {}) {
   const payload = action.payload ?? {};
   if (!TARGET_BASKETS.has(payload.targetEntity)) return null;
   const listed = Array.isArray(payload.targetIds)
@@ -357,7 +357,9 @@ export async function targetScope(action) {
     const promptIds = keys.filter((k) => UUID.test(k));
     return promptIds.length ? { entity: 'prompts', promptIds, pages: [] } : null;
   }
-  const host = keys.some((k) => k.startsWith('/')) ? await primaryHost(action.brand_id) : null;
+  const host = keys.some((k) => k.startsWith('/'))
+    ? await primaryHost(action.brand_id, { db })
+    : null;
   const pages = keys
     .map((k) => (k.startsWith('/') ? (host ? `https://${host}${k}` : null) : k))
     .filter((url) => url && /^https?:\/\//i.test(url));

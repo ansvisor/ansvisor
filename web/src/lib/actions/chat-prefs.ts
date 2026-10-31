@@ -104,6 +104,15 @@ export async function saveUsageNoticePeriod(period: string): Promise<ChatPrefRes
 }
 
 /**
+ * The person left Chat Home (CHAT-22 §1; chat_user_prefs.home_seen_at,
+ * 00420): "Since you left" counts from it on their next visit, on every
+ * device.
+ */
+export async function saveHomeSeen(): Promise<ChatPrefResult> {
+  return keepPref({ home_seen_at: new Date().toISOString() }, 'the Home visit');
+}
+
+/**
  * A change in Chat Settings › General (CHAT-23 `chatSettings.*`): default
  * mode, answer language, notifications, "Thought for N s", Ask Chat on
  * every page. Refused when the person may not pick it: a mode for a role

@@ -79,6 +79,47 @@ const SAMPLES: { [K in ChatEventType]: () => Extract<ChatEvent, { type: K }> } =
       multi: false,
     }),
   'deliverable.created': () => chatEvent('deliverable.created', 6, DELIVERABLE),
+  'why.ready': () =>
+    chatEvent('why.ready', 6, {
+      n: 1,
+      metric: 'citations',
+      unit: 'pts',
+      periodA: { from: '2026-10-12', to: '2026-10-18' },
+      periodB: { from: '2026-10-19', to: '2026-10-25' },
+      valueA: 58,
+      valueB: 52,
+      delta: -6,
+      se: 0.8,
+      noise: 'beyond_normal_swing',
+      direction: 'declined',
+      changeDay: '2026-10-24',
+      causes: [
+        {
+          kind: 'lost_citation_to_competitor',
+          share: 62,
+          points: -3.7,
+          offset: false,
+          confidence: 'high',
+          cells: 14,
+          urls: ['acme.example/blog/what-is-aeo'],
+          rows: [
+            {
+              prompt: 'what is answer engine optimization',
+              before: 'acme.example/blog/what-is-aeo',
+              now: 'lumora.example/aeo-guide-2026',
+              date: '2026-10-23',
+              answer: true,
+            },
+          ],
+        },
+      ],
+      remainder: { kind: 'unexplained', points: -2.3, share: 38 },
+      excludedCells: 2,
+      stableCells: 40,
+      partial: false,
+      engines: ['google-aio'],
+      runs: { a: 214, b: 198, cells: 42 },
+    }),
   'confirm.required': () =>
     chatEvent('confirm.required', 7, {
       n: 4,

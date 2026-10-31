@@ -51,10 +51,11 @@ describe('cachePolicy', () => {
     });
   });
 
-  it('never keeps a change, a go-live or opening a page', () => {
+  it('never keeps a change, a go-live, opening a page or a web page’s words', () => {
     expect(cache.cachePolicy({ name: 'create_draft', class: 'write' })).toBeNull();
     expect(cache.cachePolicy({ name: 'publish_cms', class: 'execute' })).toBeNull();
     expect(cache.cachePolicy({ name: 'open_page', class: 'read' })).toBeNull();
+    expect(cache.cachePolicy({ name: 'fetch_page', class: 'read' })).toBeNull();
   });
 });
 

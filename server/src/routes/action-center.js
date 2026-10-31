@@ -4,12 +4,7 @@ import supabaseAdmin from '../config/supabase.js';
 import { MANAGER_ROLES, assertBrandAccess, assertRole } from '../lib/access.js';
 import { rescoreActionsForSignal } from '../lib/action-center/priority-data.js';
 import { PlanLimitError, requireFeature } from '../lib/plan-guard.js';
-import {
-  TaskSendError,
-  loadTask,
-  sendTaskToContent,
-  sendTaskToWebhook,
-} from '../lib/action-center/task-send.js';
+import { loadTask, sendTaskToContent, sendTaskToWebhook } from '../lib/action-center/task-send.js';
 import {
   TaskWriterError,
   isTaskWriterEnabled,
@@ -75,6 +70,7 @@ router.post('/signals/:id/rescore', async (req, res) => {
     req.log.error({ err: error }, 'rescore actions for a signal error');
     return res.status(error.status || 500).json({
       error: error.status ? error.message : 'Failed to update the actions.',
+      code: error.status ? error.code : undefined,
     });
   }
 });
@@ -204,6 +200,7 @@ router.delete('/actions/:id', async (req, res) => {
     if (!error.status) req.log.error({ err: error }, 'delete action error');
     return res.status(error.status || 500).json({
       error: error.status ? error.message : 'Failed to delete the action.',
+      code: error.status ? error.code : undefined,
     });
   }
 });
@@ -238,7 +235,7 @@ router.post('/tasks/:id/send', async (req, res) => {
     if (!status) req.log.error({ err: error }, 'send action task error');
     return res.status(status || 500).json({
       error: status ? error.message : 'Failed to send the task.',
-      code: error instanceof TaskSendError ? error.code : null,
+      code: status ? (error.code ?? null) : null,
     });
   }
 });
@@ -270,7 +267,7 @@ router.post('/tasks/:id/check', taskCheckLimiter, async (req, res) => {
     if (!status) req.log.error({ err: error }, 'check action task error');
     return res.status(status || 500).json({
       error: status ? error.message : 'Failed to check the task.',
-      code: error instanceof TaskSendError ? error.code : null,
+      code: status ? (error.code ?? null) : null,
     });
   }
 });
@@ -319,6 +316,7 @@ router.post('/pages', async (req, res) => {
     return res.status(status).json({
       error: 'Failed to send to the Action Center',
       details: error.message,
+      ...(error.code ? { code: error.code } : {}),
     });
   }
 });
@@ -395,6 +393,7 @@ router.post('/content-drafts', async (req, res) => {
     return res.status(status).json({
       error: 'Failed to send to the Action Center',
       details: error.message,
+      ...(error.code ? { code: error.code } : {}),
     });
   }
 });
@@ -446,6 +445,7 @@ router.post('/products', requireFeature('shopping_analytics'), async (req, res) 
     return res.status(status).json({
       error: 'Failed to send to the Action Center',
       details: error.message,
+      ...(error.code ? { code: error.code } : {}),
     });
   }
 });
