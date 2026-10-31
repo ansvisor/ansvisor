@@ -437,11 +437,16 @@ describe('ChatSuggestion', () => {
     });
     expect(server.started).toHaveBeenCalledWith('sugg-1', 'editor');
     expect(nav.push).toHaveBeenCalledWith('/dashboard/content/editor/draft-1');
+    act(() => root.unmount());
+    root = createRoot(host);
+    await render(<ChatSuggestion detail={detailOf()} setup={setup} />);
     server.draft.mockResolvedValueOnce({ error: 'failed' });
     nav.push.mockClear();
     await click('[data-action="suggestion.openEditor"]');
     expect(sonner.error).toHaveBeenCalledWith("Couldn't open the Content Editor. Try again.");
     expect(nav.push).not.toHaveBeenCalled();
+    // A failed move frees the buttons again.
+    expect(($('[data-action="suggestion.openEditor"]') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('puts it off a week or removes it, then goes back to the Inbox', async () => {
@@ -450,8 +455,16 @@ describe('ChatSuggestion', () => {
     expect(server.snooze).toHaveBeenCalledWith('sugg-1');
     expect(sonner.success).toHaveBeenCalledWith("Not now: back in a week, if it's still open.");
     expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/inbox?tab=suggestions');
+    // Done, it stays busy while the Inbox opens: no other move meanwhile.
+    expect(($('[data-action="suggestion.dismiss"]') as HTMLButtonElement).disabled).toBe(true);
+    act(() => root.unmount());
+    root = createRoot(host);
+    await render(<ChatSuggestion detail={detailOf()} setup={setup} />);
     await click('[data-action="suggestion.dismiss"]');
     expect(server.remove).toHaveBeenCalledWith('sugg-1');
+    act(() => root.unmount());
+    root = createRoot(host);
+    await render(<ChatSuggestion detail={detailOf()} setup={setup} />);
     expect(sonner.success).toHaveBeenLastCalledWith(
       'Removed from your Inbox. The action stays in Action Center.',
     );
@@ -460,6 +473,22 @@ describe('ChatSuggestion', () => {
     await click('[data-action="suggestion.dismiss"]');
     expect(sonner.error).toHaveBeenCalledWith("Couldn't change this suggestion. Try again.");
     expect(nav.push).not.toHaveBeenCalled();
+  });
+
+  it('makes one move of a double click, before the buttons show busy', async () => {
+    await render(<ChatSuggestion detail={detailOf()} setup={setup} />);
+    await act(async () => {
+      $('[data-action="suggestion.dismiss"]')!.click();
+      $('[data-action="suggestion.dismiss"]')!.click();
+      $('[data-action="suggestion.snooze"]')!.click();
+      $('[data-action="suggestion.startChat"]')!.click();
+      $('[data-action="suggestion.openEditor"]')!.click();
+    });
+    expect(server.remove).toHaveBeenCalledTimes(1);
+    expect(server.snooze).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(server.draft).not.toHaveBeenCalled();
+    expect(nav.push).toHaveBeenCalledTimes(1);
   });
 
   it('writes nothing in a read-only workspace: each move opens the plan dialog', async () => {

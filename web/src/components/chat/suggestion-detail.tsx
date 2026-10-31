@@ -343,6 +343,37 @@ export function SuggestionUnavailable() {
 }
 
 /**
+ * One move at a time, held before the buttons show busy, so a double click
+ * makes it once. A move that succeeds stays busy while its page opens; one
+ * that fails ends, and frees the buttons.
+ */
+function useOneMove() {
+  const [busy, setBusy] = useState(false);
+  const moving = useRef(false);
+  const begin = useCallback(() => {
+    if (moving.current) return false;
+    moving.current = true;
+    setBusy(true);
+    return true;
+  }, []);
+  const end = useCallback(() => {
+    moving.current = false;
+    setBusy(false);
+  }, []);
+  return { busy, begin, end };
+}
+
+/** True the first time it's called, then false: the suggestion is marked started once. */
+function useFirstTime() {
+  const done = useRef(false);
+  return useCallback(() => {
+    if (done.current) return false;
+    done.current = true;
+    return true;
+  }, []);
+}
+
+/**
  * The suggestion's page, live: its breadcrumb, the brand it's for made the
  * active one, opened (a use, §5) unless the workspace is read-only, the
  * action's signals read for its Why as the drawer reads them, and the
@@ -376,12 +407,12 @@ export function ChatSuggestion({
   const number = `AC-${action.actionNo}`;
   const title = actionTexts(action, tTexts).title;
   const route = `/dashboard/chat/inbox/${suggestion.id}`;
-  const [busy, setBusy] = useState(false);
+  const { busy, begin, end } = useOneMove();
   const [signals, setSignals] = useState<Signal[] | null>(null);
   const [removed, setRemoved] = useState<ReadonlySet<string>>(() => new Set());
   const [draft, setDraft] = useState<ComposerDraft | null>(null);
   const opened = useRef(false);
-  const started = useRef(false);
+  const firstStart = useFirstTime();
 
   useChatCrumb(t('crumb', { date: sentDay(suggestion.sentOn, detail.today).date }));
 
@@ -437,17 +468,16 @@ export function ChatSuggestion({
   /** A chat started from here: the suggestion marked started in Chat (once), then the chat. */
   const toChat = useCallback(
     async (chatId: string) => {
-      if (!started.current) {
-        started.current = true;
+      if (firstStart()) {
         await startedDailySuggestion(suggestion.id, 'chat').catch(() => undefined);
       }
       router.push(`/dashboard/chat/${chatId}`);
     },
-    [suggestion.id, router],
+    [firstStart, suggestion.id, router],
   );
 
   async function doWithChat() {
-    setBusy(true);
+    if (!begin()) return;
     const res = await fetch('/api/chat/runs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -461,7 +491,7 @@ export function ChatSuggestion({
     }).catch(() => null);
     const chatId = res?.ok ? res.headers.get('x-chat-conversation') : null;
     if (!res?.ok || !chatId) {
-      setBusy(false);
+      end();
       const body = (await res?.json().catch(() => null)) as {
         code?: string;
         error?: string;
@@ -476,14 +506,14 @@ export function ChatSuggestion({
   }
 
   async function openEditor() {
-    if (!start) return;
-    setBusy(true);
+    if (!start || !begin()) return;
     try {
       const result = await startDraftFromAction(brandId, action.id, start.taskId, {
         page: start.page,
         title,
       });
       if ('error' in result) {
+        end();
         toast.error(t('editorFailed'));
         return;
       }
@@ -491,9 +521,8 @@ export function ChatSuggestion({
       if (result.importFailed) toast.warning(tDrawer('task.pageNotRead'));
       router.push(contentEditorPath(result.draftId));
     } catch {
+      end();
       toast.error(t('editorFailed'));
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -502,10 +531,11 @@ export function ChatSuggestion({
     done: string,
     label: string,
   ) {
-    setBusy(true);
+    if (!begin()) return;
     try {
       const result = await write(suggestion.id);
       if (!result.ok) {
+        end();
         if (result.failure === 'read_only') openUpgrade(label);
         else toast.error(t('changeFailed'));
         return;
@@ -513,9 +543,8 @@ export function ChatSuggestion({
       toast.success(done);
       router.push(INBOX_HREF);
     } catch {
+      end();
       toast.error(t('changeFailed'));
-    } finally {
-      setBusy(false);
     }
   }
 
