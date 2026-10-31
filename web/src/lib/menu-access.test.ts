@@ -36,15 +36,15 @@ describe('menuSectionOf', () => {
 });
 
 describe('MENU_SECTIONS', () => {
-  it('lists the left menu, Action Center first', () => {
-    expect(MENU_SECTIONS[0]).toBe(ALWAYS_ON_SECTION);
+  it('lists the left menu, Chat first and Action Center right after', () => {
+    expect(MENU_SECTIONS.slice(0, 2)).toEqual(['agent', ALWAYS_ON_SECTION]);
     expect(MENU_SECTIONS).toEqual(
       expect.arrayContaining(['agent', 'content', 'audit', 'insights', 'shopping', 'reports']),
     );
   });
 
-  it('lists Competitors right after Brand Visibility, so roles and people can hide it', () => {
-    expect(MENU_SECTIONS.indexOf('competitors')).toBe(MENU_SECTIONS.indexOf('insights') + 1);
+  it('lists Competitors right after Reports, so roles and people can hide it', () => {
+    expect(MENU_SECTIONS.indexOf('competitors')).toBe(MENU_SECTIONS.indexOf('reports') + 1);
     expect(cleanMenuSections(['competitors'])).toEqual(['competitors']);
     expect(hidden({ roleHidden: ['competitors'] })).toEqual(['competitors']);
   });
