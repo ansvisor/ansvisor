@@ -197,6 +197,25 @@ describe('AiUsageMeter', () => {
     );
   });
 
+  it('says Chat goes on only on the workspace’s own key once the new Chat is on', async () => {
+    vi.mocked(readAiUsage).mockResolvedValue(usage({ percentUsed: 100, chatMetered: true }));
+    await render();
+    await open();
+    expect(popup()!.textContent).toContain(
+      "Used up. AI features stop until Nov 20; Chat keeps working only where it runs on your workspace's own AI key.",
+    );
+    expect(popup()!.textContent).not.toContain('Agent Chat on your own AI key keeps working');
+
+    vi.mocked(readAiUsage).mockResolvedValue(
+      usage({ trial: true, percentUsed: 100, chatMetered: true }),
+    );
+    await remount();
+    await open();
+    expect(popup()!.textContent).toContain(
+      "Start your plan now for its full monthly AI usage; Chat keeps working only where it runs on your workspace's own AI key.",
+    );
+  });
+
   it('opens what used it, what isn’t counted, the other limits and where to get more', async () => {
     await render();
     await open();

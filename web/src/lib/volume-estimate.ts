@@ -18,6 +18,14 @@ import type { PromptVolume } from '@/types';
 export type EstimateConfidence = 'high' | 'medium' | 'low';
 
 /**
+ * The AI adoption rate the server estimates with by default
+ * (AI_VOLUME_MULTIPLIER in server/src/lib/intent-extraction.js): the share
+ * of Google searches that get an AI answer. Each volume row keeps the rate
+ * it was estimated with (aiVolumeMultiplier).
+ */
+export const AI_ADOPTION_RATE = 0.45;
+
+/**
  * What the estimate rests on: a prompt's related keywords, one keyword's
  * own Google volume (Similar Topics), or an AI's guess for a prompt not
  * tracked yet (Prompt Suggestions).

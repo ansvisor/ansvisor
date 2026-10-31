@@ -77,6 +77,9 @@
       "exhausted": "Used up. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "Used up. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
       "exhaustedTrial": "Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working.",
+      "exhaustedChat": "Used up. AI features stop until {date}; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedNoDateChat": "Used up. AI features stop until it resets; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedTrialChat": "Start your plan now for its full monthly AI usage; Chat keeps working only where it runs on your workspace's own AI key.",
       "none": "No AI usage yet this month.",
       "ownKey": "Agent Chat, on your own AI key",
       "notCounted": "Not counted",
@@ -92,7 +95,10 @@
       "seeUsage": "See usage",
       "exhausted": "You've used this month's AI limit. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "You've used this month's AI limit. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
-      "exhaustedTrial": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working."
+      "exhaustedTrial": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working.",
+      "exhaustedChat": "You've used this month's AI limit. AI features stop until {date}; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedNoDateChat": "You've used this month's AI limit. AI features stop until it resets; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedTrialChat": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Chat keeps working only where it runs on your workspace's own AI key."
     },
     "startNow": {
       "button": "Start my plan now",
@@ -297,6 +303,8 @@
       "setProductFeed": "Changing the product feed setting needs a plan",
       "generateReports": "Generating reports needs a plan",
       "deleteReports": "Deleting reports needs a plan",
+      "markTaskDone": "Marking a task done needs a plan",
+      "attachFiles": "Attaching files needs a plan",
       "startChat": "Starting a chat needs a plan",
       "sendChat": "Chatting with the agent needs a plan",
       "addBrands": "Adding brands needs a plan",
@@ -4129,7 +4137,27 @@
     "download": "Download",
     "downloaded": "Downloaded {name}",
     "downloadFailed": "Couldn't download that. Try again.",
-    "openEditor": "Open in Content Editor"
+    "openEditor": "Open in Content Editor",
+    "task": {
+      "line": "Task: {title}",
+      "untitled": "An Action Center task",
+      "markDone": "Attach to task & mark done",
+      "more": "More for this file",
+      "attachOnly": "Attach only",
+      "doneAttached": "Done · attached to task",
+      "doneInActionCenter": "Done in Action Center",
+      "markedDone": "Task marked done in Action Center",
+      "undo": "Undo",
+      "undone": "Task open again in Action Center",
+      "attached": "Attached to the task",
+      "failed": {
+        "not_found": "That file or task isn't there any more.",
+        "forbidden": "Only an Admin or a Manager can close tasks from Chat.",
+        "closed": "Its action is closed in Action Center.",
+        "changed": "It changed in Action Center since, so nothing was undone.",
+        "failed": "Couldn't change the task. Try again."
+      }
+    }
   },
   "chatFiles": {
     "title": "Files",
@@ -6002,6 +6030,7 @@
       "empty": "No pages to audit right now. Opportunities come from Google Analytics (valuable pages without AI traffic), from prompts where a competitor is cited and you aren't, and from your site's pages that were never audited or not in {days} days.",
       "showMore": "Show more",
       "prefsFailed": "Couldn't update the pages",
+      "prefsManagersOnly": "Only admins and managers can pin, exclude or restore pages.",
       "templatePages": "· {pages} pages",
       "templateFixOnce": "Fix once, applies to {pages} pages",
       "templateAudited": "{audited} of {pages}",
@@ -10366,6 +10395,7 @@
       "totalSub": "from {google} Google searches",
       "averageTitle": "Avg. AI Volume",
       "averageSub": "per prompt",
+      "chartCaption": "Total estimated AI-answered queries across all topic clusters (Google volume × the {rate} AI adoption rate), split by answer-engine share: Google AI Overviews, Google AI Mode and standalone chatbots.",
       "googleColumn": "Google Vol.",
       "googleTip": "The prompt's monthly Google searches: the median of its related keywords that have search data.",
       "aiColumn": "Est. AI Vol.",
@@ -12253,7 +12283,7 @@
       "growth": {
         "tagline": "For growing teams that want to monitor AI visibility and optimize content for AI search.",
         "engines": "ChatGPT, Perplexity, Gemini, Microsoft Copilot, Google AI Mode and Google AI Overviews tracking",
-        "extras": ["Multi-region tracking", "White-label reports & Looker Studio"]
+        "extras": ["Multi-region tracking", "Looker Studio"]
       },
       "brands": "{count, plural, one {# brand} other {# brands}}",
       "unlimitedBrands": "Unlimited brands",
@@ -12265,7 +12295,9 @@
       "aiUsage": "{count}x AI usage",
       "aiUsageCustom": "Custom AI usage, from {count}x",
       "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. The free trial comes with a smaller allowance.",
-      "aiUsageCustomHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. Ansvisor sets the amount with you."
+      "aiUsageCustomHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. Ansvisor sets the amount with you.",
+      "aiUsageHintChat": "A monthly allowance for Ansvisor's AI features: Chat and agents, Improve suggestions, the Content Editor's AI and the Action Center's task writing. Your own AI key comes with Enterprise only. The free trial comes with a smaller allowance.",
+      "aiUsageCustomHintChat": "A monthly allowance for Ansvisor's AI features: Chat and agents, Improve suggestions, the Content Editor's AI and the Action Center's task writing. On Enterprise, Chat can also run on your own AI key. Ansvisor sets the amount with you."
     },
     "contactUs": "Contact Us",
     "integrations": "Integrations",

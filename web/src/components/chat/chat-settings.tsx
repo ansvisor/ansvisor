@@ -8,11 +8,9 @@ import { saveChatFocus, saveChatGeneralSettings } from '@/lib/actions/chat-prefs
 import { track } from '@/lib/analytics';
 import { FOCUS_AREAS, type FocusArea } from '@/lib/chat/focus';
 import type {
-  AnswerLanguage,
   ChatGeneralAccess,
   ChatGeneralSettings,
   GeneralPatch,
-  NotifyChannel,
 } from '@/lib/chat/general-settings';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { cn } from '@/lib/utils';
@@ -23,14 +21,12 @@ import { useFocusLabel } from './focus-picker';
  * `chatSettings.*`; mockup #s-settings), General: the person's own
  * preferences. Each pick is kept at once on the person (every device); one
  * that can't be kept goes back and says so. Default mode is for the roles
- * that change things; Full auto says why it's locked; Inbox + Slack waits
- * for Slack. Your focus (CHAT-24 §3 item 2) is for everyone: it only
- * changes what Chat suggests. The mockup's other tabs come with their pages.
+ * that change things; Full auto says why it's locked. Your focus (CHAT-24
+ * §3 item 2) is for everyone: it only changes what Chat suggests. The
+ * mockup's other tabs come with their pages.
  */
 
 const MODES: ChatMode[] = ['ask_first', 'auto', 'full_auto'];
-const LANGUAGES: AnswerLanguage[] = ['en', 'tr', 'de'];
-const CHANNELS: NotifyChannel[] = ['inbox_email', 'inbox', 'inbox_slack'];
 
 /** One setting (mockup `.srow2`): its name and a muted line, the control on the right. */
 function Row({ label, note, children }: { label: string; note: string; children: ReactNode }) {
@@ -80,9 +76,6 @@ function Switch({
     </button>
   );
 }
-
-const SELECT =
-  'h-7 rounded-lg border bg-background px-2 text-[12.5px] text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
 export function ChatSettings({
   initial,
@@ -231,57 +224,10 @@ export function ChatSettings({
             </span>
           </Row>
 
-          <Row label={t('language.label')} note={t('language.note')}>
-            <select
-              data-action="chatSettings.answerLanguage"
-              aria-label={t('language.label')}
-              value={settings.answerLanguage ?? ''}
-              onChange={(event) =>
-                void change({
-                  answerLanguage: (event.target.value || null) as AnswerLanguage | null,
-                })
-              }
-              className={SELECT}
-            >
-              <option value="">{t('language.same')}</option>
-              {LANGUAGES.map((language) => (
-                <option key={language} value={language}>
-                  {t(`language.${language}`)}
-                </option>
-              ))}
-            </select>
-          </Row>
-
-          <Row label={t('notify.label')} note={t('notify.note')}>
-            <select
-              data-action="chatSettings.notifyChannel"
-              aria-label={t('notify.label')}
-              value={settings.notifyVia}
-              onChange={(event) => void change({ notifyVia: event.target.value as NotifyChannel })}
-              className={SELECT}
-            >
-              {CHANNELS.map((channel) => (
-                <option
-                  key={channel}
-                  value={channel}
-                  disabled={channel === 'inbox_slack' && !access.slack}
-                >
-                  {channel === 'inbox_slack' && !access.slack
-                    ? t('notify.slackSoon')
-                    : t(`notify.${channel}`)}
-                </option>
-              ))}
-            </select>
-          </Row>
-
-          <Row label={t('thought.label')} note={t('thought.note')}>
-            <Switch
-              checked={settings.showThought}
-              label={t('thought.label')}
-              action="chatSettings.toggleThinking"
-              onChange={(next) => void change({ showThought: next })}
-            />
-          </Row>
+          {/* Answer language, "Notify me when an agent needs me" and "Show Thought
+              for N s" are kept on the person but nothing reads them yet (Chat
+              answers in the question's language), so they stay hidden until
+              they're wired up; their saved values and schema stay. */}
 
           <Row label={t('everyPage.label')} note={t('everyPage.note')}>
             <Switch

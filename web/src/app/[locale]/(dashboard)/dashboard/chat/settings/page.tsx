@@ -14,10 +14,9 @@ const CAREFUL_ACCESS: ChatGeneralAccess = { modes: false, fullAutoLock: 'plan', 
 
 /**
  * Chat's Settings › General (mockup #s-settings): the person's default
- * mode, their focus (CHAT-24), answer language, notifications, "Thought
- * for N s" and Ask Chat on every page. Only with the new Chat on for the
- * workspace (CHAT_AGENTIC). Settings that can't be read open as the
- * defaults, with nothing locked opened.
+ * mode, their focus (CHAT-24) and Ask Chat on every page. Only with the
+ * new Chat on for the workspace (CHAT_AGENTIC). Settings that can't be
+ * read open as the defaults, with nothing locked opened.
  */
 export default async function ChatSettingsPage() {
   const supabase = await createClient();
