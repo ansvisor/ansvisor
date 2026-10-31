@@ -407,7 +407,7 @@ function ImpactTable({
             <th className={head}>{t('columns.lift')}</th>
             <th className={head}>
               <span className="sr-only">{t('columns.checkpoints')}</span>
-              <span aria-hidden className="grid grid-cols-4 gap-1 text-center">
+              <span aria-hidden className="grid grid-cols-[repeat(4,38px)] gap-1 text-center">
                 <span>{t('checkpoint.d7')}</span>
                 <span>{t('checkpoint.d14')}</span>
                 <span>{t('checkpoint.d30')}</span>
@@ -513,11 +513,19 @@ function sourceLine(row: ImpactRow, t: T): string {
     .join(' · ');
 }
 
+/** One checkpoint's box, as wide as "Nov 30" (the mockup's 38px). */
+const CHECKPOINT =
+  'flex h-7 items-center justify-center rounded-md text-[10.5px] whitespace-nowrap tabular-nums';
+
 /** The 7d · 14d · 30d · 90d strip: each checkpoint's effect, its due day, or none. */
 function CheckpointStrip({ marks }: { marks: readonly CheckpointMark[] }) {
   const t = useTranslations('reports.impact');
   return (
-    <span role="group" aria-label={t('columns.checkpoints')} className="grid grid-cols-4 gap-1">
+    <span
+      role="group"
+      aria-label={t('columns.checkpoints')}
+      className="grid grid-cols-[repeat(4,38px)] gap-1"
+    >
       {marks.map((mark) => {
         const day = CHECKPOINT_DAYS[mark.checkpoint];
         if (mark.state === 'due') {
@@ -529,7 +537,7 @@ function CheckpointStrip({ marks }: { marks: readonly CheckpointMark[] }) {
               data-state="due"
               title={label}
               aria-label={label}
-              className="rounded-md border border-dashed px-1 py-0.5 text-center text-[11px] text-muted-foreground"
+              className={cn(CHECKPOINT, 'border border-dashed text-muted-foreground')}
             >
               {dayOf(mark.dueOn)}
             </span>
@@ -544,7 +552,7 @@ function CheckpointStrip({ marks }: { marks: readonly CheckpointMark[] }) {
               data-state="none"
               title={label}
               aria-label={label}
-              className="px-1 py-0.5 text-center text-[11px] text-muted-foreground"
+              className={cn(CHECKPOINT, 'text-muted-foreground')}
             >
               –
             </span>
@@ -558,10 +566,7 @@ function CheckpointStrip({ marks }: { marks: readonly CheckpointMark[] }) {
             data-state="measured"
             title={label}
             aria-label={label}
-            className={cn(
-              'rounded-md border px-1 py-0.5 text-center text-[11px] tabular-nums',
-              OUTCOME_PILL[mark.outcome],
-            )}
+            className={cn(CHECKPOINT, 'border', OUTCOME_PILL[mark.outcome])}
           >
             {mark.checkpoint === 'd7' && mark.direction
               ? { up: '▲', flat: '–', down: '▼' }[mark.direction]
