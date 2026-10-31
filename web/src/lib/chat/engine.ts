@@ -135,6 +135,16 @@ import { runLoggedWrite } from './write';
 import { fileChatOutput } from './file-output';
 import { originPageSchema } from './origin';
 import { CHAT_REFERENCE_TYPES, MAX_REFERENCES } from './references';
+import {
+  MAX_SKILL_BODIES,
+  USE_SKILL_TOOL,
+  availableSkillsBlock,
+  enabledSkills,
+  loadedSkillsBlock,
+  skillsForPrompt,
+  typedSkills,
+  type LibrarySkill,
+} from './skills/library';
 import { MAX_UPLOADS } from './uploads';
 
 /**
@@ -665,6 +675,11 @@ interface RunContext {
   budget: ReadBudget;
   offered: Map<string, ChatTool>;
   refused: { tool: ChatTool; denial: ToolDenial }[];
+  /**
+   * The skills the person may use (CHAT-13 items 3–4): every enabled one,
+   * and the ones the prompt lists. None while the new Chat is off.
+   */
+  skills: { enabled: readonly LibrarySkill[]; listed: readonly LibrarySkill[] };
   /** The calls of the model step being handled: questions asked together count as one batch. */
   stepCalls?: PendingCall[];
   /**
@@ -733,9 +748,11 @@ export async function driveRun(
       const outcome = await resumePending(rc, run.pending, resume);
       if (outcome !== 'continue') return;
     }
-    // A how-to question is answered from Help before any data is read (CHAT-19 §5).
+    // A how-to question is answered from Help before any data is read (CHAT-19 §5);
+    // a message that calls a skill by its /name asks for a task, not how-to help.
     const fresh = !resume && rc.progress.steps === 0 && rc.progress.modelSteps === 0;
-    if (fresh && (await helpTurn(rc)) === 'ended') return;
+    const typed = fresh ? await loadTypedSkills(rc) : 0;
+    if (fresh && typed === 0 && (await helpTurn(rc)) === 'ended') return;
     await modelLoop(rc);
   } catch (err) {
     console.error('[chat/engine] a run failed:', err);
@@ -824,9 +841,9 @@ async function openContext(
   };
   const { offered, refused } = engineTools(ctx, scope);
   const budget = readBudget(run.effort);
+  const history = await readHistory(run, budget.historyChars);
   // One model does both on a single-model key: the run writes from the start.
   if (models.phases === 'single') progress.phase = 'write';
-  const history = await readHistory(run, budget.historyChars);
   return {
     actor,
     run,
@@ -847,6 +864,7 @@ async function openContext(
     offered: new Map(offered.map((tool) => [tool.name, tool])),
     refused,
     agentRunId,
+    skills: runSkills(actor.organizationId, progress, history.plan),
   };
 }
 
@@ -859,6 +877,44 @@ async function readAgentRunId(conversationId: string): Promise<string | null> {
     .maybeSingle();
   if (error) throw new Error(`Chat could not read the chat: ${error.message}`);
   return (data as { agent_run_id: string | null } | null)?.agent_run_id ?? null;
+}
+
+/** A message's words, its text parts joined. */
+const messageText = (message: ModelMessage) =>
+  typeof message.content === 'string'
+    ? message.content
+    : message.content
+        .map((part) => (part.type === 'text' ? part.text : ''))
+        .filter(Boolean)
+        .join('\n');
+
+/**
+ * A run's skills (CHAT-13 item 3): the enabled ones, and the ones its prompt
+ * lists. Past 20 enabled, the list keeps the ones this message calls by
+ * /name, then the ones used in this chat (called in its recent turns, or
+ * loaded in this run), then the best match to the question and the page.
+ */
+function runSkills(
+  organizationId: string,
+  progress: Progress,
+  history: HistoryPlan,
+): RunContext['skills'] {
+  const enabled = enabledSkills(organizationId);
+  if (enabled.length === 0) return { enabled, listed: [] };
+  const question = progress.question ?? '';
+  const names = (text: string) => typedSkills(text, enabled).map((skill) => skill.name);
+  const earlier = history.recent
+    .filter((message) => message.role === 'user')
+    .flatMap((message) => names(messageText(message)));
+  const page = progress.scope?.context;
+  const listed = skillsForPrompt(enabled, {
+    typed: names(question),
+    used: [...(progress.skills ?? []), ...earlier],
+    request: [question, page?.route ?? '', ...(page?.chips ?? []).map((chip) => chip.label)].join(
+      ' ',
+    ),
+  });
+  return { enabled, listed };
 }
 
 async function readBrand(brandId: string, organizationId: string) {
@@ -1059,6 +1115,87 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
   return 'ended';
 }
 
+// ─── Skills ─────────────────────────────────────────────────────────────────
+
+/**
+ * A skill's body for the rest of the run (CHAT-13 item 4): its step, "Used
+ * skill: {title}" with where it comes from under it, and its name kept, so
+ * every later step gets its text (loadedSkills).
+ */
+async function loadSkill(
+  rc: RunContext,
+  skill: LibrarySkill,
+  via: 'typed' | 'model',
+): Promise<void> {
+  rc.progress.skills = [...(rc.progress.skills ?? []), skill.name];
+  const row = await insertStep(rc.run.id, {
+    position: ++rc.progress.steps,
+    kind: 'skill',
+    status: 'done',
+    label: t('step.usedSkill', { title: skill.title }),
+    detail: t('step.skillFromLibrary'),
+    tool: USE_SKILL_TOOL,
+    debug: { skill: skill.name, via },
+  });
+  rc.sink.emit('step.finished', { step: clientStep(row) });
+}
+
+/**
+ * The skills the message calls by /name, loaded before the first step: 3 at most. Their count.
+ * None when the run starts tainted: its message is a next move a run wrote after reading
+ * outside text (fromTaintedMove), so its /name is that model's, not the person's (§16a).
+ */
+async function loadTypedSkills(rc: RunContext): Promise<number> {
+  if (rc.progress.tainted) return 0;
+  const typed = typedSkills(rc.progress.question ?? '', rc.skills.enabled).slice(
+    0,
+    MAX_SKILL_BODIES,
+  );
+  for (const skill of typed) await loadSkill(rc, skill, 'typed');
+  return typed.length;
+}
+
+/**
+ * The skill the model picked: its body from the next step, once, within the
+ * run's 3. Not after the run read outside text (CHAT-20 §16a): the pick
+ * could be that text's, so then only the person's /name loads a skill.
+ */
+async function pickSkill(rc: RunContext, call: PendingCall): Promise<CallOutcome> {
+  const input = (call.input ?? {}) as { name?: unknown };
+  const skill = rc.skills.listed.find((s) => s.name === input.name);
+  if (!skill) return result(call, { code: 'not_found' }, true);
+  if (rc.progress.skills?.includes(skill.name)) {
+    return result(call, { ok: true, note: 'Loaded already: its text is below the rules.' });
+  }
+  if (rc.progress.tainted) {
+    return result(
+      call,
+      {
+        code: 'not_available',
+        message: 'No skill is loaded after outside text was read: go on without it.',
+      },
+      true,
+    );
+  }
+  if ((rc.progress.skills?.length ?? 0) >= MAX_SKILL_BODIES) {
+    return result(
+      call,
+      { code: 'limit_reached', message: `${MAX_SKILL_BODIES} skills a run: go on with those.` },
+      true,
+    );
+  }
+  await loadSkill(rc, skill, 'model');
+  return result(call, { ok: true, note: 'Its text is below the rules from your next step.' });
+}
+
+/** The loaded skills' block for a step's prompt (prompt.ts 2b), or none. */
+function loadedSkills(rc: RunContext): string | undefined {
+  const loaded = (rc.progress.skills ?? []).flatMap((name) =>
+    rc.skills.enabled.filter((skill) => skill.name === name),
+  );
+  return loaded.length > 0 ? loadedSkillsBlock(loaded) : undefined;
+}
+
 // ─── The model loop ─────────────────────────────────────────────────────────
 
 /** The read phase ends with this: no answer, only that the reads are enough. */
@@ -1128,6 +1265,7 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
   const { system, messages } = stepPrompt({
     core: coreRules(rc, phase),
     workspace: workspaceBlock(rc, phase),
+    skills: loadedSkills(rc),
     history: phase === 'write' ? historyMessages(rc.history) : [],
     turn: turnMessage(rc, phase),
     steps: phase === 'read' ? rc.readMessages : rc.messages,
@@ -1321,6 +1459,15 @@ function toolSet(rc: RunContext, phase: ChatPhase): ToolSet {
     if (phase === 'read' && tool.class !== 'read') continue;
     set[tool.name] = aiTool({ description: tool.description, inputSchema: tool.inputSchema });
   }
+  // A skill's body (CHAT-13 item 4), in either phase, while the prompt lists skills. The
+  // same names for the whole run, so the tools stay as the cache keeps them.
+  if (rc.skills.listed.length > 0) {
+    const names = rc.skills.listed.map((skill) => skill.name) as [string, ...string[]];
+    set[USE_SKILL_TOOL] = aiTool({
+      description: `Load a skill from <available_skills> before you do its task: at most ${MAX_SKILL_BODIES} a run. Its text reaches you below the rules from your next step.`,
+      inputSchema: z.object({ name: z.enum(names) }),
+    });
+  }
   // A question card (CHAT-07): while writing, until the run asked its 4.
   if (phase === 'write' && (rc.progress.asks ?? 0) < MAX_ASKS_PER_RUN) {
     set[ASK_TOOL] = aiTool({
@@ -1406,7 +1553,7 @@ function coreRules(rc: Pick<RunContext, 'budget'>, phase: ChatPhase): string {
  * not between turns.
  */
 function workspaceBlock(
-  rc: Pick<RunContext, 'role' | 'planName' | 'brand' | 'refused' | 'offered'>,
+  rc: Pick<RunContext, 'role' | 'planName' | 'brand' | 'refused' | 'offered' | 'skills'>,
   phase: ChatPhase,
 ): string {
   const lines = [
@@ -1436,6 +1583,8 @@ function workspaceBlock(
       'Explaining a change from explain_change\'s result: lead with the metric, both values, the change and the two periods (name visibility as the share of tracked prompts where the brand appears, never the Insights Visibility score; visibility_score is the Visibility score on the Insights card: say which of its `components` moved it, in points of the score, e.g. "the mention rate\'s fall is about 3 points of the score", and a cause\'s `components` says through which part it moved the score), saying whether it improved or declined as `direction` has it (for the average position a lower number is better). Say first when it is within normal swing, and say "Not enough data" when noise_verdict is not_measurable or for cells left out. Always give the sample: the tracking runs compared in each period and the cells. Then the causes with their share and confidence; a cause with offset true partly offset the change, so give its points, not a share. Never say a cause made it happen: say it explains about N% of the change. engines_changed is an engine tracked in one period only; prompt_set_changed, prompts added or removed; not_mentioned, prompts the brand wasn\'t named in during one period. When evidence_partial is true, say "Not every answer could be read; causes are shown only where they could." When complete is false, say "Some days aren\'t fully counted yet." When unmentioned_cells has a period above 0, say "{n} prompts had no mentions in one period" with the larger. Use only numbers in the result, and say it compares scheduled tracking runs.',
     );
   }
+  // Names and descriptions only (CHAT-13 item 3): a body loads when it is used.
+  if (rc.skills.listed.length > 0) lines.push(availableSkillsBlock(rc.skills.listed));
   return lines.join('\n\n');
 }
 
@@ -1670,6 +1819,7 @@ async function handleCall(
   if (call.toolName === EXPLAIN_TOOL && phase === 'write') return explainUnavailable(rc, call);
   if (call.toolName === ASK_TOOL && phase === 'write') return askQuestion(rc, call);
   if (call.toolName === NEXT_MOVES_TOOL && phase === 'write') return keepNextMoves(rc, call);
+  if (call.toolName === USE_SKILL_TOOL) return pickSkill(rc, call);
   const tool = rc.offered.get(call.toolName);
   if (!tool || (phase === 'read' && tool.class !== 'read')) {
     return result(call, { code: 'not_available' }, true);
@@ -1969,7 +2119,9 @@ const namesTool = (text: string) => {
   const lower = text.toLowerCase();
   return (
     TOOLISH.test(text) ||
-    [ASK_TOOL, EXPLAIN_TOOL, NEXT_MOVES_TOOL].some((name) => lower.includes(name)) ||
+    [ASK_TOOL, EXPLAIN_TOOL, NEXT_MOVES_TOOL, USE_SKILL_TOOL].some((name) =>
+      lower.includes(name),
+    ) ||
     CHAT_TOOLS.some(
       (tool) =>
         lower.includes(tool.name) || (!!tool.mcpTool && lower.includes(tool.mcpTool.toLowerCase())),

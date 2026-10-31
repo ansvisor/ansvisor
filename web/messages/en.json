@@ -3695,7 +3695,9 @@
       "askSkipped": "Skipped · used {option}",
       "askStopped": "Question skipped",
       "opened": "Opened {page}",
-      "notOpened": "Couldn't open {page}"
+      "notOpened": "Couldn't open {page}",
+      "usedSkill": "Used skill: {title}",
+      "skillFromLibrary": "Ansvisor library"
     },
     "pageRefused": {
       "no_access": "No workspace to open pages for",
@@ -3786,6 +3788,8 @@
       "title": "Shortcuts",
       "keys": "type to filter · ↑↓ · Enter",
       "none": "No shortcuts match",
+      "noneWithSkills": "No shortcuts or skills match",
+      "skills": "Skills",
       "shortcuts": {
         "analyze": { "name": "Analyze", "starter": "Analyze" },
         "report": { "name": "Reports", "starter": "Create a report on" },

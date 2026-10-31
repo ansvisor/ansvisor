@@ -439,6 +439,56 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     expect(listbox()).toBeNull();
   });
 
+  // The enabled skills (W2-04, CHAT-13 item 5), as the page passes them.
+  const SKILLS = [
+    { name: 'faq', title: 'FAQ from fan-outs' },
+    { name: 'report', title: 'Weekly report' },
+    { name: 'compare', title: 'Comparison page' },
+  ];
+
+  it("lists the skills under Skills after the shortcuts, filters both, and puts a skill's /command first", async () => {
+    await render({ skills: SKILLS });
+    await type('/');
+    // The /report skill takes the /report shortcut's place.
+    expect(options()).toEqual([
+      '/analyzeAnalyze',
+      '/createCreate content',
+      '/faqFAQ from fan-outs',
+      '/reportWeekly report',
+      '/compareComparison page',
+    ]);
+    expect(container.querySelector('[role="group"]')!.getAttribute('aria-label')).toBe('Skills');
+
+    await type('/fa');
+    expect(options()).toEqual(['/faqFAQ from fan-outs']);
+    await press('Enter');
+    expect(box().value).toBe('/faq ');
+    expect(listbox()).toBeNull();
+    expect(handlers.onSend).not.toHaveBeenCalled();
+  });
+
+  it('reaches the skills with the arrows, keeps the text after one picked from the / button, and says when none match', async () => {
+    await render({ skills: SKILLS });
+    await type('our pricing page');
+    await act(async () => button('Skills and shortcuts')!.click());
+    await press('ArrowUp');
+    expect(container.querySelector('[aria-selected="true"]')!.textContent).toBe(
+      '/compareComparison page',
+    );
+    await press('Enter');
+    expect(box().value).toBe('/compare our pricing page');
+
+    await type('/zz');
+    expect(container.textContent).toContain('No shortcuts or skills match');
+  });
+
+  it('shows no Skills group without skills: the new Chat off', async () => {
+    await render();
+    await type('/');
+    expect(container.querySelector('[role="group"]')).toBeNull();
+    expect(options()).toHaveLength(3);
+  });
+
   it('references data on "@": the page’s own first, then the brand’s matches; the pick is a chip that goes with the message', async () => {
     const searchReferences = vi.fn(async () => [
       { type: 'prompt' as const, id: 'p1', label: 'Best AEO tools' },
@@ -535,6 +585,102 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
       ruleKind: 'role',
     });
     expect(toast.success).toHaveBeenCalledWith('Sent to your Admins');
+  });
+});
+
+describe("ChatComposer: a menu's side and height (W2-04)", () => {
+  // The page's scrolling area, under a 53px header, in a 1024×768 window (jsdom's height).
+  const SCROLLER = { top: 53, bottom: 768 };
+  const SKILLS = Array.from({ length: 14 }, (_, i) => ({
+    name: `skill-${i}`,
+    title: `Skill ${i}`,
+  }));
+  const listbox = () => container.querySelector<HTMLElement>('[role="listbox"]')!;
+
+  /** The composer's box at `box`, and the menu's rows `content` px tall. */
+  function layout(box: { top: number; bottom: number }, content = 500) {
+    container.style.overflowY = 'auto';
+    vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(content);
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      const isBox = [...this.children].some((child) => child.getAttribute('role') === 'listbox');
+      const r = this === container ? SCROLLER : isBox ? box : { top: 0, bottom: 0 };
+      return {
+        ...r,
+        left: 0,
+        right: 0,
+        x: 0,
+        y: r.top,
+        width: 0,
+        height: r.bottom - r.top,
+      } as DOMRect;
+    });
+  }
+  afterEach(() => vi.restoreAllMocks());
+
+  it("opens below when the room above the box (under the header, not the window's top) can't hold it", async () => {
+    // Chat Home: the box 210px under the header.
+    layout({ top: 263, bottom: 363 });
+    await render({ skills: SKILLS });
+    await type('/');
+    expect(listbox().dataset.side).toBe('below');
+    expect(listbox().className).toContain('top-full');
+    expect(listbox().className).not.toContain('bottom-full');
+    expect(listbox().style.maxHeight).toBe('300px');
+  });
+
+  it('opens above when its rows fit there, as in a chat and the side panel', async () => {
+    layout({ top: 600, bottom: 700 });
+    await render({ skills: SKILLS });
+    await type('/');
+    expect(listbox().dataset.side).toBe('above');
+    expect(listbox().className).toContain('bottom-full');
+    expect(listbox().style.maxHeight).toBe('300px');
+
+    // A short menu fits above Chat Home's box too.
+    act(() => root.unmount());
+    root = createRoot(container);
+    layout({ top: 263, bottom: 363 }, 120);
+    await render();
+    await type('/');
+    expect(listbox().dataset.side).toBe('above');
+  });
+
+  it('keeps to the room it has: above when there is less below, as tall as the room less the gap', async () => {
+    // 147px above the box, 68px below it.
+    layout({ top: 200, bottom: 700 });
+    await render({ skills: SKILLS });
+    await type('/');
+    expect(listbox().dataset.side).toBe('above');
+    expect(listbox().style.maxHeight).toBe(`${200 - 53 - 8}px`);
+  });
+
+  it('picks its side again when the window changes size, and keeps the active row in view', async () => {
+    const box = { top: 263, bottom: 363 };
+    layout(box);
+    const scrolled = vi.fn();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      value: scrolled,
+      configurable: true,
+    });
+    try {
+      await render({ skills: SKILLS });
+      await type('/');
+      expect(listbox().dataset.side).toBe('below');
+      box.top = 600;
+      box.bottom = 700;
+      await act(async () => window.dispatchEvent(new Event('resize')));
+      expect(listbox().dataset.side).toBe('above');
+
+      await press('ArrowUp');
+      const selected = container.querySelector('[aria-selected="true"]')!;
+      expect(selected.textContent).toBe('/skill-13Skill 13');
+      expect(scrolled.mock.contexts.at(-1)).toBe(selected);
+      expect(scrolled).toHaveBeenLastCalledWith({ block: 'nearest' });
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
   });
 });
 

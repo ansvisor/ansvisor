@@ -141,6 +141,8 @@ export interface RunProgress {
   capHit?: 'run' | 'month';
   /** Why a stopped run stopped (its run.stopped reason), for its agent run (CHAT-21 §H). */
   stoppedFor?: 'person' | 'expired' | 'limit';
+  /** The skills loaded for this run, by name, in order (CHAT-13 item 4: at most 3). */
+  skills?: string[];
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {

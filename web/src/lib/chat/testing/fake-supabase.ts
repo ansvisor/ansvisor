@@ -49,8 +49,6 @@ interface Builder extends PromiseLike<Result> {
   is(column: string, value: null): Builder;
   not(column: string, operator: 'is', value: null): Builder;
   lt(column: string, value: string): Builder;
-  /** At or after a date (an ISO string). */
-  gte(column: string, value: string): Builder;
   gt(column: string, value: unknown): Builder;
   /** At or after: an ISO time, or a number. */
   gte(column: string, value: unknown): Builder;
@@ -279,14 +277,6 @@ export function createFakeSupabase(): FakeSupabase {
             (row) =>
               typeof row[column] === 'string' &&
               Date.parse(row[column] as string) < Date.parse(value),
-          );
-          return builder;
-        },
-        gte(column, value) {
-          filters.push(
-            (row) =>
-              typeof row[column] === 'string' &&
-              Date.parse(row[column] as string) >= Date.parse(value),
           );
           return builder;
         },
