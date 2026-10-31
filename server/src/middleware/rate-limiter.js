@@ -41,8 +41,11 @@ export function apiLimiterKey(req) {
   return anonymousIpKey(req.ip);
 }
 
-/** The web's Chat engine's budget calls (routes/internal-chat-budget.js). */
-const CHAT_BUDGET_PATH = /^\/api\/internal\/chat\/budget(\/|$)/;
+/**
+ * The web's Chat engine's budget calls and page reads
+ * (routes/internal-chat-budget.js, routes/internal-chat-pages.js).
+ */
+const CHAT_BUDGET_PATH = /^\/api\/internal\/chat\/(budget|pages)(\/|$)/;
 
 /**
  * Whether a request is the web's Chat engine holding or settling a model

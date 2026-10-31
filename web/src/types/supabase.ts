@@ -5252,6 +5252,8 @@ export type Database = {
       invitations: {
         Row: {
           accepted_at: string | null
+          brand_ids: string[]
+          brand_scope: string
           created_at: string
           email: string
           expires_at: string
@@ -5264,6 +5266,8 @@ export type Database = {
         }
         Insert: {
           accepted_at?: string | null
+          brand_ids?: string[]
+          brand_scope?: string
           created_at?: string
           email: string
           expires_at?: string
@@ -5276,6 +5280,8 @@ export type Database = {
         }
         Update: {
           accepted_at?: string | null
+          brand_ids?: string[]
+          brand_scope?: string
           created_at?: string
           email?: string
           expires_at?: string
@@ -5392,6 +5398,45 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_brands: {
+        Row: {
+          brand_id: string
+          granted_at: string
+          granted_by: string | null
+          organization_id: string
+          user_id: string
+        }
+        Insert: {
+          brand_id: string
+          granted_at?: string
+          granted_by?: string | null
+          organization_id: string
+          user_id: string
+        }
+        Update: {
+          brand_id?: string
+          granted_at?: string
+          granted_by?: string | null
+          organization_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_brands_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_brands_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -5636,6 +5681,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          brand_scope: string
           can_manage_menus: boolean
           created_at: string
           full_name: string | null
@@ -5651,6 +5697,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          brand_scope?: string
           can_manage_menus?: boolean
           created_at?: string
           full_name?: string | null
@@ -5666,6 +5713,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          brand_scope?: string
           can_manage_menus?: boolean
           created_at?: string
           full_name?: string | null
@@ -7311,6 +7359,10 @@ export type Database = {
         Args: { p_brand_id: string; p_days?: number }
         Returns: Json
       }
+      can_access_brand: {
+        Args: { p_brand_id: string; p_user_id?: string }
+        Returns: boolean
+      }
       chat_agent_usage_shares: {
         Args: { p_budget: number; p_organization_id: string; p_since: string }
         Returns: {
@@ -8073,6 +8125,7 @@ export type Database = {
           idx: number
         }[]
       }
+      org_brand_count: { Args: { p_organization_id: string }; Returns: number }
       org_prompt_location_usage: {
         Args: { p_organization_id: string }
         Returns: {
@@ -8433,6 +8486,7 @@ export type Database = {
         Returns: number
       }
       url_decode_safe: { Args: { p_value: string }; Returns: string }
+      user_brand_ids: { Args: never; Returns: string[] }
       visibility_rate_trend: {
         Args: {
           p_brand_id: string

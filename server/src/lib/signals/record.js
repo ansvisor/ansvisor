@@ -39,6 +39,7 @@ import { resolve } from '../../config/action-engine.js';
 import { EXCLUSIVE_KIND_GROUPS, LIBRARY_KINDS } from './library/kinds.js';
 import { libraryCandidates } from './library/detect.js';
 import { newAiPlatformCandidates } from './traffic-platforms.js';
+import { notifyChatAgentsOfSignals } from '../chat-agents.js';
 
 const DAY_MS = 86_400_000;
 
@@ -1012,5 +1013,8 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
     superseded: closing.superseded.length,
   };
   logger.info({ brandId, ...summary }, '[signals] recorded');
+  // Chat's agents' Signal triggers read what this pass raised or reopened
+  // (W2-16). Not awaited, and it never throws: a Chat agent never slows the pass.
+  if (inserted + reopened > 0) void notifyChatAgentsOfSignals(brandId, nowIso);
   return summary;
 }
