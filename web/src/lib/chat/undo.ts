@@ -441,8 +441,8 @@ export const UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   request_access: requestAccessRule,
   update_draft: updateDraft,
   ...SETUP_UNDO_RULES,
-  ...OUTPUT_UNDO_RULES,
   ...ACTION_CENTER_UNDO_RULES,
+  ...OUTPUT_UNDO_RULES,
 };
 
 /**

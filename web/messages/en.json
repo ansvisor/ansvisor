@@ -3850,6 +3850,21 @@
     }
   },
   "chatRun": {
+    "tasks": {
+      "title": "{due, plural, =0 {Action Center tasks} other {Action Center tasks · # due}}",
+      "progress": "Tasks ready",
+      "ready": "{ready, number} of {total, number} ready",
+      "priority": "Priority {score, number}",
+      "untitled": "An Action Center task",
+      "status": {
+        "queued": "Queued",
+        "writing": "Writing",
+        "ready_for_review": "Ready for review",
+        "done": "Done"
+      },
+      "closeNote": "You close tasks in Action Center. I never mark them done.",
+      "close": "Close tasks in Action Center"
+    },
     "proposal": {
       "goal": "Goal",
       "sentWith": "Sent with",
@@ -4340,7 +4355,7 @@
         "askAnything": "Ask anything",
         "tasks": "Complete tasks",
         "tasksCount": "{count, number} due",
-        "tasksMessage": "Work through this week's Action Center tasks by priority and prepare what each one needs. I'll close the tasks.",
+        "tasksMessage": "/tasks Work through this week's Action Center tasks by priority and prepare what each one needs. I'll close the tasks.",
         "winBack": "Win back citations",
         "winBackCount": "{count, plural, one {# page} other {# pages}}",
         "winBackMessage": "Win back the citations we lost on {count, plural, one {# page} other {# pages}}: refresh them against what AI cites now.",
@@ -5070,12 +5085,6 @@
       "trackCompetitorsUndo": "Removed the competitors added: {competitors}",
       "dropCompetitor": "Removed the competitor {competitor}",
       "dropCompetitorUndo": "Brought back the competitor {competitor}, without its timeline events from before",
-      "reviseDraft": "Changed the draft “{title}”",
-      "reviseDraftUndo": "Put the draft “{title}” back as it was",
-      "sendToCms": "Sent the draft “{title}” to {cms}",
-      "makeReport": "Made the report “{title}”",
-      "makeReportUndo": "Removed the report “{title}” from Reports",
-      "startAudit": "Started Site Audit on {pages}",
       "sendToActions": "Sent “{title}” to Action Center as {no}",
       "sendToActionsUndo": "Cancelled {no} “{title}”, sent from Chat",
       "addToAction": "Added a finding to {no}: {finding}",
@@ -5084,6 +5093,12 @@
       "attachToTaskUndo": "Took “{file}” off {task}",
       "taskReadyForReview": "Set {task} to Ready for review",
       "taskReadyForReviewUndo": "Took {task} back from Ready for review",
+      "reviseDraft": "Changed the draft “{title}”",
+      "reviseDraftUndo": "Put the draft “{title}” back as it was",
+      "sendToCms": "Sent the draft “{title}” to {cms}",
+      "makeReport": "Made the report “{title}”",
+      "makeReportUndo": "Removed the report “{title}” from Reports",
+      "startAudit": "Started Site Audit on {pages}",
       "accessDenied": "Not allowed: {tool}",
       "agentCreated": "Created the agent “{name}”",
       "agentUpdated": "Changed the agent “{name}”",

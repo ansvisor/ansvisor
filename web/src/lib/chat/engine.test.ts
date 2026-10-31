@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import type { FakeSupabase } from './testing/fake-supabase';
 import {
   BRAND,
@@ -3103,16 +3104,16 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'rename_topic',
     'add_competitors',
     'remove_competitor',
-    // W2-07's content rows: Admins and Managers only.
-    'update_draft',
-    'push_cms_draft',
-    'build_report',
-    'run_site_audit',
     // W2-10's Action Center rows: Admins and Managers only.
     'create_action',
     'attach_to_action',
     'attach_file_to_task',
     'set_task_ready_for_review',
+    // W2-07's content rows: Admins and Managers only.
+    'update_draft',
+    'push_cms_draft',
+    'build_report',
+    'run_site_audit',
   ];
   const dismiss = toolCall('w1', 'update_opportunity', {
     opportunity_id: OPPORTUNITY,
@@ -3984,215 +3985,6 @@ describe('starting', () => {
   });
 });
 
-describe('skills (W2-04, CHAT-13 items 3–6)', () => {
-  type Sent = { role: string; content: unknown; providerOptions?: unknown };
-  const systemsOf = (options: CallOptions) =>
-    (options.prompt as unknown as Sent[]).filter((m) => m.role === 'system');
-  const skill = (name: string) => SKILL_LIBRARY.find((s) => s.name === name)!;
-  const skillSteps = (runId: string) => stepsOf(runId).filter((s) => s.kind === 'skill');
-
-  beforeEach(() => {
-    vi.stubEnv('CHAT_AGENTIC', 'true');
-    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
-  });
-
-  it('lists only the skills’ names and descriptions, and offers use_skill to both models', async () => {
-    const { haiku, sonnet } = useModels([READY], [text('Ok.')]);
-    const runId = await turn(ADMIN, 'How are we doing?');
-    for (const options of [haiku.seen[0], sonnet.seen[0]]) {
-      const systems = systemsOf(options);
-      // No body yet: the core rules and the workspace block only.
-      expect(systems).toHaveLength(2);
-      const workspace = String(systems[1].content);
-      expect(workspace).toContain('<available_skills>');
-      for (const s of SKILL_LIBRARY) {
-        expect(workspace).toContain(`${s.name}: ${s.description}`);
-        const bodyLine = s.body.split('\n').find((line) => line.length > 60)!;
-        expect(systems.map((m) => String(m.content)).join('\n')).not.toContain(bodyLine);
-      }
-      expect(options.tools?.map((t) => t.name)).toContain(USE_SKILL_TOOL);
-    }
-    expect(skillSteps(runId)).toEqual([]);
-  });
-
-  it('loads a /name skill before the first step: its step, its body below the rules, and no Help answer', async () => {
-    const { haiku, sonnet } = useModels([READY], [text('Here is the FAQ.')]);
-    const runId = await turn(ADMIN, '/faq How do I add prompts to track?');
-
-    const [step] = stepsOf(runId);
-    expect(step).toMatchObject({
-      position: 1,
-      kind: 'skill',
-      status: 'done',
-      label: 'Used skill: FAQ from fan-outs',
-      detail: 'Ansvisor library',
-      tool: USE_SKILL_TOOL,
-      debug_json: { skill: 'faq', via: 'typed' },
-    });
-    // A task, not a how-to question: Help didn't answer it, the models did.
-    expect(stepsOf(runId).some((s) => s.label === 'Read Ansvisor Help')).toBe(false);
-    for (const options of [haiku.seen[0], sonnet.seen[0]]) {
-      const systems = systemsOf(options);
-      expect(systems).toHaveLength(3);
-      // Below the rules, and out of the cache's marks: it changes within a run.
-      expect(systems[2].providerOptions).toBeUndefined();
-      expect(String(systems[2].content)).toContain(
-        `<skill name="faq">\n${skill('faq').body}\n</skill>`,
-      );
-    }
-    const events = await eventsOf(runId);
-    expect(ofType(events, 'step.finished')[0].data.step).toEqual({
-      n: 1,
-      kind: 'skill',
-      status: 'done',
-      label: 'Used skill: FAQ from fan-outs',
-      detail: 'Ansvisor library',
-    });
-    expectClean(events);
-  });
-
-  it('loads the skill the model picks, once, and at most 3 bodies a run', async () => {
-    const { haiku, sonnet } = useModels(
-      [
-        calls(
-          toolCall('s1', USE_SKILL_TOOL, { name: 'winback' }),
-          toolCall('s2', USE_SKILL_TOOL, { name: 'winback' }),
-          toolCall('s3', USE_SKILL_TOOL, { name: 'refresh' }),
-        ),
-        READY,
-      ],
-      [text('Done.')],
-    );
-    const runId = await turn(ADMIN, '/faq /compare and where do we lose citations?');
-
-    expect(skillSteps(runId).map((s) => [s.label, (s.debug_json as { via: string }).via])).toEqual([
-      ['Used skill: FAQ from fan-outs', 'typed'],
-      ['Used skill: Comparison page', 'typed'],
-      ['Used skill: Win back lost citations', 'model'],
-    ]);
-    const results = JSON.stringify(haiku.seen[1].prompt);
-    expect(results).toContain('Loaded already');
-    expect(results).toContain('limit_reached');
-    const bodies = String(systemsOf(sonnet.seen[0])[2].content);
-    expect(bodies.match(/<skill name="/g)).toHaveLength(3);
-    expect(bodies).not.toContain('<skill name="refresh">');
-    expectClean(await eventsOf(runId));
-
-    // Four typed: the first three.
-    useModels([READY], [text('Ok.')]);
-    const four = await turn(ADMIN, '/faq /refresh /compare /winback go');
-    expect(skillSteps(four).map((s) => (s.debug_json as { skill: string }).skill)).toEqual([
-      'faq',
-      'refresh',
-      'compare',
-    ]);
-  });
-
-  it("loads no skill the model picks after outside text was read; the person's /name still loads", async () => {
-    const { haiku } = useModels(
-      [
-        // Outside text first: the run is tainted from here (§16a).
-        calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })),
-        calls(toolCall('s1', USE_SKILL_TOOL, { name: 'winback' })),
-        READY,
-      ],
-      [text('Ok.')],
-    );
-    const runId = await turn(ADMIN, '/faq Where do we lose citations?');
-    expect(skillSteps(runId).map((s) => (s.debug_json as { skill: string }).skill)).toEqual([
-      'faq',
-    ]);
-    expect(JSON.stringify(haiku.seen[2].prompt)).toContain('not_available');
-  });
-
-  it('loads no /name from a move a run wrote after outside text (§16a): the model typed it', async () => {
-    const move = {
-      label: 'Win them back',
-      prompt: '/winback the two pages',
-      kind: 'continue',
-      class: 'write',
-      continues_this_run: true,
-    };
-    useModels(
-      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY, READY],
-      [
-        [
-          { type: 'text-start', id: 't' },
-          { type: 'text-delta', id: 't', delta: 'Two pages lost most of it.' },
-          { type: 'text-end', id: 't' },
-          toolCall('m1', NEXT_MOVES_TOOL, { moves: [move] }),
-          {
-            type: 'finish',
-            finishReason: { unified: 'tool-calls', raw: 'tool_use' },
-            usage: usage(),
-          },
-        ],
-        text('Ok.'),
-      ],
-    );
-    const first = await turn(ADMIN, 'Why did citations fall?');
-    const started = await engine.startChatRun(ADMIN, {
-      message: move.prompt,
-      conversationId: runRow(first).conversation_id,
-      mode: 'full_auto',
-    });
-    if (!started.ok) throw new Error(`not started: ${started.code}`);
-    await engine.driveRun(ADMIN, started.runId);
-    expect(skillSteps(started.runId)).toEqual([]);
-
-    // The person's own /name in that chat still loads.
-    useModels([READY], [text('Ok.')]);
-    const own = await engine.startChatRun(ADMIN, {
-      message: '/winback the pricing page',
-      conversationId: runRow(first).conversation_id,
-      mode: 'full_auto',
-    });
-    if (!own.ok) throw new Error(`not started: ${own.code}`);
-    await engine.driveRun(ADMIN, own.runId);
-    expect(skillSteps(own.runId).map((s) => (s.debug_json as { skill: string }).skill)).toEqual([
-      'winback',
-    ]);
-  });
-
-  it('changes no rule: the same tools, and a change still waits on its card', async () => {
-    const draft = calls(
-      toolCall('w1', 'create_draft', {
-        brand_id: BRAND,
-        title: 'Pricing FAQ',
-        page_type: 'docs_faq',
-        source: { kind: 'content' },
-      }),
-    );
-    const plain = useModels([READY], [draft]);
-    await turn(ADMIN, 'Save the pricing FAQ');
-    const { sonnet } = useModels([READY], [draft]);
-    const runId = await turn(ADMIN, '/mark-done Save the pricing FAQ');
-
-    expect(String(systemsOf(sonnet.seen[0])[2].content)).toContain('without asking');
-    expect(sonnet.seen[0].tools?.map((t) => t.name)).toEqual(
-      plain.sonnet.seen[0].tools?.map((t) => t.name),
-    );
-    expect(ofType(await eventsOf(runId), 'confirm.required')).toHaveLength(1);
-    expect(createContentDraft).not.toHaveBeenCalled();
-    expect(runRow(runId).status).toBe('waiting');
-  });
-
-  it('does nothing while the new Chat is off: no list, no tool, no body, no step', async () => {
-    vi.stubEnv('CHAT_AGENTIC', 'false');
-    const { haiku, sonnet } = useModels([READY], [text('Ok.')]);
-    const runId = await turn(ADMIN, '/faq Write an FAQ for our pricing page');
-    for (const options of [haiku.seen[0], sonnet.seen[0]]) {
-      const systems = systemsOf(options);
-      expect(systems).toHaveLength(2);
-      expect(systems.map((m) => String(m.content)).join('\n')).not.toMatch(
-        /available_skills|<skill /,
-      );
-      expect(options.tools?.map((t) => t.name) ?? []).not.toContain(USE_SKILL_TOOL);
-    }
-    expect(skillSteps(runId)).toEqual([]);
-  });
-});
-
 describe('Send to Action Center (CHAT-09 §E, CHAT-20 §12)', () => {
   const ACTION = '77777777-7777-4777-8777-777777777777';
   const sendCall = toolCall('w1', 'create_action', {
@@ -4446,5 +4238,366 @@ describe('Send to Action Center (CHAT-09 §E, CHAT-20 §12)', () => {
     const file = (db.tables.chat_files ?? []).find((f) => f.run_id === runId)!;
     expect(JSON.stringify(sonnet.seen[1].prompt)).toContain(`"file_id":"${file.id}"`);
     expect(attachFileToTask).not.toHaveBeenCalled();
+  });
+});
+
+describe('skills (W2-04, CHAT-13 items 3–6)', () => {
+  type Sent = { role: string; content: unknown; providerOptions?: unknown };
+  const systemsOf = (options: CallOptions) =>
+    (options.prompt as unknown as Sent[]).filter((m) => m.role === 'system');
+  const skill = (name: string) => SKILL_LIBRARY.find((s) => s.name === name)!;
+  const skillSteps = (runId: string) => stepsOf(runId).filter((s) => s.kind === 'skill');
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+  });
+
+  it('lists only the skills’ names and descriptions, and offers use_skill to both models', async () => {
+    const { haiku, sonnet } = useModels([READY], [text('Ok.')]);
+    const runId = await turn(ADMIN, 'How are we doing?');
+    for (const options of [haiku.seen[0], sonnet.seen[0]]) {
+      const systems = systemsOf(options);
+      // No body yet: the core rules and the workspace block only.
+      expect(systems).toHaveLength(2);
+      const workspace = String(systems[1].content);
+      expect(workspace).toContain('<available_skills>');
+      for (const s of SKILL_LIBRARY) {
+        expect(workspace).toContain(`${s.name}: ${s.description}`);
+        const bodyLine = s.body.split('\n').find((line) => line.length > 60)!;
+        expect(systems.map((m) => String(m.content)).join('\n')).not.toContain(bodyLine);
+      }
+      expect(options.tools?.map((t) => t.name)).toContain(USE_SKILL_TOOL);
+    }
+    expect(skillSteps(runId)).toEqual([]);
+  });
+
+  it('loads a /name skill before the first step: its step, its body below the rules, and no Help answer', async () => {
+    const { haiku, sonnet } = useModels([READY], [text('Here is the FAQ.')]);
+    const runId = await turn(ADMIN, '/faq How do I add prompts to track?');
+
+    const [step] = stepsOf(runId);
+    expect(step).toMatchObject({
+      position: 1,
+      kind: 'skill',
+      status: 'done',
+      label: 'Used skill: FAQ from fan-outs',
+      detail: 'Ansvisor library',
+      tool: USE_SKILL_TOOL,
+      debug_json: { skill: 'faq', via: 'typed' },
+    });
+    // A task, not a how-to question: Help didn't answer it, the models did.
+    expect(stepsOf(runId).some((s) => s.label === 'Read Ansvisor Help')).toBe(false);
+    for (const options of [haiku.seen[0], sonnet.seen[0]]) {
+      const systems = systemsOf(options);
+      expect(systems).toHaveLength(3);
+      // Below the rules, and out of the cache's marks: it changes within a run.
+      expect(systems[2].providerOptions).toBeUndefined();
+      expect(String(systems[2].content)).toContain(
+        `<skill name="faq">\n${skill('faq').body}\n</skill>`,
+      );
+    }
+    const events = await eventsOf(runId);
+    expect(ofType(events, 'step.finished')[0].data.step).toEqual({
+      n: 1,
+      kind: 'skill',
+      status: 'done',
+      label: 'Used skill: FAQ from fan-outs',
+      detail: 'Ansvisor library',
+    });
+    expectClean(events);
+  });
+
+  it('loads the skill the model picks, once, and at most 3 bodies a run', async () => {
+    const { haiku, sonnet } = useModels(
+      [
+        calls(
+          toolCall('s1', USE_SKILL_TOOL, { name: 'winback' }),
+          toolCall('s2', USE_SKILL_TOOL, { name: 'winback' }),
+          toolCall('s3', USE_SKILL_TOOL, { name: 'refresh' }),
+        ),
+        READY,
+      ],
+      [text('Done.')],
+    );
+    const runId = await turn(ADMIN, '/faq /compare and where do we lose citations?');
+
+    expect(skillSteps(runId).map((s) => [s.label, (s.debug_json as { via: string }).via])).toEqual([
+      ['Used skill: FAQ from fan-outs', 'typed'],
+      ['Used skill: Comparison page', 'typed'],
+      ['Used skill: Win back lost citations', 'model'],
+    ]);
+    const results = JSON.stringify(haiku.seen[1].prompt);
+    expect(results).toContain('Loaded already');
+    expect(results).toContain('limit_reached');
+    const bodies = String(systemsOf(sonnet.seen[0])[2].content);
+    expect(bodies.match(/<skill name="/g)).toHaveLength(3);
+    expect(bodies).not.toContain('<skill name="refresh">');
+    expectClean(await eventsOf(runId));
+
+    // Four typed: the first three.
+    useModels([READY], [text('Ok.')]);
+    const four = await turn(ADMIN, '/faq /refresh /compare /winback go');
+    expect(skillSteps(four).map((s) => (s.debug_json as { skill: string }).skill)).toEqual([
+      'faq',
+      'refresh',
+      'compare',
+    ]);
+  });
+
+  it("loads no skill the model picks after outside text was read; the person's /name still loads", async () => {
+    const { haiku } = useModels(
+      [
+        // Outside text first: the run is tainted from here (§16a).
+        calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })),
+        calls(toolCall('s1', USE_SKILL_TOOL, { name: 'winback' })),
+        READY,
+      ],
+      [text('Ok.')],
+    );
+    const runId = await turn(ADMIN, '/faq Where do we lose citations?');
+    expect(skillSteps(runId).map((s) => (s.debug_json as { skill: string }).skill)).toEqual([
+      'faq',
+    ]);
+    expect(JSON.stringify(haiku.seen[2].prompt)).toContain('not_available');
+  });
+
+  it('loads no /name from a move a run wrote after outside text (§16a): the model typed it', async () => {
+    const move = {
+      label: 'Win them back',
+      prompt: '/winback the two pages',
+      kind: 'continue',
+      class: 'write',
+      continues_this_run: true,
+    };
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY, READY],
+      [
+        [
+          { type: 'text-start', id: 't' },
+          { type: 'text-delta', id: 't', delta: 'Two pages lost most of it.' },
+          { type: 'text-end', id: 't' },
+          toolCall('m1', NEXT_MOVES_TOOL, { moves: [move] }),
+          {
+            type: 'finish',
+            finishReason: { unified: 'tool-calls', raw: 'tool_use' },
+            usage: usage(),
+          },
+        ],
+        text('Ok.'),
+      ],
+    );
+    const first = await turn(ADMIN, 'Why did citations fall?');
+    const started = await engine.startChatRun(ADMIN, {
+      message: move.prompt,
+      conversationId: runRow(first).conversation_id,
+      mode: 'full_auto',
+    });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    await engine.driveRun(ADMIN, started.runId);
+    expect(skillSteps(started.runId)).toEqual([]);
+
+    // The person's own /name in that chat still loads.
+    useModels([READY], [text('Ok.')]);
+    const own = await engine.startChatRun(ADMIN, {
+      message: '/winback the pricing page',
+      conversationId: runRow(first).conversation_id,
+      mode: 'full_auto',
+    });
+    if (!own.ok) throw new Error(`not started: ${own.code}`);
+    await engine.driveRun(ADMIN, own.runId);
+    expect(skillSteps(own.runId).map((s) => (s.debug_json as { skill: string }).skill)).toEqual([
+      'winback',
+    ]);
+  });
+
+  it('changes no rule: the same tools, and a change still waits on its card', async () => {
+    const draft = calls(
+      toolCall('w1', 'create_draft', {
+        brand_id: BRAND,
+        title: 'Pricing FAQ',
+        page_type: 'docs_faq',
+        source: { kind: 'content' },
+      }),
+    );
+    const plain = useModels([READY], [draft]);
+    await turn(ADMIN, 'Save the pricing FAQ');
+    const { sonnet } = useModels([READY], [draft]);
+    const runId = await turn(ADMIN, '/mark-done Save the pricing FAQ');
+
+    expect(String(systemsOf(sonnet.seen[0])[2].content)).toContain('without asking');
+    expect(sonnet.seen[0].tools?.map((t) => t.name)).toEqual(
+      plain.sonnet.seen[0].tools?.map((t) => t.name),
+    );
+    expect(ofType(await eventsOf(runId), 'confirm.required')).toHaveLength(1);
+    expect(createContentDraft).not.toHaveBeenCalled();
+    expect(runRow(runId).status).toBe('waiting');
+  });
+
+  it('does nothing while the new Chat is off: no list, no tool, no body, no step', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    const { haiku, sonnet } = useModels([READY], [text('Ok.')]);
+    const runId = await turn(ADMIN, '/faq Write an FAQ for our pricing page');
+    for (const options of [haiku.seen[0], sonnet.seen[0]]) {
+      const systems = systemsOf(options);
+      expect(systems).toHaveLength(2);
+      expect(systems.map((m) => String(m.content)).join('\n')).not.toMatch(
+        /available_skills|<skill /,
+      );
+      expect(options.tools?.map((t) => t.name) ?? []).not.toContain(USE_SKILL_TOOL);
+    }
+    expect(skillSteps(runId)).toEqual([]);
+  });
+});
+
+describe('the /tasks task strip (W2-11, CHAT-09 §B)', () => {
+  // The mocked registry's own list: the aliases join it for these tests only.
+  const tools = CHAT_TOOLS as (typeof CHAT_TOOLS)[number][];
+  // The Action Center's reads, as the test's read under their names: the hooks key on them.
+  const aliases = () => {
+    const read = CHAT_TOOLS.find((t) => t.name === 'read_visibility')!;
+    return [
+      { ...read, name: 'list_action_center_tasks' },
+      // get_action reads its action by id: the hook marks that action's tasks Writing.
+      {
+        ...read,
+        name: 'get_action',
+        inputSchema: z.object({ brand_id: z.string(), action_id: z.string() }),
+      },
+    ] as typeof CHAT_TOOLS;
+  };
+  const parent = (id: string, priority: number, due: string | null) => ({
+    id,
+    brand_id: BRAND,
+    status: 'new',
+    deleted_at: null,
+    priority_score: priority,
+    due_date: due,
+    category: 'fix',
+  });
+  const task = (id: string, actionId: string, position: number, title: string) => {
+    const a = db.tables.actions.find((row) => row.id === actionId)!;
+    return {
+      id,
+      action_id: actionId,
+      position,
+      task_key: null,
+      title,
+      title_params: null,
+      status: 'todo',
+      actions: { category: a.category, priority_score: a.priority_score, due_date: a.due_date },
+    };
+  };
+  const strip = () =>
+    [...db.tables.chat_task_state]
+      .sort((a, b) => Number(a.position) - Number(b.position))
+      .map((row) => [row.action_task_id, row.chat_status]);
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    tools.push(...aliases());
+    db.tables.actions = [parent('a-top', 86, '2026-01-01'), parent('a-next', 40, null)];
+    db.tables.action_tasks = [
+      task('t-faq', 'a-top', 1, 'Add FAQ block + schema to /pricing'),
+      task('t-links', 'a-top', 2, 'Fix 2 broken links on /pricing'),
+      task('t-guide', 'a-next', 1, 'Refresh the setup guide'),
+    ];
+    db.tables.chat_task_state = [];
+    db.unique.chat_task_state = [['conversation_id', 'action_task_id']];
+  });
+  afterEach(() => {
+    for (const alias of ['list_action_center_tasks', 'get_action']) {
+      tools.splice(
+        tools.findIndex((t) => t.name === alias),
+        1,
+      );
+    }
+  });
+
+  it('queues the week’s tasks, marks the opened action Writing, and settles as the run ends', async () => {
+    useModels(
+      [
+        calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })),
+        calls(toolCall('r2', 'get_action', { brand_id: BRAND, action_id: 'a-top' })),
+        READY,
+      ],
+      [text('I drafted the FAQ for /pricing.')],
+    );
+    const runId = await turn(ADMIN, "/tasks Complete this week's Action Center tasks.");
+    const updates = ofType(await eventsOf(runId), 'tasks.updated').map((e) => e.data);
+    expect(updates.map((u) => u.tasks.map((t) => t.status))).toEqual([
+      ['queued', 'queued', 'queued'],
+      ['writing', 'writing', 'queued'],
+      // The run ended: what it was still writing waits for the next one.
+      ['queued', 'queued', 'queued'],
+    ]);
+    expect(updates[0]).toMatchObject({
+      tasks: [
+        {
+          at: 1,
+          title: 'Add FAQ block + schema to /pricing',
+          priority: 86,
+          category: 'fix',
+          due: '2026-01-01',
+        },
+        { at: 2, title: 'Fix 2 broken links on /pricing' },
+        { at: 3, title: 'Refresh the setup guide', priority: 40 },
+      ],
+      ready: 0,
+      total: 3,
+      due: 2,
+    });
+    expect(strip()).toEqual([
+      ['t-faq', 'queued'],
+      ['t-links', 'queued'],
+      ['t-guide', 'queued'],
+    ]);
+    expect(db.tables.chat_task_state.every((row) => row.run_id === runId)).toBe(true);
+    // The Action Center's own tasks are as they were.
+    expect(db.tables.action_tasks.map((t) => t.status)).toEqual(['todo', 'todo', 'todo']);
+    expectClean(await eventsOf(runId));
+  });
+
+  it("takes no other brand's tasks into a chat about one brand", async () => {
+    const SECOND = '67676767-6767-4767-8767-676767676767';
+    db.tables.brands.push({ id: SECOND, organization_id: ORG, name: 'Southwind' });
+    db.tables.actions.push({ ...parent('b-top', 90, '2026-01-01'), brand_id: SECOND });
+    db.tables.action_tasks.push(task('t-other', 'b-top', 1, 'Southwind task'));
+    useModels(
+      [
+        calls(toolCall('r1', 'list_action_center_tasks', { brand_id: SECOND })),
+        calls(toolCall('r2', 'get_action', { brand_id: SECOND, action_id: 'b-top' })),
+        READY,
+      ],
+      [text('Done.')],
+    );
+    const runId = await turn(ADMIN, '/tasks Start the top task.');
+    expect(db.tables.chat_task_state).toEqual([]);
+    expect(ofType(await eventsOf(runId), 'tasks.updated')).toEqual([]);
+  });
+
+  it('keeps no strip for a run without the /tasks skill', async () => {
+    useModels(
+      [calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })), READY],
+      [text('You have 2 open actions.')],
+    );
+    const runId = await turn(ADMIN, 'What is open in my Action Center?');
+    expect(ofType(await eventsOf(runId), 'tasks.updated')).toEqual([]);
+    expect(db.tables.chat_task_state).toEqual([]);
+  });
+
+  it('answers all the same when the strip can’t be kept', async () => {
+    db.failures.chat_task_state = { message: 'down' };
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    useModels(
+      [calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })), READY],
+      [text('Here is the plan.')],
+    );
+    const runId = await turn(ADMIN, '/tasks Start the top task.');
+    expect(runRow(runId).status).toBe('done');
+    expect(ofType(await eventsOf(runId), 'tasks.updated')).toEqual([]);
+    logged.mockRestore();
+    delete db.failures.chat_task_state;
   });
 });

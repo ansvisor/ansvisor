@@ -107,15 +107,6 @@ const INPUTS: Record<string, unknown> = {
     competitors: [{ name: 'Profound', domain: 'tryprofound.com' }],
   },
   remove_competitor: { brand_id: BRAND, competitor_id: COMPETITOR },
-  update_draft: { draft_id: DRAFT, title: 'Pricing FAQ for teams' },
-  push_cms_draft: { draft_id: DRAFT, destination: 'webflow' },
-  build_report: {
-    brand_id: BRAND,
-    template: 'weekly_visibility',
-    date_from: '2026-10-01',
-    date_to: '2026-10-07',
-  },
-  run_site_audit: { brand_id: BRAND, urls: ['https://acme.example/pricing'] },
   // W2-10: Chat's Action Center changes (testing/action-center-fixtures.ts).
   create_action: {
     brand_id: BRAND,
@@ -146,6 +137,15 @@ const INPUTS: Record<string, unknown> = {
     file_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   },
   set_task_ready_for_review: { brand_id: BRAND, task_id: '99999999-9999-4999-8999-999999999999' },
+  update_draft: { draft_id: DRAFT, title: 'Pricing FAQ for teams' },
+  push_cms_draft: { draft_id: DRAFT, destination: 'webflow' },
+  build_report: {
+    brand_id: BRAND,
+    template: 'weekly_visibility',
+    date_from: '2026-10-01',
+    date_to: '2026-10-07',
+  },
+  run_site_audit: { brand_id: BRAND, urls: ['https://acme.example/pricing'] },
 };
 /** The rows that change or send a Library draft find one. */
 const NEEDS_DRAFT = new Set(['update_draft', 'push_cms_draft']);

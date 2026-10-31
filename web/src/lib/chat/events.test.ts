@@ -160,6 +160,22 @@ const SAMPLES: { [K in ChatEventType]: () => Extract<ChatEvent, { type: K }> } =
       title: 'Win back pricing citations on /pricing',
       href: `/dashboard/action-center/actions/${UUID}`,
     }),
+  'tasks.updated': () =>
+    chatEvent('tasks.updated', 20, {
+      tasks: [
+        {
+          at: 1,
+          title: 'Add FAQ block + schema to /pricing',
+          priority: 86,
+          category: 'fix',
+          status: 'writing',
+          due: '2026-11-01',
+        },
+      ],
+      ready: 0,
+      total: 1,
+      due: 1,
+    }),
   'deliverable.updated': () => chatEvent('deliverable.updated', 13, { ...DELIVERABLE, version: 2 }),
   'suggestion.created': () => chatEvent('suggestion.created', 14, { count: 3 }),
   'suggestion.resolved': () => chatEvent('suggestion.resolved', 15, { count: 1 }),

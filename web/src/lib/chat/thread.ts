@@ -8,10 +8,12 @@ import {
   type ChatRunSummary,
   type ChatActionSent,
   type ChatStep,
+  type ChatTaskStrip,
 } from './events';
 import { clientMove } from './next-moves';
 import { applyChatEvent, emptyRun } from './run-state';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
+import { readStrips, weekEndIn } from './task-strip';
 import type { WhyResult } from './why/explain';
 import { whyView, type ChatWhy } from './why/view';
 
@@ -26,6 +28,9 @@ import { whyView, type ChatWhy } from './why/view';
  * words, so a reload shows "Stopped after 41s" and the reason with Retry.
  * A finished run's next moves come back from chat_next_moves, in the
  * person's own chat only; a failed read of them loses the moves, not the chat.
+ * A /tasks run's task strip comes back from chat_task_state as it is now
+ * (CHAT-09 §B): a task the person completed in Action Center since reads
+ * Done; a failed read loses the strip, not the chat.
  */
 
 export interface ThreadRun {
@@ -45,6 +50,8 @@ export interface ThreadRun {
   nextMoves: ChatNextMove[];
   /** What it sent to the Action Center (CHAT-09 item 19), in order. */
   sent: ChatActionSent[];
+  /** The Action Center tasks it worked on (CHAT-09 §B); null when it had none. */
+  tasks: ChatTaskStrip | null;
   /** The Why did it move analyses it kept (CHAT-22 §1), in order. */
   why: ChatWhy[];
 }
@@ -233,6 +240,9 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   if (files.error) throw new Error(`Could not read the chat's files: ${files.error.message}`);
   if (moves.error)
     console.error("[chat/thread] could not read the chat's next moves:", moves.error.message);
+  const strips = runIds.length
+    ? await readThreadStrips(supabase, conversationId, messages.data ?? [], endedIds)
+    : new Map<string, ChatTaskStrip>();
   // A failed read of the analyses loses their cards, not the chat.
   if (whys.error)
     console.error("[chat/thread] could not read the chat's Why analyses:", whys.error.message);
@@ -301,6 +311,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         errorReason: ends.get(run.id)?.errorReason ?? null,
         nextMoves: movesByRun.get(run.id) ?? [],
         sent: ends.get(run.id)?.sent ?? [],
+        tasks: strips.get(run.id) ?? null,
         why: whyByRun.get(run.id) ?? [],
       },
     ]),
@@ -323,4 +334,32 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         : {}),
     })),
   };
+}
+
+/**
+ * The chat's task strips, by run, read as the person: "due this week" in the
+ * zone its latest answer was shown in (the run's), else UTC. A run that has
+ * ended is writing nothing: a task it still has Writing (an Undo of Ready for
+ * review put it back, or the run never reached its own end) reads Queued.
+ */
+async function readThreadStrips(
+  db: Awaited<ReturnType<typeof createClient>>,
+  conversationId: string,
+  messages: readonly { role: string; timezone: string | null }[],
+  endedRunIds: readonly string[],
+): Promise<Map<string, ChatTaskStrip>> {
+  const zone =
+    [...messages].reverse().find((m) => m.role === 'assistant' && m.timezone)?.timezone ?? 'UTC';
+  try {
+    const strips = await readStrips(db, conversationId, weekEndIn(new Date(), zone));
+    for (const runId of endedRunIds) {
+      for (const task of strips.get(runId)?.tasks ?? []) {
+        if (task.status === 'writing') task.status = 'queued';
+      }
+    }
+    return strips;
+  } catch (err) {
+    console.error("[chat/thread] could not read the chat's task strip:", err);
+    return new Map();
+  }
 }

@@ -283,15 +283,6 @@ describe('the Chat tool registry', () => {
     await run('rename_topic', { topic_id: item, name: 'Plans' });
     await run('add_competitors', { brand_id: brand, competitors: [{ name: 'Peec AI' }] });
     await run('remove_competitor', { brand_id: brand, competitor_id: item });
-    await run('update_draft', { draft_id: item, body_html: '<h1>FAQ</h1>' });
-    await run('push_cms_draft', { draft_id: item, destination: 'wordpress' });
-    await run('build_report', {
-      brand_id: brand,
-      template: 'competitor_benchmark',
-      date_from: '2026-10-01',
-      date_to: '2026-10-31',
-    });
-    await run('run_site_audit', { brand_id: brand, urls: [' https://acme.example/a '] });
     // With the run's place (its chat, run and approval) for Action History, §10a.
     const place = {
       conversationId: 'conv-1',
@@ -317,6 +308,15 @@ describe('the Chat tool registry', () => {
     await runInChat('attach_to_action', { action_id: item, finding: 'Lost 6 citations.' });
     await runInChat('attach_file_to_task', { brand_id: brand, task_id: item, file_id: item });
     await runInChat('set_task_ready_for_review', { brand_id: brand, task_id: item });
+    await run('update_draft', { draft_id: item, body_html: '<h1>FAQ</h1>' });
+    await run('push_cms_draft', { draft_id: item, destination: 'wordpress' });
+    await run('build_report', {
+      brand_id: brand,
+      template: 'competitor_benchmark',
+      date_from: '2026-10-01',
+      date_to: '2026-10-31',
+    });
+    await run('run_site_audit', { brand_id: brand, urls: [' https://acme.example/a '] });
 
     expect(calls.map((call) => [call.from, call.args])).toEqual([
       ['actions/prompt-suggestions.dismissSuggestion', [item]],
@@ -343,16 +343,6 @@ describe('the Chat tool registry', () => {
       ['actions/topic.renameBrandTopic', [item, 'Plans']],
       ['actions/competitor.addCompetitors', [brand, [{ name: 'Peec AI', domain: '' }]]],
       ['actions/competitor.removeBrandCompetitor', [brand, item]],
-      [
-        'actions/content-drafts.updateContentDraft',
-        [item, { title: undefined, bodyHtml: '<h1>FAQ</h1>' }],
-      ],
-      ['actions/cms-send.sendDraftToCms', [item, 'wordpress']],
-      [
-        'actions/reports.createReport',
-        [brand, { dateFrom: '2026-10-01', dateTo: '2026-10-31', template: 'competitor_benchmark' }],
-      ],
-      ['actions/audits.startSiteAudits', [brand, ['https://acme.example/a']]],
       [
         'actions/chat-action-center.createChatAction',
         [
@@ -381,6 +371,16 @@ describe('the Chat tool registry', () => {
       ],
       ['actions/chat-action-center.attachFileToTask', [brand, item, item, place]],
       ['actions/chat-action-center.setTaskReadyForReview', [brand, item, place]],
+      [
+        'actions/content-drafts.updateContentDraft',
+        [item, { title: undefined, bodyHtml: '<h1>FAQ</h1>' }],
+      ],
+      ['actions/cms-send.sendDraftToCms', [item, 'wordpress']],
+      [
+        'actions/reports.createReport',
+        [brand, { dateFrom: '2026-10-01', dateTo: '2026-10-31', template: 'competitor_benchmark' }],
+      ],
+      ['actions/audits.startSiteAudits', [brand, ['https://acme.example/a']]],
     ]);
   });
 
@@ -529,16 +529,16 @@ describe('approval policies', () => {
       rename_topic: ['admin', 'manager'],
       add_competitors: ['admin', 'manager'],
       remove_competitor: ['admin', 'manager'],
-      // Content, reports and Site Audit (W2-07, DECISIONS T): an Analyst only saves drafts.
-      update_draft: ['admin', 'manager'],
-      push_cms_draft: ['admin', 'manager'],
-      build_report: ['admin', 'manager'],
-      run_site_audit: ['admin', 'manager'],
       // Chat's Action Center changes (W2-10): Admins and Managers, as the server's routes.
       create_action: ['admin', 'manager'],
       attach_to_action: ['admin', 'manager'],
       attach_file_to_task: ['admin', 'manager'],
       set_task_ready_for_review: ['admin', 'manager'],
+      // Content, reports and Site Audit (W2-07, DECISIONS T): an Analyst only saves drafts.
+      update_draft: ['admin', 'manager'],
+      push_cms_draft: ['admin', 'manager'],
+      build_report: ['admin', 'manager'],
+      run_site_audit: ['admin', 'manager'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);
