@@ -872,7 +872,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "Competitors are the brands Ansvisor compares with yours in AI answers to your tracked prompts. You add and remove them on the **Competitors** page, under **Analytics** in the sidebar, and each one then appears in **Tracked Competitors** for a head-to-head comparison."
+          "text": "Competitors are the brands Ansvisor compares with yours in AI answers to your tracked prompts. You add and remove them on the **Competitors** page, right under **Reports** in the sidebar, and each one then appears in **Tracked Competitors** for a head-to-head comparison."
         },
         {
           "heading": "Open the Competitors page",
@@ -933,7 +933,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "The **Competitors** page, under **Analytics** in the sidebar, compares the AI visibility of the competitors you track with yours, across your tracked prompts and AI platforms. You can also open it with **Head-to-Head** on the **Leaderboard** card of **Brand Visibility**, or by clicking a competitor's name there. **Tracked Competitors** lists them with their visibility; select one to see it head-to-head with your brand."
+          "text": "The **Competitors** page, right under **Reports** in the sidebar, compares the AI visibility of the competitors you track with yours, across your tracked prompts and AI platforms. You can also open it with **Head-to-Head** on the **Leaderboard** card of **Brand Visibility**, or by clicking a competitor's name there. **Tracked Competitors** lists them with their visibility; select one to see it head-to-head with your brand."
         },
         {
           "heading": "Tracked Competitors",
@@ -1720,7 +1720,7 @@
         },
         {
           "heading": "Add the tracking snippet",
-          "text": "Setup doesn't include the tracking snippet. It's an optional step you do separately for **AI Referral Traffic**: real visits that arrive on your site from AI answer engines.\n\n1. Pick **AI Referral Traffic** in the sidebar. Until the snippet sends its first visit, the code is shown at the top of the page. After that, **Code** on the **Tracking snippet** card shows it again.\n2. Copy the snippet.\n3. Paste it into the head section of your site's pages, just before the head closes. On WordPress, use a header injection plugin; on a static site, edit your template.\n\nOnce the snippet sends a visit, the **Tracking snippet** card shows it as active, with the time of the last visit."
+          "text": "Setup doesn't include the tracking snippet. It's an optional step you do separately for **AI Referral Traffic**: real visits that arrive on your site from AI answer engines.\n\n1. Pick **AI Referral Traffic** in the sidebar. Until the snippet sends its first visit, the code is shown at the top of the page. After that, **Code** beside **Tracking snippet** in the **Data sources** strip shows it again.\n2. Copy the snippet.\n3. Paste it into the head section of your site's pages, just before the head closes. On WordPress, use a header injection plugin; on a static site, edit your template.\n\nOnce the snippet sends a visit, **Tracking snippet** in the **Data sources** strip shows it as active, with the time of the last visit."
         },
         {
           "heading": "While the first tracking runs",
@@ -2449,7 +2449,7 @@
         },
         {
           "heading": "Choose your columns",
-          "text": "**Columns**, beside the search box, picks the table's columns: tick one to show or hide it, and drag it, or use its arrows, to move it. **Prompt** always shows. The **Added** column shows when each prompt was added; click it to sort by it. The **Volume** column shows each prompt's estimated AI search volume. The **Work** column, with its filter, shows your content work on each prompt: **To do**, **In progress**, **Done** or no status.\n\nYour columns are saved for you on this brand; nobody else's table changes."
+          "text": "**Columns**, beside the search box, picks the table's columns: tick one to show or hide it, and drag it, or use its arrows, to move it. **Prompt** always shows. The **Added** column shows when each prompt was added; click it to sort by it. The **Volume** column shows each prompt's estimated AI search volume. The **Work** column, with its filter, shows your content work on each prompt: **To do**, **In progress**, **Done** or no status.\n\nYour columns are saved for you on this brand. Admins and managers can tick **Share with everyone on** the brand to make theirs the brand's view; everyone can still change their own, or go back with **Reset to the brand's view**."
         },
         {
           "heading": "Share a column view with the brand",

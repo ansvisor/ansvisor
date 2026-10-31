@@ -31,7 +31,7 @@ A new prompt has no results until it's first asked. Until then, for its first tw
 
 **Columns**, beside the search box, picks the table's columns: tick one to show or hide it, and drag it, or use its arrows, to move it. **Prompt** always shows. The **Added** column shows when each prompt was added; click it to sort by it. The **Volume** column shows each prompt's estimated AI search volume. The **Work** column, with its filter, shows your content work on each prompt: **To do**, **In progress**, **Done** or no status.
 
-Your columns are saved for you on this brand; nobody else's table changes.
+Your columns are saved for you on this brand. Admins and managers can tick **Share with everyone on** the brand to make theirs the brand's view; everyone can still change their own, or go back with **Reset to the brand's view**.
 
 ## Share a column view with the brand
 

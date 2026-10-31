@@ -35,11 +35,11 @@ To add another brand, admins and managers pick **Add Brand** in the brand switch
 
 Setup doesn't include the tracking snippet. It's an optional step you do separately for **AI Referral Traffic**: real visits that arrive on your site from AI answer engines.
 
-1. Pick **AI Referral Traffic** in the sidebar. Until the snippet sends its first visit, the code is shown at the top of the page. After that, **Code** on the **Tracking snippet** card shows it again.
+1. Pick **AI Referral Traffic** in the sidebar. Until the snippet sends its first visit, the code is shown at the top of the page. After that, **Code** beside **Tracking snippet** in the **Data sources** strip shows it again.
 2. Copy the snippet.
 3. Paste it into the head section of your site's pages, just before the head closes. On WordPress, use a header injection plugin; on a static site, edit your template.
 
-Once the snippet sends a visit, the **Tracking snippet** card shows it as active, with the time of the last visit.
+Once the snippet sends a visit, **Tracking snippet** in the **Data sources** strip shows it as active, with the time of the last visit.
 
 ## While the first tracking runs
 
