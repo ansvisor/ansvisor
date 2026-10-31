@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
+import type { FocusArea } from '@/lib/chat/focus';
 import type { ChatGeneralAccess, ChatGeneralSettings } from '@/lib/chat/general-settings';
 
 /**
@@ -27,13 +28,18 @@ vi.mock('sonner', () => {
   toast.error = (text: string) => toasts.calls.push(`error: ${text}`);
   return { toast };
 });
-const saved = vi.hoisted(() => ({ ok: true, patches: [] as unknown[] }));
+const saved = vi.hoisted(() => ({ ok: true, patches: [] as unknown[], focus: [] as unknown[] }));
 vi.mock('@/lib/actions/chat-prefs', () => ({
   saveChatGeneralSettings: vi.fn(async (patch: unknown) => {
     saved.patches.push(patch);
     return { ok: saved.ok };
   }),
+  saveChatFocus: vi.fn(async (areas: unknown) => {
+    saved.focus.push(areas);
+    return { ok: saved.ok };
+  }),
 }));
+vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
 
 const { ChatSettings } = await import('./chat-settings');
 
@@ -55,6 +61,7 @@ let host: HTMLDivElement;
 beforeEach(() => {
   saved.ok = true;
   saved.patches = [];
+  saved.focus = [];
   toasts.calls = [];
   router.refresh.mockClear();
   host = document.createElement('div');
@@ -66,11 +73,11 @@ afterEach(() => {
   host.remove();
 });
 
-async function render(settings = SETTINGS, access = OPEN) {
+async function render(settings = SETTINGS, access = OPEN, focus: FocusArea[] = []) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ChatSettings initial={settings} access={access} />
+        <ChatSettings initial={settings} access={access} focus={focus} />
       </NextIntlClientProvider>,
     );
   });
@@ -159,5 +166,44 @@ describe('ChatSettings', () => {
     await render(SETTINGS, { ...OPEN, modes: false });
     expect(modes()).toHaveLength(0);
     expect(action('chatSettings.answerLanguage')).toHaveLength(1);
+  });
+  it('shows the focus picked, and keeps a change at once in the order picked (CHAT-24 §3 item 2)', async () => {
+    await render(SETTINGS, OPEN, ['pd']);
+    const boxes = () => [...action('chatSettings.focus')] as HTMLInputElement[];
+    expect(boxes().map((box) => box.parentElement?.textContent)).toEqual([
+      'Big picture',
+      'Competitors',
+      'AI traffic',
+      'Prompts and citations',
+      'Content',
+      'Brand',
+      'Product',
+      'Markets and sources',
+    ]);
+    expect(
+      boxes()
+        .filter((box) => box.checked)
+        .map((box) => box.value),
+    ).toEqual(['pd']);
+    await act(async () => boxes()[0].click());
+    await act(async () => boxes()[6].click());
+    await act(async () => boxes()[0].click());
+    expect(saved.focus).toEqual([['pd', 'lead'], ['lead'], []]);
+    expect(toasts.calls).toEqual([
+      'Home focused on Product and Big picture',
+      'Home focused on Big picture',
+      'Focus cleared · default Home',
+    ]);
+  });
+
+  it('gives a role that only reads its focus too, and puts a change back that was not kept', async () => {
+    saved.ok = false;
+    await render(SETTINGS, { ...OPEN, modes: false }, ['brand']);
+    const brand = [...action('chatSettings.focus')].find(
+      (box) => (box as HTMLInputElement).value === 'brand',
+    ) as HTMLInputElement;
+    await act(async () => brand.click());
+    expect(brand.checked).toBe(true);
+    expect(toasts.calls).toEqual(["error: Couldn't save that. Try again."]);
   });
 });

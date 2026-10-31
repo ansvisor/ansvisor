@@ -9,6 +9,7 @@ import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-av
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
 import { readHomeShortcuts, readSinceYouLeft } from '@/lib/actions/chat-home';
+import type { FocusArea } from '@/lib/chat/focus';
 import { dayPartOf, endOfWeek } from '@/lib/chat/home';
 import { formatNumber } from '@/lib/format';
 import type { SinceMove, SinceYouLeft } from '@/lib/chat/since';
@@ -17,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useChatList } from './chat-list-provider';
 import { inboxItems, useNow } from './chat-inbox';
+import { FocusPill, useChatFocus } from './focus-picker';
 import { ForYouNow } from './for-you-now';
 
 /** The underlined link in the greeting's line (mockup `.hlnk`). */
@@ -42,6 +44,8 @@ export interface ChatHomeViewProps {
   starting: boolean;
   /** "Since you left": null until read, or with nothing to show. */
   since?: SinceYouLeft | null;
+  /** The person's focus and the pill that opens the picker (CHAT-24 §3); none without it. */
+  focus?: { areas: FocusArea[]; onEdit: () => void } | null;
 }
 
 const shortDay = (date: Date, utc = false) =>
@@ -147,6 +151,7 @@ export function ChatHomeView({
   onAsk,
   starting,
   since = null,
+  focus = null,
 }: ChatHomeViewProps) {
   const t = useTranslations('chatShell.home');
   const part = now ? dayPartOf(now.getHours()) : null;
@@ -181,6 +186,7 @@ export function ChatHomeView({
             t('caughtUp')
           )}
         </p>
+        {focus && <FocusPill areas={focus.areas} onEdit={focus.onEdit} />}
       </div>
       {since && blocks.length > 0 && (
         <div
@@ -256,6 +262,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
   const { chats } = useChatList();
   const { openUpgrade } = useUpgradeGate();
   const { canManage } = useUserRole();
+  const focusCtx = useChatFocus();
   const [counts, setCounts] = useState<{
     brandId: string;
     dueTasks: number;
@@ -353,6 +360,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
       onAsk={(message) => void startChat(message)}
       starting={starting}
       since={since && since.brandId === brandId ? since.since : null}
+      focus={focusCtx ? { areas: focusCtx.focus, onEdit: focusCtx.edit } : null}
     />
   );
 }
