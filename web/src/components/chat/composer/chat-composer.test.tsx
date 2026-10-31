@@ -439,6 +439,56 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     expect(listbox()).toBeNull();
   });
 
+  // The enabled skills (W2-04, CHAT-13 item 5), as the page passes them.
+  const SKILLS = [
+    { name: 'faq-schema', title: 'FAQ + schema writer' },
+    { name: 'llms-txt', title: 'llms.txt builder' },
+    { name: 'citation-gap', title: 'Citation gap analysis' },
+  ];
+
+  it("lists the skills under Skills after the shortcuts, filters both, and puts a skill's /command first", async () => {
+    await render({ skills: SKILLS });
+    await type('/');
+    expect(options()).toEqual([
+      '/analyzeAnalyze',
+      '/reportReports',
+      '/createCreate content',
+      '/faq-schemaFAQ + schema writer',
+      '/llms-txtllms.txt builder',
+      '/citation-gapCitation gap analysis',
+    ]);
+    expect(container.querySelector('[role="group"]')!.getAttribute('aria-label')).toBe('Skills');
+
+    await type('/fa');
+    expect(options()).toEqual(['/faq-schemaFAQ + schema writer']);
+    await press('Enter');
+    expect(box().value).toBe('/faq-schema ');
+    expect(listbox()).toBeNull();
+    expect(handlers.onSend).not.toHaveBeenCalled();
+  });
+
+  it('reaches the skills with the arrows, keeps the text after one picked from the / button, and says when none match', async () => {
+    await render({ skills: SKILLS });
+    await type('our pricing page');
+    await act(async () => button('Skills and shortcuts')!.click());
+    await press('ArrowUp');
+    expect(container.querySelector('[aria-selected="true"]')!.textContent).toBe(
+      '/citation-gapCitation gap analysis',
+    );
+    await press('Enter');
+    expect(box().value).toBe('/citation-gap our pricing page');
+
+    await type('/zz');
+    expect(container.textContent).toContain('No shortcuts or skills match');
+  });
+
+  it('shows no Skills group without skills: the new Chat off', async () => {
+    await render();
+    await type('/');
+    expect(container.querySelector('[role="group"]')).toBeNull();
+    expect(options()).toHaveLength(3);
+  });
+
   it('references data on "@": the page’s own first, then the brand’s matches; the pick is a chip that goes with the message', async () => {
     const searchReferences = vi.fn(async () => [
       { type: 'prompt' as const, id: 'p1', label: 'Best AEO tools' },

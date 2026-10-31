@@ -21,6 +21,32 @@ behaves like an AEO analyst who's been on your account for six months.
 | [`ansvisor-aeo-coach`](./ansvisor-aeo-coach) | **MCP (preferred)** | Brand snapshots, visibility deep-dives, competitor watch, citation sources, prompt coverage and prompt suggestions, Action Center (what to do next, did it work, sending Improve suggestions), mentions and sentiment (how AI talks about the brand, why sentiment moved, what AI associates it with), Content Editor drafts (sources, suggestions for review, Mark ready, what the live page earns), saved reports. Use this when your client (Claude Desktop, Claude Code, Cursor, Zed) is connected to the Ansvisor MCP server. |
 | [`ansvisor-aeo-coach-standalone`](./ansvisor-aeo-coach-standalone) | **REST (fallback)** | Same skill, no MCP needed. Use this when you're on claude.ai web without a Connector, or any surface where setting up MCP isn't an option. |
 
+## Ansvisor library (Chat)
+
+Chat in Ansvisor uses the skills below. Each is one `SKILL.md` in the
+[Agent Skills](https://agentskills.io/specification) format: instructions
+only, no scripts or reference files. Chat lists their names and
+descriptions, and loads a skill's text when it picks the skill or when you
+type its `/name`.
+
+| Filter | Skills |
+| --- | --- |
+| Analyze | [`visibility-drop`](./visibility-drop), [`citation-gap`](./citation-gap), [`share-of-voice-report`](./share-of-voice-report), [`weekly-visibility-report`](./weekly-visibility-report) |
+| Create | [`faq-schema`](./faq-schema), [`aeo-content-brief`](./aeo-content-brief), [`comparison-page`](./comparison-page) |
+| Optimize | [`content-refresh`](./content-refresh), [`answer-first-rewrite`](./answer-first-rewrite) |
+| Technical | [`llms-txt`](./llms-txt), [`schema-markup`](./schema-markup), [`ai-crawler-access`](./ai-crawler-access) |
+| Off-site | [`fix-wrong-ai-claims`](./fix-wrong-ai-claims), [`reddit-thread-finder`](./reddit-thread-finder), [`digital-pr-targets`](./digital-pr-targets) |
+
+CI checks every library skill (`web/src/lib/chat/skills/library.test.ts`):
+the front matter (`name` matches the folder, `description` up to 1,024
+characters, `metadata.title` and `metadata.category`, `license: MIT`), a body
+of at most 500 lines, the tool names Chat has, and a scan that refuses email
+addresses, prices, tracking parameters, hidden characters, base64 blobs,
+secrets and text that tries to override Chat's rules. A skill shapes how
+Chat does a task; it never changes what Chat may do or skips an approval.
+After changing one, run `yarn test -u src/lib/chat/skills` in `web/` and
+commit `library.json`, which Chat reads.
+
 ## Which flavour should I install?
 
 | Your client | Recommended |

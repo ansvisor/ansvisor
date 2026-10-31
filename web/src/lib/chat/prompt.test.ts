@@ -33,6 +33,15 @@ describe('stepPrompt', () => {
     expect(marks).toBe(3);
   });
 
+  it('puts the loaded skills below the workspace block, unmarked (CHAT-13 item 6)', () => {
+    const cached = stepPrompt(parts({ skills: 'Skills.' }));
+    expect(cached.system.map((m) => m.content)).toEqual(['Core rules.', 'Workspace.', 'Skills.']);
+    expect(cached.system.map(isMarked)).toEqual([true, true, false]);
+    expect(cached.marks).toBe(3);
+    const plain = stepPrompt(parts({ skills: 'Skills.', cache: false }));
+    expect(plain.system.map((m) => m.content)).toEqual(['Core rules.', 'Workspace.', 'Skills.']);
+  });
+
   it("marks the step's last call or result once there is one, within four marks", () => {
     const steps: ModelMessage[] = [
       { role: 'assistant', content: 'Reading.' },

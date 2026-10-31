@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import type { ChatReference, ChatReferenceType } from '@/lib/chat/references';
 import { cn } from '@/lib/utils';
 
@@ -13,7 +14,7 @@ import { cn } from '@/lib/utils';
 
 /**
  * The / menu's shortcuts in Wave 1 (CHAT-02 item 12): each fills its
- * starter text. Skills join them when they come (W2-04).
+ * starter text. The enabled skills follow them in their own group (W2-04).
  */
 export const SHORTCUTS = [
   { key: 'analyze', command: '/analyze' },
@@ -30,6 +31,24 @@ export function matchShortcuts(query: string, name: (shortcut: Shortcut) => stri
     (s) =>
       s.command.slice(1).startsWith(q) ||
       name(s)
+        .toLowerCase()
+        .split(/\s+/)
+        .some((word) => word.startsWith(q)),
+  );
+}
+
+/**
+ * The skills a "/…" filters to (CHAT-13 item 5): those whose name, a part
+ * of it, or a word of whose title starts with it.
+ */
+export function matchSkills(query: string, skills: readonly ChatSkillItem[]): ChatSkillItem[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [...skills];
+  return skills.filter(
+    (s) =>
+      s.name.startsWith(q) ||
+      s.name.split('-').some((part) => part.startsWith(q)) ||
+      s.title
         .toLowerCase()
         .split(/\s+/)
         .some((word) => word.startsWith(q)),
@@ -72,14 +91,28 @@ function Panel({
 const row =
   'flex w-full items-center gap-2 rounded-[9px] px-2 py-[7px] text-left text-[13px] hover:bg-muted aria-selected:bg-muted';
 
+/**
+ * The / menu: the shortcuts, then the Skills group of the enabled skills
+ * that match (CHAT-13 item 5), one list for the arrows. "Browse all skills"
+ * waits for the Skills page (W3).
+ */
 export function SlashMenu({
   shortcuts,
+  skills = [],
+  skillsOn = false,
   active,
   onPick,
+  onPickSkill,
 }: {
   shortcuts: Shortcut[];
+  /** The enabled skills the query matches. */
+  skills?: ChatSkillItem[];
+  /** The person has skills: the empty state names them too. */
+  skillsOn?: boolean;
+  /** The active row: the shortcuts first, then the skills. */
   active: number;
   onPick: (shortcut: Shortcut) => void;
+  onPickSkill?: (skill: ChatSkillItem) => void;
 }) {
   const t = useTranslations('chatComposer.slash');
   return (
@@ -88,24 +121,53 @@ export function SlashMenu({
         {t('title')}
         <span className="ml-auto font-normal text-muted-foreground">{t('keys')}</span>
       </div>
-      {shortcuts.length === 0 ? (
-        <p className="px-2 py-2 text-[13px] text-muted-foreground">{t('none')}</p>
+      {shortcuts.length === 0 && skills.length === 0 ? (
+        <p className="px-2 py-2 text-[13px] text-muted-foreground">
+          {skillsOn ? t('noneWithSkills') : t('none')}
+        </p>
       ) : (
-        shortcuts.map((s, i) => (
-          <button
-            key={s.key}
-            type="button"
-            role="option"
-            aria-selected={i === active}
-            data-action="slashMenu.pickShortcut"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => onPick(s)}
-            className={row}
-          >
-            <span className="font-mono text-[12.5px]">{s.command}</span>
-            <span>{t(`shortcuts.${s.key}.name`)}</span>
-          </button>
-        ))
+        <>
+          {shortcuts.map((s, i) => (
+            <button
+              key={s.key}
+              type="button"
+              role="option"
+              aria-selected={i === active}
+              data-action="slashMenu.pickShortcut"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onPick(s)}
+              className={row}
+            >
+              <span className="font-mono text-[12.5px]">{s.command}</span>
+              <span>{t(`shortcuts.${s.key}.name`)}</span>
+            </button>
+          ))}
+          {skills.length > 0 && (
+            <div role="group" aria-label={t('skills')}>
+              <div
+                aria-hidden
+                className="px-2 pt-2 pb-1 text-[11px] tracking-[.4px] text-muted-foreground uppercase"
+              >
+                {t('skills')}
+              </div>
+              {skills.map((s, i) => (
+                <button
+                  key={s.name}
+                  type="button"
+                  role="option"
+                  aria-selected={shortcuts.length + i === active}
+                  data-action="slashMenu.pickSkill"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => onPickSkill?.(s)}
+                  className={row}
+                >
+                  <span className="font-mono text-[12.5px]">/{s.name}</span>
+                  <span>{s.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </Panel>
   );

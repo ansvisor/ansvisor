@@ -4,8 +4,8 @@ route: /dashboard/chat
 keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -87,7 +87,7 @@ Analysts and Agency partners see only moves that read data. Next moves show unde
 
 ## Shortcuts and your data
 
-Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message: **/analyze**, **/report** and **/create**.
+Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message: **/analyze**, **/report** and **/create**. The skills Chat can use are listed under them (see **Skills in Chat**).
 
 Type **@**, or click **@**, to point Chat at your data: charts and metrics on the page, tracked prompts, your pages and open Action Center tasks. Use the arrow keys and Enter, or click. Your pick shows as a chip above the text; **×** takes it off.
 

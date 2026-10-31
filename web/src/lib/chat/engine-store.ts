@@ -120,6 +120,8 @@ export interface RunProgress {
   asks?: number;
   /** The next moves the model suggested last (CHAT-07 §C), kept once the run ends. */
   nextMoves?: NextMoveInput[];
+  /** The skills loaded for this run, by name, in order (CHAT-13 item 4: at most 3). */
+  skills?: string[];
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {
