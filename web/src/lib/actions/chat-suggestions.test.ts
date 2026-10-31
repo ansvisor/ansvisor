@@ -35,8 +35,10 @@ function client(via: Call['via']) {
   return (table: string) => {
     const call: Call = { via, table, op: 'select', filters: [] };
     calls.push(call);
-    const answer = () => {
-      const found = answers[`${via}.${table}.${call.op}`];
+    // A maybeSingle() read answers `….select.single` when the test names one.
+    const answer = (single = false) => {
+      const key = `${via}.${table}.${call.op}`;
+      const found = (single && answers[`${key}.single`]) || answers[key];
       return typeof found === 'function' ? found(call) : (found ?? { data: null, error: null });
     };
     const chain: Record<string, unknown> = {
@@ -54,7 +56,7 @@ function client(via: Call['via']) {
           },
         ]),
       ),
-      maybeSingle: async () => answer(),
+      maybeSingle: async () => answer(true),
       then: (resolve: (value: unknown) => unknown) => Promise.resolve(answer()).then(resolve),
     };
     return chain;
@@ -149,11 +151,11 @@ beforeEach(() => {
       ],
       error: null,
     },
-    'admin.chat_suggestions.select': {
+    'session.chat_suggestions.select.single': {
       data: { id: SUGGESTION, brand_id: BRAND, seen_at: null, opened_at: null },
       error: null,
     },
-    'admin.brands.select': { data: [{ id: BRAND }, { id: BRAND_2 }], error: null },
+    'session.brands.select': { data: [{ id: BRAND }, { id: BRAND_2 }], error: null },
     'admin.chat_suggestion_feeds.select': { data: [], error: null },
     'admin.chat_suggestion_feeds.upsert': (call: Call) => ({
       data: (call.row as { brand_id: string }[]).map((row) => ({ brand_id: row.brand_id })),
@@ -333,7 +335,7 @@ describe('markDailySuggestionsSeen', () => {
 describe('openDailySuggestion', () => {
   it('marks it opened and seen, and its feed used', async () => {
     expect(await openDailySuggestion(SUGGESTION)).toEqual({ ok: true });
-    const read = calls.find((c) => c.via === 'admin' && c.table === 'chat_suggestions')!;
+    const read = calls.find((c) => c.table === 'chat_suggestions' && c.op === 'select')!;
     expect(has(read, 'eq', 'user_id', ME)).toBe(true);
     const [opened, used] = writes();
     expect(opened.table).toBe('chat_suggestions');
@@ -349,7 +351,7 @@ describe('openDailySuggestion', () => {
   });
 
   it('keeps the first open, and still counts the feed used', async () => {
-    answers['admin.chat_suggestions.select'] = {
+    answers['session.chat_suggestions.select.single'] = {
       data: { id: SUGGESTION, brand_id: BRAND, seen_at: 'x', opened_at: '2026-10-28T08:00:00Z' },
       error: null,
     };
@@ -358,17 +360,44 @@ describe('openDailySuggestion', () => {
   });
 
   it("writes nothing on someone else's suggestion", async () => {
-    answers['admin.chat_suggestions.select'] = { data: null, error: null };
+    answers['session.chat_suggestions.select.single'] = { data: null, error: null };
     expect(await openDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'not_found' });
     expect(writes()).toEqual([]);
   });
 
   it('reads it only while its action is not deleted, so a deleted one writes nothing', async () => {
     await openDailySuggestion(SUGGESTION);
-    const read = calls.find((c) => c.via === 'admin' && c.table === 'chat_suggestions')!;
+    const read = calls.find((c) => c.table === 'chat_suggestions' && c.op === 'select')!;
     expect(read.columns).toContain('actions!chat_suggestions_action_id_fkey!inner(deleted_at)');
     expect(has(read, 'is', 'actions.deleted_at', null)).toBe(true);
     expect(has(read, 'eq', 'organization_id', ORG)).toBe(true);
+  });
+});
+
+describe('brand access', () => {
+  it("reads a suggestion to open through the person's session, so one of a brand they can't see writes nothing", async () => {
+    await openDailySuggestion(SUGGESTION);
+    const read = calls.find((c) => c.table === 'chat_suggestions' && c.op === 'select')!;
+    expect(read.via).toBe('session');
+    answers['session.chat_suggestions.select.single'] = { data: null, error: null };
+    calls = [];
+    expect(await openDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'not_found' });
+    expect(writes()).toEqual([]);
+  });
+
+  it("makes feeds only for the brands the person's session reads", async () => {
+    // The session reads one of the workspace's two brands: the other isn't theirs.
+    answers['session.brands.select'] = { data: [{ id: BRAND }], error: null };
+    answers['admin.brands.select'] = { data: [{ id: BRAND }, { id: BRAND_2 }], error: null };
+    role = 'agency_partner';
+    expect(await startDailySuggestions()).toEqual({ ok: true, made: 1 });
+    expect(await setDailySuggestions(true)).toEqual({ ok: true });
+    const upserts = writes().filter((w) => w.op === 'upsert');
+    expect(upserts).toHaveLength(2);
+    for (const upsert of upserts) {
+      expect((upsert.row as { brand_id: string }[]).map((row) => row.brand_id)).toEqual([BRAND]);
+    }
+    expect(calls.filter((c) => c.table === 'brands').every((c) => c.via === 'session')).toBe(true);
   });
 });
 

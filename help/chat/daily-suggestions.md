@@ -49,7 +49,7 @@ You can also tell Chat what to do in the box at the bottom. That starts the same
 
 ## Who gets them
 
-Daily suggestions come from the Action Center, which is in everyone's menu, so menu settings don't turn them off. Admins and Managers get them for every brand of the workspace. Agency partners get them once they open the **Inbox** for the first time. Analysts don't get them. The demo brand gets none, and a workspace whose plan ended gets no new ones: its list keeps what it has.
+Daily suggestions come from the Action Center, which is in everyone's menu, so menu settings don't turn them off. Admins and Managers get them for every brand they can see. Agency partners get them once they open the **Inbox** for the first time. Analysts don't get them. The demo brand gets none, and a workspace whose plan ended gets no new ones: its list keeps what it has.
 
 ## Pause or turn them back on
 
