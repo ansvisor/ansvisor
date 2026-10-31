@@ -194,6 +194,8 @@
       "resumePrompts": "Resuming prompts needs a plan",
       "pauseDailySuggestions": "Pausing daily suggestions needs a plan",
       "resumeDailySuggestions": "Turning daily suggestions back on needs a plan",
+      "snoozeSuggestion": "Putting a suggestion off needs a plan",
+      "removeSuggestion": "Removing a suggestion needs a plan",
       "trackPrompts": "Tracking prompts needs a plan",
       "generatePrompts": "Generating prompts needs a plan",
       "analyzePrompts": "Analyzing prompts needs a plan",
@@ -1717,7 +1719,14 @@
         "dueDate": "Due date",
         "statusLabel": "Status",
         "events": {
-          "created": "Action created",
+          "created": "{source, select, chat {Action created from Chat} other {Action created}}",
+          "evidence_attached": "Finding added from Chat: “{finding}”",
+          "evidence_withdrawn": "Finding from Chat withdrawn with Undo: “{finding}”",
+          "file_attached": "Attached from Chat to {task}{title}: “{file}”",
+          "file_detached": "Attachment from Chat taken off {task}{title} with Undo: “{file}”",
+          "task_ready_for_review": "Ready for review, from Chat: {task}{title}",
+          "task_review_withdrawn": "Ready for review taken back with Undo: {task}{title}",
+          "cancelled": "Cancelled from Chat by {by} · undo",
           "reopened": "Action reopened — its condition is firing again",
           "signals_linked": "{count, plural, one {1 new signal} other {# new signals}} linked",
           "status_changed": "Status changed to {to}",
@@ -1736,6 +1745,11 @@
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
           "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}",
           "outcome_measured": "{day, plural, =0 {} other {Day #{final, select, yes {, final} other {}} · }}{outcome, select, improved {Result: metrics improved after this action closed} mixed {Result: mixed after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
+        },
+        "eventParts": {
+          "note": "Note: {note}",
+          "sources": "From: {sources}",
+          "someone": "a teammate"
         },
         "deleteTask": "Delete task",
         "addTask": "Add task",
@@ -1844,6 +1858,14 @@
           "optimize": "Optimize",
           "openDraft": "Open draft",
           "pagesToOptimize": "Pages to optimize",
+          "attachedFromChat": {
+            "title": "Attached from Chat",
+            "by": "{name} · {date}",
+            "someone": "A teammate",
+            "open": "Open",
+            "openDraft": "Open draft",
+            "count": "{count, plural, one {# file attached from Chat} other {# files attached from Chat}}"
+          },
           "draftFailed": "Couldn't open the Content Editor. Try again.",
           "pageNotRead": "Couldn't read the live page, so the draft starts with its title. Paste the page into the editor.",
           "competitor": {
@@ -1952,6 +1974,17 @@
         "noSignalsTrafficPages": "This action was sent from AI Traffic Analytics, so it has no detection signals. Its evidence is the pages and figures on the Overview tab.",
         "noSignalsAuditPage": "This action was sent from a Site Audit report, so it has no detection signals. Its evidence is the page and the checks it fails on the Overview tab.",
         "noSignalsShoppingLinks": "This action comes from the catalog check after each sync, so it has no detection signals. Its evidence is the page and the products on the Overview tab.",
+        "noSignalsChat": "This action was sent from Chat, so it has no detection signals. Its evidence is the finding on the Overview tab, and any added later in History.",
+        "chatFinding": {
+          "source": "Source",
+          "sourceValue": "Chat",
+          "openChat": "Open the chat",
+          "sentWith": "Sent with",
+          "prompts": "{count, plural, one {# prompt} other {# prompts}}",
+          "pages": "{count, plural, one {# page} other {# pages}}",
+          "competitors": "{count, plural, one {# competitor} other {# competitors}}",
+          "platforms": "Platforms"
+        },
         "topicOpportunity": {
           "source": "Source",
           "sourceValue": "Insights › Opportunities",
@@ -2743,6 +2776,12 @@
         "noAiDescription": "Sent from AI Traffic Analytics: {count, plural, one {a page} other {# pages}} with visitors or in your sitemap that got no AI visit in the range.",
         "goal": "Earn AI-referred visits to these pages."
       },
+      "chat_finding": {
+        "title": "Act on a finding from Chat for {targets}",
+        "titleGeneric": "Act on a finding from Chat",
+        "description": "Sent from Chat: a finding and the tasks that act on it, as you approved them.",
+        "goal": "Do the tasks, so the prompts and pages this finding names move in AI answers."
+      },
       "audit_page": {
         "title": "Fix the issues Site Audit found on {targets}",
         "titleGeneric": "Fix the issues Site Audit found on a page",
@@ -3386,6 +3425,16 @@
     "newTopic": { "name": "Add topics", "step": "Added topic" },
     "topicName": { "name": "Rename topics", "step": "Renamed topic" },
     "trackCompetitors": { "name": "Add competitors", "step": "Added competitors" },
+    "sendToActions": { "name": "Send findings to Action Center", "step": "Sent to Action Center" },
+    "addToAction": {
+      "name": "Add findings to Action Center actions",
+      "step": "Added to an Action Center action"
+    },
+    "attachToTask": { "name": "Attach files to Action Center tasks", "step": "Attached to a task" },
+    "taskReadyForReview": {
+      "name": "Set Action Center tasks to Ready for review",
+      "step": "Set to Ready for review"
+    },
     "dropCompetitor": {
       "name": "Remove competitors",
       "step": "Removed competitor",
@@ -3730,6 +3779,11 @@
     }
   },
   "chatEngine": {
+    "actionCard": {
+      "tasks": "{count, plural, one {# task} other {# tasks}}",
+      "doneWhen": "Done when: {text}",
+      "dailyLimit": "This is one of the {limit} new actions the brand gets today, so Action Center's own new actions wait until tomorrow."
+    },
     "allTime": "All time",
     "lastDays": "Last {count} days",
     "since": "Since {date}",
@@ -3796,6 +3850,28 @@
     }
   },
   "chatRun": {
+    "proposal": {
+      "goal": "Goal",
+      "sentWith": "Sent with",
+      "prompts": "Prompts",
+      "pages": "Pages",
+      "competitors": "Competitors",
+      "platforms": "Platforms",
+      "newText": "New text",
+      "showAll": "Show all",
+      "showLess": "Show less"
+    },
+    "actionSent": {
+      "created": "Sent to Action Center · AC-{no}",
+      "added": "Added to AC-{no}",
+      "createdLabel": "Sent to Action Center",
+      "addedLabel": "Added to an Action Center action",
+      "createdNote": "Action Center sets its Priority Score. You close its tasks there.",
+      "addedNote": "Added as evidence. Its targets don't change.",
+      "open": "Open in Actions",
+      "toastCreated": "Sent to Action Center",
+      "toastAdded": "Added to the action in Action Center"
+    },
     "status": {
       "thinking": "Thinking…",
       "writing": "Writing the answer…",
@@ -3921,6 +3997,7 @@
     }
   },
   "chatPage": {
+    "sendToActionCenterPrompt": "Send this finding to Action Center as an action.",
     "you": "You",
     "deniedTitle": "I can't do this for you",
     "sendFailed": "Couldn't send that. Try again.",
@@ -3960,6 +4037,7 @@
     "unknown": "–"
   },
   "chatAnswer": {
+    "sendToActionCenter": "Send to Action Center",
     "label": "Answer actions",
     "copy": "Copy",
     "copied": "Copied",
@@ -4339,6 +4417,62 @@
         },
         "next": "Turned back on, the first suggestion arrives tomorrow morning.",
         "changeFailed": "Couldn't change your daily suggestions. Try again."
+      },
+      "suggestion": {
+        "crumb": "Daily suggestion · {date}",
+        "from": "from",
+        "source": "Daily suggestion · {date} · Action Center {number}",
+        "pickedToday": "Picked for you today · no AI cost",
+        "picked": "Picked for you {date} · no AI cost",
+        "tools": {
+          "label": "What was read",
+          "read": "Read {number}",
+          "pages": "{count, plural, one {# page} other {# pages}}",
+          "prompts": "{count, plural, one {# prompt} other {# prompts}}",
+          "ranked": "Ranked your open actions",
+          "priority": "priority {score, number}",
+          "waiting": "waiting {days, plural, one {# day} other {# days}}",
+          "audited": "Checked the pages",
+          "auditedOn": "Site Audit, {date}"
+        },
+        "whyNow": "Why now: {reason}",
+        "takes": "With the agent, it takes about {minutes, number} minutes.",
+        "card": {
+          "title": "From your Action Center",
+          "waiting": "Waiting {days, plural, one {# day} other {# days}}",
+          "tasks": "{count, plural, one {# task} other {# tasks}}",
+          "unassigned": "Unassigned",
+          "opened": "opened {date}",
+          "open": "Open",
+          "openLabel": "Open {number} in Action Center",
+          "morePages": "+{count, number} more",
+          "noCost": "No extra cost to pick",
+          "mode": "Mode: {mode}",
+          "editor": "Content Editor",
+          "chat": "Do it with Chat",
+          "closed": {
+            "completed": "Done",
+            "dismissed": "Dismissed"
+          }
+        },
+        "next": {
+          "firstPage": "Start with {page}",
+          "firstPageSub": "{count, plural, one {The action's page} other {The first of its # pages}}",
+          "firstPageMessage": "Start with {page}.",
+          "snooze": "Not now",
+          "snoozeSub": "Back in a week if it's still open",
+          "remove": "Remove this suggestion",
+          "removeSub": "The action stays in Action Center"
+        },
+        "doMessage": "Let's do {number} from my Action Center: {title}",
+        "pageChip": "Daily suggestion",
+        "snoozed": "Not now: back in a week, if it's still open.",
+        "removed": "Removed from your Inbox. The action stays in Action Center.",
+        "changeFailed": "Couldn't change this suggestion. Try again.",
+        "startFailed": "Couldn't start the chat. Try again.",
+        "editorFailed": "Couldn't open the Content Editor. Try again.",
+        "unavailable": "This suggestion isn't available.",
+        "backToInbox": "Back to Inbox"
       },
       "review": "Review",
       "watch": "Watch",
@@ -4942,6 +5076,14 @@
       "makeReport": "Made the report “{title}”",
       "makeReportUndo": "Removed the report “{title}” from Reports",
       "startAudit": "Started Site Audit on {pages}",
+      "sendToActions": "Sent “{title}” to Action Center as {no}",
+      "sendToActionsUndo": "Cancelled {no} “{title}”, sent from Chat",
+      "addToAction": "Added a finding to {no}: {finding}",
+      "addToActionUndo": "Withdrew the finding added to {no}",
+      "attachToTask": "Attached “{file}” to {task}",
+      "attachToTaskUndo": "Took “{file}” off {task}",
+      "taskReadyForReview": "Set {task} to Ready for review",
+      "taskReadyForReviewUndo": "Took {task} back from Ready for review",
       "accessDenied": "Not allowed: {tool}",
       "agentCreated": "Created the agent “{name}”",
       "agentUpdated": "Changed the agent “{name}”",

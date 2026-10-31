@@ -197,7 +197,7 @@ export async function resolveCallBrand(
  */
 export async function readToolCall(
   ctx: PrecedenceContext,
-  tool: Pick<ChatTool, 'brandOf' | 'batch'>,
+  tool: Pick<ChatTool, 'brandOf' | 'batch' | 'alwaysCardWhen'>,
   input: Record<string, unknown>,
   tainted: boolean,
   /** The items the run's earlier calls of this row made (progress.writes). */
@@ -210,6 +210,9 @@ export async function readToolCall(
     brandId,
     brandIsDemo: inScope ? await readBrandIsDemo(brandId) : false,
     tainted,
-    ...(overBatchCard(tool, input, before) ? { overBatch: true } : {}),
+    // Over its batch, or a choice that's the person's: a card in every mode.
+    ...(overBatchCard(tool, input, before) || tool.alwaysCardWhen?.(input as never) === true
+      ? { overBatch: true }
+      : {}),
   };
 }

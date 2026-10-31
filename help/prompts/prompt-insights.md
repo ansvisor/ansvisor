@@ -4,11 +4,11 @@ route: /dashboard/prompts/insights
 keywords: [prompt insights, analyze volumes, refresh volumes, intent, similar topics, high opportunity prompts]
 synonyms: [prompt volume, search demand, keyword volume, volume analysis]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/prompts.mdx]
 ---
 The **Insights** tab of the **Prompts** page shows the estimated AI search volume of your tracked prompts, their intent and the highest-demand prompts. It has no date range, because volume estimates aren't tied to a period.
@@ -18,18 +18,18 @@ The **Insights** tab of the **Prompts** page shows the estimated AI search volum
 Volumes come from an analysis you run:
 
 - **Analyze Volumes** the first time;
-- **Analyze New Prompts** for prompts added since;
+- **Analyze New Prompts** for prompts added since, shown while some have no volume;
 - **Refresh Volumes** for newer Google data;
 - **Re-analyze Keywords** to analyze every prompt again, keywords included.
 
-On cloud plans, each analysis counts against a monthly quota, and the toolbar shows how many are left. **Tracked Prompts** also warns when some prompts haven't been analyzed yet.
+On plans with a monthly analysis limit, each analysis counts against it, and the toolbar shows how many are left. **Tracked Prompts** also warns when some prompts haven't been analyzed yet.
 
 ## What the tab shows
 
 For analyzed prompts you see:
 
-- **Total Est. AI Volume** and **Avg. AI Volume** across your prompts.
-- The **Prompt Volumes** table, with each prompt's **Google Vol.** and **Est. AI Vol.**
+- **Prompts Analyzed**, with how many keywords they cover, and **Total Est. AI Volume** and **Avg. AI Volume** across your prompts.
+- Two **Prompt Volumes** cards: a chart of the total by answer engine, and a table with each prompt's **Google Vol.** and **Est. AI Vol.**
 - Each prompt's **Intent**: Comparison, How-to, What is, Best / Top, vs. / Review, Recommendation, Problem Solving or Other.
 - **High Opportunity Prompts**: the prompts with the most estimated AI searches. A low-confidence estimate isn't listed there on its own.
 - **Similar Topics**: the most-searched keyword clusters across your prompts. **See all** opens its own page.

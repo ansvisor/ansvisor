@@ -338,17 +338,18 @@ describe('the daily suggestions', () => {
     expect(onSeen).not.toHaveBeenCalled();
   });
 
-  it('opens the action in the Action Center on its brand, marking it opened and its feed used', async () => {
+  it('opens the suggestion’s page on its brand, which marks it opened (W2-26)', async () => {
     await render(<ChatInbox suggestions={ok()} />);
     await openTab('suggestions');
     await click('[data-suggestion="s2"]');
-    expect(server.open).toHaveBeenCalledWith('s2');
     expect(store.setActiveBrand).toHaveBeenCalledWith('brand-b');
-    expect(nav.push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=action-s2');
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/inbox/s2');
     nav.push.mockClear();
     await click('[data-suggestion="s1"] button');
-    expect(server.open).toHaveBeenLastCalledWith('s1');
     expect(nav.push).toHaveBeenCalledTimes(1);
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/inbox/s1');
+    // The page marks it opened, not the Inbox.
+    expect(server.open).not.toHaveBeenCalled();
   });
 
   it('pauses them from the link', async () => {
@@ -425,7 +426,7 @@ describe('a read-only workspace', () => {
     expect(plan.openUpgrade).toHaveBeenCalledWith('Pausing daily suggestions needs a plan');
     await click('[data-suggestion="s1"]');
     expect(server.open).not.toHaveBeenCalled();
-    expect(nav.push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=action-s1');
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/inbox/s1');
   });
 
   it("doesn't make a partner's feeds", async () => {
@@ -542,7 +543,7 @@ describe('a row', () => {
     expect(open.className).toContain('bg-background');
     expect(open.className).not.toContain('bg-primary');
     await click('[data-suggestion="s1"]');
-    expect(nav.push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=action-s1');
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/inbox/s1');
   });
 
   it('names its brand when the person has more than one', async () => {
@@ -602,31 +603,6 @@ describe('a row', () => {
         (row) => row.querySelector('.whitespace-nowrap')?.textContent,
       ),
     ).toEqual(['Oct 29', 'Today · Oct 28', 'Oct 27']);
-  });
-
-  it('opens once on a double click', async () => {
-    let answer: (value: { ok: true }) => void = () => undefined;
-    server.open.mockImplementationOnce(
-      () => new Promise<{ ok: true }>((resolve) => (answer = resolve)),
-    );
-    await render(<ChatInbox suggestions={ok()} />);
-    await openTab('suggestions');
-    await click('[data-suggestion="s1"] button');
-    await click('[data-suggestion="s1"] button');
-    await act(async () => answer({ ok: true }));
-    expect(server.open).toHaveBeenCalledTimes(1);
-    expect(nav.push).toHaveBeenCalledTimes(1);
-  });
-
-  it('still opens the action when marking it opened fails', async () => {
-    server.open.mockResolvedValueOnce({ ok: false, failure: 'failed' } as never);
-    await render(<ChatInbox suggestions={ok()} />);
-    await openTab('suggestions');
-    await click('[data-suggestion="s1"]');
-    expect(nav.push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=action-s1');
-    server.open.mockRejectedValueOnce(new Error('offline'));
-    await click('[data-suggestion="s2"]');
-    expect(nav.push).toHaveBeenLastCalledWith('/dashboard/action-center/actions?action=action-s2');
   });
 });
 

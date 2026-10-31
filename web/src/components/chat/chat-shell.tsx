@@ -25,6 +25,7 @@ import { PANEL_FROM_PARAM, panelReturnOf } from '@/lib/chat/panel';
 import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import { ChatActionsProvider, useChatActions } from './chat-actions';
 import { ChatDebugProvider } from './chat-debug';
+import { ChatCrumbContext } from './chat-crumb';
 import { inboxItems } from './chat-inbox';
 import { useChatList } from './chat-list-provider';
 import { ChatMenu } from './chat-menu';
@@ -51,6 +52,12 @@ function useIsWide(): boolean {
 }
 
 const CHAT_PATH = /^\/dashboard\/chat\/([0-9a-f-]{36})$/i;
+/** A daily suggestion's page: "Chat › Inbox › Daily suggestion · Oct 29" (CHAT-26 #d-detail). */
+const SUGGESTION_PATH = /^\/dashboard\/chat\/inbox\/[0-9a-f-]{36}$/i;
+/** The page a detail sits under, linked in its breadcrumb before the name the detail sets. */
+const DETAIL_PARENTS = {
+  inbox: '/dashboard/chat/inbox?tab=suggestions',
+} as const;
 
 /**
  * Where the palette opens while the menu is shown: under its Search chats
@@ -164,6 +171,8 @@ function ChatShellFrame({
   const [drawer, setDrawer] = useState(false);
   const [searching, setSearching] = useState(false);
   const [lastChat, setLastChat] = useState<string | null>(null);
+  // The breadcrumb's last part a page names, as a daily suggestion's page does.
+  const [crumbTail, setCrumbTail] = useState<string | null>(null);
   const stripToggle = useRef<HTMLButtonElement>(null);
   const focusAfterToggle = useRef(false);
   // Opened as a full page from the side panel (CHAT-22): ↙ Back to that page.
@@ -237,12 +246,15 @@ function ChatShellFrame({
     lastChat && (status !== 'ready' || chats.some((chat) => chat.id === lastChat))
       ? `/dashboard/chat/${lastChat}`
       : '/dashboard/chat';
-  const subPage = SUB_PAGES[pathname];
+  const suggestionPage = SUGGESTION_PATH.test(pathname);
+  const detailOf: keyof typeof DETAIL_PARENTS | undefined = suggestionPage ? 'inbox' : undefined;
+  const subPage = SUB_PAGES[pathname] ?? detailOf;
   const titled = TITLED_PAGES[pathname];
   const current = chatId ? chats.find((chat) => chat.id === chatId) : undefined;
   const pill = current ? PILL_OF[current.state] : undefined;
-  // A chat or Home fills the page itself; the other Chat pages get the usual padding.
-  const padded = pathname !== '/dashboard/chat' && !chatId;
+  // A chat, Home or a suggestion's page (a chat to be) fills the page itself;
+  // the other Chat pages get the usual padding.
+  const padded = pathname !== '/dashboard/chat' && !chatId && !suggestionPage;
   const strip = !isWide || !open;
   const runs = <RunsTray brandId={brandId} />;
 
@@ -339,7 +351,27 @@ function ChatShellFrame({
                 <span aria-hidden className="mx-1.5 font-normal text-muted-foreground/70">
                   ›
                 </span>
-                <span aria-current="page">{tNav(`pages.${subPage}`)}</span>
+                {detailOf ? (
+                  <>
+                    <Link
+                      href={DETAIL_PARENTS[detailOf]}
+                      data-action="nav.breadcrumb"
+                      className="font-medium text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
+                    >
+                      {tNav(`pages.${subPage}`)}
+                    </Link>
+                    {crumbTail && (
+                      <>
+                        <span aria-hidden className="mx-1.5 font-normal text-muted-foreground/70">
+                          ›
+                        </span>
+                        <span aria-current="page">{crumbTail}</span>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <span aria-current="page">{tNav(`pages.${subPage}`)}</span>
+                )}
               </nav>
             </>
           )}
@@ -379,7 +411,7 @@ function ChatShellFrame({
           </div>
         </header>
         <div className={cn('chat-scroll min-h-0 flex-1 overflow-y-auto', padded && 'p-6')}>
-          {children}
+          <ChatCrumbContext.Provider value={setCrumbTail}>{children}</ChatCrumbContext.Provider>
         </div>
       </div>
 
