@@ -265,6 +265,8 @@ export function actionEventText(
 ): string {
   const text = t(`drawer.events.${event.event}`, {
     to: String(event.data.to ?? ''),
+    // A task added to the open opportunity on its question.
+    merged: event.data.merged === true ? 'yes' : 'no',
     count: Number(event.data.count ?? 0),
     // Tasks the writer left for review (AC-010).
     reviews: Number(event.data.reviews ?? 0),

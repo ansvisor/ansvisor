@@ -1739,7 +1739,7 @@
           "task_deleted": "Task deleted",
           "task_edited": "Task edited",
           "tasks_generated": "{count, plural, one {# task} other {# tasks}} written from the action's evidence{reviews, plural, =0 {} one {; # waits for review} other {; # wait for review}}",
-          "task_sent": "{to, select, content {Sent to Content} webhook {Sent to the webhook} other {Sent}}: {title}",
+          "task_sent": "{to, select, content {{merged, select, yes {Added to the open Content opportunity for the same question} other {Sent to Content}}} webhook {Sent to the webhook} other {Sent}}: {title}",
           "task_checked": "Checked automatically and done: {task}{title}",
           "task_ran": "{task} — carried out automatically ({tool})",
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
@@ -1767,6 +1767,7 @@
         "send": {
           "sentToContent": "Sent to Content as an opportunity",
           "alreadyInContent": "This task is already in Content",
+          "mergedInContent": "Added to the open opportunity in Content for the same question",
           "sentToWebhook": "Sent to the webhook",
           "timeout": "Sending took too long. Please try again.",
           "unreachable": "Couldn't reach the server. Please try again.",
@@ -9545,6 +9546,10 @@
     "reviewedError": "Failed to mark as reviewed",
     "duplicatesMerged": "{count, plural, one {1 similar suggestion was merged into this one.} other {# similar suggestions were merged into this one.}}",
     "duplicatesMergedHint": "They rested on the same prompts and AI searches, so they weren't created and didn't use your quota.",
+    "sameQuestionMerged": "{count, plural, one {1 more request for the same question was added to this opportunity.} other {# more requests for the same question were added to this opportunity.}}",
+    "sameQuestionMergedHint": "A question gets one open opportunity: their prompts, AI searches and sources are counted here, and they didn't use your quota.",
+    "mergedInto": "Merged into the open opportunity for the same question.",
+    "mergedIntoOpen": "Open it",
     "newSignal": "New signal detected",
     "newSignalScoreRose": "Completed earlier, and its opportunity has grown since: the score rose from {from} to {to}.",
     "newSignalGainLost": "Completed earlier, but the gain did not hold: visibility on these prompts was {after}% after the work and is {now}% now."
