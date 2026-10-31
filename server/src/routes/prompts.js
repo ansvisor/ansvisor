@@ -678,12 +678,10 @@ router.post(
     } catch (error) {
       const status = error.status || 500;
       req.log.error({ err: error }, 'page prompt suggestions error');
-      return res
-        .status(status)
-        .json({
-          error: error.message || 'Failed to suggest prompts for this page',
-          code: error.code,
-        });
+      return res.status(status).json({
+        error: error.message || 'Failed to suggest prompts for this page',
+        code: error.code,
+      });
     }
   },
 );
