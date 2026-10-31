@@ -424,6 +424,53 @@ describe('BeforePublish', () => {
     expect(button('Copy JSON-LD')).toBeDefined();
   });
 
+  const grey: ContentAuthor = {
+    id: 'r1',
+    name: 'Dr. Grey',
+    title: 'MD',
+    bio: 'Reviews health pages.',
+    photoUrl: null,
+    sameAs: [],
+    userId: null,
+    createdBy: null,
+    defaultFor: [],
+    pages: null,
+  };
+  /** Quality's reviewer to-do, as a regulated page's read gives it (CE-049). */
+  const reviewerTodo = (done: boolean) => ({
+    id: 'reviewer' as const,
+    done,
+    gain: 0,
+    score: 'eeat' as const,
+    action: done ? null : ('pickReviewer' as const),
+    topic: 'health' as const,
+  });
+
+  it('asks for a reviewer on a page that advises on health (CE-049)', async () => {
+    await render(quality({ todos: [reviewerTodo(false)], reviewer: null }));
+    const row = rows().find((r) => r?.startsWith('No reviewer named'));
+    expect(row).toContain('The page advises readers on their health');
+    expect(jsonLd()).not.toHaveProperty('reviewedBy');
+  });
+
+  it('names the reviewer, and checks the page says so', async () => {
+    await render(quality({ todos: [reviewerTodo(true)], reviewer: grey }), {
+      contentByline: 'By Acme Team · Reviewed by Dr. Grey, MD',
+    });
+    const row = rows().find((r) => r?.startsWith('Reviewed by Dr. Grey'));
+    expect(row).toContain('Dr. Grey, MD, reviewed this page, and the page says so under its H1.');
+    expect(jsonLd().reviewedBy).toEqual({ '@type': 'Person', name: 'Dr. Grey', jobTitle: 'MD' });
+  });
+
+  it('flags a reviewer the page never names', async () => {
+    await render(quality({ todos: [reviewerTodo(true)], reviewer: grey }), {
+      contentByline: 'By Acme Team',
+    });
+    expect(rows().find((r) => r?.startsWith("The reviewer isn't on the page"))).toContain(
+      "the page doesn't name Dr. Grey",
+    );
+  });
+
   it("leaves the author out while the authors aren't read", async () => {
     await render(quality({ eeat: null, author: null }));
     expect(rows()[0]).toContain("The authors couldn't be read here");

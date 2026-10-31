@@ -207,6 +207,7 @@ export function contentPackage({ delivery, page, brand, html, jsonLd, callback =
       html,
       jsonLd: jsonLd ?? jsonLdOf(html),
       author: page.author,
+      reviewedBy: page.reviewedBy ?? null,
       featuredImage: page.featuredImage,
       method: page.method ?? null,
       sourceUrl: page.sourceUrl ?? null,
@@ -600,7 +601,7 @@ export async function sendContentPages({
   const ids = [...byId.keys()];
   const { data: drafts, error } = await supabaseAdmin
     .from('content_drafts')
-    .select('id, method, source_url, page_type, rules')
+    .select('id, method, source_url, page_type, rules, reviewer_id')
     .eq('brand_id', brandId)
     .is('archived_at', null)
     .in('id', ids);
@@ -672,6 +673,20 @@ export async function sendContentPages({
   // rules for a draft no one has set rules on, as the editor reads them),
   // else the brand's.
   const rowOf = new Map((drafts ?? []).map((d) => [d.id, d]));
+  // A page that advises on health, money or the law names its qualified
+  // reviewer (CE-049): the CMS takes the name where its import maps fields.
+  const reviewerIds = [...new Set((drafts ?? []).map((d) => d.reviewer_id).filter(Boolean))];
+  const reviewerNames = new Map();
+  if (reviewerIds.length) {
+    const { data: reviewers, error: reviewersError } = await supabaseAdmin
+      .from('content_authors')
+      .select('id, name')
+      .in('id', reviewerIds);
+    if (reviewersError) logger.warn({ err: reviewersError }, '[content-delivery] reviewers not read');
+    else
+      for (const r of reviewers ?? [])
+        reviewerNames.set(r.id, String(r.name ?? '').trim().slice(0, 200) || null);
+  }
   // The brand once: its kind of site keys My rules.
   const brand = await brandFor(brandId);
   const mine = await myRuleSets(
@@ -689,6 +704,7 @@ export async function sendContentPages({
       method: draft.method ?? null,
       sourceUrl: draft.source_url ?? null,
       pageType: draft.page_type ?? null,
+      reviewedBy: reviewerNames.get(draft.reviewer_id) ?? null,
       language: rulesLanguage(rules, brand.language) || 'en',
     };
   }

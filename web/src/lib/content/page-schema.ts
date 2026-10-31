@@ -62,6 +62,11 @@ export interface ArticleSchemaInput {
   author: ContentAuthor | null | undefined;
   /** The author's page on the brand's site (Site trust), if one was found. */
   authorUrl: string | null;
+  /**
+   * The page's qualified reviewer (CE-049), when one is picked: their name
+   * goes on as reviewedBy. Undefined while the authors aren't read.
+   */
+  reviewer?: ContentAuthor | null;
   brandName: string;
   /** The brand's home page as Site trust read it, if it did. */
   brandUrl: string | null;
@@ -86,6 +91,7 @@ export function articleJsonLd({
   title,
   author,
   authorUrl,
+  reviewer,
   brandName,
   brandUrl,
   image,
@@ -105,6 +111,11 @@ export function articleJsonLd({
     ...(author.photoUrl ? { image: author.photoUrl } : {}),
     ...(author.sameAs.length ? { sameAs: author.sameAs } : {}),
   };
+  const reviewerPerson = reviewer && {
+    '@type': 'Person',
+    name: reviewer.name,
+    ...(reviewer.title ? { jobTitle: reviewer.title } : {}),
+  };
   return {
     '@context': 'https://schema.org',
     '@type': 'Article',
@@ -112,6 +123,7 @@ export function articleJsonLd({
     ...(pageName(title) ? { headline: pageName(title) } : {}),
     ...(image ? { image } : {}),
     ...(author !== undefined ? { author: person ?? organization } : {}),
+    ...(reviewerPerson ? { reviewedBy: reviewerPerson } : {}),
     publisher: organization,
     ...(isNew ? { datePublished: today } : {}),
     dateModified: today,

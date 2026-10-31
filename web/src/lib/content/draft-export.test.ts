@@ -204,6 +204,23 @@ describe('the page fields an export carries (CE-057)', () => {
     expect(doc).toContain('<meta name="author" content="Ada Lovelace">');
   });
 
+  it('names the reviewer in HTML head, front matter and the sheet row (CE-049)', () => {
+    const reviewed = {
+      ...fields,
+      front: { ...fields.front, 'reviewed-by': 'Dr. Grey' },
+      head: { ...fields.head, reviewedBy: 'Dr. Grey' },
+    };
+    expect(draftHtmlDocument('Pipeline', '<h1>Pipeline</h1>', reviewed)).toContain(
+      '<meta name="reviewed-by" content="Dr. Grey">',
+    );
+    // A reviewer no one picked leaves nothing: no empty line, no empty tag.
+    expect(draftHtmlDocument('Pipeline', '<h1>Pipeline</h1>', fields)).not.toContain(
+      'reviewed-by',
+    );
+    expect(pageSheetRow('Pipeline', PAGE, reviewed)['Reviewed by']).toBe('Dr. Grey');
+    expect(pageSheetRow('Pipeline', PAGE)['Reviewed by']).toBe('');
+  });
+
   it('gives Word a table of them on page 1, the page after it', async () => {
     const files = unzipSync(await read(await draftDocx('Pipeline forecasting', PAGE, fields)));
     const xml = strFromU8(files['word/document.xml']);
@@ -288,13 +305,13 @@ describe('one page as a spreadsheet row (Excel, CSV)', () => {
   it('writes CSV with its header, and Excel with a cell cut at its limit', () => {
     const csv = pageCsv('T', '<p>Done.</p>', fields);
     expect(csv.split('\n')[0]).toBe(
-      'Title,Meta title,Meta description,Slug,Author,Featured image,Characters,Content,HTML',
+      'Title,Meta title,Meta description,Slug,Author,Reviewed by,Featured image,Characters,Content,HTML',
     );
     expect(csv).toContain('<p>Done.</p>');
     const long = `<p>${'x'.repeat(40_000)}</p>`;
     const [{ data }] = pageWorkbook('T', long, fields);
     expect(data[0][0]).toEqual({ value: 'Title', fontWeight: 'bold' });
-    const content = data[1][7] as string;
+    const content = data[1][8] as string;
     expect(content).toHaveLength(32_767);
     expect(content.endsWith('…')).toBe(true);
   });

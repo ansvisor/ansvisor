@@ -39,7 +39,7 @@ export interface ExportFields {
   /** Markdown's front matter, in order. */
   front: Record<string, string>;
   /** HTML's head. */
-  head: { title: string; description: string; author: string };
+  head: { title: string; description: string; author: string; reviewedBy?: string };
 }
 
 /** A stretch of text with one format; a link carries its address. */
@@ -223,6 +223,9 @@ export function draftHtmlDocument(title: string, html: string, fields?: ExportFi
       ? [`<meta name="description" content="${escapeAttribute(head.description)}">`]
       : []),
     ...(head?.author ? [`<meta name="author" content="${escapeAttribute(head.author)}">`] : []),
+    ...(head?.reviewedBy
+      ? [`<meta name="reviewed-by" content="${escapeAttribute(head.reviewedBy)}">`]
+      : []),
     '</head>',
     '<body>',
     html.trim(),
@@ -658,6 +661,7 @@ export const PAGE_SHEET_HEADERS = [
   'Meta description',
   'Slug',
   'Author',
+  'Reviewed by',
   'Featured image',
   'Characters',
   'Content',
@@ -705,6 +709,7 @@ export function pageSheetRow(
     front.description ?? '',
     front.slug ?? '',
     front.author ?? '',
+    front['reviewed-by'] ?? '',
     front.image ?? '',
     content.replace(/\n/g, '').length,
     content,
@@ -739,6 +744,7 @@ export function pageWorkbook(
         { width: 40 },
         { width: 60 },
         { width: 30 },
+        { width: 20 },
         { width: 20 },
         { width: 40 },
         { width: 11 },

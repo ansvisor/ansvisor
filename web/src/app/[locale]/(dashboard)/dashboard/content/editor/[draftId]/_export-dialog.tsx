@@ -164,6 +164,7 @@ export function ExportDialog({
   isNew,
   sourceUrl,
   author,
+  reviewer,
   teamByline,
   siteAuthor = false,
   byline,
@@ -182,6 +183,8 @@ export function ExportDialog({
   /** The live page an optimized draft is for: its address is the slug. */
   sourceUrl: string | null;
   author: ContentAuthor | null;
+  /** The page's qualified reviewer (CE-049), or null where none is picked. */
+  reviewer: ContentAuthor | null;
   /** The team byline; empty while the authors aren't read, or for the site's own author. */
   teamByline: string;
   /** No author picked, the one the site names confirmed (00271): the CMS keeps its own. */
@@ -309,6 +312,7 @@ export function ExportDialog({
         [t('fields.metaDescription'), fields.metaDescription],
         ...(fields.slug ? [[t('fields.slug'), fields.slug] as [string, string]] : []),
         ...(fields.author ? [[t('fields.author'), fields.author] as [string, string]] : []),
+        ...(reviewer?.name ? [[t('fields.reviewedBy'), reviewer.name] as [string, string]] : []),
         ...(fields.featuredImage
           ? [[t('fields.featuredImage'), fields.featuredImage] as [string, string]]
           : []),
@@ -319,6 +323,7 @@ export function ExportDialog({
       description: fields.metaDescription,
       slug: fields.slug,
       author: fields.author,
+      ...(reviewer?.name ? { 'reviewed-by': reviewer.name } : {}),
       // As Before you publish's JSON-LD: a live page keeps its published
       // date (a site's "date"), and today is when it was updated.
       ...(isNew ? { date: localDate(new Date()) } : { lastmod: localDate(new Date()) }),
@@ -328,6 +333,7 @@ export function ExportDialog({
       title: fields.metaTitle,
       description: fields.metaDescription,
       author: fields.author,
+      ...(reviewer?.name ? { reviewedBy: reviewer.name } : {}),
     },
   };
   const download = async (format: DraftExportFormat) => {
@@ -435,6 +441,15 @@ export function ExportDialog({
         ? t(byline ? 'fields.authorInContent' : 'fields.authorValue', { name: fields.author })
         : t(siteAuthor ? 'fields.siteAuthor' : 'fields.noAuthor'),
     },
+    ...(reviewer?.name
+      ? [
+          {
+            label: t('fields.reviewedBy'),
+            value: reviewer.name,
+            shown: t('fields.reviewedByValue', { name: reviewer.name }),
+          },
+        ]
+      : []),
     {
       label: t('fields.featuredImage'),
       value: fields.featuredImage,

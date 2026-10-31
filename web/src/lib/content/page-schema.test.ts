@@ -89,6 +89,16 @@ describe('articleJsonLd', () => {
     expect(articleJsonLd({ ...base, author: undefined })).not.toHaveProperty('author');
   });
 
+  it("names the page's reviewer as reviewedBy, and leaves it out without one", () => {
+    const reviewer: ContentAuthor = { ...ada, id: 'r1', name: 'Dr. Grey', title: 'MD' };
+    expect(articleJsonLd({ ...base, reviewer }).reviewedBy).toEqual({
+      '@type': 'Person',
+      name: 'Dr. Grey',
+      jobTitle: 'MD',
+    });
+    expect(articleJsonLd(base)).not.toHaveProperty('reviewedBy');
+  });
+
   it('leaves the headline out while the title has a placeholder', () => {
     const result = articleJsonLd({ ...base, title: 'Forecasting with [figure, source] accuracy' });
     expect(result).not.toHaveProperty('headline');

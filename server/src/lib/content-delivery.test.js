@@ -13,6 +13,7 @@ const db = {
   // What a callback that landed first left on the delivery.
   told: null,
   configs: [],
+  authors: [],
   // The brand's Webflow connection (00283), and whether this server has Webflow set up.
   webflow: null,
   webflowConfigured: true,
@@ -66,6 +67,7 @@ function from(table) {
       return { data: db.brand, error: null };
     }
     if (table === 'brand_domains') return { data: [{ domain: 'acme.example' }], error: null };
+    if (table === 'content_authors') return { data: db.authors, error: null };
     return { data: null, error: null };
   };
   const chain = {
@@ -164,6 +166,7 @@ beforeEach(() => {
     },
   ];
   db.queued = [row(page().draftId)];
+  db.authors = [];
   db.updates = [];
   db.rpc = [];
   db.webflow = null;
@@ -295,6 +298,17 @@ describe('sendContentPages', () => {
       skipped: 0,
       deliveries: [{ id: 'd-1', status: 'sent' }],
     });
+  });
+
+  it("names the draft's qualified reviewer on the package (CE-049)", async () => {
+    db.drafts = [draft(page().draftId, { reviewer_id: 'r1' })];
+    db.authors = [{ id: 'r1', name: '  Dr. Grey  ' }];
+    await send();
+    expect(JSON.parse(postJson.mock.calls[0][1]).page.reviewedBy).toBe('Dr. Grey');
+    // No reviewer picked: the field is there, null, so an import maps it or skips it.
+    db.drafts = [draft(page().draftId, { reviewer_id: null })];
+    await send();
+    expect(JSON.parse(postJson.mock.calls[1][1]).page.reviewedBy).toBeNull();
   });
 
   it('offers no callback to a webhook without a secret, and keeps the answer of the one that took it', async () => {

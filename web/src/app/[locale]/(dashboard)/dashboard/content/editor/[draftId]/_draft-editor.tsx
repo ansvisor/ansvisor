@@ -1535,6 +1535,7 @@ export function DraftEditor({
         eeat: eeatScore,
         trust: trustScore,
         author: pageAuthor,
+        reviewer: pageReviewer,
         canEdit: canEditPageAuthor,
         hasAuthors,
         brandName,
@@ -4354,6 +4355,7 @@ export function DraftEditor({
           isNew={draft.method === 'create'}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
+          reviewer={pageReviewer}
           teamByline={teamByline}
           siteAuthor={!pageAuthor && authorConfirmed.real}
           byline={contentByline}

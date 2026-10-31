@@ -63,6 +63,8 @@ export interface QualityRead {
   trust: TrustRead | null;
   /** The page's author, or null for the organization byline. */
   author: ContentAuthor | null;
+  /** The page's qualified reviewer (CE-049), or null where none is picked. */
+  reviewer?: ContentAuthor | null;
   /** Whether the member reading may edit that author in Settings › Authors. */
   canEdit: boolean;
   /** Whether the workspace has an author to pick (Settings › Authors). */

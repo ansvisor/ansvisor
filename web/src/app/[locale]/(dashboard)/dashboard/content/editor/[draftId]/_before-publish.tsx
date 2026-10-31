@@ -167,6 +167,10 @@ export function BeforePublish({
   const { author, brandName, siteTrust } = quality;
   // E-E-A-T is read with the authors: until then, who the page is by isn't known.
   const authorsRead = quality.eeat !== null;
+  // The page's qualified reviewer (CE-049), and Quality's to-do about one
+  // (there on a regulated page only): the row below checks both halves.
+  const reviewerTodo = quality.todos.find((todo) => todo.id === 'reviewer');
+  const reviewer = authorsRead ? quality.reviewer ?? null : null;
   const trust = quality.trust?.score ?? null;
   const below = trust !== null && trust < TRUST_GATE;
   // The biggest of what would raise Trust: the warning's reason. The claims
@@ -213,6 +217,8 @@ export function BeforePublish({
               // An author only confirmed (00271) isn't named here: left out, as unknown.
               author:
                 authorsRead && !(!author && quality.authorConfirmed?.real) ? author : undefined,
+              // A qualified reviewer (CE-049) goes on as reviewedBy, on the page's node.
+              reviewer: reviewerTodo && quality.reviewer ? quality.reviewer : undefined,
               authorUrl:
                 (author &&
                   siteTrust?.checks.authorPages.authors.find((a) => a.name === author.name)?.url) ||
@@ -259,6 +265,31 @@ export function BeforePublish({
                 title: t('author.none'),
                 detail: t('author.noneDetail', { byline: quality.team }),
               },
+    // CE-049 follow-up (#1486): on a page that advises on health, money or
+    // law, a qualified reviewer is named, and the page says so.
+    ...(reviewerTodo
+      ? [
+          !reviewer
+            ? {
+                state: 'missing' as const,
+                title: t('reviewer.none'),
+                detail: t('reviewer.noneDetail', { topic: reviewerTodo.topic ?? 'other' }),
+              }
+            : contentByline?.includes(reviewer.name)
+              ? {
+                  state: 'check' as const,
+                  title: t('reviewer.ok', { name: reviewer.name }),
+                  detail: reviewer.title
+                    ? t('reviewer.okDetailTitle', { name: reviewer.name, title: reviewer.title })
+                    : t('reviewer.okDetail', { name: reviewer.name }),
+                }
+              : {
+                  state: 'missing' as const,
+                  title: t('reviewer.notOnPage'),
+                  detail: t('reviewer.notOnPageDetail', { name: reviewer.name }),
+                },
+        ]
+      : []),
     ...(product
       ? productLd
         ? [

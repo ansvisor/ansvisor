@@ -8429,6 +8429,8 @@
           "author": "Author",
           "authorValue": "{name} → your CMS author field",
           "authorInContent": "{name} → in the content, under the H1 (Add byline to content)",
+          "reviewedBy": "Reviewed by",
+          "reviewedByValue": "{name} → your reviewer in Review settings",
           "featuredImage": "Featured image",
           "noImage": "None in the page",
           "noSlug": "None from the title: set it in your CMS",
@@ -8503,6 +8505,15 @@
           "confirmedDetail": "You confirmed the page's author is a real person your site names. Check your CMS sets them as the author.",
           "brand": "Your brand's byline",
           "brandDetail": "This page type goes out under {byline}: it needs no author."
+        },
+        "reviewer": {
+          "none": "No reviewer named",
+          "noneDetail": "The page advises readers on their {topic}. A named reviewer raises trust.",
+          "ok": "Reviewed by {name}",
+          "okDetail": "{name} reviewed this page, and the page says so under its H1.",
+          "okDetailTitle": "{name}, {title}, reviewed this page, and the page says so under its H1.",
+          "notOnPage": "The reviewer isn't on the page",
+          "notOnPageDetail": "{name} is set as the reviewer, but the page doesn't name {name}."
         },
         "dates": {
           "title": "Visible published and updated dates",
