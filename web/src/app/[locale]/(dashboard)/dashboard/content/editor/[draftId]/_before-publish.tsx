@@ -170,7 +170,7 @@ export function BeforePublish({
   // The page's qualified reviewer (CE-049), and Quality's to-do about one
   // (there on a regulated page only): the row below checks both halves.
   const reviewerTodo = quality.todos.find((todo) => todo.id === 'reviewer');
-  const reviewer = authorsRead ? quality.reviewer ?? null : null;
+  const reviewer = authorsRead ? (quality.reviewer ?? null) : null;
   const trust = quality.trust?.score ?? null;
   const below = trust !== null && trust < TRUST_GATE;
   // The biggest of what would raise Trust: the warning's reason. The claims

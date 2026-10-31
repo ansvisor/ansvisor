@@ -214,9 +214,7 @@ describe('the page fields an export carries (CE-057)', () => {
       '<meta name="reviewed-by" content="Dr. Grey">',
     );
     // A reviewer no one picked leaves nothing: no empty line, no empty tag.
-    expect(draftHtmlDocument('Pipeline', '<h1>Pipeline</h1>', fields)).not.toContain(
-      'reviewed-by',
-    );
+    expect(draftHtmlDocument('Pipeline', '<h1>Pipeline</h1>', fields)).not.toContain('reviewed-by');
     expect(pageSheetRow('Pipeline', PAGE, reviewed)['Reviewed by']).toBe('Dr. Grey');
     expect(pageSheetRow('Pipeline', PAGE)['Reviewed by']).toBe('');
   });

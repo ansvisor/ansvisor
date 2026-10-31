@@ -682,10 +682,16 @@ export async function sendContentPages({
       .from('content_authors')
       .select('id, name')
       .in('id', reviewerIds);
-    if (reviewersError) logger.warn({ err: reviewersError }, '[content-delivery] reviewers not read');
+    if (reviewersError)
+      logger.warn({ err: reviewersError }, '[content-delivery] reviewers not read');
     else
       for (const r of reviewers ?? [])
-        reviewerNames.set(r.id, String(r.name ?? '').trim().slice(0, 200) || null);
+        reviewerNames.set(
+          r.id,
+          String(r.name ?? '')
+            .trim()
+            .slice(0, 200) || null,
+        );
   }
   // The brand once: its kind of site keys My rules.
   const brand = await brandFor(brandId);
