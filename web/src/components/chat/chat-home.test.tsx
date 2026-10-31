@@ -205,7 +205,7 @@ describe('ChatHomeView', () => {
     // In the words of W2-04's skills: Chat prepares; the person closes and publishes.
     expect(onAsk.mock.calls).toEqual([
       [
-        "Work through this week's Action Center tasks by priority and prepare what each one needs. I'll close the tasks.",
+        "/tasks Work through this week's Action Center tasks by priority and prepare what each one needs. I'll close the tasks.",
       ],
       ['Win back the citations we lost on 2 pages: refresh them against what AI cites now.'],
       [
@@ -336,7 +336,7 @@ describe('ChatHome', () => {
       url: '/api/chat/runs',
       body: {
         message:
-          "Work through this week's Action Center tasks by priority and prepare what each one needs. I'll close the tasks.",
+          "/tasks Work through this week's Action Center tasks by priority and prepare what each one needs. I'll close the tasks.",
         brandId: BRAND,
       },
     });

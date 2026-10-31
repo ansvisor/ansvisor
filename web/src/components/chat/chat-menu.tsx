@@ -11,6 +11,7 @@ import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { AT_WORK_ROWS, chatMenuLists, type DayGroup } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
+import { readAgentsSeen } from './agents/agents-seen';
 import { useChatList, type ChatListStatus } from './chat-list-provider';
 import { ChatRowMenu } from './chat-menus';
 import { ChatRow } from './chat-row';
@@ -36,25 +37,6 @@ function saveFolded(folded: Record<Section, boolean>) {
     window.localStorage.setItem(SECTIONS_KEY, JSON.stringify(folded));
   } catch {
     // Private windows and full storage: it is only folded for this visit.
-  }
-}
-
-/** Agents was opened in this browser: its "New" pill is gone (CHAT-21 §A item 1). */
-const AGENTS_SEEN_KEY = 'ansvisor.chatMenu.agentsSeen';
-
-function readAgentsSeen(): boolean {
-  try {
-    return window.localStorage.getItem(AGENTS_SEEN_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function saveAgentsSeen() {
-  try {
-    window.localStorage.setItem(AGENTS_SEEN_KEY, '1');
-  } catch {
-    // Private windows and full storage: the pill shows again next visit.
   }
 }
 
@@ -149,14 +131,31 @@ function MenuItem({
 
 /**
  * The workspace's AI usage this month beside Settings (mockup `.usg2`): a
- * 30px bar and its percent, amber from 80%, red when used up. Nothing where
+ * 30px bar and its percent, amber from 80%, red when used up. In the free
+ * trial it names no share, as the header's meter (AI usage spec §3.1):
+ * "Trial credit", "Almost used" from 80%, then "Used up". Nothing where
  * there is no allowance to meter (self-hosted) or before it is read.
  */
 function UsageMeter() {
   const t = useTranslations('chatShell.menu');
+  const tMeter = useTranslations('aiUsage.meter');
   const { usage } = useAiUsage();
   if (!usage || usage.percentUsed === null) return null;
   const tone = aiUsageTone(usage);
+  if (usage.trial && tone !== 'unlimited') {
+    return (
+      <span
+        title={tMeter(`trialLabel.${tone}`)}
+        className={cn(
+          'ml-auto text-[11.5px] font-normal text-muted-foreground',
+          tone === 'warning' && 'text-amber-700 dark:text-amber-400',
+          tone === 'exhausted' && 'text-red-700 dark:text-red-400',
+        )}
+      >
+        {tMeter(`trial.${tone}`)}
+      </span>
+    );
+  }
   return (
     <span
       title={t('usageTip')}
@@ -248,19 +247,14 @@ export function ChatMenuView({
   const [query, setQuery] = useState('');
   const found = useChatSearch(query);
   const searching = query.trim() !== '';
-  // The "New" pill beside Agents, until Agents is first opened in this browser.
+  // The "New" pill beside Agent Center, until it is first opened in this browser.
   const [agentsNew, setAgentsNew] = useState(false);
-  const onAgents = pathname.startsWith('/dashboard/chat/agents');
   useEffect(() => {
     // Browser storage exists only after hydration.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFolded(readFolded());
+    setAgentsNew(!readAgentsSeen());
   }, []);
-  useEffect(() => {
-    if (onAgents) saveAgentsSeen();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAgentsNew(!onAgents && !readAgentsSeen());
-  }, [onAgents]);
   const fold = (section: Section) =>
     setFolded((was) => {
       const next = { ...was, [section]: !was[section] };
@@ -382,10 +376,11 @@ export function ChatMenuView({
               </span>
             )}
           </MenuItem>
+          {/* Agent Center is its own page, out of Chat: never the one open here. */}
           <MenuItem
-            href="/dashboard/chat/agents"
+            href="/dashboard/agents"
             action="chatMenu.openAgents"
-            active={onAgents}
+            active={false}
             onNavigate={onNavigate}
           >
             {t('agents')}

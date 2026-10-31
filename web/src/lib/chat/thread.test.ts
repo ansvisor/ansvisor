@@ -105,6 +105,199 @@ describe('loadChatThread', () => {
     });
   });
 
+  it('rebuilds a /tasks run’s task strip as it stands, Done as Action Center has it (CHAT-09 §B)', async () => {
+    seed([{ id: 'run-1', status: 'done' }]);
+    fake.db.tables.chat_run_steps = [];
+    fake.db.tables.chat_run_events = [];
+    fake.db.tables.chat_task_state = [
+      {
+        conversation_id: CHAT,
+        action_task_id: 't1',
+        position: 1,
+        chat_status: 'ready_for_review',
+        run_id: 'run-1',
+      },
+      {
+        conversation_id: CHAT,
+        action_task_id: 't2',
+        position: 2,
+        chat_status: 'queued',
+        run_id: 'run-1',
+      },
+    ];
+    const parent = { category: 'fix', priority_score: 86, due_date: '2026-10-30' };
+    fake.db.tables.action_tasks = [
+      {
+        id: 't1',
+        task_key: null,
+        title: 'Add FAQ block to /pricing',
+        title_params: null,
+        status: 'todo',
+        actions: parent,
+      },
+      // The person completed it in Action Center after the run.
+      {
+        id: 't2',
+        task_key: null,
+        title: 'Fix 2 broken links',
+        title_params: null,
+        status: 'completed',
+        actions: parent,
+      },
+    ];
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run?.tasks).toMatchObject({
+      tasks: [
+        {
+          at: 1,
+          title: 'Add FAQ block to /pricing',
+          priority: 86,
+          category: 'fix',
+          status: 'ready_for_review',
+        },
+        { at: 2, title: 'Fix 2 broken links', status: 'done' },
+      ],
+      ready: 2,
+      total: 2,
+    });
+  });
+
+  it('reads a task an ended run still has Writing as Queued, and keeps a running run’s Writing', async () => {
+    seed([
+      { id: 'run-1', status: 'done' },
+      { id: 'run-2', status: 'running' },
+    ]);
+    fake.db.tables.chat_run_steps = [];
+    fake.db.tables.chat_run_events = [];
+    // run-1's Ready for review was undone after it ended: Undo put back its Writing.
+    fake.db.tables.chat_task_state = [
+      {
+        conversation_id: CHAT,
+        action_task_id: 't1',
+        position: 1,
+        chat_status: 'writing',
+        run_id: 'run-1',
+      },
+      {
+        conversation_id: CHAT,
+        action_task_id: 't2',
+        position: 2,
+        chat_status: 'writing',
+        run_id: 'run-2',
+      },
+    ];
+    const parent = { category: 'fix', priority_score: 86, due_date: null };
+    fake.db.tables.action_tasks = ['t1', 't2'].map((id) => ({
+      id,
+      task_key: null,
+      title: `Task ${id}`,
+      title_params: null,
+      status: 'todo',
+      actions: parent,
+    }));
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run?.tasks?.tasks.map((t) => t.status)).toEqual(['queued']);
+    expect(thread!.messages[3].run?.tasks?.tasks.map((t) => t.status)).toEqual(['writing']);
+  });
+
+  it('gives a deliverable its task back: drafted for it, or its one attachment (W2-12)', async () => {
+    seed([{ id: 'run-1', status: 'done' }]);
+    fake.db.tables.chat_run_steps = [];
+    fake.db.tables.chat_run_events = [];
+    const made = (id: string, title: string) => ({
+      id,
+      run_id: 'run-1',
+      message_id: null,
+      title,
+      type: 'document',
+      formats: ['md'],
+      status: 'draft',
+      content_draft_id: null,
+      created_at: `2026-10-30T09:00:0${id.slice(-1)}.000Z`,
+    });
+    fake.db.tables.chat_files = [
+      made('f1', 'Pricing FAQ'),
+      made('f2', 'Link fixes'),
+      made('f3', 'Notes'),
+    ];
+    fake.db.tables.chat_task_state = [
+      {
+        conversation_id: CHAT,
+        action_task_id: 't1',
+        position: 1,
+        chat_status: 'queued',
+        run_id: 'run-1',
+        file_id: 'f1',
+      },
+    ];
+    fake.db.tables.chat_file_task_links = [{ file_id: 'f2', action_task_id: 't2' }];
+    const parent = { category: 'fix', priority_score: 86, due_date: null };
+    fake.db.tables.action_tasks = [
+      {
+        id: 't1',
+        task_key: null,
+        title: 'Add FAQ block to /pricing',
+        title_params: null,
+        status: 'todo',
+        actions: parent,
+      },
+      {
+        id: 't2',
+        task_key: null,
+        title: 'Fix 2 broken links',
+        title_params: null,
+        status: 'completed',
+        actions: parent,
+      },
+    ];
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run?.deliverables.map((d) => [d.title, d.task ?? null])).toEqual([
+      ['Pricing FAQ', { title: 'Add FAQ block to /pricing', state: 'open' }],
+      ['Link fixes', { title: 'Fix 2 broken links', state: 'done' }],
+      ['Notes', null],
+    ]);
+  });
+
+  it('opens the chat without its strip when the strip can’t be read', async () => {
+    seed([{ id: 'run-1', status: 'done' }]);
+    fake.db.tables.chat_run_steps = [];
+    fake.db.tables.chat_run_events = [];
+    fake.db.failures.chat_task_state = { message: 'down' };
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run?.tasks).toBeNull();
+    logged.mockRestore();
+  });
+
+  it('keeps what a run sent to the Action Center, after a reload (CHAT-09 item 19)', async () => {
+    seed([{ id: 'run-1', status: 'done' }]);
+    fake.db.tables.chat_run_steps = [];
+    const sent = {
+      kind: 'action_created' as const,
+      actionNo: 1271,
+      title: 'Win back pricing citations',
+      href: '/dashboard/action-center/actions/a1' as const,
+    };
+    fake.db.tables.chat_run_events = [
+      event('run-1', chatEvent('action.sent', 1, sent)),
+      event(
+        'run-1',
+        chatEvent('run.finished', 2, {
+          workingMs: 3000,
+          stepCount: 1,
+          sources: [],
+          generatedAt: '2026-10-31T09:00:00.000Z',
+          dataAsOf: null,
+        }),
+      ),
+    ];
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run).toMatchObject({
+      sent: [sent],
+      summary: { workingMs: 3000, stepCount: 1, sources: [] },
+    });
+  });
+
   it("keeps a stopped run's time and steps, its stopped step skipped with why", async () => {
     seed([{ id: 'run-1', status: 'stopped' }]);
     fake.db.tables.chat_run_steps = [

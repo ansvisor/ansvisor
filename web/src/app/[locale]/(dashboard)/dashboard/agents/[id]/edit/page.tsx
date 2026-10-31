@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { AgentForm } from '@/components/chat/agents/agent-form';
 import { readAgentEdit } from '@/lib/chat/agent-form-setup';
 import { agentPageId } from '@/lib/chat/agent-view';
-import { chatPageOpen } from '../../../_chat-page-access';
+import { chatPageOpen } from '../../../chat/_chat-page-access';
 
 /**
  * Edit an agent (CHAT-21 §C item 14, §D): the four steps filled with its

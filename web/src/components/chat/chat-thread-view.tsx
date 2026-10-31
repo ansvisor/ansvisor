@@ -17,7 +17,7 @@ import { searchChatReferences } from '@/lib/actions/chat-references';
 import { ANSWER_MAX, composerAnswer, recommendedLabel } from '@/lib/chat/asks';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import { ghostOf } from '@/lib/chat/next-moves';
-import type { ChatEvent } from '@/lib/chat/events';
+import type { ChatEvent, ChatTaskStrip } from '@/lib/chat/events';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { readSse } from '@/lib/chat/run-hub';
 import {
@@ -37,6 +37,10 @@ import {
   type ComposerSend,
   type ComposerVariant,
 } from './composer/chat-composer';
+import { useUserRole } from '@/hooks/use-user-role';
+import { ActionSentCard } from './run/action-sent-card';
+import { TaskStrip } from './run/task-strip';
+import { ProposalDetails } from './run/proposal-details';
 import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
 import { WhyCard } from './run/why-card';
@@ -100,6 +104,8 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         ...emptyRun(message.run.status as ClientRunStatus),
         steps: message.run.steps,
         deliverables: message.run.deliverables ?? [],
+        sent: message.run.sent ?? [],
+        tasks: message.run.tasks ?? null,
         nextMoves: message.run.nextMoves ?? [],
         why: message.run.why ?? [],
         text: message.text,
@@ -214,6 +220,9 @@ export function ChatThreadView({
   const life = useRef<AbortController | null>(null);
   // Read when a stream gives up, so following a run never waits on a render.
   const lostWords = useRef(t('connectionLost'));
+  const tSent = useTranslations('chatRun.actionSent');
+  const sentWords = useRef({ created: tSent('toastCreated'), added: tSent('toastAdded') });
+  const { canManage } = useUserRole();
   // The run under way when the page opened, which it picks up again.
   const [resumable] = useState(() => {
     const open = turns[turns.length - 1];
@@ -292,6 +301,15 @@ export function ChatThreadView({
                 run: applyChatEvent(anew || !turn.run ? emptyRun() : turn.run, event as ChatEvent),
                 startedAt: turn.startedAt ?? Date.now(),
               }));
+              // Said as it happens, not again when a run is rebuilt from its events (item 19).
+              if (event.type === 'action.sent' && !rebuild) {
+                const sent = (event as Extract<ChatEvent, { type: 'action.sent' }>).data;
+                toast(
+                  sent.kind === 'action_created'
+                    ? sentWords.current.created
+                    : sentWords.current.added,
+                );
+              }
             }
           } catch {
             // The connection broke mid-stream: reconnected below.
@@ -342,7 +360,13 @@ export function ChatThreadView({
    * A message to Chat: false when it wasn't taken, so the composer keeps it.
    * `route`: the page its chips came from, when not this one (a Retry).
    */
-  async function send(message: string, sent: ComposerSend, route = pageRoute): Promise<boolean> {
+  async function send(
+    message: string,
+    sent: ComposerSend,
+    route = pageRoute,
+    /** The run whose answer it acts on (Send to Action Center): the server reads its taint. */
+    fromRunId?: string,
+  ): Promise<boolean> {
     if (isLocked) {
       openUpgrade();
       return false;
@@ -385,6 +409,7 @@ export function ChatThreadView({
         ...(sent.attachments.length > 0 ? { attachmentIds: sent.attachments } : {}),
         ...(sent.context.length > 0 ? { context: { route, chips: sent.context } } : {}),
         ...(sent.references.length > 0 ? { references: sent.references } : {}),
+        ...(fromRunId ? { fromRunId } : {}),
       }),
     }).catch(() => null);
     if (!res?.ok || !res.body) {
@@ -516,6 +541,25 @@ export function ChatThreadView({
       );
   }
 
+  /**
+   * Send to Action Center on the latest answer (CHAT-09 item 18): Chat
+   * proposes the finding as an action, on its card. Admins and Managers, in
+   * their own chat, while nothing else runs.
+   */
+  function sendToActionCenterOf(index: number): (() => void) | undefined {
+    if (!canManage || index !== turns.length - 1) return undefined;
+    if ((thread && !thread.mine) || working || atCap) return undefined;
+    // The answer's run goes with it: one that read outside text makes this run ask too (§16a).
+    const fromRunId = turns[index].runId ?? undefined;
+    return () =>
+      void send(
+        t('sendToActionCenterPrompt'),
+        { context: chips ?? [], references: [], attachments: [] },
+        pageRoute,
+        fromRunId,
+      );
+  }
+
   return (
     <div
       className={
@@ -547,7 +591,14 @@ export function ChatThreadView({
                   onSkip={() => answer(turn, 'skip')}
                   onAnswerQuestion={(value) => answerQuestion(turn, value)}
                   onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
+                  canChangeTasks={canManage && (!thread || thread.mine)}
+                  onTasks={(strip) =>
+                    updateRun(turn.key, (was) =>
+                      was.run ? { ...was, run: { ...was.run, tasks: strip } } : was,
+                    )
+                  }
                   onRetry={retryOf(index)}
+                  onSendToActionCenter={sendToActionCenterOf(index)}
                 />
                 {turn === last && (
                   <NextMoves
@@ -642,7 +693,10 @@ function Answer({
   onSkip,
   onAnswerQuestion,
   onFiled,
+  canChangeTasks,
+  onTasks,
   onRetry,
+  onSendToActionCenter,
 }: {
   turn: Turn;
   now: number;
@@ -651,8 +705,14 @@ function Answer({
   onSkip: () => Promise<void>;
   onAnswerQuestion: (value: QuestionAnswerValue) => Promise<boolean>;
   onFiled: (fileId: string) => void;
+  /** Its deliverables' Attach to task & mark done (CHAT-09 item 13): Admins and Managers, in their own chat. */
+  canChangeTasks: boolean;
+  /** The run's task strip after such a click. */
+  onTasks: (strip: ChatTaskStrip) => void;
   /** Sends its question again; none while another run works, or on a teammate's chat. */
   onRetry?: () => void;
+  /** Send to Action Center (CHAT-09 item 18): the latest answer, for Admins and Managers. */
+  onSendToActionCenter?: () => void;
 }) {
   const t = useTranslations('chatPage');
   const debug = useChatDebug();
@@ -667,6 +727,7 @@ function Answer({
 
   const cards = (
     <>
+      {run.tasks && <TaskStrip strip={run.tasks} ended={!OPEN.includes(run.status)} />}
       {run.denials.map((denial, i) => (
         <DenialCard
           key={i}
@@ -709,6 +770,7 @@ function Answer({
           step={{ n: run.confirm.n, total: Math.max(run.steps.length, run.confirm.n) }}
           title={run.confirm.action}
           items={run.confirm.target ? [{ title: run.confirm.target }] : undefined}
+          why={run.confirm.why}
           summary={confirmStep?.kind === 'execute' ? run.confirm.target : undefined}
           actionLabel={confirmStep?.kind === 'execute' ? run.confirm.action : undefined}
           canDontAskAgain={run.confirm.canDontAskAgain}
@@ -718,7 +780,9 @@ function Answer({
           }
           onApprove={(answer) => void onApprove(answer.dontAskAgain)}
           onSkip={() => void onSkip()}
-        />
+        >
+          <ProposalDetails confirm={run.confirm} />
+        </ApprovalCard>
       )}
       {turn.runId && run.why.map((why) => <WhyCard key={why.n} runId={turn.runId!} why={why} />)}
       {turn.runId &&
@@ -729,8 +793,13 @@ function Answer({
             // Its place among the filed ones, as the server counts them: one not filed has none.
             n={filedAt[i] ?? 0}
             deliverable={deliverable}
+            canChange={canChangeTasks}
+            onTasks={onTasks}
           />
         ))}
+      {run.sent.map((sent, i) => (
+        <ActionSentCard key={`${sent.actionNo}-${i}`} sent={sent} />
+      ))}
       {run.status === 'paused_cap' && (
         <p className="text-sm text-amber-700 dark:text-amber-400">{t('pausedCap')}</p>
       )}
@@ -753,6 +822,7 @@ function Answer({
             markdown={run.text}
             filed={!!turn.fileId}
             onFiled={onFiled}
+            onSendToActionCenter={onSendToActionCenter}
           />
         ) : undefined
       }

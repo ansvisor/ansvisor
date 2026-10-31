@@ -169,6 +169,9 @@ export type AgentRefusalCode =
   | 'no_brand'
   | 'ai_limit'
   | 'owner_role'
+  | 'action_not_found'
+  | 'action_closed'
+  | 'queue_full'
   | 'failed';
 
 export type AgentRefusal =
@@ -217,6 +220,9 @@ const REFUSAL_STATUS: Record<AgentRefusalCode, number> = {
   no_brand: 409,
   ai_limit: 429,
   owner_role: 409,
+  action_not_found: 404,
+  action_closed: 409,
+  queue_full: 409,
   failed: 500,
 };
 
@@ -240,7 +246,7 @@ const AGENTS_LABEL = { labelKey: 'agents', class: 'write' } as const;
  * the Activity log as an access.denied row (CHAT-20 §4c), as Chat's own
  * denials are.
  */
-async function denied(ctx: AgentContext, { denial, asked }: AgentDenial): Promise<Refused> {
+export async function denied(ctx: AgentContext, { denial, asked }: AgentDenial): Promise<Refused> {
   const answer = buildActionDenial(denial, {
     action: askedT(asked),
     role: ctx.viewer.role,
@@ -905,6 +911,47 @@ export async function listAgents(
   };
 }
 
+/**
+ * The agents the person may run now (Run agent's picker, CHAT-21 §F item
+ * 27): ones they see and may run (§K item 51), active or paused (Run now
+ * starts a paused one too; a draft hasn't passed its activation checks),
+ * with their current version. Newest change first.
+ */
+export async function runnableAgents(ctx: AgentContext): Promise<LoadedAgent[]> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_agents')
+    .select(AGENT_COLUMNS)
+    .eq('organization_id', ctx.actor.organizationId)
+    .in('status', ['active', 'paused'])
+    .order('updated_at', { ascending: false })
+    .limit(AGENT_LIST_MAX);
+  if (error) throw new Error(`Could not read the agents: ${error.message}`);
+  const rows = ((data ?? []) as Record<string, unknown>[]).map(toAgentRow);
+  if (rows.length === 0) return [];
+  const read = await supabaseAdmin
+    .from('chat_agent_versions')
+    .select(VERSION_COLUMNS)
+    .in(
+      'agent_id',
+      rows.map((r) => r.id),
+    )
+    .in('version', [...new Set(rows.map((r) => r.version))]);
+  if (read.error) throw new Error(`Could not read the agents: ${read.error.message}`);
+  const current = new Map(rows.map((r) => [r.id, r.version]));
+  const versions = new Map<string, AgentVersionData>();
+  for (const v of (read.data ?? []) as VersionRow[]) {
+    if (current.get(v.agent_id) === v.version) versions.set(v.agent_id, versionFromRow(v));
+  }
+  return rows
+    .map((row): LoadedAgent => ({ row, version: versions.get(row.id) ?? null }))
+    .filter(
+      (agent) =>
+        agent.version !== null &&
+        canSeeAgent(factsOf(agent), ctx.viewer) &&
+        agentActDenial('run', ctx.viewer, factsOf(agent), ctx.settings) === null,
+    );
+}
+
 /** One agent as its detail shows it (§C), or null when the person can't see it. */
 export async function readAgent(
   ctx: AgentContext,
@@ -1170,7 +1217,8 @@ type AgentSummaryKey =
   | 'agentDeleted'
   | 'agentDuplicated'
   | 'agentTakenOver'
-  | 'agentRunQueued';
+  | 'agentRunQueued'
+  | 'agentRunOnAction';
 
 /**
  * Logs a person's change to an agent (CHAT-21: created, changed, state,

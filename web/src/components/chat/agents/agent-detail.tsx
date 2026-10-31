@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import { AgentAvatar } from '@/components/agentic/agent-avatar';
 import { ListDot } from '@/components/agentic/list-dot';
 import { Button } from '@/components/ui/button';
@@ -34,7 +34,6 @@ import {
   type RunFilter,
 } from '@/lib/chat/agent-view';
 import { cn } from '@/lib/utils';
-import { useChatCrumb } from '../chat-crumb';
 import { AgentDenial, CHIP, StatusLine, liveRunOf } from './agent-parts';
 import { readAgent, readAgentRuns } from './agent-requests';
 import { useAgentWords, type AgentWords } from './agent-words';
@@ -254,8 +253,6 @@ export function AgentDetail({
     void load();
   }, [load]);
 
-  const agent = state.status === 'ready' ? state.agent : null;
-  useChatCrumb(agent?.name ?? null);
   // A fresh clock with every read, so "Today" and "Next run" stay right.
   const now = useMemo(() => nowProp ?? new Date(), [nowProp, state]); // eslint-disable-line react-hooks/exhaustive-deps
   const words = useAgentWords(now, timeZone);
@@ -268,12 +265,12 @@ export function AgentDetail({
       if (button === 'archive') void reloadRuns();
     },
     onRan: () => void load(),
-    onDuplicated: (copy) => router.push(`/dashboard/chat/agents/${copy.id}`),
+    onDuplicated: (copy) => router.push(`/dashboard/agents/${copy.id}`),
     onDeleted: () => {
       // A read still on its way would bring back "isn't available": it is dropped.
       asked.current++;
       setConfirmDelete(false);
-      router.push('/dashboard/chat/agents');
+      router.push('/dashboard/agents');
     },
   });
 
@@ -308,7 +305,7 @@ export function AgentDetail({
           </button>
         ) : (
           <Link
-            href="/dashboard/chat/agents"
+            href="/dashboard/agents"
             data-action="agents.back"
             className="underline underline-offset-2 hover:text-foreground"
           >
@@ -358,6 +355,15 @@ export function AgentDetail({
   return (
     <div className="max-w-[1100px]">
       {actions.denial && <AgentDenial denial={actions.denial} onClose={actions.clearDenial} />}
+
+      <Link
+        href="/dashboard/agents"
+        data-action="agents.back"
+        className="mb-2 inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft aria-hidden className="size-3.5" />
+        {tDetail('backToAgents')}
+      </Link>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <AgentAvatar
@@ -423,7 +429,7 @@ export function AgentDetail({
           )}
           {can.edit && (
             <Link
-              href={`/dashboard/chat/agents/${a.id}/edit`}
+              href={`/dashboard/agents/${a.id}/edit`}
               data-action="agent.edit"
               className={buttonVariants({ variant: 'outline' })}
             >

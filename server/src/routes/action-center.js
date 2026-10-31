@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
-import { assertBrandAccess } from '../lib/access.js';
+import { MANAGER_ROLES, assertBrandAccess, assertRole } from '../lib/access.js';
 import { rescoreActionsForSignal } from '../lib/action-center/priority-data.js';
 import { PlanLimitError, requireFeature } from '../lib/plan-guard.js';
 import { loadTask, sendTaskToContent, sendTaskToWebhook } from '../lib/action-center/task-send.js';
@@ -22,6 +22,13 @@ import {
   sendProductActions,
 } from '../lib/action-center/from-products.js';
 import { sendAuditToActionCenter } from '../lib/action-center/from-audit.js';
+import {
+  EXECUTION_MODES,
+  chatEntitiesSchema,
+  chatProposalSchema,
+  findCoveringActions,
+  sendChatAction,
+} from '../lib/action-center/from-chat.js';
 import { runTaskCheck } from '../lib/action-center/task-checks.js';
 import { taskCheckLimiter } from '../middleware/rate-limiter.js';
 
@@ -439,6 +446,96 @@ router.post('/products', requireFeature('shopping_analytics'), async (req, res) 
       error: 'Failed to send to the Action Center',
       details: error.message,
       ...(error.code ? { code: error.code } : {}),
+    });
+  }
+});
+
+/** Who may send a finding from Chat: the roles that write Action Center (CHAT-20 §9 row 43). */
+const CHAT_ACTION_REFUSAL = 'Only admins and managers can send findings to the Action Center.';
+
+const chatCheckSchema = z.object({
+  // guid, not uuid: seeded ids aren't RFC 4122 versions.
+  brandId: z.guid(),
+  entities: chatEntitiesSchema,
+  category: chatProposalSchema.shape.category.optional(),
+});
+
+/**
+ * POST /api/action-center/chat-actions/check
+ * Body: { brandId, entities: { prompts, pages, competitors, platforms }, category? }
+ *
+ * Chat's duplicate check (CHAT-09 §E 18a, Data and API notes): the brand's
+ * active actions that already cover these prompts, pages or competitors,
+ * the closest first, before Chat shows a Send to Action Center card.
+ * Reads only.
+ */
+router.post('/chat-actions/check', async (req, res) => {
+  try {
+    const parsed = chatCheckSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res
+        .status(400)
+        .json({ error: 'Invalid request', details: parsed.error.message, code: 'invalid' });
+    }
+    const { brandId, entities, category } = parsed.data;
+    await assertBrandAccess(brandId, req.user.id);
+    await assertRole(req.user.id, MANAGER_ROLES, CHAT_ACTION_REFUSAL);
+    const { covering } = await findCoveringActions(brandId, entities, { category });
+    return res.json({ covering });
+  } catch (error) {
+    const status = error.status || 500;
+    if (status >= 500) req.log.error({ err: error }, 'chat action check error');
+    return res.status(status).json({
+      error: 'Failed to check the Action Center',
+      details: error.message,
+      ...(error.code ? { code: error.code } : {}),
+    });
+  }
+});
+
+const chatActionSchema = z.object({
+  brandId: z.guid(),
+  proposal: chatProposalSchema,
+  conversationId: z.guid().nullable().optional(),
+  runId: z.guid().nullable().optional(),
+  // Read again on the server (from-chat.js verifiedPlace): a caller's word is never recorded.
+  executionMode: z.enum(EXECUTION_MODES).nullable().default(null),
+  idempotencyKey: z.string().trim().min(8).max(200),
+  createAnyway: z.boolean().default(false),
+});
+
+/**
+ * POST /api/action-center/chat-actions
+ * Body: { brandId, proposal, conversationId?, runId?, executionMode?, idempotencyKey, createAnyway? }
+ *
+ * Send to Action Center from Chat (CHAT-09 §E, CHAT-20 §12): the action the
+ * person approved, with source `chat`, frozen targets and baseline, and the
+ * engine's Priority Score. An active action that covers it answers 409
+ * `duplicate` with that action and whether Create anyway may still go
+ * (entities differ); the same idempotency key again returns what it made.
+ */
+router.post('/chat-actions', async (req, res) => {
+  try {
+    const parsed = chatActionSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res
+        .status(400)
+        .json({ error: 'Invalid request', details: parsed.error.message, code: 'invalid' });
+    }
+    const { brandId, ...opts } = parsed.data;
+    await assertBrandAccess(brandId, req.user.id);
+    await assertRole(req.user.id, MANAGER_ROLES, CHAT_ACTION_REFUSAL);
+    const result = await sendChatAction(brandId, { ...opts, userId: req.user.id });
+    return res.status(result.created ? 201 : 200).json(result);
+  } catch (error) {
+    const status = error.status || 500;
+    if (status >= 500) req.log.error({ err: error }, 'chat action error');
+    return res.status(status).json({
+      error: 'Failed to send to the Action Center',
+      details: error.message,
+      ...(error.code ? { code: error.code } : {}),
+      // duplicate: the action that covers it, and whether Create anyway may go.
+      ...(error.extra ?? {}),
     });
   }
 });

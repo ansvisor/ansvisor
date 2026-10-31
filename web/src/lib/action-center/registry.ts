@@ -124,7 +124,9 @@ export type ActionKind =
   | 'shopping_category'
   // Raised by the catalog check for a live page linking products that no
   // longer sell (shopping path, part 7), and closed by it once fixed.
-  | 'shopping_links';
+  | 'shopping_links'
+  // Sent by a person from Chat: a finding and its tasks, as approved (CHAT-09 §E).
+  | 'chat_finding';
 
 export type TaskStatus =
   | 'todo'
@@ -300,6 +302,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'shopping_product',
   'shopping_category',
   'shopping_links',
+  'chat_finding',
 ];
 
 /**

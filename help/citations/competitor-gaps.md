@@ -5,10 +5,10 @@ keywords: [competitor gaps, gap list, by competitor, outreach targets, strength,
 synonyms: [sources citing competitors, citation gaps, where competitors get cited, outreach list, sites that skip us]
 plan: all
 updated: 2026-10-29
-last_checked: 2026-10-29
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/citations.mdx, docs/guides/competitors.mdx]
 ---
 **Competitor Gaps** is a tab of the **Top Sources** card on the **Citations** page. It lists the third-party domains that AI engines cite when they name a competitor and not you. These are outreach targets: sites AI engines already trust for your prompts, where a mention or a citation of your own is missing.
