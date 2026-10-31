@@ -55,7 +55,7 @@ export const SITE_SIGNALS = [
   'faq-schema',
 ];
 /** ChatGPT Shopping's model isn't comparable to an answer (#155): left out, as Insights leaves it. */
-const LEFT_OUT_PLATFORMS = new Set(['chatgpt-shopping']);
+export const LEFT_OUT_PLATFORMS = new Set(['chatgpt-shopping']);
 
 export interface ExplainChangeParams {
   brandId: string;

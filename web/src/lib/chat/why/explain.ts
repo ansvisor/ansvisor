@@ -282,7 +282,7 @@ function valueOf(metric: WhyMetric, parts: { num: number; den: number }[]): numb
  * be measured. A rate: the pooled rate of the two periods, p(1−p)(1/Na + 1/Nb).
  * The average position: the cells' spread around the mean, with enough cells.
  */
-function changeSe(
+export function changeSe(
   metric: WhyMetric,
   a: { num: number; den: number }[],
   b: { num: number; den: number }[],

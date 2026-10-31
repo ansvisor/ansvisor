@@ -4242,7 +4242,20 @@
       "dueTasks": "{count, plural, one {# Action Center task is due this week} other {# Action Center tasks are due this week}}",
       "completeWithChat": "Complete with Chat",
       "completeTasksMessage": "Complete this week's Action Center tasks.",
-      "startFailed": "Couldn't start that. Try again."
+      "startFailed": "Couldn't start that. Try again.",
+      "since": {
+        "left": "Since you left",
+        "oneWin": "One win",
+        "when": "{day} → today",
+        "lastVisit": "Your last visit was {date}",
+        "citations": "{engine} citations",
+        "down": "down {count}",
+        "up": "up {count}",
+        "why": "Why?",
+        "whichOnes": "Which ones?",
+        "whyMessage": "Why did our {engine} citations drop since {day}?",
+        "winMessage": "Which {engine} citations did we win since {day}?"
+      }
     },
     "inbox": {
       "title": "Inbox",

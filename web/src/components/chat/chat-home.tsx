@@ -2,12 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link, useRouter } from '@/i18n/navigation';
+import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Button } from '@/components/ui/button';
-import { countDueActions } from '@/lib/actions/chat-home';
+import { countDueActions, readSinceYouLeft } from '@/lib/actions/chat-home';
 import { dayPartOf, endOfWeek } from '@/lib/chat/home';
+import type { SinceMove, SinceYouLeft } from '@/lib/chat/since';
+import { platformName } from '@/lib/signals/names';
+import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useChatList } from './chat-list-provider';
 import { inboxItems, useNow } from './chat-inbox';
@@ -27,13 +32,102 @@ export interface ChatHomeViewProps {
   dueTasks: number | null;
   onCompleteTasks: () => void;
   starting: boolean;
+  /** "Since you left": null until read, or with nothing to show. */
+  since?: SinceYouLeft | null;
+  /** Asks Chat in a new chat: the strip's Why? and Which ones?. */
+  onAsk?: (message: string) => void;
+}
+
+const shortDay = (date: Date, utc = false) =>
+  date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(utc ? { timeZone: 'UTC' } : {}),
+  });
+
+/**
+ * One block of "Since you left" (CHAT-22 §1, mockup `.since`): the engine's
+ * citations and how far they moved since the first day counted, with the
+ * question that asks Chat why (a drop) or which ones (a win).
+ */
+function SinceBlock({
+  label,
+  kind,
+  move,
+  since,
+  starting,
+  onAsk,
+}: {
+  label: string;
+  kind: 'drop' | 'win';
+  move: SinceMove;
+  since: SinceYouLeft;
+  starting: boolean;
+  onAsk: (message: string) => void;
+}) {
+  const t = useTranslations('chatShell.home.since');
+  const engine = platformName(move.engine);
+  const day = shortDay(new Date(`${since.from}T00:00:00Z`), true);
+  const count = Math.abs(move.now - move.before);
+  const Arrow = kind === 'drop' ? ArrowDownRight : ArrowUpRight;
+  const lastVisit = new Date(since.seenAt).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+  return (
+    <div className="min-w-0 rounded-[14px] border bg-card px-3.5 py-3 shadow-sm">
+      <small className="mb-1 flex items-baseline gap-1.5 text-[11px] tracking-[.4px] text-muted-foreground uppercase">
+        {label}
+        <span
+          className="ml-auto tracking-normal normal-case"
+          title={t('lastVisit', { date: lastVisit })}
+        >
+          {t('when', { day })}
+        </span>
+      </small>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="inline-flex min-w-0 items-center gap-1">
+          <AIProviderAvatar
+            provider={resolveAIProvider(move.engine)}
+            plain
+            className="h-3.5 w-3.5"
+          />
+          {t('citations', { engine })}
+        </span>
+        <span
+          className={cn(
+            'inline-flex items-center gap-[3px] rounded-full py-1 pr-[9px] pl-1.5 text-[13px] leading-none font-semibold tabular-nums',
+            kind === 'drop'
+              ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400'
+              : 'bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-400',
+          )}
+        >
+          <Arrow aria-hidden="true" className="h-[13px] w-[13px] shrink-0" strokeWidth={2.25} />
+          <span aria-hidden="true">{count}</span>
+          <span className="sr-only">{t(kind === 'drop' ? 'down' : 'up', { count })}</span>
+        </span>
+        <button
+          type="button"
+          data-action={kind === 'drop' ? 'why.open' : 'win.open'}
+          disabled={starting}
+          onClick={() => onAsk(t(kind === 'drop' ? 'whyMessage' : 'winMessage', { engine, day }))}
+          className="rounded-[20px] border border-foreground px-[9px] py-px text-[11.5px] font-medium text-foreground disabled:opacity-50"
+        >
+          {t(kind === 'drop' ? 'why' : 'whichOnes')}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**
  * Chat Home's top (CHAT-01 items 10, 12; mockup #s-home): "Good afternoon,
  * Alex" by the person's own clock; one line under it — what needs them, as
- * a link to the Inbox, or "All caught up."; then the Action Center line when
- * tasks are due this week, with Complete with Chat. The composer follows.
+ * a link to the Inbox, or "All caught up."; "Since you left" (CHAT-22 §1)
+ * when citations moved since the person last left Home; then the Action
+ * Center line when tasks are due this week, with Complete with Chat. The
+ * composer follows.
  */
 export function ChatHomeView({
   firstName,
@@ -43,9 +137,20 @@ export function ChatHomeView({
   dueTasks,
   onCompleteTasks,
   starting,
+  since = null,
+  onAsk = () => undefined,
 }: ChatHomeViewProps) {
   const t = useTranslations('chatShell.home');
   const part = now ? dayPartOf(now.getHours()) : null;
+  // The first block says "Since you left"; a win beside a drop is "One win".
+  const blocks = since
+    ? (
+        [
+          ['drop', since.drop],
+          ['win', since.win],
+        ] as const
+      ).filter((block): block is ['drop' | 'win', SinceMove] => block[1] !== null)
+    : [];
   return (
     <div className="mx-auto w-full max-w-[720px] px-5">
       <div className="mt-[34px] mb-[18px] text-center">
@@ -69,6 +174,26 @@ export function ChatHomeView({
           )}
         </p>
       </div>
+      {since && blocks.length > 0 && (
+        <div
+          className={cn(
+            'mb-3 grid gap-2',
+            blocks.length > 1 && 'grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]',
+          )}
+        >
+          {blocks.map(([kind, move], i) => (
+            <SinceBlock
+              key={kind}
+              label={t(i === 0 ? 'since.left' : 'since.oneWin')}
+              kind={kind}
+              move={move}
+              since={since}
+              starting={starting}
+              onAsk={onAsk}
+            />
+          ))}
+        </div>
+      )}
       {dueTasks !== null && dueTasks > 0 && (
         <p className="mb-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[13px] text-muted-foreground">
           <span>{t('dueTasks', { count: dueTasks })}</span>
@@ -88,9 +213,38 @@ export function ChatHomeView({
 }
 
 /**
+ * A leave of Home is kept a moment later, so React's dev remount, or coming
+ * straight back, doesn't count as one.
+ */
+let leaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Keeps when the person leaves Chat Home (chat_user_prefs.home_seen_at):
+ * "Since you left" counts from it on their next visit, on any device. Sent
+ * with keepalive, so a closing or reloading page still keeps it. A failure
+ * only means the next visit counts from an earlier day.
+ */
+function useHomeSeen() {
+  useEffect(() => {
+    if (leaveTimer) clearTimeout(leaveTimer);
+    leaveTimer = null;
+    const leave = () =>
+      void fetch('/api/chat/home-seen', { method: 'POST', keepalive: true }).catch(() => undefined);
+    window.addEventListener('pagehide', leave);
+    return () => {
+      window.removeEventListener('pagehide', leave);
+      leaveTimer = setTimeout(() => {
+        leaveTimer = null;
+        leave();
+      }, 1000);
+    };
+  }, []);
+}
+
+/**
  * Chat Home's top with the person's chats, the active brand's due tasks and
- * Complete with Chat: it asks Chat to complete this week's Action Center
- * tasks in a new chat, then opens it while it works.
+ * "Since you left". Complete with Chat, Why? and Which ones? ask Chat in a
+ * new chat, then open it while it works.
  */
 export function ChatHome({ firstName }: { firstName: string | null }) {
   const t = useTranslations('chatShell.home');
@@ -100,6 +254,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
   const { chats } = useChatList();
   const { openUpgrade } = useUpgradeGate();
   const [due, setDue] = useState<{ brandId: string; count: number } | null>(null);
+  const [since, setSince] = useState<{ brandId: string; since: SinceYouLeft } | null>(null);
   const [starting, setStarting] = useState(false);
   const items = useMemo(() => inboxItems(chats), [chats]);
   const needsYou = items.filter((c) => c.state === 'needsYou').length;
@@ -116,14 +271,27 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
     };
   }, [brandId, weekEnd]);
 
-  async function completeTasks() {
+  useEffect(() => {
+    if (!brandId) return;
+    let current = true;
+    void readSinceYouLeft(brandId).then((result) => {
+      if (current) setSince(result.ok && result.since ? { brandId, since: result.since } : null);
+    });
+    return () => {
+      current = false;
+    };
+  }, [brandId]);
+
+  useHomeSeen();
+
+  async function startChat(message: string) {
     if (starting) return;
     setStarting(true);
     const res = await fetch('/api/chat/runs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: t('completeTasksMessage'),
+        message,
         brandId: brandId ?? undefined,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }),
@@ -151,8 +319,10 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
       inbox={items.length}
       needsYou={needsYou}
       dueTasks={due && due.brandId === brandId ? due.count : null}
-      onCompleteTasks={() => void completeTasks()}
+      onCompleteTasks={() => void startChat(t('completeTasksMessage'))}
       starting={starting}
+      since={since && since.brandId === brandId ? since.since : null}
+      onAsk={(message) => void startChat(message)}
     />
   );
 }

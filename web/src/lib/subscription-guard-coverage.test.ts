@@ -67,6 +67,7 @@ const OPEN_ACTIONS: Record<string, string> = {
   'chat-uploads.ts:removeChatUpload': "takes the person's own draft file away, never adds one",
   'chat-prefs.ts:saveChatPanelSize':
     "the person's own Chat layout (panel size), nothing that costs",
+  'chat-prefs.ts:saveHomeSeen': "the person's own record of leaving Chat Home, nothing that costs",
   'chat-access-requests.ts:requestAccess':
     'asking an Admin costs nothing, and a read-only workspace is one of the things to ask about',
   'chat-access-requests.ts:withdrawAccessRequest': 'takes back a request, never gives access',
@@ -118,6 +119,7 @@ const OPEN_ROUTES: Record<string, string> = {
   'chat/conversations/[id]:DELETE':
     'deleting your own chat starts no cost, as the old Agent chats (#1613)',
   'chat/conversations/[id]/read:POST': 'marking your own chat read starts no cost',
+  'chat/home-seen:POST': "the person's own record of leaving Chat Home starts no cost",
   'chat/conversations/[id]/restore:POST': 'undoing a delete starts no cost',
   'chat/runs:POST': 'the engine refuses a read-only workspace with the 402 body (startChatRun)',
   'chat/runs/[id]/approve:POST': 'the engine answers 402 (prepareResume), but for Ask your Admin',

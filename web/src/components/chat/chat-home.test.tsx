@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { ChatListItem } from '@/lib/chat/conversations';
+import type { SinceYouLeft } from '@/lib/chat/since';
 
 /**
  * Chat Home and the Inbox (CHAT-01 items 10–12; mockup #s-home, #s-inbox):
@@ -28,9 +29,10 @@ vi.mock('@/components/providers/upgrade-gate', () => ({
   useUpgradeGate: () => ({ isLocked: false, openUpgrade: vi.fn() }),
 }));
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
-const due = vi.hoisted(() => ({ count: 3 }));
+const due = vi.hoisted(() => ({ count: 3, since: null as SinceYouLeft | null }));
 vi.mock('@/lib/actions/chat-home', () => ({
   countDueActions: vi.fn(async () => ({ ok: true, count: due.count })),
+  readSinceYouLeft: vi.fn(async () => ({ ok: true, since: due.since })),
 }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (pick: (s: { activeBrandId: string }) => unknown) =>
@@ -82,6 +84,7 @@ beforeEach(() => {
   nav.push.mockClear();
   list.chats = [];
   due.count = 3;
+  due.since = null;
 });
 
 afterEach(() => {
@@ -158,6 +161,74 @@ describe('ChatHomeView', () => {
   });
 });
 
+const SINCE: SinceYouLeft = {
+  from: '2026-10-19',
+  seenAt: '2026-10-19T15:20:00.000Z',
+  drop: { engine: 'google-aio', before: 60, now: 40 },
+  win: { engine: 'chatgpt-web', before: 31, now: 45 },
+};
+
+describe('Since you left', () => {
+  it('shows the biggest drop with Why?, then one win with Which ones?', async () => {
+    await render(view({ since: SINCE }));
+    expect(text()).toContain('Since you left');
+    expect(text()).toContain('Oct 19 → today');
+    expect(text()).toContain('Google AI Overviews citations');
+    expect(text()).toContain('down 20');
+    expect(text()).toContain('One win');
+    expect(text()).toContain('ChatGPT citations');
+    expect(text()).toContain('up 14');
+    expect(host.querySelector('[data-action="why.open"]')?.textContent).toBe('Why?');
+    expect(host.querySelector('[data-action="win.open"]')?.textContent).toBe('Which ones?');
+  });
+
+  it('says "Since you left" over a win alone, and nothing without a move', async () => {
+    await render(view({ since: { ...SINCE, drop: null } }));
+    expect(text()).toContain('Since you left');
+    expect(text()).not.toContain('One win');
+    await render(view({ since: null }));
+    expect(text()).not.toContain('Since you left');
+  });
+
+  it('asks Chat why, or which ones, in the words of the strip', async () => {
+    const onAsk = vi.fn();
+    await render(view({ since: SINCE, onAsk }));
+    await act(async () => (host.querySelector('[data-action="why.open"]') as HTMLElement).click());
+    await act(async () => (host.querySelector('[data-action="win.open"]') as HTMLElement).click());
+    expect(onAsk.mock.calls).toEqual([
+      ['Why did our Google AI Overviews citations drop since Oct 19?'],
+      ['Which ChatGPT citations did we win since Oct 19?'],
+    ]);
+  });
+
+  it('keeps the person’s leave a moment after Home goes, not on a quick return', async () => {
+    const sent = vi.fn(async () => new Response('{"ok":true}'));
+    globalThis.fetch = sent as unknown as typeof fetch;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await render(<ChatHome firstName="Alex" />);
+      act(() => root.unmount());
+      root = createRoot(host);
+      await render(<ChatHome firstName="Alex" />);
+      vi.advanceTimersByTime(1500);
+      expect(sent).not.toHaveBeenCalled();
+      act(() => root.unmount());
+      root = createRoot(host);
+      vi.advanceTimersByTime(1000);
+      expect(sent).toHaveBeenCalledWith('/api/chat/home-seen', {
+        method: 'POST',
+        keepalive: true,
+      });
+      // A page that closes on Home keeps it too.
+      await render(<ChatHome firstName="Alex" />);
+      window.dispatchEvent(new Event('pagehide'));
+      expect(sent).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('ChatHome', () => {
   it('starts Complete with Chat as a new chat and opens it while it works', async () => {
     const calls: { url: string; body: unknown }[] = [];
@@ -182,6 +253,25 @@ describe('ChatHome', () => {
       },
     });
     expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/cccccccc-0000-4000-8000-000000000001');
+  });
+
+  it('asks Why? from "Since you left" in a new chat', async () => {
+    due.since = SINCE;
+    const bodies: unknown[] = [];
+    globalThis.fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response('', {
+        status: 200,
+        headers: { 'x-chat-conversation': 'cccccccc-0000-4000-8000-000000000002' },
+      });
+    }) as unknown as typeof fetch;
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    await act(async () => (host.querySelector('[data-action="why.open"]') as HTMLElement).click());
+    expect(bodies[0]).toMatchObject({
+      message: 'Why did our Google AI Overviews citations drop since Oct 19?',
+    });
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/cccccccc-0000-4000-8000-000000000002');
   });
 });
 
