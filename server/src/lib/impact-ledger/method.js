@@ -37,7 +37,9 @@
  *     shows a direction only), Improved, No meaningful change, Declined, Not
  *     measurable. Judged on the unrounded effect and p; stored rounded. A
  *     verdict and each confidence also need target prompts, not only cells
- *     (one prompt on ten engines is one piece of evidence ten times).
+ *     (one prompt on ten engines is one piece of evidence ten times): from
+ *     day 14, fewer than VERDICT_TARGET_PROMPTS is Not measurable
+ *     (too_few_prompts), whatever the cells; day 7 still shows a direction.
  */
 
 /** The checkpoints, in order (Addendum 2 F). */
@@ -64,7 +66,11 @@ export const MIN_CONTROL_CELLS = 10;
 /** Target cells High, and Medium, confidence need. */
 export const HIGH_TARGET_CELLS = 10;
 export const MEDIUM_TARGET_CELLS = 5;
-/** Target prompts a verdict, Medium and High confidence need (beside the cells). */
+/**
+ * Target prompts a verdict, Medium and High confidence need (beside the
+ * cells). Fewer than VERDICT_TARGET_PROMPTS from day 14: Not measurable
+ * (too_few_prompts).
+ */
 export const VERDICT_TARGET_PROMPTS = 3;
 export const MEDIUM_TARGET_PROMPTS = 5;
 export const HIGH_TARGET_PROMPTS = 10;
@@ -546,12 +552,11 @@ export function measureCells({ seed, primary, targetIds, pre, post, excluded, pr
 // ─── Outcome ────────────────────────────────────────────────────────────────
 
 /**
- * A verdict from the primary metric's unrounded effect and p (item 10),
- * with VERDICT_TARGET_PROMPTS target prompts at least: fewer can't tell a
- * change from one prompt's swing.
+ * A verdict from the primary metric's unrounded effect and p (item 10), for
+ * a checkpoint with VERDICT_TARGET_PROMPTS target prompts at least
+ * (checkpointEntry makes one with fewer Not measurable).
  */
-export function verdictOf({ effect, p, targetPrompts }) {
-  if (targetPrompts < VERDICT_TARGET_PROMPTS) return 'no_meaningful_change';
+export function verdictOf({ effect, p }) {
   if (effect >= MIN_EFFECT_PTS && p < P_VERDICT) return 'improved';
   if (effect <= -MIN_EFFECT_PTS && p < P_VERDICT) return 'declined';
   return 'no_meaningful_change';
@@ -599,7 +604,10 @@ export function lastingOf(entries, d90Outcome) {
 /**
  * A checkpoint's entry in checkpoints_json from what measureCells (or the
  * job's earlier checks) said: day 7 is Pending with a direction only, from
- * day 14 a verdict with its confidence, or Not measurable with the reason.
+ * day 14 a verdict with its confidence, or Not measurable with the reason:
+ * the one measureCells gave, or too_few_prompts with fewer than
+ * VERDICT_TARGET_PROMPTS target prompts (one prompt's swing isn't a
+ * change's effect, however many engines it is on).
  * Each keeps the primary metric's before, after and controls, so an earlier
  * checkpoint's row can be shown beside the latest.
  */
@@ -633,12 +641,15 @@ export function checkpointEntry({ cp, window, result, earlier, measuredAt }) {
       not_measurable_reason: result.reason ?? null,
     };
   }
-  if (result.reason) {
+  const reason =
+    result.reason ??
+    (result.judged.targetPrompts < VERDICT_TARGET_PROMPTS ? 'too_few_prompts' : null);
+  if (reason) {
     const entry = {
       ...base,
       outcome: 'not_measurable',
       confidence: null,
-      not_measurable_reason: result.reason,
+      not_measurable_reason: reason,
     };
     return cp.key === 'd90' ? { ...entry, lasting: lastingOf(earlier, 'not_measurable') } : entry;
   }

@@ -376,6 +376,29 @@ describe('not measurable', () => {
     });
   });
 
+  it('says too_few_prompts from day 14 with fewer than 3 target prompts, day 7 still Pending', async () => {
+    const db = fakeDb(
+      world({
+        impact_measurements: [measurement('m1', 's1', { targets: targetsOf(['t0', 't1']) })],
+      }),
+    );
+    const stats = await runImpactLedger({ db, now: D14 });
+    expect(stats.notMeasurable).toBe(1);
+    const row = db.tables.impact_measurements[0];
+    expect(row).toMatchObject({
+      outcome: 'not_measurable',
+      confidence: null,
+      checkpoint: 'd14',
+      not_measurable_reason: 'too_few_prompts',
+    });
+    expect(row.checkpoints_json[0]).toMatchObject({
+      checkpoint: 'd7',
+      outcome: 'pending',
+      direction: 'up',
+    });
+    expect(db.tables.chat_agent_runs[0]).toMatchObject({ outcome: 'not_measurable' });
+  });
+
   it('says too_few_runs without tracking data in the window', async () => {
     const db = fakeDb(world({ insights_prompt_daily: [] }));
     await runImpactLedger({ db, now: D14 });

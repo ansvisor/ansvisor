@@ -349,7 +349,7 @@ describe('effect, p-value and outcome', () => {
     expect(verdictOf(result.judged)).toBe('improved');
   });
 
-  it('gives no verdict, no High and no interval from one prompt, however many engines it is on', () => {
+  it('says too_few_prompts from day 14 with one prompt, however many engines it is on', () => {
     const engines = Array.from({ length: 10 }, (_, i) => ({ platform: `engine-${i}` }));
     const controls = Array.from({ length: 40 }, (_, i) => `c${i}`);
     const result = measure(
@@ -362,9 +362,44 @@ describe('effect, p-value and outcome', () => {
     );
     expect(result.judged).toMatchObject({ targetCells: 10, targetPrompts: 1 });
     expect(result.judged.p).toBeLessThan(0.05);
-    expect(verdictOf(result.judged)).toBe('no_meaningful_change');
     expect(confidenceOf(result.judged)).toBe('low');
     expect(result.metrics[0]).toMatchObject({ interval_low: null, interval_high: null });
+    const window = checkpointWindow(SHIPPED, 14);
+    const entry = (cp) =>
+      checkpointEntry({ cp, window, result, earlier: [], measuredAt: '2026-10-16T07:53:00Z' });
+    // Day 7 still shows its direction; from day 14 there is no verdict to give.
+    expect(entry(CHECKPOINTS[0])).toMatchObject({
+      outcome: 'pending',
+      direction: 'up',
+      not_measurable_reason: null,
+    });
+    expect(entry(CHECKPOINTS[1])).toMatchObject({
+      outcome: 'not_measurable',
+      confidence: null,
+      not_measurable_reason: 'too_few_prompts',
+      target_cells: 10,
+      target_prompts: 1,
+    });
+  });
+
+  it('gives a verdict from three target prompts on', () => {
+    const three = targetIds.slice(0, 3);
+    const result = measure(
+      [
+        ...three.map((id, i) => [id, [4, 11 + (i % 2)]]),
+        ...controlIds.map((id, i) => [id, [4, 4 + (i % 3)]]),
+      ],
+      three,
+    );
+    expect(result.judged.targetPrompts).toBe(3);
+    const entry = checkpointEntry({
+      cp: CHECKPOINTS[1],
+      window: checkpointWindow(SHIPPED, 14),
+      result,
+      earlier: [],
+      measuredAt: '2026-10-16T07:53:00Z',
+    });
+    expect(entry).toMatchObject({ outcome: 'improved', confidence: 'low' });
   });
 
   it('is the same result every time for the same rows (seeded)', () => {
@@ -383,13 +418,11 @@ describe('effect, p-value and outcome', () => {
   });
 
   it('judges the unrounded effect, with enough prompts, and sets confidence by cells and prompts', () => {
-    const enough = { p: 0.01, targetPrompts: 10 };
     // 2.96 is stored as 3.0, but isn't the minimum meaningful change.
-    expect(verdictOf({ ...enough, effect: 2.96 })).toBe('no_meaningful_change');
-    expect(verdictOf({ ...enough, effect: 3 })).toBe('improved');
-    expect(verdictOf({ effect: 8, p: 0.2, targetPrompts: 10 })).toBe('no_meaningful_change');
-    expect(verdictOf({ effect: -3, p: 0.1, targetPrompts: 3 })).toBe('declined');
-    expect(verdictOf({ effect: 20, p: 0.01, targetPrompts: 2 })).toBe('no_meaningful_change');
+    expect(verdictOf({ effect: 2.96, p: 0.01 })).toBe('no_meaningful_change');
+    expect(verdictOf({ effect: 3, p: 0.01 })).toBe('improved');
+    expect(verdictOf({ effect: 8, p: 0.2 })).toBe('no_meaningful_change');
+    expect(verdictOf({ effect: -3, p: 0.1 })).toBe('declined');
     expect(confidenceOf({ p: 0.01, targetCells: 10, targetPrompts: 10 })).toBe('high');
     expect(confidenceOf({ p: 0.01, targetCells: 9, targetPrompts: 10 })).toBe('medium');
     expect(confidenceOf({ p: 0.01, targetCells: 30, targetPrompts: 9 })).toBe('medium');
