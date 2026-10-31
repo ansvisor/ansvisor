@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import messages from '../../../messages/en.json';
 import { taskText } from '@/lib/action-center/display';
 import { ACTION_CATEGORIES, type ActionCategory } from '@/lib/action-center/registry';
+import { draftMethodForTask } from '@/lib/content/action-drafts';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { ChatTaskRow, ChatTaskStatus, ChatTaskStrip } from './events';
 
@@ -247,7 +248,7 @@ const STATUSES: readonly ChatTaskStatus[] = ['queued', 'writing', 'ready_for_rev
  * key's words in en.json. A key en.json doesn't word gives none, never the
  * key itself: the strip then says "An Action Center task".
  */
-function titleOf(task: Pick<TaskRow, 'task_key' | 'title' | 'title_params'>): string {
+export function titleOfTask(task: Pick<TaskRow, 'task_key' | 'title' | 'title_params'>): string {
   if (
     !task.title?.trim() &&
     task.task_key &&
@@ -311,7 +312,7 @@ export async function readStrips(
     const due = task.actions?.due_date ?? null;
     const row: ChatTaskRow = {
       at: 0,
-      title: titleOf(task),
+      title: titleOfTask(task),
       priority:
         typeof task.actions?.priority_score === 'number'
           ? Math.round(task.actions.priority_score)
@@ -332,4 +333,115 @@ export async function readStrips(
     strips.set(state.run_id, strip);
   }
   return strips;
+}
+
+// ─── Deliverables and their tasks (CHAT-09 items 12–16, W2-12) ──────────────
+
+/** A deliverable's task, as its card reads it: its words, and whether Action Center has it done. */
+export interface DeliverableTask {
+  title: string;
+  state: 'open' | 'done';
+}
+
+const taskOf = (task: Pick<TaskRow, 'task_key' | 'title' | 'title_params' | 'status'>) => ({
+  title: titleOfTask(task),
+  state: task.status === 'completed' ? ('done' as const) : ('open' as const),
+});
+
+/**
+ * The task a deliverable a /tasks run filed is for (CHAT-09 item 12), kept as
+ * chat_task_state.file_id: one of the strip's tasks this run is writing, of
+ * the action it opened last (get_action). Only when that is certain: the
+ * one such task, or, for a page draft, the one with a draft to write; else
+ * none, and the person picks with Attach only. Its task, or null.
+ */
+export async function linkDeliverable(
+  db: Db,
+  conversationId: string,
+  runId: string,
+  actionId: string,
+  fileId: string,
+  isDraft: boolean,
+): Promise<DeliverableTask | null> {
+  const { data: rows, error } = await supabaseAdmin
+    .from('chat_task_state')
+    .select('action_task_id')
+    .eq('conversation_id', conversationId)
+    .eq('run_id', runId)
+    .eq('chat_status', 'writing')
+    .is('file_id', null);
+  if (error) throw new Error(error.message);
+  const ids = ((rows ?? []) as { action_task_id: string }[]).map((row) => row.action_task_id);
+  if (ids.length === 0) return null;
+  const { data: tasks, error: tasksError } = await db
+    .from('action_tasks')
+    .select('id, task_key, title, title_params, status')
+    .eq('action_id', actionId)
+    .in('id', ids);
+  if (tasksError) throw new Error(tasksError.message);
+  let candidates = (tasks ?? []) as (TaskRow & { id: string })[];
+  if (candidates.length > 1 && isDraft) {
+    candidates = candidates.filter((task) => draftMethodForTask(task.task_key) !== null);
+  }
+  if (candidates.length !== 1) return null;
+  const [task] = candidates;
+  const { error: linkError } = await supabaseAdmin
+    .from('chat_task_state')
+    .update({ file_id: fileId })
+    .eq('conversation_id', conversationId)
+    .eq('action_task_id', task.id)
+    .is('file_id', null);
+  if (linkError) throw new Error(linkError.message);
+  return taskOf(task);
+}
+
+/**
+ * The tasks of a chat's deliverables, by file, as their cards show them
+ * after a reload: the task its run drafted it for (chat_task_state.file_id),
+ * else the one task it was attached to. Read through `db`: the person's
+ * session, so only the tasks they may see.
+ */
+export async function readDeliverableTasks(
+  db: Db,
+  conversationId: string,
+  fileIds: readonly string[],
+): Promise<Map<string, DeliverableTask>> {
+  const out = new Map<string, DeliverableTask>();
+  if (fileIds.length === 0) return out;
+  const [states, links] = await Promise.all([
+    db
+      .from('chat_task_state')
+      .select('action_task_id, file_id')
+      .eq('conversation_id', conversationId)
+      .in('file_id', [...fileIds]),
+    db
+      .from('chat_file_task_links')
+      .select('action_task_id, file_id')
+      .in('file_id', [...fileIds]),
+  ]);
+  if (states.error) throw new Error(states.error.message);
+  if (links.error) throw new Error(links.error.message);
+  const taskOfFile = new Map<string, string>();
+  const linked = new Map<string, string[]>();
+  for (const row of (links.data ?? []) as { action_task_id: string; file_id: string }[]) {
+    linked.set(row.file_id, [...(linked.get(row.file_id) ?? []), row.action_task_id]);
+  }
+  for (const [fileId, taskIds] of linked)
+    if (taskIds.length === 1) taskOfFile.set(fileId, taskIds[0]);
+  // What the run drafted it for comes first.
+  for (const row of (states.data ?? []) as { action_task_id: string; file_id: string }[]) {
+    taskOfFile.set(row.file_id, row.action_task_id);
+  }
+  if (taskOfFile.size === 0) return out;
+  const { data: tasks, error } = await db
+    .from('action_tasks')
+    .select('id, task_key, title, title_params, status')
+    .in('id', [...new Set(taskOfFile.values())]);
+  if (error) throw new Error(error.message);
+  const byId = new Map(((tasks ?? []) as (TaskRow & { id: string })[]).map((t) => [t.id, t]));
+  for (const [fileId, taskId] of taskOfFile) {
+    const task = byId.get(taskId);
+    if (task) out.set(fileId, taskOf(task));
+  }
+  return out;
 }

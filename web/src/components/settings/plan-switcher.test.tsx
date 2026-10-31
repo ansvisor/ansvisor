@@ -16,8 +16,10 @@ vi.mock('@/lib/actions/cancel-feedback', () => ({
 const refresh = vi.hoisted(() => vi.fn());
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
 const refreshAiUsage = vi.hoisted(() => vi.fn());
+// The workspace's AI usage: unread unless a test turns the new Chat on (chatMetered).
+const aiUsage = vi.hoisted(() => ({ usage: null as { chatMetered: boolean } | null }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({
-  useAiUsage: () => ({ usage: null, refresh: refreshAiUsage }),
+  useAiUsage: () => ({ usage: aiUsage.usage, refresh: refreshAiUsage }),
 }));
 
 (
@@ -122,6 +124,7 @@ const cards = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  aiUsage.usage = null;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -169,6 +172,27 @@ describe('the plan cards', () => {
     expect(container.textContent).toContain(
       'For small teams getting started with AI visibility monitoring and optimization.',
     );
+  });
+
+  it('says Chat and agents draw on AI usage once the new Chat is on, own keys on Enterprise only', async () => {
+    const hint = (text: string) =>
+      [...container.querySelectorAll('li span')]
+        .find((el) => el.textContent === text)
+        ?.getAttribute('title');
+    await render('growth');
+    expect(hint('5x AI usage')).toContain('Agent Chat runs on your own AI key.');
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    aiUsage.usage = { chatMetered: true };
+    await render('growth');
+    expect(hint('5x AI usage')).toBe(
+      "A monthly allowance for Ansvisor's AI features: Chat and agents, Improve suggestions, the Content Editor's AI and the Action Center's task writing. Your own AI key comes with Enterprise only. The free trial comes with a smaller allowance.",
+    );
+    expect(hint('Custom AI usage, from 10x')).toContain(
+      'On Enterprise, Chat can also run on your own AI key.',
+    );
+    expect(hint('Custom AI usage, from 10x')).not.toContain('Agent Chat');
   });
 
   it('says what a custom plan adds, with a way to ask', async () => {

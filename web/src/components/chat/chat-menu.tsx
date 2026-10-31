@@ -131,14 +131,31 @@ function MenuItem({
 
 /**
  * The workspace's AI usage this month beside Settings (mockup `.usg2`): a
- * 30px bar and its percent, amber from 80%, red when used up. Nothing where
+ * 30px bar and its percent, amber from 80%, red when used up. In the free
+ * trial it names no share, as the header's meter (AI usage spec §3.1):
+ * "Trial credit", "Almost used" from 80%, then "Used up". Nothing where
  * there is no allowance to meter (self-hosted) or before it is read.
  */
 function UsageMeter() {
   const t = useTranslations('chatShell.menu');
+  const tMeter = useTranslations('aiUsage.meter');
   const { usage } = useAiUsage();
   if (!usage || usage.percentUsed === null) return null;
   const tone = aiUsageTone(usage);
+  if (usage.trial && tone !== 'unlimited') {
+    return (
+      <span
+        title={tMeter(`trialLabel.${tone}`)}
+        className={cn(
+          'ml-auto text-[11.5px] font-normal text-muted-foreground',
+          tone === 'warning' && 'text-amber-700 dark:text-amber-400',
+          tone === 'exhausted' && 'text-red-700 dark:text-red-400',
+        )}
+      >
+        {tMeter(`trial.${tone}`)}
+      </span>
+    );
+  }
   return (
     <span
       title={t('usageTip')}

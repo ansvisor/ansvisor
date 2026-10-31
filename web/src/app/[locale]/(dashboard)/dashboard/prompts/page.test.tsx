@@ -11,7 +11,8 @@ import type { FirstRun } from '@/hooks/use-first-run';
  * Tracked Prompts on a read-only workspace (plan not active): Add prompt,
  * the row menu, the bulk bar and Analyze open the upgrade dialog, labelled
  * with what was clicked, and write nothing; on an active plan they work as
- * before. The volumes the server refuses it don't read as an outage.
+ * before. The volumes the server refuses it don't read as an outage. The
+ * Location filter stays off Query Fan-out, which doesn't use it.
  */
 
 const actions = vi.hoisted(() => ({
@@ -34,8 +35,10 @@ const volumes = vi.hoisted(() => ({
   refreshVolumes: vi.fn(),
 }));
 vi.mock('@/lib/actions/volumes', () => volumes);
+// The brand's locations, as the Location filter reads them: none unless a test says so.
+const filterOptions = vi.hoisted(() => ({ regions: [] as string[] }));
 vi.mock('@/lib/actions/tracking', () => ({
-  getBrandFilterOptions: vi.fn(async () => ({ regions: [] })),
+  getBrandFilterOptions: vi.fn(async () => ({ regions: filterOptions.regions })),
 }));
 // The brand's topics, as the Add Prompt dialog reads them: one unless a test says none.
 const topicActions = vi.hoisted(() => ({ getTopics: vi.fn() }));
@@ -79,6 +82,7 @@ vi.mock('./_topics-tab', () => ({
     return <div data-testid="topics-tab" />;
   },
 }));
+vi.mock('./_fanout-tab', () => ({ QueryFanoutTab: () => <div data-testid="fanout-tab" /> }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (select: (state: unknown) => unknown) =>
     select({ activeBrandId: 'b1', brands: [{ id: 'b1', slug: 'acme', name: 'Acme' }] }),
@@ -154,6 +158,7 @@ const dialog = () => document.querySelector('[role="dialog"]');
 beforeEach(() => {
   vi.clearAllMocks();
   nav.pathname = '/dashboard/prompts/tracked';
+  filterOptions.regions = [];
   firstRun.run = null;
   contentUsage.value = null;
   getOpenSuggestionForPrompt.mockResolvedValue(null);
@@ -244,6 +249,25 @@ describe('Tracked Prompts on a read-only workspace', () => {
     await act(async () => button('Pause')!.click());
     expect(actions.setPromptsActive).toHaveBeenCalledWith(['p1'], false);
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Location filter', () => {
+  const locationFilter = () =>
+    [...container.querySelectorAll('label')].find((l) => l.textContent === 'Location');
+
+  it('shows on Tracked Prompts for a brand tracked in more than one location', async () => {
+    filterOptions.regions = ['US', 'GB'];
+    await render(false);
+    expect(locationFilter()).toBeDefined();
+  });
+
+  it("is left off Query Fan-out, which doesn't use it", async () => {
+    filterOptions.regions = ['US', 'GB'];
+    nav.pathname = '/dashboard/prompts/fan-outs';
+    await render(false);
+    expect(container.querySelector('[data-testid="fanout-tab"]')).not.toBeNull();
+    expect(locationFilter()).toBeUndefined();
   });
 });
 
