@@ -534,6 +534,53 @@ describe('not measurable', () => {
     expect(row.concurrent_changes.map((c) => c.shared_targets)).toEqual([4, 4, 2]);
   });
 
+  it('counts a change whose measurement isn’t seeded on the targets it would be seeded with', async () => {
+    const db = fakeDb(
+      world({
+        ship_events: [
+          ship('s1', { agent_run_id: 'run1' }),
+          ship('s2', { shipped_at: '2026-10-03T09:00:00Z', action_id: 'a2' }),
+        ],
+        actions: [{ id: 'a2', brand_id: 'b1', kind: 'content', payload: { promptIds: TARGETS } }],
+      }),
+    );
+    // Tonight's seeding fails: s2 has no measurement when s1 is measured.
+    db.fail = (table, op) => table === 'impact_measurements' && op === 'upsert';
+    await runImpactLedger({ db, now: D14 });
+    const row = db.tables.impact_measurements.find((m) => m.id === 'm1');
+    expect(row).toMatchObject({
+      outcome: 'not_measurable',
+      not_measurable_reason: 'overlapping_change',
+    });
+    expect(row.concurrent_changes).toEqual([
+      expect.objectContaining({ id: 's2', shared_targets: TARGETS.length }),
+    ]);
+  });
+
+  it('keeps a change’s unseeded prompts out of the controls', async () => {
+    const db = fakeDb(
+      world({
+        ship_events: [
+          ship('s1', { agent_run_id: 'run1' }),
+          ship('s2', { shipped_at: '2026-10-03T09:00:00Z', action_id: 'a2' }),
+        ],
+        actions: [
+          {
+            id: 'a2',
+            brand_id: 'b1',
+            kind: 'content',
+            payload: { promptIds: CONTROLS.slice(0, 15) },
+          },
+        ],
+      }),
+    );
+    db.fail = (table, op) => table === 'impact_measurements' && op === 'upsert';
+    await runImpactLedger({ db, now: D14 });
+    const controls = db.tables.impact_control_sets.flatMap((c) => c.entities.map((e) => e.id));
+    expect(controls.length).toBeGreaterThan(0);
+    for (const id of CONTROLS.slice(0, 15)) expect(controls).not.toContain(id);
+  });
+
   it('measures the targets another change doesn’t share, and names that change', async () => {
     const tables = world();
     tables.ship_events.push(ship('s2', { shipped_at: '2026-10-05T10:00:00Z' }));
@@ -600,22 +647,72 @@ describe('not measurable', () => {
     const stats = await runImpactLedger({ db, now: D14 });
     expect(stats.closed).toBe(2);
     const [m1, m2, m3] = db.tables.impact_measurements;
-    // No active plan, and Chat no longer on for the workspace: both closed.
-    for (const row of [m1, m2]) {
+    // No active plan, and Chat no longer on for the workspace: both closed,
+    // each with its own reason, day 90 kept as that.
+    for (const [row, reason] of [
+      [m1, 'plan_inactive'],
+      [m2, 'measuring_off'],
+    ]) {
       expect(row).toMatchObject({
         outcome: 'not_measurable',
         confidence: null,
-        not_measurable_reason: 'plan_inactive',
+        not_measurable_reason: reason,
         checkpoint: 'd90',
         next_check_at: null,
         metrics: [],
       });
+      expect(row.checkpoints_json).toEqual([
+        expect.objectContaining({
+          checkpoint: 'd90',
+          outcome: 'not_measurable',
+          not_measurable_reason: reason,
+          lasting: null,
+          effect: null,
+          p_value: null,
+        }),
+      ]);
     }
     // Shipped lately: kept due, for when the plan comes back.
     expect(m3).toMatchObject({
       outcome: 'pending',
       next_check_at: checkAt('2026-09-20T10:00:00Z', 7),
     });
+  });
+});
+
+describe('closing, self-hosted', () => {
+  it('closes as measuring_off, never plan_inactive, keeping the earlier checkpoints', async () => {
+    process.env.CHAT_AGENTIC_ORGS = OTHER_ORG;
+    const LONG_AGO = '2026-06-01T10:00:00Z';
+    const d30 = { checkpoint: 'd30', outcome: 'improved', confidence: 'medium' };
+    const db = fakeDb(
+      world({
+        ship_events: [ship('s1', { shipped_at: LONG_AGO })],
+        impact_measurements: [
+          measurement('m1', 's1', {
+            checkpoint: 'd30',
+            outcome: 'improved',
+            confidence: 'medium',
+            checkpoints_json: [{ checkpoint: 'd7', outcome: 'pending' }, d30],
+            next_check_at: checkAt(LONG_AGO, 90),
+          }),
+        ],
+      }),
+    );
+    const stats = await runImpactLedger({ db, now: D14 });
+    expect(stats.closed).toBe(1);
+    const [row] = db.tables.impact_measurements;
+    expect(row).toMatchObject({
+      outcome: 'not_measurable',
+      not_measurable_reason: 'measuring_off',
+      checkpoint: 'd90',
+      next_check_at: null,
+    });
+    expect(row.checkpoints_json.map((e) => [e.checkpoint, e.outcome])).toEqual([
+      ['d7', 'pending'],
+      ['d30', 'improved'],
+      ['d90', 'not_measurable'],
+    ]);
   });
 });
 
@@ -735,6 +832,90 @@ describe('sends confirmed without a ship event, in order', () => {
     expect(db.calls.filter((c) => c.op === 'rpc' || c.table === 'content_drafts')).toEqual([]);
   });
 
+  it('leaves a send past the 50 noted by id alone once its date is noted', async () => {
+    const noted = Array.from({ length: 50 }, (_, i) => `n${i}`);
+    const db = fakeDb(
+      world({
+        content_draft_deliveries: [draftSend('late', T2)],
+        content_drafts: [
+          { id: 'dr1', brand_id: 'b1', title: 'Guide', action_id: null, prompt_ids: [] },
+        ],
+        ship_events: [
+          ship('s1', { agent_run_id: 'run1' }),
+          ship('s9', {
+            content_draft_id: 'dr1',
+            content_draft_delivery_id: 'first',
+            shipped_at: T1,
+            republished_at: T2,
+            republished_delivery_ids: noted,
+          }),
+        ],
+      }),
+    );
+    const stats = await runImpactLedger({ db, now: D14 });
+    expect(stats).toMatchObject({ filled: 0, failed: 0 });
+    expect(
+      db.calls.filter((c) => c.op === 'rpc' || c.table === 'content_draft_deliveries'),
+    ).toEqual([expect.objectContaining({ table: 'content_draft_deliveries', op: 'select' })]);
+  });
+
+  it('still notes a send past the 50 whose date isn’t noted yet', async () => {
+    const noted = Array.from({ length: 50 }, (_, i) => `n${i}`);
+    const db = fakeDb(
+      world({
+        content_draft_deliveries: [draftSend('late', T2)],
+        content_drafts: [
+          { id: 'dr1', brand_id: 'b1', title: 'Guide', action_id: null, prompt_ids: [] },
+        ],
+        ship_events: [
+          ship('s1', { agent_run_id: 'run1' }),
+          ship('s9', {
+            content_draft_id: 'dr1',
+            content_draft_delivery_id: 'first',
+            shipped_at: T1,
+            republished_at: null,
+            republished_delivery_ids: noted,
+          }),
+        ],
+      }),
+    );
+    await runImpactLedger({ db, now: D14 });
+    expect(db.tables.ship_events.find((e) => e.id === 's9').republished_at).toBe(T2);
+  });
+
+  it('takes an older send filled in late into its draft’s later ship event, not a second one', async () => {
+    // The later send's write went through; the earlier one's failed.
+    const db = fakeDb(
+      world({
+        content_draft_deliveries: [draftSend('b-earlier', T1)],
+        content_drafts: [
+          { id: 'dr1', brand_id: 'b1', title: 'Guide', action_id: null, prompt_ids: [] },
+        ],
+        ship_events: [
+          ship('s1', { agent_run_id: 'run1' }),
+          ship('s9', {
+            content_draft_id: 'dr1',
+            content_draft_delivery_id: 'a-later',
+            shipped_at: T2,
+          }),
+          // A cms_publish of the draft more than 90 days after it: another episode.
+          ship('s10', {
+            content_draft_id: 'dr1',
+            content_draft_delivery_id: 'much-later',
+            shipped_at: '2027-01-20T10:00:00.000Z',
+          }),
+        ],
+      }),
+    );
+    await runImpactLedger({ db, now: D14 });
+    const ofDraft = db.tables.ship_events.filter((e) => e.content_draft_id === 'dr1');
+    expect(ofDraft).toHaveLength(2);
+    expect(ofDraft.find((e) => e.id === 's9')).toMatchObject({
+      shipped_at: T2,
+      republished_delivery_ids: ['b-earlier'],
+    });
+  });
+
   it('counts a send whose ship event can’t be written as failed', async () => {
     const db = fakeDb(world({ content_draft_deliveries: [draftSend('x1', T1)] }));
     db.fail = (table, op) => table === 'ship_events' && op === 'rpc';
@@ -796,6 +977,30 @@ describe('scale and isolation', () => {
     const row = db.tables.impact_measurements[0];
     expect(row.outcome).toBe('improved');
     expect(row.checkpoints_json.at(-1)).toMatchObject({ target_cells: 40, control_cells: 60 });
+  });
+
+  it('reads a window again for the next measurement after a read of it failed', async () => {
+    const U = ids('u', 10);
+    const base = world();
+    const db = fakeDb({
+      ...base,
+      ship_events: [ship('s1', { agent_run_id: 'run1' }), ship('s2')],
+      impact_measurements: [
+        measurement('m1', 's1'),
+        measurement('m2', 's2', { targets: targetsOf(U) }),
+      ],
+      prompts: [...base.prompts, ...U.map((id) => prompt(id))],
+      insights_prompt_daily: [
+        ...base.insights_prompt_daily,
+        ...track(U, BASELINE, 14, () => 4),
+        ...track(U, '2026-10-02', 14, (i) => 11 + (i % 2)),
+      ],
+    });
+    let reads = 0;
+    db.fail = (table, op) => table === 'insights_prompt_daily' && op === 'select' && reads++ === 0;
+    const stats = await runImpactLedger({ db, now: D7 });
+    // The first measurement's read failed; the second reads the same window again.
+    expect(stats).toMatchObject({ failed: 1, measured: 1 });
   });
 
   it('counts a brand that fails and goes on with the next', async () => {

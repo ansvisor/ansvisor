@@ -72,8 +72,9 @@ export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISO
     fail: null,
     /**
      * ship_cms_publish (00428), as its SQL decides, in one step (the draft's
-     * lock): the send's own, else the draft's latest cms_publish within 90
-     * days before it, noted, else a new ship event. `beforeShip` runs first,
+     * lock): the send's own, else the draft's cms_publish within 90 days
+     * (the latest before it, else the nearest after it), noted, else a new
+     * ship event. `beforeShip` runs first,
      * so a test can make another call land while this one waits.
      */
     beforeShip: null,
@@ -95,9 +96,12 @@ export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISO
               row.brand_id === args.p_brand_id &&
               row.content_draft_id === args.p_content_draft_id &&
               row.kind === 'cms_publish' &&
-              Date.parse(row.shipped_at) >= at - 90 * 86_400_000,
+              Math.abs(Date.parse(row.shipped_at) - at) <= 90 * 86_400_000,
           )
-          .sort((a, b) => Date.parse(b.shipped_at) - Date.parse(a.shipped_at))[0];
+          .sort((a, b) => {
+            const [x, y] = [Date.parse(a.shipped_at), Date.parse(b.shipped_at)];
+            return Number(x > at) - Number(y > at) || Math.abs(x - at) - Math.abs(y - at);
+          })[0];
         if (first) {
           if (at > Date.parse(first.republished_at ?? first.shipped_at)) {
             first.republished_at = args.p_shipped_at;

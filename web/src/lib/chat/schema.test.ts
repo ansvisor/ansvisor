@@ -520,7 +520,11 @@ describe('the impact ledger', () => {
       /pg_advisory_xact_lock\(hashtext\('ship_cms_publish:' \|\| p_content_draft_id::text\)\)/,
     );
     expect(ship).toMatch(
-      /and s\.kind = 'cms_publish'\s+and s\.shipped_at >= p_shipped_at - interval '90 days'/,
+      /and s\.kind = 'cms_publish'\s+and s\.shipped_at >= p_shipped_at - interval '90 days'\s+and s\.shipped_at <= p_shipped_at \+ interval '90 days'/,
+    );
+    // The latest before the send first, else the nearest after it.
+    expect(ship).toMatch(
+      /order by s\.shipped_at > p_shipped_at,\s+greatest\(s\.shipped_at - p_shipped_at, p_shipped_at - s\.shipped_at\)/,
     );
     expect(ship).toMatch(/on conflict \(content_draft_delivery_id\) do nothing/);
     expect(ship).toMatch(/set search_path = ''/);

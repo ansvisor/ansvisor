@@ -206,6 +206,31 @@ export async function seedMeasurements(db, ships) {
 
 /** A draft live again within this many days is the same shipped change, still measured (00425, 00428). */
 export const REPUBLISH_DAYS = 90;
+/** Most sends a ship event notes by id (republished_delivery_ids, 00428): past it, by date only. */
+export const MAX_REPUBLISHED_IDS = 50;
+
+/**
+ * The cms_publish of a draft a send published at `sentAt` is noted on, as
+ * ship_cms_publish (00428) chooses it among the draft's: within
+ * REPUBLISH_DAYS, the latest shipped before it, else the nearest after
+ * it; null when none is.
+ *
+ * @param {Array<{ shipped_at: string }>} ships the draft's cms_publish ship events
+ */
+export function republishOf(ships, sentAt) {
+  const at = Date.parse(sentAt);
+  const within = REPUBLISH_DAYS * 86_400_000;
+  let best = null;
+  for (const ship of ships) {
+    const t = Date.parse(ship.shipped_at);
+    if (Math.abs(t - at) > within) continue;
+    const rank = [Number(t > at), Math.abs(t - at)];
+    if (!best || rank[0] < best.rank[0] || (rank[0] === best.rank[0] && rank[1] < best.rank[1])) {
+      best = { ship, rank };
+    }
+  }
+  return best?.ship ?? null;
+}
 
 /**
  * A page the CMS confirmed live (markDeliveryPublished): a ship event
@@ -220,8 +245,11 @@ export const REPUBLISH_DAYS = 90;
  *     event; that one notes it (republished_at, only ever forward: a later
  *     publish than the one noted, or than the ship itself; the send in
  *     republished_delivery_ids) and its measurement goes on, as two on the
- *     same targets would make each other Not measurable. A ship event of
- *     another kind on the same draft (Mark as shipped, Chat) takes no send.
+ *     same targets would make each other Not measurable. A send older than
+ *     the draft's cms_publish (filled in late by the nightly job) is noted
+ *     on the nearest one after it within REPUBLISH_DAYS, for the same
+ *     reason (republishOf). A ship event of another kind on the same draft
+ *     (Mark as shipped, Chat) takes no send.
  *
  * Off with CHAT_AGENTIC, or for a workspace it isn't on for, it writes
  * nothing, and with it off reads nothing either. Never throws: a ship event

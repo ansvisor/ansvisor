@@ -48789,9 +48789,13 @@ notify pgrst, 'reload schema';
 --   * ship_cms_publish: the decision and its write in one transaction,
 --     under a lock on the draft: the send's own ship event if it has one;
 --     else the draft's latest cms_publish shipped within 90 days before it,
---     noted (republished_at only ever forward) with the send; else a new
---     ship event. Only a cms_publish takes a send in: a ship event of
---     another kind on the same draft (Mark as shipped, Chat) is its own.
+--     noted (republished_at only ever forward) with the send; else the
+--     nearest one shipped within 90 days after it (a send whose own write
+--     failed, filled in by the nightly job after a later send of the draft
+--     wrote its ship event: a second ship event would make both Not
+--     measurable, so the later one takes it in); else a new ship event.
+--     Only a cms_publish takes a send in: a ship event of another kind on
+--     the same draft (Mark as shipped, Chat) is its own.
 --     Says the ship event's id and whether this call wrote it. Service role
 --     only; the server reads the send and its draft first.
 --   * republished_delivery_ids: the sends noted on a ship event, so the
@@ -48843,6 +48847,7 @@ begin
   end if;
 
   -- The same draft live again within 90 days: its first cms_publish goes on.
+  -- The latest shipped before the send first, else the nearest after it.
   if p_content_draft_id is not null then
     select s.id into v_id
     from public.ship_events s
@@ -48850,7 +48855,10 @@ begin
       and s.content_draft_id = p_content_draft_id
       and s.kind = 'cms_publish'
       and s.shipped_at >= p_shipped_at - interval '90 days'
-    order by s.shipped_at desc, s.id desc
+      and s.shipped_at <= p_shipped_at + interval '90 days'
+    order by s.shipped_at > p_shipped_at,
+      greatest(s.shipped_at - p_shipped_at, p_shipped_at - s.shipped_at),
+      s.id desc
     limit 1;
     if v_id is not null then
       update public.ship_events s
@@ -48897,7 +48905,7 @@ grant execute on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, 
   to service_role;
 
 comment on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text) is
-  'Impact ledger (00428): a CMS-confirmed publish as a ship event, under a lock on its draft: the send''s own, else the draft''s cms_publish within 90 days noted, else a new one. Says the id and whether this call wrote it. Service role only.';
+  'Impact ledger (00428): a CMS-confirmed publish as a ship event, under a lock on its draft: the send''s own, else the draft''s cms_publish within 90 days (the latest before it, else the nearest after) noted, else a new one. Says the id and whether this call wrote it. Service role only.';
 
 notify pgrst, 'reload schema';
 

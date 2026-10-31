@@ -28,9 +28,9 @@
  *      due: the targets (active, not shared with another change), the
  *      controls, the metrics and the outcome; then writes the control sets
  *      and the measurement;
- *   5. closes, Not measurable (plan_inactive), what is still open
- *      CLOSE_AFTER_DAYS after ship for a workspace that can't be measured
- *      (no active plan, or Chat no longer on for it);
+ *   5. closes, Not measurable (plan_inactive, or measuring_off), what is
+ *      still open CLOSE_AFTER_DAYS after ship for a workspace that can't be
+ *      measured (no active plan, or Chat no longer on for it);
  *   6. brings the agent runs whose changes were measured in the last
  *      RUN_SYNC_DAYS in step (chat_agent_runs.outcome, CHAT-21 §I item 43),
  *      so a write that failed is made the next night.
@@ -43,12 +43,12 @@ import cron from 'node-cron';
 import supabaseAdmin from '../../config/supabase.js';
 import { getPlan, isCloud, isSubscriptionActive } from '../../config/plans.js';
 import { chatAgenticDeployed, chatAgenticEnabled, chatAgenticOrgs } from '../chat-flag.js';
-import { chunkIds } from '../chunked-in.js';
 import { logger } from '../logger.js';
 import { applyPlanOverrides } from '../plan-guard.js';
 import {
   aggregateCells,
   addDays,
+  CHECKPOINTS,
   checkpointEntry,
   checkpointWindow,
   dueCheckpoints,
@@ -61,7 +61,16 @@ import {
   utcDay,
   withoutVerdict,
 } from './method.js';
-import { ImpactDbError, readAll, readChunks, seedMeasurements, shipCmsPublish } from './ship.js';
+import {
+  ImpactDbError,
+  MAX_REPUBLISHED_IDS,
+  readAll,
+  readChunks,
+  republishOf,
+  resolveTargets,
+  seedMeasurements,
+  shipCmsPublish,
+} from './ship.js';
 
 /** Daily at 07:53 UTC: yesterday's rollups are in by then (the daily sweep refreshes them). */
 export const SCHEDULE = '53 7 * * *';
@@ -195,12 +204,18 @@ async function loadPrompts(db, brandId) {
   );
 }
 
-/** The brand's changes shipped between two days, each with its target prompts. */
+/**
+ * The brand's changes shipped between two days, each with its target
+ * prompts: its measurement's, or, for one not seeded (its seeding failed,
+ * or it was written before its workspace was measured), the ones it would
+ * be seeded with, so it still counts as an overlap and keeps its prompts
+ * out of the controls.
+ */
 async function loadShipped(db, brandId, from, to) {
   const ships = await readAll('shipped changes read', () =>
     db
       .from('ship_events')
-      .select('id, title, shipped_at')
+      .select('id, brand_id, action_id, content_draft_id, url, title, shipped_at')
       .eq('brand_id', brandId)
       .gte('shipped_at', `${from}T00:00:00.000Z`)
       .lt('shipped_at', `${addDays(to, 1)}T00:00:00.000Z`)
@@ -220,7 +235,18 @@ async function loadShipped(db, brandId, from, to) {
       )
     ).map((m) => [m.ship_event_id, new Set(targetPromptIds(m.targets))]),
   );
-  return ships.map((s) => ({ ...s, promptIds: targets.get(s.id) ?? new Set() }));
+  const unseeded = ships.filter((s) => !targets.has(s.id));
+  if (unseeded.length) {
+    for (const [id, entities] of await resolveTargets(db, unseeded)) {
+      targets.set(id, new Set(targetPromptIds(entities)));
+    }
+  }
+  return ships.map((s) => ({
+    id: s.id,
+    title: s.title,
+    shipped_at: s.shipped_at,
+    promptIds: targets.get(s.id) ?? new Set(),
+  }));
 }
 
 /**
@@ -408,9 +434,13 @@ async function measureOne(db, { measurement, ship, due, prompts, shipped, window
  * already, is never confirmed again. Written now through shipCmsPublish,
  * the same upsert on the send (one ship event per send, a draft live again
  * within 90 days noted on its first), oldest publish first, so a draft's
- * first ship event is its first publish. A send noted on its draft's
- * first (republished_delivery_ids) has one already and isn't written
- * again. Counts the ship events it wrote and what failed on the way.
+ * first ship event is its first publish among those filled in. A send
+ * older than one written when it was confirmed is noted on that later one
+ * (ship_cms_publish), not made a second ship event: two would make each
+ * other Not measurable. A send noted on its draft's ship event
+ * (republished_delivery_ids, or past MAX_REPUBLISHED_IDS by its date) has
+ * one already and isn't written again. Counts the ship events it wrote
+ * and what failed on the way.
  */
 async function fillMissingSends(db, now, tally) {
   const orgs = chatAgenticOrgs();
@@ -444,21 +474,36 @@ async function fillMissingSends(db, now, tally) {
     ).map((ship) => ship.content_draft_delivery_id),
   );
   // A send noted on its draft's first cms_publish (00428) has its ship event too.
-  for (const ship of await readChunks(
+  const draftShips = await readChunks(
     'drafts ship events read',
     [...new Set(sends.map((send) => send.draft_id).filter(Boolean))],
     (chunk) =>
       db
         .from('ship_events')
-        .select('id, republished_delivery_ids')
+        .select('id, content_draft_id, shipped_at, republished_at, republished_delivery_ids')
         .in('content_draft_id', chunk)
         .eq('kind', 'cms_publish')
         .order('id'),
-  )) {
+  );
+  for (const ship of draftShips) {
     for (const id of ship.republished_delivery_ids ?? []) written.add(id);
   }
+  const shipsOfDraft = groupBy(draftShips, 'content_draft_id');
   for (const send of sends) {
     if (written.has(send.id)) continue;
+    // Past MAX_REPUBLISHED_IDS a send is noted by its date only: one its
+    // draft's ship event has noted already (republished_at at or past it)
+    // would change nothing, so it isn't written again each night.
+    const into = send.draft_id
+      ? republishOf(shipsOfDraft.get(send.draft_id) ?? [], send.published_at)
+      : null;
+    if (
+      into &&
+      (into.republished_delivery_ids?.length ?? 0) >= MAX_REPUBLISHED_IDS &&
+      Date.parse(into.republished_at ?? into.shipped_at) >= Date.parse(send.published_at)
+    ) {
+      continue;
+    }
     const { created, failed } = await shipCmsPublish({
       deliveryId: send.id,
       url: send.published_url,
@@ -470,48 +515,64 @@ async function fillMissingSends(db, now, tally) {
   }
 }
 
+/** Why a workspace's measurement can't be read: no active plan, or Chat no longer on for it. */
+function closedReason(ship) {
+  if (!isSubscriptionActive(ship.organizations?.subscription_status)) return 'plan_inactive';
+  if (!chatAgenticEnabled(ship.organization_id)) return 'measuring_off';
+  return null;
+}
+
 /**
- * Closes, Not measurable (plan_inactive), the measurements still open
- * CLOSE_AFTER_DAYS after ship whose workspace can't be measured: no active
- * plan, or Chat no longer on for it. Their next check goes, so they are
- * read no more. A workspace that can be measured keeps its own: a late run
- * still reads them.
+ * Closes, Not measurable, the measurements still open CLOSE_AFTER_DAYS
+ * after ship whose workspace can't be measured: no active plan
+ * (plan_inactive), or Chat no longer on for it (measuring_off, as on a
+ * self-hosted install, which has no plan to lapse). Day 90 goes into
+ * checkpoints_json as that, and their next check goes, so they are read
+ * no more. Each is written only while it is as read. A workspace that can
+ * be measured keeps its own: a late run still reads them.
  */
 async function closeStale(db, now, tally) {
   const cutoff = new Date(now.getTime() - CLOSE_AFTER_DAYS * DAY_MS).toISOString();
   const rows = await readAll('stale measurements read', () =>
     db
       .from('impact_measurements')
-      .select(`id, ${SHIP_OF}(organization_id, shipped_at, ${ORG_OF}(subscription_status))`)
+      .select(
+        `id, checkpoints_json, next_check_at, ${SHIP_OF}(organization_id, shipped_at, ${ORG_OF}(subscription_status))`,
+      )
       .not('next_check_at', 'is', null)
       .lt('ship_events.shipped_at', cutoff)
       .order('id'),
   );
-  const closing = rows
-    .filter(({ ship_events: ship }) => {
-      if (!ship) return false;
-      return (
-        !chatAgenticEnabled(ship.organization_id) ||
-        !isSubscriptionActive(ship.organizations?.subscription_status)
-      );
-    })
-    .map((row) => row.id);
-  for (const chunk of chunkIds(closing)) {
+  const measuredAt = now.toISOString();
+  const d90 = CHECKPOINTS[CHECKPOINTS.length - 1];
+  for (const row of rows) {
+    const reason = row.ship_events ? closedReason(row.ship_events) : null;
+    if (!reason) continue;
+    const earlier = Array.isArray(row.checkpoints_json) ? row.checkpoints_json : [];
+    // Day 90 wasn't read: no window, no numbers (the earlier checkpoints keep theirs).
+    const entry = checkpointEntry({
+      cp: d90,
+      window: {},
+      result: { reason },
+      earlier,
+      measuredAt,
+    });
     const { data, error } = await db
       .from('impact_measurements')
       .update({
         outcome: 'not_measurable',
         confidence: null,
-        not_measurable_reason: 'plan_inactive',
-        checkpoint: 'd90',
-        // Day 90 wasn't read: no window, no numbers (the earlier checkpoints keep theirs).
+        not_measurable_reason: reason,
+        checkpoint: d90.key,
+        checkpoints_json: [...earlier.filter((e) => e?.checkpoint !== d90.key), entry],
         window_json: {},
         metrics: [],
+        concurrent_changes: [],
         next_check_at: null,
-        measured_at: now.toISOString(),
+        measured_at: measuredAt,
       })
-      .in('id', chunk)
-      .not('next_check_at', 'is', null)
+      .eq('id', row.id)
+      .eq('next_check_at', row.next_check_at)
       .select('id');
     if (error) throw new ImpactDbError('stale measurements close', error);
     tally.closed += (data ?? []).length;
@@ -621,7 +682,14 @@ async function runBrand(db, { brandId, items, limits, now, tally }) {
   const windows = new Map();
   const windowOf = (start, end) => {
     const key = `${start}|${end}`;
-    if (!windows.has(key)) windows.set(key, loadWindow(db, brandId, start, end, limits));
+    if (!windows.has(key)) {
+      const read = loadWindow(db, brandId, start, end, limits);
+      windows.set(key, read);
+      // A read that failed isn't kept: the next measurement on it reads again.
+      read.catch(() => {
+        if (windows.get(key) === read) windows.delete(key);
+      });
+    }
     return windows.get(key);
   };
 
