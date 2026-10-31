@@ -1642,9 +1642,12 @@ async function cardTarget(
     .join(' · ');
 }
 
-/** What a card says beside its target: that its change can't be undone (§9), and its row's note. */
+/**
+ * What a card says beside its target: that its change can't be undone (§9; an
+ * EXECUTE never can, §10b), and its row's note.
+ */
 function cardNotes(tool: ChatTool): { noUndo?: true; note?: string } {
-  const noUndo = tool.class === 'write' && !undoRule(tool)?.windowMs;
+  const noUndo = tool.class !== 'read' && !undoRule(tool)?.windowMs;
   const note = toolNote(tool);
   return { ...(noUndo ? { noUndo: true as const } : {}), ...(note ? { note } : {}) };
 }
@@ -2184,6 +2187,8 @@ const SAID_FAILURES: Record<string, string> = {
   forbidden_role: 'forbidden_role',
   // A page live in its CMS: the Content Editor sends it (push_cms_draft).
   live_item: 'live_item',
+  // An Admin turned publishing off for Managers since the card was decided (push_cms_draft).
+  execute_off: 'execute_off',
 };
 
 /**

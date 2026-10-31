@@ -107,7 +107,9 @@ async function change(userId: string, name: string, input: unknown) {
     brandId: BRAND,
     surface: 'chat',
     mode: 'full_auto',
-    approval: { kind: 'auto', via: 'full_auto' },
+    // An EXECUTE (a page sent to a CMS) runs on the person's click only.
+    approval:
+      chatTool(name)!.class === 'execute' ? { kind: 'click' } : { kind: 'auto', via: 'full_auto' },
     place: { conversationId: null, runId: null, stepId: null },
     approvalKey: `step-${++step}`,
   });
@@ -142,7 +144,8 @@ const logRow = (id: unknown) => db.tables.chat_activity_log.find((row) => row.id
 
 describe('every WRITE row is recorded, with its Undo where §9 gives one', () => {
   it('with its §9 window, and words for the change and its Undo', () => {
-    const writes = CHAT_TOOLS.filter((tool) => tool.class === 'write');
+    // An EXECUTE's row only records (push_cms_draft): it has no Undo (§10b).
+    const writes = CHAT_TOOLS.filter((tool) => tool.class !== 'read');
     expect(writes.map((tool) => tool.name).sort()).toEqual(Object.keys(UNDO_RULES).sort());
     expect(UNDO_RULES.create_draft.windowMs).toBe(30 * DAY);
     expect(UNDO_RULES.update_opportunity.windowMs).toBe(7 * DAY);

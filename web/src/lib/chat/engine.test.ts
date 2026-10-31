@@ -2818,6 +2818,80 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     ]);
   });
 
+  it('sends a draft to a CMS only on a click, and never for a Manager the Admin turned publishing off for', async () => {
+    seedDraft(db);
+    vi.mocked(sendDraftToCms).mockResolvedValue({
+      ok: true,
+      target: 'webflow',
+      status: 'sent',
+      updated: false,
+      live: false,
+    });
+    const send = toolCall('c1', 'push_cms_draft', { draft_id: DRAFT, destination: 'webflow' });
+    // An Admin's Always lifts nothing: a click card for Admins and Managers in every mode.
+    settings({ tool_policies: { sendToCms: 'always' } });
+    for (const role of ['admin', 'manager'] as const) {
+      for (const mode of MODES) {
+        const tried = await attempt(role, mode, send);
+        expect(tried, `${role} ${mode}`).toMatchObject({ waits: true, cards: 1, denials: [] });
+        expect(tried.offered, `${role} ${mode}`).toContain('push_cms_draft');
+        expect(stepsOf(tried.runId)[0], `${role} ${mode}`).toMatchObject({ kind: 'execute' });
+      }
+    }
+    // Analysts and Agency partners only read: not offered, and called anyway, no card.
+    for (const role of ['analyst', 'agency_partner'] as const) {
+      for (const mode of MODES) {
+        const called = await attempt(role, mode, send);
+        expect(called, `${role} ${mode}`).toMatchObject({ waits: false, cards: 0 });
+        expect(called.offered, `${role} ${mode}`).not.toContain('push_cms_draft');
+      }
+    }
+    expect(sendDraftToCms).not.toHaveBeenCalled();
+
+    // Publishing off for Managers: not offered to a Manager, and the explainer says why.
+    settings({ manager_execute_off: ['publishing'] });
+    const manager = await attempt(
+      'manager',
+      'full_auto',
+      toolCall('x1', engine.EXPLAIN_TOOL, { capability: 'sendToCms', target: 'Pricing FAQ' }),
+    );
+    expect(manager.offered).not.toContain('push_cms_draft');
+    expect(manager.denials).toEqual([
+      expect.objectContaining({
+        rule: expect.objectContaining({
+          kind: 'policy',
+          detail: 'An Admin turned publishing off for Managers.',
+        }),
+        whoCan: 'Admins can do this.',
+      }),
+    ]);
+    // Called anyway: it isn't in their list, so no card to click, and nothing is sent.
+    const called = await attempt('manager', 'full_auto', send);
+    expect(called).toMatchObject({ waits: false, cards: 0 });
+    expect(sendDraftToCms).not.toHaveBeenCalled();
+    // The Admin still clicks it through, and it is sent then.
+    const admin = await attempt('admin', 'auto', send);
+    expect(admin).toMatchObject({ waits: true, cards: 1 });
+    await approve(as('admin'), admin.runId);
+    expect(sendDraftToCms).toHaveBeenCalledTimes(1);
+    expect(sendDraftToCms).toHaveBeenCalledWith(DRAFT, 'webflow');
+  });
+
+  it("refuses a Manager's CMS send clicked after the Admin turned publishing off while it waited (§4)", async () => {
+    seedDraft(db);
+    const send = toolCall('c1', 'push_cms_draft', { draft_id: DRAFT, destination: 'webflow' });
+    const tried = await attempt('manager', 'auto', send);
+    expect(tried).toMatchObject({ waits: true, cards: 1 });
+    settings({ manager_execute_off: ['publishing'] });
+    await approve(as('manager'), tried.runId);
+    expect(sendDraftToCms).not.toHaveBeenCalled();
+    expect(ofType(await eventsOf(tried.runId), 'access.denied')).toEqual([
+      expect.objectContaining({
+        data: expect.objectContaining({ rule: expect.objectContaining({ kind: 'policy' }) }),
+      }),
+    ]);
+  });
+
   it('keeps the setup rows (prompts, topics, competitors) to Admins and Managers, on a card outside Full auto', async () => {
     const setup = [
       toolCall('s1', 'add_prompts', { brand_id: BRAND, topic_id: TOPIC, prompts: ['best crm'] }),
