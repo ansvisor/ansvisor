@@ -16,8 +16,9 @@ import { runFailure } from './run-api';
  * What the agents routes (/api/chat/agents…) share: the person's agent
  * context, an agent's id from the path, and refusals as values the browser
  * reads (#1777): `{ ok: false, failure, code, error }`, with the
- * out-of-permission answer's four parts as `denial` (CHAT-20 §4c). Server
- * only.
+ * out-of-permission answer's four parts as `denial` (CHAT-20 §4c) and what
+ * it refused as `asked` (chatAgents.asked: `fullAuto`, `workspace`…).
+ * Server only.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -45,6 +46,7 @@ export function agentRefusalResponse(refusal: AgentRefusal): NextResponse {
         code: refusal.code,
         error: refusal.denial.rule.detail,
         denial: refusal.denial,
+        ...(refusal.asked ? { asked: refusal.asked } : {}),
       },
       { status: refusal.status },
     );
