@@ -18,12 +18,18 @@ import { describe, expect, it } from 'vitest';
  * anon, authenticated and service_role (schema.sql's default privileges), so
  * only a revoke from authenticated takes it away.
  *
- * A function that takes p_brand_id passes when it calls can_access_brand and
- * no longer checks the organization; any function with the organization check
- * fails. Those not converted yet are listed below with the BRAND-ACCESS PR that
- * takes them, and nobody can be narrowed to Selected brands until the list is
- * empty (PR 12), as server/src/lib/brand-access-policies.test.js says of the
- * tables.
+ * A function fails when it checks only the organization: the organization
+ * check above, or, with no call to an access helper (can_access_brand,
+ * user_brand_ids, user_has_all_brands, content_draft_member), a p_brand_id
+ * argument or a look at the caller's organization (auth.uid() and
+ * organization_id). Those not converted yet are listed below with the
+ * BRAND-ACCESS PR that takes them, and nobody can be narrowed to Selected
+ * brands until that list is empty (PR 12), as
+ * server/src/lib/brand-access-policies.test.js says of the tables; those that
+ * hold no brand's data are listed with why.
+ *
+ * It lives in the web, not next to the server's brand-access tests, so the
+ * web's checks run it where the server's packages aren't installed.
  */
 
 const ROOT = join(__dirname, '../../..');
@@ -94,15 +100,27 @@ const TO_CONVERT: Record<string, string> = {
   seed_kpi_presets: 'PR 6',
 };
 
-/** The access rule itself (00388). */
-const ACCESS_RULE = new Set(['can_access_brand']);
+/**
+ * Functions a signed-in person can call that look at the caller's organization
+ * (auth.uid() and organization_id) without an access helper, and need no brand
+ * check: why.
+ */
+const NO_BRAND_CHECK: Record<string, string> = {
+  can_access_brand: 'The access rule itself (00388): whether the caller may see one brand.',
+  org_brand_count:
+    "The plan's brand count (maxBrands, 00390): the Account's total, no brand's name or figure (BRAND-ACCESS §9 Q3).",
+  user_brand_ids: 'The access rule as a list (00388): the ids of the brands the caller may see.',
+  user_has_all_brands:
+    'Whether the caller is an admin or has All brands (00390), for rows with no brand.',
+};
 
 /** The organization check: brands joined to the caller's profile on organization_id. */
 const ORGANIZATION_CHECK =
   /\bfrom (?:public\.)?brands (\w+) join (?:public\.)?profiles (\w+) on \2\.organization_id = \1\.organization_id where \1\.id = \w+ and \2\.id = auth\.uid\(\)/;
 
-/** A call to the access rule (00388). */
-const BRAND_CHECK = /\bcan_access_brand\s*\(/;
+/** A call to a function that applies brand access (00388, 00390; content_draft_member asks can_access_brand). */
+const ACCESS_HELPER =
+  /\b(?:can_access_brand|user_brand_ids|user_has_all_brands|content_draft_member)\s*\(/;
 
 interface Statement {
   text: string;
@@ -384,10 +402,16 @@ const callable = [...fns.values()].filter(
     !/\breturns "?(?:event_)?trigger\b/.test(last(fn).header),
 );
 
-/** Checks the organization only: the organization check, or a brand argument and no brand check. */
+/**
+ * Checks only the organization: the organization check; or no access helper,
+ * and a brand argument or a look at the caller's organization (auth.uid() and
+ * organization_id).
+ */
 const organizationOnly = (fn: Fn) => {
   const body = code(last(fn).body);
-  return ORGANIZATION_CHECK.test(body) || (hasBrandArgument(fn) && !BRAND_CHECK.test(body));
+  if (ORGANIZATION_CHECK.test(body)) return true;
+  if (ACCESS_HELPER.test(body)) return false;
+  return hasBrandArgument(fn) || (/\bauth\.uid\(\)/.test(body) && /\borganization_id\b/.test(body));
 };
 
 const byName = (name: string) => callable.filter((fn) => fn.name === name);
@@ -411,14 +435,22 @@ function sourceFiles(dir: string): string[] {
 }
 
 /**
- * Code that narrows someone to Selected brands: writes member_brands or sets
- * brand_scope (the Team screen, BRAND-ACCESS PR 12), in the web, the server or
- * a migration after 00388 (whose own grant only follows a Selected person).
- * The same rule as brand-access-policies.test.js.
+ * Code that narrows someone to Selected brands: writes member_brands or
+ * brand_scope, whatever the value (the Team screen, BRAND-ACCESS PR 12), in the
+ * web, the server or a migration after 00388 (whose own grant only follows a
+ * Selected person). A brand_scope key in an object counts (an insert or update
+ * payload); Chat's `case 'brand_scope':` denial code doesn't.
  */
 function narrowingCode(): string[] {
-  const writes =
-    /\bfrom\(\s*['"]member_brands['"]\s*\)\s*\.\s*(?:insert|upsert|update)\b|\bbrand_scope['"]?\s*:\s*['"]selected['"]|\b(?:insert into|update)\s+(?:public\.)?(?:member_brands|profiles\s+set\s+brand_scope)\b/i;
+  const writes = new RegExp(
+    [
+      String.raw`\bfrom\(\s*['"]member_brands['"]\s*\)\s*\.\s*(?:insert|upsert|update)\b`,
+      String.raw`(?<!\bcase\s+['"])\bbrand_scope['"]?\s*:(?!:)`,
+      String.raw`\binsert\s+into\s+(?:public\.)?(?:member_brands\b|profiles\s*\([^)]*\bbrand_scope\b)`,
+      String.raw`\bupdate\s+(?:public\.)?profiles\s+set\b[^;]*?\bbrand_scope\s*=`,
+    ].join('|'),
+    'i',
+  );
   const found = [join(ROOT, 'web/src'), join(ROOT, 'server/src')]
     .flatMap(sourceFiles)
     .filter((path) => !path.endsWith('types/supabase.ts'))
@@ -463,30 +495,32 @@ describe('the security definer functions a signed-in person can call', () => {
     }
   });
 
-  it('check brand access, or are on the list of functions still to convert', () => {
+  it('check brand access, or are listed to convert or as needing no brand check', () => {
     // A function here is new or changed: ask public.can_access_brand(p_brand_id)
-    // instead of joining brands to the caller's profile on organization_id.
+    // (or user_brand_ids()) instead of the caller's organization. One that
+    // holds no brand's data: add it to NO_BRAND_CHECK with why.
     const unlisted = callable
-      .filter((fn) => !ACCESS_RULE.has(fn.name) && organizationOnly(fn))
+      .filter(organizationOnly)
       .map((fn) => fn.name)
-      .filter((name) => !(name in TO_CONVERT));
-    expect(unlisted.sort()).toEqual([]);
+      .filter((name) => !(name in TO_CONVERT) && !(name in NO_BRAND_CHECK));
+    expect([...new Set(unlisted)].sort()).toEqual([]);
   });
 
   it('list only functions that still check the organization only', () => {
     // A function here now checks brand access, or is gone: take it off.
-    const done = Object.keys(TO_CONVERT).filter((name) => {
-      const found = byName(name);
-      return (
-        found.length === 0 ||
-        found.every((fn) => !organizationOnly(fn) && BRAND_CHECK.test(code(last(fn).body)))
-      );
-    });
-    expect(done).toEqual([]);
+    const caught = new Set(callable.filter(organizationOnly).map((fn) => fn.name));
+    const stale = [...Object.keys(TO_CONVERT), ...Object.keys(NO_BRAND_CHECK)].filter(
+      (name) => !caught.has(name),
+    );
+    expect(stale).toEqual([]);
   });
 
-  it('leave each listed function to a later BRAND-ACCESS PR', () => {
+  it('leave each function to a later BRAND-ACCESS PR, or say why it needs no brand check', () => {
     for (const [name, pr] of Object.entries(TO_CONVERT)) expect(pr, name).toMatch(/^PR [56]$/);
+    for (const [name, why] of Object.entries(NO_BRAND_CHECK)) {
+      expect(why.length, name).toBeGreaterThan(20);
+      expect(TO_CONVERT, name).not.toHaveProperty(name);
+    }
   });
 
   it('leave no function to convert once someone can be narrowed to Selected brands (PR 12)', () => {
@@ -499,11 +533,15 @@ describe('the security definer functions a signed-in person can call', () => {
 
 describe('the citation and report functions (00426)', () => {
   const converted = CONVERTED_IN_CITATIONS.flatMap(byName);
+  /** 00426's definition and the one it replaced; later migrations may redefine them again. */
+  const pair = (fn: Fn) => {
+    const at = fn.definitions.findIndex((d) => d.migration === CITATIONS);
+    return { before: fn.definitions[at - 1], after: fn.definitions[at], at };
+  };
 
   it('ask can_access_brand(p_brand_id) in their last definition, not the organization', () => {
     for (const name of CONVERTED_IN_CITATIONS) expect(byName(name), name).toHaveLength(1);
     for (const fn of converted) {
-      expect(last(fn).migration, fn.name).toBe(CITATIONS);
       expect(code(last(fn).body), fn.name).toMatch(/\bpublic\.can_access_brand\(p_brand_id\)/);
       expect(organizationOnly(fn), fn.name).toBe(false);
       expect(TO_CONVERT, fn.name).not.toHaveProperty(fn.name);
@@ -515,8 +553,8 @@ describe('the citation and report functions (00426)', () => {
     // arguments, result, language, volatility, security definer and every
     // setting (search_path, work_mem, plan_cache_mode) stay as they were.
     for (const fn of converted) {
-      const [before, after] = fn.definitions.slice(-2);
-      expect(before.migration, fn.name).not.toBe(CITATIONS);
+      const { before, after, at } = pair(fn);
+      expect(at, fn.name).toBeGreaterThan(0);
       expect(after.header, fn.name).toBe(before.header);
       expect(after.header, fn.name).toMatch(/\bsecurity definer\b/);
       expect(withoutCheck(before.body), fn.name).toContain('<check>');
@@ -524,10 +562,23 @@ describe('the citation and report functions (00426)', () => {
     }
   });
 
-  it('keep their grants and comments: 00426 grants, revokes and comments nothing', () => {
+  it('keep their grants: 00426 grants and revokes nothing', () => {
     const own = all.filter((statement) => statement.migration === CITATIONS);
     expect(own.length).toBeGreaterThan(CONVERTED_IN_CITATIONS.length);
-    expect(own.filter((s) => /^(?:grant|revoke|comment)\b/i.test(s.text))).toEqual([]);
+    expect(own.filter((s) => /^(?:grant|revoke)\b/i.test(s.text))).toEqual([]);
     for (const fn of converted) expect(fn.authenticated, fn.name).toBe(true);
+  });
+
+  it('say brand access in their comments', () => {
+    const comments = all
+      .filter((statement) => statement.migration === CITATIONS)
+      .map((statement) => oneLine(statement.text))
+      .filter((text) => /^comment on function/i.test(text));
+    for (const name of CONVERTED_IN_CITATIONS) {
+      const own = comments.filter((text) => text.startsWith(`comment on function public.${name}(`));
+      expect(own, name).toHaveLength(1);
+      expect(own[0], name).toMatch(/can_access_brand/);
+      expect(own[0], name).not.toMatch(/organization only|organization check|org-membership/i);
+    }
   });
 });

@@ -49866,8 +49866,11 @@ notify pgrst, 'reload schema';
 --     their early return. It runs once per call, as before, not per row.
 --   * create or replace resets the settings a definition doesn't repeat, so
 --     each repeats its own: search_path, and work_mem and plan_cache_mode
---     where it had them. Grants and comments stay as they were (create or
---     replace keeps them).
+--     where it had them. Grants stay as they were (create or replace keeps
+--     them).
+--   * The comments that said "members of the brand's organization" or "an
+--     organization check" now say brand access, and the two functions that
+--     had none (citations_urls_daily, report_citation_evidence) get one.
 --   * can_access_brand runs as the function's owner here, so a caller who may
 --     not run it directly (anon) still gets the empty answer, not an error.
 
@@ -50750,6 +50753,54 @@ AS $$
   FROM top t
   ORDER BY t.tc DESC;
 $$;
+
+-- ── Comments ───────────────────────────────────────────────────────────────
+-- Who may call each one, as the check above says it.
+
+comment on function public.citations_window_stats(uuid, timestamptz, timestamptz, text[], text[], uuid[], uuid[]) is
+  'Answers scanned and regions observed in a Citations window (#732) — the denominator for every usage percentage, including answers that cite nothing. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads zero.';
+
+comment on function public.citation_url_candidates(uuid, text) is
+  'URLs on one domain that a brand has cited (#732), for the detail page to normalize and match in the app tier. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty.';
+
+comment on function public.citation_url_occurrences(uuid, bigint[], timestamptz, timestamptz, text[], text[], uuid[], uuid[]) is
+  'Answers citing any of the given URL ids (#732) — the per-URL citation detail table, one row per answer. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty.';
+
+comment on function public.citations_domains(uuid, timestamptz, timestamptz, text[], text[], uuid[], uuid[]) is
+  'Per-domain citation aggregates for the Citations page (#732). Returns every domain — the long tail is the point. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty.';
+
+comment on function public.citations_urls(
+  uuid, timestamptz, timestamptz, text[], text[], uuid[], uuid[], integer, text[], text[]
+) is
+  'Top cited URLs for one brand, capped at p_limit by citation count (#732). p_domains / p_exclude_domains apply the source scope before the cap so it never reports a slice of the global top N as the whole scope (#745); the caller resolves the scope to domains, and total_urls counts the scoped set. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty. plpgsql + force_custom_plan so the arguments reach the planner.';
+
+comment on function public.citation_gap_domains(
+  uuid, text[], text[], timestamptz, timestamptz, text[], text[], uuid[], uuid[]
+) is
+  'Per-domain competitor co-occurrence for the Competitor Gaps tab (#777). Third-party domains only; one null-domain summary row carries the answer totals. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads only that summary row, at zero. plpgsql + force_custom_plan so the arguments reach the planner.';
+
+comment on function public.citation_competitor_sources(
+  uuid, text[], text[], timestamptz, timestamptz, text[], text[], uuid[], uuid[]
+) is
+  'Per-competitor source domains for the Competitor Gaps tab (#777), keyed by the competitor id recorded in the mention. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty. plpgsql + force_custom_plan so the arguments reach the planner.';
+
+comment on function public.citations_urls_daily(
+  uuid, date, date, text[], text[], uuid[], integer, text[], text[]
+) is
+  'citations_urls over whole UTC days, from the daily rollups (00118): the top cited URLs, capped at p_limit, with total_urls counting the scoped set. Security definer (00119) because citation_urls has no select policy, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty.';
+
+comment on function public.citation_gap_domains_daily(
+  uuid, text[], text[], date, date, text[], text[], uuid[]
+) is
+  'Competitor Gaps (#1002): citation_gap_domains over whole UTC days, from the daily rollups. Third-party domains with their gap answers, strength, whether they appear in an answer where the brand is present, and the competitors in those gap answers; plus a null-domain row with the window''s totals. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty.';
+
+comment on function public.citation_competitor_sources_daily(
+  uuid, text[], text[], date, date, text[], text[], uuid[]
+) is
+  'Competitor Gaps (#1002): citation_competitor_sources over whole UTC days, from the daily rollups. Per competitor, the third-party domains cited in answers that mention it, with the answer count and weight. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty.';
+
+comment on function public.report_citation_evidence(uuid, timestamptz, timestamptz, integer, integer) is
+  'The report''s top cited pages (00063), query string and fragment stripped, each with up to p_prompts_per_url prompts whose answers cited it. Security definer because citation_urls has no select policy, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty.';
 
 notify pgrst, 'reload schema';
 
