@@ -136,6 +136,8 @@ export interface ChatConfirm {
   digest: string;
   /** offerDontAskAgain: the card may offer "Don't ask again" (CHAT-20 §5 step 6). */
   canDontAskAgain: boolean;
+  /** A change with no Undo once made (CHAT-20 §9: a page sent to a CMS, an audit): the card says so. */
+  noUndo?: true;
   /** What the change leaves behind, under the card ("Its timeline … doesn't come back"). */
   note?: string;
 }
@@ -238,12 +240,18 @@ export interface ChatEventPayloads {
    * or `reason`, the server's own plain words when it has them.
    */
   'run.error': ChatRunSummary & { code: 'failed' | 'timeout'; reason?: string };
-  'run.paused_cap': ChatRunSummary;
+  /**
+   * The next step would pass a limit: the month's AI limit (CHAT-04 item
+   * 17), or with `limit: 'run'` an agent run's own cap (CHAT-27 item 22).
+   */
+  'run.paused_cap': ChatRunSummary & { limit?: 'run' | 'month' };
   /**
    * The run stopped before its end (CHAT-03 item 19, "Stopped after …"): the
-   * person's Stop, or a card left unanswered for 7 days (`expired`).
+   * person's Stop, a card left unanswered for 7 days (`expired`), or a
+   * triggered agent run at its cap (`limit`, "Stopped at its limit",
+   * CHAT-27 item 22).
    */
-  'run.stopped': ChatRunSummary & { reason: 'person' | 'expired' };
+  'run.stopped': ChatRunSummary & { reason: 'person' | 'expired' | 'limit' };
   /** A call refused: the out-of-permission answer (CHAT-20 §4c). */
   'access.denied': ChatDenialCard;
   // Editor in Chat (CHAT-25 §12, Phase 4): payloads grow with it.
