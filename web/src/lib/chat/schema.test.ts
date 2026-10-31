@@ -536,6 +536,17 @@ describe('the impact ledger', () => {
     );
     expect(ship).toMatch(/check \(cardinality\(republished_delivery_ids\) <= 50\)/);
   });
+
+  it('finds a send noted on a cms_publish by its id, before the draft lookup (00428)', () => {
+    const ship = migration('00428');
+    // A deleted draft sets content_draft_id null: only the noted ids tie the send to it.
+    const noted = ship.indexOf('where s.republished_delivery_ids @> array[p_delivery_id]');
+    expect(noted).toBeGreaterThan(-1);
+    expect(noted).toBeLessThan(ship.indexOf('and s.content_draft_id = p_content_draft_id'));
+    expect(ship).toMatch(
+      /create index if not exists ship_events_republished_delivery_ids_idx\s+on public\.ship_events using gin \(republished_delivery_ids\);/,
+    );
+  });
 });
 
 describe('daily suggestions', () => {

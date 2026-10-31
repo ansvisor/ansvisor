@@ -72,7 +72,7 @@ export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISO
     fail: null,
     /**
      * ship_cms_publish (00428), as its SQL decides, in one step (the draft's
-     * lock): the send's own, else the draft's cms_publish within 90 days
+     * lock): the send's own, else the one it is noted on, else the draft's cms_publish within 90 days
      * (the latest before it, else the nearest after it), noted, else a new
      * ship event. `beforeShip` runs first,
      * so a test can make another call land while this one waits.
@@ -88,6 +88,10 @@ export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISO
       const rows = (tables.ship_events ??= []);
       const own = rows.find((row) => row.content_draft_delivery_id === args.p_delivery_id);
       if (own) return { data: [{ ship_event_id: own.id, created: false }], error: null };
+      const noted = rows.find((row) =>
+        (row.republished_delivery_ids ?? []).includes(args.p_delivery_id),
+      );
+      if (noted) return { data: [{ ship_event_id: noted.id, created: false }], error: null };
       const at = Date.parse(args.p_shipped_at);
       if (args.p_content_draft_id) {
         const first = rows
@@ -211,6 +215,11 @@ export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISO
         eq: (column, value) => (state.filters.push((row) => valueAt(row, column) === value), chain),
         in: (column, values) => (
           state.filters.push((row) => values.includes(valueAt(row, column))),
+          chain
+        ),
+        // An array column sharing a value with `values` (PostgREST's ov, &&).
+        overlaps: (column, values) => (
+          state.filters.push((row) => (valueAt(row, column) ?? []).some((v) => values.includes(v))),
           chain
         ),
         is: (column, value) => (

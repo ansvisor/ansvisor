@@ -48788,7 +48788,7 @@ notify pgrst, 'reload schema';
 --
 --   * ship_cms_publish: the decision and its write in one transaction,
 --     under a lock on the draft: the send's own ship event if it has one;
---     else the draft's latest cms_publish shipped within 90 days before it,
+--     else the one it is noted on (republished_delivery_ids); else the draft's latest cms_publish shipped within 90 days before it,
 --     noted (republished_at only ever forward) with the send; else the
 --     nearest one shipped within 90 days after it (a send whose own write
 --     failed, filled in by the nightly job after a later send of the draft
@@ -48799,12 +48799,19 @@ notify pgrst, 'reload schema';
 --     Says the ship event's id and whether this call wrote it. Service role
 --     only; the server reads the send and its draft first.
 --   * republished_delivery_ids: the sends noted on a ship event, so the
---     nightly job doesn't take them for sends whose ship event is missing.
---     At most 50; past that a send is noted by its date only.
+--     nightly job doesn't take them for sends whose ship event is missing,
+--     and a send noted once is that ship event's even after its draft is
+--     deleted (draft ids are set null then, so only these ids still tie
+--     the send to it). At most 50; past that a send is noted by its date
+--     only. A GIN index looks a send up among them.
 
 alter table public.ship_events
   add column if not exists republished_delivery_ids uuid[] not null default '{}'
     check (cardinality(republished_delivery_ids) <= 50);
+
+-- A send is looked up among them (ship_cms_publish, the nightly job).
+create index if not exists ship_events_republished_delivery_ids_idx
+  on public.ship_events using gin (republished_delivery_ids);
 
 comment on column public.ship_events.republished_delivery_ids is
   'The CMS sends (content_draft_deliveries) of the same draft noted on this cms_publish as published again within 90 days, at most 50 (00428).';
@@ -48841,6 +48848,17 @@ begin
   select s.id into v_id
   from public.ship_events s
   where s.content_draft_delivery_id = p_delivery_id;
+  if v_id is not null then
+    return query select v_id, false;
+    return;
+  end if;
+  -- The send noted on a cms_publish before: that one, also once its draft is
+  -- deleted (content_draft_id set null), when the lookup below finds nothing.
+  select s.id into v_id
+  from public.ship_events s
+  where s.republished_delivery_ids @> array[p_delivery_id]
+  order by s.id
+  limit 1;
   if v_id is not null then
     return query select v_id, false;
     return;

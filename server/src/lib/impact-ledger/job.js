@@ -473,7 +473,22 @@ async function fillMissingSends(db, now, tally) {
       )
     ).map((ship) => ship.content_draft_delivery_id),
   );
-  // A send noted on its draft's first cms_publish (00428) has its ship event too.
+  // A send noted on a cms_publish (republished_delivery_ids, 00428) has its
+  // ship event too, read by the send: once its draft is deleted, its
+  // content_draft_id is null and the draft's read below doesn't find it.
+  const noted = await readChunks(
+    'noted sends read',
+    sends.map((send) => send.id),
+    (chunk) =>
+      db
+        .from('ship_events')
+        .select('republished_delivery_ids')
+        .overlaps('republished_delivery_ids', chunk)
+        .order('id'),
+  );
+  for (const ship of noted) {
+    for (const id of ship.republished_delivery_ids ?? []) written.add(id);
+  }
   const draftShips = await readChunks(
     'drafts ship events read',
     [...new Set(sends.map((send) => send.draft_id).filter(Boolean))],
@@ -485,9 +500,6 @@ async function fillMissingSends(db, now, tally) {
         .eq('kind', 'cms_publish')
         .order('id'),
   );
-  for (const ship of draftShips) {
-    for (const id of ship.republished_delivery_ids ?? []) written.add(id);
-  }
   const shipsOfDraft = groupBy(draftShips, 'content_draft_id');
   for (const send of sends) {
     if (written.has(send.id)) continue;

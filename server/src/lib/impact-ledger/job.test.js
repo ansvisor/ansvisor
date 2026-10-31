@@ -916,6 +916,34 @@ describe('sends confirmed without a ship event, in order', () => {
     });
   });
 
+  it('leaves a send noted on a ship event alone once its draft is deleted', async () => {
+    // The draft is gone: its sends' and its ship event's draft ids are null.
+    const db = fakeDb(
+      world({
+        content_draft_deliveries: [
+          { ...draftSend('b-earlier', T1), draft_id: null },
+          { ...draftSend('a-later', T2), draft_id: null },
+        ],
+        ship_events: [
+          ship('s1', { agent_run_id: 'run1' }),
+          ship('s9', {
+            content_draft_id: null,
+            content_draft_delivery_id: 'b-earlier',
+            shipped_at: T1,
+            republished_at: T2,
+            republished_delivery_ids: ['a-later'],
+          }),
+        ],
+      }),
+    );
+    const stats = await runImpactLedger({ db, now: D14 });
+    expect(stats).toMatchObject({ filled: 0, failed: 0 });
+    expect(db.calls.filter((c) => c.op === 'rpc')).toEqual([]);
+    expect(db.tables.ship_events.filter((e) => e.kind === 'cms_publish' && e.id !== 's1')).toEqual([
+      expect.objectContaining({ id: 's9' }),
+    ]);
+  });
+
   it('counts a send whose ship event can’t be written as failed', async () => {
     const db = fakeDb(world({ content_draft_deliveries: [draftSend('x1', T1)] }));
     db.fail = (table, op) => table === 'ship_events' && op === 'rpc';

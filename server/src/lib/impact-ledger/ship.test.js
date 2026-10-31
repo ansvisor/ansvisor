@@ -166,6 +166,30 @@ describe('recordCmsPublish', () => {
     expect(db.tables.impact_measurements).toHaveLength(0);
   });
 
+  it('keeps a send noted on a ship event there once its draft is deleted', async () => {
+    const tables = world();
+    // The draft is gone: its sends' and its ship event's draft ids are null.
+    tables.content_draft_deliveries[0].draft_id = null;
+    tables.content_draft_deliveries.push({ ...sentAgain('x2'), draft_id: null });
+    tables.ship_events = [
+      {
+        id: 'first',
+        organization_id: ORG,
+        brand_id: 'b1',
+        kind: 'cms_publish',
+        content_draft_id: null,
+        content_draft_delivery_id: 'x1',
+        shipped_at: PUBLISHED,
+        republished_at: '2026-10-21T09:00:00.000Z',
+        republished_delivery_ids: ['x2'],
+      },
+    ];
+    const db = useDb(tables);
+    expect(await record(db, 'x2', '2026-10-21T09:00:00.000Z')).toBe('first');
+    expect(db.tables.ship_events).toHaveLength(1);
+    expect(db.tables.impact_measurements).toHaveLength(0);
+  });
+
   it('keeps one ship event for a draft published again within 90 days, noting it', async () => {
     const tables = world();
     tables.content_draft_deliveries.push(sentAgain('x2'));
