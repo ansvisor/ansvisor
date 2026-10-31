@@ -56,7 +56,7 @@ export const SITE_SIGNALS = [
   'faq-schema',
 ];
 /** ChatGPT Shopping's model isn't comparable to an answer (#155): left out, as Insights leaves it. */
-const LEFT_OUT_PLATFORMS = new Set(['chatgpt-shopping']);
+export const LEFT_OUT_PLATFORMS = new Set(['chatgpt-shopping']);
 
 export interface ExplainChangeParams {
   brandId: string;
@@ -483,7 +483,18 @@ async function readEvidence(input: {
 }): Promise<Map<string, CellEvidence>> {
   const out = new Map<string, CellEvidence>();
   if (input.cells.length === 0) return out;
-  for (const cell of input.cells) out.set(cell.key, emptyEvidence());
+  // The prompts' texts, for the causes' rows.
+  const { data: texts, error: textError } = await supabaseAdmin
+    .from('prompts')
+    .select('id, text')
+    .in('id', [...new Set(input.cells.map((cell) => cell.promptId))]);
+  if (textError) throw new Error(`Could not read the prompts: ${textError.message}`);
+  const textOf = new Map(
+    ((texts ?? []) as { id: string; text: string }[]).map((row) => [row.id, row.text]),
+  );
+  for (const cell of input.cells) {
+    out.set(cell.key, { ...emptyEvidence(), prompt: textOf.get(cell.promptId) });
+  }
 
   // The cells, by prompt, in batches of a few prompts.
   const prompts = [...new Set(input.cells.map((cell) => cell.promptId))];

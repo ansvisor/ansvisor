@@ -267,6 +267,7 @@ describe('explainChangeFor', () => {
       answer('r-a1', '2026-10-06T06:00:00Z', ['https://acme.example/pricing']),
       answer('r-b1', '2026-10-14T06:00:00Z', ['https://blog.rival.example/pricing'], true),
     ];
+    db.tables.prompts = [{ id: 'p1', text: 'best aeo tool for shops' }];
     const out = await explainChangeFor(auth, { brandId: BRAND, metric: 'mention_rate' }, NOW);
     if (!out || 'ok' in out) throw new Error('no analysis');
     expect(out.analysis.causes[0]).toMatchObject({
@@ -274,6 +275,14 @@ describe('explainChangeFor', () => {
       urls: ['acme.example/pricing'],
       fix_skill: 'winback',
     });
+    // Its table row names the prompt in its words, with the pages before and now.
+    expect(out.analysis.causes[0].rows).toEqual([
+      expect.objectContaining({
+        prompt: 'best aeo tool for shops',
+        before: 'acme.example/pricing',
+        now: 'blog.rival.example/pricing',
+      }),
+    ]);
   });
 
   it('reads the later period newest first, and gives no cause when a page of answers is full', async () => {

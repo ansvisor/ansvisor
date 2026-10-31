@@ -2,10 +2,13 @@
 
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { pageKey } from '@/lib/content/sources';
 import { menuOfProfile, readRoleHidden, type MenuProfile } from '@/lib/menu-access';
 import { OPEN_SIGNAL_STATUSES } from '@/lib/signals/registry';
+import { sinceMoves, sincePeriods, type SinceYouLeft } from '@/lib/chat/since';
+import { LEFT_OUT_PLATFORMS } from '@/lib/mcp/why';
 
 /**
  * "For you now" on Chat Home (CHAT-08 v2, mockup #s-home `.scut`; CHAT-09
@@ -138,6 +141,101 @@ export async function readHomeShortcuts(brandId: string, through: string): Promi
     return { ok: true, dueTasks, lostPages, readyDrafts };
   } catch (error) {
     console.error('[chat-home] could not count the shortcuts:', error);
+    return { ok: false };
+  }
+}
+
+/**
+ * Chat Home's "Since you left" (CHAT-22 §1, mockup #s-home `.since`): the
+ * brand's biggest citation drop and one win by engine, from the day the
+ * person last left Home (chat_user_prefs.home_seen_at, 00420) to yesterday,
+ * against as many days before. The counts come from chat_why_cells (00423)
+ * as the service role, once the brand is checked to be the person's
+ * workspace's, as Why did it move reads them. `since` is null before the
+ * first leave, within a day of it, or with no move beyond normal swing.
+ * Behind CHAT_AGENTIC; never throws (#1777): a strip that can't be read
+ * isn't shown.
+ */
+
+export type SinceResult = { ok: true; since: SinceYouLeft | null } | { ok: false };
+
+interface SinceRpcCell {
+  prompt_id: string;
+  platform: string | null;
+  model_used: string | null;
+  region: string | null;
+  period: 'a' | 'b';
+  runs: number;
+  answers: number;
+  citation_answers: number;
+}
+
+export async function readSinceYouLeft(brandId: string): Promise<SinceResult> {
+  try {
+    const parsed = z.guid().safeParse(brandId);
+    if (!parsed.success) return { ok: false };
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false };
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    const orgId = profile?.organization_id ?? null;
+    if (!orgId || !chatAgenticEnabled(orgId)) return { ok: false };
+    const [prefs, brand] = await Promise.all([
+      supabase.from('chat_user_prefs').select('home_seen_at').eq('user_id', user.id).maybeSingle(),
+      supabase
+        .from('brands')
+        .select('id')
+        .eq('id', parsed.data)
+        .eq('organization_id', orgId)
+        .maybeSingle(),
+    ]);
+    const failed = prefs.error ?? brand.error;
+    if (failed) {
+      console.error('[chat-home] could not read Since you left:', failed.message);
+      return { ok: false };
+    }
+    if (!brand.data) return { ok: false };
+    const seenAt = prefs.data?.home_seen_at ?? null;
+    const periods = seenAt ? sincePeriods(seenAt, Date.now()) : null;
+    if (!seenAt || !periods) return { ok: true, since: null };
+    const { data, error } = await supabaseAdmin.rpc('chat_why_cells', {
+      p_brand_id: parsed.data,
+      p_a_from: periods.a.from,
+      p_a_to: periods.a.to,
+      p_b_from: periods.b.from,
+      p_b_to: periods.b.to,
+      // Its day series isn't used here: the shortest, one day.
+      p_series_from: periods.b.to,
+    });
+    if (error) {
+      console.error('[chat-home] could not read Since you left:', error.message);
+      return { ok: false };
+    }
+    const cells = ((data ?? {}) as { cells?: SinceRpcCell[] }).cells ?? [];
+    const moves = sinceMoves(
+      cells
+        .filter((cell) => !LEFT_OUT_PLATFORMS.has(cell.platform ?? ''))
+        .map((cell) => ({
+          key: [cell.prompt_id, cell.platform ?? '', cell.model_used ?? '', cell.region ?? ''].join(
+            '|',
+          ),
+          engine: cell.model_used ?? cell.platform ?? 'unknown',
+          period: cell.period,
+          runs: Number(cell.runs) || 0,
+          answers: Number(cell.answers) || 0,
+          citationAnswers: Number(cell.citation_answers) || 0,
+        })),
+    );
+    if (!moves.drop && !moves.win) return { ok: true, since: null };
+    return { ok: true, since: { from: periods.b.from, seenAt, ...moves } };
+  } catch (error) {
+    console.error('[chat-home] could not read Since you left:', error);
     return { ok: false };
   }
 }

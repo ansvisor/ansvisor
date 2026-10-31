@@ -3241,6 +3241,65 @@
     "planGateTitle": "Agent is a {plan} feature",
     "planGateBody": "Upgrade your plan to chat with your dashboard about visibility, competitors, citations, and content gaps."
   },
+  "chatWhy": {
+    "aria": "Why did it move",
+    "metrics": {
+      "visibility": "Visibility",
+      "visibility_score": "Visibility score",
+      "mention_rate": "Mention rate",
+      "share_of_voice": "Share of voice",
+      "citations": "Citation rate",
+      "avg_position": "Average position"
+    },
+    "metricOn": "{engine} {metric}",
+    "units": { "pts": "pts", "positions": "positions" },
+    "change": "{delta} · {days, plural, one {# day} other {# days}}",
+    "withinSwing": "Within normal swing (±{band} at this sample size)",
+    "notEnoughData": "Not enough data",
+    "explains": "What explains the {delta}",
+    "about": "about {points} {unit}",
+    "offset": "partly offset the change",
+    "nowCite": "{count, plural, one {# prompt now cites} other {# prompts now cite}} {page}",
+    "kinds": {
+      "site_change": "Site change · {page}",
+      "lost_citation_to_competitor": "Lost citation · {page}",
+      "lost_citation": "Lost citation · {page}",
+      "competitor_entered": "Competitor entered the answers",
+      "won_citation_from_competitor": "Won citation · {page}",
+      "gained_citation": "New citation · {page}",
+      "competitor_left": "Competitor left the answers",
+      "engines_changed": "Engine added or dropped",
+      "prompt_set_changed": "Prompt set changed",
+      "not_mentioned": "Not named in one period",
+      "not_enough_data": "Not enough data",
+      "other": "Other",
+      "normal_swing": "Normal swing",
+      "unexplained": "Unexplained"
+    },
+    "prompt": "Prompt",
+    "citedBefore": "Cited before",
+    "citedNow": "Cited now",
+    "date": "Date",
+    "answer": "Answer",
+    "openAnswer": "Open the answer for {prompt}",
+    "partial": "Some answers couldn't be read, so part of the change is unexplained.",
+    "notCited": "not cited",
+    "noRows": "No single prompt explains this part.",
+    "detection": "Detection from stored snapshots, no model reads",
+    "confidence": {
+      "high": "High confidence",
+      "medium": "Medium confidence",
+      "low": "Low confidence"
+    },
+    "totalSub": "{runs, number} tracked runs · {kind, select, prompts {{cells, number} tracked prompts} other {{cells, number} prompt-engine pairs}}",
+    "periodValue": "{value} · {runs, number} runs",
+    "band": "Normal band",
+    "sample": "Sample",
+    "sampleValue": "{stable, number} compared · {excluded, number} with too little data",
+    "answerSub": "An answer from scheduled tracking",
+    "loading": "Loading…",
+    "answerFailed": "This answer couldn't be loaded."
+  },
   "chatTools": {
     "profile": { "name": "Read your profile", "step": "Read your profile" },
     "aiUsage": { "name": "Read AI usage", "step": "Read AI usage" },
@@ -4209,6 +4268,19 @@
         "publishCount": "{count, number}",
         "publishMessage": "Check the {count, plural, one {# ready draft} other {# ready drafts}}, fill their page fields and send them to our CMS as drafts. Going live stays my click.",
         "more": "More"
+      },
+      "since": {
+        "left": "Since you left",
+        "oneWin": "One win",
+        "when": "{day} → yesterday",
+        "lastVisit": "Your last visit was {date}",
+        "citations": "{engine} citations",
+        "down": "down {count, number}",
+        "up": "up {count, number}",
+        "why": "Why?",
+        "whichOnes": "Which ones?",
+        "whyMessage": "Why did our {engine} citations drop since {day}?",
+        "winMessage": "Which {engine} citations did we win since {day}?"
       }
     },
     "inbox": {

@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, for you now, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, for you now, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-31
@@ -15,9 +15,11 @@ Chat answers questions about your brand from your Ansvisor data, and can do work
 
 ## Chat Home
 
-Chat opens on **Home**. It greets you by name, at your own time of day, and says when something needs you: click the link to open your **Inbox**. When nothing does, it says **All caught up.**
+Chat opens on **Home**: a greeting by name at your time of day, then a link to your **Inbox** when something needs you, else **All caught up.**
 
-Under it, **For you now** starts common jobs. **Ask anything** takes you to the box, and **More** opens every shortcut. The others show only with something to do, counted for the brand you have open: **Complete tasks** for Action Center actions due by the end of this week, overdue ones included (Chat prepares the work, you close the tasks); **Win back citations** for pages that lost citations; **Ready to publish** for drafts marked ready (Chat sends them to your CMS as drafts, going live stays your click). Click one to start a new chat on it. If your role can't make changes, you see only the jobs that read, and no **More**.
+**For you now** starts common jobs: **Ask anything** goes to the box, **More** opens every shortcut, and the rest show when the open brand has work. **Complete tasks**: Action Center actions due this week or overdue (Chat prepares, you close them). **Win back citations**: pages that lost citations. **Ready to publish**: drafts marked ready (Chat sends them to your CMS as drafts; you publish them). Each starts a new chat. Read-only roles get only the jobs that read, no **More**.
+
+**Since you left** shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat.
 
 ## Ask Chat
 
@@ -104,6 +106,10 @@ Ask Chat why a number moved, such as "Why did ChatGPT visibility drop last week?
 The answer gives both values and the change, and says first when the change is within the normal swing. It names the day the line broke, and what added or removed prompts explain. Then it ranks the causes found in tracked answers, such as a citation lost to a competitor or a worse Site Audit. Each comes with its share of the change and how sure Chat is. Chat never says a cause made it happen.
 
 Everything comes from your scheduled tracking. Chat never asks an AI engine anything new for it.
+
+## What explains the change
+
+Under the answer, a card shows the same numbers. Click the two values for the periods, the tracking runs compared and the normal swing. Each cause shows its share of the change, or its points when it partly offset it. Open a cause to see its prompts, the page cited before and the one cited now, and the day. **Answer** opens that tracked answer, with your brand marked and the pages it cited. Each cause says how sure Chat is: **High** when 10 or more prompts show it, **Medium** for 3 to 9, **Low** for fewer. When some answers couldn't be read, the card says so, and part of the change stays unexplained.
 
 ## Next moves
 

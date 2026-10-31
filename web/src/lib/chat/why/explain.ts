@@ -131,6 +131,21 @@ export interface CellEvidence {
   answersB: EvidenceRef[];
   /** Not all its answers could be read: no cause is drawn from it. */
   partial?: boolean;
+  /** The prompt's text, for the cause's rows. */
+  prompt?: string;
+}
+
+/** One prompt a cause shows (§1 item 4's table): what was cited before and now, and when. */
+export interface CauseRow {
+  prompt: string;
+  /** The page cited in the earlier period, or null. */
+  before: string | null;
+  /** The page cited in the later one, or null when none of the brand's or a rival's was. */
+  now: string | null;
+  /** The newest answer of the later period, ISO date. */
+  date: string | null;
+  /** That answer, for the evidence drawer. */
+  answer: EvidenceRef | null;
 }
 
 export type CauseKind =
@@ -181,6 +196,8 @@ export interface WhyCause {
   urls?: string[];
   /** visibility_score: its points through each part of the score. */
   components?: Partial<Record<ScoreComponent, number>>;
+  /** The prompts that show it, up to 10. */
+  rows?: CauseRow[];
 }
 
 /** The explain_change contract (§1 item 6), engine weather aside (not in Wave 2). */
@@ -402,6 +419,27 @@ export function cellCause(
   return null;
 }
 
+/**
+ * A cell's row for its cause's table, by the way the cell moved (`worse`,
+ * as cellCause has it): a loss shows the own page cited before and what is
+ * cited now; a gain the competitor's page cited before and the own page now.
+ */
+export function rowOf(evidence: CellEvidence, worse: boolean): CauseRow | null {
+  if (!evidence.prompt) return null;
+  const latest = evidence.answersB[0] ?? null;
+  return {
+    prompt: evidence.prompt,
+    before: worse
+      ? (minus(evidence.ownCitedA, evidence.ownCitedB)[0] ?? evidence.ownCitedA[0] ?? null)
+      : (evidence.competitorCitedA[0] ?? null),
+    now: worse
+      ? (evidence.competitorCitedB[0] ?? evidence.ownCitedB[0] ?? null)
+      : (minus(evidence.ownCitedB, evidence.ownCitedA)[0] ?? evidence.ownCitedB[0] ?? null),
+    date: latest?.date ?? null,
+    answer: latest,
+  };
+}
+
 /** High: shown in 10 cells or more; Medium: in 3 to 9; Low: fewer (§1 item 5.7). */
 export function confidenceOf(cells: number): Confidence {
   if (cells >= 10) return 'high';
@@ -578,16 +616,21 @@ export type CauseTally = Map<
     refs: EvidenceRef[];
     urls: Set<string>;
     components: Partial<Record<ScoreComponent, number>>;
+    rows: CauseRow[];
   }
 >;
 
-/** Adds a cell's move to its cause (and, for the score, to the part it moved). */
+/**
+ * Adds a cell's move to its cause (and, for the score, to the part it
+ * moved), with the cell's row for the cause's table the first time it counts there.
+ */
 export function tallyCause(
   tally: CauseTally,
   cell: string,
   cause: { kind: CauseKind; urls: string[]; refs: EvidenceRef[] },
   own: number,
   component?: ScoreComponent,
+  row?: CauseRow | null,
 ) {
   const entry = tally.get(cause.kind) ?? {
     contribution: 0,
@@ -595,8 +638,10 @@ export function tallyCause(
     refs: [],
     urls: new Set<string>(),
     components: {},
+    rows: [],
   };
   entry.contribution += own;
+  if (row && !entry.cells.has(cell) && entry.rows.length < MAX_REFS) entry.rows.push(row);
   entry.cells.add(cell);
   for (const ref of cause.refs) if (entry.refs.length < MAX_REFS) entry.refs.push(ref);
   for (const url of cause.urls) entry.urls.add(url);
@@ -615,6 +660,7 @@ export function causeParts(tally: CauseTally): WhyPart[] {
     fix_skill: FIX_SKILL[kind] ?? null,
     ...(entry.urls.size > 0 ? { urls: [...entry.urls].slice(0, 5) } : {}),
     ...(Object.keys(entry.components).length > 0 ? { components: entry.components } : {}),
+    ...(entry.rows.length > 0 ? { rows: entry.rows } : {}),
   }));
 }
 
@@ -783,8 +829,10 @@ export function explainChange(input: {
     const moved = rb.num / rb.den - ra.num / ra.den;
     const own = ((ra.den / denA + rb.den / denB) / 2) * moved * scale;
     if (own === 0) return;
-    const cause = cellCause(input.evidence.get(cell.key), moved * sign < 0);
-    if (cause) tallyCause(tally, cell.key, cause, own);
+    const found = input.evidence.get(cell.key);
+    const worse = moved * sign < 0;
+    const cause = cellCause(found, worse);
+    if (cause && found) tallyCause(tally, cell.key, cause, own, undefined, rowOf(found, worse));
   });
 
   const parts = [

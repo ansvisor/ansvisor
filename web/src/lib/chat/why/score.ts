@@ -8,6 +8,7 @@ import {
   changeSe,
   noiseOf,
   rankParts,
+  rowOf,
   setChangedOf,
   setNames,
   setParts,
@@ -192,8 +193,9 @@ export function explainScoreChange(input: {
       const moved = rb.num / rb.den - ra.num / ra.den;
       const own = ((ra.den / denA + rb.den / denB) / 2) * moved * points;
       if (own === 0) continue;
-      const cause = cellCause(input.evidence.get(cell.key), own < 0, PART_CAUSES[part]);
-      if (cause) tallyCause(tally, cell.key, cause, own, part);
+      const found = input.evidence.get(cell.key);
+      const cause = cellCause(found, own < 0, PART_CAUSES[part]);
+      if (cause && found) tallyCause(tally, cell.key, cause, own, part, rowOf(found, own < 0));
     }
   };
   attribute('mention', (c) => ({ num: c.mentionAnswers, den: c.answers }), 100 * W.mention);

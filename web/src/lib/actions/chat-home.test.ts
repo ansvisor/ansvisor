@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * lost-citation signals name, and its drafts ready to publish — read as the
  * person, once, together; none for a section an Admin took off their menu;
  * only with the new Chat on, and answered as a value, never thrown (#1777).
+ * And "Since you left" (CHAT-22 §1): citations by engine since the person
+ * last left Home, counted as the service role once the brand is theirs.
  */
 
 const BRAND = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -19,6 +21,10 @@ const db = vi.hoisted(() => ({
   /** A table's answer; signals by page. */
   answers: {} as Record<string, { data?: unknown; count?: number | null; error: unknown }>,
   signalPages: [] as unknown[][],
+  /** A table's maybeSingle answer, before the profile and the role's hidden sections. */
+  single: {} as Record<string, { data: unknown; error: { message: string } | null }>,
+  rpc: { data: null, error: null } as { data: unknown; error: { message: string } | null },
+  rpcCalls: [] as unknown[][],
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -35,9 +41,10 @@ vi.mock('@/lib/supabase/server', () => ({
         };
       }
       chain.maybeSingle = async () =>
-        table === 'profiles'
+        db.single[table] ??
+        (table === 'profiles'
           ? { data: db.profile, error: null }
-          : { data: { hidden_sections: db.roleHidden }, error: null };
+          : { data: { hidden_sections: db.roleHidden }, error: null });
       chain.then = (resolve: (value: unknown) => unknown) =>
         Promise.resolve(
           table === 'signals'
@@ -48,8 +55,16 @@ vi.mock('@/lib/supabase/server', () => ({
     },
   }),
 }));
+vi.mock('@/lib/supabase/admin', () => ({
+  supabaseAdmin: {
+    rpc: async (...args: unknown[]) => {
+      db.rpcCalls.push(args);
+      return db.rpc;
+    },
+  },
+}));
 
-const { readHomeShortcuts } = await import('./chat-home');
+const { readHomeShortcuts, readSinceYouLeft } = await import('./chat-home');
 
 const lost = (...urls: string[]) => ({ lostUrls: urls.map((url) => ({ url })) });
 const tables = () => [...new Set(db.calls.map(([table]) => table))];
@@ -78,8 +93,14 @@ beforeEach(() => {
       { lostUrls: null },
     ],
   ];
+  db.single = {};
+  db.rpc = { data: null, error: null };
+  db.rpcCalls = [];
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.useRealTimers();
+});
 
 describe('readHomeShortcuts', () => {
   it('counts the due tasks, the lost-citation pages and the ready drafts together', async () => {
@@ -162,6 +183,98 @@ describe('readHomeShortcuts', () => {
     db.answers.content_drafts = { count: 2, error: null };
     db.answers.signals = { data: null, error: { message: 'nope' } };
     expect(await readHomeShortcuts(BRAND, '2026-11-01')).toEqual({ ok: false });
+    logged.mockRestore();
+  });
+});
+
+describe('readSinceYouLeft', () => {
+  const SEEN = '2026-10-19T15:20:00.000Z';
+  const cell = (engine: string, period: 'a' | 'b', answers: number, cited: number) => ({
+    prompt_id: 'p1',
+    platform: engine,
+    model_used: engine,
+    region: null,
+    period,
+    runs: 7,
+    answers,
+    citation_answers: cited,
+  });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-31T09:00:00Z'));
+    db.single = {
+      chat_user_prefs: { data: { home_seen_at: SEEN }, error: null },
+      brands: { data: { id: BRAND }, error: null },
+    };
+    db.rpc = {
+      data: {
+        cells: [
+          cell('google-aio', 'a', 200, 60),
+          cell('google-aio', 'b', 200, 40),
+          cell('chatgpt-web', 'a', 200, 30),
+          cell('chatgpt-web', 'b', 200, 50),
+          // ChatGPT Shopping is left out, as Why leaves it.
+          cell('chatgpt-shopping', 'a', 200, 0),
+          cell('chatgpt-shopping', 'b', 200, 100),
+        ],
+      },
+      error: null,
+    };
+  });
+
+  it('gives the biggest drop and one win since the person last left Home', async () => {
+    expect(await readSinceYouLeft(BRAND)).toEqual({
+      ok: true,
+      since: {
+        from: '2026-10-19',
+        seenAt: SEEN,
+        drop: { engine: 'google-aio', before: 60, now: 40 },
+        win: { engine: 'chatgpt-web', before: 30, now: 50 },
+      },
+    });
+    expect(db.calls).toContainEqual(['brands', 'eq', 'organization_id', 'org-1']);
+    expect(db.rpcCalls).toEqual([
+      [
+        'chat_why_cells',
+        {
+          p_brand_id: BRAND,
+          p_a_from: '2026-10-07',
+          p_a_to: '2026-10-18',
+          p_b_from: '2026-10-19',
+          p_b_to: '2026-10-30',
+          p_series_from: '2026-10-30',
+        },
+      ],
+    ]);
+  });
+
+  it('has nothing before the first leave, the same day, or without a move', async () => {
+    db.single.chat_user_prefs = { data: { home_seen_at: null }, error: null };
+    expect(await readSinceYouLeft(BRAND)).toEqual({ ok: true, since: null });
+    db.single.chat_user_prefs = { data: { home_seen_at: '2026-10-31T07:00:00Z' }, error: null };
+    expect(await readSinceYouLeft(BRAND)).toEqual({ ok: true, since: null });
+    expect(db.rpcCalls).toEqual([]);
+    db.single.chat_user_prefs = { data: { home_seen_at: SEEN }, error: null };
+    db.rpc = { data: { cells: [] }, error: null };
+    expect(await readSinceYouLeft(BRAND)).toEqual({ ok: true, since: null });
+  });
+
+  it('counts nothing for a brand outside the workspace, a bad id, or with the new Chat off', async () => {
+    db.single.brands = { data: null, error: null };
+    expect(await readSinceYouLeft(BRAND)).toEqual({ ok: false });
+    expect(await readSinceYouLeft('nope')).toEqual({ ok: false });
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await readSinceYouLeft(BRAND)).toEqual({ ok: false });
+    expect(db.rpcCalls).toEqual([]);
+  });
+
+  it('answers a failed read as a value', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    db.rpc = { data: null, error: { message: 'nope' } };
+    expect(await readSinceYouLeft(BRAND)).toEqual({ ok: false });
+    db.single.chat_user_prefs = { data: null, error: { message: 'nope' } };
+    expect(await readSinceYouLeft(BRAND)).toEqual({ ok: false });
     logged.mockRestore();
   });
 });

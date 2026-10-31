@@ -39,6 +39,7 @@ import {
 } from './composer/chat-composer';
 import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
+import { WhyCard } from './run/why-card';
 import { NextMoves } from './run/next-moves';
 import { RunAnswer } from './run/run-answer';
 import { StaffDebug } from './run/staff-debug';
@@ -100,6 +101,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         steps: message.run.steps,
         deliverables: message.run.deliverables ?? [],
         nextMoves: message.run.nextMoves ?? [],
+        why: message.run.why ?? [],
         text: message.text,
         generatedAt: message.generatedAt,
         dataAsOf: message.dataAsOf,
@@ -718,6 +720,7 @@ function Answer({
           onSkip={() => void onSkip()}
         />
       )}
+      {turn.runId && run.why.map((why) => <WhyCard key={why.n} runId={turn.runId!} why={why} />)}
       {turn.runId &&
         run.deliverables.map((deliverable, i) => (
           <DeliverableCard
