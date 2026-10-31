@@ -52,8 +52,11 @@ function useIsWide(): boolean {
 }
 
 const CHAT_PATH = /^\/dashboard\/chat\/([0-9a-f-]{36})$/i;
-/** An agent's detail: "Chat › Agents › {its name}" (governance mockup CRUMB). */
-const AGENT_PATH = /^\/dashboard\/chat\/agents\/[0-9a-f-]{36}$/i;
+/**
+ * An agent's detail, its Edit and New agent: "Chat › Agents › {its name}",
+ * "Chat › Agents › New agent" (governance mockup CRUMB).
+ */
+const AGENT_PATH = /^\/dashboard\/chat\/agents\/(?:new|[0-9a-f-]{36}(?:\/edit)?)$/i;
 /** A daily suggestion's page: "Chat › Inbox › Daily suggestion · Oct 29" (CHAT-26 #d-detail). */
 const SUGGESTION_PATH = /^\/dashboard\/chat\/inbox\/[0-9a-f-]{36}$/i;
 /** The page a detail sits under, linked in its breadcrumb before the name the detail sets. */

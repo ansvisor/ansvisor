@@ -57,8 +57,17 @@ vi.mock('../config/supabase.js', () => ({
     },
   },
 }));
+const assertBrandAccess = vi.fn(async () => ({ orgId: 'org1' }));
+vi.mock('./access.js', () => ({ assertBrandAccess: (...args) => assertBrandAccess(...args) }));
 vi.mock('./logger.js', () => ({
   logger: { warn: (...args) => events.push(args), error: () => {} },
+}));
+const shipped = [];
+vi.mock('./impact-ledger/ship.js', () => ({
+  shipCmsPublish: async (args) => {
+    shipped.push(args);
+    return { id: 'ship-1', created: true, failed: false };
+  },
 }));
 
 const { liveAddress, markDeliveryPublished, publishDraft, publishDraftForKeyUser } =
@@ -97,6 +106,7 @@ beforeEach(() => {
   };
   rpcs.length = 0;
   events.length = 0;
+  shipped.length = 0;
 });
 
 describe('liveAddress', () => {
@@ -295,6 +305,26 @@ describe('publishDraftForKeyUser', () => {
     expect(tables.content_drafts[0]).toMatchObject({ status: 'published', published_url: LIVE });
   });
 
+  it('leaves a draft of a brand the key’s user wasn’t given alone, as not there', async () => {
+    ofOrg('org1');
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error("You don't have access to this brand"), {
+        status: 403,
+        code: 'no_brand_access',
+      }),
+    );
+    expect(
+      await publishDraftForKeyUser({ draftId: 'dr1', url: LIVE, userId: 'u1', orgId: 'org1' }),
+    ).toBeNull();
+    expect(assertBrandAccess).toHaveBeenLastCalledWith(tables.content_drafts[0].brand_id, 'u1');
+    expect(tables.content_drafts[0].status).not.toBe('published');
+
+    assertBrandAccess.mockRejectedValueOnce(new Error('connection reset'));
+    await expect(
+      publishDraftForKeyUser({ draftId: 'dr1', url: LIVE, userId: 'u1', orgId: 'org1' }),
+    ).rejects.toThrow('connection reset');
+  });
+
   it('leaves another organization’s draft, and an archived one, alone', async () => {
     ofOrg('org2');
     expect(
@@ -354,5 +384,22 @@ describe('markDeliveryPublished', () => {
     expect(tables.actions[0].payload.publishedPages).toEqual({ dr1: LIVE });
     expect(tables.action_tasks[0].status).toBe('completed');
     expect(tables.action_events[0].actor_id).toBeNull();
+  });
+
+  it('puts the publish into the impact ledger once the delivery is published, and not again', async () => {
+    tables.content_draft_deliveries = [{ id: 'x1', draft_id: 'dr1', status: 'sent' }];
+    await markDeliveryPublished(
+      { id: 'x1', draft_id: 'dr1', status: 'sent', published_url: null },
+      LIVE,
+    );
+    expect(shipped).toEqual([
+      { deliveryId: 'x1', url: LIVE, publishedAt: tables.content_draft_deliveries[0].published_at },
+    ]);
+    // Confirmed again at the same address: nothing new shipped.
+    await markDeliveryPublished(
+      { id: 'x1', draft_id: 'dr1', status: 'published', published_url: LIVE },
+      LIVE,
+    );
+    expect(shipped).toHaveLength(1);
   });
 });

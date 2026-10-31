@@ -11,6 +11,7 @@ import { MAX_PINNED_COMPETITORS } from '@/lib/insights-trend';
 import { isSiteType, type SiteType } from '@/lib/content/page-types';
 import { isConversionsConsent, type ConversionsConsent } from '@/lib/conversion-tracking';
 import { assertWritable } from '@/lib/subscription-guard';
+import { countPlanBrands } from '@/lib/plan-brand-count';
 
 function mapDomainRow(d: Record<string, unknown>): BrandDomain {
   return {
@@ -108,15 +109,12 @@ export async function createBrand(input: CreateBrandInput): Promise<CreateBrandR
   await assertWritable({ onboarding: true });
   const supabase = await createClient();
 
-  // The demo brand (00380) never counts against the plan.
-  const { count } = await supabase
-    .from('brands')
-    .select('id', { count: 'exact', head: true })
-    .eq('organization_id', input.organizationId)
-    .eq('is_demo', false);
+  // Every brand of the organization, whatever this person sees (00390); the
+  // demo brand (00380) never counts against the plan.
+  const count = await countPlanBrands(supabase, input.organizationId);
 
   const plan = await getOrgPlan(input.organizationId);
-  if (!isWithinLimit(plan, 'maxBrands', count ?? 0)) {
+  if (!isWithinLimit(plan, 'maxBrands', count)) {
     const max = plan.limits.maxBrands;
     return {
       code: 'plan_limit',
@@ -126,22 +124,32 @@ export async function createBrand(input: CreateBrandInput): Promise<CreateBrandR
 
   const slug = slugify(input.name) || `brand-${Date.now()}`;
 
+  // The id is chosen here and the row is read back after the insert, never
+  // with `insert … returning`: that checks the select policy before the row
+  // is stored, and a Selected-brands person (00388/00389) only sees the brand
+  // once the creator grant, which runs after the insert, has shared it.
+  const brandId = crypto.randomUUID();
+  const { error: insertError } = await supabase.from('brands').insert({
+    id: brandId,
+    organization_id: input.organizationId,
+    name: input.name.trim(),
+    slug,
+    logo_url: input.logoUrl || null,
+    industry: input.industry || null,
+    description: input.description || null,
+    region: input.region || 'US',
+    // State only makes sense for US brands; drop it silently otherwise so
+    // a stale value from a region switch can't leak into the row.
+    state: (input.region || 'US') === 'US' ? input.state || null : null,
+    language: input.language || 'en',
+  });
+
+  if (insertError) throw new Error(insertError.message);
+
   const { data: brand, error } = await supabase
     .from('brands')
-    .insert({
-      organization_id: input.organizationId,
-      name: input.name.trim(),
-      slug,
-      logo_url: input.logoUrl || null,
-      industry: input.industry || null,
-      description: input.description || null,
-      region: input.region || 'US',
-      // State only makes sense for US brands; drop it silently otherwise so
-      // a stale value from a region switch can't leak into the row.
-      state: (input.region || 'US') === 'US' ? input.state || null : null,
-      language: input.language || 'en',
-    })
-    .select()
+    .select('*')
+    .eq('id', brandId)
     .single();
 
   if (error || !brand) throw new Error(error?.message ?? 'Failed to create brand');

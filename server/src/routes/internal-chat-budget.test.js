@@ -124,6 +124,7 @@ describe('POST /api/internal/chat/budget/*', () => {
       runId: RUN,
       stepId: STEP,
       ownKey: false,
+      agentRunId: null,
     });
 
     await post('reserve', reserveBody({ stepId: undefined, feature: 'image', ownKey: true }));
@@ -131,6 +132,26 @@ describe('POST /api/internal/chat/budget/*', () => {
       ORG,
       expect.objectContaining({ feature: 'image', stepId: null, ownKey: true }),
     );
+  });
+
+  it('holds an agent run’s step within its cap, and says when the run reached it', async () => {
+    const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c09';
+    await post('reserve', reserveBody({ feature: 'agent', agentRunId: AGENT_RUN }));
+    expect(reserveChatStep).toHaveBeenLastCalledWith(
+      ORG,
+      expect.objectContaining({ feature: 'agent', agentRunId: AGENT_RUN }),
+    );
+    reserveChatStep.mockRejectedValueOnce(
+      new ChatBudgetError('run_cap', 429, 'This run reached its limit.'),
+    );
+    const res = await post('reserve', reserveBody({ feature: 'agent', agentRunId: AGENT_RUN }));
+    expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({
+      success: false,
+      error: 'run_cap',
+      message: 'This run reached its limit.',
+    });
+    expect((await post('reserve', reserveBody({ agentRunId: 'nope' }))).status).toBe(400);
   });
 
   it('refuses a body it can’t read before holding anything', async () => {

@@ -16,6 +16,9 @@ export const API_FAILURES = [
 ] as const;
 export type ApiFailure = (typeof API_FAILURES)[number];
 
+/** The server's refusals of a brand the person can't reach. */
+const WORKSPACE_CODES = new Set(['not_in_workspace', 'no_brand_access']);
+
 /**
  * Read from the server's own codes, not the status alone: a 403 is another
  * workspace's brand only when the server says so, and a 429 is a used-up
@@ -39,7 +42,10 @@ export function apiFailure(status: number, body: Record<string, unknown> = {}): 
   // 403 with plan_limit. Not plan-guard's 400 for an account with no organization.
   if (status === 402 || (status === 403 && body.error === 'plan_limit')) return 'plan';
   // The server's code since BUG-001; its bare "Unauthorized" 403 before then.
-  if (body.code === 'not_in_workspace' || (status === 403 && body.error === 'Unauthorized')) {
+  // A brand of the workspace the person wasn't given (Selected brands,
+  // no_brand_access) reads the same: as for another workspace's brand, the
+  // thing to do is switch to one of your brands.
+  if (WORKSPACE_CODES.has(String(body.code)) || (status === 403 && body.error === 'Unauthorized')) {
     return 'workspace';
   }
   if (status === 404) return 'not_found';

@@ -24,6 +24,8 @@ const MODEL = 'anthropic/claude-haiku-4-5';
 let org;
 let ledger;
 let grants;
+// chat_agent_runs: an agent run's cap and its use (00419).
+let agentRuns;
 let rpcCalls;
 let runs;
 let nextId;
@@ -38,7 +40,19 @@ async function reserveChatAiUsage(args) {
     return { data: null, error: { code: 'P0002', message: 'chat run not found' } };
   }
   const held = lock.then(async () => {
-    if (!args.p_own_key && args.p_budget !== null) {
+    if (args.p_run_cap !== undefined && args.p_run_cap !== null) {
+      // 00419: the agent run's spend, own-key steps in, plus the step within its cap.
+      const runSpent = ledger
+        .filter((r) => r.agent_run_id === args.p_agent_run_id)
+        .reduce((sum, r) => sum + r.cost_usd, 0);
+      if (!args.p_own_key && args.p_budget !== null) {
+        const spent = ledger
+          .filter((r) => !r.own_key && r.used_at >= args.p_since)
+          .reduce((sum, r) => sum + r.cost_usd, 0);
+        if (spent >= args.p_budget || spent + args.p_cost > args.p_budget + 1e-12) return null;
+      }
+      if (runSpent + args.p_cost > args.p_run_cap + 1e-12) return null;
+    } else if (!args.p_own_key && args.p_budget !== null) {
       const spent = ledger
         .filter((r) => !r.own_key && r.used_at >= args.p_since)
         .reduce((sum, r) => sum + r.cost_usd, 0);
@@ -56,6 +70,7 @@ async function reserveChatAiUsage(args) {
       own_key: args.p_own_key,
       chat_run_id: args.p_chat_run_id,
       chat_run_step_id: args.p_chat_run_step_id,
+      ...(args.p_agent_run_id ? { agent_run_id: args.p_agent_run_id } : {}),
       used_at: new Date().toISOString(),
     });
     return id;
@@ -93,7 +108,11 @@ function reserveAiUsage(args) {
   return { data: id, error: null };
 }
 
-const tables = () => ({ prompt_improve_usage: ledger, ai_credit_grants: grants });
+const tables = () => ({
+  prompt_improve_usage: ledger,
+  ai_credit_grants: grants,
+  chat_agent_runs: agentRuns,
+});
 
 /** What PostgREST's filters do, on a row's value: numbers by value, times as ISO strings. */
 const same = (a, b) => a === b || (typeof a === 'number' && Number(b) === a);
@@ -116,11 +135,15 @@ function query(table) {
     if (op.kind === 'update') {
       const hit = list.filter(matches);
       hit.forEach((r) => Object.assign(r, op.value));
-      return { data: hit.map((r) => ({ id: r.id })), error: null };
+      return {
+        data: hit.map((r) => ({ id: r.id, agent_run_id: r.agent_run_id ?? null })),
+        error: null,
+      };
     }
     if (op.kind === 'delete') {
+      const gone = ledger.filter(matches);
       ledger = ledger.filter((r) => !matches(r));
-      return { data: null, error: null };
+      return { data: gone.map((r) => ({ agent_run_id: r.agent_run_id ?? null })), error: null };
     }
     if (op.kind === 'insert') {
       for (const row of [op.value].flat()) list.push({ id: `u${nextId++}`, ...row });
@@ -177,6 +200,7 @@ beforeEach(async () => {
   };
   ledger = [];
   grants = [];
+  agentRuns = [];
   rpcCalls = [];
   runs = new Set([RUN]);
   nextId = 1;
@@ -711,5 +735,119 @@ describe('each agent’s share of the AI limit', () => {
     expect(rpcCalls).toEqual([]);
     vi.stubEnv('CHAT_AGENTIC', 'false');
     await expect(budget.agentUsageShares('o1')).rejects.toMatchObject({ code: 'chat_off' });
+  });
+});
+
+describe('an agent run’s step, within its own cap (CHAT-27 items 21–22)', () => {
+  const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0a';
+
+  beforeEach(() => {
+    agentRuns = [{ id: AGENT_RUN, organization_id: 'o1', max_share: 0.1, usage_share: 0 }];
+  });
+
+  it('holds it within the run’s share of the budget, worked out here, and names its row with the run', async () => {
+    const id = await budget.reserveChatStep(
+      'o1',
+      step({ feature: 'agent', agentRunId: AGENT_RUN }),
+    );
+    // 10% of Starter's $5: the cap never leaves the server as a share.
+    expect(rpcCalls.at(-1).args).toMatchObject({
+      p_feature: 'agent',
+      p_agent_run_id: AGENT_RUN,
+      p_run_cap: 0.5,
+    });
+    expect(ledger).toEqual([expect.objectContaining({ id, agent_run_id: AGENT_RUN })]);
+    // A person's own chat names no agent run and has no cap.
+    await budget.reserveChatStep('o1', step());
+    expect(rpcCalls.at(-1).args).not.toHaveProperty('p_agent_run_id');
+    expect(rpcCalls.at(-1).args).not.toHaveProperty('p_run_cap');
+  });
+
+  it('refuses a step past the run’s cap as run_cap, own-key steps counted, with budget left', async () => {
+    // $0.495 of its $0.50 used on the workspace's own key; the month's budget is untouched.
+    ledger.push({
+      id: 'own',
+      feature: 'agent',
+      cost_usd: 0.495,
+      own_key: true,
+      agent_run_id: AGENT_RUN,
+      used_at: '2026-10-29T10:00:00.000Z',
+    });
+    await expect(
+      budget.reserveChatStep('o1', step({ feature: 'agent', agentRunId: AGENT_RUN })),
+    ).rejects.toMatchObject({ name: 'ChatBudgetError', code: 'run_cap', statusCode: 429 });
+    // The month's limit used up is still ai_limit, for the same run.
+    ledger = [];
+    spent(5);
+    await expect(
+      budget.reserveChatStep('o1', step({ feature: 'agent', agentRunId: AGENT_RUN })),
+    ).rejects.toMatchObject({ name: 'PlanLimitError', statusCode: 429 });
+  });
+
+  it('refuses an agent run that isn’t the workspace’s', async () => {
+    agentRuns[0].organization_id = 'o2';
+    await expect(
+      budget.reserveChatStep('o1', step({ agentRunId: AGENT_RUN })),
+    ).rejects.toMatchObject({ code: 'not_found', statusCode: 404 });
+    expect(rpcCalls.filter((c) => c.fn === 'reserve_chat_ai_usage')).toEqual([]);
+  });
+
+  it('keeps the run’s use as a share of the budget after each charge and release, never dollars', async () => {
+    const id = await budget.reserveChatStep(
+      'o1',
+      step({ feature: 'agent', agentRunId: AGENT_RUN }),
+    );
+    await budget.chargeChatStep('o1', id, {
+      modelId: MODEL,
+      usage: { inputTokens: 100_000, outputTokens: 20_000 },
+    });
+    // $0.20 of Starter's $5: 4%.
+    expect(agentRuns[0].usage_share).toBe(0.04);
+    const second = await budget.reserveChatStep(
+      'o1',
+      step({ feature: 'agent', agentRunId: AGENT_RUN }),
+    );
+    await budget.releaseChatStep('o1', second);
+    expect(agentRuns[0].usage_share).toBe(0.04);
+    // Self-hosted has no budget to share: the share stays.
+    vi.stubEnv('IS_CLOUD', 'false');
+    agentRuns[0].usage_share = 0;
+    await budget.refreshAgentRunShare('o1', AGENT_RUN);
+    expect(agentRuns[0].usage_share).toBe(0);
+  });
+});
+
+describe('an agent run’s step on purchased AI credits', () => {
+  const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0b';
+
+  it('caps the run on the included budget, and counts its credit parts toward it', async () => {
+    agentRuns = [{ id: AGENT_RUN, organization_id: 'o1', max_share: 0.1, usage_share: 0 }];
+    // Starter's $5 spent but $0.002; $5 left on a pack.
+    spent(4.998);
+    grants.push({
+      id: 'g1',
+      organization_id: 'o1',
+      usd_total: 5,
+      usd_used: 0,
+      expires_at: '2027-09-01T00:00:00.000Z',
+      created_at: '2026-09-01T00:00:00.000Z',
+    });
+    const id = await budget.reserveChatStep(
+      'o1',
+      step({ feature: 'agent', agentRunId: AGENT_RUN }),
+    );
+    // The hold passes on the pack; the cap stays 10% of the plan's $5, not of $10.
+    expect(rpcCalls.at(-1).args).toMatchObject({ p_budget: 10, p_run_cap: 0.5 });
+
+    await budget.chargeChatStep('o1', id, {
+      modelId: MODEL,
+      usage: { inputTokens: 100_000, outputTokens: 20_000 },
+    });
+    // $0.20: $0.002 on the included budget, the rest on the pack, both the run's.
+    const parts = ledger.filter((r) => r.agent_run_id === AGENT_RUN);
+    expect(parts).toHaveLength(2);
+    expect(parts.find((r) => r.grant_id === 'g1')).toMatchObject({ agent_run_id: AGENT_RUN });
+    // Its use is the whole step over the plan's $5: 4%.
+    expect(agentRuns[0].usage_share).toBe(0.04);
   });
 });

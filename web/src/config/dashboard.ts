@@ -57,9 +57,25 @@ export interface NavGroup {
  */
 export const dashboardNav: NavGroup[] = [
   /**
+   * Chat first, above the groups and in none of them: it is where you ask
+   * about anything below, or let the agent do the work. The route stays
+   * /dashboard/agent: renaming the URL would break every existing link for a
+   * label change, and the sidebar's "Set up" badge keys off that href.
+   */
+  {
+    items: [
+      {
+        title: 'Chat',
+        href: '/dashboard/agent',
+        icon: Sparkles,
+        requiredFeature: 'ai_agent',
+      },
+    ],
+  },
+  /**
    * New Ansvisor: the groups name the two things the product does. Execution
-   * does the work (actions, the agent, content, page fixes); Analytics shows
-   * where the brand stands in AI search.
+   * does the work (actions, content, page fixes); Analytics shows where the
+   * brand stands in AI search.
    */
   {
     title: 'Execution',
@@ -68,16 +84,6 @@ export const dashboardNav: NavGroup[] = [
         title: 'Action Center',
         href: '/dashboard/action-center',
         icon: Target,
-      },
-      // Right under Action Center: Chat is where you ask, or let the agent do
-      // the work. The route stays /dashboard/agent: renaming the URL would
-      // break every existing link for a label change, and the sidebar's
-      // "Set up" badge keys off that href.
-      {
-        title: 'Chat',
-        href: '/dashboard/agent',
-        icon: Sparkles,
-        requiredFeature: 'ai_agent',
       },
       // Content Editor (CE-001): a group, like Prompts, and new as a whole.
       // Its pages in the order the work goes: Opportunities (today's page,
@@ -115,14 +121,8 @@ export const dashboardNav: NavGroup[] = [
         icon: BarChart3,
         requiredFeature: 'basic_insights',
       },
-      // Head-to-head with each competitor, right under Brand Visibility,
-      // whose Leaderboard opens it too. Off the menu since #506, back on it.
-      {
-        title: 'Competitors',
-        href: '/dashboard/competitors',
-        icon: Users,
-        requiredFeature: 'competitor_tracking',
-      },
+      // Prompts right under Brand Visibility: adding prompts is the way in,
+      // so nothing sits between them (Competitors moved under Reports).
       {
         title: 'Prompts',
         href: '/dashboard/prompts',
@@ -172,6 +172,10 @@ export const dashboardNav: NavGroup[] = [
    *
    * It is also the only way into /dashboard/reports besides the button on
    * Visibility — from Citations or Site Audit there was no route to it at all.
+   *
+   * Competitors, the head-to-head with each competitor, sits right under it,
+   * out of Analytics so that group stays short. Brand Visibility's
+   * Leaderboard still opens it.
    */
   {
     items: [
@@ -179,6 +183,12 @@ export const dashboardNav: NavGroup[] = [
         title: 'Reports',
         href: '/dashboard/reports',
         icon: FileBarChart,
+      },
+      {
+        title: 'Competitors',
+        href: '/dashboard/competitors',
+        icon: Users,
+        requiredFeature: 'competitor_tracking',
       },
     ],
   },
