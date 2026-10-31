@@ -106,6 +106,9 @@ vi.mock('./_brand-facts-tab', () => ({
   BrandFactsTab: ({ brandId }: { brandId: string }) => <p data-testid="brand-facts">{brandId}</p>,
 }));
 
+// The client logo is _client-logo-card.test.tsx's.
+vi.mock('./_client-logo-card', () => ({ ClientLogoCard: () => null }));
+
 import BrandSettingsPage from './page';
 
 afterEach(() => {

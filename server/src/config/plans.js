@@ -133,6 +133,7 @@ export const PLANS = {
         'content_optimization',
         'custom_reports',
         'api_access',
+        'white_label',
         'ai_agent',
         'shopping_analytics',
         'prompt_improve',

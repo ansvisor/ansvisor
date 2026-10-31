@@ -1,0 +1,147 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { NextIntlClientProvider } from 'next-intl';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../../../../../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import type { Brand } from '@/types';
+
+/**
+ * Brand settings › Client logo: Admins and Managers set the client's logo
+ * on a plan with white label; others see it; Starter names Growth; a
+ * self-host without white label doesn't show the card.
+ */
+
+const actions = vi.hoisted(() => ({
+  getBrandClientLogo: vi.fn(),
+  prepareBrandClientLogoUpload: vi.fn(),
+  setBrandClientLogo: vi.fn(),
+}));
+vi.mock('@/lib/actions/white-label', () => actions);
+const uploadLogo = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/white-label/logo-upload', () => ({ uploadLogo }));
+const plan = vi.hoisted(() => ({ isCloud: true }));
+vi.mock('@/components/providers/plan-provider', () => ({ usePlanContext: () => plan }));
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
+
+const { ClientLogoCard } = await import('./_client-logo-card');
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true;
+
+const brand = { id: 'brand-1', name: 'Northwind' } as Brand;
+const signed = 'https://store.example/sign/logo.png';
+
+let container: HTMLDivElement;
+let root: Root;
+const openUpgrade = vi.fn();
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  plan.isCloud = true;
+  actions.getBrandClientLogo.mockResolvedValue({
+    ok: true,
+    view: { available: true, requiredPlan: 'growth', canEdit: true, logoUrl: null },
+  });
+  actions.setBrandClientLogo.mockResolvedValue({ ok: true });
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+});
+
+async function render(isLocked = false) {
+  await act(async () => {
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <ClientLogoCard brand={brand} />
+        </UpgradeDialogContext.Provider>
+      </NextIntlClientProvider>,
+    );
+  });
+}
+
+const button = (text: string) =>
+  [...container.querySelectorAll('button')].find((b) => b.textContent === text);
+
+describe('ClientLogoCard', () => {
+  it('names the brand the cover is prepared for', async () => {
+    await render();
+    expect(container.textContent).toContain(
+      'Your client\'s logo for this brand\'s report cover, beside "Prepared for Northwind".',
+    );
+    expect(actions.getBrandClientLogo).toHaveBeenCalledWith('brand-1');
+  });
+
+  it('uploads a picked logo for the brand and sets it', async () => {
+    uploadLogo.mockResolvedValueOnce({ ok: true, path: 'org/brands/brand-1/id.png' });
+    await render();
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(input, 'files', {
+      value: [new File(['x'], 'logo.png', { type: 'image/png' })],
+      configurable: true,
+    });
+    await act(async () => input.dispatchEvent(new Event('change', { bubbles: true })));
+    expect(actions.setBrandClientLogo).toHaveBeenCalledWith('brand-1', 'org/brands/brand-1/id.png');
+    expect(toast.success).toHaveBeenCalledWith('Client logo saved.');
+  });
+
+  it('removes the logo', async () => {
+    actions.getBrandClientLogo.mockResolvedValue({
+      ok: true,
+      view: { available: true, requiredPlan: 'growth', canEdit: true, logoUrl: signed },
+    });
+    await render();
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(signed);
+    await act(async () => button('Remove')!.click());
+    expect(actions.setBrandClientLogo).toHaveBeenCalledWith('brand-1', null);
+  });
+
+  it('opens the upgrade dialog instead on a read-only workspace', async () => {
+    actions.getBrandClientLogo.mockResolvedValue({
+      ok: true,
+      view: { available: true, requiredPlan: 'growth', canEdit: true, logoUrl: signed },
+    });
+    await render(true);
+    await act(async () => button('Remove')!.click());
+    expect(openUpgrade).toHaveBeenCalledWith('Changing the client logo needs a plan');
+    expect(actions.setBrandClientLogo).not.toHaveBeenCalled();
+  });
+
+  it('shows an analyst the logo without a way to change it', async () => {
+    actions.getBrandClientLogo.mockResolvedValue({
+      ok: true,
+      view: { available: true, requiredPlan: 'growth', canEdit: false, logoUrl: signed },
+    });
+    await render();
+    expect(button('Replace')).toBeUndefined();
+    expect(container.textContent).toContain('Only admins and managers change the client logo.');
+  });
+
+  it('names Growth on Starter', async () => {
+    actions.getBrandClientLogo.mockResolvedValue({
+      ok: true,
+      view: { available: false, requiredPlan: 'growth', canEdit: true, logoUrl: null },
+    });
+    await render();
+    expect(container.textContent).toContain(
+      'Client logos come with white label, on the Growth plan.',
+    );
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+  });
+
+  it('isn’t shown on a self-host without white label', async () => {
+    plan.isCloud = false;
+    await render();
+    expect(container.textContent).toBe('');
+    expect(actions.getBrandClientLogo).not.toHaveBeenCalled();
+  });
+});
