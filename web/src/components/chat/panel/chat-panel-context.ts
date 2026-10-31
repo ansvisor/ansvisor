@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect } from 'react';
 import type { ChatPageContext } from '@/lib/chat/page-context';
 import type { PanelSize } from '@/lib/chat/panel';
 import type { ChatReference } from '@/lib/chat/references';
+import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import type { ChatMode } from '@/lib/chat/precedence';
 
 /**
@@ -28,6 +29,8 @@ export interface ChatPanelSetup {
   onOwnKey: boolean;
   /** The AI usage period whose 80% line the person already saw (CHAT-04 item 16). */
   usageNoticeSeen: string | null;
+  /** The / menu's Skills group (CHAT-13 item 5). */
+  skills: ChatSkillItem[];
 }
 
 export interface ChatPanelState {

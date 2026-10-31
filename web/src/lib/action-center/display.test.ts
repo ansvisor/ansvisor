@@ -54,8 +54,8 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it("holds copy for all sixty-two definitions, the ten person-sent kinds and the catalog check's", () => {
-    expect(ACTION_KINDS).toHaveLength(73);
+  it("holds copy for all sixty-two definitions, the eleven person-sent kinds and the catalog check's", () => {
+    expect(ACTION_KINDS).toHaveLength(74);
   });
 
   it('names a product or category sent from Product Visibility after it (ECOM-013)', () => {
@@ -316,6 +316,32 @@ describe('actionTexts for a page sent from Site Audit', () => {
   });
 });
 
+describe('actionTexts for a finding sent from Chat', () => {
+  it('reads the title and the finding the person approved, and its goal', () => {
+    const sent = action({
+      kind: 'chat_finding',
+      payload: {
+        source: 'chat',
+        title: 'Win back pricing citations on /pricing',
+        why: 'Google AI Overviews stopped citing /pricing for 2 prompts.',
+        goal: 'Get /pricing cited again for pricing prompts.',
+      },
+    });
+    expect(actionTexts(sent, t)).toEqual({
+      title: 'Win back pricing citations on /pricing',
+      description: 'Google AI Overviews stopped citing /pricing for 2 prompts.',
+    });
+    expect(actionGoal('chat_finding', t, sent.payload)).toBe(
+      'Get /pricing cited again for pricing prompts.',
+    );
+    expect(actionGoal('chat_finding', t, {})).toBe(
+      'Do the tasks, so the prompts and pages this finding names move in AI answers.',
+    );
+    // No detection signals: no "0 signals" chip.
+    expect(actionContextTags({ ...sent, signalCount: 0 }, t)).toEqual([]);
+  });
+});
+
 describe('humanizeKind', () => {
   it('reads a definition id as the phrase it was written to be', () => {
     expect(humanizeKind('expand_platform_visibility')).toBe('Expand platform visibility');
@@ -491,6 +517,73 @@ describe('actionEventText', () => {
     ).toBe('Checked automatically and done: Refresh the pricing page');
   });
 
+  /** What Chat did, from its History events (CHAT-09 §D–E; the owner's decision of 2026-10-31). */
+  it('says an action came from Chat, and what Chat attached, added or finished', () => {
+    expect(actionEventText(event('created', { source: 'chat' }), tPage, t)).toBe(
+      'Action created from Chat',
+    );
+    expect(actionEventText(event('created', { source: 'traffic_pages' }), tPage, t)).toBe(
+      'Action created',
+    );
+    expect(actionEventText(event('created', {}), tPage, t)).toBe('Action created');
+    expect(
+      actionEventText(
+        event('file_attached', {
+          source: 'chat',
+          task: null,
+          title: 'Add a pricing FAQ block to /pricing',
+          file: 'Pricing FAQ',
+        }),
+        tPage,
+        t,
+      ),
+    ).toBe('Attached from Chat to Add a pricing FAQ block to /pricing: “Pricing FAQ”');
+    // A library task is named by its template, once.
+    expect(
+      actionEventText(
+        event('task_ready_for_review', { source: 'chat', task: 'refresh_content', title: null }),
+        tPage,
+        t,
+      ),
+    ).toBe('Ready for review, from Chat: Refresh outdated content');
+    expect(
+      actionEventText(
+        event('evidence_attached', { source: 'chat', finding: 'Lost 6 citations on /pricing.' }),
+        tPage,
+        t,
+      ),
+    ).toBe('Finding added from Chat: “Lost 6 citations on /pricing.”');
+    // Undo of an action Chat sent, by who clicked it (CHAT-20 §10b).
+    expect(
+      actionEventText(event('cancelled', { source: 'chat', via: 'undo', by: 'Cihan' }), tPage, t),
+    ).toBe('Cancelled from Chat by Cihan · undo');
+    expect(actionEventText(event('cancelled', { source: 'chat', by: null }), tPage, t)).toBe(
+      'Cancelled from Chat by a teammate · undo',
+    );
+    // A finding added with its note and sources, and which one was withdrawn.
+    expect(
+      actionEventText(
+        event('evidence_attached', {
+          source: 'chat',
+          finding: 'Lost 6 citations.',
+          note: 'Same pages as this action',
+          sources: ['Citations', '/pricing'],
+        }),
+        tPage,
+        t,
+      ),
+    ).toBe(
+      'Finding added from Chat: “Lost 6 citations.” · Note: Same pages as this action · From: Citations, /pricing',
+    );
+    expect(
+      actionEventText(
+        event('evidence_withdrawn', { source: 'chat', finding: 'Lost 6 citations.' }),
+        tPage,
+        t,
+      ),
+    ).toBe('Finding from Chat withdrawn with Undo: “Lost 6 citations.”');
+  });
+
   it("passes a task's own title and the measured verdict", () => {
     expect(actionEventText(event('task_added', { title: 'Ask the agency' }), tPage, t)).toBe(
       'Task added: “Ask the agency”',
@@ -540,6 +633,16 @@ describe('History events', () => {
     ])
     .map((match) => match[1] ?? match[2]);
 
+  // Chat writes its own (CHAT-09 §D–E): its changes, and their Undo.
+  const chatWritten = ['../actions/chat-action-center.ts', '../chat/undo-action-center.ts'].flatMap(
+    (file) =>
+      [
+        ...readFileSync(join(__dirname, file), 'utf8').matchAll(
+          /event: '(\w+)'|historyEvent\([^,]+,\s*'(\w+)'/g,
+        ),
+      ].map((match) => match[1] ?? match[2]),
+  );
+
   const tPage = createTranslator({
     locale: 'en',
     messages,
@@ -561,6 +664,10 @@ describe('History events', () => {
     reviews: 0,
     day: 0,
     final: 'no',
+    source: '',
+    finding: 'Lost 6 citations',
+    file: 'Pricing FAQ',
+    by: 'Cihan',
   };
   const eventText = (event: string, data: Partial<typeof values> = {}) =>
     tPage(`drawer.events.${event}` as Parameters<typeof tPage>[0], { ...values, ...data });
@@ -587,9 +694,24 @@ describe('History events', () => {
     );
   });
 
-  it.each([...new Set([...logged, ...written])])('has a History line for %s', (event) => {
-    expect(() => eventText(event)).not.toThrow();
+  it("reads the events Chat writes, and their Undo's", () => {
+    expect(chatWritten.sort()).toEqual([
+      'cancelled',
+      'evidence_attached',
+      'evidence_withdrawn',
+      'file_attached',
+      'file_detached',
+      'task_ready_for_review',
+      'task_review_withdrawn',
+    ]);
   });
+
+  it.each([...new Set([...logged, ...written, ...chatWritten])])(
+    'has a History line for %s',
+    (event) => {
+      expect(() => eventText(event)).not.toThrow();
+    },
+  );
 
   /** Tasks the writer left for review are said after the ones it wrote (AC-010). */
   it('says how many tasks wait for review, when any do', () => {

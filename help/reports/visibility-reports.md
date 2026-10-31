@@ -4,18 +4,18 @@ route: /dashboard/reports
 keywords: [reports, generate report, report templates, PDF, executive summary, snapshot]
 synonyms: [monthly report, client report, export a report, download PDF, report for my boss]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/reports.mdx]
 ---
 The **Reports** page makes point-in-time snapshots of your brand's AI visibility. Unlike the live dashboards, a report never changes: its numbers are captured when it is generated and stay the same as new tracking results arrive. That makes it the right tool for a monthly review, a client deliverable, or a before-and-after comparison around a campaign.
 
 ## Generate a report
 
-Click **Generate Report** and pick a template. A template is a default set of sections, and you can switch any section on or off before generating. Then give the report a title if you like, pick the **Brand** and the **Date Range** (last 7, 30 or 90 days, or Custom), and check the **Sections**. Generated reports appear under **Generated Reports** on the same page, newest first.
+Click **Generate Report** and pick a template. A template is a default set of sections, and you can switch any section on or off before generating. Then give the report a title if you like, pick the **Brand** and the **Date Range** (last 7, 30 or 90 days, or Custom), and check the **Sections**. Generated reports appear under **Generated Reports** on the same page, newest first. Delete a report with the bin icon there.
 
 ## Templates
 
@@ -26,7 +26,7 @@ Click **Generate Report** and pick a template. A template is a default set of se
 
 ## Sections
 
-The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts, Mention Evidence, Fan-out, AI Traffic, Product Visibility, Audit Score, Citations and Citation Evidence. **Product Visibility** appears only for brands with Shopping mode on. The AI executive summary is always included: it isn't a section you pick.
+The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts, Mention Evidence, Fan-out, AI Traffic, Product Visibility, Audit Score, Citations and Citation Evidence. **Product Visibility** appears only for brands with Shopping mode on. The AI executive summary is always included: it isn't a section you pick. If it can't be written, the report is saved with its figures and no summary.
 
 ## Read a report
 

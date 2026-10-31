@@ -314,7 +314,7 @@ function runScope(
           },
         }
       : {};
-  return { context: { route: '/dashboard/chat/agents', chips }, ...onAction };
+  return { context: { route: '/dashboard/agents', chips }, ...onAction };
 }
 
 async function insertId(table: string, row: Record<string, unknown>, what: string) {

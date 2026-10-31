@@ -61,6 +61,8 @@ export const SKIPPED = {
     "A person's daily suggestions switch for a brand (00422): off for a demo brand (CHAT-26 §6).",
   gsc_shopping_page_stats:
     "Search Console's shopping results by page (00377): the sync that reads them never runs for a demo brand, and with the brand's gsc_shopping_synced_at left empty, Readiness shows that item as not read yet and leaves it out of the score.",
+  member_brands:
+    "The brands shared with a Selected-brands person (00388): the organization's own people, set by its admins; everyone sees the demo brand without a row.",
 };
 
 const FOLLOW_UP =

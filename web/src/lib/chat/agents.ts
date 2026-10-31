@@ -19,6 +19,7 @@ import {
   agentTriggerSchema,
   canSeeAgent,
   copyName,
+  defaultAgentName,
   editable,
   enginesDenial,
   enginesNamed,
@@ -32,6 +33,7 @@ import {
   versionFromRow,
   visibilityDenial,
   type AgentAct,
+  type AgentAsk,
   type AgentDenial,
   type AgentFacts,
   type AgentLifecycleAction,
@@ -153,6 +155,7 @@ export type AgentRefusalCode =
   | 'invalid'
   | 'not_found'
   | 'name_taken'
+  | 'name_taken_hidden'
   | 'wrong_status'
   | 'archived'
   | 'version_conflict'
@@ -172,8 +175,18 @@ export type AgentRefusalCode =
   | 'failed';
 
 export type AgentRefusal =
-  /** The out-of-permission answer (CHAT-20 §4c): a role, the plan or a Settings › Chat switch. */
-  | { kind: 'denied'; status: 402 | 403; code: ToolDenial['code']; denial: ChatDenialCard }
+  /**
+   * The out-of-permission answer (CHAT-20 §4c): a role, the plan or a
+   * Settings › Chat switch; `asked`, what it refused, so the create flow
+   * shows it on its step (Full auto on the modes, sharing on the last).
+   */
+  | {
+      kind: 'denied';
+      status: 402 | 403;
+      code: ToolDenial['code'];
+      denial: ChatDenialCard;
+      asked?: AgentAsk;
+    }
   | {
       kind: 'refused';
       status: number;
@@ -193,6 +206,7 @@ const REFUSAL_STATUS: Record<AgentRefusalCode, number> = {
   invalid: 400,
   not_found: 404,
   name_taken: 409,
+  name_taken_hidden: 409,
   wrong_status: 409,
   archived: 409,
   version_conflict: 409,
@@ -258,7 +272,7 @@ export async function denied(ctx: AgentContext, { denial, asked }: AgentDenial):
   );
   return {
     ok: false,
-    refusal: { kind: 'denied', status: answer.status, code: denial.code, denial: card },
+    refusal: { kind: 'denied', status: answer.status, code: denial.code, denial: card, asked },
   };
 }
 
@@ -1051,15 +1065,51 @@ async function referencesRefusal(
   return null;
 }
 
-/** Whether another agent of the workspace has this name, whatever its case (§O). */
-async function nameTaken(organizationId: string, name: string, except?: string) {
+interface NamedAgent {
+  id: string;
+  name: string;
+  owner_id: string | null;
+  visibility: AgentVisibility;
+}
+
+/** Every agent's name in the workspace, with who may see it (§O: names are one a workspace). */
+async function agentNames(organizationId: string): Promise<NamedAgent[]> {
   const { data, error } = await supabaseAdmin
     .from('chat_agents')
-    .select('id, name')
+    .select('id, name, owner_id, visibility')
     .eq('organization_id', organizationId);
   if (error) throw new Error(`Could not read the agents' names: ${error.message}`);
-  return ((data ?? []) as { id: string; name: string }[]).some(
+  return (data ?? []) as NamedAgent[];
+}
+
+/**
+ * Another agent of the workspace with this name, whatever its case (§O), as
+ * its refusal: the name said back only when the person sees that agent (an
+ * Admin every one, others theirs and the workspace's); a private agent's
+ * name is never told to someone who can't see it. Null when it is free.
+ */
+async function nameRefusal(
+  ctx: AgentContext,
+  name: string,
+  except?: string,
+): Promise<Refused | null> {
+  const clash = (await agentNames(ctx.actor.organizationId)).find(
     (a) => a.id !== except && nameKey(a.name) === nameKey(name),
+  );
+  if (!clash) return null;
+  const seen =
+    ctx.viewer.role === 'admin' ||
+    clash.visibility === 'workspace' ||
+    clash.owner_id === ctx.actor.userId;
+  return seen ? refused('name_taken', { name }) : refused('name_taken_hidden');
+}
+
+/** Two trigger lists that differ (the same triggers in another order are the same). */
+function triggersDiffer(current: TriggerRow[], wanted: readonly AgentTriggerInput[]): boolean {
+  const keys = (list: string[]) => list.sort().join('\n');
+  return (
+    keys(current.map((t) => `${triggerKey(t.kind, t.config_json)}:${t.enabled}`)) !==
+    keys(wanted.map((t) => `${triggerKey(t.kind, t.config)}:${t.enabled}`))
   );
 }
 
@@ -1073,6 +1123,9 @@ function triggersRefusal(triggers: readonly AgentTriggerInput[], now: Date): Ref
 }
 
 const isUniqueClash = (error: { code?: string } | null) => error?.code === '23505';
+
+/** Two instants the same (the database's text, or the same moment written another way). */
+const sameInstant = (a: string, b: string) => a === b || Date.parse(a) === Date.parse(b);
 
 /**
  * The AI limit at 100% (§D item 21), unless Chat runs on the workspace's own
@@ -1257,13 +1310,28 @@ export async function createAgent(
     (await referencesRefusal(ctx.actor.organizationId, version));
   if (problem) return problem;
   const org = ctx.actor.organizationId;
-  if (await nameTaken(org, input.name)) return refused('name_taken', { name: input.name });
+  // A name the person didn't type: §O against every agent, the ones they can't see included.
+  let name = input.name;
+  if (input.autoName) {
+    const brandIds = version.scope.brand_ids ?? [];
+    const brand =
+      brandIds.length === 1
+        ? ((await brandsOf(org)).find((b) => b.id === brandIds[0])?.name ?? null)
+        : null;
+    name = defaultAgentName(
+      input.name,
+      brand,
+      (await agentNames(org)).map((a) => a.name),
+    );
+  }
+  const clash = await nameRefusal(ctx, name);
+  if (clash) return clash;
 
   const { data, error } = await supabaseAdmin
     .from('chat_agents')
     .insert({
       organization_id: org,
-      name: input.name,
+      name,
       status: 'draft',
       owner_id: ctx.actor.userId,
       visibility: input.visibility,
@@ -1274,7 +1342,8 @@ export async function createAgent(
     })
     .select(AGENT_COLUMNS)
     .single();
-  if (isUniqueClash(error)) return refused('name_taken', { name: input.name });
+  // Taken between the check and the save: by whom isn't known, so the name isn't said.
+  if (isUniqueClash(error)) return refused('name_taken_hidden');
   if (error || !data) throw new Error(`Could not save the agent: ${error?.message}`);
   const row = toAgentRow(data as Record<string, unknown>);
 
@@ -1320,6 +1389,13 @@ export async function updateAgent(
   if (patch.expectedVersion !== undefined && patch.expectedVersion !== row.version) {
     return refused('version_conflict');
   }
+  // A name, sharing, a cap or triggers make no new version: their saves move updated_at.
+  if (
+    patch.expectedUpdatedAt !== undefined &&
+    !sameInstant(patch.expectedUpdatedAt, row.updated_at)
+  ) {
+    return refused('version_conflict');
+  }
   if (!agent.version) return refused('failed');
 
   const next = nextVersion(agent.version, patch);
@@ -1354,10 +1430,10 @@ export async function updateAgent(
       ? await referencesRefusal(ctx.actor.organizationId, next)
       : null);
   if (problem) return problem;
-  const org = ctx.actor.organizationId;
   const renamed = patch.name !== undefined && patch.name !== row.name;
-  if (renamed && (await nameTaken(org, patch.name!, row.id))) {
-    return refused('name_taken', { name: patch.name! });
+  if (renamed) {
+    const clash = await nameRefusal(ctx, patch.name!, row.id);
+    if (clash) return clash;
   }
 
   const agentPatch: Record<string, unknown> = {};
@@ -1378,13 +1454,20 @@ export async function updateAgent(
     agentPatch.version = newVersion;
   }
 
+  const triggersChange = !!patch.triggers && triggersDiffer(currentTriggers, patch.triggers);
   let updated = row;
-  if (Object.keys(agentPatch).length > 0) {
+  if (Object.keys(agentPatch).length > 0 || triggersChange) {
+    // Every save claims the row as it was read: a save in between (of anything) wins, this one is refused.
+    // Always later than what was read (the database's own trigger sets it too).
+    agentPatch.updated_at = new Date(
+      Math.max(Date.now(), (Date.parse(row.updated_at) || 0) + 1),
+    ).toISOString();
     const { data, error } = await supabaseAdmin
       .from('chat_agents')
       .update(agentPatch)
       .eq('id', row.id)
       .eq('version', row.version)
+      .eq('updated_at', row.updated_at)
       .select(AGENT_COLUMNS);
     const lost = !error && (data ?? []).length === 0;
     if (error || lost) {
@@ -1396,17 +1479,17 @@ export async function updateAgent(
           .eq('agent_id', row.id)
           .eq('version', newVersion);
       }
-      if (isUniqueClash(error)) return refused('name_taken', { name: patch.name ?? row.name });
+      if (isUniqueClash(error)) return refused('name_taken_hidden');
       if (lost) return refused('version_conflict');
       throw new Error(`Could not save the agent: ${error?.message}`);
     }
     updated = toAgentRow((data ?? [])[0] as Record<string, unknown>);
   }
 
-  const triggersChanged = patch.triggers
-    ? await replaceTriggers(row.id, currentTriggers, patch.triggers)
+  const triggersChanged = triggersChange
+    ? await replaceTriggers(row.id, currentTriggers, patch.triggers!)
     : false;
-  if (Object.keys(agentPatch).length > 0 || triggersChanged) {
+  if (updated !== row || triggersChanged) {
     await logAgentChange(ctx, updated, 'agentUpdated');
   }
   return { ok: true, value: await detailOf(ctx, { row: updated, version: result }, now) };

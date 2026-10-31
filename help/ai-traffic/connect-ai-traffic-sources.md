@@ -4,14 +4,14 @@ route: /dashboard/traffic
 keywords: [tracking snippet, connect google analytics, connect search console, data sources, install snippet]
 synonyms: [set up ai traffic, add tracking code, link analytics, ga4, gsc]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/ai-traffic-analytics.mdx]
 ---
-The **Data sources** strip at the top of **AI Traffic Analytics** shows the four sources the page reads, and each one's state. A section whose source isn't connected stays on the page with a **Needs …** tag and a **Connect** button. Only admins and managers can connect a source.
+The **Data sources** strip at the top of **AI Traffic Analytics** shows the four sources the page reads, and each one's state. A section whose source isn't connected stays on the page with a **Needs …** tag and a **Connect …** button for that source. Only admins and managers can connect a source.
 
 ## What each source adds
 
@@ -22,7 +22,7 @@ The **Data sources** strip at the top of **AI Traffic Analytics** shows the four
 
 ## Add the tracking snippet
 
-Copy the snippet from the page. It sits at the top until it has sent a visit in the last week; after that, **Code** in the Data sources strip opens it. The page fills in your own address and tracking code, so copy it rather than typing it.
+Copy the snippet from the page. It sits at the top until it has sent a visit in the last week. **Install** in the Data sources strip opens it too; once the snippet sends visits, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.
 
 Add it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page.
 

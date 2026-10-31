@@ -17,6 +17,7 @@ export const TOPIC = '66666666-6666-4666-8666-666666666661';
 export const PROMPT_SET = '66666666-6666-4666-8666-666666666662';
 export const PROMPT = '66666666-6666-4666-8666-666666666663';
 export const COMPETITOR = '66666666-6666-4666-8666-666666666664';
+export const DRAFT = '66666666-6666-4666-8666-666666666665';
 
 export const PEOPLE = {
   admin: 'aaaaaaaa-0000-4000-8000-000000000001',
@@ -89,6 +90,8 @@ export function seedWorkspace(db: FakeSupabase): void {
         regions: ['US'],
       },
     ],
+    reports: [],
+    content_draft_versions: [],
     competitors: [
       {
         id: COMPETITOR,
@@ -222,4 +225,91 @@ export function fakeRemoveBrandCompetitor(db: FakeSupabase) {
     db.tables.competitors = db.tables.competitors.filter((r) => r.id !== id);
     return { ok: true, removed: { id, brandId, name: row.name, domain: row.domain } };
   };
+}
+
+/** A Library draft, for the rows that change or send one (seeded by the tests that need it). */
+export function seedDraft(db: FakeSupabase): void {
+  db.tables.content_drafts.push({
+    id: DRAFT,
+    brand_id: BRAND,
+    title: 'Pricing FAQ',
+    body_html: '<h1>Pricing FAQ</h1>',
+    status: 'draft',
+    archived_at: null,
+    updated_at: iso(),
+  });
+}
+
+/** updateContentDraft: History keeps the page before, then the change is saved. */
+export function fakeUpdateContentDraft(db: FakeSupabase) {
+  return async (id: string, change: { title?: string; bodyHtml?: string }) => {
+    const row = db.tables.content_drafts.find((r) => r.id === id);
+    if (!row)
+      return { ok: false, reason: 'not_found', message: 'That draft isn’t in the Library.' };
+    const versionId = fakeId();
+    db.tables.content_draft_versions.push({
+      id: versionId,
+      draft_id: id,
+      title: row.title,
+      body_html: row.body_html,
+      origin: 'agent_before',
+      created_at: iso(),
+    });
+    row.title = change.title ?? row.title;
+    row.body_html = change.bodyHtml ?? row.body_html;
+    row.updated_at = iso();
+    return {
+      ok: true,
+      updatedAt: row.updated_at,
+      bodyHash: '0'.repeat(64),
+      beforeVersionId: versionId,
+    };
+  };
+}
+
+/** content_draft_keep_version (00215): the draft as it is now, kept as a version. */
+export function fakeKeepDraftVersion(db: FakeSupabase) {
+  return ({ p_draft_id, p_origin }: Record<string, unknown>) => {
+    const draft = db.tables.content_drafts.find((d) => d.id === p_draft_id);
+    if (!draft) return null;
+    const id = fakeId();
+    db.tables.content_draft_versions.push({
+      id,
+      draft_id: draft.id,
+      title: draft.title,
+      body_html: draft.body_html,
+      origin: p_origin,
+      created_at: iso(),
+    });
+    return id;
+  };
+}
+
+/** sendDraftToCms: the page sent, as the CMS's draft. */
+export function fakeSendDraftToCms() {
+  return async (_draftId: string, target: string) => ({
+    ok: true,
+    target,
+    status: 'sent',
+    updated: false,
+    live: false,
+  });
+}
+
+/** createReport: a report row. */
+export function fakeCreateReport(db: FakeSupabase) {
+  return async (brandId: string) => {
+    const id = fakeId();
+    db.tables.reports.push({ id, brand_id: brandId, title: 'Weekly Visibility Summary' });
+    return { id };
+  };
+}
+
+/** startSiteAudits: an audit started for each page. */
+export function fakeStartSiteAudits() {
+  return async (_brandId: string, urls: string[]) => ({
+    ok: true,
+    started: urls.length,
+    audits: urls.map((url) => ({ id: fakeId(), url })),
+  });
 }

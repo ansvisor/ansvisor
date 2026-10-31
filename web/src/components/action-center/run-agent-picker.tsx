@@ -237,7 +237,7 @@ export function RunAgentPicker({
       </button>
       {picker.kind === 'ready' && (
         <Link
-          href={`/dashboard/chat/agents/new?skill=${encodeURIComponent(picker.createSkill)}`}
+          href={`/dashboard/agents/new?skill=${encodeURIComponent(picker.createSkill)}`}
           data-run-agent-item
           data-action="runAgent.createAgent"
           onClick={onClose}

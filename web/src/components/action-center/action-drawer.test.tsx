@@ -319,6 +319,75 @@ describe('ActionDrawer', () => {
     });
   });
 
+  /** What Chat attached and where it came from (CHAT-09 §D–E). */
+  describe('from Chat', () => {
+    const button = (name: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} (`),
+      )!;
+    const attached = (fileId: string) => ({
+      fileId,
+      title: `File ${fileId}`,
+      type: 'document',
+      attachedAt: '2026-10-30T09:00:00Z',
+      attachedBy: 'Cihan',
+      href: `/api/chat/files/${fileId}`,
+      draft: false,
+    });
+
+    it('names how many files Chat attached to a task, for a screen reader too', async () => {
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        tasks: [
+          {
+            id: 't1',
+            position: 1,
+            status: 'todo',
+            taskKey: null,
+            title: 'Add a FAQ to /pricing',
+            titleParams: {},
+            dependsOn: [],
+            details: null,
+            attachments: [attached('f1'), attached('f2')],
+          },
+        ],
+      });
+      await renderDrawer();
+      await act(async () => button('Tasks').click());
+      const clip = document.body.querySelector('[role="img"]')!;
+      expect(clip.getAttribute('aria-label')).toBe('2 files attached from Chat');
+      expect(clip.textContent).toBe('2');
+    });
+
+    it('links its chat only for a reader who may open it', async () => {
+      const sent = {
+        ...action,
+        kind: 'chat_finding',
+        payload: {
+          source: 'chat',
+          title: 'Win back /pricing',
+          why: 'Lost 6 citations.',
+          conversationId: 'c1',
+          entities: { pages: ['https://acme.example/pricing'], platforms: ['google-aio'] },
+        },
+      } as ActionItem;
+      server.getActionDetail.mockResolvedValue({ ...emptyDetail, chatHref: null });
+      await renderDrawer(sent);
+      const dialog = () => document.body.querySelector('[role="dialog"]')!;
+      expect(dialog().textContent).toContain('Chat');
+      expect(dialog().textContent).toContain('Google AI Overviews');
+      expect(dialog().textContent).not.toContain('Open the chat');
+      server.getActionDetail.mockResolvedValue({ ...emptyDetail, chatHref: '/dashboard/chat/c1' });
+      act(() => root.unmount());
+      root = createRoot(container);
+      await renderDrawer(sent);
+      const link = [...dialog().querySelectorAll('a')].find(
+        (a) => a.textContent === 'Open the chat',
+      );
+      expect(link?.getAttribute('href')).toBe('/dashboard/chat/c1');
+    });
+  });
+
   describe('How we check (AC-010)', () => {
     const lastCheck = { at: '2026-10-20T00:00:00Z', passed: false, missing: ['not_changed'] };
     const task = (taskKey: string, title: string) => ({

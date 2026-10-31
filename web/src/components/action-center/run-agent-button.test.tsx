@@ -220,7 +220,7 @@ describe('the picker', () => {
     ]);
     expect(item('runAgent.runWithChat')?.textContent).toContain('Run with Chat');
     expect(item('runAgent.createAgent')?.getAttribute('href')).toBe(
-      '/dashboard/chat/agents/new?skill=winback',
+      '/dashboard/agents/new?skill=winback',
     );
   });
 

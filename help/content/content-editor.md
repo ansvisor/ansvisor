@@ -5,10 +5,10 @@ keywords: [content editor, draft, placeholders, your input needed, side panel, i
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
 updated: 2026-10-30
-last_checked: 2026-10-30
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/content-editor.mdx]
 ---
 The Content Editor is where pages are written. It opens from the Library, from the Plan, or when you start a page in New content. **Editor** in the sidebar takes you back to the draft you last opened for this brand in this browser; with none, or if that draft was deleted or archived, it opens New content. The page saves as you write.

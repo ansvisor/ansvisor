@@ -46,8 +46,13 @@ describe('routeRegistry', () => {
       section: 'Action Center',
     });
     expect(routeById('competitors')).toMatchObject({ requiredFeature: 'competitor_tracking' });
-    // Chat doesn't open itself.
+    // Chat doesn't open itself; Agent Center, gated as Chat is, it does.
     expect(routeById('agent')).toBeUndefined();
+    expect(routeById('agents')).toMatchObject({
+      name: 'Agent Center',
+      section: null,
+      requiredFeature: 'ai_agent',
+    });
   });
 
   it('lists only the Settings sections this install shows: a self-hosted one has no Billing or AI Providers', () => {
@@ -116,6 +121,8 @@ describe('routeRequest', () => {
     );
     expect(to('open the content library')).toBe('/dashboard/content/library');
     expect(to('Open Prompts › Query Fan-outs')).toBe('/dashboard/prompts/fan-outs');
+    expect(to('open Agent Center')).toBe('/dashboard/agents');
+    expect(to('take me to my agents')).toBe('/dashboard/agents');
   });
 
   it('takes the longest name it finds: Prompts Insights over Insights', () => {

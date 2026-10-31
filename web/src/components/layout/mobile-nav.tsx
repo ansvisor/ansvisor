@@ -112,7 +112,7 @@ export function MobileNav() {
             )}
             {dashboardNav.flatMap((group) =>
               group.items.map((item) => {
-                if (!shouldShowDashboardNavItem(item, brandPrefs, hiddenSections)) {
+                if (!shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic)) {
                   return null;
                 }
 

@@ -5,6 +5,7 @@ import { importLegacyChats } from '@/lib/chat/legacy-import';
 import { chatRunsOnOwnKey } from '@/lib/chat/key';
 import { CAREFUL_SETUP, composerSetupOf, type ChatComposerSetup } from '@/lib/chat/composer-setup';
 import { readPrecedenceContext } from '@/lib/chat/precedence-context';
+import { skillMenuOf } from '@/lib/chat/skills/library';
 import { isChatStaff } from '@/lib/chat/staff';
 
 export { composerSetupOf, type ChatComposerSetup };
@@ -95,8 +96,9 @@ export async function chatFirstName(): Promise<string | null> {
  * The composer's setup: the default mode the person chose in Chat's settings
  * (chat_user_prefs.default_mode; Auto, ask before changes, when none), and
  * Full auto as the server will decide it, the period whose 80% usage line
- * the person already saw, and whether Chat runs on the workspace's own key.
- * A value that can't be read falls back to the careful one.
+ * the person already saw, whether Chat runs on the workspace's own key, and
+ * the skills in the / menu. A value that can't be read falls back to the
+ * careful one.
  */
 export async function chatComposerSetup(): Promise<ChatComposerSetup> {
   const supabase = await createClient();
@@ -128,5 +130,6 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
     ...composerSetupOf(prefs?.default_mode, ctx),
     usageNoticeSeen: prefs?.usage_notice_period ?? null,
     onOwnKey,
+    skills: skillMenuOf(profile.organization_id),
   };
 }

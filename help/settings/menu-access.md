@@ -1,17 +1,21 @@
 ---
 title: Choose who sees which menu sections
 route: /dashboard/settings/menu-access
-keywords: [menu access, hide menu sections, role menu, customize menu, sidebar sections]
+keywords: [menu access, hide menu sections, role menu, customize menu, sidebar sections, fold menu group]
 synonyms: [hide pages from users, left menu per role, restrict menu, simplify sidebar]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
 approved: false
 sources: [docs/guides/menu-access.mdx]
 ---
 **Menu access** in Settings decides which sections are on each person's left menu, so everyone sees the part of Ansvisor they use. It only hides: a section off someone's menu still opens from a link, and what their role can do there doesn't change. To change what someone can do, change their role in **Settings › Team**.
+
+## Fold a group on your menu
+
+Click a group's title on the left menu, **Execution** or **Analytics**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** and **Agent Center** sit above the groups, and **Reports** and **Competitors** below them, so they don't fold.
 
 ## Who can change menus
 
