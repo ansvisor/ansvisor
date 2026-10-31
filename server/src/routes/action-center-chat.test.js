@@ -169,6 +169,7 @@ describe('POST /api/action-center/chat-actions', () => {
       proposal: { ...proposal, category: 'urgent', tasks: [] },
     });
     expect(bad.status).toBe(400);
+    await expect(bad.json()).resolves.toMatchObject({ code: 'invalid' });
     expect((await post('/chat-actions', { ...body, idempotencyKey: '' })).status).toBe(400);
     expect(sendChatAction).not.toHaveBeenCalled();
   });

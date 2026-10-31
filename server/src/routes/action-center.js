@@ -473,7 +473,9 @@ router.post('/chat-actions/check', async (req, res) => {
   try {
     const parsed = chatCheckSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
+      return res
+        .status(400)
+        .json({ error: 'Invalid request', details: parsed.error.message, code: 'invalid' });
     }
     const { brandId, entities, category } = parsed.data;
     await assertBrandAccess(brandId, req.user.id);
@@ -496,7 +498,8 @@ const chatActionSchema = z.object({
   proposal: chatProposalSchema,
   conversationId: z.guid().nullable().optional(),
   runId: z.guid().nullable().optional(),
-  executionMode: z.enum(EXECUTION_MODES).default('assisted'),
+  // Read again on the server (from-chat.js verifiedPlace): a caller's word is never recorded.
+  executionMode: z.enum(EXECUTION_MODES).nullable().default(null),
   idempotencyKey: z.string().trim().min(8).max(200),
   createAnyway: z.boolean().default(false),
 });
@@ -515,7 +518,9 @@ router.post('/chat-actions', async (req, res) => {
   try {
     const parsed = chatActionSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
+      return res
+        .status(400)
+        .json({ error: 'Invalid request', details: parsed.error.message, code: 'invalid' });
     }
     const { brandId, ...opts } = parsed.data;
     await assertBrandAccess(brandId, req.user.id);

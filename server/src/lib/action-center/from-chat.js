@@ -151,6 +151,12 @@ export function proposalProblems(proposal) {
  * slash, for the brand's own site (an address on one of its domains, or a
  * path); host and path for another site's page.
  */
+/** "pricing" or "blog/aeo": no scheme, no leading slash, and no dot in its first part (no host). */
+function isBarePath(text) {
+  if (/^https?:\/\//i.test(text) || text.startsWith('/')) return false;
+  return !text.split(/[/?#]/)[0].includes('.');
+}
+
 export function pageKey(raw, brandHosts = []) {
   const text = String(raw ?? '').trim();
   if (!text) return null;
@@ -164,6 +170,9 @@ export function pageKey(raw, brandHosts = []) {
     } catch {
       return null;
     }
+  } else if (isBarePath(text)) {
+    // "pricing", "blog/what-is-aeo": a path written without its slash.
+    path = `/${text}`;
   } else if (!text.startsWith('/')) {
     // "example.com/page": a host without its scheme.
     const slash = text.indexOf('/');
@@ -236,6 +245,15 @@ export function actionKeys(action, entityRows, brandHosts = []) {
   for (const page of Array.isArray(p.pages) ? p.pages : []) {
     const key = pageKey(page, brandHosts);
     if (key) pages.add(key);
+  }
+  // The competitors a payload names beside its kept list (Chat's own, a topic gap's).
+  for (const competitorId of [
+    ...(Array.isArray(p.competitorIds) ? p.competitorIds : []),
+    p.competitorId,
+  ]) {
+    if (typeof competitorId === 'string' && competitorId) {
+      competitors.add(competitorId.toLowerCase());
+    }
   }
   return { prompts, pages, competitors };
 }
@@ -383,9 +401,11 @@ async function brandPrompts(brandId, promptIds) {
 /** A page as the action keeps it: a full address, on the primary host when it was a path. */
 export function pageUrl(raw, primaryHost) {
   const text = String(raw ?? '').trim();
+  if (!text) return null;
   if (/^https?:\/\//i.test(text)) return text;
-  if (text.startsWith('/')) return primaryHost ? `https://${primaryHost}${text}` : null;
-  return text ? `https://${text}` : null;
+  const path = text.startsWith('/') ? text : isBarePath(text) ? `/${text}` : null;
+  if (path) return primaryHost ? `https://${primaryHost}${path}` : null;
+  return `https://${text}`;
 }
 
 /** The day `days` before `now`, and the day before `now`, as dates. */
@@ -465,13 +485,21 @@ export function chatTaskRows(actionId, tasks) {
 async function sentWithKey(brandId, idempotencyKey) {
   const { data, error } = await supabaseAdmin
     .from('actions')
-    .select('id, action_no')
+    .select('id, action_no, status, deleted_at')
     .eq('brand_id', brandId)
     .eq('kind', CHAT_ACTION_KIND)
     .eq('payload->>idempotencyKey', idempotencyKey)
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(`actions: ${error.message}`);
+  // Cancelled since (Undo), or deleted: not what this approval stands for any more.
+  if (data && (data.deleted_at || data.status === 'dismissed')) {
+    throw httpError(
+      'The action this approval made was cancelled. Send the finding again for a new one.',
+      409,
+      'conflict',
+    );
+  }
   return data;
 }
 
@@ -496,6 +524,55 @@ export async function actionsToday(brandId, now = new Date()) {
   return count ?? 0;
 }
 
+/**
+ * The chat, run and approval a send names, as the database has them: the
+ * caller's own chat, a run of it, and (by the approval's key, `chat:{step}`)
+ * the step of that run sending it now, whose mark says whether it ran
+ * without a card (engine.ts writeCall). Whatever doesn't hold is left out:
+ * History never records what a caller only said.
+ *
+ * @returns {Promise<{ conversationId: string | null, runId: string | null,
+ *   executionMode: 'assisted' | 'automated' | null }>}
+ */
+export async function verifiedPlace(userId, { conversationId, runId, idempotencyKey }) {
+  const none = { conversationId: null, runId: null, executionMode: null };
+  if (!conversationId) return none;
+  const { data: chat, error } = await supabaseAdmin
+    .from('chat_conversations')
+    .select('id, user_id')
+    .eq('id', conversationId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (error) throw new Error(`chat_conversations: ${error.message}`);
+  if (!chat || chat.user_id !== userId) return none;
+  if (!runId) return { ...none, conversationId: chat.id };
+  const { data: run, error: runError } = await supabaseAdmin
+    .from('chat_runs')
+    .select('id')
+    .eq('id', runId)
+    .eq('conversation_id', chat.id)
+    .maybeSingle();
+  if (runError) throw new Error(`chat_runs: ${runError.message}`);
+  if (!run) return { ...none, conversationId: chat.id };
+  const stepId = /^chat:(.+)$/.exec(idempotencyKey ?? '')?.[1] ?? null;
+  const { data: step, error: stepError } = stepId
+    ? await supabaseAdmin
+        .from('chat_run_steps')
+        .select('id, tool, debug_json')
+        .eq('id', stepId)
+        .eq('run_id', run.id)
+        .maybeSingle()
+    : { data: null, error: null };
+  if (stepError) throw new Error(`chat_run_steps: ${stepError.message}`);
+  const executionMode =
+    step && step.tool === 'create_action'
+      ? step.debug_json?.auto === true
+        ? 'automated'
+        : 'assisted'
+      : null;
+  return { conversationId: chat.id, runId: run.id, executionMode };
+}
+
 /** A duplicate, as the route answers it (409) and Chat says it (CHAT-20 §11a `duplicate`). */
 function duplicateError(found) {
   return httpError(`AC-${found.actionNo} already covers this.`, 409, 'duplicate', {
@@ -518,7 +595,7 @@ function duplicateError(found) {
  * @param {string} opts.userId
  * @param {string | null} [opts.conversationId]
  * @param {string | null} [opts.runId]
- * @param {'assisted' | 'automated'} [opts.executionMode]
+ * @param {'assisted' | 'automated' | null} [opts.executionMode] - read again here (verifiedPlace)
  * @param {string} opts.idempotencyKey - one per approval: a retry finds what it made
  * @param {boolean} [opts.createAnyway] - the person chose Create anyway (entities differ)
  * @returns {Promise<{ actionId: string, actionNo: number, created: boolean,
@@ -531,7 +608,6 @@ export async function sendChatAction(
     userId,
     conversationId = null,
     runId = null,
-    executionMode = 'assisted',
     idempotencyKey,
     createAnyway = false,
     now = new Date(),
@@ -541,6 +617,8 @@ export async function sendChatAction(
   if (problems.length) {
     throw httpError(problems.join(' '), 400, 'invalid', { problems });
   }
+  // Where it was sent from and how it was approved, as the database has them.
+  const place = await verifiedPlace(userId, { conversationId, runId, idempotencyKey });
 
   const again = await sentWithKey(brandId, idempotencyKey);
   if (again) return { actionId: again.id, actionNo: Number(again.action_no), created: false };
@@ -596,9 +674,9 @@ export async function sendChatAction(
     targetEntity,
     targetCount: targets.length,
     targets,
-    conversationId,
-    runId,
-    execution: { mode: executionMode },
+    conversationId: place.conversationId,
+    runId: place.runId,
+    execution: place.executionMode ? { mode: place.executionMode } : null,
     idempotencyKey,
     ...(closest ? { createdAnywayBeside: closest.actionNo } : {}),
   };
@@ -643,7 +721,18 @@ export async function sendChatAction(
   const { error: tasksError } = await supabaseAdmin
     .from('action_tasks')
     .insert(chatTaskRows(action.id, proposal.tasks));
-  if (tasksError) throw new Error(tasksError.message);
+  if (tasksError) {
+    // Never an action without the tasks the person approved: it goes again,
+    // with its kept list, so the same approval tried again makes it whole.
+    const { error: undoError } = await supabaseAdmin.from('actions').delete().eq('id', action.id);
+    if (undoError) {
+      logger.error(
+        { err: undoError.message, actionId: action.id },
+        '[chat-action] an action without its tasks was left',
+      );
+    }
+    throw new Error(`The action's tasks couldn't be kept: ${tasksError.message}`);
+  }
 
   const { error: eventError } = await supabaseAdmin.from('action_events').insert({
     action_id: action.id,
@@ -651,9 +740,9 @@ export async function sendChatAction(
     actor_id: userId,
     data: {
       source: CHAT_SOURCE,
-      conversationId,
-      runId,
-      execution: { mode: executionMode },
+      conversationId: place.conversationId,
+      runId: place.runId,
+      execution: place.executionMode ? { mode: place.executionMode } : null,
       taskCount: proposal.tasks.length,
       prompts: promptIds.length,
       pages: pages.length,

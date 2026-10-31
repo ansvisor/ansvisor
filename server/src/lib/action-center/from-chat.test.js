@@ -22,11 +22,16 @@ function valueOf(row, col) {
 }
 
 function table(name) {
-  const state = { filters: [], op: 'select', row: null, count: false };
+  const state = { filters: [], op: 'select', row: null, count: false, where: {} };
   const rows = () =>
     (db.tables[name] ?? []).filter((row) => state.filters.every((match) => match(row)));
   const result = (one) => {
+    if (state.op === 'delete') {
+      db.deletes.push({ table: name, where: state.where });
+      return { data: null, error: null };
+    }
     if (state.op === 'insert') {
+      if (name === 'action_tasks' && db.tasksError) return { data: null, error: db.tasksError };
       db.inserts.push({ table: name, row: state.row });
       if (name === 'actions') {
         if (db.insertError) {
@@ -56,7 +61,12 @@ function table(name) {
       state.row = row;
       return chain;
     },
+    delete: () => {
+      state.op = 'delete';
+      return chain;
+    },
     eq: (col, val) => {
+      state.where[col] = val;
       state.filters.push((row) => valueOf(row, col) === val);
       return chain;
     },
@@ -129,6 +139,8 @@ const proposal = (over = {}) =>
 beforeEach(() => {
   db = {
     inserts: [],
+    deletes: [],
+    tasksError: null,
     insertError: null,
     countError: null,
     tables: {
@@ -141,6 +153,9 @@ beforeEach(() => {
       ],
       actions: [],
       action_entities: [],
+      chat_conversations: [{ id: 'conv-1', user_id: 'user-1', deleted_at: null }],
+      chat_runs: [{ id: 'run-1', conversation_id: 'conv-1' }],
+      chat_run_steps: [{ id: 'step-1', run_id: 'run-1', tool: 'create_action', debug_json: null }],
     },
   };
   rpc.mockReset().mockResolvedValue({
@@ -184,6 +199,15 @@ describe('pages as two actions compare them', () => {
     expect(pageKey('ansvisor.com/pricing', hosts)).toBe('/pricing');
     expect(pageKey('https://g2.com/products/ansvisor', hosts)).toBe('g2.com/products/ansvisor');
     expect(pageKey('', hosts)).toBeNull();
+  });
+
+  it('reads a bare word as a path, never as a host', () => {
+    expect(pageKey('pricing', ['ansvisor.com'])).toBe('/pricing');
+    expect(pageKey('blog/What-Is-AEO/', ['ansvisor.com'])).toBe('/blog/what-is-aeo');
+    expect(pageUrl('pricing', 'ansvisor.com')).toBe('https://ansvisor.com/pricing');
+    expect(pageUrl('g2.com/products/ansvisor', 'ansvisor.com')).toBe(
+      'https://g2.com/products/ansvisor',
+    );
   });
 
   it('keeps a path as a full address on the primary host, for measuring', () => {
@@ -307,6 +331,20 @@ describe('the duplicate check', () => {
       [1201, 'some', 1],
     ]);
     expect(covering[0]).toMatchObject({ actionId: 'act-all', title: 'Win back /pricing' });
+  });
+
+  it('matches a competitor its payload names, beside its kept list', async () => {
+    activeAction('act-gap', 1310, {
+      entities: [['prompts', PROMPT_B]],
+      payload: { competitorIds: [COMPETITOR.toUpperCase()] },
+    });
+    const { covering } = await findCoveringActions(BRAND, {
+      prompts: [],
+      pages: [],
+      competitors: [COMPETITOR],
+      platforms: [],
+    });
+    expect(covering.map((c) => [c.actionNo, c.covers])).toEqual([[1310, 'all']]);
   });
 
   it('matches a competitor kept by its name', async () => {
@@ -464,6 +502,25 @@ describe('sendChatAction', () => {
     expect(made).toEqual({ actionId: 'act-new', actionNo: 1300, created: true });
   });
 
+  it('records where it came from and how it was approved only as the database has them', async () => {
+    const payload = () => inserted('actions').at(-1).payload;
+    // Ran without a card: the engine marked its step.
+    db.tables.chat_run_steps[0].debug_json = { auto: true };
+    await send({ executionMode: 'assisted' });
+    expect(payload()).toMatchObject({
+      conversationId: 'conv-1',
+      runId: 'run-1',
+      execution: { mode: 'automated' },
+    });
+    // Someone else's chat, or a step that isn't this run's: nothing of it is kept.
+    db.tables.chat_conversations[0].user_id = 'someone-else';
+    await send({ idempotencyKey: 'chat:step-2' });
+    expect(payload()).toMatchObject({ conversationId: null, runId: null, execution: null });
+    db.tables.chat_conversations[0].user_id = 'user-1';
+    await send({ idempotencyKey: 'chat:not-a-step' });
+    expect(payload()).toMatchObject({ conversationId: 'conv-1', runId: 'run-1', execution: null });
+  });
+
   it('answers what it made for the same approval again, and makes nothing', async () => {
     db.tables.actions.push({
       id: 'act-made',
@@ -475,6 +532,30 @@ describe('sendChatAction', () => {
       deleted_at: null,
     });
     await expect(send()).resolves.toEqual({ actionId: 'act-made', actionNo: 1290, created: false });
+    expect(db.inserts).toEqual([]);
+  });
+
+  it('takes the action back when its tasks could not be kept, so the approval can go again', async () => {
+    db.tasksError = { message: 'statement timeout' };
+    await expect(send()).rejects.toThrow("The action's tasks couldn't be kept: statement timeout");
+    // Deleted again: no action without its tasks is left, and no created event was written.
+    expect(db.deletes).toEqual([{ table: 'actions', where: { id: 'act-new' } }]);
+    expect(inserted('action_events')).toEqual([]);
+    db.tasksError = null;
+    await expect(send()).resolves.toMatchObject({ created: true });
+  });
+
+  it("refuses an approval whose action was cancelled since, rather than say it's made", async () => {
+    db.tables.actions.push({
+      id: 'act-undone',
+      action_no: 1291,
+      brand_id: BRAND,
+      kind: CHAT_ACTION_KIND,
+      status: 'dismissed',
+      payload: { idempotencyKey: 'chat:step-1' },
+      deleted_at: null,
+    });
+    await expect(send()).rejects.toMatchObject({ status: 409, code: 'conflict' });
     expect(db.inserts).toEqual([]);
   });
 
