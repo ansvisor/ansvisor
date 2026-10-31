@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import type { FakeSupabase } from '@/lib/chat/testing/fake-supabase';
+import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import type { ExplainChangeOutput } from './why';
 
 /**
@@ -55,6 +56,7 @@ const rpcCell = (
   citation_answers: hits,
   brand_mentions: hits,
   sum_position: 0,
+  sum_inv_position: 0,
   position_count: 0,
   competitor_mentions: 0,
   last_at: period === 'b' ? '2026-10-18T06:00:00.000Z' : '2026-10-11T06:00:00.000Z',
@@ -311,6 +313,46 @@ describe('explainChangeFor on visibility', () => {
       mix_effect: { contribution: 50, engines_added: ['gemini-web'], engines_removed: [] },
     });
     expect(analysis.causes.map((c) => c.kind)).toEqual(['engines_changed']);
+  });
+});
+
+describe('explainChangeFor on the Visibility score', () => {
+  it('gives the Insights card’s score, split into its parts', async () => {
+    db.rpcs.chat_why_cells = () => ({
+      cells: Array.from({ length: 6 }, (_, i) => [
+        {
+          ...rpcCell(`p${i}`, 'a', 4),
+          citation_answers: 2,
+          position_count: 4,
+          sum_inv_position: 2,
+        },
+        {
+          ...rpcCell(`p${i}`, 'b', 2),
+          citation_answers: 2,
+          position_count: 2,
+          sum_inv_position: 1,
+        },
+      ]).flat(),
+      daily: [],
+      complete: true,
+    });
+    const out = await explainChangeFor(auth, { brandId: BRAND, metric: 'visibility_score' }, NOW);
+    const { analysis } = out as ExplainChangeOutput;
+    // 42 answers a period: 24 → 12 naming, 12 citing, position factor 0.5.
+    expect(analysis.value_a).toBe(
+      computeAiVisibilityScore({
+        answers: 42,
+        mentionAnswers: 24,
+        citationAnswers: 12,
+        positionFactor: 0.5,
+      }),
+    );
+    expect(analysis.metric).toBe('visibility_score');
+    expect(analysis.components!.map((c) => c.kind)).toEqual(['mention', 'citation', 'position']);
+    expect(analysis.components!.reduce((s, c) => s + c.contribution, 0)).toBeCloseTo(
+      analysis.delta!,
+      0,
+    );
   });
 });
 

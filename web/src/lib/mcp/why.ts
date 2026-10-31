@@ -13,6 +13,7 @@ import {
   type WhyMetric,
   type WhyResult,
 } from '@/lib/chat/why/explain';
+import { explainScoreChange, movedScoreCells } from '@/lib/chat/why/score';
 
 /**
  * Why did it move (CHAT-22 §1): explain_change's reads for Chat. The brand
@@ -172,6 +173,7 @@ interface RpcCell {
   citation_answers: number;
   brand_mentions: number;
   sum_position: number;
+  sum_inv_position: number;
   position_count: number;
   competitor_mentions: number;
   last_at: string | null;
@@ -195,6 +197,7 @@ const countsOf = (
   brandMentions: n(row.brand_mentions),
   competitorMentions: n(row.competitor_mentions),
   sumPosition: n(row.sum_position),
+  sumInvPosition: n(row.sum_inv_position),
   positionCount: n(row.position_count),
 });
 
@@ -209,6 +212,7 @@ const addCounts = (x: CellCounts | null, y: CellCounts): CellCounts =>
         brandMentions: x.brandMentions + y.brandMentions,
         competitorMentions: x.competitorMentions + y.competitorMentions,
         sumPosition: x.sumPosition + y.sumPosition,
+        sumInvPosition: x.sumInvPosition + y.sumInvPosition,
         positionCount: x.positionCount + y.positionCount,
       }
     : y;
@@ -326,7 +330,10 @@ export async function explainChangeFor(
       ? cellsOf(rows.filter((row) => inBothPeriods(engineOf(row))))
       : new Map([...cells].filter(([, cell]) => inBothPeriods(cell.engine)));
   const sameList = [...same.values()];
-  const moved = movedCells(params.metric, sameList, EVIDENCE_CELLS);
+  const moved =
+    params.metric === 'visibility_score'
+      ? movedScoreCells(sameList, EVIDENCE_CELLS)
+      : movedCells(params.metric, sameList, EVIDENCE_CELLS);
 
   const [competitors, brandDomains, topic] = await Promise.all([
     supabaseAdmin.from('competitors').select('domain').eq('brand_id', params.brandId),
@@ -359,7 +366,7 @@ export async function explainChangeFor(
     competitorSites,
   });
 
-  const analysis = explainChange({
+  const why = {
     metric: params.metric,
     periodA: periods.a,
     periodB: periods.b,
@@ -381,7 +388,10 @@ export async function explainChangeFor(
       } satisfies DayCounts,
     })),
     evidence,
-  });
+  };
+  // The Insights score blends three rates (why/score.ts); the others are one each.
+  const analysis =
+    params.metric === 'visibility_score' ? explainScoreChange(why) : explainChange(why);
   return {
     analysis,
     scope: {
