@@ -11805,6 +11805,7 @@
         "engine_not_on_plan": "Its engines aren't on your plan.",
         "overlapping_change": "Another shipped change works on the same prompts.",
         "no_targets": "No tracked prompt targets this action.",
+        "plan_inactive": "Measuring stopped while your plan wasn't active.",
         "other": "It can't be measured."
       },
       "csv": {

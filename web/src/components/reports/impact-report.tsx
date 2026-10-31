@@ -695,4 +695,5 @@ const REASONS = new Set([
   'engine_not_on_plan',
   'overlapping_change',
   'no_targets',
+  'plan_inactive',
 ]);

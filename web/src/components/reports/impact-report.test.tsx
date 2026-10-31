@@ -257,6 +257,26 @@ describe('ImpactReportView', () => {
     );
   });
 
+  it('says a change closed once the plan wasn’t active is why it can’t be measured (plan_inactive)', async () => {
+    read.mockResolvedValue({
+      ok: true,
+      report: report({
+        rows: [
+          row('r1', {
+            outcome: 'not_measurable',
+            confidence: null,
+            notMeasurableReason: 'plan_inactive',
+          }),
+        ],
+      }),
+    });
+    await render();
+    await click($('[data-row="r1"] [data-action="impact.openEvidence"]')!);
+    expect($('[data-slot="impact-evidence"]')!.textContent).toContain(
+      "WhyMeasuring stopped while your plan wasn't active.",
+    );
+  });
+
   it('downloads the month as CSV', async () => {
     await render();
     await click($('[data-action="impact.export"]')!);
