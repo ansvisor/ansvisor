@@ -4,7 +4,7 @@ import { useMemo, useState, type ReactElement } from 'react';
 import { useTranslations } from 'next-intl';
 import { Marked } from 'marked';
 import { toast } from 'sonner';
-import { Check, Copy, Download, FolderCheck, FolderPlus, PenLine } from 'lucide-react';
+import { Check, Copy, Download, FolderCheck, FolderPlus, ListPlus, PenLine } from 'lucide-react';
 import { useGetMore } from '@/components/ai-usage/get-more-context';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useRouter } from '@/i18n/navigation';
@@ -54,19 +54,24 @@ function Tip({ label, children }: { label: string; children: ReactElement }) {
  * the stored answer, so nothing is kept and no AI is used. Save to Files
  * files it for the workspace, once: then it reads "In Files". Open in
  * Content Editor makes a Content draft of it and opens it (item 6). Every
- * role may use them all.
+ * role may use them all. Send to Action Center (CHAT-09 item 18), on the
+ * latest answer for Admins and Managers, asks Chat to propose it as an
+ * action, on its approval card.
  */
 export function AnswerActions({
   runId,
   markdown,
   filed,
   onFiled,
+  onSendToActionCenter,
 }: {
   runId: string;
   markdown: string;
   /** Already in Files. */
   filed: boolean;
   onFiled: (fileId: string) => void;
+  /** Send to Action Center; none where it isn't offered. */
+  onSendToActionCenter?: () => void;
 }) {
   const t = useTranslations('chatAnswer');
   const { openUpgrade } = useUpgradeGate();
@@ -226,6 +231,19 @@ export function AnswerActions({
           <PenLine className={cn('size-4', opening && 'animate-pulse')} aria-hidden />
         </button>
       </Tip>
+      {onSendToActionCenter && (
+        <Tip label={t('sendToActionCenter')}>
+          <button
+            type="button"
+            data-action="answer.sendToActionCenter"
+            aria-label={t('sendToActionCenter')}
+            onClick={onSendToActionCenter}
+            className={ICON}
+          >
+            <ListPlus className="size-4" aria-hidden />
+          </button>
+        </Tip>
+      )}
     </div>
   );
 }

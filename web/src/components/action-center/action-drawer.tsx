@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
-import { ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Paperclip, Plus, Trash2 } from 'lucide-react';
 import { RemovedNote } from '@/components/action-center/removed-note';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Badge } from '@/components/ui/badge';
@@ -78,6 +78,7 @@ import { TrafficPagesContext } from './traffic-pages-context';
 import { ContentDraftContext } from './content-draft-context';
 import { ShoppingLinksContext } from './shopping-links-context';
 import { AuditPageContext } from './audit-page-context';
+import { ChatFindingContext } from './chat-finding-context';
 import {
   TaskDetailForm,
   TaskDetailView,
@@ -718,6 +719,14 @@ export function ActionDrawer({
                   <Separator />
                   <AuditPageContext payload={action.payload ?? {}} />
                 </>
+              ) : action.kind === 'chat_finding' ? (
+                <>
+                  <Separator />
+                  <ChatFindingContext
+                    payload={action.payload ?? {}}
+                    chatHref={detail.chatHref ?? null}
+                  />
+                </>
               ) : opportunityId ? (
                 <>
                   <Separator />
@@ -838,9 +847,11 @@ export function ActionDrawer({
                               ? t('drawer.noSignalsAuditPage')
                               : action.kind === 'shopping_links'
                                 ? t('drawer.noSignalsShoppingLinks')
-                                : opportunityId
-                                  ? t('drawer.noSignalsOpportunity')
-                                  : t('drawer.noSignals')}
+                                : action.kind === 'chat_finding'
+                                  ? t('drawer.noSignalsChat')
+                                  : opportunityId
+                                    ? t('drawer.noSignalsOpportunity')
+                                    : t('drawer.noSignals')}
                 </p>
               )}
               {detail.signals.map((signal) => {
@@ -987,6 +998,19 @@ function TaskRow({
             {task.position}. {text}
           </span>
         </button>
+        {(task.attachments?.length ?? 0) > 0 && (
+          <span
+            role="img"
+            aria-label={t('drawer.task.attachedFromChat.count', {
+              count: task.attachments!.length,
+            })}
+            title={t('drawer.task.attachedFromChat.count', { count: task.attachments!.length })}
+            className="mt-1.5 inline-flex shrink-0 items-center gap-0.5 text-[11px] text-muted-foreground"
+          >
+            <Paperclip className="h-3 w-3" aria-hidden />
+            {task.attachments!.length}
+          </span>
+        )}
         <div className="mt-1.5 shrink-0">
           <TaskTypeBadge type={task.details?.type ?? null} />
         </div>
@@ -1052,6 +1076,7 @@ function TaskRow({
             draftWork={draftWork}
             competitor={task.competitorFindings}
             winning={task.winningFindings}
+            attachments={task.attachments}
           />
         ))}
 
