@@ -471,4 +471,77 @@ describe('AgentDetail', () => {
     expect(one('h1')?.textContent).toBe('Citation win-back');
     expect(one('[data-slot="agent-runs-error"]')?.textContent).toContain("Couldn't load the runs.");
   });
+
+  it('links Edit to the agent’s four steps, only where `can.edit` allows it (W2-15)', async () => {
+    agent = detail({ can: { ...ADMIN_CAN } });
+    await render();
+    expect(action('agent.edit')[0].getAttribute('href')).toBe(
+      `/dashboard/chat/agents/${AGENT_ID}/edit`,
+    );
+    act(() => root.unmount());
+    root = createRoot(container);
+    agent = detail({ can: { ...ADMIN_CAN, edit: false } });
+    await render();
+    expect(action('agent.edit')).toHaveLength(0);
+  });
+
+  it('deletes an archived agent from ⋯ once confirmed, then goes back to Agents (W2-15)', async () => {
+    // Not archived: no Delete.
+    agent = detail({ can: { ...ADMIN_CAN } });
+    await render();
+    await click(action('agent.more')[0]);
+    expect(document.body.querySelector('[data-action="agent.delete"]')).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+
+    agent = detail({
+      status: 'archived',
+      can: { ...NOTHING_CAN, restore: true, duplicate: true, delete: true },
+    });
+    answer = (url, init) =>
+      init?.method === 'DELETE' && url === `/api/chat/agents/${AGENT_ID}`
+        ? Response.json({ ok: true })
+        : (base(url) ?? Response.json({ ok: false, failure: 'failed' }, { status: 500 }));
+    await render();
+    await click(action('agent.more')[0]);
+    const item = document.body.querySelector<HTMLElement>('[data-action="agent.delete"]')!;
+    expect(item.textContent).toBe('Delete');
+    await click(item);
+    // It asks first; nothing is sent until the click.
+    const dialog = document.body.querySelector<HTMLElement>('[data-slot="agent-delete-dialog"]')!;
+    expect(dialog.textContent).toContain('Delete this agent?');
+    expect(dialog.textContent).toContain(
+      '“Citation win-back” will be deleted. Its past runs and files stay.',
+    );
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+    await click(document.body.querySelector<HTMLElement>('[data-action="agent.deleteConfirm"]')!);
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => url),
+    ).toEqual([`/api/chat/agents/${AGENT_ID}`]);
+    expect(toast).toHaveBeenCalledWith('Citation win-back deleted · its runs and files stay');
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/agents');
+  });
+
+  it('keeps an archived agent when Delete is refused, with the server’s words', async () => {
+    agent = detail({ status: 'archived', can: { ...NOTHING_CAN, delete: true } });
+    answer = (url, init) =>
+      init?.method === 'DELETE'
+        ? Response.json(
+            {
+              ok: false,
+              failure: 'failed',
+              code: 'wrong_status',
+              error: "This agent is paused, so it can't do that now.",
+            },
+            { status: 409 },
+          )
+        : (base(url) ?? Response.json({ ok: false, failure: 'failed' }, { status: 500 }));
+    await render();
+    await click(action('agent.more')[0]);
+    await click(document.body.querySelector<HTMLElement>('[data-action="agent.delete"]')!);
+    await click(document.body.querySelector<HTMLElement>('[data-action="agent.deleteConfirm"]')!);
+    expect(toast.error).toHaveBeenCalledWith("This agent is paused, so it can't do that now.");
+    expect(nav.push).not.toHaveBeenCalled();
+    expect(one('h1')?.textContent).toBe('Citation win-back');
+  });
 });

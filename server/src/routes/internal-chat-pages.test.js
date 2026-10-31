@@ -46,6 +46,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const SITES = { hosts: ['acme.example'], domains: ['northwind.example'] };
+const ASK = { ...SITES, orgId: ORG };
 
 const post = (body, secret = 'chat-secret') =>
   fetch(`${base}/open`, {
@@ -75,7 +76,8 @@ describe('POST /api/internal/chat/pages/open', () => {
     expect(openPage).toHaveBeenCalledWith('https://acme.example/', { sites: SITES });
     // A name that isn't a host name is refused, not passed on as a rule.
     expect(
-      (await post({ url: 'https://acme.example/', hosts: ['*.com'], domains: [] })).status,
+      (await post({ url: 'https://acme.example/', hosts: ['*.com'], domains: [], orgId: ORG }))
+        .status,
     ).toBe(400);
   });
 
@@ -90,20 +92,31 @@ describe('POST /api/internal/chat/pages/open', () => {
       ['unreachable', 502],
     ]) {
       openPage.mockRejectedValueOnce(new PageFetchError(code, `Because ${code}`));
-      const res = await post({ url: 'https://acme.example/', ...SITES });
+      const res = await post({ url: 'https://acme.example/', ...ASK });
       expect(res.status).toBe(status);
       expect(await res.json()).toMatchObject({ code, message: `Because ${code}` });
     }
-    expect((await post({ url: '', ...SITES })).status).toBe(400);
-    expect((await post({ url: 'https://acme.example/', ...SITES, extra: 1 })).status).toBe(400);
+    expect((await post({ url: '', ...ASK })).status).toBe(400);
+    expect((await post({ url: 'https://acme.example/', ...ASK, extra: 1 })).status).toBe(400);
     // The run's sites are always given.
-    expect((await post({ url: 'https://acme.example/' })).status).toBe(400);
-    expect((await post({ url: 'https://acme.example/', hosts: [] })).status).toBe(400);
+    expect((await post({ url: 'https://acme.example/', orgId: ORG })).status).toBe(400);
+    expect((await post({ url: 'https://acme.example/', hosts: [], orgId: ORG })).status).toBe(400);
+  });
+
+  it('opens a page only for a named workspace', async () => {
+    openPage.mockResolvedValue({ url: 'https://acme.example/' });
+    // Without one, every caller would share one workspace's places.
+    expect((await post({ url: 'https://acme.example/', ...SITES })).status).toBe(400);
+    expect((await post({ url: 'https://acme.example/', ...SITES, orgId: '' })).status).toBe(400);
+    expect(
+      (await post({ url: 'https://acme.example/', ...SITES, orgId: 'not-a-workspace' })).status,
+    ).toBe(400);
+    expect(openPage).not.toHaveBeenCalled();
   });
 
   it('logs a failure without the page or its address', async () => {
     openPage.mockRejectedValue(new Error('parser broke'));
-    const res = await post({ url: 'https://secret-customer.example/plan', ...SITES });
+    const res = await post({ url: 'https://secret-customer.example/plan', ...ASK });
     expect(res.status).toBe(500);
     expect(JSON.stringify(logged.mock.calls)).not.toContain('secret-customer');
   });

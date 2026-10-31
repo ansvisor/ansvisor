@@ -5,9 +5,11 @@
  * checked the person against.
  *
  * POST /api/internal/chat/budget/reserve
- *   { orgId, runId, stepId?, feature?, model, inputTokens, maxOutputTokens, ownKey? }
+ *   { orgId, runId, stepId?, feature?, model, inputTokens, maxOutputTokens, ownKey?, agentRunId? }
  *   → 201 { usageId }: the step's row, its worst case held (on Ansvisor's key).
  *   → 429 ai_limit { trial }: the budget can't cover the step; it doesn't start.
+ *   → 429 run_cap: the chat's agent run (agentRunId) can't take the step
+ *     within its own cap (CHAT-27 item 21); it doesn't start.
  *   → 402 plan_limit: no active plan. 404 not_found: the run isn't the
  *     workspace's. 403 chat_off: Chat is off for the workspace.
  * POST /api/internal/chat/budget/charge
@@ -68,6 +70,8 @@ const reserveSchema = z.strictObject({
   inputTokens: tokens,
   maxOutputTokens: tokens.min(1),
   ownKey: z.boolean().default(false),
+  // The chat's agent run: the step is held within its cap too (CHAT-27 item 21).
+  agentRunId: z.guid().nullish(),
 });
 
 const chargeSchema = z.strictObject({
@@ -135,6 +139,7 @@ router.post('/reserve', async (req, res) => {
       runId: body.runId,
       stepId: body.stepId ?? null,
       ownKey: body.ownKey,
+      agentRunId: body.agentRunId ?? null,
     });
     return res.status(201).json({ success: true, usageId });
   } catch (err) {

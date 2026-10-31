@@ -672,6 +672,8 @@ interface RunContext {
    * rest asked with it too (CHAT-07 §A item 8), each folded with its text.
    */
   batchAnswer?: string;
+  /** The agent run this chat is (CHAT-21 §H item 36): its steps are held within its cap too. */
+  agentRunId: string | null;
 }
 
 const workedMs = (rc: Pick<RunContext, 'run' | 'segmentStart'>) =>
@@ -815,6 +817,7 @@ async function openContext(
     return null;
   }
   const brand = progress.brandId ? await readBrand(progress.brandId, actor.organizationId) : null;
+  const agentRunId = await readAgentRunId(run.conversationId);
   const scope: RunScope = {
     brandId: brand?.id ?? null,
     brandIsDemo: brand ? await readBrandIsDemo(brand.id) : false,
@@ -843,7 +846,19 @@ async function openContext(
     budget,
     offered: new Map(offered.map((tool) => [tool.name, tool])),
     refused,
+    agentRunId,
   };
+}
+
+/** The agent run a chat is (chat_conversations.agent_run_id), or null for a person's own chat. */
+async function readAgentRunId(conversationId: string): Promise<string | null> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_conversations')
+    .select('agent_run_id')
+    .eq('id', conversationId)
+    .maybeSingle();
+  if (error) throw new Error(`Chat could not read the chat: ${error.message}`);
+  return (data as { agent_run_id: string | null } | null)?.agent_run_id ?? null;
 }
 
 async function readBrand(brandId: string, organizationId: string) {
@@ -953,6 +968,8 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
     const reservation = await reserveChatStep({
       organizationId: rc.run.organizationId,
       runId: rc.run.id,
+      // An agent's run is metered as the agent's, within its own cap (CHAT-27 item 21).
+      ...(rc.agentRunId ? { feature: 'agent' as const, agentRunId: rc.agentRunId } : {}),
       model: choice.budgetModel,
       inputTokens: estimateInputTokens([HELP_SYSTEM, messages]),
       maxOutputTokens: choice.maxOutputTokens,
@@ -960,7 +977,8 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
     });
     if (!reservation.ok) {
       await endStep({ status: 'skipped', detail: t('step.skipped') });
-      if (reservation.refusal === 'ai_limit') await pauseAtCap(rc);
+      if (reservation.refusal === 'ai_limit') await pauseAtCap(rc, 'month');
+      else if (reservation.refusal === 'run_cap') await pauseAtCap(rc, 'run');
       else await failRun(rc, reservation.message);
       return 'ended';
     }
@@ -1119,13 +1137,16 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
   const reservation = await reserveChatStep({
     organizationId: rc.run.organizationId,
     runId: rc.run.id,
+    // An agent's run is metered as the agent's, within its own cap (CHAT-27 item 21).
+    ...(rc.agentRunId ? { feature: 'agent' as const, agentRunId: rc.agentRunId } : {}),
     model: choice.budgetModel,
     inputTokens: estimateInputTokens([system, messages, toolSchemas(rc, phase)]),
     maxOutputTokens: choice.maxOutputTokens,
     source: rc.models.source,
   });
   if (!reservation.ok) {
-    if (reservation.refusal === 'ai_limit') await pauseAtCap(rc);
+    if (reservation.refusal === 'ai_limit') await pauseAtCap(rc, 'month');
+    else if (reservation.refusal === 'run_cap') await pauseAtCap(rc, 'run');
     else await failRun(rc, reservation.message);
     return { kind: 'ended' };
   }
@@ -1798,9 +1819,12 @@ async function cardTarget(
     .join(' · ');
 }
 
-/** What a card says beside its target: that its change can't be undone (§9), and its row's note. */
+/**
+ * What a card says beside its target: that its change can't be undone (§9; an
+ * EXECUTE never can, §10b), and its row's note.
+ */
 function cardNotes(tool: ChatTool): { noUndo?: true; note?: string } {
-  const noUndo = tool.class === 'write' && !undoRule(tool)?.windowMs;
+  const noUndo = tool.class !== 'read' && !undoRule(tool)?.windowMs;
   const note = toolNote(tool);
   return { ...(noUndo ? { noUndo: true as const } : {}), ...(note ? { note } : {}) };
 }
@@ -2449,6 +2473,8 @@ const SAID_FAILURES: Record<string, string> = {
   forbidden_role: 'forbidden_role',
   // A page live in its CMS: the Content Editor sends it (push_cms_draft).
   live_item: 'live_item',
+  // An Admin turned publishing off for Managers since the card was decided (push_cms_draft).
+  execute_off: 'execute_off',
 };
 
 /**
@@ -3081,17 +3107,19 @@ async function offerNextMoves(rc: RunContext): Promise<void> {
 }
 
 /**
- * The month's AI limit is used (CHAT-04 item 17, CHAT-03 item 20): the next
+ * The next step would pass a limit: the month's AI limit (CHAT-04 item 17,
+ * CHAT-03 item 20), or the agent run's own cap (CHAT-27 item 22). The next
  * step doesn't start, a step still open turns skipped ("Stopped at the AI
- * limit"); what's done stays.
+ * limit"); what's done stays, and the run keeps which limit it reached.
  */
-async function pauseAtCap(rc: RunContext): Promise<void> {
+async function pauseAtCap(rc: RunContext, limit: 'run' | 'month'): Promise<void> {
   if (!(await moveRun(rc.run.id, ['running'], 'paused_cap'))) return stopNow(rc);
   await skipOpenSteps(rc.run.id, rc.sink, t('step.pausedCap'));
   const workingMs = workedMs(rc);
+  rc.progress.capHit = limit;
   await saveAnswer(rc.run.messageId, { text: rc.progress.text });
   await saveState(rc.run.id, { messages: rc.messages, progress: rc.progress, workingMs });
-  rc.sink.emit('run.paused_cap', summaryOf(rc.progress, workingMs));
+  rc.sink.emit('run.paused_cap', { ...summaryOf(rc.progress, workingMs), limit });
 }
 
 /** The run ends in error, in words (CHAT-03 item 18): its open steps fail, what's done stays. */
@@ -3125,13 +3153,14 @@ async function stopNow(rc: RunContext): Promise<void> {
 
 /**
  * A stopped run's end (CHAT-03 item 19): its open steps turn skipped
- * ("Stopped", or "No answer in 7 days"), the text so far is kept as the
- * answer, and `run.stopped` says how long it worked.
+ * ("Stopped", "No answer in 7 days", or "Stopped at its limit"), the text so
+ * far is kept as the answer, and `run.stopped` says how long it worked. The
+ * run keeps why it stopped, for its agent run.
  */
 async function finishStopped(
   run: Pick<LoadedRun, 'id' | 'messageId' | 'progress'>,
   sink: RunEventSink,
-  reason: 'person' | 'expired',
+  reason: 'person' | 'expired' | 'limit',
   workingMs: number,
 ): Promise<void> {
   const openAsks: string[] = [];
@@ -3140,7 +3169,7 @@ async function finishStopped(
       status: 'skipped',
       // An open question is skipped with it (CHAT-07 §A item 9).
       ...(step.kind === 'ask' ? { label: t('step.askStopped') } : {}),
-      detail: reason === 'expired' ? t('step.expired') : t('step.stopped'),
+      detail: t(STOPPED_STEP[reason]),
     });
     if (step.kind === 'ask') openAsks.push(step.id);
     sink.emit('step.finished', { step: clientStep(row) });
@@ -3166,14 +3195,15 @@ async function finishStopped(
   for (const e of [asksError, takenError]) {
     if (e) console.error('[chat/engine] could not skip open questions:', e.message);
   }
+  const progress: RunProgress = { ...run.progress, stoppedFor: reason };
   await saveAnswer(run.messageId, {
     text: run.progress.text,
     generatedAt: new Date().toISOString(),
     dataAsOf: run.progress.dataAsOf,
     timezone: run.progress.timezone,
   });
-  await saveState(run.id, { pending: null, waitingSince: null, workingMs, progress: run.progress });
-  sink.emit('run.stopped', { ...summaryOf(run.progress, workingMs), reason });
+  await saveState(run.id, { pending: null, waitingSince: null, workingMs, progress });
+  sink.emit('run.stopped', { ...summaryOf(progress, workingMs), reason });
   await sink.flush();
 }
 
@@ -3183,6 +3213,33 @@ async function skipOpenSteps(runId: string, sink: RunEventSink, detail: string):
     const row = await updateStep(step.id, { status: 'skipped', detail });
     sink.emit('step.finished', { step: clientStep(row) });
   }
+}
+
+/** A stopped run's open steps' words, by why it stopped. */
+const STOPPED_STEP = {
+  person: 'step.stopped',
+  expired: 'step.expired',
+  limit: 'step.stoppedAtLimit',
+} as const;
+
+/**
+ * Ends a run nothing drives, held at a card (`waiting`) or at a limit
+ * (`paused_cap`), as stopped: for its agent run (CHAT-21 §H, CHAT-27 item
+ * 22), a triggered run at its cap ("Stopped at its limit": `limit`) or one
+ * left 7 days (`expired`). False when the run wasn't held there (a person
+ * got to it first).
+ */
+export async function endHeldRun(
+  runId: string,
+  from: 'waiting' | 'paused_cap',
+  reason: 'expired' | 'limit',
+): Promise<boolean> {
+  const run = await loadRun(runId);
+  if (!run || run.status !== from) return false;
+  if (!(await moveRun(runId, [from], 'stopped', { finished: true }))) return false;
+  await finishStopped(run, new RunEventSink(runId, run.lastSeq), reason, run.workingMs);
+  publishRunEnd(runId);
+  return true;
 }
 
 /**
