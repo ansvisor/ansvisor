@@ -77,6 +77,9 @@
       "exhausted": "Used up. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "Used up. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
       "exhaustedTrial": "Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working.",
+      "exhaustedChat": "Used up. AI features stop until {date}; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedNoDateChat": "Used up. AI features stop until it resets; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedTrialChat": "Start your plan now for its full monthly AI usage; Chat keeps working only where it runs on your workspace's own AI key.",
       "none": "No AI usage yet this month.",
       "ownKey": "Agent Chat, on your own AI key",
       "notCounted": "Not counted",
@@ -92,7 +95,10 @@
       "seeUsage": "See usage",
       "exhausted": "You've used this month's AI limit. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "You've used this month's AI limit. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
-      "exhaustedTrial": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working."
+      "exhaustedTrial": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working.",
+      "exhaustedChat": "You've used this month's AI limit. AI features stop until {date}; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedNoDateChat": "You've used this month's AI limit. AI features stop until it resets; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedTrialChat": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Chat keeps working only where it runs on your workspace's own AI key."
     },
     "startNow": {
       "button": "Start my plan now",
