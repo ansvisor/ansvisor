@@ -172,6 +172,7 @@ export type AgentRefusalCode =
   | 'action_not_found'
   | 'action_closed'
   | 'queue_full'
+  | 'connection_missing'
   | 'failed';
 
 export type AgentRefusal =
@@ -223,6 +224,7 @@ const REFUSAL_STATUS: Record<AgentRefusalCode, number> = {
   action_not_found: 404,
   action_closed: 409,
   queue_full: 409,
+  connection_missing: 409,
   failed: 500,
 };
 

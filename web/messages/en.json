@@ -5195,6 +5195,7 @@
       "action_not_found": "This action isn't available.",
       "action_closed": "This action is closed. Reopen it in Action Center to run an agent on it.",
       "queue_full": "{count, plural, one {# run already waits} other {# runs already wait}} for this agent on this brand. Try again once one has started.",
+      "connection_missing": "This agent needs {name}, and {brand} doesn’t have it connected. Connect it for that brand, then run the agent again.",
       "failed": "Something went wrong with this agent. Try again."
     },
     "status": {

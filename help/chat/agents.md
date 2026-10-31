@@ -72,7 +72,7 @@ Click **Save as draft** to keep it off, or **Turn on**. If something needs fixin
 
 Step 4 lists the connections the agent's skills use. **Any CMS** counts Webflow, WordPress, Framer, Wix or a workflow webhook. **Any catalog source** counts Merchant Center, a product feed or a store.
 
-A **Required** connection is one a skill can't work without, such as a CMS for **Ready to publish**. If the brand doesn't have it, the run doesn't start, and an agent that runs on its own pauses with "A required connection is off". An **Optional** one, such as Search Console for **Weekly report**, helps but isn't needed: without it, the agent does everything else and says what it couldn't use.
+A **Required** connection is one a skill can't work without, such as a CMS for **Ready to publish**. If the brand doesn't have it, the run doesn't start: **Run now** and **Run agent** say which brand lacks it, and an agent that runs on its own pauses with "A required connection is off". An **Optional** one, such as Search Console for **Weekly report**, helps but isn't needed: without it, the agent does everything else and says what it couldn't use.
 
 ## Edit or delete an agent
 

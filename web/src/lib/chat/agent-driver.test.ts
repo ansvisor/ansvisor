@@ -387,6 +387,26 @@ describe('handing a started run to Chat', () => {
     expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
   });
 
+  it('holds a skill’s Required connection even when the saved list leaves it out or has it Optional', async () => {
+    // Saved through the API: /publish, with no connections at all.
+    Object.assign(db.tables.chat_agent_versions[0], { skill_ids: ['publish'], connections: [] });
+    const id = queueRun();
+    expect(await driver.openAgentRun(id, ORG, NOW)).toBeNull();
+    expect(runRow(id).status).toBe('stopped');
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'connection' });
+    expect(db.tables.chat_conversations).toEqual([]);
+
+    // /shopping with the catalog switched to Optional: still Required.
+    Object.assign(agentRow(), { status: 'active', paused_reason: null });
+    Object.assign(db.tables.chat_agent_versions[0], {
+      skill_ids: ['shopping'],
+      connections: [{ key: 'catalog', required: false }],
+    });
+    const again = queueRun();
+    expect(await driver.openAgentRun(again, ORG, NOW)).toBeNull();
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'connection' });
+  });
+
   it('takes any CMS and any catalog source the brand has: WordPress, a workflow webhook, Merchant Center', async () => {
     db.tables.chat_agent_versions[0].connections = [
       { key: 'cms', required: true },

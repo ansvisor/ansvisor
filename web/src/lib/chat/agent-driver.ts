@@ -10,7 +10,12 @@ import {
   logActionRunEvent,
   type ActionSnapshot,
 } from './agent-action';
-import { connectionGaps, readBrandConnections } from './agent-connections';
+import {
+  connectionGaps,
+  connectionName,
+  neededConnections,
+  readBrandConnections,
+} from './agent-connections';
 import { canWriteAgents, versionFromRow, type AgentPausedReason } from './agent-rules';
 import { startQueuedAgentRuns, type AgentRunDriver } from './agent-runs';
 import {
@@ -91,10 +96,6 @@ import { chatAgenticEnabled } from './flag';
 
 const runnerT = createTranslator({ locale: 'en', messages, namespace: 'chatAgents.runner' });
 const triggerT = createTranslator({ locale: 'en', messages, namespace: 'chatAgents.runTrigger' });
-const CONNECTION_NAMES: Record<string, string> = messages.chatAgents.connections.names;
-
-/** A connection's name as the app shows it: "Any CMS", "Google Search Console". */
-const connectionName = (key: string) => CONNECTION_NAMES[key] ?? key;
 
 /** A started run with no chat after this long lost its driver: it fails. */
 export const HANDOVER_GRACE_MS = 5 * 60_000;
@@ -415,7 +416,10 @@ export async function openAgentRun(
   if (!brand) return endBeforeStart(run, 'stopped', { stopReason: 'brand_gone', now });
   // What the brand has connected (§H item 42): without a Required connection nothing starts,
   // and a triggered agent pauses (connection); an Optional one missing is said in the run.
-  const gaps = connectionGaps(version.connections, await readBrandConnections(brand.id));
+  const gaps = connectionGaps(
+    neededConnections(version.skill_ids, version.connections),
+    await readBrandConnections(brand.id),
+  );
   if (gaps.required.length > 0) {
     return endBeforeStart(run, 'stopped', { pause: 'connection', now });
   }

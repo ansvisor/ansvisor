@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { MAX_QUEUED_PER_BRAND, RUN_NOW_REPEAT_MS, agentPlanLimits } from './agent-rules';
 import { idempotencyKey, requestHash, sweepExpiredKeys, withIdempotencyKey } from './idempotency';
 import { readActionForRun, type ActionSnapshot } from './agent-action';
+import { connectionName, missingRequiredConnection } from './agent-connections';
 import {
   agentForAct,
   logAgentChange,
@@ -132,6 +133,13 @@ export async function runAgentNow(
     brands = brands.filter((b) => b.id === input.brandId);
     if (brands.length === 0) return refused('brand_not_found');
   }
+  // A brand without a Required connection: refused before anything is queued (§H item 42).
+  for (const brand of brands) {
+    const missing = await missingRequiredConnection(version, brand.id);
+    if (missing) {
+      return refused('connection_missing', { name: connectionName(missing), brand: brand.name });
+    }
+  }
 
   const runs: RunNowItem[] = [];
   const ours: string[] = [];
@@ -224,6 +232,10 @@ export async function runAgentOnAction(
   if (failing) return failing;
   const brand = (await runnableBrands(org, version.scope)).find((b) => b.id === actionBrand.id);
   if (!brand) return refused('brand_not_found');
+  const missing = await missingRequiredConnection(version, brand.id);
+  if (missing) {
+    return refused('connection_missing', { name: connectionName(missing), brand: brand.name });
+  }
 
   const minute = String(Math.floor(now.getTime() / RUN_NOW_REPEAT_MS));
   const outcome = await withIdempotencyKey<QueuedOutcome>(

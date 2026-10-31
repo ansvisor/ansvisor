@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 
-const { connectedKinds, connectionGaps, connectionKindOf } = await import('./agent-connections');
+const { connectedKinds, connectionGaps, connectionKindOf, neededConnections } =
+  await import('./agent-connections');
 
 /**
  * What an agent's connections need of a brand (CHAT-21 §D item 21, §H item
@@ -85,5 +86,25 @@ describe('connectionGaps', () => {
     });
     expect(connectionKindOf('wix')).toBe('cms');
     expect(connectionKindOf('merchant_center')).toBe('catalog');
+  });
+});
+
+describe('neededConnections', () => {
+  it('adds what the skills can’t work without, Required, to the saved list', () => {
+    expect(neededConnections(['publish'], [])).toEqual([{ key: 'cms', required: true }]);
+    expect(
+      neededConnections(
+        ['winback', 'shopping'],
+        [
+          { key: 'catalog', required: false },
+          { key: 'google_analytics', required: false },
+        ],
+      ),
+    ).toEqual([
+      { key: 'catalog', required: true },
+      { key: 'google_analytics', required: false },
+    ]);
+    // Optional uses aren't added: /winback runs without them.
+    expect(neededConnections(['winback', 'report'], [])).toEqual([]);
   });
 });

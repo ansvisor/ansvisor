@@ -1,6 +1,7 @@
+import messages from '../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { AgentConnection } from './agent-rules';
-import { CATALOG_CONNECTION, CMS_CONNECTION } from './agent-skills';
+import { CATALOG_CONNECTION, CMS_CONNECTION, skillConnections } from './agent-skills';
 
 /**
  * Whether a brand has the connections an agent asks for (CHAT-21 §D item
@@ -37,6 +38,11 @@ const KIND_OF: Record<string, string> = {
   ga4: 'google_analytics',
 };
 
+const CONNECTION_NAMES: Record<string, string> = messages.chatAgents.connections.names;
+
+/** A connection's name as the app shows it: "Any CMS", "Google Search Console". */
+export const connectionName = (key: string) => CONNECTION_NAMES[key] ?? key;
+
 /** A connection key as the kind it is read as, or null for one this doesn't read. */
 export const connectionKindOf = (key: string): string | null => KIND_OF[key] ?? null;
 
@@ -66,6 +72,26 @@ export function connectedKinds(rows: BrandConnectionRows): Set<string> {
   if (rows.brand?.gsc_property) kinds.add('google_search_console');
   if (rows.brand?.ga_property_id) kinds.add('google_analytics');
   return kinds;
+}
+
+/**
+ * The connections a version needs: the ones it was saved with, and each one
+ * its skills can't work without as Required even when the saved list leaves
+ * it out or has it Optional (an agent saved through the API or MCP sends its
+ * own list): /publish never runs without a CMS.
+ */
+export function neededConnections(
+  skillIds: readonly string[],
+  connections: readonly AgentConnection[],
+): AgentConnection[] {
+  const out = connections.map((c) => ({ ...c }));
+  for (const need of skillConnections(skillIds)) {
+    if (!need.required) continue;
+    const kept = out.find((c) => c.key === need.key);
+    if (kept) kept.required = true;
+    else out.push({ key: need.key, required: true });
+  }
+  return out;
 }
 
 /** The agent's connections the brand lacks: Required ones keep a run from starting. */
@@ -108,4 +134,18 @@ export async function readBrandConnections(brandId: string): Promise<Set<string>
     webhooks: (webhooks.data ?? []) as BrandConnectionRows['webhooks'],
     catalog: (catalog.data ?? []) as BrandConnectionRows['catalog'],
   });
+}
+
+/**
+ * The first Required connection of the agent's the brand lacks, or null:
+ * Run now and Run agent refuse with it before they queue anything, so a
+ * click never gets a run that stops without a word. Server only.
+ */
+export async function missingRequiredConnection(
+  version: { skill_ids: readonly string[]; connections: readonly AgentConnection[] },
+  brandId: string,
+): Promise<string | null> {
+  const needed = neededConnections(version.skill_ids, version.connections);
+  if (!needed.some((c) => c.required && connectionKindOf(c.key))) return null;
+  return connectionGaps(needed, await readBrandConnections(brandId)).required[0] ?? null;
 }
