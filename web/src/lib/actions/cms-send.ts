@@ -6,7 +6,6 @@ import { CHAT_CMS_TARGETS, type ChatCmsTarget } from '@/lib/content/cms-names';
 import type { CmsDelivery } from '@/lib/content/cms-send-client';
 import { readCmsSources } from '@/lib/content/cms-sources';
 import { withContentDom } from '@/lib/content/server-dom';
-import { isManager } from '@/lib/session-role';
 import { assertWritable } from '@/lib/subscription-guard';
 import { createClient } from '@/lib/supabase/server';
 
@@ -30,6 +29,7 @@ export type SendDraftToCmsResult =
         | 'quota_exceeded'
         | 'conflict'
         | 'forbidden_role'
+        | 'execute_off'
         | 'live_item'
         | 'failed';
       message: string;
@@ -66,10 +66,12 @@ const NOT_CONNECTED = new Set([
 
 /**
  * Send one Library draft to the brand's CMS as a draft: Chat's push_cms_draft
- * (CHAT-20 §9 row 58). Admins and Managers, checked here as the API checks
- * them. A page that went live (published_url, or a send published) isn't
- * sent: its CMS item would change on the live site, with the CMS's next
- * publish (live_item; the Content Editor sends it). The page is made ready
+ * (CHAT-20 §9 row 58), an EXECUTE in the publishing group. Admins and
+ * Managers, checked here as the API checks them, and a Manager only while an
+ * Admin hasn't turned publishing off for Managers (sendAccess). A page that
+ * went live (published_url, or a send published) isn't sent: its CMS item
+ * would change on the live site, with the CMS's next publish (live_item; the
+ * Content Editor sends it). The page is made ready
  * as the Library's bulk send makes each (readCmsSources, bulkCmsItems: its
  * author and byline, the slug and meta it kept from its last send, else the
  * page's) and goes through the API's own send, as the signed-in member: its
@@ -89,6 +91,37 @@ export async function sendDraftToCms(
   }
 }
 
+/**
+ * Whether the signed-in member may send: an Admin, or a Manager while the
+ * publishing group is on for Managers (Settings › Chat, "Managers can't go
+ * live": chat_settings.manager_execute_off). Chat decides the same before
+ * its card and again on the click (precedence.ts); a server action can be
+ * called without Chat, so it checks for itself, on the member's own client.
+ */
+async function sendAccess(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<'ok' | 'forbidden_role' | 'execute_off'> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return 'forbidden_role';
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('role, organization_id')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (profile?.role === 'admin') return 'ok';
+  if (profile?.role !== 'manager' || !profile.organization_id) return 'forbidden_role';
+  const { data: settings, error: settingsError } = await supabase
+    .from('chat_settings')
+    .select('manager_execute_off')
+    .eq('organization_id', profile.organization_id)
+    .maybeSingle();
+  if (settingsError) throw new Error(settingsError.message);
+  return settings?.manager_execute_off.includes('publishing') ? 'execute_off' : 'ok';
+}
+
 async function sendOne(draftId: string, target: ChatCmsTarget): Promise<SendDraftToCmsResult> {
   if (!CHAT_CMS_TARGETS.includes(target)) {
     return {
@@ -98,11 +131,19 @@ async function sendOne(draftId: string, target: ChatCmsTarget): Promise<SendDraf
     };
   }
   const supabase = await createClient();
-  if (!(await isManager(supabase))) {
+  const access = await sendAccess(supabase);
+  if (access === 'forbidden_role') {
     return {
       ok: false,
       reason: 'forbidden_role',
       message: 'Only an admin or a manager can send a page to the CMS.',
+    };
+  }
+  if (access === 'execute_off') {
+    return {
+      ok: false,
+      reason: 'execute_off',
+      message: 'An Admin turned publishing off for Managers.',
     };
   }
   const [{ data: draft, error }, published] = await Promise.all([

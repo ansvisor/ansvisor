@@ -8,13 +8,13 @@ import { FIXTURE_IDS, defineTool } from './define-tool';
 import { draftPage, draftTitle, pageChanges } from './targets';
 
 /**
- * Chat's Content Library WRITE rows beyond create_draft (CHAT-20 §9 rows 55,
- * 58): changing a draft, and sending one to the brand's CMS as a draft.
- * Each calls a server action over the editor's own path, as the signed-in
- * member. Both are Admins' and Managers' (DECISIONS T: an Analyst's Chat
- * only creates drafts; the API sends pages for Admins and Managers). Going
- * live in a CMS (publish_cms, an EXECUTE) has no row: no CMS the app sends
- * to is published from it yet.
+ * Chat's Content Library rows beyond create_draft (CHAT-20 §9 rows 55, 58):
+ * changing a draft (a WRITE), and sending one to the brand's CMS as a draft
+ * (an EXECUTE in the publishing group: it leaves Ansvisor). Each calls a
+ * server action over the editor's own path, as the signed-in member. Both
+ * are Admins' and Managers' (DECISIONS T: an Analyst's Chat only creates
+ * drafts; the API sends pages for Admins and Managers). Going live in a CMS
+ * (publish_cms) has no row: no CMS the app sends to is published from it yet.
  */
 
 const ITEM = FIXTURE_IDS.item;
@@ -67,16 +67,16 @@ export const CONTENT_TOOLS = [
   }),
   defineTool({
     name: 'push_cms_draft',
-    class: 'write',
+    // It leaves Ansvisor and has no Undo (a CMS item can't be taken back from here; an
+    // item updated in Framer or Webflow goes live with the site's next publish): an
+    // EXECUTE, so only the person's click sends it, in every mode, Full auto included,
+    // and no Admin "Always" lifts it. In the publishing group: an Admin's "Managers can't
+    // go live" for publishing stops a Manager's send too.
+    class: 'execute',
+    executeGroup: 'publishing',
     area: 'content',
     description:
       "Send a Library draft to the brand's connected CMS as a draft there (Webflow, WordPress, Framer or Wix): nothing goes live. A page that is live already, or a send to the brand's webhook, goes from the Content Editor. Its slug and meta are what it kept from its last send, else the page's. Only when the person asked for this page to go to that CMS.",
-    // It leaves Ansvisor and has no Undo (a CMS item can't be taken back from here; an
-    // item updated in Framer or Webflow goes live with the site's next publish): a card in
-    // every mode, Full auto included, and no Admin "Always" lifts it.
-    defaultPolicy: 'ask',
-    maxPolicy: 'ask',
-    flags: { alwaysCard: true },
     minRole: 'manager',
     // A connection, not a plan: the API says when the brand hasn't one (not_connected).
     planGate: null,

@@ -78,7 +78,9 @@ import { sendHealthReport } from './lib/health/report.js';
 import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 import { refreshCloroCountries } from './lib/cloro-countries.js';
 import { chatAgenticDeployed } from './lib/chat-flag.js';
+import { startChatAgentTicks } from './lib/chat-agents.js';
 import { startModelPriceSync } from './lib/model-prices.js';
+import { startDailySuggestions } from './lib/chat-suggestions/job.js';
 
 // Before anything starts: a stray rejection is logged, not a crash.
 handleProcessErrors();
@@ -851,6 +853,12 @@ server.listen(PORT, async () => {
   // read from improve-cost.js's own table, as before.
   if (chatAgenticDeployed()) {
     startModelPriceSync().catch((err) => logger.error({ err }, '[model-prices] start failed'));
+    // Daily suggestions in Chat's Inbox (CHAT-26): every hour, one open
+    // Action Center action for each person whose morning it is, by rules
+    // and with no AI call.
+    startDailySuggestions();
+    // Chat's agents (W2-16): every minute the web fires due schedules and sweeps.
+    startChatAgentTicks();
   }
 
   if (!isCloud()) {

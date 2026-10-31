@@ -2723,6 +2723,63 @@ describe('the AI budget', () => {
     expect(events.at(-1)!.type).toBe('run.paused_cap');
     expectClean(events);
   });
+
+  it('holds an agent run’s steps as the agent’s, within its cap, and keeps which limit it reached', async () => {
+    const AGENT_RUN = '77777777-7777-4777-8777-777777777777';
+    const { sonnet } = useModels([READY], [text('never')]);
+    fakes.reserve
+      .mockImplementationOnce(async () => {
+        const hold = {
+          charge: vi.fn(async () => {}),
+          release: vi.fn(async () => {}),
+          keep: vi.fn(),
+        };
+        holds.push(hold);
+        return { ok: true, budget: hold };
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        refusal: 'run_cap',
+        trial: false,
+        retryable: false,
+        message: 'x',
+      });
+    const started = await engine.startChatRun(ADMIN, { message: 'Hello', brandId: BRAND });
+    if (!started.ok) throw new Error('not started');
+    const convo = db.tables.chat_conversations.find((c) => c.id === started.conversationId)!;
+    convo.agent_run_id = AGENT_RUN;
+    await engine.driveRun(ADMIN, started.runId);
+
+    expect(fakes.reserve).toHaveBeenCalledWith(
+      expect.objectContaining({ feature: 'agent', agentRunId: AGENT_RUN }),
+    );
+    expect(sonnet.seen).toHaveLength(0);
+    expect(runRow(started.runId).status).toBe('paused_cap');
+    expect(ofType(await eventsOf(started.runId), 'run.paused_cap')[0].data).toMatchObject({
+      limit: 'run',
+    });
+    const state = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
+    expect((state.progress as { capHit?: string }).capHit).toBe('run');
+
+    // Its driver stops a triggered one there: "Stopped at its limit", kept as why.
+    expect(await engine.endHeldRun(started.runId, 'paused_cap', 'limit')).toBe(true);
+    expect(runRow(started.runId).status).toBe('stopped');
+    expect(ofType(await eventsOf(started.runId), 'run.stopped')[0].data.reason).toBe('limit');
+    const after = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
+    expect((after.progress as { stoppedFor?: string }).stoppedFor).toBe('limit');
+    // Once only: a run no longer held there isn't ended again.
+    expect(await engine.endHeldRun(started.runId, 'paused_cap', 'limit')).toBe(false);
+  });
+
+  it('holds a person’s own chat’s steps as Chat’s, with no agent run', async () => {
+    budgetHolds();
+    useModels([READY], [text('Hi.')]);
+    await turn(ADMIN, 'Hello');
+    for (const [step] of fakes.reserve.mock.calls) {
+      expect(step).not.toHaveProperty('agentRunId');
+      expect(step).not.toHaveProperty('feature');
+    }
+  });
 });
 
 describe('refusals', () => {
@@ -3215,6 +3272,80 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     settings({ manager_execute_off: ['publishing'] });
     await approve(as('manager'), tried.runId);
     expect(fakes.publishRun).not.toHaveBeenCalled();
+    expect(ofType(await eventsOf(tried.runId), 'access.denied')).toEqual([
+      expect.objectContaining({
+        data: expect.objectContaining({ rule: expect.objectContaining({ kind: 'policy' }) }),
+      }),
+    ]);
+  });
+
+  it('sends a draft to a CMS only on a click, and never for a Manager the Admin turned publishing off for', async () => {
+    seedDraft(db);
+    vi.mocked(sendDraftToCms).mockResolvedValue({
+      ok: true,
+      target: 'webflow',
+      status: 'sent',
+      updated: false,
+      live: false,
+    });
+    const send = toolCall('c1', 'push_cms_draft', { draft_id: DRAFT, destination: 'webflow' });
+    // An Admin's Always lifts nothing: a click card for Admins and Managers in every mode.
+    settings({ tool_policies: { sendToCms: 'always' } });
+    for (const role of ['admin', 'manager'] as const) {
+      for (const mode of MODES) {
+        const tried = await attempt(role, mode, send);
+        expect(tried, `${role} ${mode}`).toMatchObject({ waits: true, cards: 1, denials: [] });
+        expect(tried.offered, `${role} ${mode}`).toContain('push_cms_draft');
+        expect(stepsOf(tried.runId)[0], `${role} ${mode}`).toMatchObject({ kind: 'execute' });
+      }
+    }
+    // Analysts and Agency partners only read: not offered, and called anyway, no card.
+    for (const role of ['analyst', 'agency_partner'] as const) {
+      for (const mode of MODES) {
+        const called = await attempt(role, mode, send);
+        expect(called, `${role} ${mode}`).toMatchObject({ waits: false, cards: 0 });
+        expect(called.offered, `${role} ${mode}`).not.toContain('push_cms_draft');
+      }
+    }
+    expect(sendDraftToCms).not.toHaveBeenCalled();
+
+    // Publishing off for Managers: not offered to a Manager, and the explainer says why.
+    settings({ manager_execute_off: ['publishing'] });
+    const manager = await attempt(
+      'manager',
+      'full_auto',
+      toolCall('x1', engine.EXPLAIN_TOOL, { capability: 'sendToCms', target: 'Pricing FAQ' }),
+    );
+    expect(manager.offered).not.toContain('push_cms_draft');
+    expect(manager.denials).toEqual([
+      expect.objectContaining({
+        rule: expect.objectContaining({
+          kind: 'policy',
+          detail: 'An Admin turned publishing off for Managers.',
+        }),
+        whoCan: 'Admins can do this.',
+      }),
+    ]);
+    // Called anyway: it isn't in their list, so no card to click, and nothing is sent.
+    const called = await attempt('manager', 'full_auto', send);
+    expect(called).toMatchObject({ waits: false, cards: 0 });
+    expect(sendDraftToCms).not.toHaveBeenCalled();
+    // The Admin still clicks it through, and it is sent then.
+    const admin = await attempt('admin', 'auto', send);
+    expect(admin).toMatchObject({ waits: true, cards: 1 });
+    await approve(as('admin'), admin.runId);
+    expect(sendDraftToCms).toHaveBeenCalledTimes(1);
+    expect(sendDraftToCms).toHaveBeenCalledWith(DRAFT, 'webflow');
+  });
+
+  it("refuses a Manager's CMS send clicked after the Admin turned publishing off while it waited (§4)", async () => {
+    seedDraft(db);
+    const send = toolCall('c1', 'push_cms_draft', { draft_id: DRAFT, destination: 'webflow' });
+    const tried = await attempt('manager', 'auto', send);
+    expect(tried).toMatchObject({ waits: true, cards: 1 });
+    settings({ manager_execute_off: ['publishing'] });
+    await approve(as('manager'), tried.runId);
+    expect(sendDraftToCms).not.toHaveBeenCalled();
     expect(ofType(await eventsOf(tried.runId), 'access.denied')).toEqual([
       expect.objectContaining({
         data: expect.objectContaining({ rule: expect.objectContaining({ kind: 'policy' }) }),

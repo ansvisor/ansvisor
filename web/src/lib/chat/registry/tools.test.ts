@@ -572,7 +572,8 @@ describe("the model's tool list on the registry's rows", () => {
     ).map((tool) => tool.name);
 
   const reads = CHAT_TOOLS.filter((tool) => tool.class === 'read').map((tool) => tool.name);
-  const writes = CHAT_TOOLS.filter((tool) => tool.class === 'write').map((tool) => tool.name);
+  // The WRITEs and the EXECUTE (push_cms_draft), in the registry's order.
+  const writes = CHAT_TOOLS.filter((tool) => tool.class !== 'read').map((tool) => tool.name);
   const starter = facts({ plan: 'starter', subscription_status: 'active' });
   const growth = facts({ plan: 'growth', subscription_status: 'active' });
   const withoutShopping = reads.filter((name) => name !== 'get_shopping_visibility');
