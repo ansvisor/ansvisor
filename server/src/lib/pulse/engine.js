@@ -1,7 +1,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { isCloud, isSubscriptionActive } from '../../config/plans.js';
-import { brandReaders } from '../access.js';
+import { brandOutsiders, brandReaders } from '../access.js';
 import { dispatchBrandWebhook } from '../webhook-dispatch.js';
 import { computePulseMetrics } from './metrics.js';
 import { renderPulseEmail, sendPulseEmail } from './email.js';
@@ -40,22 +40,36 @@ export function appUrl() {
   }
 }
 
-/**
- * Recipient emails: the explicit list from settings, as an Admin typed it,
- * else every member who can see the brand (brand access, spec §5.4: with
- * All brands, every member). The AI Traffic weekly digest (AT-013) sends to
- * the same people.
- */
-export async function resolveRecipients(organizationId, settings, brandId) {
-  if (settings?.recipients?.length) return settings.recipients;
-
-  const readers = await brandReaders(organizationId, [brandId]);
+/** The sign-in e-mail of each of `ids` that has one. */
+async function emailsOf(ids) {
   const emails = [];
-  for (const id of readers.keys()) {
+  for (const id of ids) {
     const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(id);
     if (authUser?.user?.email) emails.push(authUser.user.email);
   }
   return emails;
+}
+
+const sameAddress = (address) => String(address).trim().toLowerCase();
+
+/**
+ * Recipient emails (brand access, spec §5.4): the explicit list from
+ * settings, as an Admin or Manager set it, less the members who can't see
+ * the brand, so a list made before someone was narrowed doesn't mail them
+ * its numbers; an address that is no member's (a client, team@) stays.
+ * Else every member who can see the brand: with All brands, every member.
+ * The AI Traffic weekly digest (AT-013) sends to the same people.
+ */
+export async function resolveRecipients(organizationId, settings, brandId) {
+  if (settings?.recipients?.length) {
+    const outsiders = await brandOutsiders(organizationId, brandId);
+    if (outsiders.length === 0) return settings.recipients;
+    const hidden = new Set((await emailsOf(outsiders)).map(sameAddress));
+    return settings.recipients.filter((address) => !hidden.has(sameAddress(address)));
+  }
+
+  const readers = await brandReaders(organizationId, [brandId]);
+  return emailsOf([...readers.keys()]);
 }
 
 // In webhook mode the tracking job can "complete" while Cloro is still
@@ -237,6 +251,12 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
       return { skipped: 'nothing_notable' };
     }
 
+    // Read before the claim: a read that fails (a brief 503) then leaves no
+    // claim, and the catch-up sweep sends the pulse later, webhook included.
+    const recipients = isCloud()
+      ? await resolveRecipients(brand.organization_id, settings, brand.id)
+      : [];
+
     // Record first — the unique (brand_id, pulse_date) constraint makes
     // this the race-safe claim on "today's pulse".
     const { data: pulseRow, error: insertError } = await supabaseAdmin
@@ -265,7 +285,6 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
     let emailSent = false;
     let recipientCount = 0;
     if (isCloud()) {
-      const recipients = await resolveRecipients(brand.organization_id, settings, brand.id);
       recipientCount = recipients.length;
       if (recipients.length) {
         const { subject, html } = renderPulseEmail({

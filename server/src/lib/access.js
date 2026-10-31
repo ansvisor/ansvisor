@@ -26,6 +26,7 @@
 import supabaseAdmin from '../config/supabase.js';
 import { logger } from './logger.js';
 import { oncePerRequest } from './request-scope.js';
+import { readAllRpcRows } from './rpc-pages.js';
 
 function accessError(message, status, code) {
   const err = new Error(message);
@@ -121,20 +122,20 @@ async function readWithBrandScope(read) {
 }
 
 /**
- * The organization's people who may reach the brands of `brandIds`, each
- * with those they may, by brandAccessOf's rule for one person: an Admin, All
- * brands, the demo brand, or a grant. Read from the tables as the service
- * role, so the server picks e-mail and job recipients itself
- * (can_access_brand answers for another person only with a service-role JWT,
- * spec §10). Another organization's brands count for no one; without an
- * organization, no one.
+ * Every person of the organization with the brands of `brandIds` they may
+ * reach (an empty set for none), by brandAccessOf's rule for one person: an
+ * Admin, All brands, the demo brand, or a grant. Read from the tables as the
+ * service role, so the server picks e-mail and job recipients itself
+ * (can_access_brand answers for another person only with a service-role
+ * JWT, spec §10). Another organization's brands count for no one; without
+ * an organization, no one is read.
  * @param {string|null} orgId
  * @param {string[]} brandIds
- * @returns {Promise<Map<string, Set<string>>>} person id → the brands they may reach; people with none left out
+ * @returns {Promise<Map<string, Set<string>>>} person id → the brands they may reach
  */
-export async function brandReaders(orgId, brandIds) {
-  const readers = new Map();
-  if (!orgId || brandIds.length === 0) return readers;
+async function memberReach(orgId, brandIds) {
+  const reach = new Map();
+  if (!orgId || brandIds.length === 0) return reach;
   const [brandsRead, members] = await Promise.all([
     supabaseAdmin
       .from('brands')
@@ -147,23 +148,26 @@ export async function brandReaders(orgId, brandIds) {
   ]);
   if (brandsRead.error) throw new Error(brandsRead.error.message);
   const brands = brandsRead.data ?? [];
-  if (brands.length === 0) return readers;
+  const none = brands.length === 0;
 
-  // Grants matter only to the people with Selected brands.
-  const narrowed = (members ?? [])
-    .filter((m) => m.role !== 'admin' && m.brand_scope === 'selected')
-    .map((m) => m.id);
+  // Grants matter only to the people with Selected brands, who alone have
+  // them: read page by page, an organization's grants can pass 1000.
   const granted = new Map();
-  if (narrowed.length > 0) {
-    const { data: grants, error } = await supabaseAdmin
-      .from('member_brands')
-      .select('user_id, brand_id')
-      .eq('organization_id', orgId)
-      .in('user_id', narrowed)
-      .in(
-        'brand_id',
-        brands.map((b) => b.id),
-      );
+  const narrowed = (members ?? []).some((m) => m.role !== 'admin' && m.brand_scope === 'selected');
+  if (!none && narrowed) {
+    const { data: grants, error } = await readAllRpcRows('member_brands', (from, to) =>
+      supabaseAdmin
+        .from('member_brands')
+        .select('user_id, brand_id')
+        .eq('organization_id', orgId)
+        .in(
+          'brand_id',
+          brands.map((b) => b.id),
+        )
+        .order('user_id')
+        .order('brand_id')
+        .range(from, to),
+    );
     if (error) throw new Error(error.message);
     for (const grant of grants ?? []) {
       granted.set(grant.user_id, (granted.get(grant.user_id) ?? new Set()).add(grant.brand_id));
@@ -176,10 +180,33 @@ export async function brandReaders(orgId, brandIds) {
       all: member.role === 'admin' || member.brand_scope !== 'selected',
       brandIds: granted.get(member.id) ?? new Set(),
     };
-    const reach = new Set(brands.filter((b) => !refusalFor(access, b)).map((b) => b.id));
-    if (reach.size > 0) readers.set(member.id, reach);
+    reach.set(member.id, new Set(brands.filter((b) => !refusalFor(access, b)).map((b) => b.id)));
   }
-  return readers;
+  return reach;
+}
+
+/**
+ * The organization's people who may reach the brands of `brandIds`, each
+ * with those they may (memberReach); people with none left out.
+ * @param {string|null} orgId
+ * @param {string[]} brandIds
+ * @returns {Promise<Map<string, Set<string>>>} person id → the brands they may reach
+ */
+export async function brandReaders(orgId, brandIds) {
+  const reach = await memberReach(orgId, brandIds);
+  return new Map([...reach].filter(([, brands]) => brands.size > 0));
+}
+
+/**
+ * The organization's people who may not reach the brand (memberReach): with
+ * everyone on All brands, none.
+ * @param {string|null} orgId
+ * @param {string} brandId
+ * @returns {Promise<string[]>} their ids
+ */
+export async function brandOutsiders(orgId, brandId) {
+  const reach = await memberReach(orgId, [brandId]);
+  return [...reach].filter(([, brands]) => !brands.has(brandId)).map(([id]) => id);
 }
 
 /**

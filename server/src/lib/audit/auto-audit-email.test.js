@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const emails = { all1: 'ana@acme.test', all2: 'bo@acme.test', tea: 'cy@acme.test' };
+const emails = {
+  all1: 'ana@acme.test',
+  all2: 'bo@acme.test',
+  tea: 'cy@acme.test',
+  coffee: 'dee@acme.test',
+};
 vi.mock('../../config/supabase.js', () => ({
   default: {
     auth: { admin: { getUserById: async (id) => ({ data: { user: { email: emails[id] } } }) } },
@@ -79,6 +84,27 @@ describe('sendAutoAuditEmail', () => {
     expect(teaOnly.to).toEqual(['cy@acme.test']);
     expect(teaOnly.html).toContain('2 pages audited');
     expect(teaOnly.html).not.toContain('Acme Coffee');
+  });
+
+  it('sends each group of the same brands its own e-mail, and skips someone with no e-mail', async () => {
+    readers.map = new Map([
+      ['all1', new Set(['coffee', 'tea'])],
+      ['tea', new Set(['tea'])],
+      ['coffee', new Set(['coffee'])],
+      // Signed up by a provider that gave no e-mail: nobody to send to.
+      ['ghost', new Set(['coffee', 'tea'])],
+    ]);
+    expect(await sendAutoAuditEmail('org-1', run)).toBe(true);
+    expect(sendEmail).toHaveBeenCalledTimes(3);
+    const mails = sendEmail.mock.calls.map(([mail]) => mail);
+    expect(mails.map((mail) => mail.to)).toEqual([
+      ['ana@acme.test'],
+      ['cy@acme.test'],
+      ['dee@acme.test'],
+    ]);
+    const coffeeOnly = mails[2];
+    expect(coffeeOnly.html).toContain('3 pages audited');
+    expect(coffeeOnly.html).not.toContain('Acme Tea');
   });
 
   it('sends nothing to no one, and says when one e-mail wasn’t accepted', async () => {

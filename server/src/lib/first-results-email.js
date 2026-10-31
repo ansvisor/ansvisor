@@ -86,18 +86,22 @@ async function firstStamps(orgId) {
   );
   return stamps
     .filter(Boolean)
-    .sort((x, y) => (x.at === y.at ? x.id.localeCompare(y.id) : x.at < y.at ? -1 : 1));
+    .sort((x, y) =>
+      x.at !== y.at ? (x.at < y.at ? -1 : 1) : x.id < y.id ? -1 : x.id > y.id ? 1 : 0,
+    );
 }
 
 /**
- * Take the people of `ids` who were never sent it, in one update, so two
- * first runs finishing at once can't both send it. The ids taken.
+ * Take the people of `ids` who were never sent it and are still the
+ * organization's, in one update, so two first runs finishing at once can't
+ * both send it. The ids taken.
  */
-async function claimRecipients(ids) {
+async function claimRecipients(orgId, ids) {
   if (ids.length === 0) return [];
   const { data, error } = await supabaseAdmin
     .from('profiles')
     .update({ first_results_emailed_at: new Date().toISOString() })
+    .eq('organization_id', orgId)
     .in('id', ids)
     .is('first_results_emailed_at', null)
     .select('id');
@@ -149,7 +153,7 @@ export async function sendFirstResultsEmail(brandId) {
   const due = [...readers]
     .filter(([, seen]) => stamps.find((stamp) => seen.has(stamp.id))?.id === brandId)
     .map(([id]) => id);
-  const ids = await claimRecipients(due);
+  const ids = await claimRecipients(brand.organization_id, due);
   if (ids.length === 0) return 'skipped';
 
   const to = await emailsOf(ids);
