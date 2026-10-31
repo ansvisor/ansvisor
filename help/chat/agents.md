@@ -1,17 +1,17 @@
 ---
 title: See and run your agents in Chat › Agents
 route: /dashboard/chat/agents
-keywords: [agents, chat agents, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers]
+keywords: [agents, chat agents, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, schedule, signal trigger, needs you, stopped at its limit, run agent on an action]
 synonyms: [my agents, saved agents, automations, scheduled agents, agent history, what does this agent cost]
 plan: all
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
 approved: false
-sources: [web/messages/en.json, web/src/lib/chat/agent-rules.ts]
+sources: [web/messages/en.json, web/src/lib/chat/agent-rules.ts, web/src/lib/chat/agent-triggers.ts, web/src/lib/chat/agent-driver.ts]
 ---
-An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, or when someone clicks **Run now**. **Agents** lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses.
+An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, or when someone clicks **Run now**. **Agents** lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses.
 
 ## Open Agents
 
@@ -56,6 +56,24 @@ Admins and Managers see the buttons they may use:
 - An archived agent has **Restore**, which brings it back paused.
 
 Managers change their own agents and can run agents shared with the workspace. Admins can do this for every agent.
+
+## When an agent runs by itself
+
+A **Schedule** trigger runs at its time on the clock of the time zone it was set in, also when summer time starts or ends. A time missed while the agent was paused isn't made up later. A **Signal** trigger runs when Action Center finds a new signal of its category, and of the definitions, pages and engines you picked. **KPI changed** and **Watch rule** triggers are saved, but don't start runs yet.
+
+Signals that come close together don't each start a run. Signals within 15 minutes join one run, a brand gets at most one signal run every 6 hours, and your plan sets how many signal runs an agent may start a day. A signal that had to wait is listed in the agent's next run, and in **Run history** as **Skipped** with the reason.
+
+## How a run works
+
+Each run works on one brand, in a chat of its own. A run a trigger started acts as the agent's owner, with their role; **Run now** acts as the person who clicked it. The chat shows in that person's Inbox. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
+
+A run may use only its share of your monthly AI limit. A run a trigger started ends **Stopped at its limit** when it reaches it; a **Run now** run pauses there instead. After 3 failed runs in a row the agent pauses. When the monthly AI limit is used up, the agent pauses and starts again by itself once the limit resets.
+
+## Run an agent from Action Center
+
+Admins and Managers can also start an agent from an open action in Action Center: **Run agent** on the action's row or at the top of the open action lists the agents that work on its brand. The run works on that action alone, acts as the person who clicked, and opens beside the action. Its chat is named after the agent and the action, and **Run history** shows its trigger as **Run agent from an action**.
+
+The run never adds targets to the action and never closes its tasks. If the action is completed or dismissed, the run stops with **The action was closed**. The action's **History** shows **Agent run started** and **Agent run completed**.
 
 ## Read-only roles
 

@@ -138,6 +138,19 @@ describe('ActionDrawer', () => {
     );
   });
 
+  it('names the action’s number in the top row, its full label kept for hover and screen readers (W2-17)', async () => {
+    await renderDrawer();
+    const drawer = document.body.querySelector('[role="dialog"]')!;
+    const id = drawer.querySelector<HTMLElement>('[title^="Action ID"]')!;
+    expect(id.title).toBe(`Action ID: AC-${action.actionNo}`);
+    expect(id.textContent).toBe(`Action ID: AC-${action.actionNo}`);
+    // Only the label gives way, and only beside Run agent.
+    const label = id.firstElementChild as HTMLElement;
+    expect(label.textContent).toBe('Action ID: ');
+    expect(label.className).toBe('group-has-[[data-run-agent]]/top:sr-only');
+    expect(id.closest('.group\\/top')).not.toBeNull();
+  });
+
   it("gives the Why the demand of a signal's prompt the action didn't keep", async () => {
     const lost = (id: string, promptId: string, promptText: string) =>
       ({

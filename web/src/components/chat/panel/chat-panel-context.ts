@@ -49,6 +49,11 @@ export interface ChatPanelState {
   ask: (reference: ChatReference) => void;
   /** A suggestion chip (item 21): the question in the box, not sent. */
   fill: (text: string) => void;
+  /**
+   * Opens the panel on one of the person's chats (Run agent on an action,
+   * CHAT-21 §F item 29: the run it started, beside the action).
+   */
+  openChat: (chatId: string) => void;
 }
 
 /** One hand-off to the panel's composer; `nonce` tells a new one from the last. */
@@ -56,6 +61,8 @@ export interface PanelDraft {
   nonce: number;
   text?: string;
   reference?: ChatReference;
+  /** A chat to open in the panel instead of what it shows. */
+  chatId?: string;
 }
 
 export const ChatPanelContext = createContext<ChatPanelState | null>(null);

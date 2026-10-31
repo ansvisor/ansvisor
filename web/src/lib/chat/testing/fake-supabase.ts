@@ -27,6 +27,11 @@ export interface FakeSupabase {
   log: [string, string][];
   /** Database functions by name, for rpc(). */
   rpcs: Record<string, (args: Record<string, unknown>) => unknown>;
+  /**
+   * PostgREST's max_rows: a select returns at most this many rows, whatever
+   * its limit, as the real API cuts them without an error. Unset: no cap.
+   */
+  maxRows?: number;
   from(table: string): Builder;
   rpc(name: string, args?: Record<string, unknown>): Promise<Result>;
 }
@@ -45,6 +50,13 @@ interface Builder extends PromiseLike<Result> {
   not(column: string, operator: 'is', value: null): Builder;
   lt(column: string, value: string): Builder;
   gt(column: string, value: unknown): Builder;
+  /** At or after: an ISO time, or a number. */
+  gte(column: string, value: unknown): Builder;
+  /**
+   * PostgREST's `or`: comma-separated `column.eq.value` conditions or
+   * `and(…)` groups of them, any one of which matches.
+   */
+  or(filter: string): Builder;
   /**
    * A full-text match (`fts`): every `'word':*` term of `query`, joined by `&`,
    * starts a word of the row's `column` — a test row holds its search
@@ -115,7 +127,8 @@ export function createFakeSupabase(): FakeSupabase {
             }
             return 0;
           });
-          const limited = sorted.slice(offset, max === null ? undefined : offset + max);
+          const cap = Math.min(max ?? Infinity, fake.maxRows ?? Infinity);
+          const limited = sorted.slice(offset, cap === Infinity ? undefined : offset + cap);
           if (counting) {
             const data = counting.head ? null : limited.map((row) => ({ ...row }));
             return { data, error: null, count: matching.length };
@@ -239,6 +252,40 @@ export function createFakeSupabase(): FakeSupabase {
         },
         gt(column, value) {
           filters.push((row) => (row[column] as number) > (value as number));
+          return builder;
+        },
+        gte(column, value) {
+          const at = (v: unknown) => (typeof v === 'string' ? Date.parse(v) : (v as number));
+          filters.push((row) => row[column] !== null && at(row[column]) >= at(value));
+          return builder;
+        },
+        or(filter) {
+          // Split at the commas outside parentheses.
+          const top = (text: string) => {
+            const parts: string[] = [];
+            let depth = 0;
+            let start = 0;
+            [...text].forEach((ch, i) => {
+              if (ch === '(') depth += 1;
+              else if (ch === ')') depth -= 1;
+              else if (ch === ',' && depth === 0) {
+                parts.push(text.slice(start, i));
+                start = i + 1;
+              }
+            });
+            parts.push(text.slice(start));
+            return parts;
+          };
+          const groups = top(filter).map((group) => {
+            const inner = /^and\((.*)\)$/.exec(group);
+            return (inner ? top(inner[1]) : [group]).map((condition) => {
+              const [column, operator, ...rest] = condition.split('.');
+              if (operator !== 'eq') throw new Error(`fake or(): no ${operator}`);
+              const value = rest.join('.');
+              return (row: Row) => String(row[column]) === value;
+            });
+          });
+          filters.push((row) => groups.some((conditions) => conditions.every((c) => c(row))));
           return builder;
         },
         textSearch(column, query) {

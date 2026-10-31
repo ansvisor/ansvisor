@@ -116,6 +116,7 @@
   "chatBudget": {
     "ai_limit": "You've used this month's AI limit, so Chat stopped here. What's done so far is kept.",
     "ai_limit_trial": "Your trial AI limit is used up, so Chat stopped here. What's done so far is kept.",
+    "run_cap": "This run reached its limit, so Chat stopped here. What's done so far is kept.",
     "plan_limit": "This workspace's plan isn't active, so Chat can't run. Choose a plan to use it again.",
     "not_found": "This chat's work is gone. Ask your question again.",
     "chat_off": "Chat isn't on for this workspace.",
@@ -238,6 +239,7 @@
       "deleteContent": "Deleting content needs a plan",
       "editContent": "Editing the page needs a plan",
       "runAgent": "Running the Content Agent needs a plan",
+      "runAgentOnAction": "Running an agent on an action needs a plan",
       "fixRules": "Fixing rules needs a plan",
       "rewritePage": "Rewriting the page needs a plan",
       "reviewSuggestions": "Reviewing suggestions needs a plan",
@@ -1731,7 +1733,10 @@
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
           "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}",
-          "outcome_measured": "{day, plural, =0 {} other {Day #{final, select, yes {, final} other {}} · }}{outcome, select, improved {Result: metrics improved after this action closed} mixed {Result: mixed after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
+          "outcome_measured": "{day, plural, =0 {} other {Day #{final, select, yes {, final} other {}} · }}{outcome, select, improved {Result: metrics improved after this action closed} mixed {Result: mixed after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}",
+          "agent_run_started": "Agent run started{named, select, yes { · {agent}} other {}}",
+          "agent_run_completed": "{to, select, done {Agent run completed} failed {Agent run failed} stopped {Agent run stopped} skipped {Agent run skipped} other {Agent run ended}}{named, select, yes { · {agent}} other {}}{reason, select, action_closed { · action closed} other {}}",
+          "chat_started": "Chat started on this action"
         },
         "deleteTask": "Delete task",
         "addTask": "Add task",
@@ -2016,6 +2021,32 @@
           "rangeAll": "All time",
           "pages": "Pages when sent",
           "figures": "{citations, plural, one {# citation} other {# citations}} · {sessions, plural, one {# session} other {# sessions}} · {aiVisits, plural, one {# AI visit} other {# AI visits}}"
+        }
+      },
+      "runAgent": {
+        "button": "Run agent",
+        "buttonLabel": "Run agent · {title}",
+        "pickerTitle": "Run on AC-{no}",
+        "pickerHint": "Starts a Chat run scoped to this action. Closing its tasks stays your click.",
+        "agents": "Agents",
+        "loading": "Loading agents…",
+        "failed": "Couldn’t load the agents. Try again.",
+        "noAgents": "No agent covers this brand yet.",
+        "paused": "Paused",
+        "usedHere": "Used on {category} actions",
+        "runWithChat": "Run with Chat",
+        "runWithChatHint": "No agent · Chat works this action’s tasks in your default mode",
+        "createAgent": "Create an agent for this kind of action",
+        "toast": {
+          "started": "{agent} is working on AC-{no}",
+          "queued": "{agent} is queued for AC-{no}. It starts when a run slot frees up.",
+          "repeated": "Already asked a minute ago · no second run",
+          "coalesced": "Three runs already wait for {agent} on this brand · this one joins the last",
+          "chatStarted": "Chat is working on AC-{no}",
+          "chatQueued": "Chat is queued for AC-{no}. It starts when a run slot frees up.",
+          "openRun": "Open run",
+          "didntStart": "{reason, select, action_closed {The action was closed, so the run didn’t start.} brand_gone {The action’s brand is no longer in the agent’s scope, so the run didn’t start.} other {The run didn’t start. The agent’s Runs tab says why.}}",
+          "failed": "Couldn’t start the run. Try again."
         }
       }
     },
@@ -3676,6 +3707,8 @@
       "failed": "Something went wrong",
       "readFailed": "Couldn't read this",
       "timedOut": "Timed out",
+      "stoppedAtLimit": "Stopped at its limit",
+      "actionClosed": "This action was closed. Nothing more was changed.",
       "limit": "Over this run's limit",
       "pausedCap": "Stopped at the AI limit",
       "unknown": "Worked on a step",
@@ -4780,7 +4813,8 @@
       "agentDeleted": "Deleted the agent “{name}”",
       "agentDuplicated": "Copied the agent “{from}” as “{name}”",
       "agentTakenOver": "Took over the agent “{name}”",
-      "agentRunQueued": "Asked the agent “{name}” to run for {brand}"
+      "agentRunQueued": "Asked the agent “{name}” to run for {brand}",
+      "agentRunOnAction": "Asked the agent “{name}” to run on the action AC-{action}"
     },
     "undo": {
       "ok": "Undone.",
@@ -4810,7 +4844,8 @@
       "workspace": "Share an agent with the workspace",
       "monthCap": "Set an agent's monthly AI cap",
       "fullAuto": "Run an agent in Full auto",
-      "engines": "Use these engines in an agent"
+      "engines": "Use these engines in an agent",
+      "runWithChat": "Run Chat on an Action Center action"
     },
     "refusal": {
       "invalid": "Some of this agent's settings aren't valid. Check them and try again.",
@@ -4828,6 +4863,9 @@
       "no_brand": "None of this agent's brands is left. Pick a brand in its scope.",
       "ai_limit": "This month's AI limit is used up, so the agent can't start. It can run again once the limit resets.",
       "owner_role": "This agent's owner can't run agents any more. An Admin can take it over.",
+      "action_not_found": "This action isn't available.",
+      "action_closed": "This action is closed. Reopen it in Action Center to run an agent on it.",
+      "queue_full": "{count, plural, one {# run already waits} other {# runs already wait}} for this agent on this brand. Try again once one has started.",
       "failed": "Something went wrong with this agent. Try again."
     },
     "status": {
@@ -4956,6 +4994,31 @@
       "low": "Low confidence",
       "medium": "Medium confidence",
       "high": "High confidence"
+    },
+    "runner": {
+      "title": "{agent} · {brand}",
+      "actionTitle": "{agent} · {action}",
+      "message": "Run the agent “{agent}” for {brand}: {skills}.",
+      "skill": "/{skill}",
+      "then": ", then ",
+      "instructions": "Its instructions: {text}",
+      "started": "{trigger, select, schedule {It started on its schedule.} signal {It started because Action Center found {count, plural, one {a new signal} other {# new signals}}.} kpi {It started because a KPI changed.} watch_rule {It started because a watch rule fired.} action {It started from an Action Center action.} other {It started with Run now.}}",
+      "earlier": "{count, plural, one {One more fire came while it waited (cooldown or daily limit): it's in the scope too.} other {# more fires came while it waited (cooldown or daily limit): they're in the scope too.}}",
+      "action": "It works on one Action Center action, AC-{no} ({category}); its title and open tasks when the run was asked for are in the scope. Read it with its tasks first and keep to its targets: never add new ones. Closing tasks stays the person’s click.",
+      "background": "This run works in the background. When a question comes up, take the recommended option and list your assumptions at the top of the answer. Changes still wait for approval as the agent's mode says.",
+      "chip": {
+        "agent": "Agent",
+        "brand": "Brand",
+        "trigger": "Trigger",
+        "signal": "Signal",
+        "slot": "Scheduled for",
+        "earlier": "Earlier fires",
+        "action": "Action"
+      }
+    },
+    "runWithChat": {
+      "message": "Work on the Action Center action AC-{no} ({category}): read it and its open tasks, then draft what each task needs. Keep to its targets. I close tasks myself.",
+      "chip": "Action · {title}"
     },
     "runStatus": {
       "queued": "Queued",

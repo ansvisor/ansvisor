@@ -80,6 +80,13 @@ export interface PendingCalls {
   offerDontAskAgain: boolean;
 }
 
+/**
+ * Why a run stopped: the person's Stop, a card left 7 days, its agent run's
+ * cap, or the Action Center action its run worked on closed (CHAT-21 edge
+ * case 7).
+ */
+export type ChatStopReason = 'person' | 'expired' | 'limit' | 'action_closed';
+
 /** A run's phase, counters and what it read so far (CHAT-04 item 5, CHAT-20 §14). */
 export interface RunProgress {
   phase: ChatPhase;
@@ -120,6 +127,16 @@ export interface RunProgress {
   asks?: number;
   /** The next moves the model suggested last (CHAT-07 §C), kept once the run ends. */
   nextMoves?: NextMoveInput[];
+  /** The limit a run at paused_cap reached: the month's AI limit, or its agent run's cap. */
+  capHit?: 'run' | 'month';
+  /** Why a stopped run stopped (its run.stopped reason), for its agent run (CHAT-21 §H). */
+  stoppedFor?: ChatStopReason;
+  /**
+   * Its scope holds text from outside the workspace's own numbers (an Action
+   * Center action's title and tasks, CHAT-21 §F): the models read it as
+   * untrusted data, never as instructions (CHAT-20 §16a).
+   */
+  scopeUntrusted?: boolean;
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {
