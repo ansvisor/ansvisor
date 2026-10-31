@@ -22,7 +22,7 @@ function valueOf(row, col) {
 }
 
 function table(name) {
-  const state = { filters: [], op: 'select', row: null };
+  const state = { filters: [], op: 'select', row: null, count: false };
   const rows = () =>
     (db.tables[name] ?? []).filter((row) => state.filters.every((match) => match(row)));
   const result = (one) => {
@@ -37,11 +37,20 @@ function table(name) {
       }
       return { data: null, error: null };
     }
+    if (state.count && db.countError) return { data: null, count: null, error: db.countError };
     const found = rows();
+    if (state.count) return { data: null, count: found.length, error: null };
     return { data: one ? (found[0] ?? null) : found, error: null };
   };
   const chain = {
-    select: () => chain,
+    select: (_cols, opts) => {
+      if (opts?.head) state.count = true;
+      return chain;
+    },
+    gte: (col, val) => {
+      state.filters.push((row) => typeof row[col] === 'string' && row[col] >= val);
+      return chain;
+    },
     insert: (row) => {
       state.op = 'insert';
       state.row = row;
@@ -121,6 +130,7 @@ beforeEach(() => {
   db = {
     inserts: [],
     insertError: null,
+    countError: null,
     tables: {
       brand_domains: [{ brand_id: BRAND, domain: 'https://www.ansvisor.com', is_primary: true }],
       competitors: [{ id: COMPETITOR, brand_id: BRAND, name: 'Peec AI' }],
@@ -326,7 +336,12 @@ describe('sendChatAction', () => {
   const inserted = (name) => db.inserts.filter((i) => i.table === name).map((i) => i.row);
 
   it('creates the action frozen as it was sent, with its tasks and a created event from Chat', async () => {
-    await expect(send()).resolves.toEqual({ actionId: 'act-new', actionNo: 1300, created: true });
+    await expect(send()).resolves.toEqual({
+      actionId: 'act-new',
+      actionNo: 1300,
+      created: true,
+      dailyLimit: { used: 0, limit: 5, reached: false },
+    });
 
     const [action] = inserted('actions');
     expect(action).toMatchObject({
@@ -412,6 +427,41 @@ describe('sendChatAction', () => {
         },
       },
     ]);
+  });
+
+  /** Never refused for the day's five, as no person's send is: counted, and said once reached. */
+  it("counts toward the day's new actions, and says when they are reached", async () => {
+    const today = (id, createdAt, over = {}) =>
+      db.tables.actions.push({
+        id,
+        action_no: 1,
+        brand_id: BRAND,
+        kind: 'prompt_improve',
+        status: 'completed',
+        payload: {},
+        dedup_key: id,
+        deleted_at: null,
+        created_at: createdAt,
+        ...over,
+      });
+    // Yesterday's don't count; today's do, whoever sent them and wherever they are now.
+    today('old', '2026-10-30T23:59:00.000Z');
+    for (let i = 0; i < 3; i += 1) today(`sent-${i}`, '2026-10-31T08:00:00.000Z');
+    today('chat-0', '2026-10-31T09:00:00.000Z', { kind: CHAT_ACTION_KIND });
+    await expect(send()).resolves.toMatchObject({
+      created: true,
+      dailyLimit: { used: 4, limit: 5, reached: false },
+    });
+    // This one is the fifth (the fake doesn't keep the row it inserts: one more stands in).
+    today('chat-1', '2026-10-31T11:59:00.000Z', { kind: CHAT_ACTION_KIND });
+    await expect(send({ idempotencyKey: 'chat:step-2' })).resolves.toMatchObject({
+      created: true,
+      dailyLimit: { used: 5, limit: 5, reached: true },
+    });
+    // A count it can't read says nothing: the action stands.
+    db.countError = { message: 'timeout' };
+    const made = await send({ idempotencyKey: 'chat:step-3' });
+    expect(made).toEqual({ actionId: 'act-new', actionNo: 1300, created: true });
   });
 
   it('answers what it made for the same approval again, and makes nothing', async () => {

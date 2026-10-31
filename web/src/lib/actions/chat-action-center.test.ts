@@ -118,6 +118,36 @@ describe('createChatAction (Send to Action Center)', () => {
     });
   });
 
+  /** As every person's send: never refused for the day's new actions, and said once they're reached. */
+  it("passes on the one sentence Chat says when the day's new actions are reached", async () => {
+    answer(201, {
+      actionId: ACTION,
+      actionNo: 1275,
+      created: true,
+      dailyLimit: { used: 5, limit: 5, reached: true },
+    });
+    await expect(createChatAction(BRAND, proposal, place)).resolves.toEqual({
+      ok: true,
+      action_id: ACTION,
+      action_no: 1275,
+      created: true,
+      href: `/dashboard/action-center/actions/${ACTION}`,
+      daily_limit_reached: true,
+      daily_limit_note:
+        "This is one of the 5 new actions the brand gets today, so Action Center's own new actions wait until tomorrow.",
+    });
+    // Below the limit, or without a count: nothing to say.
+    answer(201, {
+      actionId: ACTION,
+      actionNo: 1276,
+      created: true,
+      dailyLimit: { used: 4, limit: 5, reached: false },
+    });
+    const below = await createChatAction(BRAND, proposal, place);
+    expect(below).not.toHaveProperty('daily_limit_reached');
+    expect(below).not.toHaveProperty('daily_limit_note');
+  });
+
   it("records automated in Full auto, and never a chat that isn't the person's", async () => {
     answer(201, { actionId: ACTION, actionNo: 1271, created: true });
     await createChatAction(BRAND, proposal, {

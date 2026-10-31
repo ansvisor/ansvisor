@@ -3212,6 +3212,23 @@ describe('Send to Action Center (CHAT-09 §E, CHAT-20 §12)', () => {
     expect(logged).toMatchObject({ tool_key: 'sendToActions', approval_kind: 'auto' });
   });
 
+  it("tells the model the one sentence to say when the day's new actions are reached", async () => {
+    const note =
+      "This is one of the 5 new actions the brand gets today, so Action Center's own new actions wait until tomorrow.";
+    vi.mocked(createChatAction).mockResolvedValue({
+      ...made,
+      daily_limit_reached: true,
+      daily_limit_note: note,
+    } as never);
+    const { sonnet } = useModels([READY], [calls(sendCall), text('Sent.')]);
+    const runId = await turn(ADMIN, 'Send this to Action Center', 'full_auto');
+    // Made, as any person's send is: never refused for the day's five.
+    expect(ofType(await eventsOf(runId), 'action.sent')).toHaveLength(1);
+    const told = JSON.stringify(sonnet.seen[1].prompt);
+    expect(told).toContain('"daily_limit_reached":true');
+    expect(told).toContain('own new actions wait until tomorrow.');
+  });
+
   it('tells the model the file a change filed, for a task to take it next', async () => {
     const { sonnet } = useModels(
       [READY],

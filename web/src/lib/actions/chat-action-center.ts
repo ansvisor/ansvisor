@@ -1,6 +1,8 @@
 'use server';
 
 import { randomUUID } from 'node:crypto';
+import { createTranslator } from 'next-intl';
+import messages from '../../../messages/en.json';
 import { API_BASE_URL } from '@/config/api';
 import { isManager } from '@/lib/session-role';
 import { assertWritable } from '@/lib/subscription-guard';
@@ -85,9 +87,28 @@ export type CreateChatActionResult =
       created: boolean;
       /** Open in Actions (CHAT-09 item 19). */
       href: `/dashboard/action-center/actions/${string}`;
+      /**
+       * The brand's new actions for today are reached with this one, as with
+       * any person's send: it stands, and Action Center's own wait until
+       * tomorrow. `daily_limit_note` is the one sentence Chat says about it.
+       */
+      daily_limit_reached?: true;
+      daily_limit_note?: string;
     }
   | ChatActionDuplicate
   | ChatActionFailure;
+
+const cardT = createTranslator({ locale: 'en', messages, namespace: 'chatEngine.actionCard' });
+
+/** The server's count of the day's new actions, when it says they are reached. */
+function dailyLimitOf(body: Record<string, unknown>) {
+  const limit = (body.dailyLimit ?? null) as { limit?: unknown; reached?: unknown } | null;
+  if (!limit || limit.reached !== true) return {};
+  return {
+    daily_limit_reached: true as const,
+    daily_limit_note: cardT('dailyLimit', { limit: Number(limit.limit) || 5 }),
+  };
+}
 
 const FORBIDDEN: ChatActionFailure = {
   ok: false,
@@ -250,6 +271,7 @@ export async function createChatAction(
       action_no: Number(res.body.actionNo),
       created: res.body.created === true,
       href: actionHref(actionId),
+      ...dailyLimitOf(res.body),
     };
   } catch (err) {
     console.error('[chat/action-center] could not send to Action Center:', err);

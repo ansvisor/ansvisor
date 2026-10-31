@@ -16,10 +16,13 @@
  *    the 14 days before, and each named prompt's state per platform),
  *    the evidence and the tasks. Nothing writes them again: the task
  *    writer's sweep skips the action (tasks_generated_at is set).
- *  - A manual action: its dedup key is Chat's own, so it takes no
- *    definition's slot, and the generator leaves it out of the day's five
- *    (generate.js). The engine scores it on creation, as every person-sent
- *    action (priority.js sentByHand).
+ *  - A person's send, as Improve's or Content's: its dedup key is Chat's
+ *    own, so it takes no definition's slot, and it is never refused for the
+ *    day's five new actions (config/action-engine.js maxNewActionsPerDay).
+ *    Like every send, it counts toward them, so the generator opens fewer
+ *    of its own that night and the rest wait in its queue; the answer says
+ *    when the day's five are reached, for Chat to tell the person. The
+ *    engine scores it on creation (priority.js sentByHand).
  *  - History gets `created` with source `chat`, the conversation, the run
  *    and how it was approved (`execution.mode`: assisted or automated).
  *
@@ -32,6 +35,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import supabaseAdmin from '../../config/supabase.js';
 import { selectInChunks } from '../chunked-in.js';
+import { resolve } from '../../config/action-engine.js';
 import { logger } from '../logger.js';
 import { measureBasket } from './basket-metrics.js';
 import { readPlatformStates } from './improve-outcome.js';
@@ -55,6 +59,8 @@ const BASELINE_PLATFORM_PROMPTS = 5;
 const KPI_KEYS = ['ai_visibility', 'citations', 'mentions'];
 const ACTIVE = ['new', 'in_progress', 'on_hold'];
 const DAY_MS = 86_400_000;
+/** New actions a brand gets a day; every one counts, sent or raised (generate.js). */
+export const DAILY_NEW_ACTIONS = resolve().noise.maxNewActionsPerDay;
 
 // seeded ids (the demo's) aren't RFC 4122 versions, so a plain GUID shape.
 const id = z.guid();
@@ -469,6 +475,27 @@ async function sentWithKey(brandId, idempotencyKey) {
   return data;
 }
 
+/**
+ * The brand's new actions today as the generator counts them (generate.js):
+ * every one created since midnight UTC, whoever sent it and wherever it is
+ * now. Null when it can't be read: the action stands either way.
+ */
+export async function actionsToday(brandId, now = new Date()) {
+  const dayStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  ).toISOString();
+  const { count, error } = await supabaseAdmin
+    .from('actions')
+    .select('id', { count: 'exact', head: true })
+    .eq('brand_id', brandId)
+    .gte('created_at', dayStart);
+  if (error) {
+    logger.warn({ err: error.message, brandId }, "[chat-action] today's count not read");
+    return null;
+  }
+  return count ?? 0;
+}
+
 /** A duplicate, as the route answers it (409) and Chat says it (CHAT-20 §11a `duplicate`). */
 function duplicateError(found) {
   return httpError(`AC-${found.actionNo} already covers this.`, 409, 'duplicate', {
@@ -494,7 +521,8 @@ function duplicateError(found) {
  * @param {'assisted' | 'automated'} [opts.executionMode]
  * @param {string} opts.idempotencyKey - one per approval: a retry finds what it made
  * @param {boolean} [opts.createAnyway] - the person chose Create anyway (entities differ)
- * @returns {Promise<{ actionId: string, actionNo: number, created: boolean }>}
+ * @returns {Promise<{ actionId: string, actionNo: number, created: boolean,
+ *   dailyLimit?: { used: number, limit: number, reached: boolean } }>}
  */
 export async function sendChatAction(
   brandId,
@@ -634,5 +662,16 @@ export async function sendChatAction(
   });
   if (eventError) logger.warn({ err: eventError.message }, '[chat-action] created event not kept');
 
-  return { actionId: action.id, actionNo: Number(action.action_no), created: true };
+  // Counted with the day's new actions, as every send is: said once they are reached.
+  const used = await actionsToday(brandId, now);
+  return {
+    actionId: action.id,
+    actionNo: Number(action.action_no),
+    created: true,
+    ...(used === null
+      ? {}
+      : {
+          dailyLimit: { used, limit: DAILY_NEW_ACTIONS, reached: used >= DAILY_NEW_ACTIONS },
+        }),
+  };
 }
