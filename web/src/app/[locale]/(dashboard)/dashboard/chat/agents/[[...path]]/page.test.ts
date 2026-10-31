@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const permanentRedirect = vi.fn();
@@ -42,5 +44,18 @@ describe('the old Chat › Agents routes', () => {
   it('keeps an odd segment inside its own path segment', async () => {
     await open(['a/b?c']);
     expect(permanentRedirect).toHaveBeenLastCalledWith('/dashboard/agents/a%2Fb%3Fc');
+  });
+});
+
+describe('the old Chat › Agents folder', () => {
+  // A page left beside the catch-all (agents/new, agents/[id]/edit…) wins
+  // over it, so its old address opens the old page inside Chat instead of
+  // redirecting. Merging main into the branch brought those two back once.
+  it('holds only the redirect', () => {
+    const folder = fileURLToPath(new URL('..', import.meta.url));
+    const pages = readdirSync(folder, { recursive: true, encoding: 'utf8' })
+      .filter((file) => /(^|\/)(page|layout|route)\.tsx?$/.test(file))
+      .sort();
+    expect(pages).toEqual(['[[...path]]/page.tsx']);
   });
 });
