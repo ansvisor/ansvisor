@@ -32,7 +32,7 @@ export type CheckpointMark =
       checkpoint: Checkpoint;
       state: 'measured';
       outcome: ImpactOutcome;
-      /** The effect against the control, in points; null without one. */
+      /** The effect against the control, in points; null without one, and at day 7 (a direction only). */
       effect: number | null;
       /** Day 7's direction, when it has no verdict. */
       direction: 'up' | 'flat' | 'down' | null;
@@ -66,7 +66,10 @@ export interface ImpactRow {
   after: number | null;
   controlBefore: number | null;
   controlAfter: number | null;
+  /** The effect against the control, in points; null at day 7, which shows its direction only. */
   effect: number | null;
+  /** Day 7's direction, as the job read it; null from day 14. */
+  direction: 'up' | 'flat' | 'down' | null;
   window: { preStart: string; preEnd: string; postStart: string; postEnd: string } | null;
   notMeasurableReason: string | null;
   /** Other shipped changes on the same targets in its window. */
@@ -126,7 +129,8 @@ export function checkpointMarks(
         checkpoint,
         state: 'measured',
         outcome: oneOf(entry.outcome, OUTCOMES) ?? 'pending',
-        effect: numberOr(entry.effect),
+        // Day 7 is an early signal: its direction only, never a number of points.
+        effect: checkpoint === 'd7' ? null : numberOr(entry.effect),
         direction: oneOf(entry.direction, ['up', 'flat', 'down'] as const),
         measuredAt: textOr(entry.measured_at),
       };
@@ -176,6 +180,7 @@ export function impactRow(
       textOr(input.url),
     ]),
   ].filter((page): page is string => !!page);
+  const checkpoint = oneOf(m.checkpoint, CHECKPOINTS);
   const executionMode = oneOf(input.execution_mode, ['manual', 'assisted', 'automated'] as const);
   return {
     key: input.key,
@@ -196,13 +201,15 @@ export function impactRow(
     pages,
     outcome,
     confidence: oneOf(m.confidence, ['low', 'medium', 'high'] as const),
-    checkpoint: oneOf(m.checkpoint, CHECKPOINTS),
+    checkpoint,
     metric: oneOf(primary.metric, ['visibility', 'citations'] as const),
     before: numberOr(primary.before),
     after: numberOr(primary.after),
     controlBefore: numberOr(primary.control_before),
     controlAfter: numberOr(primary.control_after),
-    effect: numberOr(primary.effect),
+    effect: checkpoint === 'd7' ? null : numberOr(primary.effect),
+    direction:
+      checkpoint === 'd7' ? oneOf(primary.direction, ['up', 'flat', 'down'] as const) : null,
     window:
       windowJson &&
       textOr(windowJson.pre_start) &&

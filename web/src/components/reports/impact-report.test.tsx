@@ -57,6 +57,7 @@ const row = (key: string, more: Partial<ImpactRow> = {}): ImpactRow => ({
   controlBefore: 40,
   controlAfter: 40,
   effect: 50,
+  direction: null,
   window: {
     preStart: '2026-09-19',
     preEnd: '2026-10-02',
@@ -289,6 +290,44 @@ describe('ImpactReportView', () => {
     expect($('[data-row="r1"]')!.textContent).toContain('0 pts');
     expect($('[data-row="r1"]')!.textContent).not.toContain('±');
     expect($('[data-slot="impact-kpis"]')!.textContent).toContain('AI traffic to changed pages0%');
+  });
+
+  it('shows day 7 as its direction only, never points, in the table and the evidence', async () => {
+    read.mockResolvedValue({
+      ok: true,
+      report: report({
+        rows: [
+          row('r1', {
+            outcome: 'pending',
+            confidence: null,
+            checkpoint: 'd7',
+            effect: null,
+            direction: 'up',
+            checkpoints: [
+              {
+                checkpoint: 'd7',
+                state: 'measured',
+                outcome: 'pending',
+                effect: null,
+                direction: 'up',
+                measuredAt: null,
+              },
+              { checkpoint: 'd14', state: 'due', dueOn: '2026-10-17' },
+              { checkpoint: 'd30', state: 'due', dueOn: '2026-11-02' },
+              { checkpoint: 'd90', state: 'due', dueOn: '2027-01-01' },
+            ],
+          }),
+        ],
+      }),
+    });
+    await render();
+    const first = $('[data-row="r1"]')!;
+    expect(first.textContent).not.toContain(' pts');
+    expect(first.textContent).toContain('▲Early direction: up');
+    await click($('[data-row="r1"] [data-action="impact.openEvidence"]')!);
+    const drawer = $('[data-slot="impact-evidence"]')!.textContent;
+    expect(drawer).toContain('Lift vs controlEarly direction: up');
+    expect(drawer).toContain('Day 7Pending · early signalPending · Early direction: up');
   });
 
   it('downloads the month as CSV', async () => {

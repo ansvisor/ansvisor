@@ -471,7 +471,16 @@ function ImpactTableRow({ row, onOpen }: { row: ImpactRow; onOpen: (row: ImpactR
           row.effect !== null && row.effect < 0 && 'text-red-700 dark:text-red-400',
         )}
       >
-        {row.effect !== null ? t('lift', { value: signed(row.effect) }) : '–'}
+        {row.effect !== null ? (
+          t('lift', { value: signed(row.effect) })
+        ) : row.direction ? (
+          <span title={t(`direction.${row.direction}`)}>
+            <span aria-hidden>{ARROW[row.direction]}</span>
+            <span className="sr-only">{t(`direction.${row.direction}`)}</span>
+          </span>
+        ) : (
+          '–'
+        )}
       </td>
       <td className="px-3 py-2.5">
         <CheckpointStrip marks={row.checkpoints} />
@@ -512,6 +521,9 @@ function sourceLine(row: ImpactRow, t: T): string {
     .filter(Boolean)
     .join(' · ');
 }
+
+/** Day 7's direction, its only reading (an early signal, no points). */
+const ARROW = { up: '▲', flat: '–', down: '▼' } as const;
 
 /** One checkpoint's box, as wide as "Nov 30" (the mockup's 38px). */
 const CHECKPOINT =
@@ -569,7 +581,7 @@ function CheckpointStrip({ marks }: { marks: readonly CheckpointMark[] }) {
             className={cn(CHECKPOINT, 'border', OUTCOME_PILL[mark.outcome])}
           >
             {mark.checkpoint === 'd7' && mark.direction
-              ? { up: '▲', flat: '–', down: '▼' }[mark.direction]
+              ? ARROW[mark.direction]
               : mark.effect !== null
                 ? signed(mark.effect)
                 : '–'}
@@ -618,7 +630,14 @@ function Evidence({ row }: { row: ImpactRow }) {
               ? `${percent(row.controlBefore)} → ${percent(row.controlAfter)}`
               : '–',
           ],
-          [t('drawer.lift'), row.effect !== null ? t('lift', { value: signed(row.effect) }) : '–'],
+          [
+            t('drawer.lift'),
+            row.effect !== null
+              ? t('lift', { value: signed(row.effect) })
+              : row.direction
+                ? t(`direction.${row.direction}`)
+                : '–',
+          ],
         ] as [string, string][])),
     [
       t('drawer.outcome'),
@@ -675,7 +694,11 @@ function Evidence({ row }: { row: ImpactRow }) {
                   ? '–'
                   : [
                       t(`outcome.${mark.outcome}`),
-                      mark.effect !== null ? t('lift', { value: signed(mark.effect) }) : null,
+                      mark.effect !== null
+                        ? t('lift', { value: signed(mark.effect) })
+                        : mark.checkpoint === 'd7' && mark.direction
+                          ? t(`direction.${mark.direction}`)
+                          : null,
                     ]
                       .filter(Boolean)
                       .join(' · ')}

@@ -179,6 +179,28 @@ describe('impactRow', () => {
     expect(row.notMeasurableReason).toBe('too_few_controls');
     expect(row.checkpoints.map((m) => m.state)).toEqual(['none', 'measured', 'none', 'none']);
   });
+  it('reads day 7 as a direction only, never points (an early signal, no verdict)', () => {
+    const row = impactRow(
+      ship({
+        measurement: {
+          ...ship().measurement,
+          outcome: 'pending',
+          confidence: null,
+          checkpoint: 'd7',
+          metrics: [{ metric: 'visibility', before: 30, after: 40, effect: 8.5, direction: 'up' }],
+          checkpoints_json: [
+            { checkpoint: 'd7', outcome: 'pending', effect: 8.5, direction: 'up' },
+          ],
+        },
+      }),
+      ME,
+      names,
+    );
+    expect(row).toMatchObject({ checkpoint: 'd7', effect: null, direction: 'up', before: 30 });
+    expect(row.checkpoints[0]).toMatchObject({ state: 'measured', effect: null, direction: 'up' });
+    // From day 14 the effect is the job's, and there is no early direction.
+    expect(impactRow(ship(), ME, names)).toMatchObject({ effect: 50, direction: null });
+  });
 });
 
 describe('checkpointMarks', () => {
