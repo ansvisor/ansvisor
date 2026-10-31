@@ -201,6 +201,16 @@ describe('readStrips', () => {
     expect(strip.total).toBe(1);
   });
 
+  it('words a task by its key from en.json, and never shows a key en.json doesn’t word', async () => {
+    db.tables.action_tasks.push(
+      task('t-key', 'a-due-low', 2, { title: null, task_key: 'fix_issues' }),
+      task('t-odd', 'a-due-low', 3, { title: null, task_key: 'not_a_task_key' }),
+    );
+    await queueTasks(CHAT, RUN, ['t-key', 't-odd']);
+    const strip = (await readStrips(supabaseAdmin, CHAT, WEEK_END, RUN)).get(RUN)!;
+    expect(strip.tasks.map((t) => t.title)).toEqual(['Fix the highest-impact issues first', '']);
+  });
+
   it('reads nothing for a chat with no strip', async () => {
     expect((await readStrips(supabaseAdmin, CHAT, WEEK_END)).size).toBe(0);
     expect(db.log.filter(([table]) => table === 'action_tasks')).toEqual([]);

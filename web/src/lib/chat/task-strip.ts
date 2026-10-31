@@ -243,6 +243,28 @@ interface TaskRow {
 const STATUSES: readonly ChatTaskStatus[] = ['queued', 'writing', 'ready_for_review', 'done'];
 
 /**
+ * A task's title as the Action Center words it (taskText): its own, else its
+ * key's words in en.json. A key en.json doesn't word gives none, never the
+ * key itself: the strip then says "An Action Center task".
+ */
+function titleOf(task: Pick<TaskRow, 'task_key' | 'title' | 'title_params'>): string {
+  if (
+    !task.title?.trim() &&
+    task.task_key &&
+    !(taskT.has as (key: string) => boolean)(task.task_key)
+  )
+    return '';
+  return taskText(
+    {
+      taskKey: task.task_key,
+      title: task.title,
+      titleParams: (task.title_params ?? {}) as Record<string, string | number>,
+    },
+    taskT as (key: string, values?: Record<string, string | number>) => string,
+  ).slice(0, 200);
+}
+
+/**
  * The strips of a chat, by the run that last worked on their tasks, as the
  * browser draws them: each task's title (as the Action Center words it),
  * its action's Priority Score and category, Chat's status for it (Done once
@@ -289,14 +311,7 @@ export async function readStrips(
     const due = task.actions?.due_date ?? null;
     const row: ChatTaskRow = {
       at: 0,
-      title: taskText(
-        {
-          taskKey: task.task_key,
-          title: task.title,
-          titleParams: (task.title_params ?? {}) as Record<string, string | number>,
-        },
-        taskT as (key: string, values?: Record<string, string | number>) => string,
-      ).slice(0, 200),
+      title: titleOf(task),
       priority:
         typeof task.actions?.priority_score === 'number'
           ? Math.round(task.actions.priority_score)
