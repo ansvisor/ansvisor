@@ -27,6 +27,23 @@ export const MENU_SECTIONS: string[] = dashboardNav
   .filter((section): section is string => section !== null);
 
 /**
+ * Sections only the new Chat has (CHAT_AGENTIC): Agent Center. While it is
+ * off for the workspace they are on no menu and in no list of sections.
+ */
+export const CHAT_AGENTIC_SECTIONS: string[] = dashboardNav
+  .flatMap((group) => group.items)
+  .filter((item) => item.requiresChatAgentic)
+  .map((item) => menuSectionOf(item.href))
+  .filter((section): section is string => section !== null);
+
+/** The left menu's sections a workspace has, in its order: all of them with the new Chat on. */
+export function menuSectionsFor(chatAgentic: boolean): string[] {
+  return chatAgentic
+    ? MENU_SECTIONS
+    : MENU_SECTIONS.filter((section) => !CHAT_AGENTIC_SECTIONS.includes(section));
+}
+
+/**
  * What a person works on or leads, with the sections that work needs. They
  * follow the audiences on ansvisor.com › Solutions.
  */
@@ -36,6 +53,7 @@ export const WORK_AREAS = [
     sections: [
       'action-center',
       'agent',
+      'agents',
       'insights',
       'competitors',
       'mentions',
@@ -49,13 +67,14 @@ export const WORK_AREAS = [
   },
   {
     id: 'content',
-    sections: ['action-center', 'agent', 'content', 'prompts', 'citations', 'reports'],
+    sections: ['action-center', 'agent', 'agents', 'content', 'prompts', 'citations', 'reports'],
   },
   {
     id: 'brand',
     sections: [
       'action-center',
       'agent',
+      'agents',
       'insights',
       'competitors',
       'mentions',
@@ -68,6 +87,7 @@ export const WORK_AREAS = [
     sections: [
       'action-center',
       'agent',
+      'agents',
       'insights',
       'competitors',
       'prompts',
@@ -78,13 +98,23 @@ export const WORK_AREAS = [
   },
   {
     id: 'product',
-    sections: ['action-center', 'agent', 'insights', 'prompts', 'mentions', 'shopping', 'reports'],
+    sections: [
+      'action-center',
+      'agent',
+      'agents',
+      'insights',
+      'prompts',
+      'mentions',
+      'shopping',
+      'reports',
+    ],
   },
   {
     id: 'bizdev',
     sections: [
       'action-center',
       'agent',
+      'agents',
       'insights',
       'competitors',
       'prompts',
@@ -174,20 +204,24 @@ export function hiddenMenuSections(
 /**
  * The sections off a menu with these work areas, given those the person's
  * role and exceptions take off whatever they work on: as they pick, before
- * it's saved.
+ * it's saved. Of `sections`, the menu's the workspace has.
  */
 export function hiddenWithWorkAreas(
   hiddenByAdmin: readonly string[],
   workAreas: readonly string[],
+  sections: readonly string[] = MENU_SECTIONS,
 ): string[] {
-  const byAreas = hiddenMenuSections({
-    role: 'admin',
-    roleHidden: [],
-    shown: [],
-    hidden: [],
-    workAreas,
-  });
-  return MENU_SECTIONS.filter((section) => hiddenByAdmin.includes(section) || byAreas.has(section));
+  const byAreas = hiddenMenuSections(
+    {
+      role: 'admin',
+      roleHidden: [],
+      shown: [],
+      hidden: [],
+      workAreas,
+    },
+    sections,
+  );
+  return sections.filter((section) => hiddenByAdmin.includes(section) || byAreas.has(section));
 }
 
 /** A person's menu, as the dashboard and Settings read it. */
@@ -221,8 +255,15 @@ export function workAreasOf(values: readonly string[] | null): WorkAreaId[] {
   return (values ?? []).filter(isWorkAreaId);
 }
 
-/** A person's menu from their profile and their role's hidden sections. */
-export function menuOfProfile(profile: MenuProfile, roleHidden: readonly string[]): MyMenu {
+/**
+ * A person's menu from their profile and their role's hidden sections, of
+ * `sections`: the menu's the workspace has (menuSectionsFor).
+ */
+export function menuOfProfile(
+  profile: MenuProfile,
+  roleHidden: readonly string[],
+  sections: readonly string[] = MENU_SECTIONS,
+): MyMenu {
   const workAreas = workAreasOf(profile.work_areas);
   const access = {
     role: profile.role,
@@ -231,8 +272,8 @@ export function menuOfProfile(profile: MenuProfile, roleHidden: readonly string[
     hidden: profile.menu_hidden ?? [],
   };
   return {
-    hidden: [...hiddenMenuSections({ ...access, workAreas })],
-    hiddenByAdmin: [...hiddenMenuSections({ ...access, workAreas: [] })],
+    hidden: [...hiddenMenuSections({ ...access, workAreas }, sections)],
+    hiddenByAdmin: [...hiddenMenuSections({ ...access, workAreas: [] }, sections)],
     workAreas,
     workAreasAsked: profile.work_areas_asked_at !== null,
     canManageMenus: canManageMenus(profile),

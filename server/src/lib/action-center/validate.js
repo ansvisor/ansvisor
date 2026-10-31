@@ -323,8 +323,8 @@ const TARGET_BASKETS = new Set(['prompts', 'pages']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The brand's primary domain as a host, for a page target written as a path. */
-async function primaryHost(brandId) {
-  const { data, error } = await supabaseAdmin
+async function primaryHost(brandId, { db = supabaseAdmin } = {}) {
+  const { data, error } = await db
     .from('brand_domains')
     .select('domain')
     .eq('brand_id', brandId)
@@ -346,7 +346,7 @@ async function primaryHost(brandId) {
  * domain. Null for another kind of target, or none: such an action is
  * measured brand-wide, as before.
  */
-export async function targetScope(action) {
+export async function targetScope(action, { db = supabaseAdmin } = {}) {
   const payload = action.payload ?? {};
   if (!TARGET_BASKETS.has(payload.targetEntity)) return null;
   const listed = Array.isArray(payload.targetIds)
@@ -357,7 +357,9 @@ export async function targetScope(action) {
     const promptIds = keys.filter((k) => UUID.test(k));
     return promptIds.length ? { entity: 'prompts', promptIds, pages: [] } : null;
   }
-  const host = keys.some((k) => k.startsWith('/')) ? await primaryHost(action.brand_id) : null;
+  const host = keys.some((k) => k.startsWith('/'))
+    ? await primaryHost(action.brand_id, { db })
+    : null;
   const pages = keys
     .map((k) => (k.startsWith('/') ? (host ? `https://${host}${k}` : null) : k))
     .filter((url) => url && /^https?:\/\//i.test(url));
@@ -575,7 +577,8 @@ async function measureReading(
   // Content Editor (CE-015) on its prompts and its page, and a product or
   // category sent from Product Visibility (ECOM-013) on its shopping
   // questions and the product's page. A page sent from a Site Audit report
-  // (learning D2) on that page.
+  // (learning D2) on that page. A finding sent from Chat (CHAT-09 §E) on the
+  // prompts and pages it named.
   if (
     action.kind === 'content_opportunity' ||
     action.kind === 'content_draft' ||
@@ -586,7 +589,8 @@ async function measureReading(
     action.kind === 'traffic_pages' ||
     action.kind === 'shopping_product' ||
     action.kind === 'shopping_category' ||
-    action.kind === 'audit_page'
+    action.kind === 'audit_page' ||
+    action.kind === 'chat_finding'
   ) {
     const scope = await basketScope(action);
     const [before, after] = await Promise.all([

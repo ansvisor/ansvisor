@@ -4,11 +4,11 @@ route: /dashboard/traffic
 keywords: [ai referral traffic, ai traffic analytics, ai visits, chatgpt visits, referral trend]
 synonyms: [traffic from ai, visitors from chatgpt, ai referrals, ai sessions]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/ai-traffic-analytics.mdx]
 ---
 **AI Referral Traffic** in the sidebar opens the **AI Traffic Analytics** page. It measures real visits to your site from AI assistants, what those visits are worth, and whether AI is changing your Google traffic. Most analytics tools count these visits as direct or referral traffic; Ansvisor tells each assistant apart.
@@ -36,7 +36,7 @@ One or two sentences above the cards sum up the range. Each fact appears only wh
 
 ## Trend and platforms
 
-- **AI Referral Trend**: **By platform** shows visits per day, or per hour on 24h. **vs Google clicks** sets AI visits beside Google clicks; it needs Search Console and a range of 7 days or longer. Dashed lines mark the days actions entered the Action Center or prompts were added.
+- **AI Referral Trend**: **By platform** shows visits per day, or per hour on 24h. **vs Google clicks** sets AI visits beside Google clicks; it needs Search Console and a range of 7 days or longer. On **vs Google clicks**, dashed lines mark the days actions entered the Action Center or prompts were added.
 - **Platform Breakdown**: each AI platform's share of visits.
 - **Referrals by Platform**: visits and change per platform, with **Engaged** and **Key events** from Google Analytics.
 - **Top Landing Pages**: the pages with the most AI visits, and how often tracked answers cite them.
@@ -54,7 +54,7 @@ A range with fewer than 30 AI visits uses the last 30 days here, and says so.
 
 ## Which AI assistants count
 
-ChatGPT, Perplexity, Claude, Gemini, Copilot, Grok, DeepSeek, Meta AI, You.com, Phind, Poe and Google Labs. A visit counts when it comes from one of their sites, or from a link tagged with their name. Google Analytics' own **AI Assistant** channel also shows assistants that aren't on the list yet. AI visits that arrive with neither count as Direct.
+ChatGPT, Perplexity, Claude, Gemini, Copilot, Grok, DeepSeek, Meta AI, You.com, Phind, Poe and Google Labs. The snippet also counts Bing's Copilot answer links, as **Bing**. A visit counts when it comes from one of their sites, or from a link tagged with their name. Google Analytics' own **AI Assistant** channel also shows assistants that aren't on the list yet. AI visits that arrive with neither count as Direct. Visits from ChatGPT Shopping product cards show as **ChatGPT Shopping**; they're part of ChatGPT's visits.
 
 ## Export the page
 
@@ -62,6 +62,6 @@ ChatGPT, Perplexity, Claude, Gemini, Copilot, Grok, DeepSeek, Meta AI, You.com, 
 
 ## Weekly AI Traffic e-mail
 
-Every Monday, each brand with AI visits gets an e-mail about the week before, sent to its Daily Pulse recipients. It shows AI visits with the change, the top platform, the summary line, visits by day and platform, and the top changes.
+Every Monday, an e-mail about the week before goes to each brand's Daily Pulse recipients, if the brand had AI visits that week or the one before. It shows AI visits with the change, the top platform, the summary line, visits by day and platform, and the top changes.
 
 To turn it off for a brand, untick **AI Traffic weekly digest** in **Settings › Notifications**; admins and managers can change it. It isn't sent while the brand's Daily Pulse is **Off**. The e-mail is on Ansvisor Cloud only.

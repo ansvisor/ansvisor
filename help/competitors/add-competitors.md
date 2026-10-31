@@ -4,14 +4,14 @@ route: /dashboard/competitors
 keywords: [add competitor, track competitors, suggest competitors, remove competitor, competitor domain, competitors page]
 synonyms: [new competitor, follow a rival, competitor list, delete a competitor, where is the competitors page, find competitors]
 plan: all
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/competitors.mdx, docs/guides/citations.mdx, docs/guides/add-your-first-brand.mdx]
 ---
-Competitors are the brands Ansvisor compares with yours in AI answers to your tracked prompts. You add and remove them on the **Competitors** page, under **Analytics** in the sidebar, and each one then appears in **Tracked Competitors** for a head-to-head comparison.
+Competitors are the brands Ansvisor compares with yours in AI answers to your tracked prompts. You add and remove them on the **Competitors** page, right under **Reports** in the sidebar, and each one then appears in **Tracked Competitors** for a head-to-head comparison.
 
 ## Open the Competitors page
 
@@ -22,6 +22,8 @@ Open **Competitors** from the sidebar, or from **Brand Visibility**:
 - **Head-to-Head Comparison**, shown in the Leaderboard's place before a brand has competitors.
 
 The Action Center's **Add at least 3 competitors** step in Getting started opens it too.
+
+Only admins and managers add, suggest and remove competitors; other members see the list and the comparison.
 
 ## Add a competitor
 

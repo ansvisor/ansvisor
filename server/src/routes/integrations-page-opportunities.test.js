@@ -19,7 +19,10 @@ vi.mock('../lib/gsc-sync.js', () => ({ runGscSync: vi.fn() }));
 vi.mock('../lib/page-opportunities.js', () => ({
   detectPageOpportunitiesInWindow: (...args) => detect(...args),
 }));
-vi.mock('../lib/access.js', () => ({ assertBrandAccess: (...args) => access(...args) }));
+vi.mock('../lib/access.js', () => ({
+  assertBrandAccess: (...args) => access(...args),
+  assertAllBrands: vi.fn(),
+}));
 
 let server;
 let baseUrl;

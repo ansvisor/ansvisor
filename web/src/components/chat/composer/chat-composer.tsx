@@ -7,6 +7,7 @@ import { ArrowUp } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useUserRole } from '@/hooks/use-user-role';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
+import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { MAX_REFERENCES, type ChatReference } from '@/lib/chat/references';
 import {
@@ -23,6 +24,7 @@ import {
   ReferenceMenu,
   SlashMenu,
   matchShortcuts,
+  matchSkills,
   type PlusItem,
   type Shortcut,
 } from './composer-menus';
@@ -125,10 +127,12 @@ const refKey = (ref: ChatReference) => `ref:${ref.type}:${ref.id}`;
  * never sends itself, and Enter and Send wait while only it shows.
  *
  * Menus (W1-12): "/" first in an empty box, or the / button, lists the
- * shortcuts that start a message; "@" at the start of a word, or the @
- * button, references data (the page's own first, then the brand's prompts,
- * pages and open tasks), the pick a chip; ＋ attaches files and connects a
- * tool. ↑ ↓ move, Enter picks, Esc closes and keeps the text.
+ * shortcuts that start a message, then the enabled skills, whose /command
+ * starts it (W2-04: the server loads the skill it names); "@" at the start
+ * of a word, or the @ button, references data (the page's own first, then
+ * the brand's prompts, pages and open tasks), the pick a chip; ＋ attaches
+ * files and connects a tool. ↑ ↓ move, Enter picks, Esc closes and keeps
+ * the text.
  *
  * A `draft` from the page (W1-08) puts its question in the box, or attaches
  * its object as an @ chip, and the cursor goes to the end.
@@ -151,6 +155,7 @@ export function ChatComposer({
   ghost,
   references: pageReferences = [],
   searchReferences,
+  skills = [],
   uploader,
   sharedReadOnly = false,
   placeholder,
@@ -197,6 +202,8 @@ export function ChatComposer({
   references?: ChatReference[];
   /** The brand's matches for "@…" (searchChatReferences); none without it. */
   searchReferences?: (query: string) => Promise<ChatReference[]>;
+  /** The enabled skills, the / menu's Skills group (CHAT-13 item 5); none while the new Chat is off. */
+  skills?: ChatSkillItem[];
   /** Attaching files: ＋ Attach files, drop and paste (W1-13); none without it. */
   uploader?: ComposerUploader;
   /** A teammate's shared chat: read, never added to (00407). */
@@ -297,7 +304,14 @@ export function ChatComposer({
   }, [atSearch, searchReferences]);
 
   const shortcutName = (s: Shortcut) => t(`slash.shortcuts.${s.key}.name`);
-  const shortcuts = menu?.kind === 'slash' ? matchShortcuts(menu.query, shortcutName) : [];
+  // A skill with a shortcut's command (/report) takes its place: the message calls the skill.
+  const shortcuts =
+    menu?.kind === 'slash'
+      ? matchShortcuts(menu.query, shortcutName).filter(
+          (s) => !skills.some((skill) => `/${skill.name}` === s.command),
+        )
+      : [];
+  const skillRows = menu?.kind === 'slash' ? matchSkills(menu.query, skills) : [];
   const atRefs = (() => {
     if (menu?.kind !== 'at') return [];
     const q = menu.query.toLowerCase();
@@ -346,7 +360,7 @@ export function ChatComposer({
 
   const menuLength =
     menu?.kind === 'slash'
-      ? shortcuts.length
+      ? shortcuts.length + skillRows.length
       : menu?.kind === 'at'
         ? atRefs.length
         : menu?.kind === 'plus'
@@ -459,6 +473,14 @@ export function ChatComposer({
     putText(`${starter} ${rest}`);
   }
 
+  /** A skill: its /command first in the box, so the message calls it. */
+  function pickSkill(skill: ChatSkillItem) {
+    // Typed "/…" is the skill's; from the button, the text stays after the command.
+    const rest = menu?.kind === 'slash' && menu.typed ? '' : text.trim();
+    setMenu(null);
+    putText(`/${skill.name} ${rest}`);
+  }
+
   function pickReference(ref: ChatReference) {
     if (menu?.kind !== 'at') return;
     // "@…" leaves the text; the pick is a chip.
@@ -471,7 +493,9 @@ export function ChatComposer({
 
   function pickActive() {
     if (menu?.kind === 'slash' && shortcuts[active]) pickShortcut(shortcuts[active]);
-    else if (menu?.kind === 'at' && atRefs[active]) pickReference(atRefs[active]);
+    else if (menu?.kind === 'slash' && skillRows[active - shortcuts.length]) {
+      pickSkill(skillRows[active - shortcuts.length]);
+    } else if (menu?.kind === 'at' && atRefs[active]) pickReference(atRefs[active]);
     else if (menu?.kind === 'plus' && plusItems[active]) plusItems[active].onPick();
   }
 
@@ -609,7 +633,14 @@ export function ChatComposer({
           />
         )}
         {menu?.kind === 'slash' && (
-          <SlashMenu shortcuts={shortcuts} active={active} onPick={pickShortcut} />
+          <SlashMenu
+            shortcuts={shortcuts}
+            skills={skillRows}
+            skillsOn={skills.length > 0}
+            active={active}
+            onPick={pickShortcut}
+            onPickSkill={pickSkill}
+          />
         )}
         {menu?.kind === 'at' && (
           <ReferenceMenu

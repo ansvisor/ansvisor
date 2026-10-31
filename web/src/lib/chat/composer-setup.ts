@@ -7,6 +7,12 @@ import { CHAT_MODES, type ChatMode, type PrecedenceContext } from './precedence'
  * same way. No React and no reads here.
  */
 
+/** A skill in the / menu (CHAT-13 item 5): its /command and its title, nothing else. */
+export interface ChatSkillItem {
+  name: string;
+  title: string;
+}
+
 /** What the composer opens with (W1-10): the person's default mode, and whether Full auto is open. */
 export interface ChatComposerSetup {
   defaultMode: ChatMode;
@@ -25,6 +31,8 @@ export interface ChatComposerSetup {
    * draw on the AI budget, so a used-up allowance doesn't pause it.
    */
   onOwnKey: boolean;
+  /** The / menu's Skills group: the enabled skills (skillMenuOf); none while the new Chat is off. */
+  skills: ChatSkillItem[];
 }
 
 /** The modes part of the setup, from the person's saved mode and the precedence facts. */
@@ -43,6 +51,7 @@ export const CAREFUL_SETUP: ChatComposerSetup = {
   ...CAREFUL_MODES,
   usageNoticeSeen: null,
   onOwnKey: false,
+  skills: [],
 };
 
 /**
