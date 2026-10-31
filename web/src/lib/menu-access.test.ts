@@ -36,11 +36,26 @@ describe('menuSectionOf', () => {
 });
 
 describe('MENU_SECTIONS', () => {
-  it('lists the left menu, Action Center first', () => {
-    expect(MENU_SECTIONS[0]).toBe(ALWAYS_ON_SECTION);
+  it('lists the left menu, Chat first and Action Center right after', () => {
+    expect(MENU_SECTIONS.slice(0, 2)).toEqual(['agent', ALWAYS_ON_SECTION]);
     expect(MENU_SECTIONS).toEqual(
       expect.arrayContaining(['agent', 'content', 'audit', 'insights', 'shopping', 'reports']),
     );
+  });
+
+  it('lists Competitors right after Reports, so roles and people can hide it', () => {
+    expect(MENU_SECTIONS.indexOf('competitors')).toBe(MENU_SECTIONS.indexOf('reports') + 1);
+    expect(cleanMenuSections(['competitors'])).toEqual(['competitors']);
+    expect(hidden({ roleHidden: ['competitors'] })).toEqual(['competitors']);
+  });
+
+  it('keeps Competitors for the areas that compare the brand with others', () => {
+    const withCompetitors = WORK_AREAS.filter((area) =>
+      (area.sections as readonly string[]).includes('competitors'),
+    ).map((area) => area.id);
+    expect(withCompetitors).toEqual(['leaders', 'brand', 'growth', 'bizdev', 'analytics']);
+    expect(hidden({ workAreas: ['brand'] })).not.toContain('competitors');
+    expect(hidden({ workAreas: ['content'] })).toContain('competitors');
   });
 
   it('knows every section a work area names', () => {

@@ -123,6 +123,23 @@ describe('reserveChatStep', () => {
     expect(calls[2].body.usage).toEqual({ inputTokens: 2200, outputTokens: 400 });
   });
 
+  it("sends the prompt cache's reads and writes, and how long the call took, never a cost", async () => {
+    held();
+    const budget = budgetOf(await reserveChatStep(step()));
+    await budget.charge(
+      { inputTokens: 4000, outputTokens: 700, cacheReadTokens: 3000, cacheWriteTokens: 400 },
+      1830,
+    );
+    expect(calls[1].body).toEqual({
+      orgId: ORG,
+      usageId: USAGE,
+      model: 'anthropic/claude-sonnet-5.5',
+      usage: { inputTokens: 4000, outputTokens: 700, cacheReadTokens: 3000, cacheWriteTokens: 400 },
+      latencyMs: 1830,
+    });
+    expect(JSON.stringify(calls[1].body)).not.toMatch(/cost|usd/i);
+  });
+
   it('sends no counts the provider didn’t report, so the hold stays as the cost', async () => {
     held();
     const budget = budgetOf(await reserveChatStep(step()));
@@ -151,6 +168,26 @@ describe('reserveChatStep', () => {
     held();
     budgetOf(await reserveChatStep(step({ source: 'own', feature: 'image', stepId: null })));
     expect(calls[0].body).toMatchObject({ ownKey: true, feature: 'image', stepId: null });
+  });
+
+  it('names an agent run’s step with its run, and says when the run reached its own cap', async () => {
+    const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c09';
+    held();
+    budgetOf(await reserveChatStep(step({ feature: 'agent', agentRunId: AGENT_RUN })));
+    expect(calls[0].body).toMatchObject({ feature: 'agent', agentRunId: AGENT_RUN });
+    // A person's own chat sends no agent run.
+    held();
+    budgetOf(await reserveChatStep(step()));
+    expect(calls[1].body).not.toHaveProperty('agentRunId');
+
+    answers.push({ status: 429, body: { success: false, error: 'run_cap' } });
+    expect(await reserveChatStep(step({ agentRunId: AGENT_RUN }))).toEqual({
+      ok: false,
+      refusal: 'run_cap',
+      trial: false,
+      retryable: false,
+      message: "This run reached its limit, so Chat stopped here. What's done so far is kept.",
+    });
   });
 
   it('says the AI limit is used up, in the trial’s words in the free trial, and starts nothing', async () => {

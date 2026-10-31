@@ -1,6 +1,6 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
@@ -93,7 +93,7 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.87 0.00 0);
+  --primary: oklch(0.87 0 0);
   --primary-foreground: oklch(0.205 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
@@ -129,6 +129,28 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* Chat's lists and pages (CHAT-01 agentic update): thin, quiet scrollbars —
+   4px, light grey, no track, darker on hover. */
+@utility chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 15%, transparent) transparent;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background: color-mix(in oklab, var(--foreground) 15%, transparent);
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--foreground) 30%, transparent);
   }
 }
 

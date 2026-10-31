@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { Competitor } from '@/types';
 import { assertWritable } from '@/lib/subscription-guard';
+import { isManager } from '@/lib/session-role';
 import { z } from 'zod';
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
 import {
@@ -64,12 +65,170 @@ export async function addCompetitor(
   return mapRow(data as Record<string, unknown>);
 }
 
+/** A competitor's domain as two are compared: scheme, www, case and trailing slash aside. */
+const domainKey = (domain: string) =>
+  domain
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/+$/, '');
+
+export type AddCompetitorsResult =
+  | {
+      ok: true;
+      /** partial: some weren't added (CHAT-20 §11a), each with why. */
+      code: 'ok' | 'partial';
+      added: Competitor[];
+      skipped: { name: string; domain: string; reason: 'duplicate' | 'failed' }[];
+    }
+  | { ok: false; reason: 'forbidden_role' | 'duplicate' | 'failed'; message: string };
+
+/**
+ * Add competitors to a brand: Chat's add_competitors (CHAT-20 §9 row 30).
+ * Admins and Managers, checked here (as the table's policy does). A domain
+ * (or, without one, a name) the brand already has is skipped (the natural
+ * key, §11c); each of the rest through addCompetitor, as the Competitors page
+ * adds one. Errors come back as values (#427).
+ */
+export async function addCompetitors(
+  brandId: string,
+  items: { name: string; domain: string }[],
+): Promise<AddCompetitorsResult> {
+  try {
+    await assertWritable({ brandId });
+    return await addSomeCompetitors(brandId, items);
+  } catch (err) {
+    console.error('Failed to add competitors from Chat:', err);
+    return {
+      ok: false,
+      reason: 'failed',
+      message: 'The competitors couldn’t be added. Try again.',
+    };
+  }
+}
+
+async function addSomeCompetitors(
+  brandId: string,
+  items: { name: string; domain: string }[],
+): Promise<AddCompetitorsResult> {
+  if (!(await isManager(await createClient()))) {
+    return {
+      ok: false,
+      reason: 'forbidden_role',
+      message: 'Only an admin or a manager can add competitors.',
+    };
+  }
+  let existing: Competitor[];
+  try {
+    existing = await getCompetitors(brandId);
+  } catch (err) {
+    return {
+      ok: false,
+      reason: 'failed',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+  const keyOf = (c: { name: string; domain: string }) =>
+    c.domain.trim() ? `d:${domainKey(c.domain)}` : `n:${c.name.trim().toLowerCase()}`;
+  const known = new Set(existing.map(keyOf));
+  const added: Competitor[] = [];
+  const skipped: Extract<AddCompetitorsResult, { ok: true }>['skipped'] = [];
+  for (const item of items) {
+    if (known.has(keyOf(item))) {
+      skipped.push({ ...item, reason: 'duplicate' });
+      continue;
+    }
+    known.add(keyOf(item));
+    try {
+      added.push(await addCompetitor(brandId, item));
+    } catch {
+      skipped.push({ ...item, reason: 'failed' });
+    }
+  }
+  if (added.length === 0) {
+    return skipped.every((s) => s.reason === 'duplicate')
+      ? { ok: false, reason: 'duplicate', message: 'The brand already has these competitors.' }
+      : { ok: false, reason: 'failed', message: "The competitors couldn't be added." };
+  }
+  return { ok: true, code: skipped.length > 0 ? 'partial' : 'ok', added, skipped };
+}
+
+export type RemoveBrandCompetitorResult =
+  | { ok: true; removed: Competitor }
+  | { ok: false; reason: 'forbidden_role' | 'not_found' | 'failed'; message: string };
+
+/**
+ * Remove one of a brand's competitors: Chat's remove_competitor (CHAT-20 §9
+ * row 32). Admins and Managers, checked here. Only the brand's own, then
+ * through deleteCompetitor, as the Competitors page removes one: its page
+ * events and timeline scans go with it, and its actions' links are marked
+ * deleted (00244). Errors come back as values (#427).
+ */
+export async function removeBrandCompetitor(
+  brandId: string,
+  competitorId: string,
+): Promise<RemoveBrandCompetitorResult> {
+  try {
+    await assertWritable({ brandId });
+    return await removeOneCompetitor(brandId, competitorId);
+  } catch (err) {
+    console.error('Failed to remove a competitor from Chat:', err);
+    return {
+      ok: false,
+      reason: 'failed',
+      message: 'The competitor couldn’t be removed. Try again.',
+    };
+  }
+}
+
+async function removeOneCompetitor(
+  brandId: string,
+  competitorId: string,
+): Promise<RemoveBrandCompetitorResult> {
+  const supabase = await createClient();
+  if (!(await isManager(supabase))) {
+    return {
+      ok: false,
+      reason: 'forbidden_role',
+      message: 'Only an admin or a manager can remove competitors.',
+    };
+  }
+  const { data, error } = await supabase
+    .from('competitors')
+    .select('*')
+    .eq('id', competitorId)
+    .eq('brand_id', brandId)
+    .maybeSingle();
+  if (error) return { ok: false, reason: 'failed', message: error.message };
+  if (!data) {
+    return {
+      ok: false,
+      reason: 'not_found',
+      message: "That competitor isn't one of this brand's.",
+    };
+  }
+  try {
+    await deleteCompetitor(competitorId);
+  } catch (err) {
+    return {
+      ok: false,
+      reason: 'failed',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+  return { ok: true, removed: mapRow(data as Record<string, unknown>) };
+}
+
 export async function deleteCompetitor(id: string): Promise<void> {
   await assertWritable();
   const supabase = await createClient();
 
-  const { error } = await supabase.from('competitors').delete().eq('id', id);
+  // A delete the row rules don't allow removes nothing rather than failing:
+  // say so instead of reporting it removed.
+  const { data, error } = await supabase.from('competitors').delete().eq('id', id).select('id');
   if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("The competitor couldn't be removed.");
 
   revalidatePath('/dashboard/brands');
 }

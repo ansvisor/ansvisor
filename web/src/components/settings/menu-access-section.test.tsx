@@ -70,10 +70,19 @@ describe('MenuAccessSection', () => {
     expect(box('Analyst sees Content')?.getAttribute('aria-checked')).toBe('false');
     expect(box('Analyst sees Audit')?.getAttribute('aria-checked')).toBe('false');
     expect(box('Analyst sees Brand Visibility')?.getAttribute('aria-checked')).toBe('true');
+    expect(box('Analyst sees Competitors')?.getAttribute('aria-checked')).toBe('true');
     expect(box('Manager sees Content')?.getAttribute('aria-checked')).toBe('true');
     expect(container.textContent).toContain('Product Visibility');
     expect(container.textContent).toContain('Execution');
     expect(container.textContent).toContain('Analytics');
+  });
+
+  it('lists Chat above the headings, as the menu does, and one Other group', async () => {
+    await render();
+    const text = container.textContent ?? '';
+    expect(text.indexOf('Chat')).toBeGreaterThan(-1);
+    expect(text.indexOf('Chat')).toBeLessThan(text.indexOf('Execution'));
+    expect(text.match(/Other/g)).toHaveLength(1);
   });
 
   it('keeps Action Center and the admins’ column on', async () => {
@@ -160,6 +169,8 @@ describe('MenuAccessSection', () => {
 describe('hiddenForSet', () => {
   it('hides what a ready-made set leaves out, never Action Center', () => {
     expect(hiddenForSet('brand')).toEqual(['content', 'audit', 'prompts', 'shopping', 'traffic']);
+    // The sets that don't compare the brand with others leave Competitors off.
+    expect(hiddenForSet('content')).toContain('competitors');
     expect(hiddenForSet('all')).toEqual([]);
   });
 });

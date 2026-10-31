@@ -9,8 +9,9 @@ vi.mock('next/image', () => ({
 }));
 vi.mock('next-themes', () => ({ useTheme: () => ({ resolvedTheme: 'light' }) }));
 vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
+const nav = vi.hoisted(() => ({ pathname: '/dashboard/action-center' }));
 vi.mock('@/i18n/navigation', () => ({
-  usePathname: () => '/dashboard/action-center',
+  usePathname: () => nav.pathname,
   Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
       {children}
@@ -23,6 +24,8 @@ vi.mock('@/hooks/use-feature-gate', () => ({
   useFeatureGate: () => ({ canUse: () => true, requiredPlanFor: () => null, isCloud: false }),
 }));
 vi.mock('@/hooks/use-agent-key-status', () => ({ useAgentKeyStatus: () => 'configured' }));
+const saveChatRailOpen = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
+vi.mock('@/lib/actions/chat-prefs', () => ({ saveChatRailOpen }));
 vi.mock('@/components/layout/brand-switcher', () => ({ BrandSwitcher: () => null }));
 vi.mock('@/components/layout/user-profile-nav-item', () => ({ UserProfileNavItem: () => null }));
 vi.mock('@/components/layout/theme-toggle', () => ({ ThemeToggle: () => null }));
@@ -75,6 +78,8 @@ vi.stubGlobal('localStorage', {
 const { Sidebar } = await import('./sidebar');
 const { MenuAccessProvider } = await import('@/components/providers/menu-access-provider');
 const { useSidebarStore } = await import('@/stores/use-sidebar-store');
+const { useChatRailStore } = await import('@/stores/use-chat-rail-store');
+const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 
 /** The dashboard sidebar, expanded (it opens collapsed). */
@@ -91,6 +96,9 @@ beforeEach(() => {
   // Expanded: a collapsed sidebar shows icons alone.
   useSidebarStore.setState({ isCollapsed: false });
   useBrandStore.setState({ activeBrandId: null });
+  useChatRailStore.setState({ open: false });
+  nav.pathname = '/dashboard/action-center';
+  saveChatRailOpen.mockClear();
   getTrackedPromptCount.mockClear();
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -185,5 +193,91 @@ describe('Sidebar', () => {
       );
     });
     expect(getTrackedPromptCount).toHaveBeenCalledWith('brand-1');
+  });
+
+  it("is the rail on Chat's screens until the logo expands it, kept on the person; elsewhere as pinned", async () => {
+    nav.pathname = '/dashboard/chat/all';
+    const render = async (chatOn: boolean) =>
+      act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+            <ChatAgenticProvider enabled={chatOn}>
+              <Sidebar />
+            </ChatAgenticProvider>
+          </NextIntlClientProvider>,
+        );
+      });
+    // Pinned open elsewhere (beforeEach), the rail here.
+    await render(true);
+    const logo = container.querySelector<HTMLButtonElement>('[data-action="rail.toggle"]')!;
+    expect(logo.getAttribute('aria-expanded')).toBe('false');
+    expect(logo.getAttribute('aria-label')).toBe('Expand the Ansvisor menu');
+    expect(container.querySelector('aside')?.className).toContain('w-16');
+
+    await act(async () => logo.click());
+    expect(saveChatRailOpen).toHaveBeenCalledWith(true);
+    expect(useChatRailStore.getState().open).toBe(true);
+    expect(logo.getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelector('aside')?.className).toContain('w-60');
+    // The pinned state elsewhere is untouched.
+    expect(useSidebarStore.getState().isCollapsed).toBe(false);
+
+    await act(async () => logo.click());
+    expect(saveChatRailOpen).toHaveBeenLastCalledWith(false);
+    expect(container.querySelector('aside')?.className).toContain('w-16');
+
+    // With the new Chat off, the logo goes home as before.
+    await render(false);
+    expect(container.querySelector('[data-action="rail.toggle"]')).toBeNull();
+    expect(container.querySelector('a[href="/dashboard"]')).not.toBeNull();
+  });
+  describe('a titled group', () => {
+    const renderSidebar = () =>
+      act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+            <Sidebar />
+          </NextIntlClientProvider>,
+        );
+      });
+    const header = (title: string) =>
+      container.querySelector<HTMLButtonElement>(`button[data-nav-group="${title}"]`)!;
+    afterEach(() => {
+      stored.delete('ansvisor.sidebar.group.analyticsOpen');
+    });
+
+    it('folds under its title with the chevron, and is remembered in this browser', async () => {
+      await renderSidebar();
+      expect(header('Analytics').getAttribute('aria-expanded')).toBe('true');
+      expect(container.querySelector('a[href="/dashboard/mentions"]')).not.toBeNull();
+
+      await act(async () => header('Analytics').click());
+      expect(header('Analytics').getAttribute('aria-expanded')).toBe('false');
+      expect(container.querySelector('a[href="/dashboard/mentions"]')).toBeNull();
+      expect(stored.get('ansvisor.sidebar.group.analyticsOpen')).toBe('0');
+      // The other group stays open.
+      expect(container.querySelector('a[href="/dashboard/action-center"]')).not.toBeNull();
+    });
+
+    it('comes back folded, and opens when one of its pages shows', async () => {
+      stored.set('ansvisor.sidebar.group.analyticsOpen', '0');
+      await renderSidebar();
+      expect(header('Analytics').getAttribute('aria-expanded')).toBe('false');
+
+      act(() => root.unmount());
+      root = createRoot(container);
+      nav.pathname = '/dashboard/mentions';
+      await renderSidebar();
+      expect(header('Analytics').getAttribute('aria-expanded')).toBe('true');
+      expect(container.querySelector('a[href="/dashboard/mentions"]')).not.toBeNull();
+    });
+
+    it('shows every item as icons alone, where there are no titles to fold', async () => {
+      stored.set('ansvisor.sidebar.group.analyticsOpen', '0');
+      useSidebarStore.setState({ isCollapsed: true });
+      await renderSidebar();
+      expect(container.querySelector('button[data-nav-group]')).toBeNull();
+      expect(container.querySelector('a[href="/dashboard/mentions"]')).not.toBeNull();
+    });
   });
 });

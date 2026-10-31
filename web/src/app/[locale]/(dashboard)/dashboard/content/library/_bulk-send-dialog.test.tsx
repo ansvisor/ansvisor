@@ -7,7 +7,7 @@ import type { CmsSource } from '@/lib/content/cms-send';
 import type { ContentDraftListItem } from '@/lib/content/drafts';
 
 const readCmsSources = vi.hoisted(() => vi.fn());
-vi.mock('./_cms-sources', () => ({ readCmsSources }));
+vi.mock('@/lib/content/cms-sources', () => ({ readCmsSources }));
 const toast = vi.hoisted(() => vi.fn());
 vi.mock('sonner', () => ({ toast }));
 const readKeptFields = vi.hoisted(() => vi.fn());
@@ -217,7 +217,7 @@ describe('BulkSendDialog', () => {
     );
     // The pages read: d4 was deleted meanwhile.
     expect(dialog().textContent).toContain('Send 3 pages to your CMS');
-    expect(lines()).toEqual(['Pour-overReady', 'Cold brewPlaceholders to fill', 'EspressoReady']);
+    expect(lines()).toEqual(['Pour-overReady', 'Cold brewYour input needed', 'EspressoReady']);
     expect(dialog().textContent).toContain("A page that can't go is left out");
 
     await act(async () => button('Send 2 pages').click());
@@ -242,7 +242,7 @@ describe('BulkSendDialog', () => {
     expect(dialog().querySelector('[role="status"]')!.textContent).toBe('1 page sent, 1 failed.');
     expect(lines()).toEqual([
       'Pour-overSent',
-      'Cold brewPlaceholders to fill',
+      'Cold brewYour input needed',
       'EspressoWebhook answered 500',
     ]);
     // Done: no more reads.
@@ -556,7 +556,7 @@ describe('BulkSendDialog', () => {
     await act(async () => button('Send 2 pages').click());
     expect(sendPagesToCms).toHaveBeenCalledTimes(2);
     expect(dialog().querySelector('[role="status"]')!.textContent).toBe('1 page sent.');
-    expect(lines()).toEqual(['Pour-overSent', 'Cold brewPlaceholders to fill', 'EspressoNot sent']);
+    expect(lines()).toEqual(['Pour-overSent', 'Cold brewYour input needed', 'EspressoNot sent']);
     expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(
       'This workspace has sent 200 pages in the last 24 hours. Try again later.',
     );
@@ -585,11 +585,7 @@ describe('BulkSendDialog', () => {
     await act(async () => void button('Send 2 pages').click());
     expect(sendPagesToCms).toHaveBeenCalledTimes(1);
     // What went shows while the next waits, and the dialog can be closed.
-    expect(lines()).toEqual([
-      'Pour-overSending…',
-      'Cold brewPlaceholders to fill',
-      'EspressoWaiting',
-    ]);
+    expect(lines()).toEqual(['Pour-overSending…', 'Cold brewYour input needed', 'EspressoWaiting']);
     expect(dialog().querySelector('[role="status"]')!.textContent).toBe('Sending: 0 of 2 done.');
     expect(button('Close')).toBeDefined();
     await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
@@ -616,7 +612,7 @@ describe('BulkSendDialog', () => {
     expect(sendPagesToCms).toHaveBeenCalledTimes(1);
     expect(lines()).toEqual([
       'Pour-overSending…',
-      'Cold brewPlaceholders to fill',
+      'Cold brewYour input needed',
       'EspressoNot sent',
     ]);
     expect(dialog().textContent).toContain(

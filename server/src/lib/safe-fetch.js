@@ -40,7 +40,7 @@ const USER_AGENT = 'Mozilla/5.0 (compatible; AnsvisorBot/1.0; +https://ansvisor.
 
 export class PageFetchError extends Error {
   /**
-   * @param {'invalid_url'|'blocked'|'unreachable'|'timeout'|'too_large'|'too_deep'|'not_html'|'http_error'|'too_many_redirects'} code
+   * @param {'invalid_url'|'blocked'|'not_allowed'|'unreachable'|'timeout'|'too_large'|'too_deep'|'not_html'|'http_error'|'too_many_redirects'} code
    * @param {string} message
    * @param {{ status?: number, errno?: string }} [extra] errno: the network error's code
    *   (ENOTFOUND, ECONNREFUSED, a TLS one…) when the page couldn't be reached
@@ -201,7 +201,8 @@ function requestOnce(url, { signal, lookup, maxBytes, truncate, types, accept })
         const contentType = res.headers['content-type'] ?? '';
         if (!types.test(contentType)) {
           res.destroy();
-          reject(new PageFetchError('not_html', `The address is ${contentType || 'not a page'}`));
+          // The words are ours: a content type is the page's to write.
+          reject(new PageFetchError('not_html', 'The address is not a web page'));
           return;
         }
         const encoding = String(res.headers['content-encoding'] ?? '').toLowerCase();
@@ -255,7 +256,7 @@ function requestOnce(url, { signal, lookup, maxBytes, truncate, types, accept })
  * A web page's HTML, fetched safely (see above).
  *
  * @param {string} address
- * @param {{ timeoutMs?: number, maxBytes?: number, truncate?: boolean, maxRedirects?: number, lookup?: Function, ports?: string[], signal?: AbortSignal, types?: RegExp, accept?: string }} [opts]
+ * @param {{ timeoutMs?: number, maxBytes?: number, truncate?: boolean, maxRedirects?: number, lookup?: Function, ports?: string[], signal?: AbortSignal, types?: RegExp, accept?: string, allowUrl?: (url: URL) => boolean }} [opts]
  *   `signal` ends the read early too (a run's Stop), as its timeout does.
  *   `truncate` reads a page over `maxBytes` up to it, instead of refusing it
  *   ('too_large'), for a caller that needs only its start.
@@ -263,6 +264,9 @@ function requestOnce(url, { signal, lookup, maxBytes, truncate, types, accept })
  *   tests use them to reach a local server.
  *   `types` and `accept` read something other than a web page (a product
  *   feed): the content types taken, else 'not_html', and the Accept header.
+ *   `allowUrl` is a caller's own check of each address, the first and each
+ *   redirect's, after safe-fetch's: false refuses it ('not_allowed'). Chat
+ *   keeps a page's redirects on the sites a run may open with it.
  * @returns {Promise<{ url: string, status: number, html: string }>} url is the address after redirects
  */
 export async function fetchPage(address, opts = {}) {
@@ -276,11 +280,18 @@ export async function fetchPage(address, opts = {}) {
     lookup = publicOnlyLookup,
     ports = WEB_PORTS,
     signal: outer = null,
+    allowUrl = null,
   } = opts;
   const signal = outer
     ? AbortSignal.any([outer, AbortSignal.timeout(timeoutMs)])
     : AbortSignal.timeout(timeoutMs);
-  let url = checkPageUrl(address, ports);
+  const allowed = (next) => {
+    if (allowUrl && !allowUrl(next)) {
+      throw new PageFetchError('not_allowed', 'The address is not one this read may open');
+    }
+    return next;
+  };
+  let url = allowed(checkPageUrl(address, ports));
   for (let hops = 0; ; hops += 1) {
     let res;
     try {
@@ -304,6 +315,6 @@ export async function fetchPage(address, opts = {}) {
     if (hops >= maxRedirects) {
       throw new PageFetchError('too_many_redirects', 'The page redirects too many times');
     }
-    url = checkPageUrl(new URL(res.redirect, url).toString(), ports);
+    url = allowed(checkPageUrl(new URL(res.redirect, url).toString(), ports));
   }
 }

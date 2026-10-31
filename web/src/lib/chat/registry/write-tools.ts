@@ -4,6 +4,8 @@ import { createContentDraft } from '@/lib/actions/content-drafts';
 import { dismissSuggestion } from '@/lib/actions/prompt-suggestions';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { ACCESS_REQUEST_RULES } from '@/lib/chat/access-requests';
+import { escapeHtml } from '@/lib/content/attachments';
+import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { PAGE_TYPES } from '@/lib/content/drafts';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { contentUuid, isHttpUrl } from '@/lib/mcp/content-schemas';
@@ -76,6 +78,23 @@ export const WRITE_TOOLS = [
         bodyHtml: input.body_html,
         sourceUrl: input.source_url,
       }),
+    // The page it saved (CHAT-06 item 6): a document, open in the Content Editor. Filed as the
+    // draft keeps it: cleaned, so no script or handler a page it read slipped in goes out.
+    deliverable: (input, output) =>
+      typeof output === 'string' && output
+        ? {
+            title: input.title,
+            type: 'document',
+            formats: ['html', 'md', 'docx', 'pdf'],
+            body: input.body_html
+              ? sanitizeDraftHtml(input.body_html)
+              : `<h1>${escapeHtml(input.title)}</h1>`,
+            mimeType: 'text/html',
+            fileName: 'page.html',
+            href: `/dashboard/content/editor/${output}`,
+            contentDraftId: output,
+          }
+        : null,
     fixture: {
       input: {
         brand_id: BRAND,
@@ -152,7 +171,8 @@ export const WRITE_TOOLS = [
     defaultPolicy: 'ask',
     maxPolicy: 'ask',
     flags: { alwaysCard: true },
-    // Every role; the server turns an Admin's away, who has no one to ask.
+    // Every role in the row, as defineTool never leaves an Admin out; the engine doesn't offer it
+    // to Admins, who have no one to ask (NOT_FOR_ADMINS), and the server turns an Admin's away.
     minRole: 'analyst',
     planGate: null,
     // About the person and the workspace: the chat it came from is the run's own.

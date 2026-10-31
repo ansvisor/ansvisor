@@ -4,8 +4,8 @@ route: /dashboard/settings/account
 keywords: [work areas, what do you work on, my menu, hidden sections, sections off your menu]
 synonyms: [missing menu item, where is a page, simplify my menu, my role focus]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -15,15 +15,15 @@ Each person can say what they work on or lead. Their left menu then keeps only t
 
 ## The work areas
 
-- **Founders & leaders**: Action Center, Chat, Brand Visibility, Mentions, AI Referral Traffic, Reports.
+- **Founders & leaders**: Action Center, Chat, Brand Visibility, Mentions, AI Referral Traffic, Reports, Competitors.
 - **AEO/GEO & Audit**: Action Center, Content, Audit, Citations, AI Referral Traffic, Reports.
 - **Content**: Action Center, Chat, Content, Prompts, Citations, Reports.
-- **Brand & PR**: Action Center, Chat, Brand Visibility, Mentions, Citations, Reports.
-- **Growth**: Action Center, Chat, Brand Visibility, Prompts, Citations, AI Referral Traffic, Reports.
+- **Brand & PR**: Action Center, Chat, Brand Visibility, Mentions, Citations, Reports, Competitors.
+- **Growth**: Action Center, Chat, Brand Visibility, Prompts, Citations, AI Referral Traffic, Reports, Competitors.
 - **Product Development**: Action Center, Chat, Brand Visibility, Prompts, Mentions, Product Visibility, Reports.
-- **Business Development**: Action Center, Chat, Brand Visibility, Prompts, Mentions, Citations, Reports.
+- **Business Development**: Action Center, Chat, Brand Visibility, Prompts, Mentions, Citations, Reports, Competitors.
 - **Developers**: Action Center, Audit, Prompts, Citations, AI Referral Traffic, Reports.
-- **Analytics**: Action Center, Brand Visibility, Prompts, Mentions, Citations, Product Visibility, AI Referral Traffic, Reports.
+- **Analytics**: Action Center, Brand Visibility, Prompts, Mentions, Citations, Product Visibility, AI Referral Traffic, Reports, Competitors.
 
 ## When you're asked
 

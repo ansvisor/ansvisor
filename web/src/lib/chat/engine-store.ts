@@ -9,6 +9,8 @@ import {
   type ChatEventType,
 } from './events';
 import type { ChatPhase } from './engine-model';
+import type { NextMoveInput } from './next-moves';
+import type { PageSites } from './page-sites';
 import type { ChatMode } from './precedence';
 import { publishRunEvent, type TailSource } from './run-hub';
 import type { ChatEffort } from './run-limits';
@@ -56,6 +58,10 @@ export interface CallResult {
   /** What the model reads: the tool's output, cut to the run's budget, or a result code. */
   value: Json;
   error: boolean;
+  /** It may carry text written outside the workspace: the model reads it in an untrusted block. */
+  untrusted?: boolean;
+  /** Where it came from, in the step's words ("AI answers"), for its block's label. */
+  source?: string;
 }
 
 /** The calls of a model step a run waits in: the one on the card, and those after it. */
@@ -70,8 +76,8 @@ export interface PendingCalls {
   n: number;
   /** The hash of the arguments on the card (ChatConfirm.digest). */
   digest: string;
-  /** A WRITE's card (`ask`) or an EXECUTE's click. */
-  kind: 'ask' | 'click';
+  /** A WRITE's card (`ask`), an EXECUTE's click, or a question card (CHAT-07). */
+  kind: 'ask' | 'click' | 'question';
   offerDontAskAgain: boolean;
 }
 
@@ -83,8 +89,16 @@ export interface RunProgress {
   dataChars: number;
   /** Writes made, by tool name. */
   writes: Record<string, number>;
+  /** Reads made, by tool name, for the reads READ_CAPS caps (pages opened). */
+  toolReads?: Record<string, number>;
+  /**
+   * The sites the run's reads listed in their structured fields (competitors'
+   * domains, cited and audited pages): with the person's and the brand's, a
+   * page may be opened on these (CHAT-10 item 11, page-sites.ts).
+   */
+  pageSites?: PageSites;
   /** What the read phase read, for the writing model. */
-  readLog: { tool: string; input: unknown; result: Json }[];
+  readLog: { tool: string; input: unknown; result: Json; source?: string; untrusted?: boolean }[];
   /** Steps so far: the next one is n = steps + 1. */
   steps: number;
   /** The answer so far, as the person saw it stream. */
@@ -97,10 +111,40 @@ export interface RunProgress {
   brandId: string | null;
   /**
    * A read this run returned text from outside the workspace's own numbers
-   * (AI answers, cited pages, drafts, generated tasks): every change after
-   * it shows a card, in every mode (CHAT-20 §16a).
+   * (AI answers, cited pages, drafts, generated tasks), or the run started
+   * so (a tainted run's next move, a chat where a read aimed words at AI):
+   * every change after it shows a card, in every mode (CHAT-20 §16a).
    */
   tainted?: boolean;
+  /**
+   * A read returned text written to steer an AI assistant (CHAT-05 item
+   * 12), or a page this run opened aimed words at AI (§16a rule 3): ignored,
+   * said so in the answer, and the rest of the run asks first and opens only
+   * pages given exactly; a later run of the chat starts tainted.
+   */
+  injection?: boolean;
+  /**
+   * The answer's fact check (CHAT-05 item 11): figures checked against the
+   * run's data, and the ones taken out (a placeholder in their place).
+   */
+  facts?: { checked: number; replaced: string[] };
+  /**
+   * The question is a next move a tainted run suggested: no site comes from
+   * its words, here or in a later turn (its row's context_json says so too).
+   */
+  fromTaintedMove?: boolean;
+  /** Question cards asked so far (CHAT-07 §B: at most 4 a run). */
+  asks?: number;
+  /** Why did it move analyses kept so far: the next one's card is n = whys + 1. */
+  whys?: number;
+  /** The next moves the model suggested last (CHAT-07 §C), kept once the run ends. */
+  nextMoves?: NextMoveInput[];
+  /** The limit a run at paused_cap reached: the month's AI limit, or its agent run's cap. */
+  capHit?: 'run' | 'month';
+  /** Why a stopped run stopped (its run.stopped reason), for its agent run (CHAT-21 §H). */
+  stoppedFor?: 'person' | 'expired' | 'limit';
+  /** The skills loaded for this run, by name, in order (CHAT-13 item 4: at most 3). */
+  skills?: string[];
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {
@@ -253,6 +297,41 @@ export interface StepWrite {
   dataAsOf?: string | null;
   tool?: string | null;
   debug?: Record<string, unknown> | null;
+  /** The step's measure (00410), for staff only: never a member column, never in an event. */
+  measure?: StepMeasure;
+}
+
+/** What a step measured (CHAT-04 item 10): how long it took, and what its result sent the model. */
+export interface StepMeasure {
+  latencyMs?: number;
+  /** Its result came from the chat's kept results (tool-cache.ts). */
+  cacheHit?: boolean;
+  /** Its result was cut to its row limit or the run's budget before the model saw it. */
+  truncated?: boolean;
+  /** The tokens its result sent the model. */
+  resultTokens?: number;
+}
+
+type MeasureColumns = Partial<{
+  latency_ms: number;
+  cache_hit: boolean;
+  truncated: boolean;
+  result_tokens: number;
+}>;
+
+/** A measure as chat_run_steps' columns; only what it holds. */
+export function measureColumns(measure: StepMeasure | undefined): MeasureColumns {
+  if (!measure) return {};
+  const count = (n: number | undefined) =>
+    typeof n === 'number' && Number.isFinite(n) ? Math.max(0, Math.round(n)) : undefined;
+  const row: MeasureColumns = {};
+  const latency = count(measure.latencyMs);
+  const tokens = count(measure.resultTokens);
+  if (latency !== undefined) row.latency_ms = latency;
+  if (measure.cacheHit !== undefined) row.cache_hit = measure.cacheHit;
+  if (measure.truncated !== undefined) row.truncated = measure.truncated;
+  if (tokens !== undefined) row.result_tokens = tokens;
+  return row;
 }
 
 /** The member columns of a step the engine just wrote, for toClientStep. */
@@ -288,6 +367,7 @@ export async function insertStep(
     finished_at: step.status === 'done' || step.status === 'error' ? now : null,
     tool: step.tool ?? null,
     debug_json: debugJson(step.debug),
+    ...measureColumns(step.measure),
   };
   const { data, error } = await supabaseAdmin
     .from('chat_run_steps')
@@ -318,6 +398,7 @@ export async function updateStep(
   if (patch.rowCount !== undefined) row.row_count = patch.rowCount;
   if (patch.dataAsOf !== undefined) row.data_as_of = patch.dataAsOf;
   if (patch.debug !== undefined) row.debug_json = debugJson(patch.debug);
+  Object.assign(row, measureColumns(patch.measure));
   const { data, error } = await supabaseAdmin
     .from('chat_run_steps')
     .update(row)

@@ -21,6 +21,41 @@ behaves like an AEO analyst who's been on your account for six months.
 | [`ansvisor-aeo-coach`](./ansvisor-aeo-coach) | **MCP (preferred)** | Brand snapshots, visibility deep-dives, competitor watch, citation sources, prompt coverage and prompt suggestions, Action Center (what to do next, did it work, sending Improve suggestions), mentions and sentiment (how AI talks about the brand, why sentiment moved, what AI associates it with), Content Editor drafts (sources, suggestions for review, Mark ready, what the live page earns), saved reports. Use this when your client (Claude Desktop, Claude Code, Cursor, Zed) is connected to the Ansvisor MCP server. |
 | [`ansvisor-aeo-coach-standalone`](./ansvisor-aeo-coach-standalone) | **REST (fallback)** | Same skill, no MCP needed. Use this when you're on claude.ai web without a Connector, or any surface where setting up MCP isn't an option. |
 
+## Ansvisor skills (Chat)
+
+Chat in Ansvisor uses the fourteen skills below. Each is one `SKILL.md` in
+the [Agent Skills](https://agentskills.io/specification) format:
+instructions only, no scripts or reference files. Chat lists their names and
+descriptions, and loads a skill's text when it picks the skill or when you
+start a message with its `/name`.
+
+| Skill | Title |
+| --- | --- |
+| [`winback`](./winback) | Win back lost citations |
+| [`tasks`](./tasks) | Complete this week’s tasks |
+| [`quality`](./quality) | Quality pass |
+| [`faq`](./faq) | FAQ from fan-outs |
+| [`report`](./report) | Weekly report |
+| [`beat`](./beat) | Beat a competitor |
+| [`refresh`](./refresh) | Refresh for this year |
+| [`publish`](./publish) | Ready to publish |
+| [`shopping`](./shopping) | AI shopping readiness |
+| [`wrongclaim`](./wrongclaim) | Fix wrong claims about us |
+| [`answerfirst`](./answerfirst) | Answer-first rewrite |
+| [`facts`](./facts) | Brand facts check |
+| [`compare`](./compare) | Comparison page |
+| [`translate`](./translate) | Translate a page |
+
+CI checks every one of them (`web/src/lib/chat/skills/library.test.ts`):
+the front matter (`name` matches the folder, `description` up to 1,024
+characters, `metadata.title` and `metadata.filters`, `license: MIT`), a body
+of at most 500 lines, the tool names Chat has, and a scan that refuses email
+addresses, prices, tracking parameters, hidden characters, base64 blobs,
+secrets and text that tries to override Chat's rules. A skill shapes how
+Chat does a task; it never changes what Chat may do, skips an approval or
+publishes anything. After changing one, run `yarn test -u src/lib/chat/skills`
+in `web/` and commit `library.json`, which Chat reads.
+
 ## Which flavour should I install?
 
 | Your client | Recommended |
@@ -40,7 +75,7 @@ fetches numbers — typed tool calls vs. inline Python HTTP requests.
 
 You need an **Ansvisor API key** in either flavour:
 
-1. Open your Ansvisor dashboard → **Settings → API Keys**
+1. Open your Ansvisor dashboard → **Settings → MCP & API Keys**
 2. Click **New key**, give it a memorable name (e.g. _Claude — laptop_)
 3. Copy the token (`ans_...`). It's shown **once** — store it in your
    password manager
@@ -102,17 +137,38 @@ you ask for that specific change.
 
 ## Contributing
 
-Got an idea for another skill? Open a PR with a new folder under
-`skills/`:
+Every folder under `skills/` other than the two AEO coach flavours is one of
+Chat's Ansvisor skills, and CI checks it as one. So there are two kinds of
+contribution:
+
+**A skill for Chat.** Ansvisor's own skills are the fourteen listed above.
+Adding one (or changing one) means, in the same PR:
 
 ```
 skills/
   your-skill-name/
-    SKILL.md           # frontmatter + body
-    references/        # optional supporting docs
+    SKILL.md           # front matter + body, nothing else: no references/ or scripts/
 ```
 
-A few principles we follow:
+- `name` is the folder's name (lowercase, digits, single hyphens); add it
+  to the list in `web/src/lib/chat/skills/library.test.ts` and to
+  `SKILL_ORDER` in `web/src/lib/chat/skills/library.ts`.
+- `description` says what it does in one line; `metadata.title` and
+  `metadata.filters` (content, visibility, reports, product); `license: MIT`.
+- The body names only tools Chat has (`web/src/lib/chat/registry`), and
+  never asks Chat to skip an approval, publish, or send anything.
+- Refresh `library.json` with `yarn test -u src/lib/chat/skills` in `web/`
+  and commit it.
+
+**Your own or a third-party skill.** Skills from elsewhere won't be added
+to this folder: Chat will import them (upload or a GitHub link), clean them
+to instructions only, scan them and have an Admin approve them, in a later
+release.
+
+**An AEO coach skill** for Claude clients goes in its own folder with its
+`references/`, and joins the AEO coach list in
+`web/src/lib/chat/skills/library.test.ts`, which leaves those out. A few
+principles we follow for those:
 
 - **Skills layer knowledge, not data.** Data comes from the MCP server
   or the matching REST endpoint. A skill's job is to know _when_ and

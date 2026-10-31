@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
-import { MANAGER_ROLES, assertRole } from '../lib/access.js';
+import { MANAGER_ROLES, assertBrandAccess, assertRole } from '../lib/access.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { decide, isDeciderConfigured } from '../lib/decider.js';
 import { classifyQueryIntents, normalizeIntentQuery } from '../lib/intent-extraction.js';
@@ -46,29 +46,8 @@ import { brandPromptKeys, demandResponse } from '../lib/prompt-demand.js';
 
 const router = Router();
 
-async function assertBrandAccess(brandId, userId) {
-  const { data: brand } = await supabaseAdmin
-    .from('brands')
-    .select('id, name, description, organization_id, language')
-    .eq('id', brandId)
-    .single();
-  if (!brand) {
-    const err = new Error('Brand not found');
-    err.status = 404;
-    throw err;
-  }
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('organization_id, role')
-    .eq('id', userId)
-    .single();
-  if (!profile || profile.organization_id !== brand.organization_id) {
-    const err = new Error('Unauthorized');
-    err.status = 403;
-    throw err;
-  }
-  return { brand, profile };
-}
+/** The brand's fields Improve reads, with its access check (lib/access.js). */
+const BRAND_COLUMNS = { columns: 'name, description, language' };
 
 async function loadSuggestionContext(brandId) {
   const [
@@ -533,6 +512,30 @@ async function replaceNewSuggestions(brandId, rows, log) {
 const SUGGEST_PROMPTS_REFUSAL = 'Only admins and managers can generate prompt suggestions.';
 const IMPROVE_REFUSAL = 'Only admins and managers can use Improve.';
 
+/**
+ * Prompts are grouped under topics, so suggesting prompts for a brand with no
+ * topic yet is refused before anything is generated: the person adds a topic
+ * first. 409 with `no_topics`, which the web reads as its own failure.
+ */
+const NO_TOPICS_REFUSAL = 'Add a topic first: prompts are grouped under topics.';
+
+/** Whether the brand has an active topic, as the dashboard's topic lists read them. */
+async function brandHasTopics(brandId) {
+  const { data, error } = await supabaseAdmin
+    .from('topics')
+    .select('id')
+    .eq('brand_id', brandId)
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return !!data;
+}
+
+function refuseNoTopics(res) {
+  return res.status(409).json({ error: NO_TOPICS_REFUSAL, code: 'no_topics' });
+}
+
 router.post(
   '/suggestions/:brandId/refresh',
   requireFeature('prompt_suggestions'),
@@ -540,6 +543,7 @@ router.post(
     try {
       const { brand } = await assertBrandAccess(req.params.brandId, req.user.id);
       await assertRole(req.user.id, MANAGER_ROLES, SUGGEST_PROMPTS_REFUSAL);
+      if (!(await brandHasTopics(req.params.brandId))) return refuseNoTopics(res);
       const { suggestions, gscCandidates, gaCandidates, catalogCandidates } =
         await generateSuggestions(req.params.brandId, {
           orgId: brand.organization_id,
@@ -632,7 +636,9 @@ router.post(
     } catch (error) {
       const status = error.status || 500;
       req.log.error({ err: error }, 'prompt-suggestions refresh error');
-      return res.status(status).json({ error: error.message || 'Failed to generate suggestions' });
+      return res
+        .status(status)
+        .json({ error: error.message || 'Failed to generate suggestions', code: error.code });
     }
   },
 );
@@ -665,15 +671,17 @@ router.post(
       }
       await assertBrandAccess(req.params.brandId, req.user.id);
       await assertRole(req.user.id, MANAGER_ROLES, SUGGEST_PROMPTS_REFUSAL);
+      if (!(await brandHasTopics(req.params.brandId))) return refuseNoTopics(res);
       const context = await loadSuggestionContext(req.params.brandId);
       const result = await suggestPromptsForPage(req.params.brandId, { ...parsed.data, context });
       return res.json(result);
     } catch (error) {
       const status = error.status || 500;
       req.log.error({ err: error }, 'page prompt suggestions error');
-      return res
-        .status(status)
-        .json({ error: error.message || 'Failed to suggest prompts for this page' });
+      return res.status(status).json({
+        error: error.message || 'Failed to suggest prompts for this page',
+        code: error.code,
+      });
     }
   },
 );
@@ -697,7 +705,9 @@ router.get('/suggestions/:brandId', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'prompt-suggestions list error');
-    return res.status(status).json({ error: error.message || 'Failed to load suggestions' });
+    return res
+      .status(status)
+      .json({ error: error.message || 'Failed to load suggestions', code: error.code });
   }
 });
 
@@ -733,7 +743,9 @@ router.get('/untracked-queries/:brandId', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'untracked queries error');
-    return res.status(status).json({ error: error.message || 'Failed to read Google queries' });
+    return res
+      .status(status)
+      .json({ error: error.message || 'Failed to read Google queries', code: error.code });
   }
 });
 
@@ -764,7 +776,9 @@ router.post('/suggestions/:id/dismiss', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'prompt-suggestions dismiss error');
-    return res.status(status).json({ error: error.message || 'Failed to dismiss' });
+    return res
+      .status(status)
+      .json({ error: error.message || 'Failed to dismiss', code: error.code });
   }
 });
 
@@ -797,7 +811,9 @@ router.post('/suggestions/:id/accept', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'prompt-suggestions accept error');
-    return res.status(status).json({ error: error.message || 'Failed to accept' });
+    return res
+      .status(status)
+      .json({ error: error.message || 'Failed to accept', code: error.code });
   }
 });
 
@@ -1080,7 +1096,7 @@ async function loadImprovePrompt(promptId, userId) {
     throw err;
   }
   const brandId = prompt.prompt_sets.brand_id;
-  const { brand } = await assertBrandAccess(brandId, userId);
+  const { brand } = await assertBrandAccess(brandId, userId, BRAND_COLUMNS);
   return { prompt, brand, brandId };
 }
 
@@ -1203,7 +1219,7 @@ router.get('/:promptId/improve', readImprove, async (req, res) => {
     req.log.error({ err: error }, 'prompt improve read error');
     return res
       .status(error.status || 500)
-      .json({ error: error.message || 'Failed to load suggestions' });
+      .json({ error: error.message || 'Failed to load suggestions', code: error.code });
   }
 });
 
@@ -1235,7 +1251,7 @@ router.get('/:promptId/demand', async (req, res) => {
     req.log.error({ err: error }, 'prompt demand read error');
     return res
       .status(error.status || 500)
-      .json({ error: error.status ? error.message : 'Failed to load demand' });
+      .json({ error: error.status ? error.message : 'Failed to load demand', code: error.code });
   }
 });
 
@@ -1425,7 +1441,7 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
     req.log.error({ err: error }, 'prompt improve generate error');
     return res
       .status(error.status || 500)
-      .json({ error: error.message || 'Failed to generate suggestions' });
+      .json({ error: error.message || 'Failed to generate suggestions', code: error.code });
   }
 });
 
@@ -1568,7 +1584,7 @@ router.post('/:promptId/improve/action', requireFeature('prompt_improve'), async
     req.log.error({ err: error }, 'prompt improve send error');
     return res
       .status(error.status || 500)
-      .json({ error: error.message || 'Failed to send to Action Center' });
+      .json({ error: error.message || 'Failed to send to Action Center', code: error.code });
   }
 });
 

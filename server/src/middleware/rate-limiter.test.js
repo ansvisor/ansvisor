@@ -248,6 +248,11 @@ describe('rate-limiter – the Chat engine’s budget calls', () => {
     expect(
       isInternalChatBudgetCall(req('/internal/chat/budget/charge', 'Bearer chat-secret')),
     ).toBe(true);
+    // Chat's page reads (fetch_page) come the same way.
+    expect(isInternalChatBudgetCall(req('/internal/chat/pages/open', 'Bearer chat-secret'))).toBe(
+      true,
+    );
+    expect(isInternalChatBudgetCall(req('/internal/chat/pages/open'))).toBe(false);
     // Without it, with another, or with the secret on any other path: counted.
     expect(isInternalChatBudgetCall(req('/internal/chat/budget/reserve'))).toBe(false);
     expect(isInternalChatBudgetCall(req('/internal/chat/budget/reserve', 'Bearer nope'))).toBe(
