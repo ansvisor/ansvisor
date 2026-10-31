@@ -433,8 +433,9 @@ export function triggerError(draft: TriggerDraft, now: Date): string | null {
 // ─── The form ────────────────────────────────────────────────────────────────
 
 /**
- * The connections an agent's skills use, Required (§D step 4), and the
- * Optional ones it had that its skills don't need.
+ * The connections an agent's skills use, Required or Optional as the
+ * skills say (§D step 4), and the Optional ones it had that its skills
+ * don't use.
  */
 export function syncConnections(
   previous: readonly AgentConnection[],
@@ -443,7 +444,7 @@ export function syncConnections(
   const needed = skillConnections(skills);
   const keys = new Set(needed.map((c) => c.key));
   return [
-    ...needed.map(({ key }) => ({ key, required: true })),
+    ...needed.map(({ key, required }) => ({ key, required })),
     ...previous.filter((c) => !keys.has(c.key) && !c.required),
   ];
 }
