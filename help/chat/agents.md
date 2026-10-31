@@ -1,15 +1,15 @@
 ---
 title: See and run your agents in Chat › Agents
 route: /dashboard/chat/agents
-keywords: [agents, chat agents, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers]
-synonyms: [my agents, saved agents, automations, scheduled agents, agent history, what does this agent cost]
+keywords: [agents, chat agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run]
+synonyms: [my agents, saved agents, automations, scheduled agents, agent history, what does this agent cost, make an agent, change an agent, remove an agent]
 plan: all
 updated: 2026-10-30
 last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
 approved: false
-sources: [web/messages/en.json, web/src/lib/chat/agent-rules.ts]
+sources: [web/messages/en.json, web/src/lib/chat/agent-rules.ts, web/src/lib/chat/agent-form.ts]
 ---
 An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, or when someone clicks **Run now**. **Agents** lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses.
 
@@ -56,6 +56,25 @@ Admins and Managers see the buttons they may use:
 - An archived agent has **Restore**, which brings it back paused.
 
 Managers change their own agents and can run agents shared with the workspace. Admins can do this for every agent.
+
+## Create an agent
+
+Admins and Managers click **New agent** on **Agents**. Four steps open, with a summary of the agent on the right:
+
+1. **Skill**: pick what it does, add up to 2 follow-on skills, and write instructions if you like.
+2. **Trigger**: add up to 5, such as **Schedule** or **Signal created**. Each shows its next run or when it fires. **Manual** is always on: **Run now**. Next to **FOR**, pick its brands, and narrow it to platforms, topics, prompt tags or URLs.
+3. **Mode & approvals**: how much it may do without asking.
+4. **Connections & model**: then its name, **Private** or **Workspace**, and **Max per run**, the most one run may use of your monthly AI limit. Admins can also set a **Monthly cap**.
+
+Click **Save as draft** to keep it off, or **Turn on**. If something needs fixing, its step opens and says what to change.
+
+## Edit or delete an agent
+
+On an agent's page, click **Edit** to open the same four steps with its current settings. An agent that is on or paused has **Save changes**; a draft has **Save as draft** and **Turn on**. A change to what it does saves a new version, and a run that already started keeps the version it started with. If someone saved the agent after you opened it, click **Reload** to see their change first.
+
+Managers edit their own agents, and Admins every agent. If your Admin keeps workspace agents to Admins, Managers can't change their agents shared with the workspace either. Analysts and Agency partners see a read-only line with **Ask your Admin** instead.
+
+To delete an agent, archive it first. Then open **⋯** on its page and click **Delete**. Chat asks first; its past runs and files stay.
 
 ## Read-only roles
 
