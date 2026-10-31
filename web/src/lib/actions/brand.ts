@@ -11,6 +11,7 @@ import { MAX_PINNED_COMPETITORS } from '@/lib/insights-trend';
 import { isSiteType, type SiteType } from '@/lib/content/page-types';
 import { isConversionsConsent, type ConversionsConsent } from '@/lib/conversion-tracking';
 import { assertWritable } from '@/lib/subscription-guard';
+import { countPlanBrands } from '@/lib/plan-brand-count';
 
 function mapDomainRow(d: Record<string, unknown>): BrandDomain {
   return {
@@ -108,15 +109,12 @@ export async function createBrand(input: CreateBrandInput): Promise<CreateBrandR
   await assertWritable({ onboarding: true });
   const supabase = await createClient();
 
-  // The demo brand (00380) never counts against the plan.
-  const { count } = await supabase
-    .from('brands')
-    .select('id', { count: 'exact', head: true })
-    .eq('organization_id', input.organizationId)
-    .eq('is_demo', false);
+  // Every brand of the organization, whatever this person sees (00390); the
+  // demo brand (00380) never counts against the plan.
+  const count = await countPlanBrands(supabase, input.organizationId);
 
   const plan = await getOrgPlan(input.organizationId);
-  if (!isWithinLimit(plan, 'maxBrands', count ?? 0)) {
+  if (!isWithinLimit(plan, 'maxBrands', count)) {
     const max = plan.limits.maxBrands;
     return {
       code: 'plan_limit',

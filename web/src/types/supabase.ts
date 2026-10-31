@@ -8112,6 +8112,7 @@ export type Database = {
           idx: number
         }[]
       }
+      org_brand_count: { Args: { p_organization_id: string }; Returns: number }
       org_prompt_location_usage: {
         Args: { p_organization_id: string }
         Returns: {
