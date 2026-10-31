@@ -249,7 +249,7 @@ function runScope(
       });
     }
   }
-  return { context: { route: '/dashboard/chat/agents', chips } };
+  return { context: { route: '/dashboard/agents', chips } };
 }
 
 async function insertId(table: string, row: Record<string, unknown>, what: string) {

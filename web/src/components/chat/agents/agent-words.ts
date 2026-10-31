@@ -10,7 +10,7 @@ import {
 } from '@/lib/chat/agent-view';
 
 /**
- * The words Chat › Agents puts around an agent (CHAT-21 §B item 6, §C):
+ * The words Agent Center puts around an agent (CHAT-21 §B item 6, §C):
  * times ("Today 09:14", "Mon 07:00"), triggers in short ("Every Mon 09:00 ·
  * New Recover signal"), the next run, the scope ("Brand A", "3 brands"),
  * connections and the 30-day outcomes. One place for the list and the

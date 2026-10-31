@@ -52,16 +52,10 @@ function useIsWide(): boolean {
 }
 
 const CHAT_PATH = /^\/dashboard\/chat\/([0-9a-f-]{36})$/i;
-/**
- * An agent's detail, its Edit and New agent: "Chat › Agents › {its name}",
- * "Chat › Agents › New agent" (governance mockup CRUMB).
- */
-const AGENT_PATH = /^\/dashboard\/chat\/agents\/(?:new|[0-9a-f-]{36}(?:\/edit)?)$/i;
 /** A daily suggestion's page: "Chat › Inbox › Daily suggestion · Oct 29" (CHAT-26 #d-detail). */
 const SUGGESTION_PATH = /^\/dashboard\/chat\/inbox\/[0-9a-f-]{36}$/i;
 /** The page a detail sits under, linked in its breadcrumb before the name the detail sets. */
 const DETAIL_PARENTS = {
-  agents: '/dashboard/chat/agents',
   inbox: '/dashboard/chat/inbox?tab=suggestions',
 } as const;
 
@@ -87,7 +81,6 @@ const SUB_PAGES: Record<string, string> = {
   '/dashboard/chat/activity': 'activity',
   '/dashboard/chat/capabilities': 'capabilities',
   '/dashboard/chat/files': 'files',
-  '/dashboard/chat/agents': 'agents',
 };
 /** Chat's own pages the header names (mockup: Settings, right under Home). */
 const TITLED_PAGES: Record<string, string> = { '/dashboard/chat/settings': 'settings' };
@@ -178,7 +171,7 @@ function ChatShellFrame({
   const [drawer, setDrawer] = useState(false);
   const [searching, setSearching] = useState(false);
   const [lastChat, setLastChat] = useState<string | null>(null);
-  // The breadcrumb's last part a page names, as an agent's detail does.
+  // The breadcrumb's last part a page names, as a daily suggestion's page does.
   const [crumbTail, setCrumbTail] = useState<string | null>(null);
   const stripToggle = useRef<HTMLButtonElement>(null);
   const focusAfterToggle = useRef(false);
@@ -254,11 +247,7 @@ function ChatShellFrame({
       ? `/dashboard/chat/${lastChat}`
       : '/dashboard/chat';
   const suggestionPage = SUGGESTION_PATH.test(pathname);
-  const detailOf: keyof typeof DETAIL_PARENTS | undefined = AGENT_PATH.test(pathname)
-    ? 'agents'
-    : suggestionPage
-      ? 'inbox'
-      : undefined;
+  const detailOf: keyof typeof DETAIL_PARENTS | undefined = suggestionPage ? 'inbox' : undefined;
   const subPage = SUB_PAGES[pathname] ?? detailOf;
   const titled = TITLED_PAGES[pathname];
   const current = chatId ? chats.find((chat) => chat.id === chatId) : undefined;

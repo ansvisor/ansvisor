@@ -37,8 +37,8 @@ import { useAgentWords, type AgentWords } from './agent-words';
 import { useAgentActions } from './use-agent-actions';
 
 /**
- * Chat › Agents (CHAT-21 §B; governance mockup `#g-agents`; CHAT-27 item
- * 24): the agents the person may see, in the tabs Mine · Workspace ·
+ * Agent Center (CHAT-21 §B; governance mockup `#g-agents`; CHAT-27 item
+ * 24), its own page under Chat on the menu: the agents the person may see, in the tabs Mine · Workspace ·
  * Paused · Archived with their counts, and a search by name or skill. One
  * card per agent: its state, skills and mode, its triggers in short, next
  * run, scope, last run, the last 30 days' outcomes and its AI use as a
@@ -119,7 +119,7 @@ function AgentCard({
   const tList = useTranslations('chatAgents.list');
   const can = agent.can;
   const live = liveRunOf(agent);
-  const href = `/dashboard/chat/agents/${agent.id}`;
+  const href = `/dashboard/agents/${agent.id}`;
   const next = words.nextRun(agent.triggers);
   const outcomes = words.outcomes(agent.outcomes30d);
   const cell = (label: string, value: ReactNode, slot: string) => (
@@ -310,7 +310,7 @@ export function AgentsList({ now: nowProp, timeZone }: { now?: Date; timeZone?: 
           </div>
           {writer && (
             <Link
-              href="/dashboard/chat/agents/new"
+              href="/dashboard/agents/new"
               data-action="agents.new"
               className={buttonVariants({ variant: 'default' })}
             >
