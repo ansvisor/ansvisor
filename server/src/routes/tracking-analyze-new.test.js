@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createJob = vi.fn();
 const runTrackingJob = vi.fn();
+const assertBrandAccess = vi.fn();
 
 let inSizes = [];
 let failTable = null;
@@ -52,13 +53,7 @@ vi.mock('../lib/tracking-quota.js', () => ({
   TrackingQuotaError: class TrackingQuotaError extends Error {},
 }));
 // The caller reaches the brand; the route reads whether it is paused from it.
-vi.mock('../lib/access.js', () => ({
-  assertBrandAccess: vi.fn(async () => ({
-    brand: { id: 'b1', organization_id: 'org-1', is_demo: false, is_active: true },
-    orgId: 'org-1',
-    role: 'manager',
-  })),
-}));
+vi.mock('../lib/access.js', () => ({ assertBrandAccess }));
 
 const { default: router } = await import('./tracking.js');
 
@@ -99,6 +94,11 @@ describe('POST /analyze-new', () => {
     failTable = null;
     createJob.mockReset().mockResolvedValue({ id: 'job-1' });
     runTrackingJob.mockReset();
+    assertBrandAccess.mockReset().mockResolvedValue({
+      brand: { id: 'b1', organization_id: 'org-1', is_demo: false, is_active: true },
+      orgId: 'org-1',
+      role: 'manager',
+    });
   });
 
   it('submits all 1,000 imported prompts with no `in` filter over 100 ids', async () => {
@@ -119,5 +119,46 @@ describe('POST /analyze-new', () => {
     expect(res.statusCode).toBe(500);
     expect(res.body).toMatchObject({ success: false });
     expect(createJob).not.toHaveBeenCalled();
+  });
+});
+
+describe("the tracking router's brand refusal", () => {
+  beforeEach(() => {
+    failTable = null;
+    createJob.mockReset().mockResolvedValue({ id: 'job-1' });
+    assertBrandAccess.mockReset();
+  });
+
+  it('answers in its own shape, with the code, and queues nothing', async () => {
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error("You don't have access to this brand"), {
+        status: 403,
+        code: 'no_brand_access',
+      }),
+    );
+    const res = await analyzeNew({ brandId: 'b1', promptIds: ids.slice(0, 2) });
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({
+      success: false,
+      message: "You don't have access to this brand",
+      code: 'no_brand_access',
+    });
+    expect(createJob).not.toHaveBeenCalled();
+  });
+
+  it('says a brand that is gone is not found, without a code', async () => {
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error('Brand not found'), { status: 404 }),
+    );
+    const res = await analyzeNew({ brandId: 'b1', promptIds: ids.slice(0, 2) });
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ success: false, message: 'Brand not found' });
+  });
+
+  it('fails, not refuses, when the check itself fails', async () => {
+    assertBrandAccess.mockRejectedValueOnce(new Error('connection reset'));
+    const res = await analyzeNew({ brandId: 'b1', promptIds: ids.slice(0, 2) });
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toMatchObject({ success: false });
   });
 });

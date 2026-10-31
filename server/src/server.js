@@ -771,7 +771,8 @@ app.use('/webhooks/content-drafts', webhookContentDraftCallbackRoutes);
 // once the person is known, before any route, the demo brand first so its
 // answer is the same with a plan or without one. The webhooks, callbacks and
 // internal endpoints above never reach them. Each request keeps its own
-// store (lib/request-scope.js): the caller's brand access is read once.
+// store (lib/request-scope.js): the caller's brand access is read once,
+// until the response ends.
 app.use(
   '/api',
   requestScope,

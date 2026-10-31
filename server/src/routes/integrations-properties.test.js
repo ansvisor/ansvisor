@@ -2,9 +2,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import express from 'express';
 
 /**
- * The connected Google account's properties (BRAND-ACCESS spec §5.2): the
- * list is the whole organization's, so with `?brandId=` the caller must
- * reach that brand, and without one have All brands. Everyone has All
+ * The connected Google account's properties and syncs (BRAND-ACCESS spec
+ * §5.2): the list is the whole organization's whichever brand asks, so it
+ * needs All brands until each brand has its own connection (PR 14); a sync
+ * of one brand needs that brand, of every brand All brands. Everyone has All
  * brands until someone is narrowed, so nothing changes for them.
  */
 
@@ -14,6 +15,8 @@ const brandAccess = vi.fn();
 const allBrands = vi.fn();
 const listGscSites = vi.fn(async () => [{ siteUrl: 'https://acme.example/' }]);
 const listGaProperties = vi.fn(async () => [{ propertyId: '123', displayName: 'Acme' }]);
+const runGscSync = vi.fn(async () => ({ synced: 1 }));
+const runGaSync = vi.fn(async () => ({ synced: 1 }));
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -21,7 +24,7 @@ vi.mock('../config/supabase.js', () => ({
       const chain = {
         select: () => chain,
         eq: () => chain,
-        single: async () => ({ data: { organization_id: 'org-1', role: 'analyst' }, error: null }),
+        single: async () => ({ data: { organization_id: 'org-1', role }, error: null }),
       };
       return chain;
     },
@@ -38,8 +41,8 @@ vi.mock('../lib/composio.js', () => ({
   listGscSites: (...args) => listGscSites(...args),
   listGaProperties: (...args) => listGaProperties(...args),
 }));
-vi.mock('../lib/ga-sync.js', () => ({ runGaSync: vi.fn() }));
-vi.mock('../lib/gsc-sync.js', () => ({ runGscSync: vi.fn() }));
+vi.mock('../lib/ga-sync.js', () => ({ runGaSync: (...args) => runGaSync(...args) }));
+vi.mock('../lib/gsc-sync.js', () => ({ runGscSync: (...args) => runGscSync(...args) }));
 vi.mock('../lib/page-opportunities.js', () => ({ detectPageOpportunitiesInWindow: vi.fn() }));
 vi.mock('../lib/access.js', () => ({
   assertBrandAccess: (...args) => brandAccess(...args),
@@ -48,13 +51,15 @@ vi.mock('../lib/access.js', () => ({
 
 let server;
 let baseUrl;
+let role;
 
 beforeAll(async () => {
   const { default: router } = await import('./integrations.js');
   const app = express();
+  app.use(express.json());
   app.use((req, _res, next) => {
     req.user = { id: 'u1' };
-    req.log = { error: vi.fn() };
+    req.log = { error: vi.fn(), info: vi.fn() };
     next();
   });
   app.use('/api/integrations', router);
@@ -67,10 +72,13 @@ beforeAll(async () => {
 afterAll(() => new Promise((resolve) => server.close(resolve)));
 
 beforeEach(() => {
+  role = 'analyst';
   brandAccess.mockReset().mockResolvedValue({ brand: { id: BRAND }, orgId: 'org-1' });
   allBrands.mockReset().mockResolvedValue({ orgId: 'org-1' });
   listGscSites.mockClear();
   listGaProperties.mockClear();
+  runGscSync.mockClear();
+  runGaSync.mockClear();
 });
 
 const refused = Object.assign(new Error("You don't have access to this brand"), {
@@ -90,21 +98,70 @@ describe.each([
     expect(brandAccess).not.toHaveBeenCalled();
   });
 
-  it('checks the brand named, and lists them for one the caller reaches', async () => {
+  it('needs All brands even when a brand is named, whose list it would not be', async () => {
+    // The demo brand is everyone's: naming it must not open the whole list.
     const res = await fetch(`${baseUrl}/${provider}/properties?brandId=${BRAND}`);
     expect(res.status).toBe(200);
-    expect(brandAccess).toHaveBeenCalledWith(BRAND, 'u1');
-    expect(allBrands).not.toHaveBeenCalled();
+    expect(allBrands).toHaveBeenCalledWith('u1');
+    expect(brandAccess).not.toHaveBeenCalled();
   });
 
-  it('refuses Selected brands without a brand, or a brand not granted, and reads nothing', async () => {
-    allBrands.mockRejectedValueOnce(refused);
-    const bare = await fetch(`${baseUrl}/${provider}/properties`);
-    expect(bare.status).toBe(403);
-    brandAccess.mockRejectedValueOnce(refused);
-    const other = await fetch(`${baseUrl}/${provider}/properties?brandId=${BRAND}`);
-    expect(other.status).toBe(403);
-    expect(await other.json()).toMatchObject({ error: "You don't have access to this brand" });
+  it('refuses Selected brands, with the code, and reads nothing', async () => {
+    allBrands.mockRejectedValue(refused);
+    for (const path of ['properties', `properties?brandId=${BRAND}`]) {
+      const res = await fetch(`${baseUrl}/${provider}/${path}`);
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({
+        error: "You don't have access to this brand",
+        code: 'no_brand_access',
+      });
+    }
     expect(list()).not.toHaveBeenCalled();
+  });
+});
+
+describe.each([
+  ['google-search-console', () => runGscSync],
+  ['google-analytics', () => runGaSync],
+])('POST /api/integrations/%s/sync', (provider, run) => {
+  const sync = (body) =>
+    fetch(`${baseUrl}/${provider}/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  beforeEach(() => {
+    role = 'manager';
+  });
+
+  it('syncs every brand for someone with All brands, as before', async () => {
+    const res = await sync({});
+    expect(res.status).toBe(200);
+    expect(allBrands).toHaveBeenCalledWith('u1');
+    expect(run()).toHaveBeenCalledWith({ organizationId: 'org-1' });
+  });
+
+  it('refuses Selected brands a sync of every brand, with the code, and runs nothing', async () => {
+    allBrands.mockRejectedValueOnce(refused);
+    const res = await sync({});
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: 'no_brand_access' });
+    expect(run()).not.toHaveBeenCalled();
+  });
+
+  it('syncs one brand the caller reaches, and refuses one not granted', async () => {
+    const res = await sync({ brandId: BRAND });
+    expect(res.status).toBe(202);
+    expect(brandAccess).toHaveBeenCalledWith(BRAND, 'u1');
+    expect(allBrands).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(run()).toHaveBeenCalledWith({ brandId: BRAND }));
+
+    run().mockClear();
+    brandAccess.mockRejectedValueOnce(refused);
+    const other = await sync({ brandId: BRAND });
+    expect(other.status).toBe(403);
+    expect(await other.json()).toMatchObject({ code: 'no_brand_access' });
+    expect(run()).not.toHaveBeenCalled();
   });
 });

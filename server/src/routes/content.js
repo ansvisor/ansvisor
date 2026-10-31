@@ -26,7 +26,6 @@ import {
   assertOpportunityAccess,
   assertPromptAccess,
   assertRole,
-  NOT_IN_WORKSPACE,
 } from '../lib/access.js';
 import { loadClusters } from '../lib/prompt-clusters.js';
 import { sendToActionCenter } from '../lib/action-center/from-opportunity.js';
@@ -1616,11 +1615,9 @@ router.post('/:id/brief', async (req, res) => {
       return res.status(404).json({ error: 'Opportunity not found' });
     }
 
+    // The caller's organization, which the brief is charged to: a caller
+    // without one reaches no brand (lib/access.js).
     const { orgId: userOrgId } = await assertBrandAccess(opp.brand_id, req.user.id);
-    // No organization to charge the brief to (a self-hosted install without one).
-    if (!userOrgId) {
-      return res.status(403).json({ error: NOT_IN_WORKSPACE, code: 'not_in_workspace' });
-    }
     await assertRole(req.user.id, MANAGER_ROLES, GENERATE_BRIEF_REFUSAL);
 
     const result = await generateBriefForOpportunity(id, { model });

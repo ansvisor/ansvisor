@@ -11,11 +11,9 @@
  * handlers can do `const status = error.status || 500` in their catch block —
  * the same pattern already used in routes/prompts.js.
  *
- * Org comparison is intentionally a plain `!==` rather than rejecting a null
- * org. In self-hosted single-tenant setups there may be no organization row,
- * so both the profile and the resource carry `organization_id = null`; a strict
- * "reject when org is null" guard would lock those installs out. In cloud mode
- * every org has a non-null id, so cross-tenant access is still blocked.
+ * Every brand belongs to an organization (`brands.organization_id` is not
+ * null), self-hosted installs included, so a caller without one (no profile,
+ * or one that left its organization) reaches no brand: 403 `not_in_workspace`.
  *
  * Brand access (BRAND-ACCESS spec §5.2, 00388): within the organization, a
  * person reaches every brand with All brands, and with Selected brands only
@@ -26,6 +24,7 @@
  * is narrowed every answer is the organization check's.
  */
 import supabaseAdmin from '../config/supabase.js';
+import { logger } from './logger.js';
 import { oncePerRequest } from './request-scope.js';
 
 function accessError(message, status, code) {
@@ -55,25 +54,55 @@ const noBrandAccess = () => accessError(NO_BRAND_ACCESS, 403, 'no_brand_access')
  */
 export function brandAccessOf(userId) {
   return oncePerRequest(`brand-access:${userId}`, async () => {
-    const { data: profile, error } = await supabaseAdmin
-      .from('profiles')
-      .select('organization_id, role, brand_scope')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
+    const profile = await readProfile(userId);
     const orgId = profile?.organization_id || null;
     const role = profile?.role ?? null;
     // An Admin always has All brands (D3); All brands is everyone's default.
     if (role === 'admin' || profile?.brand_scope !== 'selected') {
       return { orgId, role, all: true, brandIds: new Set() };
     }
+    // Grants are kept within the person's organization; without one, none count.
+    if (!orgId) return { orgId, role, all: false, brandIds: new Set() };
     const { data: grants, error: grantError } = await supabaseAdmin
       .from('member_brands')
       .select('brand_id')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .eq('organization_id', orgId);
     if (grantError) throw new Error(grantError.message);
     return { orgId, role, all: false, brandIds: new Set((grants ?? []).map((g) => g.brand_id)) };
   });
+}
+
+/**
+ * Postgres' code for a column that doesn't exist, and PostgREST's for one
+ * missing from its schema cache: here, a server deployed before 00388.
+ */
+const MISSING_COLUMN_CODES = new Set(['42703', 'PGRST204']);
+/** Postgres' code for text its column can't take: an id that isn't a uuid. */
+const INVALID_TEXT = '22P02';
+let warnedNoBrandScope = false;
+
+/**
+ * The caller's profile: organization, role and brand scope. Before 00388 is
+ * applied there is no `brand_scope`, and everyone has All brands, as 00388
+ * starts them: the profile is read without it, and that is said once.
+ */
+async function readProfile(userId) {
+  const read = (columns) =>
+    supabaseAdmin.from('profiles').select(columns).eq('id', userId).maybeSingle();
+  const { data, error } = await read('organization_id, role, brand_scope');
+  if (!error) return data;
+  if (!MISSING_COLUMN_CODES.has(error.code)) throw new Error(error.message);
+  if (!warnedNoBrandScope) {
+    warnedNoBrandScope = true;
+    logger.warn(
+      { code: error.code, migration: '00388' },
+      '[access] profiles.brand_scope is missing: everyone counts as All brands until 00388 is applied',
+    );
+  }
+  const fallback = await read('organization_id, role');
+  if (fallback.error) throw new Error(fallback.error.message);
+  return fallback.data ? { ...fallback.data, brand_scope: 'all' } : null;
 }
 
 /**
@@ -82,7 +111,7 @@ export function brandAccessOf(userId) {
  * it's the organization's but not granted, null when it does.
  */
 function refusalFor(access, brand) {
-  if (access.orgId !== brand.organization_id) return 'organization';
+  if (!access.orgId || access.orgId !== brand.organization_id) return 'organization';
   if (access.all || brand.is_demo || access.brandIds.has(brand.id)) return null;
   return 'brand';
 }
@@ -128,14 +157,17 @@ export async function assertRole(userId, roles, message) {
  * @param {string} brandId
  * @param {string} userId
  * @param {{ columns?: string }} [options] more of the brand's columns to return
- * @returns {Promise<{ brand: object, orgId: string|null, role: string|null }>}
+ * @returns {Promise<{ brand: object, orgId: string, role: string|null }>}
  */
 export async function assertBrandAccess(brandId, userId, { columns } = {}) {
-  const { data: brand } = await supabaseAdmin
+  const { data: brand, error } = await supabaseAdmin
     .from('brands')
     .select(columns ? `id, organization_id, is_demo, ${columns}` : 'id, organization_id, is_demo')
     .eq('id', brandId)
-    .single();
+    .maybeSingle();
+  // A failed read is a failure (500), not a brand that is gone; an id that
+  // can't be one (Postgres' invalid text) names no brand.
+  if (error && error.code !== INVALID_TEXT) throw new Error(error.message);
 
   if (!brand) {
     throw accessError('Brand not found', 404);

@@ -636,7 +636,9 @@ router.post(
     } catch (error) {
       const status = error.status || 500;
       req.log.error({ err: error }, 'prompt-suggestions refresh error');
-      return res.status(status).json({ error: error.message || 'Failed to generate suggestions' });
+      return res
+        .status(status)
+        .json({ error: error.message || 'Failed to generate suggestions', code: error.code });
     }
   },
 );
@@ -678,7 +680,10 @@ router.post(
       req.log.error({ err: error }, 'page prompt suggestions error');
       return res
         .status(status)
-        .json({ error: error.message || 'Failed to suggest prompts for this page' });
+        .json({
+          error: error.message || 'Failed to suggest prompts for this page',
+          code: error.code,
+        });
     }
   },
 );
@@ -702,7 +707,9 @@ router.get('/suggestions/:brandId', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'prompt-suggestions list error');
-    return res.status(status).json({ error: error.message || 'Failed to load suggestions' });
+    return res
+      .status(status)
+      .json({ error: error.message || 'Failed to load suggestions', code: error.code });
   }
 });
 
@@ -738,7 +745,9 @@ router.get('/untracked-queries/:brandId', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'untracked queries error');
-    return res.status(status).json({ error: error.message || 'Failed to read Google queries' });
+    return res
+      .status(status)
+      .json({ error: error.message || 'Failed to read Google queries', code: error.code });
   }
 });
 
@@ -769,7 +778,9 @@ router.post('/suggestions/:id/dismiss', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'prompt-suggestions dismiss error');
-    return res.status(status).json({ error: error.message || 'Failed to dismiss' });
+    return res
+      .status(status)
+      .json({ error: error.message || 'Failed to dismiss', code: error.code });
   }
 });
 
@@ -802,7 +813,9 @@ router.post('/suggestions/:id/accept', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'prompt-suggestions accept error');
-    return res.status(status).json({ error: error.message || 'Failed to accept' });
+    return res
+      .status(status)
+      .json({ error: error.message || 'Failed to accept', code: error.code });
   }
 });
 
@@ -1208,7 +1221,7 @@ router.get('/:promptId/improve', readImprove, async (req, res) => {
     req.log.error({ err: error }, 'prompt improve read error');
     return res
       .status(error.status || 500)
-      .json({ error: error.message || 'Failed to load suggestions' });
+      .json({ error: error.message || 'Failed to load suggestions', code: error.code });
   }
 });
 
@@ -1240,7 +1253,7 @@ router.get('/:promptId/demand', async (req, res) => {
     req.log.error({ err: error }, 'prompt demand read error');
     return res
       .status(error.status || 500)
-      .json({ error: error.status ? error.message : 'Failed to load demand' });
+      .json({ error: error.status ? error.message : 'Failed to load demand', code: error.code });
   }
 });
 
@@ -1430,7 +1443,7 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
     req.log.error({ err: error }, 'prompt improve generate error');
     return res
       .status(error.status || 500)
-      .json({ error: error.message || 'Failed to generate suggestions' });
+      .json({ error: error.message || 'Failed to generate suggestions', code: error.code });
   }
 });
 
@@ -1573,7 +1586,7 @@ router.post('/:promptId/improve/action', requireFeature('prompt_improve'), async
     req.log.error({ err: error }, 'prompt improve send error');
     return res
       .status(error.status || 500)
-      .json({ error: error.message || 'Failed to send to Action Center' });
+      .json({ error: error.message || 'Failed to send to Action Center', code: error.code });
   }
 });
 

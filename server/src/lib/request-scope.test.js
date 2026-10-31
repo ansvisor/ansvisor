@@ -1,10 +1,12 @@
+import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import { oncePerRequest, requestScope } from './request-scope.js';
 
 /** What a request reads once (lib/request-scope.js): kept for that request only. */
 
-const inRequest = (fn) =>
-  new Promise((resolve, reject) => requestScope({}, {}, () => fn().then(resolve, reject)));
+/** Runs `fn` inside one request's store; `res` is the response it closes with. */
+const inRequest = (fn, res = new EventEmitter()) =>
+  new Promise((resolve, reject) => requestScope({}, res, () => fn().then(resolve, reject)));
 
 describe('oncePerRequest', () => {
   it('reads once in a request, afresh in the next and outside one', async () => {
@@ -30,4 +32,22 @@ describe('oncePerRequest', () => {
     });
     expect(read).toHaveBeenCalledTimes(2);
   });
+
+  it.each(['finish', 'close'])(
+    'reads afresh once the response has ended (%s), in work the request left running',
+    async (event) => {
+      const read = vi.fn(async () => 'value');
+      const res = new EventEmitter();
+      await inRequest(async () => {
+        await oncePerRequest('k', read);
+        await oncePerRequest('k', read);
+        expect(read).toHaveBeenCalledTimes(1);
+        // A job started here and not awaited goes on in this async context.
+        res.emit(event);
+        await oncePerRequest('k', read);
+        await oncePerRequest('k', read);
+      }, res);
+      expect(read).toHaveBeenCalledTimes(3);
+    },
+  );
 });
