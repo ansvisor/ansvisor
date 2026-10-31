@@ -4,8 +4,8 @@ route: /dashboard/audit
 keywords: [site score, pages audited, audit opportunities, audited pages, score over time]
 synonyms: [audit overview, audit history, which pages to audit, audit priority]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -45,6 +45,8 @@ Pages built from one template, such as every post of a blog, share most of their
 ## Select, pin or exclude
 
 Select rows to **Audit selected**, to **Pin** them, so they always come first, or to **Exclude** them. Excluded pages are listed under the table, where **Restore** puts them back.
+
+Pins and exclusions hold for the whole brand, so only admins and managers see **Pin**, **Exclude** and **Restore**.
 
 ## The Pages tab
 

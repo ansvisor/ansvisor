@@ -827,9 +827,15 @@ export default function SiteAuditPage() {
                 staleDays={opps.staleDays}
                 selected={oppSelected}
                 onSelect={handleOppSelect}
-                onRestore={guard((urls: string[]) => void handleRestore(urls), {
-                  action: tActions('restorePages'),
-                })}
+                // Pins and exclusions hold for the whole brand: admins and
+                // managers change them, as the server allows.
+                onRestore={
+                  canManage
+                    ? guard((urls: string[]) => void handleRestore(urls), {
+                        action: tActions('restorePages'),
+                      })
+                    : undefined
+                }
                 toolbar={
                   selectedOpps.length > 0 && (
                     <AuditBulkBar
@@ -841,29 +847,33 @@ export default function SiteAuditPage() {
                       onAudit={guard(handleAuditOpps, { action: tActions('auditPages') })}
                       onClear={() => setOppSelected(new Set())}
                     >
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 gap-1.5 text-xs"
-                        disabled={selectedOppUrls.length === 0}
-                        onClick={guard(() => void handlePin(), {
-                          action: tActions(allPinned ? 'unpinPages' : 'pinPages'),
-                        })}
-                      >
-                        <Pin className="h-3 w-3" />
-                        {allPinned ? t('opportunities.unpin') : t('opportunities.pin')}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 gap-1.5 text-xs"
-                        onClick={guard(() => void handleExclude(), {
-                          action: tActions('excludePages'),
-                        })}
-                      >
-                        <EyeOff className="h-3 w-3" />
-                        {t('opportunities.exclude')}
-                      </Button>
+                      {canManage && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 gap-1.5 text-xs"
+                            disabled={selectedOppUrls.length === 0}
+                            onClick={guard(() => void handlePin(), {
+                              action: tActions(allPinned ? 'unpinPages' : 'pinPages'),
+                            })}
+                          >
+                            <Pin className="h-3 w-3" />
+                            {allPinned ? t('opportunities.unpin') : t('opportunities.pin')}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 gap-1.5 text-xs"
+                            onClick={guard(() => void handleExclude(), {
+                              action: tActions('excludePages'),
+                            })}
+                          >
+                            <EyeOff className="h-3 w-3" />
+                            {t('opportunities.exclude')}
+                          </Button>
+                        </>
+                      )}
                     </AuditBulkBar>
                   )
                 }

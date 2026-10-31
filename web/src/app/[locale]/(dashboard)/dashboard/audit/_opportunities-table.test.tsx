@@ -65,6 +65,8 @@ function render(
     excluded = [] as ExcludedPage[],
     selected = new Set<string>(),
     toolbar = null as React.ReactNode,
+    // null: no onRestore, as for a member who can't change them.
+    restore = onRestore as ((urls: string[]) => void) | null,
   } = {},
 ) {
   act(() => {
@@ -76,7 +78,7 @@ function render(
           staleDays={90}
           selected={selected}
           onSelect={onSelect}
-          onRestore={onRestore}
+          onRestore={restore ?? undefined}
           toolbar={toolbar}
         />
       </NextIntlClientProvider>,
@@ -241,6 +243,18 @@ describe('OpportunitiesTable', () => {
     act(() => button('Show')!.click());
     act(() => button('Restore')!.click());
     expect(onRestore).toHaveBeenCalledWith(['https://acme.com/legal']);
+  });
+
+  it('lists the excluded pages without Restore for a member who cannot change them', () => {
+    render([opportunity()], {
+      excluded: [
+        { key: 'acme.com/legal', url: 'https://acme.com/legal', path: '/legal', title: null },
+      ],
+      restore: null,
+    });
+    act(() => button('Show')!.click());
+    expect(container.textContent).toContain('/legal');
+    expect(button('Restore')).toBeUndefined();
   });
 
   it('says where opportunities come from when there are none', () => {

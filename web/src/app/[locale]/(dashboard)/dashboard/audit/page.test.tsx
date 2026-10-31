@@ -8,7 +8,8 @@ import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 /**
  * Site Audit on a read-only workspace (plan not active): Run audit, by its
  * button or Enter in the address, opens the upgrade dialog instead of
- * starting an audit. On an active plan it starts one and opens it.
+ * starting an audit. On an active plan it starts one and opens it. Pin,
+ * Exclude and Restore in the Opportunities inbox are for admins and managers.
  */
 
 const audits = vi.hoisted(() => ({
@@ -33,7 +34,8 @@ vi.mock('@/stores/use-brand-store', () => ({
     getState: () => brandState,
   }),
 }));
-vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
+const role = vi.hoisted(() => ({ canManage: true }));
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: role.canManage }) }));
 const push = vi.hoisted(() => vi.fn());
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push }) }));
 vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
@@ -44,10 +46,28 @@ vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
 vi.mock('./_site-trust-card', () => ({ SiteTrustCard: () => null }));
 vi.mock('./_charts', () => ({ ScoreTrendChart: () => null }));
 vi.mock('./_pages-table', () => ({ AuditPagesTable: () => null }));
-vi.mock('./_bulk-bar', () => ({ AuditBulkBar: () => null, ExportMenu: () => null }));
+// The bulk bar shows only the buttons the page puts in it.
+vi.mock('./_bulk-bar', () => ({
+  AuditBulkBar: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  ExportMenu: () => null,
+}));
 vi.mock('./_overview-cards', () => ({ AuditOverviewCards: () => null }));
+// The inbox: what the page hands it, and its bulk bar.
+const inbox = vi.hoisted(() => ({
+  props: null as null | {
+    onSelect: (keys: string[], on: boolean) => void;
+    onRestore?: (urls: string[]) => void;
+  },
+}));
 vi.mock('./_opportunities-table', () => ({
-  OpportunitiesTable: () => null,
+  OpportunitiesTable: (props: {
+    onSelect: (keys: string[], on: boolean) => void;
+    onRestore?: (urls: string[]) => void;
+    toolbar?: ReactNode;
+  }) => {
+    inbox.props = props;
+    return <div>{props.toolbar}</div>;
+  },
   opportunityAuditUrls: () => [],
 }));
 vi.mock('./_settings-dialog', () => ({ AuditSettingsDialog: () => null }));
@@ -70,6 +90,8 @@ const openUpgrade = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
+  role.canManage = true;
+  inbox.props = null;
   audits.getAuditHub.mockResolvedValue({
     pages: { pages: [], total: 0, primaryHost: 'acme.com' },
     quota: { used: 0, limit: 10, remaining: 10 },
@@ -169,5 +191,46 @@ describe('SiteAuditPage Run audit', () => {
     await pressEnter();
     expect(audits.runAudit).toHaveBeenCalledExactlyOnceWith('b1', 'https://acme.com');
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('SiteAuditPage Opportunities', () => {
+  const page = {
+    key: 'acme.com/pricing',
+    url: 'https://acme.com/pricing',
+    path: '/pricing',
+    title: 'Pricing',
+    reasons: [],
+    pinned: false,
+    running: false,
+    aiVisits: null,
+    lastAudit: null,
+    priority: 50,
+    priorityParts: { value: 50, opportunity: 50, ease: 50 },
+  };
+  const selectPage = async () => {
+    audits.getAuditHubExtras.mockResolvedValue({
+      opportunities: { opportunities: [page], excluded: [], staleDays: 90 },
+      latestRun: null,
+    });
+    await render(false);
+    await act(async () => inbox.props!.onSelect([page.key], true));
+  };
+  const named = (name: string) =>
+    [...container.querySelectorAll('button')].find((b) => b.textContent === name);
+
+  it('lets admins and managers pin, exclude and restore pages', async () => {
+    await selectPage();
+    expect(named('Pin')).toBeDefined();
+    expect(named('Exclude')).toBeDefined();
+    expect(inbox.props!.onRestore).toBeTypeOf('function');
+  });
+
+  it('gives other members no Pin, Exclude or Restore: they hold for the whole brand', async () => {
+    role.canManage = false;
+    await selectPage();
+    expect(named('Pin')).toBeUndefined();
+    expect(named('Exclude')).toBeUndefined();
+    expect(inbox.props!.onRestore).toBeUndefined();
   });
 });
