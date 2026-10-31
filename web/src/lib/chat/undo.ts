@@ -15,6 +15,7 @@ import { chatToolByKey } from './registry/tools';
 import { DAY_MS, asObject, check, textOf, type Snapshot } from './undo-parts';
 import { OUTPUT_UNDO_RULES } from './undo-output';
 import { SETUP_UNDO_RULES } from './undo-setup';
+import { ACTION_CENTER_UNDO_RULES } from './undo-action-center';
 
 /**
  * Undo (CHAT-20 §10b): the inverse of each WRITE, stored when it ran (the
@@ -69,8 +70,16 @@ export interface UndoRule {
   before(input: unknown): Promise<Snapshot | null>;
   /** Read just after it: what the row records. */
   record(input: unknown, output: unknown, before: Snapshot | null): Promise<WriteRecord>;
-  /** The inverse, once the target is as the change left it. */
-  inverse(target: { id: string; brandId: string | null; data: Snapshot }): Promise<InverseResult>;
+  /**
+   * The inverse, once the target is as the change left it. userId: who
+   * clicked Undo, for a target whose own trail names who (Action History).
+   */
+  inverse(target: {
+    id: string;
+    brandId: string | null;
+    data: Snapshot;
+    userId?: string;
+  }): Promise<InverseResult>;
   /** Where the target opens, to undo by hand. */
   href(targetId: string): ChatHref;
 }
@@ -433,6 +442,7 @@ export const UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   update_draft: updateDraft,
   ...SETUP_UNDO_RULES,
   ...OUTPUT_UNDO_RULES,
+  ...ACTION_CENTER_UNDO_RULES,
 };
 
 /**
@@ -630,6 +640,7 @@ async function undo(req: UndoRequest): Promise<UndoResult> {
     id: row.target_id,
     brandId: row.brand_id,
     data: asObject(row.undo_json) as Snapshot,
+    userId: req.userId,
   };
   const targetType = row.target_type;
   // Set inside the work: a conflict answers this click, and its key goes back.

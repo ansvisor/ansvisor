@@ -73,5 +73,6 @@ Most actions come from signals each night, but you can also send work to the Act
 - **Brand Visibility**: **Send action** on a topic in Opportunities.
 - **Product Visibility**: pick the work in a product's plan and click **Send … actions to Action Center**.
 - **Prompts**: **Send Actions** on a prompt's Improve tab.
+- **Chat**: **Send to Action Center** under an answer. Its Overview links back to the chat.
 
 Sending the same thing twice doesn't create a second action: the page says it is already in the Action Center.

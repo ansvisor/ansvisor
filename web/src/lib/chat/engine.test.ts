@@ -87,6 +87,13 @@ vi.mock('@/lib/actions/competitor', () => ({
   addCompetitors: vi.fn(),
   removeBrandCompetitor: vi.fn(),
 }));
+vi.mock('@/lib/actions/chat-action-center', () => ({
+  createChatAction: vi.fn(),
+  attachToAction: vi.fn(),
+  attachFileToTask: vi.fn(),
+  setTaskReadyForReview: vi.fn(),
+  checkChatActionCover: vi.fn(),
+}));
 // The test's own EXECUTE row (publish_page) has its words here: the product has no such tool yet.
 vi.mock('../../../messages/en.json', async (importOriginal) => {
   const { default: messages } = await importOriginal<{
@@ -216,6 +223,8 @@ const { addBrandTopic, renameBrandTopic } = await import('@/lib/actions/topic');
 const { addCompetitors, removeBrandCompetitor } = await import('@/lib/actions/competitor');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
+const { checkChatActionCover, createChatAction, attachFileToTask, attachToAction } =
+  await import('@/lib/actions/chat-action-center');
 const engine = await import('./engine');
 const { readRunEvents } = await import('./engine-store');
 const { runFromEvents } = await import('./run-state');
@@ -3099,6 +3108,11 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'push_cms_draft',
     'build_report',
     'run_site_audit',
+    // W2-10's Action Center rows: Admins and Managers only.
+    'create_action',
+    'attach_to_action',
+    'attach_file_to_task',
+    'set_task_ready_for_review',
   ];
   const dismiss = toolCall('w1', 'update_opportunity', {
     opportunity_id: OPPORTUNITY,
@@ -4176,5 +4190,261 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
       expect(options.tools?.map((t) => t.name) ?? []).not.toContain(USE_SKILL_TOOL);
     }
     expect(skillSteps(runId)).toEqual([]);
+  });
+});
+
+describe('Send to Action Center (CHAT-09 §E, CHAT-20 §12)', () => {
+  const ACTION = '77777777-7777-4777-8777-777777777777';
+  const sendCall = toolCall('w1', 'create_action', {
+    brand_id: BRAND,
+    title: 'Win back pricing citations on /pricing',
+    category: 'recover',
+    why: 'Google AI Overviews stopped citing /pricing for 2 prompts.',
+    pages: ['/pricing'],
+    tasks: [
+      {
+        title: 'Add a pricing FAQ block to /pricing',
+        type: 'on_page',
+        url: '/pricing',
+        done_when: 'The FAQ block is live on /pricing',
+      },
+    ],
+  });
+  const made = {
+    ok: true,
+    action_id: ACTION,
+    action_no: 1271,
+    created: true,
+    href: `/dashboard/action-center/actions/${ACTION}`,
+  };
+
+  beforeEach(() => {
+    vi.mocked(checkChatActionCover).mockResolvedValue({ ok: true });
+    vi.mocked(createChatAction).mockResolvedValue(made as never);
+  });
+
+  it('says an active action already covers it before any card, and makes nothing', async () => {
+    vi.mocked(checkChatActionCover).mockResolvedValue({
+      ok: false,
+      reason: 'duplicate',
+      message: 'AC-1258 already covers this.',
+      action_id: ACTION,
+      action_no: 1258,
+      can_create_anyway: false,
+    });
+    const { sonnet } = useModels([READY], [calls(sendCall), text('AC-1258 covers it.')]);
+    const runId = await turn(ADMIN, 'Send this to Action Center', 'auto');
+    const events = await eventsOf(runId);
+    expect(ofType(events, 'confirm.required')).toEqual([]);
+    expect(createChatAction).not.toHaveBeenCalled();
+    // The model is told which action covers it, to offer Add to AC-1258.
+    const told = JSON.stringify(sonnet.seen[1].prompt);
+    expect(told).toContain('duplicate');
+    expect(told).toContain('AC-1258 already covers this.');
+    expect(told).toContain('"action_no":1258');
+    expect(told).toContain('"can_create_anyway":false');
+    expect(runRow(runId).status).toBe('done');
+    expectClean(events);
+  });
+
+  it('lists its tasks on the card, then sends it as the person approved it, with Open in Actions', async () => {
+    useModels([READY], [calls(sendCall), text('Sent.')]);
+    const runId = await turn(ADMIN, 'Send this to Action Center', 'auto');
+    const confirm = ofType(await eventsOf(runId), 'confirm.required')[0].data;
+    // What is frozen once it's made (CHAT-09 18b): tasks, the finding and the targets.
+    expect(confirm).toMatchObject({
+      action: 'Send findings to Action Center',
+      target: '“Win back pricing citations on /pricing” · Recover · 1 task · Northwind',
+      items: [
+        {
+          title: 'Add a pricing FAQ block to /pricing',
+          detail: 'On-page · /pricing · Done when: The FAQ block is live on /pricing',
+        },
+      ],
+      why: 'Google AI Overviews stopped citing /pricing for 2 prompts.',
+      targets: [{ kind: 'pages', values: ['/pricing'] }],
+    });
+    expect(createChatAction).not.toHaveBeenCalled();
+
+    expect((await approve(ADMIN, runId)).ok).toBe(true);
+    const step = stepsOf(runId)[0];
+    expect(createChatAction).toHaveBeenCalledWith(
+      BRAND,
+      expect.objectContaining({ title: 'Win back pricing citations on /pricing' }),
+      {
+        conversationId: runRow(runId).conversation_id,
+        runId,
+        approvalKey: step.id,
+        executionMode: 'assisted',
+      },
+      false,
+    );
+    const events = await eventsOf(runId);
+    expect(ofType(events, 'action.sent').map((e) => e.data)).toEqual([
+      {
+        kind: 'action_created',
+        actionNo: 1271,
+        title: 'Win back pricing citations on /pricing',
+        href: `/dashboard/action-center/actions/${ACTION}`,
+      },
+    ]);
+    expect(step).toMatchObject({ status: 'done', label: 'Sent to Action Center' });
+    expectClean(events);
+  });
+
+  it('marks a change that runs without a card, so History records it as automated (§10a)', async () => {
+    const seen: unknown[] = [];
+    vi.mocked(createChatAction).mockImplementation((async (
+      _brand: string,
+      _proposal: unknown,
+      place?: { approvalKey: string },
+    ) => {
+      const step = db.tables.chat_run_steps.find((row) => row.id === place!.approvalKey);
+      seen.push((step?.debug_json as { auto?: boolean } | null)?.auto ?? null);
+      return made;
+    }) as never);
+    useModels([READY], [calls(sendCall), text('Sent.')]);
+    await turn(ADMIN, 'Send this to Action Center', 'full_auto');
+    useModels([READY], [calls(sendCall), text('Sent.')]);
+    const carded = await turn(ADMIN, 'Send this to Action Center', 'auto');
+    expect((await approve(ADMIN, carded)).ok).toBe(true);
+    // Full auto's step is marked; the card's isn't.
+    expect(seen).toEqual([true, null]);
+  });
+
+  it('shows the card for Create anyway in Full auto too: that choice is the person’s (18a)', async () => {
+    vi.mocked(checkChatActionCover).mockResolvedValue({
+      ok: false,
+      reason: 'duplicate',
+      message: 'AC-1258 already covers this.',
+      action_id: ACTION,
+      action_no: 1258,
+      can_create_anyway: true,
+    });
+    const anyway = toolCall('w1', 'create_action', {
+      ...JSON.parse(sendCall.input),
+      create_anyway: true,
+    });
+    useModels([READY], [calls(anyway), text('Waiting.')]);
+    const runId = await turn(ADMIN, 'Create it anyway', 'full_auto');
+    expect(ofType(await eventsOf(runId), 'confirm.required')).toHaveLength(1);
+    expect(createChatAction).not.toHaveBeenCalled();
+    expect(runRow(runId).status).toBe('waiting');
+  });
+
+  it("tells the model a closed action's refusal in its words (§11a conflict)", async () => {
+    // The action, as the call's brand is read from it.
+    db.tables.actions = [{ id: ACTION, brand_id: BRAND, action_no: 1258 }];
+    vi.mocked(attachToAction).mockResolvedValue({
+      ok: false,
+      reason: 'conflict',
+      message: 'That action is closed: send the finding as a new action instead.',
+    });
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'attach_to_action', { action_id: ACTION, finding: 'Lost 6.' })),
+        text('It closed.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Add it to AC-1258', 'full_auto');
+    const told = JSON.stringify(sonnet.seen[1].prompt);
+    expect(told).toContain('"code":"conflict"');
+    expect(told).toContain('That action is closed');
+    expect(stepsOf(runId)[0]).toMatchObject({
+      status: 'error',
+      detail: 'That action is closed: send the finding as a new action instead.',
+    });
+  });
+
+  describe('Send to Action Center on an answer that read outside text (§16a rule 3)', () => {
+    /** A first run that read with `read`, then the button's message, from that run, in Full auto. */
+    const script = (read: string): [Step[], Step[]] => [
+      [calls(toolCall('r1', read, { brand_id: BRAND })), READY, READY],
+      [text('Two pages lost most of it.'), calls(sendCall), text('Sent.')],
+    ];
+    async function sendFrom(fromRunId?: (first: string) => string) {
+      const first = await turn(ADMIN, 'Why did citations fall?');
+      const started = await engine.startChatRun(ADMIN, {
+        message: 'Send this finding to Action Center as an action.',
+        conversationId: runRow(first).conversation_id,
+        mode: 'full_auto',
+        fromRunId: fromRunId ? fromRunId(first) : first,
+      });
+      if (!started.ok) throw new Error(`not started: ${started.code}`);
+      await engine.driveRun(ADMIN, started.runId);
+      return started.runId;
+    }
+
+    it('starts its run tainted, so the action waits on its card even in Full auto', async () => {
+      useModels(...script('read_visibility'));
+      const runId = await sendFrom();
+      expect(createChatAction).not.toHaveBeenCalled();
+      expect(ofType(await eventsOf(runId), 'confirm.required')).toHaveLength(1);
+    });
+
+    it("doesn't when that run read the workspace's own numbers only", async () => {
+      useModels(...script('get_visibility_summary'));
+      const runId = await sendFrom();
+      expect(createChatAction).toHaveBeenCalledTimes(1);
+      expect(runRow(runId).status).toBe('done');
+    });
+
+    it("counts a run that isn't this chat's as tainted: the browser's word is never taken", async () => {
+      useModels(...script('get_visibility_summary'));
+      const runId = await sendFrom(() => '99999999-9999-4999-8999-999999999990');
+      expect(createChatAction).not.toHaveBeenCalled();
+      expect(ofType(await eventsOf(runId), 'confirm.required')).toHaveLength(1);
+    });
+  });
+
+  it('sends it without a card in Full auto, as automated, and logs it with its Undo', async () => {
+    useModels([READY], [calls(sendCall), text('Sent.')]);
+    const runId = await turn(ADMIN, 'Send this to Action Center', 'full_auto');
+    expect(ofType(await eventsOf(runId), 'confirm.required')).toEqual([]);
+    expect(vi.mocked(createChatAction).mock.calls[0][2]).toMatchObject({
+      executionMode: 'automated',
+    });
+    const logged = (db.tables.chat_activity_log ?? []).find((row) => row.run_id === runId);
+    expect(logged).toMatchObject({ tool_key: 'sendToActions', approval_kind: 'auto' });
+  });
+
+  it("tells the model the one sentence to say when the day's new actions are reached", async () => {
+    const note =
+      "This is one of the 5 new actions the brand gets today, so Action Center's own new actions wait until tomorrow.";
+    vi.mocked(createChatAction).mockResolvedValue({
+      ...made,
+      daily_limit_reached: true,
+      daily_limit_note: note,
+    } as never);
+    const { sonnet } = useModels([READY], [calls(sendCall), text('Sent.')]);
+    const runId = await turn(ADMIN, 'Send this to Action Center', 'full_auto');
+    // Made, as any person's send is: never refused for the day's five.
+    expect(ofType(await eventsOf(runId), 'action.sent')).toHaveLength(1);
+    const told = JSON.stringify(sonnet.seen[1].prompt);
+    expect(told).toContain('"daily_limit_reached":true');
+    expect(told).toContain('own new actions wait until tomorrow.');
+  });
+
+  it('tells the model the file a change filed, for a task to take it next', async () => {
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'create_draft', {
+            brand_id: BRAND,
+            title: 'Pricing FAQ',
+            page_type: 'docs_faq',
+            source: { kind: 'content' },
+            body_html: '<h1>Pricing FAQ</h1>',
+          }),
+        ),
+        text('Saved.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Draft a pricing FAQ', 'full_auto');
+    const file = (db.tables.chat_files ?? []).find((f) => f.run_id === runId)!;
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain(`"file_id":"${file.id}"`);
+    expect(attachFileToTask).not.toHaveBeenCalled();
   });
 });

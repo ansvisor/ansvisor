@@ -51,7 +51,7 @@
         },
         {
           "heading": "Send work here from other pages",
-          "text": "Most actions come from signals each night, but you can also send work to the Action Center:\n\n- **Mentions**: select answers, or open one, and click **Send to Action Center**.\n- **Content**: **Send to Actions** on a content opportunity, or **Assign to…** on a Content Plan row.\n- **New content**: send it to a teammate with **Send to Action Center**.\n- **Site Audit**: **Send to Action Center** on a page's audit report.\n- **AI Referral Traffic**: select pages and click **Send to Action Center**.\n- **Brand Visibility**: **Send action** on a topic in Opportunities.\n- **Product Visibility**: pick the work in a product's plan and click **Send … actions to Action Center**.\n- **Prompts**: **Send Actions** on a prompt's Improve tab.\n\nSending the same thing twice doesn't create a second action: the page says it is already in the Action Center."
+          "text": "Most actions come from signals each night, but you can also send work to the Action Center:\n\n- **Mentions**: select answers, or open one, and click **Send to Action Center**.\n- **Content**: **Send to Actions** on a content opportunity, or **Assign to…** on a Content Plan row.\n- **New content**: send it to a teammate with **Send to Action Center**.\n- **Site Audit**: **Send to Action Center** on a page's audit report.\n- **AI Referral Traffic**: select pages and click **Send to Action Center**.\n- **Brand Visibility**: **Send action** on a topic in Opportunities.\n- **Product Visibility**: pick the work in a product's plan and click **Send … actions to Action Center**.\n- **Prompts**: **Send Actions** on a prompt's Improve tab.\n- **Chat**: **Send to Action Center** under an answer. Its Overview links back to the chat.\n\nSending the same thing twice doesn't create a second action: the page says it is already in the Action Center."
         }
       ]
     },
@@ -290,7 +290,9 @@
         "check now",
         "regenerate tasks",
         "done when",
-        "how we check"
+        "how we check",
+        "attached from chat",
+        "ready for review"
       ],
       "synonyms": [
         "steps",
@@ -324,6 +326,10 @@
         {
           "heading": "Hand a task on",
           "text": "From a task you can:\n\n- **Create content** or **Optimize page**: open a draft in the Content Editor for this task. **Open draft** returns to it, and marking the draft ready completes the task.\n- **Send to Content**: send a content task to Content as an opportunity, where a brief can be written for it.\n- **Send to webhook**: post the task to the brand's webhook, for a workflow outside Ansvisor. Set it up under **Content › Webhook Settings** with the **Action Center task sent** event selected."
+        },
+        {
+          "heading": "Files attached from Chat",
+          "text": "When Chat attaches a file or a draft to a task, the task's details list it under **Attached from Chat**: its name, who attached it, when, and **Open**. A draft opens in the Content Editor; any other file downloads. A paperclip with a count shows on the task row.\n\nEach attachment is also a line in the action's **History**, as is a task Chat set to **Ready for review**. Neither changes the task's status: you mark it done yourself."
         },
         {
           "heading": "Regenerate tasks",
