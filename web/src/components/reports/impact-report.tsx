@@ -80,9 +80,9 @@ const dayOf = (iso: string) =>
 const timeOf = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 
-/** A signed number as the table shows it: "+12", "−3", "±0". */
+/** A signed number as the table shows it: "+12", "−3", and "0" with no sign. */
 const signed = (value: number) =>
-  value > 0 ? `+${value}` : value < 0 ? `−${Math.abs(value)}` : '±0';
+  value > 0 ? `+${value}` : value < 0 ? `−${Math.abs(value)}` : '0';
 
 /**
  * Reports › "What Ansvisor did for you" (CHAT-22 feature 2 item 5, mockup

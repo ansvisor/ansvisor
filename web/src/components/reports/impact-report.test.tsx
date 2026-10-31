@@ -277,6 +277,20 @@ describe('ImpactReportView', () => {
     );
   });
 
+  it('shows no sign on a lift or a traffic change of zero', async () => {
+    read.mockResolvedValue({
+      ok: true,
+      report: report({
+        rows: [row('r1', { outcome: 'no_meaningful_change', effect: 0 })],
+        traffic: { current: 100, previous: 100, pages: 1 },
+      }),
+    });
+    await render();
+    expect($('[data-row="r1"]')!.textContent).toContain('0 pts');
+    expect($('[data-row="r1"]')!.textContent).not.toContain('±');
+    expect($('[data-slot="impact-kpis"]')!.textContent).toContain('AI traffic to changed pages0%');
+  });
+
   it('downloads the month as CSV', async () => {
     await render();
     await click($('[data-action="impact.export"]')!);
