@@ -22,11 +22,13 @@ export function rowTime(iso: string, now = new Date()): string {
  * A chat's one line under its title (CHAT-01 agentic update, "Chat rows"):
  * the step it is on while it works or waits, the result's time once done,
  * else its brand; amber while it needs the person, red once it stopped.
- * `t` is the `chatShell.menu` translations.
+ * `t` is the `chatShell.menu` translations; `now` decides whether the time is
+ * today's (a time) or an earlier day's (a date).
  */
 export function chatLineOf(
   chat: ChatListItem,
   t: ReturnType<typeof useTranslations>,
+  now: Date = new Date(),
 ): { line: string | null; tone: 'amber' | 'red' | null } {
   const step = chat.progress ? Math.min(chat.progress.done + 1, chat.progress.total) : 0;
   const total = chat.progress?.total ?? 0;
@@ -53,14 +55,14 @@ export function chatLineOf(
     case 'done':
       return {
         line: chat.finishedAt
-          ? t('line.doneAt', { time: rowTime(chat.finishedAt) })
+          ? t('line.doneAt', { time: rowTime(chat.finishedAt, now) })
           : t('line.done'),
         tone: null,
       };
     case 'failed':
       return {
         line: chat.finishedAt
-          ? t('line.failedAt', { time: rowTime(chat.finishedAt) })
+          ? t('line.failedAt', { time: rowTime(chat.finishedAt, now) })
           : t('line.failed'),
         tone: 'red',
       };
@@ -84,15 +86,18 @@ export function ChatRow({
   onOpen,
   actions,
   className,
+  now,
 }: {
   chat: ChatListItem;
   active: boolean;
   onOpen?: () => void;
   actions?: ReactNode;
   className?: string;
+  /** The menu's clock, so a row's time and the day groups agree. */
+  now?: Date;
 }) {
   const t = useTranslations('chatShell.menu');
-  const { line, tone: lineTone } = chatLineOf(chat, t);
+  const { line, tone: lineTone } = chatLineOf(chat, t, now);
   const title = chat.title ?? t('untitled');
   const chatActions = useChatActions();
   // A pinned chat shows the pin where the dot is, unless it works or waits (CHAT-01 row menu).
