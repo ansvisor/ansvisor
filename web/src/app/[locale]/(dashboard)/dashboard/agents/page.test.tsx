@@ -3,14 +3,14 @@ import { isValidElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Chat › Agents' pages (CHAT-21 §B, §C, §D): there only with the new Chat
- * on for the workspace (CHAT_AGENTIC), the detail and Edit only for an
- * agent's id the person can see, New agent with its setup; otherwise not
- * found.
+ * Agent Center's pages (CHAT-21 §B, §C, §D), out of Chat at /dashboard/agents:
+ * there only with the new Chat on for the workspace (CHAT_AGENTIC), as
+ * Chat's own pages, the detail and Edit only for an agent's id the person
+ * can see, New agent with its setup; otherwise not found.
  */
 
 const access = vi.hoisted(() => ({ open: true }));
-vi.mock('../_chat-page-access', () => ({ chatPageOpen: async () => access.open }));
+vi.mock('../chat/_chat-page-access', () => ({ chatPageOpen: async () => access.open }));
 const notFound = vi.hoisted(() =>
   vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
@@ -55,7 +55,7 @@ beforeEach(() => {
   notFound.mockClear();
 });
 
-describe('Chat › Agents pages', () => {
+describe('Agent Center pages', () => {
   it('are not found while the new Chat is off for the workspace', async () => {
     access.open = false;
     await expect(AgentsPage()).rejects.toThrow('NEXT_NOT_FOUND');

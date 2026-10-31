@@ -67,7 +67,7 @@ vi.mock('@/lib/chat/key', () => ({
 }));
 
 const { importLegacyChats } = await import('@/lib/chat/legacy-import');
-const { chatShellPrefs, chatComposerSetup } = await import('./_chat-page-access');
+const { chatPageOpen, chatShellPrefs, chatComposerSetup } = await import('./_chat-page-access');
 
 beforeEach(() => {
   vi.stubEnv('CHAT_AGENTIC', 'true');
@@ -80,6 +80,23 @@ beforeEach(() => {
   vi.mocked(importLegacyChats).mockClear();
 });
 afterEach(() => vi.unstubAllEnvs());
+
+// Chat's pages and Agent Center's (/dashboard/agents) open only by this.
+describe('chatPageOpen', () => {
+  it('opens with the new Chat on for every workspace, or for the person’s', async () => {
+    expect(await chatPageOpen()).toBe(true);
+    vi.stubEnv('CHAT_AGENTIC_ORGS', 'org-2, ORG-1');
+    expect(await chatPageOpen()).toBe(true);
+  });
+
+  it('stays shut with it off, or on only for other workspaces', async () => {
+    vi.stubEnv('CHAT_AGENTIC_ORGS', 'org-2');
+    expect(await chatPageOpen()).toBe(false);
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await chatPageOpen()).toBe(false);
+  });
+});
 
 describe('chatShellPrefs', () => {
   it("copies the person's Agent Chat conversations on their first visit, and opens even when that fails", async () => {

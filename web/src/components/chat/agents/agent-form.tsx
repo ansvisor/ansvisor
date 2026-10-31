@@ -51,7 +51,6 @@ import { CHAT_MODES, type ChatMode } from '@/lib/chat/precedence';
 import { viewerTimeZone } from '@/lib/time-zone';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { cn } from '@/lib/utils';
-import { useChatCrumb } from '../chat-crumb';
 import { AgentDenial, CHIP } from './agent-parts';
 import {
   BOX,
@@ -221,14 +220,13 @@ export function AgentForm({
   const t = useTranslations('chatAgents.form');
   const tRoles = useTranslations('chatAccess.roleNames');
   const tDetail = useTranslations('chatAgents.detail');
-  useChatCrumb(agent ? t('crumbEdit', { name: agent.name }) : t('titleNew'));
   // The viewer's clock, read in the browser: the server renders the skeleton.
   const zone = useSyncExternalStore(
     noSubscribe,
     () => timeZone ?? viewerTimeZone(),
     () => timeZone ?? null,
   );
-  const back = agent ? `/dashboard/chat/agents/${agent.id}` : '/dashboard/chat/agents';
+  const back = agent ? `/dashboard/agents/${agent.id}` : '/dashboard/agents';
   const title = agent ? t('titleEdit') : t('titleNew');
 
   const header = (
@@ -570,7 +568,7 @@ function AgentFormBody({
           return;
         }
       }
-      const href = `/dashboard/chat/agents/${saved.id}`;
+      const href = `/dashboard/agents/${saved.id}`;
       if (intent === 'on') {
         const answer = await changeAgent(saved.id, 'activate');
         // Saved as a draft, but not on: the reason on its step; a save again patches the draft.

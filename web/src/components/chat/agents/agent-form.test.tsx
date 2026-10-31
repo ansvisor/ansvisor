@@ -333,7 +333,7 @@ describe('AgentForm: new agent', () => {
     // A Manager sends no monthly cap.
     expect(bodyOf(0)).not.toHaveProperty('maxMonthShare');
     expect(toast).toHaveBeenCalledWith('Saved as a draft · Win back');
-    expect(nav.push).toHaveBeenCalledWith(`/dashboard/chat/agents/${NEW_ID}`);
+    expect(nav.push).toHaveBeenCalledWith(`/dashboard/agents/${NEW_ID}`);
   });
 
   it('turns it on: the draft first, then Activate', async () => {
@@ -342,7 +342,7 @@ describe('AgentForm: new agent', () => {
     await click(action('agentNew.turnOn')[0]);
     expect(calls()).toEqual(['POST /api/chat/agents', `POST /api/chat/agents/${NEW_ID}/activate`]);
     expect(toast.mock.calls[0][0]).toMatch(/^Agent is on\. Next run /);
-    expect(nav.push).toHaveBeenCalledWith(`/dashboard/chat/agents/${NEW_ID}`);
+    expect(nav.push).toHaveBeenCalledWith(`/dashboard/agents/${NEW_ID}`);
   });
 
   it('shows the server’s refusal on its step: a name taken, a one-off in the past, the plan’s active agents, Full auto', async () => {
@@ -429,7 +429,7 @@ describe('AgentForm: new agent', () => {
       }
       return Response.json({ ok: false, failure: 'failed' }, { status: 500 });
     };
-    window.history.replaceState(null, '', '/dashboard/chat/agents/new');
+    window.history.replaceState(null, '', '/dashboard/agents/new');
     await render();
     await toLastStep();
     await click(action('agentNew.turnOn')[0]);
@@ -437,7 +437,7 @@ describe('AgentForm: new agent', () => {
     // Its name wasn't typed: the server names it (§O, against every agent).
     expect(bodyOf(0)).toMatchObject({ name: 'Win back lost citations', autoName: true });
     // The address is the draft's Edit now: a reload opens it, not a second agent.
-    expect(window.location.pathname).toBe(`/dashboard/chat/agents/${NEW_ID}/edit`);
+    expect(window.location.pathname).toBe(`/dashboard/agents/${NEW_ID}/edit`);
     expect(one('[data-slot="agent-form-refusal"]')!.textContent).toBe(
       'Saved as a draft. It isn’t on yet.Your plan keeps up to 1 agent on at once. Pause or archive one to turn this one on.',
     );
@@ -451,7 +451,7 @@ describe('AgentForm: new agent', () => {
       `POST /api/chat/agents/${NEW_ID}/activate`,
       `POST /api/chat/agents/${NEW_ID}/activate`,
     ]);
-    expect(nav.push).toHaveBeenCalledWith(`/dashboard/chat/agents/${NEW_ID}`);
+    expect(nav.push).toHaveBeenCalledWith(`/dashboard/agents/${NEW_ID}`);
   });
 
   it('keeps workspace sharing to Admins where Settings › Chat says so, and the monthly cap an Admin’s', async () => {
@@ -574,7 +574,7 @@ describe('AgentForm: edit', () => {
     await click(action('agentNew.save')[0]);
     expect(calls()).toEqual([]);
     expect(toast).toHaveBeenCalledWith('Nothing changed');
-    expect(nav.push).toHaveBeenLastCalledWith(`/dashboard/chat/agents/${AGENT_ID}`);
+    expect(nav.push).toHaveBeenLastCalledWith(`/dashboard/agents/${AGENT_ID}`);
 
     await type(one('#agent-name')!, 'Win back weekly');
     await click(action('agentNew.save')[0]);

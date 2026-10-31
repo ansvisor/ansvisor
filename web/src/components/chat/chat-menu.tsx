@@ -39,7 +39,7 @@ function saveFolded(folded: Record<Section, boolean>) {
   }
 }
 
-/** Agents was opened in this browser: its "New" pill is gone (CHAT-21 §A item 1). */
+/** Agent Center was opened from here in this browser: its "New" pill is gone (CHAT-21 §A item 1). */
 const AGENTS_SEEN_KEY = 'ansvisor.chatMenu.agentsSeen';
 
 function readAgentsSeen(): boolean {
@@ -248,19 +248,14 @@ export function ChatMenuView({
   const [query, setQuery] = useState('');
   const found = useChatSearch(query);
   const searching = query.trim() !== '';
-  // The "New" pill beside Agents, until Agents is first opened in this browser.
+  // The "New" pill beside Agent Center, until it is first opened from here in this browser.
   const [agentsNew, setAgentsNew] = useState(false);
-  const onAgents = pathname.startsWith('/dashboard/chat/agents');
   useEffect(() => {
     // Browser storage exists only after hydration.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFolded(readFolded());
+    setAgentsNew(!readAgentsSeen());
   }, []);
-  useEffect(() => {
-    if (onAgents) saveAgentsSeen();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAgentsNew(!onAgents && !readAgentsSeen());
-  }, [onAgents]);
   const fold = (section: Section) =>
     setFolded((was) => {
       const next = { ...was, [section]: !was[section] };
@@ -381,11 +376,16 @@ export function ChatMenuView({
               </span>
             )}
           </MenuItem>
+          {/* Agent Center is its own page, out of Chat: never the one open here. */}
           <MenuItem
-            href="/dashboard/chat/agents"
+            href="/dashboard/agents"
             action="chatMenu.openAgents"
-            active={onAgents}
-            onNavigate={onNavigate}
+            active={false}
+            onNavigate={() => {
+              saveAgentsSeen();
+              setAgentsNew(false);
+              onNavigate?.();
+            }}
           >
             {t('agents')}
             {agentsNew && <NewPill className="ml-auto" />}

@@ -8,7 +8,7 @@ import type { AgentListResult } from '@/lib/chat/agents';
 import { AGENT_ID, NOW, listItem, listResult } from '@/lib/chat/testing/agent-fixtures';
 
 /**
- * Chat › Agents (CHAT-21 §B; governance mockup #g-agents; CHAT-27 item 24):
+ * Agent Center (CHAT-21 §B; governance mockup #g-agents; CHAT-27 item 24):
  * the tabs with their counts ask the server again; each card shows its
  * state, skills, triggers, next run, scope, last run, outcomes and AI use
  * as a share with its tip, never dollars; Admins and Managers get New
@@ -169,7 +169,7 @@ describe('AgentsList', () => {
     await render();
     const [first, second] = cards();
     expect(first.querySelector('a[data-action="agents.open"]')?.getAttribute('href')).toBe(
-      `/dashboard/chat/agents/${AGENT_ID}`,
+      `/dashboard/agents/${AGENT_ID}`,
     );
     const status = first.querySelector('[data-slot="agent-status"]')!;
     expect(status.textContent).toBe('Active · Next run Mon 09:00');
@@ -214,7 +214,7 @@ describe('AgentsList', () => {
 
   it("gives each card the Run now and Pause or Resume the server's `can` gives it, and a Manager New agent", async () => {
     await render('manager');
-    expect(action('agents.new')[0].getAttribute('href')).toBe('/dashboard/chat/agents/new');
+    expect(action('agents.new')[0].getAttribute('href')).toBe('/dashboard/agents/new');
     const [first, second] = cards();
     expect(first.querySelector('[data-action="agents.run"]')).not.toBeNull();
     expect(first.querySelector('[data-action="agents.pauseResume"]')?.textContent).toBe('Pause');
