@@ -26,7 +26,7 @@ export const WHY_TOOLS = [
     class: 'read',
     area: 'visibility',
     description:
-      "Why a brand's tracked number moved between two periods: visibility, mention rate, share of voice, citation rate or average position. Visibility here = visible prompts / tracked prompts, not the Insights Visibility score. Gives the values and change, whether it is beyond normal swing, the day it changed, what a changed prompt set explains, and the ranked causes (a lost or won citation, a competitor entering, a site change) with their share and confidence. By default the last 7 days against the 7 before; give both periods, or `around` for a day the person named. Computed from scheduled tracking, never by asking an engine.",
+      "Why a brand's tracked number moved between two periods: the Visibility score on the Insights card (visibility_score), visibility, mention rate, share of voice, citation rate or average position. visibility = visible prompts / tracked prompts; the Insights Visibility score is visibility_score, split into its mention rate, citation rate and position parts. Gives the values and change, whether it is beyond normal swing, the day it changed, what a changed prompt set explains, and the ranked causes (a lost or won citation, a competitor entering, a site change) with their share and confidence. By default the last 7 days against the 7 before; give both periods, or `around` for a day the person named. Computed from scheduled tracking, never by asking an engine.",
     minRole: 'analyst',
     planGate: { platforms: true },
     brandOf: { input: 'brand_id' },
@@ -40,7 +40,7 @@ export const WHY_TOOLS = [
       metric: z
         .enum(WHY_METRICS)
         .describe(
-          'visibility (the share of tracked prompts where the brand appears: visible prompts / tracked prompts, not the Insights Visibility score), mention_rate, share_of_voice, citations (answers citing its pages) or avg_position.',
+          'visibility_score (the AI Visibility score on the Insights card: 0.6 × mention rate + 0.25 × citation rate + 0.15 × position factor), visibility (the share of tracked prompts where the brand appears: visible prompts / tracked prompts), mention_rate, share_of_voice, citations (answers citing its pages) or avg_position.',
         ),
       model: z.string().optional().describe('A model slug, or comma-separated slugs.'),
       region: z.string().optional().describe('A region code, e.g. "US" or "TR".'),

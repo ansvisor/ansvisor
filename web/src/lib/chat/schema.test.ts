@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { CHAT_MODES } from './precedence';
+import { WHY_METRICS } from './why/explain';
 
 /**
  * Chat's Wave 1 (00407–00413) and Wave 2 (00417–00423) tables as the
@@ -371,6 +372,19 @@ describe('Why’s counts (00423)', () => {
     for (const t of ['d', 'c']) {
       expect(why).toContain(`and ${t}.day between least(p_a_from, p_series_from) and p_b_to`);
     }
+  });
+});
+
+describe('Why analyses (00420, 00427)', () => {
+  it('keep every metric explain_change explains, the Visibility score too', () => {
+    // The last migration that sets the metric check is the one in force.
+    const sets = files.filter((file) =>
+      /chat_why_analyses[\s\S]*metric in \(/.test(
+        readFileSync(`${dir}/${file}`, 'utf8').replace(/--[^\n]*/g, ''),
+      ),
+    );
+    const latest = migration(sets[sets.length - 1].slice(0, 5));
+    expect(allowed(latest, 'metric').sort()).toEqual([...WHY_METRICS].sort());
   });
 });
 
