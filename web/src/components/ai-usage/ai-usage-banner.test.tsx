@@ -116,6 +116,9 @@ describe('AiUsageBanner', () => {
     // Own AI keys are Enterprise's (CHAT-16 item 19, owner decision 2026-10-30).
     state.usage = usage({ percentUsed: 100, chatMetered: true });
     await render();
+    expect(container.textContent).toContain(
+      "You've used this month's AI limit. AI features stop until Nov 20; Chat keeps working only where it runs on your workspace's own AI key.",
+    );
     expect(links()).toEqual([['Get more AI usage', '/dashboard/settings/billing']]);
 
     state.usage = usage({
@@ -156,6 +159,15 @@ describe('AiUsageBanner', () => {
     expect(buttons()).toEqual(['Start my plan now']);
     expect(links()).toEqual([['Use your own key', '/dashboard/settings/ai-providers']]);
     expect(container.textContent).not.toContain('Get more AI usage');
+  });
+
+  it('says Chat goes on only on its own key once a trial with the new Chat is used up', async () => {
+    state.usage = usage({ trial: true, percentUsed: 100, chatMetered: true });
+    await render();
+    expect(container.textContent).toContain(
+      "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Chat keeps working only where it runs on your workspace's own AI key.",
+    );
+    expect(container.textContent).not.toContain('Agent Chat');
   });
 
   it('asks other members of a trial to have an admin start the plan', async () => {

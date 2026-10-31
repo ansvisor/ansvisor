@@ -203,7 +203,9 @@ describe('ChoosePlanDialog', () => {
     expect(card('starter').textContent).toContain('ChatGPT & Microsoft Copilot tracking');
     expect(card('starter').textContent).toContain('1x AI usage');
     expect(card('growth').textContent).toContain('5x AI usage');
-    expect(card('growth').textContent).toContain('White-label reports & Looker Studio');
+    expect(card('growth').textContent).toContain('Looker Studio');
+    // No white-label reports: the app doesn't have them.
+    expect(card('growth').textContent).not.toMatch(/white.label/i);
     expect(button('Choose Starter')).toBeDefined();
     expect(button('Choose Growth')).toBeDefined();
     // One choice for a plan that ended: no trial, and no offer while it's off.
