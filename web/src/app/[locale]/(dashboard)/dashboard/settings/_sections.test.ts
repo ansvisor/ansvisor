@@ -58,9 +58,9 @@ describe('White label (00429)', () => {
     expect(resolveSettingsSection('white-label', cloud)).toBe('white-label');
   });
 
-  it("isn't there on a self-host, whose plan has no white label to upgrade to", () => {
-    expect(hasSettingsSection('white-label', selfHost)).toBe(false);
-    expect(resolveSettingsSection('white-label', selfHost)).toBe('account');
+  it('is there on a self-host too, whose plan has white label', () => {
+    expect(hasSettingsSection('white-label', selfHost)).toBe(true);
+    expect(resolveSettingsSection('white-label', selfHost)).toBe('white-label');
   });
 });
 

@@ -60,22 +60,30 @@ export function WhiteLabelSection() {
   const [footerText, setFooterText] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const show = useCallback((read: Awaited<ReturnType<typeof getWhiteLabelSettings>>) => {
-    if (!read.ok) {
-      setFailed(true);
-      return;
-    }
-    setFailed(false);
-    setView(read.view);
-    setCompanyName(read.view.companyName ?? '');
-    setAccentColor(read.view.accentColor ?? '');
-    setFooterText(read.view.footerText ?? '');
-  }, []);
+  /**
+   * Shows what was read. `keepForm`: a logo change, which leaves the name,
+   * color and footer as typed, saved or not, and updates only the rest.
+   */
+  const show = useCallback(
+    (read: Awaited<ReturnType<typeof getWhiteLabelSettings>>, keepForm = false) => {
+      if (!read.ok) {
+        setFailed(true);
+        return;
+      }
+      setFailed(false);
+      setView(read.view);
+      if (keepForm) return;
+      setCompanyName(read.view.companyName ?? '');
+      setAccentColor(read.view.accentColor ?? '');
+      setFooterText(read.view.footerText ?? '');
+    },
+    [],
+  );
   const load = useCallback(
-    () =>
+    (keepForm = false) =>
       getWhiteLabelSettings()
         .catch(() => FAILED)
-        .then(show),
+        .then((read) => show(read, keepForm)),
     [show],
   );
 
@@ -192,14 +200,14 @@ export function WhiteLabelSection() {
     const set = await setWhiteLabelLogo(uploaded.path).catch(() => FAILED);
     if (!set.ok) return fail(set.failure, tActions('saveWhiteLabel'));
     toast.success(t('logoSaved'));
-    await load();
+    await load(true);
   }
 
   async function removeLogo() {
     const set = await setWhiteLabelLogo(null).catch(() => FAILED);
     if (!set.ok) return fail(set.failure, tActions('saveWhiteLabel'));
     toast.success(t('logoRemoved'));
-    await load();
+    await load(true);
   }
 
   return (
