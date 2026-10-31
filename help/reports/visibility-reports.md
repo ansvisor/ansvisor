@@ -4,8 +4,8 @@ route: /dashboard/reports
 keywords: [reports, generate report, report templates, PDF, executive summary, snapshot]
 synonyms: [monthly report, client report, export a report, download PDF, report for my boss]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -34,4 +34,4 @@ A report opens with its **Executive Summary**: a short account of what changed v
 
 ## Download a PDF
 
-**Download PDF** saves the report as a PDF with the same sections as the web view, the executive summary included. Its text stays selectable and sharp at any zoom, and the file is small enough to attach to an email.
+**Download PDF** saves the report as a PDF with the same sections as the web view, the executive summary included. Its text stays selectable and sharp at any zoom, and the file is small enough to attach to an email. With white label in use, the report and its PDF carry your agency's logo, color, name and footer instead of Ansvisor's, with a "Prepared for" cover.

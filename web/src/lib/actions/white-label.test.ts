@@ -379,3 +379,48 @@ describe('a brand’s client logo', () => {
     expect(updates).toEqual([]);
   });
 });
+
+describe('getReportBranding', () => {
+  const dataUrl = `data:image/png;base64,${Buffer.from(PNG).toString('base64')}`;
+
+  it('gives none on Starter, without a kit, or with a kit that has neither a name nor a logo', async () => {
+    planId = 'starter';
+    kit = { company_name: 'Acme Agency', logo_path: null };
+    expect(await actions.getReportBranding(BRAND)).toEqual({ ok: true, branding: null });
+    planId = 'growth';
+    kit = null;
+    expect(await actions.getReportBranding(BRAND)).toEqual({ ok: true, branding: null });
+    kit = { company_name: null, logo_path: null, accent_color: '#1d4ed8', footer_text: 'x' };
+    expect(await actions.getReportBranding(BRAND)).toEqual({ ok: true, branding: null });
+  });
+
+  it('gives the kit in use, with its logo and the brand’s client logo as the images themselves', async () => {
+    kit = {
+      company_name: 'Acme Agency',
+      accent_color: '#1d4ed8',
+      footer_text: 'acme.com',
+      logo_path: kitLogo,
+    };
+    brand = { organization_id: ORG, client_logo_path: clientLogo, is_demo: false };
+    expect(await actions.getReportBranding(BRAND)).toEqual({
+      ok: true,
+      branding: {
+        companyName: 'Acme Agency',
+        accentColor: '#1d4ed8',
+        footerText: 'acme.com',
+        logo: dataUrl,
+        clientLogo: dataUrl,
+      },
+    });
+  });
+
+  it('fails, rather than giving Ansvisor’s look, when a logo can’t be read', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    kit = { company_name: 'Acme Agency', logo_path: `${ORG}/kit/${OTHER_ORG}.png` };
+    expect(await actions.getReportBranding(BRAND)).toEqual({ ok: false, failure: 'failed' });
+    expect(await actions.getReportBranding('not-a-brand')).toEqual({
+      ok: false,
+      failure: 'failed',
+    });
+  });
+});
