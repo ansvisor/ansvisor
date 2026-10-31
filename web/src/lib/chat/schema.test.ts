@@ -513,6 +513,25 @@ describe('the impact ledger', () => {
     );
     expect(delivery).not.toMatch(/grant [^;]*to authenticated/);
   });
+
+  it('decides a CMS publish under a lock on its draft, into a cms_publish only (00426)', () => {
+    const ship = migration('00426');
+    expect(ship).toMatch(
+      /pg_advisory_xact_lock\(hashtext\('ship_cms_publish:' \|\| p_content_draft_id::text\)\)/,
+    );
+    expect(ship).toMatch(
+      /and s\.kind = 'cms_publish'\s+and s\.shipped_at >= p_shipped_at - interval '90 days'/,
+    );
+    expect(ship).toMatch(/on conflict \(content_draft_delivery_id\) do nothing/);
+    expect(ship).toMatch(/set search_path = ''/);
+    expect(ship).toMatch(
+      /revoke all on function public\.ship_cms_publish\([^)]*\)\s+from public, anon, authenticated;/,
+    );
+    expect(ship).toMatch(
+      /grant execute on function public\.ship_cms_publish\([^)]*\)\s+to service_role;/,
+    );
+    expect(ship).toMatch(/check \(cardinality\(republished_delivery_ids\) <= 50\)/);
+  });
 });
 
 describe('daily suggestions', () => {

@@ -70,6 +70,67 @@ export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISO
     calls,
     maxRead: 0,
     fail: null,
+    /**
+     * ship_cms_publish (00426), as its SQL decides, in one step (the draft's
+     * lock): the send's own, else the draft's latest cms_publish within 90
+     * days before it, noted, else a new ship event. `beforeShip` runs first,
+     * so a test can make another call land while this one waits.
+     */
+    beforeShip: null,
+    async rpc(name, args) {
+      if (name !== 'ship_cms_publish') throw new Error(`unexpected rpc ${name}`);
+      await db.beforeShip?.(args);
+      calls.push({ table: 'ship_events', op: 'rpc' });
+      if (db.fail?.('ship_events', 'rpc')) {
+        return { data: null, error: { code: '57014', message: 'canceling statement' } };
+      }
+      const rows = (tables.ship_events ??= []);
+      const own = rows.find((row) => row.content_draft_delivery_id === args.p_delivery_id);
+      if (own) return { data: [{ ship_event_id: own.id, created: false }], error: null };
+      const at = Date.parse(args.p_shipped_at);
+      if (args.p_content_draft_id) {
+        const first = rows
+          .filter(
+            (row) =>
+              row.brand_id === args.p_brand_id &&
+              row.content_draft_id === args.p_content_draft_id &&
+              row.kind === 'cms_publish' &&
+              Date.parse(row.shipped_at) >= at - 90 * 86_400_000,
+          )
+          .sort((a, b) => Date.parse(b.shipped_at) - Date.parse(a.shipped_at))[0];
+        if (first) {
+          if (at > Date.parse(first.republished_at ?? first.shipped_at)) {
+            first.republished_at = args.p_shipped_at;
+          }
+          const noted = first.republished_delivery_ids ?? [];
+          if (!noted.includes(args.p_delivery_id) && noted.length < 50) {
+            first.republished_delivery_ids = [...noted, args.p_delivery_id];
+          }
+          return { data: [{ ship_event_id: first.id, created: false }], error: null };
+        }
+      }
+      const row = {
+        id: randomUUID(),
+        created_at: now(),
+        organization_id: args.p_organization_id,
+        brand_id: args.p_brand_id,
+        kind: 'cms_publish',
+        title: args.p_title,
+        content_draft_id: args.p_content_draft_id,
+        content_draft_delivery_id: args.p_delivery_id,
+        url: args.p_url,
+        action_id: args.p_action_id,
+        source: 'content_editor',
+        change_type: 'content',
+        shipped_at: args.p_shipped_at,
+        shipped_by: args.p_shipped_by,
+        execution_mode: args.p_execution_mode,
+        republished_at: null,
+        republished_delivery_ids: [],
+      };
+      rows.push(row);
+      return { data: [{ ship_event_id: row.id, created: true }], error: null };
+    },
     from(table) {
       tables[table] ??= [];
       const state = {

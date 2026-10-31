@@ -33,7 +33,6 @@ export const PAGE = 1000;
 export const MAX_TARGET_PAGES = 20;
 /** Measurements written per insert. */
 const SEED_CHUNK = 500;
-const DAY_MS = 86_400_000;
 
 /** A failed read or write, by what it was and the database's code: never its values. */
 export class ImpactDbError extends Error {
@@ -198,7 +197,7 @@ export async function seedMeasurements(db, ships) {
   return written;
 }
 
-/** A draft live again within this many days is the same shipped change, still measured (00425). */
+/** A draft live again within this many days is the same shipped change, still measured (00425, 00426). */
 export const REPUBLISH_DAYS = 90;
 
 /**
@@ -206,14 +205,16 @@ export const REPUBLISH_DAYS = 90;
  * (cms_publish, from the Content Editor, a content change, assisted when a
  * person sent it, automated when nobody did) and its Pending measurement.
  *
- *   * One per send (00425): written with an upsert on its send that ignores
- *     a second, so a confirmation read twice, or by two servers at once,
- *     writes one.
- *   * The same draft live again within REPUBLISH_DAYS of its ship event (a
- *     post updated in place, sent again): no second ship event; the first
- *     notes it (republished_at, only ever forward: a later publish than the
- *     one noted, or than the ship itself) and its measurement goes on, as
- *     two on the same targets would make each other Not measurable.
+ *   * One per send (00425), written by ship_cms_publish (00426) in one
+ *     transaction under a lock on the draft, so a confirmation read twice,
+ *     or two sends of one draft confirmed by two servers at once, write one.
+ *   * The same draft live again within REPUBLISH_DAYS of its latest
+ *     cms_publish (a post updated in place, sent again): no second ship
+ *     event; that one notes it (republished_at, only ever forward: a later
+ *     publish than the one noted, or than the ship itself; the send in
+ *     republished_delivery_ids) and its measurement goes on, as two on the
+ *     same targets would make each other Not measurable. A ship event of
+ *     another kind on the same draft (Mark as shipped, Chat) takes no send.
  *
  * Off with CHAT_AGENTIC, or for a workspace it isn't on for, it writes
  * nothing, and with it off reads nothing either. Never throws: a ship event
@@ -238,36 +239,6 @@ export async function shipCmsPublish({ deliveryId, url, publishedAt, db = supaba
 
     let draft = null;
     if (delivery.draft_id) {
-      const since = new Date(Date.parse(publishedAt) - REPUBLISH_DAYS * DAY_MS).toISOString();
-      const { data: earlier, error: earlierError } = await db
-        .from('ship_events')
-        .select('id, content_draft_delivery_id, shipped_at, republished_at')
-        .eq('brand_id', delivery.brand_id)
-        .eq('content_draft_id', delivery.draft_id)
-        .gte('shipped_at', since)
-        .order('shipped_at', { ascending: false })
-        .limit(1);
-      if (earlierError) throw new ImpactDbError('ship events read', earlierError);
-      const first = earlier?.[0];
-      if (first) {
-        // Only forward: a late or repeated confirmation never moves the note back.
-        const last = first.republished_at ?? first.shipped_at;
-        if (
-          first.content_draft_delivery_id !== delivery.id &&
-          Date.parse(publishedAt) > Date.parse(last)
-        ) {
-          let note = db
-            .from('ship_events')
-            .update({ republished_at: publishedAt })
-            .eq('id', first.id);
-          note = first.republished_at
-            ? note.eq('republished_at', first.republished_at)
-            : note.is('republished_at', null);
-          const { error: noteError } = await note;
-          if (noteError) throw new ImpactDbError('republish note', noteError);
-        }
-        return { id: first.id, created: false, failed: false };
-      }
       const { data, error: draftError } = await db
         .from('content_drafts')
         .select('id, title, action_id')
@@ -277,41 +248,31 @@ export async function shipCmsPublish({ deliveryId, url, publishedAt, db = supaba
       draft = data;
     }
 
-    const title = clip(draft?.title || delivery.title, 200) || 'Page';
-    const columns = 'id, brand_id, action_id, content_draft_id, url, shipped_at';
-    const { data: inserted, error: insertError } = await db
-      .from('ship_events')
-      .upsert(
-        {
-          organization_id: delivery.organization_id,
-          brand_id: delivery.brand_id,
-          kind: 'cms_publish',
-          title,
-          content_draft_id: delivery.draft_id ?? null,
-          content_draft_delivery_id: delivery.id,
-          url: pageAddress(url),
-          action_id: draft?.action_id ?? null,
-          source: 'content_editor',
-          change_type: 'content',
-          shipped_at: publishedAt,
-          shipped_by: delivery.sent_by ?? null,
-          execution_mode: delivery.sent_by ? 'assisted' : 'automated',
-        },
-        { onConflict: 'content_draft_delivery_id', ignoreDuplicates: true },
-      )
-      .select(columns);
-    if (insertError) throw new ImpactDbError('ship event insert', insertError);
-    const ship = inserted?.[0];
-    if (!ship) {
-      // Another confirmation of the send wrote it first: that one is seeded.
-      const { data: kept, error: keptError } = await db
-        .from('ship_events')
-        .select('id')
-        .eq('content_draft_delivery_id', delivery.id)
-        .maybeSingle();
-      if (keptError) throw new ImpactDbError('ship event read', keptError);
-      return { id: kept?.id ?? null, created: false, failed: false };
-    }
+    // The decision and its write in one transaction, under a lock on the
+    // draft (00426): two sends of one draft confirmed at once write one.
+    const ship = {
+      brand_id: delivery.brand_id,
+      action_id: draft?.action_id ?? null,
+      content_draft_id: delivery.draft_id ?? null,
+      url: pageAddress(url),
+      shipped_at: publishedAt,
+    };
+    const { data: shipped, error: shipError } = await db.rpc('ship_cms_publish', {
+      p_delivery_id: delivery.id,
+      p_organization_id: delivery.organization_id,
+      p_brand_id: ship.brand_id,
+      p_content_draft_id: ship.content_draft_id,
+      p_title: clip(draft?.title || delivery.title, 200) || 'Page',
+      p_url: ship.url,
+      p_action_id: ship.action_id,
+      p_shipped_at: publishedAt,
+      p_shipped_by: delivery.sent_by ?? null,
+      p_execution_mode: delivery.sent_by ? 'assisted' : 'automated',
+    });
+    if (shipError) throw new ImpactDbError('ship event write', shipError);
+    const row = (Array.isArray(shipped) ? shipped : [shipped]).find(Boolean);
+    if (!row?.created) return { id: row?.ship_event_id ?? null, created: false, failed: false };
+    ship.id = row.ship_event_id;
     // The nightly job seeds it if this fails.
     try {
       await seedMeasurements(db, [ship]);

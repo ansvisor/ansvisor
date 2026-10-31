@@ -208,6 +208,51 @@ describe('recordCmsPublish', () => {
     expect(db.tables.impact_measurements).toHaveLength(2);
   });
 
+  it('takes a publish into a cms_publish of its draft only, never a ship event of another kind', async () => {
+    const tables = world();
+    // A person marked the draft shipped from Chat the day before.
+    tables.ship_events = [
+      {
+        id: 'marked',
+        organization_id: ORG,
+        brand_id: 'b1',
+        kind: 'manual',
+        source: 'chat',
+        content_draft_id: 'dr1',
+        content_draft_delivery_id: null,
+        shipped_at: '2026-10-19T12:00:00.000Z',
+        republished_at: null,
+      },
+    ];
+    const db = useDb(tables);
+    const id = await record(db);
+    expect(id).not.toBe('marked');
+    expect(db.tables.ship_events.map((e) => [e.kind, e.content_draft_delivery_id ?? null])).toEqual(
+      [
+        ['manual', null],
+        ['cms_publish', 'x1'],
+      ],
+    );
+    expect(db.tables.ship_events[0].republished_at).toBeNull();
+    expect(db.tables.impact_measurements).toEqual([expect.objectContaining({ ship_event_id: id })]);
+  });
+
+  it('writes one ship event when two sends of one draft are confirmed at the same moment', async () => {
+    const tables = world();
+    tables.content_draft_deliveries.push(sentAgain('x2'));
+    const db = useDb(tables);
+    const again = '2026-10-21T09:00:00.000Z';
+    const [first, second] = await Promise.all([record(db), record(db, 'x2', again)]);
+    expect(second).toBe(first);
+    expect(db.tables.ship_events).toHaveLength(1);
+    expect(db.tables.ship_events[0]).toMatchObject({
+      content_draft_delivery_id: 'x1',
+      republished_at: again,
+      republished_delivery_ids: ['x2'],
+    });
+    expect(db.tables.impact_measurements).toHaveLength(1);
+  });
+
   it('reads and writes nothing with CHAT_AGENTIC off', async () => {
     delete process.env.CHAT_AGENTIC;
     const db = useDb(world());
@@ -224,7 +269,7 @@ describe('recordCmsPublish', () => {
 
   it('never throws: a failed write is logged by code and the page stays published', async () => {
     const db = useDb(world());
-    db.fail = (table, op) => table === 'ship_events' && op === 'upsert';
+    db.fail = (table, op) => table === 'ship_events' && op === 'rpc';
     expect(await record(db)).toBeNull();
     expect(logger.warn).toHaveBeenCalledWith(
       { err: { name: 'ImpactDbError', code: '57014' } },

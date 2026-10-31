@@ -677,7 +677,7 @@ describe('sends confirmed without a ship event, in order', () => {
 
   it('counts a send whose ship event can’t be written as failed', async () => {
     const db = fakeDb(world({ content_draft_deliveries: [draftSend('x1', T1)] }));
-    db.fail = (table, op) => table === 'ship_events' && op === 'upsert';
+    db.fail = (table, op) => table === 'ship_events' && op === 'rpc';
     const stats = await runImpactLedger({ db, now: D14 });
     expect(stats).toMatchObject({ filled: 0, failed: 1 });
   });

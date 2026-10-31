@@ -6619,6 +6619,7 @@ export type Database = {
           kind: string
           organization_id: string
           republished_at: string | null
+          republished_delivery_ids: string[]
           run_id: string | null
           shipped_at: string
           shipped_by: string | null
@@ -6641,6 +6642,7 @@ export type Database = {
           kind: string
           organization_id: string
           republished_at?: string | null
+          republished_delivery_ids?: string[]
           run_id?: string | null
           shipped_at: string
           shipped_by?: string | null
@@ -6663,6 +6665,7 @@ export type Database = {
           kind?: string
           organization_id?: string
           republished_at?: string | null
+          republished_delivery_ids?: string[]
           run_id?: string | null
           shipped_at?: string
           shipped_by?: string | null
@@ -8274,6 +8277,24 @@ export type Database = {
           p_topic_id?: string
         }
         Returns: Json
+      }
+      ship_cms_publish: {
+        Args: {
+          p_action_id: string
+          p_brand_id: string
+          p_content_draft_id: string
+          p_delivery_id: string
+          p_execution_mode: string
+          p_organization_id: string
+          p_shipped_at: string
+          p_shipped_by: string
+          p_title: string
+          p_url: string
+        }
+        Returns: {
+          created: boolean
+          ship_event_id: string
+        }[]
       }
       shopping_amazon_share_weekly: {
         Args: { p_as_of?: string; p_brand_id: string }
