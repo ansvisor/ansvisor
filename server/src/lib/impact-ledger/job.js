@@ -1,12 +1,18 @@
 /**
  * The impact ledger's nightly job (CHAT-22 §2, 00421), behind CHAT_AGENTIC:
  * each shipped change measured at 7, 14, 30 and 90 days against a control
- * set (method.js), from the Insights rollups of scheduled tracking only. No
- * engine query, no model call, no usage_ledger row (Addendum 2 G).
+ * set (method.js), from tracking data already collected: the Insights
+ * rollups, which hold the scheduled runs and any run by hand (each day read
+ * as the share of its answers). No engine query, no model call, no
+ * usage_ledger row (Addendum 2 G).
  *
  * Each run:
- *   1. seeds a Pending measurement for each ship event written in the last
- *      SEED_DAYS that has none (a writer that didn't, or failed to);
+ *   1. writes the ship event of each send a CMS confirmed live in the last
+ *      SEED_DAYS that has none (its write failed when it was confirmed, and
+ *      the send, already published, isn't confirmed again), through the
+ *      same recordCmsPublish; then seeds a Pending measurement for each
+ *      ship event written in the last SEED_DAYS that has none (a writer
+ *      that didn't, or failed to);
  *   2. reads the measurements due (next_check_at passed) with their ship
  *      events and workspaces, only those Chat is on for with an active plan
  *      (filtered in the query): a read-only workspace's stay due;
@@ -48,8 +54,9 @@ import {
   runOutcome,
   shippedInWindow,
   utcDay,
+  withoutVerdict,
 } from './method.js';
-import { ImpactDbError, readAll, readChunks, seedMeasurements } from './ship.js';
+import { ImpactDbError, readAll, readChunks, recordCmsPublish, seedMeasurements } from './ship.js';
 
 /** Daily at 07:53 UTC: yesterday's rollups are in by then (the daily sweep refreshes them). */
 export const SCHEDULE = '53 7 * * *';
@@ -69,6 +76,7 @@ const ACTIVE_STATUSES = ['active', 'trialing'];
 /** A measurement's ship event and workspace, embedded by their foreign keys' names. */
 const SHIP_OF = 'ship_events!impact_measurements_ship_event_id_fkey!inner';
 const ORG_OF = 'organizations!ship_events_organization_id_fkey!inner';
+const SEND_ORG_OF = 'organizations!content_draft_deliveries_organization_id_fkey!inner';
 
 const DAY_MS = 86_400_000;
 const errInfo = (err) => ({ name: err?.name, code: err?.code ?? null });
@@ -205,12 +213,18 @@ async function loadShipped(db, brandId, from, to) {
   return ships.map((s) => ({ ...s, promptIds: targets.get(s.id) ?? new Set() }));
 }
 
-/** One window's rollup rows for the brand, as cells on the plan's engines. */
+/**
+ * One window's rollup rows for the brand, as cells on the plan's engines:
+ * each day by its answers (answer_count, mentioning_answers,
+ * citation_answers), the day's flags for a row written before 00130.
+ */
 async function loadWindow(db, brandId, from, to, limits) {
   const rows = await readAll('rollups read', () =>
     db
       .from('insights_prompt_daily')
-      .select('day, prompt_id, platform, model_used, region, has_mention, has_citation')
+      .select(
+        'day, prompt_id, platform, model_used, region, answer_count, mentioning_answers, citation_answers, has_mention, has_citation',
+      )
       .eq('brand_id', brandId)
       .gte('day', from)
       .lte('day', to)
@@ -340,7 +354,10 @@ async function measureOne(db, { measurement, ship, due, prompts, shipped, window
     .from('impact_measurements')
     .update({
       window_json: window,
-      metrics: result.metrics ?? [],
+      // A Not measurable checkpoint keeps its numbers but no effect, p or interval.
+      metrics: (result.metrics ?? []).map((metric) =>
+        entry.outcome === 'not_measurable' ? withoutVerdict(metric) : metric,
+      ),
       outcome: entry.outcome,
       confidence: entry.confidence,
       checkpoint: cp.key,
@@ -358,6 +375,59 @@ async function measureOne(db, { measurement, ship, due, prompts, shipped, window
   tally.measured++;
   if (entry.outcome === 'not_measurable') tally.notMeasurable++;
   return true;
+}
+
+/**
+ * The sends a CMS confirmed live in the last SEED_DAYS, for the workspaces
+ * Chat is on for with an active plan, whose ship event is missing: its
+ * write failed when the publish was confirmed, and the send, published
+ * already, is never confirmed again. Written now through recordCmsPublish,
+ * the same upsert on the send (one ship event per send, a draft live again
+ * within 90 days noted on its first). Says how many it wrote or found.
+ */
+async function fillMissingSends(db, now) {
+  const orgs = chatAgenticOrgs();
+  const since = new Date(now.getTime() - SEED_DAYS * DAY_MS).toISOString();
+  const sends = (
+    await readAll('published sends read', () => {
+      let query = db
+        .from('content_draft_deliveries')
+        .select(
+          `id, organization_id, published_url, published_at, ${SEND_ORG_OF}(subscription_status)`,
+        )
+        .eq('status', 'published')
+        .gte('published_at', since);
+      if (orgs.length) query = query.in('organization_id', orgs);
+      if (isCloud()) query = query.in('organizations.subscription_status', ACTIVE_STATUSES);
+      return query.order('id');
+    })
+  ).filter((send) => send.published_at && chatAgenticEnabled(send.organization_id));
+  const written = new Set(
+    (
+      await readChunks(
+        'sends ship events read',
+        sends.map((send) => send.id),
+        (chunk) =>
+          db
+            .from('ship_events')
+            .select('content_draft_delivery_id')
+            .in('content_draft_delivery_id', chunk)
+            .order('content_draft_delivery_id'),
+      )
+    ).map((ship) => ship.content_draft_delivery_id),
+  );
+  let filled = 0;
+  for (const send of sends) {
+    if (written.has(send.id)) continue;
+    const id = await recordCmsPublish({
+      deliveryId: send.id,
+      url: send.published_url,
+      publishedAt: send.published_at,
+      db,
+    });
+    if (id) filled++;
+  }
+  return filled;
 }
 
 /**
@@ -394,6 +464,9 @@ async function closeStale(db, now, tally) {
         confidence: null,
         not_measurable_reason: 'plan_inactive',
         checkpoint: 'd90',
+        // Day 90 wasn't read: no window, no numbers (the earlier checkpoints keep theirs).
+        window_json: {},
+        metrics: [],
         next_check_at: null,
         measured_at: now.toISOString(),
       })
@@ -530,11 +603,12 @@ async function runBrand(db, { brandId, items, limits, now, tally }) {
  * CHAT_AGENTIC off it reads and writes nothing.
  *
  * @param {{ db?: object, now?: Date }} [options]
- * @returns {Promise<{ seeded: number, brands: number, measured: number, checkpoints: number,
+ * @returns {Promise<{ filled: number, seeded: number, brands: number, measured: number, checkpoints: number,
  *   notMeasurable: number, runsUpdated: number, closed: number, failed: number }>}
  */
 export async function runImpactLedger({ db = supabaseAdmin, now = new Date() } = {}) {
   const tally = {
+    filled: 0,
     seeded: 0,
     brands: 0,
     measured: 0,
@@ -547,7 +621,13 @@ export async function runImpactLedger({ db = supabaseAdmin, now = new Date() } =
   if (!chatAgenticDeployed()) return tally;
 
   try {
-    // Its own step: a seed that fails is tried again tomorrow, and what is due is measured.
+    // Their own steps: one that fails is tried again tomorrow, and what is due is measured.
+    try {
+      tally.filled = await fillMissingSends(db, now);
+    } catch (err) {
+      tally.failed++;
+      logger.error({ err: errInfo(err) }, '[impact-ledger] sends not filled');
+    }
     try {
       tally.seeded = await seedMeasurements(db, await loadUnseeded(db, now));
     } catch (err) {

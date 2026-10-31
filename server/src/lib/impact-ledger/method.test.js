@@ -17,11 +17,12 @@ import {
   matchControls,
   measureCells,
   nextCheckAt,
-  permutationP,
+  P_VERDICT,
   primaryMetric,
   runOutcome,
   seededRandom,
   verdictOf,
+  withoutVerdict,
 } from './method.js';
 
 /**
@@ -42,6 +43,9 @@ function cellRows(prompt, from, days, visible, { platform = 'chatgpt-web', regio
     platform,
     model_used: platform === 'claude' ? 'claude-sonnet-5' : 'gpt-5',
     region,
+    answer_count: 1,
+    mentioning_answers: i < visible ? 1 : 0,
+    citation_answers: 0,
     has_mention: i < visible,
     has_citation: false,
   }));
@@ -60,6 +64,45 @@ function windows(levels) {
 
 const promptsOf = (ids, topic = 't1') =>
   new Map(ids.map((id) => [id, { topic_id: topic, is_active: true }]));
+
+/**
+ * A small brand where the change did nothing (the calibration test): 5
+ * engines with their own levels and their own swing between the windows,
+ * 15 prompts at random levels, 3 of them targets. Seeded.
+ */
+function nullWorld(seed) {
+  const random = seededRandom(`null-world:${seed}`);
+  const engines = Array.from({ length: 5 }, (_, i) => `engine-${i}`);
+  const swing = engines.map(() => (random() - 0.5) * 0.4);
+  const offset = engines.map(() => (random() - 0.5) * 0.3);
+  const targets = ['t0', 't1', 't2'];
+  const controls = Array.from({ length: 12 }, (_, i) => `c${i}`);
+  const clamp = (p) => Math.min(0.97, Math.max(0.03, p));
+  const days = (p) => {
+    let named = 0;
+    for (let d = 0; d < 14; d++) if (random() < p) named++;
+    return named;
+  };
+  const pre = [];
+  const post = [];
+  for (const id of [...targets, ...controls]) {
+    const level = 0.05 + random() * 0.85;
+    engines.forEach((platform, e) => {
+      const before = clamp(level + offset[e]);
+      pre.push(...cellRows(id, '2026-09-17', 14, days(before), { platform }));
+      post.push(...cellRows(id, '2026-10-02', 14, days(clamp(before + swing[e])), { platform }));
+    });
+  }
+  return measureCells({
+    seed: `null-world:${seed}`,
+    primary: 'visibility',
+    targetIds: targets,
+    pre: aggregateCells(pre, ALL),
+    post: aggregateCells(post, ALL),
+    excluded: new Set(targets),
+    prompts: promptsOf([...targets, ...controls]),
+  });
+}
 
 describe('windows and checkpoints', () => {
   it('reads the 14 days before ship against the latest 14 days ending on the checkpoint', () => {
@@ -119,16 +162,36 @@ describe('windows and checkpoints', () => {
 });
 
 describe('cells', () => {
-  it('counts a cell’s tracked days, the days the brand was named or cited, and cited', () => {
+  it('counts each tracked day once, as the share of its answers naming or citing the brand', () => {
     const rows = [
       ...cellRows('p1', '2026-09-17', 5, 2),
-      // A second row the same day (the model changed mid-day): still one run.
-      { ...cellRows('p1', '2026-09-17', 1, 0)[0], model_used: 'gpt-5.1', has_citation: true },
+      // A second row the same day (the model changed mid-day, or a run by
+      // hand): still one run, its answers added — 1 of 2 named, 1 of 2 cited.
+      {
+        ...cellRows('p1', '2026-09-19', 1, 0)[0],
+        model_used: 'gpt-5.1',
+        mentioning_answers: 1,
+        citation_answers: 1,
+        has_citation: true,
+      },
     ];
     const { cells } = aggregateCells(rows, ALL);
     expect([...cells.values()]).toEqual([
-      { promptId: 'p1', platform: 'chatgpt-web', region: 'US', runs: 5, visible: 2, cited: 1 },
+      { promptId: 'p1', platform: 'chatgpt-web', region: 'US', runs: 5, visible: 2.5, cited: 0.5 },
     ]);
+  });
+
+  it('reads a row written before its answers were counted (00130) by the day’s flags', () => {
+    const [row] = cellRows('p1', '2026-09-17', 1, 0);
+    const old = {
+      ...row,
+      answer_count: 3,
+      mentioning_answers: null,
+      citation_answers: null,
+      has_citation: true,
+    };
+    const { cells } = aggregateCells([old], ALL);
+    expect([...cells.values()][0]).toMatchObject({ runs: 1, visible: 1, cited: 1 });
   });
 
   it('keeps only the plan’s engines, and says which prompts had answers only off it', () => {
@@ -410,11 +473,75 @@ describe('effect, p-value and outcome', () => {
     expect(measure(levels).metrics).toEqual(measure(levels).metrics);
   });
 
-  it('reads the p-value of identical changes as 1 and of a clean split as near 0', () => {
-    expect(permutationP([1, 1, 1], [1, 1, 1, 1], seededRandom('x'))).toBe(1);
-    expect(permutationP([9, 9, 9, 9, 9], [0, 0, 0, 0, 0, 0, 0], seededRandom('x'))).toBeLessThan(
-      0.01,
-    );
+  it('reads no effect from runs by hand that only add answers to the targets’ days', () => {
+    // Each target day gets a second answer (Run on the prompt). The day's
+    // share of answers naming the brand is unchanged: 4 of 14 days with one
+    // of one, or 8 of 14 days with one of two. Read as "any answer named
+    // it", the targets went from 29% to 57%.
+    const pre = [];
+    const post = [];
+    for (const id of [...targetIds, ...controlIds]) {
+      pre.push(...cellRows(id, '2026-09-17', 14, 4));
+      post.push(
+        ...cellRows(id, '2026-10-02', 14, 4).map((row, d) =>
+          targetIds.includes(id)
+            ? {
+                ...row,
+                answer_count: 2,
+                mentioning_answers: d < 8 ? 1 : 0,
+                has_mention: d < 8,
+              }
+            : row,
+        ),
+      );
+    }
+    const result = measureCells({
+      seed: 'm1:d14',
+      primary: 'visibility',
+      targetIds,
+      pre: aggregateCells(pre, ALL),
+      post: aggregateCells(post, ALL),
+      excluded: new Set(targetIds),
+      prompts: promptsOf([...targetIds, ...controlIds]),
+    });
+    expect(result.metrics[0]).toMatchObject({ before: 28.6, after: 28.6, effect: 0 });
+    expect(verdictOf(result.judged)).toBe('no_meaningful_change');
+  });
+
+  it('reads the p-value of identical changes as 1', () => {
+    const result = measure([
+      ...targetIds.map((id) => [id, [4, 9]]),
+      ...controlIds.map((id) => [id, [4, 9]]),
+    ]);
+    expect(result.judged.p).toBe(1);
+  });
+
+  it('keeps Improved and Declined at their nominal rate in worlds with no effect', () => {
+    // 200 small brands where nothing the change did moves anything: 5
+    // engines, each with its own level and its own swing between the
+    // windows (engine weather), 15 prompts at random levels, 3 of them
+    // targets, so most target strata hold one or two controls. A verdict
+    // needs p < P_VERDICT (and 3 points), so at most about P_VERDICT of the
+    // measurable worlds may give one; 0.07 on top is 2.5 standard errors of
+    // a rate near 0.2 over ~200 worlds, room for chance, not for a test that
+    // reads its own noise as an effect.
+    let measurable = 0;
+    let verdicts = 0;
+    for (let w = 0; w < 200; w++) {
+      const result = nullWorld(w);
+      const entry = checkpointEntry({
+        cp: CHECKPOINTS[1],
+        window: checkpointWindow(SHIPPED, 14),
+        result,
+        earlier: [],
+        measuredAt: '2026-10-16T07:53:00Z',
+      });
+      if (entry.outcome === 'not_measurable') continue;
+      measurable++;
+      if (entry.outcome === 'improved' || entry.outcome === 'declined') verdicts++;
+    }
+    expect(measurable).toBeGreaterThanOrEqual(150);
+    expect(verdicts / measurable).toBeLessThanOrEqual(P_VERDICT + 0.07);
   });
 
   it('judges the unrounded effect, with enough prompts, and sets confidence by cells and prompts', () => {
@@ -610,6 +737,62 @@ describe('checkpoint entries', () => {
       confidence: null,
       not_measurable_reason: 'too_few_controls',
     });
+  });
+
+  it('gives a Not measurable checkpoint its numbers but no effect, p, interval or direction', () => {
+    const result = {
+      ...measured(12, 0.001),
+      judged: { effect: 12, p: 0.001, targetCells: 2, targetPrompts: 2 },
+    };
+    const entry = checkpointEntry({
+      cp: CHECKPOINTS[1],
+      window,
+      result,
+      earlier: [],
+      measuredAt: at,
+    });
+    expect(entry).toMatchObject({
+      outcome: 'not_measurable',
+      not_measurable_reason: 'too_few_prompts',
+      before: 30,
+      after: 42,
+      control_before: 31,
+      effect: null,
+      p_value: null,
+      interval_low: null,
+      direction: null,
+    });
+    expect(
+      withoutVerdict({
+        before: 1,
+        effect: 2,
+        p_value: 0.1,
+        interval_low: 0,
+        interval_high: 3,
+        direction: 'flat',
+      }),
+    ).toEqual({
+      before: 1,
+      effect: null,
+      p_value: null,
+      interval_low: null,
+      interval_high: null,
+      direction: null,
+    });
+  });
+
+  it('says nothing of whether the effect held when day 90 can’t be measured', () => {
+    const entry = checkpointEntry({
+      cp: CHECKPOINTS[3],
+      window,
+      result: { reason: 'too_few_runs', targetCells: 0 },
+      earlier: [
+        { checkpoint: 'd14', outcome: 'improved' },
+        { checkpoint: 'd30', outcome: 'improved' },
+      ],
+      measuredAt: at,
+    });
+    expect(entry).toMatchObject({ outcome: 'not_measurable', lasting: null });
   });
 
   it('says at day 90 whether the effect held or faded', () => {

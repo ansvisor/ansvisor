@@ -1,18 +1,22 @@
 /**
  * The impact ledger's method (CHAT-22 §2 items 6–11): what a shipped change
- * did, read at 7, 14, 30 and 90 days against a control set, from scheduled
- * tracking only (Addendum 2 G). Pure: no database, no clock, no model call;
- * the job (job.js) reads the rows and writes what this returns.
+ * did, read at 7, 14, 30 and 90 days against a control set, from tracking
+ * data already collected: the Insights rollups, which hold the scheduled
+ * runs and also any run someone started by hand (Run on a prompt). Nothing
+ * here asks an engine or a model (Addendum 2 G). Pure: no database, no
+ * clock; the job (job.js) reads the rows and writes what this returns.
  *
  *   * Windows: the baseline is the 14 days before ship; a checkpoint reads
  *     the latest 14 days ending on it, or every day since ship when fewer
  *     have passed (day 7: days 1–7, day 14: 1–14, day 30: 17–30, day 90:
  *     77–90). The ship day itself is in neither.
  *   * Cells: prompt × engine × location, from the Insights rollups
- *     (insights_prompt_daily). A cell's runs are its tracked days; its
- *     visibility is the share of those days the brand was named or cited,
- *     its citations the share it was cited (as Insights counts them). A cell
- *     needs MIN_RUNS days in the baseline and in the checkpoint window.
+ *     (insights_prompt_daily). A cell's runs are its tracked days. Each day
+ *     counts once, as the share of that day's answers naming or citing the
+ *     brand (visibility) or citing it (citations), so a day with extra runs
+ *     by hand weighs no more and reads no likelier to be "seen" than a day
+ *     of one scheduled answer; the cell's rate is the mean of its days. A
+ *     cell needs MIN_RUNS days in the baseline and in the checkpoint window.
  *   * Strata: engine × location × baseline band (BAND_PTS-wide slices of
  *     the cell's own baseline). Targets and controls are compared inside a
  *     stratum only, so an engine-wide swing, or a level's own drift, reads
@@ -28,11 +32,13 @@
  *     weighted as the targets are spread over the strata, so the row's
  *     numbers add up: effect = (after − before) − (control after − control
  *     before).
- *   * Uncertainty (item 9): a permutation test over prompts (RESAMPLES
- *     reshuffles of the target and control labels on those residuals) for
- *     the p-value, and a bootstrap over prompts for the 90% interval (none
- *     from fewer than MIN_INTERVAL_PROMPTS target prompts), both seeded, so
- *     the same rows always give the same result.
+ *   * Uncertainty (item 9), by re-randomizing prompts and measuring again:
+ *     RESAMPLES reshuffles of which prompts are targets and which controls,
+ *     the strata's control means and the effect computed afresh each time,
+ *     for the p-value; and a bootstrap that resamples the target and the
+ *     control prompts and measures again, for the 90% interval (none from
+ *     fewer than MIN_INTERVAL_PROMPTS target prompts). Both seeded, so the
+ *     same rows always give the same result.
  *   * Outcome and confidence (item 10) in the one vocabulary: Pending (day 7
  *     shows a direction only), Improved, No meaningful change, Declined, Not
  *     measurable. Judged on the unrounded effect and p; stored rounded. A
@@ -40,6 +46,8 @@
  *     (one prompt on ten engines is one piece of evidence ten times): from
  *     day 14, fewer than VERDICT_TARGET_PROMPTS is Not measurable
  *     (too_few_prompts), whatever the cells; day 7 still shows a direction.
+ *     A Not measurable checkpoint keeps its before and after numbers and
+ *     its counts, never an effect, p-value, interval or direction.
  */
 
 /** The checkpoints, in order (Addendum 2 F). */
@@ -182,12 +190,16 @@ export function cellKey(row) {
 
 /**
  * One window's rollup rows as cells: on the plan's engines, each with its
- * tracked days (runs), the days the brand was named or cited (visible) and
- * cited (cited). Two rows of a day (a model changed mid-day) are one run.
+ * tracked days (runs), and the sums over those days of the share of each
+ * day's answers naming or citing the brand (visible) and citing it
+ * (cited). Two rows of a day (a model changed mid-day) are one run, their
+ * answers added. A row the daily refresh hasn't rewritten since 00130 (no
+ * answer counts yet) reads as one answer, named when the day was.
  * `offPlan` holds the prompts with answers only on engines off the plan.
  *
  * @param {Array<{ day: string, prompt_id: string, platform: string|null, model_used: string|null,
- *   region: string|null, has_mention: boolean, has_citation: boolean }>} rows
+ *   region: string|null, answer_count?: number, mentioning_answers?: number|null,
+ *   citation_answers?: number|null, has_mention: boolean, has_citation: boolean }>} rows
  * @returns {{ cells: Map<string, { promptId: string, platform: string|null, region: string|null,
  *   runs: number, visible: number, cited: number }>, offPlan: Set<string> }}
  */
@@ -210,16 +222,25 @@ export function aggregateCells(rows, limits) {
       };
       byCell.set(key, cell);
     }
-    const bits = (row.has_mention || row.has_citation ? 1 : 0) | (row.has_citation ? 2 : 0);
-    cell.days.set(row.day, (cell.days.get(row.day) ?? 0) | bits);
+    const answers = Number(row.answer_count) || 0;
+    const counted = answers > 0 && row.mentioning_answers != null && row.citation_answers != null;
+    const day = cell.days.get(row.day) ?? { answers: 0, named: 0, cited: 0 };
+    day.answers += counted ? answers : 1;
+    day.named += counted
+      ? Number(row.mentioning_answers)
+      : row.has_mention || row.has_citation
+        ? 1
+        : 0;
+    day.cited += counted ? Number(row.citation_answers) : row.has_citation ? 1 : 0;
+    cell.days.set(row.day, day);
   }
   const cells = new Map();
   for (const [key, { days, ...cell }] of byCell) {
     let visible = 0;
     let cited = 0;
-    for (const bits of days.values()) {
-      if (bits & 1) visible++;
-      if (bits & 2) cited++;
+    for (const day of days.values()) {
+      visible += day.named / day.answers;
+      cited += day.cited / day.answers;
     }
     cells.set(key, { ...cell, runs: days.size, visible, cited });
   }
@@ -311,53 +332,8 @@ export function seededRandom(seed) {
   };
 }
 
-const mean = (values) => values.reduce((sum, v) => sum + v, 0) / values.length;
 const round1 = (n) => Math.round(n * 10) / 10;
 const round3 = (n) => Math.round(n * 1000) / 1000;
-
-/**
- * Two-sided permutation p-value of mean(targets) − mean(controls): the
- * labels reshuffled `resamples` times over the pooled prompts. Never 0:
- * (hits + 1) / (resamples + 1).
- */
-export function permutationP(targets, controls, random, resamples = RESAMPLES) {
-  const pool = [...targets, ...controls];
-  const n = targets.length;
-  const m = controls.length;
-  const total = pool.reduce((sum, v) => sum + v, 0);
-  const observed = Math.abs(mean(targets) - mean(controls));
-  let hits = 0;
-  for (let r = 0; r < resamples; r++) {
-    // A partial Fisher–Yates: the first n places are a uniform draw.
-    let sum = 0;
-    for (let i = 0; i < n; i++) {
-      const j = i + Math.floor(random() * (pool.length - i));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-      sum += pool[i];
-    }
-    if (Math.abs(sum / n - (total - sum) / m) >= observed - 1e-9) hits++;
-  }
-  return (hits + 1) / (resamples + 1);
-}
-
-/**
- * The 90% interval of the effect (the target prompts' mean residual): a
- * bootstrap over prompts, each group resampled on its own, the controls'
- * resampled mean taken as the noise of the strata's means around it.
- */
-export function bootstrapInterval(targets, controls, random, resamples = RESAMPLES) {
-  const draw = (values) => {
-    let sum = 0;
-    for (let i = 0; i < values.length; i++) sum += values[Math.floor(random() * values.length)];
-    return sum / values.length;
-  };
-  const centre = mean(controls);
-  const effects = [];
-  for (let r = 0; r < resamples; r++) effects.push(draw(targets) - (draw(controls) - centre));
-  effects.sort((a, b) => a - b);
-  const at = (q) => effects[Math.floor(q * (effects.length - 1))];
-  return { low: at(0.05), high: at(0.95) };
-}
 
 /** The direction of an effect, as day 7 shows it (up, flat, down). */
 export function directionOf(effect) {
@@ -366,15 +342,149 @@ export function directionOf(effect) {
   return 'flat';
 }
 
-/** Values grouped by a key, in first-seen order. */
-function grouped(items, keyOf) {
-  const groups = new Map();
-  for (const item of items) {
-    const key = keyOf(item);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(item);
+/**
+ * The cells of each prompt on one metric, as units the estimate re-labels
+ * and resamples: per cell its stratum (an index), baseline and checkpoint.
+ */
+function promptUnits(cells, metric, strata) {
+  const byPrompt = new Map();
+  for (const cell of cells) {
+    const key = stratumOf(cell.pre, metric);
+    if (!strata.has(key)) strata.set(key, strata.size);
+    if (!byPrompt.has(cell.pre.promptId)) byPrompt.set(cell.pre.promptId, []);
+    byPrompt.get(cell.pre.promptId).push({
+      stratum: strata.get(key),
+      pre: rate(cell.pre, metric),
+      post: rate(cell.post, metric),
+    });
   }
-  return groups;
+  return [...byPrompt.values()];
+}
+
+/**
+ * The stratified estimate for one labelling of the units (`targets` and
+ * `controls` are unit indexes; a bootstrap repeats some): each stratum's
+ * control means from the controls given, then each target prompt's cells
+ * that have a control in their stratum, their change minus the stratum's
+ * control change, averaged per prompt, the effect the target prompts' mean.
+ * Null when no target prompt has such a cell. With `detail`, the numbers the
+ * row shows too.
+ */
+function estimate(units, strataCount, targets, controls, detail = false) {
+  const sumPre = new Float64Array(strataCount);
+  const sumPost = new Float64Array(strataCount);
+  const count = new Float64Array(strataCount);
+  for (const index of controls) {
+    for (const cell of units[index]) {
+      sumPre[cell.stratum] += cell.pre;
+      sumPost[cell.stratum] += cell.post;
+      count[cell.stratum]++;
+    }
+  }
+  let effect = 0;
+  let prompts = 0;
+  const shown = { before: 0, after: 0, controlBefore: 0, controlAfter: 0, cells: 0 };
+  const used = new Set();
+  for (const index of targets) {
+    let residual = 0;
+    let kept = 0;
+    const own = { before: 0, after: 0, controlBefore: 0, controlAfter: 0 };
+    for (const cell of units[index]) {
+      const n = count[cell.stratum];
+      if (!n) continue;
+      const controlBefore = sumPre[cell.stratum] / n;
+      const controlAfter = sumPost[cell.stratum] / n;
+      residual += cell.post - cell.pre - (controlAfter - controlBefore);
+      kept++;
+      if (detail) {
+        own.before += cell.pre;
+        own.after += cell.post;
+        own.controlBefore += controlBefore;
+        own.controlAfter += controlAfter;
+        used.add(cell.stratum);
+      }
+    }
+    if (!kept) continue;
+    effect += residual / kept;
+    prompts++;
+    if (detail) {
+      for (const key of Object.keys(own)) shown[key] += own[key] / kept;
+      shown.cells += kept;
+    }
+  }
+  if (!prompts) return null;
+  if (!detail) return effect / prompts;
+  let controlCells = 0;
+  let controlPrompts = 0;
+  for (const index of controls) {
+    const inUse = units[index].filter((cell) => used.has(cell.stratum)).length;
+    controlCells += inUse;
+    if (inUse) controlPrompts++;
+  }
+  return {
+    effect: effect / prompts,
+    before: shown.before / prompts,
+    after: shown.after / prompts,
+    controlBefore: shown.controlBefore / prompts,
+    controlAfter: shown.controlAfter / prompts,
+    targetCells: shown.cells,
+    targetPrompts: prompts,
+    controlCells,
+    controlPrompts,
+  };
+}
+
+/**
+ * Two-sided p-value of the effect by re-randomization over prompts: which
+ * prompts are targets reshuffled `resamples` times, each labelling measured
+ * afresh (its strata's control means included). Never 0: (hits + 1) /
+ * (labellings measured + 1).
+ */
+function rerandomizedP(units, strataCount, targetCount, observed, random, resamples) {
+  const order = units.map((_, index) => index);
+  let hits = 0;
+  let measured = 0;
+  for (let r = 0; r < resamples; r++) {
+    // A partial Fisher–Yates: the first targetCount places are a uniform draw.
+    for (let i = 0; i < targetCount; i++) {
+      const j = i + Math.floor(random() * (order.length - i));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    const effect = estimate(
+      units,
+      strataCount,
+      order.slice(0, targetCount),
+      order.slice(targetCount),
+    );
+    if (effect === null) continue;
+    measured++;
+    if (Math.abs(effect) >= Math.abs(observed) - 1e-9) hits++;
+  }
+  return (hits + 1) / (measured + 1);
+}
+
+/**
+ * The 90% interval of the effect: a bootstrap that resamples the target
+ * prompts and the control prompts, each group on its own, and measures
+ * again. Null from fewer than MIN_INTERVAL_PROMPTS target prompts.
+ */
+function bootstrapInterval(units, strataCount, targetCount, random, resamples) {
+  if (targetCount < MIN_INTERVAL_PROMPTS) return null;
+  const controlCount = units.length - targetCount;
+  const effects = [];
+  for (let r = 0; r < resamples; r++) {
+    const targets = Array.from({ length: targetCount }, () => Math.floor(random() * targetCount));
+    const controls = Array.from(
+      { length: controlCount },
+      () => targetCount + Math.floor(random() * controlCount),
+    );
+    const effect = estimate(units, strataCount, targets, controls);
+    if (effect !== null) effects.push(effect);
+  }
+  if (effects.length === 0) return null;
+  effects.sort((a, b) => a - b);
+  const at = (q) => effects[Math.floor(q * (effects.length - 1))];
+  return { low: at(0.05), high: at(0.95) };
 }
 
 /**
@@ -385,80 +495,65 @@ function grouped(items, keyOf) {
  * prompts kept and the control cells used. Null when no target cell has a
  * control in its stratum.
  */
-export function metricResult({ metric, targets, controls, seed }) {
+export function metricResult({ metric, targets, controls, seed, resamples = RESAMPLES }) {
   const strata = new Map();
-  for (const [stratum, cells] of grouped(controls, (c) => stratumOf(c.pre, metric))) {
-    const pre = mean(cells.map((c) => rate(c.pre, metric)));
-    const post = mean(cells.map((c) => rate(c.post, metric)));
-    strata.set(stratum, { pre, post, change: post - pre });
-  }
-  const kept = targets
-    .map((cell) => ({ cell, stratum: strata.get(stratumOf(cell.pre, metric)) }))
-    .filter((t) => t.stratum);
-  if (kept.length === 0) return null;
-  const used = new Set(kept.map((t) => stratumOf(t.cell.pre, metric)));
-  const usedControls = controls.filter((c) => used.has(stratumOf(c.pre, metric)));
-
-  const targetPrompts = [...grouped(kept, (t) => t.cell.pre.promptId).values()].map((cells) => {
-    const of = (fn) => mean(cells.map(fn));
-    const pre = of((t) => rate(t.cell.pre, metric));
-    const post = of((t) => rate(t.cell.post, metric));
-    const controlPre = of((t) => t.stratum.pre);
-    const controlPost = of((t) => t.stratum.post);
-    return {
-      pre,
-      post,
-      controlPre,
-      controlPost,
-      residual: post - pre - (controlPost - controlPre),
-    };
-  });
-  const controlResiduals = [...grouped(usedControls, (c) => c.pre.promptId).values()].map((cells) =>
-    mean(
-      cells.map((c) => {
-        const stratum = strata.get(stratumOf(c.pre, metric));
-        return rate(c.post, metric) - rate(c.pre, metric) - stratum.change;
-      }),
-    ),
+  const targetUnits = promptUnits(targets, metric, strata);
+  const units = [...targetUnits, ...promptUnits(controls, metric, strata)];
+  const targetCount = targetUnits.length;
+  const indexes = units.map((_, index) => index);
+  const seen = estimate(
+    units,
+    strata.size,
+    indexes.slice(0, targetCount),
+    indexes.slice(targetCount),
+    true,
   );
-
-  const residuals = targetPrompts.map((p) => p.residual);
-  const before = mean(targetPrompts.map((p) => p.pre));
-  const after = mean(targetPrompts.map((p) => p.post));
-  const controlBefore = mean(targetPrompts.map((p) => p.controlPre));
-  const controlAfter = mean(targetPrompts.map((p) => p.controlPost));
-  const effect = mean(residuals);
+  if (!seen) return null;
   const random = seededRandom(`${seed}:${metric}`);
-  const p = permutationP(residuals, controlResiduals, random);
-  const interval =
-    targetPrompts.length >= MIN_INTERVAL_PROMPTS
-      ? bootstrapInterval(residuals, controlResiduals, random)
-      : null;
+  const p = rerandomizedP(units, strata.size, targetCount, seen.effect, random, resamples);
+  const interval = bootstrapInterval(units, strata.size, targetCount, random, resamples);
   return {
     stored: {
       metric,
       unit: 'pts',
-      before: round1(before),
-      after: round1(after),
-      delta: round1(after - before),
-      deltaPercent: before > 0 ? round1(((after - before) / before) * 100) : null,
-      direction: directionOf(effect),
-      control_before: round1(controlBefore),
-      control_after: round1(controlAfter),
-      effect: round1(effect),
+      before: round1(seen.before),
+      after: round1(seen.after),
+      delta: round1(seen.after - seen.before),
+      deltaPercent:
+        seen.before > 0 ? round1(((seen.after - seen.before) / seen.before) * 100) : null,
+      direction: directionOf(seen.effect),
+      control_before: round1(seen.controlBefore),
+      control_after: round1(seen.controlAfter),
+      effect: round1(seen.effect),
       p_value: round3(p),
       interval_low: interval ? round1(interval.low) : null,
       interval_high: interval ? round1(interval.high) : null,
-      target_cells: kept.length,
-      target_prompts: targetPrompts.length,
-      control_cells: usedControls.length,
-      control_prompts: controlResiduals.length,
+      target_cells: seen.targetCells,
+      target_prompts: seen.targetPrompts,
+      control_cells: seen.controlCells,
+      control_prompts: seen.controlPrompts,
     },
-    effect,
+    effect: seen.effect,
     p,
-    targetCells: kept.length,
-    targetPrompts: targetPrompts.length,
-    controlCells: usedControls.length,
+    targetCells: seen.targetCells,
+    targetPrompts: seen.targetPrompts,
+    controlCells: seen.controlCells,
+  };
+}
+
+/**
+ * A stored metric of a Not measurable checkpoint (K4): its before, after,
+ * controls and counts stay, read as they were; no effect, p-value,
+ * interval or direction, as none is given.
+ */
+export function withoutVerdict(metric) {
+  return {
+    ...metric,
+    direction: null,
+    effect: null,
+    p_value: null,
+    interval_low: null,
+    interval_high: null,
   };
 }
 
@@ -591,7 +686,8 @@ export function confidenceOf({ p, targetCells, targetPrompts, stormy = false }) 
 /**
  * Whether a day 90 result held the verdict before it (day 30, else day 14):
  * "held" when it is the same Improved or Declined, "faded" when it isn't;
- * null when there was no such verdict to hold.
+ * null when there was no such verdict to hold. A day 90 that can't be
+ * measured has none (checkpointEntry).
  */
 export function lastingOf(entries, d90Outcome) {
   const before = [...entries]
@@ -645,13 +741,20 @@ export function checkpointEntry({ cp, window, result, earlier, measuredAt }) {
     result.reason ??
     (result.judged.targetPrompts < VERDICT_TARGET_PROMPTS ? 'too_few_prompts' : null);
   if (reason) {
+    // No verdict, so no effect, p-value, interval or direction (K4); and a
+    // day 90 that can't be measured says nothing of whether it held.
     const entry = {
       ...base,
+      direction: null,
+      effect: null,
+      p_value: null,
+      interval_low: null,
+      interval_high: null,
       outcome: 'not_measurable',
       confidence: null,
       not_measurable_reason: reason,
     };
-    return cp.key === 'd90' ? { ...entry, lasting: lastingOf(earlier, 'not_measurable') } : entry;
+    return cp.key === 'd90' ? { ...entry, lasting: null } : entry;
   }
   const outcome = verdictOf(result.judged);
   const entry = {

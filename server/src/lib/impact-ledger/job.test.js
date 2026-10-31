@@ -44,6 +44,9 @@ function track(promptIds, from, days, visible, { brand = 'b1', platform = 'chatg
         platform,
         model_used: 'gpt-5',
         region: 'US',
+        answer_count: 1,
+        mentioning_answers: d < visible(index) ? 1 : 0,
+        citation_answers: 0,
         has_mention: d < visible(index),
         has_citation: false,
       });
@@ -396,6 +399,16 @@ describe('not measurable', () => {
       outcome: 'pending',
       direction: 'up',
     });
+    // Its numbers stay; no effect, p-value or interval is given.
+    expect(row.metrics[0]).toMatchObject({
+      before: 28.6,
+      target_prompts: 2,
+      effect: null,
+      p_value: null,
+      interval_low: null,
+      interval_high: null,
+      direction: null,
+    });
     expect(db.tables.chat_agent_runs[0]).toMatchObject({ outcome: 'not_measurable' });
   });
 
@@ -555,6 +568,7 @@ describe('not measurable', () => {
         not_measurable_reason: 'plan_inactive',
         checkpoint: 'd90',
         next_check_at: null,
+        metrics: [],
       });
     }
     // Shipped lately: kept due, for when the plan comes back.
@@ -562,6 +576,59 @@ describe('not measurable', () => {
       outcome: 'pending',
       next_check_at: checkAt('2026-09-20T10:00:00Z', 7),
     });
+  });
+});
+
+describe('sends confirmed without a ship event', () => {
+  const send = (id, overrides = {}) => ({
+    id,
+    organization_id: ORG,
+    brand_id: 'b1',
+    draft_id: null,
+    sent_by: 'u1',
+    title: `Send ${id}`,
+    status: 'published',
+    published_url: `https://acme.example/${id}`,
+    published_at: '2026-10-14T10:00:00.000Z',
+    created_at: '2026-10-14T09:00:00.000Z',
+    ...overrides,
+  });
+
+  it('writes the ship event a confirmed send is missing, once, through the same upsert', async () => {
+    const db = fakeDb(
+      world({
+        content_draft_deliveries: [
+          send('x1'),
+          // Its ship event was written when it was confirmed.
+          send('x2'),
+          // Still waiting on its CMS, or confirmed too long ago.
+          send('x3', { status: 'sent', published_at: null }),
+          send('x4', { published_at: '2026-08-01T10:00:00.000Z' }),
+        ],
+        ship_events: [
+          ship('s1', { agent_run_id: 'run1' }),
+          ship('s2', { content_draft_delivery_id: 'x2', shipped_at: '2026-10-14T10:00:00.000Z' }),
+        ],
+      }),
+    );
+    const stats = await runImpactLedger({ db, now: D14 });
+    expect(stats.filled).toBe(1);
+    const written = db.tables.ship_events.filter((e) => e.content_draft_delivery_id === 'x1');
+    expect(written).toEqual([
+      expect.objectContaining({
+        kind: 'cms_publish',
+        url: 'https://acme.example/x1',
+        shipped_at: '2026-10-14T10:00:00.000Z',
+      }),
+    ]);
+    expect(db.tables.impact_measurements.some((m) => m.ship_event_id === written[0].id)).toBe(true);
+
+    // The next night finds it written.
+    const next = await runImpactLedger({ db, now: at('2026-10-17T07:53:00Z') });
+    expect(next.filled).toBe(0);
+    expect(db.tables.ship_events.filter((e) => e.content_draft_delivery_id === 'x1')).toHaveLength(
+      1,
+    );
   });
 });
 
@@ -649,6 +716,7 @@ describe('scale and isolation', () => {
     expect(tables.has('usage_ledger')).toBe(false);
     expect([...tables].sort()).toEqual([
       'chat_agent_runs',
+      'content_draft_deliveries',
       'impact_control_sets',
       'impact_measurements',
       'insights_prompt_daily',

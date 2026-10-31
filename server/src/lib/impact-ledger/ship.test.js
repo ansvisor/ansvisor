@@ -181,6 +181,23 @@ describe('recordCmsPublish', () => {
     expect(db.tables.impact_measurements).toHaveLength(1);
   });
 
+  it('moves the republish note only forward, never back to an older publish', async () => {
+    const tables = world();
+    tables.content_draft_deliveries.push(sentAgain('x2'), sentAgain('x3'));
+    const db = useDb(tables);
+    await record(db);
+    await record(db, 'x3', '2026-12-01T09:00:00.000Z');
+    // A send published in between, confirmed late: the note stays.
+    await record(db, 'x2', '2026-11-10T09:00:00.000Z');
+    expect(db.tables.ship_events[0].republished_at).toBe('2026-12-01T09:00:00.000Z');
+    // One published before the ship event itself: no note either.
+    const fresh = useDb(world());
+    fresh.tables.content_draft_deliveries.push(sentAgain('x4'));
+    await record(fresh);
+    await record(fresh, 'x4', '2026-10-20T08:00:00.000Z');
+    expect(fresh.tables.ship_events[0].republished_at ?? null).toBeNull();
+  });
+
   it('writes a new ship event for a draft published again after 90 days', async () => {
     const tables = world();
     tables.content_draft_deliveries.push(sentAgain('x2'));

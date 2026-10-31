@@ -211,8 +211,9 @@ export const REPUBLISH_DAYS = 90;
  *     writes one.
  *   * The same draft live again within REPUBLISH_DAYS of its ship event (a
  *     post updated in place, sent again): no second ship event; the first
- *     notes it (republished_at) and its measurement goes on, as two on the
- *     same targets would make each other Not measurable.
+ *     notes it (republished_at, only ever forward: a later publish than the
+ *     one noted, or than the ship itself) and its measurement goes on, as
+ *     two on the same targets would make each other Not measurable.
  *
  * Off with CHAT_AGENTIC, or for a workspace it isn't on for, it writes
  * nothing, and with it off reads nothing either. Never throws: a ship event
@@ -236,7 +237,7 @@ export async function recordCmsPublish({ deliveryId, url, publishedAt, db = supa
       const since = new Date(Date.parse(publishedAt) - REPUBLISH_DAYS * DAY_MS).toISOString();
       const { data: earlier, error: earlierError } = await db
         .from('ship_events')
-        .select('id, content_draft_delivery_id')
+        .select('id, content_draft_delivery_id, shipped_at, republished_at')
         .eq('brand_id', delivery.brand_id)
         .eq('content_draft_id', delivery.draft_id)
         .gte('shipped_at', since)
@@ -245,11 +246,20 @@ export async function recordCmsPublish({ deliveryId, url, publishedAt, db = supa
       if (earlierError) throw new ImpactDbError('ship events read', earlierError);
       const first = earlier?.[0];
       if (first) {
-        if (first.content_draft_delivery_id !== delivery.id) {
-          const { error: noteError } = await db
+        // Only forward: a late or repeated confirmation never moves the note back.
+        const last = first.republished_at ?? first.shipped_at;
+        if (
+          first.content_draft_delivery_id !== delivery.id &&
+          Date.parse(publishedAt) > Date.parse(last)
+        ) {
+          let note = db
             .from('ship_events')
             .update({ republished_at: publishedAt })
             .eq('id', first.id);
+          note = first.republished_at
+            ? note.eq('republished_at', first.republished_at)
+            : note.is('republished_at', null);
+          const { error: noteError } = await note;
           if (noteError) throw new ImpactDbError('republish note', noteError);
         }
         return first.id;

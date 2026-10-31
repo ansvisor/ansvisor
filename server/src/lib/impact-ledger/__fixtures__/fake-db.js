@@ -41,6 +41,7 @@ const UNIQUE = {
 const EMBEDS = {
   impact_measurements: { ship_events: ['ship_event_id', 'id'] },
   ship_events: { organizations: ['organization_id', 'id'] },
+  content_draft_deliveries: { organizations: ['organization_id', 'id'] },
 };
 
 /**
