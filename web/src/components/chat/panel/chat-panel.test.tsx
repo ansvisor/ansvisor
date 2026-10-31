@@ -124,6 +124,7 @@ const setup = (over: Partial<ChatPanelSetup> = {}): ChatPanelSetup => ({
   fullAutoOffByAdmin: false,
   onOwnKey: false,
   usageNoticeSeen: null,
+  skills: [],
   ...over,
 });
 

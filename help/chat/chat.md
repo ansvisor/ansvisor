@@ -95,7 +95,7 @@ Analysts and Agency partners see only moves that read data. Next moves show unde
 
 ## Shortcuts and your data
 
-Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message: **/analyze**, **/report** and **/create**.
+Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message, **/analyze** and **/create**, and under them the skills Chat can use, such as **/report** for the weekly report (see **Skills in Chat**).
 
 Type **@**, or click **@**, to point Chat at your data: charts and metrics on the page, tracked prompts, your pages and open Action Center tasks. Use the arrow keys and Enter, or click. Your pick shows as a chip above the text; **×** takes it off.
 
