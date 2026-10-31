@@ -1,8 +1,11 @@
 import type { TeamRole } from '@/components/providers/role-provider';
 import type { ChatTool, PlanGate, ToolFlags } from './define-tool';
+import { AUDIT_TOOLS } from './audit-tools';
 import { COMPETITOR_TOOLS } from './competitor-tools';
+import { CONTENT_TOOLS } from './content-tools';
 import { PROMPT_TOOLS } from './prompt-tools';
 import { READ_TOOLS } from './read-tools';
+import { REPORT_TOOLS } from './report-tools';
 import { TOPIC_TOOLS } from './topic-tools';
 import { WRITE_TOOLS } from './write-tools';
 import { AREA_READS } from './areas';
@@ -22,6 +25,9 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...PROMPT_TOOLS,
   ...TOPIC_TOOLS,
   ...COMPETITOR_TOOLS,
+  ...CONTENT_TOOLS,
+  ...REPORT_TOOLS,
+  ...AUDIT_TOOLS,
 ];
 
 /** The row of a tool, by its internal name; undefined for a name with no row. */
