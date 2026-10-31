@@ -241,7 +241,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   if (moves.error)
     console.error("[chat/thread] could not read the chat's next moves:", moves.error.message);
   const strips = runIds.length
-    ? await readThreadStrips(supabase, conversationId, messages.data ?? [])
+    ? await readThreadStrips(supabase, conversationId, messages.data ?? [], endedIds)
     : new Map<string, ChatTaskStrip>();
   // A failed read of the analyses loses their cards, not the chat.
   if (whys.error)
@@ -338,17 +338,26 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
 
 /**
  * The chat's task strips, by run, read as the person: "due this week" in the
- * zone its latest answer was shown in (the run's), else UTC.
+ * zone its latest answer was shown in (the run's), else UTC. A run that has
+ * ended is writing nothing: a task it still has Writing (an Undo of Ready for
+ * review put it back, or the run never reached its own end) reads Queued.
  */
 async function readThreadStrips(
   db: Awaited<ReturnType<typeof createClient>>,
   conversationId: string,
   messages: readonly { role: string; timezone: string | null }[],
+  endedRunIds: readonly string[],
 ): Promise<Map<string, ChatTaskStrip>> {
   const zone =
     [...messages].reverse().find((m) => m.role === 'assistant' && m.timezone)?.timezone ?? 'UTC';
   try {
-    return await readStrips(db, conversationId, weekEndIn(new Date(), zone));
+    const strips = await readStrips(db, conversationId, weekEndIn(new Date(), zone));
+    for (const runId of endedRunIds) {
+      for (const task of strips.get(runId)?.tasks ?? []) {
+        if (task.status === 'writing') task.status = 'queued';
+      }
+    }
+    return strips;
   } catch (err) {
     console.error("[chat/thread] could not read the chat's task strip:", err);
     return new Map();

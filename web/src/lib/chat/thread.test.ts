@@ -162,6 +162,44 @@ describe('loadChatThread', () => {
     });
   });
 
+  it('reads a task an ended run still has Writing as Queued, and keeps a running run’s Writing', async () => {
+    seed([
+      { id: 'run-1', status: 'done' },
+      { id: 'run-2', status: 'running' },
+    ]);
+    fake.db.tables.chat_run_steps = [];
+    fake.db.tables.chat_run_events = [];
+    // run-1's Ready for review was undone after it ended: Undo put back its Writing.
+    fake.db.tables.chat_task_state = [
+      {
+        conversation_id: CHAT,
+        action_task_id: 't1',
+        position: 1,
+        chat_status: 'writing',
+        run_id: 'run-1',
+      },
+      {
+        conversation_id: CHAT,
+        action_task_id: 't2',
+        position: 2,
+        chat_status: 'writing',
+        run_id: 'run-2',
+      },
+    ];
+    const parent = { category: 'fix', priority_score: 86, due_date: null };
+    fake.db.tables.action_tasks = ['t1', 't2'].map((id) => ({
+      id,
+      task_key: null,
+      title: `Task ${id}`,
+      title_params: null,
+      status: 'todo',
+      actions: parent,
+    }));
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run?.tasks?.tasks.map((t) => t.status)).toEqual(['queued']);
+    expect(thread!.messages[3].run?.tasks?.tasks.map((t) => t.status)).toEqual(['writing']);
+  });
+
   it('opens the chat without its strip when the strip can’t be read', async () => {
     seed([{ id: 'run-1', status: 'done' }]);
     fake.db.tables.chat_run_steps = [];
