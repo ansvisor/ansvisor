@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ALWAYS_ON_SECTION, hiddenMenuSections } from '@/lib/menu-access';
 import {
   SHOWN_DAYS,
   closedStatus,
@@ -32,6 +33,23 @@ describe('roleFeed', () => {
     expect(roleFeed('agency_partner')).toBe('opt_in');
     expect(roleFeed('analyst')).toBe('never');
     expect(roleFeed(null)).toBe('never');
+  });
+});
+
+describe('Action Center access (§6)', () => {
+  it('needs no check while Action Center is on every menu', () => {
+    const why = 'W2-25 daily suggestions must then respect Action Center access (CHAT-26 §6)';
+    expect(ALWAYS_ON_SECTION, why).toBe('action-center');
+    expect(
+      hiddenMenuSections({
+        role: 'agency_partner',
+        roleHidden: [ALWAYS_ON_SECTION],
+        shown: [],
+        hidden: [ALWAYS_ON_SECTION],
+        workAreas: ['developers'],
+      }).has(ALWAYS_ON_SECTION),
+      why,
+    ).toBe(false);
   });
 });
 

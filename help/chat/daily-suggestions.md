@@ -36,7 +36,7 @@ Click a row, or **Open**, to open the action in the Action Center, on its brand.
 
 ## Who gets them
 
-Daily suggestions come from the Action Center, so only people who have **Action Center** in their menu get them. Admins and Managers get them for every brand of the workspace. Agency partners get them once they open the **Inbox** for the first time. Analysts don't get them. The demo brand gets none, and a workspace whose plan ended gets no new ones: its list keeps what it has.
+Daily suggestions come from the Action Center, which is in everyone's menu, so menu settings don't turn them off. Admins and Managers get them for every brand of the workspace. Agency partners get them once they open the **Inbox** for the first time. Analysts don't get them. The demo brand gets none, and a workspace whose plan ended gets no new ones: its list keeps what it has.
 
 ## Pause or turn them back on
 

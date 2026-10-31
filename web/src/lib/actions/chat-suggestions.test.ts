@@ -5,8 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * person reads their own through their session (the last 7 days, not
  * removed or put off, their action not deleted), dated by the job's time
  * zone; every write is the server's, on their own rows only, after the
- * plan check, and answers as a value (#1777). Nobody without the Action
- * Center on their menu gets them.
+ * plan check, and answers as a value (#1777).
  */
 
 const ME = '11111111-1111-4111-8111-111111111111';
@@ -74,20 +73,7 @@ vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: { from: (table: string) => adminFrom(table) },
 }));
 const guard = vi.hoisted(() => ({ refuse: null as Error | null }));
-/** The person's menu leaves the Action Center out: today's rule never does (ALWAYS_ON_SECTION). */
-const menu = vi.hoisted(() => ({ hidesActionCenter: false }));
-vi.mock('@/lib/menu-access', async (importOriginal) => {
-  const real = await importOriginal<typeof import('@/lib/menu-access')>();
-  return {
-    ...real,
-    menuOfProfile: (...args: Parameters<typeof real.menuOfProfile>) => {
-      const own = real.menuOfProfile(...args);
-      return menu.hidesActionCenter
-        ? { ...own, hidden: [...own.hidden, real.ALWAYS_ON_SECTION] }
-        : own;
-    },
-  };
-});
+
 vi.mock('@/lib/subscription-guard', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/subscription-guard')>()),
   assertWritable: vi.fn(async () => {
@@ -118,7 +104,6 @@ beforeEach(() => {
   calls = [];
   role = 'admin';
   guard.refuse = null;
-  menu.hidesActionCenter = false;
   answers = {
     'session.profiles.select': () => ({ data: { organization_id: ORG, role }, error: null }),
     'session.chat_suggestion_feeds.select': { data: [{ status: 'on' }], error: null },
@@ -297,18 +282,6 @@ describe('readDailySuggestions', () => {
     expect(calls.some((c) => c.table.startsWith('chat_suggestion'))).toBe(false);
   });
 
-  it('gives none to someone without the Action Center on their menu', async () => {
-    role = 'manager';
-    menu.hidesActionCenter = true;
-    expect(await readDailySuggestions()).toEqual({
-      ok: true,
-      read: { roleFeed: 'never', state: 'none', suggestions: [], total: 0, today: null },
-    });
-    expect(calls.some((c) => c.table.startsWith('chat_suggestion'))).toBe(false);
-    // Their role's menu, read through their session.
-    expect(calls.find((c) => c.table === 'organization_menu_roles')?.via).toBe('session');
-  });
-
   it('says paused while any brand is, and fails as a value', async () => {
     answers['session.chat_suggestion_feeds.select'] = {
       data: [{ status: 'on' }, { status: 'paused' }],
@@ -414,12 +387,6 @@ describe('setDailySuggestions', () => {
     expect(await setDailySuggestions(true)).toEqual({ ok: false, failure: 'not_allowed' });
     expect(writes()).toEqual([]);
   });
-
-  it('turns none on for someone without the Action Center on their menu', async () => {
-    menu.hidesActionCenter = true;
-    expect(await setDailySuggestions(true)).toEqual({ ok: false, failure: 'not_allowed' });
-    expect(writes()).toEqual([]);
-  });
 });
 
 describe('startDailySuggestions', () => {
@@ -442,13 +409,6 @@ describe('startDailySuggestions', () => {
     const read = calls.find((c) => c.via === 'admin' && c.table === 'chat_suggestion_feeds')!;
     expect(has(read, 'eq', 'user_id', ME)).toBe(true);
     expect(has(read, 'eq', 'organization_id', ORG)).toBe(true);
-  });
-
-  it('makes none for a partner without the Action Center on their menu', async () => {
-    role = 'agency_partner';
-    menu.hidesActionCenter = true;
-    expect(await startDailySuggestions()).toEqual({ ok: false, failure: 'not_allowed' });
-    expect(writes()).toEqual([]);
   });
 
   it("makes none for an Analyst, nor for an Admin or Manager (the job's to make)", async () => {

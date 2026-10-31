@@ -156,17 +156,20 @@ export function suggestionDot(
 }
 
 /**
- * The Chat answers the job reads time zones from (W2-24's ZONE_DAYS and
- * ZONE_ANSWERS): the workspace's of the last 30 days, the latest 300.
+ * The Chat answers the job reads time zones from: the workspace's of the
+ * last 30 days, the latest 300. A copy of ZONE_DAYS and ZONE_ANSWERS in
+ * server/src/lib/chat-suggestions/job.js (W2-24): keep them in step.
  */
 export const ZONE_DAYS = 30;
 export const ZONE_ANSWERS = 300;
 
 /**
- * The time zone the nightly job dates a person's suggestions in (W2-24's
- * resolveZones): their latest Chat answer's (chat_messages.timezone, the
- * browser's zone it was shown in); else the one most of the workspace's
- * latest answers were read in, the newest on a tie; else UTC.
+ * The time zone the nightly job dates a person's suggestions in: their
+ * latest Chat answer's (chat_messages.timezone, the browser's zone it was
+ * shown in); else the one most of the workspace's latest answers were read
+ * in, the newest on a tie; else UTC. A copy of resolveZones in
+ * server/src/lib/chat-suggestions/rules.js (W2-24): a change there changes
+ * sent_on, so it changes here too, or "Today" drifts from it.
  *
  * @param answers the workspace's latest answers, newest first
  */

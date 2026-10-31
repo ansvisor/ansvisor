@@ -7,12 +7,6 @@ import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { parseTeamRole } from '@/lib/chat/precedence';
 import { assertWritable, SUBSCRIPTION_INACTIVE } from '@/lib/subscription-guard';
 import {
-  ALWAYS_ON_SECTION,
-  menuOfProfile,
-  readRoleHidden,
-  type MenuProfile,
-} from '@/lib/menu-access';
-import {
   ZONE_ANSWERS,
   ZONE_DAYS,
   closedStatus,
@@ -24,7 +18,6 @@ import {
   shownSince,
   type DailySuggestion,
   type DailySuggestionsRead,
-  type RoleFeed,
 } from '@/lib/chat/daily-suggestions';
 
 /**
@@ -41,8 +34,9 @@ import {
  * from. Turning the feeds on or off only changes their status: the job's
  * "first one the next morning" reads the update's time (updated_at).
  *
- * Nobody gets them without the Action Center on their menu (§6, 00374),
- * where they come from: no tab or rows, and no feed made or turned on.
+ * Action Center access (§6) needs no check: it is on every menu (menu
+ * access, 00374, ALWAYS_ON_SECTION), which a test in
+ * lib/chat/daily-suggestions.test.ts keeps true.
  */
 
 export type SuggestionsFailure = 'chat_off' | 'read_only' | 'not_allowed' | 'not_found' | 'failed';
@@ -74,8 +68,6 @@ interface Person {
   userId: string;
   orgId: string;
   role: ReturnType<typeof parseTeamRole>;
-  /** The profile's menu columns (00374). */
-  menu: Omit<MenuProfile, 'role'>;
 }
 
 /** The signed-in person with the new Chat on for their workspace, or null. */
@@ -87,40 +79,12 @@ async function chatPerson(): Promise<Person | null> {
   if (!user) return null;
   const { data: profile } = await client
     .from('profiles')
-    .select(
-      'organization_id, role, work_areas, work_areas_asked_at, menu_shown, menu_hidden, can_manage_menus',
-    )
+    .select('organization_id, role')
     .eq('id', user.id)
     .maybeSingle();
   const orgId = profile?.organization_id ?? null;
   if (!orgId || !chatAgenticEnabled(orgId)) return null;
-  return {
-    client,
-    userId: user.id,
-    orgId,
-    role: parseTeamRole(profile?.role),
-    menu: {
-      work_areas: profile?.work_areas ?? null,
-      work_areas_asked_at: profile?.work_areas_asked_at ?? null,
-      menu_shown: profile?.menu_shown ?? null,
-      menu_hidden: profile?.menu_hidden ?? null,
-      can_manage_menus: profile?.can_manage_menus ?? null,
-    },
-  };
-}
-
-/**
- * Who gets daily suggestions (§6): by role, and only with the Action Center
- * on the person's menu (00374), where they come from. Action Center is on
- * every menu today (ALWAYS_ON_SECTION); this follows the menu's own rule,
- * so it holds should that change.
- */
-async function personFeed(me: Person): Promise<RoleFeed> {
-  const feed = roleFeed(me.role);
-  if (feed === 'never' || !me.role) return 'never';
-  const roleHidden = await readRoleHidden(me.client, me.orgId, me.role);
-  const { hidden } = menuOfProfile({ ...me.menu, role: me.role }, roleHidden);
-  return hidden.includes(ALWAYS_ON_SECTION) ? 'never' : feed;
+  return { client, userId: user.id, orgId, role: parseTeamRole(profile?.role) };
 }
 
 /**
@@ -204,14 +168,14 @@ function toSuggestion(row: SuggestionRow): DailySuggestion {
  * the last 7 days' suggestions they haven't removed or put off (Not now,
  * until its day), newest first. A suggestion whose action was deleted
  * (deleted_at, which the person's session doesn't read) drops out; one done
- * or dismissed since stays, with that status. An Analyst, or someone
- * without the Action Center, gets none (§6), and nothing is read for them.
+ * or dismissed since stays, with that status. An Analyst gets none (§6),
+ * and nothing is read for them.
  */
 export async function readDailySuggestions(): Promise<SuggestionsReadResult> {
   try {
     const me = await chatPerson();
     if (!me) return { ok: false, failure: 'chat_off' };
-    const feed = await personFeed(me);
+    const feed = roleFeed(me.role);
     if (feed === 'never') {
       return {
         ok: true,
@@ -383,7 +347,7 @@ export async function setDailySuggestions(on: boolean): Promise<SuggestionsWrite
     if (typeof on !== 'boolean') return { ok: false, failure: 'not_allowed' };
     const me = await chatPerson();
     if (!me) return { ok: false, failure: 'chat_off' };
-    if ((await personFeed(me)) === 'never') return { ok: false, failure: 'not_allowed' };
+    if (roleFeed(me.role) === 'never') return { ok: false, failure: 'not_allowed' };
     const status = on ? 'on' : 'off';
     const { error } = await supabaseAdmin
       .from('chat_suggestion_feeds')
@@ -424,7 +388,7 @@ export async function setDailySuggestions(on: boolean): Promise<SuggestionsWrite
  * when they first open the Inbox): their feeds are made, on, for the
  * workspace's brands. Only while they have none: one they paused or turned
  * off stays so. Admins' and Managers' feeds are the nightly job's to make;
- * an Analyst, or someone without the Action Center, gets none.
+ * an Analyst gets none.
  */
 export async function startDailySuggestions(): Promise<SuggestionsStartResult> {
   try {
@@ -435,7 +399,7 @@ export async function startDailySuggestions(): Promise<SuggestionsStartResult> {
   try {
     const me = await chatPerson();
     if (!me) return { ok: false, failure: 'chat_off' };
-    if ((await personFeed(me)) !== 'opt_in') return { ok: false, failure: 'not_allowed' };
+    if (roleFeed(me.role) !== 'opt_in') return { ok: false, failure: 'not_allowed' };
     const { data: feeds, error: readError } = await supabaseAdmin
       .from('chat_suggestion_feeds')
       .select('brand_id')
