@@ -46,6 +46,11 @@ interface Builder extends PromiseLike<Result> {
   lt(column: string, value: string): Builder;
   gt(column: string, value: unknown): Builder;
   /**
+   * PostgREST's `or`: a row passes any of the comma-separated `column.op.value`
+   * terms (eq, neq, is null, lt a date), as saveContentDraft's agent check.
+   */
+  or(terms: string): Builder;
+  /**
    * A full-text match (`fts`): every `'word':*` term of `query`, joined by `&`,
    * starts a word of the row's `column` — a test row holds its search
    * column as plain words.
@@ -239,6 +244,24 @@ export function createFakeSupabase(): FakeSupabase {
         },
         gt(column, value) {
           filters.push((row) => (row[column] as number) > (value as number));
+          return builder;
+        },
+        or(terms) {
+          const tests = (terms.match(/(?:[^,"]|"[^"]*")+/g) ?? []).map((term) => {
+            const [column, op, ...rest] = term.split('.');
+            const raw = rest.join('.').replace(/^"|"$/g, '');
+            const value = raw === 'null' ? null : raw;
+            return (row: Row) => {
+              const cell = row[column] ?? null;
+              if (op === 'is' || op === 'eq') return cell === value;
+              if (op === 'neq') return cell !== null && cell !== value;
+              if (op === 'lt') {
+                return typeof cell === 'string' && Date.parse(cell) < Date.parse(String(value));
+              }
+              throw new Error(`The fake has no or-operator ${op}`);
+            };
+          });
+          filters.push((row) => tests.some((test) => test(row)));
           return builder;
         },
         textSearch(column, query) {

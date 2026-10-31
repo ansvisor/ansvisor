@@ -136,6 +136,8 @@ export interface ChatConfirm {
   digest: string;
   /** offerDontAskAgain: the card may offer "Don't ask again" (CHAT-20 §5 step 6). */
   canDontAskAgain: boolean;
+  /** A change with no Undo once made (CHAT-20 §9: a page sent to a CMS, an audit): the card says so. */
+  noUndo?: true;
   /** What the change leaves behind, under the card ("Its timeline … doesn't come back"). */
   note?: string;
 }
