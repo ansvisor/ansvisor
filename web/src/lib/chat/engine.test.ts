@@ -4559,6 +4559,24 @@ describe('the /tasks task strip (W2-11, CHAT-09 §B)', () => {
     expectClean(await eventsOf(runId));
   });
 
+  it("takes no other brand's tasks into a chat about one brand", async () => {
+    const SECOND = '67676767-6767-4767-8767-676767676767';
+    db.tables.brands.push({ id: SECOND, organization_id: ORG, name: 'Southwind' });
+    db.tables.actions.push({ ...parent('b-top', 90, '2026-01-01'), brand_id: SECOND });
+    db.tables.action_tasks.push(task('t-other', 'b-top', 1, 'Southwind task'));
+    useModels(
+      [
+        calls(toolCall('r1', 'list_action_center_tasks', { brand_id: SECOND })),
+        calls(toolCall('r2', 'get_action', { brand_id: SECOND, action_id: 'b-top' })),
+        READY,
+      ],
+      [text('Done.')],
+    );
+    const runId = await turn(ADMIN, '/tasks Start the top task.');
+    expect(db.tables.chat_task_state).toEqual([]);
+    expect(ofType(await eventsOf(runId), 'tasks.updated')).toEqual([]);
+  });
+
   it('keeps no strip for a run without the /tasks skill', async () => {
     useModels(
       [calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })), READY],

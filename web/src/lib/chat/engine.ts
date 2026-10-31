@@ -462,7 +462,6 @@ async function fromTaintedRun(conversationId: string, runId: string): Promise<bo
   return (state as { progress: { tainted?: boolean } | null } | null)?.progress?.tainted === true;
 }
 
-
 /**
  * What the chat's earlier runs pass on to a new one (see EarlierRuns). A
  * move is matched on the text, however the message came; a failed read
@@ -2702,7 +2701,8 @@ const TASKS_SKILL = 'tasks';
  * due first and by priority (task-strip.ts pickTasks); opening an action
  * (get_action) marks its tasks Writing. Only in a run that loaded the
  * /tasks skill, on its brand. Never stops the run: a failed write loses
- * the strip's update, not the answer.
+ * the strip's update, not the answer. A chat about one brand takes no
+ * other brand's tasks: its strip is shown to whoever may open the chat.
  */
 async function followTaskReads(
   rc: RunContext,
@@ -2711,6 +2711,8 @@ async function followTaskReads(
   brandId: string | null,
 ): Promise<void> {
   if (!brandId || !(rc.progress.skills ?? []).includes(TASKS_SKILL)) return;
+  // A chat about one brand keeps that brand's tasks only, as Ready for review does (W2-10).
+  if (rc.progress.brandId && brandId !== rc.progress.brandId) return;
   if (toolName !== 'list_action_center_tasks' && toolName !== 'get_action') return;
   try {
     if (toolName === 'list_action_center_tasks') {
