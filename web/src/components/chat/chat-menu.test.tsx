@@ -46,6 +46,7 @@ vi.mock('@/components/providers/ai-usage-provider', () => ({
 
 const { ChatMenuView } = await import('./chat-menu');
 const { ChatShell } = await import('./chat-shell');
+const { AgentsSeen } = await import('./agents/agents-seen');
 const { saveChatMenuOpen } = await import('@/lib/actions/chat-prefs');
 const { useChatRailStore } = await import('@/stores/use-chat-rail-store');
 
@@ -416,7 +417,7 @@ describe('ChatShell', () => {
     expect(host.querySelector('header h1')?.textContent).toBe('Settings');
   });
 
-  it('leads to Agent Center out of Chat, and drops its New once opened from here', async () => {
+  it('leads to Agent Center out of Chat, and drops its New once Agent Center was opened', async () => {
     // A browser's storage, where the pill's "seen" is kept.
     const kept = new Map<string, string>();
     vi.stubGlobal('localStorage', {
@@ -435,11 +436,10 @@ describe('ChatShell', () => {
     // Its pages have no Chat header: the shell names none of them.
     expect(host.querySelector('header nav')?.textContent).toBe('Chat›Inbox');
 
-    // jsdom doesn't navigate; the click is all that's needed here.
-    host.addEventListener('click', (event) => event.preventDefault());
-    await act(async () => item().click());
-    expect(item().textContent).toBe('Agent Center');
-    // Opened once, the pill stays gone on the next visit.
+    // Agent Center opened, however it was reached (its pages mark it seen).
+    act(() => root.unmount());
+    root = createRoot(host);
+    await render(<AgentsSeen />);
     act(() => root.unmount());
     root = createRoot(host);
     nav.pathname = '/dashboard/chat/all';

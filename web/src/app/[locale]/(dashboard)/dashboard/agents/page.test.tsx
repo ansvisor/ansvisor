@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { isValidElement } from 'react';
+import { Children, isValidElement, type ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -39,6 +39,8 @@ const { default: AgentsPage } = await import('./page');
 const { default: AgentPage } = await import('./[id]/page');
 const { default: NewAgentPage } = await import('./new/page');
 const { default: EditAgentPage } = await import('./[id]/edit/page');
+const { default: AgentCenterLayout } = await import('./layout');
+const { AgentsSeen } = await import('@/components/chat/agents/agents-seen');
 const { AgentForm } = await import('@/components/chat/agents/agent-form');
 const { AgentsList } = await import('@/components/chat/agents/agents-list');
 const { AgentDetail } = await import('@/components/chat/agents/agent-detail');
@@ -74,6 +76,16 @@ describe('Agent Center pages', () => {
 
   it("are not found for an address that isn't an agent's id", async () => {
     await expect(AgentPage(params('new'))).rejects.toThrow('NEXT_NOT_FOUND');
+  });
+});
+
+describe('Agent Center layout', () => {
+  it('marks Agent Center seen on every one of its pages, so the chat menu’s New goes', () => {
+    const tree = AgentCenterLayout({ children: <p>page</p> }) as ReactElement<{
+      children: ReactElement[];
+    }>;
+    const parts = Children.toArray(tree.props.children) as ReactElement[];
+    expect(parts.map((part) => part.type)).toEqual([AgentsSeen, 'p']);
   });
 });
 

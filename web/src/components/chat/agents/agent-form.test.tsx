@@ -180,6 +180,7 @@ afterEach(() => {
 describe('AgentForm: new agent', () => {
   it('walks Skill · Trigger · Mode & approvals · Connections & model, stopping where a step isn’t ready', async () => {
     await render();
+    expect(one('h1')!.textContent).toBe('New agent');
     expect(all('[data-action="agentNew.step"]').map((b) => b.textContent)).toEqual([
       '1Skill',
       '2Trigger',
@@ -553,7 +554,9 @@ describe('AgentForm: edit', () => {
         ? Response.json({ ok: true, agent: detail({ name: 'Win back weekly', version: 2 }) })
         : Response.json({ ok: false, failure: 'failed' }, { status: 500 });
     await render(SETUP, editable());
-    expect(one('h1')!.textContent).toBe('Edit agent');
+    // Its name in the title, now that no breadcrumb above names it.
+    expect(one('h1')!.textContent).toBe('Edit · Citation win-back');
+    expect(one('h1')!.getAttribute('title')).toBe('Citation win-back');
     expect(one('[data-skill="winback"]')!.getAttribute('aria-checked')).toBe('true');
     expect(container.textContent).toContain('/refresh');
     await click(one('[data-step-button="1"]')!);
@@ -626,6 +629,8 @@ describe('AgentForm: edit', () => {
   it('is read-only without the right to change it', async () => {
     await render(SETUP, detail({ mine: false, can: { ...NOTHING_CAN } }));
     expect(one('[data-slot="agent-form"]')).toBeNull();
+    // Still named, read-only too.
+    expect(one('h1')!.textContent).toBe('Edit · Citation win-back');
     expect(one('[data-slot="agent-form-read-only"]')!.textContent).toContain(
       'Only its owner or an Admin can change it',
     );

@@ -227,11 +227,14 @@ export function AgentForm({
     () => timeZone ?? null,
   );
   const back = agent ? `/dashboard/agents/${agent.id}` : '/dashboard/agents';
-  const title = agent ? t('titleEdit') : t('titleNew');
+  // Editing, the agent's name: "Edit · Citation win-back".
+  const title = agent ? t('titleEdit', { name: agent.name }) : t('titleNew');
 
   const header = (
     <div className="mb-4 flex flex-wrap items-center gap-3">
-      <h1 className="text-2xl font-bold tracking-[-.4px]">{title}</h1>
+      <h1 className="min-w-0 truncate text-2xl font-bold tracking-[-.4px]" title={agent?.name}>
+        {title}
+      </h1>
       <div className="ml-auto flex items-center gap-2">
         <Link
           href={back}

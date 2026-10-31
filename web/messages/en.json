@@ -5047,7 +5047,7 @@
     },
     "form": {
       "titleNew": "New agent",
-      "titleEdit": "Edit agent",
+      "titleEdit": "Edit · {name}",
       "cancel": "Cancel",
       "stepsLabel": "Steps",
       "steps": {

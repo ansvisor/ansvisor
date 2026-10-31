@@ -11,6 +11,7 @@ import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { AT_WORK_ROWS, chatMenuLists, type DayGroup } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
+import { readAgentsSeen } from './agents/agents-seen';
 import { useChatList, type ChatListStatus } from './chat-list-provider';
 import { ChatRowMenu } from './chat-menus';
 import { ChatRow } from './chat-row';
@@ -36,25 +37,6 @@ function saveFolded(folded: Record<Section, boolean>) {
     window.localStorage.setItem(SECTIONS_KEY, JSON.stringify(folded));
   } catch {
     // Private windows and full storage: it is only folded for this visit.
-  }
-}
-
-/** Agent Center was opened from here in this browser: its "New" pill is gone (CHAT-21 §A item 1). */
-const AGENTS_SEEN_KEY = 'ansvisor.chatMenu.agentsSeen';
-
-function readAgentsSeen(): boolean {
-  try {
-    return window.localStorage.getItem(AGENTS_SEEN_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function saveAgentsSeen() {
-  try {
-    window.localStorage.setItem(AGENTS_SEEN_KEY, '1');
-  } catch {
-    // Private windows and full storage: the pill shows again next visit.
   }
 }
 
@@ -248,7 +230,7 @@ export function ChatMenuView({
   const [query, setQuery] = useState('');
   const found = useChatSearch(query);
   const searching = query.trim() !== '';
-  // The "New" pill beside Agent Center, until it is first opened from here in this browser.
+  // The "New" pill beside Agent Center, until it is first opened in this browser.
   const [agentsNew, setAgentsNew] = useState(false);
   useEffect(() => {
     // Browser storage exists only after hydration.
@@ -381,11 +363,7 @@ export function ChatMenuView({
             href="/dashboard/agents"
             action="chatMenu.openAgents"
             active={false}
-            onNavigate={() => {
-              saveAgentsSeen();
-              setAgentsNew(false);
-              onNavigate?.();
-            }}
+            onNavigate={onNavigate}
           >
             {t('agents')}
             {agentsNew && <NewPill className="ml-auto" />}
