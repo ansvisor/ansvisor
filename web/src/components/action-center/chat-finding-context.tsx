@@ -6,8 +6,6 @@ import { Link } from '@/i18n/navigation';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { pagePath } from '@/lib/content/overlap';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 const listOf = (raw: unknown): unknown[] => (Array.isArray(raw) ? raw : []);
 const labelOf = (item: unknown): string | null => {
   if (typeof item === 'string') return item.trim() || null;
@@ -17,16 +15,19 @@ const labelOf = (item: unknown): string | null => {
 
 /**
  * What a finding sent from Chat carries (CHAT-09 §E): the chat it came
- * from, and what it was sent with, frozen when it was created (CHAT-20 §12
+ * from (Open the chat only for a reader who may open it), and what it was sent with, frozen when it was created (CHAT-20 §12
  * rule 3): its prompts, pages, competitors and platforms. The finding itself
  * is the action's description, above.
  */
-export function ChatFindingContext({ payload }: { payload: Record<string, unknown> }) {
+export function ChatFindingContext({
+  payload,
+  chatHref,
+}: {
+  payload: Record<string, unknown>;
+  /** The chat it came from, when the person reading may open it (their own, or shared). */
+  chatHref: string | null;
+}) {
   const t = useTranslations('actionCenter.actionsPage.drawer.chatFinding');
-  const conversationId =
-    typeof payload.conversationId === 'string' && UUID.test(payload.conversationId)
-      ? payload.conversationId
-      : null;
   const entities = (payload.entities ?? {}) as Record<string, unknown>;
   const prompts = listOf(entities.prompts)
     .map(labelOf)
@@ -58,9 +59,9 @@ export function ChatFindingContext({ payload }: { payload: Record<string, unknow
         <p className="text-xs font-medium text-muted-foreground">{t('source')}</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <span>{t('sourceValue')}</span>
-          {conversationId && (
+          {chatHref && (
             <Link
-              href={`/dashboard/chat/${conversationId}`}
+              href={chatHref}
               className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
             >
               {t('openChat')}
@@ -77,8 +78,8 @@ export function ChatFindingContext({ payload }: { payload: Record<string, unknow
               <div key={group.key} className="contents">
                 <dt className="text-muted-foreground">{group.label}</dt>
                 <dd className="min-w-0">
-                  {group.items.slice(0, 8).map((item) => (
-                    <span key={item} className="block truncate" title={item}>
+                  {group.items.slice(0, 8).map((item, i) => (
+                    <span key={`${i}-${item}`} className="block truncate" title={item}>
                       {item}
                     </span>
                   ))}

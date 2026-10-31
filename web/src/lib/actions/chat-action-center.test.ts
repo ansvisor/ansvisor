@@ -71,6 +71,22 @@ const proposal = {
     },
   ],
 };
+/**
+ * The run step the change runs on now, as the engine wrote it: its tool, and
+ * its mark when it ran without a card (Full auto). The embed reads its run.
+ */
+function stepFor(tool: string, auto = false) {
+  db.tables.chat_run_steps = [
+    {
+      id: 'step-1',
+      run_id: RUN,
+      status: 'running',
+      tool,
+      debug_json: auto ? { auto: true } : { input: {} },
+      chat_runs: { conversation_id: CHAT },
+    },
+  ];
+}
 const fetchMock = vi.fn();
 const answer = (status: number, body: unknown) =>
   fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(body), { status }));
@@ -89,8 +105,9 @@ beforeEach(() => {
   for (const row of db.tables.action_tasks)
     row.actions = { action_no: 1258, brand_id: BRAND, status: 'new' };
   for (const row of db.tables.chat_files) row.brand_id = BRAND;
-  db.tables.chat_conversations = [{ id: CHAT, user_id: ME }];
+  db.tables.chat_conversations = [{ id: CHAT, user_id: ME, brand_id: BRAND }];
   db.tables.chat_runs = [{ id: RUN, conversation_id: CHAT }];
+  stepFor('create_action');
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -148,14 +165,28 @@ describe('createChatAction (Send to Action Center)', () => {
     expect(below).not.toHaveProperty('daily_limit_note');
   });
 
-  it("records automated in Full auto, and never a chat that isn't the person's", async () => {
+  it('reads how it was approved from its step, never from what the caller says', async () => {
+    // Ran without a card: the engine marked its step.
+    stepFor('create_action', true);
     answer(201, { actionId: ACTION, actionNo: 1271, created: true });
-    await createChatAction(BRAND, proposal, {
-      ...place,
-      conversationId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
-      executionMode: 'automated',
-    });
-    expect(sent()).toMatchObject({ conversationId: null, runId: null, executionMode: 'automated' });
+    await createChatAction(BRAND, proposal, { ...place, executionMode: 'assisted' });
+    expect(sent()).toMatchObject({ executionMode: 'automated', idempotencyKey: 'chat:step-1' });
+
+    // A caller's word alone: another chat, a step of another tool, or one not running now.
+    const nothing = { conversationId: null, runId: null, executionMode: null };
+    for (const [why, setUp] of [
+      ['not their chat', () => (db.tables.chat_conversations[0].user_id = 'someone-else')],
+      ['another tool', () => stepFor('attach_to_action', true)],
+      ['not running', () => (db.tables.chat_run_steps[0].status = 'done')],
+    ] as const) {
+      db.tables.chat_conversations[0].user_id = ME;
+      stepFor('create_action', true);
+      setUp();
+      answer(201, { actionId: ACTION, actionNo: 1272, created: true });
+      await createChatAction(BRAND, proposal, { ...place, executionMode: 'automated' });
+      expect(sent(), why).toMatchObject(nothing);
+      expect(sent().idempotencyKey, why).not.toBe('chat:step-1');
+    }
   });
 
   it('answers a duplicate with the action that covers it, for Add to AC-{n}', async () => {
@@ -195,6 +226,23 @@ describe('createChatAction (Send to Action Center)', () => {
       reason: 'failed',
     });
   });
+
+  it("says another workspace's brand, or one outside the person's access, and a cancelled one", async () => {
+    for (const code of ['not_in_workspace', 'no_brand_access']) {
+      answer(403, { code, details: "This brand isn't in your workspace" });
+      await expect(createChatAction(BRAND, proposal, place), code).resolves.toEqual({
+        ok: false,
+        reason: 'not_found',
+        message: "This brand isn't in your workspace",
+      });
+    }
+    answer(409, { code: 'conflict', details: 'The action this approval made was cancelled.' });
+    await expect(createChatAction(BRAND, proposal, place)).resolves.toEqual({
+      ok: false,
+      reason: 'conflict',
+      message: 'The action this approval made was cancelled.',
+    });
+  });
 });
 
 describe('checkChatActionCover', () => {
@@ -218,10 +266,11 @@ describe('checkChatActionCover', () => {
 describe('attachToAction (Add to AC-{n})', () => {
   it('adds the finding to its History from Chat, and changes nothing else', async () => {
     const before = JSON.stringify(db.tables.actions);
+    stepFor('attach_to_action', true);
     const added = await attachToAction(
       ACTION,
       { finding: 'Lost 6 citations on /pricing.', note: 'Same pages', sources: ['Citations'] },
-      { ...place, executionMode: 'automated' },
+      place,
     );
     expect(added).toMatchObject({ ok: true, action_id: ACTION, action_no: 1258 });
     expect(events('evidence_attached')).toEqual([
@@ -257,6 +306,7 @@ describe('attachToAction (Add to AC-{n})', () => {
 
 describe('attachFileToTask (Attach only)', () => {
   it('links the file by the person, marks it attached, and says so in History, once', async () => {
+    stepFor('attach_file_to_task');
     await expect(attachFileToTask(BRAND, TASK, FILE, place)).resolves.toEqual({
       ok: true,
       file_id: FILE,
@@ -310,6 +360,7 @@ describe('attachFileToTask (Attach only)', () => {
 
 describe('setTaskReadyForReview', () => {
   it("puts the task last in the chat's strip as Ready for review, and says so in History", async () => {
+    stepFor('set_task_ready_for_review');
     db.tables.chat_task_state.push({
       conversation_id: CHAT,
       action_task_id: 'other-task',
@@ -340,6 +391,7 @@ describe('setTaskReadyForReview', () => {
   });
 
   it('moves a task the chat was writing, and says what it was for Undo', async () => {
+    stepFor('set_task_ready_for_review');
     db.tables.chat_task_state.push({
       conversation_id: CHAT,
       action_task_id: TASK,
@@ -352,7 +404,18 @@ describe('setTaskReadyForReview', () => {
     expect(db.tables.chat_task_state[0].chat_status).toBe('ready_for_review');
   });
 
+  it("refuses a task of a brand other than its chat's", async () => {
+    stepFor('set_task_ready_for_review');
+    db.tables.chat_conversations[0].brand_id = '99999999-0000-4000-8000-000000000000';
+    await expect(setTaskReadyForReview(BRAND, TASK, place)).resolves.toMatchObject({
+      reason: 'invalid',
+      message: 'This chat is about another brand: set Ready for review from its own chat.',
+    });
+    expect(db.tables.chat_task_state).toEqual([]);
+  });
+
   it('refuses a task done in Action Center, and outside a chat', async () => {
+    stepFor('set_task_ready_for_review');
     await expect(setTaskReadyForReview(BRAND, TASK, undefined)).resolves.toMatchObject({
       reason: 'invalid',
     });

@@ -133,6 +133,22 @@ export type ChatToolContext = McpAuthContext & { chat?: ChatWritePlace };
 export interface ToolCardItem {
   title: string;
   detail?: string;
+  /** Its new text in full (a task's change.after): the card shortens it, with Show all. */
+  body?: string;
+}
+
+/** What a card's targets are, by kind: the browser names each kind from en.json. */
+export type ToolCardTargetKind = 'prompts' | 'pages' | 'competitors' | 'platforms';
+
+/**
+ * What a card shows of a change beyond its target (CHAT-09 item 18: what is
+ * frozen when it's made): its items, why, goal and targets.
+ */
+export interface ToolCardDetails {
+  items?: ToolCardItem[];
+  why?: string;
+  goal?: string;
+  targets?: { kind: ToolCardTargetKind; values: string[] }[];
 }
 
 /**
@@ -206,8 +222,16 @@ interface ToolFields<S extends z.ZodObject> {
    * change checks again.
    */
   precheck?(ctx: ChatToolContext, input: z.output<S>): Promise<unknown>;
-  /** What its card lists under the target: the tasks an action is created with. */
-  cardItems?(input: z.output<S>): ToolCardItem[];
+  /**
+   * What its card shows beyond the target, read in the person's words where
+   * the input has ids: an action's tasks, why, goal and targets.
+   */
+  cardDetails?(input: z.output<S>): ToolCardDetails | Promise<ToolCardDetails>;
+  /**
+   * A call this input makes shows its card in every mode, Full auto too:
+   * a choice that is the person's (Create anyway, CHAT-09 item 18a).
+   */
+  alwaysCardWhen?(input: z.output<S>): boolean;
   /** What it made, as a card with its Open (CHAT-09 item 19); null when nothing. */
   resultCard?(input: z.output<S>, output: unknown): ToolResultCard | null;
   /** A valid input, for the registry's tests and the permission fixtures (CHAT-20 §19). */

@@ -129,35 +129,75 @@ const FAILED = (what: string): ChatActionFailure => ({
 /** The action's page with its drawer open: the redirect at actions/[id]. */
 const actionHref = (id: string) => `/dashboard/action-center/actions/${id}` as const;
 
-/** How the change was approved, for History's execution.mode (§10a). */
-const executionOf = (place: Place) => ({ mode: place?.executionMode ?? 'assisted' });
+/** How the change was approved, for History's execution.mode (§10a): as the server read it. */
+const executionOf = (where: Where | null) => (where ? { mode: where.executionMode } : null);
+
+/** Where a change was made, as the server read it: never as a caller said it. */
+interface Where {
+  conversationId: string;
+  brandId: string | null;
+  runId: string;
+  /** The run step it runs on: one per approval, its idempotency key. */
+  approvalKey: string;
+  executionMode: 'assisted' | 'automated';
+}
 
 /**
- * The chat and run the change was made in, when they are the person's: a
- * chat they can read (their own, or one shared with them) and a run of it.
- * Null otherwise: a server action can be called with anything.
+ * The chat, run and step a change runs on, read on the server (a server
+ * action can be called with anything): the person's own chat, a run of it,
+ * and the step of that run running this very tool now. How it was approved
+ * comes from the step: one the engine ran without a card is marked so
+ * (engine.ts writeCall), any other waited on the person's card. Null when
+ * any of it doesn't hold: nothing of it is recorded then.
  */
 async function placeOf(
   supabase: Awaited<ReturnType<typeof createClient>>,
   place: Place,
-): Promise<{ conversationId: string; runId: string | null } | null> {
-  if (!place?.conversationId) return null;
+  tool: string,
+): Promise<Where | null> {
+  if (!place?.conversationId || !place.runId || !place.approvalKey) return null;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
   const { data: chat, error } = await supabase
     .from('chat_conversations')
-    .select('id')
+    .select('id, user_id, brand_id')
     .eq('id', place.conversationId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (!chat) return null;
-  if (!place.runId) return { conversationId: chat.id as string, runId: null };
-  const { data: run, error: runError } = await supabase
-    .from('chat_runs')
-    .select('id')
-    .eq('id', place.runId)
-    .eq('conversation_id', chat.id as string)
+  // A teammate's shared chat is theirs to work in, not this person's.
+  if (!chat || chat.user_id !== user.id) return null;
+  const { data: step, error: stepError } = await supabaseAdmin
+    .from('chat_run_steps')
+    .select('id, run_id, status, tool, debug_json, chat_runs!inner(conversation_id)')
+    .eq('id', place.approvalKey)
+    .eq('run_id', place.runId)
     .maybeSingle();
-  if (runError) throw new Error(runError.message);
-  return { conversationId: chat.id as string, runId: (run?.id as string | undefined) ?? null };
+  if (stepError) throw new Error(stepError.message);
+  const row = step as {
+    id: string;
+    run_id: string;
+    status: string;
+    tool: string | null;
+    debug_json: { auto?: unknown } | null;
+    chat_runs: { conversation_id: string } | null;
+  } | null;
+  if (
+    !row ||
+    row.status !== 'running' ||
+    row.tool !== tool ||
+    row.chat_runs?.conversation_id !== chat.id
+  ) {
+    return null;
+  }
+  return {
+    conversationId: chat.id as string,
+    brandId: (chat.brand_id as string | null) ?? null,
+    runId: row.run_id,
+    approvalKey: row.id,
+    executionMode: row.debug_json?.auto === true ? 'automated' : 'assisted',
+  };
 }
 
 /** The signed-in person's session token, for the API. */
@@ -173,7 +213,19 @@ async function sessionToken(): Promise<string | null> {
 function apiRefusal(status: number, body: Record<string, unknown>): ChatActionFailure {
   const details = typeof body.details === 'string' ? body.details : null;
   if (status === 403 && body.code === 'forbidden') return FORBIDDEN;
+  // Another workspace's brand, or one outside the person's brand access.
+  if (status === 403 && (body.code === 'not_in_workspace' || body.code === 'no_brand_access')) {
+    return {
+      ok: false,
+      reason: 'not_found',
+      message: details ?? "This brand isn't one you can work on.",
+    };
+  }
   if (status === 404) return NOT_FOUND('brand');
+  // The action this approval made was cancelled since.
+  if (status === 409 && body.code === 'conflict') {
+    return { ok: false, reason: 'conflict', message: details ?? 'This changed since.' };
+  }
   if (status === 400) {
     return { ok: false, reason: 'invalid', message: details ?? 'This proposal is incomplete.' };
   }
@@ -250,15 +302,15 @@ export async function createChatAction(
     await assertWritable({ brandId });
     const supabase = await createClient();
     if (!(await isManager(supabase))) return FORBIDDEN;
-    const where = await placeOf(supabase, place);
+    const where = await placeOf(supabase, place, 'create_action');
     const res = await postApi('/chat-actions', {
       brandId,
       proposal,
       conversationId: where?.conversationId ?? null,
       runId: where?.runId ?? null,
-      executionMode: executionOf(place).mode,
+      executionMode: where?.executionMode ?? null,
       // One per approval (the run step): a retry finds what it made (§11c).
-      idempotencyKey: `chat:${place?.approvalKey ?? randomUUID()}`,
+      idempotencyKey: `chat:${where?.approvalKey ?? randomUUID()}`,
       createAnyway,
     });
     if (!res) return FAILED('Your session ended.');
@@ -321,7 +373,7 @@ export async function attachToAction(
     if (!action) return NOT_FOUND('action');
     await assertWritable({ brandId: action.brand_id });
     if (action.status === 'completed' || action.status === 'dismissed') return CLOSED;
-    const where = await placeOf(supabase, place);
+    const where = await placeOf(supabase, place, 'attach_to_action');
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -338,7 +390,7 @@ export async function attachToAction(
           ...(evidence.sources?.length ? { sources: evidence.sources } : {}),
           conversationId: where?.conversationId ?? null,
           runId: where?.runId ?? null,
-          execution: executionOf(place),
+          execution: executionOf(where),
         } as Json,
       })
       .select('id')
@@ -436,7 +488,7 @@ export async function attachFileToTask(
       .eq('status', 'draft');
     if (statusError) throw new Error(statusError.message);
 
-    const where = await placeOf(supabase, place);
+    const where = await placeOf(supabase, place, 'attach_file_to_task');
     const { error: eventError } = await supabase.from('action_events').insert({
       action_id: task.action_id,
       event: 'file_attached',
@@ -450,7 +502,7 @@ export async function attachFileToTask(
         file: file.title,
         conversationId: where?.conversationId ?? null,
         runId: where?.runId ?? null,
-        execution: executionOf(place),
+        execution: executionOf(where),
       } as Json,
     });
     if (eventError) console.error('[chat/action-center] attachment not in History:', eventError);
@@ -499,9 +551,17 @@ export async function setTaskReadyForReview(
         message: 'That task is already done or skipped in Action Center.',
       };
     }
-    const where = await placeOf(supabase, place);
+    const where = await placeOf(supabase, place, 'set_task_ready_for_review');
     if (!where) {
       return { ok: false, reason: 'invalid', message: 'Ready for review is set from a chat.' };
+    }
+    // Its chat's brand: a chat about one brand doesn't mark another's tasks.
+    if (where.brandId && where.brandId !== brandId) {
+      return {
+        ok: false,
+        reason: 'invalid',
+        message: 'This chat is about another brand: set Ready for review from its own chat.',
+      };
     }
     const { data: state, error: stateError } = await supabaseAdmin
       .from('chat_task_state')
@@ -560,7 +620,7 @@ export async function setTaskReadyForReview(
         title: task.title,
         conversationId: where.conversationId,
         runId: where.runId,
-        execution: executionOf(place),
+        execution: executionOf(where),
       } as Json,
     });
     if (eventError)

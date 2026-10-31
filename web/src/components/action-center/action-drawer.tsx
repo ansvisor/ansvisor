@@ -722,7 +722,10 @@ export function ActionDrawer({
               ) : action.kind === 'chat_finding' ? (
                 <>
                   <Separator />
-                  <ChatFindingContext payload={action.payload ?? {}} />
+                  <ChatFindingContext
+                    payload={action.payload ?? {}}
+                    chatHref={detail.chatHref ?? null}
+                  />
                 </>
               ) : opportunityId ? (
                 <>
@@ -997,8 +1000,12 @@ function TaskRow({
         </button>
         {(task.attachments?.length ?? 0) > 0 && (
           <span
+            role="img"
+            aria-label={t('drawer.task.attachedFromChat.count', {
+              count: task.attachments!.length,
+            })}
+            title={t('drawer.task.attachedFromChat.count', { count: task.attachments!.length })}
             className="mt-1.5 inline-flex shrink-0 items-center gap-0.5 text-[11px] text-muted-foreground"
-            title={t('drawer.task.attachedFromChat.title')}
           >
             <Paperclip className="h-3 w-3" aria-hidden />
             {task.attachments!.length}

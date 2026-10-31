@@ -184,7 +184,7 @@ const { addBrandTopic, renameBrandTopic } = await import('@/lib/actions/topic');
 const { addCompetitors, removeBrandCompetitor } = await import('@/lib/actions/competitor');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
-const { checkChatActionCover, createChatAction, attachFileToTask } =
+const { checkChatActionCover, createChatAction, attachFileToTask, attachToAction } =
   await import('@/lib/actions/chat-action-center');
 const engine = await import('./engine');
 const { readRunEvents } = await import('./engine-store');
@@ -3163,6 +3163,7 @@ describe('Send to Action Center (CHAT-09 §E, CHAT-20 §12)', () => {
     useModels([READY], [calls(sendCall), text('Sent.')]);
     const runId = await turn(ADMIN, 'Send this to Action Center', 'auto');
     const confirm = ofType(await eventsOf(runId), 'confirm.required')[0].data;
+    // What is frozen once it's made (CHAT-09 18b): tasks, the finding and the targets.
     expect(confirm).toMatchObject({
       action: 'Send findings to Action Center',
       target: '“Win back pricing citations on /pricing” · Recover · 1 task · Northwind',
@@ -3172,6 +3173,8 @@ describe('Send to Action Center (CHAT-09 §E, CHAT-20 §12)', () => {
           detail: 'On-page · /pricing · Done when: The FAQ block is live on /pricing',
         },
       ],
+      why: 'Google AI Overviews stopped citing /pricing for 2 prompts.',
+      targets: [{ kind: 'pages', values: ['/pricing'] }],
     });
     expect(createChatAction).not.toHaveBeenCalled();
 
@@ -3199,6 +3202,112 @@ describe('Send to Action Center (CHAT-09 §E, CHAT-20 §12)', () => {
     ]);
     expect(step).toMatchObject({ status: 'done', label: 'Sent to Action Center' });
     expectClean(events);
+  });
+
+  it('marks a change that runs without a card, so History records it as automated (§10a)', async () => {
+    const seen: unknown[] = [];
+    vi.mocked(createChatAction).mockImplementation((async (
+      _brand: string,
+      _proposal: unknown,
+      place?: { approvalKey: string },
+    ) => {
+      const step = db.tables.chat_run_steps.find((row) => row.id === place!.approvalKey);
+      seen.push((step?.debug_json as { auto?: boolean } | null)?.auto ?? null);
+      return made;
+    }) as never);
+    useModels([READY], [calls(sendCall), text('Sent.')]);
+    await turn(ADMIN, 'Send this to Action Center', 'full_auto');
+    useModels([READY], [calls(sendCall), text('Sent.')]);
+    const carded = await turn(ADMIN, 'Send this to Action Center', 'auto');
+    expect((await approve(ADMIN, carded)).ok).toBe(true);
+    // Full auto's step is marked; the card's isn't.
+    expect(seen).toEqual([true, null]);
+  });
+
+  it('shows the card for Create anyway in Full auto too: that choice is the person’s (18a)', async () => {
+    vi.mocked(checkChatActionCover).mockResolvedValue({
+      ok: false,
+      reason: 'duplicate',
+      message: 'AC-1258 already covers this.',
+      action_id: ACTION,
+      action_no: 1258,
+      can_create_anyway: true,
+    });
+    const anyway = toolCall('w1', 'create_action', {
+      ...JSON.parse(sendCall.input),
+      create_anyway: true,
+    });
+    useModels([READY], [calls(anyway), text('Waiting.')]);
+    const runId = await turn(ADMIN, 'Create it anyway', 'full_auto');
+    expect(ofType(await eventsOf(runId), 'confirm.required')).toHaveLength(1);
+    expect(createChatAction).not.toHaveBeenCalled();
+    expect(runRow(runId).status).toBe('waiting');
+  });
+
+  it("tells the model a closed action's refusal in its words (§11a conflict)", async () => {
+    // The action, as the call's brand is read from it.
+    db.tables.actions = [{ id: ACTION, brand_id: BRAND, action_no: 1258 }];
+    vi.mocked(attachToAction).mockResolvedValue({
+      ok: false,
+      reason: 'conflict',
+      message: 'That action is closed: send the finding as a new action instead.',
+    });
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'attach_to_action', { action_id: ACTION, finding: 'Lost 6.' })),
+        text('It closed.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Add it to AC-1258', 'full_auto');
+    const told = JSON.stringify(sonnet.seen[1].prompt);
+    expect(told).toContain('"code":"conflict"');
+    expect(told).toContain('That action is closed');
+    expect(stepsOf(runId)[0]).toMatchObject({
+      status: 'error',
+      detail: 'That action is closed: send the finding as a new action instead.',
+    });
+  });
+
+  describe('Send to Action Center on an answer that read outside text (§16a rule 3)', () => {
+    /** A first run that read with `read`, then the button's message, from that run, in Full auto. */
+    const script = (read: string): [Step[], Step[]] => [
+      [calls(toolCall('r1', read, { brand_id: BRAND })), READY, READY],
+      [text('Two pages lost most of it.'), calls(sendCall), text('Sent.')],
+    ];
+    async function sendFrom(fromRunId?: (first: string) => string) {
+      const first = await turn(ADMIN, 'Why did citations fall?');
+      const started = await engine.startChatRun(ADMIN, {
+        message: 'Send this finding to Action Center as an action.',
+        conversationId: runRow(first).conversation_id,
+        mode: 'full_auto',
+        fromRunId: fromRunId ? fromRunId(first) : first,
+      });
+      if (!started.ok) throw new Error(`not started: ${started.code}`);
+      await engine.driveRun(ADMIN, started.runId);
+      return started.runId;
+    }
+
+    it('starts its run tainted, so the action waits on its card even in Full auto', async () => {
+      useModels(...script('read_visibility'));
+      const runId = await sendFrom();
+      expect(createChatAction).not.toHaveBeenCalled();
+      expect(ofType(await eventsOf(runId), 'confirm.required')).toHaveLength(1);
+    });
+
+    it("doesn't when that run read the workspace's own numbers only", async () => {
+      useModels(...script('get_visibility_summary'));
+      const runId = await sendFrom();
+      expect(createChatAction).toHaveBeenCalledTimes(1);
+      expect(runRow(runId).status).toBe('done');
+    });
+
+    it("counts a run that isn't this chat's as tainted: the browser's word is never taken", async () => {
+      useModels(...script('get_visibility_summary'));
+      const runId = await sendFrom(() => '99999999-9999-4999-8999-999999999990');
+      expect(createChatAction).not.toHaveBeenCalled();
+      expect(ofType(await eventsOf(runId), 'confirm.required')).toHaveLength(1);
+    });
   });
 
   it('sends it without a card in Full auto, as automated, and logs it with its Undo', async () => {

@@ -1,3 +1,4 @@
+import { readMemberEmails } from '@/lib/member-emails';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { summaryValue } from './activity';
 import type { UndoRule, WriteRecord } from './undo';
@@ -56,7 +57,24 @@ const ok = (output: unknown) => {
   return result.ok === true ? result : null;
 };
 
-// ─── create_action: cancel it while no task has started (§10b, 24 hours) ────
+// ─── create_action: cancel it while nothing happened to it (§10b, 24 hours) ──
+
+/** Who clicked Undo, as History names them: their name, else their e-mail. */
+async function personName(userId: string | undefined): Promise<string | null> {
+  if (!userId) return null;
+  try {
+    const { data } = await supabaseAdmin
+      .from('profiles')
+      .select('full_name')
+      .eq('id', userId)
+      .maybeSingle();
+    const name = (data?.full_name as string | null | undefined)?.trim();
+    if (name) return name;
+    return (await readMemberEmails([userId])).get(userId) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const createAction: UndoRule = {
   targetType: 'action',
@@ -82,24 +100,27 @@ const createAction: UndoRule = {
     if (!action) return 'gone';
     // Picked up since: it's the team's now.
     if (action.status !== 'new') return 'changed';
-    const { data: tasks, error } = await supabaseAdmin
-      .from('action_tasks')
-      .select('status')
-      .eq('action_id', id);
+    const [{ data: tasks, error }, { data: events, error: eventsError }] = await Promise.all([
+      supabaseAdmin.from('action_tasks').select('status').eq('action_id', id),
+      supabaseAdmin.from('action_events').select('event').eq('action_id', id),
+    ]);
     check(error, "the action's tasks");
+    check(eventsError, "the action's History");
     if ((tasks ?? []).some((task) => task.status !== 'todo')) return 'changed';
+    // Assigned, edited, a task added, a finding or a file attached since: no longer as sent.
+    if ((events ?? []).some((event) => event.event !== 'created')) return 'changed';
     const now = new Date().toISOString();
-    // As Delete does (00168): dismissed and deleted, so it leaves every list.
+    // Dismissed, as the person would: it stays in the Dismissed list, with why in History.
     const { data: cancelled, error: cancelError } = await supabaseAdmin
       .from('actions')
-      .update({ status: 'dismissed', deleted_at: now, completed_at: null, updated_at: now })
+      .update({ status: 'dismissed', completed_at: null, updated_at: now })
       .eq('id', id)
       .eq('status', 'new')
       .is('deleted_at', null)
       .select('id');
     if (cancelError) throw new Error(`Could not cancel the action: ${cancelError.message}`);
     if ((cancelled ?? []).length === 0) return 'changed';
-    await historyEvent(id, 'cancelled', userId, { from: 'new' });
+    await historyEvent(id, 'cancelled', userId, { from: 'new', by: await personName(userId) });
     return 'ok';
   },
   href: ACTION_HREF,
@@ -144,7 +165,9 @@ const attachToAction: UndoRule = {
     ) {
       return 'changed';
     }
-    await historyEvent(id, 'evidence_withdrawn', userId, { eventId });
+    // Says which finding went: the one its event added.
+    const finding = textOf(asObject(rows.find((row) => row.id === eventId)?.data).finding);
+    await historyEvent(id, 'evidence_withdrawn', userId, { eventId, finding });
     return 'ok';
   },
   href: ACTION_HREF,

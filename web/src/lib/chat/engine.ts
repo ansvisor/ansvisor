@@ -333,6 +333,11 @@ export const startRunInput = z.object({
     )
     .max(MAX_REFERENCES)
     .optional(),
+  /**
+   * The run whose answer the message acts on (Send to Action Center, CHAT-09
+   * item 18): a run of the same chat, read on the server, never trusted.
+   */
+  fromRunId: z.guid().optional(),
 });
 
 /** What a message was scoped to: its page's chips and its @ references (chat_messages.context_json). */
@@ -391,6 +396,30 @@ export function titleOf(message: string): string {
  * would have in the run that suggested it. Matched on the text, however the
  * message came; a failed read counts as tainted.
  */
+/**
+ * Whether the run whose answer a message acts on (Send to Action Center)
+ * read outside text (§16a rule 3), so the run the message starts is tainted
+ * too and its changes show a card even in Full auto: the model writes the
+ * change from that answer. Read on the server; a run that isn't this chat's,
+ * or a read that fails, counts as tainted.
+ */
+async function fromTaintedRun(conversationId: string, runId: string): Promise<boolean> {
+  const { data: run, error } = await supabaseAdmin
+    .from('chat_runs')
+    .select('id')
+    .eq('id', runId)
+    .eq('conversation_id', conversationId)
+    .maybeSingle();
+  if (error || !run) return true;
+  const { data: state, error: stateError } = await supabaseAdmin
+    .from('chat_run_state')
+    .select('progress')
+    .eq('run_id', runId)
+    .maybeSingle();
+  if (stateError) return true;
+  return (state as { progress: { tainted?: boolean } | null } | null)?.progress?.tainted === true;
+}
+
 async function fromTaintedMove(conversationId: string, message: string): Promise<boolean> {
   const prompt = message.trim();
   if (!prompt || prompt.length > MOVE_PROMPT_MAX) return false;
@@ -501,7 +530,9 @@ export async function startChatRun(actor: ChatActor, raw: unknown): Promise<Star
     if (error) throw new Error(`Chat could not read the chat: ${error.message}`);
     if (!data) return failure(404, 'not_found', t('error.notFound'));
     brandId = (data as { brand_id: string | null }).brand_id;
-    tainted = await fromTaintedMove(conversationId, input.message);
+    tainted =
+      (await fromTaintedMove(conversationId, input.message)) ||
+      (input.fromRunId ? await fromTaintedRun(conversationId, input.fromRunId) : false);
   } else {
     if (input.brandId) {
       const { data, error } = await supabaseAdmin
@@ -1631,20 +1662,41 @@ function besideRefusal(out: unknown): Record<string, string | number | boolean> 
   );
 }
 
-/** What a card lists under its target (its row's cardItems): the tasks an action is made with. */
-function cardItemsOf(tool: ChatTool, input: Record<string, unknown>) {
-  if (!tool.cardItems) return {};
+/** A card's text, on one line where it's a name, at most `max` characters, ids shown as "…". */
+const cardText = (text: string, max: number) => {
+  const masked = maskIds(text).trim();
+  return masked.length > max ? `${masked.slice(0, max - 1)}…` : masked;
+};
+
+/**
+ * What a card shows beyond its target (its row's cardDetails): the tasks an
+ * action is made with, each with its new text, the finding, the goal and the
+ * targets, as they'll be frozen (CHAT-09 item 18). Nothing when it can't be
+ * read: the card still shows its target.
+ */
+async function cardDetailsOf(tool: ChatTool, input: Record<string, unknown>) {
+  if (!tool.cardDetails) return {};
   try {
-    const items = tool
-      .cardItems(input as never)
-      .slice(0, 8)
-      .map((item) => ({
-        title: maskIds(item.title),
-        ...(item.detail ? { detail: maskIds(item.detail) } : {}),
-      }));
-    return items.length ? { items } : {};
+    const details = await tool.cardDetails(input as never);
+    const items = (details.items ?? []).slice(0, 8).map((item) => ({
+      title: cardText(item.title, 200),
+      ...(item.detail ? { detail: cardText(item.detail, 300) } : {}),
+      ...(item.body ? { body: cardText(item.body, 1000) } : {}),
+    }));
+    const targets = (details.targets ?? [])
+      .map((target) => ({
+        kind: target.kind,
+        values: target.values.slice(0, 20).map((value) => cardText(value, 200)),
+      }))
+      .filter((target) => target.values.length > 0);
+    return {
+      ...(items.length ? { items } : {}),
+      ...(details.why ? { why: cardText(details.why, 600) } : {}),
+      ...(details.goal ? { goal: cardText(details.goal, 300) } : {}),
+      ...(targets.length ? { targets } : {}),
+    };
   } catch (err) {
-    console.error('[chat/engine] could not list a card’s items:', err);
+    console.error('[chat/engine] could not read a card’s details:', err);
     return {};
   }
 }
@@ -1739,7 +1791,7 @@ async function openCard(
     digest,
     canDontAskAgain: offerDontAskAgain,
     ...(note ? { note } : {}),
-    ...cardItemsOf(tool, input),
+    ...(await cardDetailsOf(tool, input)),
   });
   return {
     kind: 'pause',
@@ -2232,6 +2284,8 @@ const SAID_FAILURES: Record<string, string> = {
   quota_exceeded: 'quota_exceeded',
   duplicate: 'duplicate',
   not_found: 'not_found',
+  // An action or task closed since (Chat's Action Center changes).
+  conflict: 'conflict',
   invalid: 'invalid_input',
   forbidden_role: 'forbidden_role',
 };
@@ -2276,7 +2330,8 @@ async function writeCall(
       label: toolWords(tool, 'name'),
       detail: target || null,
       tool: tool.name,
-      debug: { input, toolCallId: call.toolCallId },
+      // It runs without a card: what a write that records it reads (automated, §10a).
+      debug: { input, toolCallId: call.toolCallId, auto: true },
     });
     rc.sink.emit('step.started', { step: clientStep(row) });
   }
@@ -2306,7 +2361,7 @@ async function writeCall(
       target,
       digest,
       canDontAskAgain: false,
-      ...cardItemsOf(tool, input),
+      ...(await cardDetailsOf(tool, input)),
     });
     return {
       kind: 'pause',
@@ -2763,7 +2818,7 @@ export async function prepareResume(
         target: [targetOf(input), tool.brandOf ? brand?.name : null].filter(Boolean).join(' · '),
         digest: pending.digest,
         canDontAskAgain: pending.offerDontAskAgain,
-        ...cardItemsOf(tool, input),
+        ...(await cardDetailsOf(tool, input)),
       });
       await sink.flush();
       publishRunEnd(runId);

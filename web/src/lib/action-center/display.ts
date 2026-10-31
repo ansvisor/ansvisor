@@ -263,7 +263,7 @@ export function actionEventText(
   t: Translator,
   tTasks: Translator & { has?: (key: string) => boolean },
 ): string {
-  return t(`drawer.events.${event.event}`, {
+  const text = t(`drawer.events.${event.event}`, {
     to: String(event.data.to ?? ''),
     count: Number(event.data.count ?? 0),
     // Tasks the writer left for review (AC-010).
@@ -283,6 +283,11 @@ export function actionEventText(
     // A finding Chat added, and a file it attached, in their own words.
     finding: String(event.data.finding ?? ''),
     file: String(event.data.file ?? ''),
+    // Who undid a Chat action (CHAT-20 §10b): named when they were.
+    by:
+      typeof event.data.by === 'string' && event.data.by
+        ? event.data.by
+        : t('drawer.eventParts.someone'),
     tool: String(event.data.tool ?? ''),
     improved: Number(event.data.improved ?? 0),
     measurable: Number(event.data.measurable ?? 0),
@@ -297,6 +302,19 @@ export function actionEventText(
     day: Number(event.data.day ?? 0),
     final: event.data.final === true ? 'yes' : 'no',
   });
+  if (event.event !== 'evidence_attached') return text;
+  // A finding added from Chat says its note and where it was read, when it has them.
+  const parts = [text];
+  if (typeof event.data.note === 'string' && event.data.note.trim()) {
+    parts.push(t('drawer.eventParts.note', { note: event.data.note.trim() }));
+  }
+  const sources = Array.isArray(event.data.sources)
+    ? event.data.sources.filter((source): source is string => typeof source === 'string')
+    : [];
+  if (sources.length > 0) {
+    parts.push(t('drawer.eventParts.sources', { sources: sources.join(', ') }));
+  }
+  return parts.join(' · ');
 }
 
 /**

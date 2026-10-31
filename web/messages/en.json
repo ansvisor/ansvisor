@@ -1715,12 +1715,12 @@
         "events": {
           "created": "{source, select, chat {Action created from Chat} other {Action created}}",
           "evidence_attached": "Finding added from Chat: “{finding}”",
-          "evidence_withdrawn": "Finding from Chat withdrawn with Undo",
+          "evidence_withdrawn": "Finding from Chat withdrawn with Undo: “{finding}”",
           "file_attached": "Attached from Chat to {task}{title}: “{file}”",
           "file_detached": "Attachment from Chat taken off {task}{title} with Undo: “{file}”",
           "task_ready_for_review": "Ready for review, from Chat: {task}{title}",
           "task_review_withdrawn": "Ready for review taken back with Undo: {task}{title}",
-          "cancelled": "Action cancelled with Undo in Chat",
+          "cancelled": "Cancelled from Chat by {by} · undo",
           "reopened": "Action reopened — its condition is firing again",
           "signals_linked": "{count, plural, one {1 new signal} other {# new signals}} linked",
           "status_changed": "Status changed to {to}",
@@ -1739,6 +1739,11 @@
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
           "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}",
           "outcome_measured": "{day, plural, =0 {} other {Day #{final, select, yes {, final} other {}} · }}{outcome, select, improved {Result: metrics improved after this action closed} mixed {Result: mixed after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
+        },
+        "eventParts": {
+          "note": "Note: {note}",
+          "sources": "From: {sources}",
+          "someone": "a teammate"
         },
         "deleteTask": "Delete task",
         "addTask": "Add task",
@@ -1852,7 +1857,8 @@
             "by": "{name} · {date}",
             "someone": "A teammate",
             "open": "Open",
-            "openDraft": "Open draft"
+            "openDraft": "Open draft",
+            "count": "{count, plural, one {# file attached from Chat} other {# files attached from Chat}}"
           },
           "draftFailed": "Couldn't open the Content Editor. Try again.",
           "pageNotRead": "Couldn't read the live page, so the draft starts with its title. Paste the page into the editor.",
@@ -3748,6 +3754,17 @@
     }
   },
   "chatRun": {
+    "proposal": {
+      "goal": "Goal",
+      "sentWith": "Sent with",
+      "prompts": "Prompts",
+      "pages": "Pages",
+      "competitors": "Competitors",
+      "platforms": "Platforms",
+      "newText": "New text",
+      "showAll": "Show all",
+      "showLess": "Show less"
+    },
     "actionSent": {
       "created": "Sent to Action Center · AC-{no}",
       "added": "Added to AC-{no}",

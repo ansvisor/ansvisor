@@ -38,6 +38,7 @@ import {
 } from './composer/chat-composer';
 import { useUserRole } from '@/hooks/use-user-role';
 import { ActionSentCard } from './run/action-sent-card';
+import { ProposalDetails } from './run/proposal-details';
 import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
 import { NextMoves } from './run/next-moves';
@@ -351,7 +352,13 @@ export function ChatThreadView({
    * A message to Chat: false when it wasn't taken, so the composer keeps it.
    * `route`: the page its chips came from, when not this one (a Retry).
    */
-  async function send(message: string, sent: ComposerSend, route = pageRoute): Promise<boolean> {
+  async function send(
+    message: string,
+    sent: ComposerSend,
+    route = pageRoute,
+    /** The run whose answer it acts on (Send to Action Center): the server reads its taint. */
+    fromRunId?: string,
+  ): Promise<boolean> {
     if (isLocked) {
       openUpgrade();
       return false;
@@ -394,6 +401,7 @@ export function ChatThreadView({
         ...(sent.attachments.length > 0 ? { attachmentIds: sent.attachments } : {}),
         ...(sent.context.length > 0 ? { context: { route, chips: sent.context } } : {}),
         ...(sent.references.length > 0 ? { references: sent.references } : {}),
+        ...(fromRunId ? { fromRunId } : {}),
       }),
     }).catch(() => null);
     if (!res?.ok || !res.body) {
@@ -533,12 +541,15 @@ export function ChatThreadView({
   function sendToActionCenterOf(index: number): (() => void) | undefined {
     if (!canManage || index !== turns.length - 1) return undefined;
     if ((thread && !thread.mine) || working || atCap) return undefined;
+    // The answer's run goes with it: one that read outside text makes this run ask too (§16a).
+    const fromRunId = turns[index].runId ?? undefined;
     return () =>
-      void send(t('sendToActionCenterPrompt'), {
-        context: chips ?? [],
-        references: [],
-        attachments: [],
-      });
+      void send(
+        t('sendToActionCenterPrompt'),
+        { context: chips ?? [], references: [], attachments: [] },
+        pageRoute,
+        fromRunId,
+      );
   }
 
   return (
@@ -736,14 +747,17 @@ function Answer({
           kind={confirmStep?.kind === 'execute' ? 'execute' : 'write'}
           step={{ n: run.confirm.n, total: Math.max(run.steps.length, run.confirm.n) }}
           title={run.confirm.action}
-          items={confirmItems(run.confirm)}
+          items={run.confirm.target ? [{ title: run.confirm.target }] : undefined}
+          why={run.confirm.why}
           summary={confirmStep?.kind === 'execute' ? run.confirm.target : undefined}
           actionLabel={confirmStep?.kind === 'execute' ? run.confirm.action : undefined}
           canDontAskAgain={run.confirm.canDontAskAgain}
           note={run.confirm.note}
           onApprove={(answer) => void onApprove(answer.dontAskAgain)}
           onSkip={() => void onSkip()}
-        />
+        >
+          <ProposalDetails confirm={run.confirm} />
+        </ApprovalCard>
       )}
       {turn.runId &&
         run.deliverables.map((deliverable, i) => (
@@ -786,16 +800,4 @@ function Answer({
       }
     />
   );
-}
-
-/**
- * What an approval card lists: its target, then what the change carries
- * line by line (the tasks Send to Action Center creates, CHAT-09 item 18).
- */
-function confirmItems(confirm: NonNullable<ClientRun['confirm']>) {
-  const items = [
-    ...(confirm.target ? [{ title: confirm.target }] : []),
-    ...(confirm.items ?? []).map((item) => ({ icon: '☐', ...item })),
-  ];
-  return items.length ? items : undefined;
 }

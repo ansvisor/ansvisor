@@ -138,8 +138,17 @@ export interface ChatConfirm {
   canDontAskAgain: boolean;
   /** What the change leaves behind, under the card ("Its timeline … doesn't come back"). */
   note?: string;
-  /** What it carries, line by line: the tasks Send to Action Center creates (CHAT-09 item 18). */
-  items?: { title: string; detail?: string }[];
+  /**
+   * What it carries, line by line: the tasks Send to Action Center creates
+   * (CHAT-09 item 18), each with its new text in full (`body`).
+   */
+  items?: { title: string; detail?: string; body?: string }[];
+  /** Why the change: the finding. */
+  why?: string;
+  /** What it aims at. */
+  goal?: string;
+  /** What it is about, by kind, in the person's words: frozen once it's made. */
+  targets?: { kind: 'prompts' | 'pages' | 'competitors' | 'platforms'; values: string[] }[];
 }
 
 /**

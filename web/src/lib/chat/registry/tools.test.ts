@@ -379,22 +379,47 @@ describe('the Chat tool registry', () => {
     await expect(send.precheck!(ctx, anyway)).resolves.toMatchObject({ reason: 'duplicate' });
   });
 
-  it('lists the tasks an action is sent with on its card, and its Open once made', () => {
+  it('shows on its card what is frozen once made, and its Open once made (CHAT-09 18, 18b)', async () => {
     const send = chatTool_('create_action');
     const input = send.inputSchema.parse({
       ...send.fixture.input,
+      goal: 'Get /pricing cited again',
+      platforms: ['google-aio'],
       tasks: [
-        { title: 'Add a FAQ to /pricing', type: 'on_page', url: '/pricing', done_when: 'Live' },
+        {
+          title: 'Add a FAQ to /pricing',
+          type: 'on_page',
+          url: '/pricing',
+          done_when: 'Live',
+          change: { after: 'Q: Which plan tracks Gemini? A: Growth and up.' },
+        },
         { title: 'Pitch G2 a review', type: 'outreach', where: 'g2.com', done_when: 'Sent' },
       ],
     });
     expect(send.target!(input)).toBe(
       '“Win back pricing citations on /pricing” · Recover · 2 tasks',
     );
-    expect(send.cardItems!(input)).toEqual([
-      { title: 'Add a FAQ to /pricing', detail: 'On-page · /pricing · Done when: Live' },
-      { title: 'Pitch G2 a review', detail: 'Outreach · g2.com · Done when: Sent' },
-    ]);
+    await expect(send.cardDetails!(input)).resolves.toEqual({
+      items: [
+        {
+          title: 'Add a FAQ to /pricing',
+          detail: 'On-page · /pricing · Done when: Live',
+          body: 'Q: Which plan tracks Gemini? A: Growth and up.',
+        },
+        { title: 'Pitch G2 a review', detail: 'Outreach · g2.com · Done when: Sent' },
+      ],
+      why: 'Google AI Overviews stopped citing /pricing for 2 pricing prompts this week.',
+      goal: 'Get /pricing cited again',
+      targets: [
+        { kind: 'prompts', values: [] },
+        { kind: 'pages', values: ['/pricing'] },
+        { kind: 'competitors', values: [] },
+        { kind: 'platforms', values: ['Google AI Overviews'] },
+      ],
+    });
+    // Create anyway is the person's choice: a card in every mode (CHAT-09 18a).
+    expect(send.alwaysCardWhen!({ ...input, create_anyway: true })).toBe(true);
+    expect(send.alwaysCardWhen!(input)).toBe(false);
     const href = `/dashboard/action-center/actions/${FIXTURE_IDS.item}`;
     expect(
       send.resultCard!(input, { ok: true, action_id: FIXTURE_IDS.item, action_no: 1271, href }),

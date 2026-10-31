@@ -66,33 +66,42 @@ describe('create_action', () => {
     expect(rule.windowMs).toBe(24 * 60 * 60 * 1000);
   });
 
-  it('cancels it while no task has started, in History by who clicked Undo', async () => {
+  it('dismisses it while nothing happened to it, in History by who clicked Undo', async () => {
+    db.tables.profiles.find((p) => p.id === ME)!.full_name = 'Cihan Geyik';
     const target = { id: ACTION, brandId: BRAND, data: {}, userId: ME };
     await expect(rule.inverse(target)).resolves.toBe('ok');
-    expect(db.tables.actions[0]).toMatchObject({
-      status: 'dismissed',
-      deleted_at: expect.any(String),
-    });
+    // Dismissed, not deleted: it stays in the Dismissed list (CHAT-20 §10b).
+    expect(db.tables.actions[0]).toMatchObject({ status: 'dismissed', deleted_at: null });
     expect(events('cancelled')).toEqual([
       expect.objectContaining({
         action_id: ACTION,
         actor_id: ME,
-        data: { source: 'chat', via: 'undo', from: 'new' },
+        data: { source: 'chat', via: 'undo', from: 'new', by: 'Cihan Geyik' },
       }),
     ]);
-    // Gone now: a second Undo finds nothing to cancel.
-    await expect(rule.inverse(target)).resolves.toBe('gone');
+    // Dismissed now: a second Undo leaves it as it is.
+    await expect(rule.inverse(target)).resolves.toBe('changed');
+    expect(events('cancelled')).toHaveLength(1);
   });
 
-  it('leaves it to the team once a task started, or the action moved on', async () => {
+  it('leaves it to the team once a task started, the action moved on, or anything happened to it', async () => {
     const target = { id: ACTION, brandId: BRAND, data: {}, userId: ME };
     db.tables.action_tasks[0].status = 'in_progress';
     await expect(rule.inverse(target)).resolves.toBe('changed');
     db.tables.action_tasks[0].status = 'todo';
     db.tables.actions[0].status = 'on_hold';
     await expect(rule.inverse(target)).resolves.toBe('changed');
-    expect(db.tables.actions[0].deleted_at).toBeNull();
-    expect(events('cancelled')).toEqual([]);
+    db.tables.actions[0].status = 'new';
+    // Assigned, edited, a task added, a finding or a file attached since: as sent no more.
+    for (const event of ['assigned', 'task_edited', 'task_added', 'evidence_attached']) {
+      db.tables.action_events = [
+        { id: 'e0', action_id: ACTION, event: 'created' },
+        { id: 'e1', action_id: ACTION, event },
+      ];
+      await expect(rule.inverse(target), event).resolves.toBe('changed');
+    }
+    db.tables.action_events = [{ id: 'e0', action_id: ACTION, event: 'created' }];
+    await expect(rule.inverse(target)).resolves.toBe('ok');
   });
 });
 
@@ -100,7 +109,12 @@ describe('attach_to_action', () => {
   const rule = RULES.attach_to_action;
 
   it('withdraws the finding once, as a new History event', async () => {
-    db.tables.action_events.push({ id: 'ev-1', action_id: ACTION, event: 'evidence_attached' });
+    db.tables.action_events.push({
+      id: 'ev-1',
+      action_id: ACTION,
+      event: 'evidence_attached',
+      data: { source: 'chat', finding: 'Lost 6 citations.' },
+    });
     const recorded = await rule.record(
       { finding: 'Lost 6 citations.' },
       { ok: true, action_id: ACTION, action_no: 1258, event_id: 'ev-1' },
@@ -118,7 +132,7 @@ describe('attach_to_action', () => {
     expect(events('evidence_withdrawn')).toEqual([
       expect.objectContaining({
         actor_id: ME,
-        data: { source: 'chat', via: 'undo', eventId: 'ev-1' },
+        data: { source: 'chat', via: 'undo', eventId: 'ev-1', finding: 'Lost 6 citations.' },
       }),
     ]);
     await expect(rule.inverse(target)).resolves.toBe('changed');
@@ -255,7 +269,10 @@ describe('from the Activity log', () => {
       surface: 'chat',
     });
     expect(undone).toMatchObject({ code: 'ok', message: 'Undone.' });
-    expect(db.tables.actions.find((a) => a.id === made.id)).toMatchObject({ status: 'dismissed' });
+    expect(db.tables.actions.find((a) => a.id === made.id)).toMatchObject({
+      status: 'dismissed',
+      deleted_at: null,
+    });
     expect(events('cancelled')[0]).toMatchObject({ action_id: made.id, actor_id: ME });
   });
 });

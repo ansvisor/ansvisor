@@ -210,6 +210,8 @@ export interface ActionDetail {
   kpis: ActionKpiRef[];
   /** Improve actions only: positions now next to the baseline (PROMPT-008). */
   positionOutcome: ImproveOutcome | null;
+  /** Sent from Chat: its chat, when the reader may open it (their own, or shared); else null. */
+  chatHref?: string | null;
 }
 
 /**
@@ -291,11 +293,14 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
     entityCounts.get(actionId),
   );
   const tasks = (tasksRes.data ?? []).map(taskFromRow);
-  const attachments = await readTaskAttachments(
-    supabase,
-    brandId,
-    tasks.map((task) => task.id),
-  );
+  const [attachments, chatHref] = await Promise.all([
+    readTaskAttachments(
+      supabase,
+      brandId,
+      tasks.map((task) => task.id),
+    ),
+    readableChat(supabase, payload),
+  ]);
   return {
     tasks: tasks.map((task) => ({
       ...task,
@@ -307,7 +312,28 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
     events: (eventsRes.data ?? []).map(eventFromRow),
     kpis: (kpisRes.data ?? []).map(kpiFromRow),
     positionOutcome: parseImproveOutcome(outcomeRes.data?.position_outcome ?? null),
+    chatHref,
   };
+}
+
+/**
+ * The chat a finding was sent from, read as the member (its author, or the
+ * team when it is shared): a chat they can't read gets no link. Null for an
+ * action not sent from Chat, or when it can't be read.
+ */
+async function readableChat(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  payload: Record<string, unknown>,
+): Promise<string | null> {
+  const id = payload.source === 'chat' ? payload.conversationId : null;
+  if (typeof id !== 'string' || !id) return null;
+  const { data, error } = await supabase
+    .from('chat_conversations')
+    .select('id')
+    .eq('id', id)
+    .maybeSingle();
+  if (error || !data) return null;
+  return `/dashboard/chat/${data.id as string}`;
 }
 
 async function logEvent(

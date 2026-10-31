@@ -857,9 +857,11 @@ describe('ChatThreadView', () => {
       await act(async () => sendButton()!.click());
       await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
       const sent = calls.find((c) => c.url === '/api/chat/runs')!;
-      expect(JSON.parse(String(sent.init!.body)).message).toBe(
-        'Send this finding to Action Center as an action.',
-      );
+      expect(JSON.parse(String(sent.init!.body))).toMatchObject({
+        message: 'Send this finding to Action Center as an action.',
+        // The answer's run goes with it: the server reads whether it read outside text (§16a).
+        fromRunId: RUN,
+      });
     });
 
     it("isn't offered to an Analyst, or on a teammate's shared chat", async () => {

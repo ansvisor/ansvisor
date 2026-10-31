@@ -515,9 +515,35 @@ describe('actionEventText', () => {
         t,
       ),
     ).toBe('Finding added from Chat: “Lost 6 citations on /pricing.”');
-    expect(actionEventText(event('cancelled', { source: 'chat', via: 'undo' }), tPage, t)).toBe(
-      'Action cancelled with Undo in Chat',
+    // Undo of an action Chat sent, by who clicked it (CHAT-20 §10b).
+    expect(
+      actionEventText(event('cancelled', { source: 'chat', via: 'undo', by: 'Cihan' }), tPage, t),
+    ).toBe('Cancelled from Chat by Cihan · undo');
+    expect(actionEventText(event('cancelled', { source: 'chat', by: null }), tPage, t)).toBe(
+      'Cancelled from Chat by a teammate · undo',
     );
+    // A finding added with its note and sources, and which one was withdrawn.
+    expect(
+      actionEventText(
+        event('evidence_attached', {
+          source: 'chat',
+          finding: 'Lost 6 citations.',
+          note: 'Same pages as this action',
+          sources: ['Citations', '/pricing'],
+        }),
+        tPage,
+        t,
+      ),
+    ).toBe(
+      'Finding added from Chat: “Lost 6 citations.” · Note: Same pages as this action · From: Citations, /pricing',
+    );
+    expect(
+      actionEventText(
+        event('evidence_withdrawn', { source: 'chat', finding: 'Lost 6 citations.' }),
+        tPage,
+        t,
+      ),
+    ).toBe('Finding from Chat withdrawn with Undo: “Lost 6 citations.”');
   });
 
   it("passes a task's own title and the measured verdict", () => {
@@ -603,6 +629,7 @@ describe('History events', () => {
     source: '',
     finding: 'Lost 6 citations',
     file: 'Pricing FAQ',
+    by: 'Cihan',
   };
   const eventText = (event: string, data: Partial<typeof values> = {}) =>
     tPage(`drawer.events.${event}` as Parameters<typeof tPage>[0], { ...values, ...data });

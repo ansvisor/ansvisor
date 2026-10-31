@@ -12,7 +12,8 @@ import {
 import { contentUuid } from '@/lib/mcp/content-schemas';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { FIXTURE_IDS, defineTool, type ChatToolContext, type ToolResultCard } from './define-tool';
-import { listWords } from './targets';
+import { listWords, promptTexts } from './targets';
+import { PLATFORM_LABELS } from '@/config/platform-labels';
 
 /**
  * Chat's Action Center WRITE rows (CHAT-20 §9 rows 43–46; CHAT-09 §D–E):
@@ -154,15 +155,39 @@ async function taskName(taskId: string, brandId: string): Promise<string | null>
   return [`AC-${row.actions.action_no}`, text ? `“${text}”` : null].filter(Boolean).join(' ');
 }
 
-/** A file's title in Files. */
-async function fileTitle(fileId: string): Promise<string | null> {
+/**
+ * A file's title in Files, within the call's workspace: the brand's, whose
+ * scope the precedence checked before any card opens.
+ */
+async function fileTitle(fileId: string, brandId: string): Promise<string | null> {
+  const { data: brand, error: brandError } = await supabaseAdmin
+    .from('brands')
+    .select('organization_id')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (brandError) throw new Error(`Could not read the brand: ${brandError.message}`);
+  if (!brand?.organization_id) return null;
   const { data, error } = await supabaseAdmin
     .from('chat_files')
     .select('title')
     .eq('id', fileId)
+    .eq('organization_id', brand.organization_id as string)
     .maybeSingle();
   if (error) throw new Error(`Could not read the file: ${error.message}`);
   return (data?.title as string | undefined) ?? null;
+}
+
+/** The brand's competitors among the ids, by name, in the ids' order. */
+async function competitorNames(brandId: string, ids: readonly string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabaseAdmin
+    .from('competitors')
+    .select('id, name')
+    .eq('brand_id', brandId)
+    .in('id', [...ids]);
+  if (error) throw new Error(`Could not read the competitors: ${error.message}`);
+  const names = new Map((data ?? []).map((row) => [row.id as string, row.name as string]));
+  return ids.map((id) => names.get(id)).filter((name): name is string => !!name);
 }
 
 const ok = (output: unknown): Record<string, unknown> | null =>
@@ -207,13 +232,36 @@ export const ACTION_CENTER_TOOLS = [
       [`“${input.title}”`, categoryT(input.category), cardT('tasks', { count: input.tasks.length })]
         .filter(Boolean)
         .join(' · '),
-    cardItems: (input) =>
-      input.tasks.map((t) => ({
-        title: t.title,
-        detail: [typeT(t.type), t.url || t.where, cardT('doneWhen', { text: t.done_when })]
-          .filter(Boolean)
-          .join(' · '),
-      })),
+    // What is frozen once it's made (CHAT-09 item 18b): every task with its new text, the
+    // finding, the goal and the targets, in the person's words.
+    cardDetails: async (input) => {
+      const [prompts, competitors] = await Promise.all([
+        input.prompt_ids.length ? promptTexts(input.brand_id, input.prompt_ids) : [],
+        competitorNames(input.brand_id, input.competitor_ids),
+      ]);
+      return {
+        items: input.tasks.map((t) => ({
+          title: t.title,
+          detail: [typeT(t.type), t.url || t.where, cardT('doneWhen', { text: t.done_when })]
+            .filter(Boolean)
+            .join(' · '),
+          ...(t.change ? { body: t.change.after } : {}),
+        })),
+        why: input.why,
+        ...(input.goal ? { goal: input.goal } : {}),
+        targets: [
+          { kind: 'prompts' as const, values: prompts },
+          { kind: 'pages' as const, values: input.pages },
+          { kind: 'competitors' as const, values: competitors },
+          {
+            kind: 'platforms' as const,
+            values: input.platforms.map((id) => PLATFORM_LABELS[id] ?? id),
+          },
+        ],
+      };
+    },
+    // Create anyway is the person's choice (CHAT-09 item 18a): its card shows in Full auto too.
+    alwaysCardWhen: (input) => input.create_anyway === true,
     resultCard: (input, output): ToolResultCard | null => {
       const made = ok(output);
       return made
@@ -316,7 +364,7 @@ export const ACTION_CENTER_TOOLS = [
       attachFileToTask(input.brand_id, input.task_id, input.file_id, placeOf(ctx)),
     target: async (input) => {
       const [file, taskWords] = await Promise.all([
-        fileTitle(input.file_id),
+        fileTitle(input.file_id, input.brand_id),
         taskName(input.task_id, input.brand_id),
       ]);
       return [file ? `“${file}”` : null, taskWords].filter(Boolean).join(' → ') || null;
