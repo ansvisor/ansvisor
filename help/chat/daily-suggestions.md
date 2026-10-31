@@ -4,8 +4,8 @@ route: /dashboard/chat/inbox
 keywords: [daily suggestions, inbox, suggestion, pause daily suggestions, turn back on, action center, one action a day, inbox tabs]
 synonyms: [daily tips, what should I do today, suggested action, stop suggestions, daily nudge]
 plan: all
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -26,20 +26,22 @@ The line under **Inbox** counts what needs you, what runs and the suggestions of
 
 ## Daily suggestions
 
-You get at most one a day for each brand, and at most 7 a week. Each row shows the action's title, its number in the Action Center, its priority, how it can be done, such as **Content Editor or Chat · about 20 min**, and the day it came.
+You get at most one a day for each brand, and at most 7 a week. Each row shows the action's title, its number in the Action Center, its priority, how it can be done, such as **Content Editor or Chat · about 20 min**, and the day it came. With more than one brand, each row also names its brand.
 
 The dot shows where it stands: blue while it's new, no longer blue once you've seen it, and green once you started it. The list shows the last 7 days only.
 
-Click a row, or **Open**, to open the action in the Action Center.
+When the action is done or dismissed in the Action Center, its row stays, faded, with **Done** or **Dismissed**. When the action is deleted, its suggestion leaves the list.
+
+Click a row, or **Open**, to open the action in the Action Center, on its brand.
 
 ## Who gets them
 
-Admins and Managers get them for every brand of the workspace. Agency partners get them once they open the **Inbox** for the first time. Analysts don't get them. The demo brand gets none, and a workspace whose plan ended gets no new ones: its list keeps what it has.
+Daily suggestions come from the Action Center, so only people who have **Action Center** in their menu get them. Admins and Managers get them for every brand of the workspace. Agency partners get them once they open the **Inbox** for the first time. Analysts don't get them. The demo brand gets none, and a workspace whose plan ended gets no new ones: its list keeps what it has.
 
 ## Pause or turn them back on
 
 Click **Pause daily suggestions**, on the **Daily suggestions** tab, to stop them for all your brands. Your Action Center is unchanged.
 
-When you haven't opened or used any suggestion for 30 days, Chat stops picking them and says **Daily suggestions are paused**. Seeing them in the **Inbox** doesn't count as using them.
+When you haven't opened or used any brand's suggestion for 30 days, Chat stops picking them for that brand and says **Daily suggestions are paused**. Seeing them in the **Inbox** doesn't count as using them.
 
-Click **Turn back on** to start them again: the first one arrives the next morning.
+Click **Turn back on** to start them again for all your brands: the first one arrives the next morning.

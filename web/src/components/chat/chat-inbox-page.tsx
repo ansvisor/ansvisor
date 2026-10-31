@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
@@ -15,9 +16,9 @@ import {
 } from '@/lib/actions/chat-suggestions';
 import type { DailySuggestion, DailySuggestionsRead } from '@/lib/chat/daily-suggestions';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { ChatInboxView, inboxItems, useNow } from './chat-inbox';
+import { ChatInboxView, inboxItems, inboxTabOf, useNow } from './chat-inbox';
 import { useChatList } from './chat-list-provider';
-import type { InboxDaily } from './inbox-suggestions';
+import type { InboxDaily, SuggestionBrand } from './inbox-suggestions';
 
 /*
  * The Inbox page's live part, kept apart from chat-inbox.tsx: it calls the
@@ -33,7 +34,9 @@ import type { InboxDaily } from './inbox-suggestions';
  * - An Agency partner's first Inbox makes their feeds (startDailySuggestions)
  *   and shows the line explaining them.
  * - Rows on screen are marked seen; opening one marks it opened and its feed
- *   used, then opens the action in the Action Center, on its brand.
+ *   used, then opens the action in the Action Center, on its brand. A row
+ *   whose brand isn't in the person's list doesn't open (it would on the
+ *   brand on screen); with more than one brand, each row names its own.
  * - Pause and Turn back on change every feed of theirs, then read again.
  *
  * In a read-only workspace the list shows, and nothing is written: seeing
@@ -56,6 +59,17 @@ export function useInboxDaily(
   const [busy, setBusy] = useState(false);
   const seen = useRef(new Set<string>());
   const starting = useRef(false);
+  // One Open at a time: a double click marks it and navigates once.
+  const opening = useRef(false);
+
+  const brandOf = useMemo(() => {
+    const names = new Map(brands.map((brand) => [brand.id, brand.name]));
+    const several = brands.filter((brand) => !brand.isDemo).length > 1;
+    return (suggestion: DailySuggestion): SuggestionBrand => ({
+      name: several ? (names.get(suggestion.brandId) ?? null) : null,
+      known: names.has(suggestion.brandId),
+    });
+  }, [brands]);
 
   const reload = useCallback(async () => {
     const result = await readDailySuggestions();
@@ -88,14 +102,17 @@ export function useInboxDaily(
 
   const onOpen = useCallback(
     async (suggestion: DailySuggestion) => {
-      if (!readOnly) await openDailySuggestion(suggestion.id).catch(() => undefined);
-      if (
-        suggestion.brandId !== activeBrandId &&
-        brands.some((brand) => brand.id === suggestion.brandId)
-      ) {
-        setActiveBrand(suggestion.brandId);
+      if (opening.current || !brands.some((brand) => brand.id === suggestion.brandId)) return;
+      opening.current = true;
+      try {
+        // Marking it opened is a use, never a gate: the action opens whatever it answers.
+        if (!readOnly) await openDailySuggestion(suggestion.id).catch(() => undefined);
+        if (suggestion.brandId !== activeBrandId) setActiveBrand(suggestion.brandId);
+        // The Action Center's drawer until W2-26's suggestion page takes over.
+        router.push(`/dashboard/action-center/actions?action=${suggestion.actionId}`);
+      } finally {
+        opening.current = false;
       }
-      router.push(`/dashboard/action-center/actions?action=${suggestion.actionId}`);
     },
     [readOnly, activeBrandId, brands, setActiveBrand, router],
   );
@@ -128,6 +145,7 @@ export function useInboxDaily(
   if (!read) return null;
   return {
     read,
+    brandOf,
     justStarted,
     busy,
     onOpen: (suggestion) => void onOpen(suggestion),
@@ -139,13 +157,16 @@ export function useInboxDaily(
 
 /**
  * The Inbox with the person's chats from the shell's list, and their daily
- * suggestions as the page read them (absent, as it was).
+ * suggestions as the page read them (absent, as it was), on the topic the
+ * address names (`?tab=`).
  */
 export function ChatInbox({ suggestions }: { suggestions?: SuggestionsReadResult | null }) {
   const { status, chats, refresh } = useChatList();
   const now = useNow();
   const items = useMemo(() => inboxItems(chats), [chats]);
   const daily = useInboxDaily(suggestions);
+  const searchParams = useSearchParams();
+  const tab = inboxTabOf(searchParams?.get('tab'));
   return (
     <ChatInboxView
       status={status}
@@ -153,6 +174,7 @@ export function ChatInbox({ suggestions }: { suggestions?: SuggestionsReadResult
       now={now}
       onRetry={() => void refresh()}
       daily={daily}
+      initialTab={tab}
     />
   );
 }

@@ -15,10 +15,13 @@ import type { SuggestionsReadResult } from '@/lib/actions/chat-suggestions';
  * for the rows on screen; a row opens its action in the Action Center; the
  * paused banner with Turn back on; Pause; an Agency partner's first Inbox;
  * none for an Analyst; a read-only workspace; and the Inbox as it was while
- * the new Chat is off.
+ * the new Chat is off. The tabs move with the arrow keys and the address
+ * keeps the open one; a row names its brand with several, stays faded once
+ * its action is closed, and doesn't open on a brand the person's list lacks.
  */
 
-const nav = vi.hoisted(() => ({ push: vi.fn() }));
+const nav = vi.hoisted(() => ({ push: vi.fn(), search: '' }));
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(nav.search) }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>
@@ -37,12 +40,21 @@ vi.mock('@/components/providers/upgrade-gate', () => ({
     openUpgrade: plan.openUpgrade,
   }),
 }));
-vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
-const store = vi.hoisted(() => ({ setActiveBrand: vi.fn() }));
+const sonner = vi.hoisted(() => ({ error: vi.fn() }));
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: sonner.error }) }));
+/** The demo brand on screen, and one brand of the workspace's own. */
+const BRANDS = [
+  { id: 'brand-a', name: 'Demo', isDemo: true },
+  { id: 'brand-b', name: 'Trailpeak' },
+];
+const store = vi.hoisted(() => ({
+  setActiveBrand: vi.fn(),
+  brands: [] as { id: string; name: string; isDemo?: boolean }[],
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (pick: (s: unknown) => unknown) =>
     pick({
-      brands: [{ id: 'brand-a' }, { id: 'brand-b' }],
+      brands: store.brands,
       activeBrandId: 'brand-a',
       setActiveBrand: store.setActiveBrand,
     }),
@@ -101,6 +113,7 @@ const suggestion = (id: string, row: Partial<DailySuggestion> = {}): DailySugges
   openedAt: null,
   startedAt: null,
   startedVia: null,
+  closed: null,
   summary: {
     actionNo: 2841,
     kind: 'content_opportunity',
@@ -142,6 +155,8 @@ const readOf = (read: Partial<DailySuggestionsRead> = {}): DailySuggestionsRead 
   roleFeed: 'default_on',
   state: 'on',
   suggestions: MOCKUP_ROWS,
+  total: (read.suggestions ?? MOCKUP_ROWS).length,
+  today: '2026-10-29',
   ...read,
 });
 const ok = (read: Partial<DailySuggestionsRead> = {}): SuggestionsReadResult => ({
@@ -159,9 +174,13 @@ beforeEach(() => {
   document.body.appendChild(host);
   root = createRoot(host);
   nav.push.mockClear();
+  nav.search = '';
+  window.history.replaceState(null, '', '/dashboard/chat/inbox');
   plan.locked = false;
   plan.openUpgrade.mockClear();
+  sonner.error.mockClear();
   store.setActiveBrand.mockClear();
+  store.brands = BRANDS;
   for (const fn of Object.values(server)) fn.mockClear();
   server.read.mockResolvedValue(ok());
   list.chats = [
@@ -303,6 +322,7 @@ describe('the daily suggestions', () => {
         items={list.chats}
         daily={{
           read: readOf(),
+          brandOf: () => ({ name: null, known: true }),
           justStarted: false,
           busy: false,
           onOpen: vi.fn(),
@@ -425,5 +445,241 @@ describe('with the new Chat off', () => {
     expect(text()).toBe('InboxNothing needs you. Results from your agents land here.');
     expect(server.seen).not.toHaveBeenCalled();
     expect(server.start).not.toHaveBeenCalled();
+  });
+});
+
+describe('the tabs, by keyboard and address', () => {
+  const tabEl = (name: string) => host.querySelector(`[data-tab="${name}"]`) as HTMLElement;
+  const key = async (name: string, k: string) =>
+    act(async () => {
+      tabEl(name).dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+    });
+
+  it('keeps one tab stop, selected, tied to its panel', async () => {
+    await render(<ChatInbox suggestions={ok()} />);
+    expect(tabEl('all').getAttribute('aria-selected')).toBe('true');
+    expect(tabEl('suggestions').getAttribute('aria-selected')).toBe('false');
+    expect(
+      [...host.querySelectorAll('[role="tab"]')].map((tab) => tab.getAttribute('tabindex')),
+    ).toEqual(['0', '-1', '-1', '-1']);
+    const panel = host.querySelector('[role="tabpanel"]')!;
+    expect(tabEl('all').getAttribute('aria-controls')).toBe(panel.id);
+    expect(panel.getAttribute('aria-labelledby')).toBe(tabEl('all').id);
+  });
+
+  it('moves between the tabs with the arrow keys, Home and End', async () => {
+    await render(<ChatInbox suggestions={ok()} />);
+    await key('all', 'ArrowRight');
+    expect(tabEl('suggestions').getAttribute('aria-selected')).toBe('true');
+    expect(tabEl('suggestions').getAttribute('tabindex')).toBe('0');
+    expect(document.activeElement).toBe(tabEl('suggestions'));
+    await key('suggestions', 'End');
+    expect(tabEl('runs').getAttribute('aria-selected')).toBe('true');
+    await key('runs', 'ArrowRight');
+    expect(tabEl('all').getAttribute('aria-selected')).toBe('true');
+    await key('all', 'ArrowLeft');
+    expect(tabEl('runs').getAttribute('aria-selected')).toBe('true');
+    await key('runs', 'Home');
+    expect(tabEl('all').getAttribute('aria-selected')).toBe('true');
+    expect(host.querySelector('[role="tabpanel"]')!.getAttribute('aria-labelledby')).toBe(
+      tabEl('all').id,
+    );
+  });
+
+  it('keeps the open tab in the address, and opens on the one it names', async () => {
+    await render(<ChatInbox suggestions={ok()} />);
+    await openTab('suggestions');
+    expect(window.location.search).toBe('?tab=suggestions');
+    await openTab('all');
+    expect(window.location.search).toBe('');
+    act(() => root.unmount());
+    root = createRoot(host);
+    nav.search = 'tab=suggestions';
+    await render(<ChatInbox suggestions={ok()} />);
+    expect(host.querySelector('[aria-selected="true"]')?.textContent).toBe('Daily suggestions3');
+  });
+
+  it('follows the address when it names another tab from outside', async () => {
+    nav.search = 'tab=runs';
+    await render(<ChatInbox suggestions={ok()} />);
+    expect(host.querySelector('[aria-selected="true"]')?.textContent).toBe('Runs1');
+    nav.search = '';
+    await render(<ChatInbox suggestions={ok()} />);
+    expect(host.querySelector('[aria-selected="true"]')?.textContent).toBe('All5');
+  });
+
+  it('opens on All when the address names a tab the person has not', async () => {
+    nav.search = 'tab=suggestions';
+    await render(
+      <ChatInbox suggestions={ok({ roleFeed: 'never', state: 'none', suggestions: [] })} />,
+    );
+    expect(host.querySelector('[aria-selected="true"]')?.textContent).toBe('All2');
+  });
+});
+
+describe('a row', () => {
+  it('keeps an action done or dismissed since, faded, with its status and no filled Open', async () => {
+    await render(
+      <ChatInbox
+        suggestions={ok({
+          suggestions: [
+            suggestion('s1', { closed: 'completed' }),
+            suggestion('s2', { closed: 'dismissed', seenAt: '2026-10-29T08:00:00Z' }),
+          ],
+        })}
+      />,
+    );
+    await openTab('suggestions');
+    const rows = [...host.querySelectorAll('[data-suggestion]')];
+    expect(rows.map((row) => row.getAttribute('data-closed'))).toEqual(['completed', 'dismissed']);
+    expect(rows.every((row) => row.className.includes('opacity-60'))).toBe(true);
+    expect(rows.map((row) => row.querySelector('.block')?.textContent)).toEqual([
+      'AC-2841 · High · Done',
+      'AC-2841 · High · Dismissed',
+    ]);
+    expect(text()).not.toContain('Content Editor or Chat');
+    const open = rows[0].querySelector('button')!;
+    expect(open.className).toContain('bg-background');
+    expect(open.className).not.toContain('bg-primary');
+    await click('[data-suggestion="s1"]');
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=action-s1');
+  });
+
+  it('names its brand when the person has more than one', async () => {
+    await render(<ChatInbox suggestions={ok({ suggestions: [suggestion('s1')] })} />);
+    await openTab('suggestions');
+    expect(host.querySelector('[data-suggestion] .block')?.textContent).toBe(
+      'AC-2841 · High · Content Editor or Chat · about 20 min',
+    );
+    act(() => root.unmount());
+    root = createRoot(host);
+    store.brands = [...BRANDS, { id: 'brand-c', name: 'Ridgeline' }];
+    await render(<ChatInbox suggestions={ok({ suggestions: [suggestion('s1')] })} />);
+    await openTab('suggestions');
+    expect(host.querySelector('[data-suggestion] .block')?.textContent).toBe(
+      'Trailpeak · AC-2841 · High · Content Editor or Chat · about 20 min',
+    );
+  });
+
+  it("doesn't open on a brand the person's list lacks", async () => {
+    await render(
+      <ChatInbox suggestions={ok({ suggestions: [suggestion('s1', { brandId: 'brand-x' })] })} />,
+    );
+    await openTab('suggestions');
+    const row = host.querySelector('[data-suggestion="s1"]') as HTMLElement;
+    expect(row.getAttribute('role')).toBeNull();
+    expect(row.getAttribute('tabindex')).toBeNull();
+    const button = row.querySelector('button')!;
+    expect(button.disabled).toBe(true);
+    expect(row.title).toBe("This brand isn't in your brand list.");
+    await act(async () => row.click());
+    expect(server.open).not.toHaveBeenCalled();
+    expect(store.setActiveBrand).not.toHaveBeenCalled();
+    expect(nav.push).not.toHaveBeenCalled();
+  });
+
+  it('has a title when its action has no kind', async () => {
+    await render(
+      <ChatInbox
+        suggestions={ok({
+          suggestions: [
+            suggestion('s1', {
+              summary: { actionNo: 12, kind: '', payload: {}, priorityLevel: null, startNow: null },
+            }),
+          ],
+        })}
+      />,
+    );
+    await openTab('suggestions');
+    expect(rowTitles()).toEqual(['An action from your Action Center']);
+  });
+
+  it('says Today by the day the read dated, not the browser clock', async () => {
+    await render(<ChatInbox suggestions={ok({ today: '2026-10-28' })} />);
+    await openTab('suggestions');
+    expect(
+      [...host.querySelectorAll('[data-suggestion]')].map(
+        (row) => row.querySelector('.whitespace-nowrap')?.textContent,
+      ),
+    ).toEqual(['Oct 29', 'Today · Oct 28', 'Oct 27']);
+  });
+
+  it('opens once on a double click', async () => {
+    let answer: (value: { ok: true }) => void = () => undefined;
+    server.open.mockImplementationOnce(
+      () => new Promise<{ ok: true }>((resolve) => (answer = resolve)),
+    );
+    await render(<ChatInbox suggestions={ok()} />);
+    await openTab('suggestions');
+    await click('[data-suggestion="s1"] button');
+    await click('[data-suggestion="s1"] button');
+    await act(async () => answer({ ok: true }));
+    expect(server.open).toHaveBeenCalledTimes(1);
+    expect(nav.push).toHaveBeenCalledTimes(1);
+  });
+
+  it('still opens the action when marking it opened fails', async () => {
+    server.open.mockResolvedValueOnce({ ok: false, failure: 'failed' } as never);
+    await render(<ChatInbox suggestions={ok()} />);
+    await openTab('suggestions');
+    await click('[data-suggestion="s1"]');
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=action-s1');
+    server.open.mockRejectedValueOnce(new Error('offline'));
+    await click('[data-suggestion="s2"]');
+    expect(nav.push).toHaveBeenLastCalledWith('/dashboard/action-center/actions?action=action-s2');
+  });
+});
+
+describe('more than the read lists', () => {
+  it('counts them all, and says how many the list shows', async () => {
+    await render(<ChatInbox suggestions={ok({ total: 140 })} />);
+    expect(tabs()).toEqual(['All142', 'Daily suggestions140', 'Needs you1', 'Runs1']);
+    expect(text()).toContain('140 suggestions this week');
+    expect(text()).toContain('Showing the newest 3 of 140.');
+    await openTab('suggestions');
+    expect(text()).toContain('Showing the newest 3 of 140.');
+  });
+
+  it('says nothing of it when it lists them all', async () => {
+    await render(<ChatInbox suggestions={ok()} />);
+    expect(text()).not.toContain('Showing the newest');
+  });
+});
+
+describe('Pause and Turn back on, failing', () => {
+  it('says so in a toast, when the server answers a failure or the call throws', async () => {
+    server.set.mockResolvedValueOnce({ ok: false, failure: 'failed' } as never);
+    await render(<ChatInbox suggestions={ok()} />);
+    await openTab('suggestions');
+    await click('[data-action="suggestions.pause"]');
+    expect(sonner.error).toHaveBeenCalledWith("Couldn't change your daily suggestions. Try again.");
+    expect(server.read).not.toHaveBeenCalled();
+    server.set.mockRejectedValueOnce(new Error('offline'));
+    await click('[data-action="suggestions.pause"]');
+    expect(sonner.error).toHaveBeenCalledTimes(2);
+    expect(
+      (host.querySelector('[data-action="suggestions.pause"]') as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it('opens the plan dialog when the workspace turned read-only meanwhile', async () => {
+    server.set.mockResolvedValueOnce({ ok: false, failure: 'read_only' } as never);
+    await render(<ChatInbox suggestions={ok({ state: 'paused', suggestions: [] })} />);
+    await openTab('suggestions');
+    await click('[data-action="suggestions.resume"]');
+    expect(plan.openUpgrade).toHaveBeenCalledWith('Turning daily suggestions back on needs a plan');
+    expect(sonner.error).not.toHaveBeenCalled();
+  });
+});
+
+describe("an Agency partner's first Inbox, with nothing made", () => {
+  it('says nothing when no feed was made', async () => {
+    server.start.mockResolvedValueOnce({ ok: true, made: 0 });
+    await render(
+      <ChatInbox suggestions={ok({ roleFeed: 'opt_in', state: 'none', suggestions: [] })} />,
+    );
+    expect(server.start).toHaveBeenCalledTimes(1);
+    expect(server.read).not.toHaveBeenCalled();
+    expect(text()).not.toContain('Daily suggestions are on for you');
   });
 });

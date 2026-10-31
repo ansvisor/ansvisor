@@ -4191,6 +4191,13 @@
         "pause": "Pause daily suggestions",
         "started": "Daily suggestions are on for you: one action a day from your Action Center, starting tomorrow morning.",
         "empty": "No daily suggestions in the last 7 days.",
+        "showing": "Showing the newest {shown} of {total}.",
+        "untitled": "An action from your Action Center",
+        "brandMissing": "This brand isn't in your brand list.",
+        "closed": {
+          "completed": "Done",
+          "dismissed": "Dismissed"
+        },
         "dot": {
           "new": "New",
           "seen": "Seen",

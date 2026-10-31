@@ -1,6 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+} from 'react';
 import { useTranslations } from 'next-intl';
 import { Inbox as InboxIcon } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -12,7 +20,7 @@ import { agoOf } from '@/lib/chat/home';
 import { chatMenuLists } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
 import type { ChatListStatus } from './chat-list-provider';
-import { INBOX_ROW, SuggestionRow, SuggestionsPanel, type InboxDaily } from './inbox-suggestions';
+import { INBOX_ROW, SuggestionRows, SuggestionsPanel, type InboxDaily } from './inbox-suggestions';
 
 /**
  * The Inbox's rows: what needs the person, what runs, and unread results —
@@ -47,6 +55,11 @@ export function inboxCounts(items: ChatListItem[], now = new Date()) {
  */
 export const INBOX_TABS = ['all', 'suggestions', 'needsYou', 'runs'] as const;
 export type InboxTab = (typeof INBOX_TABS)[number];
+
+/** A topic from the address (`?tab=`): All for none, or one that isn't a topic. */
+export function inboxTabOf(value: string | null | undefined): InboxTab {
+  return (INBOX_TABS as readonly string[]).includes(value ?? '') ? (value as InboxTab) : 'all';
+}
 
 /** Each topic's rows: Needs you and Runs split the chats; All holds them and the suggestions. */
 export function inboxTabCounts(
@@ -191,6 +204,8 @@ export interface ChatInboxViewProps {
    * or they couldn't be read: the Inbox is then as it was.
    */
   daily?: InboxDaily | null;
+  /** The topic open first, from the address (`?tab=`). */
+  initialTab?: InboxTab;
 }
 
 /**
@@ -200,12 +215,21 @@ export interface ChatInboxViewProps {
  * row opens its chat. One line and an icon when there is nothing. With the
  * daily suggestions, the same in topic tabs (mockup #d-inbox).
  */
-export function ChatInboxView({ daily, ...props }: ChatInboxViewProps) {
-  return daily ? <TabbedInboxView {...props} daily={daily} /> : <PlainInboxView {...props} />;
+export function ChatInboxView({ daily, initialTab, ...props }: ChatInboxViewProps) {
+  return daily ? (
+    <TabbedInboxView {...props} daily={daily} initialTab={initialTab} />
+  ) : (
+    <PlainInboxView {...props} />
+  );
 }
 
 /** The Inbox before its topic tabs (CHAT-01): one list. */
-function PlainInboxView({ status, items, now, onRetry }: Omit<ChatInboxViewProps, 'daily'>) {
+function PlainInboxView({
+  status,
+  items,
+  now,
+  onRetry,
+}: Omit<ChatInboxViewProps, 'daily' | 'initialTab'>) {
   const t = useTranslations('chatShell.inbox');
   const counts = inboxCounts(items, now ?? new Date());
   const summary = [
@@ -264,9 +288,12 @@ function PlainInboxView({ status, items, now, onRetry }: Omit<ChatInboxViewProps
 /**
  * The Inbox in topic tabs (CHAT-26 §2.1, §2.2; mockup #d-inbox): the
  * subtitle keeps its counts, with the week's suggestions; each tab shows
- * its count and only its rows. All opens first. The suggestions on screen
- * (All or Daily suggestions) are marked seen. An Analyst, who gets no daily
- * suggestions, has no Daily suggestions tab.
+ * its count and only its rows. All opens first, or the topic the address
+ * names (`?tab=`), which the address keeps as the person moves between
+ * them, so coming back from a row opens the same one. The arrow keys move
+ * between the topics. The suggestions on screen (All or Daily suggestions)
+ * are marked seen. An Analyst, who gets no daily suggestions, has no Daily
+ * suggestions tab.
  */
 function TabbedInboxView({
   status,
@@ -274,21 +301,61 @@ function TabbedInboxView({
   now,
   onRetry,
   daily,
+  initialTab = 'all',
 }: Omit<ChatInboxViewProps, 'daily'> & { daily: InboxDaily }) {
   const t = useTranslations('chatShell.inbox');
-  const [tab, setTab] = useState<InboxTab>('all');
   const gets = daily.read.roleFeed !== 'never';
+  const tabFor = (named: InboxTab): InboxTab => (gets || named !== 'suggestions' ? named : 'all');
+  const [tab, setTab] = useState<InboxTab>(() => tabFor(initialTab));
+  // The address named another topic from outside (the menu's Inbox link): follow it.
+  const [named, setNamed] = useState(initialTab);
+  if (named !== initialTab) {
+    setNamed(initialTab);
+    setTab(tabFor(initialTab));
+  }
+  const ids = useId();
+  const tabButtons = useRef<Partial<Record<InboxTab, HTMLButtonElement | null>>>({});
   const suggestions = gets ? daily.read.suggestions : [];
+  const suggestionsTotal = gets ? daily.read.total : 0;
   const tabs = INBOX_TABS.filter((name) => gets || name !== 'suggestions');
   const ready = status === 'ready';
   const counts = inboxCounts(items, now ?? new Date());
-  const tabCounts = inboxTabCounts(items, suggestions.length);
+  const tabCounts = inboxTabCounts(items, suggestionsTotal);
   const summary = [
     counts.needsYou ? t('summary.needsYou', { count: counts.needsYou }) : null,
     counts.running ? t('summary.running', { count: counts.running }) : null,
     counts.doneToday ? t('summary.doneToday', { count: counts.doneToday }) : null,
-    suggestions.length ? t('summary.suggestions', { count: suggestions.length }) : null,
+    suggestionsTotal ? t('summary.suggestions', { count: suggestionsTotal }) : null,
   ].filter(Boolean);
+
+  const switchTab = (next: InboxTab) => {
+    setTab(next);
+    try {
+      const url = new URL(window.location.href);
+      if (next === 'all') url.searchParams.delete('tab');
+      else url.searchParams.set('tab', next);
+      window.history.replaceState(null, '', url);
+    } catch {
+      // The address only remembers the topic; the page works without it.
+    }
+  };
+  // Arrow keys, Home and End move to a topic and open it (the roving tab stop).
+  const onTabKey = (event: KeyboardEvent<HTMLButtonElement>, i: number) => {
+    const to =
+      event.key === 'ArrowRight'
+        ? (i + 1) % tabs.length
+        : event.key === 'ArrowLeft'
+          ? (i - 1 + tabs.length) % tabs.length
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? tabs.length - 1
+              : null;
+    if (to === null) return;
+    event.preventDefault();
+    switchTab(tabs[to]);
+    tabButtons.current[tabs[to]]?.focus();
+  };
 
   const onScreen = tab === 'all' || tab === 'suggestions' ? suggestions : [];
   const unseen = onScreen
@@ -315,15 +382,22 @@ function TabbedInboxView({
         </p>
       )}
       <div role="tablist" aria-label={t('tabs.label')} className="mb-4 flex flex-wrap gap-1">
-        {tabs.map((name) => (
+        {tabs.map((name, i) => (
           <button
             key={name}
+            ref={(button) => {
+              tabButtons.current[name] = button;
+            }}
             type="button"
             role="tab"
+            id={`${ids}-tab-${name}`}
+            aria-controls={`${ids}-panel`}
+            tabIndex={tab === name ? 0 : -1}
             data-action="inbox.tab"
             data-tab={name}
             aria-selected={tab === name}
-            onClick={() => setTab(name)}
+            onClick={() => switchTab(name)}
+            onKeyDown={(event) => onTabKey(event, i)}
             className={cn(
               'rounded-lg px-2.5 py-1 text-[12.5px] text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
               tab === name && 'bg-muted font-medium text-foreground',
@@ -343,54 +417,48 @@ function TabbedInboxView({
           {t('suggestions.started')}
         </p>
       )}
-      {tab === 'suggestions' ? (
-        <SuggestionsPanel daily={daily} now={now} />
-      ) : (
-        <>
-          {status === 'loading' && (
-            <div className="mb-2 flex flex-col gap-2" aria-hidden>
-              {[0, 1, 2].map((i) => (
-                <Skeleton key={i} className="h-[62px] w-full rounded-[14px]" />
-              ))}
-            </div>
-          )}
-          {status === 'error' && (
-            <p className="mb-2 text-sm text-muted-foreground">
-              {t('loadFailed')}{' '}
-              <button
-                type="button"
-                onClick={onRetry}
-                className="underline underline-offset-2 hover:text-foreground"
-              >
-                {t('retry')}
-              </button>
-            </p>
-          )}
-          {rows > 0 ? (
-            <div className="flex flex-col gap-2">
-              {chats.map((chat) => (
-                <InboxRow key={chat.id} chat={chat} now={now} />
-              ))}
-              {tab === 'all' &&
-                suggestions.map((suggestion) => (
-                  <SuggestionRow
-                    key={suggestion.id}
-                    suggestion={suggestion}
-                    now={now}
-                    onOpen={daily.onOpen}
-                  />
+      <div role="tabpanel" id={`${ids}-panel`} aria-labelledby={`${ids}-tab-${tab}`}>
+        {tab === 'suggestions' ? (
+          <SuggestionsPanel daily={daily} now={now} />
+        ) : (
+          <>
+            {status === 'loading' && (
+              <div className="mb-2 flex flex-col gap-2" aria-hidden>
+                {[0, 1, 2].map((i) => (
+                  <Skeleton key={i} className="h-[62px] w-full rounded-[14px]" />
                 ))}
-            </div>
-          ) : (
-            ready && (
-              <div className="flex items-center gap-2 rounded-[14px] border border-dashed px-4 py-6 text-sm text-muted-foreground">
-                <InboxIcon aria-hidden className="size-4" />
-                {t('tabEmpty')}
               </div>
-            )
-          )}
-        </>
-      )}
+            )}
+            {status === 'error' && (
+              <p className="mb-2 text-sm text-muted-foreground">
+                {t('loadFailed')}{' '}
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  {t('retry')}
+                </button>
+              </p>
+            )}
+            {rows > 0 ? (
+              <div className="flex flex-col gap-2">
+                {chats.map((chat) => (
+                  <InboxRow key={chat.id} chat={chat} now={now} />
+                ))}
+                {tab === 'all' && <SuggestionRows daily={daily} now={now} />}
+              </div>
+            ) : (
+              ready && (
+                <div className="flex items-center gap-2 rounded-[14px] border border-dashed px-4 py-6 text-sm text-muted-foreground">
+                  <InboxIcon aria-hidden className="size-4" />
+                  {t('tabEmpty')}
+                </div>
+              )
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import type { TeamRole } from '@/components/providers/role-provider';
 import { storedPriorityLevel, type PriorityLevel } from '@/lib/action-center/priority';
+import { CLOSED_ACTION_STATUSES, type ActionStatus } from '@/lib/action-center/registry';
 import { formatMonthDay } from '@/lib/format';
 
 /**
@@ -40,17 +41,28 @@ export function roleFeed(role: TeamRole | null): RoleFeed {
 }
 
 /**
- * The person's feeds (one per brand) as one: on while any brand's is; else
- * paused (by the job, after 30 days unused), else off (by the person's
- * Pause); none before any is made.
+ * The person's feeds (one per brand) as one: paused while any brand's is
+ * (by the job, after 30 days unused: the banner shows, and Turn back on
+ * turns every brand's on, §2.4, §5); else on while any is; else off (by the
+ * person's Pause); none before any is made.
  */
 export type FeedsState = 'on' | 'paused' | 'off' | 'none';
 
 export function feedsState(statuses: readonly string[]): FeedsState {
-  if (statuses.includes('on')) return 'on';
   if (statuses.includes('paused')) return 'paused';
+  if (statuses.includes('on')) return 'on';
   if (statuses.includes('off')) return 'off';
   return 'none';
+}
+
+/** An action whose cycle is over in the Action Center: done or dismissed. */
+export type ClosedStatus = Extract<ActionStatus, 'completed' | 'dismissed'>;
+
+/** The action's status as closed, when it is; null while it is open (or unknown). */
+export function closedStatus(status: unknown): ClosedStatus | null {
+  return (CLOSED_ACTION_STATUSES as readonly unknown[]).includes(status)
+    ? (status as ClosedStatus)
+    : null;
 }
 
 /** "Start now" as the job kept it: the draft it opens, its pages, and about how long. */
@@ -113,6 +125,8 @@ export interface DailySuggestion {
   openedAt: string | null;
   startedAt: string | null;
   startedVia: 'chat' | 'editor' | null;
+  /** The action was done or dismissed since: the row stays, faded, with that status. */
+  closed: ClosedStatus | null;
   summary: SuggestionSummary;
 }
 
@@ -120,8 +134,15 @@ export interface DailySuggestion {
 export interface DailySuggestionsRead {
   roleFeed: RoleFeed;
   state: FeedsState;
-  /** The last SHOWN_DAYS days' suggestions, not removed, newest first. */
+  /**
+   * The last SHOWN_DAYS days' suggestions, not removed, not put off, whose
+   * action wasn't deleted: newest first, at most the read's cap.
+   */
   suggestions: DailySuggestion[];
+  /** How many there are, past the cap included. */
+  total: number;
+  /** The person's today (YYYY-MM-DD) as the job dates sent_on; null when it couldn't be read. */
+  today: string | null;
 }
 
 /** The row's dot (§2.2): new (blue), seen, started (green). Opening one sees it. */
@@ -134,21 +155,73 @@ export function suggestionDot(
   return suggestion.seenAt || suggestion.openedAt ? 'seen' : 'new';
 }
 
-/** The person's calendar day, YYYY-MM-DD, by their own clock. */
-export function localDay(now: Date): string {
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
+/**
+ * The Chat answers the job reads time zones from (W2-24's ZONE_DAYS and
+ * ZONE_ANSWERS): the workspace's of the last 30 days, the latest 300.
+ */
+export const ZONE_DAYS = 30;
+export const ZONE_ANSWERS = 300;
+
+/**
+ * The time zone the nightly job dates a person's suggestions in (W2-24's
+ * resolveZones): their latest Chat answer's (chat_messages.timezone, the
+ * browser's zone it was shown in); else the one most of the workspace's
+ * latest answers were read in, the newest on a tie; else UTC.
+ *
+ * @param answers the workspace's latest answers, newest first
+ */
+export function sendingZone(
+  answers: readonly { userId: string | null; timezone: string | null }[],
+  userId: string,
+): string {
+  const counts = new Map<string, number>();
+  for (const answer of answers) {
+    if (!isTimeZone(answer.timezone)) continue;
+    if (answer.userId === userId) return answer.timezone;
+    counts.set(answer.timezone, (counts.get(answer.timezone) ?? 0) + 1);
+  }
+  let zone = 'UTC';
+  let most = 0;
+  // Map order is first-seen order, newest first: a strict > keeps the newest on a tie.
+  for (const [name, count] of counts) {
+    if (count > most) {
+      zone = name;
+      most = count;
+    }
+  }
+  return zone;
+}
+
+function isTimeZone(zone: string | null): zone is string {
+  if (!zone || zone.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The calendar day, YYYY-MM-DD, `now` reads in `zone`. */
+export function dayIn(now: Date, zone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
 /**
  * The day a suggestion was sent, as "Oct 29", and whether that is the
- * person's today ("Today · Oct 29"); not today while their clock isn't
- * known yet (rendering on the server).
+ * person's today ("Today · Oct 29"), as the read dated it: not today when
+ * it couldn't.
  */
-export function sentDay(sentOn: string, now: Date | null): { date: string; today: boolean } {
+export function sentDay(sentOn: string, today: string | null): { date: string; today: boolean } {
   return {
     date: formatMonthDay(`${sentOn}T00:00:00Z`, 'UTC'),
-    today: now !== null && localDay(now) === sentOn,
+    today: today === sentOn,
   };
 }

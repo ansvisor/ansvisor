@@ -7,12 +7,24 @@ import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { parseTeamRole } from '@/lib/chat/precedence';
 import { assertWritable, SUBSCRIPTION_INACTIVE } from '@/lib/subscription-guard';
 import {
+  ALWAYS_ON_SECTION,
+  menuOfProfile,
+  readRoleHidden,
+  type MenuProfile,
+} from '@/lib/menu-access';
+import {
+  ZONE_ANSWERS,
+  ZONE_DAYS,
+  closedStatus,
+  dayIn,
   feedsState,
   parseSuggestionSummary,
   roleFeed,
+  sendingZone,
   shownSince,
   type DailySuggestion,
   type DailySuggestionsRead,
+  type RoleFeed,
 } from '@/lib/chat/daily-suggestions';
 
 /**
@@ -28,6 +40,9 @@ import {
  * keeps the feed's last_used_at, which the nightly job's 30-day pause counts
  * from. Turning the feeds on or off only changes their status: the job's
  * "first one the next morning" reads the update's time (updated_at).
+ *
+ * Nobody gets them without the Action Center on their menu (§6, 00374),
+ * where they come from: no tab or rows, and no feed made or turned on.
  */
 
 export type SuggestionsFailure = 'chat_off' | 'read_only' | 'not_allowed' | 'not_found' | 'failed';
@@ -42,8 +57,14 @@ export type SuggestionsStartResult =
   | { ok: true; made: number }
   | { ok: false; failure: SuggestionsFailure };
 
-/** The suggestions a read lists at most: 7 a week per brand. */
+/**
+ * The suggestions a read lists at most, newest first: 7 a week per brand,
+ * so 14 brands' worth. The read counts them all, and the Inbox says when
+ * it shows fewer.
+ */
 const LIST_MAX = 100;
+
+const DAY_MS = 86_400_000;
 
 const idSchema = z.guid();
 const idsSchema = z.array(z.guid()).min(1).max(LIST_MAX);
@@ -53,6 +74,8 @@ interface Person {
   userId: string;
   orgId: string;
   role: ReturnType<typeof parseTeamRole>;
+  /** The profile's menu columns (00374). */
+  menu: Omit<MenuProfile, 'role'>;
 }
 
 /** The signed-in person with the new Chat on for their workspace, or null. */
@@ -64,12 +87,74 @@ async function chatPerson(): Promise<Person | null> {
   if (!user) return null;
   const { data: profile } = await client
     .from('profiles')
-    .select('organization_id, role')
+    .select(
+      'organization_id, role, work_areas, work_areas_asked_at, menu_shown, menu_hidden, can_manage_menus',
+    )
     .eq('id', user.id)
     .maybeSingle();
   const orgId = profile?.organization_id ?? null;
   if (!orgId || !chatAgenticEnabled(orgId)) return null;
-  return { client, userId: user.id, orgId, role: parseTeamRole(profile?.role) };
+  return {
+    client,
+    userId: user.id,
+    orgId,
+    role: parseTeamRole(profile?.role),
+    menu: {
+      work_areas: profile?.work_areas ?? null,
+      work_areas_asked_at: profile?.work_areas_asked_at ?? null,
+      menu_shown: profile?.menu_shown ?? null,
+      menu_hidden: profile?.menu_hidden ?? null,
+      can_manage_menus: profile?.can_manage_menus ?? null,
+    },
+  };
+}
+
+/**
+ * Who gets daily suggestions (§6): by role, and only with the Action Center
+ * on the person's menu (00374), where they come from. Action Center is on
+ * every menu today (ALWAYS_ON_SECTION); this follows the menu's own rule,
+ * so it holds should that change.
+ */
+async function personFeed(me: Person): Promise<RoleFeed> {
+  const feed = roleFeed(me.role);
+  if (feed === 'never' || !me.role) return 'never';
+  const roleHidden = await readRoleHidden(me.client, me.orgId, me.role);
+  const { hidden } = menuOfProfile({ ...me.menu, role: me.role }, roleHidden);
+  return hidden.includes(ALWAYS_ON_SECTION) ? 'never' : feed;
+}
+
+/**
+ * The person's today as the nightly job dates sent_on (sendingZone): read
+ * with the service role, since the workspace's answers aren't all theirs to
+ * read; only their zones and authors, and only the day leaves the server.
+ * Null, logged, when it can't be read: no row says Today then.
+ */
+async function personToday(me: Person, now: Date): Promise<string | null> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_messages')
+    .select(
+      'timezone, chat_conversations!chat_messages_conversation_id_fkey!inner(user_id, organization_id)',
+    )
+    .eq('chat_conversations.organization_id', me.orgId)
+    .eq('role', 'assistant')
+    .not('timezone', 'is', null)
+    .gte('created_at', new Date(now.getTime() - ZONE_DAYS * DAY_MS).toISOString())
+    .order('created_at', { ascending: false })
+    .limit(ZONE_ANSWERS);
+  if (error) {
+    logFailure("read the person's time zone", error);
+    return null;
+  }
+  const answers = ((data ?? []) as unknown as AnswerZoneRow[]).map((row) => ({
+    userId: row.chat_conversations?.user_id ?? null,
+    timezone: row.timezone,
+  }));
+  return dayIn(now, sendingZone(answers, me.userId));
+}
+
+interface AnswerZoneRow {
+  timezone: string | null;
+  chat_conversations: { user_id: string | null } | null;
 }
 
 /** The plan check's refusal as a result: read_only while the workspace is, else failed. */
@@ -94,6 +179,8 @@ interface SuggestionRow {
   started_at: string | null;
   started_via: string | null;
   summary: unknown;
+  /** The action, through the person's session: one deleted (or out of reach) drops the row. */
+  actions: { status: string | null } | null;
 }
 
 function toSuggestion(row: SuggestionRow): DailySuggestion {
@@ -107,45 +194,61 @@ function toSuggestion(row: SuggestionRow): DailySuggestion {
     openedAt: row.opened_at,
     startedAt: row.started_at,
     startedVia: row.started_via === 'chat' || row.started_via === 'editor' ? row.started_via : null,
+    closed: closedStatus(row.actions?.status),
     summary: parseSuggestionSummary(row.summary),
   };
 }
 
 /**
  * The person's daily suggestions for the Inbox: their feeds as one state and
- * the last 7 days' suggestions they haven't removed, newest first. An
- * Analyst gets none (§6), and nothing is read for them.
+ * the last 7 days' suggestions they haven't removed or put off (Not now,
+ * until its day), newest first. A suggestion whose action was deleted
+ * (deleted_at, which the person's session doesn't read) drops out; one done
+ * or dismissed since stays, with that status. An Analyst, or someone
+ * without the Action Center, gets none (§6), and nothing is read for them.
  */
 export async function readDailySuggestions(): Promise<SuggestionsReadResult> {
   try {
     const me = await chatPerson();
     if (!me) return { ok: false, failure: 'chat_off' };
-    const feed = roleFeed(me.role);
-    if (feed === 'never')
-      return { ok: true, read: { roleFeed: feed, state: 'none', suggestions: [] } };
-    const [feeds, rows] = await Promise.all([
+    const feed = await personFeed(me);
+    if (feed === 'never') {
+      return {
+        ok: true,
+        read: { roleFeed: feed, state: 'none', suggestions: [], total: 0, today: null },
+      };
+    }
+    const now = new Date();
+    const at = now.toISOString();
+    const [feeds, rows, today] = await Promise.all([
       me.client.from('chat_suggestion_feeds').select('status').eq('user_id', me.userId),
       me.client
         .from('chat_suggestions')
         .select(
-          'id, brand_id, action_id, sent_on, sent_at, seen_at, opened_at, started_at, started_via, summary',
+          'id, brand_id, action_id, sent_on, sent_at, seen_at, opened_at, started_at, started_via, summary, actions!chat_suggestions_action_id_fkey!inner(status)',
+          { count: 'exact' },
         )
         .eq('user_id', me.userId)
-        .gt('sent_at', shownSince(new Date()))
+        .gt('sent_at', shownSince(now))
         .is('removed_at', null)
+        .or(`snoozed_until.is.null,snoozed_until.lte."${at}"`)
         .order('sent_at', { ascending: false })
         .limit(LIST_MAX),
+      personToday(me, now),
     ]);
     if (feeds.error || rows.error) {
       logFailure('read daily suggestions', feeds.error ?? rows.error);
       return { ok: false, failure: 'failed' };
     }
+    const suggestions = ((rows.data ?? []) as unknown as SuggestionRow[]).map(toSuggestion);
     return {
       ok: true,
       read: {
         roleFeed: feed,
         state: feedsState((feeds.data ?? []).map((row) => row.status)),
-        suggestions: ((rows.data ?? []) as SuggestionRow[]).map(toSuggestion),
+        suggestions,
+        total: Math.max(rows.count ?? 0, suggestions.length),
+        today,
       },
     };
   } catch (error) {
@@ -190,7 +293,7 @@ export async function markDailySuggestionsSeen(ids: string[]): Promise<Suggestio
 /**
  * The person opened a suggestion (§5: a use): its opened_at the first time
  * (and seen_at, when the Inbox hadn't marked it yet), and its feed's
- * last_used_at each time.
+ * last_used_at each time. Not one whose action was deleted.
  */
 export async function openDailySuggestion(id: string): Promise<SuggestionsWriteResult> {
   try {
@@ -203,12 +306,16 @@ export async function openDailySuggestion(id: string): Promise<SuggestionsWriteR
     if (!parsed.success) return { ok: false, failure: 'not_found' };
     const me = await chatPerson();
     if (!me) return { ok: false, failure: 'chat_off' };
+    // Not one whose action was deleted: nothing to open, and no use of the feed.
     const { data: row, error: readError } = await supabaseAdmin
       .from('chat_suggestions')
-      .select('id, brand_id, seen_at, opened_at')
+      .select(
+        'id, brand_id, seen_at, opened_at, actions!chat_suggestions_action_id_fkey!inner(deleted_at)',
+      )
       .eq('id', parsed.data)
       .eq('user_id', me.userId)
       .eq('organization_id', me.orgId)
+      .is('actions.deleted_at', null)
       .maybeSingle();
     if (readError) {
       logFailure('read a suggestion', readError);
@@ -276,7 +383,7 @@ export async function setDailySuggestions(on: boolean): Promise<SuggestionsWrite
     if (typeof on !== 'boolean') return { ok: false, failure: 'not_allowed' };
     const me = await chatPerson();
     if (!me) return { ok: false, failure: 'chat_off' };
-    if (roleFeed(me.role) === 'never') return { ok: false, failure: 'not_allowed' };
+    if ((await personFeed(me)) === 'never') return { ok: false, failure: 'not_allowed' };
     const status = on ? 'on' : 'off';
     const { error } = await supabaseAdmin
       .from('chat_suggestion_feeds')
@@ -317,7 +424,7 @@ export async function setDailySuggestions(on: boolean): Promise<SuggestionsWrite
  * when they first open the Inbox): their feeds are made, on, for the
  * workspace's brands. Only while they have none: one they paused or turned
  * off stays so. Admins' and Managers' feeds are the nightly job's to make;
- * an Analyst gets none.
+ * an Analyst, or someone without the Action Center, gets none.
  */
 export async function startDailySuggestions(): Promise<SuggestionsStartResult> {
   try {
@@ -328,11 +435,12 @@ export async function startDailySuggestions(): Promise<SuggestionsStartResult> {
   try {
     const me = await chatPerson();
     if (!me) return { ok: false, failure: 'chat_off' };
-    if (roleFeed(me.role) !== 'opt_in') return { ok: false, failure: 'not_allowed' };
+    if ((await personFeed(me)) !== 'opt_in') return { ok: false, failure: 'not_allowed' };
     const { data: feeds, error: readError } = await supabaseAdmin
       .from('chat_suggestion_feeds')
       .select('brand_id')
       .eq('user_id', me.userId)
+      .eq('organization_id', me.orgId)
       .limit(1);
     if (readError) {
       logFailure('read the feeds', readError);

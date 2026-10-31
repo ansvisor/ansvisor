@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   SHOWN_DAYS,
+  closedStatus,
+  dayIn,
   feedsState,
-  localDay,
   parseSuggestionSummary,
   roleFeed,
+  sendingZone,
   sentDay,
   shownSince,
   suggestionDot,
@@ -34,11 +36,22 @@ describe('roleFeed', () => {
 });
 
 describe('feedsState', () => {
-  it('is on while any brand is, else paused, else off, else none', () => {
-    expect(feedsState(['paused', 'on'])).toBe('on');
+  it('is paused while any brand is, else on while any is, else off, else none', () => {
+    expect(feedsState(['on', 'paused'])).toBe('paused');
     expect(feedsState(['off', 'paused'])).toBe('paused');
+    expect(feedsState(['off', 'on'])).toBe('on');
     expect(feedsState(['off'])).toBe('off');
     expect(feedsState([])).toBe('none');
+  });
+});
+
+describe('closedStatus', () => {
+  it('is the status of an action done or dismissed, and null while it is open', () => {
+    expect(closedStatus('completed')).toBe('completed');
+    expect(closedStatus('dismissed')).toBe('dismissed');
+    for (const open of ['new', 'in_progress', 'on_hold', null, undefined, 'nope']) {
+      expect(closedStatus(open)).toBeNull();
+    }
   });
 });
 
@@ -110,15 +123,62 @@ describe('parseSuggestionSummary', () => {
   });
 });
 
-describe('sentDay', () => {
-  const now = new Date(2026, 9, 29, 9, 30);
-  it("says the day it was sent, and whether it is today by the person's clock", () => {
-    expect(localDay(now)).toBe('2026-10-29');
-    expect(sentDay('2026-10-29', now)).toEqual({ date: 'Oct 29', today: true });
-    expect(sentDay('2026-10-28', now)).toEqual({ date: 'Oct 28', today: false });
+describe('sendingZone', () => {
+  const ME = 'me';
+  it("is the person's latest Chat answer's zone, as the job's", () => {
+    expect(
+      sendingZone(
+        [
+          { userId: 'other', timezone: 'America/New_York' },
+          { userId: ME, timezone: 'Europe/Istanbul' },
+          { userId: ME, timezone: 'Asia/Tokyo' },
+        ],
+        ME,
+      ),
+    ).toBe('Europe/Istanbul');
   });
 
-  it('is never today before the clock is known', () => {
+  it("is the workspace's most read zone without one of theirs, the newest on a tie, else UTC", () => {
+    expect(
+      sendingZone(
+        [
+          { userId: 'a', timezone: 'Europe/Berlin' },
+          { userId: 'b', timezone: 'America/New_York' },
+          { userId: 'c', timezone: 'America/New_York' },
+          { userId: 'd', timezone: 'Europe/Berlin' },
+        ],
+        ME,
+      ),
+    ).toBe('Europe/Berlin');
+    expect(
+      sendingZone(
+        [
+          { userId: ME, timezone: 'Not/AZone' },
+          { userId: ME, timezone: null },
+        ],
+        ME,
+      ),
+    ).toBe('UTC');
+    expect(sendingZone([], ME)).toBe('UTC');
+  });
+});
+
+describe('dayIn', () => {
+  it('is the calendar day an instant reads in a zone', () => {
+    const at = new Date('2026-10-29T22:30:00Z');
+    expect(dayIn(at, 'UTC')).toBe('2026-10-29');
+    expect(dayIn(at, 'Europe/Istanbul')).toBe('2026-10-30');
+    expect(dayIn(at, 'America/Los_Angeles')).toBe('2026-10-29');
+  });
+});
+
+describe('sentDay', () => {
+  it('says the day it was sent, and whether it is the today the read dated', () => {
+    expect(sentDay('2026-10-29', '2026-10-29')).toEqual({ date: 'Oct 29', today: true });
+    expect(sentDay('2026-10-28', '2026-10-29')).toEqual({ date: 'Oct 28', today: false });
+  });
+
+  it("is never today when the read couldn't date it", () => {
     expect(sentDay('2026-10-29', null)).toEqual({ date: 'Oct 29', today: false });
   });
 });
