@@ -8,7 +8,7 @@ import { PLANS, type Plan } from '@/config/plans';
  */
 
 let brandCount = 0;
-let countFilters: unknown[][] = [];
+let countCalls: unknown[][] = [];
 let inserted: unknown[] = [];
 let readBackFilters: unknown[][][] = [];
 let returningRequested = false;
@@ -23,13 +23,16 @@ vi.mock('@/lib/guards/plan-guard', () => ({
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
+    rpc: async (...call: unknown[]) => {
+      countCalls.push(call);
+      return { data: brandCount, error: null };
+    },
     from: (table: string) => ({
       select: () => {
         const filters: unknown[][] = [];
         const chain = {
           eq: (...filter: unknown[]) => {
             filters.push(filter);
-            if (filter[0] !== 'id') countFilters.push(filter);
             return chain;
           },
           // The read-back after the insert (by the id createBrand chose).
@@ -41,8 +44,6 @@ vi.mock('@/lib/supabase/server', () => ({
               error: null,
             };
           },
-          then: (resolve: (value: { count: number; error: null }) => void) =>
-            resolve({ count: brandCount, error: null }),
         };
         return chain;
       },
@@ -91,21 +92,18 @@ const capped = (maxBrands: number): Plan => ({
 describe('createBrand plan limit', () => {
   beforeEach(() => {
     inserted = [];
-    countFilters = [];
+    countCalls = [];
     readBackFilters = [];
     returningRequested = false;
   });
 
-  it("counts the organization's own brands, never the demo brand (00380)", async () => {
+  it('counts every brand of the organization, whatever the person sees, never the demo brand (00380, 00390)', async () => {
     brandCount = 0;
     plan = capped(5);
 
     await createBrand(input);
 
-    expect(countFilters).toEqual([
-      ['organization_id', 'org-1'],
-      ['is_demo', false],
-    ]);
+    expect(countCalls).toEqual([['org_brand_count', { p_organization_id: 'org-1' }]]);
   });
 
   it('returns a readable plan_limit result and inserts nothing at the limit', async () => {
