@@ -7,6 +7,7 @@ import type { ChatDenialCard } from '@/lib/chat/events';
 import { nextRunOf } from '@/lib/chat/agent-view';
 import {
   changeAgent,
+  deleteAgent,
   duplicateAgent,
   runAgentNow,
   type AgentChange,
@@ -15,7 +16,7 @@ import {
 import type { AgentWords } from './agent-words';
 
 /** What a button does to an agent. */
-export type AgentButton = AgentChange | 'run' | 'duplicate';
+export type AgentButton = AgentChange | 'run' | 'duplicate' | 'delete';
 
 const CHANGE_TOAST: Record<Exclude<AgentChange, 'activate'>, string> = {
   pause: 'toast.paused',
@@ -35,10 +36,12 @@ const ASKED: Record<AgentButton, string> = {
   'take-over': 'takeOver',
   run: 'run',
   duplicate: 'duplicate',
+  delete: 'delete',
 };
 
 /**
- * The agents' buttons (CHAT-21 §B item 7, §C item 9, §G): one call each,
+ * The agents' buttons (CHAT-21 §B item 7, §C item 9, §G), Delete
+ * included (an archived agent's, once confirmed): one call each,
  * a toast when it's done, and when the server refuses, its answer —
  * the out-of-permission card (CHAT-20 §4c) for a role, the plan or a
  * Settings › Chat switch, the upgrade dialog for a read-only workspace,
@@ -54,13 +57,15 @@ export function useAgentActions(
     onRan?: (agentId: string) => void;
     /** The copy, a draft. */
     onDuplicated?: (copy: AgentDetail) => void;
+    /** It was deleted (archived ones only): its runs and files stay. */
+    onDeleted?: (agentId: string) => void;
   } = {},
 ) {
   const t = useTranslations('chatAgents');
   const { isLocked, openUpgrade } = useUpgradeGate();
   const [busy, setBusy] = useState<{ id: string; button: AgentButton } | null>(null);
   const [denial, setDenial] = useState<ChatDenialCard | null>(null);
-  const { onChanged, onRan, onDuplicated } = handlers;
+  const { onChanged, onRan, onDuplicated, onDeleted } = handlers;
 
   const refused = useCallback(
     (button: AgentButton, answer: AgentRefused) => {
@@ -97,6 +102,13 @@ export function useAgentActions(
           onDuplicated?.(answer.agent);
           return;
         }
+        if (button === 'delete') {
+          const answer = await deleteAgent(agent.id);
+          if (!answer.ok) return refused(button, answer);
+          toast(t('toast.deleted', { name: agent.name }));
+          onDeleted?.(agent.id);
+          return;
+        }
         const answer = await changeAgent(agent.id, button);
         if (!answer.ok) return refused(button, answer);
         if (button === 'activate') {
@@ -116,7 +128,7 @@ export function useAgentActions(
         setBusy(null);
       }
     },
-    [busy, isLocked, openUpgrade, refused, t, words, onChanged, onRan, onDuplicated],
+    [busy, isLocked, openUpgrade, refused, t, words, onChanged, onRan, onDuplicated, onDeleted],
   );
 
   const isBusy = (id: string, button?: AgentButton) =>

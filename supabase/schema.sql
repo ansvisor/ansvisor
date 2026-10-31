@@ -49610,6 +49610,237 @@ create policy "chat_suggestions: own select"
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00423_chat_why_cells.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00423: Why did it move — the counts explain_change reads
+-- ============================================================================
+-- Why did it move (CHAT-22 §1, explain_change) compares a metric between two
+-- periods prompt × engine by prompt × engine, from scheduled tracking only
+-- (Addendum 2 G). chat_why_cells sums the Insights rollups for it in one
+-- call, so the web never pages through day rows (max_rows 1000):
+--
+--   * cells: per prompt, platform, model and location, and period (a or b):
+--     the tracked day rows (runs) and those where the brand was named or
+--     cited (visible_runs); answers, those naming the brand and those citing
+--     its pages; its mentions and its tracked competitors' (share of voice as
+--     Insights counts it: total_mentions against the competitors'
+--     mention_count); the positions where it was named (sum, sum of 1/position
+--     for the Visibility score's position factor, and count); and the newest
+--     answer.
+--   * daily: the same sums per day from p_series_from to p_b_to, with the
+--     prompts named or cited and those tracked (visibility as Insights counts
+--     it), for the change point (§1 item 5.2).
+--   * complete: false while a row read predates 00130/00131's columns (its
+--     sums count as 0 until the daily refresh rewrites its day), as
+--     insights_kpi_series says it.
+--
+-- From insights_prompt_daily and insights_competitor_prompt_daily, on their
+-- (brand_id, day) index, each with its own day ranges; the competitors' sums
+-- are grouped on their own before they meet the brand's, so no join repeats a
+-- row. Server only, behind CHAT_AGENTIC: the web checks the brand is the
+-- caller's workspace's first (as the MCP data functions do), then calls it as
+-- the service role. Periods and the series are 92 days at most, a before b,
+-- so one call stays small. plpgsql for those checks; it reads only.
+
+create or replace function public.chat_why_cells(
+  p_brand_id uuid,
+  p_a_from date,
+  p_a_to date,
+  p_b_from date,
+  p_b_to date,
+  p_series_from date,
+  p_models text[] default null,
+  p_region text default null,
+  p_topic_id uuid default null
+)
+returns jsonb
+language plpgsql
+stable
+set search_path = ''
+as $$
+declare
+  v_result jsonb;
+begin
+  if p_brand_id is null or p_a_from is null or p_a_to is null or p_b_from is null
+     or p_b_to is null or p_series_from is null then
+    raise exception 'chat_why_cells: the brand and every date are needed' using errcode = '22023';
+  end if;
+  if p_a_from > p_a_to or p_b_from > p_b_to then
+    raise exception 'chat_why_cells: a period ends before it starts' using errcode = '22023';
+  end if;
+  if p_a_to >= p_b_from then
+    raise exception 'chat_why_cells: period a ends before period b starts' using errcode = '22023';
+  end if;
+  if p_series_from > p_b_to then
+    raise exception 'chat_why_cells: the series starts after period b ends' using errcode = '22023';
+  end if;
+  if p_a_to - p_a_from > 92 or p_b_to - p_b_from > 92 or p_b_to - p_series_from > 92 then
+    raise exception 'chat_why_cells: a period or the series is over 92 days' using errcode = '22023';
+  end if;
+
+  with brand_rows as (
+    select d.day, d.prompt_id, d.platform, d.model_used, d.region,
+           case
+             when d.day between p_a_from and p_a_to then 'a'
+             when d.day between p_b_from and p_b_to then 'b'
+           end as period,
+           d.answer_count, d.has_mention, d.has_citation,
+           coalesce(d.mention_answers, 0) as mention_answers,
+           coalesce(d.citation_answers, 0) as citation_answers,
+           coalesce(d.total_mentions, 0) as total_mentions,
+           coalesce(d.sum_position, 0) as sum_position,
+           coalesce(d.sum_inv_position, 0) as sum_inv_position,
+           coalesce(d.position_count, 0) as position_count,
+           d.max_created_at,
+           -- A row the daily refresh hasn't rewritten since 00130/00131.
+           (d.mention_answers is null or d.negative_count is null) as stale
+    from public.insights_prompt_daily d
+    where d.brand_id = p_brand_id
+      -- One range on the (brand_id, day) index; the periods narrow it below.
+      and d.day between least(p_a_from, p_series_from) and p_b_to
+      and (d.day between p_a_from and p_a_to
+           or d.day between p_b_from and p_b_to
+           or d.day between p_series_from and p_b_to)
+      and (p_models is null or d.model_used = any (p_models))
+      and (p_region is null or d.region = p_region)
+      and (p_topic_id is null
+           or d.prompt_id in (select p.id from public.prompts p where p.topic_id = p_topic_id))
+  ),
+  competitor_rows as (
+    select c.day, c.prompt_id, c.platform, c.model_used, c.region,
+           case
+             when c.day between p_a_from and p_a_to then 'a'
+             when c.day between p_b_from and p_b_to then 'b'
+           end as period,
+           c.mention_count
+    from public.insights_competitor_prompt_daily c
+    where c.brand_id = p_brand_id
+      -- One range on the (brand_id, day) index; the periods narrow it below.
+      and c.day between least(p_a_from, p_series_from) and p_b_to
+      and (c.day between p_a_from and p_a_to
+           or c.day between p_b_from and p_b_to
+           or c.day between p_series_from and p_b_to)
+      and (p_models is null or c.model_used = any (p_models))
+      and (p_region is null or c.region = p_region)
+      and (p_topic_id is null
+           or c.prompt_id in (select p.id from public.prompts p where p.topic_id = p_topic_id))
+  ),
+  brand_cells as (
+    select r.prompt_id, r.platform, r.model_used, r.region, r.period,
+           count(*)::integer as runs,
+           (count(*) filter (where r.has_mention or r.has_citation))::integer as visible_runs,
+           sum(r.answer_count)::integer as answers,
+           sum(r.mention_answers)::integer as mention_answers,
+           sum(r.citation_answers)::integer as citation_answers,
+           sum(r.total_mentions)::integer as brand_mentions,
+           sum(r.sum_position) as sum_position,
+           sum(r.sum_inv_position) as sum_inv_position,
+           sum(r.position_count)::integer as position_count,
+           max(r.max_created_at) as last_at
+    from brand_rows r
+    where r.period is not null
+    group by r.prompt_id, r.platform, r.model_used, r.region, r.period
+  ),
+  competitor_cells as (
+    select r.prompt_id, r.platform, r.model_used, r.region, r.period,
+           sum(r.mention_count)::integer as competitor_mentions
+    from competitor_rows r
+    where r.period is not null
+    group by r.prompt_id, r.platform, r.model_used, r.region, r.period
+  ),
+  brand_daily as (
+    select r.day,
+           count(*)::integer as runs,
+           (count(*) filter (where r.has_mention or r.has_citation))::integer as visible_runs,
+           sum(r.answer_count)::integer as answers,
+           sum(r.mention_answers)::integer as mention_answers,
+           sum(r.citation_answers)::integer as citation_answers,
+           sum(r.total_mentions)::integer as brand_mentions,
+           sum(r.sum_position) as sum_position,
+           sum(r.sum_inv_position) as sum_inv_position,
+           sum(r.position_count)::integer as position_count,
+           -- Visibility as Insights counts it: prompts named or cited, of those tracked.
+           (count(distinct r.prompt_id) filter (where r.has_mention or r.has_citation))::integer
+             as visible_prompts,
+           count(distinct r.prompt_id)::integer as active_prompts
+    from brand_rows r
+    where r.day between p_series_from and p_b_to
+    group by r.day
+  ),
+  competitor_daily as (
+    select r.day, sum(r.mention_count)::integer as competitor_mentions
+    from competitor_rows r
+    where r.day between p_series_from and p_b_to
+    group by r.day
+  )
+  select jsonb_build_object(
+    -- As insights_kpi_series: false while a row read predates 00130/00131's columns.
+    'complete', not exists (select 1 from brand_rows r where r.stale),
+    'cells', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'prompt_id', b.prompt_id,
+        'platform', b.platform,
+        'model_used', b.model_used,
+        'region', b.region,
+        'period', b.period,
+        'runs', b.runs,
+        'visible_runs', b.visible_runs,
+        'answers', b.answers,
+        'mention_answers', b.mention_answers,
+        'citation_answers', b.citation_answers,
+        'brand_mentions', b.brand_mentions,
+        'sum_position', b.sum_position,
+        'sum_inv_position', b.sum_inv_position,
+        'position_count', b.position_count,
+        'competitor_mentions', coalesce(c.competitor_mentions, 0),
+        'last_at', b.last_at
+      ) order by b.prompt_id, b.platform, b.model_used, b.region, b.period)
+      from brand_cells b
+      left join competitor_cells c
+        on c.prompt_id = b.prompt_id
+       and c.platform is not distinct from b.platform
+       and c.model_used is not distinct from b.model_used
+       and c.region is not distinct from b.region
+       and c.period = b.period
+    ), '[]'::jsonb),
+    'daily', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'day', b.day,
+        'runs', b.runs,
+        'visible_runs', b.visible_runs,
+        'answers', b.answers,
+        'mention_answers', b.mention_answers,
+        'citation_answers', b.citation_answers,
+        'brand_mentions', b.brand_mentions,
+        'sum_position', b.sum_position,
+        'sum_inv_position', b.sum_inv_position,
+        'position_count', b.position_count,
+        'visible_prompts', b.visible_prompts,
+        'active_prompts', b.active_prompts,
+        'competitor_mentions', coalesce(c.competitor_mentions, 0)
+      ) order by b.day)
+      from brand_daily b
+      left join competitor_daily c on c.day = b.day
+    ), '[]'::jsonb)
+  )
+  into v_result;
+
+  return v_result;
+end;
+$$;
+
+comment on function public.chat_why_cells(uuid, date, date, date, date, date, text[], text, uuid) is
+  'Why did it move (CHAT-22 §1, 00423): the Insights rollups summed per prompt × engine × location × period (a, b) and per day from p_series_from, for explain_change. Periods and the series are 92 days at most. Server only: the web checks the brand is the caller''s first.';
+
+revoke all on function public.chat_why_cells(uuid, date, date, date, date, date, text[], text, uuid)
+  from public, anon, authenticated;
+grant execute on function public.chat_why_cells(uuid, date, date, date, date, date, text[], text, uuid)
+  to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00424_brand_access_chat_tables.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -49825,6 +50056,235 @@ create policy "chat_suggestions: own select"
     )
     and brand_id in (select public.user_brand_ids())
   );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00425_ship_events_delivery.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00425: one ship event per CMS send, and a page published again
+-- ============================================================================
+-- The impact ledger (00421, CHAT-22 §2) writes a ship event when a CMS
+-- confirms a sent page live (Send to CMS #1331). A callback or a status poll
+-- can confirm the same send more than once, and two servers can confirm it at
+-- the same moment: each would be a second shipped change on the same
+-- prompts, and two measurements on the same targets make each other Not
+-- measurable (overlapping_change).
+--
+--   * content_draft_delivery_id: the send (content_draft_deliveries) a ship
+--     event is the publish of; null for every other kind of ship event. One
+--     ship event per send: the server writes it with an upsert that ignores
+--     a second (on conflict do nothing). A plain unique index rather than a
+--     partial one: PostgREST's on_conflict names columns only, and Postgres
+--     can't infer a partial index without its predicate. Nulls stay
+--     distinct, so ship events without a send are never in each other's way.
+--   * republished_at: the last time the same draft went live again within
+--     90 days of this ship event (a post updated in place, sent again). No
+--     second ship event is written then: the first measurement goes on, and
+--     the ledger can say the page was published again.
+
+alter table public.ship_events
+  add column if not exists content_draft_delivery_id uuid
+    references public.content_draft_deliveries(id) on delete set null,
+  add column if not exists republished_at timestamptz;
+
+create unique index if not exists ship_events_content_draft_delivery_uidx
+  on public.ship_events (content_draft_delivery_id);
+
+comment on column public.ship_events.content_draft_delivery_id is
+  'The CMS send (content_draft_deliveries) this ship event is the confirmed publish of: one ship event per send (00425). Null for other kinds.';
+comment on column public.ship_events.republished_at is
+  'The last time the same draft went live again within 90 days of this ship event: no second ship event is written, the first measurement goes on (00425).';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00427_chat_why_analyses_visibility_score.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00427: Why did it move — keep a Visibility score analysis
+-- ============================================================================
+-- explain_change can now explain the Insights Visibility score
+-- (metric visibility_score, why/score.ts). chat_why_analyses (00420) allowed
+-- only the five v1 metrics, so keeping such an analysis failed its check and
+-- the result wasn't kept. Same check, with visibility_score added. A
+-- constraint swap on a small table: no rewrite, existing rows already pass.
+
+alter table public.chat_why_analyses
+  drop constraint if exists chat_why_analyses_metric_check;
+
+alter table public.chat_why_analyses
+  add constraint chat_why_analyses_metric_check check (
+    metric in (
+      'visibility',
+      'mention_rate',
+      'share_of_voice',
+      'citations',
+      'avg_position',
+      'visibility_score'
+    )
+  );
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00428_ship_cms_publish.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00428: a CMS publish into the impact ledger, one draft at a time
+-- ============================================================================
+-- A page the CMS confirmed live (Send to CMS #1331) is a ship event, once
+-- per send (00425), and the same draft live again within 90 days
+-- (p_republish_days, the server's REPUBLISH_DAYS) of its first
+-- cms_publish is that one, noted (republished_at), not a second. The
+-- server decided this in separate reads and writes, so two sends of one
+-- draft confirmed at the same moment could each miss the other and write
+-- two ship events, which then make each other Not measurable
+-- (overlapping_change).
+--
+--   * ship_cms_publish: the decision and its write in one transaction,
+--     under a lock on the draft: the send's own ship event if it has one;
+--     else the one it is noted on (republished_delivery_ids); else the
+--     draft's latest cms_publish shipped within p_republish_days before
+--     it, noted (republished_at only ever forward) with the send; else the
+--     nearest one shipped within p_republish_days after it (a send whose own write
+--     failed, filled in by the nightly job after a later send of the draft
+--     wrote its ship event: a second ship event would make both Not
+--     measurable, so the later one takes it in); else a new ship event.
+--     Only a cms_publish takes a send in: a ship event of another kind on
+--     the same draft (Mark as shipped, Chat) is its own.
+--     Says the ship event's id and whether this call wrote it. Service role
+--     only; the server reads the send and its draft first, and passes
+--     the window (REPUBLISH_DAYS in ship.js), so it is set in one place.
+--   * republished_delivery_ids: the sends noted on a ship event, so the
+--     nightly job doesn't take them for sends whose ship event is missing,
+--     and a send noted once is that ship event's even after its draft is
+--     deleted (draft ids are set null then, so only these ids still tie
+--     the send to it). At most 50; past that a send is noted by its date
+--     only. A GIN index looks a send up among them.
+
+alter table public.ship_events
+  add column if not exists republished_delivery_ids uuid[] not null default '{}'
+    check (cardinality(republished_delivery_ids) <= 50);
+
+-- A send is looked up among them (ship_cms_publish, the nightly job).
+create index if not exists ship_events_republished_delivery_ids_idx
+  on public.ship_events using gin (republished_delivery_ids);
+
+comment on column public.ship_events.republished_delivery_ids is
+  'The CMS sends (content_draft_deliveries) of the same draft noted on this cms_publish as published again within REPUBLISH_DAYS (90), at most 50 (00428).';
+
+create or replace function public.ship_cms_publish(
+  p_delivery_id uuid,
+  p_organization_id uuid,
+  p_brand_id uuid,
+  p_content_draft_id uuid,
+  p_title text,
+  p_url text,
+  p_action_id uuid,
+  p_shipped_at timestamptz,
+  p_shipped_by uuid,
+  p_execution_mode text,
+  p_republish_days integer
+)
+returns table (ship_event_id uuid, created boolean)
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_id uuid;
+begin
+  if p_delivery_id is null or p_shipped_at is null then
+    raise exception 'a send and its publish time are needed' using errcode = '22023';
+  end if;
+  if p_republish_days is null or p_republish_days < 1 then
+    raise exception 'a republish window of a day or more is needed' using errcode = '22023';
+  end if;
+  -- Every send of one draft waits for the one before it.
+  if p_content_draft_id is not null then
+    perform pg_advisory_xact_lock(hashtext('ship_cms_publish:' || p_content_draft_id::text));
+  end if;
+
+  -- The send's own, written before (a confirmation read twice).
+  select s.id into v_id
+  from public.ship_events s
+  where s.content_draft_delivery_id = p_delivery_id;
+  if v_id is not null then
+    return query select v_id, false;
+    return;
+  end if;
+  -- The send noted on a cms_publish before: that one, also once its draft is
+  -- deleted (content_draft_id set null), when the lookup below finds nothing.
+  select s.id into v_id
+  from public.ship_events s
+  where s.republished_delivery_ids @> array[p_delivery_id]
+  order by s.id
+  limit 1;
+  if v_id is not null then
+    return query select v_id, false;
+    return;
+  end if;
+
+  -- The same draft live again within the window: its first cms_publish goes on.
+  -- The latest shipped before the send first, else the nearest after it.
+  if p_content_draft_id is not null then
+    select s.id into v_id
+    from public.ship_events s
+    where s.brand_id = p_brand_id
+      and s.content_draft_id = p_content_draft_id
+      and s.kind = 'cms_publish'
+      and s.shipped_at >= p_shipped_at - make_interval(days => p_republish_days)
+      and s.shipped_at <= p_shipped_at + make_interval(days => p_republish_days)
+    order by s.shipped_at > p_shipped_at,
+      greatest(s.shipped_at - p_shipped_at, p_shipped_at - s.shipped_at),
+      s.id desc
+    limit 1;
+    if v_id is not null then
+      update public.ship_events s
+      set republished_at = case
+            when p_shipped_at > coalesce(s.republished_at, s.shipped_at) then p_shipped_at
+            else s.republished_at
+          end,
+          republished_delivery_ids = case
+            when p_delivery_id = any (s.republished_delivery_ids)
+              or cardinality(s.republished_delivery_ids) >= 50
+              then s.republished_delivery_ids
+            else s.republished_delivery_ids || p_delivery_id
+          end
+      where s.id = v_id;
+      return query select v_id, false;
+      return;
+    end if;
+  end if;
+
+  insert into public.ship_events (
+    organization_id, brand_id, kind, title, content_draft_id, content_draft_delivery_id,
+    url, action_id, source, change_type, shipped_at, shipped_by, execution_mode
+  ) values (
+    p_organization_id, p_brand_id, 'cms_publish', p_title, p_content_draft_id, p_delivery_id,
+    p_url, p_action_id, 'content_editor', 'content', p_shipped_at, p_shipped_by, p_execution_mode
+  )
+  on conflict (content_draft_delivery_id) do nothing
+  returning id into v_id;
+  if v_id is not null then
+    return query select v_id, true;
+    return;
+  end if;
+  -- A send without a draft, confirmed twice at once: the other call wrote it.
+  select s.id into v_id
+  from public.ship_events s
+  where s.content_draft_delivery_id = p_delivery_id;
+  return query select v_id, false;
+end;
+$$;
+
+revoke all on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text, integer)
+  from public, anon, authenticated;
+grant execute on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text, integer)
+  to service_role;
+
+comment on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text, integer) is
+  'Impact ledger (00428): a CMS-confirmed publish as a ship event, under a lock on its draft: the send''s own, else the one it is noted on, else the draft''s cms_publish within p_republish_days (the latest before it, else the nearest after) noted, else a new one. Says the id and whether this call wrote it. Service role only.';
 
 notify pgrst, 'reload schema';
 

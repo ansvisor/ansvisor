@@ -73,6 +73,9 @@ describe('searchChatReferences', () => {
     });
     // Prompts and pages are matched in the query, tasks by their written titles.
     expect(db.calls).toContainEqual(['prompts', 'ilike', ['text', '%pricing%']]);
+    // The brand is the prompt set's: prompts has no brand_id column.
+    expect(db.calls).toContainEqual(['prompts', 'eq', ['prompt_sets.brand_id', 'b1']]);
+    expect(db.calls).not.toContainEqual(['prompts', 'eq', ['brand_id', 'b1']]);
     expect(db.calls).toContainEqual([
       'site_pages',
       'or',
