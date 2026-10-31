@@ -77,6 +77,14 @@ describe('MenuAccessSection', () => {
     expect(container.textContent).toContain('Analytics');
   });
 
+  it('lists Chat above the headings, as the menu does, and one Other group', async () => {
+    await render();
+    const text = container.textContent ?? '';
+    expect(text.indexOf('Chat')).toBeGreaterThan(-1);
+    expect(text.indexOf('Chat')).toBeLessThan(text.indexOf('Execution'));
+    expect(text.match(/Other/g)).toHaveLength(1);
+  });
+
   it('keeps Action Center and the admins’ column on', async () => {
     await render();
     expect(box('Everyone sees Action Center')?.disabled).toBe(true);
