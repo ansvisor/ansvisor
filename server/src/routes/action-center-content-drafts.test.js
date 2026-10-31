@@ -109,8 +109,15 @@ describe('POST /api/action-center/content-drafts', () => {
     expect((await post({ brandId: 'nope', draftId: DRAFT })).status).toBe(400);
     expect(sendContentDraftToActionCenter).not.toHaveBeenCalled();
 
-    assertBrandAccess.mockRejectedValue(Object.assign(new Error('Unauthorized'), { status: 403 }));
-    expect((await post({ brandId: BRAND, draftId: DRAFT })).status).toBe(403);
+    assertBrandAccess.mockRejectedValue(
+      Object.assign(new Error("You don't have access to this brand"), {
+        status: 403,
+        code: 'no_brand_access',
+      }),
+    );
+    const refused = await post({ brandId: BRAND, draftId: DRAFT });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: 'no_brand_access' });
     expect(sendContentDraftToActionCenter).not.toHaveBeenCalled();
   });
 

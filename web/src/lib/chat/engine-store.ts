@@ -139,6 +139,12 @@ export interface RunProgress {
   whys?: number;
   /** The next moves the model suggested last (CHAT-07 §C), kept once the run ends. */
   nextMoves?: NextMoveInput[];
+  /** The limit a run at paused_cap reached: the month's AI limit, or its agent run's cap. */
+  capHit?: 'run' | 'month';
+  /** Why a stopped run stopped (its run.stopped reason), for its agent run (CHAT-21 §H). */
+  stoppedFor?: 'person' | 'expired' | 'limit';
+  /** The skills loaded for this run, by name, in order (CHAT-13 item 4: at most 3). */
+  skills?: string[];
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {

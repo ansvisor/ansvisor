@@ -8,6 +8,8 @@
  * of tracked prompts the brand was named or cited in (a prompt is one cell,
  * its engines together); the others are rates per prompt × engine cell
  * (mention rate, citation rate, share of voice by mentions, average position).
+ * The Insights Visibility score (visibility_score) blends three of them;
+ * why/score.ts explains it with these same steps, part by part.
  *
  * The steps, as §1 item 5 has them:
  *   1. Noise: the change's standard error from the pooled rate of the two
@@ -44,6 +46,7 @@ export const WHY_METRICS = [
   'share_of_voice',
   'citations',
   'avg_position',
+  'visibility_score',
 ] as const;
 export type WhyMetric = (typeof WHY_METRICS)[number];
 
@@ -70,8 +73,9 @@ export interface CellCounts {
   /** Mentions of the brand, and of its tracked competitors (share of voice). */
   brandMentions: number;
   competitorMentions: number;
-  /** Positions where the brand was named: their sum and count. */
+  /** Positions where the brand was named: their sum, the sum of 1/position, and their count. */
   sumPosition: number;
+  sumInvPosition: number;
   positionCount: number;
 }
 
@@ -160,6 +164,9 @@ export type CauseKind =
 
 export type Confidence = 'low' | 'medium' | 'high';
 
+/** The Visibility score's three parts (lib/visibility-score.ts). */
+export type ScoreComponent = 'mention' | 'citation' | 'position';
+
 /** The next step a cause offers (§1 item 4 "One fix per cause"), by its skill. */
 const FIX_SKILL: Partial<Record<CauseKind, string>> = {
   site_change: 'site_audit_fix',
@@ -187,6 +194,8 @@ export interface WhyCause {
   fix_skill: string | null;
   /** The pages it is about (own pages lost or gained, a changed page). */
   urls?: string[];
+  /** visibility_score: its points through each part of the score. */
+  components?: Partial<Record<ScoreComponent, number>>;
   /** The prompts that show it, up to 10. */
   rows?: CauseRow[];
 }
@@ -225,6 +234,17 @@ export interface WhyResult {
   unmentioned_cells: { a: number; b: number };
   /** The moved cells' answers couldn't all be read: some got no cause. */
   evidence_partial: boolean;
+  /**
+   * visibility_score: each part of the score, its value in each period (a
+   * rate in points, the position factor 0–1) and its points of the change.
+   */
+  components?: {
+    kind: ScoreComponent;
+    weight: number;
+    value_a: number | null;
+    value_b: number | null;
+    contribution: number;
+  }[];
   unexplained: {
     kind: 'normal_swing' | 'unexplained';
     contribution: number;
@@ -251,6 +271,9 @@ export function ratioOf(metric: WhyMetric, c: CellCounts): { num: number; den: n
       return { num: c.brandMentions, den: c.brandMentions + c.competitorMentions };
     case 'avg_position':
       return { num: c.sumPosition, den: c.positionCount };
+    // The score isn't one ratio (why/score.ts): this is what it counts in, answers.
+    case 'visibility_score':
+      return { num: c.mentionAnswers, den: c.answers };
   }
 }
 
@@ -268,7 +291,7 @@ const scaleOf = (metric: WhyMetric) => (metric === 'avg_position' ? 1 : 100);
 const betterSign = (metric: WhyMetric) => (metric === 'avg_position' ? -1 : 1);
 
 /** Tracked in the period: the cell had runs, whatever the metric counted. */
-const tracked = (c: CellCounts | null): c is CellCounts => !!c && c.runs > 0;
+export const tracked = (c: CellCounts | null): c is CellCounts => !!c && c.runs > 0;
 
 /** The pooled value of some cells' parts, in the metric's unit; null with nothing to count. */
 function valueOf(metric: WhyMetric, parts: { num: number; den: number }[]): number | null {
@@ -311,11 +334,17 @@ export function changePoint(
   metric: WhyMetric,
   daily: { day: string; counts: DayCounts }[],
 ): WhyResult['change_point'] {
-  const series = daily
-    .map((d) => ({ day: d.day, ...dayRatio(metric, d.counts) }))
-    .filter((d) => d.den > 0)
-    .sort((x, y) => x.day.localeCompare(y.day))
-    .map((d) => ({ day: d.day, value: (d.num / d.den) * scaleOf(metric) }));
+  return changePointOf(
+    daily
+      .map((d) => ({ day: d.day, ...dayRatio(metric, d.counts) }))
+      .filter((d) => d.den > 0)
+      .map((d) => ({ day: d.day, value: (d.num / d.den) * scaleOf(metric) })),
+  );
+}
+
+/** The change point of a daily series of values, in any order. */
+export function changePointOf(values: { day: string; value: number }[]): WhyResult['change_point'] {
+  const series = [...values].sort((x, y) => x.day.localeCompare(y.day));
   if (series.length < 2 * 3) return null;
   let best: { at: number; score: number } | null = null;
   for (let at = 3; at <= series.length - 3; at++) {
@@ -345,9 +374,49 @@ const minus = (a: string[], b: string[]) => a.filter((x) => !b.includes(x));
 export function cellCause(
   evidence: CellEvidence | undefined,
   worse: boolean,
+  /** Only these kinds (a part of the Visibility score explains its own); all when absent. */
+  kinds?: readonly CauseKind[],
 ): { kind: CauseKind; urls: string[]; refs: EvidenceRef[] } | null {
   if (!evidence || evidence.partial) return null;
-  return causeOf(evidence, worse);
+  const allowed = (kind: CauseKind) => !kinds || kinds.includes(kind);
+  const refsOf = (period: 'a' | 'b') => (period === 'a' ? evidence.answersA : evidence.answersB);
+  const site = evidence.siteChanges.filter(
+    (change) => change.direction === (worse ? 'worse' : 'better'),
+  );
+  if (allowed('site_change') && site.length > 0) {
+    return {
+      kind: 'site_change',
+      urls: site.map((change) => change.url),
+      refs: [...site.map((change) => change.ref), ...refsOf(worse ? 'b' : 'a').slice(0, 2)],
+    };
+  }
+  // An own page cited in one period only; a tracked competitor's cited instead (or before).
+  const moved = worse
+    ? minus(evidence.ownCitedA, evidence.ownCitedB)
+    : minus(evidence.ownCitedB, evidence.ownCitedA);
+  const swapped = (worse ? evidence.competitorCitedB : evidence.competitorCitedA).length > 0;
+  const citation: CauseKind = worse
+    ? swapped
+      ? 'lost_citation_to_competitor'
+      : 'lost_citation'
+    : swapped
+      ? 'won_citation_from_competitor'
+      : 'gained_citation';
+  if (allowed(citation) && moved.length > 0) {
+    return {
+      kind: citation,
+      urls: moved,
+      refs: [...refsOf('a').slice(0, 2), ...refsOf('b').slice(0, 2)],
+    };
+  }
+  const rival: CauseKind = worse ? 'competitor_entered' : 'competitor_left';
+  const rivalMoved = worse
+    ? evidence.competitorRateB > evidence.competitorRateA
+    : evidence.competitorRateB < evidence.competitorRateA;
+  if (allowed(rival) && rivalMoved) {
+    return { kind: rival, urls: [], refs: refsOf('b').slice(0, 3) };
+  }
+  return null;
 }
 
 /**
@@ -355,7 +424,7 @@ export function cellCause(
  * as cellCause has it): a loss shows the own page cited before and what is
  * cited now; a gain the competitor's page cited before and the own page now.
  */
-function rowOf(evidence: CellEvidence, worse: boolean): CauseRow | null {
+export function rowOf(evidence: CellEvidence, worse: boolean): CauseRow | null {
   if (!evidence.prompt) return null;
   const latest = evidence.answersB[0] ?? null;
   return {
@@ -369,51 +438,6 @@ function rowOf(evidence: CellEvidence, worse: boolean): CauseRow | null {
     date: latest?.date ?? null,
     answer: latest,
   };
-}
-
-function causeOf(
-  evidence: CellEvidence,
-  worse: boolean,
-): { kind: CauseKind; urls: string[]; refs: EvidenceRef[] } | null {
-  const lost = minus(evidence.ownCitedA, evidence.ownCitedB);
-  const gained = minus(evidence.ownCitedB, evidence.ownCitedA);
-  const site = evidence.siteChanges.filter(
-    (change) => change.direction === (worse ? 'worse' : 'better'),
-  );
-  const refsOf = (period: 'a' | 'b') => (period === 'a' ? evidence.answersA : evidence.answersB);
-  if (site.length > 0) {
-    return {
-      kind: 'site_change',
-      urls: site.map((change) => change.url),
-      refs: [...site.map((change) => change.ref), ...refsOf(worse ? 'b' : 'a').slice(0, 2)],
-    };
-  }
-  if (worse) {
-    if (lost.length > 0) {
-      const swapped = evidence.competitorCitedB.length > 0;
-      return {
-        kind: swapped ? 'lost_citation_to_competitor' : 'lost_citation',
-        urls: lost,
-        refs: [...refsOf('a').slice(0, 2), ...refsOf('b').slice(0, 2)],
-      };
-    }
-    if (evidence.competitorRateB > evidence.competitorRateA) {
-      return { kind: 'competitor_entered', urls: [], refs: refsOf('b').slice(0, 3) };
-    }
-    return null;
-  }
-  if (gained.length > 0) {
-    const swapped = evidence.competitorCitedA.length > 0;
-    return {
-      kind: swapped ? 'won_citation_from_competitor' : 'gained_citation',
-      urls: gained,
-      refs: [...refsOf('a').slice(0, 2), ...refsOf('b').slice(0, 2)],
-    };
-  }
-  if (evidence.competitorRateB < evidence.competitorRateA) {
-    return { kind: 'competitor_left', urls: [], refs: refsOf('b').slice(0, 3) };
-  }
-  return null;
 }
 
 /** High: shown in 10 cells or more; Medium: in 3 to 9; Low: fewer (§1 item 5.7). */
@@ -453,7 +477,7 @@ export function movedCells(metric: WhyMetric, cells: WhyCell[], count: number): 
 }
 
 /** A number's sign, a float's leftover (±1e−14) counting as none. */
-const signOf = (value: number) => (Math.abs(value) < 1e-9 ? 0 : Math.sign(value));
+export const signOf = (value: number) => (Math.abs(value) < 1e-9 ? 0 : Math.sign(value));
 
 /**
  * Whole percents that add up as the parts do (100 for all of the change):
@@ -473,6 +497,266 @@ export function wholeShares(raw: (number | null)[]): (number | null)[] {
     out[order[k].i] = (out[order[k].i] ?? 0) + 1;
   }
   return out;
+}
+
+/** A part of a change before its share: a cause, the set's change or "not enough data". */
+export type WhyPart = Omit<WhyCause, 'share' | 'offset'>;
+
+/** The cells a change is compared on (§1 item 5.3). */
+export interface CellSets {
+  enginesA: Set<string>;
+  enginesB: Set<string>;
+  enginesChanged: boolean;
+  /** The cells on the engines tracked in both periods. */
+  same: WhyCell[];
+  /** Of those, tracked in both periods; counted in both; with enough runs in each (stable). */
+  trackedBoth: WhyCell[];
+  both: WhyCell[];
+  stable: WhyCell[];
+}
+
+/** The sets, by what a period of a cell counts in (`counted`). */
+export function cellSets(
+  input: { cells: WhyCell[]; engines?: { a: string[]; b: string[] }; sameEngineCells?: WhyCell[] },
+  counted: (c: CellCounts | null) => boolean,
+): CellSets {
+  const { cells } = input;
+  const enginesIn = (period: 'a' | 'b') =>
+    new Set(
+      input.engines?.[period] ?? cells.filter((c) => tracked(c[period])).map((c) => c.engine),
+    );
+  const [enginesA, enginesB] = [enginesIn('a'), enginesIn('b')];
+  const same =
+    input.sameEngineCells ?? cells.filter((c) => enginesA.has(c.engine) && enginesB.has(c.engine));
+  const trackedBoth = same.filter((c) => tracked(c.a) && tracked(c.b));
+  const both = trackedBoth.filter((c) => counted(c.a) && counted(c.b));
+  return {
+    enginesA,
+    enginesB,
+    enginesChanged:
+      [...enginesA].some((e) => !enginesB.has(e)) || [...enginesB].some((e) => !enginesA.has(e)),
+    same,
+    trackedBoth,
+    both,
+    stable: both.filter((c) => c.a!.runs >= MIN_RUNS && c.b!.runs >= MIN_RUNS),
+  };
+}
+
+/** A prompt (or engine) tracked in one period only, on the engines in both. */
+const promptSetChanged = (sets: CellSets) => sets.same.some((c) => tracked(c.a) !== tracked(c.b));
+
+/** The set changed: an engine, or a prompt, tracked in one period only. */
+export const setChangedOf = (sets: CellSets) => sets.enginesChanged || promptSetChanged(sets);
+
+/**
+ * The set's parts of a change: engines added or dropped, then prompts;
+ * cells tracked in both but counted in one only (the brand not named);
+ * cells with too few runs. Arithmetic, not inference: the set did change.
+ */
+export function setParts(
+  cells: WhyCell[],
+  sets: CellSets,
+  change: { engineMix: number; promptMix: number; unmentioned: number; notEnough: number },
+): WhyPart[] {
+  const parts: WhyPart[] = [];
+  if (sets.enginesChanged && round(change.engineMix, 2) !== 0) {
+    const sameByKey = new Map(sets.same.map((c) => [c.key, c]));
+    parts.push({
+      kind: 'engines_changed',
+      contribution: change.engineMix,
+      confidence: 'high',
+      // The cells an added or dropped engine counts in.
+      cells: cells.filter((c) => {
+        const kept = sameByKey.get(c.key);
+        return !kept || kept.a?.runs !== c.a?.runs || kept.b?.runs !== c.b?.runs;
+      }).length,
+      evidence_refs: [],
+      fix_skill: null,
+    });
+  }
+  if (promptSetChanged(sets) && round(change.promptMix, 2) !== 0) {
+    parts.push({
+      kind: 'prompt_set_changed',
+      contribution: change.promptMix,
+      confidence: 'high',
+      cells: sets.same.filter((c) => tracked(c.a) !== tracked(c.b)).length,
+      evidence_refs: [],
+      fix_skill: FIX_SKILL.prompt_set_changed ?? null,
+    });
+  }
+  if (round(change.unmentioned, 2) !== 0) {
+    parts.push({
+      kind: 'not_mentioned',
+      contribution: change.unmentioned,
+      confidence: 'low',
+      cells: sets.trackedBoth.length - sets.both.length,
+      evidence_refs: [],
+      fix_skill: null,
+    });
+  }
+  if (round(change.notEnough, 2) !== 0) {
+    parts.push({
+      kind: 'not_enough_data',
+      contribution: change.notEnough,
+      confidence: 'low',
+      cells: sets.both.length - sets.stable.length,
+      evidence_refs: [],
+      fix_skill: null,
+    });
+  }
+  return parts;
+}
+
+/** Cells' moves, gathered by the cause their evidence shows. */
+export type CauseTally = Map<
+  CauseKind,
+  {
+    contribution: number;
+    cells: Set<string>;
+    refs: EvidenceRef[];
+    urls: Set<string>;
+    components: Partial<Record<ScoreComponent, number>>;
+    rows: CauseRow[];
+  }
+>;
+
+/**
+ * Adds a cell's move to its cause (and, for the score, to the part it
+ * moved), with the cell's row for the cause's table the first time it counts there.
+ */
+export function tallyCause(
+  tally: CauseTally,
+  cell: string,
+  cause: { kind: CauseKind; urls: string[]; refs: EvidenceRef[] },
+  own: number,
+  component?: ScoreComponent,
+  row?: CauseRow | null,
+) {
+  const entry = tally.get(cause.kind) ?? {
+    contribution: 0,
+    cells: new Set<string>(),
+    refs: [],
+    urls: new Set<string>(),
+    components: {},
+    rows: [],
+  };
+  entry.contribution += own;
+  if (row && !entry.cells.has(cell) && entry.rows.length < MAX_REFS) entry.rows.push(row);
+  entry.cells.add(cell);
+  for (const ref of cause.refs) if (entry.refs.length < MAX_REFS) entry.refs.push(ref);
+  for (const url of cause.urls) entry.urls.add(url);
+  if (component) entry.components[component] = (entry.components[component] ?? 0) + own;
+  tally.set(cause.kind, entry);
+}
+
+/** The tallied causes as parts. */
+export function causeParts(tally: CauseTally): WhyPart[] {
+  return [...tally.entries()].map(([kind, entry]) => ({
+    kind,
+    contribution: entry.contribution,
+    confidence: confidenceOf(entry.cells.size),
+    cells: entry.cells.size,
+    evidence_refs: entry.refs,
+    fix_skill: FIX_SKILL[kind] ?? null,
+    ...(entry.urls.size > 0 ? { urls: [...entry.urls].slice(0, 5) } : {}),
+    ...(Object.keys(entry.components).length > 0 ? { components: entry.components } : {}),
+    ...(entry.rows.length > 0 ? { rows: entry.rows } : {}),
+  }));
+}
+
+/** Within normal swing at 2 × SE (none at all always is); not measurable without an SE. */
+export function noiseOf(delta: number | null, se: number | null): WhyResult['noise_verdict'] {
+  if (delta === null) return 'not_measurable';
+  if (round(delta, 6) === 0) return 'within_normal_swing';
+  if (se === null) return 'not_measurable';
+  return Math.abs(delta) <= 2 * se ? 'within_normal_swing' : 'beyond_normal_swing';
+}
+
+const roundComponents = (components: Partial<Record<ScoreComponent, number>> | undefined) =>
+  components
+    ? Object.fromEntries(Object.entries(components).map(([k, v]) => [k, round(v, 2)]))
+    : undefined;
+
+/**
+ * The bars (§1 items 5.6–5.7): shares among what moved the change's way,
+ * whole percents adding up to 100 with the rest (none when `sharing` is
+ * false: within normal swing, or nothing stable); largest first, at most 5,
+ * past 4 or under 10% into "other". The mix's share is before rounding.
+ */
+export function rankParts(
+  parts: WhyPart[],
+  residual: number,
+  delta: number | null,
+  sharing: boolean,
+  mix: number,
+): { causes: WhyCause[]; residualShare: number | null; mixShare: number | null } {
+  const way = signOf(delta ?? 0);
+  const towards = [...parts.map((p) => p.contribution), residual].filter(
+    (c) => signOf(c) === way && way !== 0,
+  );
+  const total = towards.reduce((s, c) => s + c, 0);
+  /** Its share before rounding; null when it didn't move the change's way. */
+  const shareOf = (contribution: number) =>
+    sharing && total !== 0 && signOf(contribution) === way
+      ? Math.min(100, Math.max(0, (contribution / total) * 100))
+      : null;
+
+  const sorted = [...parts].sort((x, y) => Math.abs(y.contribution) - Math.abs(x.contribution));
+  const small = (p: WhyPart) => {
+    const share = shareOf(p.contribution);
+    return share !== null && share < MIN_SHARE;
+  };
+  const big = sorted.filter((p) => !small(p));
+  const needsOther = big.length < sorted.length || big.length > MAX_CAUSES;
+  const shown = needsOther ? big.slice(0, MAX_CAUSES - 1) : big;
+  const folded = sorted.filter((p) => !shown.includes(p));
+  const causes: WhyCause[] = shown.map((p) => {
+    const components = roundComponents(p.components);
+    return {
+      ...p,
+      contribution: round(p.contribution, 2),
+      share: shareOf(p.contribution),
+      offset: way !== 0 && signOf(p.contribution) === -way,
+      ...(components ? { components } : {}),
+    };
+  });
+  if (folded.length > 0) {
+    const contribution = folded.reduce((s, p) => s + p.contribution, 0);
+    const merged: Partial<Record<ScoreComponent, number>> = {};
+    for (const p of folded) {
+      for (const [k, v] of Object.entries(p.components ?? {}) as [ScoreComponent, number][]) {
+        merged[k] = (merged[k] ?? 0) + v;
+      }
+    }
+    causes.push({
+      kind: 'other',
+      contribution: round(contribution, 2),
+      share: shareOf(contribution),
+      offset: way !== 0 && signOf(contribution) === -way,
+      confidence: 'low',
+      cells: folded.reduce((s, p) => s + p.cells, 0),
+      evidence_refs: folded.flatMap((p) => p.evidence_refs).slice(0, MAX_REFS),
+      fix_skill: null,
+      ...(Object.keys(merged).length > 0 ? { components: roundComponents(merged) } : {}),
+    });
+  }
+  // The bars and the rest, in whole percents that add up to 100.
+  const shares = wholeShares([...causes.map((c) => c.share), shareOf(residual)]);
+  causes.forEach((cause, i) => (cause.share = shares[i]));
+  return { causes, residualShare: shares[causes.length], mixShare: shareOf(mix) };
+}
+
+/** What the set's prompts and engines were in each period, for mix_effect. */
+export function setNames(cells: WhyCell[], sets: CellSets) {
+  const promptsIn = (period: 'a' | 'b') =>
+    new Set(cells.filter((c) => tracked(c[period])).map((c) => c.promptId));
+  const [pa, pb] = [promptsIn('a'), promptsIn('b')];
+  return {
+    prompts_added: minus([...pb], [...pa]).length,
+    prompts_removed: minus([...pa], [...pb]).length,
+    engines_added: minus([...sets.enginesB], [...sets.enginesA]),
+    engines_removed: minus([...sets.enginesA], [...sets.enginesB]),
+  };
 }
 
 /** The analysis, from the cells, the daily series and the moved cells' evidence. */
@@ -498,227 +782,79 @@ export function explainChange(input: {
   const sign = betterSign(metric);
   const counted = (c: CellCounts | null): c is CellCounts =>
     tracked(c) && ratioOf(metric, c).den > 0;
-
-  // The headline: every cell tracked in the period, as the app's own pages count it.
-  const valueA = valueOf(
-    metric,
-    cells.flatMap((c) => (counted(c.a) ? [ratioOf(metric, c.a)] : [])),
-  );
-  const valueB = valueOf(
-    metric,
-    cells.flatMap((c) => (counted(c.b) ? [ratioOf(metric, c.b)] : [])),
-  );
-  const delta = valueA !== null && valueB !== null ? valueB - valueA : null;
-
-  // The engines in each period; the periods are compared on those in both.
-  const enginesIn = (period: 'a' | 'b') =>
-    new Set(
-      input.engines?.[period] ?? cells.filter((c) => tracked(c[period])).map((c) => c.engine),
+  /** The value over some cells, each period counting the cells it can. */
+  const valueIn = (list: WhyCell[], period: 'a' | 'b') =>
+    valueOf(
+      metric,
+      list.flatMap((c) => {
+        const counts = c[period];
+        return counted(counts) ? [ratioOf(metric, counts)] : [];
+      }),
     );
-  const [ea, eb] = [enginesIn('a'), enginesIn('b')];
-  const enginesChanged = [...ea].some((e) => !eb.has(e)) || [...eb].some((e) => !ea.has(e));
-  const same = input.sameEngineCells ?? cells.filter((c) => ea.has(c.engine) && eb.has(c.engine));
-
-  // Of those: tracked in both periods; counted in both; with enough runs in each (stable).
-  const trackedBoth = same.filter((c) => tracked(c.a) && tracked(c.b));
-  const both = trackedBoth.filter((c) => inBoth(metric, c));
-  const stable = both.filter((c) => isStable(metric, c));
-  const partsA = (list: WhyCell[]) => list.map((c) => ratioOf(metric, c.a!));
-  const partsB = (list: WhyCell[]) => list.map((c) => ratioOf(metric, c.b!));
-  /** The change over some cells, each period counting the cells it can. */
   const changeIn = (list: WhyCell[]) => {
-    const a = valueOf(
-      metric,
-      list.flatMap((c) => (counted(c.a) ? [ratioOf(metric, c.a)] : [])),
-    );
-    const b = valueOf(
-      metric,
-      list.flatMap((c) => (counted(c.b) ? [ratioOf(metric, c.b)] : [])),
-    );
+    const a = valueIn(list, 'a');
+    const b = valueIn(list, 'b');
     return a !== null && b !== null ? b - a : 0;
   };
-  const deltaSame = changeIn(same);
-  const deltaTracked = changeIn(trackedBoth);
-  const deltaBoth = changeIn(both);
-  const deltaStable = changeIn(stable);
+
+  // The headline: every cell tracked in the period, as the app's own pages count it.
+  const valueA = valueIn(cells, 'a');
+  const valueB = valueIn(cells, 'b');
+  const delta = valueA !== null && valueB !== null ? valueB - valueA : null;
+
+  const sets = cellSets(input, counted);
+  const { stable } = sets;
   // The set's change: engines added or dropped, then prompts (§1 item 5.3).
+  const deltaSame = changeIn(sets.same);
+  const deltaTracked = changeIn(sets.trackedBoth);
+  const deltaBoth = changeIn(sets.both);
+  const deltaStable = changeIn(stable);
   const engineMix = delta === null ? 0 : delta - deltaSame;
   const promptMix = delta === null ? 0 : deltaSame - deltaTracked;
   const mix = engineMix + promptMix;
-  // Tracked in both, counted in one only: the brand not named there.
-  const unmentioned = deltaTracked - deltaBoth;
-  const notEnough = deltaBoth - deltaStable;
-  const se = stable.length > 0 ? changeSe(metric, partsA(stable), partsB(stable)) : null;
-  const noise: WhyResult['noise_verdict'] =
-    delta === null
-      ? 'not_measurable'
-      : round(delta, 6) === 0
-        ? 'within_normal_swing'
-        : se === null
-          ? 'not_measurable'
-          : Math.abs(delta) <= 2 * se
-            ? 'within_normal_swing'
-            : 'beyond_normal_swing';
-
-  // What changed in the set: prompts tracked in one period only.
-  const promptsIn = (period: 'a' | 'b') =>
-    new Set(cells.filter((c) => tracked(c[period])).map((c) => c.promptId));
-  const [pa, pb] = [promptsIn('a'), promptsIn('b')];
+  const partsA = stable.map((c) => ratioOf(metric, c.a!));
+  const partsB = stable.map((c) => ratioOf(metric, c.b!));
+  const se = stable.length > 0 ? changeSe(metric, partsA, partsB) : null;
+  const noise = noiseOf(delta, se);
 
   // Each stable cell's part of the stable change, split: its own rate's
   // change at its average weight (what evidence explains), and its change
   // of weight (the remainder's). The two sum to its part, the parts to deltaStable.
-  const denA = stable.reduce((s, c) => s + ratioOf(metric, c.a!).den, 0);
-  const denB = stable.reduce((s, c) => s + ratioOf(metric, c.b!).den, 0);
-  const byKind = new Map<
-    CauseKind,
-    {
-      contribution: number;
-      cells: number;
-      refs: EvidenceRef[];
-      urls: Set<string>;
-      rows: CauseRow[];
-    }
-  >();
-  for (const cell of stable) {
-    const ra = ratioOf(metric, cell.a!);
-    const rb = ratioOf(metric, cell.b!);
-    const rateA = ra.num / ra.den;
-    const rateB = rb.num / rb.den;
-    const weight = (ra.den / denA + rb.den / denB) / 2;
-    const own = weight * (rateB - rateA) * scale;
-    if (own === 0) continue;
+  const denA = partsA.reduce((s, p) => s + p.den, 0);
+  const denB = partsB.reduce((s, p) => s + p.den, 0);
+  const tally: CauseTally = new Map();
+  stable.forEach((cell, i) => {
+    const ra = partsA[i];
+    const rb = partsB[i];
+    const moved = rb.num / rb.den - ra.num / ra.den;
+    const own = ((ra.den / denA + rb.den / denB) / 2) * moved * scale;
+    if (own === 0) return;
     const found = input.evidence.get(cell.key);
-    const worse = (rateB - rateA) * sign < 0;
+    const worse = moved * sign < 0;
     const cause = cellCause(found, worse);
-    if (!cause || !found) continue;
-    const entry = byKind.get(cause.kind) ?? {
-      contribution: 0,
-      cells: 0,
-      refs: [],
-      urls: new Set<string>(),
-      rows: [],
-    };
-    const row = rowOf(found, worse);
-    if (row && entry.rows.length < MAX_REFS) entry.rows.push(row);
-    entry.contribution += own;
-    entry.cells += 1;
-    for (const ref of cause.refs) if (entry.refs.length < MAX_REFS) entry.refs.push(ref);
-    for (const url of cause.urls) entry.urls.add(url);
-    byKind.set(cause.kind, entry);
-  }
+    if (cause && found) tallyCause(tally, cell.key, cause, own, undefined, rowOf(found, worse));
+  });
 
-  type Part = Omit<WhyCause, 'share' | 'offset'>;
-  const parts: Part[] = [...byKind.entries()].map(([kind, entry]) => ({
-    kind,
-    contribution: entry.contribution,
-    confidence: confidenceOf(entry.cells),
-    cells: entry.cells,
-    evidence_refs: entry.refs,
-    fix_skill: FIX_SKILL[kind] ?? null,
-    ...(entry.urls.size > 0 ? { urls: [...entry.urls].slice(0, 5) } : {}),
-    ...(entry.rows.length > 0 ? { rows: entry.rows } : {}),
-  }));
-  // The set changed: an engine, or a prompt, tracked in one period only.
-  // Arithmetic, not inference: the set did change.
-  const promptSetChanged = same.some((c) => tracked(c.a) !== tracked(c.b));
-  const setChanged = enginesChanged || promptSetChanged;
-  if (enginesChanged && round(engineMix, 2) !== 0) {
-    const sameByKey = new Map(same.map((c) => [c.key, c]));
-    parts.push({
-      kind: 'engines_changed',
-      contribution: engineMix,
-      confidence: 'high',
-      // The cells an added or dropped engine counts in.
-      cells: cells.filter((c) => {
-        const kept = sameByKey.get(c.key);
-        return !kept || kept.a?.runs !== c.a?.runs || kept.b?.runs !== c.b?.runs;
-      }).length,
-      evidence_refs: [],
-      fix_skill: null,
-    });
-  }
-  if (promptSetChanged && round(promptMix, 2) !== 0) {
-    parts.push({
-      kind: 'prompt_set_changed',
-      contribution: promptMix,
-      confidence: 'high',
-      cells: same.filter((c) => tracked(c.a) !== tracked(c.b)).length,
-      evidence_refs: [],
-      fix_skill: FIX_SKILL.prompt_set_changed ?? null,
-    });
-  }
-  if (round(unmentioned, 2) !== 0) {
-    parts.push({
-      kind: 'not_mentioned',
-      contribution: unmentioned,
-      confidence: 'low',
-      cells: trackedBoth.length - both.length,
-      evidence_refs: [],
-      fix_skill: null,
-    });
-  }
-  if (round(notEnough, 2) !== 0) {
-    parts.push({
-      kind: 'not_enough_data',
-      contribution: notEnough,
-      confidence: 'low',
-      cells: both.length - stable.length,
-      evidence_refs: [],
-      fix_skill: null,
-    });
-  }
-
+  const parts = [
+    ...causeParts(tally),
+    ...setParts(cells, sets, {
+      engineMix,
+      promptMix,
+      // Tracked in both, counted in one only: the brand not named there.
+      unmentioned: deltaTracked - deltaBoth,
+      notEnough: deltaBoth - deltaStable,
+    }),
+  ];
   // The rest: cells no evidence explained, their changes of weight, and normal swing.
-  const residualPart = (delta ?? 0) - parts.reduce((s, p) => s + p.contribution, 0);
-
-  // Shares among what moved the change's way, 0–100; none within normal swing or without a stable set.
-  const way = signOf(delta ?? 0);
-  const towards = [...parts.map((p) => p.contribution), residualPart].filter(
-    (c) => signOf(c) === way && way !== 0,
+  const residual = (delta ?? 0) - parts.reduce((s, p) => s + p.contribution, 0);
+  const { causes, residualShare, mixShare } = rankParts(
+    parts,
+    residual,
+    delta,
+    noise === 'beyond_normal_swing' && stable.length > 0,
+    mix,
   );
-  const total = towards.reduce((s, c) => s + c, 0);
-  const sharing = noise === 'beyond_normal_swing' && stable.length > 0 && total !== 0;
-  /** Its share before rounding; null when it didn't move the change's way. */
-  const shareOf = (contribution: number) =>
-    sharing && signOf(contribution) === way
-      ? Math.min(100, Math.max(0, (contribution / total) * 100))
-      : null;
-
-  // Largest first, at most 5 bars: past 4, or under 10%, into "other".
-  parts.sort((x, y) => Math.abs(y.contribution) - Math.abs(x.contribution));
-  const small = (p: Part) => {
-    const share = shareOf(p.contribution);
-    return share !== null && share < MIN_SHARE;
-  };
-  const big = parts.filter((p) => !small(p));
-  const needsOther = big.length < parts.length || big.length > MAX_CAUSES;
-  const shown = needsOther ? big.slice(0, MAX_CAUSES - 1) : big;
-  const folded = parts.filter((p) => !shown.includes(p));
-  const causes: WhyCause[] = shown.map((p) => ({
-    ...p,
-    contribution: round(p.contribution, 2),
-    share: shareOf(p.contribution),
-    offset: way !== 0 && signOf(p.contribution) === -way,
-  }));
-  if (folded.length > 0) {
-    const contribution = folded.reduce((s, p) => s + p.contribution, 0);
-    causes.push({
-      kind: 'other',
-      contribution: round(contribution, 2),
-      share: shareOf(contribution),
-      offset: way !== 0 && signOf(contribution) === -way,
-      confidence: 'low',
-      cells: folded.reduce((s, p) => s + p.cells, 0),
-      evidence_refs: folded.flatMap((p) => p.evidence_refs).slice(0, MAX_REFS),
-      fix_skill: null,
-    });
-  }
-  // The bars and the rest, in whole percents that add up to 100.
-  const shares = wholeShares([...causes.map((c) => c.share), shareOf(residualPart)]);
-  causes.forEach((cause, i) => (cause.share = shares[i]));
-  const residualShare = shares[causes.length];
-  const mixShare = shareOf(mix);
+  const setChanged = setChangedOf(sets);
 
   return {
     metric,
@@ -736,13 +872,10 @@ export function explainChange(input: {
     mix_effect: {
       contribution: round(mix, 2),
       share: setChanged && mixShare !== null ? Math.round(mixShare) : null,
-      prompts_added: minus([...pb], [...pa]).length,
-      prompts_removed: minus([...pa], [...pb]).length,
-      engines_added: minus([...eb], [...ea]),
-      engines_removed: minus([...ea], [...eb]),
+      ...setNames(cells, sets),
     },
     causes,
-    excluded_cells: both.length - stable.length,
+    excluded_cells: sets.both.length - stable.length,
     stable_cells: stable.length,
     unmentioned_cells: {
       a: cells.filter((c) => tracked(c.a) && !counted(c.a)).length,
@@ -750,8 +883,8 @@ export function explainChange(input: {
     },
     evidence_partial: [...input.evidence.values()].some((e) => e.partial === true),
     unexplained: {
-      kind: se !== null && Math.abs(residualPart) <= 2 * se ? 'normal_swing' : 'unexplained',
-      contribution: round(residualPart, 2),
+      kind: se !== null && Math.abs(residual) <= 2 * se ? 'normal_swing' : 'unexplained',
+      contribution: round(residual, 2),
       share: residualShare,
     },
   };

@@ -5,7 +5,7 @@ import { chatComposerSetup, chatFirstName, chatPageOpen } from './_chat-page-acc
 
 /**
  * Chat Home (CHAT-01 items 1, 10–12; mockup #s-home): the greeting, what
- * needs the person, the Action Center line, and the composer to start a new
+ * needs the person, "For you now" (CHAT-08 v2), and the composer to start a new
  * chat (W1-10…13). Only with the new Chat on for the workspace (CHAT_AGENTIC).
  */
 export default async function ChatHomePage() {

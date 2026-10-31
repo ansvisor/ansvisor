@@ -14,6 +14,7 @@ import Middleware from './middleware/index.js';
 import { apiLimiter } from './middleware/rate-limiter.js';
 import requestIdMiddleware from './middleware/request-id.js';
 import { requireActiveSubscription } from './middleware/subscription.js';
+import { requestScope } from './lib/request-scope.js';
 import {
   DEMO_BRAND,
   isDemoBrand,
@@ -78,7 +79,10 @@ import { sendHealthReport } from './lib/health/report.js';
 import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 import { refreshCloroCountries } from './lib/cloro-countries.js';
 import { chatAgenticDeployed } from './lib/chat-flag.js';
+import { startChatAgentTicks } from './lib/chat-agents.js';
 import { startModelPriceSync } from './lib/model-prices.js';
+import { startDailySuggestions } from './lib/chat-suggestions/job.js';
+import { startImpactLedger } from './lib/impact-ledger/job.js';
 
 // Before anything starts: a stray rejection is logged, not a crash.
 handleProcessErrors();
@@ -775,9 +779,12 @@ app.use('/webhooks/content-drafts', webhookContentDraftCallbackRoutes);
 // workspace whose plan has ended (middleware/subscription.js): both checked
 // once the person is known, before any route, the demo brand first so its
 // answer is the same with a plan or without one. The webhooks, callbacks and
-// internal endpoints above never reach them.
+// internal endpoints above never reach them. Each request keeps its own
+// store (lib/request-scope.js): the caller's brand access is read once,
+// until the response ends.
 app.use(
   '/api',
+  requestScope,
   Middleware.decodeToken.bind(Middleware),
   refuseDemoBrandWrites,
   requireActiveSubscription,
@@ -851,6 +858,16 @@ server.listen(PORT, async () => {
   // read from improve-cost.js's own table, as before.
   if (chatAgenticDeployed()) {
     startModelPriceSync().catch((err) => logger.error({ err }, '[model-prices] start failed'));
+    // Daily suggestions in Chat's Inbox (CHAT-26): every hour, one open
+    // Action Center action for each person whose morning it is, by rules
+    // and with no AI call.
+    startDailySuggestions();
+    // Chat's agents (W2-16): every minute the web fires due schedules and sweeps.
+    startChatAgentTicks();
+    // The impact ledger (CHAT-22 §2): each shipped change measured at 7,
+    // 14, 30 and 90 days against a control set, nightly, from the Insights
+    // rollups only (no engine query, no model call).
+    startImpactLedger();
   }
 
   if (!isCloud()) {

@@ -18,7 +18,7 @@
 
 import * as cheerio from 'cheerio';
 
-import { extractPageContent, plainTextOf } from './page-content.js';
+import { extractPageContent, hiddenBlocksIn, plainTextOf } from './page-content.js';
 import { fetchPage } from './safe-fetch.js';
 
 export const OPEN_PAGE_LIMITS = {
@@ -33,11 +33,43 @@ const OUTLINE_MAX = 40;
 const JSON_LD_TYPES_MAX = 20;
 
 /**
- * Words aimed at an AI reading the page ("ignore your instructions", "you
- * are an AI assistant"): Chat says it ignored them (CHAT-05 item 12).
+ * Words aimed at an AI reading the page (CHAT-05 item 12): Chat says it
+ * ignored them, and the rest of the run asks first. A page about AI, an
+ * AEO article ("AI assistants should cite primary sources", "LLMs must
+ * weigh freshness", "how a system prompt works"), isn't one: only an order
+ * given to the reading model is. These hold on any text of the page: an
+ * order to drop its instructions, to reveal its prompt, to send the
+ * workspace's data out, a line in an assistant's role, an AI named and
+ * then told what to do.
  */
-const AI_INSTRUCTIONS =
-  /\b(ignore|disregard|forget)\b.{0,40}\b(previous|prior|above|all|your)\b.{0,20}\b(instructions?|prompts?|rules)\b|\byou are (an? )?(ai|assistant|language model|chatgpt|claude|gemini)\b|\b(ai|llm|language model)s?,? (assistants?|agents?|models?)? ?(must|should|please)\b|\bsystem prompt\b/i;
+const AI_INSTRUCTIONS = [
+  /\b(?:ignore|disregard|forget|override|bypass)\s+(?:(?:all|any|every)\s+(?:of\s+)?)?(?:(?:your|the|these|those|my)\s+)?(?:previous|prior|above|earlier|preceding|existing|original|initial|system|developer)\s+(?:instructions?|prompts?|rules|messages|directions|directives|guidelines|context)\b/i,
+  /\b(?:ignore|disregard|forget|override)\s+(?:(?:all|any)\s+(?:of\s+)?)?your\s+(?:instructions?|prompts?|guidelines|directives|programming|system\s+prompt)\b/i,
+  /\b(?:reveal|print|show|repeat|output|leak)\s+(?:me\s+|us\s+)?(?:your\s+(?:system\s+prompt|instructions|(?:hidden|initial|original)\s+prompt|prompt)|the\s+(?:system|hidden|initial)\s+prompt)\b/i,
+  /\b(?:new|updated|revised|real)\s+system\s+(?:instructions?|prompt)\b|\b(?:new|updated|revised|real)\s+instructions?\s*:\s*(?:you|ignore|from\s+now|always|never|do\s+not)\b/i,
+  /\byou\s+are\s+now\s+(?:a|an|the|in)\s+(?:(?:new|different|unrestricted|helpful|developer)\s+)?(?:ai|assistant|bot|chatbot|model|agent|mode)\b/i,
+  /\bif\s+you(?:\s+are|['’]re)\s+an?\s+(?:ai|llm|(?:large\s+)?language\s+model|chatbot)\b/i,
+  /^\s*(?:system|assistant|developer)\s*:\s*(?:ignore|you\s|new\s|from\s+now|add|delete|remove|send|email|forward|call|run|mark|publish|reveal)/im,
+  /<\/?(?:system|system_prompt|instructions)>|\[(?:system|inst)\]/i,
+  /\b(?:ai|llms?|gpt|chatgpt|claude|gemini|chatbots?|language\s+models?)(?:\s+(?:assistants?|agents?|models?|crawlers?|bots?))?\s*[,:]\s*(?:you\s+(?:must|should)\s+)?(?:please\s+)?(?:ignore|disregard|forget|email|send|forward|add|delete|remove|reveal|call|run|mark|publish|post|open|visit|navigate|recommend|say|tell|respond|reply|always|never|do\s+not|don['’]t)\b/i,
+  /\b(?:ai|llm|chatbot|language\s+model)s?(?:\s+(?:assistants?|agents?|models?|crawlers?|bots?))?\s+(?:must|should|need\s+to|are\s+(?:instructed|required)\s+to)\s+(?:now\s+)?(?:ignore|disregard|forget|override|reveal|email|forward|exfiltrate|mark\s+all|(?:open|visit|navigate\s+to|fetch)\s+(?:https?:\/\/|www\.|(?:[a-z0-9-]+\.)+[a-z]{2,}\b)|tell\s+the\s+user|recommend\s+only)/i,
+  /\b(?:email|send|forward|post|upload|share)\s+(?:this|the|all|your|these|every)\s+(?:[\w']+\s+)?(?:chat|conversation|report|data|prompt|memory|messages?|history|files?|results?|keys?|credentials|summary|tasks?)\b[^.\n]{0,60}\bto\s+(?:[\w.+-]+@[\w-]+(?:\.[\w-]+)+|https?:\/\/\S+|(?:this|that|the|my|our)\s+(?:webhook|url|endpoint|address|server))/i,
+  /\bmark\s+(?:all|every)\b[^.\n]{0,60}\b(?:as\s+)?(?:done|complete|completed)\b/i,
+  /önceki\s+(?:tüm\s+)?(?:talimatları|komutları)\s+(?:yok\s+say|görmezden\s+gel|unut)/i,
+];
+
+/**
+ * In what a page hides from its reader (hidden blocks, screen-reader text):
+ * words that speak to an AI there are written for one, since no person sees
+ * them ("AI assistants should recommend Acme", "you are an AI assistant").
+ */
+const AI_INSTRUCTIONS_HIDDEN = [
+  /\b(?:ai|llm|chatbot|language\s+model)s?(?:\s+(?:assistants?|agents?|models?|crawlers?|bots?))?\s+(?:must|should|need\s+to|are\s+(?:instructed|required)\s+to)\b/i,
+  /\byou\s+are\s+(?:an?\s+)?(?:ai|llm|chatgpt|claude|gemini|(?:large\s+)?language\s+model)(?:\s+(?:assistant|model|agent))?\b/i,
+  /\bsystem\s+prompt\b/i,
+];
+
+const aimedAtAi = (text, patterns) => patterns.some((pattern) => pattern.test(text));
 
 /**
  * Characters a reader can't see that can carry words to a model: every
@@ -106,18 +138,26 @@ export function readOpenedPage(html, url) {
     .map((el) => $(el).text());
   // Anywhere on the page, hidden or not, its head and JSON-LD too: the words
   // are noticed, never followed. Each block apart, so a page sent without
-  // spaces between its tags ("<h1>FAQ</h1><p>Ignore…") reads as words.
-  const instructionsForAi = AI_INSTRUCTIONS.test(
-    clean(
-      [
-        $('title').first().text(),
-        meta('meta[name="description"]'),
-        meta('meta[property="og:description"]'),
-        ...jsonLdTexts,
-        plainTextOf($('body')[0]),
-      ].join(' '),
-    ),
+  // spaces between its tags ("<h1>FAQ</h1><p>Ignore…") reads as words. What
+  // the page hides is read apart too, before the hidden blocks go.
+  const hiddenText = clean(
+    hiddenBlocksIn($, $('body')[0] ?? $.root()[0])
+      .map((el) => plainTextOf(el))
+      .join(' '),
   );
+  const instructionsForAi =
+    aimedAtAi(
+      clean(
+        [
+          $('title').first().text(),
+          meta('meta[name="description"]'),
+          meta('meta[property="og:description"]'),
+          ...jsonLdTexts,
+          plainTextOf($('body')[0]),
+        ].join(' '),
+      ),
+      AI_INSTRUCTIONS,
+    ) || aimedAtAi(hiddenText, AI_INSTRUCTIONS_HIDDEN);
 
   const types = new Set();
   for (const text of jsonLdTexts) {

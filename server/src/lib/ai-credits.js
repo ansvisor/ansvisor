@@ -159,12 +159,13 @@ async function takeFromGrants(grants, wanted) {
 
 /** The ledger row's columns a split copies onto each grant's part. */
 const ROW_COLUMNS =
-  'id, organization_id, feature, model, cost_usd, own_key, grant_id, used_at, prompt_id, action_id, content_draft_id, chat_run_id, chat_run_step_id';
+  'id, organization_id, feature, model, cost_usd, own_key, grant_id, used_at, prompt_id, action_id, content_draft_id, chat_run_id, chat_run_step_id, agent_id, agent_run_id, parent_run_id';
 
 /**
  * The row keeps the included part and each grant's part becomes its own row
  * (00413: a step that crosses from one to the other is written as two rows),
- * with the row's time, so every part counts in the same period. With nothing
+ * with the row's time and its run, agent and agent run, so every part counts
+ * in the same period and toward the same agent run's cap. With nothing
  * left on the included budget the row itself becomes the first grant's part.
  * Tokens stay on the row: the parts are dollars only.
  */
@@ -180,6 +181,10 @@ async function splitRow(row, costMicros, portions) {
     content_draft_id: row.content_draft_id,
     chat_run_id: row.chat_run_id,
     chat_run_step_id: row.chat_run_step_id,
+    // An agent run's step stays its run's on the credits (00419): its cap and share count it.
+    agent_id: row.agent_id ?? null,
+    agent_run_id: row.agent_run_id ?? null,
+    parent_run_id: row.parent_run_id ?? null,
     own_key: false,
     used_at: row.used_at,
     cost_usd: dollars(p.micros),

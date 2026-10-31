@@ -1,11 +1,11 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, for you now, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-31
-last_checked: 2026-10-30
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -15,11 +15,11 @@ Chat answers questions about your brand from your Ansvisor data, and can do work
 
 ## Chat Home
 
-Chat opens on **Home**. It greets you by name, at your own time of day, and says when something needs you: click the link to open your **Inbox**. When nothing does, it says **All caught up.**
+Chat opens on **Home**: a greeting by name at your time of day, then a link to your **Inbox** when something needs you, else **All caught up.**
 
-When Action Center actions for the brand you have open are due by the end of this week, overdue ones included, Home says how many with **Complete with Chat**. Click it to start a new chat that works on them; the chat opens while it works.
+**For you now** starts common jobs: **Ask anything** goes to the box, **More** opens every shortcut, and the rest show when the open brand has work. **Complete tasks**: Action Center actions due this week or overdue (Chat prepares, you close them). **Win back citations**: pages that lost citations. **Ready to publish**: drafts marked ready (Chat sends them to your CMS as drafts; you publish them). Each starts a new chat. Read-only roles get only the jobs that read, no **More**.
 
-When your brand's citations moved since you last left Home, **Since you left** shows the engine whose citations fell most and one that won. It counts from the day you left to yesterday, against as many days before, and shows only a change beyond the normal swing. **Why?** and **Which ones?** ask Chat in a new chat.
+**Since you left** shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat.
 
 ## Ask Chat
 
@@ -85,7 +85,7 @@ Admins and Managers can also ask Chat to change a draft in the Library, send a d
 
 A draft Chat changes keeps the page before in **History**; **Undo** puts it back for 30 days. A report Chat makes can be undone for 30 days too.
 
-A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives there as a draft: nothing goes live, and publishing stays yours, in the CMS. A page that's already live, or a send to your webhook, goes from the Content Editor instead. Sending always asks first, even in **Full auto**, and can't be undone from Chat. Starting an audit always asks first, and the card says how many of the month's audits it uses. Audits have no Undo.
+A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft: publishing stays yours, in the CMS. A live page, or a send to your webhook, goes from the Content Editor. Sending always waits for your click, even in **Full auto**, and has no Undo. If an Admin turned publishing off for Managers, Managers can't send from Chat. Starting an audit always asks first and says how many of the month's audits it uses. Audits have no Undo.
 
 ## Open a web page
 
@@ -101,9 +101,9 @@ Once Chat has read text from outside your workspace in a run, it opens another s
 
 ## Why a number changed
 
-Ask Chat why a number moved, such as "Why did ChatGPT visibility drop last week?". It compares the last 7 days with the 7 before, unless you name the days. It works for visibility, mention rate, share of voice, citation rate and average position.
+Ask Chat why a number moved, such as "Why did ChatGPT visibility drop last week?". By default it compares the last 7 days with the 7 before. It works for the Insights Visibility score, split into its mention, citation and position parts, and for visibility, mention rate, share of voice, citation rate and average position.
 
-The answer gives both values and the change, and says first when the change is within the normal swing for that much data. It names the day the line broke, and how much prompts added or removed explain. Then it ranks the causes Chat found in the tracked answers, such as a citation lost to a competitor or a page whose Site Audit got worse. Each comes with its share of the change and how sure Chat is. Chat never says a cause made it happen.
+The answer gives both values and the change, and says first when the change is within the normal swing. It names the day the line broke, and what added or removed prompts explain. Then it ranks the causes found in tracked answers, such as a citation lost to a competitor or a worse Site Audit. Each comes with its share of the change and how sure Chat is. Chat never says a cause made it happen.
 
 Everything comes from your scheduled tracking. Chat never asks an AI engine anything new for it.
 
@@ -121,7 +121,7 @@ Analysts and Agency partners see only moves that read data. Next moves show unde
 
 ## Shortcuts and your data
 
-Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message: **/analyze**, **/report** and **/create**.
+Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message, **/analyze** and **/create**, and under them the skills Chat can use, such as **/report** for the weekly report (see **Skills in Chat**).
 
 Type **@**, or click **@**, to point Chat at your data: charts and metrics on the page, tracked prompts, your pages and open Action Center tasks. Use the arrow keys and Enter, or click. Your pick shows as a chip above the text; **×** takes it off.
 

@@ -7,8 +7,8 @@ import { toast } from 'sonner';
 import { Link, useRouter } from '@/i18n/navigation';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
-import { Button } from '@/components/ui/button';
-import { countDueActions, readSinceYouLeft } from '@/lib/actions/chat-home';
+import { useUserRole } from '@/hooks/use-user-role';
+import { readHomeShortcuts, readSinceYouLeft } from '@/lib/actions/chat-home';
 import { dayPartOf, endOfWeek } from '@/lib/chat/home';
 import { formatNumber } from '@/lib/format';
 import type { SinceMove, SinceYouLeft } from '@/lib/chat/since';
@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useChatList } from './chat-list-provider';
 import { inboxItems, useNow } from './chat-inbox';
+import { ForYouNow } from './for-you-now';
 
 /** The underlined link in the greeting's line (mockup `.hlnk`). */
 const LINK =
@@ -31,12 +32,16 @@ export interface ChatHomeViewProps {
   needsYou: number;
   /** Action Center tasks due this week; null until read, or when it can't be. */
   dueTasks: number | null;
-  onCompleteTasks: () => void;
+  /** Pages whose citations the brand lost, and drafts ready to publish; null until read. */
+  lostPages: number | null;
+  readyDrafts: number | null;
+  /** The person may change things: the jobs that write show, and More. */
+  canChange: boolean;
+  /** Asks Chat in a new chat: the "For you now" chips, and Since you left's Why? and Which ones?. */
+  onAsk: (message: string) => void;
   starting: boolean;
   /** "Since you left": null until read, or with nothing to show. */
   since?: SinceYouLeft | null;
-  /** Asks Chat in a new chat: the strip's Why? and Which ones?. */
-  onAsk?: (message: string) => void;
 }
 
 const shortDay = (date: Date, utc = false) =>
@@ -126,8 +131,8 @@ function SinceBlock({
  * Chat Home's top (CHAT-01 items 10, 12; mockup #s-home): "Good afternoon,
  * Alex" by the person's own clock; one line under it — what needs them, as
  * a link to the Inbox, or "All caught up."; "Since you left" (CHAT-22 §1)
- * when citations moved since the person last left Home; then the Action
- * Center line when tasks are due this week, with Complete with Chat. The
+ * when citations moved since the person last left Home; then "For you now"
+ * (CHAT-08 v2), this week's Action Center tasks one of its chips. The
  * composer follows.
  */
 export function ChatHomeView({
@@ -136,10 +141,12 @@ export function ChatHomeView({
   inbox,
   needsYou,
   dueTasks,
-  onCompleteTasks,
+  lostPages,
+  readyDrafts,
+  canChange,
+  onAsk,
   starting,
   since = null,
-  onAsk = () => undefined,
 }: ChatHomeViewProps) {
   const t = useTranslations('chatShell.home');
   const part = now ? dayPartOf(now.getHours()) : null;
@@ -195,20 +202,14 @@ export function ChatHomeView({
           ))}
         </div>
       )}
-      {dueTasks !== null && dueTasks > 0 && (
-        <p className="mb-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[13px] text-muted-foreground">
-          <span>{t('dueTasks', { count: dueTasks })}</span>
-          <Button
-            variant="outline"
-            size="sm"
-            data-action="home.completeTasks"
-            disabled={starting}
-            onClick={onCompleteTasks}
-          >
-            {t('completeWithChat')}
-          </Button>
-        </p>
-      )}
+      <ForYouNow
+        dueTasks={dueTasks}
+        lostPages={lostPages}
+        readyDrafts={readyDrafts}
+        canChange={canChange}
+        starting={starting}
+        onAsk={onAsk}
+      />
     </div>
   );
 }
@@ -243,9 +244,9 @@ function useHomeSeen() {
 }
 
 /**
- * Chat Home's top with the person's chats, the active brand's due tasks and
- * "Since you left". Complete with Chat, Why? and Which ones? ask Chat in a
- * new chat, then open it while it works.
+ * Chat Home's top with the person's chats, the active brand's counts for
+ * "For you now" and "Since you left": a chip, Why? and Which ones? ask Chat
+ * in a new chat, then open it while it works.
  */
 export function ChatHome({ firstName }: { firstName: string | null }) {
   const t = useTranslations('chatShell.home');
@@ -254,7 +255,13 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
   const brandId = useBrandStore((s) => s.activeBrandId);
   const { chats } = useChatList();
   const { openUpgrade } = useUpgradeGate();
-  const [due, setDue] = useState<{ brandId: string; count: number } | null>(null);
+  const { canManage } = useUserRole();
+  const [counts, setCounts] = useState<{
+    brandId: string;
+    dueTasks: number;
+    lostPages: number;
+    readyDrafts: number;
+  } | null>(null);
   const [since, setSince] = useState<{ brandId: string; since: SinceYouLeft } | null>(null);
   const [starting, setStarting] = useState(false);
   const items = useMemo(() => inboxItems(chats), [chats]);
@@ -264,9 +271,23 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
   useEffect(() => {
     if (!brandId || !weekEnd) return;
     let current = true;
-    void countDueActions(brandId, weekEnd).then((result) => {
-      if (current) setDue(result.ok ? { brandId, count: result.count } : null);
-    });
+    void readHomeShortcuts(brandId, weekEnd)
+      .then((result) => {
+        if (!current) return;
+        setCounts(
+          result.ok
+            ? {
+                brandId,
+                dueTasks: result.dueTasks,
+                lostPages: result.lostPages,
+                readyDrafts: result.readyDrafts,
+              }
+            : null,
+        );
+      })
+      .catch(() => {
+        if (current) setCounts(null);
+      });
     return () => {
       current = false;
     };
@@ -317,17 +338,21 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
     router.push(`/dashboard/chat/${chatId}`);
   }
 
+  // The counts of the brand open now: none while another brand's are shown.
+  const mine = counts && counts.brandId === brandId ? counts : null;
   return (
     <ChatHomeView
       firstName={firstName}
       now={now}
       inbox={items.length}
       needsYou={needsYou}
-      dueTasks={due && due.brandId === brandId ? due.count : null}
-      onCompleteTasks={() => void startChat(t('completeTasksMessage'))}
+      dueTasks={mine ? mine.dueTasks : null}
+      lostPages={mine ? mine.lostPages : null}
+      readyDrafts={mine ? mine.readyDrafts : null}
+      canChange={canManage}
+      onAsk={(message) => void startChat(message)}
       starting={starting}
       since={since && since.brandId === brandId ? since.since : null}
-      onAsk={(message) => void startChat(message)}
     />
   );
 }

@@ -38,6 +38,7 @@ const counts = (hits: number, runs: number, more: Partial<CellCounts> = {}): Cel
   brandMentions: hits,
   competitorMentions: 0,
   sumPosition: 0,
+  sumInvPosition: 0,
   positionCount: 0,
   ...more,
 });

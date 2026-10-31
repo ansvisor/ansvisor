@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { CHAT_MODES } from './precedence';
+import { WHY_METRICS } from './why/explain';
 
 /**
  * Chat's Wave 1 (00407–00413) and Wave 2 (00417–00423) tables as the
@@ -374,6 +375,19 @@ describe('Why’s counts (00423)', () => {
   });
 });
 
+describe('Why analyses (00420, 00427)', () => {
+  it('keep every metric explain_change explains, the Visibility score too', () => {
+    // The last migration that sets the metric check is the one in force.
+    const sets = files.filter((file) =>
+      /chat_why_analyses[\s\S]*metric in \(/.test(
+        readFileSync(`${dir}/${file}`, 'utf8').replace(/--[^\n]*/g, ''),
+      ),
+    );
+    const latest = migration(sets[sets.length - 1].slice(0, 5));
+    expect(allowed(latest, 'metric').sort()).toEqual([...WHY_METRICS].sort());
+  });
+});
+
 describe('questions and next moves', () => {
   const asks = table('chat_asks');
   const moves = table('chat_next_moves');
@@ -555,6 +569,56 @@ describe('the impact ledger', () => {
   it('is read by every member of the workspace', () => {
     expect(policy('ship_events: member select', wave2)).toContain(
       'organization_id in ( select p.organization_id from public.profiles p where p.id = auth.uid() )',
+    );
+  });
+
+  it('writes one ship event per CMS send, and notes a page published again (00425)', () => {
+    const delivery = migration('00425');
+    expect(delivery).toMatch(
+      /add column if not exists content_draft_delivery_id uuid\s+references public\.content_draft_deliveries\(id\) on delete set null/,
+    );
+    expect(delivery).toMatch(/add column if not exists republished_at timestamptz/);
+    // A plain unique index: PostgREST's on_conflict can't name a partial one's predicate.
+    expect(delivery).toMatch(
+      /create unique index if not exists ship_events_content_draft_delivery_uidx\s+on public\.ship_events \(content_draft_delivery_id\);/,
+    );
+    expect(delivery).not.toMatch(/grant [^;]*to authenticated/);
+  });
+
+  it('decides a CMS publish under a lock on its draft, into a cms_publish only (00428)', () => {
+    const ship = migration('00428');
+    expect(ship).toMatch(
+      /pg_advisory_xact_lock\(hashtext\('ship_cms_publish:' \|\| p_content_draft_id::text\)\)/,
+    );
+    // The window is the server's (REPUBLISH_DAYS), passed in: set in one place.
+    expect(ship).toMatch(
+      /and s\.kind = 'cms_publish'\s+and s\.shipped_at >= p_shipped_at - make_interval\(days => p_republish_days\)\s+and s\.shipped_at <= p_shipped_at \+ make_interval\(days => p_republish_days\)/,
+    );
+    expect(ship).toMatch(/p_execution_mode text,\s+p_republish_days integer\s*\)/);
+    expect(ship).not.toMatch(/interval '\d+ days'/);
+    // The latest before the send first, else the nearest after it.
+    expect(ship).toMatch(
+      /order by s\.shipped_at > p_shipped_at,\s+greatest\(s\.shipped_at - p_shipped_at, p_shipped_at - s\.shipped_at\)/,
+    );
+    expect(ship).toMatch(/on conflict \(content_draft_delivery_id\) do nothing/);
+    expect(ship).toMatch(/set search_path = ''/);
+    expect(ship).toMatch(
+      /revoke all on function public\.ship_cms_publish\([^)]*\)\s+from public, anon, authenticated;/,
+    );
+    expect(ship).toMatch(
+      /grant execute on function public\.ship_cms_publish\([^)]*\)\s+to service_role;/,
+    );
+    expect(ship).toMatch(/check \(cardinality\(republished_delivery_ids\) <= 50\)/);
+  });
+
+  it('finds a send noted on a cms_publish by its id, before the draft lookup (00428)', () => {
+    const ship = migration('00428');
+    // A deleted draft sets content_draft_id null: only the noted ids tie the send to it.
+    const noted = ship.indexOf('where s.republished_delivery_ids @> array[p_delivery_id]');
+    expect(noted).toBeGreaterThan(-1);
+    expect(noted).toBeLessThan(ship.indexOf('and s.content_draft_id = p_content_draft_id'));
+    expect(ship).toMatch(
+      /create index if not exists ship_events_republished_delivery_ids_idx\s+on public\.ship_events using gin \(republished_delivery_ids\);/,
     );
   });
 });

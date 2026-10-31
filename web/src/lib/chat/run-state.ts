@@ -159,8 +159,11 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
         errorReason: reason ?? null,
       };
     }
-    case 'run.paused_cap':
-      return { ...next, status: 'paused_cap', confirm: null, question: null, summary: event.data };
+    case 'run.paused_cap': {
+      const { limit: _limit, ...summary } = event.data;
+      void _limit;
+      return { ...next, status: 'paused_cap', confirm: null, question: null, summary };
+    }
     default:
       return next;
   }
