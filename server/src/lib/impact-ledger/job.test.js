@@ -675,6 +675,26 @@ describe('sends confirmed without a ship event, in order', () => {
     expect(db.tables.ship_events.filter((e) => e.content_draft_id === 'dr1')).toHaveLength(1);
   });
 
+  it('leaves a send noted on its draft’s first ship event alone the next nights', async () => {
+    const db = fakeDb(
+      world({
+        content_draft_deliveries: [draftSend('b-earlier', T1), draftSend('a-later', T2)],
+        content_drafts: [
+          { id: 'dr1', brand_id: 'b1', title: 'Guide', action_id: null, prompt_ids: [] },
+        ],
+      }),
+    );
+    await runImpactLedger({ db, now: D14 });
+    expect(db.tables.ship_events.find((e) => e.content_draft_id === 'dr1')).toMatchObject({
+      content_draft_delivery_id: 'b-earlier',
+      republished_delivery_ids: ['a-later'],
+    });
+    db.calls.length = 0;
+    const next = await runImpactLedger({ db, now: at('2026-10-17T07:53:00Z') });
+    expect(next).toMatchObject({ filled: 0, failed: 0 });
+    expect(db.calls.filter((c) => c.op === 'rpc' || c.table === 'content_drafts')).toEqual([]);
+  });
+
   it('counts a send whose ship event can’t be written as failed', async () => {
     const db = fakeDb(world({ content_draft_deliveries: [draftSend('x1', T1)] }));
     db.fail = (table, op) => table === 'ship_events' && op === 'rpc';

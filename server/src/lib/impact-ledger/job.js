@@ -388,9 +388,9 @@ async function measureOne(db, { measurement, ship, due, prompts, shipped, window
  * already, is never confirmed again. Written now through shipCmsPublish,
  * the same upsert on the send (one ship event per send, a draft live again
  * within 90 days noted on its first), oldest publish first, so a draft's
- * first ship event is its first publish. Counts the ship events it wrote
- * (a send noted on its draft's first is read again each night and counts
- * nothing) and what failed on the way.
+ * first ship event is its first publish. A send noted on its draft's
+ * first (republished_delivery_ids) has one already and isn't written
+ * again. Counts the ship events it wrote and what failed on the way.
  */
 async function fillMissingSends(db, now, tally) {
   const orgs = chatAgenticOrgs();
@@ -400,7 +400,7 @@ async function fillMissingSends(db, now, tally) {
       let query = db
         .from('content_draft_deliveries')
         .select(
-          `id, organization_id, published_url, published_at, ${SEND_ORG_OF}(subscription_status)`,
+          `id, organization_id, draft_id, published_url, published_at, ${SEND_ORG_OF}(subscription_status)`,
         )
         .eq('status', 'published')
         .gte('published_at', since);
@@ -423,6 +423,20 @@ async function fillMissingSends(db, now, tally) {
       )
     ).map((ship) => ship.content_draft_delivery_id),
   );
+  // A send noted on its draft's first cms_publish (00426) has its ship event too.
+  for (const ship of await readChunks(
+    'drafts ship events read',
+    [...new Set(sends.map((send) => send.draft_id).filter(Boolean))],
+    (chunk) =>
+      db
+        .from('ship_events')
+        .select('id, republished_delivery_ids')
+        .in('content_draft_id', chunk)
+        .eq('kind', 'cms_publish')
+        .order('id'),
+  )) {
+    for (const id of ship.republished_delivery_ids ?? []) written.add(id);
+  }
   for (const send of sends) {
     if (written.has(send.id)) continue;
     const { created, failed } = await shipCmsPublish({
