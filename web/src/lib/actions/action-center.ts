@@ -64,6 +64,7 @@ import type { PriorityLevel, PriorityReason } from '@/lib/action-center/priority
 import type { CompetitorFindings } from '@/lib/action-center/competitor-findings';
 import type { WinningFindings } from '@/lib/action-center/winning-findings';
 import { assertWritable } from '@/lib/subscription-guard';
+import { logEvent, touchAction, writeTaskStatus } from '@/lib/action-center/task-status';
 import { readTaskAttachments, type TaskAttachment } from '@/lib/action-center/chat-attachments';
 
 export interface ActionAssignee {
@@ -336,33 +337,6 @@ async function readableChat(
   return `/dashboard/chat/${data.id as string}`;
 }
 
-async function logEvent(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  actionId: string,
-  event: string,
-  data: Record<string, string | number | null>,
-) {
-  const { data: auth } = await supabase.auth.getUser();
-  // Best-effort: a missing trail entry must not fail the change it records.
-  await supabase
-    .from('action_events')
-    .insert({ action_id: actionId, event, data, actor_id: auth.user?.id ?? null });
-}
-
-/** Bump the action's updated stamp so the table's Updated column tracks real
- *  work, not just nightly refreshes. */
-async function touchAction(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  brandId: string,
-  actionId: string,
-) {
-  await supabase
-    .from('actions')
-    .update({ updated_at: new Date().toISOString() })
-    .eq('brand_id', brandId)
-    .eq('id', actionId);
-}
-
 /**
  * Sets an action's status. A dismissal keeps why, when the person said
  * (learning A5); any other status clears it, as a dismissal it no longer is
@@ -468,18 +442,7 @@ export async function updateTaskStatus(
   const reason = status === 'skipped' ? (skipReason ?? '').trim().slice(0, 200) : null;
   if (status === 'skipped' && !reason) throw new Error('A skipped task needs a reason');
 
-  const { error } = await supabase
-    .from('action_tasks')
-    .update({ status, skip_reason: reason, updated_at: new Date().toISOString() })
-    .eq('action_id', actionId)
-    .eq('id', taskId);
-  if (error) throw new Error(error.message);
-  await logEvent(supabase, actionId, 'task_status', {
-    taskId,
-    to: status,
-    ...(reason ? { reason } : {}),
-  });
-  await touchAction(supabase, brandId, actionId);
+  await writeTaskStatus(supabase, { brandId, actionId, taskId }, status, { skipReason: reason });
 }
 
 /** Longest a task's text may be. Long enough for a real instruction, short

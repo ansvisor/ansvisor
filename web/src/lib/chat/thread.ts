@@ -13,7 +13,7 @@ import {
 import { clientMove } from './next-moves';
 import { applyChatEvent, emptyRun } from './run-state';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
-import { readStrips, weekEndIn } from './task-strip';
+import { readDeliverableTasks, readStrips, weekEndIn, type DeliverableTask } from './task-strip';
 
 /**
  * A saved chat as its page opens it (CHAT-01, CHAT-03 item 21): its
@@ -234,6 +234,12 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   // An answer saved to Files names its message; what a run made doesn't.
   const fileByRun = new Map<string, string>();
   const madeByRun = new Map<string, ChatDeliverable[]>();
+  const madeIds = ((files.data ?? []) as FileRow[]).filter((f) => f.run_id && !f.message_id);
+  const tasksOfFiles = await readFileTasks(
+    supabase,
+    conversationId,
+    madeIds.map((f) => f.id),
+  );
   for (const f of (files.data ?? []) as FileRow[]) {
     if (!f.run_id) continue;
     if (f.message_id) {
@@ -249,6 +255,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         status: f.status,
         ...(f.content_draft_id ? { href: `/dashboard/content/editor/${f.content_draft_id}` } : {}),
         filed: 'in_files',
+        ...(tasksOfFiles.has(f.id) ? { task: tasksOfFiles.get(f.id) } : {}),
       },
     ]);
   }
@@ -309,6 +316,20 @@ async function readThreadStrips(
     return await readStrips(db, conversationId, weekEndIn(new Date(), zone));
   } catch (err) {
     console.error("[chat/thread] could not read the chat's task strip:", err);
+    return new Map();
+  }
+}
+
+/** The tasks of the chat's deliverables (CHAT-09 item 12), read as the person; a failed read loses them, not the chat. */
+async function readFileTasks(
+  db: Awaited<ReturnType<typeof createClient>>,
+  conversationId: string,
+  fileIds: string[],
+): Promise<Map<string, DeliverableTask>> {
+  try {
+    return await readDeliverableTasks(db, conversationId, fileIds);
+  } catch (err) {
+    console.error("[chat/thread] could not read the deliverables' tasks:", err);
     return new Map();
   }
 }

@@ -17,7 +17,7 @@ import { searchChatReferences } from '@/lib/actions/chat-references';
 import { ANSWER_MAX, composerAnswer, recommendedLabel } from '@/lib/chat/asks';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import { ghostOf } from '@/lib/chat/next-moves';
-import type { ChatEvent } from '@/lib/chat/events';
+import type { ChatEvent, ChatTaskStrip } from '@/lib/chat/events';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { readSse } from '@/lib/chat/run-hub';
 import {
@@ -589,6 +589,12 @@ export function ChatThreadView({
                   onSkip={() => answer(turn, 'skip')}
                   onAnswerQuestion={(value) => answerQuestion(turn, value)}
                   onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
+                  canChangeTasks={canManage && (!thread || thread.mine)}
+                  onTasks={(strip) =>
+                    updateRun(turn.key, (was) =>
+                      was.run ? { ...was, run: { ...was.run, tasks: strip } } : was,
+                    )
+                  }
                   onRetry={retryOf(index)}
                   onSendToActionCenter={sendToActionCenterOf(index)}
                 />
@@ -685,6 +691,8 @@ function Answer({
   onSkip,
   onAnswerQuestion,
   onFiled,
+  canChangeTasks,
+  onTasks,
   onRetry,
   onSendToActionCenter,
 }: {
@@ -695,6 +703,10 @@ function Answer({
   onSkip: () => Promise<void>;
   onAnswerQuestion: (value: QuestionAnswerValue) => Promise<boolean>;
   onFiled: (fileId: string) => void;
+  /** Its deliverables' Attach to task & mark done (CHAT-09 item 13): Admins and Managers, in their own chat. */
+  canChangeTasks: boolean;
+  /** The run's task strip after such a click. */
+  onTasks: (strip: ChatTaskStrip) => void;
   /** Sends its question again; none while another run works, or on a teammate's chat. */
   onRetry?: () => void;
   /** Send to Action Center (CHAT-09 item 18): the latest answer, for Admins and Managers. */
@@ -775,6 +787,8 @@ function Answer({
             // Its place among the filed ones, as the server counts them: one not filed has none.
             n={filedAt[i] ?? 0}
             deliverable={deliverable}
+            canChange={canChangeTasks}
+            onTasks={onTasks}
           />
         ))}
       {run.sent.map((sent, i) => (

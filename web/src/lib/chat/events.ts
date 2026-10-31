@@ -240,6 +240,12 @@ export interface ChatDeliverable {
    * file is the run's n-th deliverable, never named by its id here.
    */
   filed?: 'in_files' | 'storage_full' | 'failed';
+  /**
+   * The Action Center task it was drafted for (CHAT-09 item 12): "Task:
+   * {title}" on its card, with Attach to task & mark done; `done` once
+   * Action Center has the task completed. None when that isn't certain.
+   */
+  task?: { title: string; state: 'open' | 'done' };
 }
 
 /**
