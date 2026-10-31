@@ -257,6 +257,8 @@ export function explainScoreChange(input: {
       : part === 'position'
         ? round(positionFactor(t), 2)
         : round((100 * (part === 'mention' ? t.mentionAnswers : t.citationAnswers)) / t.answers);
+  // The change as the Insights card shows it: between the two rounded scores.
+  const shown = valueA === null || valueB === null ? null : round(round(valueB) - round(valueA));
 
   return {
     metric: 'visibility_score',
@@ -265,10 +267,10 @@ export function explainScoreChange(input: {
     period_b: input.periodB,
     value_a: valueA === null ? null : round(valueA),
     value_b: valueB === null ? null : round(valueB),
-    delta: delta === null ? null : round(delta),
+    delta: shown,
     se: se === null ? null : round(se, 2),
     noise_verdict: noise,
-    direction: delta === null || round(delta) === 0 ? 'flat' : delta < 0 ? 'declined' : 'improved',
+    direction: shown === null || shown === 0 ? 'flat' : shown < 0 ? 'declined' : 'improved',
     change_point: changePointOf(
       input.daily.flatMap((d) => {
         const value = scoreOf(d.counts);

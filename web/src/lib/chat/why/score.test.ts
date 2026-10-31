@@ -108,6 +108,25 @@ describe('explainScoreChange', () => {
     expect(result.unexplained).toMatchObject({ contribution: -0.5, share: 5 });
   });
 
+  it('gives the change as the card shows it: between the two rounded scores', () => {
+    // 200 answers: 1 citing, then 2. The card shows 0.1 → 0.3, a change of 0.2
+    // (the unrounded change, 0.125, would read 0.1).
+    const cells = Array.from({ length: 10 }, (_, i) =>
+      cell(`p${i}`, counts(20, 0, i === 0 ? 1 : 0, 0, 0), counts(20, 0, i === 0 ? 2 : 0, 0, 0)),
+    );
+    const card = (cited: number) =>
+      computeAiVisibilityScore({
+        answers: 200,
+        mentionAnswers: 0,
+        citationAnswers: cited,
+        positionFactor: null,
+      })!;
+    const result = explain(cells, () => undefined);
+    expect(result).toMatchObject({ value_a: card(1), value_b: card(2), direction: 'improved' });
+    expect(result.delta).toBe(Math.round((card(2) - card(1)) * 10) / 10);
+    expect(result.delta).toBe(0.2);
+  });
+
   it('gives a lost citation the citation part only, never the mention part', () => {
     const cells = ten(counts(20, 10, 10, 10, 6), counts(20, 8, 2, 8, 4.8));
     const result = explain(cells, () => lost);
