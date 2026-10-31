@@ -228,6 +228,7 @@ import {
   type PromptLocationMatrix,
 } from '@/lib/prompt-location-matrix';
 import { readUrlChoice } from '@/lib/url-state';
+import { AIO_SEARCH_SHARE } from './_platform-shares';
 import { promptsTableState } from './table-state';
 import { formatCompactNumber, formatDate, formatNumber } from '@/lib/format';
 import {
@@ -1847,8 +1848,7 @@ export default function PromptsPage() {
   const totalAiVol = volumes.reduce((s, v) => s + v.estAiVolume, 0);
   const totalEstimate = sumEstimates(volumes.map((v) => estimateByPromptId.get(v.promptId)!));
   const averagePerPrompt = averageEstimate(totalEstimate);
-  // The rate the volumes were estimated with, as the AI Adoption Rate card
-  // and the Prompt Volumes caption both say it.
+  // The rate the volumes were estimated with, as the AI Adoption Rate card says it.
   const adoptionRate = `${((volumes[0]?.aiVolumeMultiplier ?? AI_ADOPTION_RATE) * 100).toFixed(0)}%`;
   const estimateOf = (v: PromptVolume) => estimateByPromptId.get(v.promptId)!;
   // High Opportunity Prompts: a low-confidence estimate isn't listed on its own.
@@ -2424,7 +2424,9 @@ export default function PromptsPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium">Prompt Volumes</CardTitle>
                     <p className="text-xs text-muted-foreground">
-                      {tVolumes('chartCaption', { rate: adoptionRate })}
+                      {tVolumes('chartCaption', {
+                        share: `${Math.round(AIO_SEARCH_SHARE * 100)}%`,
+                      })}
                     </p>
                   </CardHeader>
                   <CardContent>

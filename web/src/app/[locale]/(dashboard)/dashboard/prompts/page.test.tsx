@@ -79,6 +79,11 @@ vi.mock('./_topics-tab', () => ({
     return <div data-testid="topics-tab" />;
   },
 }));
+// An AI Overviews share of its own, to show the Prompt Volumes caption reads it.
+vi.mock('./_platform-shares', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./_platform-shares')>()),
+  AIO_SEARCH_SHARE: 0.38,
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (select: (state: unknown) => unknown) =>
     select({ activeBrandId: 'b1', brands: [{ id: 'b1', slug: 'acme', name: 'Acme' }] }),
@@ -564,7 +569,7 @@ describe('the volume quota without an active plan', () => {
 });
 
 describe('the Prompt Volumes chart', () => {
-  it("says the volumes' AI adoption rate in the Prompt Volumes caption, as on its card", async () => {
+  it("says AI Overviews' share of Google searches in its caption, apart from the adoption rate", async () => {
     nav.pathname = '/dashboard/prompts/insights';
     actions.getPromptsPageData.mockResolvedValue({
       quota: { used: 1, limit: 10, remaining: 9 },
@@ -590,8 +595,9 @@ describe('the Prompt Volumes chart', () => {
       ],
     });
     await render(false);
+    // The card: the rate the volumes were estimated with. The caption: the
+    // AI Overviews share the chart's weights rest on (AIO_SEARCH_SHARE).
     expect(container.textContent).toContain('AI Adoption Rate45%');
-    expect(container.textContent).toContain('Google AI Overviews (~45% of Google searches)');
-    expect(container.textContent).not.toContain('35%');
+    expect(container.textContent).toContain('Google AI Overviews (~38% of Google searches)');
   });
 });
