@@ -86,14 +86,11 @@ function fail(req, res, err, what, failed = 'Failed to sync the catalog') {
     return res.status(err.status).json({ error: err.message, code: err.code });
   }
   if (err?.status === 403 || err?.status === 404) {
+    // An access refusal keeps its own code (not_in_workspace, no_brand_access);
+    // this file's role refusals and lookups carry none.
     return res.status(err.status).json({
       error: err.message,
-      code:
-        err.code === 'not_in_workspace'
-          ? 'not_in_workspace'
-          : err.status === 404
-            ? 'not_found'
-            : 'forbidden',
+      code: err.code ?? (err.status === 404 ? 'not_found' : 'forbidden'),
     });
   }
   req.log.error({ err: { name: err?.name, message: err?.message } }, what);

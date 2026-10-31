@@ -202,6 +202,12 @@ export const agentTriggersSchema = z
 /** A new agent, saved as a draft (§D item 17). */
 export const createAgentInput = z.strictObject({
   name: agentNameSchema,
+  /**
+   * `name` is the primary skill's title, not one the person typed: the
+   * server names it by §O against every agent of the workspace (with its
+   * brand, then " 2"…), private ones it can't show the person included.
+   */
+  autoName: z.boolean().default(false),
   visibility: z.enum(AGENT_VISIBILITIES).default('private'),
   /** Left out: the workspace's default (chat_settings.agent_run_share_default). */
   maxRunShare: runShareSchema.optional(),
@@ -227,6 +233,11 @@ export type CreateAgentInput = z.output<typeof createAgentInput>;
 export const updateAgentInput = z
   .strictObject({
     expectedVersion: z.number().int().min(1).optional(),
+    /**
+     * The agent's `updatedAt` the editor opened: any save since (a name,
+     * sharing, a cap or triggers, which make no new version) refuses this one.
+     */
+    expectedUpdatedAt: z.string().min(1).max(64).optional(),
     name: agentNameSchema.optional(),
     visibility: z.enum(AGENT_VISIBILITIES).optional(),
     maxRunShare: runShareSchema.optional(),
@@ -243,13 +254,20 @@ export const updateAgentInput = z
     triggers: agentTriggersSchema.optional(),
   })
   .refine(
-    (patch) => Object.keys(patch).some((key) => key !== 'expectedVersion'),
+    (patch) =>
+      Object.keys(patch).some((key) => key !== 'expectedVersion' && key !== 'expectedUpdatedAt'),
     'Nothing to change',
   );
 export type UpdateAgentInput = z.output<typeof updateAgentInput>;
 
-/** Run now (§E Manual): one brand of its scope, or every one, one run each (§H item 41). */
-export const runNowInput = z.strictObject({ brandId: uuid.optional() });
+/**
+ * Run now (§E Manual): one brand of its scope, or every one, one run each
+ * (§H item 41). Run agent on an Action Center action (§F) names the action
+ * instead: one run, on the action's brand.
+ */
+export const runNowInput = z
+  .strictObject({ brandId: uuid.optional(), actionId: uuid.optional() })
+  .refine((input) => !(input.brandId && input.actionId), 'Either brandId or actionId');
 
 /** The Agents list's tabs (§B item 5) and its search, by name or skill. */
 export const AGENT_LIST_VIEWS = ['mine', 'workspace', 'paused', 'archived'] as const;
@@ -396,6 +414,33 @@ export function versionFromRow(row: {
 export const nameKey = (name: string) => name.toLowerCase();
 
 /**
+ * A new agent's name (§O): the primary skill's title; taken in the
+ * workspace (whatever the case), with its brand ("Win back lost citations
+ * · Brand A"), then " 2", " 3". At most 60 characters.
+ */
+export function defaultAgentName(
+  title: string,
+  brand: string | null,
+  taken: readonly string[],
+): string {
+  const used = new Set(taken.map(nameKey));
+  const fit = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, 60).trimEnd();
+  const free = (text: string) => !used.has(nameKey(text));
+  const first = fit(title);
+  if (free(first)) return first;
+  if (brand) {
+    const withBrand = fit(`${title} · ${brand}`);
+    if (free(withBrand)) return withBrand;
+  }
+  for (let n = 2; n < 1000; n++) {
+    const suffix = ` ${n}`;
+    const candidate = `${first.slice(0, 60 - suffix.length).trimEnd()}${suffix}`;
+    if (free(candidate)) return candidate;
+  }
+  return first;
+}
+
+/**
  * A duplicate's name (edge case 12): "{name} copy", then " 2", " 3"… past
  * the names taken (lower-cased), the name shortened to stay within 60.
  */
@@ -462,7 +507,8 @@ export type AgentAsk =
   | 'workspace'
   | 'monthCap'
   | 'fullAuto'
-  | 'engines';
+  | 'engines'
+  | 'runWithChat';
 
 /** A refusal: the precedence's denial, and what was asked in words. */
 export interface AgentDenial {
@@ -526,7 +572,10 @@ export function canSeeAgent(agent: AgentFacts, viewer: AgentViewer): boolean {
 }
 
 /** The acts on an existing agent (create and duplicate make a new one). */
-export type AgentAct = Exclude<AgentAsk, 'workspace' | 'monthCap' | 'fullAuto' | 'engines'>;
+export type AgentAct = Exclude<
+  AgentAsk,
+  'workspace' | 'monthCap' | 'fullAuto' | 'engines' | 'runWithChat'
+>;
 
 /** What only an Admin may do to a workspace agent while Settings › Chat keeps them to Admins. */
 const ADMINS_ONLY_ACTS: readonly AgentAct[] = ['edit', 'activate', 'resume'];
@@ -561,6 +610,17 @@ export function agentActDenial(
     return { denial: { code: 'policy_never' }, asked: act };
   }
   return null;
+}
+
+/**
+ * Run with Chat on an Action Center action (CHAT-21 §F item 27): Chat works
+ * the action's tasks, which are changes, so Admins and Managers only, as
+ * Run agent. Null when they may.
+ */
+export function runWithChatDenial(viewer: AgentViewer): AgentDenial | null {
+  return canWriteAgents(viewer.role)
+    ? null
+    : forbidden(viewer.role, ['admin', 'manager'], 'runWithChat');
 }
 
 /** Making an agent visible to the workspace: refused for Managers while Admins keep it. */

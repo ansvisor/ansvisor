@@ -15,6 +15,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
+import { assertBrandAccess } from '../lib/access.js';
 import { deliverEmail } from '../lib/email.js';
 import { PlanLimitError, getAiUsage, getDraftAiUsage, getOrgIdForUser } from '../lib/plan-guard.js';
 import {
@@ -66,8 +67,19 @@ router.get('/ai-usage/draft/:draftId', async (req, res) => {
     const orgId = await getOrgIdForUser(req.user.id);
     // As /ai-usage: without an org row there is no budget to share.
     if (!orgId) return res.json({ unlimited: true, percent: null });
+    // The page's share is its brand's: read only by someone who reaches it.
+    const { data: draft, error: draftError } = await supabaseAdmin
+      .from('content_drafts')
+      .select('brand_id')
+      .eq('id', draftId.data)
+      .maybeSingle();
+    if (draftError) throw new Error(draftError.message);
+    if (draft) await assertBrandAccess(draft.brand_id, req.user.id);
     return res.json(await getDraftAiUsage(orgId, draftId.data));
   } catch (error) {
+    if (error.status === 403 || error.status === 404) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
     if (error instanceof PlanLimitError) {
       return res.status(error.statusCode).json({
         success: false,

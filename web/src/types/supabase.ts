@@ -5255,6 +5255,8 @@ export type Database = {
       invitations: {
         Row: {
           accepted_at: string | null
+          brand_ids: string[]
+          brand_scope: string
           created_at: string
           email: string
           expires_at: string
@@ -5267,6 +5269,8 @@ export type Database = {
         }
         Insert: {
           accepted_at?: string | null
+          brand_ids?: string[]
+          brand_scope?: string
           created_at?: string
           email: string
           expires_at?: string
@@ -5279,6 +5283,8 @@ export type Database = {
         }
         Update: {
           accepted_at?: string | null
+          brand_ids?: string[]
+          brand_scope?: string
           created_at?: string
           email?: string
           expires_at?: string
@@ -5395,6 +5401,45 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_brands: {
+        Row: {
+          brand_id: string
+          granted_at: string
+          granted_by: string | null
+          organization_id: string
+          user_id: string
+        }
+        Insert: {
+          brand_id: string
+          granted_at?: string
+          granted_by?: string | null
+          organization_id: string
+          user_id: string
+        }
+        Update: {
+          brand_id?: string
+          granted_at?: string
+          granted_by?: string | null
+          organization_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_brands_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_brands_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -5639,6 +5684,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          brand_scope: string
           can_manage_menus: boolean
           created_at: string
           full_name: string | null
@@ -5654,6 +5700,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          brand_scope?: string
           can_manage_menus?: boolean
           created_at?: string
           full_name?: string | null
@@ -5669,6 +5716,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          brand_scope?: string
           can_manage_menus?: boolean
           created_at?: string
           full_name?: string | null
@@ -6613,6 +6661,7 @@ export type Database = {
           agent_run_id: string | null
           brand_id: string
           change_type: string | null
+          content_draft_delivery_id: string | null
           content_draft_id: string | null
           created_at: string
           execution_mode: string
@@ -6620,6 +6669,8 @@ export type Database = {
           id: string
           kind: string
           organization_id: string
+          republished_at: string | null
+          republished_delivery_ids: string[]
           run_id: string | null
           shipped_at: string
           shipped_by: string | null
@@ -6633,6 +6684,7 @@ export type Database = {
           agent_run_id?: string | null
           brand_id: string
           change_type?: string | null
+          content_draft_delivery_id?: string | null
           content_draft_id?: string | null
           created_at?: string
           execution_mode: string
@@ -6640,6 +6692,8 @@ export type Database = {
           id?: string
           kind: string
           organization_id: string
+          republished_at?: string | null
+          republished_delivery_ids?: string[]
           run_id?: string | null
           shipped_at: string
           shipped_by?: string | null
@@ -6653,6 +6707,7 @@ export type Database = {
           agent_run_id?: string | null
           brand_id?: string
           change_type?: string | null
+          content_draft_delivery_id?: string | null
           content_draft_id?: string | null
           created_at?: string
           execution_mode?: string
@@ -6660,6 +6715,8 @@ export type Database = {
           id?: string
           kind?: string
           organization_id?: string
+          republished_at?: string | null
+          republished_delivery_ids?: string[]
           run_id?: string | null
           shipped_at?: string
           shipped_by?: string | null
@@ -6694,6 +6751,13 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ship_events_content_draft_delivery_id_fkey"
+            columns: ["content_draft_delivery_id"]
+            isOneToOne: true
+            referencedRelation: "content_draft_deliveries"
             referencedColumns: ["id"]
           },
           {
@@ -7341,6 +7405,10 @@ export type Database = {
       brand_ai_conversions: {
         Args: { p_brand_id: string; p_days?: number }
         Returns: Json
+      }
+      can_access_brand: {
+        Args: { p_brand_id: string; p_user_id?: string }
+        Returns: boolean
       }
       chat_agent_usage_shares: {
         Args: { p_budget: number; p_organization_id: string; p_since: string }
@@ -8104,6 +8172,7 @@ export type Database = {
           idx: number
         }[]
       }
+      org_brand_count: { Args: { p_organization_id: string }; Returns: number }
       org_prompt_location_usage: {
         Args: { p_organization_id: string }
         Returns: {
@@ -8306,6 +8375,25 @@ export type Database = {
         }
         Returns: Json
       }
+      ship_cms_publish: {
+        Args: {
+          p_action_id: string
+          p_brand_id: string
+          p_content_draft_id: string
+          p_delivery_id: string
+          p_execution_mode: string
+          p_organization_id: string
+          p_republish_days: number
+          p_shipped_at: string
+          p_shipped_by: string
+          p_title: string
+          p_url: string
+        }
+        Returns: {
+          created: boolean
+          ship_event_id: string
+        }[]
+      }
       shopping_amazon_share_weekly: {
         Args: { p_as_of?: string; p_brand_id: string }
         Returns: {
@@ -8464,6 +8552,7 @@ export type Database = {
         Returns: number
       }
       url_decode_safe: { Args: { p_value: string }; Returns: string }
+      user_brand_ids: { Args: never; Returns: string[] }
       visibility_rate_trend: {
         Args: {
           p_brand_id: string

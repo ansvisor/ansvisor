@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
 import type { AgentDetail as Agent, AgentRunView } from '@/lib/chat/agents';
+import type { UpgradeDialogState } from '@/components/providers/upgrade-gate';
 import {
   ADMIN_CAN,
   AGENT_ID,
@@ -38,6 +39,7 @@ vi.mock('@/lib/actions/chat-access-requests', () => ({
 }));
 
 const { AgentDetail } = await import('./agent-detail');
+const { UpgradeDialogContext } = await import('@/components/providers/upgrade-gate');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -58,11 +60,14 @@ const base = (url: string): Response | null => {
 async function settle() {
   await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 }
-async function render() {
+/** The detail, in the dashboard's read-only state when `gate` is given. */
+async function render(gate: UpgradeDialogState | null = null) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <AgentDetail id={AGENT_ID} now={NOW} timeZone="UTC" />
+        <UpgradeDialogContext.Provider value={gate}>
+          <AgentDetail id={AGENT_ID} now={NOW} timeZone="UTC" />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -243,9 +248,25 @@ describe('AgentDetail', () => {
     await click(action('agent.more')[0]);
     await click(document.body.querySelector<HTMLElement>('[data-action="agent.duplicate"]')!);
     expect(toast).toHaveBeenCalledWith('Copied as a draft · Citation win-back copy');
-    expect(nav.push).toHaveBeenCalledWith(
-      '/dashboard/chat/agents/aaaaaaaa-0000-4000-8000-000000000009',
-    );
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/agents/aaaaaaaa-0000-4000-8000-000000000009');
+  });
+
+  // Agent Center (/dashboard/agents): its own page now, out of Chat's header.
+  it('leads back to Agent Center from the top', async () => {
+    await render();
+    const back = action('agents.back')[0];
+    expect(back.getAttribute('href')).toBe('/dashboard/agents');
+    expect(back.textContent).toBe('Back to Agent Center');
+  });
+
+  // Out of Chat, the dashboard's read-only state (plan ended, trial over) still holds.
+  it('opens the upgrade dialog instead of running while the workspace is read-only', async () => {
+    agent = detail({ can: { ...ADMIN_CAN } });
+    const openUpgrade = vi.fn();
+    await render({ isLocked: true, reason: 'ended', adminName: null, openUpgrade });
+    await click(action('agent.runNow')[0]);
+    expect(openUpgrade).toHaveBeenCalledWith('Run an agent now');
+    expect(posts()).toEqual([]);
   });
 
   it('shows skills, mode, connections with Required or Optional, and the model', async () => {
@@ -459,7 +480,7 @@ describe('AgentDetail', () => {
     answer = () => Response.json({ ok: false, failure: 'not_found' }, { status: 404 });
     await render();
     expect(one('[data-slot="agent-error"]')?.textContent).toContain("This agent isn't available.");
-    expect(action('agents.back')[0].getAttribute('href')).toBe('/dashboard/chat/agents');
+    expect(action('agents.back')[0].getAttribute('href')).toBe('/dashboard/agents');
   });
 
   it('keeps the agent when only its runs could not be read', async () => {
@@ -470,5 +491,76 @@ describe('AgentDetail', () => {
     await render();
     expect(one('h1')?.textContent).toBe('Citation win-back');
     expect(one('[data-slot="agent-runs-error"]')?.textContent).toContain("Couldn't load the runs.");
+  });
+
+  it('links Edit to the agent’s four steps, only where `can.edit` allows it (W2-15)', async () => {
+    agent = detail({ can: { ...ADMIN_CAN } });
+    await render();
+    expect(action('agent.edit')[0].getAttribute('href')).toBe(`/dashboard/agents/${AGENT_ID}/edit`);
+    act(() => root.unmount());
+    root = createRoot(container);
+    agent = detail({ can: { ...ADMIN_CAN, edit: false } });
+    await render();
+    expect(action('agent.edit')).toHaveLength(0);
+  });
+
+  it('deletes an archived agent from ⋯ once confirmed, then goes back to Agents (W2-15)', async () => {
+    // Not archived: no Delete.
+    agent = detail({ can: { ...ADMIN_CAN } });
+    await render();
+    await click(action('agent.more')[0]);
+    expect(document.body.querySelector('[data-action="agent.delete"]')).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+
+    agent = detail({
+      status: 'archived',
+      can: { ...NOTHING_CAN, restore: true, duplicate: true, delete: true },
+    });
+    answer = (url, init) =>
+      init?.method === 'DELETE' && url === `/api/chat/agents/${AGENT_ID}`
+        ? Response.json({ ok: true })
+        : (base(url) ?? Response.json({ ok: false, failure: 'failed' }, { status: 500 }));
+    await render();
+    await click(action('agent.more')[0]);
+    const item = document.body.querySelector<HTMLElement>('[data-action="agent.delete"]')!;
+    expect(item.textContent).toBe('Delete');
+    await click(item);
+    // It asks first; nothing is sent until the click.
+    const dialog = document.body.querySelector<HTMLElement>('[data-slot="agent-delete-dialog"]')!;
+    expect(dialog.textContent).toContain('Delete this agent?');
+    expect(dialog.textContent).toContain(
+      '“Citation win-back” will be deleted. Its past runs and files stay.',
+    );
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+    await click(document.body.querySelector<HTMLElement>('[data-action="agent.deleteConfirm"]')!);
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => url),
+    ).toEqual([`/api/chat/agents/${AGENT_ID}`]);
+    expect(toast).toHaveBeenCalledWith('Citation win-back deleted · its runs and files stay');
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/agents');
+  });
+
+  it('keeps an archived agent when Delete is refused, with the server’s words', async () => {
+    agent = detail({ status: 'archived', can: { ...NOTHING_CAN, delete: true } });
+    answer = (url, init) =>
+      init?.method === 'DELETE'
+        ? Response.json(
+            {
+              ok: false,
+              failure: 'failed',
+              code: 'wrong_status',
+              error: "This agent is paused, so it can't do that now.",
+            },
+            { status: 409 },
+          )
+        : (base(url) ?? Response.json({ ok: false, failure: 'failed' }, { status: 500 }));
+    await render();
+    await click(action('agent.more')[0]);
+    await click(document.body.querySelector<HTMLElement>('[data-action="agent.delete"]')!);
+    await click(document.body.querySelector<HTMLElement>('[data-action="agent.deleteConfirm"]')!);
+    expect(toast.error).toHaveBeenCalledWith("This agent is paused, so it can't do that now.");
+    expect(nav.push).not.toHaveBeenCalled();
+    expect(one('h1')?.textContent).toBe('Citation win-back');
   });
 });

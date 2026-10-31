@@ -70,7 +70,7 @@ import { formatNumber } from '@/lib/format';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { BulkSendDialog } from './_bulk-send-dialog';
-import { readCmsSources } from './_cms-sources';
+import { readCmsSources } from '@/lib/content/cms-sources';
 import { LibraryExportMenu, useLibraryExport } from './_library-export';
 import { LibraryTable, type LibraryRowActions, type LibrarySelection } from './_library-table';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';

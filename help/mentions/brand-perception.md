@@ -4,11 +4,11 @@ route: /dashboard/mentions
 keywords: [perception, brand attributes, brand shape, biggest gap, associated words]
 synonyms: [how AI describes my brand, brand themes, what AI says about us, words AI uses for us]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/mentions.mdx]
 ---
 The **Perception** tab of the Mentions & Sentiment page shows the words AI uses next to your brand, and how they compare with the words it uses for your competitors. The terms are taken from the sentences that name each brand by fixed rules, not by an AI model. A sentence that names two brands lends its words to both.
@@ -23,7 +23,7 @@ The first card lists the words and phrases that appear next to your brand, ranke
 
 ## Biggest gap
 
-Under the brand shape, **Biggest gap** names the attribute where a competitor leads you by the widest margin, when that margin is at least 20 points. For example, AI may use *affordable* in 45% of the responses naming a competitor but in only 10% of the responses naming you. Figures marked **Low sample** are left out.
+Under the brand shape, **Biggest gap** names the attribute where one of the competitors on the brand shape leads you by the widest margin, when that margin is at least 20 points. For example, AI may use *affordable* in 45% of the responses naming a competitor but in only 10% of the responses naming you. A competitor's figures marked **Low sample** are left out, and the note doesn't show while yours are.
 
 ## Frequently mentioned with
 

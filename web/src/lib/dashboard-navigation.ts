@@ -8,6 +8,7 @@ type Translator = (key: string) => string;
  * mobile menus from silently falling out of sync. */
 export const dashboardNavLabelKeys: Record<string, string> = {
   Chat: 'chat',
+  'Agent Center': 'agentCenter',
   'Action Center': 'actionCenter',
   'Answer Engine Insights': 'insights',
   Competitors: 'competitors',
@@ -79,12 +80,16 @@ export function childLinkHref(child: NavChild, pathname: string): string {
 /** Brand preferences hide a navigation item entirely; they are intentionally
  * separate from plan gates, which render a visible but disabled item. So do
  * the sections the viewer's menu leaves out (menu access): off the menu, the
- * page still opens from a link. */
+ * page still opens from a link. And so does the new Chat off for the
+ * workspace (CHAT_AGENTIC) an item only it has (Agent Center), whose pages
+ * aren't there then. */
 export function shouldShowDashboardNavItem(
   item: NavItem,
   brandPrefs: Record<BrandPrefKey, boolean>,
   hiddenSections: ReadonlySet<string> = new Set(),
+  chatAgentic = false,
 ): boolean {
+  if (item.requiresChatAgentic && !chatAgentic) return false;
   const section = menuSectionOf(item.href);
   if (section && hiddenSections.has(section)) return false;
   return !item.requiresBrandPref || brandPrefs[item.requiresBrandPref];

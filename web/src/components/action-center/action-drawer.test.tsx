@@ -138,6 +138,19 @@ describe('ActionDrawer', () => {
     );
   });
 
+  it('names the action’s number in the top row, its full label kept for hover and screen readers (W2-17)', async () => {
+    await renderDrawer();
+    const drawer = document.body.querySelector('[role="dialog"]')!;
+    const id = drawer.querySelector<HTMLElement>('[title^="Action ID"]')!;
+    expect(id.title).toBe(`Action ID: AC-${action.actionNo}`);
+    expect(id.textContent).toBe(`Action ID: AC-${action.actionNo}`);
+    // Only the label gives way, and only beside Run agent.
+    const label = id.firstElementChild as HTMLElement;
+    expect(label.textContent).toBe('Action ID: ');
+    expect(label.className).toBe('group-has-[[data-run-agent]]/top:sr-only');
+    expect(id.closest('.group\\/top')).not.toBeNull();
+  });
+
   it("gives the Why the demand of a signal's prompt the action didn't keep", async () => {
     const lost = (id: string, promptId: string, promptText: string) =>
       ({
@@ -303,6 +316,75 @@ describe('ActionDrawer', () => {
         expect.objectContaining({ taskTotal: 2, taskCompleted: 1 }),
       );
       expect(onChanged).not.toHaveBeenCalled();
+    });
+  });
+
+  /** What Chat attached and where it came from (CHAT-09 §D–E). */
+  describe('from Chat', () => {
+    const button = (name: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} (`),
+      )!;
+    const attached = (fileId: string) => ({
+      fileId,
+      title: `File ${fileId}`,
+      type: 'document',
+      attachedAt: '2026-10-30T09:00:00Z',
+      attachedBy: 'Cihan',
+      href: `/api/chat/files/${fileId}`,
+      draft: false,
+    });
+
+    it('names how many files Chat attached to a task, for a screen reader too', async () => {
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        tasks: [
+          {
+            id: 't1',
+            position: 1,
+            status: 'todo',
+            taskKey: null,
+            title: 'Add a FAQ to /pricing',
+            titleParams: {},
+            dependsOn: [],
+            details: null,
+            attachments: [attached('f1'), attached('f2')],
+          },
+        ],
+      });
+      await renderDrawer();
+      await act(async () => button('Tasks').click());
+      const clip = document.body.querySelector('[role="img"]')!;
+      expect(clip.getAttribute('aria-label')).toBe('2 files attached from Chat');
+      expect(clip.textContent).toBe('2');
+    });
+
+    it('links its chat only for a reader who may open it', async () => {
+      const sent = {
+        ...action,
+        kind: 'chat_finding',
+        payload: {
+          source: 'chat',
+          title: 'Win back /pricing',
+          why: 'Lost 6 citations.',
+          conversationId: 'c1',
+          entities: { pages: ['https://acme.example/pricing'], platforms: ['google-aio'] },
+        },
+      } as ActionItem;
+      server.getActionDetail.mockResolvedValue({ ...emptyDetail, chatHref: null });
+      await renderDrawer(sent);
+      const dialog = () => document.body.querySelector('[role="dialog"]')!;
+      expect(dialog().textContent).toContain('Chat');
+      expect(dialog().textContent).toContain('Google AI Overviews');
+      expect(dialog().textContent).not.toContain('Open the chat');
+      server.getActionDetail.mockResolvedValue({ ...emptyDetail, chatHref: '/dashboard/chat/c1' });
+      act(() => root.unmount());
+      root = createRoot(container);
+      await renderDrawer(sent);
+      const link = [...dialog().querySelectorAll('a')].find(
+        (a) => a.textContent === 'Open the chat',
+      );
+      expect(link?.getAttribute('href')).toBe('/dashboard/chat/c1');
     });
   });
 

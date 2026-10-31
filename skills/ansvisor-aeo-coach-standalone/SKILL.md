@@ -573,6 +573,11 @@ When the user asks how AI describes the brand, why sentiment moved
   read-only: `GET` endpoints still work, writes are refused. Tell the
   user their plan has ended and that an admin can choose a plan (or
   update the payment method) in **Settings → Billing**. Don't retry.
+- `402` with `"code": "plan_required"` (and `"required_plan": "growth"`)
+  → the workspace is on Starter or in its free trial: `GET` endpoints
+  work, writes need the Growth plan or above. Tell the user this needs
+  Growth and that an admin can upgrade in **Settings → Billing**. Don't
+  retry.
 - `500` with a message (e.g. a plan limit, "Generate suggestions for
   this range first") → relay the message as is.
 - Network timeout → retry once. If it still fails, surface it and stop.

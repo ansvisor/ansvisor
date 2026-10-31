@@ -383,6 +383,17 @@ describe('GET /api/catalog/accounts (#1270)', () => {
     expect(other.status).toBe(403);
     expect((await other.json()).code).toBe('not_in_workspace');
 
+    // A brand of the workspace not given to the caller keeps its own code, not a role's.
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error("You don't have access to this brand"), {
+        status: 403,
+        code: 'no_brand_access',
+      }),
+    );
+    const notGiven = await fetch(`${base}/accounts?${query}`);
+    expect(notGiven.status).toBe(403);
+    expect((await notGiven.json()).code).toBe('no_brand_access');
+
     assertBrandAccess.mockRejectedValueOnce(
       Object.assign(new Error('Brand not found'), { status: 404 }),
     );

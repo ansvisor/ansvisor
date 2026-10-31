@@ -1,14 +1,14 @@
 ---
 title: Work with Action Center actions
 route: /dashboard/action-center/actions
-keywords: [actions, action status, assign action, dismiss action, export actions, top actions]
-synonyms: [recommendations, work items, to-dos, action list]
+keywords: [actions, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat]
+synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/action-center.mdx]
 ---
 An action is one piece of work with an outcome, built from the evidence behind it. Ansvisor groups many signals into one action: six valuable pages with no AI traffic become one "Capture AI traffic" action with six linked signals, not six rows. New actions are added after the daily tracking run, on the **Actions** tab.
@@ -23,13 +23,13 @@ An action is one piece of work with an outcome, built from the evidence behind i
 
 ## Cards and filters
 
-The cards at the top count and filter the list. Click one to narrow the table, and click it again to clear it.
+The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.
 
 - **Top Actions**: the five highest-priority open actions.
 - **At Risk**: open Recover and Fix actions.
 - **Opportunities**: open Growth actions.
 - **In Progress**: actions someone is working on.
-- **Highest Priority**: the highest level among open actions.
+- **Highest Priority**: the highest level among open actions; it doesn't filter. While Getting started runs, its card shows instead.
 
 Below them, filter by category, **Priority**, **Status** and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters are kept in the page's address, so a filtered view can be shared. For an online shop, the **From Products** chip lists only the actions sent from Products.
 
@@ -51,6 +51,14 @@ Click a row to open the action. Under its title you set **Status**, **Assignee**
 - **Signals**: the evidence. Click one to open it on the Signals tab.
 - **History**: every change, from status and assignee changes to tasks updated or sent.
 
+## Run an agent on an action
+
+When Chat is on, Admins and Managers see **Run agent** on each open action: an agent button next to its title in the list, and at the top of the open action.
+
+It lists your agents that work on the action's brand, the ones used on this kind of action first. Pick one, and Chat starts a run on this action alone and opens it beside the action. **Run with Chat** does the same without an agent, in your default mode. **Create an agent for this kind of action** starts a new agent from a fitting skill.
+
+The run drafts the work, but closing tasks stays your click. If the action is completed or dismissed, an agent's run stops; a **Run with Chat** run doesn't. The action's **History** shows when a run started and ended, and who started it.
+
 ## Assign work
 
 An action with no one on it belongs to **Everyone** in the workspace until someone takes it. Pick a teammate in the action's **Assignee** field, and set a **Due date** if it has one. The **Assignee** filter on the Actions tab shows one person's actions, or **Everyone** for the unassigned ones.
@@ -67,9 +75,12 @@ Most actions come from signals each night, but you can also send work to the Act
 
 - **Mentions**: select answers, or open one, and click **Send to Action Center**.
 - **Content**: **Send to Actions** on a content opportunity, or **Assign to…** on a Content Plan row.
+- **New content**: send it to a teammate with **Send to Action Center**.
 - **Site Audit**: **Send to Action Center** on a page's audit report.
 - **AI Referral Traffic**: select pages and click **Send to Action Center**.
 - **Brand Visibility**: **Send action** on a topic in Opportunities.
+- **Product Visibility**: pick the work in a product's plan and click **Send … actions to Action Center**.
 - **Prompts**: **Send Actions** on a prompt's Improve tab.
+- **Chat**: **Send to Action Center** under an answer. Its Overview links back to the chat.
 
-Sending the same thing twice doesn't create a second action: the page says it is already in the Action Center, with its action number.
+Sending the same thing twice doesn't create a second action: the page says it is already in the Action Center.

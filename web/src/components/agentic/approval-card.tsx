@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -81,6 +81,7 @@ export function ApprovalCard({
   doneLabel,
   onApprove,
   onSkip,
+  children,
 }: {
   kind?: 'write' | 'execute';
   /** The step it stops at, and the run's step count. */
@@ -116,6 +117,8 @@ export function ApprovalCard({
   doneLabel?: string;
   onApprove?: (answer: ApprovalAnswer) => void;
   onSkip?: () => void;
+  /** More of what the change carries, under its items (Send to Action Center's goal and targets). */
+  children?: ReactNode;
 }) {
   const t = useTranslations('agentic.approvalCard');
   const { guard } = useUpgradeGate();
@@ -241,6 +244,7 @@ export function ApprovalCard({
             ))}
           </ul>
         )}
+        {children}
         <SourceChips label={t('sources')} sources={sources} />
         {status === 'error' && error && (
           <p role="alert" className="mt-2 mb-0 text-[12.5px] text-red-700 dark:text-red-300">

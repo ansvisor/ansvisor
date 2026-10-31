@@ -23,6 +23,7 @@ Fed to the Next.js app. Variables prefixed with `NEXT_PUBLIC_` are exposed to th
 | `STRIPE_SECRET_KEY` | cloud only | Stripe live/test secret key |
 | `STRIPE_WEBHOOK_SECRET` | cloud only | Stripe webhook signing secret |
 | `CRON_SECRET` | cloud; self-host with Chat | Shared secret the web app sends to the server's internal endpoints: Vercel cron, and Chat's AI budget for each model step when `CHAT_AGENTIC` is on. Self-hosted with Chat on, set it here and in the server's `.env` to the same value, or Chat can't answer. |
+| `CHAT_INTERNAL_SECRET` | optional | With the new Chat on (`CHAT_AGENTIC=true`): the secret the server sends to this app's `/api/internal/chat/agents/*` endpoints, which fire agent schedules and Signal triggers and sweep agent runs. Same value as the server's. Unset: agents run only with **Run now**. Generate with `openssl rand -hex 32` |
 
 \* You need **at least one AI provider key** for tracking to work. Configure providers per-brand in the dashboard.
 
@@ -58,6 +59,7 @@ Fed to the Express API + workers.
 | `SCRAPEDO_API_KEY` | Site Audit | Scrape.do API key — required to run **Site Audit** (it fetches target pages via Scrape.do's proxy + JS render). Distinct from `CLORO_API_KEY`, which scrapes the AI answer engines. |
 | `AI_VOLUME_MULTIPLIER` | optional | Estimated AI search adoption rate (default `0.45` = 45% of a prompt's Google volume, the median of its keywords' monthly searches; AI Overviews appear on roughly 43–48% of Google searches) |
 | `CRON_SECRET` | cloud; self-host with Chat | Shared secret with web's `CRON_SECRET` (the same value); protects the internal endpoints: cron, and Chat's AI budget when `CHAT_AGENTIC` is on |
+| `CHAT_INTERNAL_SECRET` | optional | With the new Chat on (`CHAT_AGENTIC=true`): every minute the server calls the web app (`PUBLIC_APP_URL`) to fire agent schedules and sweep agent runs, and after each signal pass sends it the new signals for Signal triggers. Same value as the web's. Unset: agents run only with **Run now**. Not in `NODE_ENV=development`; there, run `node src/scripts/chat-agents-tick.js` |
 
 ## Tips for production
 

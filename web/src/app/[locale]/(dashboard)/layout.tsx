@@ -18,13 +18,14 @@ import { planFactsFromOrgRow } from '@/lib/chat/plan-facts';
 import { DEFAULT_CHAT_SETTINGS, parseTeamRole } from '@/lib/chat/precedence';
 import { composerSetupOf } from '@/lib/chat/composer-setup';
 import { chatRunsOnOwnKey } from '@/lib/chat/key';
+import { skillMenuOf } from '@/lib/chat/skills/library';
 import { ChatPanelPage, ChatPanelProvider } from '@/components/chat/panel/chat-panel-provider';
 import { ChatSidePanelSlot } from '@/components/chat/panel/chat-side-panel-slot';
 import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { GettingStartedPageOpened } from '@/components/getting-started/page-opened';
 import { getBrands } from '@/lib/actions/brand';
-import { menuOfProfile, readRoleHidden } from '@/lib/menu-access';
+import { menuOfProfile, menuSectionsFor, readRoleHidden } from '@/lib/menu-access';
 import { getPlan, isCloud, toPlanId } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
@@ -111,7 +112,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
       organizationId: profile.organization_id,
     });
   }
-  const menu = menuOfProfile({ ...profile, role }, roleHidden);
+  // Of the sections the workspace has: Agent Center only with the new Chat on.
+  const menu = menuOfProfile({ ...profile, role }, roleHidden, menuSectionsFor(chatOn));
 
   // The organization's demo brand (sample data, 00380), shown or hidden: the
   // dialog's offer reads whether the organization ever subscribed. Hidden
@@ -198,6 +200,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ...composerModes,
     usageNoticeSeen: chatPrefs?.usage_notice_period ?? null,
     onOwnKey: chatOnOwnKey,
+    skills: skillMenuOf(profile.organization_id),
   };
 
   return (

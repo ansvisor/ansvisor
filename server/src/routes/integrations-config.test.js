@@ -15,7 +15,7 @@ vi.mock('../lib/composio.js', () => ({
 vi.mock('../lib/ga-sync.js', () => ({ runGaSync: vi.fn() }));
 vi.mock('../lib/gsc-sync.js', () => ({ runGscSync: vi.fn() }));
 vi.mock('../lib/page-opportunities.js', () => ({ detectPageOpportunitiesInWindow: vi.fn() }));
-vi.mock('../lib/access.js', () => ({ assertBrandAccess: vi.fn() }));
+vi.mock('../lib/access.js', () => ({ assertBrandAccess: vi.fn(), assertAllBrands: vi.fn() }));
 
 const { integrationsConfig } = await import('./integrations.js');
 
