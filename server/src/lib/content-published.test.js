@@ -57,6 +57,8 @@ vi.mock('../config/supabase.js', () => ({
     },
   },
 }));
+const assertBrandAccess = vi.fn(async () => ({ orgId: 'org1' }));
+vi.mock('./access.js', () => ({ assertBrandAccess: (...args) => assertBrandAccess(...args) }));
 vi.mock('./logger.js', () => ({
   logger: { warn: (...args) => events.push(args), error: () => {} },
 }));
@@ -301,6 +303,26 @@ describe('publishDraftForKeyUser', () => {
       await publishDraftForKeyUser({ draftId: 'dr1', url: LIVE, userId: 'u1', orgId: 'org1' }),
     ).toMatchObject({ publishedUrl: LIVE, taskCompleted: false, onBrandDomain: true });
     expect(tables.content_drafts[0]).toMatchObject({ status: 'published', published_url: LIVE });
+  });
+
+  it('leaves a draft of a brand the key’s user wasn’t given alone, as not there', async () => {
+    ofOrg('org1');
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error("You don't have access to this brand"), {
+        status: 403,
+        code: 'no_brand_access',
+      }),
+    );
+    expect(
+      await publishDraftForKeyUser({ draftId: 'dr1', url: LIVE, userId: 'u1', orgId: 'org1' }),
+    ).toBeNull();
+    expect(assertBrandAccess).toHaveBeenLastCalledWith(tables.content_drafts[0].brand_id, 'u1');
+    expect(tables.content_drafts[0].status).not.toBe('published');
+
+    assertBrandAccess.mockRejectedValueOnce(new Error('connection reset'));
+    await expect(
+      publishDraftForKeyUser({ draftId: 'dr1', url: LIVE, userId: 'u1', orgId: 'org1' }),
+    ).rejects.toThrow('connection reset');
   });
 
   it('leaves another organization’s draft, and an archived one, alone', async () => {
