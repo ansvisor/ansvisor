@@ -4,11 +4,11 @@ route: /dashboard/mentions
 keywords: [mentions, sentiment, brand mentions, mention rate, net sentiment, co-mentioned]
 synonyms: [where AI names my brand, tone of AI answers, brand mentions in AI answers, how AI talks about us]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/mentions.mdx]
 ---
 The **Mentions & Sentiment** page, **Mentions** in the sidebar, shows where AI answers name your brand, in what tone, and next to which competitors. It reads the answers your tracking already stores, so opening it or changing a filter never asks an AI model again. It has three tabs: **Overview**, **Mentions** and **Perception**.
@@ -19,7 +19,7 @@ All three tabs share one filter bar, for the brand active in the sidebar. **Date
 
 ## Overview tab
 
-The **Overview** opens with a summary line: net sentiment and its change, the platform behind most of that change, and the competitors AI usually names next to you. Four cards follow: **Total mentions**, **Mention rate**, **Prompts with mentions**, and **Net sentiment** with its positive, neutral and negative split. **Mentions & sentiment over time** draws one point per day; the 24h view has no trend. **By AI platform** compares the platforms and notes when two are 40 or more points apart. **Competitor framing** shows how often AI names each competitor and, under **Also names you**, how many of those answers name you too.
+The **Overview** opens with a summary line: net sentiment and its change, the platform behind most of that change, and the competitors AI usually names next to you. Four cards follow: **Total mentions**, **Mention rate**, **Prompts with mentions**, and **Net sentiment** with its positive, neutral and negative split. **Mentions & sentiment over time** draws one point per day; the 24h view has no trend. **By AI platform** compares the platforms and notes when two platforms' net sentiment is 40 or more points apart. **Competitor framing** shows how often AI names each competitor and, under **Also names you**, how many of those answers name you too.
 
 ## Changes from the previous period
 
@@ -27,7 +27,7 @@ Every change compares the selected period with the period of the same length jus
 
 ## Mentions tab
 
-The **Mentions** tab lists every answer that names your brand, 100 per page. Each row shows the prompt, the platform, the **Mention context** around your brand, the **Sentiment**, the **Position** (#2 of 5 means named second of five brands), the **Co-mentioned** competitors, the topic and the date. The table's own controls filter by **Sentiment** and **Co-mentioned**, **Group by** prompt or platform, and **Sort** by Newest, Oldest, Most co-mentions or Most negative. Click a row to open the full answer in a side panel.
+The **Mentions** tab lists every answer that names your brand, 100 per page. Each row shows the prompt, the platform, the country when the brand tracks more than one, the **Mention context** around your brand, the **Sentiment**, the **Position** (#2 of 5 means named second of five brands), the **Co-mentioned** competitors, the topic and the date. The table's own controls filter by **Sentiment** and **Co-mentioned**, **Group by** prompt or platform, and **Sort** by Newest, Oldest, Most co-mentions or Most negative. Click a row to open the full answer in a side panel.
 
 ## Copy summary and Export CSV
 

@@ -60,6 +60,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import type { ChatPageFilter } from '@/lib/chat/page-context';
 import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
 import {
   generateOpportunitiesOnDemand,
@@ -356,6 +358,7 @@ export default function ContentPage() {
   const { guard, isLocked, openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   const tManagers = useTranslations('managersOnly');
+  const tChat = useTranslations('chatPanel.suggest');
   // The bulk bar's Dismiss and Delete ask first: the upgrade dialog instead.
   const confirmUnlessLocked =
     (action: string) => (open: boolean, details: { cancel: () => void }) => {
@@ -1072,6 +1075,32 @@ export default function ContentPage() {
     setTopicFilter('');
     setSearch('');
   };
+
+  // Chat's side panel sees the page (W1-08): its filters, and the
+  // high-impact opportunity on top of the list.
+  const pageFilters: ChatPageFilter[] = [];
+  if (typeFilter !== 'all') {
+    pageFilters.push({ key: 'type', label: t(`type.${typeFilter}`), value: typeFilter });
+  }
+  if (impactFilter !== 'all') {
+    pageFilters.push({ key: 'impact', label: t(`impact.${impactFilter}`), value: impactFilter });
+  }
+  if (statusFilter !== 'all') {
+    pageFilters.push({ key: 'status', label: t(`status.${statusFilter}`), value: statusFilter });
+  }
+  const topOpportunity = opportunities.find((o) => o.impact === 'high');
+  useChatPageContext(
+    activeBrandId
+      ? {
+          filters: pageFilters,
+          suggestions: [
+            ...(topOpportunity ? [tChat('opportunityStart', { title: topOpportunity.title })] : []),
+            tChat('opportunitiesFirst'),
+            tChat('actions'),
+          ],
+        }
+      : null,
+  );
 
   if (!activeBrandId) {
     return (

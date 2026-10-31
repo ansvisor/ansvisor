@@ -14,9 +14,11 @@ const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 
 let canManageMenus = true;
-vi.mock('@/components/providers/menu-access-provider', () => ({
+vi.mock('@/components/providers/menu-access-provider', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/providers/menu-access-provider')>()),
   useCanManageMenus: () => canManageMenus,
 }));
+let chatOn = true;
 
 const actions = vi.hoisted(() => ({
   getMenuAccessSettings: vi.fn(),
@@ -25,6 +27,7 @@ const actions = vi.hoisted(() => ({
 vi.mock('@/lib/actions/menu-access', () => actions);
 
 const { MenuAccessSection, hiddenForSet } = await import('./menu-access-section');
+const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -35,6 +38,7 @@ let root: Root;
 beforeEach(() => {
   vi.clearAllMocks();
   canManageMenus = true;
+  chatOn = true;
   actions.getMenuAccessSettings.mockResolvedValue({
     roles: { manager: [], analyst: ['content', 'audit'], agency_partner: [] },
     members: [],
@@ -55,7 +59,9 @@ async function render() {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <MenuAccessSection />
+        <ChatAgenticProvider enabled={chatOn}>
+          <MenuAccessSection />
+        </ChatAgenticProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -70,10 +76,39 @@ describe('MenuAccessSection', () => {
     expect(box('Analyst sees Content')?.getAttribute('aria-checked')).toBe('false');
     expect(box('Analyst sees Audit')?.getAttribute('aria-checked')).toBe('false');
     expect(box('Analyst sees Brand Visibility')?.getAttribute('aria-checked')).toBe('true');
+    expect(box('Analyst sees Competitors')?.getAttribute('aria-checked')).toBe('true');
     expect(box('Manager sees Content')?.getAttribute('aria-checked')).toBe('true');
     expect(container.textContent).toContain('Product Visibility');
     expect(container.textContent).toContain('Execution');
     expect(container.textContent).toContain('Analytics');
+  });
+
+  it('lists Chat above the headings, as the menu does, and one Other group', async () => {
+    await render();
+    const text = container.textContent ?? '';
+    expect(text.indexOf('Chat')).toBeGreaterThan(-1);
+    expect(text.indexOf('Chat')).toBeLessThan(text.indexOf('Execution'));
+    expect(text.match(/Other/g)).toHaveLength(1);
+  });
+
+  it('lists Agent Center right under Chat, every role seeing it until it is hidden', async () => {
+    await render();
+    const text = container.textContent ?? '';
+    expect(text.indexOf('Agent Center')).toBeGreaterThan(text.indexOf('Chat'));
+    expect(text.indexOf('Agent Center')).toBeLessThan(text.indexOf('Execution'));
+    for (const role of ['Manager', 'Analyst', 'Agency Partner']) {
+      expect(box(`${role} sees Agent Center`)?.getAttribute('aria-checked')).toBe('true');
+    }
+    await act(async () => box('Analyst sees Agent Center')!.click());
+    expect(actions.setRoleMenu).toHaveBeenCalledWith('analyst', ['agents', 'content', 'audit']);
+  });
+
+  it('leaves Agent Center out while the new Chat is off, Chat staying', async () => {
+    chatOn = false;
+    await render();
+    expect(container.textContent).not.toContain('Agent Center');
+    expect(box('Analyst sees Agent Center')).toBeNull();
+    expect(box('Analyst sees Chat')).not.toBeNull();
   });
 
   it('keeps Action Center and the admins’ column on', async () => {
@@ -160,6 +195,8 @@ describe('MenuAccessSection', () => {
 describe('hiddenForSet', () => {
   it('hides what a ready-made set leaves out, never Action Center', () => {
     expect(hiddenForSet('brand')).toEqual(['content', 'audit', 'prompts', 'shopping', 'traffic']);
+    // The sets that don't compare the brand with others leave Competitors off.
+    expect(hiddenForSet('content')).toContain('competitors');
     expect(hiddenForSet('all')).toEqual([]);
   });
 });

@@ -16,6 +16,7 @@ const actions = vi.hoisted(() => ({ setMyWorkAreas: vi.fn() }));
 vi.mock('@/lib/actions/menu-access', () => actions);
 
 const { WorkAreasStep } = await import('./work-areas-step');
+const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
 const { WelcomeView } = await import('@/app/[locale]/(onboarding)/dashboard/welcome/_welcome-view');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -59,9 +60,26 @@ describe('WorkAreasStep', () => {
     await render(<WorkAreasStep title="What do you work on?" lede="Pick." onDone={onDone} />);
     expect(container.querySelectorAll('button[aria-pressed]')).toHaveLength(9);
     expect(button('Founders & leaders').textContent).toContain(
-      'Action Center · Chat · Brand Visibility · Mentions · AI Referral Traffic · Reports',
+      'Action Center · Chat · Brand Visibility · Competitors · Mentions · AI Referral Traffic · Reports',
     );
-    expect(container.textContent).toContain('11 of 11 sections');
+    expect(container.textContent).toContain('12 of 12 sections');
+    // No Agent Center while the new Chat is off (and outside the dashboard).
+    expect(container.textContent).not.toContain('Agent Center');
+  });
+
+  it('shows Agent Center right after Chat with the new Chat on', async () => {
+    await render(
+      <ChatAgenticProvider enabled>
+        <WorkAreasStep title="t" lede="l" onDone={onDone} />
+      </ChatAgenticProvider>,
+    );
+    expect(button('Founders & leaders').textContent).toContain(
+      'Action Center · Chat · Agent Center · Brand Visibility',
+    );
+    expect(container.textContent).toContain('13 of 13 sections');
+    act(() => button('Developers').click());
+    expect(menu()).not.toContain('Agent Center');
+    expect(container.textContent).toContain('6 of 13 sections');
   });
 
   it('narrows the menu as areas are picked, and saves them on Continue', async () => {
@@ -69,7 +87,9 @@ describe('WorkAreasStep', () => {
     act(() => button('Brand & PR').click());
     act(() => button('Developers').click());
     expect(button('Brand & PR').getAttribute('aria-pressed')).toBe('true');
-    expect(container.textContent).toContain('9 of 11 sections');
+    expect(container.textContent).toContain('10 of 12 sections');
+    // Brand & PR keeps Competitors.
+    expect(menu()).toContain('Competitors');
     expect(menu()).not.toContain('Content');
     expect(menu()).not.toContain('Product Visibility');
 
@@ -99,7 +119,7 @@ describe('WorkAreasStep', () => {
     await render(
       <WorkAreasStep title="t" lede="l" hiddenByAdmin={['content', 'audit']} onDone={onDone} />,
     );
-    expect(container.textContent).toContain('9 of 11 sections');
+    expect(container.textContent).toContain('10 of 12 sections');
     expect(container.textContent).toContain('2 hidden by your admin');
   });
 });

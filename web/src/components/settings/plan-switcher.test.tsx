@@ -15,6 +15,12 @@ vi.mock('@/lib/actions/cancel-feedback', () => ({
 }));
 const refresh = vi.hoisted(() => vi.fn());
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
+const refreshAiUsage = vi.hoisted(() => vi.fn());
+// The workspace's AI usage: unread unless a test turns the new Chat on (chatMetered).
+const aiUsage = vi.hoisted(() => ({ usage: null as { chatMetered: boolean } | null }));
+vi.mock('@/components/providers/ai-usage-provider', () => ({
+  useAiUsage: () => ({ usage: aiUsage.usage, refresh: refreshAiUsage }),
+}));
 
 (
   globalThis as typeof globalThis & {
@@ -118,6 +124,7 @@ const cards = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  aiUsage.usage = null;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -151,7 +158,7 @@ describe('the plan cards', () => {
         '500 site audits a month',
         '5x AI usage',
         'Multi-region tracking',
-        'White-label reports & Looker Studio',
+        'Looker Studio',
       ],
     });
     expect(container.textContent).not.toContain('8 answer engines');
@@ -165,6 +172,27 @@ describe('the plan cards', () => {
     expect(container.textContent).toContain(
       'For small teams getting started with AI visibility monitoring and optimization.',
     );
+  });
+
+  it('says Chat and agents draw on AI usage once the new Chat is on, own keys on Enterprise only', async () => {
+    const hint = (text: string) =>
+      [...container.querySelectorAll('li span')]
+        .find((el) => el.textContent === text)
+        ?.getAttribute('title');
+    await render('growth');
+    expect(hint('5x AI usage')).toContain('Agent Chat runs on your own AI key.');
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    aiUsage.usage = { chatMetered: true };
+    await render('growth');
+    expect(hint('5x AI usage')).toBe(
+      "A monthly allowance for Ansvisor's AI features: Chat and agents, Improve suggestions, the Content Editor's AI and the Action Center's task writing. Your own AI key comes with Enterprise only. The free trial comes with a smaller allowance.",
+    );
+    expect(hint('Custom AI usage, from 10x')).toContain(
+      'On Enterprise, Chat can also run on your own AI key.',
+    );
+    expect(hint('Custom AI usage, from 10x')).not.toContain('Agent Chat');
   });
 
   it('says what a custom plan adds, with a way to ask', async () => {
@@ -220,6 +248,24 @@ describe('the billing period', () => {
     const growth = container.querySelectorAll('[data-slot="card"]')[1];
     expect(growth.querySelector('.line-through')?.textContent).toBe('Regular price $2,988');
     expect(growth.textContent).toContain('$2,390/yr');
+  });
+
+  it('marks the period shown, filled dark, and only that one', async () => {
+    await render('starter', { status: 'trialing' });
+    const pressed = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')]
+        .filter((b) => b.getAttribute('aria-pressed') === 'true')
+        .map((b) => [b.textContent, b.classList.contains('bg-primary')]);
+    const filled = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')].filter((b) =>
+        b.classList.contains('bg-primary'),
+      );
+
+    expect(pressed()).toEqual([['Monthly', true]]);
+    expect(filled()).toHaveLength(1);
+    await click('AnnualSave 20%');
+    expect(pressed()).toEqual([['AnnualSave 20%', true]]);
+    expect(filled()).toHaveLength(1);
   });
 
   it('moves a paid plan to annual billing from its own card', async () => {
@@ -301,6 +347,8 @@ describe('buying during the free trial', () => {
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'active' }));
     // The layout reads the plan again: a read-only workspace opens up.
     expect(refresh).toHaveBeenCalledTimes(1);
+    // The header meter reads the AI usage again: the paid period starts at 0.
+    expect(refreshAiUsage).toHaveBeenCalledTimes(1);
   });
 
   it('buys a year without a code', async () => {
@@ -332,6 +380,7 @@ describe('buying during the free trial', () => {
       action: { label: 'Update card', onClick: expect.any(Function) },
     });
     expect(onUpdate).not.toHaveBeenCalled();
+    expect(refreshAiUsage).not.toHaveBeenCalled();
     // The dialog stays open to try again.
     expect(document.body.textContent).toContain('Buy Starter now?');
   });
@@ -427,7 +476,8 @@ describe('choosing a plan once the old one has ended', () => {
     expect(toggle().textContent).toBe('Show plan details');
     expect(toggle().getAttribute('aria-expanded')).toBe('false');
     expect(details().className).toContain('invisible');
-    expect(details().textContent).toContain('White-label reports & Looker Studio');
+    expect(details().textContent).toContain('Looker Studio');
+    expect(details().textContent).not.toMatch(/white.label/i);
 
     await act(async () => toggle().click());
     expect(toggle().textContent).toBe('Hide plan details');
@@ -501,6 +551,38 @@ describe('choosing a plan once the old one has ended', () => {
       returnTo: 'billing',
       mode: 'trial',
     });
+  });
+
+  it('marks the chosen way to start, filled dark, and only that one', async () => {
+    await render('starter', { status: 'incomplete', trialOffered: true });
+    const choices = () => [...container.querySelectorAll<HTMLButtonElement>('[data-choice]')];
+    const chosen = () =>
+      choices()
+        .filter((b) => b.getAttribute('aria-pressed') === 'true')
+        .map((b) => b.dataset.choice);
+    const filled = () =>
+      choices()
+        .filter((b) => b.classList.contains('bg-primary'))
+        .map((b) => b.dataset.choice);
+
+    // Monthly at first, where the first-month offer is.
+    expect(choices().map((b) => b.dataset.choice)).toEqual(['trial', 'month', 'year']);
+    expect(chosen()).toEqual(['month']);
+    expect(filled()).toEqual(['month']);
+    expect(container.querySelector('[data-choice="month"]')!.className).toContain(
+      'text-primary-foreground',
+    );
+
+    for (const choice of ['trial', 'year'] as const) {
+      await choose(choice);
+      expect(chosen()).toEqual([choice]);
+      expect(filled()).toEqual([choice]);
+      expect(
+        choices()
+          .filter((b) => b.dataset.choice !== choice)
+          .every((b) => b.className.includes('text-muted-foreground')),
+      ).toBe(true);
+    }
   });
 
   it('says so when Stripe turns the code down at Checkout, and shows the plain prices', async () => {

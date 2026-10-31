@@ -8,8 +8,10 @@ type Translator = (key: string) => string;
  * mobile menus from silently falling out of sync. */
 export const dashboardNavLabelKeys: Record<string, string> = {
   Chat: 'chat',
+  'Agent Center': 'agentCenter',
   'Action Center': 'actionCenter',
   'Answer Engine Insights': 'insights',
+  Competitors: 'competitors',
   'AI Referral Traffic': 'traffic',
   Prompts: 'prompts',
   'Tracked Prompts': 'trackedPrompts',
@@ -78,12 +80,16 @@ export function childLinkHref(child: NavChild, pathname: string): string {
 /** Brand preferences hide a navigation item entirely; they are intentionally
  * separate from plan gates, which render a visible but disabled item. So do
  * the sections the viewer's menu leaves out (menu access): off the menu, the
- * page still opens from a link. */
+ * page still opens from a link. And so does the new Chat off for the
+ * workspace (CHAT_AGENTIC) an item only it has (Agent Center), whose pages
+ * aren't there then. */
 export function shouldShowDashboardNavItem(
   item: NavItem,
   brandPrefs: Record<BrandPrefKey, boolean>,
   hiddenSections: ReadonlySet<string> = new Set(),
+  chatAgentic = false,
 ): boolean {
+  if (item.requiresChatAgentic && !chatAgentic) return false;
   const section = menuSectionOf(item.href);
   if (section && hiddenSections.has(section)) return false;
   return !item.requiresBrandPref || brandPrefs[item.requiresBrandPref];
@@ -91,6 +97,18 @@ export function shouldShowDashboardNavItem(
 
 /** Chat's menu item: its route stays /dashboard/agent. */
 export const CHAT_HREF = '/dashboard/agent';
+
+/** Chat's address with the new Chat on for the workspace (CHAT_AGENTIC, CHAT-01 item 1). */
+export const CHAT_AGENTIC_HREF = '/dashboard/chat';
+
+/**
+ * Where a menu item links. With the new Chat on, Chat opens /dashboard/chat
+ * (its old address would only redirect there) and is the current page on
+ * every Chat route; the item keeps CHAT_HREF for its badge and menu section.
+ */
+export function navItemHref(item: Pick<NavItem, 'href'>, chatAgentic: boolean): string {
+  return chatAgentic && item.href === CHAT_HREF ? CHAT_AGENTIC_HREF : item.href;
+}
 
 /**
  * The badge beside a menu item. Chat has its own: while the demo brand is

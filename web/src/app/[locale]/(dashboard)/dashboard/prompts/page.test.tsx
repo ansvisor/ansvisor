@@ -5,12 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import type { Prompt } from '@/types';
+import type { FirstRun } from '@/hooks/use-first-run';
 
 /**
  * Tracked Prompts on a read-only workspace (plan not active): Add prompt,
  * the row menu, the bulk bar and Analyze open the upgrade dialog, labelled
  * with what was clicked, and write nothing; on an active plan they work as
- * before. The volumes the server refuses it don't read as an outage.
+ * before. The volumes the server refuses it don't read as an outage. The
+ * Location filter stays off Query Fan-out, which doesn't use it.
  */
 
 const actions = vi.hoisted(() => ({
@@ -33,10 +35,21 @@ const volumes = vi.hoisted(() => ({
   refreshVolumes: vi.fn(),
 }));
 vi.mock('@/lib/actions/volumes', () => volumes);
+// The brand's locations, as the Location filter reads them: none unless a test says so.
+const filterOptions = vi.hoisted(() => ({ regions: [] as string[] }));
 vi.mock('@/lib/actions/tracking', () => ({
-  getBrandFilterOptions: vi.fn(async () => ({ regions: [] })),
+  getBrandFilterOptions: vi.fn(async () => ({ regions: filterOptions.regions })),
 }));
-vi.mock('@/lib/actions/topic', () => ({ getTopics: vi.fn(async () => []) }));
+// The brand's topics, as the Add Prompt dialog reads them: one unless a test says none.
+const topicActions = vi.hoisted(() => ({ getTopics: vi.fn() }));
+vi.mock('@/lib/actions/topic', () => topicActions);
+const COFFEE_TOPIC = {
+  id: 't1',
+  brandId: 'b1',
+  name: 'Coffee',
+  isActive: true,
+  createdAt: '2026-09-01T00:00:00.000Z',
+};
 const contentUsage = vi.hoisted(() => ({ value: null as object | null }));
 const getOpenSuggestionForPrompt = vi.hoisted(() =>
   vi.fn(async (): Promise<string | null> => null),
@@ -58,6 +71,18 @@ vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
+// The brand's first run: null unless a test says it goes on.
+const firstRun = vi.hoisted(() => ({ run: null as FirstRun | null }));
+vi.mock('@/hooks/use-first-run', () => ({ useFirstRun: () => firstRun.run }));
+// The Topics tab has tests of its own; here, what the page asks of it.
+const topicsTab = vi.hoisted(() => ({ props: [] as Record<string, unknown>[] }));
+vi.mock('./_topics-tab', () => ({
+  TopicsTab: (props: Record<string, unknown>) => {
+    topicsTab.props.push(props);
+    return <div data-testid="topics-tab" />;
+  },
+}));
+vi.mock('./_fanout-tab', () => ({ QueryFanoutTab: () => <div data-testid="fanout-tab" /> }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (select: (state: unknown) => unknown) =>
     select({ activeBrandId: 'b1', brands: [{ id: 'b1', slug: 'acme', name: 'Acme' }] }),
@@ -133,6 +158,8 @@ const dialog = () => document.querySelector('[role="dialog"]');
 beforeEach(() => {
   vi.clearAllMocks();
   nav.pathname = '/dashboard/prompts/tracked';
+  filterOptions.regions = [];
+  firstRun.run = null;
   contentUsage.value = null;
   getOpenSuggestionForPrompt.mockResolvedValue(null);
   vi.stubGlobal(
@@ -147,6 +174,7 @@ beforeEach(() => {
     positions: {},
   });
   actions.setPromptsActive.mockResolvedValue({ updated: 1 });
+  topicActions.getTopics.mockResolvedValue([COFFEE_TOPIC]);
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -156,6 +184,25 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+});
+
+describe("Tracked Prompts during the brand's first run", () => {
+  it('says the first answers are arriving above the table, and nothing once it is done', async () => {
+    firstRun.run = {
+      brandId: 'b1',
+      queued: false,
+      progress: { current: 18, total: 40 },
+      left: { minutes: 6 },
+    };
+    await render(false);
+    expect(container.textContent).toContain(
+      'Your first answers are arriving (18 of 40) · ~6 min. This fills in when tracking finishes.',
+    );
+
+    firstRun.run = null;
+    await render(false);
+    expect(container.textContent).not.toContain('Your first answers are arriving');
+  });
 });
 
 describe('Tracked Prompts on a read-only workspace', () => {
@@ -202,6 +249,98 @@ describe('Tracked Prompts on a read-only workspace', () => {
     await act(async () => button('Pause')!.click());
     expect(actions.setPromptsActive).toHaveBeenCalledWith(['p1'], false);
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Location filter', () => {
+  const locationFilter = () =>
+    [...container.querySelectorAll('label')].find((l) => l.textContent === 'Location');
+
+  it('shows on Tracked Prompts for a brand tracked in more than one location', async () => {
+    filterOptions.regions = ['US', 'GB'];
+    await render(false);
+    expect(locationFilter()).toBeDefined();
+  });
+
+  it("is left off Query Fan-out, which doesn't use it", async () => {
+    filterOptions.regions = ['US', 'GB'];
+    nav.pathname = '/dashboard/prompts/fan-outs';
+    await render(false);
+    expect(container.querySelector('[data-testid="fanout-tab"]')).not.toBeNull();
+    expect(locationFilter()).toBeUndefined();
+  });
+});
+
+describe('Add Prompt on a brand without topics', () => {
+  // A button, not a link: the page reads its tab from the route only when it opens.
+  const addTopic = () =>
+    [...(dialog()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Add a topic');
+  const typePrompt = async (text: string) => {
+    const input = dialog()!.querySelector<HTMLInputElement>('input')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(input, text);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+
+  it('asks for a topic first instead of the form, with a way to the Topics tab', async () => {
+    topicActions.getTopics.mockResolvedValue([]);
+    await render(false);
+    await act(async () => button('Add prompt')!.click());
+    expect(dialog()?.textContent).toContain('Add a topic first');
+    expect(addTopic()).toBeDefined();
+    expect(button('Save & close')).toBeUndefined();
+    expect(actions.importPrompts).not.toHaveBeenCalled();
+  });
+
+  it('switches to the Topics tab in place with Add Topic asked for, closing the dialog', async () => {
+    topicActions.getTopics.mockResolvedValue([]);
+    topicsTab.props = [];
+    await render(false);
+    await act(async () => button('Add prompt')!.click());
+    await act(async () => addTopic()!.click());
+    await act(async () => {});
+    expect(dialog()).toBeNull();
+    expect(window.location.pathname).toBe('/dashboard/prompts/topics');
+    expect(document.querySelector('[data-testid="topics-tab"]')).not.toBeNull();
+    expect(topicsTab.props.at(-1)).toMatchObject({ openAddTopic: true });
+
+    // Once the tab has opened it, the request is handed back.
+    await act(async () => (topicsTab.props.at(-1)!.onAddTopicOpened as () => void)());
+    expect(topicsTab.props.at(-1)).toMatchObject({ openAddTopic: false });
+  });
+
+  it('shows the form as before when the brand has a topic', async () => {
+    await render(false);
+    await act(async () => button('Add prompt')!.click());
+    expect(dialog()?.textContent).not.toContain('Add a topic first');
+    expect(button('Save & close')).toBeDefined();
+  });
+
+  it('reads the topics again on every open, so one added since counts', async () => {
+    topicActions.getTopics.mockResolvedValueOnce([]);
+    await render(false);
+    await act(async () => button('Add prompt')!.click());
+    expect(dialog()?.textContent).toContain('Add a topic first');
+    await act(async () => button('Cancel')!.click());
+    await act(async () => button('Add prompt')!.click());
+    expect(dialog()?.textContent).not.toContain('Add a topic first');
+    expect(topicActions.getTopics).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks for a topic first when saving finds the brand has none left', async () => {
+    actions.importPrompts.mockResolvedValue({
+      error: 'Add a topic first: prompts are grouped under topics.',
+      code: 'no_topics',
+    });
+    await render(false);
+    await act(async () => button('Add prompt')!.click());
+    await typePrompt('Best espresso beans?');
+    await act(async () => button('Save & close')!.click());
+    expect(actions.importPrompts).toHaveBeenCalled();
+    expect(dialog()?.textContent).toContain('Add a topic first');
+    expect(addTopic()).toBeDefined();
   });
 });
 
@@ -445,5 +584,40 @@ describe('the volume quota without an active plan', () => {
     expect(container.textContent).not.toContain('No active plan');
     expect(reds().length).toBeGreaterThan(0);
     expect(button('Analyze Volumes')!.disabled).toBe(true);
+  });
+});
+
+describe('the Prompt Volumes chart', () => {
+  it('says the rate the volumes were estimated with, as the AI Adoption Rate card does', async () => {
+    nav.pathname = '/dashboard/prompts/insights';
+    actions.getPromptsPageData.mockResolvedValue({
+      quota: { used: 1, limit: 10, remaining: 9 },
+      promptSets: [{ prompts: [prompt] }],
+      visibility: {},
+      positions: {},
+      volumes: [
+        {
+          id: 'v1',
+          promptId: 'p1',
+          promptText: prompt.text,
+          promptCategory: 'Coffee',
+          intent: 'commercial',
+          keywords: ['coffee subscription'],
+          googleVolumes: { 'coffee subscription': 1000 },
+          totalGoogleVolume: 1000,
+          aiVolumeMultiplier: 0.4,
+          estAiVolume: 400,
+          competitionIndex: null,
+          competition: null,
+          fetchedAt: '2026-10-20T00:00:00.000Z',
+        },
+      ],
+    });
+    await render(false);
+    // The row's rate, not the default: the card and the caption say the same
+    // one, and the caption claims no other share of Google searches.
+    expect(container.textContent).toContain('AI Adoption Rate40%');
+    expect(container.textContent).toContain('Google volume × the 40% AI adoption rate');
+    expect(container.textContent).not.toMatch(/~\d+% of Google searches/);
   });
 });

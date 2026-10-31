@@ -5,17 +5,17 @@ keywords: [send to cms, webflow, wordpress, framer, draft post, last send]
 synonyms: [push to cms, publish to blog, send to website, export to cms]
 plan: all
 updated: 2026-10-29
-last_checked: 2026-10-29
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/send-to-cms.mdx, docs/guides/content-editor.mdx]
 ---
 **Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site or your Wix site's Blog as a draft post, or to your workflow tool, which creates the post in your CMS. Ansvisor never publishes on its own: you publish in your CMS. Only admins and managers can send pages.
 
 ## Send one page
 
-In the editor, click the paper-plane icon in the header. **Before you publish** opens first when it has something to ask about, such as a missing author, open placeholders, missing alt text or broken links. Check it and click **Continue to send**. From the Library, open a row's **…** menu and pick **Send to CMS**.
+In the editor, click the paper-plane icon in the header. With Quality on, **Before you publish** opens first when it has something to ask about, such as a missing author, open placeholders, missing alt text or broken links. Check it and click **Continue to send**. From the Library, open a row's **…** menu and pick **Send to CMS**.
 
 The dialog fills the **Slug**, **Meta title** and **Meta description** from the page; change them before sending if you like. What you send is kept on the draft, so the next send starts from it.
 

@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { dbClient } from '@/lib/supabase/scoped';
 import { API_BASE_URL } from '@/config/api';
 import { GOOGLE_PAGES_MIN_IMPRESSIONS, googlePagesWindow } from '@/lib/traffic-google-pages';
 import { TRAFFIC_PAGE_SIZE, countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
@@ -9,6 +10,7 @@ import { isHourlyWindow, listUtcHours, utcHourKey } from '@/lib/traffic-buckets'
 import { CONVERSIONS_FALLBACK_DAYS, widensToLast30Days } from '@/lib/traffic-conversions';
 import { getSuggestionSourceStates, type SourceState } from '@/lib/actions/integrations';
 import { isPlatformSurface, type PlatformSurface } from '@/lib/traffic-platforms';
+import { NO_TOPICS } from '@/lib/topics-required';
 
 export interface TrafficDateWindow {
   dateFrom?: string;
@@ -260,7 +262,7 @@ export async function getTrafficSummary(
   /** The page shows the top 10 landing pages; an export takes them all. */
   opts?: { topPages?: number },
 ): Promise<TrafficSummary> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { from, to, prevFrom, prevTo } = resolveTrafficWindow(window);
   const hasPrev = Boolean(prevFrom && prevTo);
 
@@ -366,7 +368,7 @@ export async function getTrafficTrend(
   brandId: string,
   window?: TrafficDateWindow,
 ): Promise<TrafficTrendPoint[]> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { from, to } = resolveTrafficWindow(window);
   // A day or less reads hour by hour (AT-017); longer windows by day.
   const hourly = Boolean(from && to && isHourlyWindow(from, to));
@@ -825,13 +827,14 @@ export interface PagePromptSuggestions {
  * "Add prompts" on the Pages section (AT-006 part B2): prompts whose best
  * answer is this page, written from what the page says, its figures over the
  * page's range and the brand's Search Console queries that share its words.
- * Nothing is stored until the person tracks some.
+ * Nothing is stored until the person tracks some. A brand with no topic yet
+ * gets `no_topics` before anything is written: prompts go under topics.
  */
 export async function suggestPagePrompts(
   brandId: string,
   window: TrafficDateWindow | undefined,
   page: string,
-): Promise<PagePromptSuggestions | { error: string }> {
+): Promise<PagePromptSuggestions | { error: string; code?: typeof NO_TOPICS }> {
   const supabase = await createClient();
   const {
     data: { session },
@@ -854,7 +857,8 @@ export async function suggestPagePrompts(
   // Returned, not thrown: a thrown error's message is masked in production.
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    return { error: body.message || body.error || `Server error: ${res.status}` };
+    const error: string = body.message || body.error || `Server error: ${res.status}`;
+    return body.code === NO_TOPICS ? { error, code: NO_TOPICS } : { error };
   }
   return res.json();
 }
@@ -1028,7 +1032,7 @@ export async function getTrafficGoogleTotals(
     gscLatestDays: number | null;
   },
 ): Promise<TrafficGoogleTotals> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   // Both sources store whole days, so the range goes as its first and last.
   const since = utcDay(window.dateFrom) ?? null;
   const until = utcDay(window.dateTo) ?? new Date().toISOString().slice(0, 10);

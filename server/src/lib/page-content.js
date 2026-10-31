@@ -11,7 +11,9 @@
  * is taken out: blocks named for it (author, share, related…), blocks that
  * are mostly links (breadcrumbs, a table of contents, icon rows, post
  * lists), bylines ("8 min read"), and avatars, logos, icons and cover
- * images.
+ * images. A page builder's copy of a block for another screen size (Framer
+ * prints one per breakpoint and its CSS shows one) is taken out first, and
+ * any block saying just what the one before it says goes last.
  */
 
 import * as cheerio from 'cheerio';
@@ -27,6 +29,19 @@ const MAX_JSON_LD_LENGTH = 50_000;
 /** Where a page's own content usually is, the most telling first. */
 const MAIN_SELECTORS = ['main', 'article', '[role="main"]', '#content', '#main'];
 
+/**
+ * A block named #main or #content holding this much of the page's text is
+ * an app's root (Framer's #main is the whole site), no sign of the content.
+ */
+const APP_ROOT_SHARE = 0.95;
+
+/**
+ * The screen width a page is read at: a page builder (Framer) puts a copy of
+ * a block in the page for each breakpoint and its CSS shows one, so the
+ * copies hidden on this screen are taken out.
+ */
+const DESKTOP_WIDTH = 1440;
+
 /** The site's frame, and what can't be content. */
 const FRAME =
   'script, style, noscript, template, iframe, object, embed, form, button, input, select, textarea, svg, canvas, nav, header, footer, aside, [role="navigation"], [role="banner"], [role="contentinfo"], [aria-hidden="true"], .w-condition-invisible';
@@ -38,6 +53,107 @@ const FRAME =
  */
 const HIDDEN =
   '[hidden]:not([hidden="until-found"]), [style*="display:none"], [style*="display: none"]';
+
+/**
+ * All a page hides from its reader, for a reader that keeps nothing hidden
+ * (Chat's fetch_page, `dropHidden`): what the browser hides, what only a
+ * screen reader reads, an FAQ's collapsed answers too.
+ */
+const ALL_HIDDEN =
+  '[hidden], [aria-hidden="true"], .sr-only, .visually-hidden, .screen-reader-text';
+/**
+ * Classes that hide a block (Tailwind's, Bootstrap's): unless a class on
+ * it shows it again on a wider screen (`hidden md:block`, `d-none
+ * d-lg-block`, `invisible md:visible`), which a desktop reader sees.
+ */
+const HIDDEN_CLASSES = '.hidden, .d-none, .invisible';
+const SHOWN_CLASS =
+  /^(?:(?:sm|md|lg|xl|2xl):(?:block|flex|grid|inline|inline-block|inline-flex|inline-grid|table|contents|visible)|d-(?:sm|md|lg|xl|xxl)-(?:block|flex|grid|inline|inline-block|inline-flex|table)|visible)$/;
+/**
+ * Styles that hide text from a reader: gone, see-through, zero-sized,
+ * off-screen or clipped. A property's own name only: `margin-left`,
+ * `background-clip: text` (a gradient heading) show what they style.
+ */
+const HIDDEN_STYLE =
+  /display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(?:\.0+)?\s*(?:;|!|$)|font-size\s*:\s*0(?:\.0+)?(?:px|em|rem|%|pt)?\s*(?:;|!|$)|(?<![\w-])(?:left|top|text-indent)\s*:\s*-\d{3,}|(?<![\w-])clip\s*:\s*rect/i;
+
+/** Whether a class hides the block for every screen: none of its others shows it again. */
+const hiddenByClass = ($, el) =>
+  !String($(el).attr('class') ?? '')
+    .split(/\s+/)
+    .some((name) => SHOWN_CLASS.test(name));
+
+/** The blocks a text reads apart: a space after each, so their words don't run together. */
+const TEXT_BLOCKS = new Set([
+  'p',
+  'li',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'div',
+  'section',
+  'article',
+  'blockquote',
+  'pre',
+  'td',
+  'th',
+  'dt',
+  'dd',
+  'br',
+  'figcaption',
+  'tr',
+  'ul',
+  'ol',
+  'table',
+]);
+
+const BLOCK_END = Symbol('block end');
+
+/** Elements whose text is code, not words a reader sees: never read as text. */
+const NOT_WORDS = new Set(['script', 'style']);
+
+/**
+ * An element's words, each block apart, in one walk (no recursion: a deep
+ * page is fine). A script's or a style's code isn't words.
+ */
+export function plainTextOf(root) {
+  const parts = [];
+  const stack = [root];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (node === BLOCK_END) {
+      parts.push(' ');
+    } else if (node.type === 'text') {
+      parts.push(node.data);
+    } else if (isElement(node) && NOT_WORDS.has(node.name)) {
+      // Its code, skipped.
+    } else if (node.children) {
+      if (isElement(node) && TEXT_BLOCKS.has(node.name)) stack.push(BLOCK_END);
+      for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
+    }
+  }
+  return clean(parts.join(''));
+}
+
+/**
+ * The blocks under `root` that hide their words from a reader (ALL_HIDDEN,
+ * HIDDEN_CLASSES, HIDDEN_STYLE): what `dropHidden` removes, and what a
+ * reader for a model checks apart (page-open.js).
+ */
+export function hiddenBlocksIn($, root) {
+  return [
+    ...findIn($, root, ALL_HIDDEN).toArray(),
+    ...findIn($, root, HIDDEN_CLASSES)
+      .toArray()
+      .filter((el) => hiddenByClass($, el)),
+    ...findIn($, root, '[style]')
+      .toArray()
+      .filter((el) => HIDDEN_STYLE.test($(el).attr('style') ?? '')),
+  ];
+}
 
 /**
  * A question an accordion's hidden answer follows: an FAQ beside the text
@@ -168,9 +284,12 @@ function nameWords(className, id) {
     .filter(Boolean);
 }
 
-/** A block's class and id, as lower-case words. */
+/** A block's class, id and Framer layer name ("Avatar with text"), as lower-case words. */
 function wordsOf($el) {
-  return nameWords($el.attr('class'), $el.attr('id'));
+  return nameWords(
+    `${$el.attr('class') ?? ''} ${$el.attr('data-framer-name') ?? ''}`,
+    $el.attr('id'),
+  );
 }
 
 /** An element's class and id, as lower-case words, from its attributes. */
@@ -351,6 +470,7 @@ function blockReader() {
         links: 0,
         linkText: 0,
         inPage: 0,
+        pictures: node.name === 'img' ? 1 : 0,
         hrefs: new Set(),
       };
       for (const child of children) {
@@ -370,6 +490,7 @@ function blockReader() {
         block.links += sub.links;
         block.linkText += sub.linkText;
         block.inPage += sub.inPage;
+        block.pictures += sub.pictures;
         for (const href of sub.hrefs) {
           if (block.hrefs.size >= MIN_LIST_TARGETS) break;
           block.hrefs.add(href);
@@ -484,6 +605,156 @@ function commonAncestor($, a, b) {
   return el;
 }
 
+/**
+ * Whether a media query holds on a DESKTOP_WIDTH screen: one of its
+ * comma-separated queries does, each part a screen type or a min/max width.
+ * A part it can't read ("print", an orientation) holds nowhere.
+ */
+export function onDesktop(query) {
+  return query.split(',').some((alternative) =>
+    alternative
+      .toLowerCase()
+      .split(/\band\b/)
+      .map((part) => part.trim())
+      .every((part) => {
+        if (/^(?:only\s+)?(?:screen|all)$/.test(part)) return true;
+        const width = /^\(\s*(min|max)-width\s*:\s*(\d+(?:\.\d+)?)(px|em|rem)\s*\)$/.exec(part);
+        if (!width) return false;
+        const px = Number(width[2]) * (width[3] === 'px' ? 1 : 16);
+        return width[1] === 'min' ? DESKTOP_WIDTH >= px : DESKTOP_WIDTH <= px;
+      }),
+  );
+}
+
+/**
+ * The classes a page's own CSS hides on a desktop screen: rules of only
+ * class selectors and display:none, inside a media query that holds there.
+ * Read in one pass however the CSS is written.
+ */
+export function classesHiddenOnDesktop(css) {
+  const hidden = new Set();
+  for (let at = css.indexOf('@media'); at !== -1; ) {
+    const open = css.indexOf('{', at);
+    if (open === -1) break;
+    let depth = 1;
+    let end = open + 1;
+    for (; end < css.length && depth > 0; end += 1) {
+      if (css[end] === '{') depth += 1;
+      else if (css[end] === '}') depth -= 1;
+    }
+    if (onDesktop(css.slice(at + '@media'.length, open))) {
+      for (const rule of css.slice(open + 1, end - 1).split('}')) {
+        const brace = rule.indexOf('{');
+        if (brace === -1) continue;
+        const selectors = rule
+          .slice(0, brace)
+          .split(',')
+          .map((selector) => selector.trim());
+        const declaration = rule
+          .slice(brace + 1)
+          .replace(/\s+/g, '')
+          .replace(/;$/, '')
+          .toLowerCase();
+        if (
+          (declaration === 'display:none' || declaration === 'display:none!important') &&
+          selectors.every((selector) => /^\.[a-z_-][\w-]*$/i.test(selector))
+        ) {
+          for (const selector of selectors) hidden.add(selector.slice(1));
+        }
+      }
+    }
+    at = css.indexOf('@media', end);
+  }
+  return hidden;
+}
+
+/**
+ * What a block says, its words and pictures, for telling a copy: null when
+ * it says nothing (a spacer). Its words are read only when it has some.
+ */
+function signatureOf($, el, length) {
+  const pictures = [...(el.name === 'img' ? [el] : []), ...findIn($, el, 'img').toArray()].map(
+    (img) => pictureOf(img.attribs?.src ?? ''),
+  );
+  const text = length > 0 ? clean($(el).text()) : '';
+  return text || pictures.some(Boolean) ? `${text}|${pictures.join(' ')}` : null;
+}
+
+/**
+ * A picture's address for telling a copy: a builder's copies ask for the
+ * same image file in other sizes (`a.png?scale-down-to=512`), so a file's
+ * query is left out; an address that is a script's (`/_next/image?url=…`,
+ * `image.php?id=…`) names its picture in the query, and is kept whole.
+ */
+function pictureOf(src) {
+  const [path] = src.split('?');
+  return /\.(?:avif|gif|jpe?g|png|svg|webp)$/i.test(path) ? path : src;
+}
+
+/** The blocks a run of copies is looked for in: not a list's items or a table's cells. */
+const REPEATABLE = new Set([
+  'div',
+  'section',
+  'figure',
+  'picture',
+  'img',
+  'p',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'blockquote',
+]);
+
+/**
+ * Each block saying the same as the block of its tag right before it, at
+ * any depth: a copy the page shows on another screen, or a builder's
+ * leftover. Only blocks of the same length are read in full, so a page is
+ * read about once. When the copy holds the text or its title (`kept`), the
+ * block before it goes instead.
+ */
+function repeatedBlocks($, root, kept) {
+  const { read } = blockReader();
+  const signatures = new Map();
+  const signature = (el) => {
+    if (!signatures.has(el)) signatures.set(el, signatureOf($, el, read(el).length));
+    return signatures.get(el);
+  };
+  const repeats = [];
+  const stack = [root];
+  while (stack.length > 0) {
+    const parent = stack.pop();
+    let before = null;
+    for (const child of parent.children ?? []) {
+      if (!isElement(child)) continue;
+      // Read in full only when their text and their pictures count the same
+      // and aren't nothing: such a block inside another such block holds at
+      // most half of its text and pictures, so the page is read only as many
+      // times as it can be halved.
+      if (
+        before?.name === child.name &&
+        REPEATABLE.has(child.name) &&
+        read(child).length === read(before).length &&
+        read(child).pictures === read(before).pictures &&
+        read(child).length + read(child).pictures > 0 &&
+        signature(child) !== null &&
+        signature(child) === signature(before)
+      ) {
+        if (!kept.has(child)) {
+          repeats.push(child);
+          continue;
+        }
+        repeats.push(before);
+      }
+      before = child;
+      stack.push(child);
+    }
+  }
+  return repeats;
+}
+
 /*
  * The tag passes below read each '<' once, left to right, and give what the
  * regex each names would, in time near the text's length however its tags
@@ -595,16 +866,42 @@ export function textLength(html) {
 /**
  * @param {string} html the page as fetched
  * @param {string} pageUrl the page's address after redirects, for its links
- * @returns {{ title: string, html: string }} html: the content, then its JSON-LD scripts
+ * @param {{ $?: import('cheerio').CheerioAPI, dropHidden?: boolean, withText?: boolean }} [opts]
+ *   `$`: the page already parsed, read once by a caller that reads it too
+ *   (it is changed: the frame and furniture go). `dropHidden`: all the page
+ *   hides goes first, with no FAQ answers kept (a reader for a model).
+ *   `withText`: the content's words too.
+ * @returns {{ title: string, html: string, text?: string }} html: the content,
+ *   then its JSON-LD scripts; text (withText): its words, each block apart
  */
-export function extractPageContent(html, pageUrl) {
-  const $ = cheerio.load(html);
+export function extractPageContent(
+  html,
+  pageUrl,
+  { $: parsed, dropHidden = false, withText = false } = {},
+) {
+  const $ = parsed ?? cheerio.load(html);
 
   const jsonLd = $('script[type="application/ld+json"]')
     .map((_, el) => $(el).text().trim())
     .get()
     .filter((text) => text && text.length <= MAX_JSON_LD_LENGTH)
     .slice(0, MAX_JSON_LD);
+
+  // The copies a desktop screen doesn't show, by the page's own CSS, go
+  // before anything is read: the text, its title and its pictures once.
+  const desktopHidden = classesHiddenOnDesktop(
+    $('style')
+      .map((_, el) => $(el).text())
+      .get()
+      .join('\n'),
+  );
+  if (desktopHidden.size > 0) {
+    removeAll(
+      findIn($, $.root()[0], '[class]')
+        .toArray()
+        .filter((el) => el.attribs.class.split(/\s+/).some((name) => desktopHidden.has(name))),
+    );
+  }
 
   // The H1s with words, and the page's order, before the frame goes: an
   // article's title often sits in its own <header>.
@@ -619,6 +916,7 @@ export function extractPageContent(html, pageUrl) {
 
   const body = $('body');
   removeAll(findIn($, body[0], FRAME).toArray());
+  if (dropHidden) removeAll(hiddenBlocksIn($, body[0]));
 
   // The root: the page's main block when it holds the text; else the part
   // of the page holding the text and its H1; else the text area alone.
@@ -650,9 +948,15 @@ export function extractPageContent(html, pageUrl) {
     clean($('title').first().text());
   // Still on the page (not in a header that went with the frame).
   const heading = titleH1 && $(titleH1).closest('body').length > 0 ? titleH1 : null;
+  // Each block's text read once, however many app roots nest.
+  const measured = blockReader();
+  const appRoot = (el) => {
+    if (el.name === 'main' || el.name === 'article' || el.attribs.role === 'main') return false;
+    return measured.read(el).length >= measured.read(body[0]).length * APP_ROOT_SHARE;
+  };
   const main = MAIN_SELECTORS.map((selector) => $(selector).toArray())
     .flat()
-    .find((el) => !textArea || inside(textArea, el));
+    .find((el) => (!textArea || inside(textArea, el)) && !appRoot(el));
   const root = main
     ? $(main)
     : textArea
@@ -770,6 +1074,7 @@ export function extractPageContent(html, pageUrl) {
     }
   }
   removeAll(unaddressed);
+  removeAll(repeatedBlocks($, root[0], kept));
 
   // One H1 per page, its title: any other becomes an H2, and one without
   // words (a logo) is no heading.
@@ -789,5 +1094,9 @@ export function extractPageContent(html, pageUrl) {
   const schema = jsonLd
     .map((text) => `<script type="application/ld+json">${text.replace(/</g, '\\u003c')}</script>`)
     .join('');
-  return { title, html: `${content}${schema}` };
+  return {
+    title,
+    html: `${content}${schema}`,
+    ...(withText ? { text: plainTextOf(root[0]) } : {}),
+  };
 }

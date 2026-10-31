@@ -432,6 +432,20 @@ function sentByHand(action) {
       subject: { entity: 'pages', count: p.targetCount ?? null },
     };
   }
+  // A finding sent from Chat (CHAT-09 §E): what it is about, as the person
+  // approved it. Recover work rests on something lost, Fix on an issue, the
+  // rest on a gap; its prompts, pages or competitors are its subject.
+  if (action.kind === 'chat_finding') {
+    const change =
+      action.category === 'recover' ? 'slipping' : action.category === 'fix' ? 'issue' : 'gap';
+    return {
+      change,
+      severity: SEVERITY[change],
+      confidence: 0.5,
+      recoverability: 0.6,
+      subject: { entity: p.targetEntity ?? 'prompts', count: p.targetCount ?? null },
+    };
+  }
   // A page sent from a Site Audit report (learning D2): a fix on the site,
   // as urgent as the checks it fails are many, near to hand.
   if (action.kind === 'audit_page') {

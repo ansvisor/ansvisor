@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
 import {
   BarChart3,
   Check,
@@ -20,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { RemovedNote } from '@/components/action-center/removed-note';
+import { RunAgentButton } from '@/components/action-center/run-agent-button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -358,7 +360,19 @@ export function ActionTable({
                       />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{texts.title}</p>
+                      <div className="flex min-w-0 items-center gap-1">
+                        <p className="truncate text-sm font-medium">{texts.title}</p>
+                        <AskAboutThis
+                          reference={{ type: 'task', id: action.id, label: texts.title }}
+                          className="shrink-0"
+                        />
+                        <RunAgentButton
+                          action={action}
+                          title={texts.title}
+                          variant="row"
+                          className="shrink-0"
+                        />
+                      </div>
                       <p className="truncate text-xs text-muted-foreground">{texts.description}</p>
                       <div className="mt-1 flex flex-wrap gap-1">
                         <Badge variant="outline" className="text-[10px]">

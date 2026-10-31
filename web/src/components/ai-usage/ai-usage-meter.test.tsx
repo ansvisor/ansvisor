@@ -19,6 +19,7 @@ vi.mock('@/config/plans', async (importOriginal) => ({
 }));
 vi.mock('next/navigation', () => ({ usePathname: () => env.pathname }));
 vi.mock('@/i18n/navigation', () => ({
+  useRouter: () => ({ refresh: () => {} }),
   Link: ({
     href,
     className,
@@ -196,6 +197,25 @@ describe('AiUsageMeter', () => {
     );
   });
 
+  it('says Chat goes on only on the workspace’s own key once the new Chat is on', async () => {
+    vi.mocked(readAiUsage).mockResolvedValue(usage({ percentUsed: 100, chatMetered: true }));
+    await render();
+    await open();
+    expect(popup()!.textContent).toContain(
+      "Used up. AI features stop until Nov 20; Chat keeps working only where it runs on your workspace's own AI key.",
+    );
+    expect(popup()!.textContent).not.toContain('Agent Chat on your own AI key keeps working');
+
+    vi.mocked(readAiUsage).mockResolvedValue(
+      usage({ trial: true, percentUsed: 100, chatMetered: true }),
+    );
+    await remount();
+    await open();
+    expect(popup()!.textContent).toContain(
+      "Start your plan now for its full monthly AI usage; Chat keeps working only where it runs on your workspace's own AI key.",
+    );
+  });
+
   it('opens what used it, what isn’t counted, the other limits and where to get more', async () => {
     await render();
     await open();
@@ -273,16 +293,62 @@ describe('AiUsageMeter', () => {
     expect(popup()!.textContent).not.toContain('Get more AI usage');
   });
 
-  it('names the free trial, and says starting the plan gives more once it’s used up', async () => {
+  it('names the free trial with no share, and offers to start the plan once it’s used up', async () => {
+    vi.mocked(readAiUsage).mockResolvedValue(usage({ trial: true, percentUsed: 100 }));
+    await render();
+    // The trigger names the credit's state, not a share.
+    expect(trigger()!.textContent).toBe('AIUsed up');
+    expect(trigger()!.getAttribute('aria-label')).toBe("AI: the free trial's AI credit is used up");
+    await open();
+    const text = popup()!.textContent!;
+    expect(text).toContain('AI usage · Growth free trial');
+    expect(text).toContain('Trial AI credit used up');
+    expect(text).toContain('Shared by every seat · the trial ends Nov 20');
+    expect(text).toContain('Start your plan now for its full monthly AI usage;');
+    // No share anywhere: neither the whole nor each feature's.
+    expect(text).not.toContain('%');
+    expect(popup()!.querySelector('[role="progressbar"]')).toBeNull();
+    expect([...popup()!.querySelectorAll('button')].map((b) => b.textContent)).toContain(
+      'Start my plan now',
+    );
+    expect(links()[0]).toEqual(['Use your own key', '/dashboard/settings/ai-providers']);
+    expect(text).not.toContain('Get more AI usage');
+  });
+
+  it('opens Start my plan now’s dialog outside the popover, which closes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ planId: 'growth', status: 'trialing', interval: 'month' })),
+    );
     vi.mocked(readAiUsage).mockResolvedValue(usage({ trial: true, percentUsed: 100 }));
     await render();
     await open();
-    expect(popup()!.textContent).toContain('AI usage this month · Growth free trial');
-    expect(popup()!.textContent).toContain(
-      "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance;",
+    const start = [...popup()!.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Start my plan now',
+    )!;
+    await act(async () => start.click());
+    await act(async () => {});
+    expect(popup()).toBeNull();
+    expect(document.querySelector('[role="dialog"]')!.textContent).toContain(
+      'Start your Growth plan now?',
     );
-    expect(links()[0]).toEqual(['Start your plan', '/dashboard/settings/billing']);
-    expect(popup()!.textContent).not.toContain('Get more AI usage');
+    vi.unstubAllGlobals();
+  });
+
+  it('says a trial credit is almost used from 80%, and asks other members for an admin', async () => {
+    vi.mocked(readAiUsage).mockResolvedValue(usage({ trial: true, percentUsed: 84 }));
+    await render('analyst');
+    expect(trigger()!.textContent).toBe('AIAlmost used');
+    await open();
+    expect(popup()!.textContent).toContain('Trial AI credit almost used');
+    expect(popup()!.textContent).toContain(
+      'To start the plan now, ask an admin of your workspace.',
+    );
+    expect(popup()!.querySelectorAll('button')).toHaveLength(0);
+
+    vi.mocked(readAiUsage).mockResolvedValue(usage({ trial: true, percentUsed: 12 }));
+    await remount();
+    expect(trigger()!.textContent).toBe('AITrial credit');
   });
 
   it('tells a member who isn’t an admin to ask one, instead of the admin’s links', async () => {
@@ -454,7 +520,7 @@ describe('AiUsageProvider', () => {
     vi.mocked(readAiUsage).mockResolvedValue(usage({ trial: true, percentUsed: 84 }));
     await render();
     expect(toast.warning).toHaveBeenCalledExactlyOnceWith(
-      "You've used 84% of the free trial's AI usage. Starting the plan gives its full monthly allowance.",
+      'Your trial AI credit is almost used. Starting your plan now gives its full monthly AI usage.',
     );
     expect(localStorage.getItem('aeo:ai-usage-toast')).toBe(
       '2026-10-20T09:00:00.000Z:growth:trial',

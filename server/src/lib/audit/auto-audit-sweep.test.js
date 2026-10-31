@@ -240,8 +240,9 @@ describe('sweepAutoAudits', () => {
 
     expect(sendAutoAuditEmail).toHaveBeenCalledWith('org-1', {
       brands: [
-        { name: 'Acme Coffee', pages: 3, completed: 2, criticalIssues: 3 },
-        { name: 'Acme Tea', pages: 2, completed: 2, criticalIssues: 3 },
+        // Each brand by its id too: the e-mail lists to each person the brands they see.
+        { id: 'brand-a', name: 'Acme Coffee', pages: 3, completed: 2, criticalIssues: 3 },
+        { id: 'brand-b', name: 'Acme Tea', pages: 2, completed: 2, criticalIssues: 3 },
       ],
       nextRunAt: '2026-10-14T00:00:00.000Z',
     });

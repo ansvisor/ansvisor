@@ -2,6 +2,7 @@ import type { Sheet } from 'write-excel-file/browser';
 import { BYTE_ORDER_MARK } from '@/lib/action-center/export';
 import { toCsv } from '@/lib/csv';
 import { slugify } from '@/lib/slug';
+import { ELEMENT_NODE, TEXT_NODE, parseHtml } from './dom';
 import { safeLinkHref } from './editor';
 import { pageFields, withoutLeadingH1 } from './ready-to-publish';
 
@@ -74,7 +75,7 @@ function sameFormat(a: DraftRun, b: DraftRun) {
 function inlineRuns(nodes: Node[]): DraftRun[] {
   const runs: DraftRun[] = [];
   const walk = (node: Node, format: Omit<DraftRun, 'text'>) => {
-    if (node.nodeType === Node.TEXT_NODE) {
+    if (node.nodeType === TEXT_NODE) {
       const text = (node.textContent ?? '').replace(/\s+/g, ' ');
       if (!text) return;
       const last = runs.at(-1);
@@ -82,7 +83,7 @@ function inlineRuns(nodes: Node[]): DraftRun[] {
       else runs.push({ text, ...format });
       return;
     }
-    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    if (node.nodeType !== ELEMENT_NODE) return;
     const el = node as Element;
     const tag = el.tagName.toLowerCase();
     if (SKIPPED.has(tag)) return;
@@ -150,13 +151,13 @@ function tableRows(table: Element): Extract<DraftBlock, { kind: 'table' }>['rows
 function blocksIn(parent: Element, counter: { lists: number }): DraftBlock[] {
   const blocks: DraftBlock[] = [];
   for (const node of Array.from(parent.childNodes)) {
-    if (node.nodeType === Node.TEXT_NODE) {
+    if (node.nodeType === TEXT_NODE) {
       // Loose text between blocks, as an HTML block may leave it.
       const runs = inlineRuns([node]);
       if (runs.length) blocks.push({ kind: 'paragraph', runs });
       continue;
     }
-    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+    if (node.nodeType !== ELEMENT_NODE) continue;
     const el = node as Element;
     const tag = el.tagName.toLowerCase();
     if (SKIPPED.has(tag)) continue;
@@ -195,7 +196,7 @@ export function draftBlocks(
   /** Shared by pages that go in one file, so each list numbers on its own. */
   counter: { lists: number } = { lists: 0 },
 ): DraftBlock[] {
-  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+  const doc = parseHtml(`<body>${html}</body>`);
   const blocks = blocksIn(doc.body, counter);
   const hasTitle = blocks.some((b) => b.kind === 'heading' && b.level === 1);
   return hasTitle || !title.trim()
@@ -300,11 +301,15 @@ export function draftMarkdown(title: string, html: string, fields?: ExportFields
   return `${parts.join('')}\n`;
 }
 
-type Docx = typeof import('docx');
+export type Docx = typeof import('docx');
 type DocxChild = InstanceType<Docx['Paragraph']> | InstanceType<Docx['Table']>;
 
-/** The blocks as Word paragraphs and tables, the lists numbered and bulleted as on the page. */
-function docxBlocks(m: Docx, blocks: DraftBlock[]): DocxChild[] {
+/**
+ * The blocks as Word paragraphs and tables, the lists numbered and bulleted
+ * as on the page. Chat's answer export (lib/chat/export-file.ts) writes its
+ * Word file with it too.
+ */
+export function docxBlocks(m: Docx, blocks: DraftBlock[]): DocxChild[] {
   const HEADING = {
     1: m.HeadingLevel.HEADING_1,
     2: m.HeadingLevel.HEADING_2,
@@ -373,8 +378,15 @@ function docxBlocks(m: Docx, blocks: DraftBlock[]): DocxChild[] {
   return content(blocks);
 }
 
-/** A Word document of sections, each starting on a page of its own, with the lists' numbering. */
-function docxDocument(m: Docx, title: string, sections: DocxChild[][]) {
+/**
+ * A Word document of sections, each starting on a page of its own, with the
+ * lists' numbering; `note`, when given, is a small grey line in every page's
+ * header and footer (Chat's "Generated …" line, CHAT-06 item 40).
+ */
+export function docxDocument(m: Docx, title: string, sections: DocxChild[][], note?: string) {
+  const noteLine = () => [
+    new m.Paragraph({ children: [new m.TextRun({ text: note, size: 16, color: '6B7280' })] }),
+  ];
   return new m.Document({
     title,
     numbering: {
@@ -391,7 +403,15 @@ function docxDocument(m: Docx, title: string, sections: DocxChild[][]) {
         },
       ],
     },
-    sections: sections.map((children) => ({ children })),
+    sections: sections.map((children) => ({
+      children,
+      ...(note
+        ? {
+            headers: { default: new m.Header({ children: noteLine() }) },
+            footers: { default: new m.Footer({ children: noteLine() }) },
+          }
+        : {}),
+    })),
   });
 }
 

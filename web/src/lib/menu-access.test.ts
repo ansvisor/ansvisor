@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   ALWAYS_ON_SECTION,
+  CHAT_AGENTIC_SECTIONS,
   MENU_SECTIONS,
   WORK_AREAS,
   WORK_AREA_IDS,
@@ -11,6 +12,7 @@ import {
   hiddenWithWorkAreas,
   menuOfProfile,
   menuSectionOf,
+  menuSectionsFor,
   readRoleHidden,
   workAreaSections,
   type MenuAccess,
@@ -30,17 +32,33 @@ describe('menuSectionOf', () => {
   it('names a route by its first part under /dashboard', () => {
     expect(menuSectionOf('/dashboard/content/plan')).toBe('content');
     expect(menuSectionOf('/dashboard/agent')).toBe('agent');
+    expect(menuSectionOf('/dashboard/agents/a1/edit')).toBe('agents');
     expect(menuSectionOf('/dashboard')).toBeNull();
     expect(menuSectionOf('/pricing')).toBeNull();
   });
 });
 
 describe('MENU_SECTIONS', () => {
-  it('lists the left menu, Action Center first', () => {
-    expect(MENU_SECTIONS[0]).toBe(ALWAYS_ON_SECTION);
+  it('lists the left menu, Chat and Agent Center first and Action Center right after', () => {
+    expect(MENU_SECTIONS.slice(0, 3)).toEqual(['agent', 'agents', ALWAYS_ON_SECTION]);
     expect(MENU_SECTIONS).toEqual(
       expect.arrayContaining(['agent', 'content', 'audit', 'insights', 'shopping', 'reports']),
     );
+  });
+
+  it('lists Competitors right after Reports, so roles and people can hide it', () => {
+    expect(MENU_SECTIONS.indexOf('competitors')).toBe(MENU_SECTIONS.indexOf('reports') + 1);
+    expect(cleanMenuSections(['competitors'])).toEqual(['competitors']);
+    expect(hidden({ roleHidden: ['competitors'] })).toEqual(['competitors']);
+  });
+
+  it('keeps Competitors for the areas that compare the brand with others', () => {
+    const withCompetitors = WORK_AREAS.filter((area) =>
+      (area.sections as readonly string[]).includes('competitors'),
+    ).map((area) => area.id);
+    expect(withCompetitors).toEqual(['leaders', 'brand', 'growth', 'bizdev', 'analytics']);
+    expect(hidden({ workAreas: ['brand'] })).not.toContain('competitors');
+    expect(hidden({ workAreas: ['content'] })).toContain('competitors');
   });
 
   it('knows every section a work area names', () => {
@@ -101,6 +119,51 @@ describe('hiddenMenuSections', () => {
     expect(
       hidden({ role: 'admin', roleHidden: ['mentions'], workAreas: ['brand'] }).sort(),
     ).toEqual(['audit', 'content', 'prompts', 'shopping', 'traffic'].sort());
+  });
+});
+
+// Agent Center (/dashboard/agents), right under Chat and only with the new
+// Chat on: the same rule as Chat for roles and work areas.
+describe('Agent Center', () => {
+  const chatOff = menuSectionsFor(false);
+
+  it('is the one section only the new Chat has', () => {
+    expect(CHAT_AGENTIC_SECTIONS).toEqual(['agents']);
+    expect(menuSectionsFor(true)).toEqual(MENU_SECTIONS);
+    expect(chatOff).toEqual(MENU_SECTIONS.filter((section) => section !== 'agents'));
+  });
+
+  it('is in the work areas Chat is in, right after it', () => {
+    for (const area of WORK_AREAS) {
+      const sections = area.sections as readonly string[];
+      const chat = sections.indexOf('agent');
+      expect(sections.indexOf('agents')).toBe(chat < 0 ? -1 : chat + 1);
+    }
+    expect(hidden({ workAreas: ['content'] })).not.toContain('agents');
+    expect(hidden({ workAreas: ['aeo'] })).toEqual(expect.arrayContaining(['agent', 'agents']));
+  });
+
+  it('is on every role’s menu until someone hides it, as Chat is', () => {
+    expect(hidden({ role: 'agency_partner' })).toEqual([]);
+    expect(hidden({ roleHidden: ['agents'] })).toEqual(['agents']);
+    expect(cleanMenuSections(['agents', 'agent'])).toEqual(['agent', 'agents']);
+  });
+
+  it('is off every count and list while the new Chat is off', () => {
+    expect([...hiddenMenuSections({ ...analyst, workAreas: ['aeo'] }, chatOff)]).not.toContain(
+      'agents',
+    );
+    expect(hiddenWithWorkAreas(['agents'], ['aeo'], chatOff)).not.toContain('agents');
+    const profile = {
+      role: 'analyst' as const,
+      work_areas: [],
+      work_areas_asked_at: null,
+      menu_shown: [],
+      menu_hidden: ['agents'],
+      can_manage_menus: null,
+    };
+    expect(menuOfProfile(profile, [], chatOff).hidden).toEqual([]);
+    expect(menuOfProfile(profile, [], menuSectionsFor(true)).hidden).toEqual(['agents']);
   });
 });
 

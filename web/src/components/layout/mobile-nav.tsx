@@ -10,9 +10,11 @@ import {
   childLinkHref,
   dashboardNavBadge,
   getDashboardNavLabel,
+  navItemHref,
   shouldShowDashboardNavItem,
 } from '@/lib/dashboard-navigation';
 import { useDemoBrand } from '@/components/providers/demo-brand-provider';
+import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
 import { siteConfig } from '@/config/site';
@@ -39,6 +41,7 @@ export function MobileNav() {
   const agentKeyMissing = isCloud && agentKeyStatus === 'missing';
   // On the demo brand, Chat says it comes next week (its page is the preview).
   const { isDemo } = useDemoBrand();
+  const chatAgentic = useChatAgentic();
   const tDemo = useTranslations('demo.chat');
   const chatSoon = isDemo ? tDemo('soon') : null;
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
@@ -109,14 +112,15 @@ export function MobileNav() {
             )}
             {dashboardNav.flatMap((group) =>
               group.items.map((item) => {
-                if (!shouldShowDashboardNavItem(item, brandPrefs, hiddenSections)) {
+                if (!shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic)) {
                   return null;
                 }
 
+                const href = navItemHref(item, chatAgentic);
                 const isActive =
                   item.href === '/dashboard'
                     ? pathname === '/dashboard'
-                    : pathname.startsWith(item.href);
+                    : pathname.startsWith(href);
                 const label = getDashboardNavLabel(item.title, t);
 
                 // Chat's own badge: "Soon (next week)" on the demo brand,
@@ -146,7 +150,7 @@ export function MobileNav() {
                 }
 
                 const link = (
-                  <Link key={item.href} href={item.href} onClick={() => setOpen(false)}>
+                  <Link key={item.href} href={href} onClick={() => setOpen(false)}>
                     <span
                       className={cn(
                         'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',

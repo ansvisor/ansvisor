@@ -4,11 +4,11 @@ route: /dashboard/content/library
 keywords: [content library, drafts, draft status, archive, export drafts]
 synonyms: [content list, my articles, saved pages, draft list]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-30
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/content-editor.mdx]
 ---
 The **Library**, under **Content** in the sidebar, lists every page you, your teammates and the Content Agent wrote or changed in Ansvisor. Click a row to open the draft in the editor.
@@ -26,13 +26,13 @@ Each tab shows its count:
 
 ## Columns and filters
 
-The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Status, Created and Updated. The **Created** filter narrows the list to the last 7, 30 or 90 days. Once a page has been sent to your CMS, the **Last send** filter lists the pages by how their last send went: never sent, sending, sent, failed or published.
+The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Status, Created and Updated. While the Content Agent writes a draft, its Status reads **Agent writing…**, and **Agent failed** if it couldn't finish; where your workspace has Chat, each comes with the same dot Chat shows for a run. The **Created** filter narrows the list to the last 7, 30 or 90 days. Once a page has been sent to your CMS, the **Last send** filter lists the pages by how their last send went: never sent, sending, sent, failed or published.
 
 ## The row menu
 
-- **Status**: set the draft to In progress, In review, Ready or Published. Ready works like the editor's Mark ready, and Published asks for the page's live address. Moving a ready or published draft back to In progress or In review opens its task again.
+- **Status**: set the draft to In progress, In review, Ready or Published. Ready works like the editor's Mark ready, and Published, not offered for archived drafts, asks for the page's live address. Moving a ready or published draft back to In progress or In review opens its task again. A published one also opens the action's Publish task again and stops its Live page being measured for the action.
 - **Export Word**, **Export Excel**, **Export CSV**, **Export HTML** or **Export Markdown** for that draft.
-- **Send to CMS**: send the draft to your CMS. Tick several rows to send them at once.
+- **Send to CMS**: send the draft to your CMS, except an archived one. Admins and managers can tick several rows to send up to 25 at once.
 - **Send to Archive** or **Restore**.
 - **Delete**: the draft leaves the Library for good, with its versions and suggestions. An Action Center task it was sent as stays.
 

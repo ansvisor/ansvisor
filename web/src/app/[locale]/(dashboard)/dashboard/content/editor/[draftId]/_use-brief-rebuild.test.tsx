@@ -47,15 +47,19 @@ const onRebuilt = vi.fn();
 let inHand: SourcesRead | null;
 let rulesNow: { key: string; name: string; detail: string }[] | undefined;
 
+/** Whether the hook said the brief was the server's, each time it rendered. */
+let serverSeen: boolean[] = [];
+
 /** The hook behind buttons, as the side panel drives it. */
 function Harness() {
-  const { rebuild } = useBriefRebuild({
+  const { onServer, rebuild } = useBriefRebuild({
     draft,
     pageNow: () => ({ title: 'T', html: '<h1>T</h1>', length: 3000, rules: rulesNow }),
     sourcesNow: () => inHand,
     onSourcesRead,
     onRebuilt,
   });
+  serverSeen.push(onServer);
   return (
     <>
       <button data-rebuild onClick={() => void rebuild()} />
@@ -80,6 +84,7 @@ beforeEach(async () => {
   rebuildDraftBrief.mockResolvedValue({ brief: { builtFrom: null } });
   inHand = { ...SOURCES, failed: false };
   rulesNow = undefined;
+  serverSeen = [];
   container = document.createElement('div');
   root = createRoot(container);
   await act(async () =>
@@ -94,6 +99,27 @@ beforeEach(async () => {
 afterEach(() => act(() => root.unmount()));
 
 describe('useBriefRebuild', () => {
+  it('says the brief is the server’s only once its write starts, not while prompts and sources go', async () => {
+    let release: (value: unknown) => void = () => {};
+    addDraftPrompts.mockImplementation(async () => {
+      expect(serverSeen.at(-1)).toBe(false);
+    });
+    getDraftSources.mockImplementation(async () => {
+      expect(serverSeen.at(-1)).toBe(false);
+      return SOURCES;
+    });
+    rebuildDraftBrief.mockImplementation(
+      () => new Promise((resolve) => (release = () => resolve({ brief: { builtFrom: null } }))),
+    );
+    await press('lost');
+    expect(addDraftPrompts).toHaveBeenCalled();
+    expect(getDraftSources).toHaveBeenCalled();
+    expect(serverSeen.at(-1)).toBe(true);
+    await act(async () => release(null));
+    expect(serverSeen.at(-1)).toBe(false);
+    expect(onRebuilt).toHaveBeenCalled();
+  });
+
   it('builds from the sources in hand, reading nothing', async () => {
     await press('rebuild');
     expect(getDraftSources).not.toHaveBeenCalled();

@@ -44476,6 +44476,1146 @@ create policy "topic_suggestions: admin/manager update" on public.topic_suggesti
   );
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00383_getting_started_skip_demo_brand.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00383: the demo brand doesn't make a real brand "a later brand"
+-- ============================================================================
+-- 00197 runs Getting started at once for an organization's first brand and
+-- asks first for a later one. Since the demo brand (00380), a person who
+-- starts without a card has the demo brand first, so the brand they set up
+-- after adding a card counted as a later brand: its Getting started waited
+-- for an answer and the Actions page said "No actions yet" instead of the
+-- 17 steps.
+--
+--   * start_brand_getting_started: only the organization's other real brands
+--     (is_demo false) make a new brand ask first.
+--   * Brands already caught by it: a real brand whose Getting started still
+--     waits for an answer (confirmed_at and dismissed_at null), that has no
+--     real brand before it in its organization, in an organization with a
+--     demo brand, runs it now, as it would have. A second brand whose first
+--     was deleted, with no demo brand, still asks: the demo brand didn't
+--     cause it.
+
+create or replace function public.start_brand_getting_started()
+returns trigger
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+begin
+  insert into public.getting_started (brand_id, confirmed_at)
+  values (
+    new.id,
+    -- The organization's first real brand runs it; a later one asks first.
+    -- The demo brand doesn't count (00380).
+    case
+      when exists (
+        select 1 from public.brands b
+        where b.organization_id = new.organization_id
+          and b.id <> new.id
+          and not b.is_demo
+      ) then null
+      else now()
+    end
+  )
+  on conflict (brand_id) do nothing;
+  return new;
+end;
+$$;
+
+revoke all on function public.start_brand_getting_started() from public, anon, authenticated;
+
+update public.getting_started gs
+   set confirmed_at = now()
+  from public.brands b
+ where b.id = gs.brand_id
+   and not b.is_demo
+   and gs.confirmed_at is null
+   and gs.dismissed_at is null
+   and not exists (
+     select 1 from public.brands earlier
+     where earlier.organization_id = b.organization_id
+       and earlier.id <> b.id
+       and not earlier.is_demo
+       and earlier.created_at <= b.created_at
+   )
+   -- Only where a demo brand is what made it "a later brand". Its own
+   -- created_at is counted back from each rebuild (server/src/lib/demo/
+   -- core.js), so it can't be compared.
+   and exists (
+     select 1 from public.brands demo
+     where demo.organization_id = b.organization_id
+       and demo.is_demo
+   );
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00385_first_results_email.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00385: "Your first results are ready", e-mailed once per person
+-- ============================================================================
+-- A new customer's first tracking run takes 30 to 65 minutes, and most leave
+-- the app meanwhile. When a brand's first full run stamps, the API e-mails
+-- the organization's members that its results are in
+-- (server/src/lib/first-results-email.js).
+--
+--   * profiles.first_results_emailed_at: when the person was sent it. The
+--     API claims the members still without one in a single update before it
+--     sends, so two brands' first runs finishing at once never send it
+--     twice, and a later brand's first run doesn't send it again. A send
+--     Resend refused (or one skipped where e-mail isn't set up) gives the
+--     claim back.
+
+alter table public.profiles
+  add column if not exists first_results_emailed_at timestamptz;
+
+comment on column public.profiles.first_results_emailed_at is
+  'When "Your first results are ready" was e-mailed to the person, once, after a brand''s first full tracking run stamped. Null: never sent.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00386_organization_cancel_at_period_end.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00386: whether an organization's plan ends at the end of its period
+-- ============================================================================
+-- A canceled subscription runs to the end of its paid period (Stripe's
+-- cancel_at_period_end). Billing read that live from Stripe; every page now
+-- shows a thin band while it is so ("Your plan ends on {date} · Keep my
+-- plan"), so the organization keeps it beside subscription_ends_at, written
+-- as the plan is: by Stripe's webhook and the billing routes, with the
+-- service role.
+--
+-- The column is the server's, as 00062 / 00276 / 00405's guard has the plan
+-- and billing columns. Its own trigger holds it: 00405 rewrote that guard
+-- after this number in the migration order, so a fresh install would end on
+-- 00405's version, without this column.
+
+alter table public.organizations
+  add column if not exists cancel_at_period_end boolean not null default false;
+
+comment on column public.organizations.cancel_at_period_end is
+  'The subscription ends at the end of its period (canceled, still paid until subscription_ends_at): Stripe''s cancel_at_period_end, written by the webhook and the billing routes; server only.';
+
+create or replace function public.guard_organization_cancel_at_period_end()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if (tg_op = 'INSERT' and new.cancel_at_period_end is distinct from false)
+     or (tg_op = 'UPDATE' and new.cancel_at_period_end is distinct from old.cancel_at_period_end)
+  then
+    raise exception 'organization column is managed server-side and cannot be set from the client'
+      using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists organizations_guard_cancel_at_period_end on public.organizations;
+
+create trigger organizations_guard_cancel_at_period_end
+  before insert or update on public.organizations
+  for each row
+  execute function public.guard_organization_cancel_at_period_end();
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00387_organization_competitor_access.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00387: organizations and competitors access rules
+-- ============================================================================
+-- organizations: a signed-in person reads the organization their profile
+-- belongs to. Onboarding creates the organization with the person's own
+-- session, choosing its id, and doesn't read it back until the profile has
+-- joined it. The server reads and writes organizations with the service
+-- role, which these rules don't apply to. The anon role has no use for the
+-- table.
+--
+-- competitors: every member of the brand's organization reads them; an
+-- admin or a manager of that organization adds, changes and deletes them,
+-- as brand settings and Chat already allow (the same rules topics have,
+-- 00382). Setting up a brand keeps working: a new
+-- organization's first person is its admin, and only admins and managers
+-- add brands.
+
+-- ── organizations ───────────────────────────────────────────────────────────
+
+drop policy if exists "organizations: member or creator select" on public.organizations;
+
+drop policy if exists "organizations: member select" on public.organizations;
+create policy "organizations: member select" on public.organizations
+  for select
+  to authenticated
+  using (
+    id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+    )
+  );
+
+drop policy if exists "organizations: authenticated insert" on public.organizations;
+create policy "organizations: authenticated insert" on public.organizations
+  for insert
+  to authenticated
+  with check (auth.uid() is not null);
+
+drop policy if exists "organizations: admin update" on public.organizations;
+create policy "organizations: admin update" on public.organizations
+  for update
+  to authenticated
+  using (
+    id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  )
+  with check (
+    id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  );
+
+revoke all on table public.organizations from anon;
+
+-- ── competitors ─────────────────────────────────────────────────────────────
+
+drop policy if exists "competitors: member insert" on public.competitors;
+drop policy if exists "competitors: member update" on public.competitors;
+drop policy if exists "competitors: member delete" on public.competitors;
+
+drop policy if exists "competitors: admin/manager insert" on public.competitors;
+create policy "competitors: admin/manager insert" on public.competitors
+  for insert
+  with check (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  );
+
+drop policy if exists "competitors: admin/manager update" on public.competitors;
+create policy "competitors: admin/manager update" on public.competitors
+  for update
+  using (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  )
+  with check (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  );
+
+drop policy if exists "competitors: admin/manager delete" on public.competitors;
+create policy "competitors: admin/manager delete" on public.competitors
+  for delete
+  using (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  );
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00388_brand_access.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00388: brand access — which of the organization's brands a person sees
+-- ============================================================================
+-- One Account (organization) holds several brands, and different teams or
+-- agencies work on different ones (BRAND-ACCESS). A person joins with one
+-- role and either All brands or Selected brands. Admins always have All
+-- brands, and so does everyone here before this migration: nothing anyone
+-- sees changes until the Team screen lets an admin narrow someone.
+--
+-- This migration only stores the choice and answers "may this person see
+-- this brand?". The rules that apply it come after it: the brands policies
+-- (00389), the brand tables whose policies skip brands, the functions that
+-- check the organization themselves, and the server, MCP and Chat paths.
+--
+--   * profiles.brand_scope: 'all' or 'selected'. Set by the server (the
+--     00228/00374 guard below), like role. An admin is always 'all' (a
+--     check, and the reset below on promotion). Leaving the organization
+--     resets it to 'all', so whoever creates or joins one next starts from
+--     the default; a move straight into another organization keeps the scope
+--     the update gives but never the brands shared in the old one, so a move
+--     can't widen anyone's access by itself.
+--   * member_brands: the brands shared with a Selected-brands person, in the
+--     person's own organization (a trigger checks both). A person reads their
+--     own rows and an admin reads the organization's; only the server writes
+--     them. Deleting the brand, the person or the organization deletes them.
+--   * invitations.brand_scope / brand_ids: the choice the invitation keeps
+--     until it is accepted. Ids of a brand deleted since then stay in the
+--     array: whoever accepts it shares only the brands still there.
+--   * can_access_brand(brand, person) and user_brand_ids(): the rule, in one
+--     place. A brand of the person's organization, and the person is an
+--     admin, has All brands, has it shared, or it is the demo brand (00380,
+--     sample data everyone in the organization reads). Both bypass RLS
+--     (security definer), so the brands policies can call them without
+--     recursing. Only the service role may ask about someone else.
+--   * A new brand is shared with whoever added it when they have Selected
+--     brands (a Selected-brands manager may add brands).
+--
+-- A profile without an organization sees no brand here, as under today's
+-- policies (brands.organization_id is never null). The API server compares
+-- organizations itself with a plain !== for self-hosted installs
+-- (server/src/lib/access.js); it applies the scope on top of that, so this
+-- rule doesn't change who a self-hosted install lets in.
+
+-- ── profiles.brand_scope ────────────────────────────────────────────────────
+
+alter table public.profiles
+  add column if not exists brand_scope text not null default 'all';
+
+alter table public.profiles
+  drop constraint if exists profiles_brand_scope_check;
+alter table public.profiles
+  add constraint profiles_brand_scope_check
+  check (brand_scope in ('all', 'selected'));
+
+-- Admins always have All brands.
+alter table public.profiles
+  drop constraint if exists profiles_admin_all_brands_check;
+alter table public.profiles
+  add constraint profiles_admin_all_brands_check
+  check (role <> 'admin' or brand_scope = 'all');
+
+comment on column public.profiles.brand_scope is
+  'Brand access (00388): ''all'' = every brand of the organization, ''selected'' = the brands in member_brands (and the demo brand). Admins are always ''all''. Set by the server.';
+
+-- 00374's guard, plus brand_scope: a person's own update can't widen (or
+-- narrow) the brands they see.
+create or replace function public.guard_profile_server_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+  if new.role is distinct from old.role then
+    raise exception 'profile role is managed server-side' using errcode = '42501';
+  end if;
+  if new.organization_id is distinct from old.organization_id
+     and (
+       old.organization_id is not null
+       or new.organization_id is null
+       or public.organization_has_other_members(new.organization_id, new.id)
+     )
+  then
+    raise exception 'profile organization is managed server-side' using errcode = '42501';
+  end if;
+  if new.menu_shown is distinct from old.menu_shown
+     or new.menu_hidden is distinct from old.menu_hidden
+     or new.can_manage_menus is distinct from old.can_manage_menus
+  then
+    raise exception 'profile menu access is managed server-side' using errcode = '42501';
+  end if;
+  if new.brand_scope is distinct from old.brand_scope then
+    raise exception 'profile brand access is managed server-side' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+-- Whoever makes the change: a new admin has All brands, and so does a person
+-- who left the organization (no brand to see; the next organization starts
+-- from the default). A move straight into another organization keeps the
+-- scope the update gives: a removed-and-invited person is reset on the way
+-- out, and an update can't tell "set to Selected again" from "not set", so
+-- resetting there could hand All brands to someone invited with Selected.
+-- The brands shared in the old organization go either way (the trigger after
+-- the update). Fires after the guard (triggers run in name order), so the
+-- guard checks what the person asked for, not this reset.
+create or replace function public.reset_profile_brand_scope()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.role = 'admin' or new.organization_id is null then
+    new.brand_scope := 'all';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_reset_brand_scope on public.profiles;
+create trigger profiles_reset_brand_scope
+  before update of organization_id, role on public.profiles
+  for each row execute function public.reset_profile_brand_scope();
+
+-- ── member_brands ───────────────────────────────────────────────────────────
+
+create table if not exists public.member_brands (
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  granted_by uuid references auth.users(id) on delete set null,
+  granted_at timestamptz not null default now(),
+  primary key (user_id, brand_id)
+);
+
+-- The primary key serves the helpers' (user_id, brand_id) look-ups; these
+-- serve a brand's people (Brand settings) and an organization's list (Team).
+create index if not exists member_brands_brand_id_idx on public.member_brands (brand_id);
+create index if not exists member_brands_organization_id_idx on public.member_brands (organization_id);
+
+comment on table public.member_brands is
+  'Brand access (00388): the brands shared with a Selected-brands person, in their own organization. Rows mean nothing for All-brands people and go when the person leaves, moves organization, becomes an admin or gets All brands. Read by the person (own rows) and admins; written by the server.';
+
+-- The brand and the person both belong to the row's organization.
+create or replace function public.check_member_brand_organization()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if not exists (
+    select 1 from public.brands b
+    where b.id = new.brand_id and b.organization_id = new.organization_id
+  ) then
+    raise exception 'member_brands: brand % is not in organization %', new.brand_id, new.organization_id
+      using errcode = '23514';
+  end if;
+  if not exists (
+    select 1 from public.profiles p
+    where p.id = new.user_id and p.organization_id = new.organization_id
+  ) then
+    raise exception 'member_brands: person % is not in organization %', new.user_id, new.organization_id
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists member_brands_check_organization on public.member_brands;
+create trigger member_brands_check_organization
+  before insert or update on public.member_brands
+  for each row execute function public.check_member_brand_organization();
+
+-- The shared brands go when the person moves or leaves the organization
+-- (their rows name the old one) and when they end up with All brands (a new
+-- admin, or the server widening them). Security definer: a person's own
+-- update (joining the organization they just created, in onboarding) fires
+-- it, and people can't write member_brands.
+create or replace function public.forget_profile_member_brands()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  delete from public.member_brands mb
+  where mb.user_id = new.id
+    and (new.brand_scope = 'all' or mb.organization_id is distinct from new.organization_id);
+  return null;
+end;
+$$;
+
+revoke all on function public.forget_profile_member_brands() from public, anon, authenticated;
+
+drop trigger if exists profiles_forget_member_brands on public.profiles;
+create trigger profiles_forget_member_brands
+  after update of organization_id, role, brand_scope on public.profiles
+  for each row
+  when (
+    old.organization_id is distinct from new.organization_id
+    or (new.brand_scope = 'all' and old.brand_scope = 'selected')
+  )
+  execute function public.forget_profile_member_brands();
+
+-- ── The rule ────────────────────────────────────────────────────────────────
+
+-- May the person see the brand? Their organization's brand, and they are an
+-- admin, have All brands, have it shared, or it is the demo brand. Asking
+-- about someone else needs the service role (the API server, MCP, Chat);
+-- anyone else gets false. Call it with a brand argument (functions that take
+-- p_brand_id); in a policy over many rows prefer user_brand_ids(), which runs
+-- once per query.
+create or replace function public.can_access_brand(
+  p_brand_id uuid,
+  p_user_id uuid default auth.uid()
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select case
+    when p_brand_id is null or p_user_id is null then false
+    when p_user_id is distinct from auth.uid()
+      and coalesce(auth.role(), '') <> 'service_role' then false
+    else exists (
+      select 1
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where b.id = p_brand_id
+        and p.id = p_user_id
+        and (
+          p.role = 'admin'
+          or p.brand_scope = 'all'
+          or b.is_demo
+          or exists (
+            select 1 from public.member_brands mb
+            where mb.user_id = p.id and mb.brand_id = b.id
+          )
+        )
+    )
+  end;
+$$;
+
+revoke all on function public.can_access_brand(uuid, uuid) from public, anon;
+grant execute on function public.can_access_brand(uuid, uuid) to authenticated, service_role;
+
+comment on function public.can_access_brand(uuid, uuid) is
+  'Brand access (00388): whether the person (default: the caller) may see the brand: their organization''s, and they are an admin, have All brands, have it shared (member_brands) or it is the demo brand. Another person''s id only with the service role; false otherwise.';
+
+-- The ids of the brands the caller may see, by the same rule. In a policy,
+-- `brand_id in (select public.user_brand_ids())` runs it once per query.
+create or replace function public.user_brand_ids()
+returns setof uuid
+language sql
+stable
+security definer
+set search_path = ''
+rows 20
+as $$
+  select b.id
+  from public.profiles p
+  join public.brands b on b.organization_id = p.organization_id
+  where p.id = auth.uid()
+    and (
+      p.role = 'admin'
+      or p.brand_scope = 'all'
+      or b.is_demo
+      or exists (
+        select 1 from public.member_brands mb
+        where mb.user_id = p.id and mb.brand_id = b.id
+      )
+    );
+$$;
+
+revoke all on function public.user_brand_ids() from public, anon;
+grant execute on function public.user_brand_ids() to authenticated, service_role;
+
+comment on function public.user_brand_ids() is
+  'Brand access (00388): the ids of the brands the caller (auth.uid()) may see, by can_access_brand''s rule. For policies: brand_id in (select public.user_brand_ids()).';
+
+-- ── member_brands policies ──────────────────────────────────────────────────
+-- A person reads the brands shared with them, an admin those of everyone in
+-- the organization; the server writes them (service role).
+
+alter table public.member_brands enable row level security;
+revoke all on table public.member_brands from anon, authenticated;
+grant select on table public.member_brands to authenticated;
+grant all on table public.member_brands to service_role;
+
+drop policy if exists "member_brands: own or admin select" on public.member_brands;
+create policy "member_brands: own or admin select" on public.member_brands
+  for select
+  to authenticated
+  using (
+    brand_id in (select public.user_brand_ids())
+    and (
+      user_id = auth.uid()
+      or organization_id in (
+        select p.organization_id
+        from public.profiles p
+        where p.id = auth.uid() and p.role = 'admin'
+      )
+    )
+  );
+
+-- ── A new brand is shared with whoever added it ─────────────────────────────
+-- A Selected-brands manager may add brands and sees the ones they add. The
+-- server's own inserts (service role, no person) and the demo brand (every
+-- member's) add nothing; a server path that adds a brand for a person shares
+-- it itself.
+--
+-- It runs after the row is stored, so it can't help the insert read its own
+-- row back: PostgreSQL checks `insert … returning` against the select policy
+-- before storing the row and before this trigger. Under 00389 a
+-- Selected-brands person therefore adds a brand without asking for it back
+-- (web createBrand: its own id, then a read) — see 00389.
+create or replace function public.grant_brand_to_creator()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.is_demo then
+    return null;
+  end if;
+  insert into public.member_brands (organization_id, user_id, brand_id, granted_by)
+  select new.organization_id, p.id, new.id, p.id
+  from public.profiles p
+  where p.id = auth.uid()
+    and p.organization_id = new.organization_id
+    and p.brand_scope = 'selected'
+  on conflict (user_id, brand_id) do nothing;
+  return null;
+end;
+$$;
+
+revoke all on function public.grant_brand_to_creator() from public, anon, authenticated;
+
+drop trigger if exists brands_grant_creator on public.brands;
+create trigger brands_grant_creator
+  after insert on public.brands
+  for each row execute function public.grant_brand_to_creator();
+
+-- ── invitations ─────────────────────────────────────────────────────────────
+
+alter table public.invitations
+  add column if not exists brand_scope text not null default 'all',
+  add column if not exists brand_ids uuid[] not null default '{}';
+
+alter table public.invitations
+  drop constraint if exists invitations_brand_scope_check;
+alter table public.invitations
+  add constraint invitations_brand_scope_check
+  check (brand_scope in ('all', 'selected'));
+
+-- Brand ids only for Selected brands, and never for an admin.
+alter table public.invitations
+  drop constraint if exists invitations_brand_ids_check;
+alter table public.invitations
+  add constraint invitations_brand_ids_check
+  check (brand_scope = 'selected' or cardinality(brand_ids) = 0);
+
+alter table public.invitations
+  drop constraint if exists invitations_admin_all_brands_check;
+alter table public.invitations
+  add constraint invitations_admin_all_brands_check
+  check (role <> 'admin' or brand_scope = 'all');
+
+comment on column public.invitations.brand_scope is
+  'Brand access (00388): ''all'' or ''selected'', given to the person when they accept. Admins: always ''all''.';
+comment on column public.invitations.brand_ids is
+  'Brand access (00388): the brands shared on acceptance when brand_scope = ''selected''. Checked against the organization when set; a brand deleted since stays here and is skipped on acceptance.';
+
+-- The brands named belong to the invitation's organization, when they are
+-- set (an invitation accepted after one of them was deleted still updates).
+create or replace function public.check_invitation_brands()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if exists (
+    select 1
+    from unnest(new.brand_ids) as ids(brand_id)
+    where not exists (
+      select 1 from public.brands b
+      where b.id = ids.brand_id and b.organization_id = new.organization_id
+    )
+  ) then
+    raise exception 'invitation brands must belong to its organization' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists invitations_check_brands on public.invitations;
+create trigger invitations_check_brands
+  before insert or update of organization_id, brand_ids on public.invitations
+  for each row execute function public.check_invitation_brands();
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00389_brands_brand_access.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00389: brands — read, change and delete only the brands you can access
+-- ============================================================================
+-- 00388 stored which brands a person sees. This applies it to the brands
+-- table: its select, update and delete policies add the person's brand
+-- access to the organization and role checks they had (00001, 00380). The
+-- insert policy stays as it was (an admin or a manager of the organization,
+-- never a demo brand), and a Selected-brands person who adds a brand gets it
+-- shared (00388's trigger).
+--
+-- Every policy on a brand's rows reaches the brand through a subquery on
+-- public.brands, and PostgreSQL applies the brands policies inside that
+-- subquery too: the 147 policies on 83 tables that read brands narrow with
+-- this change. Brand tables whose policies look only at the organization or
+-- the person, and the security definer functions that check the organization
+-- themselves, follow in later migrations; server/src/lib/
+-- brand-access-policies.test.js lists the tables and fails on a new one.
+--
+-- Nothing changes yet: everyone has All brands until the Team screen narrows
+-- someone, and for All-brands people each policy below passes exactly the
+-- rows it passed before.
+--
+-- How the rules are written:
+--   * select: All brands (admins included) match on the row's own
+--     organization_id, as before; Selected brands on user_brand_ids(). A
+--     brand being added has to pass too: `insert … returning` (any
+--     .insert().select() with a person's session) checks the select policy against the
+--     new row before it is stored, so a rule that looks the brand up by id,
+--     such as can_access_brand(id), would refuse every new brand.
+--   * A Selected-brands manager's new brand still can't read itself back in
+--     that same insert: the creator's grant is added after the row is
+--     stored. The web's createBrand therefore adds it with an id of its own
+--     and reads it after the insert (no returning).
+--   * update and delete: the row is there, so the scope is
+--     `id in (select public.user_brand_ids())`, next to the role checks.
+--   * `id in (select public.user_brand_ids())` isn't correlated with the row,
+--     so it runs once per query (a hashed SubPlan), where
+--     `(select public.can_access_brand(id))` would run once per row. The
+--     look-ups inside use member_brands' primary key (user_id, brand_id) and
+--     brands' organization_id index; no new index is needed.
+--   * To authenticated: anon may not run the helpers, and with no profile it
+--     matched no brand before either.
+--
+-- Performance, to measure on the development database before and after (as
+-- a signed-in member: set local role authenticated plus request.jwt.claims):
+--   * Insights (insights_aggregates_daily, insights_kpi_series, the
+--     *_daily rollups) and Citations' invoker functions read through these
+--     policies; Perception (mentions_perception) and the citations functions
+--     with their own organization check are security definer and don't.
+--   * Expect each brand-table policy's brands subquery to keep its plan,
+--     with the brands filter showing `hashed SubPlan` and user_brand_ids()
+--     run at most once per subquery (loops=1). They took 6–9 s before 00290.
+
+drop policy if exists "brands: member select" on public.brands;
+create policy "brands: member select" on public.brands
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and (p.role = 'admin' or p.brand_scope = 'all')
+    )
+    or id in (select public.user_brand_ids())
+  );
+
+drop policy if exists "brands: admin/manager update" on public.brands;
+create policy "brands: admin/manager update" on public.brands
+  for update
+  to authenticated
+  using (
+    not is_demo
+    and organization_id in (
+      select profiles.organization_id
+      from public.profiles
+      where profiles.id = auth.uid()
+        and profiles.role = any (array['admin'::public.user_role, 'manager'::public.user_role])
+    )
+    and id in (select public.user_brand_ids())
+  )
+  with check (
+    not is_demo
+    and organization_id in (
+      select profiles.organization_id
+      from public.profiles
+      where profiles.id = auth.uid()
+        and profiles.role = any (array['admin'::public.user_role, 'manager'::public.user_role])
+    )
+    and id in (select public.user_brand_ids())
+  );
+
+drop policy if exists "brands: admin delete" on public.brands;
+create policy "brands: admin delete" on public.brands
+  for delete
+  to authenticated
+  using (
+    not is_demo
+    and organization_id in (
+      select profiles.organization_id
+      from public.profiles
+      where profiles.id = auth.uid()
+        and profiles.role = 'admin'::public.user_role
+    )
+    and id in (select public.user_brand_ids())
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00390_brand_access_account_tables.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00390: brand access — the Account-level brand tables, quotas, invitations
+-- ============================================================================
+-- 00388 stored which brands a person sees and 00389 applied it to the brands
+-- table, which every policy that reads its brand through brands follows. This
+-- migration takes the brand tables whose policies look only at the
+-- organization or the person, and the paths that would count or show less (or
+-- more) once someone has Selected brands. Chat's tables, created from 00400
+-- on, follow in 00424, after them.
+--
+-- Nothing changes yet: everyone has All brands until the Team screen narrows
+-- someone, and for All-brands people every rule below passes the same rows as
+-- before (their user_brand_ids() is every brand of their organization), with
+-- one exception, below.
+--
+--   * user_has_all_brands(): whether the caller is an admin or has All
+--     brands. A row with no brand (a chat or file about the whole workspace)
+--     may still hold any brand's data, so where other people's rows have none
+--     (00424) only they read it.
+--   * prompt_usage_counters, content_draft_deliveries, agent_conversations
+--     (and agent_messages, through it): a row is read only by someone who can
+--     access its brand. The organization and person checks stay. A person's
+--     own old Agent chat about a brand they no longer see is hidden, not
+--     deleted, and comes back with the access.
+--   * The exception: agent_conversations never checked the organization, so
+--     someone who moved to another organization still read their own Agent
+--     chats from the old one. Those about one of the old organization's
+--     brands are hidden now (its brands are none of theirs); those with no
+--     brand stay.
+--   * content_draft_member(), which ten policies on a draft's inputs,
+--     confirmations, images and ready log and three functions (snapshot,
+--     restore, decide suggestions) call: the draft's brand must be one the
+--     person can access, not just one of their organization. Its policies
+--     are for signed-in people only (anon can't run it; it never could).
+--   * The plan's quotas count the whole Account, whatever the person sees:
+--     org_prompt_location_usage and prompt_usage_summary become security
+--     definer with their own membership or brand check, and the brand count
+--     behind maxBrands is org_brand_count(). A Selected-brands person can't
+--     get past a limit by seeing fewer brands, and sees the Account's totals
+--     (the usage cards, as shares) but no other brand's figure: the location
+--     usage of brands they can't access comes back as one row with no brand.
+--   * invitations: only admins read them, so the brands an invitation shares
+--     stay with the admins. Settings › Team lists the pending invitations for
+--     everyone from the server (web lib/actions/team.ts), without those
+--     columns.
+--   * member_brands' check locks the person's profile (for share), so a move
+--     to another organization running at the same time either waits for the
+--     grant (and then deletes it) or is seen by it (and refuses it).
+--
+-- Policies here call the access rule as `brand_id in (select
+-- public.user_brand_ids())`: not correlated with the row, so it runs once per
+-- query, and only for authenticated (anon may not run it). Functions that look
+-- at one brand use can_access_brand(brand).
+
+-- ── user_has_all_brands ─────────────────────────────────────────────────────
+-- An admin, or All brands, in an organization: the people who may read a row
+-- of the organization that names no brand. A policy calls it as
+-- `(select public.user_has_all_brands())`, once per query.
+
+create or replace function public.user_has_all_brands()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.organization_id is not null
+      and (p.role = 'admin' or p.brand_scope = 'all')
+  );
+$$;
+
+revoke all on function public.user_has_all_brands() from public, anon;
+grant execute on function public.user_has_all_brands() to authenticated, service_role;
+
+comment on function public.user_has_all_brands() is
+  'Brand access (00390): whether the caller (auth.uid()) is an admin or has All brands in their organization. For policies on rows with no brand: brand_id is null and (select public.user_has_all_brands()).';
+
+-- ── prompt_usage_counters ───────────────────────────────────────────────────
+
+drop policy if exists "prompt_usage_counters: member select" on public.prompt_usage_counters;
+create policy "prompt_usage_counters: member select" on public.prompt_usage_counters
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and brand_id in (select public.user_brand_ids())
+  );
+
+-- ── content_draft_deliveries ────────────────────────────────────────────────
+
+drop policy if exists "content_draft_deliveries: member select" on public.content_draft_deliveries;
+create policy "content_draft_deliveries: member select" on public.content_draft_deliveries
+  for select
+  to authenticated
+  using (
+    organization_id in (select p.organization_id from public.profiles p where p.id = auth.uid())
+    and brand_id in (select public.user_brand_ids())
+  );
+
+-- ── agent_conversations (the old Agent; agent_messages follows it) ──────────
+-- brand_id is the brand a chat was opened on, or null (none pinned). Only the
+-- person who wrote a chat reads it, so one with no brand stays theirs.
+
+drop policy if exists "Users read own conversations" on public.agent_conversations;
+create policy "Users read own conversations" on public.agent_conversations
+  for select
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+drop policy if exists "Users write own conversations" on public.agent_conversations;
+create policy "Users write own conversations" on public.agent_conversations
+  for all
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  )
+  with check (
+    user_id = auth.uid()
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+-- ── content_draft_member ────────────────────────────────────────────────────
+-- A draft the caller may work on: its brand is one they can access, or the
+-- caller is the server. It answers for one draft, row by row in the policies,
+-- so it asks can_access_brand about that draft's brand (one indexed look-up)
+-- rather than listing every brand the person sees.
+
+create or replace function public.content_draft_member(p_draft_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select auth.role() = 'service_role' or exists (
+    select 1
+    from public.content_drafts d
+    where d.id = p_draft_id
+      and public.can_access_brand(d.brand_id)
+  );
+$$;
+
+revoke all on function public.content_draft_member(uuid) from public, anon;
+grant execute on function public.content_draft_member(uuid) to authenticated, service_role;
+
+comment on function public.content_draft_member(uuid) is
+  'Whether the caller may work on the draft (00215): the server, or a person who can access its brand (00390, can_access_brand). Backs the policies of content_draft_inputs, _confirmations, _own_images and _ready_log, and content_draft_snapshot, _restore and _decide_suggestions.';
+
+alter policy "content_draft_inputs: member select" on public.content_draft_inputs to authenticated;
+alter policy "content_draft_inputs: member insert" on public.content_draft_inputs to authenticated;
+alter policy "content_draft_inputs: member update" on public.content_draft_inputs to authenticated;
+alter policy "content_draft_inputs: member delete" on public.content_draft_inputs to authenticated;
+alter policy "content_draft_confirmations: member select" on public.content_draft_confirmations to authenticated;
+alter policy "content_draft_confirmations: member insert" on public.content_draft_confirmations to authenticated;
+alter policy "content_draft_own_images: member select" on public.content_draft_own_images to authenticated;
+alter policy "content_draft_own_images: member insert" on public.content_draft_own_images to authenticated;
+alter policy "content_draft_ready_log: member select" on public.content_draft_ready_log to authenticated;
+alter policy "content_draft_ready_log: member insert" on public.content_draft_ready_log to authenticated;
+
+-- ── The plan's prompt-location quota (00128, 00380), Account-wide ──────────
+-- savePromptSet, the prompt dialogs, the Tracked Prompts KPI and
+-- import_prompts count through this, as the person. It counts every brand of
+-- the organization when the caller belongs to it (or is the server); anyone
+-- else gets no rows, as RLS gave them before. A brand the caller can't access
+-- is counted in a single row with no brand id: the total is the Account's,
+-- and no hidden brand's usage shows.
+
+create or replace function public.org_prompt_location_usage(p_organization_id uuid)
+returns table (brand_id uuid, locations bigint)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with per_brand as (
+    select b.id, sum(greatest(coalesce(array_length(p.regions, 1), 0), 1))::bigint as locations
+    from public.prompts p
+    join public.prompt_sets ps on ps.id = p.prompt_set_id
+    join public.brands b on b.id = ps.brand_id
+    where b.organization_id = p_organization_id
+      and not b.is_demo
+      and p.is_active
+      and (
+        coalesce(auth.role(), '') = 'service_role'
+        or exists (
+          select 1 from public.profiles pf
+          where pf.id = auth.uid() and pf.organization_id = p_organization_id
+        )
+      )
+    group by b.id
+  ),
+  shown as (
+    select
+      case
+        when coalesce(auth.role(), '') = 'service_role'
+          or u.id in (select public.user_brand_ids())
+        then u.id
+      end as brand_id,
+      u.locations
+    from per_brand u
+  )
+  select s.brand_id, sum(s.locations)::bigint
+  from shown s
+  group by s.brand_id;
+$$;
+
+revoke all on function public.org_prompt_location_usage(uuid) from public, anon;
+grant execute on function public.org_prompt_location_usage(uuid) to authenticated, service_role;
+
+comment on function public.org_prompt_location_usage(uuid) is
+  'Active prompt locations per brand for one org (#691, 00128) — the plan-quota unit, one per region entry per active prompt, minimum one; paused prompts and the demo brand (00380) don''t count. Security definer (00390): the whole organization for its members and the server, nothing for anyone else; the brands the caller can''t access come back as one row with a null brand_id.';
+
+-- ── The usage cards' Account totals (00139, 00380), Account-wide ────────────
+-- One brand's counts, and its Account's prompts, brands and locations, which
+-- the plan limits. For the server, or a person who can access the brand; the
+-- Account's totals count every brand, whatever the person sees.
+
+create or replace function public.prompt_usage_summary(p_brand_id uuid)
+returns table (
+  brand_active integer,
+  brand_paused integer,
+  account_active integer,
+  account_brands integer,
+  account_locations integer
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select
+    coalesce(bc.active_prompts, 0),
+    coalesce(bc.paused_prompts, 0),
+    coalesce(acct.active_prompts, 0)::integer,
+    (
+      select count(*)
+      from public.brands b2
+      where b2.organization_id = b.organization_id
+        and not b2.is_demo
+    )::integer,
+    coalesce(acct.active_locations, 0)::integer
+  from public.brands b
+  left join public.prompt_usage_counters bc on bc.brand_id = b.id
+  left join lateral (
+    select sum(c.active_prompts) as active_prompts, sum(c.active_locations) as active_locations
+    from public.prompt_usage_counters c
+    join public.brands cb on cb.id = c.brand_id
+    where c.organization_id = b.organization_id
+      and not cb.is_demo
+  ) acct on true
+  where b.id = p_brand_id
+    and (coalesce(auth.role(), '') = 'service_role' or public.can_access_brand(b.id));
+$$;
+
+revoke all on function public.prompt_usage_summary(uuid) from public, anon;
+grant execute on function public.prompt_usage_summary(uuid) to authenticated, service_role;
+
+comment on function public.prompt_usage_summary(uuid) is
+  'One brand''s active/paused prompts and its account''s active prompts, brands and active prompt locations, from prompt_usage_counters only (PROMPT-012); the account totals leave out the demo brand (00380). Security definer (00390): for the server or a person who can access the brand; the account totals count every brand.';
+
+-- ── The plan's brand count (maxBrands), Account-wide ────────────────────────
+-- The Brands page and createBrand (web) compare it with the plan. The
+-- organization's brands but the demo brand, for its members and the server;
+-- 0 for anyone else, as RLS gave them before.
+
+create or replace function public.org_brand_count(p_organization_id uuid)
+returns integer
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select count(*)::integer
+  from public.brands b
+  where b.organization_id = p_organization_id
+    and not b.is_demo
+    and (
+      coalesce(auth.role(), '') = 'service_role'
+      or exists (
+        select 1 from public.profiles pf
+        where pf.id = auth.uid() and pf.organization_id = p_organization_id
+      )
+    );
+$$;
+
+revoke all on function public.org_brand_count(uuid) from public, anon;
+grant execute on function public.org_brand_count(uuid) to authenticated, service_role;
+
+comment on function public.org_brand_count(uuid) is
+  'Brand access (00390): the organization''s brands the plan counts (maxBrands), the demo brand left out, whatever brands the caller sees. For its members and the server; 0 for anyone else.';
+
+-- ── invitations: admins only ────────────────────────────────────────────────
+-- An invitation names the brands it shares (00388). Admins manage
+-- invitations (00002) and are the only ones who read them now; the pending
+-- list everyone sees in Settings › Team comes from the server.
+
+drop policy if exists "Members can view org invitations" on public.invitations;
+drop policy if exists "Admins can view org invitations" on public.invitations;
+create policy "Admins can view org invitations" on public.invitations
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  );
+
+-- ── member_brands: the person stays in the organization while shared ───────
+-- 00388's check, with the person's profile locked (for share) until the grant
+-- commits. A move to another organization updates that row: it waits for the
+-- grant, and its own trigger then deletes it; or it went first, and the check
+-- reads the moved row and refuses the grant.
+
+create or replace function public.check_member_brand_organization()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if not exists (
+    select 1 from public.brands b
+    where b.id = new.brand_id and b.organization_id = new.organization_id
+  ) then
+    raise exception 'member_brands: brand % is not in organization %', new.brand_id, new.organization_id
+      using errcode = '23514';
+  end if;
+  perform 1 from public.profiles p
+  where p.id = new.user_id and p.organization_id = new.organization_id
+  for share;
+  if not found then
+    raise exception 'member_brands: person % is not in organization %', new.user_id, new.organization_id
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00400_chat_core.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -45836,6 +46976,4291 @@ revoke all on function public.chat_claim_run_slot(uuid, integer, integer)
   from public, anon, authenticated;
 grant execute on function public.chat_run_limits(uuid, uuid) to service_role;
 grant execute on function public.chat_claim_run_slot(uuid, integer, integer) to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00407_chat_conversations_share_search.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00407: Chat's chats — shared with the team, read, deleted with Undo and
+-- searched; and what a message was scoped to
+-- ============================================================================
+-- Chat's shell and composer (CHAT-01, CHAT-02; CHAT-20 §15b, §16c), behind
+-- CHAT_AGENTIC: nothing reads or writes these columns while the flag is off.
+-- The server writes every one of them (service role), as it writes the rest
+-- of a chat (00400).
+--
+--   * shared_at: Share with team (CHAT-20 §16c). Null: private to its author,
+--     as every chat starts. Set: every member of the chat's workspace reads
+--     it, its messages, runs and steps (they follow the chat's policies,
+--     00400); the row shows the author's initials. Unshare clears it. A
+--     brand's access is its workspace's membership today; when brands are
+--     shared with Agency partners one by one (a Team feature), this policy
+--     narrows with it.
+--   * last_read_at: when the author last opened the chat's newest answer.
+--     An answer finished after it is an unread result, which keeps the chat
+--     in Agents at work and bold in Recents (CHAT-01 agentic update).
+--   * deleted_at: Delete with Undo (CHAT-01 row menu). A deleted chat is
+--     gone for every member at once (the policies below leave it out); the
+--     server brings it back on Undo, and its sweep removes it for good once
+--     the Undo toast is over (CHAT-20 §16c: a hard delete after Undo), its
+--     messages, runs and steps with it. Activity log rows stay (00402).
+--   * search_tsv: Search chats and the Ctrl K palette (CHAT-01 item 6) look
+--     in titles and message text. The 'simple' configuration: no stemming,
+--     so a chat in any language is found by its words.
+--   * chat_messages.context_json: what the person scoped a message to
+--     (CHAT-02 Data notes): the page and its chips as sent (a removed chip
+--     isn't), the @ references with their scope, the attachments
+--     (chat_uploads, 00409), Browse a page, and the skill or shortcut that
+--     started it. A person's message only; an answer has none.
+
+-- ─── Chats ──────────────────────────────────────────────────────────────────
+
+alter table public.chat_conversations
+  add column if not exists shared_at timestamptz,
+  add column if not exists last_read_at timestamptz,
+  add column if not exists deleted_at timestamptz,
+  add column if not exists search_tsv tsvector
+    generated always as (to_tsvector('simple', coalesce(title, ''))) stored;
+
+comment on column public.chat_conversations.shared_at is
+  'Share with team (CHAT-20 §16c): null = private to the author; set = every member of the workspace reads the chat. Written by the server.';
+comment on column public.chat_conversations.last_read_at is
+  'When the author last opened the newest answer: an answer finished after it is an unread result (Agents at work, bold in Recents).';
+comment on column public.chat_conversations.deleted_at is
+  'Deleted, with the Undo toast still open: no member reads it; the server restores it on Undo and its sweep removes it for good afterwards.';
+comment on column public.chat_conversations.search_tsv is
+  'The title''s words (simple configuration, any language), for Search chats and Ctrl K.';
+
+-- Search chats: titles.
+create index if not exists chat_conversations_search_idx
+  on public.chat_conversations using gin (search_tsv);
+-- All chats › Team: the workspace's shared chats, newest first.
+create index if not exists chat_conversations_shared_idx
+  on public.chat_conversations (organization_id, last_message_at desc)
+  where shared_at is not null and deleted_at is null;
+-- The sweep of deleted chats once their Undo is over.
+create index if not exists chat_conversations_deleted_idx
+  on public.chat_conversations (deleted_at)
+  where deleted_at is not null;
+
+-- ─── Messages ───────────────────────────────────────────────────────────────
+
+alter table public.chat_messages
+  add column if not exists context_json jsonb
+    check (
+      context_json is null
+      or (jsonb_typeof(context_json) = 'object' and octet_length(context_json::text) <= 32000)
+    ),
+  add column if not exists search_tsv tsvector
+    generated always as (to_tsvector('simple', content_md)) stored;
+
+-- Only a person's message carries what it was scoped to.
+alter table public.chat_messages
+  drop constraint if exists chat_messages_context_json_role_check;
+alter table public.chat_messages
+  add constraint chat_messages_context_json_role_check
+    check (context_json is null or role = 'user');
+
+comment on column public.chat_messages.context_json is
+  'What the person scoped the message to (CHAT-02): {page, chips [{key, label, value}], references [{type, id, label, scope}], attachments [upload ids], browse, skill, shortcut}. Removed chips are not in it. A person''s message only; up to 32,000 bytes.';
+comment on column public.chat_messages.search_tsv is
+  'The message''s words (simple configuration, any language), for Search chats and Ctrl K.';
+
+-- Search chats: message text.
+create index if not exists chat_messages_search_idx
+  on public.chat_messages using gin (search_tsv);
+
+-- ─── Who reads ──────────────────────────────────────────────────────────────
+
+-- 00400's author policy, without deleted chats.
+drop policy if exists "chat_conversations: author select" on public.chat_conversations;
+create policy "chat_conversations: author select"
+  on public.chat_conversations
+  for select
+  using (
+    user_id = auth.uid()
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+-- A shared chat: every member of its workspace, while they belong to it.
+drop policy if exists "chat_conversations: shared select" on public.chat_conversations;
+create policy "chat_conversations: shared select"
+  on public.chat_conversations
+  for select
+  using (
+    shared_at is not null
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00408_chat_user_prefs_general.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00408: a person's Chat settings — the rest of Settings › General, the
+-- panel and rail they left, and what Chat already showed them once
+-- ============================================================================
+-- Chat's settings follow the person to every device (DECISIONS N3), so they
+-- live on chat_user_prefs (00400) with the menu, focus, model and effort.
+-- Behind CHAT_AGENTIC: nothing reads them while the flag is off. The person
+-- reads and writes their own row (00400's policies); the server checks what
+-- their plan and role allow before it acts on one (Full auto, Slack).
+--
+--   * rail_open: the app sidebar on Chat screens, expanded (true) or the
+--     56px rail (false, the default; CHAT-01 4f).
+--   * panel_size: the side panel's last size (CHAT-01 item 16): compact
+--     (420px, the default), wide (640px) or full screen.
+--   * default_mode: the mode a new chat starts in (Settings › General;
+--     CHAT-23 chatSettings.defaultMode): Ask me first, Auto (the default) or
+--     Full auto, which the server allows only where the plan and the
+--     workspace's switch do (CHAT-20 §5).
+--   * answer_language: the language Chat answers in, a BCP 47 tag ('tr',
+--     'pt-BR'). Null: the language the person writes in. The app itself
+--     stays in English.
+--   * notify_via: when an agent needs them (CHAT-23 chatSettings.notifyChannel):
+--     Inbox and email (the default), Inbox only, or Inbox and Slack (offered
+--     once Slack is connected).
+--   * show_thought: "Thought for N s" under answers.
+--   * panel_on_pages: Ask Chat · Ctrl J in every app page's header.
+--   * focus_prompted_at: when the focus picker (CHAT-24) was last shown, so
+--     it isn't shown again too soon; focus itself (00400) stays null until
+--     they pick or skip.
+--   * usage_notice_period: the first day of the AI usage period whose 80%
+--     notice they saw (CHAT-04 item 16: once per person per period). Null:
+--     none seen yet.
+--   * legacy_imported_at: when their Agent Chat conversations
+--     (agent_conversations, 00009) were copied into Chat, keeping their ids,
+--     on their first visit to Chat. Null: not copied yet.
+
+alter table public.chat_user_prefs
+  add column if not exists rail_open boolean not null default false,
+  add column if not exists panel_size text not null default 'compact'
+    check (panel_size in ('compact', 'wide', 'full')),
+  add column if not exists default_mode text not null default 'auto'
+    check (default_mode in ('ask_first', 'auto', 'full_auto')),
+  add column if not exists answer_language text
+    check (answer_language ~ '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$'),
+  add column if not exists notify_via text not null default 'inbox_email'
+    check (notify_via in ('inbox_email', 'inbox', 'inbox_slack')),
+  add column if not exists show_thought boolean not null default true,
+  add column if not exists panel_on_pages boolean not null default true,
+  add column if not exists focus_prompted_at timestamptz,
+  add column if not exists usage_notice_period date,
+  add column if not exists legacy_imported_at timestamptz;
+
+comment on column public.chat_user_prefs.rail_open is
+  'The app sidebar on Chat screens: expanded (true) or the 56px rail (false, the default; CHAT-01 4f).';
+comment on column public.chat_user_prefs.panel_size is
+  'The side panel''s last size (CHAT-01 item 16): compact (420px), wide (640px) or full.';
+comment on column public.chat_user_prefs.default_mode is
+  'The mode a new chat starts in: ask_first, auto or full_auto (Full auto only where the plan and the workspace allow; the server checks).';
+comment on column public.chat_user_prefs.answer_language is
+  'The language Chat answers in (BCP 47). Null: the language the person writes in.';
+comment on column public.chat_user_prefs.notify_via is
+  'When an agent needs them: inbox_email, inbox or inbox_slack (CHAT-23 chatSettings.notifyChannel).';
+comment on column public.chat_user_prefs.usage_notice_period is
+  'The first day of the AI usage period whose 80% notice they saw (CHAT-04 item 16). Null: none yet.';
+comment on column public.chat_user_prefs.legacy_imported_at is
+  'When their Agent Chat conversations (00009) were copied into Chat with their ids. Null: not yet.';
+
+comment on table public.chat_user_prefs is
+  'Chat (00400, 00408): a person''s Chat settings, on the server so they follow them to every device (DECISIONS N3): menu, rail and panel, where pages open, focus areas, model, effort, default mode, answer language, notifications, Thought for N s, Ask Chat on pages, and the one-time notices and copy. Theirs to read and write.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00409_chat_uploads.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00409: Chat's attachments — the files a person attaches to a message
+-- ============================================================================
+-- The composer's Attach (CHAT-02 items 18–22), behind CHAT_AGENTIC: nothing
+-- writes here while the flag is off. An attachment is data for the run that
+-- reads it (CHAT-05), never a deliverable: it doesn't show in Files (00411)
+-- and doesn't count toward the workspace's storage.
+--
+--   * The bucket chat-uploads: private, 10 MB a file (CHAT-00: every
+--     upload), the types CHAT-02 item 19 lists. Each file goes under its
+--     workspace's folder ({organization_id}/{upload id}). Members have no
+--     policy on it: the app gives a one-time upload address after its own
+--     checks, and reads the file with the service role, as content-images
+--     does (00272).
+--   * chat_uploads: one row per attached file. pending until the file
+--     arrived, ready once the server checked it, failed when it didn't (the
+--     chip's Retry). conversation_id is null for a new chat's draft, before
+--     its first message makes the chat; message_id is set when the message
+--     is sent, and a message carries at most 5 (the trigger below backs the
+--     server's check). Kept 90 days (expires_at): a daily sweep deletes the
+--     row and its file, also after its chat was deleted, so no file is left
+--     behind without a row.
+--
+-- The server writes every row (service role). A person reads their own, and
+-- the attachments of a chat they can read (a shared chat's, 00407).
+
+-- ─── The bucket ─────────────────────────────────────────────────────────────
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'chat-uploads',
+  'chat-uploads',
+  false,
+  10485760,
+  array[
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+    'text/markdown',
+    'text/csv',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/json',
+    'text/html',
+    'image/png',
+    'image/jpeg',
+    'image/webp'
+  ]
+)
+-- Run again, it leaves the bucket as an admin may have set it.
+on conflict (id) do nothing;
+
+-- ─── Attachments ────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_uploads (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  -- The person who attached it.
+  user_id uuid not null references auth.users(id) on delete cascade,
+  -- Null while it is in a new chat's draft. A deleted chat or message leaves
+  -- its attachments to the sweep, which deletes each file with its row.
+  conversation_id uuid references public.chat_conversations(id) on delete set null,
+  -- The message it was sent with; null while it is in a draft.
+  message_id uuid references public.chat_messages(id) on delete set null,
+  -- The file's name as the person had it, for the chip.
+  name text not null check (char_length(name) between 1 and 255),
+  mime_type text not null check (
+    mime_type in (
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'text/markdown',
+      'text/csv',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/json',
+      'text/html',
+      'image/png',
+      'image/jpeg',
+      'image/webp'
+    )
+  ),
+  size_bytes integer not null check (size_bytes between 1 and 10485760),
+  -- Its object in chat-uploads: {organization_id}/{id}.
+  storage_path text not null unique check (char_length(storage_path) between 1 and 300),
+  status text not null default 'pending' check (status in ('pending', 'ready', 'failed')),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '90 days')
+);
+
+create index if not exists chat_uploads_user_created_idx
+  on public.chat_uploads (user_id, created_at desc);
+create index if not exists chat_uploads_organization_idx
+  on public.chat_uploads (organization_id);
+create index if not exists chat_uploads_conversation_idx
+  on public.chat_uploads (conversation_id) where conversation_id is not null;
+create index if not exists chat_uploads_message_idx
+  on public.chat_uploads (message_id) where message_id is not null;
+-- The daily sweep of expired attachments.
+create index if not exists chat_uploads_expires_idx
+  on public.chat_uploads (expires_at);
+
+comment on table public.chat_uploads is
+  'Chat (00409): the files a person attached to a message (CHAT-02 18–22), in the private bucket chat-uploads; 10 MB each, 5 a message, kept 90 days. Data for the run, never a deliverable. Written by the server; a person reads their own and those of a chat they can read.';
+comment on column public.chat_uploads.storage_path is
+  'The object in the chat-uploads bucket: {organization_id}/{id}.';
+
+-- At most 5 attachments a message: the database's backstop to the server's
+-- check. Counted when an attachment joins a message.
+create or replace function public.chat_uploads_per_message()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.message_id is not null
+     and (tg_op = 'INSERT' or new.message_id is distinct from old.message_id)
+     and (
+       select count(*) from public.chat_uploads u
+       where u.message_id = new.message_id and u.id <> new.id
+     ) >= 5
+  then
+    raise exception 'a message carries at most 5 attachments' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_chat_uploads_per_message on public.chat_uploads;
+create trigger trg_chat_uploads_per_message
+  before insert or update of message_id on public.chat_uploads
+  for each row execute function public.chat_uploads_per_message();
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_uploads enable row level security;
+revoke all on table public.chat_uploads from anon, authenticated;
+grant select on table public.chat_uploads to authenticated;
+grant all on table public.chat_uploads to service_role;
+
+-- Their own, while they belong to its workspace; and those of a chat they
+-- can read (its policies: the author's, or a shared one).
+drop policy if exists "chat_uploads: own or chat select" on public.chat_uploads;
+create policy "chat_uploads: own or chat select"
+  on public.chat_uploads
+  for select
+  using (
+    (
+      user_id = auth.uid()
+      and organization_id in (
+        select p.organization_id from public.profiles p where p.id = auth.uid()
+      )
+    )
+    or conversation_id in (select c.id from public.chat_conversations c)
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00410_chat_tool_cache.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00410: Chat's tool results kept within a chat, and what each step and
+-- model call measured
+-- ============================================================================
+-- The context engine (CHAT-04 items 9–10, 27–28; CHAT-20 §15a), behind
+-- CHAT_AGENTIC: nothing writes here while the flag is off. Everything here
+-- is the server's and staff's: tool names, results and costs never reach a
+-- member (CHAT-03 item 22, CHAT-04 item 15).
+--
+--   * chat_tool_cache: within one chat, the same read with the same scope
+--     reuses the earlier result (item 9), unless the data has refreshed
+--     since: the engine compares data_as_of with the brand's newest
+--     tracking run before it uses a row (§15a: the cache is dropped when
+--     data_as_of moves). scope_hash is the sha-256 of the read's normalized
+--     scope (brand, dates, platforms, filters, limit). Rows are kept a day
+--     (expires_at, the sweep), and go with their chat. A reuse costs no
+--     model tokens and no budget (item 27).
+--   * chat_run_steps, a step's measure (staff only: members are granted
+--     00400's columns, not these): latency_ms; cache_hit when its result
+--     came from chat_tool_cache; truncated when the result was cut to the
+--     run's budget before the model saw it (item 6); result_tokens, what it
+--     sent the model.
+--   * prompt_improve_usage, a model call's measure (the AI budget's ledger,
+--     00405; server only): the prompt cache's read and write tokens (§D
+--     item 28) and the call's latency. input_tokens and output_tokens are
+--     already there (00120).
+
+-- ─── A chat's tool results ──────────────────────────────────────────────────
+
+create table if not exists public.chat_tool_cache (
+  conversation_id uuid not null references public.chat_conversations(id) on delete cascade,
+  -- The registry name of the tool that read.
+  tool text not null check (char_length(tool) between 1 and 100),
+  -- sha-256 (hex) of the read's normalized scope.
+  scope_hash text not null check (scope_hash ~ '^[0-9a-f]{64}$'),
+  -- The brand the read was about, whose refresh voids it; null for a
+  -- workspace-wide read.
+  brand_id uuid references public.brands(id) on delete cascade,
+  -- The result as the model got it, already within the run's budget.
+  result_json jsonb not null check (octet_length(result_json::text) <= 1000000),
+  row_count integer check (row_count >= 0),
+  data_as_of timestamptz,
+  hits integer not null default 0 check (hits >= 0),
+  created_at timestamptz not null default now(),
+  last_hit_at timestamptz,
+  expires_at timestamptz not null default (now() + interval '1 day'),
+  primary key (conversation_id, tool, scope_hash)
+);
+
+create index if not exists chat_tool_cache_brand_idx
+  on public.chat_tool_cache (brand_id) where brand_id is not null;
+-- The sweep of expired results.
+create index if not exists chat_tool_cache_expires_idx
+  on public.chat_tool_cache (expires_at);
+
+comment on table public.chat_tool_cache is
+  'Chat (00410): within one chat, a read''s result by tool and normalized scope (CHAT-04 item 9), reused until the brand''s data refreshes (data_as_of) or it expires (a day). Server only.';
+
+alter table public.chat_tool_cache enable row level security;
+revoke all on table public.chat_tool_cache from anon, authenticated;
+grant all on table public.chat_tool_cache to service_role;
+
+-- ─── A step's measure ───────────────────────────────────────────────────────
+
+alter table public.chat_run_steps
+  add column if not exists latency_ms integer check (latency_ms >= 0),
+  add column if not exists cache_hit boolean not null default false,
+  add column if not exists truncated boolean not null default false,
+  add column if not exists result_tokens integer check (result_tokens >= 0);
+
+comment on column public.chat_run_steps.latency_ms is
+  'How long the step took (CHAT-04 item 10). Staff only: never granted to members.';
+comment on column public.chat_run_steps.cache_hit is
+  'Its result came from chat_tool_cache (00410). Staff only.';
+comment on column public.chat_run_steps.truncated is
+  'Its result was cut to the run''s budget before the model saw it (CHAT-04 item 6). Staff only.';
+comment on column public.chat_run_steps.result_tokens is
+  'The tokens its result sent the model. Staff only.';
+
+-- ─── A model call's measure ─────────────────────────────────────────────────
+
+alter table public.prompt_improve_usage
+  add column if not exists cache_read_tokens integer check (cache_read_tokens >= 0),
+  add column if not exists cache_write_tokens integer check (cache_write_tokens >= 0),
+  add column if not exists latency_ms integer check (latency_ms >= 0);
+
+comment on column public.prompt_improve_usage.cache_read_tokens is
+  'Input tokens the provider read from its prompt cache (CHAT-04 §D item 28). Null where not measured.';
+comment on column public.prompt_improve_usage.cache_write_tokens is
+  'Input tokens the provider wrote to its prompt cache. Null where not measured.';
+comment on column public.prompt_improve_usage.latency_ms is
+  'How long the model call took. Null where not measured.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00411_chat_files.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00411: Chat's Files — the work Chat finished, filed for the workspace, and
+-- the storage it takes
+-- ============================================================================
+-- Outputs and Files (CHAT-06; CHAT-09 items 13–17; CHAT-18 item 21), behind
+-- CHAT_AGENTIC: nothing writes here while the flag is off. The server writes
+-- every row (service role): it files a deliverable when a run makes one,
+-- an answer on Save to Files, and deletes a file for its creator or an
+-- Admin (the Chat plan's decision).
+--
+--   * The bucket chat-files: private. Each file's canonical content (Markdown
+--     for a document or report, JSON rows for a table, the source for code,
+--     PNG or WebP for an image) under {organization_id}/{file id}/, and the
+--     formats rendered from it on a first download, cached beside it (CHAT-06
+--     Data notes). 25 MB an object: Chat's own output, not an upload. Members
+--     have no policy on it; the app hands out one-time download addresses.
+--   * chat_files: one row per filed deliverable or saved answer. Files
+--     belong to the workspace (CHAT-06 item 24): every member reads them
+--     (brand access is workspace membership today). Its type, the formats it
+--     downloads in, where it came from (origin, and the chat, message and run
+--     when Chat made it; the Content draft it was opened in), its status
+--     (draft, attached to a task, done), audience (public content follows
+--     CHAT-05's rule), version (a revision updates the same file), tags and
+--     a one-line summary for the finder and the chat's history (CHAT-04
+--     item 7), and when it was generated with the newest data it read
+--     (items 38–42). Kept a year (expires_at); a daily sweep deletes it and
+--     its objects after the 30-day notice. A deleted brand leaves its files
+--     to the workspace, a deleted member leaves theirs with no creator.
+--   * chat_file_task_links: a file attached to an Action Center task
+--     (CHAT-09 item 13), by whom and when. Readable where its file is.
+--   * chat_storage_usage: each workspace's bytes and files in Files, kept by
+--     the trigger below on every file written, resized or deleted, so the
+--     meter and the "Storage is full" check read one row (CHAT-06 items
+--     26–29). Attachments (00409) and rendered formats don't count. The
+--     limit is the plan's plus its storage packs (00413), worked out on the
+--     server.
+
+-- ─── The bucket ─────────────────────────────────────────────────────────────
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'chat-files',
+  'chat-files',
+  false,
+  26214400,
+  array[
+    'text/markdown',
+    'text/html',
+    'text/plain',
+    'text/csv',
+    'application/json',
+    'application/ld+json',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'image/png',
+    'image/webp'
+  ]
+)
+-- Run again, it leaves the bucket as an admin may have set it.
+on conflict (id) do nothing;
+
+-- ─── Files ──────────────────────────────────────────────────────────────────
+
+-- A list's words as one text, for a generated search column (array_to_string
+-- is only stable).
+create or replace function public.chat_text_array_words(p_values text[])
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(string_agg(v, ' '), '') from unnest(p_values) as t(v);
+$$;
+
+create table if not exists public.chat_files (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  -- Null: about the workspace, or its brand was deleted.
+  brand_id uuid references public.brands(id) on delete set null,
+  created_by uuid references auth.users(id) on delete set null,
+  title text not null check (char_length(title) between 1 and 200),
+  type text not null check (type in ('document', 'table', 'code', 'image', 'report')),
+  -- The formats it downloads in (CHAT-06 item 2), the first its main one.
+  formats text[] not null default '{}' check (
+    formats <@ array[
+      'md', 'html', 'docx', 'pdf', 'csv', 'xlsx', 'json', 'jsonld', 'txt', 'png', 'webp'
+    ]::text[]
+    and public.chat_text_array_distinct(formats)
+  ),
+  -- The canonical content's type and object in chat-files.
+  mime_type text not null check (char_length(mime_type) between 3 and 100),
+  storage_path text not null unique check (char_length(storage_path) between 1 and 300),
+  size_bytes bigint not null default 0 check (size_bytes >= 0),
+  -- From: an Action Center task, Chat, a scheduled job or the Content Editor.
+  origin text not null check (origin in ('task', 'chat', 'schedule', 'editor')),
+  conversation_id uuid references public.chat_conversations(id) on delete set null,
+  message_id uuid references public.chat_messages(id) on delete set null,
+  run_id uuid references public.chat_runs(id) on delete set null,
+  -- Open in Content Editor: the draft made from it ("Used in Content draft").
+  content_draft_id uuid references public.content_drafts(id) on delete set null,
+  status text not null default 'draft' check (status in ('draft', 'attached', 'done')),
+  audience text not null default 'internal' check (audience in ('internal', 'public')),
+  version integer not null default 1 check (version >= 1),
+  summary text check (char_length(summary) between 1 and 300),
+  tags text[] not null default '{}' check (cardinality(tags) <= 30),
+  -- CHAT-06 items 38–42: when it was made (UTC), the newest data it read and
+  -- the IANA time zone both were shown in.
+  generated_at timestamptz not null default now(),
+  data_as_of timestamptz,
+  timezone text check (char_length(timezone) between 1 and 64),
+  search_tsv tsvector generated always as (
+    to_tsvector(
+      'simple',
+      title || ' ' || coalesce(summary, '') || ' ' || public.chat_text_array_words(tags)
+    )
+  ) stored,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '1 year')
+);
+
+-- Files: the workspace's, newest first.
+create index if not exists chat_files_organization_created_idx
+  on public.chat_files (organization_id, created_at desc);
+create index if not exists chat_files_brand_idx
+  on public.chat_files (brand_id) where brand_id is not null;
+create index if not exists chat_files_created_by_idx
+  on public.chat_files (created_by) where created_by is not null;
+create index if not exists chat_files_conversation_idx
+  on public.chat_files (conversation_id) where conversation_id is not null;
+create index if not exists chat_files_message_idx
+  on public.chat_files (message_id) where message_id is not null;
+create index if not exists chat_files_run_idx
+  on public.chat_files (run_id) where run_id is not null;
+create index if not exists chat_files_content_draft_idx
+  on public.chat_files (content_draft_id) where content_draft_id is not null;
+-- The finder (CHAT-06 items 13–15): title, summary and tags.
+create index if not exists chat_files_search_idx
+  on public.chat_files using gin (search_tsv);
+-- The daily sweep, and its 30-day notice.
+create index if not exists chat_files_expires_idx
+  on public.chat_files (expires_at);
+
+drop trigger if exists trg_chat_files_updated_at on public.chat_files;
+create trigger trg_chat_files_updated_at
+  before update on public.chat_files
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_files is
+  'Chat (00411): the work Chat finished, filed for the workspace (CHAT-06): type, formats, origin, status, audience, version, tags, summary, generated_at / data_as_of / timezone; content in the private bucket chat-files; kept a year. Every member reads; the server writes.';
+comment on column public.chat_files.storage_path is
+  'The canonical content''s object in the chat-files bucket, under {organization_id}/{id}/; rendered formats are cached beside it.';
+comment on column public.chat_files.formats is
+  'The formats it downloads in (CHAT-06 item 2), its main format first.';
+
+-- ─── Files attached to tasks ────────────────────────────────────────────────
+
+create table if not exists public.chat_file_task_links (
+  file_id uuid not null references public.chat_files(id) on delete cascade,
+  action_task_id uuid not null references public.action_tasks(id) on delete cascade,
+  attached_by uuid references auth.users(id) on delete set null,
+  attached_at timestamptz not null default now(),
+  primary key (file_id, action_task_id)
+);
+
+create index if not exists chat_file_task_links_task_idx
+  on public.chat_file_task_links (action_task_id);
+
+comment on table public.chat_file_task_links is
+  'Chat (00411): a file attached to an Action Center task (CHAT-09 item 13), by whom and when. Readable where its file is; the server writes.';
+
+-- ─── Storage used ───────────────────────────────────────────────────────────
+
+create table if not exists public.chat_storage_usage (
+  organization_id uuid primary key references public.organizations(id) on delete cascade,
+  bytes_used bigint not null default 0 check (bytes_used >= 0),
+  file_count integer not null default 0 check (file_count >= 0),
+  updated_at timestamptz not null default now()
+);
+
+comment on table public.chat_storage_usage is
+  'Chat (00411): a workspace''s bytes and files in Files (CHAT-06 items 26–29), kept by the trigger on chat_files. Members read it; only the trigger writes.';
+
+-- Keeps chat_storage_usage in step with chat_files. Security definer, so
+-- the row is kept whoever writes a file. A file leaving takes its bytes off
+-- an existing row only: a workspace being deleted takes its counter with it,
+-- and a new row there would fail its key.
+create or replace function public.chat_files_count_storage()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_op = 'INSERT' then
+    insert into public.chat_storage_usage as u (organization_id, bytes_used, file_count)
+    values (new.organization_id, new.size_bytes, 1)
+    on conflict (organization_id) do update
+      set bytes_used = u.bytes_used + excluded.bytes_used,
+          file_count = u.file_count + 1,
+          updated_at = now();
+    return new;
+  elsif tg_op = 'DELETE' then
+    update public.chat_storage_usage
+    set bytes_used = greatest(bytes_used - old.size_bytes, 0),
+        file_count = greatest(file_count - 1, 0),
+        updated_at = now()
+    where organization_id = old.organization_id;
+    return old;
+  else
+    update public.chat_storage_usage
+    set bytes_used = greatest(bytes_used + new.size_bytes - old.size_bytes, 0),
+        updated_at = now()
+    where organization_id = new.organization_id;
+    return new;
+  end if;
+end;
+$$;
+
+drop trigger if exists trg_chat_files_count_storage on public.chat_files;
+create trigger trg_chat_files_count_storage
+  after insert or delete or update of size_bytes on public.chat_files
+  for each row execute function public.chat_files_count_storage();
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_files enable row level security;
+alter table public.chat_file_task_links enable row level security;
+alter table public.chat_storage_usage enable row level security;
+
+revoke all on table public.chat_files from anon, authenticated;
+revoke all on table public.chat_file_task_links from anon, authenticated;
+revoke all on table public.chat_storage_usage from anon, authenticated;
+
+grant select on table public.chat_files to authenticated;
+grant select on table public.chat_file_task_links to authenticated;
+grant select on table public.chat_storage_usage to authenticated;
+
+grant all on table public.chat_files to service_role;
+grant all on table public.chat_file_task_links to service_role;
+grant all on table public.chat_storage_usage to service_role;
+
+-- Files belong to the workspace: its members read them while they belong to it.
+drop policy if exists "chat_files: member select" on public.chat_files;
+create policy "chat_files: member select"
+  on public.chat_files
+  for select
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+drop policy if exists "chat_file_task_links: file select" on public.chat_file_task_links;
+create policy "chat_file_task_links: file select"
+  on public.chat_file_task_links
+  for select
+  using (file_id in (select f.id from public.chat_files f));
+
+drop policy if exists "chat_storage_usage: member select" on public.chat_storage_usage;
+create policy "chat_storage_usage: member select"
+  on public.chat_storage_usage
+  for select
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00412_help_answers.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00412: Chat's Help answers — the answers it already gave, and the
+-- questions Help couldn't answer
+-- ============================================================================
+-- Help in Chat (CHAT-19 §4–§6), behind CHAT_AGENTIC: nothing writes here
+-- while the flag is off. A Help answer is written from the Help articles in
+-- the repository (help/{area}/{slug}.md) alone: no workspace's data, files
+-- or history goes into it (§5), so one answer serves every workspace.
+-- Server only: staff read both tables with the service role.
+--
+--   * help_answer_cache: step 2 of §5's cheapest path. The same Help
+--     question, normalized (case, spacing, punctuation), in the same
+--     language and app version gets the answer given before, with no model
+--     call. articles lists the articles it was written from ({area}/{slug}),
+--     so an article that changes clears the answers built on it.
+--   * help_gaps: a question Help had no good match for (§4 "Gaps"), for the
+--     weekly list of articles to write: the question as asked, the page the
+--     person was on, the closest article and its score. No workspace's or
+--     person's id is kept: the log is anonymous.
+
+-- ─── Answers given ──────────────────────────────────────────────────────────
+
+create table if not exists public.help_answer_cache (
+  id uuid primary key default gen_random_uuid(),
+  -- The question as normalized, and its sha-256 (hex), the key.
+  question text not null check (char_length(question) between 1 and 500),
+  question_hash text not null check (question_hash ~ '^[0-9a-f]{64}$'),
+  -- The language the answer is in (BCP 47) and the app version it is for.
+  lang text not null check (lang ~ '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$'),
+  app_version text not null check (char_length(app_version) between 1 and 40),
+  answer_md text not null check (char_length(answer_md) between 1 and 20000),
+  -- The articles it was written from, as {area}/{slug}.
+  articles text[] not null default '{}' check (cardinality(articles) <= 10),
+  -- The model that wrote it.
+  model text check (char_length(model) between 1 and 200),
+  hits integer not null default 0 check (hits >= 0),
+  created_at timestamptz not null default now(),
+  last_hit_at timestamptz,
+  unique (question_hash, lang, app_version)
+);
+
+-- An article that changed: the answers built on it.
+create index if not exists help_answer_cache_articles_idx
+  on public.help_answer_cache using gin (articles);
+
+comment on table public.help_answer_cache is
+  'Help in Chat (00412): a Help answer by normalized question, language and app version (CHAT-19 §5 step 2), written from the listed Help articles only, with no workspace data. Cleared for an article when it changes. Server only.';
+
+-- ─── Questions with no good answer ──────────────────────────────────────────
+
+create table if not exists public.help_gaps (
+  id uuid primary key default gen_random_uuid(),
+  question text not null check (char_length(question) between 1 and 500),
+  lang text not null check (lang ~ '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$'),
+  -- The app page the person asked from.
+  route text check (char_length(route) between 1 and 500),
+  -- The closest article ({area}/{slug}) and its retrieval score; null when
+  -- nothing matched at all.
+  best_article text check (char_length(best_article) between 1 and 200),
+  best_score real check (best_score >= 0),
+  app_version text check (char_length(app_version) between 1 and 40),
+  created_at timestamptz not null default now()
+);
+
+-- The weekly list, newest first.
+create index if not exists help_gaps_created_idx
+  on public.help_gaps (created_at desc);
+
+comment on table public.help_gaps is
+  'Help in Chat (00412): questions Help had no good match for (CHAT-19 §4 Gaps), anonymous: the question, the page, the closest article and its score. For the weekly list of new articles. Server only.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.help_answer_cache enable row level security;
+alter table public.help_gaps enable row level security;
+
+revoke all on table public.help_answer_cache from anon, authenticated;
+revoke all on table public.help_gaps from anon, authenticated;
+
+grant all on table public.help_answer_cache to service_role;
+grant all on table public.help_gaps to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00413_add_on_packs.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00413: Add-on packs — AI credits and storage, bought with Stripe
+-- ============================================================================
+-- CHAT-18 (and CHAT-04 item 11, CHAT-06 item 26), behind CHAT_AGENTIC: no
+-- pack is offered or granted while the flag is off. A workspace that used
+-- its monthly AI limit or its storage buys more in the product; nothing is
+-- granted before Stripe says it was paid.
+--
+--   * add_on_products: the packs on sale (CHAT-18 §A), a table and not code,
+--     so staff change them without a release. AI credits are one payment,
+--     valid 12 months, and add half their price to the AI budget (2x the
+--     model cost; grant_ai_usd); storage is monthly, renewed with the plan,
+--     and adds grant_bytes (1 GB = 1024³ bytes). stripe_price_id is set per
+--     deployment (test prices on a test deployment); a pack without one is
+--     never sold. highlight is the "Most picked" one on its tab. Seeded with
+--     the owner's packs below. Server only: the grants are dollars of model
+--     cost, which no browser gets (CHAT-18 item 3); the server tells the
+--     page what each pack adds for its plan.
+--   * add_on_purchases: one row per Checkout an Admin started (CHAT-18 §D):
+--     pending until Stripe's webhook says paid or failed (checkout.session
+--     .completed, invoice.paid), each Checkout once (its id is unique);
+--     refunded by staff in Stripe; a storage pack's subscription item ended
+--     is cancelled. The workspace's Admins read their purchases (Settings ›
+--     Billing › Add-ons); the server writes.
+--   * ai_credit_grants: what a paid AI pack added: its dollars of model cost,
+--     how much was used, and until when (12 months). The budget draws on
+--     them after the month's included limit, oldest first (CHAT-18 item 19).
+--     A refund takes the unused part away (usd_total down to usd_used).
+--     Server only.
+--   * storage_grants: what a paid storage pack adds, until the end of the
+--     period paid for (each invoice.paid moves active_until on). Server only.
+--   * prompt_improve_usage.grant_id: the AI credit grant a ledger row drew on
+--     (CHAT-18 Data notes); null when it drew on the included budget. A step
+--     that crosses from one to the other is written as two rows.
+
+-- ─── Packs on sale ──────────────────────────────────────────────────────────
+
+create table if not exists public.add_on_products (
+  id text primary key check (id ~ '^[a-z][a-z0-9_]{1,39}$'),
+  kind text not null check (kind in ('ai', 'storage')),
+  name text not null check (char_length(name) between 1 and 100),
+  -- The price in the currency's smallest unit (cents).
+  price_cents integer not null check (price_cents > 0),
+  currency text not null default 'usd' check (currency ~ '^[a-z]{3}$'),
+  billing text not null check (billing in ('one_time', 'monthly')),
+  -- AI: the dollars of model cost it adds (price ÷ 2). Storage: the bytes.
+  grant_ai_usd numeric(12, 2) check (grant_ai_usd > 0),
+  grant_bytes bigint check (grant_bytes > 0),
+  -- AI: how long its credits last. Storage: null, it lasts while it renews.
+  valid_months smallint check (valid_months > 0),
+  stripe_price_id text check (stripe_price_id ~ '^price_[A-Za-z0-9]{1,200}$'),
+  active boolean not null default true,
+  -- "Most picked" on its tab.
+  highlight boolean not null default false,
+  sort smallint not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check ((kind = 'ai') = (grant_ai_usd is not null)),
+  check ((kind = 'storage') = (grant_bytes is not null)),
+  check (kind <> 'ai' or (billing = 'one_time' and valid_months is not null)),
+  check (kind <> 'storage' or (billing = 'monthly' and valid_months is null))
+);
+
+drop trigger if exists trg_add_on_products_updated_at on public.add_on_products;
+create trigger trg_add_on_products_updated_at
+  before update on public.add_on_products
+  for each row execute function public.handle_updated_at();
+
+comment on table public.add_on_products is
+  'Add-on packs on sale (CHAT-18 §A): AI credits (one payment, 12 months, grant_ai_usd = price ÷ 2 of model cost) and storage (monthly, grant_bytes). Staff-edited; stripe_price_id per deployment, a pack without one isn''t sold. Server only.';
+
+-- The owner's packs (CHAT-18 items 2 and 4; "Most picked": $50 and +25 GB).
+-- Run again, it leaves them as staff may have changed them.
+insert into public.add_on_products
+  (id, kind, name, price_cents, billing, grant_ai_usd, grant_bytes, valid_months, highlight, sort)
+values
+  ('ai_10', 'ai', 'AI credits $10', 1000, 'one_time', 5, null, 12, false, 1),
+  ('ai_50', 'ai', 'AI credits $50', 5000, 'one_time', 25, null, 12, true, 2),
+  ('ai_250', 'ai', 'AI credits $250', 25000, 'one_time', 125, null, 12, false, 3),
+  ('ai_1000', 'ai', 'AI credits $1,000', 100000, 'one_time', 500, null, 12, false, 4),
+  ('storage_25', 'storage', 'Storage +25 GB', 500, 'monthly', null, 26843545600, null, true, 1),
+  ('storage_100', 'storage', 'Storage +100 GB', 1500, 'monthly', null, 107374182400, null, false, 2),
+  ('storage_250', 'storage', 'Storage +250 GB', 2900, 'monthly', null, 268435456000, null, false, 3)
+on conflict (id) do nothing;
+
+-- ─── Purchases ──────────────────────────────────────────────────────────────
+
+create table if not exists public.add_on_purchases (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  product_id text not null references public.add_on_products(id) on update cascade,
+  -- The Admin who bought it.
+  bought_by uuid references auth.users(id) on delete set null,
+  status text not null default 'pending'
+    check (status in ('pending', 'paid', 'failed', 'refunded', 'cancelled')),
+  stripe_checkout_session_id text unique check (stripe_checkout_session_id ~ '^cs_[A-Za-z0-9_]{1,250}$'),
+  stripe_invoice_id text check (stripe_invoice_id ~ '^in_[A-Za-z0-9_]{1,250}$'),
+  -- A storage pack's item on the plan's subscription.
+  stripe_subscription_item_id text unique
+    check (stripe_subscription_item_id ~ '^si_[A-Za-z0-9_]{1,250}$'),
+  amount_paid_cents integer check (amount_paid_cents >= 0),
+  currency text not null default 'usd' check (currency ~ '^[a-z]{3}$'),
+  granted_at timestamptz,
+  -- AI credits: granted_at + the pack's months. Storage: null.
+  expires_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  -- Paid, and what came after paying, were granted.
+  check (status in ('pending', 'failed') or granted_at is not null)
+);
+
+-- Settings › Billing › Add-ons: the workspace's purchases, newest first.
+create index if not exists add_on_purchases_organization_created_idx
+  on public.add_on_purchases (organization_id, created_at desc);
+create index if not exists add_on_purchases_product_idx
+  on public.add_on_purchases (product_id);
+create index if not exists add_on_purchases_bought_by_idx
+  on public.add_on_purchases (bought_by) where bought_by is not null;
+create index if not exists add_on_purchases_invoice_idx
+  on public.add_on_purchases (stripe_invoice_id) where stripe_invoice_id is not null;
+
+drop trigger if exists trg_add_on_purchases_updated_at on public.add_on_purchases;
+create trigger trg_add_on_purchases_updated_at
+  before update on public.add_on_purchases
+  for each row execute function public.handle_updated_at();
+
+comment on table public.add_on_purchases is
+  'Add-on packs bought (CHAT-18 §D–E): one row per Checkout, pending until the Stripe webhook says paid or failed (each Checkout once), refunded by staff, cancelled when a storage item ends. The workspace''s Admins read; the server writes.';
+
+-- ─── What a paid pack grants ────────────────────────────────────────────────
+
+create table if not exists public.ai_credit_grants (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  purchase_id uuid not null unique references public.add_on_purchases(id) on delete cascade,
+  -- Dollars of model cost (the pack's grant_ai_usd), and how much is used.
+  usd_total numeric(12, 6) not null check (usd_total >= 0),
+  usd_used numeric(12, 6) not null default 0 check (usd_used >= 0),
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (usd_used <= usd_total)
+);
+
+-- The budget's draw: a workspace's grants still valid, oldest first.
+create index if not exists ai_credit_grants_organization_expires_idx
+  on public.ai_credit_grants (organization_id, expires_at);
+
+drop trigger if exists trg_ai_credit_grants_updated_at on public.ai_credit_grants;
+create trigger trg_ai_credit_grants_updated_at
+  before update on public.ai_credit_grants
+  for each row execute function public.handle_updated_at();
+
+comment on table public.ai_credit_grants is
+  'AI credits a paid pack added (CHAT-18 §F): dollars of model cost, used, valid until; drawn after the month''s included limit, oldest first. A refund lowers usd_total to usd_used. Server only: dollars never reach a browser.';
+
+create table if not exists public.storage_grants (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  purchase_id uuid not null unique references public.add_on_purchases(id) on delete cascade,
+  bytes bigint not null check (bytes > 0),
+  -- The end of the period paid for; each paid renewal moves it on.
+  active_until timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists storage_grants_organization_active_idx
+  on public.storage_grants (organization_id, active_until);
+
+drop trigger if exists trg_storage_grants_updated_at on public.storage_grants;
+create trigger trg_storage_grants_updated_at
+  before update on public.storage_grants
+  for each row execute function public.handle_updated_at();
+
+comment on table public.storage_grants is
+  'Storage a paid pack adds (CHAT-18 item 21): bytes, until the end of the period paid for (moved on by each paid renewal). The limit is the plan''s plus these, worked out on the server. Server only.';
+
+-- ─── The ledger's grant ─────────────────────────────────────────────────────
+
+alter table public.prompt_improve_usage
+  add column if not exists grant_id uuid
+    references public.ai_credit_grants(id) on delete set null;
+
+comment on column public.prompt_improve_usage.grant_id is
+  'The AI credit grant this row drew on (00413); null when it drew on the month''s included budget.';
+
+create index if not exists prompt_improve_usage_grant_idx
+  on public.prompt_improve_usage (grant_id)
+  where grant_id is not null;
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.add_on_products enable row level security;
+alter table public.add_on_purchases enable row level security;
+alter table public.ai_credit_grants enable row level security;
+alter table public.storage_grants enable row level security;
+
+revoke all on table public.add_on_products from anon, authenticated;
+revoke all on table public.add_on_purchases from anon, authenticated;
+revoke all on table public.ai_credit_grants from anon, authenticated;
+revoke all on table public.storage_grants from anon, authenticated;
+
+grant select on table public.add_on_purchases to authenticated;
+
+grant all on table public.add_on_products to service_role;
+grant all on table public.add_on_purchases to service_role;
+grant all on table public.ai_credit_grants to service_role;
+grant all on table public.storage_grants to service_role;
+
+-- Billing is the Admins': the workspace's Admins read its purchases, while
+-- they belong to it.
+drop policy if exists "add_on_purchases: admin select" on public.add_on_purchases;
+create policy "add_on_purchases: admin select"
+  on public.add_on_purchases
+  for select
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00414_own_keys_enterprise.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00414: own AI keys are Enterprise's; a key saved before Chat keeps 30 days
+-- ============================================================================
+-- Owner decision 2026-10-30 (CHAT-16 items 19 and 28): with Chat on for a
+-- workspace (CHAT_AGENTIC), it runs on its own provider key only on
+-- Enterprise. On Growth own keys would take the place of AI credit packs.
+-- A workspace that saved a key before Chat went live for it keeps using
+-- that key for 30 days, on any plan; after that Chat runs on the plan's
+-- monthly AI limit.
+--
+--   * legacy_key_grandfathered (00405) now marks every workspace that isn't
+--     on Enterprise and has a saved key: 00405 marked only Starter and
+--     Growth trials, while paid Growth had own keys in its plan. The web
+--     marks one that saves a key while Chat is still off for it, as before.
+--   * legacy_key_until: when its 30 days end. Empty until Chat (or Settings
+--     › AI Providers) first needs the key with Chat on; the web fills it
+--     once (lib/chat/key.ts startLegacyKeyDays). Server only, as the mark.
+
+alter table public.organizations
+  add column if not exists legacy_key_until timestamptz;
+
+comment on column public.organizations.legacy_key_grandfathered is
+  'CHAT-16 item 28: a workspace not on Enterprise that saved its own AI key before Chat went live for it keeps using that key for Chat for 30 days (legacy_key_until). Set by 00405 / 00414 and, while Chat is off for the workspace, when it saves a key; server only.';
+
+comment on column public.organizations.legacy_key_until is
+  'CHAT-16 item 28: when a kept key (legacy_key_grandfathered) stops running Chat, 30 days after Chat first needed it. Null until then; server only.';
+
+update public.organizations o
+set legacy_key_grandfathered = true
+where o.plan is distinct from 'enterprise'
+  and not o.legacy_key_grandfathered
+  and exists (select 1 from public.organization_ai_keys k where k.organization_id = o.id);
+
+-- 00405's guard, with the new column the server's too: a member can't move
+-- their own workspace's end date.
+create or replace function public.guard_organization_server_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.plan is distinct from 'free'
+       or new.plan_overrides is not null
+       or new.subscription_status is distinct from 'incomplete'
+       or new.subscription_ends_at is not null
+       or new.stripe_customer_id is not null
+       or new.stripe_subscription_id is not null
+       or new.anthropic_api_key_encrypted is not null
+       or new.anthropic_api_key_last4 is not null
+       or new.anthropic_api_key_set_at is not null
+       or new.anthropic_api_key_set_by is not null
+       or new.legacy_key_grandfathered is distinct from false
+       or new.legacy_key_until is not null
+    then
+      raise exception 'organization column is managed server-side and cannot be set from the client'
+        using errcode = '42501';
+    end if;
+    return new;
+  end if;
+
+  if new.plan is distinct from old.plan
+     or new.plan_overrides is distinct from old.plan_overrides
+     or new.subscription_status is distinct from old.subscription_status
+     or new.subscription_ends_at is distinct from old.subscription_ends_at
+     or new.stripe_customer_id is distinct from old.stripe_customer_id
+     or new.stripe_subscription_id is distinct from old.stripe_subscription_id
+     or new.anthropic_api_key_encrypted is distinct from old.anthropic_api_key_encrypted
+     or new.anthropic_api_key_last4 is distinct from old.anthropic_api_key_last4
+     or new.anthropic_api_key_set_at is distinct from old.anthropic_api_key_set_at
+     or new.anthropic_api_key_set_by is distinct from old.anthropic_api_key_set_by
+     or new.legacy_key_grandfathered is distinct from old.legacy_key_grandfathered
+     or new.legacy_key_until is distinct from old.legacy_key_until
+  then
+    raise exception 'organization column is managed server-side and cannot be set from the client'
+      using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00417_chat_asks_next_moves.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00417: Chat's questions and next moves, and the shortcut a message started
+-- ============================================================================
+-- Questions and next moves (CHAT-07) and shortcuts (CHAT-08), behind
+-- CHAT_AGENTIC: nothing writes here while the flag is off. The server writes
+-- every row (service role); members read them where their run is (its chat's
+-- policies, 00400 and 00407), so a reload, the side panel and another device
+-- show the same card and the same chips.
+--
+--   * chat_asks: a question card a run paused on (CHAT-07 §A). One row per
+--     question, in the order the run asked them (position, from 1): the
+--     card's "1 of 2" comes from it. A run asks at most 4 questions (§B: 2 a
+--     task, 4 a run), which position's limit backs. Each has 2–4 options with
+--     exactly one Recommended (the server's rule, backed by
+--     chat_ask_options_valid), an "Other…" row when allow_other, and several
+--     picks when multi. step_id is the run's `ask` step, "Waiting for your
+--     answer". The answer is written once, with answered_at (a second one is
+--     the API's 409): {selected: [0], other, skipped, via: card | composer}.
+--     Stop saves the open ones as skipped (§A item 9). A subtask's question
+--     (CHAT-27) is its own run's, shown under the parent.
+--   * chat_next_moves: the 2–4 moves a finished run suggests (§C), ranked
+--     from 1, so the chips and the composer's ghost text come back after a
+--     reload. label names a real object, never an id or a tool; prompt is
+--     what a click sends, under 80 characters so it fits as ghost text.
+--     class is the move's action class: an Analyst or an Agency partner gets
+--     no write or execute move, as a chip or as ghost text (§C item 4).
+--     ghost_ok is the server's mark that the move continues an object of
+--     this run: only such a move is shown as ghost text.
+--   * chat_messages.shortcut_id: the shortcut a person's message started
+--     (CHAT-08 Data notes: 'tasks', 'analyze', 'report'…), so the context
+--     engine runs that shortcut's data plan and runs can be counted per
+--     shortcut. context_json (00407) carries it for the browser; this is the
+--     column an index counts by. A person's message only.
+
+-- ─── Questions ──────────────────────────────────────────────────────────────
+
+-- Whether a question's options are 2–4 rows, each with a label, exactly one
+-- of them Recommended (CHAT-07 Data notes: the server refuses any other).
+create or replace function public.chat_ask_options_valid(p_options jsonb)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select case
+    when jsonb_typeof(p_options) <> 'array' then false
+    when jsonb_array_length(p_options) not between 2 and 4 then false
+    else coalesce(
+      (
+        select bool_and(
+            jsonb_typeof(o) = 'object'
+            and jsonb_typeof(o -> 'label') = 'string'
+            and char_length(o ->> 'label') between 1 and 120
+          )
+          and count(*) filter (where o -> 'recommended' = 'true'::jsonb) = 1
+        from jsonb_array_elements(p_options) as t(o)
+      ),
+      false
+    )
+  end;
+$$;
+
+create table if not exists public.chat_asks (
+  id uuid primary key default gen_random_uuid(),
+  run_id uuid not null references public.chat_runs(id) on delete cascade,
+  -- The run's `ask` step ("Waiting for your answer").
+  step_id uuid not null references public.chat_run_steps(id) on delete cascade,
+  -- Its place among the run's questions, from 1: at most 4 a run (CHAT-07 §B).
+  position smallint not null check (position between 1 and 4),
+  question text not null check (char_length(question) between 1 and 300),
+  -- [{label, detail, recommended, cost_multiplier}]: 2–4 rows, one Recommended.
+  -- A cost multiplier comes from the model prices (00404), never from code.
+  options_json jsonb not null check (
+    public.chat_ask_options_valid(options_json) and octet_length(options_json::text) <= 8000
+  ),
+  allow_other boolean not null default false,
+  multi boolean not null default false,
+  -- {selected: [0], other: null, skipped: false, via: 'card' | 'composer'}.
+  answer_json jsonb check (
+    answer_json is null
+    or (jsonb_typeof(answer_json) = 'object' and octet_length(answer_json::text) <= 4000)
+  ),
+  answered_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (run_id, position),
+  check ((answer_json is null) = (answered_at is null))
+);
+
+create index if not exists chat_asks_step_idx
+  on public.chat_asks (step_id);
+
+comment on table public.chat_asks is
+  'Chat (00417): the questions a run paused on (CHAT-07 §A), in order, at most 4 a run: 2–4 options with one Recommended, Other, multi, and the answer once given. Readable where the run is; the server writes.';
+comment on column public.chat_asks.answer_json is
+  '{selected: [option indexes], other: text or null, skipped: boolean, via: card | composer}. Written once, with answered_at.';
+
+-- ─── Next moves ─────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_next_moves (
+  id uuid primary key default gen_random_uuid(),
+  run_id uuid not null references public.chat_runs(id) on delete cascade,
+  -- Best first, from 1: the ghost text's candidate is rank 1. At most 4 a run.
+  rank smallint not null check (rank between 1 and 4),
+  -- "Start task 2: comparison page": real objects, never ids or tool names.
+  label text not null check (char_length(label) between 1 and 80),
+  -- What a click sends as the person's next message (CHAT-07 §C item 5).
+  prompt text not null check (char_length(prompt) between 1 and 80),
+  -- The move's action class: read-only roles get read moves only.
+  class text not null check (class in ('read', 'write', 'execute')),
+  -- It continues an object of this run, so it may show as ghost text.
+  ghost_ok boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (run_id, rank)
+);
+
+comment on table public.chat_next_moves is
+  'Chat (00417): the 2–4 next moves a finished run suggests (CHAT-07 §C), ranked, with the prompt a click sends, the move''s action class (read-only roles see read moves only) and whether it may show as ghost text. Readable where the run is; the server writes.';
+
+-- ─── The shortcut a message started ─────────────────────────────────────────
+
+alter table public.chat_messages
+  add column if not exists shortcut_id text check (shortcut_id ~ '^[a-z][a-z0-9-]{1,39}$');
+
+-- Only a person's message starts a shortcut.
+alter table public.chat_messages
+  drop constraint if exists chat_messages_shortcut_id_role_check;
+alter table public.chat_messages
+  add constraint chat_messages_shortcut_id_role_check
+    check (shortcut_id is null or role = 'user');
+
+comment on column public.chat_messages.shortcut_id is
+  'The shortcut that started this message (CHAT-08: tasks, analyze, report…), whose data plan the run uses. A person''s message only; context_json (00407) carries it for the browser.';
+
+-- Runs per shortcut (CHAT-08 telemetry).
+create index if not exists chat_messages_shortcut_idx
+  on public.chat_messages (shortcut_id, created_at)
+  where shortcut_id is not null;
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_asks enable row level security;
+alter table public.chat_next_moves enable row level security;
+
+revoke all on table public.chat_asks from anon, authenticated;
+revoke all on table public.chat_next_moves from anon, authenticated;
+
+grant select on table public.chat_asks to authenticated;
+grant select on table public.chat_next_moves to authenticated;
+
+grant all on table public.chat_asks to service_role;
+grant all on table public.chat_next_moves to service_role;
+
+-- Questions and moves follow their run, which follows its chat (00400).
+drop policy if exists "chat_asks: run select" on public.chat_asks;
+create policy "chat_asks: run select"
+  on public.chat_asks
+  for select
+  using (run_id in (select r.id from public.chat_runs r));
+
+drop policy if exists "chat_next_moves: run select" on public.chat_next_moves;
+create policy "chat_next_moves: run select"
+  on public.chat_next_moves
+  for select
+  using (run_id in (select r.id from public.chat_runs r));
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00418_chat_task_state.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00418: Chat's task strip — where Chat's work on each Action Center task is
+-- ============================================================================
+-- Complete tasks (CHAT-09 §B, CHAT-08 /tasks), behind CHAT_AGENTIC: nothing
+-- writes here while the flag is off.
+--
+--   * chat_task_state: one row per Action Center task a chat works on, for
+--     the strip under the answer (`tasks.updated`): its place in the strip
+--     and Chat's own status for it, Queued, Writing, Ready for review or
+--     Done. These describe Chat's work, not the task's Action Center status
+--     (§B item 6): Done is set only once Action Center has the task
+--     completed by the person's click (§D), and Ready for review is where
+--     Chat, or an agent, says its work for the task is finished (CHAT-09
+--     item 16a, CHAT-21 item 32). action_tasks itself is never changed here:
+--     the Action Center engine and its statuses stay as they are (CHAT-09
+--     guardrail). run_id is the run working on the task now, or the last one
+--     that did; file_id the deliverable drafted for it (the card's "Task:
+--     {title}"), before and after it is attached (chat_file_task_links,
+--     00411). The task's title, Priority Score and category are read from
+--     Action Center each time, never copied here.
+--
+-- The server writes every row (service role). Rows are readable where their
+-- chat is (its policies, 00400 and 00407), and go with it.
+
+create table if not exists public.chat_task_state (
+  conversation_id uuid not null references public.chat_conversations(id) on delete cascade,
+  action_task_id uuid not null references public.action_tasks(id) on delete cascade,
+  -- Its place in the strip, from 1: the order the run took them in.
+  position smallint not null check (position >= 1),
+  chat_status text not null default 'queued'
+    check (chat_status in ('queued', 'writing', 'ready_for_review', 'done')),
+  run_id uuid references public.chat_runs(id) on delete set null,
+  file_id uuid references public.chat_files(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (conversation_id, action_task_id)
+);
+
+create index if not exists chat_task_state_task_idx
+  on public.chat_task_state (action_task_id);
+create index if not exists chat_task_state_run_idx
+  on public.chat_task_state (run_id) where run_id is not null;
+create index if not exists chat_task_state_file_idx
+  on public.chat_task_state (file_id) where file_id is not null;
+
+drop trigger if exists trg_chat_task_state_updated_at on public.chat_task_state;
+create trigger trg_chat_task_state_updated_at
+  before update on public.chat_task_state
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_task_state is
+  'Chat (00418): the task strip (CHAT-09 §B): per chat and Action Center task, its place and Chat''s own status (queued, writing, ready_for_review, done), the run on it and the deliverable drafted for it. Never the task''s Action Center status. Readable where the chat is; the server writes.';
+comment on column public.chat_task_state.chat_status is
+  'Chat''s work on the task: queued, writing, ready_for_review (Chat or an agent finished its work), done (only once Action Center has the task completed by the person''s click).';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_task_state enable row level security;
+revoke all on table public.chat_task_state from anon, authenticated;
+grant select on table public.chat_task_state to authenticated;
+grant all on table public.chat_task_state to service_role;
+
+drop policy if exists "chat_task_state: chat select" on public.chat_task_state;
+create policy "chat_task_state: chat select"
+  on public.chat_task_state
+  for select
+  using (conversation_id in (select c.id from public.chat_conversations c));
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00419_chat_agents.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00419: Chat's agents — definitions, versions, triggers and runs; subtasks
+-- and each agent's share of the AI budget
+-- ============================================================================
+-- Agents (CHAT-21) and sub-agents with agent AI budgets (CHAT-27, Phase 1
+-- and section E), behind CHAT_AGENTIC: nothing reads or writes these while
+-- the flag is off. An agent is one saved object that starts Chat runs (owner
+-- decision 4): no second runtime, no key of its own, no tool list of its own.
+-- These are Chat's tables only: no Content Editor or Action Center table is
+-- changed (CHAT-21 boundary). The server writes every row (service role),
+-- after its role, plan and activation checks.
+--
+--   * chat_agents: the definition (CHAT-21 data model `agent`): name (1–60,
+--     unique in the workspace), status draft → active ⇄ paused → archived
+--     (deleted for good from archived only), why it is paused, the owner
+--     (the Admin or Manager who activated it: its triggered runs act as
+--     them, Addendum 2 H), who sees it (private: its owner and Admins;
+--     workspace: every member, read-only for Analysts and Agency partners),
+--     the version runs start with, failed runs in a row (3 pause it), and
+--     its AI caps as shares of the monthly AI limit (CHAT-27 items 19, 23):
+--     max_run_share per run (10% by default, 1–50%) and max_month_share a
+--     month (none by default).
+--   * chat_agent_versions: what the agent does, one immutable row per save
+--     (§C item 14): skills in order (1 primary + up to 2 follow-on),
+--     instructions (≤ 2,000), mode, connections ({key, required}), model and
+--     effort, scope (brands or all, topics, tags, engines, URLs), who is
+--     notified when it needs someone, and the follow-up check's day (14).
+--     A run keeps the version it started with.
+--   * chat_agent_triggers: what starts it (§E): a schedule (its CHAT-12
+--     schedule row, Wave 3), a Signal, a KPI change or a watch rule, 1–5 an
+--     agent; config_json holds each kind's settings. Run now and Run agent
+--     on an action are always on and have no row. last_fired_at and
+--     cooldown_until are the noise control's (§E item 24).
+--   * chat_agent_runs: one row per run an agent started or was asked to
+--     start (§H): queued, running, needs_you, done, failed, stopped,
+--     skipped (coalesced, cooldown, daily limit or nothing to do) or
+--     paused_cap; its trigger and what fired it (trigger_ref, evidence_json
+--     as scope), the person it acts as (the clicking person for Run now and
+--     Run agent, the owner for a trigger), its brand (one run per brand),
+--     the action a Run agent click scoped it to, its outcome from the impact
+--     ledger, and its cap and use as shares (CHAT-27 items 21–26): never
+--     dollars. Its chat is the conversation with its agent_run_id (below).
+--     One run at a time per agent and brand: a running or waiting one holds
+--     the place (§M item 58, the unique index); the rest wait queued.
+--     chat_start_next_agent_run() starts the next queued one when the
+--     workspace has room (§M item 59: Run now and Run agent first, then in
+--     fire order). The agent's runs stay when it is deleted (§B item 7).
+--   * chat_conversations.agent_run_id and origin 'agent': every agent run is
+--     a Chat run in a conversation of its own (§H item 36). It is readable
+--     by whoever reads its agent run (the policy below): the agent's runs
+--     are seen with the agent (§K item 51), not only by the person it acted
+--     as.
+--   * chat_activity_log.agent_id and agent_run_id: the changes an agent's
+--     run made, for the Activity log's agent filter (CHAT-27 item 29).
+--   * chat_settings: the per-run cap new agents start with (CHAT-27 item 19,
+--     Settings › Chat › Agents), whether agents may use Full auto, and
+--     whether only Admins may make workspace agents (CHAT-21 §K).
+--
+-- CHAT-27's data (section C items 11–12, section E items 21, 30–31):
+--
+--   * chat_runs.parent_run_id and subtask_title: a subtask is a child run of
+--     the run that called run_subtasks, in the same chat, with no message of
+--     its own (its events go to the parent's stream). One level only, at
+--     most 10 a run (5 a call, 2 calls): the trigger below backs the
+--     registry's check. A parent's Stop or deletion takes its subtasks.
+--   * prompt_improve_usage.agent_id, agent_run_id and parent_run_id: the
+--     agent, the agent run and the parent run a spend row was for, so one
+--     grouped read gives each agent's share and a parent's total includes
+--     its subtasks.
+--   * reserve_chat_ai_usage (00405's), taking the agent run: it names the
+--     row with the run's agent and parent, and with p_run_cap (dollars: the
+--     run's share times the budget, worked out on the server) holds the
+--     step only while the agent run's spend, own-key steps included
+--     (CHAT-27 item 33), plus the step's worst case stays within it, under
+--     the same lock, so subtasks at once can't pass it.
+--   * chat_agent_usage_shares(): each agent's share of the AI limit in a
+--     period, its own-key share and its runs, for the Agents list, Billing's
+--     By agent and the meter (items 24–28). Server only: the budget is an
+--     argument, and a member who could pass one could turn shares back into
+--     dollars, so the API serves the shares (item 30: no cost leaves the
+--     server).
+
+-- ─── Agents ─────────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_agents (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null check (char_length(name) between 1 and 60),
+  status text not null default 'draft'
+    check (status in ('draft', 'active', 'paused', 'archived')),
+  -- Why it is paused (CHAT-21 §G item 34); manual: a person paused it. Only
+  -- cap resumes on its own, after the monthly reset or a credit pack.
+  paused_reason text check (
+    paused_reason in (
+      'cap', 'connection', 'skill_off', 'failures', 'owner_role', 'plan', 'brand_gone', 'manual'
+    )
+  ),
+  -- The Admin or Manager who activated it (a draft's: who made it). Null once
+  -- their account is deleted: the agent pauses (owner_role) until an Admin
+  -- takes it over.
+  owner_id uuid references auth.users(id) on delete set null,
+  visibility text not null default 'private' check (visibility in ('private', 'workspace')),
+  -- The version new runs start with (chat_agent_versions).
+  version integer not null default 1 check (version >= 1),
+  -- Failed runs in a row: 3 pause it (failures).
+  fail_count smallint not null default 0 check (fail_count >= 0),
+  -- Shares of the monthly AI limit (CHAT-27 items 19, 23): per run, and a
+  -- month (null: no monthly cap).
+  max_run_share numeric(3, 2) not null default 0.10 check (max_run_share between 0.01 and 0.50),
+  max_month_share numeric(3, 2) check (max_month_share between 0.01 and 1),
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  activated_at timestamptz,
+  archived_at timestamptz,
+  check ((status = 'paused') = (paused_reason is not null))
+);
+
+-- One name per workspace, whatever its case (CHAT-21 §O).
+create unique index if not exists chat_agents_name_uidx
+  on public.chat_agents (organization_id, lower(name));
+-- Agents: the workspace's, by status (Mine, Workspace, Paused, Archived).
+create index if not exists chat_agents_organization_status_idx
+  on public.chat_agents (organization_id, status);
+create index if not exists chat_agents_owner_idx
+  on public.chat_agents (owner_id) where owner_id is not null;
+
+drop trigger if exists trg_chat_agents_updated_at on public.chat_agents;
+create trigger trg_chat_agents_updated_at
+  before update on public.chat_agents
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_agents is
+  'Chat (00419): an agent, one saved object that starts Chat runs (CHAT-21): name, status, pause reason, owner, visibility, current version, failed runs in a row, and its AI caps as shares of the monthly limit (CHAT-27). Private agents: owner and Admins; workspace agents: every member. The server writes.';
+comment on column public.chat_agents.max_run_share is
+  'The most one run may spend, as a share of the monthly AI limit (CHAT-27 item 19): 0.10 by default, 0.01–0.50.';
+comment on column public.chat_agents.max_month_share is
+  'The most the agent may spend a month, as a share of the monthly AI limit (CHAT-27 item 23); null: no monthly cap.';
+
+-- ─── Versions ───────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_agent_versions (
+  agent_id uuid not null references public.chat_agents(id) on delete cascade,
+  version integer not null check (version >= 1),
+  -- The primary skill, then up to 2 follow-on skills, in order (CHAT-13 ids).
+  skill_ids text[] not null check (
+    cardinality(skill_ids) between 1 and 3
+    and public.chat_text_array_distinct(skill_ids)
+    and public.chat_text_array_words(skill_ids)
+      ~ '^[a-z0-9][a-z0-9-]{0,63}( [a-z0-9][a-z0-9-]{0,63}){0,2}$'
+  ),
+  -- Read like a skill's body, below the system rules: it grants nothing.
+  instructions text check (char_length(instructions) between 1 and 2000),
+  -- The composer's modes (CHAT-02): Ask me first, Auto, Full auto (Growth+).
+  mode text not null default 'auto' check (mode in ('ask_first', 'auto', 'full_auto')),
+  -- [{key, required}]: the workspace's connections it may use.
+  connections jsonb not null default '[]'::jsonb check (
+    jsonb_typeof(connections) = 'array' and jsonb_array_length(connections) <= 30
+  ),
+  -- 'auto' or a model from the catalog (CHAT-16); never a key.
+  model text not null default 'auto' check (char_length(model) between 1 and 200),
+  effort text not null default 'normal' check (effort in ('normal', 'high', 'max')),
+  -- {brand_ids: [...] or all_brands: true, topic_ids, tags, engines, urls}.
+  scope jsonb not null default '{}'::jsonb check (
+    jsonb_typeof(scope) = 'object' and octet_length(scope::text) <= 32000
+  ),
+  -- Who is told when it needs someone, besides its owner.
+  notify_user_ids uuid[] not null default '{}' check (cardinality(notify_user_ids) <= 20),
+  -- The follow-up check after a ship, in days (CHAT-21 §I item 45).
+  followup_days smallint not null default 14 check (followup_days between 1 and 90),
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (agent_id, version)
+);
+
+comment on table public.chat_agent_versions is
+  'Chat (00419): what an agent does, one row per save, never changed (CHAT-21 §C item 14): skills in order, instructions, mode, connections, model and effort, scope, who is notified, follow-up day. A run keeps the version it started with. Readable where the agent is; the server writes.';
+
+-- ─── Triggers ───────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_agent_triggers (
+  id uuid primary key default gen_random_uuid(),
+  agent_id uuid not null references public.chat_agents(id) on delete cascade,
+  -- Run now and Run agent on an action are always on and have no row.
+  kind text not null check (kind in ('schedule', 'signal', 'kpi', 'watch_rule')),
+  -- schedule: {schedule_id}; signal: {category, definition_ids, entity_filter};
+  -- kpi: {kpi, direction, threshold, unit, period}; watch_rule: {watch_rule_id}.
+  config_json jsonb not null default '{}'::jsonb check (
+    jsonb_typeof(config_json) = 'object' and octet_length(config_json::text) <= 8000
+  ),
+  enabled boolean not null default true,
+  last_fired_at timestamptz,
+  -- Fires before it are kept for the next run (CHAT-21 §E item 24).
+  cooldown_until timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists chat_agent_triggers_agent_idx
+  on public.chat_agent_triggers (agent_id);
+-- What the evaluator reads after each data batch: the enabled triggers of a kind.
+create index if not exists chat_agent_triggers_kind_idx
+  on public.chat_agent_triggers (kind) where enabled;
+
+drop trigger if exists trg_chat_agent_triggers_updated_at on public.chat_agent_triggers;
+create trigger trg_chat_agent_triggers_updated_at
+  before update on public.chat_agent_triggers
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_agent_triggers is
+  'Chat (00419): what starts an agent (CHAT-21 §E): a schedule, a Signal, a KPI change or a watch rule, 1–5 an agent, with each kind''s settings, the last fire and the cooldown. Readable where the agent is; the server writes.';
+
+-- At most 5 triggers an agent (CHAT-21 §D): the database's backstop to the
+-- server's check.
+create or replace function public.chat_agent_triggers_per_agent()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (
+    select count(*) from public.chat_agent_triggers t
+    where t.agent_id = new.agent_id and t.id <> new.id
+  ) >= 5 then
+    raise exception 'an agent has at most 5 triggers' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_chat_agent_triggers_per_agent on public.chat_agent_triggers;
+create trigger trg_chat_agent_triggers_per_agent
+  before insert or update of agent_id on public.chat_agent_triggers
+  for each row execute function public.chat_agent_triggers_per_agent();
+
+-- ─── Runs ───────────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_agent_runs (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  -- Null once the agent is deleted: its runs stay (CHAT-21 §B item 7).
+  agent_id uuid references public.chat_agents(id) on delete set null,
+  -- The version it runs with (chat_agent_versions), kept when edits make a new one.
+  agent_version integer not null check (agent_version >= 1),
+  -- One run per brand (§H item 41). Null once the brand is deleted.
+  brand_id uuid references public.brands(id) on delete set null,
+  trigger_kind text not null
+    check (trigger_kind in ('schedule', 'signal', 'kpi', 'watch_rule', 'manual', 'action')),
+  -- The trigger that fired; null for Run now and Run agent.
+  trigger_id uuid references public.chat_agent_triggers(id) on delete set null,
+  -- What fired it: a signal, a schedule run, an action or a watch rule fire.
+  trigger_ref text check (char_length(trigger_ref) between 1 and 200),
+  -- The person it acts as (§H item 38).
+  acting_user_id uuid references auth.users(id) on delete set null,
+  status text not null default 'queued' check (
+    status in (
+      'queued', 'running', 'needs_you', 'done', 'failed', 'stopped', 'skipped', 'paused_cap'
+    )
+  ),
+  skipped_reason text
+    check (skipped_reason in ('coalesced', 'cooldown', 'daily_limit', 'nothing_to_do')),
+  -- user: a person stopped it; no_answer: 7 days on a card (§H item 40);
+  -- run_cap: Stopped at its limit (CHAT-27 item 22); action_closed and
+  -- brand_gone: CHAT-21 edge cases 7 and 9.
+  stop_reason text
+    check (stop_reason in ('user', 'no_answer', 'run_cap', 'action_closed', 'brand_gone')),
+  -- The trigger's evidence, passed to the run as scope (§E item 23), and
+  -- the fires coalesced into it.
+  evidence_json jsonb not null default '{}'::jsonb check (
+    jsonb_typeof(evidence_json) = 'object' and octet_length(evidence_json::text) <= 64000
+  ),
+  -- The action a Run agent click scoped it to (§F item 28).
+  action_id uuid references public.actions(id) on delete set null,
+  -- Shares of the monthly AI limit, never dollars (CHAT-27 items 21–26):
+  -- the run's cap (the agent's max_run_share when it started, plus each
+  -- "Continue with +5%"), and what it has used, its subtasks' included.
+  max_share numeric(3, 2) not null default 0.10 check (max_share between 0.01 and 1),
+  usage_share numeric(7, 4) not null default 0 check (usage_share >= 0),
+  -- From the impact ledger (00421) once what it shipped is measured (§I).
+  outcome text check (
+    outcome in ('pending', 'improved', 'no_meaningful_change', 'declined', 'not_measurable')
+  ),
+  outcome_confidence text check (outcome_confidence in ('low', 'medium', 'high')),
+  queued_at timestamptz not null default now(),
+  started_at timestamptz,
+  finished_at timestamptz,
+  check ((status = 'skipped') = (skipped_reason is not null)),
+  check (stop_reason is null or status = 'stopped'),
+  check (outcome_confidence is null or outcome is not null)
+);
+
+-- An agent's Runs tab, newest first, and its runs today (§E item 24).
+create index if not exists chat_agent_runs_agent_queued_idx
+  on public.chat_agent_runs (agent_id, queued_at desc);
+-- The workspace's queue, in fire order (§M item 59).
+create index if not exists chat_agent_runs_queue_idx
+  on public.chat_agent_runs (organization_id, queued_at)
+  where status = 'queued';
+-- The workspace's runs working now, for its concurrency limit (§M item 57).
+create index if not exists chat_agent_runs_running_idx
+  on public.chat_agent_runs (organization_id)
+  where status = 'running';
+-- One run at a time per agent and brand (§M item 58). A run paused at its
+-- AI cap keeps its place: an Admin may continue it (CHAT-27 item 22).
+create unique index if not exists chat_agent_runs_active_uidx
+  on public.chat_agent_runs (agent_id, brand_id)
+  where status in ('running', 'needs_you', 'paused_cap');
+create index if not exists chat_agent_runs_brand_idx
+  on public.chat_agent_runs (brand_id) where brand_id is not null;
+create index if not exists chat_agent_runs_trigger_idx
+  on public.chat_agent_runs (trigger_id) where trigger_id is not null;
+create index if not exists chat_agent_runs_acting_user_idx
+  on public.chat_agent_runs (acting_user_id) where acting_user_id is not null;
+create index if not exists chat_agent_runs_action_idx
+  on public.chat_agent_runs (action_id) where action_id is not null;
+
+comment on table public.chat_agent_runs is
+  'Chat (00419): one row per run an agent started or was asked to start (CHAT-21 §H): status, skip and stop reasons, trigger and evidence, the person it acts as, brand, the action it was scoped to, outcome, and its cap and use as shares of the monthly AI limit (CHAT-27). Its chat is the conversation with this agent_run_id. Readable with its agent; the server writes.';
+comment on column public.chat_agent_runs.usage_share is
+  'What the run, its subtasks included, has used, as a share of the monthly AI limit (CHAT-27 item 25). Kept by the server; never dollars.';
+
+-- Starts the workspace's next queued agent run, when fewer than
+-- p_workspace_limit of its agent runs are running (the plan's, CHAT-21 §M):
+-- Run now and Run agent first, then in fire order; never one whose agent and
+-- brand already have a run running or waiting on a person. One start at a
+-- time per workspace: the next waits and counts this one. Returns the run
+-- started, or null. A run whose agent was deleted or archived, or whose
+-- brand was deleted, never starts; a triggered run starts only while its
+-- agent is active (Run now and Run agent also on a paused or draft one,
+-- CHAT-21 §G). A running run whose Chat run was lost is ended by the
+-- server's sweep, which frees its place. A run that goes back to running
+-- from needs_you or paused_cap doesn't pass through here: the server checks
+-- the workspace's limit for it.
+create or replace function public.chat_start_next_agent_run(
+  p_organization_id uuid,
+  p_workspace_limit integer
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_running integer;
+  v_id uuid;
+begin
+  if p_workspace_limit is null or p_workspace_limit < 1 then
+    raise exception 'a workspace limit is needed' using errcode = '22023';
+  end if;
+  perform pg_advisory_xact_lock(hashtext('chat_agent_run_slot:' || p_organization_id::text));
+
+  select count(*) into v_running
+  from public.chat_agent_runs
+  where organization_id = p_organization_id
+    and status = 'running';
+  if v_running >= p_workspace_limit then
+    return null;
+  end if;
+
+  select q.id into v_id
+  from public.chat_agent_runs q
+  join public.chat_agents g on g.id = q.agent_id
+  where q.organization_id = p_organization_id
+    and q.status = 'queued'
+    and q.brand_id is not null
+    and g.status <> 'archived'
+    and (g.status = 'active' or q.trigger_kind in ('manual', 'action'))
+    and not exists (
+      select 1 from public.chat_agent_runs a
+      where a.agent_id = q.agent_id
+        and a.brand_id = q.brand_id
+        and a.status in ('running', 'needs_you', 'paused_cap')
+    )
+  order by (q.trigger_kind in ('manual', 'action')) desc, q.queued_at, q.id
+  limit 1;
+  if v_id is null then
+    return null;
+  end if;
+
+  update public.chat_agent_runs
+  set status = 'running', started_at = coalesce(started_at, now())
+  where id = v_id;
+  return v_id;
+end;
+$$;
+
+revoke all on function public.chat_start_next_agent_run(uuid, integer)
+  from public, anon, authenticated;
+grant execute on function public.chat_start_next_agent_run(uuid, integer) to service_role;
+
+-- ─── An agent run's chat ────────────────────────────────────────────────────
+
+alter table public.chat_conversations
+  add column if not exists agent_run_id uuid
+    references public.chat_agent_runs(id) on delete set null;
+
+-- A chat an agent's run started (CHAT-21 §H item 36).
+alter table public.chat_conversations
+  drop constraint if exists chat_conversations_origin_check;
+alter table public.chat_conversations
+  add constraint chat_conversations_origin_check
+    check (origin in ('page', 'panel', 'agent'));
+
+-- One chat per agent run.
+create unique index if not exists chat_conversations_agent_run_uidx
+  on public.chat_conversations (agent_run_id) where agent_run_id is not null;
+
+comment on column public.chat_conversations.agent_run_id is
+  'The agent run this chat is (CHAT-21 §H item 36; origin agent). Readable by whoever reads the agent run. Null for a person''s own chat, and once the run is gone.';
+
+-- ─── An agent's changes in the Activity log ─────────────────────────────────
+
+alter table public.chat_activity_log
+  add column if not exists agent_id uuid references public.chat_agents(id) on delete set null,
+  add column if not exists agent_run_id uuid
+    references public.chat_agent_runs(id) on delete set null;
+
+-- The Activity log's "Agent: {name}" filter (CHAT-27 item 29).
+create index if not exists chat_activity_log_agent_created_idx
+  on public.chat_activity_log (agent_id, created_at desc) where agent_id is not null;
+create index if not exists chat_activity_log_agent_run_idx
+  on public.chat_activity_log (agent_run_id) where agent_run_id is not null;
+
+comment on column public.chat_activity_log.agent_id is
+  'The agent whose run made the change (CHAT-21, CHAT-27 item 29); null for a person''s own chat, and once the agent is deleted.';
+
+-- ─── Agents in Settings › Chat ──────────────────────────────────────────────
+
+alter table public.chat_settings
+  add column if not exists agent_run_share_default numeric(3, 2) not null default 0.10
+    check (agent_run_share_default between 0.01 and 0.50),
+  add column if not exists agents_full_auto boolean not null default true,
+  add column if not exists workspace_agents_admins_only boolean not null default false;
+
+comment on column public.chat_settings.agent_run_share_default is
+  'The per-run cap a new agent starts with, as a share of the monthly AI limit (CHAT-27 item 19): 0.10 by default, 0.01–0.50.';
+comment on column public.chat_settings.agents_full_auto is
+  'Agents may run in Full auto (CHAT-21 §K). Off: Full auto agents pause (plan) and new ones can''t pick it. The plan decides first: Full auto is Growth+.';
+comment on column public.chat_settings.workspace_agents_admins_only is
+  'Only Admins may make an agent visible to the workspace (CHAT-21 §D item 20).';
+
+-- ─── Subtasks (CHAT-27 §C) ──────────────────────────────────────────────────
+
+alter table public.chat_runs
+  add column if not exists parent_run_id uuid references public.chat_runs(id) on delete cascade,
+  add column if not exists subtask_title text check (char_length(subtask_title) between 1 and 120);
+
+-- A subtask has no message of its own: its answer is its parent's.
+alter table public.chat_runs
+  alter column message_id drop not null;
+
+alter table public.chat_runs
+  drop constraint if exists chat_runs_subtask_check;
+alter table public.chat_runs
+  add constraint chat_runs_subtask_check
+    check (
+      (parent_run_id is null) = (message_id is not null)
+      and (parent_run_id is null) = (subtask_title is null)
+    );
+
+create index if not exists chat_runs_parent_idx
+  on public.chat_runs (parent_run_id) where parent_run_id is not null;
+
+comment on column public.chat_runs.parent_run_id is
+  'The run whose run_subtasks call started this one (CHAT-27 §C): in the same chat, one level only, at most 10 a run. Null for a run that answers a message.';
+comment on column public.chat_runs.subtask_title is
+  'A subtask''s short title ("Competitor C"), shown in its parent''s steps and Activity log rows.';
+
+-- A subtask's parent is a run of the same chat that is no subtask itself,
+-- and a run has at most 10 subtasks: the database's backstop to the
+-- registry's check (CHAT-27 item 3).
+create or replace function public.chat_runs_subtask_rules()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.parent_run_id is null then
+    return new;
+  end if;
+
+  if not exists (
+    select 1 from public.chat_runs p
+    where p.id = new.parent_run_id
+      and p.parent_run_id is null
+      and p.conversation_id = new.conversation_id
+  ) then
+    raise exception 'a subtask''s parent is a run of the same chat that is no subtask'
+      using errcode = '23514';
+  end if;
+
+  if (
+    select count(*) from public.chat_runs c
+    where c.parent_run_id = new.parent_run_id and c.id <> new.id
+  ) >= 10 then
+    raise exception 'a run has at most 10 subtasks' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_chat_runs_subtask_rules on public.chat_runs;
+create trigger trg_chat_runs_subtask_rules
+  before insert or update of parent_run_id, conversation_id on public.chat_runs
+  for each row execute function public.chat_runs_subtask_rules();
+
+-- ─── Who spent it (CHAT-27 item 30) ─────────────────────────────────────────
+
+alter table public.prompt_improve_usage
+  add column if not exists agent_id uuid references public.chat_agents(id) on delete set null,
+  add column if not exists agent_run_id uuid
+    references public.chat_agent_runs(id) on delete set null,
+  add column if not exists parent_run_id uuid references public.chat_runs(id) on delete set null;
+
+comment on column public.prompt_improve_usage.agent_id is
+  'The agent whose run this row was for (00419); null for other features and plain chats, and once the agent is deleted (its agent_run_id stays).';
+comment on column public.prompt_improve_usage.agent_run_id is
+  'The agent run this row was for (00419): its run cap and its share are summed by it.';
+comment on column public.prompt_improve_usage.parent_run_id is
+  'The parent run when this row was a subtask''s (CHAT-27 §C), so a parent''s total includes its subtasks.';
+
+create index if not exists prompt_improve_usage_agent_idx
+  on public.prompt_improve_usage (agent_id) where agent_id is not null;
+create index if not exists prompt_improve_usage_agent_run_idx
+  on public.prompt_improve_usage (agent_run_id) where agent_run_id is not null;
+create index if not exists prompt_improve_usage_parent_run_idx
+  on public.prompt_improve_usage (parent_run_id) where parent_run_id is not null;
+
+-- 00405's hold, taking the agent run and its cap. The two new arguments
+-- have defaults, so a call with the old ones still matches; the old
+-- signature goes first, or the two would both match it.
+drop function if exists public.reserve_chat_ai_usage(
+  uuid, uuid, uuid, text, text, numeric, boolean, timestamptz, numeric
+);
+
+-- Writes the step's row and returns its id; the server turns it into the
+-- step's real cost once the model answers, or deletes it when nothing was
+-- billed. Null when the budget can't cover the step's worst case (p_cost),
+-- or, given p_run_cap (dollars), when the agent run's spend so far, own-key
+-- steps included, plus p_cost would pass it; the server tells the two apart
+-- from the run's spend. On the workspace's own key (p_own_key), or with no
+-- budget to hold against (p_budget null: self-hosted), the budget isn't
+-- checked. The run must be the organization's, and the step, when named,
+-- the run's. The agent run is the chat's (chat_conversations.agent_run_id),
+-- so a subtask's step counts toward its parent's: p_agent_run_id, when
+-- given, must be that one. p_run_cap is always the whole agent run's cap,
+-- subtasks included, never one subtask's slice (the server checks slices).
+-- The row is named by the run's parent and the agent run's agent.
+create or replace function public.reserve_chat_ai_usage(
+  p_organization_id  uuid,
+  p_chat_run_id      uuid,
+  p_chat_run_step_id uuid,
+  p_feature          text,
+  p_model            text,
+  p_cost             numeric,
+  p_own_key          boolean,
+  p_since            timestamptz,
+  p_budget           numeric,
+  p_agent_run_id     uuid default null,
+  p_run_cap          numeric default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_parent_id uuid;
+  v_agent_run uuid;
+  v_agent_id  uuid;
+  v_spent     numeric;
+  v_run_spent numeric;
+  v_id        uuid;
+begin
+  if p_feature is null or p_feature not in ('chat', 'agent', 'schedule', 'image') then
+    raise exception 'not a Chat feature: %', p_feature using errcode = '22023';
+  end if;
+  select r.parent_run_id, c.agent_run_id into v_parent_id, v_agent_run
+  from public.chat_runs r
+  join public.chat_conversations c on c.id = r.conversation_id
+  where r.id = p_chat_run_id
+    and c.organization_id = p_organization_id;
+  if not found or (
+    p_chat_run_step_id is not null
+    and not exists (
+      select 1 from public.chat_run_steps s
+      where s.id = p_chat_run_step_id and s.run_id = p_chat_run_id
+    )
+  ) then
+    raise exception 'chat run not found' using errcode = 'P0002';
+  end if;
+  if p_agent_run_id is not null and p_agent_run_id is distinct from v_agent_run then
+    raise exception 'agent run is not the chat''s' using errcode = '22023';
+  end if;
+  if p_run_cap is not null and v_agent_run is null then
+    raise exception 'a run cap needs an agent run' using errcode = '22023';
+  end if;
+
+  if v_agent_run is not null then
+    select a.agent_id into v_agent_id
+    from public.chat_agent_runs a
+    where a.id = v_agent_run
+      and a.organization_id = p_organization_id;
+    if not found then
+      raise exception 'agent run not found' using errcode = 'P0002';
+    end if;
+  end if;
+
+  if (not coalesce(p_own_key, false) and p_budget is not null) or p_run_cap is not null then
+    -- The lock reserve_ai_usage takes: one hold at a time per organization.
+    perform pg_advisory_xact_lock(hashtext('ai_usage:' || p_organization_id::text));
+  end if;
+
+  if not coalesce(p_own_key, false) and p_budget is not null then
+    select coalesce(sum(cost_usd), 0) into v_spent
+    from public.prompt_improve_usage
+    where organization_id = p_organization_id
+      and used_at >= p_since
+      and not own_key;
+
+    if v_spent >= p_budget or v_spent + greatest(p_cost, 0) > p_budget then
+      return null;
+    end if;
+  end if;
+
+  if p_run_cap is not null then
+    -- Own-key steps count too: the cap stops a runaway run on any key.
+    select coalesce(sum(cost_usd), 0) into v_run_spent
+    from public.prompt_improve_usage
+    where agent_run_id = v_agent_run;
+
+    if v_run_spent + greatest(p_cost, 0) > p_run_cap then
+      return null;
+    end if;
+  end if;
+
+  insert into public.prompt_improve_usage (
+    organization_id, feature, model, cost_usd, own_key, chat_run_id, chat_run_step_id,
+    agent_id, agent_run_id, parent_run_id)
+  values (
+    p_organization_id, p_feature, p_model, greatest(p_cost, 0), coalesce(p_own_key, false),
+    p_chat_run_id, p_chat_run_step_id, v_agent_id, v_agent_run, v_parent_id)
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+comment on function public.reserve_chat_ai_usage(uuid, uuid, uuid, text, text, numeric, boolean, timestamptz, numeric, uuid, numeric) is
+  'Holds a Chat step''s worst-case cost (p_cost) under the per-organization lock, only while the period''s spend since p_since (own-key rows left out, holds in flight in) plus p_cost stays within p_budget and, given p_run_cap, the agent run''s spend (own-key rows in) plus p_cost stays within it; returns the row to settle, or null. Own-key steps and an unlimited budget (null) skip the budget check. The row is named by its run''s parent and its agent run''s agent (00419).';
+
+revoke all on function public.reserve_chat_ai_usage(uuid, uuid, uuid, text, text, numeric, boolean, timestamptz, numeric, uuid, numeric)
+  from public, anon, authenticated;
+grant execute on function public.reserve_chat_ai_usage(uuid, uuid, uuid, text, text, numeric, boolean, timestamptz, numeric, uuid, numeric)
+  to service_role;
+
+-- Each agent's share of the AI limit since p_since: what its runs spent on
+-- the budget over p_budget, what they spent on the workspace's own key over
+-- the same, and how many runs spent anything. Rounded to 0.01%. A deleted
+-- agent's runs come back together, with a null agent_id. No rows without a
+-- budget (p_budget null or 0: self-hosted has no limit to share).
+create or replace function public.chat_agent_usage_shares(
+  p_organization_id uuid,
+  p_since timestamptz,
+  p_budget numeric
+)
+returns table (agent_id uuid, share numeric, own_key_share numeric, runs integer)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select
+    u.agent_id,
+    round(coalesce(sum(u.cost_usd) filter (where not u.own_key), 0) / p_budget, 4),
+    round(coalesce(sum(u.cost_usd) filter (where u.own_key), 0) / p_budget, 4),
+    count(distinct u.agent_run_id)::integer
+  from public.prompt_improve_usage u
+  where u.organization_id = p_organization_id
+    and u.used_at >= p_since
+    and u.agent_run_id is not null
+    and p_budget > 0
+  group by u.agent_id;
+$$;
+
+comment on function public.chat_agent_usage_shares(uuid, timestamptz, numeric) is
+  'Each agent''s share of the monthly AI limit since p_since (CHAT-27 item 30): budget share, own-key share and runs, rounded to 0.01%. Server only: the budget is its argument, so no member may call it; the API serves the shares, never the costs.';
+
+revoke all on function public.chat_agent_usage_shares(uuid, timestamptz, numeric)
+  from public, anon, authenticated;
+grant execute on function public.chat_agent_usage_shares(uuid, timestamptz, numeric)
+  to service_role;
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_agents enable row level security;
+alter table public.chat_agent_versions enable row level security;
+alter table public.chat_agent_triggers enable row level security;
+alter table public.chat_agent_runs enable row level security;
+
+revoke all on table public.chat_agents from anon, authenticated;
+revoke all on table public.chat_agent_versions from anon, authenticated;
+revoke all on table public.chat_agent_triggers from anon, authenticated;
+revoke all on table public.chat_agent_runs from anon, authenticated;
+
+grant select on table public.chat_agents to authenticated;
+grant select on table public.chat_agent_versions to authenticated;
+grant select on table public.chat_agent_triggers to authenticated;
+grant select on table public.chat_agent_runs to authenticated;
+-- 00402 grants members its columns one by one: the new two join them.
+grant select (agent_id, agent_run_id) on table public.chat_activity_log to authenticated;
+
+grant all on table public.chat_agents to service_role;
+grant all on table public.chat_agent_versions to service_role;
+grant all on table public.chat_agent_triggers to service_role;
+grant all on table public.chat_agent_runs to service_role;
+
+-- A workspace agent: every member of its workspace, while they belong to
+-- it. A private one: its owner and the workspace's Admins (CHAT-21
+-- Definition). Brands are the workspace's membership today: when Agency
+-- partners get brands one by one, this narrows with them.
+drop policy if exists "chat_agents: member select" on public.chat_agents;
+create policy "chat_agents: member select"
+  on public.chat_agents
+  for select
+  using (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and (
+          p.role = 'admin'
+          or chat_agents.visibility = 'workspace'
+          or chat_agents.owner_id = auth.uid()
+        )
+    )
+  );
+
+-- Versions and triggers follow their agent.
+drop policy if exists "chat_agent_versions: agent select" on public.chat_agent_versions;
+create policy "chat_agent_versions: agent select"
+  on public.chat_agent_versions
+  for select
+  using (agent_id in (select a.id from public.chat_agents a));
+
+drop policy if exists "chat_agent_triggers: agent select" on public.chat_agent_triggers;
+create policy "chat_agent_triggers: agent select"
+  on public.chat_agent_triggers
+  for select
+  using (agent_id in (select a.id from public.chat_agents a));
+
+-- A run follows its agent; the person it acted as and the workspace's
+-- Admins also read it once the agent is deleted. Members of the workspace
+-- only, while they belong to it.
+drop policy if exists "chat_agent_runs: agent select" on public.chat_agent_runs;
+create policy "chat_agent_runs: agent select"
+  on public.chat_agent_runs
+  for select
+  using (
+    agent_id in (select a.id from public.chat_agents a)
+    or organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and (p.role = 'admin' or chat_agent_runs.acting_user_id = auth.uid())
+    )
+  );
+
+-- An agent run's chat: whoever reads the run (CHAT-21 §K item 51), while
+-- they belong to its workspace; never once deleted. Its messages, runs and
+-- steps follow (00400).
+drop policy if exists "chat_conversations: agent run select" on public.chat_conversations;
+create policy "chat_conversations: agent run select"
+  on public.chat_conversations
+  for select
+  using (
+    agent_run_id in (select r.id from public.chat_agent_runs r)
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00420_chat_why_analyses.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00420: Why did it move — the analyses Chat ran, and when a person last
+-- left Chat Home
+-- ============================================================================
+-- Why did it move (CHAT-22 feature 1) and Home's "Since you left" strip
+-- (DESIGN-POLISH Home), behind CHAT_AGENTIC: nothing writes here while the
+-- flag is off.
+--
+--   * chat_why_analyses: one row per explain_change a run made (CHAT-22 §1
+--     items 5–6): the metric, the scope (engines, filters, prompt set, in
+--     names), the two periods compared (a before b) and the result, the
+--     explain_change contract (headline values, noise verdict, change point,
+--     mix effect, ranked causes with evidence refs, excluded cells,
+--     unexplained), all computed by the server from scheduled tracking data
+--     with no model call (Addendum 2 G); data_as_of is the newest tracking
+--     run it read. The model's short summary is the answer's text, not this
+--     row's. Kept so the Why screen, its evidence drawer and a reload show
+--     the same numbers. Engine weather and its benchmark panel are not here:
+--     the plan hides them in Wave 2. Readable where its chat is (00400 and
+--     00407); the server writes.
+--   * chat_user_prefs.home_seen_at: when the person last left Chat Home,
+--     what "Since you left" counts the changes after. Theirs to write, like
+--     the rest of their settings row (00400).
+
+create table if not exists public.chat_why_analyses (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.chat_conversations(id) on delete cascade,
+  -- The run whose step made it. A deleted run leaves the analysis with its chat.
+  run_id uuid references public.chat_runs(id) on delete set null,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  -- CHAT-22 §1 item 2's v1 metrics.
+  metric text not null check (
+    metric in ('visibility', 'mention_rate', 'share_of_voice', 'citations', 'avg_position')
+  ),
+  -- Engines, filters and the prompt set, in names (CHAT-03: never ids).
+  scope_json jsonb not null default '{}'::jsonb check (
+    jsonb_typeof(scope_json) = 'object' and octet_length(scope_json::text) <= 8000
+  ),
+  -- Period a, then period b after it (by default the previous 7 days, then the last 7).
+  period_a_start date not null,
+  period_a_end date not null,
+  period_b_start date not null,
+  period_b_end date not null,
+  -- The explain_change contract (CHAT-22 §1 item 6). Up to 1 MB as text.
+  result_json jsonb not null check (
+    jsonb_typeof(result_json) = 'object' and octet_length(result_json::text) <= 1000000
+  ),
+  data_as_of timestamptz,
+  created_at timestamptz not null default now(),
+  check (
+    period_a_start <= period_a_end
+    and period_a_end < period_b_start
+    and period_b_start <= period_b_end
+  )
+);
+
+create index if not exists chat_why_analyses_conversation_idx
+  on public.chat_why_analyses (conversation_id, created_at desc);
+create index if not exists chat_why_analyses_run_idx
+  on public.chat_why_analyses (run_id) where run_id is not null;
+create index if not exists chat_why_analyses_brand_idx
+  on public.chat_why_analyses (brand_id, created_at desc);
+
+comment on table public.chat_why_analyses is
+  'Chat (00420): one Why did it move analysis (CHAT-22 §1): metric, scope, the two periods and the explain_change result, computed from scheduled tracking data with no model call. Readable where its chat is; the server writes.';
+comment on column public.chat_why_analyses.result_json is
+  'The explain_change contract: {metric, period_a, period_b, value_a, value_b, delta, se, noise_verdict, change_point, mix_effect, causes [{kind, share, contribution, confidence, cells, evidence_refs, fix_skill}], excluded_cells, unexplained}.';
+
+-- ─── Since you left ─────────────────────────────────────────────────────────
+
+alter table public.chat_user_prefs
+  add column if not exists home_seen_at timestamptz;
+
+comment on column public.chat_user_prefs.home_seen_at is
+  'When the person last left Chat Home: "Since you left" counts what changed after it. Null: never.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_why_analyses enable row level security;
+revoke all on table public.chat_why_analyses from anon, authenticated;
+grant select on table public.chat_why_analyses to authenticated;
+grant all on table public.chat_why_analyses to service_role;
+
+drop policy if exists "chat_why_analyses: chat select" on public.chat_why_analyses;
+create policy "chat_why_analyses: chat select"
+  on public.chat_why_analyses
+  for select
+  using (conversation_id in (select c.id from public.chat_conversations c));
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00421_impact_ledger.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00421: the impact ledger — what shipped, how it was measured, and the
+-- prompts it was compared against
+-- ============================================================================
+-- The Impact ledger (CHAT-22 feature 2; CHAT-21 §I; CHAT-09 v2), behind
+-- CHAT_AGENTIC: nothing writes here while the flag is off. One data source
+-- for both places that show it (Addendum 2 H): Action Center › History (the
+-- outcome per action) and Reports › "What Ansvisor did for you". Every
+-- number is the server's, from scheduled tracking data only (Addendum 2 G):
+-- no engine query and no model call measures anything here. The server
+-- writes every row (service role); every member of the workspace reads them
+-- (the ledger is for every role, CHAT-22 Permissions).
+--
+--   * ship_events: a change that went live (CHAT-22 §2 item 1): a CMS
+--     publish the connection confirmed, a merged PR (feature 4, later), a
+--     person's Mark as shipped (WRITE, with Undo: the server deletes the
+--     row), or a third-party placement first seen in tracked answers. What
+--     shipped (a Files deliverable, a Content draft, the live URL), the
+--     action it belongs to (whose frozen targets are measured), where it
+--     came from (Chat, Action Center, the Content Editor), its kind of
+--     change, the run and agent behind it, who shipped it and how (History's
+--     execution.mode: manual, assisted, automated). Drafts are not shipped.
+--   * impact_measurements: one per ship event (§2 item 12): the targets
+--     (History's AffectedEntity[]: prompts, URLs, topics, engines…), the
+--     latest checkpoint's window and metrics (ActionResultMetric[]), the
+--     outcome in the one vocabulary (Pending, Improved, No meaningful
+--     change, Declined, Not measurable) with its confidence, the checkpoint
+--     (d7 "early signal" with no verdict, d14 first verdict, d30 confirmed,
+--     d90 lasting effect) and each checkpoint's own result, why it isn't
+--     measurable, and the other changes in its window. next_check_at is
+--     when the measuring job comes back; null after day 90.
+--   * impact_control_sets: the control prompts a checkpoint compared the
+--     targets with (§2 item 7): same brand and engines, never a target in
+--     the window, matched by topic, pre-window band (±10 pts) and engine.
+--     One per measurement and checkpoint, since a control that becomes a
+--     target leaves the later checkpoints.
+--
+-- Action Center's own tables don't change: wiring History to read these
+-- rows is the Action Center's change, after its owner signs off (CHAT-22 §2
+-- item 12).
+
+-- ─── What shipped ───────────────────────────────────────────────────────────
+
+create table if not exists public.ship_events (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  kind text not null check (kind in ('cms_publish', 'pr_merged', 'manual', 'third_party_observed')),
+  -- The change as the ledger names it ("FAQ block on /pricing").
+  title text not null check (char_length(title) between 1 and 200),
+  -- What shipped: a deliverable, a Content draft, the page as it is live.
+  file_id uuid references public.chat_files(id) on delete set null,
+  content_draft_id uuid references public.content_drafts(id) on delete set null,
+  url text check (char_length(url) between 1 and 2000),
+  -- The action it belongs to: its frozen targets are the measurement's.
+  action_id uuid references public.actions(id) on delete set null,
+  -- The ledger's filters: where it came from and what kind of change it was.
+  source text not null check (source in ('chat', 'action_center', 'content_editor')),
+  change_type text check (change_type in ('content', 'technical', 'outreach')),
+  run_id uuid references public.chat_runs(id) on delete set null,
+  agent_id uuid references public.chat_agents(id) on delete set null,
+  -- The agent run that shipped it, for the run's Outcome (CHAT-21 §I item 43).
+  agent_run_id uuid references public.chat_agent_runs(id) on delete set null,
+  shipped_at timestamptz not null,
+  -- The person who shipped it or marked it; null for an integration or an
+  -- agent on its own.
+  shipped_by uuid references auth.users(id) on delete set null,
+  execution_mode text not null check (execution_mode in ('manual', 'assisted', 'automated')),
+  created_at timestamptz not null default now()
+);
+
+-- What Ansvisor did for you: the workspace's month, and a brand's.
+create index if not exists ship_events_organization_shipped_idx
+  on public.ship_events (organization_id, shipped_at desc);
+create index if not exists ship_events_brand_shipped_idx
+  on public.ship_events (brand_id, shipped_at desc);
+-- Action Center › History: an action's.
+create index if not exists ship_events_action_idx
+  on public.ship_events (action_id) where action_id is not null;
+create index if not exists ship_events_file_idx
+  on public.ship_events (file_id) where file_id is not null;
+create index if not exists ship_events_content_draft_idx
+  on public.ship_events (content_draft_id) where content_draft_id is not null;
+create index if not exists ship_events_run_idx
+  on public.ship_events (run_id) where run_id is not null;
+create index if not exists ship_events_agent_idx
+  on public.ship_events (agent_id) where agent_id is not null;
+create index if not exists ship_events_agent_run_idx
+  on public.ship_events (agent_run_id) where agent_run_id is not null;
+
+comment on table public.ship_events is
+  'Impact ledger (00421): a change that went live (CHAT-22 §2 item 1): CMS publish, merged PR, Mark as shipped or a third-party placement; what shipped, its action, source, change type, run, agent, when, by whom and how. Every member reads; the server writes.';
+comment on column public.ship_events.execution_mode is
+  'Action Center History''s execution.mode: manual (a person did it), assisted (Chat drafted, a person shipped), automated (an agent or integration shipped it).';
+
+-- ─── How it was measured ────────────────────────────────────────────────────
+
+create table if not exists public.impact_measurements (
+  id uuid primary key default gen_random_uuid(),
+  ship_event_id uuid not null unique references public.ship_events(id) on delete cascade,
+  -- AffectedEntity[]: {type: prompt | url | keyword | topic | citation |
+  -- competitor | platform, id, label}; at most 50 prompts.
+  targets jsonb not null default '[]'::jsonb check (
+    jsonb_typeof(targets) = 'array' and octet_length(targets::text) <= 200000
+  ),
+  -- The latest checkpoint's {pre_start, pre_end, post_start, post_end}.
+  window_json jsonb not null default '{}'::jsonb check (jsonb_typeof(window_json) = 'object'),
+  -- The latest checkpoint's ActionResultMetric[]: {metric, before, after,
+  -- delta, control_before, control_after, effect, p_value, interval_low,
+  -- interval_high…}.
+  metrics jsonb not null default '[]'::jsonb check (
+    jsonb_typeof(metrics) = 'array' and octet_length(metrics::text) <= 100000
+  ),
+  outcome text not null default 'pending' check (
+    outcome in ('pending', 'improved', 'no_meaningful_change', 'declined', 'not_measurable')
+  ),
+  confidence text check (confidence in ('low', 'medium', 'high')),
+  -- The latest checkpoint measured; null before day 7.
+  checkpoint text check (checkpoint in ('d7', 'd14', 'd30', 'd90')),
+  -- One result per checkpoint, oldest first (the row shows a changed verdict).
+  checkpoints_json jsonb not null default '[]'::jsonb check (
+    jsonb_typeof(checkpoints_json) = 'array' and octet_length(checkpoints_json::text) <= 100000
+  ),
+  -- A code the page words: too_few_runs, too_few_controls, targets_removed,
+  -- engine_not_on_plan, overlapping_change…
+  not_measurable_reason text check (not_measurable_reason ~ '^[a-z_]{1,40}$'),
+  -- Other changes in the window: engine weather, prompt-set edits,
+  -- competitor moves, other ship events on the same targets.
+  concurrent_changes jsonb not null default '[]'::jsonb check (
+    jsonb_typeof(concurrent_changes) = 'array' and octet_length(concurrent_changes::text) <= 100000
+  ),
+  next_check_at timestamptz,
+  measured_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  -- A verdict has a confidence; Pending and Not measurable have none.
+  check ((confidence is not null) = (outcome in ('improved', 'no_meaningful_change', 'declined'))),
+  check ((not_measurable_reason is not null) = (outcome = 'not_measurable')),
+  check (outcome = 'pending' or checkpoint is not null)
+);
+
+-- The measuring job: what is due.
+create index if not exists impact_measurements_next_check_idx
+  on public.impact_measurements (next_check_at) where next_check_at is not null;
+
+drop trigger if exists trg_impact_measurements_updated_at on public.impact_measurements;
+create trigger trg_impact_measurements_updated_at
+  before update on public.impact_measurements
+  for each row execute function public.handle_updated_at();
+
+comment on table public.impact_measurements is
+  'Impact ledger (00421): one measurement per ship event (CHAT-22 §2 item 12), read by Action Center › History and Reports › What Ansvisor did for you alike: targets, window, metrics, outcome and confidence, checkpoint d7/d14/d30/d90 with each one''s result, why not measurable, concurrent changes. Every member reads; the server writes.';
+comment on column public.impact_measurements.outcome is
+  'Pending (before day 14; day 7 shows direction only), Improved, No meaningful change, Declined or Not measurable (CHAT-22 §2 item 10). Never set from task completion alone.';
+
+-- ─── What it was compared against ───────────────────────────────────────────
+
+create table if not exists public.impact_control_sets (
+  id uuid primary key default gen_random_uuid(),
+  impact_measurement_id uuid not null
+    references public.impact_measurements(id) on delete cascade,
+  checkpoint text not null check (checkpoint in ('d7', 'd14', 'd30', 'd90')),
+  -- The control prompts × engines, as AffectedEntity[].
+  entities jsonb not null default '[]'::jsonb check (
+    jsonb_typeof(entities) = 'array' and octet_length(entities::text) <= 200000
+  ),
+  -- How they were matched: {topic, band_pts, engines}.
+  match_rules_json jsonb not null default '{}'::jsonb check (jsonb_typeof(match_rules_json) = 'object'),
+  -- Prompt × engine cells: fewer than 10 make the checkpoint Not measurable.
+  cell_count integer not null default 0 check (cell_count >= 0),
+  created_at timestamptz not null default now(),
+  unique (impact_measurement_id, checkpoint)
+);
+
+comment on table public.impact_control_sets is
+  'Impact ledger (00421): the control prompts one checkpoint of a measurement compared its targets with (CHAT-22 §2 item 7), and how they were matched. Every member reads; the server writes.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.ship_events enable row level security;
+alter table public.impact_measurements enable row level security;
+alter table public.impact_control_sets enable row level security;
+
+revoke all on table public.ship_events from anon, authenticated;
+revoke all on table public.impact_measurements from anon, authenticated;
+revoke all on table public.impact_control_sets from anon, authenticated;
+
+grant select on table public.ship_events to authenticated;
+grant select on table public.impact_measurements to authenticated;
+grant select on table public.impact_control_sets to authenticated;
+
+grant all on table public.ship_events to service_role;
+grant all on table public.impact_measurements to service_role;
+grant all on table public.impact_control_sets to service_role;
+
+-- The workspace's members, while they belong to it. Brands are its
+-- membership today (Agency partners' shared brands come later).
+drop policy if exists "ship_events: member select" on public.ship_events;
+create policy "ship_events: member select"
+  on public.ship_events
+  for select
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+-- Measurements follow their ship event, control sets their measurement.
+drop policy if exists "impact_measurements: ship event select" on public.impact_measurements;
+create policy "impact_measurements: ship event select"
+  on public.impact_measurements
+  for select
+  using (ship_event_id in (select s.id from public.ship_events s));
+
+drop policy if exists "impact_control_sets: measurement select" on public.impact_control_sets;
+create policy "impact_control_sets: measurement select"
+  on public.impact_control_sets
+  for select
+  using (impact_measurement_id in (select m.id from public.impact_measurements m));
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00422_chat_suggestions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00422: daily suggestions — one Action Center action a day, in Chat's Inbox
+-- ============================================================================
+-- Daily improvement suggestions (CHAT-26), behind CHAT_AGENTIC: nothing
+-- writes here while the flag is off. A nightly server job picks, by rules
+-- and with no AI call, at most one open action a day per person and brand
+-- (at most 7 in a rolling week), from what already waits in their Action
+-- Center. The action itself is never touched. Off for the demo brand, a
+-- read-only workspace and people without Action Center access.
+--
+--   * chat_suggestion_feeds: one per person and brand (CHAT-26 §10: what
+--     one person ignores doesn't stop it for the others). on; paused by the
+--     job after 30 days with no suggestion used (opened, started, put off or
+--     removed: seeing the Inbox doesn't count), and on again only by the
+--     person's click; off by the person (Settings › Notifications). The
+--     first suggestion after turning it back on comes the next morning.
+--     reminded_at: the one "Daily suggestions are paused · Turn back on"
+--     line Chat Home showed after a pause.
+--   * chat_suggestions: one per suggestion sent (§4): the action, the day it
+--     was sent in the person's time zone (sent_on: one a day per feed), what
+--     the person did with it (seen, opened, started in Chat or the Content
+--     Editor, put off until, removed) and the texts and data row as sent
+--     (summary). The Inbox shows the last 7 days; the nightly job deletes
+--     rows older than 14 days ("renews every 14 days").
+--
+-- The server writes every row (service role): the person's clicks go
+-- through its API, which also keeps the feed's last_used_at. A person reads
+-- only their own rows, in the workspace they belong to now.
+
+-- ─── Feeds ──────────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_suggestion_feeds (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  status text not null default 'on' check (status in ('on', 'paused', 'off')),
+  paused_at timestamptz,
+  last_used_at timestamptz,
+  reminded_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, brand_id),
+  check ((status = 'paused') = (paused_at is not null))
+);
+
+create index if not exists chat_suggestion_feeds_brand_idx
+  on public.chat_suggestion_feeds (brand_id);
+create index if not exists chat_suggestion_feeds_organization_idx
+  on public.chat_suggestion_feeds (organization_id);
+
+drop trigger if exists trg_chat_suggestion_feeds_updated_at on public.chat_suggestion_feeds;
+create trigger trg_chat_suggestion_feeds_updated_at
+  before update on public.chat_suggestion_feeds
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_suggestion_feeds is
+  'Chat (00422): a person''s daily suggestions for one brand (CHAT-26): on, paused after 30 days unused (back on only by their click), or off; when they last used one, and the one Home reminder after a pause. Theirs to read; the server writes.';
+
+-- ─── Suggestions ────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  action_id uuid not null references public.actions(id) on delete cascade,
+  -- The day it was sent, in the person's time zone (or the workspace's).
+  sent_on date not null,
+  sent_at timestamptz not null default now(),
+  seen_at timestamptz,
+  opened_at timestamptz,
+  -- Started with Do it with Chat (or the detail page's composer), or in the Content Editor.
+  started_at timestamptz,
+  started_via text check (started_via in ('chat', 'editor')),
+  -- Not now: back in a week if the action is still open.
+  snoozed_until timestamptz,
+  removed_at timestamptz,
+  -- The texts and data row as sent, assembled with no model call (§3 item 5).
+  summary jsonb not null default '{}'::jsonb check (
+    jsonb_typeof(summary) = 'object' and octet_length(summary::text) <= 32000
+  ),
+  -- One a day per person and brand: the job's backstop if it runs twice.
+  unique (user_id, brand_id, sent_on),
+  check ((started_at is null) = (started_via is null))
+);
+
+-- The Inbox: a person's last 7 days, newest first.
+create index if not exists chat_suggestions_user_sent_idx
+  on public.chat_suggestions (user_id, sent_at desc);
+-- The picker: an action suggested to this person in the last 14 days.
+create index if not exists chat_suggestions_user_action_idx
+  on public.chat_suggestions (user_id, action_id, sent_at desc);
+-- The nightly delete of rows older than 14 days.
+create index if not exists chat_suggestions_sent_idx
+  on public.chat_suggestions (sent_at);
+create index if not exists chat_suggestions_brand_idx
+  on public.chat_suggestions (brand_id);
+create index if not exists chat_suggestions_action_idx
+  on public.chat_suggestions (action_id);
+create index if not exists chat_suggestions_organization_idx
+  on public.chat_suggestions (organization_id);
+
+comment on table public.chat_suggestions is
+  'Chat (00422): a daily suggestion sent to a person (CHAT-26 §4): the action, the day, what they did with it, and the texts as sent. Shown 7 days, deleted after 14; the action is never touched. Theirs to read; the server writes.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_suggestion_feeds enable row level security;
+alter table public.chat_suggestions enable row level security;
+
+revoke all on table public.chat_suggestion_feeds from anon, authenticated;
+revoke all on table public.chat_suggestions from anon, authenticated;
+
+grant select on table public.chat_suggestion_feeds to authenticated;
+grant select on table public.chat_suggestions to authenticated;
+
+grant all on table public.chat_suggestion_feeds to service_role;
+grant all on table public.chat_suggestions to service_role;
+
+-- A person's own, in the workspace they belong to now.
+drop policy if exists "chat_suggestion_feeds: own select" on public.chat_suggestion_feeds;
+create policy "chat_suggestion_feeds: own select"
+  on public.chat_suggestion_feeds
+  for select
+  using (
+    user_id = auth.uid()
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+drop policy if exists "chat_suggestions: own select" on public.chat_suggestions;
+create policy "chat_suggestions: own select"
+  on public.chat_suggestions
+  for select
+  using (
+    user_id = auth.uid()
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00423_chat_why_cells.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00423: Why did it move — the counts explain_change reads
+-- ============================================================================
+-- Why did it move (CHAT-22 §1, explain_change) compares a metric between two
+-- periods prompt × engine by prompt × engine, from scheduled tracking only
+-- (Addendum 2 G). chat_why_cells sums the Insights rollups for it in one
+-- call, so the web never pages through day rows (max_rows 1000):
+--
+--   * cells: per prompt, platform, model and location, and period (a or b):
+--     the tracked day rows (runs) and those where the brand was named or
+--     cited (visible_runs); answers, those naming the brand and those citing
+--     its pages; its mentions and its tracked competitors' (share of voice as
+--     Insights counts it: total_mentions against the competitors'
+--     mention_count); the positions where it was named (sum, sum of 1/position
+--     for the Visibility score's position factor, and count); and the newest
+--     answer.
+--   * daily: the same sums per day from p_series_from to p_b_to, with the
+--     prompts named or cited and those tracked (visibility as Insights counts
+--     it), for the change point (§1 item 5.2).
+--   * complete: false while a row read predates 00130/00131's columns (its
+--     sums count as 0 until the daily refresh rewrites its day), as
+--     insights_kpi_series says it.
+--
+-- From insights_prompt_daily and insights_competitor_prompt_daily, on their
+-- (brand_id, day) index, each with its own day ranges; the competitors' sums
+-- are grouped on their own before they meet the brand's, so no join repeats a
+-- row. Server only, behind CHAT_AGENTIC: the web checks the brand is the
+-- caller's workspace's first (as the MCP data functions do), then calls it as
+-- the service role. Periods and the series are 92 days at most, a before b,
+-- so one call stays small. plpgsql for those checks; it reads only.
+
+create or replace function public.chat_why_cells(
+  p_brand_id uuid,
+  p_a_from date,
+  p_a_to date,
+  p_b_from date,
+  p_b_to date,
+  p_series_from date,
+  p_models text[] default null,
+  p_region text default null,
+  p_topic_id uuid default null
+)
+returns jsonb
+language plpgsql
+stable
+set search_path = ''
+as $$
+declare
+  v_result jsonb;
+begin
+  if p_brand_id is null or p_a_from is null or p_a_to is null or p_b_from is null
+     or p_b_to is null or p_series_from is null then
+    raise exception 'chat_why_cells: the brand and every date are needed' using errcode = '22023';
+  end if;
+  if p_a_from > p_a_to or p_b_from > p_b_to then
+    raise exception 'chat_why_cells: a period ends before it starts' using errcode = '22023';
+  end if;
+  if p_a_to >= p_b_from then
+    raise exception 'chat_why_cells: period a ends before period b starts' using errcode = '22023';
+  end if;
+  if p_series_from > p_b_to then
+    raise exception 'chat_why_cells: the series starts after period b ends' using errcode = '22023';
+  end if;
+  if p_a_to - p_a_from > 92 or p_b_to - p_b_from > 92 or p_b_to - p_series_from > 92 then
+    raise exception 'chat_why_cells: a period or the series is over 92 days' using errcode = '22023';
+  end if;
+
+  with brand_rows as (
+    select d.day, d.prompt_id, d.platform, d.model_used, d.region,
+           case
+             when d.day between p_a_from and p_a_to then 'a'
+             when d.day between p_b_from and p_b_to then 'b'
+           end as period,
+           d.answer_count, d.has_mention, d.has_citation,
+           coalesce(d.mention_answers, 0) as mention_answers,
+           coalesce(d.citation_answers, 0) as citation_answers,
+           coalesce(d.total_mentions, 0) as total_mentions,
+           coalesce(d.sum_position, 0) as sum_position,
+           coalesce(d.sum_inv_position, 0) as sum_inv_position,
+           coalesce(d.position_count, 0) as position_count,
+           d.max_created_at,
+           -- A row the daily refresh hasn't rewritten since 00130/00131.
+           (d.mention_answers is null or d.negative_count is null) as stale
+    from public.insights_prompt_daily d
+    where d.brand_id = p_brand_id
+      -- One range on the (brand_id, day) index; the periods narrow it below.
+      and d.day between least(p_a_from, p_series_from) and p_b_to
+      and (d.day between p_a_from and p_a_to
+           or d.day between p_b_from and p_b_to
+           or d.day between p_series_from and p_b_to)
+      and (p_models is null or d.model_used = any (p_models))
+      and (p_region is null or d.region = p_region)
+      and (p_topic_id is null
+           or d.prompt_id in (select p.id from public.prompts p where p.topic_id = p_topic_id))
+  ),
+  competitor_rows as (
+    select c.day, c.prompt_id, c.platform, c.model_used, c.region,
+           case
+             when c.day between p_a_from and p_a_to then 'a'
+             when c.day between p_b_from and p_b_to then 'b'
+           end as period,
+           c.mention_count
+    from public.insights_competitor_prompt_daily c
+    where c.brand_id = p_brand_id
+      -- One range on the (brand_id, day) index; the periods narrow it below.
+      and c.day between least(p_a_from, p_series_from) and p_b_to
+      and (c.day between p_a_from and p_a_to
+           or c.day between p_b_from and p_b_to
+           or c.day between p_series_from and p_b_to)
+      and (p_models is null or c.model_used = any (p_models))
+      and (p_region is null or c.region = p_region)
+      and (p_topic_id is null
+           or c.prompt_id in (select p.id from public.prompts p where p.topic_id = p_topic_id))
+  ),
+  brand_cells as (
+    select r.prompt_id, r.platform, r.model_used, r.region, r.period,
+           count(*)::integer as runs,
+           (count(*) filter (where r.has_mention or r.has_citation))::integer as visible_runs,
+           sum(r.answer_count)::integer as answers,
+           sum(r.mention_answers)::integer as mention_answers,
+           sum(r.citation_answers)::integer as citation_answers,
+           sum(r.total_mentions)::integer as brand_mentions,
+           sum(r.sum_position) as sum_position,
+           sum(r.sum_inv_position) as sum_inv_position,
+           sum(r.position_count)::integer as position_count,
+           max(r.max_created_at) as last_at
+    from brand_rows r
+    where r.period is not null
+    group by r.prompt_id, r.platform, r.model_used, r.region, r.period
+  ),
+  competitor_cells as (
+    select r.prompt_id, r.platform, r.model_used, r.region, r.period,
+           sum(r.mention_count)::integer as competitor_mentions
+    from competitor_rows r
+    where r.period is not null
+    group by r.prompt_id, r.platform, r.model_used, r.region, r.period
+  ),
+  brand_daily as (
+    select r.day,
+           count(*)::integer as runs,
+           (count(*) filter (where r.has_mention or r.has_citation))::integer as visible_runs,
+           sum(r.answer_count)::integer as answers,
+           sum(r.mention_answers)::integer as mention_answers,
+           sum(r.citation_answers)::integer as citation_answers,
+           sum(r.total_mentions)::integer as brand_mentions,
+           sum(r.sum_position) as sum_position,
+           sum(r.sum_inv_position) as sum_inv_position,
+           sum(r.position_count)::integer as position_count,
+           -- Visibility as Insights counts it: prompts named or cited, of those tracked.
+           (count(distinct r.prompt_id) filter (where r.has_mention or r.has_citation))::integer
+             as visible_prompts,
+           count(distinct r.prompt_id)::integer as active_prompts
+    from brand_rows r
+    where r.day between p_series_from and p_b_to
+    group by r.day
+  ),
+  competitor_daily as (
+    select r.day, sum(r.mention_count)::integer as competitor_mentions
+    from competitor_rows r
+    where r.day between p_series_from and p_b_to
+    group by r.day
+  )
+  select jsonb_build_object(
+    -- As insights_kpi_series: false while a row read predates 00130/00131's columns.
+    'complete', not exists (select 1 from brand_rows r where r.stale),
+    'cells', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'prompt_id', b.prompt_id,
+        'platform', b.platform,
+        'model_used', b.model_used,
+        'region', b.region,
+        'period', b.period,
+        'runs', b.runs,
+        'visible_runs', b.visible_runs,
+        'answers', b.answers,
+        'mention_answers', b.mention_answers,
+        'citation_answers', b.citation_answers,
+        'brand_mentions', b.brand_mentions,
+        'sum_position', b.sum_position,
+        'sum_inv_position', b.sum_inv_position,
+        'position_count', b.position_count,
+        'competitor_mentions', coalesce(c.competitor_mentions, 0),
+        'last_at', b.last_at
+      ) order by b.prompt_id, b.platform, b.model_used, b.region, b.period)
+      from brand_cells b
+      left join competitor_cells c
+        on c.prompt_id = b.prompt_id
+       and c.platform is not distinct from b.platform
+       and c.model_used is not distinct from b.model_used
+       and c.region is not distinct from b.region
+       and c.period = b.period
+    ), '[]'::jsonb),
+    'daily', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'day', b.day,
+        'runs', b.runs,
+        'visible_runs', b.visible_runs,
+        'answers', b.answers,
+        'mention_answers', b.mention_answers,
+        'citation_answers', b.citation_answers,
+        'brand_mentions', b.brand_mentions,
+        'sum_position', b.sum_position,
+        'sum_inv_position', b.sum_inv_position,
+        'position_count', b.position_count,
+        'visible_prompts', b.visible_prompts,
+        'active_prompts', b.active_prompts,
+        'competitor_mentions', coalesce(c.competitor_mentions, 0)
+      ) order by b.day)
+      from brand_daily b
+      left join competitor_daily c on c.day = b.day
+    ), '[]'::jsonb)
+  )
+  into v_result;
+
+  return v_result;
+end;
+$$;
+
+comment on function public.chat_why_cells(uuid, date, date, date, date, date, text[], text, uuid) is
+  'Why did it move (CHAT-22 §1, 00423): the Insights rollups summed per prompt × engine × location × period (a, b) and per day from p_series_from, for explain_change. Periods and the series are 92 days at most. Server only: the web checks the brand is the caller''s first.';
+
+revoke all on function public.chat_why_cells(uuid, date, date, date, date, date, text[], text, uuid)
+  from public, anon, authenticated;
+grant execute on function public.chat_why_cells(uuid, date, date, date, date, date, text[], text, uuid)
+  to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00424_brand_access_chat_tables.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00424: brand access — Chat's brand tables
+-- ============================================================================
+-- 00390 took the brand tables whose policies look only at the organization or
+-- the person, up to 00390. These are Chat's (00400–00422), so they come after
+-- the migrations that create them: a chat, a filed file, a change that went
+-- live, a person's daily suggestions, Chat's change log and access requests,
+-- an agent's runs and a why-it-moved analysis are read only by someone who can
+-- access their brand. Every condition they had stays.
+--
+-- Nothing changes yet: everyone has All brands until the Team screen narrows
+-- someone, and for All-brands people every rule passes the same rows as
+-- before.
+--
+--   * A row with no brand (a chat or file about the whole workspace, a run
+--     whose brand was deleted) may still hold any brand's data: a chat with
+--     no brand lets each tool call pick its own. Someone else's such row is
+--     read only by admins and All-brands people (user_has_all_brands(),
+--     00390). The person's own rows with no brand stay theirs: their own
+--     chat, their own Chat changes and access requests (with the admins').
+--   * A person's own chat about a brand they can't access is hidden, not
+--     deleted, and comes back with the access (BRAND-ACCESS §9 Q4). So is a
+--     shared one, and an agent run's.
+--   * What follows these tables keeps following them: a chat's messages, runs,
+--     steps, questions, next moves, task state and attachments; a file's task
+--     links; a change's measurements and their control sets.
+--   * The rule is `brand_id in (select public.user_brand_ids())`, once per
+--     query, for authenticated only (anon may not run it).
+--
+-- server/src/lib/brand-access-policies.test.js checks every brand table and
+-- the tables that follow one.
+
+-- ── chat_conversations ──────────────────────────────────────────────────────
+
+-- The author's own chat with no brand stays theirs, whatever brands they see
+-- (Q4 hides only chats about a brand): they wrote every question in it, and
+-- an answer there that read a brand they have since lost is still the one
+-- they were given.
+drop policy if exists "chat_conversations: author select" on public.chat_conversations;
+create policy "chat_conversations: author select"
+  on public.chat_conversations
+  for select
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+drop policy if exists "chat_conversations: shared select" on public.chat_conversations;
+create policy "chat_conversations: shared select"
+  on public.chat_conversations
+  for select
+  to authenticated
+  using (
+    shared_at is not null
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
+  );
+
+drop policy if exists "chat_conversations: agent run select" on public.chat_conversations;
+create policy "chat_conversations: agent run select"
+  on public.chat_conversations
+  for select
+  to authenticated
+  using (
+    agent_run_id in (select r.id from public.chat_agent_runs r)
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
+  );
+
+-- ── chat_agent_runs ─────────────────────────────────────────────────────────
+
+drop policy if exists "chat_agent_runs: agent select" on public.chat_agent_runs;
+create policy "chat_agent_runs: agent select"
+  on public.chat_agent_runs
+  for select
+  to authenticated
+  using (
+    (
+      agent_id in (select a.id from public.chat_agents a)
+      or organization_id in (
+        select p.organization_id
+        from public.profiles p
+        where p.id = auth.uid()
+          and (p.role = 'admin' or chat_agent_runs.acting_user_id = auth.uid())
+      )
+    )
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
+  );
+
+-- ── chat_why_analyses ───────────────────────────────────────────────────────
+
+drop policy if exists "chat_why_analyses: chat select" on public.chat_why_analyses;
+create policy "chat_why_analyses: chat select"
+  on public.chat_why_analyses
+  for select
+  to authenticated
+  using (
+    conversation_id in (select c.id from public.chat_conversations c)
+    and brand_id in (select public.user_brand_ids())
+  );
+
+-- ── chat_files ──────────────────────────────────────────────────────────────
+
+drop policy if exists "chat_files: member select" on public.chat_files;
+create policy "chat_files: member select"
+  on public.chat_files
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
+  );
+
+-- ── chat_activity_log, chat_access_requests ─────────────────────────────────
+-- Read by the person who acted (or asked) and the admins, who have All brands:
+-- a row with no brand stays readable to them.
+
+drop policy if exists "chat_activity_log: own or admin select" on public.chat_activity_log;
+create policy "chat_activity_log: own or admin select"
+  on public.chat_activity_log
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and (p.role = 'admin' or chat_activity_log.user_id = auth.uid())
+    )
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+drop policy if exists "chat_access_requests: own or admin select" on public.chat_access_requests;
+create policy "chat_access_requests: own or admin select"
+  on public.chat_access_requests
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and (p.role = 'admin' or chat_access_requests.requester_id = auth.uid())
+    )
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+-- ── ship_events (impact_measurements and impact_control_sets follow) ───────
+
+drop policy if exists "ship_events: member select" on public.ship_events;
+create policy "ship_events: member select"
+  on public.ship_events
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and brand_id in (select public.user_brand_ids())
+  );
+
+-- ── chat_suggestion_feeds, chat_suggestions ─────────────────────────────────
+
+drop policy if exists "chat_suggestion_feeds: own select" on public.chat_suggestion_feeds;
+create policy "chat_suggestion_feeds: own select"
+  on public.chat_suggestion_feeds
+  for select
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and brand_id in (select public.user_brand_ids())
+  );
+
+drop policy if exists "chat_suggestions: own select" on public.chat_suggestions;
+create policy "chat_suggestions: own select"
+  on public.chat_suggestions
+  for select
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and brand_id in (select public.user_brand_ids())
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00425_ship_events_delivery.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00425: one ship event per CMS send, and a page published again
+-- ============================================================================
+-- The impact ledger (00421, CHAT-22 §2) writes a ship event when a CMS
+-- confirms a sent page live (Send to CMS #1331). A callback or a status poll
+-- can confirm the same send more than once, and two servers can confirm it at
+-- the same moment: each would be a second shipped change on the same
+-- prompts, and two measurements on the same targets make each other Not
+-- measurable (overlapping_change).
+--
+--   * content_draft_delivery_id: the send (content_draft_deliveries) a ship
+--     event is the publish of; null for every other kind of ship event. One
+--     ship event per send: the server writes it with an upsert that ignores
+--     a second (on conflict do nothing). A plain unique index rather than a
+--     partial one: PostgREST's on_conflict names columns only, and Postgres
+--     can't infer a partial index without its predicate. Nulls stay
+--     distinct, so ship events without a send are never in each other's way.
+--   * republished_at: the last time the same draft went live again within
+--     90 days of this ship event (a post updated in place, sent again). No
+--     second ship event is written then: the first measurement goes on, and
+--     the ledger can say the page was published again.
+
+alter table public.ship_events
+  add column if not exists content_draft_delivery_id uuid
+    references public.content_draft_deliveries(id) on delete set null,
+  add column if not exists republished_at timestamptz;
+
+create unique index if not exists ship_events_content_draft_delivery_uidx
+  on public.ship_events (content_draft_delivery_id);
+
+comment on column public.ship_events.content_draft_delivery_id is
+  'The CMS send (content_draft_deliveries) this ship event is the confirmed publish of: one ship event per send (00425). Null for other kinds.';
+comment on column public.ship_events.republished_at is
+  'The last time the same draft went live again within 90 days of this ship event: no second ship event is written, the first measurement goes on (00425).';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00426_brand_access_citation_functions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00426: brand access — the citation and report functions
+-- ============================================================================
+-- 00389 narrowed the brands table, and every policy that reads a brand through
+-- it follows. A security definer function doesn't: it reads past RLS and
+-- checks the caller itself. These eleven still ask only whether the brand
+-- belongs to the caller's organization (brands joined to the caller's profile
+-- on organization_id), so a Selected-brands person could read the citations
+-- of a brand they can't see through them. Each now asks can_access_brand
+-- (00388) instead:
+--   * the Citations page: citations_window_stats, citation_url_candidates,
+--     citation_url_occurrences (00069), citations_domains, citations_urls,
+--     citation_gap_domains, citation_competitor_sources (00111);
+--   * its daily-rollup reads: citations_urls_daily (00119),
+--     citation_gap_domains_daily, citation_competitor_sources_daily (00203);
+--   * the report's evidence: report_citation_evidence (00063).
+--
+-- The first of three waves (BRAND-ACCESS PR 4–6); Insights, Mentions and
+-- Topics come next, then AI traffic, content, shopping and the catalog.
+-- web/src/lib/brand-access-functions.test.ts lists the functions still to do
+-- and fails on a new one that checks only the organization.
+--
+-- Nothing changes yet: everyone has All brands until the Team screen narrows
+-- someone, and for an All-brands person can_access_brand(brand) is true
+-- exactly when the brand is their organization's, the check it replaces.
+-- Without a person (anon, the service role) both answer no, so those callers
+-- still read nothing: none of these lets the service role through.
+--
+-- How:
+--   * Each function is its last definition, word for word, with only the
+--     check changed. The sql ones keep their `allowed` CTE, which now selects
+--     its one row when can_access_brand(p_brand_id); the plpgsql ones keep
+--     their early return. It runs once per call, as before, not per row.
+--   * create or replace resets the settings a definition doesn't repeat, so
+--     each repeats its own: search_path, and work_mem and plan_cache_mode
+--     where it had them. Grants stay as they were (create or replace keeps
+--     them).
+--   * The comments that said "members of the brand's organization" or "an
+--     organization check" now say brand access, and the two functions that
+--     had none (citations_urls_daily, report_citation_evidence) get one.
+--   * can_access_brand runs as the function's owner here, so a caller who may
+--     not run it directly (anon) still gets the empty answer, not an error.
+
+-- ── citations_window_stats (00069) ─────────────────────────────────────────
+-- The Citations page: answers scanned and regions in the window.
+
+create or replace function public.citations_window_stats(
+  p_brand_id uuid,
+  p_date_from timestamptz default null,
+  p_date_to timestamptz default null,
+  p_models text[] default null,
+  p_regions text[] default null,
+  p_prompt_ids uuid[] default null,
+  p_topic_ids uuid[] default null
+)
+returns table (results bigint, regions text[])
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with allowed as (
+    select 1 where public.can_access_brand(p_brand_id)
+  )
+  select count(*)::bigint,
+         coalesce(array_agg(distinct pr.region) filter (where pr.region is not null), '{}')
+  from public.prompt_results pr
+  where exists (select 1 from allowed)
+    and pr.brand_id = p_brand_id
+    and pr.platform <> 'chatgpt-shopping'
+    and (p_date_from  is null or pr.created_at >= p_date_from)
+    and (p_date_to    is null or pr.created_at <= p_date_to)
+    and (p_models     is null or pr.model_used = any(p_models))
+    and (p_regions    is null or pr.region = any(p_regions))
+    and (p_prompt_ids is null or pr.prompt_id = any(p_prompt_ids))
+    and (p_topic_ids  is null or pr.prompt_id in (
+          select pp.id from public.prompts pp where pp.topic_id = any(p_topic_ids)));
+$$;
+
+-- ── citation_url_candidates (00069) ────────────────────────────────────────
+-- The URL detail: URLs on one domain the brand has cited.
+
+create or replace function public.citation_url_candidates(
+  p_brand_id uuid,
+  p_domain text
+)
+returns table (
+  id bigint,
+  url text,
+  title text
+)
+language sql
+stable
+security definer
+set search_path to 'public'
+as $$
+  with allowed as (
+    select 1 where public.can_access_brand(p_brand_id)
+  )
+  select cu.id, cu.url, cu.title
+  from public.citation_urls cu
+  where exists (select 1 from allowed)
+    and cu.domain = p_domain
+    and exists (
+      select 1 from public.prompt_result_citations c
+      where c.url_id = cu.id and c.brand_id = p_brand_id
+    );
+$$;
+
+-- ── citation_url_occurrences (00069) ───────────────────────────────────────
+-- The URL detail: the answers citing the URLs.
+
+create or replace function public.citation_url_occurrences(
+  p_brand_id uuid,
+  p_url_ids bigint[],
+  p_date_from timestamptz default null,
+  p_date_to timestamptz default null,
+  p_models text[] default null,
+  p_regions text[] default null,
+  p_prompt_ids uuid[] default null,
+  p_topic_ids uuid[] default null
+)
+returns table (
+  result_id uuid,
+  prompt_id uuid,
+  prompt_text text,
+  platform text,
+  model_used text,
+  region text,
+  created_at timestamptz,
+  sentiment text,
+  brand_mentioned boolean,
+  citations_in_answer int,
+  rank int,
+  total_sources int
+)
+language sql
+stable
+security definer
+set search_path to 'public'
+set work_mem to '96MB'
+as $$
+  with allowed as (
+    select 1 where public.can_access_brand(p_brand_id)
+  ),
+  hits as (
+    select c.prompt_result_id as rid,
+           count(*)::int as cited,
+           (min(c.position) + 1)::int as rnk
+    from public.prompt_result_citations c
+    where exists (select 1 from allowed)
+      and c.brand_id = p_brand_id
+      and c.url_id = any(p_url_ids)
+      and (p_date_from is null or c.created_at >= p_date_from)
+      and (p_date_to   is null or c.created_at <= p_date_to)
+    group by c.prompt_result_id
+  ),
+  answers as (
+    select h.rid, h.cited, h.rnk, pr.prompt_id, pr.platform, pr.model_used,
+           pr.region, pr.created_at, pr.sentiment,
+           coalesce(pr.mention_count, 0) > 0 as mentioned
+    from hits h
+    join public.prompt_results pr on pr.id = h.rid
+    where pr.brand_id = p_brand_id
+      and pr.platform <> 'chatgpt-shopping'
+      and (p_date_from  is null or pr.created_at >= p_date_from)
+      and (p_date_to    is null or pr.created_at <= p_date_to)
+      and (p_models     is null or pr.model_used = any(p_models))
+      and (p_regions    is null or pr.region = any(p_regions))
+      and (p_prompt_ids is null or pr.prompt_id = any(p_prompt_ids))
+      and (p_topic_ids  is null or pr.prompt_id in (
+            select pp.id from public.prompts pp where pp.topic_id = any(p_topic_ids)))
+  ),
+  -- Grouped once and joined, rather than counted per answer in a correlated
+  -- subselect: the subselect re-probed the index for each of the 2,084 rows
+  -- the busiest URL returns.
+  sizes as (
+    select a.prompt_result_id as rid, count(*)::int as total
+    from public.prompt_result_citations a
+    where a.prompt_result_id in (select rid from answers)
+    group by a.prompt_result_id
+  )
+  select a.rid, a.prompt_id, p.text, a.platform, a.model_used, a.region,
+         a.created_at, a.sentiment, a.mentioned, a.cited, a.rnk,
+         coalesce(s.total, a.cited)
+  from answers a
+  left join sizes s on s.rid = a.rid
+  left join public.prompts p on p.id = a.prompt_id
+  order by a.created_at desc;
+$$;
+
+-- ── citations_domains (00111) ──────────────────────────────────────────────
+-- The Citations page: per-domain aggregates.
+
+create or replace function public.citations_domains(
+  p_brand_id uuid,
+  p_date_from timestamptz default null,
+  p_date_to timestamptz default null,
+  p_models text[] default null,
+  p_regions text[] default null,
+  p_prompt_ids uuid[] default null,
+  p_topic_ids uuid[] default null
+)
+returns table (domain text, total_citations bigint, results_citing bigint, models text[])
+language plpgsql
+stable
+security definer
+set search_path = public
+set work_mem = '96MB'
+set plan_cache_mode = force_custom_plan
+as $$
+#variable_conflict use_column
+begin
+  -- An end bound at or after now() excludes nothing, but it makes the
+  -- planner estimate ~1 row for recent windows (see the header).
+  if p_date_to >= now() then
+    p_date_to := null;
+  end if;
+
+  return query
+  with allowed as (
+    select 1 where public.can_access_brand(p_brand_id)
+  ),
+  -- The brand's results in scope, read from the covering index.
+  res as materialized (
+    select pr.id, coalesce(pr.model_used, pr.platform) as m
+    from public.prompt_results pr
+    where exists (select 1 from allowed)
+      and pr.brand_id = p_brand_id
+      and pr.platform <> 'chatgpt-shopping'
+      and (p_date_from  is null or pr.created_at >= p_date_from)
+      and (p_date_to    is null or pr.created_at <= p_date_to)
+      and (p_models     is null or pr.model_used = any(p_models))
+      and (p_regions    is null or pr.region = any(p_regions))
+      and (p_prompt_ids is null or pr.prompt_id = any(p_prompt_ids))
+      and (p_topic_ids  is null or pr.prompt_id in (
+            select pp.id from public.prompts pp where pp.topic_id = any(p_topic_ids)))
+  ),
+  -- Citations per (URL, result), before any URL is resolved to its domain.
+  cites as materialized (
+    select c.url_id, c.prompt_result_id as rid, count(*) as n
+    from public.prompt_result_citations c
+    where exists (select 1 from allowed)
+      and c.brand_id = p_brand_id
+      and (p_date_from is null or c.created_at >= p_date_from)
+      and (p_date_to   is null or c.created_at <= p_date_to)
+    group by c.url_id, c.prompt_result_id
+  ),
+  -- Each distinct URL's domain, looked up once.
+  url_domains as materialized (
+    select cu.id, cu.domain
+    from public.citation_urls cu
+    where cu.id in (select url_id from cites)
+  ),
+  pairs as (
+    select ud.domain as d, ci.rid, sum(ci.n)::bigint as n, min(r.m) as m
+    from cites ci
+    join res r on r.id = ci.rid
+    join url_domains ud on ud.id = ci.url_id
+    group by ud.domain, ci.rid
+  ),
+  counts as (
+    select d, sum(n)::bigint as tc, count(*)::bigint as rc from pairs group by d
+  ),
+  model_lists as (
+    select d, array_agg(m order by m) as ms
+    from (select distinct d, m from pairs) s
+    group by d
+  )
+  select c.d, c.tc, c.rc, m.ms
+  from counts c join model_lists m on m.d = c.d
+  order by c.tc desc;
+end;
+$$;
+
+-- ── citations_urls (00111) ─────────────────────────────────────────────────
+-- The Citations page: per-URL aggregates.
+
+create or replace function public.citations_urls(
+  p_brand_id uuid,
+  p_date_from timestamptz default null,
+  p_date_to timestamptz default null,
+  p_models text[] default null,
+  p_regions text[] default null,
+  p_prompt_ids uuid[] default null,
+  p_topic_ids uuid[] default null,
+  p_limit integer default 2000,
+  p_domains text[] default null,
+  p_exclude_domains text[] default null
+)
+returns table (
+  url text, domain text, title text,
+  total_citations bigint, results_citing bigint, models text[], total_urls bigint
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+set work_mem = '96MB'
+set plan_cache_mode = force_custom_plan
+as $$
+#variable_conflict use_column
+begin
+  -- An end bound at or after now() excludes nothing, but it makes the
+  -- planner estimate ~1 row for recent windows (see the header).
+  if p_date_to >= now() then
+    p_date_to := null;
+  end if;
+
+  return query
+  with allowed as (
+    select 1 where public.can_access_brand(p_brand_id)
+  ),
+  -- The brand's results in scope, read from the covering index.
+  res as materialized (
+    select pr.id, coalesce(pr.model_used, pr.platform) as m
+    from public.prompt_results pr
+    where exists (select 1 from allowed)
+      and pr.brand_id = p_brand_id
+      and pr.platform <> 'chatgpt-shopping'
+      and (p_date_from  is null or pr.created_at >= p_date_from)
+      and (p_date_to    is null or pr.created_at <= p_date_to)
+      and (p_models     is null or pr.model_used = any(p_models))
+      and (p_regions    is null or pr.region = any(p_regions))
+      and (p_prompt_ids is null or pr.prompt_id = any(p_prompt_ids))
+      and (p_topic_ids  is null or pr.prompt_id in (
+            select pp.id from public.prompts pp where pp.topic_id = any(p_topic_ids)))
+  ),
+  -- Citations per (URL, result), before the join to the results.
+  cites as materialized (
+    select c.url_id as uid, c.prompt_result_id as rid, count(*) as n
+    from public.prompt_result_citations c
+    where exists (select 1 from allowed)
+      and c.brand_id = p_brand_id
+      and (p_date_from is null or c.created_at >= p_date_from)
+      and (p_date_to   is null or c.created_at <= p_date_to)
+    group by c.url_id, c.prompt_result_id
+  ),
+  agg as (
+    select ci.uid, sum(ci.n)::bigint as tc, count(*)::bigint as rc, array_agg(distinct r.m) as ms
+    from cites ci
+    join res r on r.id = ci.rid
+    group by ci.uid
+  ),
+  include_ids as (
+    select cu.id from public.citation_urls cu
+    where p_domains is not null and cu.domain = any(p_domains)
+  ),
+  exclude_ids as (
+    select cu.id from public.citation_urls cu
+    where p_exclude_domains is not null and cu.domain = any(p_exclude_domains)
+  ),
+  scoped as (
+    select a.*
+    from agg a
+    where (p_domains is null
+           or exists (select 1 from include_ids i where i.id = a.uid))
+      and (p_exclude_domains is null
+           or not exists (select 1 from exclude_ids e where e.id = a.uid))
+  )
+  select cu.url, cu.domain, cu.title, a.tc, a.rc, a.ms,
+         (select count(*)::bigint from scoped)
+  from (select * from scoped order by tc desc, uid limit p_limit) a
+  join public.citation_urls cu on cu.id = a.uid
+  order by a.tc desc;
+end;
+$$;
+
+-- ── citation_gap_domains (00111) ───────────────────────────────────────────
+-- Citation gap: the domains competitors are cited from.
+
+create or replace function public.citation_gap_domains(
+  p_brand_id uuid,
+  p_brand_domains text[],
+  p_competitor_domains text[],
+  p_date_from timestamptz default null,
+  p_date_to timestamptz default null,
+  p_models text[] default null,
+  p_regions text[] default null,
+  p_prompt_ids uuid[] default null,
+  p_topic_ids uuid[] default null
+)
+returns table (
+  domain text,
+  competitor_answers bigint,
+  appears_in_ours boolean,
+  strength double precision,
+  competitor_names text[],
+  our_answer_count bigint,
+  total_answers bigint
+)
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set work_mem to '96MB'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+#variable_conflict use_column
+begin
+  -- An end bound at or after now() excludes nothing, but it makes the
+  -- planner estimate ~1 row for recent windows (see the header).
+  if p_date_to >= now() then
+    p_date_to := null;
+  end if;
+
+  return query
+  with allowed as (
+    select 1 where public.can_access_brand(p_brand_id)
+  ),
+  answers as materialized (
+    select pr.id as rid,
+           coalesce(pr.mention_count, 0) > 0 as we_mention,
+           coalesce(
+             jsonb_path_exists(pr.competitor_mentions, '$[*] ? (@.mention_count > 0)'),
+             false
+           ) as comp_present,
+           pr.competitor_mentions
+    from prompt_results pr
+    where exists (select 1 from allowed)
+      and pr.brand_id = p_brand_id
+      and pr.platform <> 'chatgpt-shopping'
+      and (p_date_from  is null or pr.created_at >= p_date_from)
+      and (p_date_to    is null or pr.created_at <= p_date_to)
+      and (p_models     is null or pr.model_used = any(p_models))
+      and (p_regions    is null or pr.region = any(p_regions))
+      and (p_prompt_ids is null or pr.prompt_id = any(p_prompt_ids))
+      and (p_topic_ids  is null or pr.prompt_id in (
+            select pp.id from public.prompts pp where pp.topic_id = any(p_topic_ids)))
+  ),
+  adomains as materialized (
+    select distinct c.prompt_result_id as rid, cu.domain as d
+    from prompt_result_citations c
+    join citation_urls cu on cu.id = c.url_id
+    where c.brand_id = p_brand_id
+      and c.prompt_result_id in (select rid from answers)
+  ),
+  dtags as materialized (
+    select s.d,
+      exists (select 1 from unnest(p_brand_domains) e
+              where s.d = e or right(s.d, length(e) + 1) = '.' || e) as is_you,
+      exists (select 1 from unnest(p_competitor_domains) e
+              where s.d = e or right(s.d, length(e) + 1) = '.' || e) as is_comp
+    from (select distinct ad.d from adomains ad) s
+  ),
+  per_answer as (
+    select ad.rid, 1.0 / count(*) as w, bool_or(t.is_you) as you_cited
+    from adomains ad join dtags t on t.d = ad.d
+    group by ad.rid
+  ),
+  flags as materialized (
+    select a.rid,
+           a.we_mention or coalesce(pa.you_cited, false) as we_present,
+           a.comp_present,
+           coalesce(pa.w, 0) as w
+    from answers a
+    left join per_answer pa on pa.rid = a.rid
+  ),
+  domain_rows as (
+    select ad.d,
+      count(*) filter (where f.comp_present and not f.we_present) as competitor_answers,
+      bool_or(f.we_present) as appears,
+      coalesce(sum(f.w) filter (where f.comp_present and not f.we_present), 0) as strength
+    from adomains ad
+    join dtags t on t.d = ad.d and not t.is_you and not t.is_comp
+    join flags f on f.rid = ad.rid
+    group by ad.d
+  ),
+  qualifying as (
+    select f.rid from flags f where f.comp_present and not f.we_present
+  ),
+  mention_names as (
+    select q.rid,
+      case when co.id is not null
+           then coalesce(nullif(trim(co.name), ''), 'Competitor')
+           else coalesce(nullif(trim(x.e ->> 'name'), ''), 'Competitor')
+      end as cname
+    from qualifying q
+    join answers a on a.rid = q.rid,
+    lateral jsonb_array_elements(a.competitor_mentions) x(e)
+    left join competitors co
+      on co.brand_id = p_brand_id and co.id::text = x.e ->> 'competitor_id'
+    where coalesce((x.e ->> 'mention_count')::numeric, 0) > 0
+  ),
+  domain_names as (
+    select ad.d, array_agg(distinct mn.cname order by mn.cname) as names
+    from adomains ad
+    join dtags t on t.d = ad.d and not t.is_you and not t.is_comp
+    join mention_names mn on mn.rid = ad.rid
+    group by ad.d
+  ),
+  totals as (
+    select count(*)::bigint as total_answers,
+           (count(*) filter (where f.we_present))::bigint as our_answer_count
+    from flags f
+  )
+  select dr.d, dr.competitor_answers::bigint, dr.appears, dr.strength::float8,
+         coalesce(dn.names, '{}'::text[]), t.our_answer_count, t.total_answers
+  from domain_rows dr
+  left join domain_names dn on dn.d = dr.d
+  cross join totals t
+  where dr.competitor_answers > 0 or dr.appears
+  union all
+  select null, 0, false, 0, '{}'::text[], t.our_answer_count, t.total_answers
+  from totals t;
+end;
+$$;
+
+-- ── citation_competitor_sources (00111) ────────────────────────────────────
+-- Citation gap: each competitor's sources.
+
+create or replace function public.citation_competitor_sources(
+  p_brand_id uuid,
+  p_brand_domains text[],
+  p_competitor_domains text[],
+  p_date_from timestamptz default null,
+  p_date_to timestamptz default null,
+  p_models text[] default null,
+  p_regions text[] default null,
+  p_prompt_ids uuid[] default null,
+  p_topic_ids uuid[] default null
+)
+returns table (
+  competitor_id text,
+  domain text,
+  answers_feeding bigint,
+  strength double precision
+)
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set work_mem to '96MB'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+#variable_conflict use_column
+begin
+  -- An end bound at or after now() excludes nothing, but it makes the
+  -- planner estimate ~1 row for recent windows (see the header).
+  if p_date_to >= now() then
+    p_date_to := null;
+  end if;
+
+  return query
+  with allowed as (
+    select 1 where public.can_access_brand(p_brand_id)
+  ),
+  answers as materialized (
+    select pr.id as rid, pr.competitor_mentions
+    from prompt_results pr
+    where exists (select 1 from allowed)
+      and pr.brand_id = p_brand_id
+      and pr.platform <> 'chatgpt-shopping'
+      and (p_date_from  is null or pr.created_at >= p_date_from)
+      and (p_date_to    is null or pr.created_at <= p_date_to)
+      and (p_models     is null or pr.model_used = any(p_models))
+      and (p_regions    is null or pr.region = any(p_regions))
+      and (p_prompt_ids is null or pr.prompt_id = any(p_prompt_ids))
+      and (p_topic_ids  is null or pr.prompt_id in (
+            select pp.id from public.prompts pp where pp.topic_id = any(p_topic_ids)))
+  ),
+  adomains as materialized (
+    select distinct c.prompt_result_id as rid, cu.domain as d
+    from prompt_result_citations c
+    join citation_urls cu on cu.id = c.url_id
+    where c.brand_id = p_brand_id
+      and c.prompt_result_id in (select rid from answers)
+  ),
+  dtags as materialized (
+    select s.d,
+      exists (select 1 from unnest(p_brand_domains) e
+              where s.d = e or right(s.d, length(e) + 1) = '.' || e) as is_you,
+      exists (select 1 from unnest(p_competitor_domains) e
+              where s.d = e or right(s.d, length(e) + 1) = '.' || e) as is_comp
+    from (select distinct ad.d from adomains ad) s
+  ),
+  per_answer as (
+    select ad.rid, 1.0 / count(*) as w
+    from adomains ad group by ad.rid
+  ),
+  mentions as materialized (
+    select a.rid, x.e ->> 'competitor_id' as competitor_id
+    from answers a,
+    lateral jsonb_array_elements(a.competitor_mentions) x(e)
+    where coalesce(
+            jsonb_path_exists(a.competitor_mentions, '$[*] ? (@.mention_count > 0)'),
+            false
+          )
+      and coalesce((x.e ->> 'mention_count')::numeric, 0) > 0
+  )
+  select m.competitor_id, ad.d,
+         count(distinct m.rid)::bigint as answers_feeding,
+         sum(pa.w)::float8 as strength
+  from mentions m
+  join adomains ad on ad.rid = m.rid
+  join dtags t on t.d = ad.d and not t.is_you and not t.is_comp
+  join per_answer pa on pa.rid = m.rid
+  group by m.competitor_id, ad.d;
+end;
+$$;
+
+-- ── citations_urls_daily (00119) ───────────────────────────────────────────
+-- The Citations page's URLs, from the daily rollups.
+
+create or replace function public.citations_urls_daily(
+  p_brand_id uuid,
+  p_day_from date default null,
+  p_day_to date default null,
+  p_models text[] default null,
+  p_regions text[] default null,
+  p_topic_ids uuid[] default null,
+  p_limit integer default 2000,
+  p_domains text[] default null,
+  p_exclude_domains text[] default null
+) returns table(url text, domain text, title text, total_citations bigint,
+                results_citing bigint, models text[], total_urls bigint)
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set work_mem to '64MB'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+#variable_conflict use_column
+begin
+  if not public.can_access_brand(p_brand_id) then
+    return;
+  end if;
+
+  return query
+  with agg as (
+    select u.url_id as uid,
+           sum(u.citations)::bigint as tc,
+           sum(u.results)::bigint as rc,
+           array_agg(distinct coalesce(u.model_used, u.platform)) as ms
+    from public.citation_url_daily u
+    where u.brand_id = p_brand_id
+      and (p_day_from  is null or u.day >= p_day_from)
+      and (p_day_to    is null or u.day <= p_day_to)
+      and (p_models    is null or u.model_used = any(p_models))
+      and (p_regions   is null or u.region = any(p_regions))
+      and (p_topic_ids is null or u.topic_id = any(p_topic_ids))
+    group by u.url_id
+  ),
+  include_ids as (
+    select cu.id from public.citation_urls cu
+    where p_domains is not null and cu.domain = any(p_domains)
+  ),
+  exclude_ids as (
+    select cu.id from public.citation_urls cu
+    where p_exclude_domains is not null and cu.domain = any(p_exclude_domains)
+  ),
+  scoped as materialized (
+    select a.*
+    from agg a
+    where (p_domains is null
+           or exists (select 1 from include_ids i where i.id = a.uid))
+      and (p_exclude_domains is null
+           or not exists (select 1 from exclude_ids e where e.id = a.uid))
+  )
+  select cu.url, cu.domain, cu.title, a.tc, a.rc, a.ms,
+         (select count(*)::bigint from scoped)
+  from (select * from scoped order by tc desc, uid limit p_limit) a
+  join public.citation_urls cu on cu.id = a.uid
+  order by a.tc desc;
+end;
+$$;
+
+-- ── citation_gap_domains_daily (00203) ─────────────────────────────────────
+-- Citation gap's domains, from the daily rollups.
+
+create or replace function public.citation_gap_domains_daily(
+  p_brand_id uuid,
+  p_brand_domains text[],
+  p_competitor_domains text[],
+  p_day_from date default null,
+  p_day_to date default null,
+  p_models text[] default null,
+  p_regions text[] default null,
+  p_topic_ids uuid[] default null
+)
+returns table (
+  domain text,
+  competitor_answers bigint,
+  appears_in_ours boolean,
+  strength double precision,
+  competitor_names text[],
+  our_answer_count bigint,
+  total_answers bigint
+)
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set work_mem to '64MB'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+#variable_conflict use_column
+begin
+  if not public.can_access_brand(p_brand_id) then
+    return;
+  end if;
+
+  return query
+  with g as (
+    select d.domain as dm,
+           sum(d.gap_answers)::bigint as ga,
+           sum(d.gap_strength) as gs,
+           sum(d.present_answers)::bigint as pa
+    from public.citation_gap_domain_daily d
+    where d.brand_id = p_brand_id
+      and (p_day_from  is null or d.day >= p_day_from)
+      and (p_day_to    is null or d.day <= p_day_to)
+      and (p_models    is null or d.model_used = any(p_models))
+      and (p_regions   is null or d.region = any(p_regions))
+      and (p_topic_ids is null or d.topic_id = any(p_topic_ids))
+    group by d.domain
+  ),
+  -- Third-party domains only: neither the brand's nor a competitor's.
+  third_party as (
+    select g.* from g
+    where not exists (select 1 from unnest(p_brand_domains) e
+                      where g.dm = e or right(g.dm, length(e) + 1) = '.' || e)
+      and not exists (select 1 from unnest(p_competitor_domains) e
+                      where g.dm = e or right(g.dm, length(e) + 1) = '.' || e)
+  ),
+  -- The competitors mentioned in the gap answers citing each domain.
+  names as (
+    select n.dm, array_agg(distinct n.cname order by n.cname) as names
+    from (
+      select c.domain as dm,
+             case when co.id is not null
+                  then coalesce(nullif(trim(co.name), ''), 'Competitor')
+                  else c.competitor_name
+             end as cname
+      from public.citation_gap_competitor_daily c
+      left join public.competitors co
+        on co.brand_id = p_brand_id and co.id::text = c.competitor_id
+      where c.brand_id = p_brand_id
+        and c.gap_answers > 0
+        and (p_day_from  is null or c.day >= p_day_from)
+        and (p_day_to    is null or c.day <= p_day_to)
+        and (p_models    is null or c.model_used = any(p_models))
+        and (p_regions   is null or c.region = any(p_regions))
+        and (p_topic_ids is null or c.topic_id = any(p_topic_ids))
+    ) n
+    group by n.dm
+  ),
+  totals as (
+    select coalesce(sum(r.answers), 0)::bigint as total_answers,
+           coalesce(sum(r.present_answers), 0)::bigint as our_answer_count
+    from public.citation_result_daily r
+    where r.brand_id = p_brand_id
+      and (p_day_from  is null or r.day >= p_day_from)
+      and (p_day_to    is null or r.day <= p_day_to)
+      and (p_models    is null or r.model_used = any(p_models))
+      and (p_regions   is null or r.region = any(p_regions))
+      and (p_topic_ids is null or r.topic_id = any(p_topic_ids))
+  )
+  select t.dm, t.ga, t.pa > 0, coalesce(t.gs, 0)::float8,
+         coalesce(n.names, '{}'::text[]), tt.our_answer_count, tt.total_answers
+  from third_party t
+  left join names n on n.dm = t.dm
+  cross join totals tt
+  where t.ga > 0 or t.pa > 0
+  union all
+  select null, 0::bigint, false, 0::float8, '{}'::text[], tt.our_answer_count, tt.total_answers
+  from totals tt;
+end;
+$$;
+
+-- ── citation_competitor_sources_daily (00203) ──────────────────────────────
+-- Citation gap's competitor sources, from the daily rollups.
+
+create or replace function public.citation_competitor_sources_daily(
+  p_brand_id uuid,
+  p_brand_domains text[],
+  p_competitor_domains text[],
+  p_day_from date default null,
+  p_day_to date default null,
+  p_models text[] default null,
+  p_regions text[] default null,
+  p_topic_ids uuid[] default null
+)
+returns table (
+  competitor_id text,
+  domain text,
+  answers_feeding bigint,
+  strength double precision
+)
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set work_mem to '64MB'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+#variable_conflict use_column
+begin
+  if not public.can_access_brand(p_brand_id) then
+    return;
+  end if;
+
+  return query
+  with agg as materialized (
+    select c.competitor_id as cid, c.domain as dm,
+           sum(c.answers)::bigint as af,
+           sum(c.strength)::float8 as st
+    from public.citation_gap_competitor_daily c
+    where c.brand_id = p_brand_id
+      and (p_day_from  is null or c.day >= p_day_from)
+      and (p_day_to    is null or c.day <= p_day_to)
+      and (p_models    is null or c.model_used = any(p_models))
+      and (p_regions   is null or c.region = any(p_regions))
+      and (p_topic_ids is null or c.topic_id = any(p_topic_ids))
+    group by c.competitor_id, c.domain
+  ),
+  -- Third-party domains only, tagged once per domain.
+  third_party as (
+    select s.dm
+    from (select distinct dm from agg) s
+    where not exists (select 1 from unnest(p_brand_domains) e
+                      where s.dm = e or right(s.dm, length(e) + 1) = '.' || e)
+      and not exists (select 1 from unnest(p_competitor_domains) e
+                      where s.dm = e or right(s.dm, length(e) + 1) = '.' || e)
+  )
+  select a.cid, a.dm, a.af, a.st
+  from agg a
+  join third_party t on t.dm = a.dm;
+end;
+$$;
+
+-- ── report_citation_evidence (00063) ───────────────────────────────────────
+-- The report's citation evidence.
+
+CREATE OR REPLACE FUNCTION "public"."report_citation_evidence"(
+  "p_brand_id" uuid,
+  "p_date_from" timestamptz,
+  "p_date_to" timestamptz,
+  "p_limit" integer DEFAULT 10,
+  "p_prompts_per_url" integer DEFAULT 3
+)
+RETURNS TABLE(
+  "url" text,
+  "domain" text,
+  "title" text,
+  "total_citations" bigint,
+  "sourced_prompts" text[]
+)
+LANGUAGE "sql"
+STABLE
+SECURITY DEFINER
+SET "search_path" TO 'public'
+SET "work_mem" TO '96MB'
+AS $$
+  WITH allowed AS (
+    SELECT 1
+    WHERE public.can_access_brand(p_brand_id)
+  ),
+  -- citation_urls keeps the query string, so one page can sit under several
+  -- ids (?utm_source=..., ?authuser=...). Evidence is about the page, not the
+  -- link that reached it, so strip query and fragment and group on what is
+  -- left — the same normalization the section applied before this moved into
+  -- SQL. Without it the list shows the same article three times.
+  pairs AS (
+    SELECT
+      regexp_replace(split_part(split_part(cu.url, '#', 1), '?', 1), '/$', '') AS norm_url,
+      cu.domain AS domain,
+      nullif(cu.title, '') AS title,
+      pr.prompt_id AS prompt_id,
+      count(*) AS n
+    FROM prompt_result_citations c
+    JOIN prompt_results pr ON pr.id = c.prompt_result_id
+    JOIN citation_urls cu ON cu.id = c.url_id
+    WHERE EXISTS (SELECT 1 FROM allowed)
+      AND c.brand_id = p_brand_id
+      AND pr.brand_id = p_brand_id
+      AND pr.platform <> 'chatgpt-shopping'
+      AND c.created_at >= p_date_from
+      AND c.created_at <= p_date_to
+      AND pr.created_at >= p_date_from
+      AND pr.created_at <= p_date_to
+    GROUP BY 1, 2, 3, 4, c.prompt_result_id
+  ),
+  agg AS (
+    SELECT
+      norm_url,
+      sum(n)::bigint AS tc,
+      min(domain) AS domain,
+      min(title) AS title
+    FROM pairs
+    GROUP BY norm_url
+  ),
+  top AS (
+    SELECT norm_url, tc, domain, title FROM agg ORDER BY tc DESC, norm_url LIMIT p_limit
+  ),
+  -- One row per (url, prompt text), then keep the first few per url. Ordering
+  -- by text keeps the choice stable across runs of the same report.
+  ranked AS (
+    SELECT norm_url, text, row_number() OVER (PARTITION BY norm_url ORDER BY text) AS rn
+    FROM (
+      SELECT DISTINCT t.norm_url, p.text
+      FROM top t
+      JOIN pairs pa ON pa.norm_url = t.norm_url
+      JOIN prompts p ON p.id = pa.prompt_id
+      WHERE p.text IS NOT NULL AND p.text <> ''
+    ) d
+  )
+  SELECT
+    t.norm_url,
+    coalesce(t.domain, ''),
+    coalesce(t.title, ''),
+    t.tc,
+    coalesce(
+      (SELECT array_agg(r.text ORDER BY r.rn)
+       FROM ranked r
+       WHERE r.norm_url = t.norm_url AND r.rn <= p_prompts_per_url),
+      ARRAY[]::text[]
+    )
+  FROM top t
+  ORDER BY t.tc DESC;
+$$;
+
+-- ── Comments ───────────────────────────────────────────────────────────────
+-- Who may call each one, as the check above says it.
+
+comment on function public.citations_window_stats(uuid, timestamptz, timestamptz, text[], text[], uuid[], uuid[]) is
+  'Answers scanned and regions observed in a Citations window (#732) — the denominator for every usage percentage, including answers that cite nothing. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads zero.';
+
+comment on function public.citation_url_candidates(uuid, text) is
+  'URLs on one domain that a brand has cited (#732), for the detail page to normalize and match in the app tier. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty.';
+
+comment on function public.citation_url_occurrences(uuid, bigint[], timestamptz, timestamptz, text[], text[], uuid[], uuid[]) is
+  'Answers citing any of the given URL ids (#732) — the per-URL citation detail table, one row per answer. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty.';
+
+comment on function public.citations_domains(uuid, timestamptz, timestamptz, text[], text[], uuid[], uuid[]) is
+  'Per-domain citation aggregates for the Citations page (#732). Returns every domain — the long tail is the point. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty.';
+
+comment on function public.citations_urls(
+  uuid, timestamptz, timestamptz, text[], text[], uuid[], uuid[], integer, text[], text[]
+) is
+  'Top cited URLs for one brand, capped at p_limit by citation count (#732). p_domains / p_exclude_domains apply the source scope before the cap so it never reports a slice of the global top N as the whole scope (#745); the caller resolves the scope to domains, and total_urls counts the scoped set. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty. plpgsql + force_custom_plan so the arguments reach the planner.';
+
+comment on function public.citation_gap_domains(
+  uuid, text[], text[], timestamptz, timestamptz, text[], text[], uuid[], uuid[]
+) is
+  'Per-domain competitor co-occurrence for the Competitor Gaps tab (#777). Third-party domains only; one null-domain summary row carries the answer totals. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads only that summary row, at zero. plpgsql + force_custom_plan so the arguments reach the planner.';
+
+comment on function public.citation_competitor_sources(
+  uuid, text[], text[], timestamptz, timestamptz, text[], text[], uuid[], uuid[]
+) is
+  'Per-competitor source domains for the Competitor Gaps tab (#777), keyed by the competitor id recorded in the mention. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty. plpgsql + force_custom_plan so the arguments reach the planner.';
+
+comment on function public.citations_urls_daily(
+  uuid, date, date, text[], text[], uuid[], integer, text[], text[]
+) is
+  'citations_urls over whole UTC days, from the daily rollups (00118): the top cited URLs, capped at p_limit, with total_urls counting the scoped set. Security definer (00119) because citation_urls has no select policy, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty.';
+
+comment on function public.citation_gap_domains_daily(
+  uuid, text[], text[], date, date, text[], text[], uuid[]
+) is
+  'Competitor Gaps (#1002): citation_gap_domains over whole UTC days, from the daily rollups. Third-party domains with their gap answers, strength, whether they appear in an answer where the brand is present, and the competitors in those gap answers; plus a null-domain row with the window''s totals. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty.';
+
+comment on function public.citation_competitor_sources_daily(
+  uuid, text[], text[], date, date, text[], text[], uuid[]
+) is
+  'Competitor Gaps (#1002): citation_competitor_sources over whole UTC days, from the daily rollups. Per competitor, the third-party domains cited in answers that mention it, with the answer count and weight. Security definer, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty.';
+
+comment on function public.report_citation_evidence(uuid, timestamptz, timestamptz, integer, integer) is
+  'The report''s top cited pages (00063), query string and fragment stripped, each with up to p_prompts_per_url prompts whose answers cited it. Security definer because citation_urls has no select policy, for a person who can access the brand (00426, can_access_brand); anyone else, the service role included, reads empty.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00427_chat_why_analyses_visibility_score.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00427: Why did it move — keep a Visibility score analysis
+-- ============================================================================
+-- explain_change can now explain the Insights Visibility score
+-- (metric visibility_score, why/score.ts). chat_why_analyses (00420) allowed
+-- only the five v1 metrics, so keeping such an analysis failed its check and
+-- the result wasn't kept. Same check, with visibility_score added. A
+-- constraint swap on a small table: no rewrite, existing rows already pass.
+
+alter table public.chat_why_analyses
+  drop constraint if exists chat_why_analyses_metric_check;
+
+alter table public.chat_why_analyses
+  add constraint chat_why_analyses_metric_check check (
+    metric in (
+      'visibility',
+      'mention_rate',
+      'share_of_voice',
+      'citations',
+      'avg_position',
+      'visibility_score'
+    )
+  );
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00428_ship_cms_publish.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00428: a CMS publish into the impact ledger, one draft at a time
+-- ============================================================================
+-- A page the CMS confirmed live (Send to CMS #1331) is a ship event, once
+-- per send (00425), and the same draft live again within 90 days
+-- (p_republish_days, the server's REPUBLISH_DAYS) of its first
+-- cms_publish is that one, noted (republished_at), not a second. The
+-- server decided this in separate reads and writes, so two sends of one
+-- draft confirmed at the same moment could each miss the other and write
+-- two ship events, which then make each other Not measurable
+-- (overlapping_change).
+--
+--   * ship_cms_publish: the decision and its write in one transaction,
+--     under a lock on the draft: the send's own ship event if it has one;
+--     else the one it is noted on (republished_delivery_ids); else the
+--     draft's latest cms_publish shipped within p_republish_days before
+--     it, noted (republished_at only ever forward) with the send; else the
+--     nearest one shipped within p_republish_days after it (a send whose own write
+--     failed, filled in by the nightly job after a later send of the draft
+--     wrote its ship event: a second ship event would make both Not
+--     measurable, so the later one takes it in); else a new ship event.
+--     Only a cms_publish takes a send in: a ship event of another kind on
+--     the same draft (Mark as shipped, Chat) is its own.
+--     Says the ship event's id and whether this call wrote it. Service role
+--     only; the server reads the send and its draft first, and passes
+--     the window (REPUBLISH_DAYS in ship.js), so it is set in one place.
+--   * republished_delivery_ids: the sends noted on a ship event, so the
+--     nightly job doesn't take them for sends whose ship event is missing,
+--     and a send noted once is that ship event's even after its draft is
+--     deleted (draft ids are set null then, so only these ids still tie
+--     the send to it). At most 50; past that a send is noted by its date
+--     only. A GIN index looks a send up among them.
+
+alter table public.ship_events
+  add column if not exists republished_delivery_ids uuid[] not null default '{}'
+    check (cardinality(republished_delivery_ids) <= 50);
+
+-- A send is looked up among them (ship_cms_publish, the nightly job).
+create index if not exists ship_events_republished_delivery_ids_idx
+  on public.ship_events using gin (republished_delivery_ids);
+
+comment on column public.ship_events.republished_delivery_ids is
+  'The CMS sends (content_draft_deliveries) of the same draft noted on this cms_publish as published again within REPUBLISH_DAYS (90), at most 50 (00428).';
+
+create or replace function public.ship_cms_publish(
+  p_delivery_id uuid,
+  p_organization_id uuid,
+  p_brand_id uuid,
+  p_content_draft_id uuid,
+  p_title text,
+  p_url text,
+  p_action_id uuid,
+  p_shipped_at timestamptz,
+  p_shipped_by uuid,
+  p_execution_mode text,
+  p_republish_days integer
+)
+returns table (ship_event_id uuid, created boolean)
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_id uuid;
+begin
+  if p_delivery_id is null or p_shipped_at is null then
+    raise exception 'a send and its publish time are needed' using errcode = '22023';
+  end if;
+  if p_republish_days is null or p_republish_days < 1 then
+    raise exception 'a republish window of a day or more is needed' using errcode = '22023';
+  end if;
+  -- Every send of one draft waits for the one before it.
+  if p_content_draft_id is not null then
+    perform pg_advisory_xact_lock(hashtext('ship_cms_publish:' || p_content_draft_id::text));
+  end if;
+
+  -- The send's own, written before (a confirmation read twice).
+  select s.id into v_id
+  from public.ship_events s
+  where s.content_draft_delivery_id = p_delivery_id;
+  if v_id is not null then
+    return query select v_id, false;
+    return;
+  end if;
+  -- The send noted on a cms_publish before: that one, also once its draft is
+  -- deleted (content_draft_id set null), when the lookup below finds nothing.
+  select s.id into v_id
+  from public.ship_events s
+  where s.republished_delivery_ids @> array[p_delivery_id]
+  order by s.id
+  limit 1;
+  if v_id is not null then
+    return query select v_id, false;
+    return;
+  end if;
+
+  -- The same draft live again within the window: its first cms_publish goes on.
+  -- The latest shipped before the send first, else the nearest after it.
+  if p_content_draft_id is not null then
+    select s.id into v_id
+    from public.ship_events s
+    where s.brand_id = p_brand_id
+      and s.content_draft_id = p_content_draft_id
+      and s.kind = 'cms_publish'
+      and s.shipped_at >= p_shipped_at - make_interval(days => p_republish_days)
+      and s.shipped_at <= p_shipped_at + make_interval(days => p_republish_days)
+    order by s.shipped_at > p_shipped_at,
+      greatest(s.shipped_at - p_shipped_at, p_shipped_at - s.shipped_at),
+      s.id desc
+    limit 1;
+    if v_id is not null then
+      update public.ship_events s
+      set republished_at = case
+            when p_shipped_at > coalesce(s.republished_at, s.shipped_at) then p_shipped_at
+            else s.republished_at
+          end,
+          republished_delivery_ids = case
+            when p_delivery_id = any (s.republished_delivery_ids)
+              or cardinality(s.republished_delivery_ids) >= 50
+              then s.republished_delivery_ids
+            else s.republished_delivery_ids || p_delivery_id
+          end
+      where s.id = v_id;
+      return query select v_id, false;
+      return;
+    end if;
+  end if;
+
+  insert into public.ship_events (
+    organization_id, brand_id, kind, title, content_draft_id, content_draft_delivery_id,
+    url, action_id, source, change_type, shipped_at, shipped_by, execution_mode
+  ) values (
+    p_organization_id, p_brand_id, 'cms_publish', p_title, p_content_draft_id, p_delivery_id,
+    p_url, p_action_id, 'content_editor', 'content', p_shipped_at, p_shipped_by, p_execution_mode
+  )
+  on conflict (content_draft_delivery_id) do nothing
+  returning id into v_id;
+  if v_id is not null then
+    return query select v_id, true;
+    return;
+  end if;
+  -- A send without a draft, confirmed twice at once: the other call wrote it.
+  select s.id into v_id
+  from public.ship_events s
+  where s.content_draft_delivery_id = p_delivery_id;
+  return query select v_id, false;
+end;
+$$;
+
+revoke all on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text, integer)
+  from public, anon, authenticated;
+grant execute on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text, integer)
+  to service_role;
+
+comment on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text, integer) is
+  'Impact ledger (00428): a CMS-confirmed publish as a ship event, under a lock on its draft: the send''s own, else the one it is noted on, else the draft''s cms_publish within p_republish_days (the latest before it, else the nearest after) noted, else a new one. Says the id and whether this call wrote it. Service role only.';
 
 notify pgrst, 'reload schema';
 

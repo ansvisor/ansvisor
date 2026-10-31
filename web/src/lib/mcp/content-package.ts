@@ -2,7 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { readContentAuthors } from '@/lib/content/authors-read';
 import { bulkCmsItems, cmsSource, type BulkProblem } from '@/lib/content/cms-send';
-import { setContentDom } from '@/lib/content/dom';
+import { withContentDom } from '@/lib/content/server-dom';
 import { qualityPhase } from '@/lib/content/quality';
 import { fragment } from '@/lib/content/ready-to-publish';
 import { draftLanguage } from '@/lib/content/rules';
@@ -14,27 +14,11 @@ import { draftLanguage } from '@/lib/content/rules';
  * with its own connector. Ansvisor's MCP never sends it.
  *
  * The editor's helpers read HTML with a DOM, which the server has none of:
- * jsdom's window is given to them (setContentDom), made on the first call
- * and kept, and imported here alone, so no other tool waits for it and the
+ * jsdom's window is given to them (withContentDom, made on the first call
+ * and kept), imported here alone, so no other tool waits for it and the
  * browser's bundle never carries it. The MCP server imports this module on
  * the tool's first call too.
  */
-
-let dom: Promise<void> | null = null;
-
-/** jsdom's window for the editor's helpers, made once; a failed load is tried again. */
-function withContentDom(): Promise<void> {
-  dom ??= import('jsdom')
-    .then(({ JSDOM }) => {
-      const { window } = new JSDOM('<!doctype html><html><head></head><body></body></html>');
-      setContentDom(window);
-    })
-    .catch((err: unknown) => {
-      dom = null;
-      throw err;
-    });
-  return dom;
-}
 
 /** The page as the CMS takes it. */
 export interface McpCmsPackage {

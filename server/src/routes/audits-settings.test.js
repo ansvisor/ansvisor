@@ -14,6 +14,7 @@ const readSiteTrust = vi.fn();
 const isOrgActive = vi.fn();
 const getSiteAuditQuotaStatus = vi.fn(async () => quota);
 const getOrgIdForUser = vi.fn(async () => 'org-1');
+const assertAllBrands = vi.fn(async () => ({ orgId: 'org-1' }));
 let server;
 let baseUrl;
 
@@ -69,7 +70,10 @@ function query(table) {
 async function startApp() {
   vi.resetModules();
   vi.doMock('../config/supabase.js', () => ({ default: { from: (t) => query(t) } }));
-  vi.doMock('../lib/access.js', () => ({ assertBrandAccess: async () => ({ orgId: 'org-1' }) }));
+  vi.doMock('../lib/access.js', () => ({
+    assertBrandAccess: async () => ({ orgId: 'org-1' }),
+    assertAllBrands,
+  }));
   vi.doMock('../lib/plan-guard.js', () => ({
     requireFeature: () => (req, res, next) => next(),
     enforceSiteAuditQuota: vi.fn(),
@@ -113,6 +117,7 @@ const otherBrand = '44444444-4444-4444-4444-444444444444';
 beforeEach(async () => {
   writes = [];
   getSiteAuditQuotaStatus.mockClear();
+  assertAllBrands.mockReset().mockResolvedValue({ orgId: 'org-1' });
   isOrgActive.mockReset().mockResolvedValue(true);
   readSiteTrust.mockReset().mockResolvedValue({
     checks: { about: { ok: true, url: 'https://acme.com/about' } },
@@ -279,6 +284,29 @@ describe('PUT /api/audits/settings', () => {
     res = await put({ brandId, autoAudit: false });
     expect(res.status).toBe(403);
     expect(writes).toEqual([]);
+  });
+
+  it("keeps the organization's switch and e-mail to people with All brands; their brand's patterns are anyone's with the brand", async () => {
+    const refusal = Object.assign(new Error("You don't have access to this brand"), {
+      status: 403,
+      code: 'no_brand_access',
+    });
+    assertAllBrands.mockRejectedValue(refusal);
+
+    for (const change of [{ autoAudit: false }, { emailAfterRun: true }]) {
+      const res = await put({ brandId, ...change, excludePatterns: ['/legal/*'] });
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({
+        success: false,
+        message: "You don't have access to this brand",
+        code: 'no_brand_access',
+      });
+    }
+    expect(writes).toEqual([]);
+
+    const res = await put({ brandId, excludePatterns: ['/legal/*'] });
+    expect(res.status).toBe(200);
+    expect(writes).toEqual([expect.objectContaining({ table: 'site_audit_brand_settings' })]);
   });
 });
 

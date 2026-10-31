@@ -89,12 +89,15 @@ export function readBudget(effort: ChatEffort = 'normal'): ReadBudget {
 
 /**
  * WRITE caps per run (§14), by tool name; a write not named here gets
- * DEFAULT_WRITE_CAP. Rows that don't exist yet are named so they come
- * capped.
+ * DEFAULT_WRITE_CAP. A batch row's cap counts its items (add_prompts: 50
+ * prompts, add_competitors: 5 competitors), any other's its calls. Rows that
+ * don't exist yet are named so they come capped.
  */
 export const WRITE_CAPS: Readonly<Record<string, number>> = {
   add_prompts: 50,
   add_competitors: 5,
+  // Prompts paused, as the row takes them (up to 50 a call, §9 row 22).
+  pause_prompts: 50,
   create_action: 5,
   create_draft: 10,
   set_follow_up_check: 3,
@@ -103,6 +106,19 @@ export const DEFAULT_WRITE_CAP = 10;
 
 export function writeCap(toolName: string): number {
   return WRITE_CAPS[toolName] ?? DEFAULT_WRITE_CAP;
+}
+
+/**
+ * READ caps per run (§14), by tool name, on top of the read budget: pages
+ * opened (fetch_page, CHAT-10 item 12), whatever the effort. A read not
+ * named here has only the budget.
+ */
+export const READ_CAPS: Readonly<Record<string, number>> = {
+  fetch_page: 10,
+};
+
+export function readCap(toolName: string): number | null {
+  return READ_CAPS[toolName] ?? null;
 }
 
 /** Model steps one run may take before it answers with what it has. */

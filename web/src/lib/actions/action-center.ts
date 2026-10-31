@@ -64,6 +64,8 @@ import type { PriorityLevel, PriorityReason } from '@/lib/action-center/priority
 import type { CompetitorFindings } from '@/lib/action-center/competitor-findings';
 import type { WinningFindings } from '@/lib/action-center/winning-findings';
 import { assertWritable } from '@/lib/subscription-guard';
+import { logEvent, touchAction, writeTaskStatus } from '@/lib/action-center/task-status';
+import { readTaskAttachments, type TaskAttachment } from '@/lib/action-center/chat-attachments';
 
 export interface ActionAssignee {
   id: string;
@@ -182,6 +184,8 @@ export interface ActionTask {
   competitorFindings?: CompetitorFindings | null;
   /** What Find what sets your winning pages apart found, once it ran (learning C4). */
   winningFindings?: WinningFindings | null;
+  /** Files and drafts Chat attached to it (CHAT-09 items 13, 16): "Attached from Chat". */
+  attachments?: TaskAttachment[];
 }
 
 export interface ActionEvent {
@@ -207,6 +211,8 @@ export interface ActionDetail {
   kpis: ActionKpiRef[];
   /** Improve actions only: positions now next to the baseline (PROMPT-008). */
   positionOutcome: ImproveOutcome | null;
+  /** Sent from Chat: its chat, when the reader may open it (their own, or shared); else null. */
+  chatHref?: string | null;
 }
 
 /**
@@ -287,44 +293,48 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
     (outcomeRes.data?.payload ?? {}) as Record<string, unknown>,
     entityCounts.get(actionId),
   );
+  const tasks = (tasksRes.data ?? []).map(taskFromRow);
+  const [attachments, chatHref] = await Promise.all([
+    readTaskAttachments(
+      supabase,
+      brandId,
+      tasks.map((task) => task.id),
+    ),
+    readableChat(supabase, payload),
+  ]);
   return {
-    tasks: (tasksRes.data ?? []).map(taskFromRow).map((task) => ({
+    tasks: tasks.map((task) => ({
       ...task,
       titleParams: currentTaskParams(task.titleParams, payload) ?? task.titleParams,
+      attachments: attachments.get(task.id) ?? [],
     })),
     signals,
     entities,
     events: (eventsRes.data ?? []).map(eventFromRow),
     kpis: (kpisRes.data ?? []).map(kpiFromRow),
     positionOutcome: parseImproveOutcome(outcomeRes.data?.position_outcome ?? null),
+    chatHref,
   };
 }
 
-async function logEvent(
+/**
+ * The chat a finding was sent from, read as the member (its author, or the
+ * team when it is shared): a chat they can't read gets no link. Null for an
+ * action not sent from Chat, or when it can't be read.
+ */
+async function readableChat(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  actionId: string,
-  event: string,
-  data: Record<string, string | number | null>,
-) {
-  const { data: auth } = await supabase.auth.getUser();
-  // Best-effort: a missing trail entry must not fail the change it records.
-  await supabase
-    .from('action_events')
-    .insert({ action_id: actionId, event, data, actor_id: auth.user?.id ?? null });
-}
-
-/** Bump the action's updated stamp so the table's Updated column tracks real
- *  work, not just nightly refreshes. */
-async function touchAction(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  brandId: string,
-  actionId: string,
-) {
-  await supabase
-    .from('actions')
-    .update({ updated_at: new Date().toISOString() })
-    .eq('brand_id', brandId)
-    .eq('id', actionId);
+  payload: Record<string, unknown>,
+): Promise<string | null> {
+  const id = payload.source === 'chat' ? payload.conversationId : null;
+  if (typeof id !== 'string' || !id) return null;
+  const { data, error } = await supabase
+    .from('chat_conversations')
+    .select('id')
+    .eq('id', id)
+    .maybeSingle();
+  if (error || !data) return null;
+  return `/dashboard/chat/${data.id as string}`;
 }
 
 /**
@@ -432,18 +442,7 @@ export async function updateTaskStatus(
   const reason = status === 'skipped' ? (skipReason ?? '').trim().slice(0, 200) : null;
   if (status === 'skipped' && !reason) throw new Error('A skipped task needs a reason');
 
-  const { error } = await supabase
-    .from('action_tasks')
-    .update({ status, skip_reason: reason, updated_at: new Date().toISOString() })
-    .eq('action_id', actionId)
-    .eq('id', taskId);
-  if (error) throw new Error(error.message);
-  await logEvent(supabase, actionId, 'task_status', {
-    taskId,
-    to: status,
-    ...(reason ? { reason } : {}),
-  });
-  await touchAction(supabase, brandId, actionId);
+  await writeTaskStatus(supabase, { brandId, actionId, taskId }, status, { skipReason: reason });
 }
 
 /** Longest a task's text may be. Long enough for a real instruction, short

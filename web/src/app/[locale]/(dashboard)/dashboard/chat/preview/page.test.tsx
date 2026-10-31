@@ -29,7 +29,10 @@ const notFound = vi.hoisted(() =>
   }),
 );
 vi.mock('next/navigation', () => ({ notFound }));
+// The composer's "Ask your Admin to connect" (B2's requests).
+vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
+  useRouter: () => ({ push: () => {}, refresh: () => {} }),
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>
       {children}
@@ -108,31 +111,33 @@ describe('the Chat pieces preview', () => {
   it('shows every piece in every state', async () => {
     await render();
     expect(notFound).not.toHaveBeenCalled();
-    // 5 states in 3 sizes, and the 5 still ones of the Agents list.
+    // 5 states in 3 sizes, the live answer's (W1-14), and the 5 still ones of the Agents list.
     const avatars = pieces('agent-avatar') as HTMLElement[];
     const states = new Set(['idle', 'working', 'waiting', 'done', 'failed']);
     const live = avatars.filter((el) => el.dataset.tone === 'live');
     const muted = avatars.filter((el) => el.dataset.tone === 'muted');
-    expect(live).toHaveLength(15);
+    expect(live).toHaveLength(16);
     expect(new Set(live.map((el) => el.dataset.state))).toEqual(states);
     expect(muted).toHaveLength(5);
     expect(new Set(muted.map((el) => el.dataset.state))).toEqual(states);
     expect(pieces('status-pill')).toHaveLength(9);
     expect(pieces('approval-pill')).toHaveLength(5);
-    expect(pieces('step-marker')).toHaveLength(5);
+    // Each state, and the live answer's four steps (W1-14).
+    expect(pieces('step-marker')).toHaveLength(9);
     expect(pieces('list-dot')).toHaveLength(6);
     expect(pieces('list-progress')).toHaveLength(1);
     expect(pieces('new-pill')).toHaveLength(1);
     expect(pieces('attention-dot')).toHaveLength(1);
     expect(pieces('attention-count')).toHaveLength(2);
-    expect(pieces('done-tick')).toHaveLength(3);
+    // Three sizes, and the live answer's finished header (W1-14).
+    expect(pieces('done-tick')).toHaveLength(4);
   });
 
   it('shows every run card in every state, and the runs tray', async () => {
     await render();
     expect(slots('plan-card')).toHaveLength(3);
-    // Running, waiting, done, one step, stopped, failed; and one in the result card.
-    expect(slots('run-steps')).toHaveLength(7);
+    // Running, waiting, done, one step, stopped, failed; one in the result card, and the live answer's.
+    expect(slots('run-steps')).toHaveLength(8);
     const approvals = ([...slots('agent-card')] as HTMLElement[]).filter((el) =>
       el.hasAttribute('data-kind'),
     );
@@ -146,6 +151,9 @@ describe('the Chat pieces preview', () => {
       'execute:saving',
       'execute:pending',
     ]);
+    expect(slots('question-card')).toHaveLength(3);
+    expect(slots('next-moves')).toHaveLength(1);
+    expect(slots('question-answered')).toHaveLength(2);
     expect(slots('done-line')).toHaveLength(2);
     expect(slots('approval-skipped')).toHaveLength(1);
     expect([...slots('result-card')].map((el) => (el as HTMLElement).dataset.state)).toEqual([

@@ -29,6 +29,7 @@ class ChatBudgetError extends Error {
 const reserveChatStep = vi.fn();
 const chargeChatStep = vi.fn();
 const releaseChatStep = vi.fn();
+const agentUsageShares = vi.fn();
 vi.mock('../lib/plan-guard.js', () => ({ PlanLimitError }));
 vi.mock('../lib/chat-budget.js', () => ({
   CHAT_BUDGET_FEATURES: ['chat', 'agent', 'schedule', 'image'],
@@ -36,6 +37,7 @@ vi.mock('../lib/chat-budget.js', () => ({
   reserveChatStep: (...args) => reserveChatStep(...args),
   chargeChatStep: (...args) => chargeChatStep(...args),
   releaseChatStep: (...args) => releaseChatStep(...args),
+  agentUsageShares: (...args) => agentUsageShares(...args),
 }));
 
 const { default: router } = await import('./internal-chat-budget.js');
@@ -48,6 +50,7 @@ beforeEach(async () => {
   reserveChatStep.mockReset().mockResolvedValue(USAGE);
   chargeChatStep.mockReset().mockResolvedValue(undefined);
   releaseChatStep.mockReset().mockResolvedValue(undefined);
+  agentUsageShares.mockReset().mockResolvedValue({ unlimited: false, since: null, shares: [] });
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -88,9 +91,25 @@ describe('POST /api/internal/chat/budget/*', () => {
     for (const path of ['reserve', 'charge', 'release']) {
       expect((await post(path, reserveBody(), 'nope')).status).toBe(401);
     }
+    // A secret of another length, or the right one without its Bearer, is refused too.
+    expect((await post('reserve', reserveBody(), 'shhh')).status).toBe(401);
+    const bare = await fetch(`${baseUrl}/reserve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'shh' },
+      body: JSON.stringify(reserveBody()),
+    });
+    expect(bare.status).toBe(401);
     vi.stubEnv('CRON_SECRET', '');
     expect((await post('reserve', reserveBody(), '')).status).toBe(401);
     expect(reserveChatStep).not.toHaveBeenCalled();
+  });
+
+  it('compares the secret in constant time', async () => {
+    const crypto = await import('node:crypto');
+    const spy = vi.spyOn(crypto.default, 'timingSafeEqual');
+    expect((await post('reserve', reserveBody(), 'shx')).status).toBe(401);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 
   it('holds a step and answers its row, a Chat step on Ansvisor’s key unless it says otherwise', async () => {
@@ -105,6 +124,7 @@ describe('POST /api/internal/chat/budget/*', () => {
       runId: RUN,
       stepId: STEP,
       ownKey: false,
+      agentRunId: null,
     });
 
     await post('reserve', reserveBody({ stepId: undefined, feature: 'image', ownKey: true }));
@@ -112,6 +132,26 @@ describe('POST /api/internal/chat/budget/*', () => {
       ORG,
       expect.objectContaining({ feature: 'image', stepId: null, ownKey: true }),
     );
+  });
+
+  it('holds an agent run’s step within its cap, and says when the run reached it', async () => {
+    const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c09';
+    await post('reserve', reserveBody({ feature: 'agent', agentRunId: AGENT_RUN }));
+    expect(reserveChatStep).toHaveBeenLastCalledWith(
+      ORG,
+      expect.objectContaining({ feature: 'agent', agentRunId: AGENT_RUN }),
+    );
+    reserveChatStep.mockRejectedValueOnce(
+      new ChatBudgetError('run_cap', 429, 'This run reached its limit.'),
+    );
+    const res = await post('reserve', reserveBody({ feature: 'agent', agentRunId: AGENT_RUN }));
+    expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({
+      success: false,
+      error: 'run_cap',
+      message: 'This run reached its limit.',
+    });
+    expect((await post('reserve', reserveBody({ agentRunId: 'nope' }))).status).toBe(400);
   });
 
   it('refuses a body it can’t read before holding anything', async () => {
@@ -174,6 +214,27 @@ describe('POST /api/internal/chat/budget/*', () => {
       modelId: 'anthropic/claude-sonnet-5.5',
       usage: { inputTokens: 4000, outputTokens: 800 },
     });
+    // The prompt cache's reads and writes, and how long the call took.
+    res = await post('charge', {
+      orgId: ORG,
+      usageId: USAGE,
+      model: 'anthropic/claude-sonnet-5.5',
+      usage: { inputTokens: 4000, outputTokens: 800, cacheReadTokens: 3000, cacheWriteTokens: 500 },
+      latencyMs: 1830,
+    });
+    expect(res.status).toBe(200);
+    expect(chargeChatStep).toHaveBeenLastCalledWith(ORG, USAGE, {
+      modelId: 'anthropic/claude-sonnet-5.5',
+      usage: { inputTokens: 4000, outputTokens: 800, cacheReadTokens: 3000, cacheWriteTokens: 500 },
+      latencyMs: 1830,
+    });
+    for (const bad of [
+      { usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: -1 } },
+      { usage: { inputTokens: 1, outputTokens: 1 }, latencyMs: 1.5 },
+    ]) {
+      res = await post('charge', { orgId: ORG, usageId: USAGE, model: 'm', ...bad });
+      expect(res.status).toBe(400);
+    }
     // A cost from the web is never taken.
     res = await post('charge', {
       orgId: ORG,
@@ -199,5 +260,43 @@ describe('POST /api/internal/chat/budget/*', () => {
     });
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ success: false, message: 'Internal error' });
+  });
+});
+
+describe('GET /api/internal/chat/budget/agent-shares', () => {
+  const get = (query, secret = 'shh') =>
+    fetch(`${baseUrl}/agent-shares?${query}`, {
+      headers: { Authorization: `Bearer ${secret}` },
+    });
+
+  it('answers each agent’s share for the period or the last days, never a dollar', async () => {
+    const shares = {
+      unlimited: false,
+      since: '2026-10-20T09:00:00.000Z',
+      shares: [{ agentId: RUN, share: 0.032, ownKeyShare: 0, runs: 4 }],
+    };
+    agentUsageShares.mockResolvedValueOnce(shares);
+    let res = await get(`orgId=${ORG}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, ...shares });
+    expect(agentUsageShares).toHaveBeenLastCalledWith(ORG, { days: null });
+
+    res = await get(`orgId=${ORG}&days=30`);
+    expect(res.status).toBe(200);
+    expect(agentUsageShares).toHaveBeenLastCalledWith(ORG, { days: 30 });
+  });
+
+  it('answers only the web, and refuses a query it can’t read', async () => {
+    expect((await get(`orgId=${ORG}`, 'nope')).status).toBe(401);
+    expect((await get('orgId=nope')).status).toBe(400);
+    expect((await get(`orgId=${ORG}&days=365`)).status).toBe(400);
+    expect(agentUsageShares).not.toHaveBeenCalled();
+  });
+
+  it('says when the workspace has no active plan', async () => {
+    agentUsageShares.mockRejectedValueOnce(new PlanLimitError('No plan', 402));
+    const res = await get(`orgId=${ORG}`);
+    expect(res.status).toBe(402);
+    expect(await res.json()).toMatchObject({ success: false, error: 'plan_limit' });
   });
 });

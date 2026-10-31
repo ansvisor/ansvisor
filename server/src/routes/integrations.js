@@ -15,7 +15,7 @@ import {
 import { runGscSync } from '../lib/gsc-sync.js';
 import { runGaSync } from '../lib/ga-sync.js';
 import { detectPageOpportunitiesInWindow } from '../lib/page-opportunities.js';
-import { assertBrandAccess } from '../lib/access.js';
+import { assertBrandAccess, assertAllBrands } from '../lib/access.js';
 
 const router = Router();
 
@@ -255,10 +255,13 @@ router.delete('/:provider', async (req, res) => {
  * GET /api/integrations/google-search-console/properties
  * Properties visible to the org's connected account (#642). Member-readable —
  * the mapping UI is shown to the whole org; writes stay role-gated elsewhere.
+ * The list is the whole organization's, whichever brand asks, so it needs All
+ * brands (BRAND-ACCESS §5.2) until each brand has its own connection (PR 14).
  */
 router.get('/google-search-console/properties', async (req, res) => {
   try {
     if (!isComposioConfigured(GSC)) return notConfigured(res, GSC);
+    await assertAllBrands(req.user.id);
 
     const profile = await getProfile(req.user.id);
     const entityId = entityIdFor(profile.organization_id);
@@ -272,7 +275,7 @@ router.get('/google-search-console/properties', async (req, res) => {
     return res.json({ properties });
   } catch (err) {
     req.log.error({ err }, 'integrations properties error');
-    return res.status(err.status || 500).json({ error: err.message });
+    return res.status(err.status || 500).json({ error: err.message, code: err.code });
   }
 });
 
@@ -301,7 +304,8 @@ function startBrandSync(req, res, provider, brandId, run) {
  * POST /api/integrations/google-search-console/sync
  * Runs the query-stats sync for the caller's org immediately (#644) —
  * testing and first-time backfill; the daily cycle runs the same sync.
- * With `{ brandId }` in the body it syncs that brand only, in the background.
+ * With `{ brandId }` in the body it syncs that brand only, in the background;
+ * without one, every brand, so it needs All brands.
  */
 router.post('/google-search-console/sync', async (req, res) => {
   try {
@@ -318,22 +322,24 @@ router.post('/google-search-console/sync', async (req, res) => {
       return startBrandSync(req, res, GSC, brandId, runGscSync);
     }
 
+    await assertAllBrands(req.user.id);
     const result = await runGscSync({ organizationId: profile.organization_id });
     return res.json(result);
   } catch (err) {
     req.log.error({ err }, 'integrations sync error');
-    return res.status(err.status || 500).json({ error: err.message });
+    return res.status(err.status || 500).json({ error: err.message, code: err.code });
   }
 });
 
 /**
  * GET /api/integrations/google-analytics/properties
  * GA4 properties visible to the org's connected account (#694). Member-
- * readable, like the Search Console listing above.
+ * readable, like the Search Console listing above, and with All brands only.
  */
 router.get('/google-analytics/properties', async (req, res) => {
   try {
     if (!isComposioConfigured(GA)) return notConfigured(res, GA);
+    await assertAllBrands(req.user.id);
 
     const profile = await getProfile(req.user.id);
     const entityId = entityIdFor(profile.organization_id);
@@ -347,7 +353,7 @@ router.get('/google-analytics/properties', async (req, res) => {
     return res.json({ properties });
   } catch (err) {
     req.log.error({ err }, 'integrations GA properties error');
-    return res.status(err.status || 500).json({ error: err.message });
+    return res.status(err.status || 500).json({ error: err.message, code: err.code });
   }
 });
 
@@ -355,7 +361,8 @@ router.get('/google-analytics/properties', async (req, res) => {
  * POST /api/integrations/google-analytics/sync
  * Runs the traffic sync for the caller's org immediately (#704) — testing and
  * first-time backfill; the daily cycle runs the same sync. With `{ brandId }`
- * in the body it syncs that brand only, in the background.
+ * in the body it syncs that brand only, in the background; without one,
+ * every brand, so it needs All brands.
  */
 router.post('/google-analytics/sync', async (req, res) => {
   try {
@@ -372,11 +379,12 @@ router.post('/google-analytics/sync', async (req, res) => {
       return startBrandSync(req, res, GA, brandId, runGaSync);
     }
 
+    await assertAllBrands(req.user.id);
     const result = await runGaSync({ organizationId: profile.organization_id });
     return res.json(result);
   } catch (err) {
     req.log.error({ err }, 'integrations GA sync error');
-    return res.status(err.status || 500).json({ error: err.message });
+    return res.status(err.status || 500).json({ error: err.message, code: err.code });
   }
 });
 
@@ -411,7 +419,7 @@ router.get('/google-analytics/page-opportunities', async (req, res) => {
     return res.json(result);
   } catch (err) {
     if (!err.status) req.log.error({ err }, 'integrations GA page opportunities error');
-    return res.status(err.status || 500).json({ error: err.message });
+    return res.status(err.status || 500).json({ error: err.message, code: err.code });
   }
 });
 
