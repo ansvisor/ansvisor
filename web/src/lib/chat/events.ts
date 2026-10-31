@@ -110,6 +110,10 @@ export interface ChatAsk {
   options: ChatAskOption[];
   allowOther: boolean;
   multi: boolean;
+  /** Its place among the questions asked together ("1 of 2"), when there are more. */
+  batch?: { at: number; of: number };
+  /** What comes after the answer: "Then I'll write the FAQ draft". */
+  then?: string;
 }
 
 /**
@@ -132,6 +136,10 @@ export interface ChatConfirm {
   digest: string;
   /** offerDontAskAgain: the card may offer "Don't ask again" (CHAT-20 §5 step 6). */
   canDontAskAgain: boolean;
+  /** A change with no Undo once made (CHAT-20 §9: a page sent to a CMS, an audit): the card says so. */
+  noUndo?: true;
+  /** What the change leaves behind, under the card ("Its timeline … doesn't come back"). */
+  note?: string;
 }
 
 /** The rule behind a refusal (CHAT-20 §4c): denial.ts's kinds. */
@@ -172,12 +180,25 @@ export interface ChatDeliverable {
   status: 'draft' | 'attached' | 'done';
   /** Its card's Open (CHAT-06): the file, or the page's draft in the editor. */
   href?: ChatHref;
+  /**
+   * Whether it is in Files (CHAT-06 item 9): filed as it was made, or not,
+   * the workspace's storage being full (item 29) or filing failing. Its
+   * file is the run's n-th deliverable, never named by its id here.
+   */
+  filed?: 'in_files' | 'storage_full' | 'failed';
 }
 
-/** A next move: a chip that fills the composer (CHAT-07). In rank order. */
+/**
+ * A next move (CHAT-07 §C): a card under the latest answer whose click sends
+ * its prompt. In rank order; never its class or a tool.
+ */
 export interface ChatNextMove {
+  /** "Do the same for /features" */
   label: string;
+  /** What a click sends as the person's next message. */
   prompt: string;
+  /** It continues this run's object: the first one shows as the composer's ghost text. */
+  ghost?: boolean;
 }
 
 /** The workspace's monthly AI usage, as a percent of its limit (CHAT-04, DECISIONS R). */

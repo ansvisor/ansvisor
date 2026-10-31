@@ -17,7 +17,7 @@ When you finish setting up a brand, the first round of questions to the AI engin
 
 The first run can take anywhere from a few minutes to one or two hours at busy times. **Brand Visibility** shows that the first tracking is in progress, and fills in with your results as they come back.
 
-You can leave the page: the run keeps going in the background.
+You can leave the page: the run keeps going in the background. When your workspace's first results are ready, everyone in it gets one e-mail, **Your first results are ready**. It's sent once, not for every brand you add.
 
 ## Where results appear first
 

@@ -38,7 +38,11 @@ import {
   type PromptPositionCell,
 } from '@/lib/prompt-position-summary';
 import { assertWritable } from '@/lib/subscription-guard';
+import { isManager } from '@/lib/session-role';
 import { NO_TOPICS, NO_TOPICS_MESSAGE, brandHasTopics } from '@/lib/topics-required';
+
+/** A prompt's text as two are compared: case and spacing aside (the natural key, CHAT-20 §11c). */
+const textKey = (text: string) => text.trim().toLowerCase().replace(/\s+/g, ' ');
 
 function filterByPlan(plan: Plan, platforms: string[], models: string[]) {
   const allowedScrapers = plan.limits.allowedScrapers
@@ -853,6 +857,8 @@ export interface ImportPromptRow {
   idx: number;
   text: string;
   topic: string | null;
+  /** The topic by its id, when the caller has it (Chat): never matched or made by name. */
+  topicId?: string;
   platforms: string[];
   models: string[];
   regions: string[];
@@ -918,7 +924,7 @@ export async function importPrompts(
     supabase.from('topics').select('id, name').eq('brand_id', brandId),
   ]);
   const shopping = !!brandRow?.shopping_mode_enabled;
-  const keyOf = (t: string) => t.trim().toLowerCase().replace(/\s+/g, ' ');
+  const keyOf = textKey;
   const seen = new Set((existing ?? []).map((p) => keyOf(p.text as string)));
   const topicIds = new Map((topicRows ?? []).map((t) => [keyOf(t.name as string), t.id as string]));
 
@@ -943,7 +949,7 @@ export async function importPrompts(
   const newTopics = [
     ...new Map(
       clean
-        .filter((r) => r.topic && !topicIds.has(keyOf(r.topic)))
+        .filter((r) => r.topic && !r.topicId && !topicIds.has(keyOf(r.topic)))
         .map((r) => [keyOf(r.topic!), r.topic!.trim().slice(0, 60)]),
     ).values(),
   ];
@@ -964,7 +970,7 @@ export async function importPrompts(
       idx: r.idx,
       text: r.text,
       category: r.topic?.trim() ?? '',
-      topic_id: r.topic ? (topicIds.get(keyOf(r.topic)) ?? '') : '',
+      topic_id: r.topicId ?? (r.topic ? (topicIds.get(keyOf(r.topic)) ?? '') : ''),
       platforms: r.platforms,
       models: r.models,
       regions: r.regions,
@@ -977,6 +983,231 @@ export async function importPrompts(
   const { started } = await analyzeNewPrompts(brandId, promptIds);
   revalidatePath('/dashboard/prompts');
   return { importedIdx: imported.map((r) => r.idx), promptIds, analysisStarted: started };
+}
+
+export type AddTopicPromptsResult =
+  | {
+      ok: true;
+      /** partial: some weren't added (CHAT-20 §11a), each with why. */
+      code: 'ok' | 'partial';
+      added: { id: string; text: string }[];
+      skipped: { text: string; reason: 'duplicate' | 'plan_limit' | 'invalid' }[];
+      analysisStarted: boolean;
+    }
+  | {
+      ok: false;
+      reason: 'forbidden_role' | 'not_found' | 'duplicate' | 'quota_exceeded' | 'failed';
+      message: string;
+    };
+
+/** The ids of a brand's prompt sets: a prompt names its set, the set its brand. */
+async function brandSetIds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase.from('prompt_sets').select('id').eq('brand_id', brandId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => row.id as string);
+}
+
+/**
+ * Add prompts to one of a brand's topics: Chat's add_prompts (CHAT-20 §9
+ * row 20). Admins and Managers, checked here (isManager). The topic comes
+ * first: one of the brand's active topics, by its id (a new one is
+ * add_topic's). Each prompt is tracked as the brand's newest active prompt
+ * is (its platforms and models, else ChatGPT) at the brand's location,
+ * through importPrompts: the same checks, the same locked write that stops
+ * at the plan's locations, and the first run. A text the brand already
+ * tracks is skipped (the natural key, §11c). Errors come back as values (#427).
+ */
+export async function addTopicPrompts(
+  brandId: string,
+  topicId: string,
+  texts: string[],
+): Promise<AddTopicPromptsResult> {
+  try {
+    await assertWritable({ brandId });
+    return await addPromptsToTopic(brandId, topicId, texts);
+  } catch (err) {
+    console.error('Failed to add prompts from Chat:', err);
+    return { ok: false, reason: 'failed', message: 'The prompts couldn’t be added. Try again.' };
+  }
+}
+
+async function addPromptsToTopic(
+  brandId: string,
+  topicId: string,
+  texts: string[],
+): Promise<AddTopicPromptsResult> {
+  const supabase = await createClient();
+  if (!(await isManager(supabase))) {
+    return {
+      ok: false,
+      reason: 'forbidden_role',
+      message: 'Only an admin or a manager can add prompts.',
+    };
+  }
+  const { data: topic, error: topicError } = await supabase
+    .from('topics')
+    .select('id, name')
+    .eq('id', topicId)
+    .eq('brand_id', brandId)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (topicError) return { ok: false, reason: 'failed', message: topicError.message };
+  if (!topic) {
+    return {
+      ok: false,
+      reason: 'not_found',
+      message: "That topic isn't one of this brand's topics. Add the topic first.",
+    };
+  }
+
+  const sets = await brandSetIds(supabase, brandId);
+  const [existingRead, latestRead] = sets.length
+    ? await Promise.all([
+        supabase.from('prompts').select('text').in('prompt_set_id', sets),
+        supabase
+          .from('prompts')
+          .select('platforms, models')
+          .in('prompt_set_id', sets)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ])
+    : [
+        { data: [], error: null },
+        { data: null, error: null },
+      ];
+  const readError = existingRead.error ?? latestRead.error;
+  if (readError) return { ok: false, reason: 'failed', message: readError.message };
+
+  const { organizationId, region } = await getBrandContext(supabase, brandId);
+  const latest = latestRead.data as { platforms?: unknown; models?: unknown } | null;
+  const platforms =
+    Array.isArray(latest?.platforms) && latest.platforms.length > 0
+      ? (latest.platforms as string[])
+      : ['chatgpt-web'];
+  const models = Array.isArray(latest?.models) ? (latest.models as string[]) : [];
+  const tracked = new Set(
+    ((existingRead.data ?? []) as { text: string }[]).map((p) => textKey(p.text)),
+  );
+  const rows: ImportPromptRow[] = [];
+  const skipped: Extract<AddTopicPromptsResult, { ok: true }>['skipped'] = [];
+  for (const raw of texts) {
+    const text = raw.trim().replace(/\s+/g, ' ');
+    if (!text || text.length > 500) skipped.push({ text: raw, reason: 'invalid' });
+    else if (tracked.has(textKey(text))) skipped.push({ text, reason: 'duplicate' });
+    else {
+      tracked.add(textKey(text));
+      rows.push({
+        idx: rows.length,
+        text,
+        // The topic by its id: a brand may have another, paused or not, of the same name.
+        topic: topic.name as string,
+        topicId: topic.id as string,
+        platforms,
+        models,
+        regions: [region],
+      });
+    }
+  }
+  if (rows.length === 0) {
+    return skipped.every((s) => s.reason === 'duplicate')
+      ? { ok: false, reason: 'duplicate', message: 'The brand already tracks these prompts.' }
+      : { ok: false, reason: 'failed', message: 'There was no prompt text to add.' };
+  }
+
+  const result = await importPrompts(brandId, rows);
+  if ('error' in result) return { ok: false, reason: 'failed', message: result.error };
+  const added = result.importedIdx.map((idx, i) => ({
+    id: result.promptIds[i],
+    text: rows[idx].text,
+  }));
+  const addedIdx = new Set(result.importedIdx);
+  // What the locked write left out: the plan's locations ran out.
+  for (const row of rows) {
+    if (!addedIdx.has(row.idx)) skipped.push({ text: row.text, reason: 'plan_limit' });
+  }
+  if (added.length === 0) {
+    const [plan, usage] = await Promise.all([
+      getOrgPlan(organizationId),
+      getOrgLocationUsage(supabase, organizationId),
+    ]);
+    return {
+      ok: false,
+      reason: 'quota_exceeded',
+      message:
+        locationLimitMessage(plan, usage.total, 1) ??
+        "Your plan's prompt locations are used up, so no prompt was added.",
+    };
+  }
+  return {
+    ok: true,
+    code: skipped.length > 0 ? 'partial' : 'ok',
+    added,
+    skipped,
+    analysisStarted: result.analysisStarted,
+  };
+}
+
+export type PauseBrandPromptsResult =
+  | { ok: true; paused: string[] }
+  | { ok: false; reason: 'forbidden_role' | 'not_found' | 'failed'; message: string };
+
+/**
+ * Pause some of a brand's prompts: Chat's pause_prompts (CHAT-20 §9 row 22,
+ * its "archive": a paused prompt stops being tracked, frees its locations
+ * and keeps its history). Admins and Managers, checked here. Only the
+ * brand's prompts among the ids that are active now, as the table's bulk
+ * Pause pauses them (pausing is never metered); the ones paused come back,
+ * and none paused is a refusal. Errors come back as values (#427).
+ */
+export async function pauseBrandPrompts(
+  brandId: string,
+  ids: string[],
+): Promise<PauseBrandPromptsResult> {
+  try {
+    await assertWritable({ brandId });
+    return await pauseSomePrompts(brandId, ids);
+  } catch (err) {
+    console.error('Failed to pause prompts from Chat:', err);
+    return { ok: false, reason: 'failed', message: 'The prompts couldn’t be paused. Try again.' };
+  }
+}
+
+async function pauseSomePrompts(brandId: string, ids: string[]): Promise<PauseBrandPromptsResult> {
+  const supabase = await createClient();
+  if (!(await isManager(supabase))) {
+    return {
+      ok: false,
+      reason: 'forbidden_role',
+      message: 'Only an admin or a manager can pause prompts.',
+    };
+  }
+  const sets = await brandSetIds(supabase, brandId);
+  if (sets.length === 0) {
+    return { ok: false, reason: 'not_found', message: "None of these prompts is this brand's." };
+  }
+  const { data, error } = await supabase
+    .from('prompts')
+    .update({ is_active: false })
+    .in('prompt_set_id', sets)
+    .in('id', ids)
+    .eq('is_active', true)
+    .select('id');
+  if (error) return { ok: false, reason: 'failed', message: error.message };
+  const paused = (data ?? []).map((row) => row.id as string);
+  if (paused.length === 0) {
+    return {
+      ok: false,
+      reason: 'not_found',
+      message: "None of these prompts is one of this brand's active prompts.",
+    };
+  }
+  revalidatePath('/dashboard/prompts');
+  return { ok: true, paused };
 }
 
 export async function deletePrompt(id: string): Promise<void> {

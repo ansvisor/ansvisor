@@ -200,11 +200,13 @@ const lookupTablesNameTheirBrand: {
   [T in BrandLookupTable]: 'brand_id' extends keyof Tables[T]['Row'] ? true : never;
 } = {
   actions: true,
+  competitors: true,
   content_drafts: true,
   content_opportunities: true,
   prompt_results: true,
   prompt_suggestions: true,
   site_audits: true,
+  topics: true,
 };
 
 const BRAND_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';

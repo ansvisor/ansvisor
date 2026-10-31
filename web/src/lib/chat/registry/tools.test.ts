@@ -71,12 +71,35 @@ vi.mock('@/lib/actions/content', () => ({
 }));
 vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: tracked.track('actions/content-drafts.createContentDraft'),
+  updateContentDraft: tracked.track('actions/content-drafts.updateContentDraft'),
+}));
+vi.mock('@/lib/actions/cms-send', () => ({
+  sendDraftToCms: tracked.track('actions/cms-send.sendDraftToCms'),
+}));
+vi.mock('@/lib/actions/reports', () => ({
+  createReport: tracked.track('actions/reports.createReport'),
+}));
+vi.mock('@/lib/actions/audits', () => ({
+  startSiteAudits: tracked.track('actions/audits.startSiteAudits'),
+  getAuditQuota: tracked.track('actions/audits.getAuditQuota'),
 }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({
   dismissSuggestion: tracked.track('actions/prompt-suggestions.dismissSuggestion'),
 }));
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: tracked.track('actions/chat-access-requests.requestAccess'),
+}));
+vi.mock('@/lib/actions/prompt', () => ({
+  addTopicPrompts: tracked.track('actions/prompt.addTopicPrompts'),
+  pauseBrandPrompts: tracked.track('actions/prompt.pauseBrandPrompts'),
+}));
+vi.mock('@/lib/actions/topic', () => ({
+  addBrandTopic: tracked.track('actions/topic.addBrandTopic'),
+  renameBrandTopic: tracked.track('actions/topic.renameBrandTopic'),
+}));
+vi.mock('@/lib/actions/competitor', () => ({
+  addCompetitors: tracked.track('actions/competitor.addCompetitors'),
+  removeBrandCompetitor: tracked.track('actions/competitor.removeBrandCompetitor'),
 }));
 
 const { CHAT_TOOLS, chatTool, chatToolByKey, registryCatalog } = await import('./tools');
@@ -240,6 +263,21 @@ describe('the Chat tool registry', () => {
       page_type: 'docs_faq',
       source: { kind: 'opportunity', id: item },
     });
+    await run('add_prompts', { brand_id: brand, topic_id: item, prompts: [' crm pricing '] });
+    await run('pause_prompts', { brand_id: brand, prompt_ids: [item] });
+    await run('add_topic', { brand_id: brand, name: ' Pricing ' });
+    await run('rename_topic', { topic_id: item, name: 'Plans' });
+    await run('add_competitors', { brand_id: brand, competitors: [{ name: 'Peec AI' }] });
+    await run('remove_competitor', { brand_id: brand, competitor_id: item });
+    await run('update_draft', { draft_id: item, body_html: '<h1>FAQ</h1>' });
+    await run('push_cms_draft', { draft_id: item, destination: 'wordpress' });
+    await run('build_report', {
+      brand_id: brand,
+      template: 'competitor_benchmark',
+      date_from: '2026-10-01',
+      date_to: '2026-10-31',
+    });
+    await run('run_site_audit', { brand_id: brand, urls: [' https://acme.example/a '] });
 
     expect(calls.map((call) => [call.from, call.args])).toEqual([
       ['actions/prompt-suggestions.dismissSuggestion', [item]],
@@ -260,6 +298,22 @@ describe('the Chat tool registry', () => {
           },
         ],
       ],
+      ['actions/prompt.addTopicPrompts', [brand, item, ['crm pricing']]],
+      ['actions/prompt.pauseBrandPrompts', [brand, [item]]],
+      ['actions/topic.addBrandTopic', [brand, 'Pricing']],
+      ['actions/topic.renameBrandTopic', [item, 'Plans']],
+      ['actions/competitor.addCompetitors', [brand, [{ name: 'Peec AI', domain: '' }]]],
+      ['actions/competitor.removeBrandCompetitor', [brand, item]],
+      [
+        'actions/content-drafts.updateContentDraft',
+        [item, { title: undefined, bodyHtml: '<h1>FAQ</h1>' }],
+      ],
+      ['actions/cms-send.sendDraftToCms', [item, 'wordpress']],
+      [
+        'actions/reports.createReport',
+        [brand, { dateFrom: '2026-10-01', dateTo: '2026-10-31', template: 'competitor_benchmark' }],
+      ],
+      ['actions/audits.startSiteAudits', [brand, ['https://acme.example/a']]],
     ]);
   });
 
@@ -287,8 +341,8 @@ describe('approval policies', () => {
     for (const tool of CHAT_TOOLS) {
       if (tool.class === 'read') {
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['on', 'on']);
-      } else if (tool.class === 'write' && tool.flags.alwaysCard) {
-        // Ask your Admin: only the person's click sends it (CHAT-20 row 80a).
+      } else if (tool.class === 'write' && (tool.flags.alwaysCard || tool.flags.costCard)) {
+        // Ask your Admin, or a cost said first: a card in every mode (CHAT-20 rows 37, 80a).
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask', 'ask']);
       } else if (tool.class === 'write') {
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask_full_auto', 'always']);
@@ -304,10 +358,37 @@ describe('approval policies', () => {
       update_opportunity: ['admin', 'manager'],
       dismiss_prompt_suggestion: ['admin', 'manager', 'analyst'],
       request_access: ['admin', 'manager', 'analyst', 'agency_partner'],
+      // The brand's tracking setup (W2-06): Admins and Managers, as the app (00382, #1762).
+      add_prompts: ['admin', 'manager'],
+      pause_prompts: ['admin', 'manager'],
+      add_topic: ['admin', 'manager'],
+      rename_topic: ['admin', 'manager'],
+      add_competitors: ['admin', 'manager'],
+      remove_competitor: ['admin', 'manager'],
+      // Content, reports and Site Audit (W2-07, DECISIONS T): an Analyst only saves drafts.
+      update_draft: ['admin', 'manager'],
+      push_cms_draft: ['admin', 'manager'],
+      build_report: ['admin', 'manager'],
+      run_site_audit: ['admin', 'manager'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);
     }
+  });
+
+  it('files the page create_draft saved as the draft keeps it: cleaned (CHAT-06)', () => {
+    const draft = CHAT_TOOLS.find((t) => t.name === 'create_draft')!;
+    const made = draft.deliverable!(
+      {
+        title: 'Pricing FAQ',
+        body_html:
+          '<h1>Pricing FAQ</h1><script>fetch("https://evil.example")</script><img src="https://ansvisor.com/a.png" onerror="alert(1)">',
+      } as never,
+      FIXTURE_IDS.brand,
+    )!;
+    expect(made.body).not.toMatch(/<script/i);
+    expect(made.body).not.toMatch(/onerror/i);
+    expect(made.body).toContain('<h1>Pricing FAQ</h1>');
   });
 
   it('says where every row that takes a brand or an object finds its brand', () => {
@@ -488,7 +569,8 @@ describe("the model's tool list on the registry's rows", () => {
     ).map((tool) => tool.name);
 
   const reads = CHAT_TOOLS.filter((tool) => tool.class === 'read').map((tool) => tool.name);
-  const writes = CHAT_TOOLS.filter((tool) => tool.class === 'write').map((tool) => tool.name);
+  // The WRITEs and the EXECUTE (push_cms_draft), in the registry's order.
+  const writes = CHAT_TOOLS.filter((tool) => tool.class !== 'read').map((tool) => tool.name);
   const starter = facts({ plan: 'starter', subscription_status: 'active' });
   const growth = facts({ plan: 'growth', subscription_status: 'active' });
   const withoutShopping = reads.filter((name) => name !== 'get_shopping_visibility');

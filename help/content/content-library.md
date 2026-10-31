@@ -4,8 +4,8 @@ route: /dashboard/content/library
 keywords: [content library, drafts, draft status, archive, export drafts]
 synonyms: [content list, my articles, saved pages, draft list]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-30
+last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -26,7 +26,7 @@ Each tab shows its count:
 
 ## Columns and filters
 
-The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Status, Created and Updated. The **Created** filter narrows the list to the last 7, 30 or 90 days. Once a page has been sent to your CMS, the **Last send** filter lists the pages by how their last send went: never sent, sending, sent, failed or published.
+The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Status, Created and Updated. While the Content Agent writes a draft, its Status reads **Agent writing…**, and **Agent failed** if it couldn't finish; where your workspace has Chat, each comes with the same dot Chat shows for a run. The **Created** filter narrows the list to the last 7, 30 or 90 days. Once a page has been sent to your CMS, the **Last send** filter lists the pages by how their last send went: never sent, sending, sent, failed or published.
 
 ## The row menu
 

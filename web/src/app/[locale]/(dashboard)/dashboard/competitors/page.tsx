@@ -5,6 +5,7 @@ import { useRouter } from '@/i18n/navigation';
 import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
+import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   getCompetitors,
@@ -176,7 +177,8 @@ function NoBrandSelected() {
 
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
-function EmptyState({ onAdd, onSuggest }: { onAdd: () => void; onSuggest: () => void }) {
+/** Without onAdd (a member who isn't an admin or a manager) there's nothing to start with here. */
+function EmptyState({ onAdd, onSuggest }: { onAdd?: () => void; onSuggest?: () => void }) {
   const t = useTranslations('competitors');
   return (
     <Card>
@@ -186,16 +188,18 @@ function EmptyState({ onAdd, onSuggest }: { onAdd: () => void; onSuggest: () => 
         </div>
         <h3 className="text-lg font-semibold">{t('emptyTitle')}</h3>
         <p className="text-sm text-muted-foreground mt-1 max-w-sm">{t('emptyDescription')}</p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <Button className="gap-2" onClick={onAdd}>
-            <Plus className="h-4 w-4" />
-            {t('addCompetitor')}
-          </Button>
-          <Button variant="outline" className="gap-2" onClick={onSuggest}>
-            <Sparkles className="h-4 w-4" />
-            {t('suggestCompetitors')}
-          </Button>
-        </div>
+        {onAdd && onSuggest && (
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            <Button className="gap-2" onClick={onAdd}>
+              <Plus className="h-4 w-4" />
+              {t('addCompetitor')}
+            </Button>
+            <Button variant="outline" className="gap-2" onClick={onSuggest}>
+              <Sparkles className="h-4 w-4" />
+              {t('suggestCompetitors')}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -329,7 +333,8 @@ function CompetitorCard({
   } | null;
   isSelected: boolean;
   onSelect: () => void;
-  onDelete: () => void;
+  /** Absent for a member who isn't an admin or a manager: no delete button. */
+  onDelete?: () => void;
   deleting: boolean;
 }) {
   const t = useTranslations('competitors');
@@ -396,24 +401,26 @@ function CompetitorCard({
           </div>
         )}
 
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={t('delete')}
-          title={t('delete')}
-          className="h-7 w-7 opacity-0 group-hover:opacity-70 hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-opacity"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          disabled={deleting}
-        >
-          {deleting ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Trash2 className="h-3.5 w-3.5" />
-          )}
-        </Button>
+        {onDelete && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('delete')}
+            title={t('delete')}
+            className="h-7 w-7 opacity-0 group-hover:opacity-70 hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            disabled={deleting}
+          >
+            {deleting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -1253,6 +1260,8 @@ export default function CompetitorsPage() {
   // it opens) and Delete open the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  // Admins and managers add and remove competitors; others only read them.
+  const { canManage } = useUserRole();
   const openAdd = guard(() => setDialogOpen(true), { action: tActions('addCompetitors') });
   const openSuggest = guard(() => setSuggestDialogOpen(true), {
     action: tActions('suggestCompetitors'),
@@ -1597,20 +1606,27 @@ export default function CompetitorsPage() {
                 />
               )}
             </div>
-            <Button variant="outline" className="gap-2" onClick={openSuggest}>
-              <Sparkles className="h-4 w-4" />
-              {t('suggestCompetitors')}
-            </Button>
-            <Button className="gap-2" onClick={openAdd}>
-              <Plus className="h-4 w-4" />
-              {t('addCompetitor')}
-            </Button>
+            {canManage && (
+              <>
+                <Button variant="outline" className="gap-2" onClick={openSuggest}>
+                  <Sparkles className="h-4 w-4" />
+                  {t('suggestCompetitors')}
+                </Button>
+                <Button className="gap-2" onClick={openAdd}>
+                  <Plus className="h-4 w-4" />
+                  {t('addCompetitor')}
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </HeaderWithAiUsage>
 
       {competitors.length === 0 ? (
-        <EmptyState onAdd={openAdd} onSuggest={openSuggest} />
+        <EmptyState
+          onAdd={canManage ? openAdd : undefined}
+          onSuggest={canManage ? openSuggest : undefined}
+        />
       ) : (
         <>
           {/* Competitor List */}
@@ -1655,9 +1671,13 @@ export default function CompetitorsPage() {
                     onSelect={() =>
                       selectCompetitor(selectedCompetitorId === comp.id ? null : comp.id)
                     }
-                    onDelete={guard(() => setConfirmDelete(comp), {
-                      action: tActions('deleteCompetitors'),
-                    })}
+                    onDelete={
+                      canManage
+                        ? guard(() => setConfirmDelete(comp), {
+                            action: tActions('deleteCompetitors'),
+                          })
+                        : undefined
+                    }
                     deleting={deleting === comp.id}
                   />
                 ))}

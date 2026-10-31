@@ -9,6 +9,8 @@ import { MetricBreakdownSheet, type BreakdownTab } from './_metric-breakdown-she
 import { FormulaDialog } from './_formula-dialog';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFirstRun } from '@/hooks/use-first-run';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { largestMove, rangeChipLabel } from '@/lib/chat/page-context';
 import {
   getInsightsData,
   getTrackingWindow,
@@ -275,6 +277,11 @@ function RunSinglePromptDialog({
 
 // ─── Filter Bar ───────────────────────────────────────────────────────────────
 
+/** An AI model filter's name: its provider family's, as the filter shows it. */
+function modelName(value: string): string {
+  return modelLabel(value.split(',')[0]);
+}
+
 function FilterBar({
   filters,
   onChange,
@@ -374,22 +381,18 @@ function FilterBar({
             <SelectValue placeholder={t('allPlatforms')}>
               {(value) => {
                 if (!value || value === '__all__') return t('allPlatforms');
-                const firstSlug = String(value).split(',')[0];
-                return modelLabel(firstSlug);
+                return modelName(String(value));
               }}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">{t('allPlatforms')}</SelectItem>
-            {availableModels.map((m) => {
-              // m is a comma-separated slug list representing a provider family
-              const firstSlug = m.split(',')[0];
-              return (
-                <SelectItem key={m} value={m}>
-                  {modelLabel(firstSlug)}
-                </SelectItem>
-              );
-            })}
+            {/* Each value is a comma-separated slug list: a provider family. */}
+            {availableModels.map((m) => (
+              <SelectItem key={m} value={m}>
+                {modelName(m)}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -649,6 +652,10 @@ export default function InsightsPage() {
   // The tracking job's pace while this page polls it ("about N min left").
   const [pace, setPace] = useState<ProgressSample[]>([]);
   const tCommon = useTranslations('common');
+  const tChat = useTranslations('chatPanel.suggest');
+  const tChatRange = useTranslations('chatPanel.range');
+  const tPlatforms = useTranslations('insights.platforms');
+  const tLeaderboard = useTranslations('insights.leaderboard');
   const router = useRouter();
   const { isCloud } = usePlanContext();
   // A read-only workspace (plan not active): Run All and Test Single Prompt
@@ -1121,6 +1128,61 @@ export default function InsightsPage() {
       setIsExporting(false);
     }
   }, [brand]);
+
+  // Chat's side panel sees the page (W1-08): its dates and filters, the
+  // platform that moved most, and the tables to ask about.
+  const moved = largestMove(platforms?.filter((row) => row.status === 'ok'));
+  const topicName = availableTopics.find((topic) => topic.id === filters.topic)?.name;
+  useChatPageContext(
+    brand
+      ? {
+          pageName: t('title'),
+          dateRange: {
+            from: filters.datePreset === 'custom' ? filters.dateFrom : filters.datePreset,
+            to: filters.datePreset === 'custom' ? filters.dateTo : null,
+            label: rangeChipLabel(
+              filters.datePreset,
+              { from: filters.dateFrom, to: filters.dateTo },
+              (key, values) => tChatRange(key, values),
+            ),
+          },
+          filters: [
+            {
+              key: 'platform',
+              label: filters.model ? modelName(filters.model) : tCommon('allPlatforms'),
+              value: filters.model,
+            },
+            ...(filters.region
+              ? [
+                  {
+                    key: 'region',
+                    label: formatRegionDisplay(filters.region),
+                    value: filters.region,
+                  },
+                ]
+              : []),
+            ...(filters.topic && topicName
+              ? [{ key: 'topic', label: topicName, value: filters.topic }]
+              : []),
+          ],
+          suggestions: [
+            ...(moved
+              ? [
+                  tChat(moved.change < 0 ? 'visibilityDrop' : 'visibilityRise', {
+                    platform: moved.name,
+                  }),
+                ]
+              : []),
+            tChat('competitorGained'),
+            tChat('actions'),
+          ],
+          referenceables: [
+            { type: 'table', id: 'visibility-by-platform', label: tPlatforms('title') },
+            { type: 'table', id: 'visibility-leaderboard', label: tLeaderboard('title') },
+          ],
+        }
+      : null,
+  );
 
   if (!brand || (isLoading && !summary)) return <InsightsSkeleton />;
 

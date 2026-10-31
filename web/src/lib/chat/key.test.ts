@@ -1,29 +1,42 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Whose key a Chat step runs on: with Chat on, the workspace's own when its
- * plan allows it (Growth+, or a Starter key kept from before), else
- * Ansvisor's, which draws on the AI budget. With Chat off, today's Agent
- * Chat: the workspace's own key or nothing on the cloud.
+ * Whose key a Chat step runs on: with Chat on, the workspace's own on
+ * Enterprise, or for 30 days when it saved one before Chat (CHAT-16 items 19
+ * and 28, owner decision 2026-10-30); else Ansvisor's, which draws on the AI
+ * budget. With Chat off, today's Agent Chat: the workspace's own key or
+ * nothing on the cloud.
  */
 
 const ORG = '22222222-2222-4222-8222-222222222222';
+const DAY = 24 * 60 * 60 * 1000;
 
 let org: Record<string, unknown> | null;
 let ownKey: Record<string, unknown> | null;
 const reads: string[] = [];
+const updates: Record<string, unknown>[] = [];
 
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
     from: (table: string) => {
       reads.push(table);
+      let update: Record<string, unknown> | null = null;
       const chain = {
         select: () => chain,
         eq: () => chain,
-        maybeSingle: async () => ({
-          data: table === 'organizations' ? org : ownKey,
-          error: null,
-        }),
+        is: () => chain,
+        update: (row: Record<string, unknown>) => {
+          updates.push(row);
+          update = row;
+          return chain;
+        },
+        maybeSingle: async () => {
+          if (!update) return { data: table === 'organizations' ? org : ownKey, error: null };
+          // The start fills an empty date only.
+          if (!org || org.legacy_key_until != null) return { data: null, error: null };
+          org = { ...org, ...update };
+          return { data: { legacy_key_until: update.legacy_key_until }, error: null };
+        },
       };
       return chain;
     },
@@ -34,7 +47,8 @@ vi.mock('@/lib/agent/key-encryption', () => ({
   decryptApiKey: (envelope: string) => `plain(${envelope})`,
 }));
 
-const { ownKeyAllowed, resolveChatModelKey } = await import('./key');
+const { chatRunsOnOwnKey, ownKeyAllowed, ownKeyAccess, resolveChatModelKey } =
+  await import('./key');
 
 const CUSTOMER = {
   provider: 'openai',
@@ -42,14 +56,21 @@ const CUSTOMER = {
   settings: { model: 'gpt-5.5' },
 };
 
+const orgOn = (plan: string, legacy = false, until: string | null = null) => ({
+  plan,
+  legacy_key_grandfathered: legacy,
+  legacy_key_until: until,
+});
+
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('ANTHROPIC_API_KEY', 'ansvisor-key');
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
-  org = { plan: 'starter', subscription_status: 'active', legacy_key_grandfathered: false };
+  org = orgOn('starter');
   ownKey = null;
   reads.length = 0;
+  updates.length = 0;
 });
 
 afterEach(() => {
@@ -66,49 +87,85 @@ const OWN = {
 };
 
 describe('ownKeyAllowed', () => {
-  it('opens own keys to Growth and Enterprise, not to Starter or a Growth trial', () => {
-    const at = (plan: string, subscription_status = 'active', legacy = false) =>
-      ownKeyAllowed({ plan, subscription_status, legacy_key_grandfathered: legacy });
-    expect(at('growth')).toBe(true);
+  it('opens own keys to Enterprise only, and to a kept key for its 30 days', () => {
+    const now = Date.parse('2026-11-10T00:00:00Z');
+    const at = (plan: string, legacy = false, until: string | null = null) =>
+      ownKeyAllowed(orgOn(plan, legacy, until), now);
     expect(at('enterprise')).toBe(true);
-    expect(at('enterprise', 'trialing')).toBe(true);
+    expect(at('growth')).toBe(false);
     expect(at('starter')).toBe(false);
-    expect(at('growth', 'trialing')).toBe(false);
-    // A key kept from before Chat drew on the budget (CHAT-16 item 28).
-    expect(at('starter', 'active', true)).toBe(true);
-    expect(at('growth', 'trialing', true)).toBe(true);
+    // A key saved before Chat went live (CHAT-16 item 28): not started yet, or before its date.
+    expect(at('growth', true)).toBe(true);
+    expect(at('starter', true, '2026-11-20T00:00:00Z')).toBe(true);
+    expect(at('growth', true, '2026-11-09T00:00:00Z')).toBe(false);
     expect(ownKeyAllowed(null)).toBe(false);
   });
 });
 
+describe('ownKeyAccess', () => {
+  it('starts a kept key’s 30 days the first time it is needed, once', async () => {
+    org = orgOn('growth', true);
+    const access = await ownKeyAccess(ORG);
+    expect(access.state).toBe('kept');
+    const until = Date.parse((access as { until: string }).until);
+    expect(Math.abs(until - (Date.now() + 30 * DAY))).toBeLessThan(60_000);
+    expect(updates).toHaveLength(1);
+
+    // Started: read back, not moved.
+    expect(await ownKeyAccess(ORG)).toEqual(access);
+    expect(updates).toHaveLength(1);
+  });
+
+  it('locks a kept key after its date, and every plan but Enterprise', async () => {
+    org = orgOn('growth', true, new Date(Date.now() - DAY).toISOString());
+    expect(await ownKeyAccess(ORG)).toEqual({ state: 'locked' });
+    org = orgOn('growth');
+    expect(await ownKeyAccess(ORG)).toEqual({ state: 'locked' });
+    org = orgOn('enterprise');
+    expect(await ownKeyAccess(ORG)).toEqual({ state: 'plan' });
+    expect(updates).toHaveLength(0);
+  });
+
+  it('is open with Chat off or self-hosted, without a read', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await ownKeyAccess(ORG)).toEqual({ state: 'open' });
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    expect(await ownKeyAccess(ORG)).toEqual({ state: 'open' });
+    expect(reads).toEqual([]);
+  });
+});
+
 describe('resolveChatModelKey, Chat on', () => {
-  it('runs a Growth workspace on its own key: its provider bills it', async () => {
-    org = { plan: 'growth', subscription_status: 'active', legacy_key_grandfathered: false };
+  it('runs an Enterprise workspace on its own key: its provider bills it', async () => {
+    org = orgOn('enterprise');
     ownKey = CUSTOMER;
     expect(await resolveChatModelKey(ORG)).toEqual(OWN);
   });
 
-  it('runs Starter on Ansvisor’s key, its own key saved since left aside', async () => {
-    ownKey = CUSTOMER;
-    expect(await resolveChatModelKey(ORG)).toEqual(ANSVISOR);
-    // Not even read: the plan doesn't include it.
-    expect(reads).toEqual(['organizations']);
+  it('runs Growth and Starter on Ansvisor’s key, their own key left aside', async () => {
+    for (const plan of ['growth', 'starter']) {
+      org = orgOn(plan);
+      ownKey = CUSTOMER;
+      reads.length = 0;
+      expect(await resolveChatModelKey(ORG)).toEqual(ANSVISOR);
+      // Not even read: the plan doesn't include it.
+      expect(reads).toEqual(['organizations']);
+    }
   });
 
-  it('keeps a Starter workspace’s key from before on its own key', async () => {
-    org = { plan: 'starter', subscription_status: 'active', legacy_key_grandfathered: true };
+  it('keeps a key saved before Chat on its own key for 30 days, then the AI budget', async () => {
+    org = orgOn('growth', true);
     ownKey = CUSTOMER;
     expect(await resolveChatModelKey(ORG)).toEqual(OWN);
-  });
+    expect(updates).toHaveLength(1);
 
-  it('falls back to Ansvisor’s key when a Growth workspace has none', async () => {
-    org = { plan: 'growth', subscription_status: 'active', legacy_key_grandfathered: false };
+    org = orgOn('growth', true, new Date(Date.now() - 1000).toISOString());
     expect(await resolveChatModelKey(ORG)).toEqual(ANSVISOR);
   });
 
-  it('runs a Growth free trial on Ansvisor’s key, as Starter', async () => {
-    org = { plan: 'growth', subscription_status: 'trialing', legacy_key_grandfathered: false };
-    ownKey = CUSTOMER;
+  it('falls back to Ansvisor’s key when an Enterprise workspace has none', async () => {
+    org = orgOn('enterprise');
     expect(await resolveChatModelKey(ORG)).toEqual(ANSVISOR);
   });
 
@@ -137,7 +194,7 @@ describe('resolveChatModelKey, Chat off', () => {
   });
 
   it('never falls back to Ansvisor’s key on the cloud', async () => {
-    org = { plan: 'growth', subscription_status: 'active', legacy_key_grandfathered: false };
+    org = orgOn('enterprise');
     expect(await resolveChatModelKey(ORG)).toBeNull();
   });
 
@@ -145,5 +202,39 @@ describe('resolveChatModelKey, Chat off', () => {
     vi.stubEnv('CHAT_AGENTIC', 'true');
     vi.stubEnv('CHAT_AGENTIC_ORGS', '33333333-3333-4333-8333-333333333333');
     expect(await resolveChatModelKey(ORG)).toBeNull();
+  });
+});
+
+describe('chatRunsOnOwnKey', () => {
+  it('says yes only where resolveChatModelKey would pick the workspace’s own key', async () => {
+    org = orgOn('enterprise');
+    ownKey = CUSTOMER;
+    expect(await chatRunsOnOwnKey(ORG)).toBe(true);
+
+    // No key saved, or the plan leaves it aside: Ansvisor's key, on the budget.
+    ownKey = null;
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    ownKey = CUSTOMER;
+    org = orgOn('growth');
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    org = orgOn('starter');
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+
+    // A key saved before Chat: its 30 days, then the budget.
+    org = orgOn('growth', true, new Date(Date.now() + DAY).toISOString());
+    expect(await chatRunsOnOwnKey(ORG)).toBe(true);
+    org = orgOn('growth', true, new Date(Date.now() - DAY).toISOString());
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+  });
+
+  it('is no with Chat off or self-hosted, where nothing is metered', async () => {
+    org = orgOn('enterprise');
+    ownKey = CUSTOMER;
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    expect(reads).toEqual([]);
   });
 });

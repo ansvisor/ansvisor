@@ -9,6 +9,7 @@ import {
   type ChatEventType,
 } from './events';
 import type { ChatPhase } from './engine-model';
+import type { NextMoveInput } from './next-moves';
 import type { ChatMode } from './precedence';
 import { publishRunEvent, type TailSource } from './run-hub';
 import type { ChatEffort } from './run-limits';
@@ -74,8 +75,8 @@ export interface PendingCalls {
   n: number;
   /** The hash of the arguments on the card (ChatConfirm.digest). */
   digest: string;
-  /** A WRITE's card (`ask`) or an EXECUTE's click. */
-  kind: 'ask' | 'click';
+  /** A WRITE's card (`ask`), an EXECUTE's click, or a question card (CHAT-07). */
+  kind: 'ask' | 'click' | 'question';
   offerDontAskAgain: boolean;
 }
 
@@ -115,6 +116,10 @@ export interface RunProgress {
    * run's data, and the ones taken out (a placeholder in their place).
    */
   facts?: { checked: number; replaced: string[] };
+  /** Question cards asked so far (CHAT-07 §B: at most 4 a run). */
+  asks?: number;
+  /** The next moves the model suggested last (CHAT-07 §C), kept once the run ends. */
+  nextMoves?: NextMoveInput[];
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {
@@ -267,6 +272,41 @@ export interface StepWrite {
   dataAsOf?: string | null;
   tool?: string | null;
   debug?: Record<string, unknown> | null;
+  /** The step's measure (00410), for staff only: never a member column, never in an event. */
+  measure?: StepMeasure;
+}
+
+/** What a step measured (CHAT-04 item 10): how long it took, and what its result sent the model. */
+export interface StepMeasure {
+  latencyMs?: number;
+  /** Its result came from the chat's kept results (tool-cache.ts). */
+  cacheHit?: boolean;
+  /** Its result was cut to its row limit or the run's budget before the model saw it. */
+  truncated?: boolean;
+  /** The tokens its result sent the model. */
+  resultTokens?: number;
+}
+
+type MeasureColumns = Partial<{
+  latency_ms: number;
+  cache_hit: boolean;
+  truncated: boolean;
+  result_tokens: number;
+}>;
+
+/** A measure as chat_run_steps' columns; only what it holds. */
+export function measureColumns(measure: StepMeasure | undefined): MeasureColumns {
+  if (!measure) return {};
+  const count = (n: number | undefined) =>
+    typeof n === 'number' && Number.isFinite(n) ? Math.max(0, Math.round(n)) : undefined;
+  const row: MeasureColumns = {};
+  const latency = count(measure.latencyMs);
+  const tokens = count(measure.resultTokens);
+  if (latency !== undefined) row.latency_ms = latency;
+  if (measure.cacheHit !== undefined) row.cache_hit = measure.cacheHit;
+  if (measure.truncated !== undefined) row.truncated = measure.truncated;
+  if (tokens !== undefined) row.result_tokens = tokens;
+  return row;
 }
 
 /** The member columns of a step the engine just wrote, for toClientStep. */
@@ -302,6 +342,7 @@ export async function insertStep(
     finished_at: step.status === 'done' || step.status === 'error' ? now : null,
     tool: step.tool ?? null,
     debug_json: debugJson(step.debug),
+    ...measureColumns(step.measure),
   };
   const { data, error } = await supabaseAdmin
     .from('chat_run_steps')
@@ -332,6 +373,7 @@ export async function updateStep(
   if (patch.rowCount !== undefined) row.row_count = patch.rowCount;
   if (patch.dataAsOf !== undefined) row.data_as_of = patch.dataAsOf;
   if (patch.debug !== undefined) row.debug_json = debugJson(patch.debug);
+  Object.assign(row, measureColumns(patch.measure));
   const { data, error } = await supabaseAdmin
     .from('chat_run_steps')
     .update(row)

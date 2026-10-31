@@ -21,6 +21,7 @@ export const HELP_AREAS = [
   'ai-traffic',
   'reports',
   'settings',
+  'chat',
 ] as const;
 export type HelpArea = (typeof HELP_AREAS)[number];
 

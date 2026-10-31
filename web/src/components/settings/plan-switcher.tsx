@@ -42,6 +42,7 @@ import {
   type BillingInterval,
 } from '@/lib/billing/plan-purchase';
 import { TRIAL_DAYS } from '@/lib/billing/trial';
+import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useRouter } from '@/i18n/navigation';
 import { formatNumber } from '@/lib/format';
@@ -85,6 +86,9 @@ export function PlanSwitcher({
   const { canAdmin } = useUserRole();
   // A change can unlock a read-only workspace: the layout reads the plan again.
   const router = useRouter();
+  // A trial bought starts a new period, its AI usage from 0: the header meter
+  // and its banners read it again rather than show the trial's.
+  const { refresh: refreshAiUsage } = useAiUsage();
   const [loading, setLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -153,6 +157,7 @@ export function PlanSwitcher({
       const data = await res.json();
       onUpdate(data);
       router.refresh();
+      refreshAiUsage();
       toast.success(
         pending.buy ? t('planBought', { plan: PLANS[pending.planId].name }) : t('planChanged'),
       );
@@ -177,6 +182,8 @@ export function PlanSwitcher({
         cancelAtPeriodEnd: data.cancelAtPeriodEnd,
         currentPeriodEnd: data.currentPeriodEnd,
       });
+      // The layout reads the plan again: every page says when it ends.
+      router.refresh();
       toast.success(t('subscriptionCanceled'));
       return true;
     } catch (err) {

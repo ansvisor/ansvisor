@@ -57,6 +57,83 @@ describe('the run in the browser', () => {
     expect(approved).toMatchObject({ status: 'running', confirm: null });
   });
 
+  it('waits on a question card, folds it once answered, and clears it on Stop (CHAT-07)', () => {
+    const ask: ChatStep = {
+      n: 2,
+      kind: 'ask',
+      status: 'waiting',
+      label: 'Waiting for your answer',
+    };
+    const asking = runFromEvents([
+      ...events.slice(0, 3),
+      chatEvent('step.started', 4, { step: ask }),
+      chatEvent('ask.created', 5, {
+        n: 2,
+        question: 'Which page?',
+        options: [{ label: '/pricing', recommended: true }, { label: '/features' }],
+        allowOther: false,
+        multi: false,
+      }),
+    ]);
+    expect(asking).toMatchObject({ status: 'waiting', confirm: null, question: { n: 2 } });
+    // Another step's news leaves it waiting.
+    const still = applyChatEvent(
+      asking,
+      chatEvent('step.updated', 6, { step: { ...read, status: 'done' } }),
+    );
+    expect(still).toMatchObject({ status: 'waiting', question: { n: 2 } });
+    const answered = applyChatEvent(
+      asking,
+      chatEvent('step.finished', 6, {
+        step: { ...ask, status: 'done', label: 'Which page?', detail: '/features' },
+      }),
+    );
+    expect(answered).toMatchObject({ status: 'running', question: null });
+    expect(
+      applyChatEvent(asking, chatEvent('run.stopped', 6, { ...summary, reason: 'person' })),
+    ).toMatchObject({ status: 'stopped', question: null });
+  });
+
+  it('keeps the next moves sent before its end (CHAT-07 §C)', () => {
+    const moves = [
+      { label: 'Do the same for /features', prompt: 'Do the same for /features', ghost: true },
+    ];
+    const done = runFromEvents([
+      chatEvent('text.delta', 1, { text: 'Done.' }),
+      chatEvent('next_moves', 2, { moves }),
+      chatEvent('run.finished', 3, {
+        ...summary,
+        generatedAt: '2026-10-30T09:00:00.000Z',
+        dataAsOf: null,
+      }),
+    ]);
+    expect(done).toMatchObject({ status: 'done', nextMoves: moves });
+    expect(emptyRun().nextMoves).toEqual([]);
+  });
+
+  it('keeps what the run made, in order: each one its card (CHAT-06 item 1)', () => {
+    const made = {
+      title: 'Pricing FAQ',
+      type: 'document' as const,
+      formats: ['html', 'md'],
+      status: 'draft' as const,
+      href: '/dashboard/content/editor/x' as const,
+      filed: 'in_files' as const,
+    };
+    const run = applyChatEvent(
+      applyChatEvent(emptyRun(), chatEvent('deliverable.created', 1, made)),
+      chatEvent('deliverable.created', 2, {
+        ...made,
+        title: 'Pricing table',
+        filed: 'storage_full',
+      }),
+    );
+    expect(run.deliverables.map((d) => [d.title, d.filed])).toEqual([
+      ['Pricing FAQ', 'in_files'],
+      ['Pricing table', 'storage_full'],
+    ]);
+  });
+
   it('skips an event it already has, or a type it doesn’t know', () => {
     const run = runFromEvents(events);
     expect(applyChatEvent(run, events[2])).toBe(run);

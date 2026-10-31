@@ -62,6 +62,10 @@ vi.mock('@/lib/supabase/admin', () => ({
 const align = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/plan-engines', () => ({ alignPromptsToPlanForOrg: align }));
 
+// Add-on packs' events (CHAT-18): their own module, tested on its own.
+const addOns = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/billing/add-on-webhook', () => ({ handleAddOnEvent: addOns }));
+
 const { POST } = await import('./route');
 
 const deliver = (type: string, object: unknown, previous?: Record<string, unknown>) => {
@@ -96,6 +100,7 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(console, 'log').mockImplementation(() => {});
   align.mockResolvedValue({ promptCount: 0, platforms: [], models: [] });
+  addOns.mockResolvedValue(false);
   db.eq.mockResolvedValue({ error: null });
   brands.filters = [];
   brands.answer = { error: null };
@@ -125,6 +130,7 @@ describe('checkout.session.completed', () => {
       stripe_customer_id: 'cus1',
       stripe_subscription_id: 'sub1',
       subscription_ends_at: '2027-01-15T08:00:00.000Z',
+      cancel_at_period_end: false,
     });
     expect(db.eq).toHaveBeenCalledWith('id', 'org1');
     expect(align).toHaveBeenCalledWith('org1', 'growth');
@@ -259,6 +265,7 @@ describe('customer.subscription.updated', () => {
     await deliver('customer.subscription.updated', subscription('active', 1_800_000_000));
     expect(db.update).toHaveBeenCalledWith({
       subscription_status: 'active',
+      cancel_at_period_end: false,
       subscription_ends_at: '2027-01-15T08:00:00.000Z',
       plan: 'growth',
     });
@@ -266,7 +273,56 @@ describe('customer.subscription.updated', () => {
 
     db.update.mockClear();
     await deliver('customer.subscription.updated', subscription('past_due'));
-    expect(db.update).toHaveBeenCalledWith({ subscription_status: 'past_due', plan: 'growth' });
+    expect(db.update).toHaveBeenCalledWith({
+      subscription_status: 'past_due',
+      cancel_at_period_end: false,
+      plan: 'growth',
+    });
+  });
+
+  it('writes whether the plan ends at its period end, for the app-wide band', async () => {
+    await deliver('customer.subscription.updated', {
+      ...subscription('active', 1_800_000_000),
+      cancel_at_period_end: true,
+    });
+    expect(db.update.mock.calls[0][0]).toMatchObject({
+      cancel_at_period_end: true,
+      subscription_ends_at: '2027-01-15T08:00:00.000Z',
+    });
+
+    // Resumed.
+    db.update.mockClear();
+    await deliver('customer.subscription.updated', {
+      ...subscription('active', 1_800_000_000),
+      cancel_at_period_end: false,
+    });
+    expect(db.update.mock.calls[0][0]).toMatchObject({ cancel_at_period_end: false });
+  });
+
+  it('clears it once the subscription has ended', async () => {
+    await deliver('customer.subscription.deleted', subscription('canceled'));
+    expect(db.update).toHaveBeenCalledWith({
+      subscription_status: 'canceled',
+      plan: 'starter',
+      cancel_at_period_end: false,
+    });
+  });
+
+  it('writes the first paid period’s end when a trial is bought, so the AI usage starts again', async () => {
+    // Bought the day before the trial would end: Stripe ends it and starts a
+    // month-long period that day. The monthly quotas count from that period's start
+    // (quotaPeriodStart), so the trial's usage no longer counts.
+    await deliver('customer.subscription.updated', subscription('active', 1_802_592_000), {
+      status: 'trialing',
+      trial_end: 1_800_000_000,
+    });
+    expect(db.update).toHaveBeenCalledWith({
+      subscription_status: 'active',
+      subscription_ends_at: '2027-02-14T08:00:00.000Z',
+      cancel_at_period_end: false,
+      plan: 'growth',
+    });
+    expect(db.eq).toHaveBeenCalledWith('stripe_customer_id', 'cus1');
   });
 });
 
@@ -310,5 +366,36 @@ describe('the demo brand after a purchase', () => {
     expect(res.status).toBe(200);
     expect(db.update).toHaveBeenCalledWith(expect.objectContaining({ plan: 'growth' }));
     expect(align).toHaveBeenCalled();
+  });
+});
+
+describe('add-on packs (CHAT-18)', () => {
+  it('leave a pack’s event to the packs alone: the plan is never touched', async () => {
+    addOns.mockResolvedValue(true);
+    const res = await deliver('checkout.session.completed', {
+      customer: 'cus1',
+      subscription: null,
+      metadata: { add_on_purchase_id: 'a0000000-0000-4000-8000-000000000001' },
+    });
+
+    expect(res.status).toBe(200);
+    expect(addOns).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'checkout.session.completed' }),
+    );
+    expect(stripeApi.retrieve).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it('answer 500 when a grant fails, so Stripe sends the event again', async () => {
+    addOns.mockRejectedValue(new Error('down'));
+    const res = await deliver('invoice.paid', { id: 'in_1', customer: 'cus1' });
+    expect(res.status).toBe(500);
+  });
+
+  it('pass a plan’s event on to the plan’s handlers', async () => {
+    stripeApi.retrieve.mockResolvedValue(subscription('active', 1_800_000_000));
+    await deliver('checkout.session.completed', { customer: 'cus1', subscription: 'sub1' });
+    expect(addOns).toHaveBeenCalled();
+    expect(db.update).toHaveBeenCalled();
   });
 });
