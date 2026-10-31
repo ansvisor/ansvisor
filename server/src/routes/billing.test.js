@@ -9,6 +9,7 @@ import express from 'express';
 let profile;
 let org;
 let sentToday;
+let draftRow = null;
 const inserted = [];
 const updated = [];
 
@@ -17,6 +18,7 @@ function table(name) {
   const result = () => {
     if (name === 'profiles') return { data: profile, error: null };
     if (name === 'organizations') return { data: org, error: null };
+    if (name === 'content_drafts') return { data: draftRow, error: null };
     if (name === 'cancellation_feedback') {
       if (state.insert) return { data: { id: 'f1' }, error: null };
       if (state.update) return { data: null, error: null };
@@ -54,6 +56,10 @@ const deliverEmail = vi.fn();
 const getAiUsage = vi.fn();
 const getDraftAiUsage = vi.fn();
 const getOrgIdForUser = vi.fn();
+const assertBrandAccess = vi.fn();
+vi.mock('../lib/access.js', () => ({
+  assertBrandAccess: (...args) => assertBrandAccess(...args),
+}));
 vi.mock('../config/supabase.js', () => ({ default: { from: (name) => table(name) } }));
 vi.mock('../lib/email.js', () => ({ deliverEmail: (...args) => deliverEmail(...args) }));
 class PlanLimitError extends Error {
@@ -274,6 +280,35 @@ describe('GET /ai-usage/draft/:draftId', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ unlimited: false, percent: 3.7 });
     expect(getDraftAiUsage).toHaveBeenCalledWith('o1', draftId);
+  });
+
+  it('shows a page’s share only to someone who reaches its brand', async () => {
+    getOrgIdForUser.mockResolvedValue('o1');
+    getDraftAiUsage.mockReset().mockResolvedValue({ unlimited: false, percent: 3.7 });
+    draftRow = { brand_id: 'b-hidden' };
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error("You don't have access to this brand"), {
+        status: 403,
+        code: 'no_brand_access',
+      }),
+    );
+    try {
+      let res = await fetch(`${baseUrl}/ai-usage/draft/${draftId}`);
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({
+        error: "You don't have access to this brand",
+        code: 'no_brand_access',
+      });
+      expect(assertBrandAccess).toHaveBeenCalledWith('b-hidden', expect.any(String));
+      expect(getDraftAiUsage).not.toHaveBeenCalled();
+
+      assertBrandAccess.mockResolvedValueOnce({ orgId: 'o1' });
+      res = await fetch(`${baseUrl}/ai-usage/draft/${draftId}`);
+      expect(res.status).toBe(200);
+      expect(getDraftAiUsage).toHaveBeenCalledWith('o1', draftId);
+    } finally {
+      draftRow = null;
+    }
   });
 
   it('turns away an id that isn’t one', async () => {

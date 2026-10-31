@@ -447,6 +447,24 @@ describe('ChatShell', () => {
     expect(host.querySelector('header nav')?.textContent).toBe('Chat›Agents›Citation win-back');
     expect(action('nav.breadcrumb')[1].getAttribute('href')).toBe('/dashboard/chat/agents');
 
+    // New agent and an agent's Edit name themselves under Agents too (W2-15).
+    function NewAgent() {
+      useChatCrumb('New agent');
+      return <p>new</p>;
+    }
+    for (const path of [
+      '/dashboard/chat/agents/new',
+      '/dashboard/chat/agents/aaaaaaaa-0000-4000-8000-000000000001/edit',
+    ]) {
+      nav.pathname = path;
+      await render(
+        <ChatShell menuOpen>
+          <NewAgent />
+        </ChatShell>,
+      );
+      expect(host.querySelector('header nav')?.textContent).toBe('Chat›Agents›New agent');
+    }
+
     // Opened once, the pill stays gone on other pages.
     nav.pathname = '/dashboard/chat/inbox';
     await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);

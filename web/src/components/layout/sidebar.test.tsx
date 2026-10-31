@@ -231,4 +231,53 @@ describe('Sidebar', () => {
     expect(container.querySelector('[data-action="rail.toggle"]')).toBeNull();
     expect(container.querySelector('a[href="/dashboard"]')).not.toBeNull();
   });
+  describe('a titled group', () => {
+    const renderSidebar = () =>
+      act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+            <Sidebar />
+          </NextIntlClientProvider>,
+        );
+      });
+    const header = (title: string) =>
+      container.querySelector<HTMLButtonElement>(`button[data-nav-group="${title}"]`)!;
+    afterEach(() => {
+      stored.delete('ansvisor.sidebar.group.analyticsOpen');
+    });
+
+    it('folds under its title with the chevron, and is remembered in this browser', async () => {
+      await renderSidebar();
+      expect(header('Analytics').getAttribute('aria-expanded')).toBe('true');
+      expect(container.querySelector('a[href="/dashboard/mentions"]')).not.toBeNull();
+
+      await act(async () => header('Analytics').click());
+      expect(header('Analytics').getAttribute('aria-expanded')).toBe('false');
+      expect(container.querySelector('a[href="/dashboard/mentions"]')).toBeNull();
+      expect(stored.get('ansvisor.sidebar.group.analyticsOpen')).toBe('0');
+      // The other group stays open.
+      expect(container.querySelector('a[href="/dashboard/action-center"]')).not.toBeNull();
+    });
+
+    it('comes back folded, and opens when one of its pages shows', async () => {
+      stored.set('ansvisor.sidebar.group.analyticsOpen', '0');
+      await renderSidebar();
+      expect(header('Analytics').getAttribute('aria-expanded')).toBe('false');
+
+      act(() => root.unmount());
+      root = createRoot(container);
+      nav.pathname = '/dashboard/mentions';
+      await renderSidebar();
+      expect(header('Analytics').getAttribute('aria-expanded')).toBe('true');
+      expect(container.querySelector('a[href="/dashboard/mentions"]')).not.toBeNull();
+    });
+
+    it('shows every item as icons alone, where there are no titles to fold', async () => {
+      stored.set('ansvisor.sidebar.group.analyticsOpen', '0');
+      useSidebarStore.setState({ isCollapsed: true });
+      await renderSidebar();
+      expect(container.querySelector('button[data-nav-group]')).toBeNull();
+      expect(container.querySelector('a[href="/dashboard/mentions"]')).not.toBeNull();
+    });
+  });
 });

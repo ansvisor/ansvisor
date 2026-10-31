@@ -161,10 +161,16 @@ describe('POST /api/action-center/pages', () => {
     );
   });
 
-  it('refuses a caller outside the brand’s organization', async () => {
-    assertBrandAccess.mockRejectedValue(Object.assign(new Error('Unauthorized'), { status: 403 }));
+  it('refuses a caller outside the brand’s organization, with the code', async () => {
+    assertBrandAccess.mockRejectedValue(
+      Object.assign(new Error("This brand isn't in your workspace"), {
+        status: 403,
+        code: 'not_in_workspace',
+      }),
+    );
     const res = await post({ brandId: BRAND, pages: ['/'], reason: 'no_ai_traffic' });
     expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: 'not_in_workspace' });
     expect(sendTrafficPagesToActionCenter).not.toHaveBeenCalled();
   });
 

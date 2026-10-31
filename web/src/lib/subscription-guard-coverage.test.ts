@@ -125,6 +125,13 @@ const OPEN_ROUTES: Record<string, string> = {
   'chat/runs/[id]/answer:POST': 'the engine answers 402 (prepareResume) while read-only',
   'chat/runs/[id]/stop:POST': 'stopping a run starts no cost',
   'chat/files/zip:POST': 'reads only: the picked files as one .zip, nothing kept',
+  // The API server's cron and hooks (CHAT_INTERNAL_SECRET), never a person: the
+  // triggers fire nothing in a read-only workspace, and the agent run driver
+  // starts no run in one (readArmedOrgs, openAgentRun).
+  'internal/chat/agents/tick:POST':
+    "the server's cron; it starts no agent run in a read-only workspace",
+  'internal/chat/agents/signals:POST':
+    "the server's signal hook; it starts no agent run in a read-only workspace",
 };
 
 /** What checks a route's plan before it writes. */
