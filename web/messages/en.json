@@ -4159,10 +4159,20 @@
       "workedWhileAway": "Your agents worked while you were away.",
       "needsYou": "{count, plural, one {# thing needs you} other {# things need you}}",
       "caughtUp": "All caught up.",
-      "dueTasks": "{count, plural, one {# Action Center task is due this week} other {# Action Center tasks are due this week}}",
-      "completeWithChat": "Complete with Chat",
       "completeTasksMessage": "Complete this week's Action Center tasks.",
-      "startFailed": "Couldn't start that. Try again."
+      "startFailed": "Couldn't start that. Try again.",
+      "forYou": {
+        "title": "For you now",
+        "askAnything": "Ask anything",
+        "tasks": "Complete tasks",
+        "tasksCount": "{count} due",
+        "winBack": "Win back citations",
+        "winBackCount": "{count, plural, one {# page} other {# pages}}",
+        "winBackMessage": "Win back the citations we lost on {count, plural, one {# page} other {# pages}}.",
+        "publish": "Ready to publish",
+        "publishMessage": "Get the {count, plural, one {# ready draft} other {# ready drafts}} published.",
+        "more": "More ▾"
+      }
     },
     "inbox": {
       "title": "Inbox",

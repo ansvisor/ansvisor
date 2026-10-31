@@ -8,10 +8,10 @@ import type { ChatListItem } from '@/lib/chat/conversations';
 /**
  * Chat Home and the Inbox (CHAT-01 items 10–12; mockup #s-home, #s-inbox):
  * the greeting by the person's clock, what needs them as a link to the
- * Inbox or "All caught up.", the Action Center line only when tasks are due
- * (singular at 1) with Complete with Chat, which starts the chat and opens
- * it; the Inbox lists needs you, running and unread results with Review,
- * Watch and Open.
+ * Inbox or "All caught up."; "For you now" (CHAT-08 v2): Ask anything and
+ * More always, a job's chip only with something to do, its count from the
+ * brand's data, which starts the chat and opens it; the Inbox lists needs
+ * you, running and unread results with Review, Watch and Open.
  */
 
 const nav = vi.hoisted(() => ({ push: vi.fn() }));
@@ -28,9 +28,14 @@ vi.mock('@/components/providers/upgrade-gate', () => ({
   useUpgradeGate: () => ({ isLocked: false, openUpgrade: vi.fn() }),
 }));
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
-const due = vi.hoisted(() => ({ count: 3 }));
+const due = vi.hoisted(() => ({ count: 3, lostPages: 0, readyDrafts: 0 }));
 vi.mock('@/lib/actions/chat-home', () => ({
   countDueActions: vi.fn(async () => ({ ok: true, count: due.count })),
+  countHomeShortcuts: vi.fn(async () => ({
+    ok: true,
+    lostPages: due.lostPages,
+    readyDrafts: due.readyDrafts,
+  })),
 }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (pick: (s: { activeBrandId: string }) => unknown) =>
@@ -82,6 +87,8 @@ beforeEach(() => {
   nav.push.mockClear();
   list.chats = [];
   due.count = 3;
+  due.lostPages = 0;
+  due.readyDrafts = 0;
 });
 
 afterEach(() => {
@@ -108,7 +115,9 @@ const view = (props: Partial<Parameters<typeof ChatHomeView>[0]> = {}) => (
     inbox={0}
     needsYou={0}
     dueTasks={null}
-    onCompleteTasks={() => undefined}
+    lostPages={null}
+    readyDrafts={null}
+    onAsk={() => undefined}
     starting={false}
     {...props}
   />
@@ -145,21 +154,60 @@ describe('ChatHomeView', () => {
     expect(text()).toContain('All caught up.');
   });
 
-  it('shows the Action Center line only with tasks due, singular at 1', async () => {
-    await render(view({ dueTasks: 0 }));
-    expect(text()).not.toContain('due this week');
-    await render(view({ dueTasks: 1 }));
-    expect(text()).toContain('1 Action Center task is due this week');
-    await render(view({ dueTasks: 4 }));
-    expect(text()).toContain('4 Action Center tasks are due this week');
-    expect(host.querySelector('[data-action="home.completeTasks"]')?.textContent).toBe(
-      'Complete with Chat',
+  it('shows Ask anything and More always, and a job only with something to do', async () => {
+    await render(view({ dueTasks: 0, lostPages: 0, readyDrafts: 0 }));
+    expect(text()).toContain('For you now');
+    expect(host.querySelector('[data-action="home.askAnything"]')?.textContent).toBe(
+      'Ask anything',
     );
+    expect(host.querySelector('[data-action="home.moreShortcuts"]')?.textContent).toBe('More ▾');
+    expect(host.querySelector('[data-action="home.runShortcut"]')).toBeNull();
+    await render(view({ dueTasks: 4, lostPages: 1, readyDrafts: 2 }));
+    expect(
+      [...host.querySelectorAll('[data-action="home.runShortcut"]')].map((b) => b.textContent),
+    ).toEqual(['Complete tasks4 due', 'Win back citations1 page', 'Ready to publish2']);
+  });
+
+  it('asks Chat in each chip’s words', async () => {
+    const onAsk = vi.fn();
+    await render(view({ dueTasks: 4, lostPages: 2, readyDrafts: 1, onAsk }));
+    for (const chip of host.querySelectorAll<HTMLElement>('[data-action="home.runShortcut"]')) {
+      await act(async () => chip.click());
+    }
+    expect(onAsk.mock.calls).toEqual([
+      ["Complete this week's Action Center tasks."],
+      ['Win back the citations we lost on 2 pages.'],
+      ['Get the 1 ready draft published.'],
+    ]);
+  });
+
+  it('puts Ask anything into the composer, and More opens its / menu', async () => {
+    const box = document.createElement('textarea');
+    box.dataset.action = 'composer.input';
+    const slash = document.createElement('button');
+    slash.dataset.action = 'composer.openSlash';
+    const opened = vi.fn();
+    slash.addEventListener('click', opened);
+    document.body.append(box, slash);
+    try {
+      await render(view());
+      await act(async () =>
+        (host.querySelector('[data-action="home.askAnything"]') as HTMLElement).click(),
+      );
+      expect(document.activeElement).toBe(box);
+      await act(async () =>
+        (host.querySelector('[data-action="home.moreShortcuts"]') as HTMLElement).click(),
+      );
+      expect(opened).toHaveBeenCalledTimes(1);
+    } finally {
+      box.remove();
+      slash.remove();
+    }
   });
 });
 
 describe('ChatHome', () => {
-  it('starts Complete with Chat as a new chat and opens it while it works', async () => {
+  it('starts a chip’s job as a new chat and opens it while it works', async () => {
     const calls: { url: string; body: unknown }[] = [];
     globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, body: JSON.parse(String(init?.body)) });
@@ -170,10 +218,8 @@ describe('ChatHome', () => {
     }) as unknown as typeof fetch;
     await render(<ChatHome firstName="Alex" />);
     await act(async () => undefined);
-    expect(text()).toContain('3 Action Center tasks are due this week');
-    await act(async () =>
-      (host.querySelector('[data-action="home.completeTasks"]') as HTMLElement).click(),
-    );
+    expect(text()).toContain('Complete tasks3 due');
+    await act(async () => (host.querySelector('[data-skill="tasks"]') as HTMLElement).click());
     expect(calls[0]).toMatchObject({
       url: '/api/chat/runs',
       body: {
