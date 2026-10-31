@@ -78,6 +78,7 @@ import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 import { refreshCloroCountries } from './lib/cloro-countries.js';
 import { chatAgenticDeployed } from './lib/chat-flag.js';
 import { startModelPriceSync } from './lib/model-prices.js';
+import { startImpactLedger } from './lib/impact-ledger/job.js';
 
 // Before anything starts: a stray rejection is logged, not a crash.
 handleProcessErrors();
@@ -845,6 +846,10 @@ server.listen(PORT, async () => {
   // read from improve-cost.js's own table, as before.
   if (chatAgenticDeployed()) {
     startModelPriceSync().catch((err) => logger.error({ err }, '[model-prices] start failed'));
+    // The impact ledger (CHAT-22 §2): each shipped change measured at 7,
+    // 14, 30 and 90 days against a control set, nightly, from the Insights
+    // rollups only (no engine query, no model call).
+    startImpactLedger();
   }
 
   if (!isCloud()) {

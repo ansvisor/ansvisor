@@ -60,6 +60,13 @@ vi.mock('../config/supabase.js', () => ({
 vi.mock('./logger.js', () => ({
   logger: { warn: (...args) => events.push(args), error: () => {} },
 }));
+const shipped = [];
+vi.mock('./impact-ledger/ship.js', () => ({
+  recordCmsPublish: async (args) => {
+    shipped.push(args);
+    return 'ship-1';
+  },
+}));
 
 const { liveAddress, markDeliveryPublished, publishDraft, publishDraftForKeyUser } =
   await import('./content-published.js');
@@ -97,6 +104,7 @@ beforeEach(() => {
   };
   rpcs.length = 0;
   events.length = 0;
+  shipped.length = 0;
 });
 
 describe('liveAddress', () => {
@@ -354,5 +362,22 @@ describe('markDeliveryPublished', () => {
     expect(tables.actions[0].payload.publishedPages).toEqual({ dr1: LIVE });
     expect(tables.action_tasks[0].status).toBe('completed');
     expect(tables.action_events[0].actor_id).toBeNull();
+  });
+
+  it('puts the publish into the impact ledger once the delivery is published, and not again', async () => {
+    tables.content_draft_deliveries = [{ id: 'x1', draft_id: 'dr1', status: 'sent' }];
+    await markDeliveryPublished(
+      { id: 'x1', draft_id: 'dr1', status: 'sent', published_url: null },
+      LIVE,
+    );
+    expect(shipped).toEqual([
+      { deliveryId: 'x1', url: LIVE, publishedAt: tables.content_draft_deliveries[0].published_at },
+    ]);
+    // Confirmed again at the same address: nothing new shipped.
+    await markDeliveryPublished(
+      { id: 'x1', draft_id: 'dr1', status: 'published', published_url: LIVE },
+      LIVE,
+    );
+    expect(shipped).toHaveLength(1);
   });
 });
