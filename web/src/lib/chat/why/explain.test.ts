@@ -315,6 +315,53 @@ describe('explainChange', () => {
     expect(result.unexplained.share).toBeNull();
   });
 
+  it('fills a cause’s table by the way the cell moved: own page then rival, or rival then own', () => {
+    const found = new Map<string, CellEvidence>([
+      [
+        'lost|chatgpt',
+        evidence({
+          prompt: 'best aeo tool',
+          ownCitedA: ['acme.example/pricing'],
+          competitorCitedB: ['rival.example/pricing'],
+        }),
+      ],
+      // Better: the rival left; the brand's page stayed cited.
+      [
+        'left|chatgpt',
+        evidence({
+          prompt: 'aeo for shops',
+          ownCitedA: ['acme.example/guide'],
+          ownCitedB: ['acme.example/guide'],
+          competitorCitedA: ['rival.example/guide'],
+          competitorRateA: 0.6,
+          competitorRateB: 0,
+        }),
+      ],
+    ]);
+    const result = explain(
+      [
+        cell('lost|chatgpt', counts(10, 10), counts(2, 10)),
+        cell('left|chatgpt', counts(2, 10), counts(9, 10)),
+      ],
+      found,
+    );
+    const rowsOf = (kind: string) => result.causes.find((c) => c.kind === kind)?.rows;
+    expect(rowsOf('lost_citation_to_competitor')).toEqual([
+      expect.objectContaining({
+        prompt: 'best aeo tool',
+        before: 'acme.example/pricing',
+        now: 'rival.example/pricing',
+      }),
+    ]);
+    expect(rowsOf('competitor_left')).toEqual([
+      expect.objectContaining({
+        prompt: 'aeo for shops',
+        before: 'rival.example/guide',
+        now: 'acme.example/guide',
+      }),
+    ]);
+  });
+
   it('shows 5 bars at most, "other" one of them', () => {
     const kinds: [string, Partial<CellEvidence>][] = [
       [

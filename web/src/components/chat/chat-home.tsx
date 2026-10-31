@@ -10,6 +10,7 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Button } from '@/components/ui/button';
 import { countDueActions, readSinceYouLeft } from '@/lib/actions/chat-home';
 import { dayPartOf, endOfWeek } from '@/lib/chat/home';
+import { formatNumber } from '@/lib/format';
 import type { SinceMove, SinceYouLeft } from '@/lib/chat/since';
 import { platformName } from '@/lib/signals/names';
 import { cn } from '@/lib/utils';
@@ -104,7 +105,7 @@ function SinceBlock({
           )}
         >
           <Arrow aria-hidden="true" className="h-[13px] w-[13px] shrink-0" strokeWidth={2.25} />
-          <span aria-hidden="true">{count}</span>
+          <span aria-hidden="true">{formatNumber(count)}</span>
           <span className="sr-only">{t(kind === 'drop' ? 'down' : 'up', { count })}</span>
         </span>
         <button
@@ -274,9 +275,13 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
   useEffect(() => {
     if (!brandId) return;
     let current = true;
-    void readSinceYouLeft(brandId).then((result) => {
-      if (current) setSince(result.ok && result.since ? { brandId, since: result.since } : null);
-    });
+    void readSinceYouLeft(brandId)
+      .then((result) => {
+        if (current) setSince(result.ok && result.since ? { brandId, since: result.since } : null);
+      })
+      .catch(() => {
+        if (current) setSince(null);
+      });
     return () => {
       current = false;
     };

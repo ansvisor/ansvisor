@@ -34,9 +34,29 @@ describe('sincePeriods', () => {
   });
 });
 
-const cells = (engine: string, a: [number, number], b: [number, number]): SinceCell[] => [
-  { engine, period: 'a', answers: a[0], citationAnswers: a[1] },
-  { engine, period: 'b', answers: b[0], citationAnswers: b[1] },
+/** A prompt's cell on one engine, both periods: [answers, citing answers] each, 7 runs. */
+const cells = (
+  engine: string,
+  a: [number, number],
+  b: [number, number],
+  prompt = 'p1',
+): SinceCell[] => [
+  {
+    key: `${prompt}|${engine}`,
+    engine,
+    period: 'a',
+    runs: 7,
+    answers: a[0],
+    citationAnswers: a[1],
+  },
+  {
+    key: `${prompt}|${engine}`,
+    engine,
+    period: 'b',
+    runs: 7,
+    answers: b[0],
+    citationAnswers: b[1],
+  },
 ];
 
 describe('sinceMoves', () => {
@@ -47,7 +67,7 @@ describe('sinceMoves', () => {
         ...cells('gpt-5', [200, 30], [200, 50]),
         ...cells('perplexity', [200, 50], [200, 30]),
         // Two prompts of one engine add up.
-        ...cells('perplexity', [100, 10], [100, 5]),
+        ...cells('perplexity', [100, 10], [100, 5], 'p2'),
       ]),
     ).toEqual({
       drop: { engine: 'perplexity', before: 60, now: 35 },
@@ -65,12 +85,26 @@ describe('sinceMoves', () => {
     ).toEqual({ drop: null, win: null });
   });
 
-  it('leaves out an engine tracked in only one period', () => {
+  it('counts only the cells tracked in both periods, so a prompt dropped isn’t a drop', () => {
+    const only = (key: string, period: 'a' | 'b', answers: number, cited: number): SinceCell => ({
+      key,
+      engine: 'gpt-5',
+      period,
+      runs: 7,
+      answers,
+      citationAnswers: cited,
+    });
     expect(
       sinceMoves([
-        { engine: 'grok', period: 'b', answers: 200, citationAnswers: 50 },
-        { engine: 'gemini', period: 'a', answers: 200, citationAnswers: 50 },
+        // The same prompt, flat; another, citing well, tracked before only.
+        ...cells('gpt-5', [200, 40], [200, 40]),
+        only('p2|gpt-5', 'a', 200, 150),
+        // An engine tracked in one period only.
+        only('p3|grok', 'b', 200, 50),
       ]),
     ).toEqual({ drop: null, win: null });
+    // Too few runs in a period is too little to compare.
+    const thin = cells('gpt-5', [200, 120], [200, 20]).map((c) => ({ ...c, runs: 2 }));
+    expect(sinceMoves(thin)).toEqual({ drop: null, win: null });
   });
 });

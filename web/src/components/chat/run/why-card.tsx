@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   Sheet,
@@ -25,17 +25,33 @@ import { cn } from '@/lib/utils';
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** A day as kept (YYYY-MM-DD); anything else, from a row an older version kept, isn't one. */
+const isDay = (iso: string | null | undefined): iso is string =>
+  typeof iso === 'string' && /^\d{4}-\d{2}-\d{2}/.test(iso) && !Number.isNaN(Date.parse(iso));
 const day = (iso: string) =>
-  new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
+  isDay(iso)
+    ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'UTC',
+      })
+    : '';
 const span = (period: { from: string; to: string }) =>
-  period.from === period.to ? day(period.from) : `${day(period.from)} – ${day(period.to)}`;
+  !isDay(period.from) || !isDay(period.to)
+    ? '—'
+    : period.from === period.to
+      ? day(period.from)
+      : `${day(period.from)} – ${day(period.to)}`;
 const daysOf = (period: { from: string; to: string }) =>
-  Math.round((Date.parse(period.to) - Date.parse(period.from)) / DAY_MS) + 1;
+  isDay(period.from) && isDay(period.to)
+    ? Math.round((Date.parse(period.to) - Date.parse(period.from)) / DAY_MS) + 1
+    : null;
 const one = (value: number) => (Math.round(Math.abs(value) * 10) / 10).toString();
+/** A change with its sign, none at zero ("0", never "+0" or "−0"). */
+const signed = (value: number) => {
+  const size = one(value);
+  return size === '0' ? size : `${value < 0 ? '−' : '+'}${size}`;
+};
 
 /**
  * A cause's row (mockup `.czh`): its share, its words, how sure, the caret.
@@ -65,6 +81,8 @@ export function WhyCard({ runId, why }: { runId: string; why: ChatWhy }) {
   const [open, setOpen] = useState<number | null>(why.causes.length > 0 ? 0 : null);
   const [drawer, setDrawer] = useState<Drawer | null>(null);
   const [answer, setAnswer] = useState<WhyAnswer | 'loading' | 'failed' | null>(null);
+  // The answer asked for last: an earlier one that comes back later is dropped.
+  const asking = useRef<AbortController | null>(null);
 
   const metric = t(`metrics.${why.metric}`);
   const label =
@@ -73,18 +91,29 @@ export function WhyCard({ runId, why }: { runId: string; why: ChatWhy }) {
       : metric;
   const unit = t(`units.${why.unit}`);
   const declined = why.direction === 'declined';
-  const delta = why.delta === null ? null : `${why.delta < 0 ? '−' : '+'}${one(why.delta)} ${unit}`;
+  const delta = why.delta === null ? null : `${signed(why.delta)} ${unit}`;
+  const days = daysOf(why.periodB);
 
   async function openAnswer(cause: number, row: number, prompt: string) {
+    asking.current?.abort();
+    const ask = new AbortController();
+    asking.current = ask;
     setDrawer({ kind: 'answer', cause, row, prompt });
     setAnswer('loading');
     try {
-      const res = await fetch(`/api/chat/runs/${runId}/why/${why.n}/${cause}/${row}`);
+      const res = await fetch(`/api/chat/runs/${runId}/why/${why.n}/${cause}/${row}`, {
+        signal: ask.signal,
+      });
       const body = res.ok ? ((await res.json()) as { answer?: WhyAnswer }) : null;
-      setAnswer(body?.answer ?? 'failed');
+      if (!ask.signal.aborted) setAnswer(body?.answer ?? 'failed');
     } catch {
-      setAnswer('failed');
+      if (!ask.signal.aborted) setAnswer('failed');
     }
+  }
+
+  function closeDrawer() {
+    asking.current?.abort();
+    setDrawer(null);
   }
 
   return (
@@ -112,7 +141,9 @@ export function WhyCard({ runId, why }: { runId: string; why: ChatWhy }) {
               )}
             >
               {declined ? '▼' : why.direction === 'improved' ? '▲' : ''}{' '}
-              {t('change', { delta: `${one(why.delta!)} ${unit}`, days: daysOf(why.periodB) })}
+              {days === null
+                ? `${one(why.delta!)} ${unit}`
+                : t('change', { delta: `${one(why.delta!)} ${unit}`, days })}
             </span>
           )}
         </b>
@@ -125,6 +156,7 @@ export function WhyCard({ runId, why }: { runId: string; why: ChatWhy }) {
             : t('notEnoughData')}
         </p>
       )}
+      {why.partial && <p className="mb-2 text-[12.5px] text-muted-foreground">{t('partial')}</p>}
 
       {delta && (
         <div className="mt-4 mb-2 text-[11px] font-medium tracking-[.4px] text-muted-foreground uppercase">
@@ -162,7 +194,7 @@ export function WhyCard({ runId, why }: { runId: string; why: ChatWhy }) {
         {t('detection')}
       </span>
 
-      <Sheet open={drawer !== null} onOpenChange={(next) => !next && setDrawer(null)}>
+      <Sheet open={drawer !== null} onOpenChange={(next) => !next && closeDrawer()}>
         <SheetContent side="right" className="w-full sm:max-w-[420px]">
           {drawer?.kind === 'total' && (
             <>
@@ -171,7 +203,11 @@ export function WhyCard({ runId, why }: { runId: string; why: ChatWhy }) {
                   {label} · {why.valueA ?? '—'} → {why.valueB ?? '—'}
                 </SheetTitle>
                 <SheetDescription>
-                  {t('totalSub', { runs: why.runs.a + why.runs.b, cells: why.runs.cells })}
+                  {t('totalSub', {
+                    runs: why.runs.a + why.runs.b,
+                    cells: why.runs.cells,
+                    kind: why.metric === 'visibility' ? 'prompts' : 'pairs',
+                  })}
                 </SheetDescription>
               </SheetHeader>
               <dl className="grid grid-cols-[120px_1fr] gap-x-2.5 gap-y-1.5 px-4 text-[12.5px]">
@@ -211,7 +247,7 @@ export function WhyCard({ runId, why }: { runId: string; why: ChatWhy }) {
                       part.mark ? (
                         <mark
                           key={i}
-                          className="rounded-sm bg-amber-100 px-0.5 dark:bg-amber-500/25"
+                          className="rounded-sm bg-amber-100 px-0.5 text-amber-900 dark:bg-amber-500/25 dark:text-amber-200"
                         >
                           {part.text}
                         </mark>
@@ -219,9 +255,9 @@ export function WhyCard({ runId, why }: { runId: string; why: ChatWhy }) {
                         <span key={i}>{part.text}</span>
                       ),
                     )}
-                    {answer.citations.map((citation) => (
+                    {answer.citations.map((citation, i) => (
                       <span
-                        key={citation.url}
+                        key={`${i}-${citation.url}`}
                         title={citation.url}
                         className={cn(
                           'mt-1 block truncate font-mono text-[11.5px]',
@@ -247,7 +283,7 @@ function Share({ share, points }: { share: number | null; points: number }) {
   return (
     <span>
       <b className="block text-[17px] tracking-[-.3px] tabular-nums">
-        {share === null ? `${points > 0 ? '+' : '−'}${one(points)}` : `${share}%`}
+        {share === null ? signed(points) : `${share}%`}
       </b>
       <i className="relative mt-1 block h-1.5 overflow-hidden rounded-full bg-muted">
         <i
@@ -277,6 +313,7 @@ function CauseRow({
   const t = useTranslations('chatWhy');
   const page = pathOf(cause.urls[0]);
   const title = t(`kinds.${cause.kind}`, { page });
+  const confidence = t(`confidence.${cause.confidence}`);
   const now = cause.rows.find((row) => row.now)?.now;
   const citing = cause.rows.filter((row) => row.now === now).length;
   const sub = [
@@ -309,6 +346,15 @@ function CauseRow({
           <em className="block truncate text-xs text-muted-foreground not-italic" title={sub}>
             {sub}
           </em>
+          {/* A narrow card (the side panel) says how sure under the words. */}
+          <span
+            className={cn(
+              'mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] whitespace-nowrap @xl:hidden',
+              CONFIDENCE[cause.confidence],
+            )}
+          >
+            {confidence}
+          </span>
         </span>
         <span
           className={cn(
@@ -316,7 +362,7 @@ function CauseRow({
             CONFIDENCE[cause.confidence],
           )}
         >
-          {t(`confidence.${cause.confidence}`)}
+          {confidence}
         </span>
         <span
           aria-hidden="true"
@@ -330,45 +376,58 @@ function CauseRow({
       </button>
       <div id={id} hidden={!open} className="px-3 pb-3">
         {cause.rows.length > 0 ? (
-          <div className="overflow-hidden rounded-xl border text-[12.5px]">
-            <div className="grid grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.25fr)_52px_74px] items-center gap-2.5 bg-muted/50 px-2.5 py-[7px] text-[11px] tracking-[.3px] text-muted-foreground uppercase">
-              <span>{t('prompt')}</span>
-              <span>{t('citedBefore')}</span>
-              <span>{t('citedNow')}</span>
-              <span>{t('date')}</span>
-              <span />
+          <div
+            role="table"
+            aria-label={title}
+            className="overflow-hidden rounded-xl border text-[12.5px]"
+          >
+            <div
+              role="row"
+              className="grid grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.25fr)_52px_74px] items-center gap-2.5 bg-muted/50 px-2.5 py-[7px] text-[11px] tracking-[.3px] text-muted-foreground uppercase"
+            >
+              <span role="columnheader">{t('prompt')}</span>
+              <span role="columnheader">{t('citedBefore')}</span>
+              <span role="columnheader">{t('citedNow')}</span>
+              <span role="columnheader">{t('date')}</span>
+              <span role="columnheader">
+                <span className="sr-only">{t('answer')}</span>
+              </span>
             </div>
             {cause.rows.map((row, i) => (
               <div
                 key={i}
+                role="row"
                 className="grid grid-cols-[minmax(0,1.35fr)_minmax(0,1.35fr)_minmax(0,1.25fr)_52px_74px] items-center gap-2.5 border-t px-2.5 py-[7px]"
               >
-                <span className="truncate" title={row.prompt}>
+                <span role="cell" className="truncate" title={row.prompt}>
                   {row.prompt}
                 </span>
-                <span className="truncate" title={row.before ?? undefined}>
+                <span role="cell" className="truncate" title={row.before ?? undefined}>
                   <code className="text-[11.5px] text-muted-foreground">
                     {row.before ?? t('notCited')}
                   </code>
                 </span>
-                <span className="truncate" title={row.now ?? undefined}>
+                <span role="cell" className="truncate" title={row.now ?? undefined}>
                   <code className="text-[11.5px] text-muted-foreground">
                     {row.now ?? t('notCited')}
                   </code>
                 </span>
-                <span className="truncate">{row.date ? day(row.date) : ''}</span>
-                {row.answer ? (
-                  <button
-                    type="button"
-                    data-action="why.openEvidence"
-                    onClick={() => onAnswer(i, row.prompt)}
-                    className="rounded-full border px-2.5 py-0.5 text-xs hover:border-foreground"
-                  >
-                    {t('answer')}
-                  </button>
-                ) : (
-                  <span />
-                )}
+                <span role="cell" className="truncate">
+                  {row.date ? day(row.date) : ''}
+                </span>
+                <span role="cell">
+                  {row.answer && (
+                    <button
+                      type="button"
+                      data-action="why.openEvidence"
+                      aria-label={t('openAnswer', { prompt: row.prompt })}
+                      onClick={() => onAnswer(i, row.prompt)}
+                      className="rounded-full border px-2.5 py-0.5 text-xs hover:border-foreground"
+                    >
+                      {t('answer')}
+                    </button>
+                  )}
+                </span>
               </div>
             ))}
           </div>

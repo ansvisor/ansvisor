@@ -74,9 +74,12 @@ export async function countDueActions(brandId: string, through: string): Promise
 export type SinceResult = { ok: true; since: SinceYouLeft | null } | { ok: false };
 
 interface SinceRpcCell {
+  prompt_id: string;
   platform: string | null;
   model_used: string | null;
+  region: string | null;
   period: 'a' | 'b';
+  runs: number;
   answers: number;
   citation_answers: number;
 }
@@ -133,8 +136,12 @@ export async function readSinceYouLeft(brandId: string): Promise<SinceResult> {
       cells
         .filter((cell) => !LEFT_OUT_PLATFORMS.has(cell.platform ?? ''))
         .map((cell) => ({
+          key: [cell.prompt_id, cell.platform ?? '', cell.model_used ?? '', cell.region ?? ''].join(
+            '|',
+          ),
           engine: cell.model_used ?? cell.platform ?? 'unknown',
           period: cell.period,
+          runs: Number(cell.runs) || 0,
           answers: Number(cell.answers) || 0,
           citationAnswers: Number(cell.citation_answers) || 0,
         })),

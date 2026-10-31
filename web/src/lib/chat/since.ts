@@ -1,10 +1,12 @@
-import { changeSe } from './why/explain';
+import { MIN_RUNS, changeSe } from './why/explain';
 
 /**
  * Chat Home's "Since you left" (CHAT-22 §1, mockup #s-home `.since`): the
  * brand's citations per engine from the day the person last left Home to
  * yesterday, against as many days before, from the tracking counts Why did
- * it move reads (chat_why_cells, 00423). The engine whose citations fell
+ * it move reads (chat_why_cells, 00423), on the cells (prompt, engine,
+ * location) tracked in both periods with enough runs, as Why's stable set:
+ * a prompt added or dropped isn't a move. The engine whose citations fell
  * most and the one whose rose most, each only when its citation rate moved
  * beyond normal swing as Why counts it, so fewer runs alone isn't a drop.
  * UTC days, as the counts keep them. Pure.
@@ -37,10 +39,14 @@ export interface SinceYouLeft {
   win: SinceMove | null;
 }
 
-/** One engine's counts in a period, as chat_why_cells gives them per prompt and location. */
+/** One cell's counts in a period, as chat_why_cells gives them: a prompt on one engine at one location. */
 export interface SinceCell {
+  /** The prompt, engine and location: the same cell in both periods. */
+  key: string;
   engine: string;
   period: 'a' | 'b';
+  /** Tracked day rows, and the answers among them. */
+  runs: number;
   answers: number;
   citationAnswers: number;
 }
@@ -68,17 +74,25 @@ export function sincePeriods(seenAt: string, now: number): SincePeriods | null {
 
 /** The biggest drop and the biggest win in citations, by engine; null for either without one. */
 export function sinceMoves(cells: SinceCell[]): Pick<SinceYouLeft, 'drop' | 'win'> {
-  const engines = new Map<string, Record<'a' | 'b', { num: number; den: number }>>();
+  // Only cells tracked in both periods with enough runs in each, as Why's
+  // stable set: a prompt or a location added or dropped isn't a drop.
+  const byKey = new Map<string, Partial<Record<'a' | 'b', SinceCell>>>();
   for (const cell of cells) {
-    const counts = engines.get(cell.engine) ?? { a: { num: 0, den: 0 }, b: { num: 0, den: 0 } };
-    counts[cell.period].num += cell.citationAnswers;
-    counts[cell.period].den += cell.answers;
-    engines.set(cell.engine, counts);
+    byKey.set(cell.key, { ...byKey.get(cell.key), [cell.period]: cell });
+  }
+  const engines = new Map<string, Record<'a' | 'b', { num: number; den: number }>>();
+  for (const { a, b } of byKey.values()) {
+    if (!a || !b || a.runs < MIN_RUNS || b.runs < MIN_RUNS || !a.answers || !b.answers) continue;
+    const counts = engines.get(a.engine) ?? { a: { num: 0, den: 0 }, b: { num: 0, den: 0 } };
+    counts.a.num += a.citationAnswers;
+    counts.a.den += a.answers;
+    counts.b.num += b.citationAnswers;
+    counts.b.den += b.answers;
+    engines.set(a.engine, counts);
   }
   let drop: SinceMove | null = null;
   let win: SinceMove | null = null;
   for (const [engine, { a, b }] of engines) {
-    // Tracked in both periods: an engine added or dropped isn't a move.
     if (a.den <= 0 || b.den <= 0) continue;
     const se = changeSe('citations', [a], [b]);
     const rate = (b.num / b.den - a.num / a.den) * 100;

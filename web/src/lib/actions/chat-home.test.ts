@@ -113,6 +113,7 @@ describe('readSinceYouLeft', () => {
     model_used: engine,
     region: null,
     period,
+    runs: 7,
     answers,
     citation_answers: cited,
   });

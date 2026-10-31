@@ -56,19 +56,25 @@ export interface ChatWhy {
 
 const cleanUrl = (url: string) => url.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
 
-/** The analysis a run kept, as its card shows it. */
+const NO_PERIOD = { from: '', to: '' };
+
+/**
+ * The analysis a run kept, as its card shows it. A row kept by an older
+ * version may lack a part: it reads as none, never as an error.
+ */
 export function whyView(
   n: number,
   result: WhyResult,
   scope: { engines?: unknown; runs_compared?: unknown } = {},
 ): ChatWhy {
-  const runs = (scope.runs_compared ?? {}) as { a?: number; b?: number; cells?: number };
+  const runs = (scope?.runs_compared ?? {}) as { a?: number; b?: number; cells?: number };
+  const unexplained = result.unexplained ?? { kind: 'unexplained', contribution: 0, share: null };
   return {
     n,
     metric: result.metric,
     unit: result.unit,
-    periodA: result.period_a,
-    periodB: result.period_b,
+    periodA: result.period_a ?? NO_PERIOD,
+    periodB: result.period_b ?? NO_PERIOD,
     valueA: result.value_a,
     valueB: result.value_b,
     delta: result.delta,
@@ -76,7 +82,7 @@ export function whyView(
     noise: result.noise_verdict,
     direction: result.direction,
     changeDay: result.change_point?.date ?? null,
-    causes: result.causes.map((cause) => ({
+    causes: (result.causes ?? []).map((cause) => ({
       kind: cause.kind,
       share: cause.share,
       points: cause.contribution,
@@ -93,14 +99,14 @@ export function whyView(
       })),
     })),
     remainder: {
-      kind: result.unexplained.kind,
-      points: result.unexplained.contribution,
-      share: result.unexplained.share,
+      kind: unexplained.kind,
+      points: unexplained.contribution ?? 0,
+      share: unexplained.share ?? null,
     },
-    excludedCells: result.excluded_cells,
-    stableCells: result.stable_cells,
-    partial: result.evidence_partial,
-    engines: Array.isArray(scope.engines) ? (scope.engines as string[]) : [],
+    excludedCells: result.excluded_cells ?? 0,
+    stableCells: result.stable_cells ?? 0,
+    partial: result.evidence_partial === true,
+    engines: Array.isArray(scope?.engines) ? (scope.engines as string[]) : [],
     runs: { a: runs.a ?? 0, b: runs.b ?? 0, cells: runs.cells ?? 0 },
   };
 }

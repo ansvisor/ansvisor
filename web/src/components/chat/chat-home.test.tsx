@@ -172,7 +172,7 @@ describe('Since you left', () => {
   it('shows the biggest drop with Why?, then one win with Which ones?', async () => {
     await render(view({ since: SINCE }));
     expect(text()).toContain('Since you left');
-    expect(text()).toContain('Oct 19 → today');
+    expect(text()).toContain('Oct 19 → yesterday');
     expect(text()).toContain('Google AI Overviews citations');
     expect(text()).toContain('down 20');
     expect(text()).toContain('One win');
@@ -180,6 +180,16 @@ describe('Since you left', () => {
     expect(text()).toContain('up 14');
     expect(host.querySelector('[data-action="why.open"]')?.textContent).toBe('Why?');
     expect(host.querySelector('[data-action="win.open"]')?.textContent).toBe('Which ones?');
+  });
+
+  it('writes a big move with thousands', async () => {
+    await render(
+      view({ since: { ...SINCE, drop: { engine: 'google-aio', before: 1500, now: 266 } } }),
+    );
+    expect(text()).toContain('down 1,234');
+    expect(
+      host.querySelector('[data-action="why.open"]')?.previousElementSibling?.textContent,
+    ).toContain('1,234');
   });
 
   it('says "Since you left" over a win alone, and nothing without a move', async () => {

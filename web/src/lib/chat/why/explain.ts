@@ -350,19 +350,22 @@ export function cellCause(
   return causeOf(evidence, worse);
 }
 
-/** A cell's row for its cause's table. */
-function rowOf(evidence: CellEvidence, kind: CauseKind): CauseRow | null {
+/**
+ * A cell's row for its cause's table, by the way the cell moved (`worse`,
+ * as cellCause has it): a loss shows the own page cited before and what is
+ * cited now; a gain the competitor's page cited before and the own page now.
+ */
+function rowOf(evidence: CellEvidence, worse: boolean): CauseRow | null {
   if (!evidence.prompt) return null;
   const latest = evidence.answersB[0] ?? null;
-  const gained = kind === 'won_citation_from_competitor' || kind === 'gained_citation';
   return {
     prompt: evidence.prompt,
-    before: gained
-      ? (evidence.competitorCitedA[0] ?? null)
-      : (minus(evidence.ownCitedA, evidence.ownCitedB)[0] ?? evidence.ownCitedA[0] ?? null),
-    now: gained
-      ? (minus(evidence.ownCitedB, evidence.ownCitedA)[0] ?? evidence.ownCitedB[0] ?? null)
-      : (evidence.competitorCitedB[0] ?? evidence.ownCitedB[0] ?? null),
+    before: worse
+      ? (minus(evidence.ownCitedA, evidence.ownCitedB)[0] ?? evidence.ownCitedA[0] ?? null)
+      : (evidence.competitorCitedA[0] ?? null),
+    now: worse
+      ? (evidence.competitorCitedB[0] ?? evidence.ownCitedB[0] ?? null)
+      : (minus(evidence.ownCitedB, evidence.ownCitedA)[0] ?? evidence.ownCitedB[0] ?? null),
     date: latest?.date ?? null,
     answer: latest,
   };
@@ -586,7 +589,8 @@ export function explainChange(input: {
     const own = weight * (rateB - rateA) * scale;
     if (own === 0) continue;
     const found = input.evidence.get(cell.key);
-    const cause = cellCause(found, (rateB - rateA) * sign < 0);
+    const worse = (rateB - rateA) * sign < 0;
+    const cause = cellCause(found, worse);
     if (!cause || !found) continue;
     const entry = byKind.get(cause.kind) ?? {
       contribution: 0,
@@ -595,7 +599,7 @@ export function explainChange(input: {
       urls: new Set<string>(),
       rows: [],
     };
-    const row = rowOf(found, cause.kind);
+    const row = rowOf(found, worse);
     if (row && entry.rows.length < MAX_REFS) entry.rows.push(row);
     entry.contribution += own;
     entry.cells += 1;

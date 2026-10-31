@@ -399,6 +399,43 @@ describe('loadChatThread, next moves', () => {
     expect(JSON.stringify(why)).not.toContain('answer-secret');
   });
 
+  it('leaves out an analysis it can’t show, keeping the next one’s place for its drawer', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    fake.db.tables.chat_why_analyses = [
+      // Kept broken, or by a version that kept another shape.
+      {
+        id: 'w1',
+        run_id: 'r1',
+        scope_json: null,
+        result_json: null,
+        created_at: '2026-10-30T09:00:02.000Z',
+      },
+      {
+        id: 'w2',
+        run_id: 'r1',
+        scope_json: null,
+        // Old enough to lack most parts: they read as none.
+        result_json: { metric: 'citations', unit: 'pts', value_a: 40, value_b: 35, delta: -5 },
+        created_at: '2026-10-30T09:00:03.000Z',
+      },
+    ];
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].text).toBe('Two pages lost most of it.');
+    const why = thread!.messages[1].run!.why;
+    expect(why).toHaveLength(1);
+    expect(why[0]).toMatchObject({
+      n: 2,
+      valueA: 40,
+      causes: [],
+      periodB: { from: '', to: '' },
+      remainder: { points: 0, share: null },
+      partial: false,
+      engines: [],
+    });
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
   it('opens the chat without Why cards when they can’t be read', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     fake.db.failures.chat_why_analyses = { message: 'relation does not exist' };

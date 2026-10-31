@@ -70,7 +70,8 @@ export async function readWhyAnswer(
     .from('chat_why_analyses')
     .select('brand_id, result_json')
     .eq('run_id', runId)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
   if (error) throw new Error(`Could not read the analysis: ${error.message}`);
   const analysis = (data ?? [])[n - 1] as unknown as
     | { brand_id: string; result_json: WhyResult }
@@ -85,7 +86,8 @@ export async function readWhyAnswer(
       .eq('id', ref.id)
       .eq('brand_id', analysis.brand_id)
       .maybeSingle(),
-    supabaseAdmin.from('brands').select('name, domain').eq('id', analysis.brand_id).maybeSingle(),
+    // The brand's sites are its brand_domains: brands has no domain column.
+    supabaseAdmin.from('brands').select('name').eq('id', analysis.brand_id).maybeSingle(),
     supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', analysis.brand_id),
   ]);
   if (answer.error) throw new Error(`Could not read the answer: ${answer.error.message}`);
@@ -98,11 +100,8 @@ export async function readWhyAnswer(
   } | null;
   if (!row) return null;
   const name = (brand.data as { name?: string } | null)?.name ?? '';
-  const own = [
-    (brand.data as { domain?: string | null } | null)?.domain,
-    ...((domains.data ?? []) as { domain: string }[]).map((d) => d.domain),
-  ]
-    .map((d) => (d ? hostOf(d.includes('://') ? d : `https://${d}`) : null))
+  const own = ((domains.data ?? []) as { domain: string | null }[])
+    .map(({ domain: d }) => (d ? hostOf(d.includes('://') ? d : `https://${d}`) : null))
     .filter((d): d is string => !!d);
   return {
     engine: row.model_used ?? row.platform ?? '',

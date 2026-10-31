@@ -204,7 +204,8 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
           .from('chat_why_analyses')
           .select('run_id, scope_json, result_json')
           .in('run_id', runIds)
-          .order('created_at', { ascending: true }),
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true }),
       ])
     : [
         { data: [], error: null },
@@ -220,16 +221,26 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   // A failed read of the analyses loses their cards, not the chat.
   if (whys.error)
     console.error("[chat/thread] could not read the chat's Why analyses:", whys.error.message);
+  // Each analysis keeps its place in its run (the drawer's route finds it by
+  // that n); one that can't be shown is left out, not the chat.
   const whyByRun = new Map<string, ChatWhy[]>();
+  const whyCount = new Map<string, number>();
   for (const row of (whys.error ? [] : (whys.data ?? [])) as unknown as {
     run_id: string | null;
     scope_json: Record<string, unknown>;
     result_json: WhyResult;
   }[]) {
     if (!row.run_id) continue;
-    const list = whyByRun.get(row.run_id) ?? [];
-    list.push(whyView(list.length + 1, row.result_json, row.scope_json));
-    whyByRun.set(row.run_id, list);
+    const n = (whyCount.get(row.run_id) ?? 0) + 1;
+    whyCount.set(row.run_id, n);
+    try {
+      whyByRun.set(row.run_id, [
+        ...(whyByRun.get(row.run_id) ?? []),
+        whyView(n, row.result_json, row.scope_json),
+      ]);
+    } catch (error) {
+      console.error('[chat/thread] could not show a Why analysis:', error);
+    }
   }
   const movesByRun = new Map<string, ChatNextMove[]>();
   for (const m of (moves.error ? [] : (moves.data ?? [])) as NextMoveRow[]) {
