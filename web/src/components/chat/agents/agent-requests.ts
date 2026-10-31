@@ -18,6 +18,10 @@ export type AgentRefused = {
   /** The server's words for a plain refusal ("This agent is archived…"); null for none. */
   message: string | null;
   denial: ChatDenialCard | null;
+  /** The refusal's code (`name_taken`, `plan_locked`…); null when none came back. */
+  code: string | null;
+  /** What a denial refused (chatAgents.asked: `fullAuto`, `workspace`…); null for none. */
+  asked: string | null;
 };
 
 /** A change of state, as its route is named. */
@@ -70,6 +74,8 @@ async function send<T>(url: string, init: RequestInit): Promise<({ ok: true } & 
     // A 500's words are the log's, not the person's.
     message: res && res.status < 500 && typeof body?.error === 'string' ? body.error : null,
     denial: (body?.denial as ChatDenialCard | undefined) ?? null,
+    code: typeof body?.code === 'string' ? body.code : null,
+    asked: typeof body?.asked === 'string' ? body.asked : null,
   };
 }
 
@@ -84,3 +90,17 @@ export const duplicateAgent = (id: string) =>
 /** Run now: each brand's run, queued. */
 export const runAgentNow = (id: string) =>
   send<{ runs: RunNowItem[] }>(`/api/chat/agents/${id}/run`, { body: '{}' });
+
+/** Save as draft (CHAT-21 §D item 17): the new agent's detail. */
+export const createAgent = (input: Record<string, unknown>) =>
+  send<{ agent: AgentDetail }>('/api/chat/agents', { body: JSON.stringify(input) });
+
+/** A change from Edit (§C item 14): a new version when what it does changed. */
+export const updateAgent = (id: string, patch: Record<string, unknown>) =>
+  send<{ agent: AgentDetail }>(`/api/chat/agents/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+
+/** Delete, once archived (§B item 7): its runs, chats and files stay. */
+export const deleteAgent = (id: string) => send(`/api/chat/agents/${id}`, { method: 'DELETE' });
