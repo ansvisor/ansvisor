@@ -11,8 +11,10 @@
  *      ones), and skips read-only workspaces (no active plan): their lists
  *      keep what they have;
  *   3. per workspace, its people by role (ROLE_FEEDS) and their time zones,
- *      and only those whose morning it is go on;
- *   4. per brand, in a few batched reads: their feeds (one made for admins
+ *      and only those whose morning it is go on; which brands each of them
+ *      can see is read once (brand access, spec §5.4: brandReaders);
+ *   4. per brand, for the people who can see it, in a few batched reads:
+ *      their feeds (one made for admins
  *      and managers who have none), the suggestions kept, then, for those due,
  *      the brand's open actions, which of them "Start now" opens and which
  *      wait in "Needs you";
@@ -30,6 +32,7 @@
 import cron from 'node-cron';
 import supabaseAdmin from '../../config/supabase.js';
 import { isCloud, isSubscriptionActive } from '../../config/plans.js';
+import { brandReaders } from '../access.js';
 import { chatAgenticDeployed, chatAgenticEnabled, chatAgenticOrgs } from '../chat-flag.js';
 import { selectInChunks } from '../chunked-in.js';
 import { DRAFT_TASK_KEYS, TASK_DONE } from '../content-published.js';
@@ -446,8 +449,13 @@ async function runBrand(db, { orgId, brandId, people, zones, now, tally }) {
 }
 
 /**
- * One workspace: its people whose morning it is, brand by brand. A brand
- * that fails is counted and logged, and the next one goes on.
+ * One workspace: its people whose morning it is, brand by brand, each brand
+ * for the people who can see it (brand access, spec §5.4), read once for
+ * all its brands. Someone who can't see a brand gets no feed or suggestion
+ * there, and a feed of theirs is left as it was: neither used nor paused,
+ * ready again if they're given the brand back. A brand that fails is
+ * counted and logged, and the next one goes on; the people's access unread
+ * fails the workspace, and nothing is written for it this hour.
  */
 async function runWorkspace(db, { orgId, brands, now, tally }) {
   const people = await loadPeople(db, orgId);
@@ -455,10 +463,16 @@ async function runWorkspace(db, { orgId, brands, now, tally }) {
   const zones = resolveZones(await loadAnswerZones(db, orgId, now));
   const morning = people.filter((person) => inMorning(now, zones.ofPerson(person.id)));
   if (morning.length === 0) return;
+  const readers = await brandReaders(
+    orgId,
+    brands.map((brand) => brand.id),
+  );
 
   for (const brand of brands) {
+    const seeing = morning.filter((person) => readers.get(person.id)?.has(brand.id));
+    if (seeing.length === 0) continue;
     try {
-      await runBrand(db, { orgId, brandId: brand.id, people: morning, zones, now, tally });
+      await runBrand(db, { orgId, brandId: brand.id, people: seeing, zones, now, tally });
     } catch (err) {
       tally.failed++;
       logger.error(
