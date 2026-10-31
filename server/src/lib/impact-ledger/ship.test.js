@@ -312,6 +312,27 @@ describe('resolveTargets', () => {
   });
 });
 
+describe('labels and titles cut to length', () => {
+  /** Whether a text holds a surrogate without its pair (Postgres takes none). */
+  const loneSurrogate = (text) =>
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(text);
+
+  it('cuts by character, never through an emoji, in a target’s label and a ship event’s title', async () => {
+    const long = `${'a'.repeat(199)}\u{1F600}tail`;
+    const tables = world();
+    tables.content_drafts[0].title = long;
+    tables.prompts = [{ ...prompt('p1'), text: long }, prompt('p2')];
+    const db = useDb(tables);
+    await record(db);
+    const [ship] = db.tables.ship_events;
+    const label = db.tables.impact_measurements[0].targets[0].label;
+    for (const text of [ship.title, label]) {
+      expect(loneSurrogate(text)).toBe(false);
+      expect(text).toBe(`${'a'.repeat(199)}\u{1F600}`);
+    }
+  });
+});
+
 describe('resolveTargets, older and night-engine actions', () => {
   const P1 = '00000000-0000-4000-8000-000000000001';
   const P2 = '00000000-0000-4000-8000-000000000002';
@@ -337,6 +358,38 @@ describe('resolveTargets, older and night-engine actions', () => {
     });
     const targets = await resolveTargets(db, [{ id: 's1', brand_id: 'b1', action_id: 'a1' }]);
     expect(targets.get('s1').map((t) => t.id)).toEqual(['p1', 'p2']);
+  });
+
+  it('reads an older action’s opportunity, topic and a path page through the database it is given', async () => {
+    const db = fakeDb({
+      actions: [
+        { id: 'a1', brand_id: 'b1', kind: 'content_opportunity', payload: { opportunityId: 'o1' } },
+        { id: 'a2', brand_id: 'b1', kind: 'content_opportunity', payload: { topicId: 't9' } },
+        {
+          id: 'a3',
+          brand_id: 'b1',
+          kind: 'fix_page',
+          payload: { targetEntity: 'pages', targetIds: ['/pricing'] },
+        },
+      ],
+      content_opportunities: [
+        { id: 'o1', cluster_id: 'k1', related_cluster_ids: [], prompt_id: null },
+      ],
+      prompt_cluster_members: [{ cluster_id: 'k1', prompt_id: 'p1' }],
+      brand_domains: [{ brand_id: 'b1', domain: 'acme.example', is_primary: true }],
+      prompts: [prompt('p1'), { ...prompt('p2'), topic_id: 't9' }],
+    });
+    // The admin client is another, empty database: nothing is read from it.
+    const admin = useDb({});
+    const targets = await resolveTargets(db, [
+      { id: 's1', brand_id: 'b1', action_id: 'a1' },
+      { id: 's2', brand_id: 'b1', action_id: 'a2' },
+      { id: 's3', brand_id: 'b1', action_id: 'a3' },
+    ]);
+    expect(targets.get('s1').map((t) => t.id)).toEqual(['p1']);
+    expect(targets.get('s2').map((t) => t.id)).toEqual(['p2']);
+    expect(targets.get('s3').map((t) => t.id)).toEqual(['https://acme.example/pricing']);
+    expect(admin.calls).toEqual([]);
   });
 
   it('reads a night-engine action’s targetEntity and targetIds', async () => {

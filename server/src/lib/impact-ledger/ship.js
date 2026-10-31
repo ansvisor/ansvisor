@@ -63,7 +63,14 @@ export async function readChunks(what, ids, build) {
 
 const strings = (value) =>
   Array.isArray(value) ? value.filter((v) => typeof v === 'string' && v.length > 0) : [];
-const clip = (text, max) => String(text ?? '').slice(0, max);
+/**
+ * A text cut to `max` characters by code point, never through a pair: a
+ * lone surrogate is no text Postgres takes, in a text or a jsonb.
+ */
+export const clip = (text, max) =>
+  Array.from(String(text ?? ''))
+    .slice(0, max)
+    .join('');
 
 /** A page address the ledger keeps: http(s), at most 2000 characters (00421). */
 function pageAddress(value) {
@@ -114,8 +121,8 @@ export async function resolveTargets(db, ships) {
     let pages = [];
     if (action?.brand_id === ship.brand_id) {
       const own = { ...action, payload: action.payload ?? {} };
-      const basket = await basketScope(own);
-      const named = await targetScope(own);
+      const basket = await basketScope(own, { db });
+      const named = await targetScope(own, { db });
       promptIds = basket.promptIds.length ? basket.promptIds : (named?.promptIds ?? []);
       pages = [...basket.pages, ...(named?.pages ?? [])];
     }
