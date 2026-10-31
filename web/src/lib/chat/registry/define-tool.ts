@@ -114,14 +114,64 @@ export interface ToolFlags {
 }
 
 /**
+ * Where a WRITE runs, for a row that records it on what it changes (CHAT-20
+ * §10a layer 1: Action History's conversation, run and execution.mode): the
+ * chat and run, the approval's key (the run step that asked for it, one per
+ * approval) and how it was approved. Set by runLoggedWrite; absent on a read.
+ */
+export interface ChatWritePlace {
+  conversationId: string | null;
+  runId: string | null;
+  approvalKey: string;
+  /** assisted: the person approved it (a card, a click); automated: it ran by itself. */
+  executionMode: 'assisted' | 'automated';
+}
+
+/**
  * Who a tool acts as: the signed-in user, resolved into the shape the MCP
- * data functions scope by (lib/agent/auth.ts resolveAgentAuth). A page read
- * (fetch_page) gets the run's sites too, which its redirects must stay on:
- * the engine's, never the model's.
+ * data functions scope by (lib/agent/auth.ts resolveAgentAuth), and, for a
+ * WRITE, where it runs. A page read (fetch_page) gets the run's sites too,
+ * which its redirects must stay on: the engine's, never the model's.
  */
 export type ChatToolContext = McpAuthContext & {
+  chat?: ChatWritePlace;
   pageSites?: { hosts: readonly string[]; domains: readonly string[] };
 };
+
+/** A line of what a card's change carries (the approval card's items): a task to create. */
+export interface ToolCardItem {
+  title: string;
+  detail?: string;
+  /** Its new text in full (a task's change.after): the card shortens it, with Show all. */
+  body?: string;
+}
+
+/** What a card's targets are, by kind: the browser names each kind from en.json. */
+export type ToolCardTargetKind = 'prompts' | 'pages' | 'competitors' | 'platforms';
+
+/**
+ * What a card shows of a change beyond its target (CHAT-09 item 18: what is
+ * frozen when it's made): its items, why, goal and targets.
+ */
+export interface ToolCardDetails {
+  items?: ToolCardItem[];
+  why?: string;
+  goal?: string;
+  targets?: { kind: ToolCardTargetKind; values: string[] }[];
+}
+
+/**
+ * What a change made, shown under the answer with its Open (CHAT-09 item
+ * 19): an action sent to the Action Center, or a finding added to one.
+ */
+export interface ToolResultCard {
+  kind: 'action_created' | 'action_added';
+  /** The action's number: "AC-1271". */
+  actionNo: number;
+  title: string;
+  /** Open in Actions. */
+  href: `/dashboard/${string}`;
+}
 
 interface ToolFields<S extends z.ZodObject> {
   /** The internal name. Never shown to customers: steps show the label (CHAT-03). */
@@ -173,6 +223,26 @@ interface ToolFields<S extends z.ZodObject> {
    * file; a row without it makes nothing.
    */
   deliverable?(input: z.output<S>, output: unknown): ToolDeliverable | null;
+  /**
+   * A WRITE's check before its card or its run (CHAT-20 §12 rule 1: Send to
+   * Action Center's duplicate check): a refusal it returns ({ ok: false,
+   * reason, message }) answers the call, with no card and nothing changed;
+   * anything else lets it go on. A check that fails lets it go on too: the
+   * change checks again.
+   */
+  precheck?(ctx: ChatToolContext, input: z.output<S>): Promise<unknown>;
+  /**
+   * What its card shows beyond the target, read in the person's words where
+   * the input has ids: an action's tasks, why, goal and targets.
+   */
+  cardDetails?(input: z.output<S>): ToolCardDetails | Promise<ToolCardDetails>;
+  /**
+   * A call this input makes shows its card in every mode, Full auto too:
+   * a choice that is the person's (Create anyway, CHAT-09 item 18a).
+   */
+  alwaysCardWhen?(input: z.output<S>): boolean;
+  /** What it made, as a card with its Open (CHAT-09 item 19); null when nothing. */
+  resultCard?(input: z.output<S>, output: unknown): ToolResultCard | null;
   /** A valid input, for the registry's tests and the permission fixtures (CHAT-20 §19). */
   fixture: { input: z.input<S> };
 }

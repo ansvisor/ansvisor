@@ -4,8 +4,8 @@ route: /dashboard/action-center/actions
 keywords: [actions, action status, assign action, dismiss action, export actions, top actions]
 synonyms: [recommendations, work items, to-dos, action list]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -71,5 +71,6 @@ Most actions come from signals each night, but you can also send work to the Act
 - **AI Referral Traffic**: select pages and click **Send to Action Center**.
 - **Brand Visibility**: **Send action** on a topic in Opportunities.
 - **Prompts**: **Send Actions** on a prompt's Improve tab.
+- **Chat**: **Send to Action Center** under an answer. Its Overview says it came from Chat, with what it was sent with and a link back to the chat.
 
 Sending the same thing twice doesn't create a second action: the page says it is already in the Action Center, with its action number.
