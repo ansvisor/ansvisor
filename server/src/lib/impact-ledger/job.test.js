@@ -359,6 +359,35 @@ describe('checkpoints', () => {
   });
 });
 
+describe('two instances', () => {
+  it('measures a checkpoint on one instance only: the other writes no control set', async () => {
+    const db = fakeDb(world());
+    const [a, b] = await Promise.all([
+      runImpactLedger({ db, now: D14 }),
+      runImpactLedger({ db, now: D14 }),
+    ]);
+    expect(a.measured + b.measured).toBe(1);
+    expect(a.checkpoints + b.checkpoints).toBe(2);
+    expect(
+      db.calls.filter((c) => c.table === 'impact_control_sets' && c.op === 'upsert'),
+    ).toHaveLength(1);
+    expect(db.tables.impact_measurements[0]).toMatchObject({
+      checkpoint: 'd14',
+      next_check_at: checkAt(SHIPPED, 30),
+    });
+  });
+
+  it('leaves a measurement whose run stopped midway due the next night', async () => {
+    const db = fakeDb(world());
+    db.fail = (table, op) => table === 'impact_control_sets' && op === 'upsert';
+    expect(await runImpactLedger({ db, now: D14 })).toMatchObject({ measured: 0, failed: 1 });
+    db.fail = null;
+    const next = await runImpactLedger({ db, now: at('2026-10-17T07:53:00Z') });
+    expect(next.measured).toBe(1);
+    expect(db.tables.impact_measurements[0].checkpoint).toBe('d14');
+  });
+});
+
 describe('not measurable', () => {
   it('says too_few_controls with fewer than 10 control cells, the reason stored', async () => {
     const db = fakeDb(world({ controls: ids('c', 9) }));

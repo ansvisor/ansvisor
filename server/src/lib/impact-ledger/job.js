@@ -23,10 +23,11 @@
  *   3. per brand, in a few batched reads: its prompts (topics, active), the
  *      changes it shipped around the windows (overlaps, controls), and each
  *      window's rollup rows, read once and shared;
- *   4. per measurement, each checkpoint due: the targets (active, not
- *      shared with another change), the controls, the metrics and the
- *      outcome; writes the control sets, then the measurement, only as it
- *      was read (another server's run writes it once);
+ *   4. per measurement, claimed first, only as it was read (another
+ *      instance's run that read it too leaves it alone), each checkpoint
+ *      due: the targets (active, not shared with another change), the
+ *      controls, the metrics and the outcome; then writes the control sets
+ *      and the measurement;
  *   5. closes, Not measurable (plan_inactive), what is still open
  *      CLOSE_AFTER_DAYS after ship for a workspace that can't be measured
  *      (no active plan, or Chat no longer on for it);
@@ -73,6 +74,11 @@ const MAX_CONCURRENT = 50;
  * can't be measured: day 90's check (the morning after day 90), then 30 days.
  */
 export const CLOSE_AFTER_DAYS = 91 + 30;
+/**
+ * How long a measurement one run claimed stays its own (next_check_at moved
+ * this far ahead): a run that stops midway leaves it due the next night.
+ */
+const CLAIM_MS = 60 * 60 * 1000;
 /** Days back the agent runs of measured changes are brought in step: a failed write is retried. */
 export const RUN_SYNC_DAYS = 3;
 /** Subscription states with an active plan (config/plans.js isSubscriptionActive). */
@@ -303,13 +309,25 @@ async function measureCheckpoint({ measurement, ship, cp, prompts, shipped, wind
 }
 
 /**
- * Every checkpoint due for one measurement, then its writes: the control
- * sets (one per checkpoint, written again unchanged by a second run), then
- * the measurement itself, only while its next_check_at is as read. Says
- * whether it wrote the measurement.
+ * Every checkpoint due for one measurement, claimed first (next_check_at
+ * moved ahead, only while it is as read: another instance's run that read
+ * it too measures nothing), then its writes: the control sets (one per
+ * checkpoint), then the measurement itself, only while it is still this
+ * run's claim. Says whether it wrote the measurement.
  */
 async function measureOne(db, { measurement, ship, due, prompts, shipped, windowOf, now, tally }) {
   const measuredAt = now.toISOString();
+  // Claimed first, only as read: the API runs on every instance, and only
+  // the one that claims it measures it and writes its control sets.
+  const claimed = new Date(now.getTime() + CLAIM_MS).toISOString();
+  const { data: claim, error: claimError } = await db
+    .from('impact_measurements')
+    .update({ next_check_at: claimed })
+    .eq('id', measurement.id)
+    .eq('next_check_at', measurement.next_check_at)
+    .select('id');
+  if (claimError) throw new ImpactDbError('measurement claim', claimError);
+  if (!claim?.length) return false;
   const entries = Array.isArray(measurement.checkpoints_json)
     ? [...measurement.checkpoints_json]
     : [];
@@ -372,7 +390,7 @@ async function measureOne(db, { measurement, ship, due, prompts, shipped, window
       measured_at: measuredAt,
     })
     .eq('id', measurement.id)
-    .eq('next_check_at', measurement.next_check_at)
+    .eq('next_check_at', claimed)
     .select('id');
   if (error) throw new ImpactDbError('measurement write', error);
   if (!data?.length) return false;
