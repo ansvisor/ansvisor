@@ -4,11 +4,11 @@ route: /dashboard/citations
 keywords: [citations, cited sources, cited URLs, source types, domains, top sources, export citations, third-party sources]
 synonyms: [which sites AI cites, AI sources, links in AI answers, references in AI answers, cited pages]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/citations.mdx]
 ---
 The **Citations** page lists the domains and URLs that AI engines cited in their answers to your tracked prompts, for the brand selected in the sidebar. It shows which sources AI engines rely on when they answer questions in your category, and sorts them by source type. It reads the answers your tracking already collects.
@@ -27,7 +27,7 @@ The filters are kept in the page's address, so a refresh or a shared link opens 
 
 Three cards sit at the top of the page:
 
-- **Total Citations**: every citation in the window, and how many tracked results (AI answers) they come from.
+- **Total Citations**: every citation in the window, across the tracked results (AI answers) in it.
 - **Unique Domains**: the cited domains in the source choice you made (**Brand**, **Competitors**, **Third-Party** or **All**), with their unique URLs.
 - **Avg citations per result**: the number of links per AI answer.
 
@@ -81,7 +81,7 @@ Ansvisor gives every cited domain one of eight types:
 - **Forum**: forums and question-and-answer sites.
 - **Social**: social networks, video sites and blogging platforms.
 - **Review**: review and rating sites.
-- **Institutional**: .edu, .gov and .mil addresses, country versions included, and a list of public and international bodies.
+- **Institutional**: .edu, .gov and .mil addresses (country versions included), academic addresses such as .ac.uk, Wikipedia, and a list of public and international bodies.
 - **Other**: every site that isn't on one of the lists.
 
 You and Competitor come first: a tracked competitor's domain is always Competitor, even when it's also a review site. Only competitors with a domain are matched. The other lists are short, so most sites are Other.

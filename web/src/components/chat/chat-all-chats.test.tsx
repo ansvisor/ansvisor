@@ -41,6 +41,19 @@ vi.mock('./chat-list-provider', () => ({
   }),
 }));
 
+// The page's clock; null keeps the real one.
+const clock = vi.hoisted(() => ({ now: null as Date | null }));
+vi.mock('./chat-inbox', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./chat-inbox')>();
+  return {
+    ...actual,
+    useNow: () => {
+      const real = actual.useNow();
+      return clock.now ?? real;
+    },
+  };
+});
+
 const { ChatAllChats, passesFilter } = await import('./chat-all-chats');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -115,6 +128,7 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => root.unmount());
+  clock.now = null;
   host.remove();
   vi.unstubAllGlobals();
 });
@@ -201,6 +215,14 @@ describe('ChatAllChats', () => {
     expect(rows()).toEqual(['Q3 content plan']);
     await act(async () => action('allChats.openChat')[0].click());
     expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/z');
+  });
+
+  it("tells a row's time by the page's clock, as the Updated column does", async () => {
+    // The page's day is 30 October; the system clock is whatever today is.
+    clock.now = new Date('2026-10-30T12:00:00');
+    active = [chat('a', { state: 'done', finishedAt: '2026-10-30T08:02:00' })];
+    await render(<ChatAllChats ownInitials="JP" />);
+    expect(text()).toContain('Done · 08:02');
   });
 
   it('says when nothing matches, and Clear filters shows every chat again', async () => {

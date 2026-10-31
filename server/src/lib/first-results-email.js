@@ -1,4 +1,5 @@
 import supabaseAdmin from '../config/supabase.js';
+import { brandReaders } from './access.js';
 import { deliverEmail } from './email.js';
 import logger from './logger.js';
 
@@ -7,8 +8,15 @@ import logger from './logger.js';
  * tracking run stamps. A new customer's first run takes 30 to 65 minutes,
  * and most leave the app meanwhile; the app says it in a toast to those
  * still in it. Sent once per person (profiles.first_results_emailed_at,
- * 00385) to the organization's members, through Resend (email.js), a silent
- * no-op where it isn't configured.
+ * 00385), through Resend (email.js), a silent no-op where it isn't
+ * configured.
+ *
+ * Each person gets it with their own first results (brand access, spec
+ * §5.4): when this run is the earliest stamped run of the real brands they
+ * can see. With All brands that is the organization's first results, as
+ * before; with Selected brands, their first brand's. 00385 left the people
+ * who had results before it without a stamp, so it is the earliest run, not
+ * the stamp, that keeps them from being told a later brand is their first.
  */
 
 /** The dashboard's origin, for the e-mail's link. */
@@ -53,42 +61,48 @@ export function renderFirstResultsEmail({ brandName }) {
 }
 
 /**
- * Whether this brand's run is the organization's first results: of its real
- * brands' stamped runs, the earliest is this brand's. A workspace that had
- * results before (another brand, or before this e-mail existed) isn't told
- * its "first" results are ready when it adds a brand. Two brands' first runs
- * stamping close together: the earlier stamp sends, the later doesn't.
+ * The organization's real brands with a stamped run, each with its first,
+ * earliest first; equal stamps in brand id order.
  */
-async function isOrganizationsFirstResults(orgId, brandId) {
+async function firstStamps(orgId) {
   const { data: brands, error: brandsError } = await supabaseAdmin
     .from('brands')
     .select('id')
     .eq('organization_id', orgId)
     .eq('is_demo', false);
   if (brandsError) throw new Error(brandsError.message);
-  const ids = (brands ?? []).map((row) => row.id);
-  if (ids.length === 0) return false;
-
-  const { data: runs, error } = await supabaseAdmin
-    .from('tracking_runs')
-    .select('brand_id')
-    .in('brand_id', ids)
-    .not('completed_at', 'is', null)
-    .order('completed_at', { ascending: true })
-    .limit(1);
-  if (error) throw new Error(error.message);
-  return runs?.[0]?.brand_id === brandId;
+  const stamps = await Promise.all(
+    (brands ?? []).map(async ({ id }) => {
+      const { data: runs, error } = await supabaseAdmin
+        .from('tracking_runs')
+        .select('completed_at')
+        .eq('brand_id', id)
+        .not('completed_at', 'is', null)
+        .order('completed_at', { ascending: true })
+        .limit(1);
+      if (error) throw new Error(error.message);
+      return runs?.[0]?.completed_at ? { id, at: runs[0].completed_at } : null;
+    }),
+  );
+  return stamps
+    .filter(Boolean)
+    .sort((x, y) =>
+      x.at !== y.at ? (x.at < y.at ? -1 : 1) : x.id < y.id ? -1 : x.id > y.id ? 1 : 0,
+    );
 }
 
 /**
- * Take the organization's members who were never sent it, in one update, so
- * two first runs finishing at once can't both send it. The ids taken.
+ * Take the people of `ids` who were never sent it and are still the
+ * organization's, in one update, so two first runs finishing at once can't
+ * both send it. The ids taken.
  */
-async function claimRecipients(orgId) {
+async function claimRecipients(orgId, ids) {
+  if (ids.length === 0) return [];
   const { data, error } = await supabaseAdmin
     .from('profiles')
     .update({ first_results_emailed_at: new Date().toISOString() })
     .eq('organization_id', orgId)
+    .in('id', ids)
     .is('first_results_emailed_at', null)
     .select('id');
   if (error) throw new Error(error.message);
@@ -114,11 +128,11 @@ async function emailsOf(ids) {
 }
 
 /**
- * E-mail the brand's organization that its first results are in: the
- * members never sent it before, when this brand's run is the organization's
- * first results (not a demo brand's, nor a later brand's). 'sent', 'refused', 'unknown' (no answer:
- * Resend may have sent it, so the claim stays) or 'skipped' (nobody left to
- * send it to, or e-mail isn't set up).
+ * E-mail the people whose first results this brand's first run is: those
+ * who can see the brand, never sent it, and see no real brand with an
+ * earlier stamped run (never for a demo brand). 'sent', 'refused',
+ * 'unknown' (no answer: Resend may have sent it, so the claim stays) or
+ * 'skipped' (nobody to send it to, or e-mail isn't set up).
  */
 export async function sendFirstResultsEmail(brandId) {
   const { data: brand, error } = await supabaseAdmin
@@ -128,9 +142,18 @@ export async function sendFirstResultsEmail(brandId) {
     .single();
   if (error) throw new Error(error.message);
   if (!brand?.organization_id || brand.is_demo) return 'skipped';
-  if (!(await isOrganizationsFirstResults(brand.organization_id, brandId))) return 'skipped';
+  const stamps = await firstStamps(brand.organization_id);
+  if (!stamps.some((stamp) => stamp.id === brandId)) return 'skipped';
 
-  const ids = await claimRecipients(brand.organization_id);
+  // Each person's first results: the earliest of the brands they see.
+  const readers = await brandReaders(
+    brand.organization_id,
+    stamps.map((stamp) => stamp.id),
+  );
+  const due = [...readers]
+    .filter(([, seen]) => stamps.find((stamp) => seen.has(stamp.id))?.id === brandId)
+    .map(([id]) => id);
+  const ids = await claimRecipients(brand.organization_id, due);
   if (ids.length === 0) return 'skipped';
 
   const to = await emailsOf(ids);

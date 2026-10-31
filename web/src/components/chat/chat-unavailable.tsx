@@ -1,7 +1,7 @@
 import { useTranslations } from 'next-intl';
 import { MessageSquareOff } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 
 /**
  * A chat that isn't there for the person (CHAT-01 item 26): an unknown or

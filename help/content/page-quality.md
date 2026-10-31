@@ -4,11 +4,11 @@ route: /dashboard/content/editor
 keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author]
 synonyms: [content quality, quality check, page score, eeat score, ready to publish checklist]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/content-editor.mdx]
 ---
 Quality scores a Content Editor page and lists what would raise it. It's turned on per installation: where it's off, nothing on this page shows. With it on, **Instructions** in the side panel has a third segment, **Quality**, and the header a **Quality** chip with the page's score.
@@ -21,7 +21,7 @@ At the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your 
 
 ## Your to-dos and what would raise it
 
-- **Your to-dos** are what only you can do: pick the page's author, add your own experience or data, link the proof for a claim, and fill the placeholders.
+- **Your to-dos** are what only you can do, such as picking the page's author, adding your own experience, data or an expert's quote, linking the proof for a claim, and filling the placeholders.
 - **What would raise it** lists the checks still open, each with the points it would add to a score and, where it has one, a button such as **Show** or **Add source**.
 
 ## Hand off
@@ -32,13 +32,13 @@ In **Settings › Content**, admins and managers can have each brand's new pages
 
 ## Next step
 
-With Quality on, the header shows the page's **Next step**: plan the page, write the first draft, fix open rules, add proof and author, or check and mark ready. It comes with a button to take the step, **Skip this step** and **All steps**.
+With Quality on, the header shows the page's **Next step**: plan the page, write the first draft or bring in your page, fix its length or open rules, add proof and author, or check and mark ready. It comes with a button to take the step, **Skip this step** and **All steps**.
 
 Once the page is ready, **Next step** also offers **Mark published**.
 
 ## The page's author
 
-The header shows the page's author, picked from **Settings › Authors**. Authors are real people only: the Content Agent can't add or invent them. For a page that advises on health, money or the law, the header also shows the qualified person who reviewed it.
+The header shows the page's author, picked from **Settings › Authors**, or your brand's team as the byline. The Content Agent can't add, edit or invent authors. For a page that advises on health, money or the law, the header also shows the qualified person who reviewed it.
 
 ## Before you publish
 
@@ -54,6 +54,6 @@ On a page with a shopping path, it also names the product cards whose price has 
 
 ## Export with Quality on
 
-**Export** opens a dialog: the same files as without Quality, and under **Platforms** a copy of the page to paste into Webflow, WordPress, Shopify or Google Docs.
+**Export** opens a dialog: the same files as without Quality, and under **Platforms** a copy of the page to paste into Webflow, WordPress, Shopify or Google Docs. A line over the options sums up **Before you publish**, and **Review** opens it.
 
 If placeholders are still open, Export asks first: **Fill now**, or **Export without them**, which leaves out the sentences with a placeholder. One in the title or a heading has to be filled.

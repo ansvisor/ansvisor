@@ -315,7 +315,7 @@ export function ChatAllChats({
         {!loading &&
           lists.status === 'ready' &&
           rows.map((chat) => {
-            const { line, tone } = chatLineOf(chat, tMenu);
+            const { line, tone } = chatLineOf(chat, tMenu, now ?? undefined);
             const href = `/dashboard/chat/${chat.id}`;
             return (
               <div

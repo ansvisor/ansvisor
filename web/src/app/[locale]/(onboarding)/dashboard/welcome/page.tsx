@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { getMyMenu } from '@/lib/actions/menu-access';
 import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
 import { DASHBOARD_HOME } from '@/config/home';
+import { chatAgenticEnabled } from '@/lib/chat/flag';
+import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import type { TeamRole } from '@/components/providers/role-provider';
 import { WelcomeView } from './_welcome-view';
 
@@ -39,12 +41,15 @@ export default async function WelcomePage() {
 
   return (
     <OnboardingFrame width="wide" preview={null}>
-      <WelcomeView
-        role={profile.role as TeamRole}
-        workspace={workspace}
-        firstName={fullName.trim().split(/\s+/)[0] ?? ''}
-        hiddenByAdmin={menu?.hiddenByAdmin ?? []}
-      />
+      {/* The menu it shows has Agent Center only with the new Chat on. */}
+      <ChatAgenticProvider enabled={chatAgenticEnabled(profile.organization_id)}>
+        <WelcomeView
+          role={profile.role as TeamRole}
+          workspace={workspace}
+          firstName={fullName.trim().split(/\s+/)[0] ?? ''}
+          hiddenByAdmin={menu?.hiddenByAdmin ?? []}
+        />
+      </ChatAgenticProvider>
     </OnboardingFrame>
   );
 }

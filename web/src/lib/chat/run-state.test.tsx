@@ -134,6 +134,98 @@ describe('the run in the browser', () => {
     ]);
   });
 
+  it('keeps what it sent to the Action Center, and the tasks a card carries (CHAT-09 items 18–19)', () => {
+    const sent = {
+      kind: 'action_created' as const,
+      actionNo: 1271,
+      title: 'Win back pricing citations',
+      href: '/dashboard/action-center/actions/x' as const,
+    };
+    const run = applyChatEvent(
+      applyChatEvent(emptyRun(), chatEvent('action.sent', 1, sent)),
+      chatEvent('action.sent', 2, { ...sent, kind: 'action_added', actionNo: 1258 }),
+    );
+    expect(run.sent.map((s) => [s.kind, s.actionNo])).toEqual([
+      ['action_created', 1271],
+      ['action_added', 1258],
+    ]);
+    const carded = applyChatEvent(
+      emptyRun(),
+      chatEvent('confirm.required', 1, {
+        n: 1,
+        action: 'Send findings to Action Center',
+        target: '“Win back pricing citations” · Recover · 1 task',
+        digest: 'b'.repeat(32),
+        canDontAskAgain: false,
+        items: [{ title: 'Add a FAQ to /pricing', detail: 'On-page · /pricing' }],
+      }),
+    );
+    expect(carded.confirm?.items).toEqual([
+      { title: 'Add a FAQ to /pricing', detail: 'On-page · /pricing' },
+    ]);
+  });
+
+  it('keeps the task strip as the last tasks.updated says it (CHAT-09 §B)', () => {
+    const row = {
+      at: 1,
+      title: 'Add FAQ block + schema to /pricing',
+      priority: 86,
+      category: 'fix' as const,
+      status: 'writing' as const,
+    };
+    const writing = applyChatEvent(
+      emptyRun(),
+      chatEvent('tasks.updated', 1, { tasks: [row], ready: 0, total: 1, due: 1 }),
+    );
+    expect(writing.tasks?.tasks.map((t) => t.status)).toEqual(['writing']);
+    const ready = applyChatEvent(
+      writing,
+      chatEvent('tasks.updated', 2, {
+        tasks: [{ ...row, status: 'ready_for_review' }],
+        ready: 1,
+        total: 1,
+        due: 1,
+      }),
+    );
+    expect(ready.tasks).toMatchObject({ ready: 1, total: 1 });
+    expect(ready.tasks?.tasks[0].status).toBe('ready_for_review');
+    expect(emptyRun().tasks).toBeNull();
+  });
+
+  it('keeps each Why analysis once, by its number (CHAT-22 §1 item 4)', () => {
+    const why = {
+      n: 1,
+      metric: 'citations' as const,
+      unit: 'pts' as const,
+      periodA: { from: '2026-10-12', to: '2026-10-18' },
+      periodB: { from: '2026-10-19', to: '2026-10-25' },
+      valueA: 58,
+      valueB: 52,
+      delta: -6,
+      se: 0.8,
+      noise: 'beyond_normal_swing' as const,
+      direction: 'declined' as const,
+      changeDay: null,
+      causes: [],
+      remainder: { kind: 'unexplained' as const, points: -6, share: 100 },
+      excludedCells: 0,
+      stableCells: 40,
+      partial: false,
+      engines: [],
+      runs: { a: 10, b: 10, cells: 40 },
+    };
+    const run = [
+      chatEvent('why.ready', 1, why),
+      chatEvent('why.ready', 2, { ...why, n: 2, metric: 'visibility' as const }),
+      chatEvent('why.ready', 3, { ...why, valueB: 50 }),
+    ].reduce(applyChatEvent, emptyRun());
+    expect(run.why.map((w) => [w.n, w.metric, w.valueB])).toEqual([
+      [2, 'visibility', 52],
+      [1, 'citations', 50],
+    ]);
+    expect(emptyRun().why).toEqual([]);
+  });
+
   it('skips an event it already has, or a type it doesn’t know', () => {
     const run = runFromEvents(events);
     expect(applyChatEvent(run, events[2])).toBe(run);

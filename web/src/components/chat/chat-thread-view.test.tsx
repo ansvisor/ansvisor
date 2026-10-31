@@ -265,7 +265,7 @@ describe('ChatThreadView', () => {
     const bar = container.querySelector('[role="toolbar"][aria-label="Answer actions"]')!;
     expect(
       [...bar.querySelectorAll('[aria-label]')].map((b) => b.getAttribute('aria-label')),
-    ).toEqual(['Copy', 'Download', 'In Files', 'Open in Content Editor']);
+    ).toEqual(['Copy', 'Download', 'In Files', 'Open in Content Editor', 'Send to Action Center']);
     // What the run made shows as its card, its page open in the editor.
     const card = container.querySelector('[data-slot="deliverable-card"]')!;
     expect(card.getAttribute('aria-label')).toBe('Pricing FAQ');
@@ -820,6 +820,95 @@ describe('ChatThreadView', () => {
       expect(container.querySelector('[data-slot="question-answered"]')!.textContent).toBe(
         'Which page should the FAQ go on?The blog',
       );
+    });
+  });
+
+  /** CHAT-09 items 18–19: Send to Action Center on the latest answer, and what it sent. */
+  describe('Send to Action Center (CHAT-09 §E)', () => {
+    const answered = (run: object = {}) =>
+      ({
+        conversationId: CHAT,
+        title: 'Citations',
+        brandId: null,
+        mine: true,
+        messages: [
+          {
+            role: 'user',
+            text: 'Why did AIO drop?',
+            generatedAt: null,
+            dataAsOf: null,
+            timezone: null,
+          },
+          {
+            role: 'assistant',
+            text: 'Two pages lost most of it.',
+            generatedAt: '2026-10-30T09:14:00.000Z',
+            dataAsOf: null,
+            timezone: 'UTC',
+            run: { runId: RUN, status: 'done', steps: [], fileId: null, deliverables: [], ...run },
+          },
+        ],
+      }) as unknown as ChatThread;
+    const sendButton = () =>
+      container.querySelector<HTMLElement>('[data-action="answer.sendToActionCenter"]');
+
+    it('asks Chat to propose the latest answer as an action, on its card', async () => {
+      await render({ thread: answered(), variant: 'dock' });
+      await act(async () => sendButton()!.click());
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      const sent = calls.find((c) => c.url === '/api/chat/runs')!;
+      expect(JSON.parse(String(sent.init!.body))).toMatchObject({
+        message: 'Send this finding to Action Center as an action.',
+        // The answer's run goes with it: the server reads whether it read outside text (§16a).
+        fromRunId: RUN,
+      });
+    });
+
+    it("isn't offered to an Analyst, or on a teammate's shared chat", async () => {
+      act(() => root.unmount());
+      root = createRoot(container);
+      await act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+            <RoleProvider role="analyst">
+              <ChatThreadView
+                thread={answered()}
+                variant="dock"
+                defaultMode="ask_first"
+                fullAutoOpen={false}
+              />
+            </RoleProvider>
+          </NextIntlClientProvider>,
+        );
+      });
+      expect(sendButton()).toBeNull();
+      act(() => root.unmount());
+      root = createRoot(container);
+      await render({ thread: { ...answered(), mine: false }, variant: 'dock' });
+      expect(sendButton()).toBeNull();
+    });
+
+    it('shows what it sent with Open in Actions, after a reload too', async () => {
+      await render({
+        thread: answered({
+          sent: [
+            {
+              kind: 'action_created',
+              actionNo: 1271,
+              title: 'Win back pricing citations',
+              href: '/dashboard/action-center/actions/a1',
+            },
+          ],
+        }),
+        variant: 'dock',
+      });
+      const card = container.querySelector('[data-slot="action-sent-card"]')!;
+      expect(card.textContent).toContain('Sent to Action Center · AC-1271');
+      expect(card.textContent).toContain('Win back pricing citations');
+      expect(card.querySelector('a')!.getAttribute('href')).toBe(
+        '/dashboard/action-center/actions/a1',
+      );
+      expect(card.querySelector('a')!.textContent).toBe('Open in Actions');
     });
   });
 

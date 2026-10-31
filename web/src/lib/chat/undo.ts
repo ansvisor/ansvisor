@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
+import { followRestoredPageType } from '@/lib/content/draft-page-type';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
 import { logActivity, summaryValue, type ActivityPlace } from './activity';
@@ -12,7 +13,9 @@ import { readPrecedenceContext, readToolCall } from './precedence-context';
 import type { ChatTool } from './registry/define-tool';
 import { chatToolByKey } from './registry/tools';
 import { DAY_MS, asObject, check, textOf, type Snapshot } from './undo-parts';
+import { OUTPUT_UNDO_RULES } from './undo-output';
 import { SETUP_UNDO_RULES } from './undo-setup';
+import { ACTION_CENTER_UNDO_RULES } from './undo-action-center';
 
 /**
  * Undo (CHAT-20 §10b): the inverse of each WRITE, stored when it ran (the
@@ -67,8 +70,16 @@ export interface UndoRule {
   before(input: unknown): Promise<Snapshot | null>;
   /** Read just after it: what the row records. */
   record(input: unknown, output: unknown, before: Snapshot | null): Promise<WriteRecord>;
-  /** The inverse, once the target is as the change left it. */
-  inverse(target: { id: string; brandId: string | null; data: Snapshot }): Promise<InverseResult>;
+  /**
+   * The inverse, once the target is as the change left it. userId: who
+   * clicked Undo, for a target whose own trail names who (Action History).
+   */
+  inverse(target: {
+    id: string;
+    brandId: string | null;
+    data: Snapshot;
+    userId?: string;
+  }): Promise<InverseResult>;
   /** Where the target opens, to undo by hand. */
   href(targetId: string): ChatHref;
 }
@@ -78,6 +89,8 @@ const sha256 = (text: string) => createHash('sha256').update(text).digest('hex')
 // ─── create_draft: archive the draft it saved (§9: 30 days, "move to trash") ─
 
 const DRAFT_COLUMNS = 'id, brand_id, title, body_html, status, archived_at, updated_at';
+/** How long History keeps a version (00215): content_draft_restore's 90 days. */
+const HISTORY_DAYS = 90;
 
 /** What a draft looks like to a person: its title, page and status. */
 function draftState(row: Record<string, unknown>): Snapshot {
@@ -143,6 +156,98 @@ const createDraft: UndoRule = {
       .maybeSingle();
     if (archiveError) throw new Error(`Could not archive the draft: ${archiveError.message}`);
     return archived ? 'ok' : 'changed';
+  },
+  href: (id) => `/dashboard/content/editor/${id}`,
+};
+
+// ─── update_draft: back to the page before (§9: 30 days, "restore previous version") ─
+
+const updateDraft: UndoRule = {
+  targetType: 'content_draft',
+  windowMs: 30 * DAY_MS,
+  async before() {
+    return null; // The action keeps the page before in History, and says which version.
+  },
+  async record(input, output) {
+    const id = textOf(asObject(input).draft_id);
+    const result = asObject(output);
+    const versionId = textOf(result.beforeVersionId);
+    let row: Record<string, unknown> | null = null;
+    if (id && result.ok === true) {
+      const { data, error } = await supabaseAdmin
+        .from('content_drafts')
+        .select(DRAFT_COLUMNS)
+        .eq('id', id)
+        .maybeSingle();
+      check(error, 'the draft');
+      row = data;
+    }
+    return {
+      target: { type: 'content_draft', id },
+      summaryParams: { title: summaryValue(row?.title ?? asObject(input).title) },
+      undo: row && versionId ? { versionId, after: draftState(row) } : null,
+    };
+  },
+  async inverse({ id, brandId, data }) {
+    let read = supabaseAdmin
+      .from('content_drafts')
+      .select(`${DRAFT_COLUMNS}, agent_state`)
+      .eq('id', id);
+    if (brandId) read = read.eq('brand_id', brandId);
+    const { data: draft, error } = await read.maybeSingle();
+    check(error, 'the draft');
+    if (!draft) return 'gone';
+    // Edited, renamed, archived or being written by the agent since: the person's to restore from History.
+    const after = asObject(data.after);
+    const now = draftState(draft);
+    if (
+      draft.archived_at ||
+      draft.agent_state === 'writing' ||
+      now.title !== after.title ||
+      now.bodyHash !== after.bodyHash
+    ) {
+      return 'changed';
+    }
+    // The version kept before the change: this draft's, within History's 90 days (00215).
+    const { data: version, error: versionError } = await supabaseAdmin
+      .from('content_draft_versions')
+      .select('draft_id, title, body_html, created_at')
+      .eq('id', textOf(data.versionId) ?? '')
+      .maybeSingle();
+    check(versionError, 'the draft’s version');
+    if (
+      !version ||
+      version.draft_id !== id ||
+      Date.parse(version.created_at as string) < Date.now() - HISTORY_DAYS * DAY_MS
+    ) {
+      return 'gone';
+    }
+    // History's restore (content_draft_restore), only over the page just read: the page now
+    // is kept first, then the version comes back; a write in between wins.
+    const { error: keepError } = await supabaseAdmin.rpc('content_draft_keep_version', {
+      p_draft_id: id,
+      p_origin: 'restore',
+    });
+    if (keepError) throw new Error(`Could not keep the draft before Undo: ${keepError.message}`);
+    const { data: restored, error: restoreError } = await supabaseAdmin
+      .from('content_drafts')
+      .update({
+        title: version.title,
+        body_html: version.body_html,
+        restored_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('updated_at', draft.updated_at)
+      .select('updated_at')
+      .maybeSingle();
+    if (restoreError) throw new Error(`Could not restore the draft: ${restoreError.message}`);
+    if (!restored) return 'changed';
+    await followRestoredPageType(supabaseAdmin, id, {
+      title: version.title as string,
+      bodyHtml: version.body_html as string,
+      updatedAt: restored.updated_at as string,
+    });
+    return 'ok';
   },
   href: (id) => `/dashboard/content/editor/${id}`,
 };
@@ -324,20 +429,30 @@ const requestAccessRule: UndoRule = {
   href: () => '/dashboard/settings/roles-access',
 };
 
-/** Each WRITE row's Undo, by tool name. A WRITE without one has no Undo. */
+/**
+ * Each WRITE row's Undo, by tool name. A rule whose window is 0 only records
+ * what its change did (§9 gives it no Undo: a page sent to a CMS, an audit
+ * started); a WRITE without one has no Undo. An EXECUTE's rule only records.
+ */
 export const UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   create_draft: createDraft,
   update_opportunity: updateOpportunity,
   dismiss_prompt_suggestion: dismissSuggestion,
   request_access: requestAccessRule,
+  update_draft: updateDraft,
   ...SETUP_UNDO_RULES,
+  ...ACTION_CENTER_UNDO_RULES,
+  ...OUTPUT_UNDO_RULES,
 };
 
-/** A tool's Undo, or null: a read or an EXECUTE has none (§10b). */
+/**
+ * A tool's Undo rule, or null: a read has none, and an EXECUTE has no Undo
+ * (§10b), so its rule is one that only records what it did (window 0).
+ */
 export function undoRule(tool: Pick<ChatTool, 'name' | 'class'>): UndoRule | null {
-  return tool.class === 'write' && Object.hasOwn(UNDO_RULES, tool.name)
-    ? UNDO_RULES[tool.name]
-    : null;
+  if (tool.class === 'read' || !Object.hasOwn(UNDO_RULES, tool.name)) return null;
+  const rule = UNDO_RULES[tool.name];
+  return tool.class === 'write' || rule.windowMs === 0 ? rule : null;
 }
 
 // ─── Undo from the step, the result card or the Activity log ────────────────
@@ -525,6 +640,7 @@ async function undo(req: UndoRequest): Promise<UndoResult> {
     id: row.target_id,
     brandId: row.brand_id,
     data: asObject(row.undo_json) as Snapshot,
+    userId: req.userId,
   };
   const targetType = row.target_type;
   // Set inside the work: a conflict answers this click, and its key goes back.

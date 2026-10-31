@@ -28,6 +28,17 @@ vi.mock('@/config/dashboard', () => {
   return {
     dashboardNav: [
       {
+        items: [
+          { title: 'Chat', href: '/dashboard/agent', icon: Icon },
+          {
+            title: 'Agent Center',
+            href: '/dashboard/agents',
+            icon: Icon,
+            requiresChatAgentic: true,
+          },
+        ],
+      },
+      {
         title: 'Analytics',
         items: [
           { title: 'Action Center', href: '/dashboard/action-center', icon: Icon },
@@ -49,6 +60,7 @@ vi.stubGlobal('localStorage', {
 
 const { MobileNav } = await import('./mobile-nav');
 const { MenuAccessProvider } = await import('@/components/providers/menu-access-provider');
+const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 
 /**
@@ -74,12 +86,14 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-async function open(hidden: string[]) {
+async function open(hidden: string[], chatOn = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <MenuAccessProvider hidden={hidden} canManageMenus={false}>
-          <MobileNav />
+          <ChatAgenticProvider enabled={chatOn}>
+            <MobileNav />
+          </ChatAgenticProvider>
         </MenuAccessProvider>
       </NextIntlClientProvider>,
     );
@@ -104,5 +118,23 @@ describe('MobileNav', () => {
     expect(link('/dashboard/prompts')).toBeNull();
     expect(link('/dashboard/mentions')).toBeNull();
     expect(link('/dashboard/brands/brand-1/prompts')).toBeNull();
+  });
+
+  it('lists Agent Center under Chat with the new Chat on', async () => {
+    await open([], true);
+    expect(link('/dashboard/chat')).not.toBeNull();
+    expect(link('/dashboard/agents')?.textContent).toBe('Agent Center');
+  });
+
+  it('leaves Agent Center off with the new Chat off', async () => {
+    await open([]);
+    expect(link('/dashboard/agent')).not.toBeNull();
+    expect(link('/dashboard/agents')).toBeNull();
+  });
+
+  it('leaves Agent Center off when the viewer’s menu hides it', async () => {
+    await open(['agents'], true);
+    expect(link('/dashboard/chat')).not.toBeNull();
+    expect(link('/dashboard/agents')).toBeNull();
   });
 });

@@ -537,7 +537,7 @@ describe('when the check cannot be read', () => {
  * webhooks are mounted outside /api.
  */
 describe("server.js's mount", () => {
-  it('puts every API route behind the person, the demo brand and then the plan', async () => {
+  it('puts every API route in its request’s store, behind the person, the demo brand and then the plan', async () => {
     const source = await readFile(new URL('../server.js', import.meta.url), 'utf8');
     // One call per line, however Prettier wraps it.
     const flat = source
@@ -549,7 +549,7 @@ describe("server.js's mount", () => {
       .map((line) => line.trim())
       .filter((line) => /^app\.use\(.*\broutes\);$/.test(line));
     expect(mounts).toEqual([
-      "app.use('/api', Middleware.decodeToken.bind(Middleware), refuseDemoBrandWrites, requireActiveSubscription, routes);",
+      "app.use('/api', requestScope, Middleware.decodeToken.bind(Middleware), refuseDemoBrandWrites, requireActiveSubscription, routes);",
     ]);
     expect(source).toMatch(
       /import \{[^}]*\brefuseDemoBrandWrites\b[^}]*\} from '\.\/middleware\/demo-brand\.js';/,

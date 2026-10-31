@@ -59,6 +59,25 @@ vi.mock('@/lib/chat/agent-runs', () => ({
     ok: true,
     value: { runs: [{ brand: 'Brand A', status: 'queued', repeated: false, coalesced: false }] },
   })),
+  runAgentOnAction: vi.fn(async () => ({
+    ok: true,
+    value: {
+      run: {
+        brand: 'Brand A',
+        status: 'running',
+        repeated: false,
+        coalesced: false,
+        chatId: 'chat-1',
+        stopReason: null,
+      },
+    },
+  })),
+}));
+vi.mock('@/lib/chat/agent-action', () => ({
+  compatibleAgents: vi.fn(async () => ({
+    ok: true,
+    value: { action: { no: 1258, category: 'recover' }, agents: [], createSkill: 'winback' },
+  })),
 }));
 
 const AGENT = 'eeeeeeee-0000-4000-8000-000000000001';
@@ -75,8 +94,10 @@ const duplicate = await import('./[id]/duplicate/route');
 const takeOver = await import('./[id]/take-over/route');
 const run = await import('./[id]/run/route');
 const runsRoute = await import('./[id]/runs/route');
+const compatible = await import('./compatible/route');
 const lib = await import('@/lib/chat/agents');
-const { runAgentNow } = await import('@/lib/chat/agent-runs');
+const { runAgentNow, runAgentOnAction } = await import('@/lib/chat/agent-runs');
+const { compatibleAgents } = await import('@/lib/chat/agent-action');
 
 const url = (path = '') => `https://app.example.com/api/chat/agents${path}`;
 const params = (id = AGENT) => ({ params: Promise.resolve({ id }) });
@@ -288,11 +309,72 @@ describe('/api/chat/agents/{id}/run and /runs', () => {
     expect(await res.json()).toMatchObject({ failure: 'limit', code: 'ai_limit' });
   });
 
+  it('runs it on an Action Center action, answering the run’s chat (W2-17)', async () => {
+    const ACTION = 'acacacac-0000-4000-8000-000000000001';
+    const res = await run.POST(new Request(url(), post({ actionId: ACTION })), params());
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({
+      ok: true,
+      runs: [{ brand: 'Brand A', status: 'running', repeated: false, coalesced: false }],
+      chatId: 'chat-1',
+      stopReason: null,
+    });
+    expect(runAgentOnAction).toHaveBeenCalledWith(CTX, AGENT, ACTION);
+    expect(runAgentNow).not.toHaveBeenCalled();
+    // A brand and an action at once, or an action id that isn't one: refused.
+    expect(
+      (await run.POST(new Request(url(), post({ actionId: ACTION, brandId: BRAND })), params()))
+        .status,
+    ).toBe(400);
+    expect((await run.POST(new Request(url(), post({ actionId: 'x' })), params())).status).toBe(
+      400,
+    );
+    vi.mocked(runAgentOnAction).mockResolvedValueOnce(lib.refused('action_closed'));
+    const closed = await run.POST(new Request(url(), post({ actionId: ACTION })), params());
+    expect(closed.status).toBe(409);
+    expect(await closed.json()).toMatchObject({ ok: false, code: 'action_closed' });
+  });
+
   it('lists up to 50 runs, and 404 for an agent the person can’t see', async () => {
     expect((await runsRoute.GET(new Request(url('?limit=10')), params())).status).toBe(200);
     expect(lib.listAgentRuns).toHaveBeenCalledWith(CTX, AGENT, 10);
     expect((await runsRoute.GET(new Request(url('?limit=51')), params())).status).toBe(400);
     vi.mocked(lib.listAgentRuns).mockResolvedValueOnce(null);
     expect((await runsRoute.GET(new Request(url()), params())).status).toBe(404);
+  });
+});
+
+describe('/api/chat/agents/compatible (W2-17)', () => {
+  const ACTION = 'acacacac-0000-4000-8000-000000000001';
+
+  it('lists the agents for an action to an Admin or a Manager', async () => {
+    const res = await compatible.GET(new Request(url(`/compatible?actionId=${ACTION}`)));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      action: { no: 1258, category: 'recover' },
+      agents: [],
+      createSkill: 'winback',
+    });
+    expect(compatibleAgents).toHaveBeenCalledWith(CTX, ACTION);
+    expect((await compatible.GET(new Request(url('/compatible?actionId=x')))).status).toBe(400);
+  });
+
+  it('is not there with Chat off, and answers an Analyst with the out-of-permission answer', async () => {
+    state.on = false;
+    expect((await compatible.GET(new Request(url(`/compatible?actionId=${ACTION}`)))).status).toBe(
+      404,
+    );
+    state.on = true;
+    vi.mocked(lib.readAgentContext).mockResolvedValueOnce({
+      ...CTX,
+      viewer: { ...CTX.viewer, role: 'analyst' },
+      plan: { planId: 'growth' },
+      settings: lib.agentSettingsOf(null),
+    } as never);
+    const res = await compatible.GET(new Request(url(`/compatible?actionId=${ACTION}`)));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ ok: false, code: 'forbidden_role' });
+    expect(compatibleAgents).not.toHaveBeenCalled();
   });
 });

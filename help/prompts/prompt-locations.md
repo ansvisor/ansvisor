@@ -4,24 +4,24 @@ route: /dashboard/prompts/tracked
 keywords: [locations, add location, remove location, locations view, countries, us states, cities]
 synonyms: [track in another country, regional tracking, geo tracking, stop tracking a location]
 plan: all
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/prompts.mdx]
 ---
-A prompt can be tracked in several locations (countries, US states or cities), with its own figures in each one. In **Tracked Prompts** you compare them in the **Locations** view, and add or remove places with the **Track in more locations** dialog.
+A prompt can be tracked in several locations (countries, US states or cities), with its own figures in each one. In **Tracked Prompts** you compare them in the **Locations** view, and add or remove places with the **Track in more locations** dialog. Admins and managers add and remove locations.
 
 ## The Locations view
 
-**View: Table | Locations**, above the table, switches to **Locations**: one row per prompt and one column per location your prompts track, the most-tracked first (12 at most). Pick **Visibility**, **Position**, **Mentions** or **Citations**; cells are shaded light to dark, and for Position, named earlier is darker.
+The **Table | Locations** switch, above the table, opens **Locations**: one row per prompt and one column per location your prompts track, the most-tracked first (12 at most). Pick **Visibility**, **Position**, **Mentions** or **Citations**; cells are shaded light to dark, and for Position, named earlier is darker.
 
 An **All prompts · average** row and a **Gap** column (the best location minus the worst) sit beside three cards: **Weakest location**, **Strongest location** and **Biggest gap between locations**. Click a cell to open the prompt's Positions panel for that location. The date range and filters work as in the table.
 
 ## A location as a table column
 
-To see one location in the normal table, open **Columns** and use **Add a location column**. It adds a metric in one location, such as Visibility in one country, as its own column.
+To see one location in the normal table, open **Columns** and use **Add a location column**. It adds a metric in one location, such as Visibility in one country, as its own column, up to eight of them.
 
 ## Add locations
 

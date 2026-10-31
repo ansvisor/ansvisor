@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getBrands } from '@/lib/actions/brand';
 import { getPlan, isCloud as checkIsCloud } from '@/config/plans';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
+import { countPlanBrands } from '@/lib/plan-brand-count';
 import { BrandsClient } from './_brands-client';
 import { WorkspaceSettingsMenu } from '@/components/layout/workspace-settings-menu';
 import { AddBrandLink } from '@/components/dashboard/add-brand-link';
@@ -65,15 +66,17 @@ export default async function BrandsPage() {
   // getOrgPlan, not getPlan(org.plan): the limit shown here must be the one
   // createBrand enforces, Enterprise plan_overrides included. Reading the bare
   // plan offered "Add brand" to an override-capped org and failed on submit.
-  const [brands, plan] = await Promise.all([
+  // The count is the organization's, not this list's: a person with Selected
+  // brands sees fewer brands than the plan counts (00390).
+  const [brands, plan, counted] = await Promise.all([
     orgId ? getBrands(orgId) : [],
     orgId ? getOrgPlan(orgId) : getPlan(null),
+    orgId ? countPlanBrands(supabase, orgId) : 0,
   ]);
 
   // The demo brand (sample data) is none of the plan's brands: never counted,
   // and not listed while hidden.
   const listed = brands.filter((b) => !(b.isDemo && b.demoHiddenAt));
-  const counted = brands.filter((b) => !b.isDemo).length;
   const maxBrands = plan.limits.maxBrands;
   const canAddBrand = maxBrands === -1 || counted < maxBrands;
   const needsUpgrade = !canAddBrand && checkIsCloud();
