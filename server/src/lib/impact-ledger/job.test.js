@@ -645,14 +645,10 @@ describe('not measurable', () => {
       }),
     );
     const stats = await runImpactLedger({ db, now: D14 });
-    expect(stats.closed).toBe(2);
+    expect(stats.closed).toBe(1);
     const [m1, m2, m3] = db.tables.impact_measurements;
-    // No active plan, and Chat no longer on for the workspace: both closed,
-    // each with its own reason, day 90 kept as that.
-    for (const [row, reason] of [
-      [m1, 'plan_inactive'],
-      [m2, 'measuring_off'],
-    ]) {
+    // No active plan: closed, day 90 kept as that.
+    for (const [row, reason] of [[m1, 'plan_inactive']]) {
       expect(row).toMatchObject({
         outcome: 'not_measurable',
         confidence: null,
@@ -672,6 +668,8 @@ describe('not measurable', () => {
         }),
       ]);
     }
+    // Chat no longer on for the workspace (CHAT_AGENTIC_ORGS): kept open.
+    expect(m2).toMatchObject({ outcome: 'pending', next_check_at: checkAt(LONG_AGO, 30) });
     // Shipped lately: kept due, for when the plan comes back.
     expect(m3).toMatchObject({
       outcome: 'pending',
@@ -680,40 +678,44 @@ describe('not measurable', () => {
   });
 });
 
-describe('closing, self-hosted', () => {
-  it('closes as measuring_off, never plan_inactive, keeping the earlier checkpoints', async () => {
-    process.env.CHAT_AGENTIC_ORGS = OTHER_ORG;
-    const LONG_AGO = '2026-06-01T10:00:00Z';
-    const d30 = { checkpoint: 'd30', outcome: 'improved', confidence: 'medium' };
-    const db = fakeDb(
-      world({
-        ship_events: [ship('s1', { shipped_at: LONG_AGO })],
-        impact_measurements: [
-          measurement('m1', 's1', {
-            checkpoint: 'd30',
-            outcome: 'improved',
-            confidence: 'medium',
-            checkpoints_json: [{ checkpoint: 'd7', outcome: 'pending' }, d30],
-            next_check_at: checkAt(LONG_AGO, 90),
-          }),
-        ],
-      }),
-    );
-    const stats = await runImpactLedger({ db, now: D14 });
-    expect(stats.closed).toBe(1);
-    const [row] = db.tables.impact_measurements;
-    expect(row).toMatchObject({
-      outcome: 'not_measurable',
-      not_measurable_reason: 'measuring_off',
-      checkpoint: 'd90',
-      next_check_at: null,
+describe('closing while Chat is off for a workspace', () => {
+  const LONG_AGO = '2026-06-01T10:00:00Z';
+  const d30 = { checkpoint: 'd30', outcome: 'improved', confidence: 'medium' };
+  const stale = () =>
+    world({
+      ship_events: [ship('s1', { shipped_at: LONG_AGO })],
+      impact_measurements: [
+        measurement('m1', 's1', {
+          checkpoint: 'd30',
+          outcome: 'improved',
+          confidence: 'medium',
+          checkpoints_json: [{ checkpoint: 'd7', outcome: 'pending' }, d30],
+          next_check_at: checkAt(LONG_AGO, 90),
+        }),
+      ],
     });
-    expect(row.checkpoints_json.map((e) => [e.checkpoint, e.outcome])).toEqual([
-      ['d7', 'pending'],
-      ['d30', 'improved'],
-      ['d90', 'not_measurable'],
-    ]);
-  });
+
+  for (const cloud of [false, true]) {
+    it(`keeps it open through a night CHAT_AGENTIC_ORGS leaves it out (${cloud ? 'cloud' : 'self-hosted'}), and reads day 90 once it is back`, async () => {
+      if (cloud) process.env.IS_CLOUD = 'true';
+      const db = fakeDb(stale());
+      // A deploy that drops the workspace for a night.
+      process.env.CHAT_AGENTIC_ORGS = OTHER_ORG;
+      const off = await runImpactLedger({ db, now: D14 });
+      expect(off).toMatchObject({ closed: 0, measured: 0 });
+      expect(db.tables.impact_measurements[0]).toMatchObject({
+        outcome: 'improved',
+        next_check_at: checkAt(LONG_AGO, 90),
+      });
+      // Back on the next night: day 90 is read, late, and the earlier checkpoints stay.
+      process.env.CHAT_AGENTIC_ORGS = ORG;
+      const on = await runImpactLedger({ db, now: at('2026-10-17T07:53:00Z') });
+      expect(on).toMatchObject({ measured: 1, closed: 0 });
+      const [row] = db.tables.impact_measurements;
+      expect(row).toMatchObject({ checkpoint: 'd90', next_check_at: null });
+      expect(row.checkpoints_json.map((e) => e.checkpoint)).toEqual(['d7', 'd30', 'd90']);
+    });
+  }
 });
 
 describe('sends confirmed without a ship event', () => {

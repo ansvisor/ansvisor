@@ -28,9 +28,9 @@
  *      due: the targets (active, not shared with another change), the
  *      controls, the metrics and the outcome; then writes the control sets
  *      and the measurement;
- *   5. closes, Not measurable (plan_inactive, or measuring_off), what is
- *      still open CLOSE_AFTER_DAYS after ship for a workspace that can't be
- *      measured (no active plan, or Chat no longer on for it);
+ *   5. closes, Not measurable (plan_inactive), what is still open
+ *      CLOSE_AFTER_DAYS after ship for a cloud workspace with no active
+ *      plan; a workspace Chat is off for keeps its own open;
  *   6. brings the agent runs whose changes were measured in the last
  *      RUN_SYNC_DAYS in step (chat_agent_runs.outcome, CHAT-21 §I item 43),
  *      so a write that failed is made the next night.
@@ -527,23 +527,21 @@ async function fillMissingSends(db, now, tally) {
   }
 }
 
-/** Why a workspace's measurement can't be read: no active plan, or Chat no longer on for it. */
-function closedReason(ship) {
-  if (!isSubscriptionActive(ship.organizations?.subscription_status)) return 'plan_inactive';
-  if (!chatAgenticEnabled(ship.organization_id)) return 'measuring_off';
-  return null;
-}
-
 /**
- * Closes, Not measurable, the measurements still open CLOSE_AFTER_DAYS
- * after ship whose workspace can't be measured: no active plan
- * (plan_inactive), or Chat no longer on for it (measuring_off, as on a
- * self-hosted install, which has no plan to lapse). Day 90 goes into
+ * Closes, Not measurable (plan_inactive), the measurements still open
+ * CLOSE_AFTER_DAYS after ship whose cloud workspace has no active plan, as
+ * its subscription in the database says. Day 90 goes into
  * checkpoints_json as that, and their next check goes, so they are read
- * no more. Each is written only while it is as read. A workspace that can
- * be measured keeps its own: a late run still reads them.
+ * no more. Each is written only while it is as read.
+ *
+ * Chat no longer on for a workspace (CHAT_AGENTIC_ORGS) closes nothing:
+ * the list is deploy config, and a deploy that drops a workspace for a
+ * night would close its measurements for good. They stay open, read by no
+ * one while Chat is off, and a late run reads them once it is back on.
+ * Self-hosted has no plan to lapse, so it closes nothing.
  */
 async function closeStale(db, now, tally) {
+  if (!isCloud()) return;
   const cutoff = new Date(now.getTime() - CLOSE_AFTER_DAYS * DAY_MS).toISOString();
   const rows = await readAll('stale measurements read', () =>
     db
@@ -558,8 +556,9 @@ async function closeStale(db, now, tally) {
   const measuredAt = now.toISOString();
   const d90 = CHECKPOINTS[CHECKPOINTS.length - 1];
   for (const row of rows) {
-    const reason = row.ship_events ? closedReason(row.ship_events) : null;
-    if (!reason) continue;
+    if (!row.ship_events) continue;
+    if (isSubscriptionActive(row.ship_events.organizations?.subscription_status)) continue;
+    const reason = 'plan_inactive';
     const earlier = Array.isArray(row.checkpoints_json) ? row.checkpoints_json : [];
     // Day 90 wasn't read: no window, no numbers (the earlier checkpoints keep theirs).
     const entry = checkpointEntry({
