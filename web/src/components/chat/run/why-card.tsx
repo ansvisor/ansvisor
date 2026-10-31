@@ -37,6 +37,19 @@ const daysOf = (period: { from: string; to: string }) =>
   Math.round((Date.parse(period.to) - Date.parse(period.from)) / DAY_MS) + 1;
 const one = (value: number) => (Math.round(Math.abs(value) * 10) / 10).toString();
 
+/**
+ * A cause's row (mockup `.czh`): its share, its words, how sure, the caret.
+ * On a narrow card (the side panel) the confidence goes, as the mockup's.
+ */
+const ROW = 'grid-cols-[56px_minmax(0,1fr)_18px] @xl:grid-cols-[72px_minmax(0,1fr)_132px_18px]';
+
+/** High, Medium and Low confidence (mockup `.conf.hi/.md/.lo`). */
+const CONFIDENCE: Record<ChatWhyCause['confidence'], string> = {
+  high: 'bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-400',
+  medium: 'bg-muted text-muted-foreground',
+  low: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
+};
+
 /** A page's path for a cause's title ("/blog/what-is-aeo"), or the page when it has none. */
 const pathOf = (page: string | undefined) => {
   if (!page) return '';
@@ -75,7 +88,7 @@ export function WhyCard({ runId, why }: { runId: string; why: ChatWhy }) {
   }
 
   return (
-    <section aria-label={t('aria')} data-action="why.card">
+    <section aria-label={t('aria')} data-action="why.card" className="@container">
       <div className="mt-0.5 mb-3 flex flex-wrap items-baseline gap-2.5">
         <b className="text-[15px]">
           {label}{' '}
@@ -131,7 +144,7 @@ export function WhyCard({ runId, why }: { runId: string; why: ChatWhy }) {
       ))}
       {why.remainder.points !== 0 && (
         <div className="mb-2 rounded-[14px] border bg-card shadow-sm">
-          <div className="grid grid-cols-[56px_1fr_18px] items-center gap-3 px-3 py-2.5">
+          <div className={cn('grid items-center gap-3 px-3 py-2.5', ROW)}>
             <Share share={why.remainder.share} points={why.remainder.points} />
             <span className="min-w-0">
               <b className="block truncate text-[13.5px] font-medium">
@@ -283,7 +296,10 @@ function CauseRow({
         aria-expanded={open}
         aria-controls={id}
         onClick={onToggle}
-        className="grid w-full grid-cols-[56px_1fr_18px] items-center gap-3 rounded-[14px] px-3 py-2.5 text-left hover:bg-muted/40"
+        className={cn(
+          'grid w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left hover:bg-muted/40',
+          ROW,
+        )}
       >
         <Share share={cause.share} points={cause.points} />
         <span className="min-w-0">
@@ -293,6 +309,14 @@ function CauseRow({
           <em className="block truncate text-xs text-muted-foreground not-italic" title={sub}>
             {sub}
           </em>
+        </span>
+        <span
+          className={cn(
+            'hidden rounded-full px-2 py-0.5 text-center text-[11px] whitespace-nowrap @xl:block',
+            CONFIDENCE[cause.confidence],
+          )}
+        >
+          {t(`confidence.${cause.confidence}`)}
         </span>
         <span
           aria-hidden="true"

@@ -3282,6 +3282,11 @@
     "notCited": "not cited",
     "noRows": "No single prompt explains this part.",
     "detection": "Detection from stored snapshots, no model reads",
+    "confidence": {
+      "high": "High confidence",
+      "medium": "Medium confidence",
+      "low": "Low confidence"
+    },
     "totalSub": "{runs} tracked runs · {cells} tracked prompts",
     "periodValue": "{value} · {runs} runs",
     "band": "Normal band",

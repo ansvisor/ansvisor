@@ -134,6 +134,33 @@ describe('WhyCard', () => {
     expect(text).toContain('Detection from stored snapshots, no model reads');
   });
 
+  it('says how sure each cause is, an offset and "Other" too', async () => {
+    await render({
+      ...why,
+      causes: [
+        ...why.causes,
+        {
+          kind: 'other',
+          share: null,
+          points: -0.4,
+          offset: false,
+          confidence: 'low',
+          cells: 2,
+          urls: [],
+          rows: [],
+        },
+      ],
+    });
+    const rows = [...container.querySelectorAll('[data-action="why.toggleCause"]')].map(
+      (row) => row.textContent ?? '',
+    );
+    expect(rows[0]).toContain('High confidence');
+    // The offset (a new citation) keeps its own.
+    expect(rows[1]).toContain('Medium confidence');
+    expect(rows[2]).toContain('Other');
+    expect(rows[2]).toContain('Low confidence');
+  });
+
   it('opens a cause to its prompts: cited before, cited now and the day', async () => {
     await render();
     const first = container.querySelector('[data-action="why.toggleCause"]')!;
