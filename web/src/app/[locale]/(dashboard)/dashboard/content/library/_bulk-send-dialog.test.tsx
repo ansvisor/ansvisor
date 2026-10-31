@@ -527,6 +527,15 @@ describe('BulkSendDialog', () => {
     expect(button('Send 2 pages').disabled).toBe(false);
   });
 
+  it('tells a manager an admin turned publishing off for managers', async () => {
+    sendPagesToCms.mockResolvedValue({ ok: false, code: 'execute_off', field: null });
+    await render();
+    await act(async () => button('Send 2 pages').click());
+    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(
+      'An admin turned publishing off for managers, so only an admin can send pages to the CMS.',
+    );
+  });
+
   it('says a page is already on its way to Webflow, and clears it when the webhook is picked', async () => {
     webflow.ready = true;
     sendPagesToCms.mockResolvedValue({ ok: false, code: 'in_progress', field: null });

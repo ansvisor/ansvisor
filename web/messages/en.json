@@ -4596,7 +4596,7 @@
       },
       "execute": {
         "title": "What Managers may take live",
-        "note": "EXECUTE always needs a click, whoever runs it. Off, a Manager gets Ask your Admin instead.",
+        "note": "EXECUTE always needs a click, whoever runs it. Off, a Manager gets Ask your Admin instead. Publishing off also stops a Manager's Send to CMS in the Content Editor and Library.",
         "groups": {
           "publishing": "Publishing",
           "email_outreach": "Email and outreach",
@@ -7437,6 +7437,7 @@
           "webhook_not_subscribed": "The brand's webhook doesn't receive \"Content page sent\". Turn it on in Webhook Settings on Content Opportunities.",
           "daily_limit": "This workspace has sent 200 pages in the last 24 hours. Try again later.",
           "forbidden": "Only admins and managers can send pages to the CMS.",
+          "execute_off": "An admin turned publishing off for managers, so only an admin can send pages to the CMS.",
           "not_found": "This page isn't in the brand anymore.",
           "invalid": "The page couldn't go as it is. Check it and send again.",
           "invalidField": "Check the {field, select, slug {slug} metaTitle {meta title} metaDescription {meta description} title {title} other {page}} and send again.",

@@ -36,7 +36,14 @@ const ERROR_CODES = { 403: 'forbidden', 404: 'not_found', 409: 'conflict', 422: 
 /** Who may send pages to the brand's CMS (#1331): as who may change its webhook. */
 const SEND_ROLES = ['admin', 'manager'];
 
-async function assertSender(userId) {
+/**
+ * An admin sends; a manager only while no admin of the brand's workspace
+ * turned Publishing off for managers (Settings › Chat, "What Managers may
+ * take live": chat_settings.manager_execute_off, 00401). Chat's own send
+ * (web cms-send.ts) checks the same switch. A read that fails refuses the
+ * send.
+ */
+async function assertSender(userId, orgId) {
   const { data: profile } = await supabaseAdmin
     .from('profiles')
     .select('role')
@@ -45,6 +52,19 @@ async function assertSender(userId) {
   if (!SEND_ROLES.includes(profile?.role)) {
     const err = new Error('Only admins and managers can send pages to the CMS.');
     err.status = 403;
+    throw err;
+  }
+  if (profile.role === 'admin') return;
+  const { data: settings, error } = await supabaseAdmin
+    .from('chat_settings')
+    .select('manager_execute_off')
+    .eq('organization_id', orgId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (settings?.manager_execute_off?.includes('publishing')) {
+    const err = new Error('An admin turned publishing off for managers.');
+    err.status = 403;
+    err.code = 'execute_off';
     throw err;
   }
 }
@@ -65,7 +85,7 @@ router.post('/send', async (req, res) => {
   const { brandId, pages, target } = parsed.data;
   try {
     const { orgId } = await assertBrandAccess(brandId, req.user.id);
-    await assertSender(req.user.id);
+    await assertSender(req.user.id, orgId);
     const sent = await sendContentPages({ orgId, brandId, userId: req.user.id, pages, target });
     return res.json(sent);
   } catch (err) {

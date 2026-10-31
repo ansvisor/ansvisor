@@ -156,6 +156,13 @@ describe('sendPagesToCms', () => {
       code: 'invalid',
       field: 'pages.0.slug',
     });
+    // A manager, with publishing turned off for managers: its own reason, not "workspace".
+    answer(403, { code: 'execute_off' });
+    expect(await sendPagesToCms('brand-1', [page])).toEqual({
+      ok: false,
+      code: 'execute_off',
+      field: null,
+    });
     for (const code of [
       'webflow_not_configured',
       'no_webflow',

@@ -10,15 +10,30 @@ const BRAND = '33333333-3333-3333-3333-333333333333';
 const DRAFT = '77777777-7777-7777-7777-777777777777';
 
 let role;
+/** The workspace's Chat settings row (null: none), or the error reading it. */
+let chatSettings;
+let chatSettingsError;
+const settingsReads = [];
 const assertBrandAccess = vi.fn();
 const sendContentPages = vi.fn();
 vi.mock('../config/supabase.js', () => ({
   default: {
-    from: () => {
+    from: (table) => {
+      const filters = {};
       const chain = {
         select: () => chain,
-        eq: () => chain,
+        eq: (column, value) => {
+          filters[column] = value;
+          return chain;
+        },
         single: async () => ({ data: { role }, error: null }),
+        maybeSingle: async () => {
+          if (table !== 'chat_settings') throw new Error(`unexpected ${table}`);
+          settingsReads.push(filters);
+          return chatSettingsError
+            ? { data: null, error: chatSettingsError }
+            : { data: chatSettings, error: null };
+        },
       };
       return chain;
     },
@@ -54,6 +69,9 @@ let baseUrl;
 
 beforeEach(async () => {
   role = 'manager';
+  chatSettings = null;
+  chatSettingsError = null;
+  settingsReads.length = 0;
   assertBrandAccess.mockReset().mockResolvedValue({ orgId: 'o1' });
   sendContentPages
     .mockReset()
@@ -111,6 +129,40 @@ describe('POST /api/content-drafts/send', () => {
     const res = await send({ brandId: BRAND, pages: [page] });
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ code: 'forbidden' });
+    expect(sendContentPages).not.toHaveBeenCalled();
+  });
+
+  it('refuses a manager once an admin turned publishing off for managers', async () => {
+    chatSettings = { manager_execute_off: ['email_outreach', 'publishing'] };
+    const res = await send({ brandId: BRAND, pages: [page] });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: 'execute_off' });
+    expect(settingsReads).toEqual([{ organization_id: 'o1' }]);
+    expect(sendContentPages).not.toHaveBeenCalled();
+  });
+
+  it('sends for a manager while publishing stays on for managers', async () => {
+    chatSettings = { manager_execute_off: ['email_outreach', 'code_prs'] };
+    const res = await send({ brandId: BRAND, pages: [page] });
+    expect(res.status).toBe(200);
+    expect(settingsReads).toEqual([{ organization_id: 'o1' }]);
+    expect(sendContentPages).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends for an admin with publishing off for managers, without reading the switch', async () => {
+    role = 'admin';
+    chatSettings = { manager_execute_off: ['publishing'] };
+    const res = await send({ brandId: BRAND, pages: [page] });
+    expect(res.status).toBe(200);
+    expect(settingsReads).toEqual([]);
+    expect(sendContentPages).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a manager’s send when the switch can’t be read', async () => {
+    chatSettingsError = { message: 'db down' };
+    const res = await send({ brandId: BRAND, pages: [page] });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ code: 'failed' });
     expect(sendContentPages).not.toHaveBeenCalled();
   });
 
