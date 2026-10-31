@@ -7,9 +7,9 @@
  * Each run:
  *   1. seeds a Pending measurement for each ship event written in the last
  *      SEED_DAYS that has none (a writer that didn't, or failed to);
- *   2. reads the measurements due (next_check_at passed) and their ship
- *      events, for the workspaces Chat is on for, and skips read-only
- *      workspaces (no active plan): they stay due;
+ *   2. reads the measurements due (next_check_at passed) with their ship
+ *      events and workspaces, only those Chat is on for with an active plan
+ *      (filtered in the query): a read-only workspace's stay due;
  *   3. per brand, in a few batched reads: its prompts (topics, active), the
  *      changes it shipped around the windows (overlaps, controls), and each
  *      window's rollup rows, read once and shared;
@@ -17,10 +17,14 @@
  *      shared with another change), the controls, the metrics and the
  *      outcome; writes the control sets, then the measurement, only as it
  *      was read (another server's run writes it once);
- *   5. per brand, the outcome of the agent runs whose changes were measured
- *      (chat_agent_runs.outcome, CHAT-21 §I item 43).
- * A brand, or a measurement, that fails is counted and logged, and the next
- * goes on. Logs carry counts and codes only, never a customer's names,
+ *   5. closes, Not measurable (plan_inactive), what is still open
+ *      CLOSE_AFTER_DAYS after ship for a workspace that can't be measured
+ *      (no active plan, or Chat no longer on for it);
+ *   6. brings the agent runs whose changes were measured in the last
+ *      RUN_SYNC_DAYS in step (chat_agent_runs.outcome, CHAT-21 §I item 43),
+ *      so a write that failed is made the next night.
+ * A brand, a measurement or a run that fails is counted and logged, and the
+ * next goes on. Logs carry counts and codes only, never a customer's names,
  * prompts or pages.
  */
 
@@ -28,6 +32,7 @@ import cron from 'node-cron';
 import supabaseAdmin from '../../config/supabase.js';
 import { getPlan, isCloud, isSubscriptionActive } from '../../config/plans.js';
 import { chatAgenticDeployed, chatAgenticEnabled, chatAgenticOrgs } from '../chat-flag.js';
+import { chunkIds } from '../chunked-in.js';
 import { logger } from '../logger.js';
 import { applyPlanOverrides } from '../plan-guard.js';
 import {
@@ -52,6 +57,18 @@ export const SCHEDULE = '53 7 * * *';
 export const SEED_DAYS = 30;
 /** Most other changes a measurement lists in concurrent_changes. */
 const MAX_CONCURRENT = 50;
+/**
+ * Days after ship a measurement still open is closed for a workspace that
+ * can't be measured: day 90's check (the morning after day 90), then 30 days.
+ */
+export const CLOSE_AFTER_DAYS = 91 + 30;
+/** Days back the agent runs of measured changes are brought in step: a failed write is retried. */
+export const RUN_SYNC_DAYS = 3;
+/** Subscription states with an active plan (config/plans.js isSubscriptionActive). */
+const ACTIVE_STATUSES = ['active', 'trialing'];
+/** A measurement's ship event and workspace, embedded by their foreign keys' names. */
+const SHIP_OF = 'ship_events!impact_measurements_ship_event_id_fkey!inner';
+const ORG_OF = 'organizations!ship_events_organization_id_fkey!inner';
 
 const DAY_MS = 86_400_000;
 const errInfo = (err) => ({ name: err?.name, code: err?.code ?? null });
@@ -74,7 +91,16 @@ const targetPromptIds = (targets) =>
 
 // ─── Reads ──────────────────────────────────────────────────────────────────
 
-/** Ship events written lately (for the workspaces Chat is on for) with no measurement yet. */
+/** The plan limits a workspace's engines are read on (§2 item 15): self-hosted has every one. */
+function limitsOf(org) {
+  if (!isCloud()) return getPlan('self_hosted').limits;
+  return applyPlanOverrides(getPlan(org?.plan), org ?? {}).limits;
+}
+
+/**
+ * Ship events written lately with no measurement yet, for the workspaces
+ * Chat is on for with an active plan (in the query).
+ */
 async function loadUnseeded(db, now) {
   const orgs = chatAgenticOrgs();
   const since = new Date(now.getTime() - SEED_DAYS * DAY_MS).toISOString();
@@ -82,11 +108,13 @@ async function loadUnseeded(db, now) {
     await readAll('new ship events read', () => {
       let query = db
         .from('ship_events')
-        .select('id, organization_id, brand_id, action_id, content_draft_id, url, shipped_at')
-        .gte('created_at', since)
-        .order('id');
+        .select(
+          `id, organization_id, brand_id, action_id, content_draft_id, url, shipped_at, ${ORG_OF}(subscription_status)`,
+        )
+        .gte('created_at', since);
       if (orgs.length) query = query.in('organization_id', orgs);
-      return query;
+      if (isCloud()) query = query.in('organizations.subscription_status', ACTIVE_STATUSES);
+      return query.order('id');
     })
   ).filter((ship) => chatAgenticEnabled(ship.organization_id));
   const seeded = new Set(
@@ -106,57 +134,33 @@ async function loadUnseeded(db, now) {
   return ships.filter((ship) => !seeded.has(ship.id));
 }
 
-/** The measurements due now, each with its ship event, for the workspaces Chat is on for. */
+/**
+ * The measurements due now, each with its ship event and its workspace's
+ * plan limits: only workspaces Chat is on for (CHAT_AGENTIC_ORGS) with an
+ * active plan, filtered in the query.
+ */
 async function loadDue(db, now) {
-  const measurements = await readAll('due measurements read', () =>
-    db
+  const orgs = chatAgenticOrgs();
+  const rows = await readAll('due measurements read', () => {
+    let query = db
       .from('impact_measurements')
-      .select('id, ship_event_id, targets, checkpoints_json, next_check_at')
-      .lte('next_check_at', now.toISOString())
-      .order('id'),
-  );
-  const ships = new Map(
-    (
-      await readChunks(
-        'ship events read',
-        measurements.map((m) => m.ship_event_id),
-        (chunk) =>
-          db
-            .from('ship_events')
-            .select(
-              'id, organization_id, brand_id, kind, change_type, shipped_at, agent_run_id, title',
-            )
-            .in('id', chunk)
-            .order('id'),
+      .select(
+        `id, ship_event_id, targets, checkpoints_json, next_check_at, ${SHIP_OF}(id, organization_id, brand_id, kind, change_type, shipped_at, agent_run_id, title, ${ORG_OF}(plan, subscription_status, plan_overrides))`,
       )
-    ).map((s) => [s.id, s]),
-  );
-  return measurements
-    .map((measurement) => ({ measurement, ship: ships.get(measurement.ship_event_id) }))
-    .filter(({ ship }) => ship && chatAgenticEnabled(ship.organization_id));
-}
-
-/** The workspaces' plan limits and whether they may be measured (an active plan, or off the cloud). */
-async function loadPlans(db, orgIds) {
-  const plans = new Map();
-  if (!isCloud()) {
-    for (const id of orgIds) plans.set(id, { active: true, limits: getPlan('self_hosted').limits });
-    return plans;
-  }
-  const orgs = await readChunks('organizations read', orgIds, (chunk) =>
-    db
-      .from('organizations')
-      .select('id, plan, subscription_status, plan_overrides')
-      .in('id', chunk)
-      .order('id'),
-  );
-  for (const org of orgs) {
-    plans.set(org.id, {
-      active: isSubscriptionActive(org.subscription_status),
-      limits: applyPlanOverrides(getPlan(org.plan), org).limits,
-    });
-  }
-  return plans;
+      .lte('next_check_at', now.toISOString());
+    if (orgs.length) query = query.in('ship_events.organization_id', orgs);
+    if (isCloud()) {
+      query = query.in('ship_events.organizations.subscription_status', ACTIVE_STATUSES);
+    }
+    return query.order('id');
+  });
+  return rows
+    .filter((row) => row.ship_events && chatAgenticEnabled(row.ship_events.organization_id))
+    .map(({ ship_events: ship, ...measurement }) => ({
+      measurement,
+      ship,
+      limits: limitsOf(ship.organizations),
+    }));
 }
 
 /** The brand's prompts: topic and whether they are tracked, by id. */
@@ -225,8 +229,9 @@ async function loadWindow(db, brandId, from, to, limits) {
  * One checkpoint of one change (CHAT-22 §2 items 7, 10, 11): Not measurable
  * without targets (no_targets), with every target out of tracking
  * (targets_removed), or with another change shipped in the window on
- * OVERLAP_SHARE of them (overlapping_change); else measured on the targets
- * no other change shares, against controls no change in the window targets.
+ * OVERLAP_SHARE of them, or other changes on all of them together
+ * (overlapping_change); else measured on the targets no other change
+ * shares, against controls no change in the window targets.
  */
 async function measureCheckpoint({ measurement, ship, cp, prompts, shipped, windowOf }) {
   const window = checkpointWindow(ship.shipped_at, cp.day);
@@ -255,7 +260,11 @@ async function measureCheckpoint({ measurement, ship, cp, prompts, shipped, wind
     });
   }
   concurrent.splice(MAX_CONCURRENT);
-  if (overlapping) return { window, result: { reason: 'overlapping_change' }, concurrent };
+  const own = active.filter((id) => !shared.has(id));
+  // Other changes share them all, or half or more for one: Not measurable.
+  if (overlapping || own.length === 0) {
+    return { window, result: { reason: 'overlapping_change' }, concurrent };
+  }
 
   const excluded = new Set(targetIds);
   for (const other of others) other.promptIds.forEach((id) => excluded.add(id));
@@ -266,7 +275,7 @@ async function measureCheckpoint({ measurement, ship, cp, prompts, shipped, wind
   const result = measureCells({
     seed: `${measurement.id}:${cp.key}`,
     primary: primaryMetric(ship),
-    targetIds: active.filter((id) => !shared.has(id)),
+    targetIds: own,
     pre,
     post,
     excluded,
@@ -352,14 +361,80 @@ async function measureOne(db, { measurement, ship, due, prompts, shipped, window
 }
 
 /**
- * The agent runs' outcomes from what they shipped (CHAT-21 §I item 43), for
- * the runs one of whose changes was just measured; written only when they
- * changed.
+ * Closes, Not measurable (plan_inactive), the measurements still open
+ * CLOSE_AFTER_DAYS after ship whose workspace can't be measured: no active
+ * plan, or Chat no longer on for it. Their next check goes, so they are
+ * read no more. A workspace that can be measured keeps its own: a late run
+ * still reads them.
  */
-async function updateAgentRuns(db, runIds, tally) {
+async function closeStale(db, now, tally) {
+  const cutoff = new Date(now.getTime() - CLOSE_AFTER_DAYS * DAY_MS).toISOString();
+  const rows = await readAll('stale measurements read', () =>
+    db
+      .from('impact_measurements')
+      .select(`id, ${SHIP_OF}(organization_id, shipped_at, ${ORG_OF}(subscription_status))`)
+      .not('next_check_at', 'is', null)
+      .lt('ship_events.shipped_at', cutoff)
+      .order('id'),
+  );
+  const closing = rows
+    .filter(({ ship_events: ship }) => {
+      if (!ship) return false;
+      return (
+        !chatAgenticEnabled(ship.organization_id) ||
+        !isSubscriptionActive(ship.organizations?.subscription_status)
+      );
+    })
+    .map((row) => row.id);
+  for (const chunk of chunkIds(closing)) {
+    const { data, error } = await db
+      .from('impact_measurements')
+      .update({
+        outcome: 'not_measurable',
+        confidence: null,
+        not_measurable_reason: 'plan_inactive',
+        checkpoint: 'd90',
+        next_check_at: null,
+        measured_at: now.toISOString(),
+      })
+      .in('id', chunk)
+      .not('next_check_at', 'is', null)
+      .select('id');
+    if (error) throw new ImpactDbError('stale measurements close', error);
+    tally.closed += (data ?? []).length;
+  }
+}
+
+/**
+ * The agent runs' outcomes from what they shipped (CHAT-21 §I item 43), for
+ * the runs one of whose changes was measured in the last RUN_SYNC_DAYS:
+ * written only when they changed, and only within the run's own workspace.
+ * A run whose write fails is counted, and made again the next night.
+ */
+async function syncAgentRuns(db, now, tally) {
+  const since = new Date(now.getTime() - RUN_SYNC_DAYS * DAY_MS).toISOString();
+  const recent = await readAll('measured runs read', () =>
+    db
+      .from('impact_measurements')
+      .select(`id, ${SHIP_OF}(agent_run_id, organization_id)`)
+      .gte('measured_at', since)
+      .not('ship_events.agent_run_id', 'is', null)
+      .order('id'),
+  );
+  const orgOf = new Map();
+  for (const { ship_events: ship } of recent) {
+    if (ship?.agent_run_id && chatAgenticEnabled(ship.organization_id)) {
+      orgOf.set(ship.agent_run_id, ship.organization_id);
+    }
+  }
+  const runIds = [...orgOf.keys()];
   if (runIds.length === 0) return;
   const ships = await readChunks('run ship events read', runIds, (chunk) =>
-    db.from('ship_events').select('id, agent_run_id').in('agent_run_id', chunk).order('id'),
+    db
+      .from('ship_events')
+      .select('id, agent_run_id, organization_id')
+      .in('agent_run_id', chunk)
+      .order('id'),
   );
   const measured = new Map(
     (
@@ -378,14 +453,19 @@ async function updateAgentRuns(db, runIds, tally) {
   const runs = await readChunks('agent runs read', runIds, (chunk) =>
     db
       .from('chat_agent_runs')
-      .select('id, outcome, outcome_confidence')
+      .select('id, organization_id, outcome, outcome_confidence')
       .in('id', chunk)
       .order('id'),
   );
   const shipsOf = groupBy(ships, 'agent_run_id');
   for (const run of runs) {
+    const org = orgOf.get(run.id);
+    if (run.organization_id !== org) continue;
     const next = runOutcome(
-      (shipsOf.get(run.id) ?? []).map((s) => measured.get(s.id)).filter(Boolean),
+      (shipsOf.get(run.id) ?? [])
+        .filter((s) => s.organization_id === org)
+        .map((s) => measured.get(s.id))
+        .filter(Boolean),
     );
     if (!next) continue;
     if (next.outcome === run.outcome && next.confidence === (run.outcome_confidence ?? null)) {
@@ -394,8 +474,16 @@ async function updateAgentRuns(db, runIds, tally) {
     const { error } = await db
       .from('chat_agent_runs')
       .update({ outcome: next.outcome, outcome_confidence: next.confidence })
-      .eq('id', run.id);
-    if (error) throw new ImpactDbError('agent run outcome write', error);
+      .eq('id', run.id)
+      .eq('organization_id', org);
+    if (error) {
+      tally.failed++;
+      logger.error(
+        { err: errInfo(new ImpactDbError('agent run outcome write', error)) },
+        '[impact-ledger] agent run not updated',
+      );
+      continue;
+    }
     tally.runsUpdated++;
   }
 }
@@ -424,17 +512,14 @@ async function runBrand(db, { brandId, items, limits, now, tally }) {
     return windows.get(key);
   };
 
-  const runIds = new Set();
   for (const item of items) {
     try {
-      const wrote = await measureOne(db, { ...item, prompts, shipped, windowOf, now, tally });
-      if (wrote && item.ship.agent_run_id) runIds.add(item.ship.agent_run_id);
+      await measureOne(db, { ...item, prompts, shipped, windowOf, now, tally });
     } catch (err) {
       tally.failed++;
       logger.error({ err: errInfo(err) }, '[impact-ledger] measurement failed');
     }
   }
-  await updateAgentRuns(db, [...runIds], tally);
 }
 
 // ─── The run ────────────────────────────────────────────────────────────────
@@ -446,7 +531,7 @@ async function runBrand(db, { brandId, items, limits, now, tally }) {
  *
  * @param {{ db?: object, now?: Date }} [options]
  * @returns {Promise<{ seeded: number, brands: number, measured: number, checkpoints: number,
- *   notMeasurable: number, runsUpdated: number, skipped: number, failed: number }>}
+ *   notMeasurable: number, runsUpdated: number, closed: number, failed: number }>}
  */
 export async function runImpactLedger({ db = supabaseAdmin, now = new Date() } = {}) {
   const tally = {
@@ -456,7 +541,7 @@ export async function runImpactLedger({ db = supabaseAdmin, now = new Date() } =
     checkpoints: 0,
     notMeasurable: 0,
     runsUpdated: 0,
-    skipped: 0,
+    closed: 0,
     failed: 0,
   };
   if (!chatAgenticDeployed()) return tally;
@@ -476,24 +561,32 @@ export async function runImpactLedger({ db = supabaseAdmin, now = new Date() } =
         due: dueCheckpoints(item.measurement.checkpoints_json, item.ship.shipped_at, now),
       }))
       .filter((item) => item.due.length > 0);
-    const plans = await loadPlans(db, [...new Set(due.map((item) => item.ship.organization_id))]);
 
     for (const [brandId, items] of groupBy(
       due.map((item) => ({ ...item, brandId: item.ship.brand_id })),
       'brandId',
     )) {
-      const plan = plans.get(items[0].ship.organization_id);
-      if (!plan?.active) {
-        tally.skipped += items.length;
-        continue;
-      }
       try {
-        await runBrand(db, { brandId, items, limits: plan.limits, now, tally });
+        await runBrand(db, { brandId, items, limits: items[0].limits, now, tally });
         tally.brands++;
       } catch (err) {
         tally.failed++;
         logger.error({ err: errInfo(err) }, '[impact-ledger] brand failed');
       }
+    }
+
+    // Their own steps: one that fails is tried again tomorrow.
+    try {
+      await closeStale(db, now, tally);
+    } catch (err) {
+      tally.failed++;
+      logger.error({ err: errInfo(err) }, '[impact-ledger] closing failed');
+    }
+    try {
+      await syncAgentRuns(db, now, tally);
+    } catch (err) {
+      tally.failed++;
+      logger.error({ err: errInfo(err) }, '[impact-ledger] agent runs failed');
     }
   } catch (err) {
     tally.failed++;

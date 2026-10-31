@@ -5,14 +5,15 @@
  *
  *   * resolveTargets: the prompts (at most MAX_TARGET_PROMPTS) and pages a
  *     change is measured on, as AffectedEntity[]: its action's frozen
- *     targets (payload.promptIds, else its topic's prompts), else its
- *     draft's prompts; the action's pages and the live address beside them.
- *     Only the brand's own prompts.
+ *     targets as Action Center's own measure reads them, else its draft's
+ *     prompts; the action's pages and the live address beside them. Only
+ *     the brand's own prompts.
  *   * seedMeasurements: one Pending measurement per ship event that has
  *     none, first read at day 7. The nightly job (job.js) seeds what a
  *     writer didn't, so a ship event written anywhere is measured.
  *   * recordCmsPublish: a publish the CMS confirmed (Send to CMS: the
- *     webhook's callback or the CMS's own status), written once per send.
+ *     webhook's callback or the CMS's own status), written once per send,
+ *     and once for a draft published again within REPUBLISH_DAYS.
  *
  * Batched reads, 1000 rows a page; logs carry codes and counts, never a
  * customer's names, addresses or texts.
@@ -21,6 +22,8 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { chatAgenticDeployed, chatAgenticEnabled } from '../chat-flag.js';
 import { chunkIds } from '../chunked-in.js';
+import { basketScope } from '../action-center/basket-metrics.js';
+import { targetScope } from '../action-center/validate.js';
 import { logger } from '../logger.js';
 import { MAX_TARGET_PROMPTS, checkAt } from './method.js';
 
@@ -30,6 +33,7 @@ export const PAGE = 1000;
 export const MAX_TARGET_PAGES = 20;
 /** Measurements written per insert. */
 const SEED_CHUNK = 500;
+const DAY_MS = 86_400_000;
 
 /** A failed read or write, by what it was and the database's code: never its values. */
 export class ImpactDbError extends Error {
@@ -71,7 +75,14 @@ function pageAddress(value) {
 
 /**
  * The targets of each ship event, as AffectedEntity[] ({ type, id, label }),
- * by ship event id. In a few batched reads, whatever the number of events.
+ * by ship event id: its action's, as Action Center's own measure reads them
+ * (basketScope: payload.promptIds, or an older action's opportunity
+ * clusters or topic; targetScope: the night engine's targetEntity and
+ * targetIds), else its draft's prompts; the action's pages and the live
+ * address beside them. Only the brand's own prompts, at most
+ * MAX_TARGET_PROMPTS. Actions, drafts and prompts are read in batches; only
+ * an older action's opportunity or topic, or a page written as a path, reads
+ * on its own.
  *
  * @param {object} db
  * @param {Array<{ id: string, brand_id: string, action_id?: string|null,
@@ -82,7 +93,7 @@ export async function resolveTargets(db, ships) {
   const actions = new Map(
     (
       await readChunks('actions read', ships.map((s) => s.action_id).filter(Boolean), (chunk) =>
-        db.from('actions').select('id, brand_id, payload').in('id', chunk).order('id'),
+        db.from('actions').select('id, brand_id, kind, payload').in('id', chunk).order('id'),
       )
     ).map((a) => [a.id, a]),
   );
@@ -97,55 +108,52 @@ export async function resolveTargets(db, ships) {
     ).map((d) => [d.id, d]),
   );
 
-  const wanted = new Map();
+  const wanted = [];
   for (const ship of ships) {
     const action = actions.get(ship.action_id);
-    const payload = action?.brand_id === ship.brand_id && action.payload ? action.payload : {};
-    let promptIds = strings(payload.promptIds);
+    let promptIds = [];
+    let pages = [];
+    if (action?.brand_id === ship.brand_id) {
+      const own = { ...action, payload: action.payload ?? {} };
+      const basket = await basketScope(own);
+      const named = await targetScope(own);
+      promptIds = basket.promptIds.length ? basket.promptIds : (named?.promptIds ?? []);
+      pages = [...basket.pages, ...(named?.pages ?? [])];
+    }
     const draft = drafts.get(ship.content_draft_id);
     if (!promptIds.length && draft?.brand_id === ship.brand_id) {
       promptIds = strings(draft.prompt_ids);
     }
-    const topicId =
-      !promptIds.length && typeof payload.topicId === 'string' ? payload.topicId : null;
-    const live =
-      payload.publishedPages && typeof payload.publishedPages === 'object'
-        ? Object.values(payload.publishedPages)
-        : [];
-    const pages = [
-      ...new Set([...strings(payload.pages), ...live, ship.url].map(pageAddress).filter(Boolean)),
-    ].slice(0, MAX_TARGET_PAGES);
-    wanted.set(ship.id, { ship, promptIds: [...new Set(promptIds)], topicId, pages });
+    wanted.push({
+      ship,
+      promptIds: [...new Set(strings(promptIds))],
+      pages: [...new Set([...pages, ship.url].map(pageAddress).filter(Boolean))].slice(
+        0,
+        MAX_TARGET_PAGES,
+      ),
+    });
   }
 
-  const all = [...wanted.values()];
-  const promptRows = await readChunks(
-    'target prompts read',
-    all.flatMap((w) => w.promptIds),
-    (chunk) =>
-      db
-        .from('prompts')
-        .select('id, text, topic_id, prompt_sets!inner(brand_id)')
-        .in('id', chunk)
-        .order('id'),
+  const promptOf = new Map(
+    (
+      await readChunks(
+        'target prompts read',
+        wanted.flatMap((w) => w.promptIds),
+        (chunk) =>
+          db
+            .from('prompts')
+            .select('id, text, prompt_sets!inner(brand_id)')
+            .in('id', chunk)
+            .order('id'),
+      )
+    ).map((p) => [p.id, p]),
   );
-  const topicRows = await readChunks(
-    'topic prompts read',
-    all.map((w) => w.topicId).filter(Boolean),
-    (chunk) =>
-      db
-        .from('prompts')
-        .select('id, text, topic_id, prompt_sets!inner(brand_id)')
-        .in('topic_id', chunk)
-        .order('id'),
-  );
-  const promptOf = new Map(promptRows.map((p) => [p.id, p]));
 
   const targets = new Map();
-  for (const { ship, promptIds, topicId, pages } of all) {
-    const ownBrand = (p) => p?.prompt_sets?.brand_id === ship.brand_id;
-    let prompts = promptIds.map((id) => promptOf.get(id)).filter(ownBrand);
-    if (topicId) prompts = topicRows.filter((p) => p.topic_id === topicId && ownBrand(p));
+  for (const { ship, promptIds, pages } of wanted) {
+    const prompts = promptIds
+      .map((id) => promptOf.get(id))
+      .filter((p) => p?.prompt_sets?.brand_id === ship.brand_id);
     targets.set(ship.id, [
       ...prompts.slice(0, MAX_TARGET_PROMPTS).map((p) => ({
         type: 'prompt',
@@ -190,15 +198,25 @@ export async function seedMeasurements(db, ships) {
   return written;
 }
 
+/** A draft live again within this many days is the same shipped change, still measured (00425). */
+export const REPUBLISH_DAYS = 90;
+
 /**
  * A page the CMS confirmed live (markDeliveryPublished): a ship event
  * (cms_publish, from the Content Editor, a content change, assisted when a
  * person sent it, automated when nobody did) and its Pending measurement.
- * Once per send: the same send's publish confirmed again (a retry) finds
- * its ship event and writes nothing. Off with CHAT_AGENTIC, or for a
- * workspace it isn't on for, it writes nothing, and with it off reads
- * nothing either. Never throws: a ship event that fails is logged, and the
- * page stays published.
+ *
+ *   * One per send (00425): written with an upsert on its send that ignores
+ *     a second, so a confirmation read twice, or by two servers at once,
+ *     writes one.
+ *   * The same draft live again within REPUBLISH_DAYS of its ship event (a
+ *     post updated in place, sent again): no second ship event; the first
+ *     notes it (republished_at) and its measurement goes on, as two on the
+ *     same targets would make each other Not measurable.
+ *
+ * Off with CHAT_AGENTIC, or for a workspace it isn't on for, it writes
+ * nothing, and with it off reads nothing either. Never throws: a ship event
+ * that fails is logged, and the page stays published.
  *
  * @returns {Promise<string|null>} the ship event's id
  */
@@ -207,27 +225,35 @@ export async function recordCmsPublish({ deliveryId, url, publishedAt, db = supa
   try {
     const { data: delivery, error } = await db
       .from('content_draft_deliveries')
-      .select('id, organization_id, brand_id, draft_id, sent_by, title, created_at')
+      .select('id, organization_id, brand_id, draft_id, sent_by, title')
       .eq('id', deliveryId)
       .maybeSingle();
     if (error) throw new ImpactDbError('delivery read', error);
     if (!delivery || !chatAgenticEnabled(delivery.organization_id)) return null;
-    const address = pageAddress(url);
-
-    let seen = db
-      .from('ship_events')
-      .select('id')
-      .eq('brand_id', delivery.brand_id)
-      .eq('kind', 'cms_publish')
-      .gte('shipped_at', delivery.created_at);
-    seen = delivery.draft_id ? seen.eq('content_draft_id', delivery.draft_id) : seen;
-    seen = address ? seen.eq('url', address) : seen.is('url', null);
-    const { data: before, error: seenError } = await seen.limit(1);
-    if (seenError) throw new ImpactDbError('ship events read', seenError);
-    if (before?.length) return before[0].id;
 
     let draft = null;
     if (delivery.draft_id) {
+      const since = new Date(Date.parse(publishedAt) - REPUBLISH_DAYS * DAY_MS).toISOString();
+      const { data: earlier, error: earlierError } = await db
+        .from('ship_events')
+        .select('id, content_draft_delivery_id')
+        .eq('brand_id', delivery.brand_id)
+        .eq('content_draft_id', delivery.draft_id)
+        .gte('shipped_at', since)
+        .order('shipped_at', { ascending: false })
+        .limit(1);
+      if (earlierError) throw new ImpactDbError('ship events read', earlierError);
+      const first = earlier?.[0];
+      if (first) {
+        if (first.content_draft_delivery_id !== delivery.id) {
+          const { error: noteError } = await db
+            .from('ship_events')
+            .update({ republished_at: publishedAt })
+            .eq('id', first.id);
+          if (noteError) throw new ImpactDbError('republish note', noteError);
+        }
+        return first.id;
+      }
       const { data, error: draftError } = await db
         .from('content_drafts')
         .select('id, title, action_id')
@@ -238,26 +264,40 @@ export async function recordCmsPublish({ deliveryId, url, publishedAt, db = supa
     }
 
     const title = clip(draft?.title || delivery.title, 200) || 'Page';
+    const columns = 'id, brand_id, action_id, content_draft_id, url, shipped_at';
     const { data: inserted, error: insertError } = await db
       .from('ship_events')
-      .insert({
-        organization_id: delivery.organization_id,
-        brand_id: delivery.brand_id,
-        kind: 'cms_publish',
-        title,
-        content_draft_id: delivery.draft_id ?? null,
-        url: address,
-        action_id: draft?.action_id ?? null,
-        source: 'content_editor',
-        change_type: 'content',
-        shipped_at: publishedAt,
-        shipped_by: delivery.sent_by ?? null,
-        execution_mode: delivery.sent_by ? 'assisted' : 'automated',
-      })
-      .select('id, brand_id, action_id, content_draft_id, url, shipped_at');
+      .upsert(
+        {
+          organization_id: delivery.organization_id,
+          brand_id: delivery.brand_id,
+          kind: 'cms_publish',
+          title,
+          content_draft_id: delivery.draft_id ?? null,
+          content_draft_delivery_id: delivery.id,
+          url: pageAddress(url),
+          action_id: draft?.action_id ?? null,
+          source: 'content_editor',
+          change_type: 'content',
+          shipped_at: publishedAt,
+          shipped_by: delivery.sent_by ?? null,
+          execution_mode: delivery.sent_by ? 'assisted' : 'automated',
+        },
+        { onConflict: 'content_draft_delivery_id', ignoreDuplicates: true },
+      )
+      .select(columns);
     if (insertError) throw new ImpactDbError('ship event insert', insertError);
     const ship = inserted?.[0];
-    if (!ship) return null;
+    if (!ship) {
+      // Another confirmation of the send wrote it first: that one is seeded.
+      const { data: kept, error: keptError } = await db
+        .from('ship_events')
+        .select('id')
+        .eq('content_draft_delivery_id', delivery.id)
+        .maybeSingle();
+      if (keptError) throw new ImpactDbError('ship event read', keptError);
+      return kept?.id ?? null;
+    }
     // The nightly job seeds it if this fails.
     try {
       await seedMeasurements(db, [ship]);

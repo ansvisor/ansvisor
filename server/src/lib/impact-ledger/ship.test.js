@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeDb } from './__fixtures__/fake-db.js';
 
-vi.mock('../../config/supabase.js', () => ({ default: {} }));
+// Action Center's own scope readers (basketScope, targetScope) read through
+// the admin client: the test's in-memory database.
+vi.mock('../../config/supabase.js', () => ({
+  default: { from: (table) => globalThis.impactLedgerDb.from(table) },
+}));
 vi.mock('../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
 const { logger } = await import('../logger.js');
@@ -54,8 +58,25 @@ function world(overrides = {}) {
   };
 }
 
-const record = (db) =>
-  recordCmsPublish({ deliveryId: 'x1', url: LIVE, publishedAt: PUBLISHED, db });
+const record = (db, deliveryId = 'x1', publishedAt = PUBLISHED) =>
+  recordCmsPublish({ deliveryId, url: LIVE, publishedAt, db });
+
+/** A second send of the same draft. */
+const sentAgain = (id) => ({
+  id,
+  organization_id: ORG,
+  brand_id: 'b1',
+  draft_id: 'dr1',
+  sent_by: 'u1',
+  title: 'Cold brew guide',
+});
+
+/** The in-memory database, also the one the admin client reads. */
+function useDb(tables) {
+  const db = fakeDb(tables);
+  globalThis.impactLedgerDb = db;
+  return db;
+}
 
 beforeEach(() => {
   process.env.CHAT_AGENTIC = 'true';
@@ -70,7 +91,7 @@ afterEach(() => {
 
 describe('recordCmsPublish', () => {
   it('writes the publish as a shipped change, with its Pending measurement on the draft’s prompts', async () => {
-    const db = fakeDb(world());
+    const db = useDb(world());
     const id = await record(db);
     expect(db.tables.ship_events).toEqual([
       expect.objectContaining({
@@ -87,6 +108,7 @@ describe('recordCmsPublish', () => {
         shipped_at: PUBLISHED,
         shipped_by: 'u1',
         execution_mode: 'assisted',
+        content_draft_delivery_id: 'x1',
       }),
     ]);
     expect(db.tables.impact_measurements).toEqual([
@@ -107,7 +129,7 @@ describe('recordCmsPublish', () => {
     tables.content_drafts[0].action_id = 'a1';
     tables.content_draft_deliveries[0].sent_by = null;
     tables.actions = [{ id: 'a1', brand_id: 'b1', payload: { promptIds: ['p3'] } }];
-    const db = fakeDb(tables);
+    const db = useDb(tables);
     await record(db);
     expect(db.tables.ship_events[0]).toMatchObject({
       action_id: 'a1',
@@ -118,30 +140,74 @@ describe('recordCmsPublish', () => {
   });
 
   it('writes one ship event per send, however often its publish is confirmed', async () => {
-    const db = fakeDb(world());
+    const db = useDb(world());
     const first = await record(db);
     expect(await record(db)).toBe(first);
     expect(db.tables.ship_events).toHaveLength(1);
     expect(db.tables.impact_measurements).toHaveLength(1);
   });
 
+  it('writes one ship event per send when two confirmations race, by the send', async () => {
+    const tables = world();
+    // A send whose draft is gone: only the send tells them apart.
+    tables.content_draft_deliveries[0].draft_id = null;
+    tables.ship_events = [
+      {
+        id: 'first',
+        brand_id: 'b1',
+        kind: 'cms_publish',
+        content_draft_delivery_id: 'x1',
+        shipped_at: PUBLISHED,
+      },
+    ];
+    const db = useDb(tables);
+    expect(await record(db)).toBe('first');
+    expect(db.tables.ship_events).toHaveLength(1);
+    expect(db.tables.impact_measurements).toHaveLength(0);
+  });
+
+  it('keeps one ship event for a draft published again within 90 days, noting it', async () => {
+    const tables = world();
+    tables.content_draft_deliveries.push(sentAgain('x2'));
+    const db = useDb(tables);
+    const first = await record(db);
+    const again = '2026-12-01T09:00:00.000Z';
+    expect(await record(db, 'x2', again)).toBe(first);
+    expect(db.tables.ship_events).toHaveLength(1);
+    expect(db.tables.ship_events[0]).toMatchObject({
+      content_draft_delivery_id: 'x1',
+      republished_at: again,
+    });
+    expect(db.tables.impact_measurements).toHaveLength(1);
+  });
+
+  it('writes a new ship event for a draft published again after 90 days', async () => {
+    const tables = world();
+    tables.content_draft_deliveries.push(sentAgain('x2'));
+    const db = useDb(tables);
+    await record(db);
+    await record(db, 'x2', '2027-02-01T09:00:00.000Z');
+    expect(db.tables.ship_events.map((e) => e.content_draft_delivery_id)).toEqual(['x1', 'x2']);
+    expect(db.tables.impact_measurements).toHaveLength(2);
+  });
+
   it('reads and writes nothing with CHAT_AGENTIC off', async () => {
     delete process.env.CHAT_AGENTIC;
-    const db = fakeDb(world());
+    const db = useDb(world());
     expect(await record(db)).toBeNull();
     expect(db.calls).toEqual([]);
   });
 
   it('writes nothing for a workspace CHAT_AGENTIC_ORGS doesn’t list', async () => {
     process.env.CHAT_AGENTIC_ORGS = '22222222-2222-2222-2222-222222222222';
-    const db = fakeDb(world());
+    const db = useDb(world());
     expect(await record(db)).toBeNull();
     expect(db.calls.filter((c) => c.op !== 'select')).toEqual([]);
   });
 
   it('never throws: a failed write is logged by code and the page stays published', async () => {
-    const db = fakeDb(world());
-    db.fail = (table, op) => table === 'ship_events' && op === 'insert';
+    const db = useDb(world());
+    db.fail = (table, op) => table === 'ship_events' && op === 'upsert';
     expect(await record(db)).toBeNull();
     expect(logger.warn).toHaveBeenCalledWith(
       { err: { name: 'ImpactDbError', code: '57014' } },
@@ -150,7 +216,7 @@ describe('recordCmsPublish', () => {
   });
 
   it('keeps the ship event when its measurement fails: the nightly job seeds it', async () => {
-    const db = fakeDb(world());
+    const db = useDb(world());
     db.fail = (table, op) => table === 'impact_measurements' && op === 'upsert';
     expect(await record(db)).toEqual(expect.any(String));
     expect(db.tables.ship_events).toHaveLength(1);
@@ -161,7 +227,7 @@ describe('recordCmsPublish', () => {
 describe('resolveTargets', () => {
   it('takes only the brand’s own prompts, at most 50, and a topic’s prompts without named ones', async () => {
     const many = Array.from({ length: 60 }, (_, i) => `q${String(i).padStart(2, '0')}`);
-    const db = fakeDb({
+    const db = useDb({
       actions: [
         { id: 'a1', brand_id: 'b1', payload: { promptIds: [...many, 'theirs'] } },
         { id: 'a2', brand_id: 'b1', payload: { topicId: 'topic-9' } },
@@ -180,6 +246,62 @@ describe('resolveTargets', () => {
     expect(targets.get('s1').map((t) => t.id)).not.toContain('theirs');
     expect(targets.get('s2')).toEqual([
       { type: 'prompt', id: 'in-topic', label: 'prompt in-topic' },
+    ]);
+  });
+});
+
+describe('resolveTargets, older and night-engine actions', () => {
+  const P1 = '00000000-0000-4000-8000-000000000001';
+  const P2 = '00000000-0000-4000-8000-000000000002';
+
+  it('reads an older action’s prompts from its opportunity’s clusters', async () => {
+    const db = useDb({
+      actions: [
+        {
+          id: 'a1',
+          brand_id: 'b1',
+          kind: 'content_opportunity',
+          payload: { opportunityId: 'o1' },
+        },
+      ],
+      content_opportunities: [
+        { id: 'o1', cluster_id: 'k1', related_cluster_ids: [], prompt_id: null },
+      ],
+      prompt_cluster_members: [
+        { cluster_id: 'k1', prompt_id: 'p1' },
+        { cluster_id: 'k1', prompt_id: 'p2' },
+      ],
+      prompts: [prompt('p1'), prompt('p2')],
+    });
+    const targets = await resolveTargets(db, [{ id: 's1', brand_id: 'b1', action_id: 'a1' }]);
+    expect(targets.get('s1').map((t) => t.id)).toEqual(['p1', 'p2']);
+  });
+
+  it('reads a night-engine action’s targetEntity and targetIds', async () => {
+    const db = useDb({
+      actions: [
+        {
+          id: 'a1',
+          brand_id: 'b1',
+          kind: 'recover_visibility',
+          payload: { targetEntity: 'prompts', targetIds: [P1, P2, 'not-an-id'] },
+        },
+        {
+          id: 'a2',
+          brand_id: 'b1',
+          kind: 'fix_page',
+          payload: { targetEntity: 'pages', targetIds: ['https://acme.example/pricing'] },
+        },
+      ],
+      prompts: [prompt(P1), prompt(P2)],
+    });
+    const targets = await resolveTargets(db, [
+      { id: 's1', brand_id: 'b1', action_id: 'a1' },
+      { id: 's2', brand_id: 'b1', action_id: 'a2' },
+    ]);
+    expect(targets.get('s1').map((t) => t.id)).toEqual([P1, P2]);
+    expect(targets.get('s2')).toEqual([
+      { type: 'url', id: 'https://acme.example/pricing', label: 'https://acme.example/pricing' },
     ]);
   });
 });

@@ -13,19 +13,31 @@
  *     visibility is the share of those days the brand was named or cited,
  *     its citations the share it was cited (as Insights counts them). A cell
  *     needs MIN_RUNS days in the baseline and in the checkpoint window.
+ *   * Strata: engine × location × baseline band (BAND_PTS-wide slices of
+ *     the cell's own baseline). Targets and controls are compared inside a
+ *     stratum only, so an engine-wide swing, or a level's own drift, reads
+ *     the same for both whatever their mix.
  *   * Controls (item 7): the brand's other active prompts, never a target of
- *     a change shipped in the window, on the targets' engines and within
- *     BAND_PTS of a target cell's baseline visibility, the same topic first.
- *     Fewer than MIN_CONTROL_CELLS: Not measurable.
- *   * Effect (item 8): a difference in differences, per prompt (a prompt's
- *     cells averaged), the targets' change minus the controls'.
+ *     a change shipped in the window, in a target cell's stratum (on
+ *     visibility), the same topic first. Fewer than MIN_CONTROL_CELLS: Not
+ *     measurable.
+ *   * Effect (item 8): a difference in differences, stratified: each cell's
+ *     change minus its stratum's mean control change, averaged per prompt;
+ *     the effect is the target prompts' mean. A target cell with no control
+ *     in its stratum is left out. The controls' before and after are
+ *     weighted as the targets are spread over the strata, so the row's
+ *     numbers add up: effect = (after − before) − (control after − control
+ *     before).
  *   * Uncertainty (item 9): a permutation test over prompts (RESAMPLES
- *     reshuffles of the target and control labels) for the p-value, and a
- *     bootstrap over prompts for the 90% interval, both seeded, so the same
- *     rows always give the same result.
+ *     reshuffles of the target and control labels on those residuals) for
+ *     the p-value, and a bootstrap over prompts for the 90% interval (none
+ *     from fewer than MIN_INTERVAL_PROMPTS target prompts), both seeded, so
+ *     the same rows always give the same result.
  *   * Outcome and confidence (item 10) in the one vocabulary: Pending (day 7
  *     shows a direction only), Improved, No meaningful change, Declined, Not
- *     measurable.
+ *     measurable. Judged on the unrounded effect and p; stored rounded. A
+ *     verdict and each confidence also need target prompts, not only cells
+ *     (one prompt on ten engines is one piece of evidence ten times).
  */
 
 /** The checkpoints, in order (Addendum 2 F). */
@@ -43,7 +55,7 @@ export const WINDOW_DAYS = 14;
 export const MIN_EFFECT_PTS = 3;
 /** p below it gives a verdict (Improved / Declined) and Medium confidence. */
 export const P_VERDICT = 0.2;
-/** p below it, with HIGH_TARGET_CELLS, gives High confidence. */
+/** p below it, with HIGH_TARGET_CELLS and HIGH_TARGET_PROMPTS, gives High confidence. */
 export const P_HIGH = 0.05;
 /** Tracked days a cell needs in the baseline and in the checkpoint window. */
 export const MIN_RUNS = 3;
@@ -52,7 +64,13 @@ export const MIN_CONTROL_CELLS = 10;
 /** Target cells High, and Medium, confidence need. */
 export const HIGH_TARGET_CELLS = 10;
 export const MEDIUM_TARGET_CELLS = 5;
-/** How far a control's baseline visibility may be from a target cell's. */
+/** Target prompts a verdict, Medium and High confidence need (beside the cells). */
+export const VERDICT_TARGET_PROMPTS = 3;
+export const MEDIUM_TARGET_PROMPTS = 5;
+export const HIGH_TARGET_PROMPTS = 10;
+/** Target prompts an interval is read from: none from one. */
+export const MIN_INTERVAL_PROMPTS = 2;
+/** A stratum's baseline band, in points: 0–9.9, 10–19.9 … 90–100. */
 export const BAND_PTS = 10;
 /** Another change shipped on this share of the targets makes a checkpoint Not measurable. */
 export const OVERLAP_SHARE = 0.5;
@@ -207,50 +225,57 @@ export function aggregateCells(rows, limits) {
 export function rate(cell, metric) {
   return ((metric === 'citations' ? cell.cited : cell.visible) / cell.runs) * 100;
 }
+/** A rate's baseline band: 0 for 0–9.9 points … 9 for 90–100. */
+export function bandOf(points) {
+  return Math.min(9, Math.floor(points / BAND_PTS + 1e-9));
+}
+
+/** A cell's stratum on a metric: engine × location × the band of its baseline. */
+export function stratumOf(cell, metric) {
+  return `${cell.platform ?? ''}|${cell.region ?? ''}|${bandOf(rate(cell, metric))}`;
+}
 
 // ─── Controls ───────────────────────────────────────────────────────────────
 
 /**
- * The control cells (item 7): candidates on a target cell's engine and
- * location, within BAND_PTS of its baseline visibility; the same topic as a
- * target first, any topic when those are fewer than MIN_CONTROL_CELLS. The
- * closest first, at most MAX_CONTROL_CELLS.
+ * The control cells (item 7): candidates in a target cell's stratum on
+ * visibility (its engine, location and baseline band). The same topic as a
+ * target when those reach MIN_CONTROL_CELLS and every stratum the others
+ * would; else any topic, the same topic first. At most MAX_CONTROL_CELLS,
+ * shared out between the strata so none is crowded out.
  *
  * @param {{ targets: Array<{ key: string, pre: object }>, candidates: Array<{ key: string, pre: object,
  *   post: object }>, targetTopics: Set<string>, topicOf: (promptId: string) => string|null }} input
  */
 export function matchControls({ targets, candidates, targetTopics, topicOf }) {
-  const slots = new Map();
-  for (const target of targets) {
-    const slot = `${target.pre.platform ?? ''}|${target.pre.region ?? ''}`;
-    if (!slots.has(slot)) slots.set(slot, []);
-    slots.get(slot).push(rate(target.pre, 'visibility'));
-  }
+  const strata = new Set(targets.map((t) => stratumOf(t.pre, 'visibility')));
   const near = [];
   for (const candidate of candidates) {
-    const levels = slots.get(`${candidate.pre.platform ?? ''}|${candidate.pre.region ?? ''}`);
-    if (!levels) continue;
-    const level = rate(candidate.pre, 'visibility');
-    const distance = Math.min(...levels.map((target) => Math.abs(level - target)));
-    if (distance > BAND_PTS + 1e-9) continue;
+    const stratum = stratumOf(candidate.pre, 'visibility');
+    if (!strata.has(stratum)) continue;
     const topic = topicOf(candidate.pre.promptId);
-    near.push({ ...candidate, distance, sameTopic: !!topic && targetTopics.has(topic) });
+    near.push({ ...candidate, stratum, sameTopic: !!topic && targetTopics.has(topic) });
   }
   const same = near.filter((cell) => cell.sameTopic);
-  const useSame = same.length >= MIN_CONTROL_CELLS;
-  const chosen = (useSame ? same : near)
-    .sort(
-      (a, b) =>
-        Number(b.sameTopic) - Number(a.sameTopic) ||
-        a.distance - b.distance ||
-        (a.key < b.key ? -1 : a.key > b.key ? 1 : 0),
-    )
-    .slice(0, MAX_CONTROL_CELLS);
+  const covered = (cells) => new Set(cells.map((cell) => cell.stratum)).size;
+  const useSame = same.length >= MIN_CONTROL_CELLS && covered(same) === covered(near);
+  const pool = (useSame ? same : near).sort(
+    (a, b) => Number(b.sameTopic) - Number(a.sameTopic) || (a.key < b.key ? -1 : 1),
+  );
+  const perStratum = Math.max(1, Math.floor(MAX_CONTROL_CELLS / Math.max(1, covered(pool))));
+  const taken = new Map();
+  const cells = pool.filter((cell) => {
+    const n = taken.get(cell.stratum) ?? 0;
+    if (n >= perStratum) return false;
+    taken.set(cell.stratum, n + 1);
+    return true;
+  });
   return {
-    cells: chosen,
+    cells,
     rules: {
       topic: useSame ? 'same' : same.length ? 'same_then_any' : 'any',
       band_pts: BAND_PTS,
+      strata: covered(cells),
       engines: [...new Set(targets.map((t) => t.pre.platform).filter(Boolean))].sort(),
       min_runs: MIN_RUNS,
     },
@@ -309,30 +334,23 @@ export function permutationP(targets, controls, random, resamples = RESAMPLES) {
   return (hits + 1) / (resamples + 1);
 }
 
-/** The 90% interval of the effect: a bootstrap over prompts, each group resampled on its own. */
+/**
+ * The 90% interval of the effect (the target prompts' mean residual): a
+ * bootstrap over prompts, each group resampled on its own, the controls'
+ * resampled mean taken as the noise of the strata's means around it.
+ */
 export function bootstrapInterval(targets, controls, random, resamples = RESAMPLES) {
   const draw = (values) => {
     let sum = 0;
     for (let i = 0; i < values.length; i++) sum += values[Math.floor(random() * values.length)];
     return sum / values.length;
   };
+  const centre = mean(controls);
   const effects = [];
-  for (let r = 0; r < resamples; r++) effects.push(draw(targets) - draw(controls));
+  for (let r = 0; r < resamples; r++) effects.push(draw(targets) - (draw(controls) - centre));
   effects.sort((a, b) => a - b);
   const at = (q) => effects[Math.floor(q * (effects.length - 1))];
   return { low: at(0.05), high: at(0.95) };
-}
-
-/** Each prompt's cells averaged: its baseline and checkpoint rates, and their difference. */
-function perPrompt(cells, metric) {
-  const prompts = new Map();
-  for (const { pre, post } of cells) {
-    if (!prompts.has(pre.promptId)) prompts.set(pre.promptId, { pre: [], post: [] });
-    const entry = prompts.get(pre.promptId);
-    entry.pre.push(rate(pre, metric));
-    entry.post.push(rate(post, metric));
-  }
-  return [...prompts.values()].map(({ pre, post }) => ({ pre: mean(pre), post: mean(post) }));
 }
 
 /** The direction of an effect, as day 7 shows it (up, flat, down). */
@@ -342,41 +360,99 @@ export function directionOf(effect) {
   return 'flat';
 }
 
+/** Values grouped by a key, in first-seen order. */
+function grouped(items, keyOf) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = keyOf(item);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  return groups;
+}
+
 /**
- * One metric (ActionResultMetric, item 12): the targets' and the controls'
- * baseline and checkpoint, the change, the effect, its p-value and 90%
- * interval, in points.
+ * One metric (ActionResultMetric, item 12), stratified: the targets' and
+ * the (target-weighted) controls' baseline and checkpoint, the change, the
+ * effect, its p-value and 90% interval, in points, as stored (rounded); and
+ * the unrounded effect and p it is judged on, with the target cells and
+ * prompts kept and the control cells used. Null when no target cell has a
+ * control in its stratum.
  */
 export function metricResult({ metric, targets, controls, seed }) {
-  const t = perPrompt(targets, metric);
-  const c = perPrompt(controls, metric);
-  const before = mean(t.map((p) => p.pre));
-  const after = mean(t.map((p) => p.post));
-  const controlBefore = mean(c.map((p) => p.pre));
-  const controlAfter = mean(c.map((p) => p.post));
-  const tDiffs = t.map((p) => p.post - p.pre);
-  const cDiffs = c.map((p) => p.post - p.pre);
-  const effect = round1(after - before - (controlAfter - controlBefore));
+  const strata = new Map();
+  for (const [stratum, cells] of grouped(controls, (c) => stratumOf(c.pre, metric))) {
+    const pre = mean(cells.map((c) => rate(c.pre, metric)));
+    const post = mean(cells.map((c) => rate(c.post, metric)));
+    strata.set(stratum, { pre, post, change: post - pre });
+  }
+  const kept = targets
+    .map((cell) => ({ cell, stratum: strata.get(stratumOf(cell.pre, metric)) }))
+    .filter((t) => t.stratum);
+  if (kept.length === 0) return null;
+  const used = new Set(kept.map((t) => stratumOf(t.cell.pre, metric)));
+  const usedControls = controls.filter((c) => used.has(stratumOf(c.pre, metric)));
+
+  const targetPrompts = [...grouped(kept, (t) => t.cell.pre.promptId).values()].map((cells) => {
+    const of = (fn) => mean(cells.map(fn));
+    const pre = of((t) => rate(t.cell.pre, metric));
+    const post = of((t) => rate(t.cell.post, metric));
+    const controlPre = of((t) => t.stratum.pre);
+    const controlPost = of((t) => t.stratum.post);
+    return {
+      pre,
+      post,
+      controlPre,
+      controlPost,
+      residual: post - pre - (controlPost - controlPre),
+    };
+  });
+  const controlResiduals = [...grouped(usedControls, (c) => c.pre.promptId).values()].map((cells) =>
+    mean(
+      cells.map((c) => {
+        const stratum = strata.get(stratumOf(c.pre, metric));
+        return rate(c.post, metric) - rate(c.pre, metric) - stratum.change;
+      }),
+    ),
+  );
+
+  const residuals = targetPrompts.map((p) => p.residual);
+  const before = mean(targetPrompts.map((p) => p.pre));
+  const after = mean(targetPrompts.map((p) => p.post));
+  const controlBefore = mean(targetPrompts.map((p) => p.controlPre));
+  const controlAfter = mean(targetPrompts.map((p) => p.controlPost));
+  const effect = mean(residuals);
   const random = seededRandom(`${seed}:${metric}`);
-  const p = permutationP(tDiffs, cDiffs, random);
-  const interval = bootstrapInterval(tDiffs, cDiffs, random);
-  const delta = round1(after - before);
+  const p = permutationP(residuals, controlResiduals, random);
+  const interval =
+    targetPrompts.length >= MIN_INTERVAL_PROMPTS
+      ? bootstrapInterval(residuals, controlResiduals, random)
+      : null;
   return {
-    metric,
-    unit: 'pts',
-    before: round1(before),
-    after: round1(after),
-    delta,
-    deltaPercent: before > 0 ? round1(((after - before) / before) * 100) : null,
-    direction: directionOf(effect),
-    control_before: round1(controlBefore),
-    control_after: round1(controlAfter),
+    stored: {
+      metric,
+      unit: 'pts',
+      before: round1(before),
+      after: round1(after),
+      delta: round1(after - before),
+      deltaPercent: before > 0 ? round1(((after - before) / before) * 100) : null,
+      direction: directionOf(effect),
+      control_before: round1(controlBefore),
+      control_after: round1(controlAfter),
+      effect: round1(effect),
+      p_value: round3(p),
+      interval_low: interval ? round1(interval.low) : null,
+      interval_high: interval ? round1(interval.high) : null,
+      target_cells: kept.length,
+      target_prompts: targetPrompts.length,
+      control_cells: usedControls.length,
+      control_prompts: controlResiduals.length,
+    },
     effect,
-    p_value: round3(p),
-    interval_low: round1(interval.low),
-    interval_high: round1(interval.high),
-    target_prompts: t.length,
-    control_prompts: c.length,
+    p,
+    targetCells: kept.length,
+    targetPrompts: targetPrompts.length,
+    controlCells: usedControls.length,
   };
 }
 
@@ -392,15 +468,18 @@ export function primaryMetric(ship) {
 /**
  * One checkpoint of one change, from its windows' cells: the target cells
  * (MIN_RUNS days in both windows), the matched controls, and the metrics,
- * the primary first; or why it can't be measured (engine_not_on_plan,
- * too_few_runs, too_few_controls). The controls are returned either way
- * once they were matched, for impact_control_sets.
+ * the primary first, with what the primary is judged on (`judged`); or why
+ * it can't be measured: no target left once other changes took theirs
+ * (overlapping_change), engine_not_on_plan, too_few_runs, or too few
+ * controls in the targets' strata (too_few_controls). The controls are
+ * returned either way once they were matched, for impact_control_sets.
  *
  * @param {{ seed: string, primary: 'visibility'|'citations', targetIds: string[],
  *   pre: ReturnType<typeof aggregateCells>, post: ReturnType<typeof aggregateCells>,
  *   excluded: Set<string>, prompts: Map<string, { topic_id: string|null, is_active: boolean }> }} input
  */
 export function measureCells({ seed, primary, targetIds, pre, post, excluded, prompts }) {
+  if (targetIds.length === 0) return { reason: 'overlapping_change', targetCells: 0 };
   const isTarget = new Set(targetIds);
   const targets = [];
   let seen = false;
@@ -438,33 +517,69 @@ export function measureCells({ seed, primary, targetIds, pre, post, excluded, pr
     targetTopics,
     topicOf: (id) => prompts.get(id)?.topic_id ?? null,
   });
-  if (control.cells.length < MIN_CONTROL_CELLS) {
-    return { reason: 'too_few_controls', targetCells: targets.length, control };
+  const main = control.cells.length
+    ? metricResult({ metric: primary, targets, controls: control.cells, seed })
+    : null;
+  if (!main || main.controlCells < MIN_CONTROL_CELLS) {
+    return { reason: 'too_few_controls', targetCells: main?.targetCells ?? 0, control };
   }
-  const metrics = [primary, primary === 'visibility' ? 'citations' : 'visibility'].map((metric) =>
-    metricResult({ metric, targets, controls: control.cells, seed }),
-  );
-  return { reason: null, targetCells: targets.length, control, metrics };
+  const other = metricResult({
+    metric: primary === 'visibility' ? 'citations' : 'visibility',
+    targets,
+    controls: control.cells,
+    seed,
+  });
+  return {
+    reason: null,
+    targetCells: main.targetCells,
+    control,
+    metrics: [main.stored, ...(other ? [other.stored] : [])],
+    judged: {
+      effect: main.effect,
+      p: main.p,
+      targetCells: main.targetCells,
+      targetPrompts: main.targetPrompts,
+    },
+  };
 }
 
 // ─── Outcome ────────────────────────────────────────────────────────────────
 
-/** A verdict from the primary metric (item 10). */
-export function verdictOf({ effect, p_value: p }) {
+/**
+ * A verdict from the primary metric's unrounded effect and p (item 10),
+ * with VERDICT_TARGET_PROMPTS target prompts at least: fewer can't tell a
+ * change from one prompt's swing.
+ */
+export function verdictOf({ effect, p, targetPrompts }) {
+  if (targetPrompts < VERDICT_TARGET_PROMPTS) return 'no_meaningful_change';
   if (effect >= MIN_EFFECT_PTS && p < P_VERDICT) return 'improved';
   if (effect <= -MIN_EFFECT_PTS && p < P_VERDICT) return 'declined';
   return 'no_meaningful_change';
 }
 
 /**
- * Confidence (item 10): High with p < P_HIGH, HIGH_TARGET_CELLS and no
- * Stormy engine weather on the targets' engines in the window; Medium with
- * p < P_VERDICT and MEDIUM_TARGET_CELLS; Low otherwise. `stormy` is false
- * until engine weather (feature 1 item 7) exists: none is known.
+ * Confidence (item 10): High with p < P_HIGH, HIGH_TARGET_CELLS and
+ * HIGH_TARGET_PROMPTS and no Stormy engine weather on the targets' engines
+ * in the window; Medium with p < P_VERDICT, MEDIUM_TARGET_CELLS and
+ * MEDIUM_TARGET_PROMPTS; Low otherwise. `stormy` is false until engine
+ * weather (feature 1 item 7) exists: none is known.
  */
-export function confidenceOf({ p, targetCells, stormy = false }) {
-  if (p < P_HIGH && targetCells >= HIGH_TARGET_CELLS && !stormy) return 'high';
-  if (p < P_VERDICT && targetCells >= MEDIUM_TARGET_CELLS) return 'medium';
+export function confidenceOf({ p, targetCells, targetPrompts, stormy = false }) {
+  if (
+    p < P_HIGH &&
+    targetCells >= HIGH_TARGET_CELLS &&
+    targetPrompts >= HIGH_TARGET_PROMPTS &&
+    !stormy
+  ) {
+    return 'high';
+  }
+  if (
+    p < P_VERDICT &&
+    targetCells >= MEDIUM_TARGET_CELLS &&
+    targetPrompts >= MEDIUM_TARGET_PROMPTS
+  ) {
+    return 'medium';
+  }
   return 'low';
 }
 
@@ -485,17 +600,27 @@ export function lastingOf(entries, d90Outcome) {
  * A checkpoint's entry in checkpoints_json from what measureCells (or the
  * job's earlier checks) said: day 7 is Pending with a direction only, from
  * day 14 a verdict with its confidence, or Not measurable with the reason.
+ * Each keeps the primary metric's before, after and controls, so an earlier
+ * checkpoint's row can be shown beside the latest.
  */
 export function checkpointEntry({ cp, window, result, earlier, measuredAt }) {
   const primary = result.metrics?.[0] ?? null;
   const base = {
     checkpoint: cp.key,
     window,
-    target_cells: result.targetCells ?? 0,
-    control_cells: result.control?.cells.length ?? 0,
+    metric: primary?.metric ?? null,
+    before: primary?.before ?? null,
+    after: primary?.after ?? null,
+    control_before: primary?.control_before ?? null,
+    control_after: primary?.control_after ?? null,
     effect: primary?.effect ?? null,
     p_value: primary?.p_value ?? null,
+    interval_low: primary?.interval_low ?? null,
+    interval_high: primary?.interval_high ?? null,
     direction: primary?.direction ?? null,
+    target_cells: result.targetCells ?? 0,
+    target_prompts: result.judged?.targetPrompts ?? 0,
+    control_cells: primary?.control_cells ?? result.control?.cells.length ?? 0,
     // No engine weather yet (feature 1 item 7): Stormy days can't be checked.
     weather_checked: false,
     measured_at: measuredAt,
@@ -517,11 +642,11 @@ export function checkpointEntry({ cp, window, result, earlier, measuredAt }) {
     };
     return cp.key === 'd90' ? { ...entry, lasting: lastingOf(earlier, 'not_measurable') } : entry;
   }
-  const outcome = verdictOf(primary);
+  const outcome = verdictOf(result.judged);
   const entry = {
     ...base,
     outcome,
-    confidence: confidenceOf({ p: primary.p_value, targetCells: result.targetCells }),
+    confidence: confidenceOf(result.judged),
     not_measurable_reason: null,
   };
   return cp.key === 'd90' ? { ...entry, lasting: lastingOf(earlier, outcome) } : entry;

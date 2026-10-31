@@ -30,11 +30,35 @@ function compareBy(orders) {
   };
 }
 
-/** The unique keys an upsert's onConflict names, by table. */
+/** The unique keys an upsert's onConflict names, by table. Nulls never conflict (00425). */
 const UNIQUE = {
   impact_measurements: ['ship_event_id'],
   impact_control_sets: ['impact_measurement_id', 'checkpoint'],
+  ship_events: ['content_draft_delivery_id'],
 };
+
+/** The embeds the queries name (`ship_events!…!inner(…)`): table → embedded table → [column, its key]. */
+const EMBEDS = {
+  impact_measurements: { ship_events: ['ship_event_id', 'id'] },
+  ship_events: { organizations: ['organization_id', 'id'] },
+};
+
+/**
+ * A row with the tables its select embeds, as `!inner` joins do: a row
+ * whose embedded row is missing is dropped (null).
+ */
+function embed(tables, table, row, columns) {
+  const out = { ...row };
+  for (const [name, [local, remote]] of Object.entries(EMBEDS[table] ?? {})) {
+    if (!new RegExp(`\\b${name}[!(]`).test(columns)) continue;
+    const found = (tables[name] ?? []).find((other) => other[remote] === row[local]);
+    if (!found) return null;
+    const nested = embed(tables, name, found, columns);
+    if (!nested) return null;
+    out[name] = nested;
+  }
+  return out;
+}
 
 export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISOString() } = {}) {
   const tables = {};
@@ -69,7 +93,10 @@ export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISO
           const key = UNIQUE[table];
           const out = [];
           for (const values of [state.payload].flat()) {
-            const taken = key && rows.find((row) => key.every((k) => row[k] === values[k]));
+            const taken =
+              key &&
+              key.every((k) => values[k] != null) &&
+              rows.find((row) => key.every((k) => row[k] === values[k]));
             if (taken) {
               if (state.op === 'upsert' && !options?.ignoreDuplicates) {
                 Object.assign(taken, values, { updated_at: stamp });
@@ -88,7 +115,10 @@ export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISO
           for (const row of changed) Object.assign(row, state.payload, { updated_at: stamp });
           return { data: returning ? changed.map((row) => ({ ...row })) : null, error: null };
         }
-        const found = rows.filter(match).sort(compareBy(state.order));
+        const found = rows
+          .map((row) => embed(tables, table, row, state.columns))
+          .filter((row) => row && match(row))
+          .sort(compareBy(state.order));
         const [start, end] = state.range ?? [0, found.length - 1];
         const data = found
           .slice(start, end + 1)
@@ -99,8 +129,9 @@ export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISO
         return { data, error: null };
       };
       const chain = {
-        select: () => {
+        select: (columns = '') => {
           if (state.op !== 'select') returning = true;
+          else state.columns = columns;
           return chain;
         },
         insert: (payload) => ((state.op = 'insert'), (state.payload = payload), chain),
@@ -136,6 +167,12 @@ export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISO
           state.filters.push((row) => valueAt(row, column) != null && valueAt(row, column) < value),
           chain
         ),
+        // Only `.not(column, 'is', null)`: an embedded column's too.
+        not: (column, operator, value) => {
+          if (operator !== 'is') throw new Error(`unexpected not.${operator}`);
+          state.filters.push((row) => (valueAt(row, column) ?? null) !== value);
+          return chain;
+        },
         order: (column, opts = {}) => (state.order.push({ column, ...opts }), chain),
         range: (from, to) => ((state.range = [from, to]), chain),
         limit: (n) => ((state.range = [0, n - 1]), chain),

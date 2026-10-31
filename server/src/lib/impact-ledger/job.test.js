@@ -106,7 +106,9 @@ function world({
     ship_events: [ship('s1', { agent_run_id: 'run1' })],
     impact_measurements: [measurement('m1', 's1')],
     impact_control_sets: [],
-    chat_agent_runs: [{ id: 'run1', outcome: 'pending', outcome_confidence: null }],
+    chat_agent_runs: [
+      { id: 'run1', organization_id: ORG, outcome: 'pending', outcome_confidence: null },
+    ],
     prompts: [...TARGETS, ...controls].map((id) => prompt(id)),
     organizations: [{ id: ORG, plan: 'growth', subscription_status: 'active', plan_overrides: {} }],
     insights_prompt_daily: [
@@ -246,6 +248,14 @@ describe('checkpoints', () => {
       ['d7', 'pending'],
       ['d14', 'improved'],
     ]);
+    expect(row.checkpoints_json[1]).toMatchObject({
+      metric: 'visibility',
+      before: 28.6,
+      control_before: 28.6,
+      target_cells: 10,
+      target_prompts: 10,
+      control_cells: 20,
+    });
     expect(row.metrics[0]).toMatchObject({ metric: 'visibility', unit: 'pts', before: 28.6 });
     expect(row.metrics[0].effect).toBeGreaterThan(40);
     expect(row.metrics[0].p_value).toBeLessThan(0.05);
@@ -253,7 +263,13 @@ describe('checkpoints', () => {
     expect(db.tables.impact_control_sets.map((c) => c.checkpoint)).toEqual(['d7', 'd14']);
     expect(db.tables.impact_control_sets[1]).toMatchObject({
       cell_count: 20,
-      match_rules_json: { topic: 'same', band_pts: 10, engines: ['chatgpt-web'], min_runs: 3 },
+      match_rules_json: {
+        topic: 'same',
+        band_pts: 10,
+        strata: 1,
+        engines: ['chatgpt-web'],
+        min_runs: 3,
+      },
     });
     expect(db.tables.impact_control_sets[1].entities[0]).toEqual({
       type: 'prompt',
@@ -423,6 +439,25 @@ describe('not measurable', () => {
     ]);
   });
 
+  it('says overlapping_change when other changes share every target between them', async () => {
+    const tables = world();
+    const others = [TARGETS.slice(0, 4), TARGETS.slice(4, 8), TARGETS.slice(8)];
+    others.forEach((targets, i) => {
+      tables.ship_events.push(ship(`o${i}`, { shipped_at: '2026-10-05T10:00:00Z' }));
+      tables.impact_measurements.push(
+        measurement(`n${i}`, `o${i}`, {
+          targets: targetsOf(targets),
+          next_check_at: checkAt('2026-10-05T10:00:00Z', 14),
+        }),
+      );
+    });
+    const db = fakeDb(tables);
+    await runImpactLedger({ db, now: D14 });
+    const row = db.tables.impact_measurements.find((m) => m.id === 'm1');
+    expect(row.not_measurable_reason).toBe('overlapping_change');
+    expect(row.concurrent_changes.map((c) => c.shared_targets)).toEqual([4, 4, 2]);
+  });
+
   it('measures the targets another change doesn’t share, and names that change', async () => {
     const tables = world();
     tables.ship_events.push(ship('s2', { shipped_at: '2026-10-05T10:00:00Z' }));
@@ -457,8 +492,84 @@ describe('not measurable', () => {
       }),
     );
     const stats = await runImpactLedger({ db, now: D14 });
-    expect(stats).toMatchObject({ skipped: 1, measured: 0 });
+    expect(stats).toMatchObject({ measured: 0, closed: 0 });
+    expect(db.calls.map((c) => c.table)).not.toContain('insights_prompt_daily');
     expect(db.tables.impact_measurements[0].next_check_at).toBe(checkAt(SHIPPED, 7));
+  });
+
+  it('closes what stays open 30 days past day 90 for a workspace that can’t be measured', async () => {
+    process.env.IS_CLOUD = 'true';
+    process.env.CHAT_AGENTIC_ORGS = `${ORG},${OTHER_ORG}`;
+    const LONG_AGO = '2026-06-01T10:00:00Z';
+    const THIRD_ORG = '33333333-3333-3333-3333-333333333333';
+    const db = fakeDb(
+      world({
+        organizations: [
+          { id: ORG, plan: 'growth', subscription_status: 'canceled', plan_overrides: null },
+          { id: OTHER_ORG, plan: 'growth', subscription_status: 'active', plan_overrides: null },
+          { id: THIRD_ORG, plan: 'growth', subscription_status: 'active', plan_overrides: null },
+        ],
+        ship_events: [
+          ship('s1', { shipped_at: LONG_AGO }),
+          ship('s2', { shipped_at: LONG_AGO, organization_id: THIRD_ORG, brand_id: 'b3' }),
+          ship('s3', { shipped_at: '2026-09-20T10:00:00Z' }),
+        ],
+        impact_measurements: [
+          measurement('m1', 's1', { next_check_at: checkAt(LONG_AGO, 30) }),
+          measurement('m2', 's2', { next_check_at: checkAt(LONG_AGO, 30) }),
+          measurement('m3', 's3', { next_check_at: checkAt('2026-09-20T10:00:00Z', 7) }),
+        ],
+      }),
+    );
+    const stats = await runImpactLedger({ db, now: D14 });
+    expect(stats.closed).toBe(2);
+    const [m1, m2, m3] = db.tables.impact_measurements;
+    // No active plan, and Chat no longer on for the workspace: both closed.
+    for (const row of [m1, m2]) {
+      expect(row).toMatchObject({
+        outcome: 'not_measurable',
+        confidence: null,
+        not_measurable_reason: 'plan_inactive',
+        checkpoint: 'd90',
+        next_check_at: null,
+      });
+    }
+    // Shipped lately: kept due, for when the plan comes back.
+    expect(m3).toMatchObject({
+      outcome: 'pending',
+      next_check_at: checkAt('2026-09-20T10:00:00Z', 7),
+    });
+  });
+});
+
+describe('agent runs', () => {
+  it('writes a run’s outcome only within its own workspace', async () => {
+    const db = fakeDb(
+      world({
+        chat_agent_runs: [
+          { id: 'run1', organization_id: OTHER_ORG, outcome: 'pending', outcome_confidence: null },
+        ],
+      }),
+    );
+    const stats = await runImpactLedger({ db, now: D14 });
+    expect(stats.runsUpdated).toBe(0);
+    expect(db.tables.chat_agent_runs[0].outcome).toBe('pending');
+  });
+
+  it('makes a run’s write that failed again the next night', async () => {
+    const db = fakeDb(world());
+    db.fail = (table, op) => table === 'chat_agent_runs' && op === 'update';
+    const first = await runImpactLedger({ db, now: D14 });
+    expect(first).toMatchObject({ measured: 1, runsUpdated: 0, failed: 1 });
+    expect(db.tables.chat_agent_runs[0].outcome).toBe('pending');
+
+    db.fail = null;
+    const next = await runImpactLedger({ db, now: at('2026-10-17T07:53:00Z') });
+    expect(next).toMatchObject({ measured: 0, runsUpdated: 1, failed: 0 });
+    expect(db.tables.chat_agent_runs[0]).toMatchObject({
+      outcome: 'improved',
+      outcome_confidence: 'high',
+    });
   });
 });
 
