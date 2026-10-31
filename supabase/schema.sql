@@ -48773,10 +48773,10 @@ comment on column public.ship_events.republished_at is
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
--- migrations/00426_ship_cms_publish.sql
+-- migrations/00428_ship_cms_publish.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
--- 00426: a CMS publish into the impact ledger, one draft at a time
+-- 00428: a CMS publish into the impact ledger, one draft at a time
 -- ============================================================================
 -- A page the CMS confirmed live (Send to CMS #1331) is a ship event, once
 -- per send (00425), and the same draft live again within 90 days of its
@@ -48803,7 +48803,7 @@ alter table public.ship_events
     check (cardinality(republished_delivery_ids) <= 50);
 
 comment on column public.ship_events.republished_delivery_ids is
-  'The CMS sends (content_draft_deliveries) of the same draft noted on this cms_publish as published again within 90 days, at most 50 (00426).';
+  'The CMS sends (content_draft_deliveries) of the same draft noted on this cms_publish as published again within 90 days, at most 50 (00428).';
 
 create or replace function public.ship_cms_publish(
   p_delivery_id uuid,
@@ -48897,7 +48897,7 @@ grant execute on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, 
   to service_role;
 
 comment on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text) is
-  'Impact ledger (00426): a CMS-confirmed publish as a ship event, under a lock on its draft: the send''s own, else the draft''s cms_publish within 90 days noted, else a new one. Says the id and whether this call wrote it. Service role only.';
+  'Impact ledger (00428): a CMS-confirmed publish as a ship event, under a lock on its draft: the send''s own, else the draft''s cms_publish within 90 days noted, else a new one. Says the id and whether this call wrote it. Service role only.';
 
 notify pgrst, 'reload schema';
 

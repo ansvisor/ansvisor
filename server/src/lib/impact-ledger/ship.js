@@ -197,7 +197,7 @@ export async function seedMeasurements(db, ships) {
   return written;
 }
 
-/** A draft live again within this many days is the same shipped change, still measured (00425, 00426). */
+/** A draft live again within this many days is the same shipped change, still measured (00425, 00428). */
 export const REPUBLISH_DAYS = 90;
 
 /**
@@ -205,7 +205,7 @@ export const REPUBLISH_DAYS = 90;
  * (cms_publish, from the Content Editor, a content change, assisted when a
  * person sent it, automated when nobody did) and its Pending measurement.
  *
- *   * One per send (00425), written by ship_cms_publish (00426) in one
+ *   * One per send (00425), written by ship_cms_publish (00428) in one
  *     transaction under a lock on the draft, so a confirmation read twice,
  *     or two sends of one draft confirmed by two servers at once, write one.
  *   * The same draft live again within REPUBLISH_DAYS of its latest
@@ -249,7 +249,7 @@ export async function shipCmsPublish({ deliveryId, url, publishedAt, db = supaba
     }
 
     // The decision and its write in one transaction, under a lock on the
-    // draft (00426): two sends of one draft confirmed at once write one.
+    // draft (00428): two sends of one draft confirmed at once write one.
     const ship = {
       brand_id: delivery.brand_id,
       action_id: draft?.action_id ?? null,

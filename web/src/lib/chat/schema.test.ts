@@ -514,8 +514,8 @@ describe('the impact ledger', () => {
     expect(delivery).not.toMatch(/grant [^;]*to authenticated/);
   });
 
-  it('decides a CMS publish under a lock on its draft, into a cms_publish only (00426)', () => {
-    const ship = migration('00426');
+  it('decides a CMS publish under a lock on its draft, into a cms_publish only (00428)', () => {
+    const ship = migration('00428');
     expect(ship).toMatch(
       /pg_advisory_xact_lock\(hashtext\('ship_cms_publish:' \|\| p_content_draft_id::text\)\)/,
     );

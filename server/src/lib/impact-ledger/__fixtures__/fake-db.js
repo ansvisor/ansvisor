@@ -71,7 +71,7 @@ export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISO
     maxRead: 0,
     fail: null,
     /**
-     * ship_cms_publish (00426), as its SQL decides, in one step (the draft's
+     * ship_cms_publish (00428), as its SQL decides, in one step (the draft's
      * lock): the send's own, else the draft's latest cms_publish within 90
      * days before it, noted, else a new ship event. `beforeShip` runs first,
      * so a test can make another call land while this one waits.
