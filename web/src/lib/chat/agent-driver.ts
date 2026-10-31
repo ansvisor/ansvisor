@@ -5,7 +5,13 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
 import { canWriteAgents, versionFromRow, type AgentPausedReason } from './agent-rules';
 import { startQueuedAgentRuns, type AgentRunDriver } from './agent-runs';
-import { evidenceOf, isTriggered, readArmedOrgs, type AgentEvidence } from './agent-triggers';
+import {
+  agentMonthCapReached,
+  evidenceOf,
+  isTriggered,
+  readArmedOrgs,
+  type AgentEvidence,
+} from './agent-triggers';
 import {
   loadAgent,
   pauseAgentForSystem,
@@ -318,6 +324,11 @@ export async function openAgentRun(
       stopReason: pause === 'brand_gone' ? 'brand_gone' : null,
       now,
     });
+  }
+  // The agent's own monthly cap holds for every run, Run now's on an agent paused at
+  // it too: the run ends before it starts, and a triggered agent pauses (cap).
+  if (await agentMonthCapReached(organizationId, agent.row.id, agent.row.max_month_share)) {
+    return endBeforeStart(run, 'stopped', { pause: 'cap', now });
   }
   const brand = (await runnableBrands(organizationId, version.scope)).find(
     (b) => b.id === run.brand_id,

@@ -331,6 +331,38 @@ describe('handing a started run to Chat', () => {
     expect(runRow(id).status).toBe('stopped');
   });
 
+  it('holds the agent’s own monthly cap for Run now too, on an agent paused at it', async () => {
+    const { readAgentShares } = await import('./agent-shares');
+    const atCap = {
+      unlimited: false,
+      byAgent: new Map([[AGENT, { share: 0.18, ownKeyShare: 0.02, runs: 4 }]]),
+    };
+    vi.mocked(readAgentShares).mockResolvedValueOnce(atCap).mockResolvedValueOnce(atCap);
+    Object.assign(agentRow(), { status: 'paused', paused_reason: 'cap', max_month_share: 0.2 });
+    const manual = queueRun({ trigger_kind: 'manual', acting_user_id: PEOPLE.manager });
+    expect(await driver.openAgentRun(manual, ORG, NOW)).toBeNull();
+    expect(runRow(manual).status).toBe('stopped');
+    expect(db.tables.chat_conversations).toEqual([]);
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'cap' });
+
+    // Active and at its cap: a triggered run pauses it.
+    Object.assign(agentRow(), { status: 'active', paused_reason: null });
+    runRow(manual).status = 'done';
+    const triggered = queueRun();
+    expect(await driver.openAgentRun(triggered, ORG, NOW)).toBeNull();
+    expect(runRow(triggered).status).toBe('stopped');
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'cap' });
+
+    // Under it, Run now goes on.
+    vi.mocked(readAgentShares).mockResolvedValueOnce({
+      unlimited: false,
+      byAgent: new Map([[AGENT, { share: 0.05, ownKeyShare: 0, runs: 1 }]]),
+    });
+    runRow(triggered).status = 'done';
+    const under = queueRun({ trigger_kind: 'manual', acting_user_id: PEOPLE.manager });
+    expect(await driver.openAgentRun(under, ORG, NOW)).not.toBeNull();
+  });
+
   it('stops a run whose brand left its scope, and with Chat off starts nothing', async () => {
     db.tables.chat_agent_versions[0].scope = { brand_ids: [] };
     const id = queueRun();

@@ -228,6 +228,12 @@ describe('the agents’ sweep', () => {
       byAgent: new Map([[AGENT, { share: 0.2, ownKeyShare: 0, runs: 5 }]]),
     });
     expect((await sweepAgents(NOW, driver)).resumed).toBe(0);
+    // 0.18 + 0.02 is a hair under 0.2 in floating point: still at the cap.
+    fakes.shares.mockResolvedValue({
+      unlimited: false,
+      byAgent: new Map([[AGENT, { share: 0.18, ownKeyShare: 0.02, runs: 5 }]]),
+    });
+    expect((await sweepAgents(NOW, driver)).resumed).toBe(0);
     fakes.shares.mockResolvedValue({
       unlimited: false,
       byAgent: new Map([[AGENT, { share: 0.05, ownKeyShare: 0, runs: 1 }]]),
