@@ -81,6 +81,7 @@ import { chatAgenticDeployed } from './lib/chat-flag.js';
 import { startChatAgentTicks } from './lib/chat-agents.js';
 import { startModelPriceSync } from './lib/model-prices.js';
 import { startDailySuggestions } from './lib/chat-suggestions/job.js';
+import { startImpactLedger } from './lib/impact-ledger/job.js';
 
 // Before anything starts: a stray rejection is logged, not a crash.
 handleProcessErrors();
@@ -859,6 +860,10 @@ server.listen(PORT, async () => {
     startDailySuggestions();
     // Chat's agents (W2-16): every minute the web fires due schedules and sweeps.
     startChatAgentTicks();
+    // The impact ledger (CHAT-22 §2): each shipped change measured at 7,
+    // 14, 30 and 90 days against a control set, nightly, from the Insights
+    // rollups only (no engine query, no model call).
+    startImpactLedger();
   }
 
   if (!isCloud()) {

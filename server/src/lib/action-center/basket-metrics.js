@@ -97,18 +97,18 @@ export function basketValues(raw, { pageCount }) {
  * sent before any of its prompts was tracked (VIS-011) takes the prompts it
  * has now: the ones tracked from its suggestions.
  */
-export async function basketScope(action) {
+export async function basketScope(action, { db = supabaseAdmin } = {}) {
   const payload = action.payload || {};
   let promptIds = Array.isArray(payload.promptIds) ? payload.promptIds : [];
   if (!promptIds.length && payload.opportunityId) {
-    const { data: opp } = await supabaseAdmin
+    const { data: opp } = await db
       .from('content_opportunities')
       .select('cluster_id, related_cluster_ids, prompt_id')
       .eq('id', payload.opportunityId)
       .maybeSingle();
     const clusterIds = [opp?.cluster_id, ...(opp?.related_cluster_ids || [])].filter(Boolean);
     if (clusterIds.length) {
-      const { data: members, error } = await supabaseAdmin
+      const { data: members, error } = await db
         .from('prompt_cluster_members')
         .select('prompt_id')
         .in('cluster_id', clusterIds);
@@ -118,15 +118,15 @@ export async function basketScope(action) {
     if (!promptIds.length && opp?.prompt_id) promptIds = [opp.prompt_id];
   }
   if (!promptIds.length && payload.topicId) {
-    promptIds = await topicPromptIds(action.brand_id, [payload.topicId]);
+    promptIds = await topicPromptIds(action.brand_id, [payload.topicId], { db });
   }
   return { promptIds, pages: scopePages(payload) };
 }
 
 /** The prompts the brand's topics have now, by id. */
-export async function topicPromptIds(brandId, topicIds) {
+export async function topicPromptIds(brandId, topicIds, { db = supabaseAdmin } = {}) {
   if (!topicIds.length) return [];
-  const { data: prompts, error } = await supabaseAdmin
+  const { data: prompts, error } = await db
     .from('prompts')
     .select('id, prompt_sets!inner(brand_id)')
     .eq('prompt_sets.brand_id', brandId)
