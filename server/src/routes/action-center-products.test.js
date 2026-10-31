@@ -123,9 +123,16 @@ describe('POST /api/action-center/products', () => {
     expect((await post(body)).status).toBe(404);
   });
 
-  it("refuses a caller outside the brand's organization", async () => {
-    assertBrandAccess.mockRejectedValue(Object.assign(new Error('Forbidden'), { status: 403 }));
-    expect((await post(body)).status).toBe(403);
+  it("refuses a caller outside the brand's organization, with the code", async () => {
+    assertBrandAccess.mockRejectedValue(
+      Object.assign(new Error("This brand isn't in your workspace"), {
+        status: 403,
+        code: 'not_in_workspace',
+      }),
+    );
+    const res = await post(body);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: 'not_in_workspace' });
     expect(sendProductActions).not.toHaveBeenCalled();
   });
 

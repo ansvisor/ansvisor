@@ -67,6 +67,7 @@ const OPEN_ACTIONS: Record<string, string> = {
   'chat-uploads.ts:removeChatUpload': "takes the person's own draft file away, never adds one",
   'chat-prefs.ts:saveChatPanelSize':
     "the person's own Chat layout (panel size), nothing that costs",
+  'chat-prefs.ts:saveHomeSeen': "the person's own record of leaving Chat Home, nothing that costs",
   'chat-access-requests.ts:requestAccess':
     'asking an Admin costs nothing, and a read-only workspace is one of the things to ask about',
   'chat-access-requests.ts:withdrawAccessRequest': 'takes back a request, never gives access',
@@ -118,6 +119,7 @@ const OPEN_ROUTES: Record<string, string> = {
   'chat/conversations/[id]:DELETE':
     'deleting your own chat starts no cost, as the old Agent chats (#1613)',
   'chat/conversations/[id]/read:POST': 'marking your own chat read starts no cost',
+  'chat/home-seen:POST': "the person's own record of leaving Chat Home starts no cost",
   'chat/conversations/[id]/restore:POST': 'undoing a delete starts no cost',
   'chat/runs:POST': 'the engine refuses a read-only workspace with the 402 body (startChatRun)',
   'chat/runs/[id]/approve:POST': 'the engine answers 402 (prepareResume), but for Ask your Admin',
@@ -125,6 +127,13 @@ const OPEN_ROUTES: Record<string, string> = {
   'chat/runs/[id]/answer:POST': 'the engine answers 402 (prepareResume) while read-only',
   'chat/runs/[id]/stop:POST': 'stopping a run starts no cost',
   'chat/files/zip:POST': 'reads only: the picked files as one .zip, nothing kept',
+  // The API server's cron and hooks (CHAT_INTERNAL_SECRET), never a person: the
+  // triggers fire nothing in a read-only workspace, and the agent run driver
+  // starts no run in one (readArmedOrgs, openAgentRun).
+  'internal/chat/agents/tick:POST':
+    "the server's cron; it starts no agent run in a read-only workspace",
+  'internal/chat/agents/signals:POST':
+    "the server's signal hook; it starts no agent run in a read-only workspace",
 };
 
 /** What checks a route's plan before it writes. */

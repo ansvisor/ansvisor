@@ -11,6 +11,7 @@ import type {
   ChatTaskStrip,
 } from './events';
 import { isChatEventType } from './events';
+import type { ChatWhy } from './why/view';
 
 /**
  * A run as the browser draws it, built from its events only (CHAT-00: the
@@ -49,6 +50,8 @@ export interface ClientRun {
   sent: ChatActionSent[];
   /** The Action Center tasks it works on (CHAT-09 §B); null when it has none. */
   tasks: ChatTaskStrip | null;
+  /** Why did it move analyses it kept (CHAT-22 §1), in order. */
+  why: ChatWhy[];
   summary: ChatRunSummary | null;
   generatedAt: string | null;
   dataAsOf: string | null;
@@ -70,6 +73,7 @@ export function emptyRun(status: ClientRunStatus = 'running'): ClientRun {
     deliverables: [],
     sent: [],
     tasks: null,
+    why: [],
     summary: null,
     generatedAt: null,
     dataAsOf: null,
@@ -131,6 +135,9 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
     case 'tasks.updated':
       next.tasks = event.data;
       return next;
+    case 'why.ready':
+      next.why = [...run.why.filter((why) => why.n !== event.data.n), event.data];
+      return next;
     case 'next_moves':
       next.nextMoves = event.data.moves;
       return next;
@@ -166,8 +173,11 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
         errorReason: reason ?? null,
       };
     }
-    case 'run.paused_cap':
-      return { ...next, status: 'paused_cap', confirm: null, question: null, summary: event.data };
+    case 'run.paused_cap': {
+      const { limit: _limit, ...summary } = event.data;
+      void _limit;
+      return { ...next, status: 'paused_cap', confirm: null, question: null, summary };
+    }
     default:
       return next;
   }

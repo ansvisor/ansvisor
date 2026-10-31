@@ -14,6 +14,8 @@ import { clientMove } from './next-moves';
 import { applyChatEvent, emptyRun } from './run-state';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
 import { readDeliverableTasks, readStrips, weekEndIn, type DeliverableTask } from './task-strip';
+import type { WhyResult } from './why/explain';
+import { whyView, type ChatWhy } from './why/view';
 
 /**
  * A saved chat as its page opens it (CHAT-01, CHAT-03 item 21): its
@@ -50,6 +52,8 @@ export interface ThreadRun {
   sent: ChatActionSent[];
   /** The Action Center tasks it worked on (CHAT-09 §B); null when it had none. */
   tasks: ChatTaskStrip | null;
+  /** The Why did it move analyses it kept (CHAT-22 §1), in order. */
+  why: ChatWhy[];
 }
 
 export interface ThreadMessage {
@@ -196,7 +200,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   const runIds = (runs.data ?? []).map((run) => run.id);
   const endedIds = (runs.data ?? []).filter((run) => ENDED.includes(run.status)).map((r) => r.id);
   const mine = !!user && chat.user_id === user.id;
-  const [steps, files, ends, moves] = runIds.length
+  const [steps, files, ends, moves, whys] = runIds.length
     ? await Promise.all([
         supabase
           .from('chat_run_steps')
@@ -217,15 +221,52 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
               .in('run_id', runIds)
               .order('rank', { ascending: true })
           : { data: [], error: null },
+        // Readable where the chat is (00420); the card's numbers, never its ids.
+        supabase
+          .from('chat_why_analyses')
+          .select('run_id, scope_json, result_json')
+          .in('run_id', runIds)
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true }),
       ])
-    : [{ data: [], error: null }, { data: [], error: null }, new Map(), { data: [], error: null }];
+    : [
+        { data: [], error: null },
+        { data: [], error: null },
+        new Map(),
+        { data: [], error: null },
+        { data: [], error: null },
+      ];
   if (steps.error) throw new Error(`Could not read the chat's steps: ${steps.error.message}`);
   if (files.error) throw new Error(`Could not read the chat's files: ${files.error.message}`);
   if (moves.error)
     console.error("[chat/thread] could not read the chat's next moves:", moves.error.message);
   const strips = runIds.length
-    ? await readThreadStrips(supabase, conversationId, messages.data ?? [])
+    ? await readThreadStrips(supabase, conversationId, messages.data ?? [], endedIds)
     : new Map<string, ChatTaskStrip>();
+  // A failed read of the analyses loses their cards, not the chat.
+  if (whys.error)
+    console.error("[chat/thread] could not read the chat's Why analyses:", whys.error.message);
+  // Each analysis keeps its place in its run (the drawer's route finds it by
+  // that n); one that can't be shown is left out, not the chat.
+  const whyByRun = new Map<string, ChatWhy[]>();
+  const whyCount = new Map<string, number>();
+  for (const row of (whys.error ? [] : (whys.data ?? [])) as unknown as {
+    run_id: string | null;
+    scope_json: Record<string, unknown>;
+    result_json: WhyResult;
+  }[]) {
+    if (!row.run_id) continue;
+    const n = (whyCount.get(row.run_id) ?? 0) + 1;
+    whyCount.set(row.run_id, n);
+    try {
+      whyByRun.set(row.run_id, [
+        ...(whyByRun.get(row.run_id) ?? []),
+        whyView(n, row.result_json, row.scope_json),
+      ]);
+    } catch (error) {
+      console.error('[chat/thread] could not show a Why analysis:', error);
+    }
+  }
   const movesByRun = new Map<string, ChatNextMove[]>();
   for (const m of (moves.error ? [] : (moves.data ?? [])) as NextMoveRow[]) {
     const move = clientMove({ label: m.label, prompt: m.prompt, ghostOk: m.ghost_ok });
@@ -278,6 +319,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         nextMoves: movesByRun.get(run.id) ?? [],
         sent: ends.get(run.id)?.sent ?? [],
         tasks: strips.get(run.id) ?? null,
+        why: whyByRun.get(run.id) ?? [],
       },
     ]),
   );
@@ -303,17 +345,26 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
 
 /**
  * The chat's task strips, by run, read as the person: "due this week" in the
- * zone its latest answer was shown in (the run's), else UTC.
+ * zone its latest answer was shown in (the run's), else UTC. A run that has
+ * ended is writing nothing: a task it still has Writing (an Undo of Ready for
+ * review put it back, or the run never reached its own end) reads Queued.
  */
 async function readThreadStrips(
   db: Awaited<ReturnType<typeof createClient>>,
   conversationId: string,
   messages: readonly { role: string; timezone: string | null }[],
+  endedRunIds: readonly string[],
 ): Promise<Map<string, ChatTaskStrip>> {
   const zone =
     [...messages].reverse().find((m) => m.role === 'assistant' && m.timezone)?.timezone ?? 'UTC';
   try {
-    return await readStrips(db, conversationId, weekEndIn(new Date(), zone));
+    const strips = await readStrips(db, conversationId, weekEndIn(new Date(), zone));
+    for (const runId of endedRunIds) {
+      for (const task of strips.get(runId)?.tasks ?? []) {
+        if (task.status === 'writing') task.status = 'queued';
+      }
+    }
+    return strips;
   } catch (err) {
     console.error("[chat/thread] could not read the chat's task strip:", err);
     return new Map();

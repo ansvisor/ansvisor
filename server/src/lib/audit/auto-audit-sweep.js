@@ -351,6 +351,7 @@ async function finishRun({ runId, orgId, brands, auditIds, emailAfterRun, nextRu
       criticalIssues = count ?? 0;
     }
     perBrand.push({
+      id: brand.id,
       name: brand.name,
       pages: own.length,
       completed: completed.length,

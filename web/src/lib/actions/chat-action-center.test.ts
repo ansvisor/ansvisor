@@ -24,6 +24,8 @@ vi.mock('@/lib/supabase/admin', async () => ({
 const manager = vi.hoisted(() => ({ is: true }));
 vi.mock('@/lib/session-role', () => ({ isManager: async () => manager.is }));
 const writable = vi.hoisted(() => vi.fn(async () => {}));
+/** The brands the person may use (can_access_brand): every one unless a test narrows it. */
+const brandAccess = vi.hoisted(() => ({ only: null as string[] | null }));
 vi.mock('@/lib/subscription-guard', () => ({ assertWritable: writable }));
 vi.mock('@/config/api', () => ({ API_BASE_URL: 'http://api.test' }));
 vi.mock('@/lib/supabase/server', async () => {
@@ -33,6 +35,13 @@ vi.mock('@/lib/supabase/server', async () => {
     // The member's own client: the same rows here (RLS isn't what these tests are about).
     createClient: async () => ({
       from: (table: string) => db.from(table),
+      rpc: async (fn: string, args: { p_brand_id: string }) => {
+        if (fn !== 'can_access_brand') throw new Error(`unexpected rpc ${fn}`);
+        return {
+          data: !brandAccess.only || brandAccess.only.includes(args.p_brand_id),
+          error: null,
+        };
+      },
       auth: {
         getUser: async () => ({ data: { user: { id: ME } } }),
         getSession: async () => ({ data: { session: { access_token: 'token-1' } } }),
@@ -96,6 +105,7 @@ const events = (event: string) => db.tables.action_events.filter((e) => e.event 
 beforeEach(() => {
   vi.clearAllMocks();
   manager.is = true;
+  brandAccess.only = null;
   vi.stubGlobal('fetch', fetchMock);
   db.tables = {};
   db.unique = {};
@@ -424,5 +434,39 @@ describe('setTaskReadyForReview', () => {
       reason: 'conflict',
     });
     expect(db.tables.chat_task_state).toEqual([]);
+  });
+});
+
+describe('brand access (Selected brands)', () => {
+  const OTHER = '44444444-4444-4444-8444-444444444444';
+
+  it("adds no finding, file or Ready for review on a brand the person wasn't given", async () => {
+    brandAccess.only = [OTHER];
+    stepFor('attach_to_action');
+    await expect(attachToAction(ACTION, { finding: 'Lost 6.' }, place)).resolves.toMatchObject({
+      ok: false,
+      reason: 'not_found',
+    });
+    stepFor('attach_file_to_task');
+    await expect(attachFileToTask(BRAND, TASK, FILE, place)).resolves.toMatchObject({
+      ok: false,
+      reason: 'not_found',
+    });
+    stepFor('set_task_ready_for_review');
+    await expect(setTaskReadyForReview(BRAND, TASK, place)).resolves.toMatchObject({
+      ok: false,
+      reason: 'not_found',
+    });
+    expect(db.tables.action_events ?? []).toEqual([]);
+    expect(db.tables.chat_file_task_links ?? []).toEqual([]);
+    expect(db.tables.chat_task_state ?? []).toEqual([]);
+  });
+
+  it('still works on a brand the person was given', async () => {
+    brandAccess.only = [BRAND];
+    stepFor('attach_to_action');
+    await expect(attachToAction(ACTION, { finding: 'Lost 6.' }, place)).resolves.toMatchObject({
+      ok: true,
+    });
   });
 });

@@ -331,6 +331,20 @@ export async function createChatAction(
   }
 }
 
+/**
+ * Whether the person may use the brand (brand access, 00388): a person given
+ * Selected brands only theirs. The member reads below see the whole
+ * workspace's actions and tasks, so this is checked on its own.
+ */
+async function canUseBrand(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc('can_access_brand', { p_brand_id: brandId });
+  if (error) throw new Error(error.message);
+  return data === true;
+}
+
 /** An action the person's workspace has, open: its brand, number and status. */
 async function openAction(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -370,7 +384,7 @@ export async function attachToAction(
     const supabase = await createClient();
     if (!(await isManager(supabase))) return FORBIDDEN;
     const action = await openAction(supabase, actionId);
-    if (!action) return NOT_FOUND('action');
+    if (!action || !(await canUseBrand(supabase, action.brand_id))) return NOT_FOUND('action');
     await assertWritable({ brandId: action.brand_id });
     if (action.status === 'completed' || action.status === 'dismissed') return CLOSED;
     const where = await placeOf(supabase, place, 'attach_to_action');
@@ -452,6 +466,7 @@ export async function attachFileToTask(
     await assertWritable({ brandId });
     const supabase = await createClient();
     if (!(await isManager(supabase))) return FORBIDDEN;
+    if (!(await canUseBrand(supabase, brandId))) return NOT_FOUND('task');
     const task = await brandTask(supabase, brandId, taskId);
     if (!task) return NOT_FOUND('task');
     if (task.actions?.status === 'completed' || task.actions?.status === 'dismissed') return CLOSED;
@@ -542,6 +557,7 @@ export async function setTaskReadyForReview(
     await assertWritable({ brandId });
     const supabase = await createClient();
     if (!(await isManager(supabase))) return FORBIDDEN;
+    if (!(await canUseBrand(supabase, brandId))) return NOT_FOUND('task');
     const task = await brandTask(supabase, brandId, taskId);
     if (!task) return NOT_FOUND('task');
     if (!OPEN_TASK.has(task.status)) {

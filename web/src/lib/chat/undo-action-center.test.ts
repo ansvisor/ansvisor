@@ -191,6 +191,17 @@ describe('attach_file_to_task', () => {
       'changed',
     );
   });
+
+  it("takes nothing off a task that isn't the logged brand's", async () => {
+    const { undo } = await rule.record({ task_id: TASK }, attached, null);
+    const other = '44444444-4444-4444-8444-444444444444';
+    await expect(rule.inverse({ id: TASK, brandId: other, data: undo!, userId: ME })).resolves.toBe(
+      'gone',
+    );
+    expect(db.tables.chat_file_task_links).toEqual([{ file_id: FILE, action_task_id: TASK }]);
+    expect(db.tables.chat_files[0].status).toBe('attached');
+    expect(events('file_detached')).toEqual([]);
+  });
 });
 
 describe('set_task_ready_for_review', () => {

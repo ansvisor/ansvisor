@@ -7,7 +7,7 @@ import type { CmsSource } from '@/lib/content/cms-send';
 import type { ContentDraftListItem } from '@/lib/content/drafts';
 
 const readCmsSources = vi.hoisted(() => vi.fn());
-vi.mock('./_cms-sources', () => ({ readCmsSources }));
+vi.mock('@/lib/content/cms-sources', () => ({ readCmsSources }));
 const toast = vi.hoisted(() => vi.fn());
 vi.mock('sonner', () => ({ toast }));
 const readKeptFields = vi.hoisted(() => vi.fn());

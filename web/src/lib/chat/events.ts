@@ -23,6 +23,8 @@
  * (isChatEventType), so a newer server never breaks an open page.
  */
 
+import type { ChatWhy } from './why/view';
+
 // ─── Steps ──────────────────────────────────────────────────────────────────
 
 /**
@@ -136,6 +138,8 @@ export interface ChatConfirm {
   digest: string;
   /** offerDontAskAgain: the card may offer "Don't ask again" (CHAT-20 §5 step 6). */
   canDontAskAgain: boolean;
+  /** A change with no Undo once made (CHAT-20 §9: a page sent to a CMS, an audit): the card says so. */
+  noUndo?: true;
   /** What the change leaves behind, under the card ("Its timeline … doesn't come back"). */
   note?: string;
   /**
@@ -290,6 +294,8 @@ export interface ChatEventPayloads {
   'text.delta': { text: string };
   'ask.created': ChatAsk;
   'deliverable.created': ChatDeliverable;
+  /** A Why did it move analysis the run kept (CHAT-22 §1, "why.ready"): its card's numbers. */
+  'why.ready': ChatWhy;
   'confirm.required': ChatConfirm;
   next_moves: { moves: ChatNextMove[] };
   'usage.updated': ChatUsage;
@@ -300,12 +306,19 @@ export interface ChatEventPayloads {
    * or `reason`, the server's own plain words when it has them.
    */
   'run.error': ChatRunSummary & { code: 'failed' | 'timeout'; reason?: string };
-  'run.paused_cap': ChatRunSummary;
+  /**
+   * The next step would pass a limit: the month's AI limit (CHAT-04 item
+   * 17), or with `limit: 'run'` an agent run's own cap (CHAT-27 item 22).
+   */
+  'run.paused_cap': ChatRunSummary & { limit?: 'run' | 'month' };
   /**
    * The run stopped before its end (CHAT-03 item 19, "Stopped after …"): the
-   * person's Stop, or a card left unanswered for 7 days (`expired`).
+   * person's Stop, a card left unanswered for 7 days (`expired`), or a
+   * triggered agent run at its cap (`limit`, "Stopped at its limit",
+   * CHAT-27 item 22), or the Action Center action an agent run worked on
+   * closed (`action_closed`, CHAT-21 edge case 7).
    */
-  'run.stopped': ChatRunSummary & { reason: 'person' | 'expired' };
+  'run.stopped': ChatRunSummary & { reason: 'person' | 'expired' | 'limit' | 'action_closed' };
   /** A call refused: the out-of-permission answer (CHAT-20 §4c). */
   'access.denied': ChatDenialCard;
   /** Sent to Action Center, or added to an action there (CHAT-09 item 19). */
@@ -337,6 +350,7 @@ const EVENT_TYPES: Record<ChatEventType, true> = {
   'text.delta': true,
   'ask.created': true,
   'deliverable.created': true,
+  'why.ready': true,
   'confirm.required': true,
   next_moves: true,
   'usage.updated': true,

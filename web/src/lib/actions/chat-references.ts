@@ -58,10 +58,11 @@ export async function searchChatReferences(brandId: string, q: string): Promise<
     const query = referenceQuery(q);
     const pattern = `%${query}%`;
 
+    // A prompt reaches its brand through its prompt set; prompts has no brand_id.
     let prompts = supabase
       .from('prompts')
-      .select('id, text')
-      .eq('brand_id', brandId)
+      .select('id, text, prompt_sets!inner(brand_id)')
+      .eq('prompt_sets.brand_id', brandId)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .limit(MAX_REFERENCES);
