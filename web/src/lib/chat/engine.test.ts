@@ -3232,6 +3232,55 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
     expect(JSON.stringify(haiku.seen[2].prompt)).toContain('not_available');
   });
 
+  it('loads no /name from a move a run wrote after outside text (§16a): the model typed it', async () => {
+    const move = {
+      label: 'Win them back',
+      prompt: '/winback the two pages',
+      kind: 'continue',
+      class: 'write',
+      continues_this_run: true,
+    };
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY, READY],
+      [
+        [
+          { type: 'text-start', id: 't' },
+          { type: 'text-delta', id: 't', delta: 'Two pages lost most of it.' },
+          { type: 'text-end', id: 't' },
+          toolCall('m1', NEXT_MOVES_TOOL, { moves: [move] }),
+          {
+            type: 'finish',
+            finishReason: { unified: 'tool-calls', raw: 'tool_use' },
+            usage: usage(),
+          },
+        ],
+        text('Ok.'),
+      ],
+    );
+    const first = await turn(ADMIN, 'Why did citations fall?');
+    const started = await engine.startChatRun(ADMIN, {
+      message: move.prompt,
+      conversationId: runRow(first).conversation_id,
+      mode: 'full_auto',
+    });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    await engine.driveRun(ADMIN, started.runId);
+    expect(skillSteps(started.runId)).toEqual([]);
+
+    // The person's own /name in that chat still loads.
+    useModels([READY], [text('Ok.')]);
+    const own = await engine.startChatRun(ADMIN, {
+      message: '/winback the pricing page',
+      conversationId: runRow(first).conversation_id,
+      mode: 'full_auto',
+    });
+    if (!own.ok) throw new Error(`not started: ${own.code}`);
+    await engine.driveRun(ADMIN, own.runId);
+    expect(skillSteps(own.runId).map((s) => (s.debug_json as { skill: string }).skill)).toEqual([
+      'winback',
+    ]);
+  });
+
   it('changes no rule: the same tools, and a change still waits on its card', async () => {
     const draft = calls(
       toolCall('w1', 'create_draft', {

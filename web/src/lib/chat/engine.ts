@@ -1061,8 +1061,13 @@ async function loadSkill(
   rc.sink.emit('step.finished', { step: clientStep(row) });
 }
 
-/** The skills the message calls by /name, loaded before the first step: 3 at most. Their count. */
+/**
+ * The skills the message calls by /name, loaded before the first step: 3 at most. Their count.
+ * None when the run starts tainted: its message is a next move a run wrote after reading
+ * outside text (fromTaintedMove), so its /name is that model's, not the person's (§16a).
+ */
 async function loadTypedSkills(rc: RunContext): Promise<number> {
+  if (rc.progress.tainted) return 0;
   const typed = typedSkills(rc.progress.question ?? '', rc.skills.enabled).slice(
     0,
     MAX_SKILL_BODIES,
