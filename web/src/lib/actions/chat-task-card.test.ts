@@ -26,6 +26,8 @@ vi.mock('@/lib/supabase/admin', async () => ({
 const manager = vi.hoisted(() => ({ is: true }));
 vi.mock('@/lib/session-role', () => ({ isManager: async () => manager.is }));
 const writable = vi.hoisted(() => vi.fn(async () => {}));
+// Brand access (can_access_brand): a person given Selected brands may lack the card's.
+const access = vi.hoisted(() => ({ brand: true }));
 vi.mock('@/lib/subscription-guard', () => ({
   assertWritable: writable,
   SUBSCRIPTION_INACTIVE: { code: 'subscription_inactive' },
@@ -39,6 +41,10 @@ vi.mock('@/lib/supabase/server', async () => {
     createClient: async () => ({
       from: (table: string) => db.from(table),
       auth: { getUser: async () => ({ data: { user: { id: ME } } }) },
+      rpc: async (fn: string) => ({
+        data: fn === 'can_access_brand' ? access.brand : null,
+        error: null,
+      }),
     }),
   };
 });
@@ -61,6 +67,7 @@ const events = () => db.tables.action_events;
 
 beforeEach(() => {
   manager.is = true;
+  access.brand = true;
   writable.mockReset().mockResolvedValue(undefined);
   db.failures = {};
   db.defaults = { action_events: () => ({ created_at: new Date().toISOString() }) };
@@ -200,6 +207,29 @@ describe('markTaskDoneFromCard', () => {
     expect(db.tables.chat_file_task_links).toEqual([]);
   });
 
+  it('changes nothing on a brand the person may not use, or for a file of another brand', async () => {
+    access.brand = false;
+    expect(await markTaskDoneFromCard(RUN, 1)).toEqual({ ok: false, failure: 'not_found' });
+    access.brand = true;
+    file().brand_id = '44444444-4444-4444-8444-444444444444';
+    expect(await markTaskDoneFromCard(RUN, 1)).toEqual({ ok: false, failure: 'not_found' });
+    expect(task().status).toBe('todo');
+    expect(file().status).toBe('draft');
+    expect(db.tables.chat_file_task_links).toEqual([]);
+    expect(events()).toEqual([]);
+  });
+
+  it('checks the task’s brand can write (a demo brand) before any write', async () => {
+    writable.mockImplementation(async (opts?: { brandId?: string | null }) => {
+      if (opts?.brandId) throw Object.assign(new Error('demo'), { code: 'demo_brand' });
+    });
+    expect(await markTaskDoneFromCard(RUN, 1)).toEqual({ ok: false, failure: 'failed' });
+    expect(writable).toHaveBeenCalledWith({ brandId: BRAND });
+    expect(file().status).toBe('draft');
+    expect(db.tables.chat_file_task_links).toEqual([]);
+    expect(events()).toEqual([]);
+  });
+
   it('answers a failed write as a value', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     db.failures.action_tasks = { message: 'down' };
@@ -227,6 +257,24 @@ describe('undoTaskDoneFromCard', () => {
       ['task_status', 'todo', ME],
     ]);
     expect(events()[1].data).toMatchObject({ source: 'chat', via: 'undo' });
+  });
+
+  it('puts a skipped task back with its why', async () => {
+    task().status = 'skipped';
+    task().skip_reason = 'Covered by the new page';
+    await markTaskDoneFromCard(RUN, 1);
+    expect(task().skip_reason).toBeNull();
+    expect(await undoTaskDoneFromCard(RUN, 1)).toMatchObject({ ok: true });
+    expect(task()).toMatchObject({ status: 'skipped', skip_reason: 'Covered by the new page' });
+  });
+
+  it('changes nothing on a brand the person may no longer use', async () => {
+    await markTaskDoneFromCard(RUN, 1);
+    access.brand = false;
+    expect(await undoTaskDoneFromCard(RUN, 1)).toEqual({ ok: false, failure: 'not_found' });
+    expect(task().status).toBe('completed');
+    expect(file().status).toBe('done');
+    expect(db.tables.chat_file_task_links).toHaveLength(1);
   });
 
   it('keeps a link and a file status it didn’t make', async () => {

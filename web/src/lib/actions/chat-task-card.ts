@@ -55,7 +55,7 @@ interface CardTask {
   supabase: Client;
   userId: string;
   conversationId: string;
-  file: { id: string; status: 'draft' | 'attached' | 'done' };
+  file: { id: string; status: 'draft' | 'attached' | 'done'; brand_id: string | null };
   task: {
     id: string;
     action_id: string;
@@ -63,6 +63,7 @@ interface CardTask {
     title: string | null;
     title_params: unknown;
     status: string;
+    skip_reason: string | null;
     actions: { brand_id: string; status: string } | null;
   };
   /** The run whose strip holds the task, when one does. */
@@ -113,14 +114,12 @@ async function cardTask(runId: unknown, n: unknown): Promise<CardTask | null> {
   if (!chat || chat.user_id !== user.id || chat.deleted_at) return null;
   const { data: files, error: filesError } = await supabaseAdmin
     .from('chat_files')
-    .select('id, status')
+    .select('id, status, brand_id')
     .eq('run_id', run.data)
     .is('message_id', null)
     .order('created_at', { ascending: true });
   if (filesError) throw new Error(filesError.message);
-  const file = ((files ?? []) as { id: string; status: CardTask['file']['status'] }[])[
-    place.data - 1
-  ];
+  const file = ((files ?? []) as CardTask['file'][])[place.data - 1];
   if (!file) return null;
   const [{ data: state, error: stateError }, { data: links, error: linksError }] =
     await Promise.all([
@@ -146,7 +145,7 @@ async function cardTask(runId: unknown, n: unknown): Promise<CardTask | null> {
   const { data: task, error: taskError } = await supabase
     .from('action_tasks')
     .select(
-      'id, action_id, task_key, title, title_params, status, actions!action_tasks_action_id_fkey!inner(brand_id, status)',
+      'id, action_id, task_key, title, title_params, status, skip_reason, actions!action_tasks_action_id_fkey!inner(brand_id, status)',
     )
     .eq('id', taskId)
     .maybeSingle();
@@ -188,6 +187,30 @@ async function stripOf(card: CardTask, runId: string): Promise<ChatTaskStrip | n
 const CLOSED_ACTIONS = ['completed', 'dismissed'];
 
 /**
+ * Whether the person may change the card's task: its brand is one they may
+ * use (brand access, can_access_brand, as W2-10's writes check it; the task
+ * read above sees the whole workspace's), and the file is of that brand.
+ */
+async function brandUsable(card: CardTask): Promise<boolean> {
+  const brandId = card.task.actions?.brand_id;
+  if (!brandId) return false;
+  if (card.file.brand_id && card.file.brand_id !== brandId) return false;
+  const { data, error } = await card.supabase.rpc('can_access_brand', { p_brand_id: brandId });
+  if (error) throw new Error(error.message);
+  return data === true;
+}
+
+/** The brand's own plan check (a demo brand changes nothing): before any write. */
+async function brandWritable(card: CardTask) {
+  try {
+    await assertWritable({ brandId: card.task.actions!.brand_id });
+    return null;
+  } catch (error) {
+    return refusal(error);
+  }
+}
+
+/**
  * Attach to task & mark done (CHAT-09 item 13): the file linked to its task
  * by the person, the file done, and the task completed through the Action
  * Center's own write, the person as the actor and Chat as the source; the
@@ -204,6 +227,9 @@ export async function markTaskDoneFromCard(runId: string, n: number): Promise<Ta
     const card = await cardTask(runId, n);
     if (!card) return failure('not_found');
     if (!(await isManager(card.supabase))) return failure('forbidden');
+    if (!(await brandUsable(card))) return failure('not_found');
+    const refused = await brandWritable(card);
+    if (refused) return refused;
     const { task, file } = card;
     const actionStatus = task.actions?.status ?? '';
     if (CLOSED_ACTIONS.includes(actionStatus)) return failure('closed');
@@ -226,6 +252,7 @@ export async function markTaskDoneFromCard(runId: string, n: number): Promise<Ta
       const data: EventData = {
         source: 'chat',
         from: task.status,
+        ...(task.status === 'skipped' && task.skip_reason ? { skipReason: task.skip_reason } : {}),
         fileId: file.id,
         fileFrom: file.status,
         linked: (made ?? []).length > 0,
@@ -317,6 +344,9 @@ export async function undoTaskDoneFromCard(runId: string, n: number): Promise<Ta
     const card = await cardTask(runId, n);
     if (!card) return failure('not_found');
     if (!(await isManager(card.supabase))) return failure('forbidden');
+    if (!(await brandUsable(card))) return failure('not_found');
+    const refused = await brandWritable(card);
+    if (refused) return refused;
     const { task, file } = card;
     const { data: events, error } = await card.supabase
       .from('action_events')
@@ -347,7 +377,12 @@ export async function undoTaskDoneFromCard(runId: string, n: number): Promise<Ta
       card.supabase,
       { brandId: task.actions!.brand_id, actionId: task.action_id, taskId: task.id },
       from,
-      { data: { source: 'chat', via: 'undo', fileId: file.id } },
+      {
+        // A skipped task goes back with its why.
+        skipReason:
+          from === 'skipped' && typeof data.skipReason === 'string' ? data.skipReason : null,
+        data: { source: 'chat', via: 'undo', fileId: file.id },
+      },
     );
     const fileFrom =
       data.fileFrom === 'draft' || data.fileFrom === 'attached' ? data.fileFrom : 'done';
