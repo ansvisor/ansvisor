@@ -3,6 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 vi.mock('../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('node-cron', () => ({ default: { schedule: vi.fn() } }));
+// Who sees which brand (brand access, lib/access.js): everyone every brand, unless a test says.
+const access = vi.hoisted(() => ({ readers: null, error: null, calls: [] }));
+vi.mock('../access.js', () => ({
+  brandReaders: async (orgId, brandIds) => {
+    access.calls.push([orgId, brandIds]);
+    if (access.error) throw access.error;
+    return access.readers ?? { get: () => new Set(brandIds) };
+  },
+}));
 
 const cron = (await import('node-cron')).default;
 const { logger } = await import('../logger.js');
@@ -260,6 +269,9 @@ beforeEach(() => {
   vi.stubEnv('IS_CLOUD', 'true');
   capture = vi.fn(async (events) => events.length);
   logger.error.mockClear();
+  access.readers = null;
+  access.error = null;
+  access.calls = [];
 });
 
 afterEach(() => {
@@ -603,6 +615,110 @@ describe('runDailySuggestions: keeping and pausing', () => {
     );
     await run(db);
     expect(db.tables.chat_suggestions.some((r) => r.user_id === 'admin')).toBe(false);
+  });
+});
+
+describe('runDailySuggestions: brand access (spec §5.4)', () => {
+  /** A second brand of the workspace, with an open action of its own. */
+  const twoBrands = (overrides = {}) =>
+    world({
+      brands: [
+        ...world().brands,
+        { id: 'b3', organization_id: ORG, is_active: true, is_demo: false },
+      ],
+      actions: [...world().actions, openAction('a-b3', { brand_id: 'b3', priority_score: 70 })],
+      ...overrides,
+    });
+  const seeOnly = (byPerson) => {
+    access.readers = new Map(Object.entries(byPerson).map(([id, brands]) => [id, new Set(brands)]));
+  };
+
+  it('gives no feed and no suggestion where a person can’t see the brand', async () => {
+    seeOnly({
+      admin: ['b1', 'b3'],
+      'admin-new': ['b1'],
+      'manager-new': ['b1'],
+      'partner-on': ['b1', 'b3'],
+    });
+    const db = fakeDb(
+      twoBrands({
+        profiles: [
+          ...world().profiles,
+          { id: 'manager-new', role: 'manager', organization_id: ORG },
+        ],
+        chat_suggestion_feeds: [
+          feedOf('admin', 'b1', 3),
+          feedOf('admin', 'b3', 3),
+          // Narrowed to b1 since its b3 feed was made: b3 sends it nothing now.
+          feedOf('admin-new', 'b1', 3),
+          feedOf('admin-new', 'b3', 3),
+          feedOf('partner-on', 'b1', 3),
+        ],
+      }),
+    );
+    await run(db);
+    const sent = db.tables.chat_suggestions.map((r) => `${r.user_id}@${r.brand_id}`).sort();
+    expect(sent).toEqual(['admin-new@b1', 'admin@b1', 'admin@b3', 'partner-on@b1']);
+    // A manager with no feed yet, narrowed to b1, gets one on b1 only.
+    expect(
+      db.tables.chat_suggestion_feeds
+        .filter((f) => f.user_id === 'manager-new')
+        .map((f) => f.brand_id),
+    ).toEqual(['b1']);
+  });
+
+  it('reads who sees what once for the workspace, not once a brand', async () => {
+    await run(fakeDb(twoBrands()));
+    expect(access.calls).toEqual([[ORG, ['b1', 'b3']]]);
+  });
+
+  it('reads no brand nobody of the morning can see', async () => {
+    seeOnly({ admin: ['b1'], 'admin-new': ['b1'], 'partner-on': ['b1'] });
+    const db = fakeDb(twoBrands());
+    await run(db);
+    expect(db.tables.chat_suggestions.some((r) => r.brand_id === 'b3')).toBe(false);
+    expect(db.tables.chat_suggestion_feeds.some((f) => f.brand_id === 'b3')).toBe(false);
+  });
+
+  it('leaves a hidden person’s feed as it was, neither used nor paused, and works again with the brand back', async () => {
+    // Thirty-one days past its first unused suggestion: due to pause, were it run.
+    const feed = feedOf('admin', 'b1', 45, { updated_at: daysAgo(31), last_used_at: daysAgo(35) });
+    const unused = Array.from({ length: 8 }, (_, i) => ({
+      id: `s${i + 1}`,
+      user_id: 'admin',
+      organization_id: ORG,
+      brand_id: 'b1',
+      action_id: `old-${i + 1}`,
+      sent_on: daysAgo(i + 1).slice(0, 10),
+      sent_at: daysAgo(i + 1),
+      summary: { action: { category: 'growth' } },
+    }));
+    const db = fakeDb(world({ chat_suggestion_feeds: [{ ...feed }], chat_suggestions: unused }));
+    seeOnly({ 'partner-on': ['b1'] });
+    const stats = await run(db);
+    expect(stats.paused).toBe(0);
+    expect(db.tables.chat_suggestion_feeds.find((f) => f.user_id === 'admin')).toEqual(feed);
+    expect(rowsOn(db, '2026-10-30').some((r) => r.user_id === 'admin')).toBe(false);
+
+    // Given b1 back, the same feed goes on from where it was: due, it pauses now.
+    access.readers = null;
+    expect((await run(db, later(1))).paused).toBe(1);
+    expect(db.tables.chat_suggestion_feeds.find((f) => f.user_id === 'admin').status).toBe(
+      'paused',
+    );
+  });
+
+  it('fails the workspace, writing nothing, when who sees what can’t be read', async () => {
+    access.error = Object.assign(new Error('profiles down'), { name: 'Error', code: '57014' });
+    const db = fakeDb(world());
+    const stats = await run(db);
+    expect(stats).toMatchObject({ workspaces: 0, failed: 1, sent: 0, feedsMade: 0 });
+    expect(db.tables.chat_suggestions).toEqual([]);
+    expect(db.tables.chat_suggestion_feeds).toEqual(world().chat_suggestion_feeds);
+    expect(logger.error).toHaveBeenCalledWith(
+      { err: { name: 'Error', code: '57014' } },
+      '[chat-suggestions] workspace failed',
+    );
   });
 });
 
