@@ -4,6 +4,7 @@ import {
   CHECKPOINTS,
   MAX_CONTROL_CELLS,
   MIN_CONTROL_CELLS,
+  MIN_CONTROL_PROMPTS,
   addDays,
   aggregateCells,
   checkAt,
@@ -699,6 +700,26 @@ describe('not measurable', () => {
     expect(result.control.cells).toHaveLength(MIN_CONTROL_CELLS - 1);
   });
 
+  it('says too_few_controls with one control prompt, however many cells it brings', () => {
+    const engines = Array.from({ length: MIN_CONTROL_CELLS }, (_, i) => `engine-${i}`);
+    const ids = ['t1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9', 't10', 'c1'];
+    const levels = ids.flatMap((id) =>
+      engines.map((platform) => [id, id === 'c1' ? [4, 4] : [4, 10], { platform }]),
+    );
+    const result = measureCells({
+      seed: 's',
+      primary: 'visibility',
+      targetIds: ids.slice(0, 10),
+      ...windows(levels),
+      excluded: new Set(ids.slice(0, 10)),
+      prompts: promptsOf(ids),
+    });
+    // Ten control cells, all of one prompt: one control.
+    expect(result.control.cells).toHaveLength(MIN_CONTROL_CELLS);
+    expect(result).toMatchObject({ reason: 'too_few_controls' });
+    expect(MIN_CONTROL_PROMPTS).toBeGreaterThan(1);
+  });
+
   it('says too_few_runs with fewer than 3 tracked days in a window (tracking started late)', () => {
     const pre = aggregateCells(
       targetIds.flatMap((id) => cellRows(id, '2026-09-28', 2, 1)),
@@ -934,6 +955,51 @@ describe('checkpoint entries', () => {
     expect(lastingOf([{ checkpoint: 'd30', outcome: 'no_meaningful_change' }], 'improved')).toBe(
       null,
     );
+  });
+
+  it('reads day 14’s verdict for day 90 when day 30 has none', () => {
+    const earlier = [
+      { checkpoint: 'd14', outcome: 'improved' },
+      { checkpoint: 'd30', outcome: 'not_measurable' },
+    ];
+    expect(lastingOf(earlier, 'improved')).toBe('held');
+    expect(lastingOf(earlier, 'no_meaningful_change')).toBe('faded');
+    // Day 30's own verdict, No meaningful change, is the one before day 90.
+    expect(
+      lastingOf(
+        [
+          { checkpoint: 'd14', outcome: 'improved' },
+          { checkpoint: 'd30', outcome: 'no_meaningful_change' },
+        ],
+        'improved',
+      ),
+    ).toBeNull();
+  });
+
+  it('reads no p-value or interval for a checkpoint without a verdict (day 7)', () => {
+    const targetIds = Array.from({ length: 10 }, (_, i) => `t${i}`);
+    const controls = Array.from({ length: 20 }, (_, i) => `c${i}`);
+    const input = {
+      seed: 'm1:d7',
+      primary: 'visibility',
+      targetIds,
+      ...windows([
+        ...targetIds.map((id, i) => [id, [4, 11 + (i % 2)]]),
+        ...controls.map((id, i) => [id, [4, 4 + (i % 3)]]),
+      ]),
+      excluded: new Set(targetIds),
+      prompts: promptsOf([...targetIds, ...controls]),
+    };
+    const day7 = measureCells({ ...input, verdict: false });
+    const day14 = measureCells(input);
+    expect(day7.metrics[0]).toMatchObject({
+      effect: day14.metrics[0].effect,
+      direction: 'up',
+      p_value: null,
+      interval_low: null,
+      interval_high: null,
+    });
+    expect(day14.metrics[0].p_value).toEqual(expect.any(Number));
   });
 });
 

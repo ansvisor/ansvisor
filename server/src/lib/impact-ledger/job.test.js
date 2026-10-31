@@ -225,8 +225,19 @@ describe('checkpoints', () => {
       },
     });
     expect(row.checkpoints_json).toEqual([
-      expect.objectContaining({ checkpoint: 'd7', outcome: 'pending', direction: 'up' }),
+      expect.objectContaining({
+        checkpoint: 'd7',
+        outcome: 'pending',
+        direction: 'up',
+        // A direction only: nothing re-randomized or resampled for it.
+        p_value: null,
+        interval_low: null,
+        interval_high: null,
+      }),
     ]);
+    for (const metric of row.metrics) {
+      expect(metric).toMatchObject({ p_value: null, interval_low: null, interval_high: null });
+    }
     expect(db.tables.impact_control_sets).toEqual([
       expect.objectContaining({ impact_measurement_id: 'm1', checkpoint: 'd7', cell_count: 20 }),
     ]);

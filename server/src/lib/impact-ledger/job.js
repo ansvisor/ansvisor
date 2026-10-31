@@ -304,6 +304,8 @@ async function measureCheckpoint({ measurement, ship, cp, prompts, shipped, wind
     post,
     excluded,
     prompts,
+    // Day 7 shows a direction only: no p-value or interval is read for it.
+    verdict: cp.key !== 'd7',
   });
   return { window, result, concurrent };
 }

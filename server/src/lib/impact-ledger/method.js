@@ -23,8 +23,9 @@
  *     the same for both whatever their mix.
  *   * Controls (item 7): the brand's other active prompts, never a target of
  *     a change shipped in the window, in a target cell's stratum (on
- *     visibility), the same topic first. Fewer than MIN_CONTROL_CELLS: Not
- *     measurable.
+ *     visibility), the same topic first. Fewer than MIN_CONTROL_CELLS, or
+ *     than MIN_CONTROL_PROMPTS prompts (one prompt on ten engines is one
+ *     control, however many cells): Not measurable.
  *   * Effect (item 8): a difference in differences, stratified: each cell's
  *     change minus its stratum's mean control change, averaged per prompt;
  *     the effect is the target prompts' mean. A target cell with no control
@@ -74,6 +75,11 @@ export const P_HIGH = 0.05;
 export const MIN_RUNS = 3;
 /** Fewest control cells a checkpoint is compared with. */
 export const MIN_CONTROL_CELLS = 10;
+/**
+ * Fewest control prompts they come from: the prompt is the unit of
+ * evidence, for controls as for targets (VERDICT_TARGET_PROMPTS).
+ */
+export const MIN_CONTROL_PROMPTS = 3;
 /** Target cells High, and Medium, confidence need. */
 export const HIGH_TARGET_CELLS = 10;
 export const MEDIUM_TARGET_CELLS = 5;
@@ -639,6 +645,7 @@ export function metricResult({ metric, targets, controls, seed, resamples = RESA
     targetCells: seen.targetCells,
     targetPrompts: seen.targetPrompts,
     controlCells: seen.controlCells,
+    controlPrompts: seen.controlPrompts,
   };
 }
 
@@ -674,14 +681,26 @@ export function primaryMetric(ship) {
  * the primary first, with what the primary is judged on (`judged`); or why
  * it can't be measured: no target left once other changes took theirs
  * (overlapping_change), engine_not_on_plan, too_few_runs, or too few
- * controls in the targets' strata (too_few_controls). The controls are
- * returned either way once they were matched, for impact_control_sets.
+ * controls in the targets' strata, by cells or by prompts
+ * (too_few_controls). The controls are returned either way once they were
+ * matched, for impact_control_sets. Without `verdict` (day 7: a direction
+ * only) nothing is re-randomized or resampled: no p and no interval.
  *
  * @param {{ seed: string, primary: 'visibility'|'citations', targetIds: string[],
  *   pre: ReturnType<typeof aggregateCells>, post: ReturnType<typeof aggregateCells>,
- *   excluded: Set<string>, prompts: Map<string, { topic_id: string|null, is_active: boolean }> }} input
+ *   excluded: Set<string>, prompts: Map<string, { topic_id: string|null, is_active: boolean }>,
+ *   verdict?: boolean }} input
  */
-export function measureCells({ seed, primary, targetIds, pre, post, excluded, prompts }) {
+export function measureCells({
+  seed,
+  primary,
+  targetIds,
+  pre,
+  post,
+  excluded,
+  prompts,
+  verdict = true,
+}) {
   if (targetIds.length === 0) return { reason: 'overlapping_change', targetCells: 0 };
   const isTarget = new Set(targetIds);
   const targets = [];
@@ -720,15 +739,20 @@ export function measureCells({ seed, primary, targetIds, pre, post, excluded, pr
     targetTopics,
     topicOf: (id) => prompts.get(id)?.topic_id ?? null,
   });
-  // Read first with nothing re-randomized: too few controls, or too few
-  // target prompts for a verdict (day 7's direction needs no p), stop here.
+  // Read first with nothing re-randomized: too few controls stop here, and
+  // too few target prompts for a verdict, or no verdict to give (day 7's
+  // direction), need no p or interval.
   const read = (metric, resamples) =>
     metricResult({ metric, targets, controls: control.cells, seed, resamples });
   const first = control.cells.length ? read(primary, 0) : null;
-  if (!first || first.controlCells < MIN_CONTROL_CELLS) {
+  if (
+    !first ||
+    first.controlCells < MIN_CONTROL_CELLS ||
+    first.controlPrompts < MIN_CONTROL_PROMPTS
+  ) {
     return { reason: 'too_few_controls', targetCells: first?.targetCells ?? 0, control };
   }
-  const resamples = first.targetPrompts >= VERDICT_TARGET_PROMPTS ? RESAMPLES : 0;
+  const resamples = verdict && first.targetPrompts >= VERDICT_TARGET_PROMPTS ? RESAMPLES : 0;
   const main = resamples ? read(primary, resamples) : first;
   const other = read(primary === 'visibility' ? 'citations' : 'visibility', resamples);
   return {
@@ -785,15 +809,20 @@ export function confidenceOf({ p, targetCells, targetPrompts, stormy = false }) 
 }
 
 /**
- * Whether a day 90 result held the verdict before it (day 30, else day 14):
- * "held" when it is the same Improved or Declined, "faded" when it isn't;
- * null when there was no such verdict to hold. A day 90 that can't be
- * measured has none (checkpointEntry).
+ * Whether a day 90 result held the verdict before it (day 30's, else day
+ * 14's when day 30 has none: not measured, or Not measurable): "held" when
+ * it is the same Improved or Declined, "faded" when it isn't; null when
+ * there was no such verdict to hold. A day 90 that can't be measured has
+ * none (checkpointEntry).
  */
 export function lastingOf(entries, d90Outcome) {
   const before = [...entries]
     .reverse()
-    .find((entry) => entry.checkpoint === 'd30' || entry.checkpoint === 'd14');
+    .find(
+      (entry) =>
+        (entry.checkpoint === 'd30' || entry.checkpoint === 'd14') &&
+        VERDICTS.includes(entry.outcome),
+    );
   if (!before || (before.outcome !== 'improved' && before.outcome !== 'declined')) return null;
   return d90Outcome === before.outcome ? 'held' : 'faded';
 }
