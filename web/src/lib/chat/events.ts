@@ -142,6 +142,62 @@ export interface ChatConfirm {
   noUndo?: true;
   /** What the change leaves behind, under the card ("Its timeline … doesn't come back"). */
   note?: string;
+  /**
+   * What it carries, line by line: the tasks Send to Action Center creates
+   * (CHAT-09 item 18), each with its new text in full (`body`).
+   */
+  items?: { title: string; detail?: string; body?: string }[];
+  /** Why the change: the finding. */
+  why?: string;
+  /** What it aims at. */
+  goal?: string;
+  /** What it is about, by kind, in the person's words: frozen once it's made. */
+  targets?: { kind: 'prompts' | 'pages' | 'competitors' | 'platforms'; values: string[] }[];
+}
+
+/**
+ * What a change sent to the Action Center (CHAT-09 item 19): a new action,
+ * or a finding added to one that already covered it, with Open in Actions.
+ */
+export interface ChatActionSent {
+  kind: 'action_created' | 'action_added';
+  /** "AC-1271" */
+  actionNo: number;
+  /** The new action's title, or the finding added. */
+  title: string;
+  href: ChatHref;
+}
+
+/**
+ * Chat's work on an Action Center task, in the task strip (CHAT-09 §B item
+ * 5, chat_task_state 00418): never the task's own Action Center status.
+ * Done only once the person completed the task there (item 6).
+ */
+export type ChatTaskStatus = 'queued' | 'writing' | 'ready_for_review' | 'done';
+
+/** One task in the strip: by its place, never its id. */
+export interface ChatTaskRow {
+  /** Its place in the strip, from 1. */
+  at: number;
+  /** The task as the Action Center words it; empty when it has no words. */
+  title: string;
+  /** Its action's Priority Score (0–100); null before the engine scored it. */
+  priority: number | null;
+  /** Its action's category, shown as the Action Center names it ("Fix"). */
+  category: 'growth' | 'protect' | 'recover' | 'fix' | 'compete' | null;
+  status: ChatTaskStatus;
+  /** Its action's due date, YYYY-MM-DD, when it has one. */
+  due?: string;
+}
+
+/** The task strip under a /tasks answer (CHAT-09 §B, mockup #s-work): at most 4 tasks. */
+export interface ChatTaskStrip {
+  tasks: ChatTaskRow[];
+  /** Ready for review or Done: "1 of 3 ready" (CHAT-01 item 7). */
+  ready: number;
+  total: number;
+  /** Its tasks due by the end of this week: "Action Center tasks · 4 due". */
+  due: number;
 }
 
 /** The rule behind a refusal (CHAT-20 §4c): denial.ts's kinds. */
@@ -253,11 +309,16 @@ export interface ChatEventPayloads {
    * The run stopped before its end (CHAT-03 item 19, "Stopped after …"): the
    * person's Stop, a card left unanswered for 7 days (`expired`), or a
    * triggered agent run at its cap (`limit`, "Stopped at its limit",
-   * CHAT-27 item 22).
+   * CHAT-27 item 22), or the Action Center action an agent run worked on
+   * closed (`action_closed`, CHAT-21 edge case 7).
    */
-  'run.stopped': ChatRunSummary & { reason: 'person' | 'expired' | 'limit' };
+  'run.stopped': ChatRunSummary & { reason: 'person' | 'expired' | 'limit' | 'action_closed' };
   /** A call refused: the out-of-permission answer (CHAT-20 §4c). */
   'access.denied': ChatDenialCard;
+  /** Sent to Action Center, or added to an action there (CHAT-09 item 19). */
+  'action.sent': ChatActionSent;
+  /** The task strip as it stands (CHAT-09 §B): the whole strip each time. */
+  'tasks.updated': ChatTaskStrip;
   // Editor in Chat (CHAT-25 §12, Phase 4): payloads grow with it.
   /** A new version card of a page Chat writes. */
   'deliverable.updated': ChatDeliverable & { version: number };
@@ -292,6 +353,8 @@ const EVENT_TYPES: Record<ChatEventType, true> = {
   'run.paused_cap': true,
   'run.stopped': true,
   'access.denied': true,
+  'action.sent': true,
+  'tasks.updated': true,
   'deliverable.updated': true,
   'suggestion.created': true,
   'suggestion.resolved': true,

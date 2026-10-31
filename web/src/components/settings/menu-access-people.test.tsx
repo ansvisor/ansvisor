@@ -18,6 +18,7 @@ const actions = vi.hoisted(() => ({ setMemberMenu: vi.fn(), setMenuManager: vi.f
 vi.mock('@/lib/actions/menu-access', () => actions);
 
 const { MenuManagersCard, MenuPeopleCard, memberMenuWith } = await import('./menu-access-people');
+const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -90,11 +91,13 @@ function Cards() {
   );
 }
 
-async function render() {
+async function render(chatOn = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <Cards />
+        <ChatAgenticProvider enabled={chatOn}>
+          <Cards />
+        </ChatAgenticProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -176,6 +179,24 @@ describe('MenuPeopleCard', () => {
     expect(row('ece').textContent).toContain('Custom: +Audit');
     expect(row('ece').textContent).toContain('11 of 12 sections');
     expect(row('mert').textContent).toContain('All sections');
+  });
+
+  // Agent Center, only with the new Chat on: in the count and the boxes then.
+  it('counts and lists Agent Center only with the new Chat on', async () => {
+    await render(true);
+    // Brand & PR's sections now hold Agent Center too.
+    expect(row('deniz').textContent).toContain('8 of 13 sections');
+    await act(async () => buttonIn(row('mert'), 'Customize').click());
+    expect(el('[aria-label="Mert Aydın sees Agent Center"]').getAttribute('aria-checked')).toBe(
+      'true',
+    );
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render(false);
+    await act(async () => buttonIn(row('mert'), 'Customize').click());
+    expect(container.querySelector('[aria-label="Mert Aydın sees Agent Center"]')).toBeNull();
+    expect(el('[aria-label="Mert Aydın sees Chat"]')).not.toBeNull();
   });
 
   it('saves a person’s exception as a box changes', async () => {

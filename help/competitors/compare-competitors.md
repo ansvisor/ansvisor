@@ -8,7 +8,7 @@ updated: 2026-10-31
 last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/competitors.mdx, docs/concepts/visibility-scoring.mdx]
 ---
 The **Competitors** page, right under **Reports** in the sidebar, compares the AI visibility of the competitors you track with yours, across your tracked prompts and AI platforms. You can also open it with **Head-to-Head** on the **Leaderboard** card of **Brand Visibility**, or by clicking a competitor's name there. **Tracked Competitors** lists them with their visibility; select one to see it head-to-head with your brand.

@@ -1,7 +1,7 @@
 ---
-title: See and run your agents in Chat › Agents
-route: /dashboard/chat/agents
-keywords: [agents, chat agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, agent connections, required connection]
+title: See and run your agents in Agent Center
+route: /dashboard/agents
+keywords: [agents, agent center, chat agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection]
 synonyms: [my agents, saved agents, automations, scheduled agents, agent history, what does this agent cost, make an agent, change an agent, remove an agent]
 plan: all
 updated: 2026-10-31
@@ -9,13 +9,13 @@ last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
 approved: false
-sources: [web/messages/en.json, web/src/lib/chat/agent-rules.ts, web/src/lib/chat/agent-form.ts, web/src/lib/chat/agent-triggers.ts, web/src/lib/chat/agent-driver.ts, web/src/lib/chat/agent-skills.ts, web/src/lib/chat/agent-connections.ts]
+sources: [web/messages/en.json, web/src/config/dashboard.ts, web/src/lib/chat/agent-rules.ts, web/src/lib/chat/agent-form.ts, web/src/lib/chat/agent-triggers.ts, web/src/lib/chat/agent-driver.ts, web/src/lib/chat/agent-skills.ts, web/src/lib/chat/agent-connections.ts]
 ---
-An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, or when someone clicks **Run now**. **Agents** lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses.
+An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, or when someone clicks **Run now**. **Agent Center** lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses.
 
-## Open Agents
+## Open Agent Center
 
-Click **Agents** in the chat menu, under **Inbox**. It shows **New** until you open it the first time. You can also press Ctrl K (⌘K on a Mac) in Chat and type "Agents".
+Click **Agent Center** on the left menu, right under **Chat**. It has a page of its own, outside Chat. It is also in the chat menu, under **Inbox**, where it shows **New** until you first open Agent Center. You can also press Ctrl K (⌘K on a Mac) in Chat and type "Agent Center". Old links to Agents in Chat open Agent Center.
 
 The tabs above the list show how many agents each holds:
 
@@ -59,7 +59,7 @@ Managers change their own agents and can run agents shared with the workspace. A
 
 ## Create an agent
 
-Admins and Managers click **New agent** on **Agents**. Four steps open, with a summary of the agent on the right:
+Admins and Managers click **New agent** in **Agent Center**. Four steps open, with a summary of the agent on the right:
 
 1. **Skill**: pick what it does, add up to 2 follow-on skills, and write instructions if you like.
 2. **Trigger**: add up to 5, such as **Schedule** or **Signal created**. Each shows its next run or when it fires. **Manual** is always on: **Run now**. Next to **FOR**, pick its brands, and narrow it to platforms, topics, prompt tags or URLs.
@@ -81,6 +81,7 @@ On an agent's page, click **Edit** to open the same four steps with its current 
 Managers edit their own agents, and Admins every agent. If your Admin keeps workspace agents to Admins, Managers can't change their agents shared with the workspace either. Analysts and Agency partners see a read-only line with **Ask your Admin** instead.
 
 To delete an agent, archive it first. Then open **⋯** on its page and click **Delete**. Chat asks first; its past runs and files stay.
+
 ## When an agent runs by itself
 
 A **Schedule** trigger runs at its time on the clock of the time zone it was set in, also when summer time starts or ends. A time missed while the agent was paused isn't made up later. A **Signal** trigger runs when Action Center finds a new signal of its category, and of the definitions, pages and engines you picked. **KPI changed** and **Watch rule** triggers are saved, but don't start runs yet.
@@ -92,6 +93,12 @@ Signals that come close together don't each start a run. Signals within 15 minut
 Each run works on one brand, in a chat of its own. A run a trigger started acts as the agent's owner, with their role; **Run now** acts as the person who clicked it. The chat shows in that person's Inbox. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
 
 A run may use only its share of your monthly AI limit. A run a trigger started ends **Stopped at its limit** when it reaches it; a **Run now** run pauses there instead. After 3 failed runs in a row the agent pauses. When the monthly AI limit is used up, the agent pauses and starts again by itself once the limit resets.
+
+## Run an agent from Action Center
+
+Admins and Managers can also start an agent from an open action in Action Center: **Run agent** on the action's row or at the top of the open action lists the agents that work on its brand. The run works on that action alone, acts as the person who clicked, and opens beside the action. Its chat is named after the agent and the action, and **Run history** shows its trigger as **Run agent from an action**.
+
+The run never adds targets to the action and never closes its tasks. If the action is completed or dismissed, the run stops with **The action was closed**. The action's **History** shows **Agent run started** and **Agent run completed**.
 
 ## Read-only roles
 

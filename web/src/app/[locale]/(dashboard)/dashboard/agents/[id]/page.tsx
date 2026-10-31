@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { AgentDetail } from '@/components/chat/agents/agent-detail';
 import { agentPageId } from '@/lib/chat/agent-view';
-import { chatPageOpen } from '../../_chat-page-access';
+import { chatPageOpen } from '../../chat/_chat-page-access';
 
 /**
  * An agent's detail (CHAT-21 §C; governance mockup #g-agent): its state,

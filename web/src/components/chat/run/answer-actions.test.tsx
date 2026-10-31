@@ -39,14 +39,24 @@ const onFiled = vi.fn();
 let answer: (url: string, init?: RequestInit) => Response;
 const fetchMock = vi.fn(async (url: string, init?: RequestInit) => answer(url, init));
 
-async function render(markdown = 'Two pages lost most of it.', filed = false) {
+async function render(
+  markdown = 'Two pages lost most of it.',
+  filed = false,
+  onSendToActionCenter?: () => void,
+) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <UpgradeDialogContext.Provider
           value={{ isLocked: false, reason: 'ended', adminName: null, openUpgrade }}
         >
-          <AnswerActions runId={RUN} markdown={markdown} filed={filed} onFiled={onFiled} />
+          <AnswerActions
+            runId={RUN}
+            markdown={markdown}
+            filed={filed}
+            onFiled={onFiled}
+            onSendToActionCenter={onSendToActionCenter}
+          />
         </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
@@ -95,6 +105,18 @@ describe('AnswerActions', () => {
         b.getAttribute('aria-label'),
       ),
     ).toEqual(['Copy', 'Download', 'Save to Files', 'Open in Content Editor']);
+  });
+
+  /** CHAT-09 item 18: on the latest answer, for Admins and Managers (the thread decides). */
+  it('offers Send to Action Center where the thread gives it, and asks Chat on a click', async () => {
+    const send = vi.fn();
+    await render(undefined, false, send);
+    expect(button('answer.sendToActionCenter').getAttribute('aria-label')).toBe(
+      'Send to Action Center',
+    );
+    await click(button('answer.sendToActionCenter'));
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('offers Markdown, Word and PDF, and CSV and Excel only with a table', async () => {

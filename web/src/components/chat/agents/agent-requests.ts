@@ -1,5 +1,6 @@
 import { API_FAILURES, apiFailure, type ApiFailure } from '@/lib/api-failure';
 import type { ChatDenialCard } from '@/lib/chat/events';
+import type { CompatibleAgents } from '@/lib/chat/agent-action';
 import type { AgentDetail, AgentListResult, AgentRunView } from '@/lib/chat/agents';
 import type { AgentListView } from '@/lib/chat/agent-rules';
 import type { RunNowItem } from '@/lib/chat/agent-runs';
@@ -104,3 +105,44 @@ export const updateAgent = (id: string, patch: Record<string, unknown>) =>
 
 /** Delete, once archived (§B item 7): its runs, chats and files stay. */
 export const deleteAgent = (id: string) => send(`/api/chat/agents/${id}`, { method: 'DELETE' });
+
+/**
+ * Run agent's picker on an Action Center action (CHAT-21 §F item 27): the
+ * agents for it, or the server's refusal (an action closed or gone, the
+ * out-of-permission answer).
+ */
+export async function readCompatibleAgents(
+  actionId: string,
+): Promise<({ ok: true } & CompatibleAgents) | AgentRefused> {
+  const res = await fetch(`/api/chat/agents/compatible?actionId=${encodeURIComponent(actionId)}`, {
+    cache: 'no-store',
+  }).catch(() => null);
+  const body = (await res?.json().catch(() => null)) as Record<string, unknown> | null;
+  if (res?.ok && body?.ok === true) return body as unknown as { ok: true } & CompatibleAgents;
+  return {
+    ok: false,
+    failure: isFailure(body?.failure) ? body.failure : apiFailure(res?.status ?? 0, body ?? {}),
+    message: res && res.status < 500 && typeof body?.error === 'string' ? body.error : null,
+    denial: (body?.denial as ChatDenialCard | undefined) ?? null,
+    code: typeof body?.code === 'string' ? body.code : null,
+    asked: typeof body?.asked === 'string' ? body.asked : null,
+  };
+}
+
+/** Run agent on an action: its run, the run's chat once it started, or why it didn't. */
+export const runAgentOnAction = (id: string, actionId: string) =>
+  send<{ runs: RunNowItem[]; chatId: string | null; stopReason?: string | null }>(
+    `/api/chat/agents/${id}/run`,
+    {
+      body: JSON.stringify({ actionId }),
+    },
+  );
+
+/** Run with Chat on an action: the person's chat on it, started or queued, or the one from a minute ago. */
+export const runChatOnAction = (actionId: string, timezone?: string) =>
+  send<{ chatId: string; queued: boolean; repeated?: boolean }>(
+    `/api/chat/actions/${actionId}/chat`,
+    {
+      body: JSON.stringify(timezone ? { timezone } : {}),
+    },
+  );

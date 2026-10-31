@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Bot,
   FileBarChart,
   FileText,
   Gauge,
@@ -44,6 +45,12 @@ export interface NavItem {
   disabled?: boolean;
   requiredFeature?: Feature;
   requiresBrandPref?: BrandPrefKey;
+  /**
+   * Only with the new Chat on for the workspace (CHAT_AGENTIC): off, the item
+   * is on no menu and in no list of the menu's sections, as its pages aren't
+   * there either. Agent Center.
+   */
+  requiresChatAgentic?: boolean;
 }
 
 export interface NavGroup {
@@ -61,6 +68,10 @@ export const dashboardNav: NavGroup[] = [
    * about anything below, or let the agent do the work. The route stays
    * /dashboard/agent: renaming the URL would break every existing link for a
    * label change, and the sidebar's "Set up" badge keys off that href.
+   *
+   * Agent Center right under it: the agents that run in Chat, on a page of
+   * their own (was Chat › Agents, /dashboard/chat/agents, which redirects
+   * here). Gated as Chat is, and there only with the new Chat on.
    */
   {
     items: [
@@ -69,6 +80,13 @@ export const dashboardNav: NavGroup[] = [
         href: '/dashboard/agent',
         icon: Sparkles,
         requiredFeature: 'ai_agent',
+      },
+      {
+        title: 'Agent Center',
+        href: '/dashboard/agents',
+        icon: Bot,
+        requiredFeature: 'ai_agent',
+        requiresChatAgentic: true,
       },
     ],
   },

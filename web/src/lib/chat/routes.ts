@@ -79,6 +79,8 @@ const FILTERS: Record<string, readonly RouteFilter[]> = {
 const SYNONYMS: Record<string, readonly string[]> = {
   // "insights" alone is this page's address and Prompts › Insights' name: the model asks.
   insights: ['visibility', 'answer engine insights', 'visibility dashboard', 'insights'],
+  // Was Chat › Agents.
+  agents: ['agents', 'my agents', 'agent centre'],
   'action-center': ['actions', 'action centre'],
   'action-center/signals': ['signals'],
   'action-center/kpis': ['kpis', 'kpi', 'goals'],
