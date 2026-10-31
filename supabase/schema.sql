@@ -45276,13 +45276,23 @@ notify pgrst, 'reload schema';
 --
 -- Nothing changes yet: everyone has All brands until the Team screen narrows
 -- someone, and for All-brands people every rule below passes the same rows as
--- before (their user_brand_ids() is every brand of their organization).
+-- before (their user_brand_ids() is every brand of their organization), with
+-- one exception, below.
 --
+--   * user_has_all_brands(): whether the caller is an admin or has All
+--     brands. A row with no brand (a chat or file about the whole workspace)
+--     may still hold any brand's data, so where other people's rows have none
+--     (00424) only they read it.
 --   * prompt_usage_counters, content_draft_deliveries, agent_conversations
 --     (and agent_messages, through it): a row is read only by someone who can
 --     access its brand. The organization and person checks stay. A person's
 --     own old Agent chat about a brand they no longer see is hidden, not
 --     deleted, and comes back with the access.
+--   * The exception: agent_conversations never checked the organization, so
+--     someone who moved to another organization still read their own Agent
+--     chats from the old one. Those about one of the old organization's
+--     brands are hidden now (its brands are none of theirs); those with no
+--     brand stay.
 --   * content_draft_member(), which ten policies on a draft's inputs,
 --     confirmations, images and ready log and three functions (snapshot,
 --     restore, decide suggestions) call: the draft's brand must be one the
@@ -45307,6 +45317,33 @@ notify pgrst, 'reload schema';
 -- public.user_brand_ids())`: not correlated with the row, so it runs once per
 -- query, and only for authenticated (anon may not run it). Functions that look
 -- at one brand use can_access_brand(brand).
+
+-- ── user_has_all_brands ─────────────────────────────────────────────────────
+-- An admin, or All brands, in an organization: the people who may read a row
+-- of the organization that names no brand. A policy calls it as
+-- `(select public.user_has_all_brands())`, once per query.
+
+create or replace function public.user_has_all_brands()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.organization_id is not null
+      and (p.role = 'admin' or p.brand_scope = 'all')
+  );
+$$;
+
+revoke all on function public.user_has_all_brands() from public, anon;
+grant execute on function public.user_has_all_brands() to authenticated, service_role;
+
+comment on function public.user_has_all_brands() is
+  'Brand access (00390): whether the caller (auth.uid()) is an admin or has All brands in their organization. For policies on rows with no brand: brand_id is null and (select public.user_has_all_brands()).';
 
 -- ── prompt_usage_counters ───────────────────────────────────────────────────
 
@@ -45333,7 +45370,8 @@ create policy "content_draft_deliveries: member select" on public.content_draft_
   );
 
 -- ── agent_conversations (the old Agent; agent_messages follows it) ──────────
--- brand_id is the brand a chat was opened on, or null (none pinned).
+-- brand_id is the brand a chat was opened on, or null (none pinned). Only the
+-- person who wrote a chat reads it, so one with no brand stays theirs.
 
 drop policy if exists "Users read own conversations" on public.agent_conversations;
 create policy "Users read own conversations" on public.agent_conversations
@@ -49588,9 +49626,12 @@ notify pgrst, 'reload schema';
 -- someone, and for All-brands people every rule passes the same rows as
 -- before.
 --
---   * A row with no brand (a chat or file about the whole workspace, a run or
---     log row whose brand was deleted) stays as it was: there is no brand to
---     hide.
+--   * A row with no brand (a chat or file about the whole workspace, a run
+--     whose brand was deleted) may still hold any brand's data: a chat with
+--     no brand lets each tool call pick its own. Someone else's such row is
+--     read only by admins and All-brands people (user_has_all_brands(),
+--     00390). The person's own rows with no brand stay theirs: their own
+--     chat, their own Chat changes and access requests (with the admins').
 --   * A person's own chat about a brand they can't access is hidden, not
 --     deleted, and comes back with the access (BRAND-ACCESS §9 Q4). So is a
 --     shared one, and an agent run's.
@@ -49605,6 +49646,10 @@ notify pgrst, 'reload schema';
 
 -- ── chat_conversations ──────────────────────────────────────────────────────
 
+-- The author's own chat with no brand stays theirs, whatever brands they see
+-- (Q4 hides only chats about a brand): they wrote every question in it, and
+-- an answer there that read a brand they have since lost is still the one
+-- they were given.
 drop policy if exists "chat_conversations: author select" on public.chat_conversations;
 create policy "chat_conversations: author select"
   on public.chat_conversations
@@ -49630,7 +49675,10 @@ create policy "chat_conversations: shared select"
     and organization_id in (
       select p.organization_id from public.profiles p where p.id = auth.uid()
     )
-    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
   );
 
 drop policy if exists "chat_conversations: agent run select" on public.chat_conversations;
@@ -49644,7 +49692,10 @@ create policy "chat_conversations: agent run select"
     and organization_id in (
       select p.organization_id from public.profiles p where p.id = auth.uid()
     )
-    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
   );
 
 -- ── chat_agent_runs ─────────────────────────────────────────────────────────
@@ -49664,7 +49715,10 @@ create policy "chat_agent_runs: agent select"
           and (p.role = 'admin' or chat_agent_runs.acting_user_id = auth.uid())
       )
     )
-    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
   );
 
 -- ── chat_why_analyses ───────────────────────────────────────────────────────
@@ -49690,10 +49744,15 @@ create policy "chat_files: member select"
     organization_id in (
       select p.organization_id from public.profiles p where p.id = auth.uid()
     )
-    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
   );
 
 -- ── chat_activity_log, chat_access_requests ─────────────────────────────────
+-- Read by the person who acted (or asked) and the admins, who have All brands:
+-- a row with no brand stays readable to them.
 
 drop policy if exists "chat_activity_log: own or admin select" on public.chat_activity_log;
 create policy "chat_activity_log: own or admin select"

@@ -3,7 +3,10 @@ import { countPlanBrands } from './plan-brand-count';
 
 type Client = Parameters<typeof countPlanBrands>[0];
 
-function client(answer: { data: number | null; error: { message: string } | null }, seen = 0) {
+function client(
+  answer: { data: number | null; error: { code: string; message: string } | null },
+  seen = 0,
+) {
   const filters: unknown[][] = [];
   const rpc = vi.fn(async () => answer);
   const chain = {
@@ -27,17 +30,33 @@ describe('countPlanBrands', () => {
     expect(from).not.toHaveBeenCalled();
   });
 
-  it('falls back to the brands the person reads, the demo brand left out, until 00390 is on the database', async () => {
-    const { db, from, filters } = client(
-      { data: null, error: { message: 'function public.org_brand_count does not exist' } },
-      2,
+  it.each([
+    ['PGRST202', 'Could not find the function public.org_brand_count(p_organization_id)'],
+    ['42883', 'function public.org_brand_count(uuid) does not exist'],
+  ])(
+    'falls back to the brands the person reads, the demo brand left out, until 00390 is on the database (%s)',
+    async (code, message) => {
+      const { db, from, filters } = client({ data: null, error: { code, message } }, 2);
+
+      expect(await countPlanBrands(db, 'org-1')).toBe(2);
+      expect(from).toHaveBeenCalledWith('brands');
+      expect(filters).toEqual([
+        ['organization_id', 'org-1'],
+        ['is_demo', false],
+      ]);
+    },
+  );
+
+  it('throws on any other error, so a limit never passes on a failed count', async () => {
+    const { db, from } = client(
+      {
+        data: null,
+        error: { code: '57014', message: 'canceling statement due to statement timeout' },
+      },
+      0,
     );
 
-    expect(await countPlanBrands(db, 'org-1')).toBe(2);
-    expect(from).toHaveBeenCalledWith('brands');
-    expect(filters).toEqual([
-      ['organization_id', 'org-1'],
-      ['is_demo', false],
-    ]);
+    await expect(countPlanBrands(db, 'org-1')).rejects.toThrow('statement timeout');
+    expect(from).not.toHaveBeenCalled();
   });
 });

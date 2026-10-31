@@ -117,7 +117,7 @@ function conditions(body) {
 
 /** The brand condition the two migrations add, as `and …`. */
 const BRAND_CONDITION =
-  /\s*and \((?: ?brand_id is null or brand_id in \(select public\.user_brand_ids\(\)\) ?)\)|\s*and brand_id in \(select public\.user_brand_ids\(\)\)/g;
+  /\s*and \( ?brand_id in \(select public\.user_brand_ids\(\)\) or \(brand_id is null and \(select public\.user_has_all_brands\(\)\)\) ?\)|\s*and \( ?brand_id is null or brand_id in \(select public\.user_brand_ids\(\)\) ?\)|\s*and brand_id in \(select public\.user_brand_ids\(\)\)/g;
 
 /** The policies a migration (re)creates: [table, name] pairs. */
 function created(file) {
@@ -162,30 +162,36 @@ describe('the brand tables 00390 and 00424 take', () => {
       expect(now.command).toBe(before.command);
       // Every condition gains the brand condition…
       for (const condition of conditions(now.body)) {
-        expect(condition).toMatch(/brand_idin\(selectpublic\.user_brand_ids\(\)\)\)?$/);
+        expect(condition).toMatch(
+          /brand_idin\(selectpublic\.user_brand_ids\(\)\)\)?$|brand_idisnulland\(selectpublic\.user_has_all_brands\(\)\)\)\)$/,
+        );
       }
       // …and keeps everything it had.
       expect(conditions(now.body.replace(BRAND_CONDITION, ''))).toEqual(conditions(before.body));
     },
   );
 
-  it('keeps a row without a brand where the column may be empty, and only there', () => {
-    const nullable = new Set(
+  it('shows a row with no brand to admins and All-brands people, or to its own person', () => {
+    const withoutBrand = (rule) =>
       taken
-        .filter(([table, name]) =>
-          policiesOf(table).now.get(name).body.includes('brand_id is null'),
-        )
-        .map(([table]) => table),
-    );
-    // brand_id is nullable there: a chat or file about the whole workspace, or
-    // a row whose brand was deleted (on delete set null).
-    expect([...nullable].sort()).toEqual([
-      'agent_conversations',
-      'chat_access_requests',
-      'chat_activity_log',
-      'chat_agent_runs',
-      'chat_conversations',
-      'chat_files',
+        .filter(([table, name]) => policiesOf(table).now.get(name).body.includes(rule))
+        .map(([table, name]) => `${table}: ${name}`)
+        .sort();
+    // Someone else's row with no brand (a shared chat, a filed file, an agent
+    // run) may hold any brand's data: admins and All-brands people only.
+    expect(withoutBrand('brand_id is null and (select public.user_has_all_brands())')).toEqual([
+      'chat_agent_runs: chat_agent_runs: agent select',
+      'chat_conversations: chat_conversations: agent run select',
+      'chat_conversations: chat_conversations: shared select',
+      'chat_files: chat_files: member select',
+    ]);
+    // The person's own (and admins'): what they wrote, did or asked.
+    expect(withoutBrand('brand_id is null or brand_id in')).toEqual([
+      'agent_conversations: Users read own conversations',
+      'agent_conversations: Users write own conversations',
+      'chat_access_requests: chat_access_requests: own or admin select',
+      'chat_activity_log: chat_activity_log: own or admin select',
+      'chat_conversations: chat_conversations: author select',
     ]);
   });
 
@@ -199,6 +205,24 @@ describe('the brand tables 00390 and 00424 take', () => {
       const changer = created(ACCOUNT).some(([t]) => t === table) ? ACCOUNT : CHAT;
       expect(maker < changer, table).toBe(true);
     }
+  });
+});
+
+describe('user_has_all_brands (00390)', () => {
+  it('answers whether the caller is an admin or has All brands, in an organization', () => {
+    const all = lastFunction('user_has_all_brands');
+    expect(all.file).toBe(ACCOUNT);
+    expect(all.header).toMatch(
+      /^\) returns boolean language sql stable security definer set search_path = '' /,
+    );
+    expect(all.body).toMatch(
+      /from public\.profiles p where p\.id = auth\.uid\(\) and p\.organization_id is not null and \(p\.role = 'admin' or p\.brand_scope = 'all'\)/,
+    );
+    const sql = read(ACCOUNT);
+    expect(sql).toMatch(/revoke all on function public\.user_has_all_brands\(\) from public, anon/);
+    expect(sql).toMatch(
+      /grant execute on function public\.user_has_all_brands\(\) to authenticated, service_role/,
+    );
   });
 });
 

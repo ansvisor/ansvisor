@@ -2,6 +2,9 @@ import type { createClient } from '@/lib/supabase/server';
 
 type ServerSupabase = Awaited<ReturnType<typeof createClient>>;
 
+/** The function isn't there: PostgREST doesn't know it, or Postgres doesn't. */
+const MISSING_FUNCTION = new Set(['PGRST202', '42883']);
+
 /**
  * The brands an organization's plan counts against maxBrands: every one of
  * them, whatever brands the person sees (BRAND-ACCESS, 00390), and never the
@@ -11,6 +14,7 @@ type ServerSupabase = Awaited<ReturnType<typeof createClient>>;
  * org_brand_count answers the organization's members (0 for anyone else).
  * Until 00390 is on the database, the count falls back to the brands the
  * person reads, as before: every one of them while everyone has All brands.
+ * Any other error is thrown: a limit must not pass on a failed count.
  */
 export async function countPlanBrands(
   supabase: Pick<ServerSupabase, 'rpc' | 'from'>,
@@ -20,6 +24,7 @@ export async function countPlanBrands(
     p_organization_id: organizationId,
   });
   if (!error) return data ?? 0;
+  if (!MISSING_FUNCTION.has(error.code)) throw new Error(error.message);
 
   const { count } = await supabase
     .from('brands')

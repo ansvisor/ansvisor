@@ -12,9 +12,12 @@
 -- someone, and for All-brands people every rule passes the same rows as
 -- before.
 --
---   * A row with no brand (a chat or file about the whole workspace, a run or
---     log row whose brand was deleted) stays as it was: there is no brand to
---     hide.
+--   * A row with no brand (a chat or file about the whole workspace, a run
+--     whose brand was deleted) may still hold any brand's data: a chat with
+--     no brand lets each tool call pick its own. Someone else's such row is
+--     read only by admins and All-brands people (user_has_all_brands(),
+--     00390). The person's own rows with no brand stay theirs: their own
+--     chat, their own Chat changes and access requests (with the admins').
 --   * A person's own chat about a brand they can't access is hidden, not
 --     deleted, and comes back with the access (BRAND-ACCESS §9 Q4). So is a
 --     shared one, and an agent run's.
@@ -29,6 +32,10 @@
 
 -- ── chat_conversations ──────────────────────────────────────────────────────
 
+-- The author's own chat with no brand stays theirs, whatever brands they see
+-- (Q4 hides only chats about a brand): they wrote every question in it, and
+-- an answer there that read a brand they have since lost is still the one
+-- they were given.
 drop policy if exists "chat_conversations: author select" on public.chat_conversations;
 create policy "chat_conversations: author select"
   on public.chat_conversations
@@ -54,7 +61,10 @@ create policy "chat_conversations: shared select"
     and organization_id in (
       select p.organization_id from public.profiles p where p.id = auth.uid()
     )
-    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
   );
 
 drop policy if exists "chat_conversations: agent run select" on public.chat_conversations;
@@ -68,7 +78,10 @@ create policy "chat_conversations: agent run select"
     and organization_id in (
       select p.organization_id from public.profiles p where p.id = auth.uid()
     )
-    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
   );
 
 -- ── chat_agent_runs ─────────────────────────────────────────────────────────
@@ -88,7 +101,10 @@ create policy "chat_agent_runs: agent select"
           and (p.role = 'admin' or chat_agent_runs.acting_user_id = auth.uid())
       )
     )
-    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
   );
 
 -- ── chat_why_analyses ───────────────────────────────────────────────────────
@@ -114,10 +130,15 @@ create policy "chat_files: member select"
     organization_id in (
       select p.organization_id from public.profiles p where p.id = auth.uid()
     )
-    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+    and (
+      brand_id in (select public.user_brand_ids())
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
   );
 
 -- ── chat_activity_log, chat_access_requests ─────────────────────────────────
+-- Read by the person who acted (or asked) and the admins, who have All brands:
+-- a row with no brand stays readable to them.
 
 drop policy if exists "chat_activity_log: own or admin select" on public.chat_activity_log;
 create policy "chat_activity_log: own or admin select"

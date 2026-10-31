@@ -12,12 +12,18 @@ import { brandScopedTables } from './demo/coverage.js';
  *
  * Read from the migrations:
  *   * a brand table (one with a brand_id) passes when every top-level OR
- *     branch of each client policy condition ties the row's brand_id to
- *     brands (by the brand's id) or to the access rule;
+ *     branch of each client policy condition ties the row's own brand_id to
+ *     brands (by the brand's id) or to the access rule. A row with no brand
+ *     passes only for admins and All-brands people (`brand_id is null and
+ *     (select public.user_has_all_brands())`), except on the person's own
+ *     rows listed below;
  *   * a table without a brand_id passes when each branch reaches, by the row
  *     it names, a table that passes (a draft, a chat, a change that went
  *     live…), or calls content_draft_member(); otherwise it is on the list
- *     below of Account-level tables, with why.
+ *     below of Account-level tables, with why, or on the list of tables a
+ *     later PR takes, which must be empty before anyone can be narrowed.
+ *   * a subquery with union, intersect or except doesn't count, nor an
+ *     `exists` that ties brands to another table's brand_id.
  * Policies for the service role, policies that refuse everyone (`false`) and
  * restrictive ones (they only narrow) don't count.
  */
@@ -53,17 +59,13 @@ const SERVER_ONLY = [
 
 /**
  * Tables without a brand_id whose client policies don't reach a brand: the
- * Account's or the person's own, or (Chat's agents) decided elsewhere.
+ * Account's or the person's own.
  */
 const NOT_BRAND_DATA = {
   add_on_purchases: "The Account's purchases, for its admins (BRAND-ACCESS D1).",
   agent_token_usage: "A person's own monthly token use with the old Agent.",
   ai_bot_usage: "The Account's AI bot event meter against the plan (D1).",
   api_keys: "A person's own API keys; a key carries its owner's brand access (PR 10).",
-  chat_agents:
-    "An agent names its brands in its version's scope (jsonb, no brand_id); who sees which agent is Chat's rule (agent-rules canSeeAgent), PR 9.",
-  chat_agent_triggers: "An agent's triggers, with the agent (chat_agents, PR 9).",
-  chat_agent_versions: "An agent's versions, with the agent (chat_agents, PR 9).",
   chat_auto_choices: "A person's own Chat tool choices.",
   chat_settings: "The Account's Chat settings (D1).",
   chat_storage_usage: "The Account's Chat storage meter against the plan (D1).",
@@ -73,8 +75,6 @@ const NOT_BRAND_DATA = {
   cloro_countries: 'The list of countries a prompt can track, the same for everyone.',
   content_authors: "The Account's authors for content (Settings › Authors).",
   content_rule_sets: "The Account's content rules.",
-  integration_connections:
-    "The Account's Google connection; per brand in BRAND-ACCESS PR 14 (brand_integrations).",
   invitations: "The Account's invitations, for its admins (00390).",
   organization_menu_roles: "The Account's menu access by role (00374).",
   organizations: 'The Account itself: its plan, billing and members (D1).',
@@ -84,36 +84,82 @@ const NOT_BRAND_DATA = {
   site_audit_settings: "The Account's auto-audit switch.",
 };
 
+/**
+ * Tables without a brand_id that hold a brand's data but don't reach it yet,
+ * and the BRAND-ACCESS PR that takes them:
+ *   * chat_agents (and its versions and triggers): an agent names its brands
+ *     in its version's scope (jsonb); who sees which agent is Chat's rule
+ *     (agent-rules canSeeAgent), PR 9.
+ *   * integration_connections: the Account's Google connection, which lists
+ *     every brand's properties; per brand in PR 14.
+ * Nobody can be narrowed while this list has a table (the last test below).
+ */
+const DEFERRED = {
+  chat_agents: 'PR 9',
+  chat_agent_triggers: 'PR 9',
+  chat_agent_versions: 'PR 9',
+  integration_connections: 'PR 14',
+};
+
+/**
+ * A person's own rows, read by them (and admins, who have All brands), where a
+ * row with no brand stays readable whatever brands they see: what they wrote
+ * or did themselves. Keys: `table: policy`.
+ */
+const OWN_ROWS_WITHOUT_BRAND = {
+  'agent_conversations: users read own conversations':
+    'The old Agent: only the person who wrote the chat reads it.',
+  'agent_conversations: users write own conversations':
+    'The old Agent: only the person who wrote the chat changes it.',
+  'chat_conversations: chat_conversations: author select':
+    'The author’s own chat with no brand stays theirs (BRAND-ACCESS §9 Q4 hides chats about a brand).',
+  'chat_activity_log: chat_activity_log: own or admin select':
+    'Chat’s change log: the person who acted, or an admin.',
+  'chat_access_requests: chat_access_requests: own or admin select':
+    'A request to the admins: the person who asked, or an admin.',
+};
+
 /** Roles that bypass RLS: a policy for them only is the server's. */
 const SERVER_ROLES = new Set(['service_role', 'postgres', 'supabase_admin']);
 
 /** Functions that apply brand access, which anon may not run. */
-const ACCESS_CALL = /\b(?:public\.)?(?:can_access_brand|user_brand_ids|content_draft_member)\s*\(/i;
+const ACCESS_CALL =
+  /\b(?:public\.)?(?:can_access_brand|user_brand_ids|user_has_all_brands|content_draft_member)\s*\(/i;
 
-const BRAND_COLUMN = String.raw`(?:\w+\.)?brand_id`;
+/** Rows from more than one query: what they bind to can't be read from the first. */
+const SET_OPERATION = /\b(?:union|intersect|except)\b/i;
 
 /**
- * A condition that ties the row's brand_id to brand access: the access rule,
- * the brand's own id from brands (whose policies apply inside), no brand at
- * all (nothing to hide), or false.
+ * The conditions that tie a table's own brand_id to brand access: the access
+ * rule, the brand's own id from brands (whose policies apply inside), or
+ * false. An `exists` names the table's brand_id with the table, so it can't
+ * be another table's.
  */
-const BRAND_BINDINGS = [
-  new RegExp(String.raw`^${BRAND_COLUMN} in \( ?select (?:public\.)?user_brand_ids\(\) ?\)$`, 'i'),
-  new RegExp(
-    String.raw`^(?:select )?(?:public\.)?can_access_brand\( ?${BRAND_COLUMN} ?(?:, ?auth\.uid\(\) ?)?\)$`,
-    'i',
-  ),
-  new RegExp(
-    String.raw`^${BRAND_COLUMN} in \( ?select (?:distinct )?(\w+)\.id from \(* ?(?:public\.)?brands (?:as )?\1\b`,
-    'i',
-  ),
-  new RegExp(
-    String.raw`^exists \( ?select 1 from \(* ?(?:public\.)?brands (?:as )?(\w+)\b.*\b\1\.id = \(*${BRAND_COLUMN}\b`,
-    'i',
-  ),
-  new RegExp(String.raw`^${BRAND_COLUMN} is null$`, 'i'),
-  /^false$/i,
-];
+function brandBindings(table) {
+  const column = String.raw`(?:${table}\.)?brand_id`;
+  return [
+    new RegExp(String.raw`^${column} in \( ?select (?:public\.)?user_brand_ids\(\) ?\)$`, 'i'),
+    new RegExp(
+      String.raw`^(?:select )?(?:public\.)?can_access_brand\( ?${column} ?(?:, ?auth\.uid\(\) ?)?\)$`,
+      'i',
+    ),
+    new RegExp(
+      String.raw`^${column} in \( ?select (?:distinct )?(\w+)\.id from \(* ?(?:public\.)?brands (?:as )?\1\b`,
+      'i',
+    ),
+    new RegExp(
+      String.raw`^exists \( ?select 1 from \(* ?(?:public\.)?brands (?:as )?(\w+)\b.*\b\1\.id = \(*${table}\.brand_id\b`,
+      'i',
+    ),
+    /^false$/i,
+  ];
+}
+
+/** `brand_id is null`: on its own only for OWN_ROWS_WITHOUT_BRAND. */
+const noBrand = (table) => new RegExp(String.raw`^(?:${table}\.)?brand_id is null$`, 'i');
+
+/** `(select public.user_has_all_brands())`: with no brand, admins and All-brands people. */
+const ALL_BRANDS = /^(?:select )?(?:public\.)?user_has_all_brands\(\)$/i;
 
 /** content_draft_member(draft): the draft's brand, by can_access_brand (00390). */
 const DRAFT_MEMBER = /^(?:public\.)?content_draft_member\( ?\w+ ?\)$/i;
@@ -278,12 +324,17 @@ const brandTables = brandScopedTables(migrations);
 
 /** The policies that let a signed-in person (or anon) in: permissive, for a client role, not `false`. */
 function clientPolicies(table) {
-  return [...(policies.get(table)?.values() ?? [])].filter(
-    (p) =>
-      !p.restrictive &&
-      p.roles.some((role) => !SERVER_ROLES.has(role)) &&
-      !/^(?:using \(\s*false\s*\)\s*)?(?:with check \(\s*false\s*\)\s*)?$/i.test(p.body.trim()),
-  );
+  return [...(policies.get(table)?.entries() ?? [])]
+    .map(([policyName, p]) => ({
+      name: policyName,
+      ...p,
+    }))
+    .filter(
+      (p) =>
+        !p.restrictive &&
+        p.roles.some((role) => !SERVER_ROLES.has(role)) &&
+        !/^(?:using \(\s*false\s*\)\s*)?(?:with check \(\s*false\s*\)\s*)?$/i.test(p.body.trim()),
+    );
 }
 
 /** The index of the parenthesis that closes the one at `open`. */
@@ -338,36 +389,56 @@ function split(expr, word) {
 }
 
 /**
- * Whether every row the condition lets in passes `binds`: each top-level OR
- * branch has a conjunct `binds` accepts, or a parenthesized conjunct that is
- * bound itself. String literals are left out first, so their words don't count.
+ * Whether every row the condition lets in passes `rule`: each top-level OR
+ * branch has a conjunct `rule.binds` accepts, a parenthesized conjunct that
+ * is bound itself, or `brand_id is null` together with user_has_all_brands()
+ * (alone, on the person's own rows: `rule.ownRows`). A conjunct with a set
+ * operation never binds. String literals are left out first, so their words
+ * don't count.
  */
-function bound(condition, binds) {
+function bound(condition, rule) {
   const text = unwrap(condition.replace(/'(?:[^']|'')*'/g, "''"));
   const branches = split(text, 'or');
-  if (branches.length > 1) return branches.every((branch) => bound(branch, binds));
-  return split(text, 'and').some((part) => {
-    const inner = unwrap(part);
-    return binds(inner) || (inner !== part && bound(inner, binds));
-  });
+  if (branches.length > 1) return branches.every((branch) => bound(branch, rule));
+  const parts = split(text, 'and').map((part) => [part, unwrap(part)]);
+  if (
+    rule.noBrand &&
+    parts.some(([, inner]) => rule.noBrand.test(inner)) &&
+    (rule.ownRows || parts.some(([, inner]) => ALL_BRANDS.test(inner)))
+  ) {
+    return true;
+  }
+  return parts.some(
+    ([part, inner]) =>
+      !SET_OPERATION.test(inner) && (rule.binds(inner) || (inner !== part && bound(inner, rule))),
+  );
 }
 
-const bindsBrand = (part) => BRAND_BINDINGS.some((binding) => binding.test(part));
-
-/** Every condition of every client policy of the table is bound by `binds`. */
-function allBound(table, binds) {
+/** Every condition of every client policy of the table is bound by `ruleFor(policy)`. */
+function allBound(table, ruleFor) {
   return clientPolicies(table).every((p) => {
     const found = conditions(p.body);
-    return found.length > 0 && found.every((condition) => bound(condition, binds));
+    const rule = ruleFor(p.name);
+    return found.length > 0 && found.every((condition) => bound(condition, rule));
   });
 }
+
+/** A brand table's rule: its own brand_id, tied to brand access. */
+const brandRule = (table) => {
+  const bindings = brandBindings(table);
+  return (policy) => ({
+    binds: (part) => bindings.some((binding) => binding.test(part)),
+    noBrand: noBrand(table),
+    ownRows: `${table}: ${policy}` in OWN_ROWS_WITHOUT_BRAND,
+  });
+};
 
 const reaching = [];
 const notReaching = [];
 const serverOnly = [];
 for (const table of brandTables) {
   if (clientPolicies(table).length === 0) serverOnly.push(table);
-  else if (allBound(table, bindsBrand)) reaching.push(table);
+  else if (allBound(table, brandRule(table))) reaching.push(table);
   else notReaching.push(table);
 }
 
@@ -379,15 +450,17 @@ const children = [...policies.keys()].filter(
   (table) => !brandTables.has(table) && table !== 'brands' && clientPolicies(table).length > 0,
 );
 const reached = new Set(reaching);
-const bindsThroughParent = (part) => {
-  if (bindsBrand(part) || DRAFT_MEMBER.test(part)) return true;
-  const m = part.match(PARENT_ROW);
-  return !!m && (!m[1] || m[1] === m[3]) && reached.has(m[2].toLowerCase());
-};
+const childRule = () => ({
+  binds: (part) => {
+    if (DRAFT_MEMBER.test(part)) return true;
+    const m = part.match(PARENT_ROW);
+    return !!m && (!m[1] || m[1] === m[3]) && reached.has(m[2].toLowerCase());
+  },
+});
 for (let grew = true; grew; ) {
   grew = false;
   for (const table of children) {
-    if (!reached.has(table) && allBound(table, bindsThroughParent)) {
+    if (!reached.has(table) && allBound(table, childRule)) {
       reached.add(table);
       grew = true;
     }
@@ -395,6 +468,28 @@ for (let grew = true; grew; ) {
 }
 const childrenReaching = children.filter((table) => reached.has(table));
 const childrenNotReaching = children.filter((table) => !reached.has(table));
+
+/**
+ * Code that narrows someone to Selected brands: writes member_brands or sets
+ * brand_scope (the Team screen, BRAND-ACCESS PR 12), in the web, the server or
+ * a migration after 00388 (whose own grant only follows a Selected person).
+ */
+function narrowingCode() {
+  const found = [];
+  const writes =
+    /\bfrom\(\s*['"]member_brands['"]\s*\)\s*\.\s*(?:insert|upsert|update)\b|\bbrand_scope['"]?\s*:\s*['"]selected['"]|\b(?:insert into|update)\s+(?:public\.)?(?:member_brands|profiles\s+set\s+brand_scope)\b/i;
+  for (const root of ['../../../web/src/', '../../src/']) {
+    const base = new URL(root, import.meta.url);
+    for (const file of readdirSync(base, { recursive: true })) {
+      if (!/\.(?:ts|tsx|js)$/.test(file) || /\.test\.|types\/supabase\.ts$/.test(file)) continue;
+      if (writes.test(readFileSync(new URL(file, base), 'utf8'))) found.push(`${root}${file}`);
+    }
+  }
+  files.forEach((file, i) => {
+    if (file >= '00389' && writes.test(migrations[i].replace(/--[^\n]*/g, ''))) found.push(file);
+  });
+  return found;
+}
 
 describe('the brands policies (00389)', () => {
   const brands = policies.get('brands');
@@ -478,8 +573,20 @@ describe('every brand table answers to the brand’s access', () => {
     // brand_id, with `brand_id in (select public.user_brand_ids())` or a
     // subquery that selects the brand's own id from public.brands. A branch
     // through the organization (`organization_id in (…)`) lets a
-    // Selected-brands person read every brand's rows.
+    // Selected-brands person read every brand's rows. A row with no brand:
+    // `brand_id is null and (select public.user_has_all_brands())`.
     expect(notReaching.sort()).toEqual([]);
+  });
+
+  it('lets a row with no brand stay open only on the person’s own rows, each with why', () => {
+    for (const [key, why] of Object.entries(OWN_ROWS_WITHOUT_BRAND)) {
+      const at = key.indexOf(': ');
+      const [table, policy] = [key.slice(0, at), key.slice(at + 2)];
+      // A key here no longer names a policy: take it off the list.
+      expect(policies.get(table)?.has(policy), key).toBe(true);
+      expect(policies.get(table).get(policy).body, key).toMatch(/brand_id is null or/);
+      expect(why.length, key).toBeGreaterThan(20);
+    }
   });
 
   it('lists the brand tables only the server reads and writes', () => {
@@ -510,12 +617,28 @@ describe('every table without a brand_id', () => {
     }
   });
 
-  it('reaches a brand, or is on the Account-level list with why', () => {
+  it('reaches a brand, or is on the Account-level or the deferred list', () => {
     // A table here is new, or its policy changed: reach its brand through the
     // row it belongs to (`parent_id in (select p.id from public.<parent> p)`),
     // or, if it holds no brand's data, add it to NOT_BRAND_DATA with why.
-    // A table on the list that now reaches a brand: take it off.
-    expect(childrenNotReaching.sort()).toEqual(Object.keys(NOT_BRAND_DATA).sort());
+    // A table on a list that now reaches a brand: take it off.
+    expect(childrenNotReaching.sort()).toEqual(
+      [...Object.keys(NOT_BRAND_DATA), ...Object.keys(DEFERRED)].sort(),
+    );
+  });
+
+  it('defers tables only to a later BRAND-ACCESS PR', () => {
+    for (const [table, pr] of Object.entries(DEFERRED)) expect(pr, table).toMatch(/^PR \d+$/);
+  });
+
+  it('leaves no table deferred once someone can be narrowed to Selected brands (PR 12)', () => {
+    // Writing member_brands or brand_scope turns the feature on: before that,
+    // PR 9 (Chat agents) and PR 14 (Google per brand) take their tables, and
+    // this list is empty.
+    const narrowing = narrowingCode();
+    if (narrowing.length > 0) {
+      expect(Object.keys(DEFERRED), `narrowed by ${narrowing.join(', ')}`).toEqual([]);
+    }
   });
 
   it('says why each Account-level table holds no brand’s data', () => {
