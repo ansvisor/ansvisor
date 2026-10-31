@@ -553,6 +553,8 @@ describe('readDailySuggestion', () => {
   };
 
   beforeEach(() => {
+    // The page reads its row whole (maybeSingle), not the open's default row.
+    delete answers['session.chat_suggestions.select.single'];
     answers['session.chat_suggestions.select'] = { data: row, error: null };
     answers['session.action_tasks.select'] = {
       data: [
@@ -680,7 +682,7 @@ describe('a suggestion’s uses', () => {
     expect(has(started, 'is', 'started_at', null)).toBe(true);
 
     calls = [];
-    answers['admin.chat_suggestions.select'] = {
+    answers['session.chat_suggestions.select.single'] = {
       data: { id: SUGGESTION, brand_id: BRAND, started_at: '2026-10-28T08:00:00Z' },
       error: null,
     };
@@ -688,12 +690,18 @@ describe('a suggestion’s uses', () => {
     expect(writes().map((w) => w.table)).toEqual(['chat_suggestion_feeds']);
   });
 
+  it("reads the suggestion through the person's session", async () => {
+    await snoozeDailySuggestion(SUGGESTION);
+    const read = calls.find((c) => c.table === 'chat_suggestions' && c.op === 'select')!;
+    expect(read.via).toBe('session');
+  });
+
   it('takes only Chat or the Content Editor as where, and nothing on someone else’s', async () => {
     expect(await startedDailySuggestion(SUGGESTION, 'email' as 'chat')).toEqual({
       ok: false,
       failure: 'not_allowed',
     });
-    answers['admin.chat_suggestions.select'] = { data: null, error: null };
+    answers['session.chat_suggestions.select.single'] = { data: null, error: null };
     expect(await removeDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'not_found' });
     expect(writes()).toEqual([]);
   });
