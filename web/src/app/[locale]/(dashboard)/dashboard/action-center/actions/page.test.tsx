@@ -92,9 +92,20 @@ vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, values?: { title?: string }) =>
     key === 'actionHow' ? `${key}: ${values?.title}` : key,
 }));
+const setActiveBrand = vi.hoisted(() => vi.fn());
 vi.mock('@/stores/use-brand-store', () => ({
-  useBrandStore: (selector: (state: { getActiveBrand: () => Brand }) => unknown) =>
-    selector({ getActiveBrand: () => brand }),
+  useBrandStore: (
+    selector: (state: {
+      getActiveBrand: () => Brand;
+      brands: Brand[];
+      setActiveBrand: (id: string) => void;
+    }) => unknown,
+  ) =>
+    selector({
+      getActiveBrand: () => brand,
+      brands: [brand, { ...brand, id: 'other-brand' }],
+      setActiveBrand,
+    }),
 }));
 vi.mock('@/lib/actions/action-center', () => ({ getActions, getActionsAffected }));
 vi.mock('@/lib/actions/getting-started', () => ({
@@ -424,6 +435,21 @@ describe('Getting started in the actions list', () => {
       act(() => root.unmount());
       root = createRoot(container);
     }
+  });
+
+  /** Chat's Open in Actions (actions/[id]) names the action's brand, so its drawer opens. */
+  it('switches to the brand a link names, once, when it is one of the person’s', async () => {
+    setActiveBrand.mockClear();
+    window.history.replaceState(null, '', '/?action=a1&brand=other-brand');
+    await render();
+    expect(setActiveBrand).toHaveBeenCalledWith('other-brand');
+    expect(setActiveBrand).toHaveBeenCalledTimes(1);
+    act(() => root.unmount());
+    root = createRoot(container);
+    setActiveBrand.mockClear();
+    window.history.replaceState(null, '', '/?action=a1&brand=not-theirs');
+    await render();
+    expect(setActiveBrand).not.toHaveBeenCalled();
   });
 
   it('keeps a category the URL names, and lists the actions', async () => {

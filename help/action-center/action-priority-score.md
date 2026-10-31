@@ -5,10 +5,10 @@ keywords: [priority score, priority level, critical, why this priority, action r
 synonyms: [action priority, ranking, how actions are sorted, urgency]
 plan: all
 updated: 2026-10-29
-last_checked: 2026-10-29
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/action-center.mdx]
 ---
 Every action has a **Priority Score** from 0 to 100: how soon to work on it beside the others. Impact says how much an action could matter; priority weighs impact together with the evidence behind it. The score sets the default order of the **Actions** tab and the **Top Actions** card.

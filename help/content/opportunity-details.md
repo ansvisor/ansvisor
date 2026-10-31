@@ -4,11 +4,11 @@ route: /dashboard/content
 keywords: [opportunity details, source data, why this score, another angle, mark as reviewed, dismiss opportunity, send to actions, new signal detected]
 synonyms: [opportunity panel, opportunity page, act on an opportunity, follow an opportunity]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/content-optimization.mdx]
 ---
 On **Opportunities**, click an opportunity's title to open it in a panel beside the list. The page's address keeps it, so a link opens it too. **Open in new tab**, in the row's **…** menu, opens it as a page of its own. The panel shows what the opportunity rests on, and every action you can take on it.
@@ -41,8 +41,8 @@ An opportunity built for a group of prompts also shows:
 
 The panel's **…** menu holds the rest:
 
-- **Send to Plan**, for admins and managers: the opportunity goes to the top of the Content plan.
-- **Another angle**.
+- **Send to Plan**, for admins and managers: the opportunity goes to the top of the Content plan. Once it's a priority there, it reads **Open in Plan**.
+- **Another angle**, except on an opportunity sent from the Action Center.
 - **Send to Workflow**, which reads **Send Again** once it's sent.
 - **Copy All Data**.
 - **Mark as reviewed**, for a new opportunity: its status becomes Reviewed.

@@ -4,12 +4,12 @@ route: /dashboard/content
 keywords: [content opportunities, opportunity score, impact, visibility gap, content ideas, export csv, filter opportunities, bulk actions]
 synonyms: [content optimization, content gaps, what to write, content suggestions]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
-sources: [docs/guides/content-optimization.mdx, docs/guides/content-editor.mdx, server/src/lib/opportunity-generator.js, server/src/lib/opportunity-dedup.js, server/src/lib/opportunity-limits.js]
+approved: true
+sources: [docs/guides/content-optimization.mdx, docs/guides/content-editor.mdx]
 ---
 The **Opportunities** page, under **Content** in the sidebar, lists content opportunities: what to write or change so AI answers name you where they don't yet. Ansvisor suggests them on its own as tracking data comes in. An opportunity is built for a group of related prompts that one piece of content can answer, or for a single prompt. From each one you can start writing, plan it, brief it or send it on.
 
@@ -28,7 +28,7 @@ Above the list, cards count the **Total Opportunities** and the **High Impact** 
 - Search the opportunities, and narrow the list by topic, prompt, type, impact, **Source** and status. The sources are **System**, suggested automatically; **Manual**, made with **New**; **Prompt**, suggested from a prompt; and **Action**, sent from an Action Center task.
 - **Suggested** picks a period, all time, this month, the last 30 days or your own dates, and the order: highest score, newest or oldest.
 - Archived opportunities stay hidden unless you filter to them.
-- The filters stay in the page's address, so a link opens the same view.
+- Most filters and the order stay in the page's address, so a link opens the same view; the topic and the search don't.
 - **Export CSV** downloads every opportunity that matches the filters and the search, not only the page you see.
 
 ## Quick actions on a row
@@ -36,7 +36,7 @@ Above the list, cards count the **Total Opportunities** and the **High Impact** 
 Each row's **…** menu has the quick actions:
 
 - **Send to Editor**, or **Open draft** once a draft is being written for it;
-- **Send to Plan**;
+- **Send to Plan**, or **Open in Plan** once it's a priority there, for owned opportunities still open;
 - **Send to Workflow**, for a new opportunity;
 - **Open in new tab**, which opens it as a page of its own;
 - **Dismiss**, for a new one. Undo it from the message that appears.

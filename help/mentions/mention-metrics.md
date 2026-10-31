@@ -5,10 +5,10 @@ keywords: [total mentions, mention rate, net sentiment, low sample, position, pr
 synonyms: [what does net sentiment mean, times named, mention count, sentiment score]
 plan: all
 updated: 2026-10-29
-last_checked: 2026-10-29
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/mentions.mdx]
 ---
 Each tracked answer that names your brand is tagged **Positive**, **Neutral** or **Negative** toward your brand. An answer that doesn't name you has no sentiment. Competitors have no sentiment yet, so every tone on the Mentions & Sentiment page is the tone toward your brand.
