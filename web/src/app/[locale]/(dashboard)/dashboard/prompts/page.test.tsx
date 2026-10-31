@@ -586,3 +586,38 @@ describe('the volume quota without an active plan', () => {
     expect(button('Analyze Volumes')!.disabled).toBe(true);
   });
 });
+
+describe('the Prompt Volumes chart', () => {
+  it('says the rate the volumes were estimated with, as the AI Adoption Rate card does', async () => {
+    nav.pathname = '/dashboard/prompts/insights';
+    actions.getPromptsPageData.mockResolvedValue({
+      quota: { used: 1, limit: 10, remaining: 9 },
+      promptSets: [{ prompts: [prompt] }],
+      visibility: {},
+      positions: {},
+      volumes: [
+        {
+          id: 'v1',
+          promptId: 'p1',
+          promptText: prompt.text,
+          promptCategory: 'Coffee',
+          intent: 'commercial',
+          keywords: ['coffee subscription'],
+          googleVolumes: { 'coffee subscription': 1000 },
+          totalGoogleVolume: 1000,
+          aiVolumeMultiplier: 0.4,
+          estAiVolume: 400,
+          competitionIndex: null,
+          competition: null,
+          fetchedAt: '2026-10-20T00:00:00.000Z',
+        },
+      ],
+    });
+    await render(false);
+    // The row's rate, not the default: the card and the caption say the same
+    // one, and the caption claims no other share of Google searches.
+    expect(container.textContent).toContain('AI Adoption Rate40%');
+    expect(container.textContent).toContain('Google volume × the 40% AI adoption rate');
+    expect(container.textContent).not.toMatch(/~\d+% of Google searches/);
+  });
+});
