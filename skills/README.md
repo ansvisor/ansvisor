@@ -137,17 +137,38 @@ you ask for that specific change.
 
 ## Contributing
 
-Got an idea for another skill? Open a PR with a new folder under
-`skills/`:
+Every folder under `skills/` other than the two AEO coach flavours is one of
+Chat's Ansvisor skills, and CI checks it as one. So there are two kinds of
+contribution:
+
+**A skill for Chat.** Ansvisor's own skills are the fourteen listed above.
+Adding one (or changing one) means, in the same PR:
 
 ```
 skills/
   your-skill-name/
-    SKILL.md           # frontmatter + body
-    references/        # optional supporting docs
+    SKILL.md           # front matter + body, nothing else: no references/ or scripts/
 ```
 
-A few principles we follow:
+- `name` is the folder's name (lowercase, digits, single hyphens); add it
+  to the list in `web/src/lib/chat/skills/library.test.ts` and to
+  `SKILL_ORDER` in `web/src/lib/chat/skills/library.ts`.
+- `description` says what it does in one line; `metadata.title` and
+  `metadata.filters` (content, visibility, reports, product); `license: MIT`.
+- The body names only tools Chat has (`web/src/lib/chat/registry`), and
+  never asks Chat to skip an approval, publish, or send anything.
+- Refresh `library.json` with `yarn test -u src/lib/chat/skills` in `web/`
+  and commit it.
+
+**Your own or a third-party skill.** Skills from elsewhere won't be added
+to this folder: Chat will import them (upload or a GitHub link), clean them
+to instructions only, scan them and have an Admin approve them, in a later
+release.
+
+**An AEO coach skill** for Claude clients goes in its own folder with its
+`references/`, and joins the AEO coach list in
+`web/src/lib/chat/skills/library.test.ts`, which leaves those out. A few
+principles we follow for those:
 
 - **Skills layer knowledge, not data.** Data comes from the MCP server
   or the matching REST endpoint. A skill's job is to know _when_ and

@@ -1,6 +1,6 @@
 ---
 name: report
-description: "Citations, mentions and share of voice: what changed and why. Emailed to your team."
+description: "Citations, mentions and share of voice: what changed and why. Ready to share with your team."
 license: MIT
 metadata:
   title: "Weekly report"

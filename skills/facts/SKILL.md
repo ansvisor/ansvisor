@@ -1,6 +1,6 @@
 ---
 name: facts
-description: "Fetches brand facts from the site and checks every draft against them."
+description: "Checks every draft against your approved brand facts."
 license: MIT
 metadata:
   title: "Brand facts check"

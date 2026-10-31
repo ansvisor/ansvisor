@@ -1,6 +1,6 @@
 ---
 name: publish
-description: "Checks, page fields and a Webflow draft. Going live is always your click."
+description: "Checks, page fields and a CMS draft. Going live is always your click."
 license: MIT
 metadata:
   title: "Ready to publish"

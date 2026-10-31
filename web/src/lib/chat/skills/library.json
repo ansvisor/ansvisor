@@ -42,7 +42,7 @@
     {
       "name": "report",
       "title": "Weekly report",
-      "description": "Citations, mentions and share of voice: what changed and why. Emailed to your team.",
+      "description": "Citations, mentions and share of voice: what changed and why. Ready to share with your team.",
       "filters": [
         "reports"
       ],
@@ -70,7 +70,7 @@
     {
       "name": "publish",
       "title": "Ready to publish",
-      "description": "Checks, page fields and a Webflow draft. Going live is always your click.",
+      "description": "Checks, page fields and a CMS draft. Going live is always your click.",
       "filters": [
         "content"
       ],
@@ -106,7 +106,7 @@
     {
       "name": "facts",
       "title": "Brand facts check",
-      "description": "Fetches brand facts from the site and checks every draft against them.",
+      "description": "Checks every draft against your approved brand facts.",
       "filters": [
         "content"
       ],

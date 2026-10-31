@@ -81,7 +81,8 @@ function readValue(raw: string, key: string, problems: string[]): string | undef
 /** A SKILL.md's front matter and body, with what is wrong with its form. */
 export function parseSkillFile(text: string): { skill: SkillFile; problems: string[] } {
   const problems: string[] = [];
-  const skill: SkillFile = { metadata: {}, body: '' };
+  // No prototype: a key like "constructor" is the skill's own, never Object's.
+  const skill: SkillFile = { metadata: Object.create(null) as Record<string, string>, body: '' };
   const normalized = text.replace(/\r\n?/g, '\n');
   const match = /^---\n([\s\S]*?)\n---(?:\n|$)/.exec(normalized);
   if (!match) {
@@ -92,27 +93,41 @@ export function parseSkillFile(text: string): { skill: SkillFile; problems: stri
   skill.body = normalized.slice(match[0].length);
   const seen = new Set<string>();
   let inMetadata = false;
+  // The indent of metadata's first key: the others keep it.
+  let metadataIndent: string | null = null;
   for (const line of match[1].split('\n')) {
     if (line.trim() === '' || /^\s*#/.test(line)) continue;
-    const nested = /^ {2,}([A-Za-z0-9_-]+):(.*)$/.exec(line);
-    if (nested) {
-      if (!inMetadata) {
-        problems.push(`"${line.trim()}" is indented outside metadata`);
-        continue;
-      }
-      const key = nested[1];
-      if (key in skill.metadata) problems.push(`metadata.${key} is there twice`);
-      const value = readValue(nested[2], `metadata.${key}`, problems);
-      if (value !== undefined) skill.metadata[key] = value;
+    if (/^[ ]*\t/.test(line)) {
+      problems.push(`"${line.trim()}" is indented with a tab: use spaces`);
       continue;
     }
-    const field = /^([A-Za-z0-9_-]+):(.*)$/.exec(line);
+    const field = /^( *)([A-Za-z0-9_-]+):(.*)$/.exec(line);
     if (!field) {
       problems.push(`"${line.trim()}" isn't a key: value line`);
       inMetadata = false;
       continue;
     }
-    const key = field[1];
+    const [, indent, key, after] = field;
+    const label = indent ? `metadata.${key}` : key;
+    if (after !== '' && !after.startsWith(' ')) {
+      problems.push(`${label}: put a space after the colon`);
+      continue;
+    }
+    if (indent) {
+      if (!inMetadata) {
+        problems.push(`"${line.trim()}" is indented outside metadata`);
+        continue;
+      }
+      metadataIndent ??= indent;
+      if (indent !== metadataIndent) {
+        problems.push(`${label} is indented unlike the keys before it`);
+        continue;
+      }
+      if (Object.hasOwn(skill.metadata, key)) problems.push(`${label} is there twice`);
+      const value = readValue(after, label, problems);
+      if (value !== undefined) skill.metadata[key] = value;
+      continue;
+    }
     inMetadata = false;
     if (seen.has(key)) problems.push(`${key} is there twice`);
     seen.add(key);
@@ -125,11 +140,11 @@ export function parseSkillFile(text: string): { skill: SkillFile; problems: stri
       continue;
     }
     if (key === 'metadata') {
-      if (field[2].trim() !== '') problems.push('metadata takes its keys on the lines under it');
+      if (after.trim() !== '') problems.push('metadata takes its keys on the lines under it');
       inMetadata = true;
       continue;
     }
-    const value = readValue(field[2], key, problems);
+    const value = readValue(after, key, problems);
     if (value !== undefined) (skill as unknown as Record<string, string>)[key] = value;
   }
   return { skill, problems };
@@ -166,8 +181,20 @@ export function checkSkillFile(folder: string, text: string): SkillCheck {
   else if (lines > WARN_LINES) warnings.push(`the body has ${lines} lines (over ${WARN_LINES})`);
   const bytes = new TextEncoder().encode(skill.body).length;
   if (bytes > MAX_BYTES) problems.push(`the body is ${bytes} bytes (max ${MAX_BYTES})`);
-  const scan = scanSkillText(text);
-  return { skill, problems: [...problems, ...scan.blocks], warnings: [...warnings, ...scan.warns] };
+  // The file as written, and the front matter's values as they read: a
+  // double-quoted value's escapes can spell what the file's text doesn't.
+  const values = [
+    name,
+    description,
+    skill.license,
+    compatibility,
+    ...Object.values(skill.metadata),
+  ];
+  const raw = scanSkillText(text);
+  const read = scanSkillText(values.filter((value): value is string => !!value).join('\n'));
+  const blocks = [...new Set([...raw.blocks, ...read.blocks])];
+  const warns = [...new Set([...raw.warns, ...read.warns])];
+  return { skill, problems: [...problems, ...blocks], warnings: [...warnings, ...warns] };
 }
 
 // ─── The scan (item 16, and what a published skill never holds, item 20) ────

@@ -49,9 +49,18 @@ const MCP_COACH_SKILLS = ['ansvisor-aeo-coach', 'ansvisor-aeo-coach-standalone']
 /**
  * Ansvisor's skills (CHAT-13 v2, "Ansvisor skills (14)"): the v2 mockup's
  * fourteen, by the ids CHAT-21's agents use (agent-skills.ts on W2-15).
- * Each title and description is the mockup's (`SK`: its card and its line);
- * the five the mockup's `SK` doesn't describe take the agentic plan's §4
- * line.
+ * Each title and description is the mockup's (`SK`: its card and its line),
+ * and the mockup's words are final, except where they promise what Chat
+ * can't do (decided in the W2-04 review, 2026-10-31):
+ *   - report: "Emailed to your team." is "Ready to share with your team.":
+ *     Chat sends no email;
+ *   - facts: the agentic plan's "Fetches brand facts from the site…" is
+ *     "Checks every draft against your approved brand facts.": Chat reads
+ *     no site, and only approved facts count;
+ *   - publish: "a Webflow draft" is "a CMS draft": the draft goes to the
+ *     brand's own CMS, whichever it is.
+ * The other four the mockup's `SK` doesn't describe (beat, refresh,
+ * answerfirst, translate) take the agentic plan's §4 line.
  */
 const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = {
   winback: {
@@ -73,7 +82,7 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
   report: {
     title: 'Weekly report',
     description:
-      'Citations, mentions and share of voice: what changed and why. Emailed to your team.',
+      'Citations, mentions and share of voice: what changed and why. Ready to share with your team.',
   },
   beat: {
     title: 'Beat a competitor',
@@ -85,7 +94,7 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
   },
   publish: {
     title: 'Ready to publish',
-    description: 'Checks, page fields and a Webflow draft. Going live is always your click.',
+    description: 'Checks, page fields and a CMS draft. Going live is always your click.',
   },
   shopping: {
     title: 'AI shopping readiness',
@@ -102,7 +111,7 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
   },
   facts: {
     title: 'Brand facts check',
-    description: 'Fetches brand facts from the site and checks every draft against them.',
+    description: 'Checks every draft against your approved brand facts.',
   },
   compare: {
     title: 'Comparison page',
@@ -118,6 +127,22 @@ const LIBRARY_NAMES = Object.keys(ANSVISOR_SKILLS);
 /** Words that read as a tool's name: a verb Chat's tools start with, then snake_case. */
 const TOOL_NAME =
   /\b(?:get|list|add|pause|create|update|dismiss|remove|rename|open|explain|request|use)_[a-z]+(?:_[a-z]+)*\b/g;
+
+/** Any snake_case name in backticks: what a skill writes a tool's name as (`get_draft`). */
+const BACKTICKED_NAME = /`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`/g;
+
+/**
+ * The tool-like names a text uses that Chat has no tool for: every
+ * snake_case name in backticks (`send_to_cms`, `mark_task_done`), and every
+ * word that starts like one of Chat's tools.
+ */
+function unknownTools(text: string, known: ReadonlySet<string>): string[] {
+  const names = [
+    ...[...text.matchAll(BACKTICKED_NAME)].map((match) => match[1]),
+    ...[...text.matchAll(TOOL_NAME)].map((match) => match[0]),
+  ];
+  return [...new Set(names)].filter((name) => !known.has(name));
+}
 
 /** Ansvisor's competitors: a published skill names none of them (item 20). */
 const COMPETITORS = /\b(profound|peec|otterly|athena ?hq|scrunch)\b/i;
@@ -183,11 +208,15 @@ describe('the skills in /skills', () => {
 
   it("name only Chat's tools", () => {
     const known = new Set(CHAT_TOOLS.map((tool) => tool.name));
+    // The check itself: a made-up tool in backticks is caught, whatever it starts with.
+    expect(
+      unknownTools(
+        'Call `send_to_cms`, then `mark_task_done`, `publish_page` and `email_report`; read `get_draft` and list_drafts.',
+        known,
+      ),
+    ).toEqual(['send_to_cms', 'mark_task_done', 'publish_page', 'email_report']);
     const unknown = files.flatMap(({ folder, text }) =>
-      [...text.matchAll(TOOL_NAME)]
-        .map((match) => match[0])
-        .filter((name) => !known.has(name))
-        .map((name) => `${folder}: ${name}`),
+      unknownTools(text, known).map((name) => `${folder}: ${name}`),
     );
     expect(unknown).toEqual([]);
     // Each one says what to read with its tools.

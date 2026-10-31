@@ -1071,13 +1071,27 @@ async function loadTypedSkills(rc: RunContext): Promise<number> {
   return typed.length;
 }
 
-/** The skill the model picked: its body from the next step, once, within the run's 3. */
+/**
+ * The skill the model picked: its body from the next step, once, within the
+ * run's 3. Not after the run read outside text (CHAT-20 §16a): the pick
+ * could be that text's, so then only the person's /name loads a skill.
+ */
 async function pickSkill(rc: RunContext, call: PendingCall): Promise<CallOutcome> {
   const input = (call.input ?? {}) as { name?: unknown };
   const skill = rc.skills.listed.find((s) => s.name === input.name);
   if (!skill) return result(call, { code: 'not_found' }, true);
   if (rc.progress.skills?.includes(skill.name)) {
     return result(call, { ok: true, note: 'Loaded already: its text is below the rules.' });
+  }
+  if (rc.progress.tainted) {
+    return result(
+      call,
+      {
+        code: 'not_available',
+        message: 'No skill is loaded after outside text was read: go on without it.',
+      },
+      true,
+    );
   }
   if ((rc.progress.skills?.length ?? 0) >= MAX_SKILL_BODIES) {
     return result(

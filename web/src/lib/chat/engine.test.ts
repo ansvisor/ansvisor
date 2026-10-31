@@ -3215,6 +3215,23 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
     ]);
   });
 
+  it("loads no skill the model picks after outside text was read; the person's /name still loads", async () => {
+    const { haiku } = useModels(
+      [
+        // Outside text first: the run is tainted from here (§16a).
+        calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })),
+        calls(toolCall('s1', USE_SKILL_TOOL, { name: 'winback' })),
+        READY,
+      ],
+      [text('Ok.')],
+    );
+    const runId = await turn(ADMIN, '/faq Where do we lose citations?');
+    expect(skillSteps(runId).map((s) => (s.debug_json as { skill: string }).skill)).toEqual([
+      'faq',
+    ]);
+    expect(JSON.stringify(haiku.seen[2].prompt)).toContain('not_available');
+  });
+
   it('changes no rule: the same tools, and a change still waits on its card', async () => {
     const draft = calls(
       toolCall('w1', 'create_draft', {
