@@ -77,6 +77,7 @@ import { sendHealthReport } from './lib/health/report.js';
 import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 import { refreshCloroCountries } from './lib/cloro-countries.js';
 import { chatAgenticDeployed } from './lib/chat-flag.js';
+import { startChatAgentTicks } from './lib/chat-agents.js';
 import { startModelPriceSync } from './lib/model-prices.js';
 import { startDailySuggestions } from './lib/chat-suggestions/job.js';
 
@@ -850,6 +851,8 @@ server.listen(PORT, async () => {
     // Action Center action for each person whose morning it is, by rules
     // and with no AI call.
     startDailySuggestions();
+    // Chat's agents (W2-16): every minute the web fires due schedules and sweeps.
+    startChatAgentTicks();
   }
 
   if (!isCloud()) {

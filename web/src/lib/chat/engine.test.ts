@@ -2319,6 +2319,63 @@ describe('the AI budget', () => {
     expect(events.at(-1)!.type).toBe('run.paused_cap');
     expectClean(events);
   });
+
+  it('holds an agent run’s steps as the agent’s, within its cap, and keeps which limit it reached', async () => {
+    const AGENT_RUN = '77777777-7777-4777-8777-777777777777';
+    const { sonnet } = useModels([READY], [text('never')]);
+    fakes.reserve
+      .mockImplementationOnce(async () => {
+        const hold = {
+          charge: vi.fn(async () => {}),
+          release: vi.fn(async () => {}),
+          keep: vi.fn(),
+        };
+        holds.push(hold);
+        return { ok: true, budget: hold };
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        refusal: 'run_cap',
+        trial: false,
+        retryable: false,
+        message: 'x',
+      });
+    const started = await engine.startChatRun(ADMIN, { message: 'Hello', brandId: BRAND });
+    if (!started.ok) throw new Error('not started');
+    const convo = db.tables.chat_conversations.find((c) => c.id === started.conversationId)!;
+    convo.agent_run_id = AGENT_RUN;
+    await engine.driveRun(ADMIN, started.runId);
+
+    expect(fakes.reserve).toHaveBeenCalledWith(
+      expect.objectContaining({ feature: 'agent', agentRunId: AGENT_RUN }),
+    );
+    expect(sonnet.seen).toHaveLength(0);
+    expect(runRow(started.runId).status).toBe('paused_cap');
+    expect(ofType(await eventsOf(started.runId), 'run.paused_cap')[0].data).toMatchObject({
+      limit: 'run',
+    });
+    const state = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
+    expect((state.progress as { capHit?: string }).capHit).toBe('run');
+
+    // Its driver stops a triggered one there: "Stopped at its limit", kept as why.
+    expect(await engine.endHeldRun(started.runId, 'paused_cap', 'limit')).toBe(true);
+    expect(runRow(started.runId).status).toBe('stopped');
+    expect(ofType(await eventsOf(started.runId), 'run.stopped')[0].data.reason).toBe('limit');
+    const after = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
+    expect((after.progress as { stoppedFor?: string }).stoppedFor).toBe('limit');
+    // Once only: a run no longer held there isn't ended again.
+    expect(await engine.endHeldRun(started.runId, 'paused_cap', 'limit')).toBe(false);
+  });
+
+  it('holds a person’s own chat’s steps as Chat’s, with no agent run', async () => {
+    budgetHolds();
+    useModels([READY], [text('Hi.')]);
+    await turn(ADMIN, 'Hello');
+    for (const [step] of fakes.reserve.mock.calls) {
+      expect(step).not.toHaveProperty('agentRunId');
+      expect(step).not.toHaveProperty('feature');
+    }
+  });
 });
 
 describe('refusals', () => {
