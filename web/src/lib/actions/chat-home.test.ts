@@ -2,143 +2,166 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Chat Home's Action Center line (CHAT-01 item 12, CHAT-09 item 3): the
- * brand's open actions due by the end of this week, read as the person,
- * only with the new Chat on, and answered as a value — never thrown (#1777).
- * And "For you now"'s counts (CHAT-08 v2): the pages the open lost-citation
- * signals name, and the drafts ready to publish.
+ * "For you now"'s counts on Chat Home (CHAT-08 v2, CHAT-09 item 3): the
+ * brand's open actions due by the week's end, the pages its open
+ * lost-citation signals name, and its drafts ready to publish — read as the
+ * person, once, together; none for a section an Admin took off their menu;
+ * only with the new Chat on, and answered as a value, never thrown (#1777).
  */
 
 const BRAND = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const db = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
-  filters: [] as unknown[][],
-  answer: { count: 3, error: null } as { count: number | null; error: { message: string } | null },
-  /** A table's own answer, over `answer`. */
+  profile: {} as Record<string, unknown>,
+  roleHidden: [] as string[],
+  /** Each statement: [table, method, ...args]. */
+  calls: [] as unknown[][],
+  /** A table's answer; signals by page. */
   answers: {} as Record<string, { data?: unknown; count?: number | null; error: unknown }>,
+  signalPages: [] as unknown[][],
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: db.user } }) },
     from: (table: string) => {
-      if (table === 'profiles') {
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({ data: { organization_id: 'org-1' }, error: null }),
-            }),
-          }),
-        };
-      }
       const chain: Record<string, unknown> = {};
-      for (const name of ['select', 'eq', 'in', 'lte', 'is']) {
+      let page = 0;
+      for (const name of ['select', 'eq', 'in', 'lte', 'is', 'order', 'range']) {
         chain[name] = (...args: unknown[]) => {
-          db.filters.push([table, name, ...args]);
+          db.calls.push([table, name, ...args]);
+          if (name === 'range') page = (args[0] as number) / 1000;
           return chain;
         };
       }
+      chain.maybeSingle = async () =>
+        table === 'profiles'
+          ? { data: db.profile, error: null }
+          : { data: { hidden_sections: db.roleHidden }, error: null };
       chain.then = (resolve: (value: unknown) => unknown) =>
-        Promise.resolve(db.answers[table] ?? db.answer).then(resolve);
+        Promise.resolve(
+          table === 'signals'
+            ? (db.answers.signals ?? { data: db.signalPages[page] ?? [], error: null })
+            : (db.answers[table] ?? { count: 0, error: null }),
+        ).then(resolve);
       return chain;
     },
   }),
 }));
 
-const { countDueActions, countHomeShortcuts } = await import('./chat-home');
+const { readHomeShortcuts } = await import('./chat-home');
+
+const lost = (...urls: string[]) => ({ lostUrls: urls.map((url) => ({ url })) });
+const tables = () => [...new Set(db.calls.map(([table]) => table))];
 
 beforeEach(() => {
   vi.stubEnv('CHAT_AGENTIC', 'true');
   db.user = { id: 'user-1' };
-  db.filters = [];
-  db.answer = { count: 3, error: null };
-  db.answers = {};
+  db.profile = {
+    organization_id: 'org-1',
+    role: 'manager',
+    work_areas: [],
+    work_areas_asked_at: null,
+    menu_shown: [],
+    menu_hidden: [],
+    can_manage_menus: false,
+  };
+  db.roleHidden = [];
+  db.calls = [];
+  db.answers = { actions: { count: 3, error: null }, content_drafts: { count: 2, error: null } };
+  db.signalPages = [
+    [
+      lost('https://www.acme.example/pricing/', 'https://acme.example/blog?utm=x#top'),
+      // The same pages again, written other ways.
+      lost('http://acme.example/Pricing', 'acme.example/blog'),
+      // A signal from before its evidence names no page.
+      { lostUrls: null },
+    ],
+  ];
 });
 afterEach(() => vi.unstubAllEnvs());
 
-describe('countDueActions', () => {
-  it("counts the brand's open actions due by the week's end", async () => {
-    expect(await countDueActions(BRAND, '2026-11-01')).toEqual({ ok: true, count: 3 });
-    expect(db.filters).toEqual([
-      ['actions', 'select', 'id', { count: 'exact', head: true }],
-      ['actions', 'eq', 'brand_id', BRAND],
-      ['actions', 'in', 'status', ['new', 'in_progress', 'on_hold']],
-      ['actions', 'lte', 'due_date', '2026-11-01'],
+describe('readHomeShortcuts', () => {
+  it('counts the due tasks, the lost-citation pages and the ready drafts together', async () => {
+    expect(await readHomeShortcuts(BRAND, '2026-11-01')).toEqual({
+      ok: true,
+      dueTasks: 3,
+      lostPages: 2,
+      readyDrafts: 2,
+    });
+    const of = (table: string) => db.calls.filter(([t]) => t === table).map(([, ...c]) => c);
+    expect(of('actions')).toEqual([
+      ['select', 'id', { count: 'exact', head: true }],
+      ['eq', 'brand_id', BRAND],
+      ['in', 'status', ['new', 'in_progress', 'on_hold']],
+      ['lte', 'due_date', '2026-11-01'],
     ]);
+    // The pages only, a page of signals at a time.
+    expect(of('signals')).toEqual([
+      ['select', 'lostUrls:payload->lostUrls'],
+      ['eq', 'brand_id', BRAND],
+      ['eq', 'kind', 'lost_citations'],
+      ['in', 'status', ['new', 'acknowledged']],
+      ['order', 'id'],
+      ['range', 0, 999],
+    ]);
+    expect(of('content_drafts')).toEqual([
+      ['select', 'id', { count: 'exact', head: true }],
+      ['eq', 'brand_id', BRAND],
+      ['eq', 'status', 'ready'],
+      ['is', 'archived_at', null],
+    ]);
+  });
+
+  it('reads the next page of signals while a page is full', async () => {
+    db.signalPages = [
+      Array.from({ length: 1000 }, (_, i) => lost(`https://acme.example/p${i % 10}`)),
+      [lost('https://acme.example/last')],
+    ];
+    const result = await readHomeShortcuts(BRAND, '2026-11-01');
+    expect(result).toMatchObject({ ok: true, lostPages: 11 });
+    expect(db.calls.filter(([t, m]) => t === 'signals' && m === 'range')).toEqual([
+      ['signals', 'range', 0, 999],
+      ['signals', 'range', 1000, 1999],
+    ]);
+  });
+
+  it('counts nothing for a section an Admin took off the person’s menu', async () => {
+    db.profile.menu_hidden = ['content'];
+    db.roleHidden = ['citations'];
+    expect(await readHomeShortcuts(BRAND, '2026-11-01')).toEqual({
+      ok: true,
+      dueTasks: 3,
+      lostPages: 0,
+      readyDrafts: 0,
+    });
+    expect(tables()).not.toContain('content_drafts');
+    expect(tables()).not.toContain('signals');
   });
 
   it('takes the demo brand’s id, made by hand and not an RFC 4122 one', async () => {
     const demo = '33333333-3333-3333-3333-333333333333';
-    expect(await countDueActions(demo, '2026-11-01')).toEqual({ ok: true, count: 3 });
-    expect(db.filters).toContainEqual(['actions', 'eq', 'brand_id', demo]);
+    expect(await readHomeShortcuts(demo, '2026-11-01')).toMatchObject({ ok: true });
   });
 
   it('reads nothing for a bad brand or date, signed out or with the new Chat off', async () => {
-    expect(await countDueActions('nope', '2026-11-01')).toEqual({ ok: false });
-    expect(await countDueActions(BRAND, 'Sunday')).toEqual({ ok: false });
+    expect(await readHomeShortcuts('nope', '2026-11-01')).toEqual({ ok: false });
+    expect(await readHomeShortcuts(BRAND, 'Sunday')).toEqual({ ok: false });
     db.user = null;
-    expect(await countDueActions(BRAND, '2026-11-01')).toEqual({ ok: false });
+    expect(await readHomeShortcuts(BRAND, '2026-11-01')).toEqual({ ok: false });
     db.user = { id: 'user-1' };
     vi.stubEnv('CHAT_AGENTIC', 'false');
-    expect(await countDueActions(BRAND, '2026-11-01')).toEqual({ ok: false });
-    expect(db.filters).toEqual([]);
-  });
-
-  it('answers a failed read as a value', async () => {
-    db.answer = { count: null, error: { message: 'nope' } };
-    expect(await countDueActions(BRAND, '2026-11-01')).toEqual({ ok: false });
-  });
-});
-
-describe('countHomeShortcuts', () => {
-  const lost = (status: string, urls?: string[]) => ({
-    status,
-    payload: urls
-      ? { promptText: 'p', lostUrls: urls.map((url) => ({ url })) }
-      : { promptText: 'p' },
-  });
-
-  it('counts the pages the open lost-citation signals name, and the drafts ready to publish', async () => {
-    db.answers = {
-      signals: {
-        data: [
-          lost('new', ['https://www.acme.example/pricing/', 'https://acme.example/blog']),
-          // The same page again, written another way.
-          lost('acknowledged', ['http://acme.example/Pricing']),
-          // A signal from before its evidence names no page.
-          lost('new'),
-        ],
-        error: null,
-      },
-      content_drafts: { count: 2, error: null },
-    };
-    expect(await countHomeShortcuts(BRAND)).toEqual({ ok: true, lostPages: 2, readyDrafts: 2 });
-    expect(db.filters).toEqual([
-      ['signals', 'select', 'payload'],
-      ['signals', 'eq', 'brand_id', BRAND],
-      ['signals', 'eq', 'kind', 'lost_citations'],
-      ['signals', 'in', 'status', ['new', 'acknowledged']],
-      ['content_drafts', 'select', 'id', { count: 'exact', head: true }],
-      ['content_drafts', 'eq', 'brand_id', BRAND],
-      ['content_drafts', 'eq', 'status', 'ready'],
-      ['content_drafts', 'is', 'archived_at', null],
-    ]);
-  });
-
-  it('reads nothing for a bad brand, signed out or with the new Chat off', async () => {
-    expect(await countHomeShortcuts('nope')).toEqual({ ok: false });
-    db.user = null;
-    expect(await countHomeShortcuts(BRAND)).toEqual({ ok: false });
-    db.user = { id: 'user-1' };
-    vi.stubEnv('CHAT_AGENTIC', 'false');
-    expect(await countHomeShortcuts(BRAND)).toEqual({ ok: false });
-    expect(db.filters).toEqual([]);
+    expect(await readHomeShortcuts(BRAND, '2026-11-01')).toEqual({ ok: false });
+    expect(tables()).toEqual(['profiles']);
   });
 
   it('answers a failed read as a value', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    db.answers = { signals: { data: null, error: { message: 'nope' } } };
-    expect(await countHomeShortcuts(BRAND)).toEqual({ ok: false });
+    db.answers.content_drafts = { count: null, error: { message: 'nope' } };
+    expect(await readHomeShortcuts(BRAND, '2026-11-01')).toEqual({ ok: false });
+    db.answers.content_drafts = { count: 2, error: null };
+    db.answers.signals = { data: null, error: { message: 'nope' } };
+    expect(await readHomeShortcuts(BRAND, '2026-11-01')).toEqual({ ok: false });
     logged.mockRestore();
   });
 });

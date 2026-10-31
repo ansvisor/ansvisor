@@ -4,14 +4,17 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { ChatListItem } from '@/lib/chat/conversations';
+import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 
 /**
  * Chat Home and the Inbox (CHAT-01 items 10–12; mockup #s-home, #s-inbox):
  * the greeting by the person's clock, what needs them as a link to the
- * Inbox or "All caught up."; "For you now" (CHAT-08 v2): Ask anything and
- * More always, a job's chip only with something to do, its count from the
- * brand's data, which starts the chat and opens it; the Inbox lists needs
- * you, running and unread results with Review, Watch and Open.
+ * Inbox or "All caught up."; "For you now" (CHAT-08 v2): Ask anything
+ * always, More and the jobs that write for someone who can change things, a
+ * job's chip only with something to do, its count from the brand's data,
+ * read again for another brand, which starts the chat in its skill's words
+ * and opens it; the Inbox lists needs you, running and unread results with
+ * Review, Watch and Open.
  */
 
 const nav = vi.hoisted(() => ({ push: vi.fn() }));
@@ -28,18 +31,16 @@ vi.mock('@/components/providers/upgrade-gate', () => ({
   useUpgradeGate: () => ({ isLocked: false, openUpgrade: vi.fn() }),
 }));
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
-const due = vi.hoisted(() => ({ count: 3, lostPages: 0, readyDrafts: 0 }));
-vi.mock('@/lib/actions/chat-home', () => ({
-  countDueActions: vi.fn(async () => ({ ok: true, count: due.count })),
-  countHomeShortcuts: vi.fn(async () => ({
-    ok: true,
-    lostPages: due.lostPages,
-    readyDrafts: due.readyDrafts,
-  })),
+const BRAND = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const due = vi.hoisted(() => ({
+  brand: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  answer: null as unknown,
+  read: vi.fn(),
 }));
+vi.mock('@/lib/actions/chat-home', () => ({ readHomeShortcuts: due.read }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (pick: (s: { activeBrandId: string }) => unknown) =>
-    pick({ activeBrandId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }),
+    pick({ activeBrandId: due.brand }),
 }));
 const list = vi.hoisted(() => ({ chats: [] as ChatListItem[] }));
 vi.mock('./chat-list-provider', () => ({
@@ -86,9 +87,9 @@ beforeEach(() => {
   root = createRoot(host);
   nav.push.mockClear();
   list.chats = [];
-  due.count = 3;
-  due.lostPages = 0;
-  due.readyDrafts = 0;
+  due.brand = BRAND;
+  due.answer = { ok: true, dueTasks: 3, lostPages: 0, readyDrafts: 0 };
+  due.read.mockReset().mockImplementation(async () => due.answer);
 });
 
 afterEach(() => {
@@ -96,11 +97,11 @@ afterEach(() => {
   host.remove();
 });
 
-async function render(node: ReactNode) {
+async function render(node: ReactNode, role: TeamRole = 'manager') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        {node}
+        <RoleProvider role={role}>{node}</RoleProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -117,6 +118,7 @@ const view = (props: Partial<Parameters<typeof ChatHomeView>[0]> = {}) => (
     dueTasks={null}
     lostPages={null}
     readyDrafts={null}
+    canChange
     onAsk={() => undefined}
     starting={false}
     {...props}
@@ -160,12 +162,32 @@ describe('ChatHomeView', () => {
     expect(host.querySelector('[data-action="home.askAnything"]')?.textContent).toBe(
       'Ask anything',
     );
-    expect(host.querySelector('[data-action="home.moreShortcuts"]')?.textContent).toBe('More ▾');
+    const more = host.querySelector('[data-action="home.moreShortcuts"]')!;
+    expect(more.textContent).toBe('More▾');
+    // The arrow is drawn, not read.
+    expect(more.querySelector('[aria-hidden="true"]')?.textContent).toBe('▾');
     expect(host.querySelector('[data-action="home.runShortcut"]')).toBeNull();
-    await render(view({ dueTasks: 4, lostPages: 1, readyDrafts: 2 }));
+    await render(view({ dueTasks: 1234, lostPages: 1, readyDrafts: 2 }));
     expect(
       [...host.querySelectorAll('[data-action="home.runShortcut"]')].map((b) => b.textContent),
-    ).toEqual(['Complete tasks4 due', 'Win back citations1 page', 'Ready to publish2']);
+    ).toEqual(['Complete tasks 1,234 due', 'Win back citations 1 page', 'Ready to publish 2']);
+    // The chips are one group, named by its title.
+    const group = host.querySelector('[role="group"]')!;
+    expect(document.getElementById(group.getAttribute('aria-labelledby')!)?.textContent).toBe(
+      'For you now',
+    );
+  });
+
+  it('gives someone who can’t change things the jobs that read, and no More', async () => {
+    const onAsk = vi.fn();
+    await render(view({ dueTasks: 4, lostPages: 2, readyDrafts: 1, canChange: false, onAsk }));
+    expect(host.querySelector('[data-action="home.moreShortcuts"]')).toBeNull();
+    const chips = [...host.querySelectorAll<HTMLElement>('[data-action="home.runShortcut"]')];
+    expect(chips.map((b) => b.dataset.skill)).toEqual(['winback']);
+    await act(async () => chips[0].click());
+    expect(onAsk).toHaveBeenCalledWith(
+      'Show the 2 pages that lost citations and what AI cites instead.',
+    );
   });
 
   it('asks Chat in each chip’s words', async () => {
@@ -174,10 +196,15 @@ describe('ChatHomeView', () => {
     for (const chip of host.querySelectorAll<HTMLElement>('[data-action="home.runShortcut"]')) {
       await act(async () => chip.click());
     }
+    // In the words of W2-04's skills: Chat prepares; the person closes and publishes.
     expect(onAsk.mock.calls).toEqual([
-      ["Complete this week's Action Center tasks."],
-      ['Win back the citations we lost on 2 pages.'],
-      ['Get the 1 ready draft published.'],
+      [
+        "Work through this week's Action Center tasks by priority and prepare what each one needs. I'll close the tasks.",
+      ],
+      ['Win back the citations we lost on 2 pages: refresh them against what AI cites now.'],
+      [
+        'Check the 1 ready draft, fill their page fields and send them to our CMS as drafts. Going live stays my click.',
+      ],
     ]);
   });
 
@@ -218,16 +245,56 @@ describe('ChatHome', () => {
     }) as unknown as typeof fetch;
     await render(<ChatHome firstName="Alex" />);
     await act(async () => undefined);
-    expect(text()).toContain('Complete tasks3 due');
+    expect(text()).toContain('Complete tasks 3 due');
+    expect(due.read).toHaveBeenCalledWith(BRAND, expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
     await act(async () => (host.querySelector('[data-skill="tasks"]') as HTMLElement).click());
     expect(calls[0]).toMatchObject({
       url: '/api/chat/runs',
       body: {
-        message: "Complete this week's Action Center tasks.",
-        brandId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        message:
+          "Work through this week's Action Center tasks by priority and prepare what each one needs. I'll close the tasks.",
+        brandId: BRAND,
       },
     });
     expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/cccccccc-0000-4000-8000-000000000001');
+  });
+
+  it('shows no job when the counts can’t be read, and keeps Ask anything', async () => {
+    due.answer = { ok: false };
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    expect(host.querySelector('[data-action="home.runShortcut"]')).toBeNull();
+    expect(host.querySelector('[data-action="home.askAnything"]')).not.toBeNull();
+    due.read.mockRejectedValueOnce(new Error('network'));
+    root.unmount();
+    root = createRoot(host);
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    expect(host.querySelector('[data-action="home.runShortcut"]')).toBeNull();
+  });
+
+  it('reads the counts again for another brand, never showing the first one’s', async () => {
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    expect(text()).toContain('Complete tasks 3 due');
+    const other = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    due.brand = other;
+    let answer: (value: unknown) => void = () => undefined;
+    due.read.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    await render(<ChatHome firstName="Alex" />);
+    // While the new brand's counts are read, the first brand's aren't shown.
+    expect(host.querySelector('[data-action="home.runShortcut"]')).toBeNull();
+    await act(async () => answer({ ok: true, dueTasks: 0, lostPages: 0, readyDrafts: 5 }));
+    expect(due.read).toHaveBeenLastCalledWith(other, expect.any(String));
+    expect(text()).toContain('Ready to publish 5');
+  });
+
+  it('shows an Analyst no More and no job that writes', async () => {
+    due.answer = { ok: true, dueTasks: 3, lostPages: 0, readyDrafts: 2 };
+    await render(<ChatHome firstName="Alex" />, 'analyst');
+    await act(async () => undefined);
+    expect(host.querySelector('[data-action="home.moreShortcuts"]')).toBeNull();
+    expect(host.querySelector('[data-action="home.runShortcut"]')).toBeNull();
   });
 });
 

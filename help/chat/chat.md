@@ -17,7 +17,7 @@ Chat answers questions about your brand from your Ansvisor data, and can do work
 
 Chat opens on **Home**. It greets you by name, at your own time of day, and says when something needs you: click the link to open your **Inbox**. When nothing does, it says **All caught up.**
 
-Under it, **For you now** starts common jobs. **Ask anything** takes you to the box, and **More** opens every shortcut. The others show only when there is something to do, with a count for the brand you have open: **Complete tasks** for Action Center actions due by the end of this week, overdue ones included; **Win back citations** for pages that lost citations; **Ready to publish** for drafts marked ready. Click one to start a new chat that works on it; the chat opens while it works.
+Under it, **For you now** starts common jobs. **Ask anything** takes you to the box, and **More** opens every shortcut. The others show only with something to do, counted for the brand you have open: **Complete tasks** for Action Center actions due by the end of this week, overdue ones included (Chat prepares the work, you close the tasks); **Win back citations** for pages that lost citations; **Ready to publish** for drafts marked ready (Chat sends them to your CMS as drafts, going live stays your click). Click one to start a new chat on it. If your role can't make changes, you see only the jobs that read, and no **More**.
 
 ## Ask Chat
 

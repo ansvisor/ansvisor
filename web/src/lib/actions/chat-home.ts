@@ -3,19 +3,41 @@
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
+import { pageKey } from '@/lib/content/sources';
+import { menuOfProfile, readRoleHidden, type MenuProfile } from '@/lib/menu-access';
+import { OPEN_SIGNAL_STATUSES } from '@/lib/signals/registry';
 
 /**
- * Chat Home's Action Center line (CHAT-01 item 12, CHAT-09 item 3): how many
- * of the brand's open actions are due by the end of this week, overdue ones
- * included. Read as the person, so only a brand they can see counts. Behind
- * CHAT_AGENTIC. Answers as a value and never throws (#1777): a count that
- * can't be read hides the line.
+ * "For you now" on Chat Home (CHAT-08 v2, mockup #s-home `.scut`; CHAT-09
+ * item 3): the counts its chips carry, for the active brand.
+ *   - Complete tasks: the brand's open Action Center actions due by the end
+ *     of this week, overdue ones included.
+ *   - Win back citations: the pages the brand's open lost-citation signals
+ *     name (their AC-001 evidence; one without evidence names none).
+ *   - Ready to publish: the brand's drafts marked ready, not archived.
+ * A job whose menu section an Admin took off the person's menu (Menu access,
+ * 00374) isn't counted: its chip doesn't show. Read as the person, once,
+ * then the counts together. Behind CHAT_AGENTIC; never throws (#1777):
+ * counts that can't be read hide the chips.
  */
 
-export type DueCountResult = { ok: true; count: number } | { ok: false };
+export type HomeShortcuts =
+  | { ok: true; dueTasks: number; lostPages: number; readyDrafts: number }
+  | { ok: false };
 
 /** The Action Center statuses still open. */
-const OPEN_STATUSES = ['new', 'in_progress', 'on_hold'];
+const OPEN_ACTIONS = ['new', 'in_progress', 'on_hold'];
+
+/** The menu section each job belongs to: an Admin hiding it hides the job. */
+const JOB_SECTIONS = {
+  dueTasks: 'action-center',
+  lostPages: 'citations',
+  readyDrafts: 'content',
+} as const;
+
+/** Signals read a page at a time; a brand has one per prompt at most. */
+const SIGNAL_PAGE = 1000;
+const MAX_SIGNAL_PAGES = 20;
 
 const input = z.object({
   // guid, not uuid: ids made by hand (the demo brand's) aren't RFC 4122 ones.
@@ -24,7 +46,47 @@ const input = z.object({
   through: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
-export async function countDueActions(brandId: string, through: string): Promise<DueCountResult> {
+/** A page as the lost-citation evidence keys it (server signals/lost-citation-evidence.js). */
+const pageOf = (url: string) => pageKey(/^[a-z]+:\/\//i.test(url) ? url : `https://${url.trim()}`);
+
+type Client = Awaited<ReturnType<typeof createClient>>;
+
+/** The pages the brand's open lost-citation signals name, a page of signals at a time. */
+async function countLostPages(supabase: Client, brandId: string): Promise<number> {
+  const pages = new Set<string>();
+  for (let page = 0; page < MAX_SIGNAL_PAGES; page++) {
+    const { data, error } = await supabase
+      .from('signals')
+      .select('lostUrls:payload->lostUrls')
+      .eq('brand_id', brandId)
+      .eq('kind', 'lost_citations')
+      .in('status', [...OPEN_SIGNAL_STATUSES])
+      .order('id')
+      .range(page * SIGNAL_PAGE, (page + 1) * SIGNAL_PAGE - 1);
+    if (error) throw new Error(`signals: ${error.message}`);
+    const rows = (data ?? []) as { lostUrls: unknown }[];
+    for (const { lostUrls } of rows) {
+      for (const lost of Array.isArray(lostUrls) ? lostUrls : []) {
+        const url = (lost as { url?: unknown } | null)?.url;
+        const key = typeof url === 'string' && url.trim() ? pageOf(url) : null;
+        if (key) pages.add(key);
+      }
+    }
+    if (rows.length < SIGNAL_PAGE) break;
+  }
+  return pages.size;
+}
+
+async function countOf(
+  query: PromiseLike<{ count: number | null; error: { message: string } | null }>,
+  what: string,
+): Promise<number> {
+  const { count, error } = await query;
+  if (error) throw new Error(`${what}: ${error.message}`);
+  return count ?? 0;
+}
+
+export async function readHomeShortcuts(brandId: string, through: string): Promise<HomeShortcuts> {
   try {
     const parsed = input.safeParse({ brandId, through });
     if (!parsed.success) return { ok: false };
@@ -35,93 +97,45 @@ export async function countDueActions(brandId: string, through: string): Promise
     if (!user) return { ok: false };
     const { data: profile } = await supabase
       .from('profiles')
-      .select('organization_id')
+      .select(
+        'organization_id, role, work_areas, work_areas_asked_at, menu_shown, menu_hidden, can_manage_menus',
+      )
       .eq('id', user.id)
       .maybeSingle();
-    if (!chatAgenticEnabled(profile?.organization_id ?? null)) return { ok: false };
-    const { count, error } = await supabase
-      .from('actions')
-      .select('id', { count: 'exact', head: true })
-      .eq('brand_id', parsed.data.brandId)
-      .in('status', OPEN_STATUSES)
-      .lte('due_date', parsed.data.through);
-    if (error) {
-      console.error('[chat-home] could not count due actions:', error.message);
-      return { ok: false };
-    }
-    return { ok: true, count: count ?? 0 };
-  } catch (error) {
-    console.error('[chat-home] could not count due actions:', error);
-    return { ok: false };
-  }
-}
+    const orgId = (profile?.organization_id as string | null | undefined) ?? null;
+    if (!profile || !orgId || !chatAgenticEnabled(orgId)) return { ok: false };
+    const menuProfile = profile as unknown as MenuProfile;
+    const roleHidden = await readRoleHidden(supabase, orgId, menuProfile.role);
+    const hidden = new Set(menuOfProfile(menuProfile, roleHidden).hiddenByAdmin);
+    const shown = (job: keyof typeof JOB_SECTIONS) => !hidden.has(JOB_SECTIONS[job]);
 
-/**
- * "For you now" on Chat Home (CHAT-08 v2, mockup #s-home `.scut`): the
- * counts its chips carry. Win back citations: the pages the brand's open
- * lost-citation signals name (their AC-001 evidence; one without evidence
- * names none). Ready to publish: the brand's drafts marked ready and not
- * archived. Read as the person, behind CHAT_AGENTIC; never throws (#1777):
- * counts that can't be read hide their chips.
- */
-
-export type ShortcutCounts = { ok: true; lostPages: number; readyDrafts: number } | { ok: false };
-
-/** The signal statuses still open. */
-const OPEN_SIGNALS = ['new', 'acknowledged'];
-
-/** A page as compared: lower case, no scheme, no "www.", no trailing slash. */
-const pageOf = (url: string) =>
-  url
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/^www\./, '')
-    .replace(/\/+$/, '');
-
-export async function countHomeShortcuts(brandId: string): Promise<ShortcutCounts> {
-  try {
-    const parsed = z.guid().safeParse(brandId);
-    if (!parsed.success) return { ok: false };
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false };
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', user.id)
-      .maybeSingle();
-    if (!chatAgenticEnabled(profile?.organization_id ?? null)) return { ok: false };
-    const [signals, ready] = await Promise.all([
-      supabase
-        .from('signals')
-        .select('payload')
-        .eq('brand_id', parsed.data)
-        .eq('kind', 'lost_citations')
-        .in('status', OPEN_SIGNALS),
-      supabase
-        .from('content_drafts')
-        .select('id', { count: 'exact', head: true })
-        .eq('brand_id', parsed.data)
-        .eq('status', 'ready')
-        .is('archived_at', null),
+    const { brandId: brand, through: weekEnd } = parsed.data;
+    const [dueTasks, lostPages, readyDrafts] = await Promise.all([
+      shown('dueTasks')
+        ? countOf(
+            supabase
+              .from('actions')
+              .select('id', { count: 'exact', head: true })
+              .eq('brand_id', brand)
+              .in('status', OPEN_ACTIONS)
+              .lte('due_date', weekEnd),
+            'actions',
+          )
+        : 0,
+      shown('lostPages') ? countLostPages(supabase, brand) : 0,
+      shown('readyDrafts')
+        ? countOf(
+            supabase
+              .from('content_drafts')
+              .select('id', { count: 'exact', head: true })
+              .eq('brand_id', brand)
+              .eq('status', 'ready')
+              .is('archived_at', null),
+            'content_drafts',
+          )
+        : 0,
     ]);
-    const failed = signals.error ?? ready.error;
-    if (failed) {
-      console.error('[chat-home] could not count the shortcuts:', failed.message);
-      return { ok: false };
-    }
-    const pages = new Set<string>();
-    for (const { payload } of (signals.data ?? []) as { payload: unknown }[]) {
-      const lost = (payload as { lostUrls?: unknown } | null)?.lostUrls;
-      for (const page of Array.isArray(lost) ? lost : []) {
-        const url = (page as { url?: unknown } | null)?.url;
-        if (typeof url === 'string' && url.trim()) pages.add(pageOf(url));
-      }
-    }
-    return { ok: true, lostPages: pages.size, readyDrafts: ready.count ?? 0 };
+    return { ok: true, dueTasks, lostPages, readyDrafts };
   } catch (error) {
     console.error('[chat-home] could not count the shortcuts:', error);
     return { ok: false };

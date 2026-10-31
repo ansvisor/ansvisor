@@ -4159,19 +4159,21 @@
       "workedWhileAway": "Your agents worked while you were away.",
       "needsYou": "{count, plural, one {# thing needs you} other {# things need you}}",
       "caughtUp": "All caught up.",
-      "completeTasksMessage": "Complete this week's Action Center tasks.",
       "startFailed": "Couldn't start that. Try again.",
       "forYou": {
         "title": "For you now",
         "askAnything": "Ask anything",
         "tasks": "Complete tasks",
-        "tasksCount": "{count} due",
+        "tasksCount": "{count, number} due",
+        "tasksMessage": "Work through this week's Action Center tasks by priority and prepare what each one needs. I'll close the tasks.",
         "winBack": "Win back citations",
         "winBackCount": "{count, plural, one {# page} other {# pages}}",
-        "winBackMessage": "Win back the citations we lost on {count, plural, one {# page} other {# pages}}.",
+        "winBackMessage": "Win back the citations we lost on {count, plural, one {# page} other {# pages}}: refresh them against what AI cites now.",
+        "winBackReadMessage": "Show the {count, plural, one {# page} other {# pages}} that lost citations and what AI cites instead.",
         "publish": "Ready to publish",
-        "publishMessage": "Get the {count, plural, one {# ready draft} other {# ready drafts}} published.",
-        "more": "More ▾"
+        "publishCount": "{count, number}",
+        "publishMessage": "Check the {count, plural, one {# ready draft} other {# ready drafts}}, fill their page fields and send them to our CMS as drafts. Going live stays my click.",
+        "more": "More"
       }
     },
     "inbox": {

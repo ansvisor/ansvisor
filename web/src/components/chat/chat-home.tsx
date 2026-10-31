@@ -5,7 +5,8 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
-import { countDueActions, countHomeShortcuts } from '@/lib/actions/chat-home';
+import { useUserRole } from '@/hooks/use-user-role';
+import { readHomeShortcuts } from '@/lib/actions/chat-home';
 import { dayPartOf, endOfWeek } from '@/lib/chat/home';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useChatList } from './chat-list-provider';
@@ -28,6 +29,8 @@ export interface ChatHomeViewProps {
   /** Pages whose citations the brand lost, and drafts ready to publish; null until read. */
   lostPages: number | null;
   readyDrafts: number | null;
+  /** The person may change things: the jobs that write show, and More. */
+  canChange: boolean;
   /** Asks Chat in a new chat: the "For you now" chips. */
   onAsk: (message: string) => void;
   starting: boolean;
@@ -47,6 +50,7 @@ export function ChatHomeView({
   dueTasks,
   lostPages,
   readyDrafts,
+  canChange,
   onAsk,
   starting,
 }: ChatHomeViewProps) {
@@ -79,6 +83,7 @@ export function ChatHomeView({
         dueTasks={dueTasks}
         lostPages={lostPages}
         readyDrafts={readyDrafts}
+        canChange={canChange}
         starting={starting}
         onAsk={onAsk}
       />
@@ -97,9 +102,10 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
   const brandId = useBrandStore((s) => s.activeBrandId);
   const { chats } = useChatList();
   const { openUpgrade } = useUpgradeGate();
-  const [due, setDue] = useState<{ brandId: string; count: number } | null>(null);
+  const { canManage } = useUserRole();
   const [counts, setCounts] = useState<{
     brandId: string;
+    dueTasks: number;
     lostPages: number;
     readyDrafts: number;
   } | null>(null);
@@ -111,30 +117,27 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
   useEffect(() => {
     if (!brandId || !weekEnd) return;
     let current = true;
-    void countDueActions(brandId, weekEnd).then((result) => {
-      if (current) setDue(result.ok ? { brandId, count: result.count } : null);
-    });
+    void readHomeShortcuts(brandId, weekEnd)
+      .then((result) => {
+        if (!current) return;
+        setCounts(
+          result.ok
+            ? {
+                brandId,
+                dueTasks: result.dueTasks,
+                lostPages: result.lostPages,
+                readyDrafts: result.readyDrafts,
+              }
+            : null,
+        );
+      })
+      .catch(() => {
+        if (current) setCounts(null);
+      });
     return () => {
       current = false;
     };
   }, [brandId, weekEnd]);
-
-  useEffect(() => {
-    if (!brandId) return;
-    let current = true;
-    void countHomeShortcuts(brandId).then((result) => {
-      if (current) {
-        setCounts(
-          result.ok
-            ? { brandId, lostPages: result.lostPages, readyDrafts: result.readyDrafts }
-            : null,
-        );
-      }
-    });
-    return () => {
-      current = false;
-    };
-  }, [brandId]);
 
   async function startChat(message: string) {
     if (starting) return;
@@ -164,15 +167,18 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
     router.push(`/dashboard/chat/${chatId}`);
   }
 
+  // The counts of the brand open now: none while another brand's are shown.
+  const mine = counts && counts.brandId === brandId ? counts : null;
   return (
     <ChatHomeView
       firstName={firstName}
       now={now}
       inbox={items.length}
       needsYou={needsYou}
-      dueTasks={due && due.brandId === brandId ? due.count : null}
-      lostPages={counts && counts.brandId === brandId ? counts.lostPages : null}
-      readyDrafts={counts && counts.brandId === brandId ? counts.readyDrafts : null}
+      dueTasks={mine ? mine.dueTasks : null}
+      lostPages={mine ? mine.lostPages : null}
+      readyDrafts={mine ? mine.readyDrafts : null}
+      canChange={canManage}
       onAsk={(message) => void startChat(message)}
       starting={starting}
     />
