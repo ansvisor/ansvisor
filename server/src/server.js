@@ -14,6 +14,7 @@ import Middleware from './middleware/index.js';
 import { apiLimiter } from './middleware/rate-limiter.js';
 import requestIdMiddleware from './middleware/request-id.js';
 import { requireActiveSubscription } from './middleware/subscription.js';
+import { requestScope } from './lib/request-scope.js';
 import {
   DEMO_BRAND,
   isDemoBrand,
@@ -769,9 +770,11 @@ app.use('/webhooks/content-drafts', webhookContentDraftCallbackRoutes);
 // workspace whose plan has ended (middleware/subscription.js): both checked
 // once the person is known, before any route, the demo brand first so its
 // answer is the same with a plan or without one. The webhooks, callbacks and
-// internal endpoints above never reach them.
+// internal endpoints above never reach them. Each request keeps its own
+// store (lib/request-scope.js): the caller's brand access is read once.
 app.use(
   '/api',
+  requestScope,
   Middleware.decodeToken.bind(Middleware),
   refuseDemoBrandWrites,
   requireActiveSubscription,

@@ -15,7 +15,7 @@ import {
 import { runGscSync } from '../lib/gsc-sync.js';
 import { runGaSync } from '../lib/ga-sync.js';
 import { detectPageOpportunitiesInWindow } from '../lib/page-opportunities.js';
-import { assertBrandAccess } from '../lib/access.js';
+import { assertBrandAccess, assertAllBrands } from '../lib/access.js';
 
 const router = Router();
 
@@ -252,13 +252,26 @@ router.delete('/:provider', async (req, res) => {
 // equivalent yet, so these stay on explicit paths rather than under :provider.
 
 /**
- * GET /api/integrations/google-search-console/properties
+ * Who may list the connected account's properties (BRAND-ACCESS §5.2): with
+ * `?brandId=`, someone who reaches that brand; without one, someone with All
+ * brands, since the list is the whole organization's and would show a
+ * Selected-brands person the brands they weren't given.
+ */
+async function assertPropertyReader(req) {
+  const brandId = typeof req.query.brandId === 'string' ? req.query.brandId : '';
+  if (brandId) await assertBrandAccess(brandId, req.user.id);
+  else await assertAllBrands(req.user.id);
+}
+
+/**
+ * GET /api/integrations/google-search-console/properties?brandId=
  * Properties visible to the org's connected account (#642). Member-readable —
  * the mapping UI is shown to the whole org; writes stay role-gated elsewhere.
  */
 router.get('/google-search-console/properties', async (req, res) => {
   try {
     if (!isComposioConfigured(GSC)) return notConfigured(res, GSC);
+    await assertPropertyReader(req);
 
     const profile = await getProfile(req.user.id);
     const entityId = entityIdFor(profile.organization_id);
@@ -327,13 +340,14 @@ router.post('/google-search-console/sync', async (req, res) => {
 });
 
 /**
- * GET /api/integrations/google-analytics/properties
+ * GET /api/integrations/google-analytics/properties?brandId=
  * GA4 properties visible to the org's connected account (#694). Member-
  * readable, like the Search Console listing above.
  */
 router.get('/google-analytics/properties', async (req, res) => {
   try {
     if (!isComposioConfigured(GA)) return notConfigured(res, GA);
+    await assertPropertyReader(req);
 
     const profile = await getProfile(req.user.id);
     const entityId = entityIdFor(profile.organization_id);

@@ -16,9 +16,17 @@
  * so both the profile and the resource carry `organization_id = null`; a strict
  * "reject when org is null" guard would lock those installs out. In cloud mode
  * every org has a non-null id, so cross-tenant access is still blocked.
+ *
+ * Brand access (BRAND-ACCESS spec §5.2, 00388): within the organization, a
+ * person reaches every brand with All brands, and with Selected brands only
+ * those granted to them (member_brands), as the database's can_access_brand
+ * has it: an Admin always has All brands, and the demo brand is everyone's.
+ * The caller's organization, role and scope are read once per request
+ * (lib/request-scope.js). Everyone starts with All brands, so until someone
+ * is narrowed every answer is the organization check's.
  */
 import supabaseAdmin from '../config/supabase.js';
-import { getOrgIdForUser } from './plan-guard.js';
+import { oncePerRequest } from './request-scope.js';
 
 function accessError(message, status, code) {
   const err = new Error(message);
@@ -33,6 +41,57 @@ function accessError(message, status, code) {
  */
 export const NOT_IN_WORKSPACE = "This brand isn't in your workspace";
 const notInWorkspace = () => accessError(NOT_IN_WORKSPACE, 403, 'not_in_workspace');
+
+/** A brand of the organization the person has no access to (Selected brands). */
+export const NO_BRAND_ACCESS = "You don't have access to this brand";
+const noBrandAccess = () => accessError(NO_BRAND_ACCESS, 403, 'no_brand_access');
+
+/**
+ * The caller's brand access: their organization and role, whether they have
+ * All brands, and with Selected brands the brands granted. Read once per
+ * request.
+ * @param {string} userId
+ * @returns {Promise<{ orgId: string|null, role: string|null, all: boolean, brandIds: Set<string> }>}
+ */
+export function brandAccessOf(userId) {
+  return oncePerRequest(`brand-access:${userId}`, async () => {
+    const { data: profile, error } = await supabaseAdmin
+      .from('profiles')
+      .select('organization_id, role, brand_scope')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const orgId = profile?.organization_id || null;
+    const role = profile?.role ?? null;
+    // An Admin always has All brands (D3); All brands is everyone's default.
+    if (role === 'admin' || profile?.brand_scope !== 'selected') {
+      return { orgId, role, all: true, brandIds: new Set() };
+    }
+    const { data: grants, error: grantError } = await supabaseAdmin
+      .from('member_brands')
+      .select('brand_id')
+      .eq('user_id', userId);
+    if (grantError) throw new Error(grantError.message);
+    return { orgId, role, all: false, brandIds: new Set((grants ?? []).map((g) => g.brand_id)) };
+  });
+}
+
+/**
+ * Whether the access reaches a brand row (`id`, `organization_id`,
+ * `is_demo`): 'organization' when it's another organization's, 'brand' when
+ * it's the organization's but not granted, null when it does.
+ */
+function refusalFor(access, brand) {
+  if (access.orgId !== brand.organization_id) return 'organization';
+  if (access.all || brand.is_demo || access.brandIds.has(brand.id)) return null;
+  return 'brand';
+}
+
+const refusalError = (refusal) => (refusal === 'organization' ? notInWorkspace() : noBrandAccess());
+
+/** Several brands' refusal: another organization's first, then one not granted. */
+const firstRefusal = (refusals) =>
+  refusals.find((r) => r === 'organization') ?? refusals.find((r) => r === 'brand') ?? null;
 
 /**
  * The roles that may add prompts and topics, change settings and delete for
@@ -62,13 +121,19 @@ export async function assertRole(userId, roles, message) {
 }
 
 /**
- * Assert that `brandId` belongs to the caller's organization.
- * @returns {Promise<{ brand: object, orgId: string|null }>}
+ * Assert that the caller may reach `brandId`: their organization's, and with
+ * Selected brands granted to them. 404 for a brand that is gone, 403
+ * `not_in_workspace` for another organization's, 403 `no_brand_access` for
+ * one of theirs they weren't given.
+ * @param {string} brandId
+ * @param {string} userId
+ * @param {{ columns?: string }} [options] more of the brand's columns to return
+ * @returns {Promise<{ brand: object, orgId: string|null, role: string|null }>}
  */
-export async function assertBrandAccess(brandId, userId) {
+export async function assertBrandAccess(brandId, userId, { columns } = {}) {
   const { data: brand } = await supabaseAdmin
     .from('brands')
-    .select('id, organization_id')
+    .select(columns ? `id, organization_id, is_demo, ${columns}` : 'id, organization_id, is_demo')
     .eq('id', brandId)
     .single();
 
@@ -76,12 +141,23 @@ export async function assertBrandAccess(brandId, userId) {
     throw accessError('Brand not found', 404);
   }
 
-  const orgId = await getOrgIdForUser(userId);
-  if (orgId !== brand.organization_id) {
-    throw notInWorkspace();
-  }
+  const access = await brandAccessOf(userId);
+  const refusal = refusalFor(access, brand);
+  if (refusal) throw refusalError(refusal);
 
-  return { brand, orgId };
+  return { brand, orgId: access.orgId, role: access.role };
+}
+
+/**
+ * Assert that the caller has All brands: for what lists the whole
+ * organization's at once (a connected account's properties) and so would
+ * show a Selected-brands person the brands they weren't given.
+ * @returns {Promise<{ orgId: string|null, role: string|null }>}
+ */
+export async function assertAllBrands(userId) {
+  const access = await brandAccessOf(userId);
+  if (!access.all) throw noBrandAccess();
+  return { orgId: access.orgId, role: access.role };
 }
 
 /**
@@ -91,7 +167,7 @@ export async function assertBrandAccess(brandId, userId) {
  * @returns {Promise<object[]>} the matched opportunity rows (`id`, `brand_id`)
  */
 export async function assertOpportunitiesAccess(ids, userId) {
-  const userOrg = await getOrgIdForUser(userId);
+  const access = await brandAccessOf(userId);
 
   const { data: opps } = await supabaseAdmin
     .from('content_opportunities')
@@ -105,14 +181,16 @@ export async function assertOpportunitiesAccess(ids, userId) {
   const brandIds = [...new Set(opps.map((o) => o.brand_id))];
   const { data: brands } = await supabaseAdmin
     .from('brands')
-    .select('id, organization_id')
+    .select('id, organization_id, is_demo')
     .in('id', brandIds);
 
-  const orgByBrand = new Map((brands || []).map((b) => [b.id, b.organization_id]));
-  const allOwned = opps.every((o) => orgByBrand.get(o.brand_id) === userOrg);
-  if (!allOwned) {
-    throw notInWorkspace();
-  }
+  const brandById = new Map((brands || []).map((b) => [b.id, b]));
+  const refusals = opps.map((o) => {
+    const brand = brandById.get(o.brand_id);
+    return brand ? refusalFor(access, brand) : 'organization';
+  });
+  const refusal = firstRefusal(refusals);
+  if (refusal) throw refusalError(refusal);
 
   return opps;
 }
@@ -137,28 +215,33 @@ export async function assertOpportunityAccess(id, userId) {
 }
 
 /**
- * Assert that every prompt in `promptIds` belongs to the caller's org,
- * resolved through prompts -> prompt_sets -> brands.
+ * Assert that every prompt in `promptIds` belongs to a brand the caller may
+ * reach, resolved through prompts -> prompt_sets -> brands.
  * @returns {Promise<object[]>} the matched prompt rows, each with
  *   prompt_sets.brand_id and prompt_sets.brands.organization_id
  */
 export async function assertPromptAccess(promptIds, userId) {
   const ids = Array.isArray(promptIds) ? promptIds : [promptIds];
-  const userOrg = await getOrgIdForUser(userId);
+  const access = await brandAccessOf(userId);
 
   const { data: rows } = await supabaseAdmin
     .from('prompts')
-    .select('id, prompt_sets!inner(brand_id, brands!inner(organization_id))')
+    .select('id, prompt_sets!inner(brand_id, brands!inner(organization_id, is_demo))')
     .in('id', ids);
 
   if (!rows || rows.length < new Set(ids).size) {
     throw accessError('Prompt not found', 404);
   }
 
-  const allOwned = rows.every((r) => r.prompt_sets?.brands?.organization_id === userOrg);
-  if (!allOwned) {
-    throw notInWorkspace();
-  }
+  const refusals = rows.map((r) =>
+    refusalFor(access, {
+      id: r.prompt_sets?.brand_id,
+      organization_id: r.prompt_sets?.brands?.organization_id,
+      is_demo: r.prompt_sets?.brands?.is_demo,
+    }),
+  );
+  const refusal = firstRefusal(refusals);
+  if (refusal) throw refusalError(refusal);
 
   return rows;
 }

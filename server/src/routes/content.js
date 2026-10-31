@@ -130,25 +130,7 @@ router.post('/generate', requireFeature('content_optimization'), async (req, res
       return res.status(400).json({ error: 'brandId is required' });
     }
 
-    const { data: brand } = await supabaseAdmin
-      .from('brands')
-      .select('id, organization_id')
-      .eq('id', brandId)
-      .single();
-
-    if (!brand) {
-      return res.status(404).json({ error: 'Brand not found' });
-    }
-
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', req.user.id)
-      .single();
-
-    if (!profile || profile.organization_id !== brand.organization_id) {
-      return res.status(403).json({ error: NOT_IN_WORKSPACE, code: 'not_in_workspace' });
-    }
+    await assertBrandAccess(brandId, req.user.id);
     await assertRole(req.user.id, MANAGER_ROLES, GENERATE_OPPORTUNITIES_REFUSAL);
 
     const job = await createJob({
@@ -1634,14 +1616,9 @@ router.post('/:id/brief', async (req, res) => {
       return res.status(404).json({ error: 'Opportunity not found' });
     }
 
-    const { data: brand } = await supabaseAdmin
-      .from('brands')
-      .select('organization_id')
-      .eq('id', opp.brand_id)
-      .single();
-
-    const userOrgId = await getOrgIdForUser(req.user.id);
-    if (!brand || !userOrgId || userOrgId !== brand.organization_id) {
+    const { orgId: userOrgId } = await assertBrandAccess(opp.brand_id, req.user.id);
+    // No organization to charge the brief to (a self-hosted install without one).
+    if (!userOrgId) {
       return res.status(403).json({ error: NOT_IN_WORKSPACE, code: 'not_in_workspace' });
     }
     await assertRole(req.user.id, MANAGER_ROLES, GENERATE_BRIEF_REFUSAL);

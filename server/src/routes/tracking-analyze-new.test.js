@@ -51,7 +51,14 @@ vi.mock('../lib/tracking-quota.js', () => ({
   enforceOnDemandTrackingQuota: vi.fn(),
   TrackingQuotaError: class TrackingQuotaError extends Error {},
 }));
-vi.mock('../lib/access.js', () => ({ assertBrandAccess: vi.fn() }));
+// The caller reaches the brand; the route reads whether it is paused from it.
+vi.mock('../lib/access.js', () => ({
+  assertBrandAccess: vi.fn(async () => ({
+    brand: { id: 'b1', organization_id: 'org-1', is_demo: false, is_active: true },
+    orgId: 'org-1',
+    role: 'manager',
+  })),
+}));
 
 const { default: router } = await import('./tracking.js');
 
