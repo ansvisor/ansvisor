@@ -5,10 +5,10 @@ keywords: [content library, drafts, draft status, archive, export drafts]
 synonyms: [content list, my articles, saved pages, draft list]
 plan: all
 updated: 2026-10-30
-last_checked: 2026-10-30
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/content-editor.mdx]
 ---
 The **Library**, under **Content** in the sidebar, lists every page you, your teammates and the Content Agent wrote or changed in Ansvisor. Click a row to open the draft in the editor.

@@ -4,14 +4,14 @@ route: /dashboard/brands/new
 keywords: [add brand, onboarding, setup wizard, first brand, brand setup, target market, free trial]
 synonyms: [get started, create a brand, set up my account, onboard, add another brand]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/add-your-first-brand.mdx]
 ---
-When you start with Ansvisor, a setup wizard walks you through your first brand. It takes 5 to 10 minutes, and you need the website of the brand you want to track. The wizard has five steps on a self-hosted install and seven on the cloud: the extra two ask what you work on and pick your plan. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped.
+When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. The wizard has five steps on a self-hosted install and seven on the cloud: the extra two ask what you work on and pick your plan. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped.
 
 ## Step 1: Brand basics
 
@@ -74,6 +74,8 @@ A self-hosted install asks the same the first time you open the dashboard.
 The final step picks your plan, **Starter** or **Growth**, and starts checkout.
 
 While a free trial is on offer, **Choose how to start** lets you pick the trial, **Monthly** or **Yearly**. With the trial you enter card details, nothing is charged until the trial ends, and the step tells you the day of the first charge. The trial comes with an organization's first subscription only. **Buy now**, or a plan without a trial, starts the plan the same day.
+
+Not ready to add a card? **Explore the demo** opens a demo brand with sample data. Your brand stays saved, and its tracking starts when you pick a plan.
 
 A self-hosted install skips this step.
 

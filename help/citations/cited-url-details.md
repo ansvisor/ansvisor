@@ -1,14 +1,14 @@
 ---
 title: Details of a cited URL
-route: /dashboard/citations/url
+route: /dashboard/citations
 keywords: [cited URL, URL details, citation drill-down, cited in, prompts breakdown, article type, owned page]
 synonyms: [which answers cite this page, why is this page cited, prompts citing a URL, citation details, page citations]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/citations.mdx]
 ---
 Every URL that AI engines cite has its own page in Ansvisor. Open it from the **URLs** tab of the **Citations** page by clicking a page's title. It opens with the Citations page's date range, platform and region, but not its topic or prompt. You can change the date range and platform on the URL's page. **Citations** at the top goes back.
