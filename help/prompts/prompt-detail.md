@@ -4,14 +4,14 @@ route: /dashboard/prompts/tracked
 keywords: [prompt page, prompt detail, demand, google trends, people also ask, search console]
 synonyms: [single prompt view, is this asked for real, real demand, prompt results]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/prompts.mdx]
 ---
-Click a prompt's text in **Tracked Prompts** to open its own page. It shows the prompt's visibility, mentions, citations and per-platform results. When the prompt has a volume, an **AI searches a month** card shows its estimate. Beside it, **Demand · is this asked for real?** shows measured signals of whether people really ask it.
+Click a prompt's text in **Tracked Prompts** to open its own page. It shows the prompt's visibility, mentions, citations and per-platform results. When the prompt has a volume, an **AI searches a month** card shows its estimate. Below the figures, **Demand · is this asked for real?** shows measured signals of whether people really ask it.
 
 ## The four demand signals
 
@@ -22,7 +22,7 @@ Each signal shows its source and the day it was read:
 - **People Also Ask**: the related questions Google shows for the keyword. Read about once a week.
 - **YouTube**: the views across YouTube's top videos for the keyword, and the most viewed one. Read about once a week.
 
-A query matches a prompt when most of its words are in the prompt.
+A query matches a prompt when at least half of its words are in the prompt, and counts for the closest prompt only.
 
 ## When a signal is missing
 
@@ -32,11 +32,11 @@ A card without its signal says why, for example **Connect Search Console to see 
 
 ## Track a People Also Ask question
 
-Each People Also Ask question has a **+ Track** button. One click adds it as a tracked prompt in the prompt's topic, within your plan's prompt limit. A question your brand already tracks, however it's written, shows **Tracked** instead and isn't added twice.
+Each People Also Ask question has a **+ Track** button for admins and managers. One click adds it as a tracked prompt in the prompt's topic, within your plan's prompt limit. A question your brand already tracks, even with different capitals, accents or punctuation, shows **Tracked** instead and isn't added twice.
 
 ## Demand level
 
-The signals read come to a demand level, shown in the prompt's KPI row, for example **Demand · High** with **3 of 4 signals**. It carries a **Measured** badge, never **Estimate**.
+The signals read come to a demand level, shown in the KPI row as **Demand · 3 of 4 signals** with the level, for example **High**. It carries a **Measured** badge, never **Estimate**.
 
 ## How the demand level is scored
 

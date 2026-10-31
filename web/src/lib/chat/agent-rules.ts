@@ -260,8 +260,14 @@ export const updateAgentInput = z
   );
 export type UpdateAgentInput = z.output<typeof updateAgentInput>;
 
-/** Run now (§E Manual): one brand of its scope, or every one, one run each (§H item 41). */
-export const runNowInput = z.strictObject({ brandId: uuid.optional() });
+/**
+ * Run now (§E Manual): one brand of its scope, or every one, one run each
+ * (§H item 41). Run agent on an Action Center action (§F) names the action
+ * instead: one run, on the action's brand.
+ */
+export const runNowInput = z
+  .strictObject({ brandId: uuid.optional(), actionId: uuid.optional() })
+  .refine((input) => !(input.brandId && input.actionId), 'Either brandId or actionId');
 
 /** The Agents list's tabs (§B item 5) and its search, by name or skill. */
 export const AGENT_LIST_VIEWS = ['mine', 'workspace', 'paused', 'archived'] as const;
@@ -501,7 +507,8 @@ export type AgentAsk =
   | 'workspace'
   | 'monthCap'
   | 'fullAuto'
-  | 'engines';
+  | 'engines'
+  | 'runWithChat';
 
 /** A refusal: the precedence's denial, and what was asked in words. */
 export interface AgentDenial {
@@ -565,7 +572,10 @@ export function canSeeAgent(agent: AgentFacts, viewer: AgentViewer): boolean {
 }
 
 /** The acts on an existing agent (create and duplicate make a new one). */
-export type AgentAct = Exclude<AgentAsk, 'workspace' | 'monthCap' | 'fullAuto' | 'engines'>;
+export type AgentAct = Exclude<
+  AgentAsk,
+  'workspace' | 'monthCap' | 'fullAuto' | 'engines' | 'runWithChat'
+>;
 
 /** What only an Admin may do to a workspace agent while Settings › Chat keeps them to Admins. */
 const ADMINS_ONLY_ACTS: readonly AgentAct[] = ['edit', 'activate', 'resume'];
@@ -600,6 +610,17 @@ export function agentActDenial(
     return { denial: { code: 'policy_never' }, asked: act };
   }
   return null;
+}
+
+/**
+ * Run with Chat on an Action Center action (CHAT-21 §F item 27): Chat works
+ * the action's tasks, which are changes, so Admins and Managers only, as
+ * Run agent. Null when they may.
+ */
+export function runWithChatDenial(viewer: AgentViewer): AgentDenial | null {
+  return canWriteAgents(viewer.role)
+    ? null
+    : forbidden(viewer.role, ['admin', 'manager'], 'runWithChat');
 }
 
 /** Making an agent visible to the workspace: refused for Managers while Admins keep it. */

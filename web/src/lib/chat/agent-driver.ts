@@ -3,6 +3,13 @@ import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
+import {
+  actionClosed,
+  actionScopeOf,
+  categoryName,
+  logActionRunEvent,
+  type ActionSnapshot,
+} from './agent-action';
 import { canWriteAgents, versionFromRow, type AgentPausedReason } from './agent-rules';
 import { startQueuedAgentRuns, type AgentRunDriver } from './agent-runs';
 import {
@@ -21,8 +28,15 @@ import {
   runnableBrands,
   type AgentRefusal,
 } from './agents';
-import { APPROVAL_TTL_MS, driveRun, endHeldRun, validTimezone, type ChatActor } from './engine';
-import { loadRun, newProgress, type LoadedRun } from './engine-store';
+import {
+  APPROVAL_TTL_MS,
+  driveRun,
+  endHeldRun,
+  stopChatRun,
+  validTimezone,
+  type ChatActor,
+} from './engine';
+import { OPEN_RUN_STATUSES, loadRun, newProgress, type LoadedRun } from './engine-store';
 import { chatAgenticEnabled } from './flag';
 
 /**
@@ -56,7 +70,17 @@ import { chatAgenticEnabled } from './flag';
  * An ended run counts toward the agent's failed runs in a row (3 pause it,
  * failures); one that shipped something gets a Pending outcome until the
  * impact ledger measures it (§I). Each run's use is kept by the server as
- * the run spends (usage_share). A slot that frees is filled by the minute
+ * the run spends (usage_share).
+ *
+ * A run on an Action Center action (Run agent, CHAT-21 §F) is scoped to it:
+ * its chat is titled "{agent} · {action}", its message names the action by
+ * number and category, and its scope carries an Action chip, the action as
+ * an @ reference, and its title and open tasks as they were when the person
+ * asked, read as untrusted data; it starts tainted (every change a card). It doesn't start on an action
+ * closed since, and stops when the action closes while it runs (edge case
+ * 7): both "The action was closed" (action_closed). Its start and its end
+ * are written to the action's History, as the person it acts as (§F item
+ * 31). A slot that frees is filled by the minute
  * tick (agent-sweep.ts), in a request of its own: a run that ends never
  * starts the next in what is left of its own request's time. Server only.
  */
@@ -70,7 +94,7 @@ export const HANDOVER_GRACE_MS = 5 * 60_000;
 export const FAILURES_TO_PAUSE = 3;
 
 const AGENT_RUN_COLUMNS =
-  'id, organization_id, agent_id, agent_version, brand_id, trigger_kind, trigger_ref, acting_user_id, status, evidence_json, queued_at, started_at';
+  'id, organization_id, agent_id, agent_version, brand_id, trigger_kind, trigger_ref, acting_user_id, status, evidence_json, action_id, queued_at, started_at';
 const VERSION_COLUMNS =
   'agent_id, version, skill_ids, instructions, mode, connections, model, effort, scope, notify_user_ids, followup_days';
 
@@ -89,6 +113,8 @@ export interface AgentRunRow {
   acting_user_id: string | null;
   status: string;
   evidence_json: Json;
+  /** The action a Run agent click scoped it to (§F item 28). */
+  action_id: string | null;
   queued_at: string;
   started_at: string | null;
 }
@@ -157,14 +183,17 @@ async function endBeforeStart(
     now,
   }: {
     pause?: Exclude<AgentPausedReason, 'manual'> | null;
-    stopReason?: 'brand_gone' | null;
+    stopReason?: 'brand_gone' | 'action_closed' | null;
     now: Date;
   },
 ): Promise<null> {
   if (pause && run.agent_id && isTriggered(run.trigger_kind)) {
     await pauseAgentForSystem(run.organization_id, run.agent_id, pause);
   }
-  await moveAgentRun(run.id, 'running', to, { stopReason, now });
+  // A Run agent click that didn't start says so in its action's History.
+  if (await moveAgentRun(run.id, 'running', to, { stopReason, now })) {
+    await logActionRunEnd(run, to, stopReason);
+  }
   return null;
 }
 
@@ -185,6 +214,8 @@ export function agentRunMessage(input: {
   instructions: string | null;
   triggerKind: string;
   evidence: AgentEvidence;
+  /** The action a Run agent click scoped it to, as it was then (§F item 28). */
+  action?: ActionSnapshot | null;
 }): string {
   const signals = input.evidence.fires.filter((f) => f.kind === 'signal').length;
   const lines = [
@@ -195,6 +226,13 @@ export function agentRunMessage(input: {
     }),
     runnerT('started', { trigger: input.triggerKind, count: signals }),
   ];
+  // Its number and category only: the action's title and tasks may come from
+  // outside, so they go in the scope as data (runScope), never in the message.
+  if (input.action) {
+    lines.push(
+      runnerT('action', { no: input.action.no, category: categoryName(input.action.category) }),
+    );
+  }
   if (input.evidence.earlier.length > 0) {
     lines.push(runnerT('earlier', { count: input.evidence.earlier.length }));
   }
@@ -212,7 +250,7 @@ const MAX_CHIPS = 12;
  * and id, a schedule's slot), and how many earlier fires came with it.
  */
 function runScope(
-  input: { agent: string; brand: string; triggerKind: string },
+  input: { agent: string; brand: string; triggerKind: string; action?: ActionSnapshot | null },
   evidence: AgentEvidence,
   withIds: boolean,
 ) {
@@ -225,6 +263,18 @@ function runScope(
       value: triggerT(input.triggerKind as 'schedule'),
     },
   ];
+  // "Action · {title}" (§F item 28): its number on screen, its id for the run alone.
+  const { action } = input;
+  if (action) {
+    chips.push({
+      key: 'action',
+      label: runnerT('chip.action'),
+      value: (withIds ? `AC-${action.no} ${action.id}` : `AC-${action.no} · ${action.title}`).slice(
+        0,
+        200,
+      ),
+    });
+  }
   if (withIds) {
     for (const fire of evidence.fires) {
       if (chips.length >= MAX_CHIPS - 1) break;
@@ -249,7 +299,22 @@ function runScope(
       });
     }
   }
-  return { context: { route: '/dashboard/chat/agents', chips } };
+  // The action as Ask about this attaches it (Chat's Action Center reads take its
+  // id), with its title and open tasks when the person asked: data the models read
+  // as untrusted (progress.scopeUntrusted), never instructions.
+  const onAction =
+    withIds && action
+      ? {
+          references: [{ type: 'task' as const, id: action.id, label: action.title.slice(0, 200) }],
+          action: {
+            number: `AC-${action.no}`,
+            title: action.title,
+            category: action.category,
+            open_tasks: action.tasks,
+          },
+        }
+      : {};
+  return { context: { route: '/dashboard/agents', chips }, ...onAction };
 }
 
 async function insertId(table: string, row: Record<string, unknown>, what: string) {
@@ -335,9 +400,20 @@ export async function openAgentRun(
   );
   if (!brand) return endBeforeStart(run, 'stopped', { stopReason: 'brand_gone', now });
 
+  // A run on an action: the action as the person asked (§F item 28), still open (edge case 7).
+  const action = run.action_id ? actionScopeOf(run.evidence_json) : null;
+  if (run.action_id && (!action || (await actionClosed(run.action_id)))) {
+    return endBeforeStart(run, 'stopped', { stopReason: 'action_closed', now });
+  }
+
   const evidence = evidenceOf(run.evidence_json);
   const timezone = validTimezone(evidence.fires.find((f) => f.timezone)?.timezone);
-  const words = { agent: agent.row.name, brand: brand.name, triggerKind: run.trigger_kind };
+  const words = {
+    agent: agent.row.name,
+    brand: brand.name,
+    triggerKind: run.trigger_kind,
+    action,
+  };
   const text = agentRunMessage({
     ...words,
     skills: version.skill_ids,
@@ -353,7 +429,10 @@ export async function openAgentRun(
         organization_id: organizationId,
         user_id: actingUserId,
         brand_id: brand.id,
-        title: runnerT('title', { agent: agent.row.name, brand: brand.name }).slice(0, 200),
+        title: (action
+          ? runnerT('actionTitle', { agent: agent.row.name, action: action.title })
+          : runnerT('title', { agent: agent.row.name, brand: brand.name })
+        ).slice(0, 200),
         origin: 'agent',
         agent_run_id: run.id,
       },
@@ -402,6 +481,8 @@ export async function openAgentRun(
       ...newProgress(timezone, brand.id, 'read'),
       question: text,
       scope: runScope(words, evidence, true),
+      // An action's title and tasks may come from outside: every change is a card (§16a).
+      ...(action ? { tainted: true, scopeUntrusted: true } : {}),
     } as unknown as Json,
     heartbeat_at: now.toISOString(),
   });
@@ -412,6 +493,20 @@ export async function openAgentRun(
       .update({ acting_user_id: actingUserId })
       .eq('id', run.id);
     if (error) console.error('[chat/agents] could not name who a run acts as:', error);
+  }
+  if (run.action_id) {
+    await logActionRunEvent(
+      run.action_id,
+      'agent_run_started',
+      {
+        run_id: run.id,
+        agent_id: agent.row.id,
+        agent: agent.row.name,
+        conversation_id: conversationId,
+        mode: version.mode,
+      },
+      actingUserId,
+    );
   }
   return { agentRunId: run.id, organizationId, chatRunId, actor };
 }
@@ -467,7 +562,14 @@ export function agentStateOf(chat: Pick<LoadedRun, 'status' | 'progress'>): {
       const why = chat.progress?.stoppedFor;
       return {
         status: 'stopped',
-        stopReason: why === 'expired' ? 'no_answer' : why === 'limit' ? 'run_cap' : 'user',
+        stopReason:
+          why === 'expired'
+            ? 'no_answer'
+            : why === 'limit'
+              ? 'run_cap'
+              : why === 'action_closed'
+                ? 'action_closed'
+                : 'user',
       };
     }
     default:
@@ -521,6 +623,61 @@ async function markShipped(agentRunId: string) {
     .is('outcome', null);
 }
 
+/**
+ * A run on an action that ended: "Agent run completed" (or failed, stopped)
+ * in the action's History, as the person it acted as (§F item 31).
+ */
+async function logActionRunEnd(run: AgentRunRow, status: string, stopReason?: string | null) {
+  if (!run.action_id) return;
+  let agentName: string | null = null;
+  if (run.agent_id) {
+    const { data } = await supabaseAdmin
+      .from('chat_agents')
+      .select('name')
+      .eq('id', run.agent_id)
+      .maybeSingle();
+    agentName = (data as { name: string } | null)?.name ?? null;
+  }
+  await logActionRunEvent(
+    run.action_id,
+    'agent_run_completed',
+    {
+      run_id: run.id,
+      agent_id: run.agent_id,
+      agent: agentName,
+      to: status,
+      stop_reason: stopReason ?? null,
+    },
+    run.acting_user_id,
+  );
+}
+
+/**
+ * The action a run works on closed while it ran (edge case 7): its Chat run
+ * stops (after the step it is on, when it is driven elsewhere), and the run
+ * ends "The action was closed" (action_closed). Nothing more is changed.
+ */
+async function stopForClosedAction(
+  run: AgentRunRow,
+  chatRunId: string | null,
+  now: Date,
+): Promise<string | null> {
+  if (chatRunId && run.acting_user_id) {
+    const stopped = await stopChatRun(
+      { userId: run.acting_user_id, email: null, organizationId: run.organization_id },
+      chatRunId,
+      'action_closed',
+    );
+    if (!stopped.ok) console.error('[chat/agents] could not stop a closed action’s run:', stopped);
+  }
+  if (!(await moveAgentRun(run.id, run.status, 'stopped', { stopReason: 'action_closed', now }))) {
+    return (await readAgentRun(run.id))?.status ?? null;
+  }
+  if (run.agent_id) await markShipped(run.id);
+  await logActionRunEnd(run, 'stopped', 'action_closed');
+  return 'stopped';
+}
+
 /** Starts the workspace's next queued runs, while it has room and may run them. */
 export async function startNextAgentRuns(
   organizationId: string,
@@ -544,6 +701,17 @@ export async function settleAgentRun(
   if (!run || !HELD.includes(run.status)) return run?.status ?? null;
 
   const chatRunId = await chatRunOf(run.id);
+  // Its action closed while its Chat run still works or waits (edge case 7). Not
+  // yet handed over: its driver checks the action itself, within the grace.
+  if (run.action_id && (await actionClosed(run.action_id))) {
+    const chat = chatRunId ? await loadRun(chatRunId) : null;
+    const handingOver =
+      !chatRunId &&
+      now.getTime() - Date.parse(run.started_at ?? run.queued_at) <= HANDOVER_GRACE_MS;
+    if (!handingOver && (!chat || OPEN_RUN_STATUSES.includes(chat.status))) {
+      return stopForClosedAction(run, chatRunId, now);
+    }
+  }
   let target: { status: string; stopReason?: string } | null = null;
   let capHit: 'run' | 'month' | undefined;
   if (!chatRunId) {
@@ -587,6 +755,7 @@ export async function settleAgentRun(
       }
     }
   }
+  if (ENDED.includes(target.status)) await logActionRunEnd(run, target.status, target.stopReason);
   return target.status;
 }
 

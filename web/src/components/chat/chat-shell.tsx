@@ -52,11 +52,12 @@ function useIsWide(): boolean {
 }
 
 const CHAT_PATH = /^\/dashboard\/chat\/([0-9a-f-]{36})$/i;
-/**
- * An agent's detail, its Edit and New agent: "Chat › Agents › {its name}",
- * "Chat › Agents › New agent" (governance mockup CRUMB).
- */
-const AGENT_PATH = /^\/dashboard\/chat\/agents\/(?:new|[0-9a-f-]{36}(?:\/edit)?)$/i;
+/** A daily suggestion's page: "Chat › Inbox › Daily suggestion · Oct 29" (CHAT-26 #d-detail). */
+const SUGGESTION_PATH = /^\/dashboard\/chat\/inbox\/[0-9a-f-]{36}$/i;
+/** The page a detail sits under, linked in its breadcrumb before the name the detail sets. */
+const DETAIL_PARENTS = {
+  inbox: '/dashboard/chat/inbox?tab=suggestions',
+} as const;
 
 /**
  * Where the palette opens while the menu is shown: under its Search chats
@@ -80,7 +81,6 @@ const SUB_PAGES: Record<string, string> = {
   '/dashboard/chat/activity': 'activity',
   '/dashboard/chat/capabilities': 'capabilities',
   '/dashboard/chat/files': 'files',
-  '/dashboard/chat/agents': 'agents',
 };
 /** Chat's own pages the header names (mockup: Settings, right under Home). */
 const TITLED_PAGES: Record<string, string> = { '/dashboard/chat/settings': 'settings' };
@@ -171,7 +171,7 @@ function ChatShellFrame({
   const [drawer, setDrawer] = useState(false);
   const [searching, setSearching] = useState(false);
   const [lastChat, setLastChat] = useState<string | null>(null);
-  // The breadcrumb's last part a page names, as an agent's detail does.
+  // The breadcrumb's last part a page names, as a daily suggestion's page does.
   const [crumbTail, setCrumbTail] = useState<string | null>(null);
   const stripToggle = useRef<HTMLButtonElement>(null);
   const focusAfterToggle = useRef(false);
@@ -246,13 +246,15 @@ function ChatShellFrame({
     lastChat && (status !== 'ready' || chats.some((chat) => chat.id === lastChat))
       ? `/dashboard/chat/${lastChat}`
       : '/dashboard/chat';
-  const agentPage = AGENT_PATH.test(pathname);
-  const subPage = SUB_PAGES[pathname] ?? (agentPage ? 'agents' : undefined);
+  const suggestionPage = SUGGESTION_PATH.test(pathname);
+  const detailOf: keyof typeof DETAIL_PARENTS | undefined = suggestionPage ? 'inbox' : undefined;
+  const subPage = SUB_PAGES[pathname] ?? detailOf;
   const titled = TITLED_PAGES[pathname];
   const current = chatId ? chats.find((chat) => chat.id === chatId) : undefined;
   const pill = current ? PILL_OF[current.state] : undefined;
-  // A chat or Home fills the page itself; the other Chat pages get the usual padding.
-  const padded = pathname !== '/dashboard/chat' && !chatId;
+  // A chat, Home or a suggestion's page (a chat to be) fills the page itself;
+  // the other Chat pages get the usual padding.
+  const padded = pathname !== '/dashboard/chat' && !chatId && !suggestionPage;
   const strip = !isWide || !open;
   const runs = <RunsTray brandId={brandId} />;
 
@@ -349,10 +351,10 @@ function ChatShellFrame({
                 <span aria-hidden className="mx-1.5 font-normal text-muted-foreground/70">
                   ›
                 </span>
-                {agentPage ? (
+                {detailOf ? (
                   <>
                     <Link
-                      href="/dashboard/chat/agents"
+                      href={DETAIL_PARENTS[detailOf]}
                       data-action="nav.breadcrumb"
                       className="font-medium text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
                     >

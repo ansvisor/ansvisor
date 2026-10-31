@@ -134,6 +134,64 @@ describe('the run in the browser', () => {
     ]);
   });
 
+  it('keeps what it sent to the Action Center, and the tasks a card carries (CHAT-09 items 18–19)', () => {
+    const sent = {
+      kind: 'action_created' as const,
+      actionNo: 1271,
+      title: 'Win back pricing citations',
+      href: '/dashboard/action-center/actions/x' as const,
+    };
+    const run = applyChatEvent(
+      applyChatEvent(emptyRun(), chatEvent('action.sent', 1, sent)),
+      chatEvent('action.sent', 2, { ...sent, kind: 'action_added', actionNo: 1258 }),
+    );
+    expect(run.sent.map((s) => [s.kind, s.actionNo])).toEqual([
+      ['action_created', 1271],
+      ['action_added', 1258],
+    ]);
+    const carded = applyChatEvent(
+      emptyRun(),
+      chatEvent('confirm.required', 1, {
+        n: 1,
+        action: 'Send findings to Action Center',
+        target: '“Win back pricing citations” · Recover · 1 task',
+        digest: 'b'.repeat(32),
+        canDontAskAgain: false,
+        items: [{ title: 'Add a FAQ to /pricing', detail: 'On-page · /pricing' }],
+      }),
+    );
+    expect(carded.confirm?.items).toEqual([
+      { title: 'Add a FAQ to /pricing', detail: 'On-page · /pricing' },
+    ]);
+  });
+
+  it('keeps the task strip as the last tasks.updated says it (CHAT-09 §B)', () => {
+    const row = {
+      at: 1,
+      title: 'Add FAQ block + schema to /pricing',
+      priority: 86,
+      category: 'fix' as const,
+      status: 'writing' as const,
+    };
+    const writing = applyChatEvent(
+      emptyRun(),
+      chatEvent('tasks.updated', 1, { tasks: [row], ready: 0, total: 1, due: 1 }),
+    );
+    expect(writing.tasks?.tasks.map((t) => t.status)).toEqual(['writing']);
+    const ready = applyChatEvent(
+      writing,
+      chatEvent('tasks.updated', 2, {
+        tasks: [{ ...row, status: 'ready_for_review' }],
+        ready: 1,
+        total: 1,
+        due: 1,
+      }),
+    );
+    expect(ready.tasks).toMatchObject({ ready: 1, total: 1 });
+    expect(ready.tasks?.tasks[0].status).toBe('ready_for_review');
+    expect(emptyRun().tasks).toBeNull();
+  });
+
   it('keeps each Why analysis once, by its number (CHAT-22 §1 item 4)', () => {
     const why = {
       n: 1,

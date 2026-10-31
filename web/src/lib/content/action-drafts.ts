@@ -60,7 +60,7 @@ export function findActionDraft(
 }
 
 /** Statuses after which a task is no longer outstanding work. */
-const TASK_DONE = ['completed', 'skipped', 'failed'];
+export const TASK_DONE = ['completed', 'skipped', 'failed'];
 /** A draft whose writing is done. */
 const DRAFT_DONE: DraftStatus[] = ['ready', 'published'];
 /** Tries at writing an action's live pages when another write lands between (as the API's). */
