@@ -500,6 +500,19 @@ describe('the impact ledger', () => {
       'organization_id in ( select p.organization_id from public.profiles p where p.id = auth.uid() )',
     );
   });
+
+  it('writes one ship event per CMS send, and notes a page published again (00425)', () => {
+    const delivery = migration('00425');
+    expect(delivery).toMatch(
+      /add column if not exists content_draft_delivery_id uuid\s+references public\.content_draft_deliveries\(id\) on delete set null/,
+    );
+    expect(delivery).toMatch(/add column if not exists republished_at timestamptz/);
+    // A plain unique index: PostgREST's on_conflict can't name a partial one's predicate.
+    expect(delivery).toMatch(
+      /create unique index if not exists ship_events_content_draft_delivery_uidx\s+on public\.ship_events \(content_draft_delivery_id\);/,
+    );
+    expect(delivery).not.toMatch(/grant [^;]*to authenticated/);
+  });
 });
 
 describe('daily suggestions', () => {

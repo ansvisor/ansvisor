@@ -6610,6 +6610,7 @@ export type Database = {
           agent_run_id: string | null
           brand_id: string
           change_type: string | null
+          content_draft_delivery_id: string | null
           content_draft_id: string | null
           created_at: string
           execution_mode: string
@@ -6617,6 +6618,7 @@ export type Database = {
           id: string
           kind: string
           organization_id: string
+          republished_at: string | null
           run_id: string | null
           shipped_at: string
           shipped_by: string | null
@@ -6630,6 +6632,7 @@ export type Database = {
           agent_run_id?: string | null
           brand_id: string
           change_type?: string | null
+          content_draft_delivery_id?: string | null
           content_draft_id?: string | null
           created_at?: string
           execution_mode: string
@@ -6637,6 +6640,7 @@ export type Database = {
           id?: string
           kind: string
           organization_id: string
+          republished_at?: string | null
           run_id?: string | null
           shipped_at: string
           shipped_by?: string | null
@@ -6650,6 +6654,7 @@ export type Database = {
           agent_run_id?: string | null
           brand_id?: string
           change_type?: string | null
+          content_draft_delivery_id?: string | null
           content_draft_id?: string | null
           created_at?: string
           execution_mode?: string
@@ -6657,6 +6662,7 @@ export type Database = {
           id?: string
           kind?: string
           organization_id?: string
+          republished_at?: string | null
           run_id?: string | null
           shipped_at?: string
           shipped_by?: string | null
@@ -6691,6 +6697,13 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ship_events_content_draft_delivery_id_fkey"
+            columns: ["content_draft_delivery_id"]
+            isOneToOne: true
+            referencedRelation: "content_draft_deliveries"
             referencedColumns: ["id"]
           },
           {
