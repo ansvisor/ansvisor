@@ -167,7 +167,7 @@ describe('mergeOpportunity', () => {
     expect(update.source_data.promptText).toBe(QUESTION);
   });
 
-  it('keeps its own signal when what joins has none, and its results in view', () => {
+  it('keeps its own signal and score when what joins has none, and its results in view', () => {
     const update = mergeOpportunity(
       row(),
       {
@@ -177,7 +177,8 @@ describe('mergeOpportunity', () => {
       },
       { source: 'action', taskId: 't1' },
     );
-    expect(update).toMatchObject({ opportunity_score: 90, impact: 'high' });
+    // The score stays with the signal its breakdown shows; the impact is the higher.
+    expect(update).toMatchObject({ opportunity_score: 60, impact: 'high' });
     expect(update.source_data.estAiVolume).toBe(4973);
     expect(update.source_data.pastActions).toEqual(['a7']);
   });

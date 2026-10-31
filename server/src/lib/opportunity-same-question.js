@@ -175,8 +175,12 @@ export function mergeOpportunity(target, incoming, entry, at = new Date().toISOS
   const s = incoming.source_data || {};
   const targetScore = Number(target.opportunity_score) || 0;
   const incomingScore = Number(incoming.opportunity_score) || 0;
-  // The stronger measured signal stays; a task carries none of its own.
-  const signal = s.scoreComponents && incomingScore > targetScore ? s : t;
+  // The stronger signal stays, with its score, so the score and its
+  // breakdown agree: a task's higher priority doesn't replace a measured
+  // signal, since it carries none of its own.
+  const measured = (sd) => Boolean(sd.scoreComponents) || sd.estAiVolume !== undefined;
+  const stronger = incomingScore > targetScore && (measured(s) || !measured(t));
+  const signal = stronger ? s : t;
   const related = [
     ...new Set([...(target.related_cluster_ids || []), ...clustersOf(incoming)]),
   ].filter((id) => id !== target.cluster_id);
@@ -209,7 +213,7 @@ export function mergeOpportunity(target, incoming, entry, at = new Date().toISOS
   return {
     source_data: sourceData,
     related_cluster_ids: related,
-    opportunity_score: Math.max(targetScore, incomingScore),
+    opportunity_score: stronger ? incomingScore : targetScore,
     impact: impact ?? target.impact,
   };
 }

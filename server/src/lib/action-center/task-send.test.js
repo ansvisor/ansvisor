@@ -289,9 +289,9 @@ describe('one open opportunity per question', () => {
     expect(sent).toEqual({ opportunityId: 'o-open', created: false, merged: true });
     expect(db.content_opportunities).toHaveLength(1);
     const [opp] = db.content_opportunities;
-    // The task's action is stronger: its score and impact stay; the
-    // opportunity's measured signal stays too, a task has none.
-    expect(opp).toMatchObject({ opportunity_score: 84, impact: 'high' });
+    // The opportunity's measured signal and its score stay, a task has none;
+    // the task's higher impact is kept.
+    expect(opp).toMatchObject({ opportunity_score: 52, impact: 'high' });
     expect(opp.source_data.estAiVolume).toBe(3038);
     expect(opp.source_data.prompts).toHaveLength(1);
     expect(opp.source_data.merged).toEqual([
