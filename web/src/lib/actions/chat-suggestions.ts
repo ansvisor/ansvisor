@@ -6,7 +6,13 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { parseTeamRole } from '@/lib/chat/precedence';
 import { assertWritable, SUBSCRIPTION_INACTIVE } from '@/lib/subscription-guard';
+import { readAssignees } from '@/lib/action-center/assignees';
+import { readEntityCounts } from '@/lib/action-center/entity-counts';
+import { ACTION_COLUMNS, actionItemFromRow, type ActionRow } from '@/lib/action-center/rows';
+import { actionPages } from '@/lib/content/action-drafts';
+import type { ActionItem } from '@/lib/actions/action-center';
 import {
+  SNOOZE_DAYS,
   ZONE_ANSWERS,
   ZONE_DAYS,
   closedStatus,
@@ -16,8 +22,12 @@ import {
   roleFeed,
   sendingZone,
   shownSince,
+  suggestionPick,
+  suggestionStart,
   type DailySuggestion,
   type DailySuggestionsRead,
+  type SuggestionPick,
+  type SuggestionStart,
 } from '@/lib/chat/daily-suggestions';
 
 /**
@@ -37,6 +47,10 @@ import {
  * Action Center access (§6) needs no check: it is on every menu (menu
  * access, 00374, ALWAYS_ON_SECTION), which a test in
  * lib/chat/daily-suggestions.test.ts keeps true.
+ *
+ * A suggestion's page (§2.3, W2-26) reads one suggestion with its action as
+ * the Action Center lists it, and its uses (§5: opening, starting it in Chat
+ * or the Content Editor, Not now, Remove) each keep the feed used.
  */
 
 export type SuggestionsFailure = 'chat_off' | 'read_only' | 'not_allowed' | 'not_found' | 'failed';
@@ -50,6 +64,24 @@ export type SuggestionsWriteResult = { ok: true } | { ok: false; failure: Sugges
 export type SuggestionsStartResult =
   | { ok: true; made: number }
   | { ok: false; failure: SuggestionsFailure };
+
+/** What a suggestion's page shows (§2.3). */
+export interface SuggestionDetail {
+  suggestion: DailySuggestion;
+  /** The action as the Action Center lists it now. */
+  action: ActionItem;
+  pick: SuggestionPick;
+  /** Where "Content Editor" starts; null when the action has no writing to do. */
+  start: SuggestionStart | null;
+  /** When its pages were last audited (Site Audit, completed); null when none was. */
+  auditedAt: string | null;
+  /** The person's today as the job dates sent_on; null when it couldn't be read. */
+  today: string | null;
+}
+
+export type SuggestionDetailResult =
+  | { ok: true; detail: SuggestionDetail }
+  | { ok: false; failure: 'chat_off' | 'not_found' | 'failed' };
 
 /**
  * The suggestions a read lists at most, newest first: 7 a week per brand,
@@ -221,6 +253,99 @@ export async function readDailySuggestions(): Promise<SuggestionsReadResult> {
   }
 }
 
+interface DetailRow extends Omit<SuggestionRow, 'actions'> {
+  actions: (ActionRow & { brand_id: string }) | null;
+}
+
+/**
+ * One of the person's suggestions for its page (§2.3): not removed, its
+ * action not deleted, read through their session; with the action as the
+ * Action Center lists it now (its title's counts, assignee and task count),
+ * the writing task "Content Editor" opens, its pages' last Site Audit and
+ * the person's today. An Analyst has none.
+ */
+export async function readDailySuggestion(id: string): Promise<SuggestionDetailResult> {
+  try {
+    const parsed = idSchema.safeParse(id);
+    if (!parsed.success) return { ok: false, failure: 'not_found' };
+    const me = await chatPerson();
+    if (!me) return { ok: false, failure: 'chat_off' };
+    if (roleFeed(me.role) === 'never') return { ok: false, failure: 'not_found' };
+    const { data, error } = await me.client
+      .from('chat_suggestions')
+      .select(
+        `id, brand_id, action_id, sent_on, sent_at, seen_at, opened_at, started_at, started_via, summary, actions!chat_suggestions_action_id_fkey!inner(brand_id, ${ACTION_COLUMNS})`,
+      )
+      .eq('id', parsed.data)
+      .eq('user_id', me.userId)
+      .is('removed_at', null)
+      .maybeSingle();
+    if (error) {
+      logFailure('read a suggestion', error);
+      return { ok: false, failure: 'failed' };
+    }
+    const row = data as unknown as DetailRow | null;
+    if (!row?.actions) return { ok: false, failure: 'not_found' };
+    const action = row.actions;
+    const pages = actionPages(action.payload ?? {});
+    const now = new Date();
+    const [tasks, assignees, counts, audit, today] = await Promise.all([
+      me.client
+        .from('action_tasks')
+        .select('id, task_key, status')
+        .eq('action_id', action.id)
+        .order('position'),
+      readAssignees(me.client, row.brand_id, action.assignee_id ? [action.assignee_id] : []),
+      readEntityCounts(me.client, [action.id]),
+      pages.length > 0
+        ? me.client
+            .from('site_audits')
+            .select('completed_at')
+            .eq('brand_id', row.brand_id)
+            .eq('status', 'completed')
+            .in('url', pages)
+            .order('completed_at', { ascending: false })
+            .limit(1)
+        : Promise.resolve({ data: [], error: null }),
+      personToday(me, now),
+    ]);
+    if (tasks.error || audit.error) {
+      logFailure('read a suggestion', tasks.error ?? audit.error);
+      return { ok: false, failure: 'failed' };
+    }
+    const taskRows = (tasks.data ?? []) as {
+      id: string;
+      task_key: string | null;
+      status: string;
+    }[];
+    const item = actionItemFromRow(action, {
+      assignee: action.assignee_id ? (assignees.get(action.assignee_id) ?? null) : null,
+      taskTotal: taskRows.length,
+      taskCompleted: taskRows.filter((task) => task.status === 'completed').length,
+      signalCount: 0,
+      entityCounts: counts.get(action.id),
+    });
+    const auditedAt = ((audit.data ?? []) as { completed_at: string | null }[])[0]?.completed_at;
+    return {
+      ok: true,
+      detail: {
+        suggestion: toSuggestion({ ...row, actions: { status: action.status } }),
+        action: item,
+        pick: suggestionPick(row.summary),
+        start: suggestionStart(
+          taskRows.map((task) => ({ id: task.id, taskKey: task.task_key, status: task.status })),
+          item.payload,
+        ),
+        auditedAt: auditedAt ?? null,
+        today,
+      },
+    };
+  } catch (error) {
+    logFailure('read a suggestion', error);
+    return { ok: false, failure: 'failed' };
+  }
+}
+
 /**
  * Marks the suggestions the Inbox showed as seen: the person's own, not seen
  * before. Seeing isn't using: the feed is left alone.
@@ -254,27 +379,39 @@ export async function markDailySuggestionsSeen(ids: string[]): Promise<Suggestio
   }
 }
 
+/** What a use reads of the suggestion before it writes. */
+interface UseRow {
+  id: string;
+  brand_id: string;
+  seen_at: string | null;
+  opened_at: string | null;
+  started_at: string | null;
+}
+
 /**
- * The person opened a suggestion (§5: a use): its opened_at the first time
- * (and seen_at, when the Inbox hadn't marked it yet), and its feed's
- * last_used_at each time. Not one whose action was deleted.
+ * A use of one of the person's suggestions (§5): `change` written to it,
+ * when it gives one, then its feed's last_used_at, which the nightly job's
+ * 30-day pause counts from. `unless` names a stamp the change only fills,
+ * never moves. Not one whose action was deleted: nothing to use, and no use
+ * of the feed. Its callers check the plan first.
  */
-export async function openDailySuggestion(id: string): Promise<SuggestionsWriteResult> {
-  try {
-    await assertWritable();
-  } catch (error) {
-    return refusal(error);
-  }
+async function recordUse(
+  id: string,
+  what: string,
+  change: (
+    row: UseRow,
+    at: string,
+  ) => { values: Record<string, string>; unless?: 'opened_at' | 'started_at' } | null,
+): Promise<SuggestionsWriteResult> {
   try {
     const parsed = idSchema.safeParse(id);
     if (!parsed.success) return { ok: false, failure: 'not_found' };
     const me = await chatPerson();
     if (!me) return { ok: false, failure: 'chat_off' };
-    // Not one whose action was deleted: nothing to open, and no use of the feed.
     const { data: row, error: readError } = await supabaseAdmin
       .from('chat_suggestions')
       .select(
-        'id, brand_id, seen_at, opened_at, actions!chat_suggestions_action_id_fkey!inner(deleted_at)',
+        'id, brand_id, seen_at, opened_at, started_at, actions!chat_suggestions_action_id_fkey!inner(deleted_at)',
       )
       .eq('id', parsed.data)
       .eq('user_id', me.userId)
@@ -287,15 +424,17 @@ export async function openDailySuggestion(id: string): Promise<SuggestionsWriteR
     }
     if (!row) return { ok: false, failure: 'not_found' };
     const at = new Date().toISOString();
-    if (!row.opened_at) {
-      const { error } = await supabaseAdmin
+    const write = change(row as UseRow, at);
+    if (write) {
+      let update = supabaseAdmin
         .from('chat_suggestions')
-        .update(row.seen_at ? { opened_at: at } : { opened_at: at, seen_at: at })
+        .update(write.values)
         .eq('id', row.id)
-        .eq('user_id', me.userId)
-        .is('opened_at', null);
+        .eq('user_id', me.userId);
+      if (write.unless) update = update.is(write.unless, null);
+      const { error } = await update;
       if (error) {
-        logFailure('mark a suggestion opened', error);
+        logFailure(what, error);
         return { ok: false, failure: 'failed' };
       }
     }
@@ -310,9 +449,75 @@ export async function openDailySuggestion(id: string): Promise<SuggestionsWriteR
     }
     return { ok: true };
   } catch (error) {
-    logFailure('open a suggestion', error);
+    logFailure(what, error);
     return { ok: false, failure: 'failed' };
   }
+}
+
+/**
+ * The person opened a suggestion (§5: a use): its opened_at the first time
+ * (and seen_at, when the Inbox hadn't marked it yet), and its feed's
+ * last_used_at each time.
+ */
+export async function openDailySuggestion(id: string): Promise<SuggestionsWriteResult> {
+  try {
+    await assertWritable();
+  } catch (error) {
+    return refusal(error);
+  }
+  return recordUse(id, 'mark a suggestion opened', (row, at) => {
+    if (row.opened_at) return null;
+    const values: Record<string, string> = { opened_at: at };
+    if (!row.seen_at) values.seen_at = at;
+    return { values, unless: 'opened_at' };
+  });
+}
+
+/**
+ * Not now (§2.3): off the Inbox for a week; the nightly job doesn't pick
+ * its action again meanwhile, and it shows again then if its action is
+ * still open.
+ */
+export async function snoozeDailySuggestion(id: string): Promise<SuggestionsWriteResult> {
+  try {
+    await assertWritable();
+  } catch (error) {
+    return refusal(error);
+  }
+  return recordUse(id, 'put a suggestion off', (_row, at) => ({
+    values: {
+      snoozed_until: new Date(Date.parse(at) + SNOOZE_DAYS * DAY_MS).toISOString(),
+    },
+  }));
+}
+
+/** Remove this suggestion (§2.3, §4): gone from the Inbox at once; the action stays. */
+export async function removeDailySuggestion(id: string): Promise<SuggestionsWriteResult> {
+  try {
+    await assertWritable();
+  } catch (error) {
+    return refusal(error);
+  }
+  return recordUse(id, 'remove a suggestion', (_row, at) => ({ values: { removed_at: at } }));
+}
+
+/**
+ * The person started it (§5): in Chat (Do it with Chat, or a message from
+ * its page) or in the Content Editor. The first start is kept, with where.
+ */
+export async function startedDailySuggestion(
+  id: string,
+  via: 'chat' | 'editor',
+): Promise<SuggestionsWriteResult> {
+  try {
+    await assertWritable();
+  } catch (error) {
+    return refusal(error);
+  }
+  if (via !== 'chat' && via !== 'editor') return { ok: false, failure: 'not_allowed' };
+  return recordUse(id, 'mark a suggestion started', (row, at) =>
+    row.started_at ? null : { values: { started_at: at, started_via: via }, unless: 'started_at' },
+  );
 }
 
 /** The workspace's brands that get suggestions: active, and not the demo brand (§6). */

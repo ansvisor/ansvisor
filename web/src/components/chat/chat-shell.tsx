@@ -54,6 +54,13 @@ function useIsWide(): boolean {
 const CHAT_PATH = /^\/dashboard\/chat\/([0-9a-f-]{36})$/i;
 /** An agent's detail: "Chat › Agents › {its name}" (governance mockup CRUMB). */
 const AGENT_PATH = /^\/dashboard\/chat\/agents\/[0-9a-f-]{36}$/i;
+/** A daily suggestion's page: "Chat › Inbox › Daily suggestion · Oct 29" (CHAT-26 #d-detail). */
+const SUGGESTION_PATH = /^\/dashboard\/chat\/inbox\/[0-9a-f-]{36}$/i;
+/** The page a detail sits under, linked in its breadcrumb before the name the detail sets. */
+const DETAIL_PARENTS = {
+  agents: '/dashboard/chat/agents',
+  inbox: '/dashboard/chat/inbox?tab=suggestions',
+} as const;
 
 /**
  * Where the palette opens while the menu is shown: under its Search chats
@@ -243,13 +250,19 @@ function ChatShellFrame({
     lastChat && (status !== 'ready' || chats.some((chat) => chat.id === lastChat))
       ? `/dashboard/chat/${lastChat}`
       : '/dashboard/chat';
-  const agentPage = AGENT_PATH.test(pathname);
-  const subPage = SUB_PAGES[pathname] ?? (agentPage ? 'agents' : undefined);
+  const suggestionPage = SUGGESTION_PATH.test(pathname);
+  const detailOf: keyof typeof DETAIL_PARENTS | undefined = AGENT_PATH.test(pathname)
+    ? 'agents'
+    : suggestionPage
+      ? 'inbox'
+      : undefined;
+  const subPage = SUB_PAGES[pathname] ?? detailOf;
   const titled = TITLED_PAGES[pathname];
   const current = chatId ? chats.find((chat) => chat.id === chatId) : undefined;
   const pill = current ? PILL_OF[current.state] : undefined;
-  // A chat or Home fills the page itself; the other Chat pages get the usual padding.
-  const padded = pathname !== '/dashboard/chat' && !chatId;
+  // A chat, Home or a suggestion's page (a chat to be) fills the page itself;
+  // the other Chat pages get the usual padding.
+  const padded = pathname !== '/dashboard/chat' && !chatId && !suggestionPage;
   const strip = !isWide || !open;
   const runs = <RunsTray brandId={brandId} />;
 
@@ -346,10 +359,10 @@ function ChatShellFrame({
                 <span aria-hidden className="mx-1.5 font-normal text-muted-foreground/70">
                   ›
                 </span>
-                {agentPage ? (
+                {detailOf ? (
                   <>
                     <Link
-                      href="/dashboard/chat/agents"
+                      href={DETAIL_PARENTS[detailOf]}
                       data-action="nav.breadcrumb"
                       className="font-medium text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
                     >

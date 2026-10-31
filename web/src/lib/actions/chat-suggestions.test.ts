@@ -81,13 +81,29 @@ vi.mock('@/lib/subscription-guard', async (importOriginal) => ({
   }),
 }));
 
+// The Action Center's own reads of an action's assignee and list counts.
+vi.mock('@/lib/action-center/assignees', () => ({
+  readAssignees: vi.fn(
+    async (_client: unknown, _brand: string, ids: string[]) =>
+      new Map(ids.map((id) => [id, { id, fullName: 'Ana Lima', avatarUrl: null }])),
+  ),
+}));
+vi.mock('@/lib/action-center/entity-counts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/action-center/entity-counts')>()),
+  readEntityCounts: vi.fn(async () => new Map()),
+}));
+
 const { SubscriptionInactiveError } = await import('@/lib/subscription-guard');
 const {
   markDailySuggestionsSeen,
   openDailySuggestion,
+  readDailySuggestion,
   readDailySuggestions,
+  removeDailySuggestion,
   setDailySuggestions,
+  snoozeDailySuggestion,
   startDailySuggestions,
+  startedDailySuggestion,
 } = await import('./chat-suggestions');
 
 const summary = {
@@ -430,6 +446,12 @@ describe('a read-only workspace', () => {
       failure: 'read_only',
     });
     expect(await openDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'read_only' });
+    expect(await snoozeDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'read_only' });
+    expect(await removeDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'read_only' });
+    expect(await startedDailySuggestion(SUGGESTION, 'chat')).toEqual({
+      ok: false,
+      failure: 'read_only',
+    });
     expect(await setDailySuggestions(true)).toEqual({ ok: false, failure: 'read_only' });
     expect(await startDailySuggestions()).toEqual({ ok: false, failure: 'read_only' });
     expect(writes()).toEqual([]);
@@ -450,6 +472,8 @@ describe('with the new Chat off', () => {
       failure: 'chat_off',
     });
     expect(await openDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'chat_off' });
+    expect(await readDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'chat_off' });
+    expect(await snoozeDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'chat_off' });
     expect(await setDailySuggestions(true)).toEqual({ ok: false, failure: 'chat_off' });
     expect(await startDailySuggestions()).toEqual({ ok: false, failure: 'chat_off' });
     expect(calls.some((c) => c.table.startsWith('chat_suggestion'))).toBe(false);
@@ -458,5 +482,198 @@ describe('with the new Chat off', () => {
   it("is off for a workspace CHAT_AGENTIC_ORGS doesn't list", async () => {
     vi.stubEnv('CHAT_AGENTIC_ORGS', '99999999-9999-4999-8999-999999999999');
     expect(await readDailySuggestions()).toEqual({ ok: false, failure: 'chat_off' });
+  });
+});
+
+describe('readDailySuggestion', () => {
+  const action = {
+    brand_id: BRAND,
+    id: ACTION,
+    action_no: 2841,
+    category: 'growth',
+    kind: 'improve_page_content',
+    impact: 'high',
+    status: 'new',
+    payload: {
+      targetCount: 5,
+      pages: ['https://acme.example/ridge-45l', 'https://acme.example/crest-30l'],
+      promptIds: ['p1', 'p2', 'p3'],
+    },
+    kpi_keys: [],
+    assignee_id: 'person-1',
+    due_date: null,
+    created_at: '2026-10-23T08:00:00Z',
+    updated_at: '2026-10-28T08:00:00Z',
+    priority_score: 81,
+    priority_level: 'high',
+    priority_reason: null,
+    priority_updated_at: null,
+  };
+  const row = {
+    id: SUGGESTION,
+    brand_id: BRAND,
+    action_id: ACTION,
+    sent_on: '2026-10-29',
+    sent_at: '2026-10-29T07:05:00Z',
+    seen_at: null,
+    opened_at: null,
+    started_at: null,
+    started_via: null,
+    summary: { ...summary, waitingDays: 6 },
+    actions: action,
+  };
+
+  beforeEach(() => {
+    answers['session.chat_suggestions.select'] = { data: row, error: null };
+    answers['session.action_tasks.select'] = {
+      data: [
+        { id: 'task-1', task_key: 'review_findings', status: 'completed' },
+        { id: 'task-2', task_key: 'optimize_content', status: 'new' },
+        { id: 'task-3', task_key: 'track_results', status: 'new' },
+      ],
+      error: null,
+    };
+    answers['session.site_audits.select'] = {
+      data: [{ completed_at: '2026-10-28T10:00:00Z' }],
+      error: null,
+    };
+  });
+
+  it('reads it with its action as the Action Center lists it, through the person’s session', async () => {
+    const result = await readDailySuggestion(SUGGESTION);
+    if (!result.ok) throw new Error('not read');
+    const { detail } = result;
+    expect(detail.suggestion).toMatchObject({ id: SUGGESTION, actionId: ACTION, closed: null });
+    expect(detail.action).toMatchObject({
+      actionNo: 2841,
+      status: 'new',
+      priorityScore: 81,
+      priorityLevel: 'high',
+      taskTotal: 3,
+      taskCompleted: 1,
+      assignee: { id: 'person-1', fullName: 'Ana Lima' },
+    });
+    expect(detail.pick).toEqual({ score: 81, waitingDays: 6 });
+    // The open writing task, on the action's first page.
+    expect(detail.start).toEqual({
+      taskId: 'task-2',
+      method: 'optimize',
+      page: 'https://acme.example/ridge-45l',
+    });
+    expect(detail.auditedAt).toBe('2026-10-28T10:00:00Z');
+    // 09:00 UTC is the 29th's evening in Auckland, the person's latest answer's zone.
+    expect(detail.today).toBe('2026-10-29');
+
+    const read = calls.find((c) => c.via === 'session' && c.table === 'chat_suggestions')!;
+    expect(read.columns).toContain('actions!chat_suggestions_action_id_fkey!inner(brand_id, id,');
+    expect(has(read, 'eq', 'id', SUGGESTION)).toBe(true);
+    expect(has(read, 'eq', 'user_id', ME)).toBe(true);
+    expect(has(read, 'is', 'removed_at', null)).toBe(true);
+    const audit = calls.find((c) => c.table === 'site_audits')!;
+    expect(audit.via).toBe('session');
+    expect(has(audit, 'eq', 'brand_id', BRAND)).toBe(true);
+    expect(has(audit, 'eq', 'status', 'completed')).toBe(true);
+    expect(has(audit, 'in', 'url', action.payload.pages)).toBe(true);
+    expect(writes()).toEqual([]);
+  });
+
+  it('reads no audit for an action with no pages, and starts no editor without writing to do', async () => {
+    answers['session.chat_suggestions.select'] = {
+      data: { ...row, actions: { ...action, payload: { targetCount: 5 } } },
+      error: null,
+    };
+    answers['session.action_tasks.select'] = {
+      data: [{ id: 'task-2', task_key: 'optimize_content', status: 'completed' }],
+      error: null,
+    };
+    const result = await readDailySuggestion(SUGGESTION);
+    expect(result).toMatchObject({ ok: true, detail: { start: null, auditedAt: null } });
+    expect(calls.some((c) => c.table === 'site_audits')).toBe(false);
+  });
+
+  it('says closed for an action done since', async () => {
+    answers['session.chat_suggestions.select'] = {
+      data: { ...row, actions: { ...action, status: 'completed' } },
+      error: null,
+    };
+    expect(await readDailySuggestion(SUGGESTION)).toMatchObject({
+      ok: true,
+      detail: { suggestion: { closed: 'completed' } },
+    });
+  });
+
+  it('finds none removed, deleted, someone else’s, for an Analyst or for a bad id', async () => {
+    answers['session.chat_suggestions.select'] = { data: null, error: null };
+    expect(await readDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'not_found' });
+    expect(await readDailySuggestion('nope')).toEqual({ ok: false, failure: 'not_found' });
+    calls = [];
+    role = 'analyst';
+    expect(await readDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'not_found' });
+    expect(calls.some((c) => c.table === 'chat_suggestions')).toBe(false);
+  });
+
+  it('fails as a value', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    answers['session.site_audits.select'] = { data: null, error: { message: 'down' } };
+    expect(await readDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'failed' });
+    answers['session.chat_suggestions.select'] = { data: null, error: { message: 'down' } };
+    expect(await readDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'failed' });
+    logged.mockRestore();
+  });
+});
+
+describe('a suggestion’s uses', () => {
+  it('puts it off a week (Not now), and keeps the feed used', async () => {
+    expect(await snoozeDailySuggestion(SUGGESTION)).toEqual({ ok: true });
+    const [snoozed, used] = writes();
+    expect(snoozed.table).toBe('chat_suggestions');
+    expect(snoozed.row).toEqual({ snoozed_until: '2026-11-05T09:00:00.000Z' });
+    expect(has(snoozed, 'eq', 'user_id', ME)).toBe(true);
+    expect(used.row).toEqual({ last_used_at: '2026-10-29T09:00:00.000Z' });
+  });
+
+  it('removes it, the action left as it is', async () => {
+    expect(await removeDailySuggestion(SUGGESTION)).toEqual({ ok: true });
+    expect(writes().map((w) => [w.table, w.row])).toEqual([
+      ['chat_suggestions', { removed_at: '2026-10-29T09:00:00.000Z' }],
+      ['chat_suggestion_feeds', { last_used_at: '2026-10-29T09:00:00.000Z' }],
+    ]);
+    expect(calls.some((c) => c.table === 'actions')).toBe(false);
+  });
+
+  it('marks it started, with where, keeping the first start', async () => {
+    expect(await startedDailySuggestion(SUGGESTION, 'editor')).toEqual({ ok: true });
+    const [started] = writes();
+    expect(started.row).toEqual({
+      started_at: '2026-10-29T09:00:00.000Z',
+      started_via: 'editor',
+    });
+    expect(has(started, 'is', 'started_at', null)).toBe(true);
+
+    calls = [];
+    answers['admin.chat_suggestions.select'] = {
+      data: { id: SUGGESTION, brand_id: BRAND, started_at: '2026-10-28T08:00:00Z' },
+      error: null,
+    };
+    expect(await startedDailySuggestion(SUGGESTION, 'chat')).toEqual({ ok: true });
+    expect(writes().map((w) => w.table)).toEqual(['chat_suggestion_feeds']);
+  });
+
+  it('takes only Chat or the Content Editor as where, and nothing on someone else’s', async () => {
+    expect(await startedDailySuggestion(SUGGESTION, 'email' as 'chat')).toEqual({
+      ok: false,
+      failure: 'not_allowed',
+    });
+    answers['admin.chat_suggestions.select'] = { data: null, error: null };
+    expect(await removeDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'not_found' });
+    expect(writes()).toEqual([]);
+  });
+
+  it('fails as a value when the write fails', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    answers['admin.chat_suggestions.update'] = { data: null, error: { message: 'down' } };
+    expect(await snoozeDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'failed' });
+    expect(writes().map((w) => w.table)).toEqual(['chat_suggestions']);
+    logged.mockRestore();
   });
 });
