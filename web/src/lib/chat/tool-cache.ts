@@ -55,8 +55,11 @@ export const TRACKING_READS: ReadonlySet<string> = new Set([
   'get_shopping_visibility',
 ]);
 
-/** Reads never kept: opening a page reads no data. */
-const NOT_KEPT: ReadonlySet<string> = new Set(['open_page']);
+/**
+ * Reads never kept: opening a page of the app reads no data, and a web
+ * page's words are kept nowhere (CHAT-10 §B).
+ */
+const NOT_KEPT: ReadonlySet<string> = new Set(['open_page', 'fetch_page']);
 
 export interface CachePolicy {
   /** The longest a result holds. */

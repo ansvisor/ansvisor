@@ -64,16 +64,23 @@ export interface ChatBudgetStep {
   maxOutputTokens: number;
   /** Whose key the step runs on (resolveChatModelKey). */
   source: ChatKeySource;
+  /**
+   * The agent run the step's chat is (chat_conversations.agent_run_id): the
+   * server holds the step within that run's cap too (CHAT-27 item 21).
+   */
+  agentRunId?: string | null;
 }
 
 /**
  * Why a step can't start: the budget can't cover it (ai_limit; CHAT-04 item
- * 17's card, the trial's own words in the free trial), no active plan
- * (plan_limit), a run that isn't the workspace's (not_found), Chat off on
- * the server (chat_off), or the API didn't answer in time (unavailable).
+ * 17's card, the trial's own words in the free trial), an agent run's own
+ * cap can't (run_cap; CHAT-27 item 22), no active plan (plan_limit), a run
+ * that isn't the workspace's (not_found), Chat off on the server
+ * (chat_off), or the API didn't answer in time (unavailable).
  */
 export const CHAT_BUDGET_REFUSALS = [
   'ai_limit',
+  'run_cap',
   'plan_limit',
   'not_found',
   'chat_off',
@@ -209,6 +216,7 @@ export async function reserveChatStep(step: ChatBudgetStep): Promise<ChatStepRes
       inputTokens: Math.max(0, Math.ceil(step.inputTokens)),
       maxOutputTokens: Math.max(1, Math.ceil(step.maxOutputTokens)),
       ownKey: step.source === 'own',
+      ...(step.agentRunId ? { agentRunId: step.agentRunId } : {}),
     },
     RESERVE_TIMEOUT_MS,
   );

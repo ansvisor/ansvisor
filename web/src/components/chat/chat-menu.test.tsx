@@ -53,6 +53,7 @@ vi.mock('@/components/providers/ai-usage-provider', () => ({
 const { ChatMenuView } = await import('./chat-menu');
 const { ChatShell } = await import('./chat-shell');
 const { useChatCrumb } = await import('./chat-crumb');
+const { AgentsSeen } = await import('./agents/agents-seen');
 const { saveChatMenuOpen } = await import('@/lib/actions/chat-prefs');
 const { useChatRailStore } = await import('@/stores/use-chat-rail-store');
 
@@ -158,9 +159,9 @@ describe('ChatMenuView', () => {
     expect(action('chatMenu.openSettings')[0].textContent).toBe('Settings');
     expect(action('chatMenu.openInbox')[0].getAttribute('href')).toBe('/dashboard/chat/inbox');
     expect(action('chatMenu.openFiles')[0].getAttribute('href')).toBe('/dashboard/chat/files');
-    // Agents, with "New" until it is first opened (governance mockup #cnav).
-    expect(action('chatMenu.openAgents')[0].getAttribute('href')).toBe('/dashboard/chat/agents');
-    expect(action('chatMenu.openAgents')[0].textContent).toBe('AgentsNew');
+    // Agent Center, out of Chat, with "New" until it is first opened (governance mockup #cnav).
+    expect(action('chatMenu.openAgents')[0].getAttribute('href')).toBe('/dashboard/agents');
+    expect(action('chatMenu.openAgents')[0].textContent).toBe('Agent CenterNew');
     for (const unbuilt of ['chatMenu.openSkills', 'chatMenu.openScheduled']) {
       expect(action(unbuilt)).toHaveLength(0);
     }
@@ -369,7 +370,7 @@ describe('ChatShell', () => {
     );
     expect(
       [...popup.querySelectorAll('[data-action="search.openPage"]')].map((b) => b.textContent),
-    ).toEqual(['☰All chats', '✦Agents', '▤Files', '⚙Settings']);
+    ).toEqual(['☰All chats', '✦Agent Center', '▤Files', '⚙Settings']);
     await act(async () =>
       (popup.querySelector('[data-action="search.openPage"]') as HTMLElement).click(),
     );
@@ -445,7 +446,7 @@ describe('ChatShell', () => {
     expect(host.querySelector('header h1')?.textContent).toBe('Settings');
   });
 
-  it("names Agents and an agent's detail in the breadcrumb, and drops Agents' New once opened", async () => {
+  it('leads to Agent Center out of Chat, and drops its New once Agent Center was opened', async () => {
     // A browser's storage, where the pill's "seen" is kept.
     const kept = new Map<string, string>();
     vi.stubGlobal('localStorage', {
@@ -454,34 +455,48 @@ describe('ChatShell', () => {
       removeItem: (key: string) => void kept.delete(key),
       clear: () => kept.clear(),
     });
-    nav.pathname = '/dashboard/chat/agents';
+    nav.pathname = '/dashboard/chat/inbox';
     await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
-    expect(host.querySelector('header nav')?.textContent).toBe('Chat›Agents');
-    const item = host.querySelector<HTMLElement>('#chat-menu [data-action="chatMenu.openAgents"]')!;
-    expect(item.getAttribute('aria-current')).toBe('page');
-    expect(item.textContent).toBe('Agents');
+    const item = () =>
+      host.querySelector<HTMLAnchorElement>('#chat-menu [data-action="chatMenu.openAgents"]')!;
+    expect(item().getAttribute('href')).toBe('/dashboard/agents');
+    expect(item().getAttribute('aria-current')).toBeNull();
+    expect(item().textContent).toBe('Agent CenterNew');
+    // Its pages have no Chat header: the shell names none of them.
+    expect(host.querySelector('header nav')?.textContent).toBe('Chat›Inbox');
 
-    // The detail names the agent; its Agents goes back to the list.
+    // Agent Center opened, however it was reached (its pages mark it seen).
+    act(() => root.unmount());
+    root = createRoot(host);
+    await render(<AgentsSeen />);
+    act(() => root.unmount());
+    root = createRoot(host);
+    nav.pathname = '/dashboard/chat/all';
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    expect(item().textContent).toBe('Agent Center');
+    vi.unstubAllGlobals();
+  });
+
+  it("names the Inbox and a daily suggestion's page in the breadcrumb, which fills the page (CHAT-26)", async () => {
     function Named() {
-      useChatCrumb('Citation win-back');
-      return <p>detail</p>;
+      useChatCrumb('Daily suggestion · Oct 29');
+      return <p>suggestion</p>;
     }
-    nav.pathname = '/dashboard/chat/agents/aaaaaaaa-0000-4000-8000-000000000001';
+    nav.pathname = '/dashboard/chat/inbox/55555555-5555-4555-8555-555555555555';
     await render(
       <ChatShell menuOpen>
         <Named />
       </ChatShell>,
     );
-    expect(host.querySelector('header nav')?.textContent).toBe('Chat›Agents›Citation win-back');
-    expect(action('nav.breadcrumb')[1].getAttribute('href')).toBe('/dashboard/chat/agents');
-
-    // Opened once, the pill stays gone on other pages.
-    nav.pathname = '/dashboard/chat/inbox';
-    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
-    expect(host.querySelector('#chat-menu [data-action="chatMenu.openAgents"]')?.textContent).toBe(
-      'Agents',
+    expect(host.querySelector('header nav')?.textContent).toBe(
+      'Chat›Inbox›Daily suggestion · Oct 29',
     );
-    vi.unstubAllGlobals();
+    // Its Inbox goes back to the Daily suggestions.
+    expect(action('nav.breadcrumb')[1].getAttribute('href')).toBe(
+      '/dashboard/chat/inbox?tab=suggestions',
+    );
+    // A chat to be: no page padding around it.
+    expect(host.querySelector('.chat-scroll')?.className).not.toContain('p-6');
   });
 
   it('leads a chat opened as a full page back to the app page it came from (CHAT-22)', async () => {

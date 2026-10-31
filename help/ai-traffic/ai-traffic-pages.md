@@ -4,11 +4,11 @@ route: /dashboard/traffic
 keywords: [no ai traffic, cited not clicked, broken ai links, untracked google queries, pages]
 synonyms: [pages without ai visits, 404 from ai, redirect suggestions, ai taking google clicks]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/ai-traffic-analytics.mdx]
 ---
 The **Pages** section of **AI Traffic Analytics** answers which pages get AI visits, which don't, and why. Below it, the Google Search Console tables show whether AI is changing your Google traffic.
@@ -25,7 +25,7 @@ The **Pages** section of **AI Traffic Analytics** answers which pages get AI vis
 
 Rows carry their next step: **Audit page** for a page AI cites or a prompt targets, **Add prompts** for one no prompt points to.
 
-On **No AI traffic** and **Cited, not clicked**, each row's **…** menu also has **Send to Action Center**, **Add prompts** and **Suggest content**. Under the list, **Audit N cited pages** (or **Audit N pages**) starts Site Audits for the pages shown, and **Send to Action Center** sends them as one action.
+On **No AI traffic** and **Cited, not clicked**, each row's **…** menu also has **Send to Action Center**, **Add prompts** and **Suggest content**. Under the list, **Audit N cited pages** (or **Audit N pages**) starts Site Audits for the pages shown, and **Send to Action Center** sends them as one action. Only admins and managers can add prompts or suggest content.
 
 ## Add prompts for a page
 

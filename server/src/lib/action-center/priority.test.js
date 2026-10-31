@@ -391,6 +391,32 @@ describe('scorePriority', () => {
     expect(sent(6).score).toBeGreaterThan(sent(2).score);
   });
 
+  /** A finding sent from Chat (CHAT-09 §E): scored on creation like every person-sent action. */
+  it('scores a finding sent from Chat by its category, on what it names', () => {
+    const sent = (category) =>
+      scorePriority(
+        {
+          action: action({
+            kind: 'chat_finding',
+            category,
+            impact: 'medium',
+            created_at: daysAgo(0),
+            payload: { source: 'chat', targetEntity: 'prompts', targetCount: 2 },
+          }),
+          signals: [],
+        },
+        NOW,
+      );
+    expect(sent('recover').reason).toMatchObject({
+      change: 'slipping',
+      subject: { entity: 'prompts', count: 2 },
+    });
+    expect(sent('fix').reason.change).toBe('issue');
+    expect(sent('growth').reason.change).toBe('gap');
+    // Something slipping is more urgent than a gap.
+    expect(sent('recover').score).toBeGreaterThan(sent('growth').score);
+  });
+
   it('scores a live page linking products that no longer sell as a sure, quick fix (shopping path, part 7)', () => {
     const linked = scorePriority(
       {

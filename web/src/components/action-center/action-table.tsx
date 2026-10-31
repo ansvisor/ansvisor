@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { RemovedNote } from '@/components/action-center/removed-note';
+import { RunAgentButton } from '@/components/action-center/run-agent-button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -363,6 +364,12 @@ export function ActionTable({
                         <p className="truncate text-sm font-medium">{texts.title}</p>
                         <AskAboutThis
                           reference={{ type: 'task', id: action.id, label: texts.title }}
+                          className="shrink-0"
+                        />
+                        <RunAgentButton
+                          action={action}
+                          title={texts.title}
+                          variant="row"
                           className="shrink-0"
                         />
                       </div>

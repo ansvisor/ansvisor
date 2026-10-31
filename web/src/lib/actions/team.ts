@@ -129,13 +129,18 @@ export async function listMembers(): Promise<TeamMember[]> {
   }));
 }
 
+/**
+ * The organization's pending invitations, as everyone in Settings › Team sees
+ * them. Only admins read invitations themselves (00390: an invitation names
+ * the brands it shares), so the list comes from the server, without the
+ * token or the brands.
+ */
 export async function listInvitations(): Promise<TeamInvitation[]> {
   const { profile } = await getCurrentUserAndOrg();
-  const supabase = await createClient();
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('invitations')
-    .select('*')
+    .select('id, email, role, status, invited_by, expires_at, created_at, accepted_at')
     .eq('organization_id', profile.organization_id)
     .eq('status', 'pending')
     .order('created_at', { ascending: false });

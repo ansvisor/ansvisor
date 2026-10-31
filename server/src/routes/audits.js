@@ -15,7 +15,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import logger from '../lib/logger.js';
-import { assertBrandAccess } from '../lib/access.js';
+import { assertAllBrands, assertBrandAccess } from '../lib/access.js';
 import {
   requireFeature,
   enforceSiteAuditQuota,
@@ -865,6 +865,22 @@ router.get('/opportunities', async (req, res) => {
   }
 });
 
+/**
+ * Roles that may change Site Audit settings and the brand's pinned and
+ * excluded pages, as for Daily Pulse's.
+ */
+const SETTINGS_ROLES = ['admin', 'manager'];
+
+async function canChangeSettings(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single();
+  if (error) throw error;
+  return SETTINGS_ROLES.includes(data?.role);
+}
+
 const prefsSchema = z.object({
   brandId: z.guid(),
   urls: z
@@ -877,7 +893,8 @@ const prefsSchema = z.object({
 });
 
 // PUT /api/audits/opportunities/prefs — pin, exclude or clear pages of the
-// Opportunities inbox ({ brandId, urls, state }).
+// Opportunities inbox ({ brandId, urls, state }). They hold for the whole
+// brand, so admins and managers only, as the settings.
 router.put('/opportunities/prefs', async (req, res) => {
   const userId = req.user?.id;
   const parsed = prefsSchema.safeParse(req.body ?? {});
@@ -891,6 +908,12 @@ router.put('/opportunities/prefs', async (req, res) => {
 
   try {
     await assertBrandAccess(brandId, userId);
+    if (!(await canChangeSettings(userId))) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admins and managers can pin or exclude pages.',
+      });
+    }
 
     const byKey = new Map(urls.map((url) => [opportunityKey(url), url]));
     const { error } =
@@ -955,19 +978,6 @@ router.get('/templates', async (req, res) => {
   }
 });
 
-/** Roles that may change Site Audit settings, as for Daily Pulse's. */
-const SETTINGS_ROLES = ['admin', 'manager'];
-
-async function canChangeSettings(userId) {
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', userId)
-    .single();
-  if (error) throw error;
-  return SETTINGS_ROLES.includes(data?.role);
-}
-
 /**
  * Site Audit settings as the Settings dialog shows them (SA-006): the org's
  * auto-audit switch and e-mail, the brand's exclude patterns and pinned
@@ -1005,7 +1015,11 @@ function sendAuditError(req, res, err, message) {
   if (err instanceof PlanLimitError) {
     return res.status(err.statusCode).json({ success: false, message: err.message });
   }
-  if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+  if (err.status) {
+    return res
+      .status(err.status)
+      .json({ success: false, message: err.message, ...(err.code ? { code: err.code } : {}) });
+  }
   req.log.error({ err }, message);
   return res.status(500).json({ success: false, message: err.message });
 }
@@ -1073,6 +1087,9 @@ router.put('/settings', async (req, res) => {
 
     const now = new Date().toISOString();
     if (autoAudit !== undefined || emailAfterRun !== undefined) {
+      // The switch and the e-mail are the organization's, for every brand:
+      // a person with Selected brands changes only their brand's patterns.
+      await assertAllBrands(userId);
       const { error } = await supabaseAdmin.from('site_audit_settings').upsert(
         {
           organization_id: orgId,

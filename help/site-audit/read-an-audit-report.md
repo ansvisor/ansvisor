@@ -4,18 +4,18 @@ route: /dashboard/audit
 keywords: [audit report, audit score, signals, audit categories, grade]
 synonyms: [audit results, page score, what failed, E-E-A-T score]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/site-audit.mdx]
 ---
 Each audit has its own report. It opens right after you run an audit, or from a row on the **Pages** tab. It scores the page out of 100, breaks the score down by category and lists every signal checked. The icons at the top re-run the audit on the same page or delete it; **Delete audit** can't be undone.
 
 ## Total score
 
-The gauge shows the page's score out of 100 and a grade: **Good** (70 and above), **Needs work** (40 to 69) or **Poor** (below 40). Beside it are the number of signals that **passed**, raised **warnings** or **failed**, and how many of the 48 signals were evaluated.
+The gauge shows the page's score out of 100 and a grade: **Good** (70 and above), **Needs work** (40 to 69) or **Poor** (below 40). When the page was audited before, a badge beside the grade shows the change since then, such as "+8 since" that audit's date. Beside it are the number of signals that **passed**, raised **warnings** or **failed**, and how many of the 48 signals were evaluated.
 
 ## Categories
 
