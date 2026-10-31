@@ -95,7 +95,19 @@ async function run(req: WriteRequest): Promise<WriteOutcome> {
     },
     async () => {
       const before = rule ? await rule.before(req.input) : null;
-      const output = await tool.run(req.ctx, req.input as never);
+      // Where it runs, for a row that records it on what it changes (Action History, §10a).
+      const output = await tool.run(
+        {
+          ...req.ctx,
+          chat: {
+            conversationId: req.place.conversationId,
+            runId: req.place.runId,
+            approvalKey: req.approvalKey,
+            executionMode: req.approval.kind === 'auto' ? 'automated' : 'assisted',
+          },
+        },
+        req.input as never,
+      );
       // The change is made: whatever happens to its log row, it isn't made again.
       let activityId: string | null = null;
       if (!refused(output)) {

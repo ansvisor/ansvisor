@@ -118,6 +118,14 @@ export function actionTexts(
       description: t('shopping_links.description', { count }),
     };
   }
+  // A finding sent from Chat (CHAT-09 §E) carries the title and the finding
+  // the person approved.
+  if (action.kind === 'chat_finding' && typeof p.title === 'string' && p.title) {
+    return {
+      title: p.title,
+      description: typeof p.why === 'string' && p.why ? p.why : t(`${action.kind}.description`),
+    };
+  }
   // An Improve action carries its own title and "why", written from the
   // prompt's platform states when it was sent (PROMPT-004).
   if (action.kind === 'prompt_improve' && typeof p.title === 'string' && p.title) {
@@ -241,6 +249,14 @@ export function eventTaskText(
   return t(key);
 }
 
+/** Chat's History events about one task (CHAT-09 §D), named as a checked task is. */
+const CHAT_TASK_EVENTS = new Set([
+  'file_attached',
+  'file_detached',
+  'task_ready_for_review',
+  'task_review_withdrawn',
+]);
+
 /** A History entry as a sentence: what happened, to what, by which tool. */
 export function actionEventText(
   event: ActionEvent,
@@ -256,11 +272,17 @@ export function actionEventText(
     // and the tool as it is recorded — the tool id is the audit fact, so it
     // is not translated.
     // A checked task is named once (`{task}{title}`): by its own title when it
-    // has one; lines written before the API sent only one carry both.
+    // has one; lines written before the API sent only one carry both. So is a
+    // task Chat attached a file to or set to Ready for review (CHAT-09 §D).
     task:
-      event.event === 'task_checked' && event.data.title
+      (event.event === 'task_checked' || CHAT_TASK_EVENTS.has(event.event)) && event.data.title
         ? ''
         : eventTaskText(event.data.task, tTasks),
+    // Where it came from: `chat` for what Chat did (CHAT-20 §10a).
+    source: String(event.data.source ?? ''),
+    // A finding Chat added, and a file it attached, in their own words.
+    finding: String(event.data.finding ?? ''),
+    file: String(event.data.file ?? ''),
     tool: String(event.data.tool ?? ''),
     improved: Number(event.data.improved ?? 0),
     measurable: Number(event.data.measurable ?? 0),
@@ -289,8 +311,13 @@ export function actionGoal(
   t: Translator,
   payload?: Record<string, unknown> | null,
 ): string {
-  // An Improve action names its own prompt and platforms (PROMPT-004).
-  if (kind === 'prompt_improve' && typeof payload?.goal === 'string' && payload.goal) {
+  // An Improve action names its own prompt and platforms (PROMPT-004); a
+  // finding sent from Chat its own goal, when it gave one (CHAT-09 §E).
+  if (
+    (kind === 'prompt_improve' || kind === 'chat_finding') &&
+    typeof payload?.goal === 'string' &&
+    payload.goal
+  ) {
     return payload.goal;
   }
   return isActionKind(kind) ? t(`${kind}.goal`) : t('unknown.goal');
@@ -312,6 +339,7 @@ const PERSON_SENT_KINDS: string[] = [
   'shopping_product',
   'shopping_category',
   'shopping_links',
+  'chat_finding',
 ];
 
 /** Compact evidence chips under the title: signal count plus the kind's own

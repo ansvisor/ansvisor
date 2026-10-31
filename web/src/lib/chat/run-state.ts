@@ -1,4 +1,5 @@
 import type {
+  ChatActionSent,
   ChatAsk,
   ChatConfirm,
   ChatNextMove,
@@ -43,6 +44,8 @@ export interface ClientRun {
   denials: ChatDenialCard[];
   /** What it made, in order (CHAT-06 item 1): the n-th is the run's file n. */
   deliverables: ChatDeliverable[];
+  /** What it sent to the Action Center, in order (CHAT-09 item 19). */
+  sent: ChatActionSent[];
   summary: ChatRunSummary | null;
   generatedAt: string | null;
   dataAsOf: string | null;
@@ -62,6 +65,7 @@ export function emptyRun(status: ClientRunStatus = 'running'): ClientRun {
     nextMoves: [],
     denials: [],
     deliverables: [],
+    sent: [],
     summary: null,
     generatedAt: null,
     dataAsOf: null,
@@ -116,6 +120,9 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
       return next;
     case 'deliverable.created':
       next.deliverables = [...run.deliverables, event.data];
+      return next;
+    case 'action.sent':
+      next.sent = [...run.sent, event.data];
       return next;
     case 'next_moves':
       next.nextMoves = event.data.moves;

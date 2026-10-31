@@ -1,11 +1,11 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo]
+keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, send to action center, add to action, attach to task, ready for review]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -76,6 +76,14 @@ Admins and Managers can ask Chat to track new prompts in a topic, pause prompts,
 Chat asks first, except in **Full auto**. Removing a competitor, or pausing more than five prompts at once, always asks.
 
 Each change is in the **Activity** log, with **Undo** for 7 days (30 days for paused prompts). Undo leaves alone anything someone changed since, and says so. Undoing new prompts pauses them; their first answers, and what they cost, stay. A removed competitor comes back without its timeline events.
+
+## Send a finding to Action Center
+
+Admins and Managers see **Send to Action Center** under Chat's latest answer. Chat proposes the finding as an action: its title, category, the prompts, pages and competitors it is about, and its tasks. Each task names its page and says when it is done. You approve it on its card, except in **Full auto**. Action Center sets its Priority Score, and **Open in Actions** opens it.
+
+If an open action already covers these prompts, pages or competitors, Chat offers to add the finding to it instead. That action's targets don't change. **Create anyway** is offered only when the new finding covers something the open action doesn't.
+
+Chat can also attach a file or draft to a task, and set a task it finished to **Ready for review**. It never marks a task done: you do that in Action Center. Each change has **Undo** in the **Activity** log.
 
 ## Next moves
 

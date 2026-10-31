@@ -43,6 +43,13 @@ vi.mock('@/lib/actions/competitor', () => ({
   addCompetitors: vi.fn(),
   removeBrandCompetitor: vi.fn(),
 }));
+vi.mock('@/lib/actions/chat-action-center', () => ({
+  createChatAction: vi.fn(),
+  attachToAction: vi.fn(),
+  attachFileToTask: vi.fn(),
+  setTaskReadyForReview: vi.fn(),
+  checkChatActionCover: vi.fn(),
+}));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
@@ -52,6 +59,8 @@ const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
 const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
 const { addBrandTopic, renameBrandTopic } = await import('@/lib/actions/topic');
 const { addCompetitors, removeBrandCompetitor } = await import('@/lib/actions/competitor');
+const chatActionCenter = await import('@/lib/actions/chat-action-center');
+const acFixtures = await import('./testing/action-center-fixtures');
 const { runLoggedWrite } = await import('./write');
 const { activitySummary, approvalFor, logActivity, recordActivity } = await import('./activity');
 const { decideToolCall } = await import('./precedence');
@@ -82,6 +91,36 @@ const INPUTS: Record<string, unknown> = {
     competitors: [{ name: 'Profound', domain: 'tryprofound.com' }],
   },
   remove_competitor: { brand_id: BRAND, competitor_id: COMPETITOR },
+  // W2-10: Chat's Action Center changes (testing/action-center-fixtures.ts).
+  create_action: {
+    brand_id: BRAND,
+    title: 'Win back pricing citations on /pricing',
+    category: 'recover',
+    why: 'Google AI Overviews stopped citing /pricing.',
+    pages: ['/pricing'],
+    prompt_ids: [],
+    competitor_ids: [],
+    platforms: [],
+    create_anyway: false,
+    tasks: [
+      {
+        title: 'Add a pricing FAQ block to /pricing',
+        type: 'on_page',
+        url: '/pricing',
+        done_when: 'The FAQ block is live',
+      },
+    ],
+  },
+  attach_to_action: {
+    action_id: '88888888-8888-4888-8888-888888888888',
+    finding: 'Lost 6 citations.',
+  },
+  attach_file_to_task: {
+    brand_id: BRAND,
+    task_id: '99999999-9999-4999-8999-999999999999',
+    file_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  },
+  set_task_ready_for_review: { brand_id: BRAND, task_id: '99999999-9999-4999-8999-999999999999' },
 };
 const toolCtx = {} as never;
 let step = 0;
@@ -100,6 +139,19 @@ beforeEach(() => {
   vi.mocked(renameBrandTopic).mockImplementation(fakeRenameBrandTopic(db) as never);
   vi.mocked(addCompetitors).mockImplementation(fakeAddCompetitors(db) as never);
   vi.mocked(removeBrandCompetitor).mockImplementation(fakeRemoveBrandCompetitor(db) as never);
+  acFixtures.seedActionCenter(db);
+  vi.mocked(chatActionCenter.createChatAction).mockImplementation(
+    acFixtures.fakeCreateChatAction(db) as never,
+  );
+  vi.mocked(chatActionCenter.attachToAction).mockImplementation(
+    acFixtures.fakeAttachToAction(db) as never,
+  );
+  vi.mocked(chatActionCenter.attachFileToTask).mockImplementation(
+    acFixtures.fakeAttachFileToTask(db) as never,
+  );
+  vi.mocked(chatActionCenter.setTaskReadyForReview).mockImplementation(
+    acFixtures.fakeSetTaskReadyForReview(db) as never,
+  );
 });
 afterEach(() => vi.unstubAllEnvs());
 

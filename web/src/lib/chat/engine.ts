@@ -39,7 +39,13 @@ import {
   type PendingCalls,
   type RunProgress,
 } from './engine-store';
-import { maskIds, type ChatDenialCard, type ChatRunSummary, type ChatStepScope } from './events';
+import {
+  isChatHref,
+  maskIds,
+  type ChatDenialCard,
+  type ChatRunSummary,
+  type ChatStepScope,
+} from './events';
 import { HOLD_MAX, checkFigures, figureHold, figuresOfRun, type KnownFigures } from './facts';
 import { fitResult, toJson } from './fit';
 import { historyMessages, planHistory, type HistoryPlan, type HistoryRow } from './history';
@@ -1522,6 +1528,11 @@ async function handleCall(
 
   const { ctx, call: facts } = await callFacts(rc, tool, input);
   const decision = decideForEngine(tool, ctx, facts);
+  // A change its own check refuses before its card (Send to Action Center's duplicate): no card.
+  if (decision.kind !== 'deny' && tool.class !== 'read') {
+    const refused = await precheckOf(rc, tool, input, ctx);
+    if (refused) return result(call, refused, true);
+  }
   switch (decision.kind) {
     case 'deny':
       return result(call, await deny(rc, tool, ctx, facts, decision.denial, input), true);
@@ -1580,6 +1591,62 @@ async function deny(
     rule: answer.rule.detail,
     whoCan: answer.whoCan,
   };
+}
+
+/**
+ * A WRITE's own check before its card (its row's `precheck`, CHAT-20 §12):
+ * the refusal the model is told, in its §11a code and words, with what it
+ * says beside them (the action that covers a finding). Null to go on, and
+ * when the check itself fails: the change checks again.
+ */
+async function precheckOf(
+  rc: RunContext,
+  tool: ChatTool,
+  input: Record<string, unknown>,
+  ctx: PrecedenceContext | null,
+): Promise<Record<string, unknown> | null> {
+  if (!tool.precheck) return null;
+  try {
+    const out = await tool.precheck(toolContext(rc, ctx?.role ?? rc.role), input as never);
+    const said = saidFailure(out);
+    return said ? { ...said, ...besideRefusal(out) } : null;
+  } catch (err) {
+    console.error('[chat/engine] a change’s check failed:', err);
+    return null;
+  }
+}
+
+/**
+ * What a refusal says beside its code and words, for the model to act on:
+ * the action that already covers a finding (its id and number) and whether
+ * Create anyway may still go. Plain values only.
+ */
+function besideRefusal(out: unknown): Record<string, string | number | boolean> {
+  return Object.fromEntries(
+    Object.entries((out ?? {}) as Record<string, unknown>).filter(
+      (entry): entry is [string, string | number | boolean] =>
+        !['ok', 'reason', 'message'].includes(entry[0]) &&
+        ['string', 'number', 'boolean'].includes(typeof entry[1]),
+    ),
+  );
+}
+
+/** What a card lists under its target (its row's cardItems): the tasks an action is made with. */
+function cardItemsOf(tool: ChatTool, input: Record<string, unknown>) {
+  if (!tool.cardItems) return {};
+  try {
+    const items = tool
+      .cardItems(input as never)
+      .slice(0, 8)
+      .map((item) => ({
+        title: maskIds(item.title),
+        ...(item.detail ? { detail: maskIds(item.detail) } : {}),
+      }));
+    return items.length ? { items } : {};
+  } catch (err) {
+    console.error('[chat/engine] could not list a card’s items:', err);
+    return {};
+  }
 }
 
 /** The explainer: a refused capability's out-of-permission answer, decided now. */
@@ -1672,6 +1739,7 @@ async function openCard(
     digest,
     canDontAskAgain: offerDontAskAgain,
     ...(note ? { note } : {}),
+    ...cardItemsOf(tool, input),
   });
   return {
     kind: 'pause',
@@ -2238,6 +2306,7 @@ async function writeCall(
       target,
       digest,
       canDontAskAgain: false,
+      ...cardItemsOf(tool, input),
     });
     return {
       kind: 'pause',
@@ -2262,8 +2331,15 @@ async function writeCall(
     });
     rc.sink.emit('step.finished', { step: clientStep(row) });
     // An EXECUTE is never tried again by itself (§11b): the model is told it failed,
-    // or, for a refusal the person can act on, why (§11a).
-    return result(call, said ?? { code: 'failed' }, true);
+    // or, for a refusal the person can act on, why (§11a), with what it names
+    // (a duplicate found as it was made: the action that covers it).
+    return result(
+      call,
+      said
+        ? { ...said, ...besideRefusal(outcome.code === 'ok' ? outcome.output : null) }
+        : { code: 'failed' },
+      true,
+    );
   }
 
   rc.progress.writes[tool.name] = (rc.progress.writes[tool.name] ?? 0) + batchSize(tool, input);
@@ -2279,8 +2355,32 @@ async function writeCall(
   });
   rc.sink.emit('step.finished', { step: clientStep(row) });
   const output = outcome.code === 'ok' ? outcome.output : null;
-  await deliver(rc, tool, input, output, facts.brandId);
-  return result(call, { code: 'ok', output: fitResult(output, rc.budget.resultChars).value });
+  const fileId = await deliver(rc, tool, input, output, facts.brandId);
+  showResultCard(rc, tool, input, output);
+  return result(call, {
+    code: 'ok',
+    output: fitResult(output, rc.budget.resultChars).value,
+    // What it filed, for a change that names a file next (attach_file_to_task).
+    ...(fileId ? { file_id: fileId } : {}),
+  });
+}
+
+/** What a change made, as a card with its Open (its row's resultCard, CHAT-09 item 19). */
+function showResultCard(
+  rc: RunContext,
+  tool: ChatTool,
+  input: Record<string, unknown>,
+  output: unknown,
+) {
+  if (!tool.resultCard) return;
+  try {
+    const card = tool.resultCard(input as never, output);
+    if (card && isChatHref(card.href)) {
+      rc.sink.emit('action.sent', { ...card, title: maskIds(card.title).slice(0, 200) });
+    }
+  } catch (err) {
+    console.error('[chat/engine] could not show what a change made:', err);
+  }
 }
 
 /**
@@ -2295,9 +2395,9 @@ async function deliver(
   input: Record<string, unknown>,
   output: unknown,
   brandId: string | null,
-): Promise<void> {
+): Promise<string | null> {
   const made = tool.deliverable?.(input as never, output);
-  if (!made) return;
+  if (!made) return null;
   const filed = await fileChatOutput({
     organizationId: rc.actor.organizationId,
     createdBy: rc.actor.userId,
@@ -2328,6 +2428,7 @@ async function deliver(
     ...(made.href ? { href: made.href } : {}),
     filed: filed.ok ? 'in_files' : filed.failure,
   });
+  return filed.ok ? filed.id : null;
 }
 
 // ─── Waiting, approving, skipping ───────────────────────────────────────────
@@ -2662,6 +2763,7 @@ export async function prepareResume(
         target: [targetOf(input), tool.brandOf ? brand?.name : null].filter(Boolean).join(' · '),
         digest: pending.digest,
         canDontAskAgain: pending.offerDontAskAgain,
+        ...cardItemsOf(tool, input),
       });
       await sink.flush();
       publishRunEnd(runId);

@@ -36,6 +36,8 @@ import {
   type ComposerSend,
   type ComposerVariant,
 } from './composer/chat-composer';
+import { useUserRole } from '@/hooks/use-user-role';
+import { ActionSentCard } from './run/action-sent-card';
 import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
 import { NextMoves } from './run/next-moves';
@@ -98,6 +100,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         ...emptyRun(message.run.status as ClientRunStatus),
         steps: message.run.steps,
         deliverables: message.run.deliverables ?? [],
+        sent: message.run.sent ?? [],
         nextMoves: message.run.nextMoves ?? [],
         text: message.text,
         generatedAt: message.generatedAt,
@@ -208,6 +211,9 @@ export function ChatThreadView({
   const life = useRef<AbortController | null>(null);
   // Read when a stream gives up, so following a run never waits on a render.
   const lostWords = useRef(t('connectionLost'));
+  const tSent = useTranslations('chatRun.actionSent');
+  const sentWords = useRef({ created: tSent('toastCreated'), added: tSent('toastAdded') });
+  const { canManage } = useUserRole();
   // The run under way when the page opened, which it picks up again.
   const [resumable] = useState(() => {
     const open = turns[turns.length - 1];
@@ -286,6 +292,15 @@ export function ChatThreadView({
                 run: applyChatEvent(anew || !turn.run ? emptyRun() : turn.run, event as ChatEvent),
                 startedAt: turn.startedAt ?? Date.now(),
               }));
+              // Said as it happens, not again when a run is rebuilt from its events (item 19).
+              if (event.type === 'action.sent' && !rebuild) {
+                const sent = (event as Extract<ChatEvent, { type: 'action.sent' }>).data;
+                toast(
+                  sent.kind === 'action_created'
+                    ? sentWords.current.created
+                    : sentWords.current.added,
+                );
+              }
             }
           } catch {
             // The connection broke mid-stream: reconnected below.
@@ -510,6 +525,22 @@ export function ChatThreadView({
       );
   }
 
+  /**
+   * Send to Action Center on the latest answer (CHAT-09 item 18): Chat
+   * proposes the finding as an action, on its card. Admins and Managers, in
+   * their own chat, while nothing else runs.
+   */
+  function sendToActionCenterOf(index: number): (() => void) | undefined {
+    if (!canManage || index !== turns.length - 1) return undefined;
+    if ((thread && !thread.mine) || working || atCap) return undefined;
+    return () =>
+      void send(t('sendToActionCenterPrompt'), {
+        context: chips ?? [],
+        references: [],
+        attachments: [],
+      });
+  }
+
   return (
     <div
       className={
@@ -542,6 +573,7 @@ export function ChatThreadView({
                   onAnswerQuestion={(value) => answerQuestion(turn, value)}
                   onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
                   onRetry={retryOf(index)}
+                  onSendToActionCenter={sendToActionCenterOf(index)}
                 />
                 {turn === last && (
                   <NextMoves
@@ -636,6 +668,7 @@ function Answer({
   onAnswerQuestion,
   onFiled,
   onRetry,
+  onSendToActionCenter,
 }: {
   turn: Turn;
   now: number;
@@ -646,6 +679,8 @@ function Answer({
   onFiled: (fileId: string) => void;
   /** Sends its question again; none while another run works, or on a teammate's chat. */
   onRetry?: () => void;
+  /** Send to Action Center (CHAT-09 item 18): the latest answer, for Admins and Managers. */
+  onSendToActionCenter?: () => void;
 }) {
   const t = useTranslations('chatPage');
   const debug = useChatDebug();
@@ -701,7 +736,7 @@ function Answer({
           kind={confirmStep?.kind === 'execute' ? 'execute' : 'write'}
           step={{ n: run.confirm.n, total: Math.max(run.steps.length, run.confirm.n) }}
           title={run.confirm.action}
-          items={run.confirm.target ? [{ title: run.confirm.target }] : undefined}
+          items={confirmItems(run.confirm)}
           summary={confirmStep?.kind === 'execute' ? run.confirm.target : undefined}
           actionLabel={confirmStep?.kind === 'execute' ? run.confirm.action : undefined}
           canDontAskAgain={run.confirm.canDontAskAgain}
@@ -720,6 +755,9 @@ function Answer({
             deliverable={deliverable}
           />
         ))}
+      {run.sent.map((sent, i) => (
+        <ActionSentCard key={`${sent.actionNo}-${i}`} sent={sent} />
+      ))}
       {run.status === 'paused_cap' && (
         <p className="text-sm text-amber-700 dark:text-amber-400">{t('pausedCap')}</p>
       )}
@@ -742,9 +780,22 @@ function Answer({
             markdown={run.text}
             filed={!!turn.fileId}
             onFiled={onFiled}
+            onSendToActionCenter={onSendToActionCenter}
           />
         ) : undefined
       }
     />
   );
+}
+
+/**
+ * What an approval card lists: its target, then what the change carries
+ * line by line (the tasks Send to Action Center creates, CHAT-09 item 18).
+ */
+function confirmItems(confirm: NonNullable<ClientRun['confirm']>) {
+  const items = [
+    ...(confirm.target ? [{ title: confirm.target }] : []),
+    ...(confirm.items ?? []).map((item) => ({ icon: '☐', ...item })),
+  ];
+  return items.length ? items : undefined;
 }

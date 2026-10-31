@@ -112,6 +112,13 @@ const SAMPLES: { [K in ChatEventType]: () => Extract<ChatEvent, { type: K }> } =
       whoCan: 'Admins and Managers can do this.',
       nextActions: ['ask_admin', 'see_access'],
     }),
+  'action.sent': () =>
+    chatEvent('action.sent', 19, {
+      kind: 'action_created',
+      actionNo: 1271,
+      title: 'Win back pricing citations on /pricing',
+      href: `/dashboard/action-center/actions/${UUID}`,
+    }),
   'deliverable.updated': () => chatEvent('deliverable.updated', 13, { ...DELIVERABLE, version: 2 }),
   'suggestion.created': () => chatEvent('suggestion.created', 14, { count: 3 }),
   'suggestion.resolved': () => chatEvent('suggestion.resolved', 15, { count: 1 }),

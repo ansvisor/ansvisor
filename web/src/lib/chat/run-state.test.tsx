@@ -134,6 +134,37 @@ describe('the run in the browser', () => {
     ]);
   });
 
+  it('keeps what it sent to the Action Center, and the tasks a card carries (CHAT-09 items 18–19)', () => {
+    const sent = {
+      kind: 'action_created' as const,
+      actionNo: 1271,
+      title: 'Win back pricing citations',
+      href: '/dashboard/action-center/actions/x' as const,
+    };
+    const run = applyChatEvent(
+      applyChatEvent(emptyRun(), chatEvent('action.sent', 1, sent)),
+      chatEvent('action.sent', 2, { ...sent, kind: 'action_added', actionNo: 1258 }),
+    );
+    expect(run.sent.map((s) => [s.kind, s.actionNo])).toEqual([
+      ['action_created', 1271],
+      ['action_added', 1258],
+    ]);
+    const carded = applyChatEvent(
+      emptyRun(),
+      chatEvent('confirm.required', 1, {
+        n: 1,
+        action: 'Send findings to Action Center',
+        target: '“Win back pricing citations” · Recover · 1 task',
+        digest: 'b'.repeat(32),
+        canDontAskAgain: false,
+        items: [{ title: 'Add a FAQ to /pricing', detail: 'On-page · /pricing' }],
+      }),
+    );
+    expect(carded.confirm?.items).toEqual([
+      { title: 'Add a FAQ to /pricing', detail: 'On-page · /pricing' },
+    ]);
+  });
+
   it('skips an event it already has, or a type it doesn’t know', () => {
     const run = runFromEvents(events);
     expect(applyChatEvent(run, events[2])).toBe(run);

@@ -1,5 +1,6 @@
 import type { TeamRole } from '@/components/providers/role-provider';
 import type { ChatTool, PlanGate, ToolFlags } from './define-tool';
+import { ACTION_CENTER_TOOLS } from './action-center-tools';
 import { COMPETITOR_TOOLS } from './competitor-tools';
 import { PROMPT_TOOLS } from './prompt-tools';
 import { READ_TOOLS } from './read-tools';
@@ -22,6 +23,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...PROMPT_TOOLS,
   ...TOPIC_TOOLS,
   ...COMPETITOR_TOOLS,
+  ...ACTION_CENTER_TOOLS,
 ];
 
 /** The row of a tool, by its internal name; undefined for a name with no row. */

@@ -64,6 +64,7 @@ import type { PriorityLevel, PriorityReason } from '@/lib/action-center/priority
 import type { CompetitorFindings } from '@/lib/action-center/competitor-findings';
 import type { WinningFindings } from '@/lib/action-center/winning-findings';
 import { assertWritable } from '@/lib/subscription-guard';
+import { readTaskAttachments, type TaskAttachment } from '@/lib/action-center/chat-attachments';
 
 export interface ActionAssignee {
   id: string;
@@ -182,6 +183,8 @@ export interface ActionTask {
   competitorFindings?: CompetitorFindings | null;
   /** What Find what sets your winning pages apart found, once it ran (learning C4). */
   winningFindings?: WinningFindings | null;
+  /** Files and drafts Chat attached to it (CHAT-09 items 13, 16): "Attached from Chat". */
+  attachments?: TaskAttachment[];
 }
 
 export interface ActionEvent {
@@ -287,10 +290,17 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
     (outcomeRes.data?.payload ?? {}) as Record<string, unknown>,
     entityCounts.get(actionId),
   );
+  const tasks = (tasksRes.data ?? []).map(taskFromRow);
+  const attachments = await readTaskAttachments(
+    supabase,
+    brandId,
+    tasks.map((task) => task.id),
+  );
   return {
-    tasks: (tasksRes.data ?? []).map(taskFromRow).map((task) => ({
+    tasks: tasks.map((task) => ({
       ...task,
       titleParams: currentTaskParams(task.titleParams, payload) ?? task.titleParams,
+      attachments: attachments.get(task.id) ?? [],
     })),
     signals,
     entities,

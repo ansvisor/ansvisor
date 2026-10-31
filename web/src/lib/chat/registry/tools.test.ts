@@ -90,8 +90,16 @@ vi.mock('@/lib/actions/competitor', () => ({
   addCompetitors: tracked.track('actions/competitor.addCompetitors'),
   removeBrandCompetitor: tracked.track('actions/competitor.removeBrandCompetitor'),
 }));
+vi.mock('@/lib/actions/chat-action-center', () => ({
+  createChatAction: tracked.track('actions/chat-action-center.createChatAction'),
+  attachToAction: tracked.track('actions/chat-action-center.attachToAction'),
+  attachFileToTask: tracked.track('actions/chat-action-center.attachFileToTask'),
+  setTaskReadyForReview: tracked.track('actions/chat-action-center.setTaskReadyForReview'),
+  checkChatActionCover: tracked.track('actions/chat-action-center.checkChatActionCover'),
+}));
 
 const { CHAT_TOOLS, chatTool, chatToolByKey, registryCatalog } = await import('./tools');
+const chatTool_ = (name: string) => chatTool(name)!;
 const { BRAND_LOOKUP_TABLES, FIXTURE_IDS, defineTool } = await import('./define-tool');
 const { DEFAULT_CHAT_SETTINGS, allowedRoles, allowedTools } = await import('../precedence');
 const { planFactsFromOrgRow } = await import('../plan-facts');
@@ -258,6 +266,31 @@ describe('the Chat tool registry', () => {
     await run('rename_topic', { topic_id: item, name: 'Plans' });
     await run('add_competitors', { brand_id: brand, competitors: [{ name: 'Peec AI' }] });
     await run('remove_competitor', { brand_id: brand, competitor_id: item });
+    // With the run's place (its chat, run and approval) for Action History, §10a.
+    const place = {
+      conversationId: 'conv-1',
+      runId: 'run-1',
+      approvalKey: 'step-1',
+      executionMode: 'assisted' as const,
+    };
+    const runInChat = (name: string, input: unknown) => {
+      const tool = chatTool_(name);
+      return tool.run({ ...ctx, chat: place }, tool.inputSchema.parse(input));
+    };
+    await runInChat('create_action', {
+      brand_id: brand,
+      title: 'Win back pricing citations',
+      category: 'recover',
+      why: 'Lost 6 citations on /pricing.',
+      prompt_ids: [item],
+      pages: ['/pricing'],
+      tasks: [
+        { title: 'Add a FAQ to /pricing', type: 'on_page', url: '/pricing', done_when: 'Live' },
+      ],
+    });
+    await runInChat('attach_to_action', { action_id: item, finding: 'Lost 6 citations.' });
+    await runInChat('attach_file_to_task', { brand_id: brand, task_id: item, file_id: item });
+    await runInChat('set_task_ready_for_review', { brand_id: brand, task_id: item });
 
     expect(calls.map((call) => [call.from, call.args])).toEqual([
       ['actions/prompt-suggestions.dismissSuggestion', [item]],
@@ -284,7 +317,107 @@ describe('the Chat tool registry', () => {
       ['actions/topic.renameBrandTopic', [item, 'Plans']],
       ['actions/competitor.addCompetitors', [brand, [{ name: 'Peec AI', domain: '' }]]],
       ['actions/competitor.removeBrandCompetitor', [brand, item]],
+      [
+        'actions/chat-action-center.createChatAction',
+        [
+          brand,
+          {
+            title: 'Win back pricing citations',
+            category: 'recover',
+            why: 'Lost 6 citations on /pricing.',
+            entities: { prompts: [item], pages: ['/pricing'], competitors: [], platforms: [] },
+            tasks: [
+              {
+                title: 'Add a FAQ to /pricing',
+                type: 'on_page',
+                url: '/pricing',
+                done_when: 'Live',
+              },
+            ],
+          },
+          place,
+          false,
+        ],
+      ],
+      [
+        'actions/chat-action-center.attachToAction',
+        [item, { finding: 'Lost 6 citations.', note: undefined, sources: undefined }, place],
+      ],
+      ['actions/chat-action-center.attachFileToTask', [brand, item, item, place]],
+      ['actions/chat-action-center.setTaskReadyForReview', [brand, item, place]],
     ]);
+  });
+
+  it("checks Send to Action Center's duplicate before its card, and lets Create anyway go only where it may", async () => {
+    const send = chatTool_('create_action');
+    const input = send.inputSchema.parse(send.fixture.input);
+    const { checkChatActionCover } = await import('@/lib/actions/chat-action-center');
+    const check = vi.mocked(checkChatActionCover);
+    const duplicate = (canCreateAnyway: boolean) => ({
+      ok: false as const,
+      reason: 'duplicate' as const,
+      message: 'AC-1258 already covers this.',
+      action_id: FIXTURE_IDS.item,
+      action_no: 1258,
+      can_create_anyway: canCreateAnyway,
+    });
+
+    check.mockResolvedValueOnce({ ok: true });
+    await expect(send.precheck!(ctx, input)).resolves.toBeNull();
+    expect(check).toHaveBeenLastCalledWith(
+      FIXTURE_IDS.brand,
+      { prompts: [], pages: ['/pricing'], competitors: [], platforms: [] },
+      'recover',
+    );
+    check.mockResolvedValueOnce(duplicate(false));
+    await expect(send.precheck!(ctx, input)).resolves.toMatchObject({ reason: 'duplicate' });
+    // Create anyway: past a partial overlap only.
+    const anyway = { ...input, create_anyway: true };
+    check.mockResolvedValueOnce(duplicate(true));
+    await expect(send.precheck!(ctx, anyway)).resolves.toBeNull();
+    check.mockResolvedValueOnce(duplicate(false));
+    await expect(send.precheck!(ctx, anyway)).resolves.toMatchObject({ reason: 'duplicate' });
+  });
+
+  it('lists the tasks an action is sent with on its card, and its Open once made', () => {
+    const send = chatTool_('create_action');
+    const input = send.inputSchema.parse({
+      ...send.fixture.input,
+      tasks: [
+        { title: 'Add a FAQ to /pricing', type: 'on_page', url: '/pricing', done_when: 'Live' },
+        { title: 'Pitch G2 a review', type: 'outreach', where: 'g2.com', done_when: 'Sent' },
+      ],
+    });
+    expect(send.target!(input)).toBe(
+      '“Win back pricing citations on /pricing” · Recover · 2 tasks',
+    );
+    expect(send.cardItems!(input)).toEqual([
+      { title: 'Add a FAQ to /pricing', detail: 'On-page · /pricing · Done when: Live' },
+      { title: 'Pitch G2 a review', detail: 'Outreach · g2.com · Done when: Sent' },
+    ]);
+    const href = `/dashboard/action-center/actions/${FIXTURE_IDS.item}`;
+    expect(
+      send.resultCard!(input, { ok: true, action_id: FIXTURE_IDS.item, action_no: 1271, href }),
+    ).toEqual({
+      kind: 'action_created',
+      actionNo: 1271,
+      title: 'Win back pricing citations on /pricing',
+      href,
+    });
+    expect(send.resultCard!(input, { ok: false, reason: 'duplicate' })).toBeNull();
+    const add = chatTool_('attach_to_action');
+    expect(
+      add.resultCard!(add.inputSchema.parse(add.fixture.input), {
+        ok: true,
+        action_no: 1258,
+        href,
+      }),
+    ).toMatchObject({ kind: 'action_added', actionNo: 1258 });
+  });
+
+  it('never offers a tool that marks a task done (CHAT-09 item 15)', () => {
+    const names = CHAT_TOOLS.map((tool) => tool.name).join(' ');
+    expect(names).not.toMatch(/complete|mark_done|dismiss_action|delete_action|close_task/);
   });
 
   it('refuses what the update and draft writes are not for', () => {
@@ -335,6 +468,11 @@ describe('approval policies', () => {
       rename_topic: ['admin', 'manager'],
       add_competitors: ['admin', 'manager'],
       remove_competitor: ['admin', 'manager'],
+      // Chat's Action Center changes (W2-10): Admins and Managers, as the server's routes.
+      create_action: ['admin', 'manager'],
+      attach_to_action: ['admin', 'manager'],
+      attach_file_to_task: ['admin', 'manager'],
+      set_task_ready_for_review: ['admin', 'manager'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);
