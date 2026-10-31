@@ -13,6 +13,9 @@ let rpcCalls;
 let writes;
 let server;
 let baseUrl;
+// The brand access check (#1888): the brand, or a refusal for a person
+// without it.
+let brandAccess;
 
 function query(table) {
   const filters = {};
@@ -95,7 +98,7 @@ async function startApp() {
       },
     },
   }));
-  vi.doMock('../lib/access.js', () => ({ assertBrandAccess: async () => ({ orgId: 'org-1' }) }));
+  vi.doMock('../lib/access.js', () => ({ assertBrandAccess: () => brandAccess() }));
   vi.doMock('../lib/plan-guard.js', () => ({
     requireFeature: () => (req, res, next) => next(),
     enforceSiteAuditQuota: vi.fn(),
@@ -134,6 +137,7 @@ async function startApp() {
 const brandId = '33333333-3333-3333-3333-333333333333';
 
 beforeEach(async () => {
+  brandAccess = async () => ({ orgId: 'org-1' });
   rpcCalls = [];
   writes = [];
   tables = {
@@ -459,6 +463,24 @@ describe('PUT /api/audits/opportunities/prefs', () => {
       expect(res.status).toBe(403);
       expect((await res.json()).message).toBe('Only admins and managers can pin or exclude pages.');
     }
+    expect(writes).toEqual([]);
+  });
+
+  it('refuses an agency partner, and a manager without access to the brand', async () => {
+    tables.profiles = [{ id: 'u1', role: 'agency_partner' }];
+    let res = await put({ brandId, urls: ['https://acme.com/blog'], state: 'excluded' });
+    expect(res.status).toBe(403);
+
+    tables.profiles = [{ id: 'u1', role: 'manager' }];
+    brandAccess = async () => {
+      throw Object.assign(new Error("You don't have access to this brand"), {
+        status: 403,
+        code: 'no_brand_access',
+      });
+    };
+    res = await put({ brandId, urls: ['https://acme.com/blog'], state: 'pinned' });
+    expect(res.status).toBe(403);
+    expect((await res.json()).message).toBe("You don't have access to this brand");
     expect(writes).toEqual([]);
   });
 
