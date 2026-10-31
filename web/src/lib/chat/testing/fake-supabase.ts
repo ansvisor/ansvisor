@@ -81,6 +81,29 @@ export const fakeId = () => {
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
+/**
+ * A select's JSON fields (`alias:column->key`), as PostgREST reads them:
+ * each comes with the row under its alias, else its last key, beside the
+ * row's own columns.
+ */
+function jsonFields(columns: string | undefined): ((row: Row) => Row)[] {
+  return (columns ?? '').split(',').flatMap((entry) => {
+    const match = entry.trim().match(/^(?:(\w+):)?(\w+)((?:->\w+)+)$/);
+    if (!match) return [];
+    const [, alias, column, path] = match;
+    const keys = path.split('->').filter(Boolean);
+    return [
+      (row: Row) => {
+        let value: unknown = row[column];
+        for (const key of keys) {
+          value = value && typeof value === 'object' ? (value as Row)[key] : undefined;
+        }
+        return { [alias ?? keys[keys.length - 1]]: value ?? null };
+      },
+    ];
+  });
+}
+
 export function createFakeSupabase(): FakeSupabase {
   const fake: FakeSupabase = {
     tables: {},
@@ -106,6 +129,9 @@ export function createFakeSupabase(): FakeSupabase {
       let max: number | null = null;
       let offset = 0;
       let counting: { head: boolean } | null = null;
+      let fields: ((row: Row) => Row)[] = [];
+      const read = (row: Row) =>
+        fields.reduce<Row>((out, field) => ({ ...out, ...field(row) }), { ...row });
 
       const rows = () => (fake.tables[table] ??= []);
       const clash = (row: Row, others: Row[]) =>
@@ -131,10 +157,10 @@ export function createFakeSupabase(): FakeSupabase {
           const cap = Math.min(max ?? Infinity, fake.maxRows ?? Infinity);
           const limited = sorted.slice(offset, cap === Infinity ? undefined : offset + cap);
           if (counting) {
-            const data = counting.head ? null : limited.map((row) => ({ ...row }));
+            const data = counting.head ? null : limited.map(read);
             return { data, error: null, count: matching.length };
           }
-          return { data: limited.map((row) => ({ ...row })), error: null };
+          return { data: limited.map(read), error: null };
         }
         if (kind === 'delete') {
           fake.tables[table] = rows().filter((row) => !matching.includes(row));
@@ -195,9 +221,12 @@ export function createFakeSupabase(): FakeSupabase {
       };
 
       const builder: Builder = {
-        select(_columns, options) {
+        select(columns, options) {
           if (kind !== 'select') returning = true;
-          else if (options?.count) counting = { head: options.head ?? false };
+          else {
+            fields = jsonFields(columns);
+            if (options?.count) counting = { head: options.head ?? false };
+          }
           return builder;
         },
         insert(rowsIn) {

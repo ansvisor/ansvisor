@@ -26,6 +26,7 @@ import botIngestRoutes from './routes/bot-ingest.js';
 import cloroCallbackRoutes from './routes/cloro-callback.js';
 import internalTriggerTrackingRoutes from './routes/internal-trigger-tracking.js';
 import internalChatBudgetRoutes from './routes/internal-chat-budget.js';
+import internalChatPagesRoutes from './routes/internal-chat-pages.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
 import { pruneContentVersions } from './lib/content-history.js';
 import {
@@ -628,6 +629,11 @@ app.get('/api/internal/integrations-config', (req, res) => {
 // starts, then charged at its real cost or let go (routes/internal-chat-budget.js).
 // With the secret, the /api limiter above doesn't count them (rate-limiter.js).
 app.use('/api/internal/chat/budget', internalChatBudgetRoutes);
+
+// --- Internal Chat page reads (CRON_SECRET auth, called by the web's Chat engine) ---
+// fetch_page (CHAT-10 §B): a public page opened through safe-fetch's rules and
+// read on the server; only what Chat reads of it goes back (routes/internal-chat-pages.js).
+app.use('/api/internal/chat/pages', internalChatPagesRoutes);
 
 // --- Internal Improve send endpoint (CRON_SECRET auth, called by web MCP layer) ---
 // The web MCP layer verifies the caller's `ans_` API key org owns the prompt

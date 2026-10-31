@@ -66,6 +66,9 @@ vi.mock('@/lib/mcp/google-reads', async (importOriginal) =>
 vi.mock('@/lib/mcp/workspace-reads', async (importOriginal) =>
   tracked.all('mcp/workspace-reads', await importOriginal<Record<string, unknown>>()),
 );
+vi.mock('@/lib/mcp/pages', async (importOriginal) =>
+  tracked.all('mcp/pages', await importOriginal<Record<string, unknown>>()),
+);
 vi.mock('@/lib/actions/content', () => ({
   updateOpportunityStatus: tracked.track('actions/content.updateOpportunityStatus'),
 }));
