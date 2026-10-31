@@ -18,6 +18,7 @@ import { readImpactReport, type ImpactRange, type ImpactReport } from '@/lib/act
 import { saveBlob } from '@/lib/download';
 import {
   CHECKPOINT_DAYS,
+  baselineDays,
   OUTCOMES,
   impactCsv,
   outcomeCounts,
@@ -599,10 +600,7 @@ function Evidence({ row }: { row: ImpactRow }) {
     value === null ? '–' : t('percent', { value: Math.round(value) });
   const baseline = row.window
     ? { from: row.window.preStart, to: row.window.preEnd }
-    : {
-        from: new Date(Date.parse(row.shippedAt) - 14 * 86_400_000).toISOString(),
-        to: new Date(Date.parse(row.shippedAt) - 86_400_000).toISOString(),
-      };
+    : baselineDays(row.shippedAt);
   const items: [string, string][] = [
     [
       t('drawer.baseline'),

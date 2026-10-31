@@ -330,6 +330,28 @@ describe('ImpactReportView', () => {
     expect(drawer).toContain('Day 7Pending · early signalPending · Early direction: up');
   });
 
+  it('dates a baseline with no window kept as the job does: the 14 UTC days before the ship', async () => {
+    // Late on Oct 3 in UTC is Oct 4 here: the job's baseline is still Sep 19 – Oct 2.
+    const tz = process.env.TZ;
+    process.env.TZ = 'Pacific/Kiritimati';
+    try {
+      read.mockResolvedValue({
+        ok: true,
+        report: report({
+          rows: [row('r1', { shippedAt: '2026-10-03T22:30:00.000Z', window: null })],
+        }),
+      });
+      await render();
+      await click($('[data-row="r1"] [data-action="impact.openEvidence"]')!);
+      expect($('[data-slot="impact-evidence"]')!.textContent).toContain(
+        'BaselineSep 19 \u2013 Oct 2 \u00b7 14 days before ship',
+      );
+    } finally {
+      if (tz === undefined) delete process.env.TZ;
+      else process.env.TZ = tz;
+    }
+  });
+
   it('downloads the month as CSV', async () => {
     await render();
     await click($('[data-action="impact.export"]')!);

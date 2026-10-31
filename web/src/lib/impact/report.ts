@@ -104,6 +104,16 @@ const textOr = (value: unknown): string | null =>
 const oneOf = <T extends string>(value: unknown, list: readonly T[]): T | null =>
   (list as readonly unknown[]).includes(value) ? (value as T) : null;
 
+/**
+ * The baseline's days, YYYY-MM-DD, as the job sets them (checkpointWindow):
+ * the 14 UTC days before the ship's UTC day. For a row with no window kept.
+ */
+export function baselineDays(shippedAt: string): { from: string; to: string } {
+  const ship = Date.parse(`${new Date(shippedAt).toISOString().slice(0, 10)}T00:00:00Z`);
+  const day = (n: number) => new Date(ship + n * DAY_MS).toISOString().slice(0, 10);
+  return { from: day(-14), to: day(-1) };
+}
+
 /** The day a checkpoint comes, YYYY-MM-DD, from the ship. */
 export function checkpointDue(shippedAt: string, checkpoint: Checkpoint): string {
   return new Date(Date.parse(shippedAt) + CHECKPOINT_DAYS[checkpoint] * DAY_MS)
