@@ -2,15 +2,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { routeRegistry } from './routes';
 
-// The sidebar with Competitors on it, as #1809 puts it back under Brand
-// Visibility: Chat's registry lists the page once, from the sidebar.
+// The sidebar with Competitors on it (#1809 put it back, now under Reports):
+// Chat's registry lists the page once, from the sidebar. Added here only if
+// the menu ever drops it again.
 vi.mock('@/config/dashboard', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/config/dashboard')>();
+  const listed = actual.dashboardNav.some((group) =>
+    group.items.some((item) => item.href === '/dashboard/competitors'),
+  );
   return {
     ...actual,
     dashboardNav: actual.dashboardNav.map((group) =>
-      group.title === 'Analytics' &&
-      !group.items.some((item) => item.href === '/dashboard/competitors')
+      group.title === 'Analytics' && !listed
         ? {
             ...group,
             items: [

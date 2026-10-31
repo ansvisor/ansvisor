@@ -215,14 +215,19 @@ function MenuAccessSettingsView() {
               </TableHeader>
               <TableBody>
                 {GROUPS.map((group, i) => [
-                  <TableRow key={`group-${i}`} className="hover:bg-transparent">
-                    <TableCell
-                      colSpan={2 + MENU_ROLES.length}
-                      className="pt-4 pb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground"
-                    >
-                      {group.title ? getDashboardNavGroupLabel(group.title, tNav) : t('otherGroup')}
-                    </TableCell>
-                  </TableRow>,
+                  // Chat, first and in no group, sits above the headings as on the menu.
+                  (group.title || i > 0) && (
+                    <TableRow key={`group-${i}`} className="hover:bg-transparent">
+                      <TableCell
+                        colSpan={2 + MENU_ROLES.length}
+                        className="pt-4 pb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground"
+                      >
+                        {group.title
+                          ? getDashboardNavGroupLabel(group.title, tNav)
+                          : t('otherGroup')}
+                      </TableCell>
+                    </TableRow>
+                  ),
                   ...group.items.map(({ section, title, icon: Icon }) => {
                     const label = getDashboardNavLabel(title, tNav);
                     const always = section === ALWAYS_ON_SECTION;

@@ -480,6 +480,7 @@ export function ChatSidePanel() {
                 fullAutoOffByAdmin={setup.fullAutoOffByAdmin}
                 onOwnKey={setup.onOwnKey}
                 usageNoticeSeen={setup.usageNoticeSeen}
+                skills={setup.skills}
                 onConversation={remember}
                 chips={chips}
                 onRemoveChip={(key) =>

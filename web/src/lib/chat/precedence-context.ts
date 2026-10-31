@@ -200,6 +200,8 @@ export async function readToolCall(
   tool: Pick<ChatTool, 'brandOf' | 'batch'>,
   input: Record<string, unknown>,
   tainted: boolean,
+  /** The items the run's earlier calls of this row made (progress.writes). */
+  before = 0,
 ): Promise<ToolCall> {
   const brandId = await resolveCallBrand(tool, input, ctx.organizationId);
   const inScope =
@@ -208,6 +210,6 @@ export async function readToolCall(
     brandId,
     brandIsDemo: inScope ? await readBrandIsDemo(brandId) : false,
     tainted,
-    ...(overBatchCard(tool, input) ? { overBatch: true } : {}),
+    ...(overBatchCard(tool, input, before) ? { overBatch: true } : {}),
   };
 }
