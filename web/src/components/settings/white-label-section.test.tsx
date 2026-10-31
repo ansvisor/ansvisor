@@ -163,6 +163,50 @@ describe('WhiteLabelSection', () => {
     expect(container.textContent).toContain('Only admins change the white label kit.');
   });
 
+  it('keeps the name, color and footer typed but not saved when a logo goes up or is removed', async () => {
+    const signed = 'https://store.example/sign/org/kit/id.png';
+    uploadLogo.mockResolvedValueOnce({ ok: true, path: 'org/kit/id.png' });
+    await render();
+    await type('#white-label-company', 'Acme Partners');
+    await type('#white-label-color', '#0f766e');
+    await type('#white-label-footer', 'acmepartners.com');
+    // The server now has the logo, and still the saved words.
+    actions.getWhiteLabelSettings.mockResolvedValue({ ok: true, view: view({ logoUrl: signed }) });
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const file = new File(['x'], 'logo.png', { type: 'image/png' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    await act(async () => input.dispatchEvent(new Event('change', { bubbles: true })));
+
+    const field = (id: string) => container.querySelector<HTMLInputElement>(id)!.value;
+    expect(actions.setWhiteLabelLogo).toHaveBeenCalledWith('org/kit/id.png');
+    expect(container.querySelector('[data-testid="logo-paper"] img')?.getAttribute('src')).toBe(
+      signed,
+    );
+    expect(field('#white-label-company')).toBe('Acme Partners');
+    expect(field('#white-label-color')).toBe('#0f766e');
+    expect(field('#white-label-footer')).toBe('acmepartners.com');
+    expect(button('Save changes')!.disabled).toBe(false);
+
+    await act(async () => button('Remove')!.click());
+    expect(actions.setWhiteLabelLogo).toHaveBeenLastCalledWith(null);
+    expect(field('#white-label-company')).toBe('Acme Partners');
+
+    // Saving them still takes what was typed.
+    await act(async () => button('Save changes')!.click());
+    expect(actions.saveWhiteLabelKit).toHaveBeenCalledWith({
+      companyName: 'Acme Partners',
+      accentColor: '#0f766e',
+      footerText: 'acmepartners.com',
+    });
+  });
+
+  it('shows the logo on white paper in both themes, as the report it goes on', async () => {
+    await render();
+    const paper = container.querySelector('[data-testid="logo-paper"]')!;
+    expect(paper.className).toContain('bg-white');
+    expect(paper.className).not.toMatch(/\bbg-muted|dark:/);
+  });
+
   it('uploads a picked logo, sets it, and says why one didn’t go', async () => {
     uploadLogo.mockResolvedValueOnce({ ok: true, path: 'org/kit/id.png' });
     await render();

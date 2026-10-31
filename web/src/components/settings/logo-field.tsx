@@ -50,12 +50,16 @@ export function LogoField({
     <div className="space-y-2">
       <p className="text-sm font-medium">{label}</p>
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex h-16 w-40 items-center justify-center overflow-hidden rounded-md border bg-muted/40 p-2">
+        {/* White paper in both themes, as the report it goes on: a dark logo stays visible. */}
+        <div
+          data-testid="logo-paper"
+          className="flex h-16 w-40 items-center justify-center overflow-hidden rounded-md border bg-white p-2 shadow-sm"
+        >
           {url ? (
             // eslint-disable-next-line @next/next/no-img-element -- a short-lived signed address
             <img src={url} alt={label} className="max-h-full max-w-full object-contain" />
           ) : (
-            <span className="text-xs text-muted-foreground">{t('noLogo')}</span>
+            <span className="text-xs text-zinc-500">{t('noLogo')}</span>
           )}
         </div>
         {canEdit && (
