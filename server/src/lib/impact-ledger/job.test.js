@@ -632,6 +632,57 @@ describe('sends confirmed without a ship event', () => {
   });
 });
 
+describe('sends confirmed without a ship event, in order', () => {
+  const draftSend = (id, publishedAt) => ({
+    id,
+    organization_id: ORG,
+    brand_id: 'b1',
+    draft_id: 'dr1',
+    sent_by: 'u1',
+    title: 'Guide',
+    status: 'published',
+    published_url: 'https://acme.example/guide',
+    published_at: publishedAt,
+    created_at: publishedAt,
+  });
+  const T1 = '2026-10-10T10:00:00.000Z';
+  const T2 = '2026-10-13T10:00:00.000Z';
+
+  it('takes a draft’s sends oldest first: its ship event is its first publish', async () => {
+    // The later send's id sorts first.
+    const db = fakeDb(
+      world({
+        content_draft_deliveries: [draftSend('a-later', T2), draftSend('b-earlier', T1)],
+        content_drafts: [
+          { id: 'dr1', brand_id: 'b1', title: 'Guide', action_id: null, prompt_ids: [] },
+        ],
+      }),
+    );
+    const stats = await runImpactLedger({ db, now: D14 });
+    expect(stats.filled).toBe(1);
+    const shipped = db.tables.ship_events.filter((e) => e.content_draft_id === 'dr1');
+    expect(shipped).toEqual([
+      expect.objectContaining({
+        content_draft_delivery_id: 'b-earlier',
+        shipped_at: T1,
+        republished_at: T2,
+      }),
+    ]);
+
+    // The later send, noted on the first, is read again each night but writes nothing.
+    const next = await runImpactLedger({ db, now: at('2026-10-17T07:53:00Z') });
+    expect(next).toMatchObject({ filled: 0, failed: 0 });
+    expect(db.tables.ship_events.filter((e) => e.content_draft_id === 'dr1')).toHaveLength(1);
+  });
+
+  it('counts a send whose ship event can’t be written as failed', async () => {
+    const db = fakeDb(world({ content_draft_deliveries: [draftSend('x1', T1)] }));
+    db.fail = (table, op) => table === 'ship_events' && op === 'upsert';
+    const stats = await runImpactLedger({ db, now: D14 });
+    expect(stats).toMatchObject({ filled: 0, failed: 1 });
+  });
+});
+
 describe('agent runs', () => {
   it('writes a run’s outcome only within its own workspace', async () => {
     const db = fakeDb(

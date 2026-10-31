@@ -16,6 +16,8 @@ import {
   lastingOf,
   matchControls,
   measureCells,
+  metricResult,
+  MIN_BOOTSTRAP_SHARE,
   nextCheckAt,
   P_VERDICT,
   primaryMetric,
@@ -66,17 +68,22 @@ const promptsOf = (ids, topic = 't1') =>
   new Map(ids.map((id) => [id, { topic_id: topic, is_active: true }]));
 
 /**
- * A small brand where the change did nothing (the calibration test): 5
- * engines with their own levels and their own swing between the windows,
- * 15 prompts at random levels, 3 of them targets. Seeded.
+ * A small brand of the calibration and power tests: engines with their own
+ * levels and their own swing between the windows (engine weather), prompts
+ * at random levels, `lift` added to the targets' chance of being named
+ * after ship (0: the change did nothing). With `orphan`, one more target is
+ * tracked only on an engine no control is on. Seeded.
  */
-function nullWorld(seed) {
-  const random = seededRandom(`null-world:${seed}`);
-  const engines = Array.from({ length: 5 }, (_, i) => `engine-${i}`);
+function world(
+  seed,
+  { kind, targets: t = 3, controls: c = 12, engines: e = 5, lift = 0, orphan = false },
+) {
+  const random = seededRandom(`${kind}-world:${seed}`);
+  const engines = Array.from({ length: e }, (_, i) => `engine-${i}`);
   const swing = engines.map(() => (random() - 0.5) * 0.4);
   const offset = engines.map(() => (random() - 0.5) * 0.3);
-  const targets = ['t0', 't1', 't2'];
-  const controls = Array.from({ length: 12 }, (_, i) => `c${i}`);
+  const targets = Array.from({ length: t }, (_, i) => `t${i}`);
+  const controls = Array.from({ length: c }, (_, i) => `c${i}`);
   const clamp = (p) => Math.min(0.97, Math.max(0.03, p));
   const days = (p) => {
     let named = 0;
@@ -87,14 +94,24 @@ function nullWorld(seed) {
   const post = [];
   for (const id of [...targets, ...controls]) {
     const level = 0.05 + random() * 0.85;
-    engines.forEach((platform, e) => {
-      const before = clamp(level + offset[e]);
+    const own = targets.includes(id) ? lift : 0;
+    engines.forEach((platform, i) => {
+      const before = clamp(level + offset[i]);
       pre.push(...cellRows(id, '2026-09-17', 14, days(before), { platform }));
-      post.push(...cellRows(id, '2026-10-02', 14, days(clamp(before + swing[e])), { platform }));
+      post.push(
+        ...cellRows(id, '2026-10-02', 14, days(clamp(before + swing[i] + own)), { platform }),
+      );
     });
   }
+  if (orphan) {
+    const level = 0.05 + random() * 0.85;
+    const platform = 'engine-targets-only';
+    pre.push(...cellRows('t-orphan', '2026-09-17', 14, days(level), { platform }));
+    post.push(...cellRows('t-orphan', '2026-10-02', 14, days(level), { platform }));
+    targets.push('t-orphan');
+  }
   return measureCells({
-    seed: `null-world:${seed}`,
+    seed: `${kind}-world:${seed}`,
     primary: 'visibility',
     targetIds: targets,
     pre: aggregateCells(pre, ALL),
@@ -102,6 +119,25 @@ function nullWorld(seed) {
     excluded: new Set(targets),
     prompts: promptsOf([...targets, ...controls]),
   });
+}
+
+/** Of `count` seeded worlds: how many could be measured, and how many gave each outcome. */
+function outcomes(count, options) {
+  const tally = { measurable: 0, improved: 0, declined: 0 };
+  for (let seed = 0; seed < count; seed++) {
+    const entry = checkpointEntry({
+      cp: CHECKPOINTS[1],
+      window: checkpointWindow(SHIPPED, 14),
+      result: world(seed, options),
+      earlier: [],
+      measuredAt: '2026-10-16T07:53:00Z',
+    });
+    if (entry.outcome === 'not_measurable') continue;
+    tally.measurable++;
+    if (entry.outcome === 'improved') tally.improved++;
+    if (entry.outcome === 'declined') tally.declined++;
+  }
+  return tally;
 }
 
 describe('windows and checkpoints', () => {
@@ -424,9 +460,13 @@ describe('effect, p-value and outcome', () => {
       controls,
     );
     expect(result.judged).toMatchObject({ targetCells: 10, targetPrompts: 1 });
-    expect(result.judged.p).toBeLessThan(0.05);
-    expect(confidenceOf(result.judged)).toBe('low');
-    expect(result.metrics[0]).toMatchObject({ interval_low: null, interval_high: null });
+    // Nothing is re-randomized for a checkpoint that can't have a verdict.
+    expect(result.judged.p).toBeNull();
+    expect(result.metrics[0]).toMatchObject({
+      p_value: null,
+      interval_low: null,
+      interval_high: null,
+    });
     const window = checkpointWindow(SHIPPED, 14);
     const entry = (cp) =>
       checkpointEntry({ cp, window, result, earlier: [], measuredAt: '2026-10-16T07:53:00Z' });
@@ -508,6 +548,58 @@ describe('effect, p-value and outcome', () => {
     expect(verdictOf(result.judged)).toBe('no_meaningful_change');
   });
 
+  it('leaves out target cells with no control in their stratum before anything is re-randomized', () => {
+    const other = { platform: 'perplexity-web' };
+    const result = measure(
+      [
+        ...targetIds.map((id, i) => [id, [4, 11 + (i % 2)]]),
+        // Two more targets, tracked only on an engine no control is on.
+        ['x0', [4, 4], other],
+        ['x1', [4, 4], other],
+        ...controlIds.map((id, i) => [id, [4, 4 + (i % 3)]]),
+      ],
+      [...targetIds, 'x0', 'x1'],
+    );
+    expect(result.judged).toMatchObject({ targetCells: 10, targetPrompts: 10 });
+    expect(result.metrics[0]).toMatchObject({ target_prompts: 10, control_prompts: 20 });
+    expect(result.judged.p).toBeLessThan(0.05);
+  });
+
+  it('skips and counts the bootstrap resamples that leave a target stratum without control', () => {
+    const cellOf = (promptId, platform, before, after) => ({
+      key: `${promptId}|${platform}|US`,
+      pre: { promptId, platform, region: 'US', runs: 14, visible: before, cited: 0 },
+      post: { promptId, platform, region: 'US', runs: 14, visible: after, cited: 0 },
+    });
+    const targets = ['t0', 't1', 't2'].flatMap((id, i) =>
+      ['a', 'b', 'c'].map((engine) => cellOf(id, engine, 7, 9 + (i % 2))),
+    );
+    const many = Array.from({ length: 20 }, (_, i) => cellOf(`c${i}`, 'a', 7, 7 + (i % 3)));
+    // One control on engine b: about two resamples in three draw it.
+    const oneSparse = metricResult({
+      metric: 'visibility',
+      targets,
+      controls: [...many, cellOf('cb', 'b', 7, 8)],
+      seed: 's',
+    }).stored;
+    expect(oneSparse.interval_low).not.toBeNull();
+    expect(oneSparse.interval_resamples).toBeGreaterThan(1000 * MIN_BOOTSTRAP_SHARE);
+    expect(oneSparse.interval_resamples).toBeLessThan(1000);
+    // One each on b and c: fewer than half draw both, so no interval.
+    const twoSparse = metricResult({
+      metric: 'visibility',
+      targets,
+      controls: [...many, cellOf('cb', 'b', 7, 8), cellOf('cc', 'c', 7, 8)],
+      seed: 's',
+    }).stored;
+    expect(twoSparse).toMatchObject({
+      interval_low: null,
+      interval_high: null,
+      interval_resamples: null,
+    });
+    expect(twoSparse.p_value).not.toBeNull();
+  });
+
   it('reads the p-value of identical changes as 1', () => {
     const result = measure([
       ...targetIds.map((id) => [id, [4, 9]]),
@@ -516,33 +608,53 @@ describe('effect, p-value and outcome', () => {
     expect(result.judged.p).toBe(1);
   });
 
-  it('keeps Improved and Declined at their nominal rate in worlds with no effect', () => {
-    // 200 small brands where nothing the change did moves anything: 5
-    // engines, each with its own level and its own swing between the
-    // windows (engine weather), 15 prompts at random levels, 3 of them
-    // targets, so most target strata hold one or two controls. A verdict
-    // needs p < P_VERDICT (and 3 points), so at most about P_VERDICT of the
-    // measurable worlds may give one; 0.07 on top is 2.5 standard errors of
-    // a rate near 0.2 over ~200 worlds, room for chance, not for a test that
-    // reads its own noise as an effect.
-    let measurable = 0;
-    let verdicts = 0;
-    for (let w = 0; w < 200; w++) {
-      const result = nullWorld(w);
-      const entry = checkpointEntry({
-        cp: CHECKPOINTS[1],
-        window: checkpointWindow(SHIPPED, 14),
-        result,
-        earlier: [],
-        measuredAt: '2026-10-16T07:53:00Z',
-      });
-      if (entry.outcome === 'not_measurable') continue;
-      measurable++;
-      if (entry.outcome === 'improved' || entry.outcome === 'declined') verdicts++;
-    }
-    expect(measurable).toBeGreaterThanOrEqual(150);
-    expect(verdicts / measurable).toBeLessThanOrEqual(P_VERDICT + 0.07);
-  });
+  // Calibration: in worlds where the change did nothing, Improved and
+  // Declined together come from p < P_VERDICT (and 3 points), so they may
+  // come in about P_VERDICT of the measurable worlds. Measured: 0.179 (35 of
+  // 196; 5 engines, 3 targets, 12 controls: most target strata hold one or
+  // two controls) and 0.179 (34 of 190) with a fourth target tracked only
+  // where no control is. Bounds: P_VERDICT + 0.07 above (2.5 standard
+  // errors of a rate near 0.2 over ~190 worlds: room for chance, not for a
+  // test that reads noise as an effect) and 0.10 below (the unstudentized
+  // difference read 0.087 and 0.079 here, power lost with it).
+  const nominal = (tally) => (tally.improved + tally.declined) / tally.measurable;
+
+  it(
+    'keeps Improved and Declined at their nominal rate in worlds with no effect',
+    () => {
+      const tally = outcomes(200, { kind: 'null' });
+      expect(tally.measurable).toBeGreaterThanOrEqual(150);
+      expect(nominal(tally)).toBeLessThanOrEqual(P_VERDICT + 0.07);
+      expect(nominal(tally)).toBeGreaterThanOrEqual(0.1);
+    },
+    { timeout: 30_000 },
+  );
+
+  it(
+    'keeps them there with a target tracked only where no control is',
+    () => {
+      const tally = outcomes(200, { kind: 'orphan', orphan: true });
+      expect(tally.measurable).toBeGreaterThanOrEqual(150);
+      expect(nominal(tally)).toBeLessThanOrEqual(P_VERDICT + 0.07);
+      expect(nominal(tally)).toBeGreaterThanOrEqual(0.1);
+    },
+    { timeout: 30_000 },
+  );
+
+  it(
+    'finds a real +15 pts effect in most noisy worlds (power)',
+    () => {
+      // 5 targets, 15 controls, 5 engines with their own swing: measured
+      // Improved in 0.86 of 100 worlds (3 targets: 0.62; 8 targets: 0.95).
+      // 0.70 is over 4 standard errors below 0.86 at 100 worlds: a method
+      // that lost a fair part of its power fails here.
+      const tally = outcomes(100, { kind: 'power5', targets: 5, controls: 15, lift: 0.15 });
+      expect(tally.measurable).toBeGreaterThanOrEqual(90);
+      expect(tally.improved / tally.measurable).toBeGreaterThanOrEqual(0.7);
+      expect(tally.declined).toBe(0);
+    },
+    { timeout: 30_000 },
+  );
 
   it('judges the unrounded effect, with enough prompts, and sets confidence by cells and prompts', () => {
     // 2.96 is stored as 3.0, but isn't the minimum meaningful change.
@@ -777,6 +889,7 @@ describe('checkpoint entries', () => {
       p_value: null,
       interval_low: null,
       interval_high: null,
+      interval_resamples: null,
       direction: null,
     });
   });

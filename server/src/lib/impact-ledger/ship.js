@@ -219,10 +219,14 @@ export const REPUBLISH_DAYS = 90;
  * nothing, and with it off reads nothing either. Never throws: a ship event
  * that fails is logged, and the page stays published.
  *
- * @returns {Promise<string|null>} the ship event's id
+ * @returns {Promise<{ id: string|null, created: boolean, failed: boolean }>} the ship
+ *   event's id, whether this call wrote it (not one written before, nor a
+ *   draft's first noted as published again), and whether something failed
+ *   on the way (logged; the nightly job counts it)
  */
-export async function recordCmsPublish({ deliveryId, url, publishedAt, db = supabaseAdmin }) {
-  if (!chatAgenticDeployed()) return null;
+export async function shipCmsPublish({ deliveryId, url, publishedAt, db = supabaseAdmin }) {
+  const none = { id: null, created: false, failed: false };
+  if (!chatAgenticDeployed()) return none;
   try {
     const { data: delivery, error } = await db
       .from('content_draft_deliveries')
@@ -230,7 +234,7 @@ export async function recordCmsPublish({ deliveryId, url, publishedAt, db = supa
       .eq('id', deliveryId)
       .maybeSingle();
     if (error) throw new ImpactDbError('delivery read', error);
-    if (!delivery || !chatAgenticEnabled(delivery.organization_id)) return null;
+    if (!delivery || !chatAgenticEnabled(delivery.organization_id)) return none;
 
     let draft = null;
     if (delivery.draft_id) {
@@ -262,7 +266,7 @@ export async function recordCmsPublish({ deliveryId, url, publishedAt, db = supa
           const { error: noteError } = await note;
           if (noteError) throw new ImpactDbError('republish note', noteError);
         }
-        return first.id;
+        return { id: first.id, created: false, failed: false };
       }
       const { data, error: draftError } = await db
         .from('content_drafts')
@@ -306,7 +310,7 @@ export async function recordCmsPublish({ deliveryId, url, publishedAt, db = supa
         .eq('content_draft_delivery_id', delivery.id)
         .maybeSingle();
       if (keptError) throw new ImpactDbError('ship event read', keptError);
-      return kept?.id ?? null;
+      return { id: kept?.id ?? null, created: false, failed: false };
     }
     // The nightly job seeds it if this fails.
     try {
@@ -316,13 +320,24 @@ export async function recordCmsPublish({ deliveryId, url, publishedAt, db = supa
         { err: { name: err?.name, code: err?.code ?? null } },
         '[impact-ledger] measurement not seeded',
       );
+      return { id: ship.id, created: true, failed: true };
     }
-    return ship.id;
+    return { id: ship.id, created: true, failed: false };
   } catch (err) {
     logger.warn(
       { err: { name: err?.name, code: err?.code ?? null } },
       '[impact-ledger] cms publish not recorded',
     );
-    return null;
+    return { id: null, created: false, failed: true };
   }
+}
+
+/**
+ * The ship event of a publish the CMS confirmed (shipCmsPublish), as
+ * markDeliveryPublished asks for it: its id, or null.
+ *
+ * @returns {Promise<string|null>}
+ */
+export async function recordCmsPublish(args) {
+  return (await shipCmsPublish(args)).id;
 }

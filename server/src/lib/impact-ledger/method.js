@@ -34,11 +34,14 @@
  *     before).
  *   * Uncertainty (item 9), by re-randomizing prompts and measuring again:
  *     RESAMPLES reshuffles of which prompts are targets and which controls,
- *     the strata's control means and the effect computed afresh each time,
+ *     the strata's control means computed afresh each time, tested on the
+ *     studentized difference of the two groups' residuals (studentized),
  *     for the p-value; and a bootstrap that resamples the target and the
- *     control prompts and measures again, for the 90% interval (none from
- *     fewer than MIN_INTERVAL_PROMPTS target prompts). Both seeded, so the
- *     same rows always give the same result.
+ *     control prompts and measures the effect again, for the 90% interval
+ *     (none from fewer than MIN_INTERVAL_PROMPTS target prompts). Only the
+ *     cells in strata holding both a target and a control take part
+ *     (measuredUnits). Both seeded, so the same rows always give the same
+ *     result.
  *   * Outcome and confidence (item 10) in the one vocabulary: Pending (day 7
  *     shows a direction only), Improved, No meaningful change, Declined, Not
  *     measurable. Judged on the unrounded effect and p; stored rounded. A
@@ -84,6 +87,8 @@ export const MEDIUM_TARGET_PROMPTS = 5;
 export const HIGH_TARGET_PROMPTS = 10;
 /** Target prompts an interval is read from: none from one. */
 export const MIN_INTERVAL_PROMPTS = 2;
+/** Share of a bootstrap's resamples that must be measurable for an interval. */
+export const MIN_BOOTSTRAP_SHARE = 0.5;
 /** A stratum's baseline band, in points: 0–9.9, 10–19.9 … 90–100. */
 export const BAND_PTS = 10;
 /** Another change shipped on this share of the targets makes a checkpoint Not measurable. */
@@ -343,8 +348,8 @@ export function directionOf(effect) {
 }
 
 /**
- * The cells of each prompt on one metric, as units the estimate re-labels
- * and resamples: per cell its stratum (an index), baseline and checkpoint.
+ * The cells of each prompt on one metric: per cell its stratum (an index),
+ * baseline and checkpoint.
  */
 function promptUnits(cells, metric, strata) {
   const byPrompt = new Map();
@@ -362,15 +367,47 @@ function promptUnits(cells, metric, strata) {
 }
 
 /**
+ * The units a metric is measured, re-labelled and resampled on, targets
+ * first: each prompt with its cells in the strata used (those holding a
+ * target cell and a control cell), and nothing else. A target cell with
+ * no control in its stratum, a target prompt left with none, and a
+ * control's cells in a stratum no target is in are out before anything is
+ * measured, so a reshuffle labels exactly the units the effect is read on,
+ * as many targets as it has.
+ *
+ * Units still differ in how many cells they bring: a target tracked on
+ * five engines brings five, a control matched on one engine one. That is
+ * each prompt's own coverage of the strata used, the same rule for both;
+ * trimming targets to their controls' cells would drop what they measure,
+ * and the prompt (its cells averaged) stays the unit of evidence.
+ */
+function measuredUnits(targets, controls, metric) {
+  const strata = new Map();
+  const targetUnits = promptUnits(targets, metric, strata);
+  const controlUnits = promptUnits(controls, metric, strata);
+  const controlled = new Set(controlUnits.flatMap((unit) => unit.map((cell) => cell.stratum)));
+  const kept = targetUnits
+    .map((unit) => unit.filter((cell) => controlled.has(cell.stratum)))
+    .filter((unit) => unit.length > 0);
+  const used = new Set(kept.flatMap((unit) => unit.map((cell) => cell.stratum)));
+  const peers = controlUnits
+    .map((unit) => unit.filter((cell) => used.has(cell.stratum)))
+    .filter((unit) => unit.length > 0);
+  return { units: [...kept, ...peers], targetCount: kept.length, strataCount: strata.size };
+}
+
+/**
  * The stratified estimate for one labelling of the units (`targets` and
  * `controls` are unit indexes; a bootstrap repeats some): each stratum's
- * control means from the controls given, then each target prompt's cells
- * that have a control in their stratum, their change minus the stratum's
- * control change, averaged per prompt, the effect the target prompts' mean.
- * Null when no target prompt has such a cell. With `detail`, the numbers the
- * row shows too.
+ * control means from the controls given, then each target cell's change
+ * minus its stratum's control change, averaged per prompt, the effect the
+ * target prompts' mean. A target cell whose stratum has no control in this
+ * labelling is left out, as the observed one leaves it out; `strict`
+ * (the bootstrap) makes such a labelling unmeasured (null) instead. Null
+ * too when no target prompt keeps a cell. With `detail`, the numbers the
+ * row shows.
  */
-function estimate(units, strataCount, targets, controls, detail = false) {
+function estimate(units, strataCount, targets, controls, { detail = false, strict = false } = {}) {
   const sumPre = new Float64Array(strataCount);
   const sumPost = new Float64Array(strataCount);
   const count = new Float64Array(strataCount);
@@ -384,14 +421,16 @@ function estimate(units, strataCount, targets, controls, detail = false) {
   let effect = 0;
   let prompts = 0;
   const shown = { before: 0, after: 0, controlBefore: 0, controlAfter: 0, cells: 0 };
-  const used = new Set();
   for (const index of targets) {
     let residual = 0;
     let kept = 0;
     const own = { before: 0, after: 0, controlBefore: 0, controlAfter: 0 };
     for (const cell of units[index]) {
       const n = count[cell.stratum];
-      if (!n) continue;
+      if (!n) {
+        if (strict) return null;
+        continue;
+      }
       const controlBefore = sumPre[cell.stratum] / n;
       const controlAfter = sumPost[cell.stratum] / n;
       residual += cell.post - cell.pre - (controlAfter - controlBefore);
@@ -401,7 +440,6 @@ function estimate(units, strataCount, targets, controls, detail = false) {
         own.after += cell.post;
         own.controlBefore += controlBefore;
         own.controlAfter += controlAfter;
-        used.add(cell.stratum);
       }
     }
     if (!kept) continue;
@@ -414,13 +452,6 @@ function estimate(units, strataCount, targets, controls, detail = false) {
   }
   if (!prompts) return null;
   if (!detail) return effect / prompts;
-  let controlCells = 0;
-  let controlPrompts = 0;
-  for (const index of controls) {
-    const inUse = units[index].filter((cell) => used.has(cell.stratum)).length;
-    controlCells += inUse;
-    if (inUse) controlPrompts++;
-  }
   return {
     effect: effect / prompts,
     before: shown.before / prompts,
@@ -429,19 +460,79 @@ function estimate(units, strataCount, targets, controls, detail = false) {
     controlAfter: shown.controlAfter / prompts,
     targetCells: shown.cells,
     targetPrompts: prompts,
-    controlCells,
-    controlPrompts,
+    controlCells: controls.reduce((sum, index) => sum + units[index].length, 0),
+    controlPrompts: controls.length,
   };
 }
 
 /**
- * Two-sided p-value of the effect by re-randomization over prompts: which
- * prompts are targets reshuffled `resamples` times, each labelling measured
- * afresh (its strata's control means included). Never 0: (hits + 1) /
+ * The statistic a labelling is tested on: the target prompts' mean
+ * residual minus the control prompts', over its standard error (Welch's),
+ * each prompt's residual its cells' changes less their strata's control
+ * changes in this labelling. Studentized because the two groups' prompts
+ * aren't alike: a target brings its cells on every engine it is tracked on,
+ * a control only those matched in the targets' strata (often one or two),
+ * so a control's residual is the noisier. The raw difference reshuffled
+ * would mix the two and read the targets against a wider spread than
+ * their own (in the tests' worlds with no effect: Improved or Declined in
+ * 8–9% of them where P_VERDICT allows 20%, and less power with few
+ * targets); studentized, a permutation test stays valid when the groups'
+ * spreads differ (Chung & Romano 2013), and reads about 18% there. Null
+ * without a target or a control prompt left to read.
+ */
+function studentized(units, strataCount, targets, controls) {
+  const sumPre = new Float64Array(strataCount);
+  const sumPost = new Float64Array(strataCount);
+  const count = new Float64Array(strataCount);
+  for (const index of controls) {
+    for (const cell of units[index]) {
+      sumPre[cell.stratum] += cell.pre;
+      sumPost[cell.stratum] += cell.post;
+      count[cell.stratum]++;
+    }
+  }
+  const residuals = (indexes) => {
+    const out = [];
+    for (const index of indexes) {
+      let residual = 0;
+      let kept = 0;
+      for (const cell of units[index]) {
+        const n = count[cell.stratum];
+        if (!n) continue;
+        residual += cell.post - cell.pre - (sumPost[cell.stratum] - sumPre[cell.stratum]) / n;
+        kept++;
+      }
+      if (kept) out.push(residual / kept);
+    }
+    return out;
+  };
+  const t = residuals(targets);
+  const c = residuals(controls);
+  if (t.length === 0 || c.length === 0) return null;
+  const meanOf = (values) => values.reduce((sum, v) => sum + v, 0) / values.length;
+  const varianceOf = (values, mean) =>
+    values.length > 1
+      ? values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (values.length - 1)
+      : 0;
+  const mt = meanOf(t);
+  const mc = meanOf(c);
+  const difference = mt - mc;
+  const se = Math.sqrt(varianceOf(t, mt) / t.length + varianceOf(c, mc) / c.length);
+  if (se < 1e-9) return difference === 0 ? 0 : Math.sign(difference) * Infinity;
+  return difference / se;
+}
+
+/**
+ * Two-sided p-value by re-randomization over prompts: which of the
+ * measured units are targets reshuffled `resamples` times, as many as the
+ * effect is read on, each labelling measured afresh (its strata's control
+ * means included) on the studentized statistic. Never 0: (hits + 1) /
  * (labellings measured + 1).
  */
-function rerandomizedP(units, strataCount, targetCount, observed, random, resamples) {
+function rerandomizedP(units, strataCount, targetCount, random, resamples) {
   const order = units.map((_, index) => index);
+  const observed =
+    studentized(units, strataCount, order.slice(0, targetCount), order.slice(targetCount)) ?? 0;
   let hits = 0;
   let measured = 0;
   for (let r = 0; r < resamples; r++) {
@@ -450,15 +541,15 @@ function rerandomizedP(units, strataCount, targetCount, observed, random, resamp
       const j = i + Math.floor(random() * (order.length - i));
       [order[i], order[j]] = [order[j], order[i]];
     }
-    const effect = estimate(
+    const statistic = studentized(
       units,
       strataCount,
       order.slice(0, targetCount),
       order.slice(targetCount),
     );
-    if (effect === null) continue;
+    if (statistic === null) continue;
     measured++;
-    if (Math.abs(effect) >= Math.abs(observed) - 1e-9) hits++;
+    if (Math.abs(statistic) >= Math.abs(observed) - 1e-9) hits++;
   }
   return (hits + 1) / (measured + 1);
 }
@@ -466,25 +557,32 @@ function rerandomizedP(units, strataCount, targetCount, observed, random, resamp
 /**
  * The 90% interval of the effect: a bootstrap that resamples the target
  * prompts and the control prompts, each group on its own, and measures
- * again. Null from fewer than MIN_INTERVAL_PROMPTS target prompts.
+ * again. A resample that leaves a target cell's stratum with no control is
+ * skipped and counted, not measured on fewer cells; with fewer than
+ * MIN_BOOTSTRAP_SHARE of them measured, or fewer than MIN_INTERVAL_PROMPTS
+ * target prompts, there is no interval.
+ *
+ * @returns {{ low: number, high: number, resamples: number, skipped: number } | null}
  */
 function bootstrapInterval(units, strataCount, targetCount, random, resamples) {
   if (targetCount < MIN_INTERVAL_PROMPTS) return null;
   const controlCount = units.length - targetCount;
   const effects = [];
+  let skipped = 0;
   for (let r = 0; r < resamples; r++) {
     const targets = Array.from({ length: targetCount }, () => Math.floor(random() * targetCount));
     const controls = Array.from(
       { length: controlCount },
       () => targetCount + Math.floor(random() * controlCount),
     );
-    const effect = estimate(units, strataCount, targets, controls);
-    if (effect !== null) effects.push(effect);
+    const effect = estimate(units, strataCount, targets, controls, { strict: true });
+    if (effect === null) skipped++;
+    else effects.push(effect);
   }
-  if (effects.length === 0) return null;
+  if (effects.length < resamples * MIN_BOOTSTRAP_SHARE) return null;
   effects.sort((a, b) => a - b);
   const at = (q) => effects[Math.floor(q * (effects.length - 1))];
-  return { low: at(0.05), high: at(0.95) };
+  return { low: at(0.05), high: at(0.95), resamples: effects.length, skipped };
 }
 
 /**
@@ -493,25 +591,27 @@ function bootstrapInterval(units, strataCount, targetCount, random, resamples) {
  * effect, its p-value and 90% interval, in points, as stored (rounded); and
  * the unrounded effect and p it is judged on, with the target cells and
  * prompts kept and the control cells used. Null when no target cell has a
- * control in its stratum.
+ * control in its stratum. With `resamples` 0 nothing is re-randomized or
+ * resampled: no p and no interval (a checkpoint that can't have a verdict).
  */
 export function metricResult({ metric, targets, controls, seed, resamples = RESAMPLES }) {
-  const strata = new Map();
-  const targetUnits = promptUnits(targets, metric, strata);
-  const units = [...targetUnits, ...promptUnits(controls, metric, strata)];
-  const targetCount = targetUnits.length;
+  const { units, targetCount, strataCount } = measuredUnits(targets, controls, metric);
+  if (targetCount === 0) return null;
   const indexes = units.map((_, index) => index);
   const seen = estimate(
     units,
-    strata.size,
+    strataCount,
     indexes.slice(0, targetCount),
     indexes.slice(targetCount),
-    true,
+    { detail: true },
   );
-  if (!seen) return null;
-  const random = seededRandom(`${seed}:${metric}`);
-  const p = rerandomizedP(units, strata.size, targetCount, seen.effect, random, resamples);
-  const interval = bootstrapInterval(units, strata.size, targetCount, random, resamples);
+  let p = null;
+  let interval = null;
+  if (resamples > 0) {
+    const random = seededRandom(`${seed}:${metric}`);
+    p = rerandomizedP(units, strataCount, targetCount, random, resamples);
+    interval = bootstrapInterval(units, strataCount, targetCount, random, resamples);
+  }
   return {
     stored: {
       metric,
@@ -525,9 +625,10 @@ export function metricResult({ metric, targets, controls, seed, resamples = RESA
       control_before: round1(seen.controlBefore),
       control_after: round1(seen.controlAfter),
       effect: round1(seen.effect),
-      p_value: round3(p),
+      p_value: p === null ? null : round3(p),
       interval_low: interval ? round1(interval.low) : null,
       interval_high: interval ? round1(interval.high) : null,
+      interval_resamples: interval ? interval.resamples : null,
       target_cells: seen.targetCells,
       target_prompts: seen.targetPrompts,
       control_cells: seen.controlCells,
@@ -554,6 +655,7 @@ export function withoutVerdict(metric) {
     p_value: null,
     interval_low: null,
     interval_high: null,
+    interval_resamples: null,
   };
 }
 
@@ -618,18 +720,17 @@ export function measureCells({ seed, primary, targetIds, pre, post, excluded, pr
     targetTopics,
     topicOf: (id) => prompts.get(id)?.topic_id ?? null,
   });
-  const main = control.cells.length
-    ? metricResult({ metric: primary, targets, controls: control.cells, seed })
-    : null;
-  if (!main || main.controlCells < MIN_CONTROL_CELLS) {
-    return { reason: 'too_few_controls', targetCells: main?.targetCells ?? 0, control };
+  // Read first with nothing re-randomized: too few controls, or too few
+  // target prompts for a verdict (day 7's direction needs no p), stop here.
+  const read = (metric, resamples) =>
+    metricResult({ metric, targets, controls: control.cells, seed, resamples });
+  const first = control.cells.length ? read(primary, 0) : null;
+  if (!first || first.controlCells < MIN_CONTROL_CELLS) {
+    return { reason: 'too_few_controls', targetCells: first?.targetCells ?? 0, control };
   }
-  const other = metricResult({
-    metric: primary === 'visibility' ? 'citations' : 'visibility',
-    targets,
-    controls: control.cells,
-    seed,
-  });
+  const resamples = first.targetPrompts >= VERDICT_TARGET_PROMPTS ? RESAMPLES : 0;
+  const main = resamples ? read(primary, resamples) : first;
+  const other = read(primary === 'visibility' ? 'citations' : 'visibility', resamples);
   return {
     reason: null,
     targetCells: main.targetCells,

@@ -10,7 +10,11 @@
  *   1. writes the ship event of each send a CMS confirmed live in the last
  *      SEED_DAYS that has none (its write failed when it was confirmed, and
  *      the send, already published, isn't confirmed again), through the
- *      same recordCmsPublish; then seeds a Pending measurement for each
+ *      same upsert (shipCmsPublish), oldest publish first. A workspace's
+ *      first night on CHAT_AGENTIC_ORGS so gets ship events for its last
+ *      SEED_DAYS of confirmed sends, as intended: their checkpoints are
+ *      read late, as any late measurement is. Then it seeds a Pending
+ *      measurement for each
  *      ship event written in the last SEED_DAYS that has none (a writer
  *      that didn't, or failed to);
  *   2. reads the measurements due (next_check_at passed) with their ship
@@ -56,7 +60,7 @@ import {
   utcDay,
   withoutVerdict,
 } from './method.js';
-import { ImpactDbError, readAll, readChunks, recordCmsPublish, seedMeasurements } from './ship.js';
+import { ImpactDbError, readAll, readChunks, seedMeasurements, shipCmsPublish } from './ship.js';
 
 /** Daily at 07:53 UTC: yesterday's rollups are in by then (the daily sweep refreshes them). */
 export const SCHEDULE = '53 7 * * *';
@@ -381,11 +385,14 @@ async function measureOne(db, { measurement, ship, due, prompts, shipped, window
  * The sends a CMS confirmed live in the last SEED_DAYS, for the workspaces
  * Chat is on for with an active plan, whose ship event is missing: its
  * write failed when the publish was confirmed, and the send, published
- * already, is never confirmed again. Written now through recordCmsPublish,
+ * already, is never confirmed again. Written now through shipCmsPublish,
  * the same upsert on the send (one ship event per send, a draft live again
- * within 90 days noted on its first). Says how many it wrote or found.
+ * within 90 days noted on its first), oldest publish first, so a draft's
+ * first ship event is its first publish. Counts the ship events it wrote
+ * (a send noted on its draft's first is read again each night and counts
+ * nothing) and what failed on the way.
  */
-async function fillMissingSends(db, now) {
+async function fillMissingSends(db, now, tally) {
   const orgs = chatAgenticOrgs();
   const since = new Date(now.getTime() - SEED_DAYS * DAY_MS).toISOString();
   const sends = (
@@ -399,7 +406,7 @@ async function fillMissingSends(db, now) {
         .gte('published_at', since);
       if (orgs.length) query = query.in('organization_id', orgs);
       if (isCloud()) query = query.in('organizations.subscription_status', ACTIVE_STATUSES);
-      return query.order('id');
+      return query.order('published_at').order('id');
     })
   ).filter((send) => send.published_at && chatAgenticEnabled(send.organization_id));
   const written = new Set(
@@ -416,18 +423,17 @@ async function fillMissingSends(db, now) {
       )
     ).map((ship) => ship.content_draft_delivery_id),
   );
-  let filled = 0;
   for (const send of sends) {
     if (written.has(send.id)) continue;
-    const id = await recordCmsPublish({
+    const { created, failed } = await shipCmsPublish({
       deliveryId: send.id,
       url: send.published_url,
       publishedAt: send.published_at,
       db,
     });
-    if (id) filled++;
+    if (created) tally.filled++;
+    if (failed) tally.failed++;
   }
-  return filled;
 }
 
 /**
@@ -623,7 +629,7 @@ export async function runImpactLedger({ db = supabaseAdmin, now = new Date() } =
   try {
     // Their own steps: one that fails is tried again tomorrow, and what is due is measured.
     try {
-      tally.filled = await fillMissingSends(db, now);
+      await fillMissingSends(db, now, tally);
     } catch (err) {
       tally.failed++;
       logger.error({ err: errInfo(err) }, '[impact-ledger] sends not filled');
