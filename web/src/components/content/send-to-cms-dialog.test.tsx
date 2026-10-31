@@ -281,6 +281,12 @@ describe('SendDialog', () => {
     await act(async () => button('Send').click());
     expect(alert()).toBe("This brand isn't in your workspace. Switch to one of your brands.");
 
+    sendPagesToCms.mockResolvedValueOnce({ ok: false, code: 'execute_off', field: null });
+    await act(async () => button('Send').click());
+    expect(alert()).toBe(
+      'An admin turned publishing off for managers, so only an admin can send pages to the CMS.',
+    );
+
     // What the webhook answered, in the app's words; else why it wasn't reached.
     const failed = { id: 'x1', draftId: 'd1', status: 'failed' };
     sendPagesToCms.mockResolvedValueOnce({

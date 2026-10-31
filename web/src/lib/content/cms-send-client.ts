@@ -43,6 +43,8 @@ export type CmsSendError =
   | 'in_progress'
   | 'daily_limit'
   | 'forbidden'
+  // A manager, with publishing turned off for managers (Settings › Chat).
+  | 'execute_off'
   | 'not_found'
   | 'invalid'
   | 'failed'
@@ -104,6 +106,7 @@ const KNOWN: readonly CmsSendError[] = [
   'in_progress',
   'daily_limit',
   'forbidden',
+  'execute_off',
   'not_found',
   'invalid',
 ];
