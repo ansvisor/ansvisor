@@ -12,7 +12,7 @@ import { triggerTrackingCheck } from '@/lib/actions/tracking';
 import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { addCompetitor, getCompetitors } from '@/lib/actions/competitor';
 import { getFaviconUrl } from '@/lib/favicon';
-import { slugify } from '@/lib/slug';
+import { insertOrganization } from '@/lib/organization-insert';
 import { addCompetitorChoice, mergeCompetitorSuggestions } from '@/lib/competitor-list';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
@@ -704,31 +704,15 @@ export default function OnboardingPage() {
       let orgId = profile?.organization_id;
 
       if (!orgId) {
-        const slug = slugify(brandName) || `org-${Date.now()}`;
-
-        const { data: existing } = await supabase
-          .from('organizations')
-          .select('id')
-          .eq('slug', slug)
-          .maybeSingle();
-
-        const finalSlug = existing ? `${slug}-${Date.now()}` : slug;
-
-        const { data: org, error: orgError } = await supabase
-          .from('organizations')
-          .insert({ name: brandName.trim(), slug: finalSlug })
-          .select()
-          .single();
-
-        if (orgError || !org) throw new Error(orgError?.message ?? 'Failed to create organization');
+        const newOrgId = await insertOrganization(supabase, brandName);
 
         const { error: profileError } = await supabase
           .from('profiles')
-          .update({ organization_id: org.id })
+          .update({ organization_id: newOrgId })
           .eq('id', user.id);
 
         if (profileError) throw new Error(profileError.message);
-        orgId = org.id;
+        orgId = newOrgId;
       }
 
       setOrganizationId(orgId);
