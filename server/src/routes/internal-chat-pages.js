@@ -4,16 +4,19 @@
  * endpoints; the web checks the person and their workspace, the page's site
  * and the run's pages before it asks.
  *
- * POST /api/internal/chat/pages/open { url, hosts, domains, orgId? }
+ * POST /api/internal/chat/pages/open { url, hosts, domains, orgId }
  *   hosts and domains: the run's sites (a host as it is, "www." aside; a
  *   domain with its subdomains); every step of the page's redirects must be
- *   on one (not_allowed). The web sends only well-formed names.
+ *   on one (not_allowed). The web sends only well-formed names. orgId: the
+ *   workspace the page is opened for, always given (400 without it), so
+ *   each workspace has its own places.
  *   → 200 { page }: what Chat reads of the page, never its HTML.
  *   → 4xx/5xx { code, message, status }: why it couldn't be opened
  *     (safe-fetch's codes; status: the page's own answer). The web words
  *     each code itself: a message never carries what the page sent.
  *   → 429 { code: 'busy' }: a workspace opens 2 pages at once at most, so
- *     one run can't hold the API's event loop.
+ *     one run can't hold the API's event loop. The count is this process's:
+ *     with several API instances, a workspace opens 2 on each.
  *
  * Neither the page nor its address is logged. Calls with the secret aren't
  * counted by the API's per-IP limiter (rate-limiter.js), as the budget's.
@@ -42,7 +45,7 @@ const openSchema = z.strictObject({
   url: z.string().trim().min(1).max(2048),
   hosts: hostList,
   domains: hostList,
-  orgId: z.guid().optional(),
+  orgId: z.guid(),
 });
 
 /** The answer for a page that couldn't be opened, by safe-fetch's code. */
@@ -61,7 +64,7 @@ const FETCH_STATUS = {
 
 /** Pages a workspace opens at once, at most. */
 export const PAGES_AT_ONCE = 2;
-/** Pages opening now, by workspace. */
+/** Pages opening now, by workspace, in this process (not shared between API instances). */
 const opening = new Map();
 
 router.post('/open', async (req, res) => {
@@ -69,8 +72,7 @@ router.post('/open', async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ code: 'invalid_url', message: 'Not a URL', status: null });
   }
-  const { url, hosts, domains, orgId } = parsed.data;
-  const key = orgId ?? '';
+  const { url, hosts, domains, orgId: key } = parsed.data;
   const now = opening.get(key) ?? 0;
   if (now >= PAGES_AT_ONCE) {
     return res

@@ -112,7 +112,13 @@ const TEXT_BLOCKS = new Set([
 
 const BLOCK_END = Symbol('block end');
 
-/** An element's words, each block apart, in one walk (no recursion: a deep page is fine). */
+/** Elements whose text is code, not words a reader sees: never read as text. */
+const NOT_WORDS = new Set(['script', 'style']);
+
+/**
+ * An element's words, each block apart, in one walk (no recursion: a deep
+ * page is fine). A script's or a style's code isn't words.
+ */
 export function plainTextOf(root) {
   const parts = [];
   const stack = [root];
@@ -122,12 +128,31 @@ export function plainTextOf(root) {
       parts.push(' ');
     } else if (node.type === 'text') {
       parts.push(node.data);
+    } else if (isElement(node) && NOT_WORDS.has(node.name)) {
+      // Its code, skipped.
     } else if (node.children) {
       if (isElement(node) && TEXT_BLOCKS.has(node.name)) stack.push(BLOCK_END);
       for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
     }
   }
   return clean(parts.join(''));
+}
+
+/**
+ * The blocks under `root` that hide their words from a reader (ALL_HIDDEN,
+ * HIDDEN_CLASSES, HIDDEN_STYLE): what `dropHidden` removes, and what a
+ * reader for a model checks apart (page-open.js).
+ */
+export function hiddenBlocksIn($, root) {
+  return [
+    ...findIn($, root, ALL_HIDDEN).toArray(),
+    ...findIn($, root, HIDDEN_CLASSES)
+      .toArray()
+      .filter((el) => hiddenByClass($, el)),
+    ...findIn($, root, '[style]')
+      .toArray()
+      .filter((el) => HIDDEN_STYLE.test($(el).attr('style') ?? '')),
+  ];
 }
 
 /**
@@ -891,17 +916,7 @@ export function extractPageContent(
 
   const body = $('body');
   removeAll(findIn($, body[0], FRAME).toArray());
-  if (dropHidden) {
-    removeAll([
-      ...findIn($, body[0], ALL_HIDDEN).toArray(),
-      ...findIn($, body[0], HIDDEN_CLASSES)
-        .toArray()
-        .filter((el) => hiddenByClass($, el)),
-      ...findIn($, body[0], '[style]')
-        .toArray()
-        .filter((el) => HIDDEN_STYLE.test($(el).attr('style') ?? '')),
-    ]);
-  }
+  if (dropHidden) removeAll(hiddenBlocksIn($, body[0]));
 
   // The root: the page's main block when it holds the text; else the part
   // of the page holding the text and its H1; else the text area alone.

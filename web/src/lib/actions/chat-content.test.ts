@@ -33,6 +33,7 @@ const { sendDraftToCms } = await import('./cms-send');
 const { startSiteAudits } = await import('./audits');
 const { updateContentDraft } = await import('./content-drafts');
 
+const ORG = 'org-1';
 const BRAND = '11111111-1111-4111-8111-111111111111';
 const DRAFT = '33333333-3333-4333-8333-333333333333';
 
@@ -42,7 +43,8 @@ let answer: { status: number; body: unknown };
 beforeEach(() => {
   fake.db = createFakeSupabase();
   Object.assign(fake.db.tables, {
-    profiles: [{ id: 'u1', role: 'manager' }],
+    profiles: [{ id: 'u1', role: 'manager', organization_id: ORG }],
+    chat_settings: [],
     content_draft_deliveries: [],
     content_drafts: [
       {
@@ -97,7 +99,11 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 const asRole = (role: string) => {
-  fake.db.tables.profiles = [{ id: 'u1', role }];
+  fake.db.tables.profiles = [{ id: 'u1', role, organization_id: ORG }];
+};
+/** An Admin's "Managers can't go live" switches in Settings › Chat (chat_settings, 00401). */
+const managersCantGoLive = (groups: string[]) => {
+  fake.db.tables.chat_settings = [{ organization_id: ORG, manager_execute_off: groups }];
 };
 
 describe('sendDraftToCms', () => {
@@ -182,6 +188,34 @@ describe('sendDraftToCms', () => {
       { id: 'd0', draft_id: DRAFT, status: 'published', target: 'webflow' },
     ];
     expect(await sendDraftToCms(DRAFT, 'webflow')).toMatchObject({ reason: 'live_item' });
+    expect(requests).toEqual([]);
+  });
+
+  it('refuses a Manager once an Admin turned publishing off for Managers, before reading the page', async () => {
+    managersCantGoLive(['publishing']);
+    expect(await sendDraftToCms(DRAFT, 'webflow')).toEqual({
+      ok: false,
+      reason: 'execute_off',
+      message: 'An Admin turned publishing off for Managers.',
+    });
+    expect(readCmsSources).not.toHaveBeenCalled();
+    expect(requests).toEqual([]);
+    // The switch is the Managers': an Admin still sends.
+    asRole('admin');
+    expect(await sendDraftToCms(DRAFT, 'webflow')).toMatchObject({ ok: true });
+    // Another group switched off leaves publishing on.
+    asRole('manager');
+    managersCantGoLive(['email_outreach', 'code_prs']);
+    expect(await sendDraftToCms(DRAFT, 'webflow')).toMatchObject({ ok: true });
+    expect(requests).toHaveLength(2);
+  });
+
+  it('refuses an Agency partner as an Analyst, and a Manager whose switches can’t be read', async () => {
+    asRole('agency_partner');
+    expect(await sendDraftToCms(DRAFT, 'webflow')).toMatchObject({ reason: 'forbidden_role' });
+    asRole('manager');
+    fake.db.failures.chat_settings = { message: 'db down' };
+    expect(await sendDraftToCms(DRAFT, 'webflow')).toMatchObject({ ok: false, reason: 'failed' });
     expect(requests).toEqual([]);
   });
 

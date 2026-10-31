@@ -70,7 +70,7 @@ const { addBrandTopic, renameBrandTopic } = await import('@/lib/actions/topic');
 const { addCompetitors, removeBrandCompetitor } = await import('@/lib/actions/competitor');
 const { runLoggedWrite } = await import('./write');
 const { activitySummary, approvalFor, logActivity, recordActivity } = await import('./activity');
-const { decideToolCall } = await import('./precedence');
+const { allowedTools, decideToolCall, listingDenial } = await import('./precedence');
 const { readPrecedenceContext, readToolCall } = await import('./precedence-context');
 const { chatTool, CHAT_TOOLS } = await import('./registry/tools');
 const { UNDO_RULES } = await import('./undo');
@@ -709,34 +709,100 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
     },
   );
 
-  it('sends a draft to a CMS only from a card, in every mode, even under an Admin Always (no Undo)', async () => {
-    const tool = chatTool('push_cms_draft')!;
-    expect(tool).toMatchObject({ maxPolicy: 'ask', flags: { alwaysCard: true } });
-    // An Admin's stored Always is held to the row's maximum.
+  /** An Admin's Chat settings row (00401): a stored Always, and the go-live groups off for Managers. */
+  const cmsSettings = (managerExecuteOff: string[]) => {
     db.tables.chat_settings = [
       {
         organization_id: ORG,
-        tool_policies: { [tool.labelKey]: 'always' },
+        tool_policies: { [chatTool('push_cms_draft')!.labelKey]: 'always' },
         full_auto_for_members: true,
         dont_ask_again: true,
-        manager_execute_off: [],
+        manager_execute_off: managerExecuteOff,
       },
     ];
+  };
+  const AGENCY = 'aaaaaaaa-0000-4000-8000-000000000005';
+
+  it('sends a draft to a CMS as an EXECUTE in the publishing group: only on a click, even under an Admin Always', async () => {
+    expect(chatTool('push_cms_draft')).toMatchObject({
+      class: 'execute',
+      executeGroup: 'publishing',
+      defaultPolicy: 'click',
+      maxPolicy: 'click',
+    });
+    // An Admin's stored Always lifts nothing: an EXECUTE is a click.
+    cmsSettings([]);
     for (const userId of [PEOPLE.admin, PEOPLE.manager]) {
       for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
-        expect(await decide(userId, 'push_cms_draft', mode), `${userId} ${mode}`).toMatchObject({
-          kind: 'ask',
-          reason: 'always_card',
-          offerDontAskAgain: false,
+        expect(await decide(userId, 'push_cms_draft', mode), `${userId} ${mode}`).toEqual({
+          kind: 'click',
         });
       }
     }
+  });
+
+  it('refuses a Manager’s CMS send once an Admin turned publishing off for Managers; an Admin still clicks', async () => {
+    cmsSettings(['publishing']);
     for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
-      expect(await decide(PEOPLE.analyst, 'push_cms_draft', mode)).toMatchObject({
+      expect(await decide(PEOPLE.manager, 'push_cms_draft', mode)).toEqual({
         kind: 'deny',
-        denial: { code: 'forbidden_role', roles: ['admin', 'manager'] },
+        denial: { code: 'execute_off', group: 'publishing' },
       });
+      expect(await decide(PEOPLE.admin, 'push_cms_draft', mode)).toEqual({ kind: 'click' });
     }
+    // Not offered to that Manager either, with the reason the explainer gives.
+    const ctx = await readPrecedenceContext({
+      userId: PEOPLE.manager,
+      organizationId: ORG,
+      mode: 'full_auto',
+      surface: 'chat',
+    });
+    const scope = { brandId: BRAND, brandIsDemo: false };
+    const tool = chatTool('push_cms_draft')!;
+    expect(allowedTools([tool], ctx!, scope)).toEqual([]);
+    expect(listingDenial(tool, ctx!, scope)).toEqual({ code: 'execute_off', group: 'publishing' });
+    // Another group switched off leaves publishing to Managers.
+    cmsSettings(['email_outreach', 'code_prs', 'feeds']);
+    expect(await decide(PEOPLE.manager, 'push_cms_draft', 'auto')).toEqual({ kind: 'click' });
+  });
+
+  it('never offers a CMS send to an Analyst or an Agency partner, in any mode', async () => {
+    db.tables.profiles.push({ id: AGENCY, role: 'agency_partner', organization_id: ORG });
+    const tool = chatTool('push_cms_draft')!;
+    for (const userId of [PEOPLE.analyst, AGENCY]) {
+      for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+        expect(await decide(userId, 'push_cms_draft', mode)).toMatchObject({
+          kind: 'deny',
+          denial: { code: 'forbidden_role', roles: ['admin', 'manager'] },
+        });
+        const ctx = await readPrecedenceContext({
+          userId,
+          organizationId: ORG,
+          mode,
+          surface: 'chat',
+        });
+        expect(allowedTools([tool], ctx!, { brandId: BRAND, brandIsDemo: false })).toEqual([]);
+      }
+    }
+  });
+
+  it('a CMS send clicked through is in the Activity log as an EXECUTE, with no Undo', async () => {
+    const tool = chatTool('push_cms_draft')!;
+    const { decision, outcome } = await runAs(PEOPLE.manager, tool, 'full_auto');
+    expect(decision).toEqual({ kind: 'click' });
+    expect(outcome).toMatchObject({ code: 'ok' });
+    expect(sendDraftToCms).toHaveBeenCalledWith(DRAFT, 'webflow');
+    expect(db.tables.chat_activity_log).toHaveLength(1);
+    expect(db.tables.chat_activity_log[0]).toMatchObject({
+      tool_key: 'sendToCms',
+      class: 'execute',
+      approval_kind: 'click',
+      target_type: 'content_draft',
+      target_id: DRAFT,
+      summary_params: { cms: 'Webflow' },
+      undo_json: null,
+      undo_until: null,
+    });
   });
 
   it('an Analyst still saves a draft (DECISIONS T), but changes none', async () => {
@@ -827,8 +893,10 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
     expect(tool.description).not.toMatch(/webhook\)/);
   });
 
-  it('has no row that goes live in a CMS: publishing stays the person’s, in the CMS', () => {
-    expect(CHAT_TOOLS.filter((tool) => tool.class === 'execute')).toEqual([]);
+  it('has no row that goes live in a CMS: its one EXECUTE sends a draft, and publishing stays the person’s', () => {
+    expect(CHAT_TOOLS.filter((tool) => tool.class === 'execute').map((tool) => tool.name)).toEqual([
+      'push_cms_draft',
+    ]);
     expect(chatTool('publish_cms')).toBeUndefined();
   });
 });

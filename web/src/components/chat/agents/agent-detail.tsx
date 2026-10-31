@@ -8,6 +8,14 @@ import { ListDot } from '@/components/agentic/list-dot';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -36,7 +44,8 @@ import { useAgentActions, type AgentButton } from './use-agent-actions';
  * An agent's detail (CHAT-21 §C; governance mockup `#g-agent`; CHAT-27 item
  * 25): its name, state, owner and This period's AI use; the buttons the
  * server says the person may use (`can`): Activate, Pause or Resume, Restore,
- * Run now, Open run, and under ⋯ Duplicate, Take over and Archive. Then its
+ * Open run, Edit (W2-15's four steps), Run now, and under ⋯ Duplicate,
+ * Take over and Archive, or Delete for an archived agent, which asks first. Then its
  * skills, mode, connections and model; its triggers with the next run; its
  * last 50 runs, each with its AI use against its cap ("3.2% of 10%"),
  * state, trigger and brand, opening the run's chat; and beside them who it
@@ -211,6 +220,8 @@ export function AgentDetail({
   const [state, setState] = useState<DetailState>({ status: 'loading' });
   const [runs, setRuns] = useState<AgentRunView[] | null | 'loading'>('loading');
   const [filter, setFilter] = useState<RunFilter>('all');
+  // Delete asks first (§B item 7): the dialog, open.
+  const [confirmDelete, setConfirmDelete] = useState(false);
   // Only the newest read lands: a slower, older one never covers a fresher answer.
   const asked = useRef(0);
   const runsAsked = useRef(0);
@@ -258,6 +269,12 @@ export function AgentDetail({
     },
     onRan: () => void load(),
     onDuplicated: (copy) => router.push(`/dashboard/chat/agents/${copy.id}`),
+    onDeleted: () => {
+      // A read still on its way would bring back "isn't available": it is dropped.
+      asked.current++;
+      setConfirmDelete(false);
+      router.push('/dashboard/chat/agents');
+    },
   });
 
   if (state.status === 'loading') {
@@ -329,6 +346,8 @@ export function AgentDetail({
     ...(can.duplicate ? (['duplicate'] as const) : []),
     ...(can.takeOver ? (['take-over'] as const) : []),
     ...(can.archive ? (['archive'] as const) : []),
+    // Only an archived agent can be deleted (§G); it asks first.
+    ...(can.delete ? (['delete'] as const) : []),
   ];
   const settings = a.settings;
   const shownRuns = runs === 'loading' || runs === null ? [] : runs;
@@ -402,6 +421,15 @@ export function AgentDetail({
               {t('actions.openRun')}
             </Link>
           )}
+          {can.edit && (
+            <Link
+              href={`/dashboard/chat/agents/${a.id}/edit`}
+              data-action="agent.edit"
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              {t('actions.edit')}
+            </Link>
+          )}
           {can.run && (
             <Button data-action="agent.runNow" disabled={busy} onClick={press('run')}>
               {spinner('run')}
@@ -423,8 +451,11 @@ export function AgentDetail({
                   <DropdownMenuItem
                     key={button}
                     data-action={`agent.${button === 'take-over' ? 'takeOver' : button}`}
-                    onClick={press(button)}
-                    className={cn('text-[13px]', button === 'archive' && 'text-destructive')}
+                    onClick={button === 'delete' ? () => setConfirmDelete(true) : press(button)}
+                    className={cn(
+                      'text-[13px]',
+                      (button === 'archive' || button === 'delete') && 'text-destructive',
+                    )}
                   >
                     {t(`actions.${button === 'take-over' ? 'takeOver' : button}`)}
                   </DropdownMenuItem>
@@ -434,6 +465,37 @@ export function AgentDetail({
           )}
         </div>
       </div>
+
+      {can.delete && (
+        <Dialog open={confirmDelete} onOpenChange={(open) => !busy && setConfirmDelete(open)}>
+          <DialogContent data-slot="agent-delete-dialog">
+            <DialogHeader>
+              <DialogTitle>{t('deleteDialog.title')}</DialogTitle>
+              <DialogDescription>{t('deleteDialog.body', { name: a.name })}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                data-action="agent.deleteCancel"
+                disabled={busy}
+                onClick={() => setConfirmDelete(false)}
+              >
+                {t('deleteDialog.cancel')}
+              </Button>
+              <Button
+                variant="destructive"
+                data-action="agent.deleteConfirm"
+                disabled={busy}
+                // Refused, the dialog closes so the answer (a card or its words) shows.
+                onClick={() => void actions.act(a, 'delete').then(() => setConfirmDelete(false))}
+              >
+                {spinner('delete')}
+                {t('deleteDialog.confirm')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <div
         data-slot="agent-fields"

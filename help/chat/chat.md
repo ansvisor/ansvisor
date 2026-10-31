@@ -83,7 +83,7 @@ Admins and Managers can also ask Chat to change a draft in the Library, send a d
 
 A draft Chat changes keeps the page before in **History**; **Undo** puts it back for 30 days. A report Chat makes can be undone for 30 days too.
 
-A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives there as a draft: nothing goes live, and publishing stays yours, in the CMS. A page that's already live, or a send to your webhook, goes from the Content Editor instead. Sending always asks first, even in **Full auto**, and can't be undone from Chat. Starting an audit always asks first, and the card says how many of the month's audits it uses. Audits have no Undo.
+A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft: publishing stays yours, in the CMS. A live page, or a send to your webhook, goes from the Content Editor. Sending always waits for your click, even in **Full auto**, and has no Undo. If an Admin turned publishing off for Managers, Managers can't send from Chat. Starting an audit always asks first and says how many of the month's audits it uses. Audits have no Undo.
 
 ## Open a web page
 

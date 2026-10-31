@@ -423,7 +423,7 @@ const requestAccessRule: UndoRule = {
 /**
  * Each WRITE row's Undo, by tool name. A rule whose window is 0 only records
  * what its change did (§9 gives it no Undo: a page sent to a CMS, an audit
- * started); a WRITE without one has no Undo.
+ * started); a WRITE without one has no Undo. An EXECUTE's rule only records.
  */
 export const UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   create_draft: createDraft,
@@ -435,11 +435,14 @@ export const UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   ...OUTPUT_UNDO_RULES,
 };
 
-/** A tool's Undo, or null: a read or an EXECUTE has none (§10b). */
+/**
+ * A tool's Undo rule, or null: a read has none, and an EXECUTE has no Undo
+ * (§10b), so its rule is one that only records what it did (window 0).
+ */
 export function undoRule(tool: Pick<ChatTool, 'name' | 'class'>): UndoRule | null {
-  return tool.class === 'write' && Object.hasOwn(UNDO_RULES, tool.name)
-    ? UNDO_RULES[tool.name]
-    : null;
+  if (tool.class === 'read' || !Object.hasOwn(UNDO_RULES, tool.name)) return null;
+  const rule = UNDO_RULES[tool.name];
+  return tool.class === 'write' || rule.windowMs === 0 ? rule : null;
 }
 
 // ─── Undo from the step, the result card or the Activity log ────────────────
