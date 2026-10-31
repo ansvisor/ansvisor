@@ -57,7 +57,7 @@ When Chat is on, Admins and Managers see **Run agent** on each open action: an a
 
 It lists your agents that work on the action's brand, the ones used on this kind of action first. Pick one, and Chat starts a run on this action alone and opens it beside the action. **Run with Chat** does the same without an agent, in your default mode. **Create an agent for this kind of action** starts a new agent from a fitting skill.
 
-The run drafts the work and can set tasks to Ready for review, but closing tasks stays your click. If the action is completed or dismissed, the run stops. The action's **History** shows when a run started and ended, and who started it.
+The run drafts the work, but closing tasks stays your click. If the action is completed or dismissed, the run stops. The action's **History** shows when a run started and ended, and who started it.
 
 ## Assign work
 

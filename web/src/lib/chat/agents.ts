@@ -168,6 +168,7 @@ export type AgentRefusalCode =
   | 'owner_role'
   | 'action_not_found'
   | 'action_closed'
+  | 'queue_full'
   | 'failed';
 
 export type AgentRefusal =
@@ -207,6 +208,7 @@ const REFUSAL_STATUS: Record<AgentRefusalCode, number> = {
   owner_role: 409,
   action_not_found: 404,
   action_closed: 409,
+  queue_full: 409,
   failed: 500,
 };
 

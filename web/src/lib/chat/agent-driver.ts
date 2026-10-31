@@ -67,9 +67,10 @@ import { chatAgenticEnabled } from './flag';
  * the run spends (usage_share).
  *
  * A run on an Action Center action (Run agent, CHAT-21 §F) is scoped to it:
- * its chat is titled "{agent} · {action}", carries an Action chip and the
- * action as an @ reference, and its message names the action and its open
- * tasks as they were when the person asked. It doesn't start on an action
+ * its chat is titled "{agent} · {action}", its message names the action by
+ * number and category, and its scope carries an Action chip, the action as
+ * an @ reference, and its title and open tasks as they were when the person
+ * asked, read as untrusted data; it starts tainted (every change a card). It doesn't start on an action
  * closed since, and stops when the action closes while it runs (edge case
  * 7): both "The action was closed" (action_closed). Its start and its end
  * are written to the action's History, as the person it acts as (§F item
@@ -183,7 +184,10 @@ async function endBeforeStart(
   if (pause && run.agent_id && isTriggered(run.trigger_kind)) {
     await pauseAgentForSystem(run.organization_id, run.agent_id, pause);
   }
-  await moveAgentRun(run.id, 'running', to, { stopReason, now });
+  // A Run agent click that didn't start says so in its action's History.
+  if (await moveAgentRun(run.id, 'running', to, { stopReason, now })) {
+    await logActionRunEnd(run, to, stopReason);
+  }
   return null;
 }
 
@@ -216,21 +220,12 @@ export function agentRunMessage(input: {
     }),
     runnerT('started', { trigger: input.triggerKind, count: signals }),
   ];
+  // Its number and category only: the action's title and tasks may come from
+  // outside, so they go in the scope as data (runScope), never in the message.
   if (input.action) {
     lines.push(
-      runnerT('action', {
-        no: input.action.no,
-        title: input.action.title,
-        category: categoryName(input.action.category),
-      }),
+      runnerT('action', { no: input.action.no, category: categoryName(input.action.category) }),
     );
-    if (input.action.tasks.length > 0) {
-      lines.push(
-        runnerT('actionTasks', {
-          tasks: input.action.tasks.map((task) => `“${task}”`).join(', '),
-        }),
-      );
-    }
   }
   if (input.evidence.earlier.length > 0) {
     lines.push(runnerT('earlier', { count: input.evidence.earlier.length }));
@@ -298,15 +293,22 @@ function runScope(
       });
     }
   }
-  // The action as Ask about this attaches it: Chat's Action Center reads take its id.
-  const references =
+  // The action as Ask about this attaches it (Chat's Action Center reads take its
+  // id), with its title and open tasks when the person asked: data the models read
+  // as untrusted (progress.scopeUntrusted), never instructions.
+  const onAction =
     withIds && action
-      ? [{ type: 'task' as const, id: action.id, label: action.title.slice(0, 200) }]
-      : undefined;
-  return {
-    context: { route: '/dashboard/chat/agents', chips },
-    ...(references ? { references } : {}),
-  };
+      ? {
+          references: [{ type: 'task' as const, id: action.id, label: action.title.slice(0, 200) }],
+          action: {
+            number: `AC-${action.no}`,
+            title: action.title,
+            category: action.category,
+            open_tasks: action.tasks,
+          },
+        }
+      : {};
+  return { context: { route: '/dashboard/chat/agents', chips }, ...onAction };
 }
 
 async function insertId(table: string, row: Record<string, unknown>, what: string) {
@@ -468,6 +470,8 @@ export async function openAgentRun(
       ...newProgress(timezone, brand.id, 'read'),
       question: text,
       scope: runScope(words, evidence, true),
+      // An action's title and tasks may come from outside: every change is a card (§16a).
+      ...(action ? { tainted: true, scopeUntrusted: true } : {}),
     } as unknown as Json,
     heartbeat_at: now.toISOString(),
   });
@@ -547,7 +551,14 @@ export function agentStateOf(chat: Pick<LoadedRun, 'status' | 'progress'>): {
       const why = chat.progress?.stoppedFor;
       return {
         status: 'stopped',
-        stopReason: why === 'expired' ? 'no_answer' : why === 'limit' ? 'run_cap' : 'user',
+        stopReason:
+          why === 'expired'
+            ? 'no_answer'
+            : why === 'limit'
+              ? 'run_cap'
+              : why === 'action_closed'
+                ? 'action_closed'
+                : 'user',
       };
     }
     default:
@@ -644,6 +655,7 @@ async function stopForClosedAction(
     const stopped = await stopChatRun(
       { userId: run.acting_user_id, email: null, organizationId: run.organization_id },
       chatRunId,
+      'action_closed',
     );
     if (!stopped.ok) console.error('[chat/agents] could not stop a closed action’s run:', stopped);
   }
@@ -678,10 +690,14 @@ export async function settleAgentRun(
   if (!run || !HELD.includes(run.status)) return run?.status ?? null;
 
   const chatRunId = await chatRunOf(run.id);
-  // Its action closed while its Chat run still works or waits (edge case 7).
+  // Its action closed while its Chat run still works or waits (edge case 7). Not
+  // yet handed over: its driver checks the action itself, within the grace.
   if (run.action_id && (await actionClosed(run.action_id))) {
     const chat = chatRunId ? await loadRun(chatRunId) : null;
-    if (!chat || OPEN_RUN_STATUSES.includes(chat.status)) {
+    const handingOver =
+      !chatRunId &&
+      now.getTime() - Date.parse(run.started_at ?? run.queued_at) <= HANDOVER_GRACE_MS;
+    if (!handingOver && (!chat || OPEN_RUN_STATUSES.includes(chat.status))) {
       return stopForClosedAction(run, chatRunId, now);
     }
   }

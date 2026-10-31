@@ -27,8 +27,10 @@ export const maxDuration = 300;
  * With `actionId`, Run agent on an Action Center action (CHAT-21 §F): one
  * run on the action's brand, scoped to the action. 202 with its state and,
  * once it started, its chat (`chatId`, the person's own) for the side
- * panel. 404 an action the person can't see, 409 a closed one, 402 the
- * demo brand's, 400 an agent whose scope doesn't cover its brand.
+ * panel, or why a run that ended before it started stopped (`stopReason`).
+ * 404 an action the person can't see, 409 a closed one or 3 runs waiting
+ * on other actions, 402 the demo brand's, 400 an agent whose scope doesn't
+ * cover its brand.
  *
  * Refusals as values (#1777): 400 a bad body or a brand outside its scope,
  * 402 read-only, 403 the out-of-permission answer (CHAT-20 §4c), 404, 409
@@ -50,7 +52,12 @@ export async function POST(req: Request, { params }: AgentParams) {
       const onAction = await runAgentOnAction(ctx, id, input.data.actionId);
       if (!onAction.ok) return agentRefusalResponse(onAction.refusal);
       const { run } = onAction.value;
-      return NextResponse.json<{ ok: true; runs: RunNowItem[]; chatId: string | null }>(
+      return NextResponse.json<{
+        ok: true;
+        runs: RunNowItem[];
+        chatId: string | null;
+        stopReason: string | null;
+      }>(
         {
           ok: true,
           runs: [
@@ -62,6 +69,7 @@ export async function POST(req: Request, { params }: AgentParams) {
             },
           ],
           chatId: run.chatId,
+          stopReason: run.stopReason,
         },
         { status: 202 },
       );

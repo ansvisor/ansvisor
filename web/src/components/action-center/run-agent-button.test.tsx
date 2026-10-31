@@ -179,7 +179,8 @@ describe('who sees Run agent', () => {
   it('shows it to Admins and Managers on an open action while Chat is on', async () => {
     await render({ role: 'admin' });
     expect(trigger()?.getAttribute('aria-label')).toBe(
-      'Run an agent on “Win back citations for /blog/what-is-aeo”',
+      // Starts with what the drawer's button says (WCAG 2.5.3).
+      'Run agent · Win back citations for /blog/what-is-aeo',
     );
     await render({ role: 'manager', variant: 'drawer' });
     expect(trigger()?.textContent).toBe('Run agent');
@@ -276,6 +277,72 @@ describe('the picker', () => {
     expect(document.querySelector('[data-slot="agent-denial"]')?.textContent).toContain(
       'Run an agent now',
     );
+  });
+
+  it('moves between its choices with ↑ ↓ and closes with Esc', async () => {
+    await render();
+    await openPicker();
+    const items = [...document.querySelectorAll<HTMLElement>('[data-run-agent-item]')];
+    expect(items.map((el) => el.dataset.action)).toEqual([
+      'runAgent.pickAgent',
+      'runAgent.pickAgent',
+      'runAgent.runWithChat',
+      'runAgent.createAgent',
+    ]);
+    const popup = document.querySelector<HTMLElement>('[data-slot="popover-content"]')!;
+    const press = (key: string) =>
+      act(() => {
+        (document.activeElement ?? popup).dispatchEvent(
+          new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+        );
+      });
+    items[0].focus();
+    press('ArrowDown');
+    expect(document.activeElement).toBe(items[1]);
+    press('ArrowUp');
+    press('ArrowUp');
+    // From the first, up wraps to the last.
+    expect(document.activeElement).toBe(items[3]);
+    press('ArrowDown');
+    expect(document.activeElement).toBe(items[0]);
+    expect(trigger()?.getAttribute('aria-expanded')).toBe('true');
+    press('Escape');
+    await settle();
+    expect(trigger()?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('opens the upgrade dialog when the workspace went read-only since the page loaded', async () => {
+    answer = () =>
+      json({ ok: false, failure: 'subscription', error: 'Your plan is not active.' }, 402);
+    await render();
+    await click(trigger()!);
+    for (let i = 0; i < 100 && !openUpgrade.mock.calls.length; i++) {
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
+    }
+    expect(openUpgrade).toHaveBeenCalledWith('Running an agent on an action needs a plan');
+    expect(document.querySelector('[data-action="runAgent.pickAgent"]')).toBeNull();
+  });
+
+  it('says a run didn’t start, and why, instead of "queued"', async () => {
+    const base = answer;
+    answer = (url, init) =>
+      url.startsWith('/api/chat/agents/agent-1/run')
+        ? json(
+            {
+              ok: true,
+              runs: [{ brand: 'Brand A', status: 'stopped', repeated: false, coalesced: false }],
+              chatId: null,
+              stopReason: 'action_closed',
+            },
+            202,
+          )
+        : base(url, init);
+    await render();
+    await openPicker();
+    await click(item('runAgent.pickAgent')!);
+    expect(toast.error).toHaveBeenCalledWith('The action was closed, so the run didn’t start.');
+    expect(toast).not.toHaveBeenCalled();
+    expect(openChat).not.toHaveBeenCalled();
   });
 
   it('opens the upgrade dialog instead in a read-only workspace', async () => {

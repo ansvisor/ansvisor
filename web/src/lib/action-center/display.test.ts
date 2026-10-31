@@ -455,10 +455,17 @@ describe('actionEventText', () => {
         tPage,
         t,
       ),
-    ).toBe('Agent run stopped · Citation win-back');
+    ).toBe('Agent run stopped · Citation win-back · action closed');
     expect(actionEventText(event('chat_started', { source: 'chat' }), tPage, t)).toBe(
       'Chat started on this action',
     );
+    // A deleted agent's lines end without a name, and without an empty separator.
+    expect(actionEventText(event('agent_run_started', { agent: null }), tPage, t)).toBe(
+      'Agent run started',
+    );
+    expect(
+      actionEventText(event('agent_run_completed', { agent: null, to: 'failed' }), tPage, t),
+    ).toBe('Agent run failed');
   });
 
   it('reads the 30-day position result with its counts', () => {

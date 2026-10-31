@@ -192,6 +192,17 @@ describe('the action a run is scoped to', () => {
     });
   });
 
+  it('isn’t found on a brand not shared with the person (Agency partners)', async () => {
+    const ctx = await ctxOf(PEOPLE.manager);
+    const shared = { ...ctx, viewer: { ...ctx.viewer, brandAccess: [BRAND_2] } };
+    expect(await action.readActionForRun(shared, ACTION)).toMatchObject({
+      ok: false,
+      refusal: { status: 404, code: 'action_not_found' },
+    });
+    const withIt = { ...ctx, viewer: { ...ctx.viewer, brandAccess: [BRAND] } };
+    expect((await action.readActionForRun(withIt, ACTION)).ok).toBe(true);
+  });
+
   it('is closed once completed, dismissed, deleted or gone', async () => {
     expect(await action.actionClosed(ACTION)).toBe(false);
     db.tables.actions[0].status = 'on_hold';

@@ -1734,8 +1734,8 @@
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
           "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}",
           "outcome_measured": "{day, plural, =0 {} other {Day #{final, select, yes {, final} other {}} · }}{outcome, select, improved {Result: metrics improved after this action closed} mixed {Result: mixed after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}",
-          "agent_run_started": "Agent run started · {agent}",
-          "agent_run_completed": "{to, select, done {Agent run completed} failed {Agent run failed} stopped {Agent run stopped} skipped {Agent run skipped} other {Agent run ended}} · {agent}",
+          "agent_run_started": "Agent run started{named, select, yes { · {agent}} other {}}",
+          "agent_run_completed": "{to, select, done {Agent run completed} failed {Agent run failed} stopped {Agent run stopped} skipped {Agent run skipped} other {Agent run ended}}{named, select, yes { · {agent}} other {}}{reason, select, action_closed { · action closed} other {}}",
           "chat_started": "Chat started on this action"
         },
         "deleteTask": "Delete task",
@@ -2025,7 +2025,7 @@
       },
       "runAgent": {
         "button": "Run agent",
-        "buttonLabel": "Run an agent on “{title}”",
+        "buttonLabel": "Run agent · {title}",
         "pickerTitle": "Run on AC-{no}",
         "pickerHint": "Starts a Chat run scoped to this action. Closing its tasks stays your click.",
         "agents": "Agents",
@@ -2045,6 +2045,7 @@
           "chatStarted": "Chat is working on AC-{no}",
           "chatQueued": "Chat is queued for AC-{no}. It starts when a run slot frees up.",
           "openRun": "Open run",
+          "didntStart": "{reason, select, action_closed {The action was closed, so the run didn’t start.} brand_gone {The action’s brand is no longer in the agent’s scope, so the run didn’t start.} other {The run didn’t start. The agent’s Runs tab says why.}}",
           "failed": "Couldn’t start the run. Try again."
         }
       }
@@ -3707,6 +3708,7 @@
       "readFailed": "Couldn't read this",
       "timedOut": "Timed out",
       "stoppedAtLimit": "Stopped at its limit",
+      "actionClosed": "This action was closed. Nothing more was changed.",
       "limit": "Over this run's limit",
       "pausedCap": "Stopped at the AI limit",
       "unknown": "Worked on a step",
@@ -4863,6 +4865,7 @@
       "owner_role": "This agent's owner can't run agents any more. An Admin can take it over.",
       "action_not_found": "This action isn't available.",
       "action_closed": "This action is closed. Reopen it in Action Center to run an agent on it.",
+      "queue_full": "{count, plural, one {# run already waits} other {# runs already wait}} for this agent on this brand. Try again once one has started.",
       "failed": "Something went wrong with this agent. Try again."
     },
     "status": {
@@ -5001,8 +5004,7 @@
       "instructions": "Its instructions: {text}",
       "started": "{trigger, select, schedule {It started on its schedule.} signal {It started because Action Center found {count, plural, one {a new signal} other {# new signals}}.} kpi {It started because a KPI changed.} watch_rule {It started because a watch rule fired.} action {It started from an Action Center action.} other {It started with Run now.}}",
       "earlier": "{count, plural, one {One more fire came while it waited (cooldown or daily limit): it's in the scope too.} other {# more fires came while it waited (cooldown or daily limit): they're in the scope too.}}",
-      "action": "It works on one Action Center action, AC-{no} “{title}” ({category}). Read it with its tasks first and keep to its targets: never add new ones. When a task’s work is done, set it to Ready for review; closing tasks stays the person’s click.",
-      "actionTasks": "Its open tasks when the run was asked for: {tasks}.",
+      "action": "It works on one Action Center action, AC-{no} ({category}); its title and open tasks when the run was asked for are in the scope. Read it with its tasks first and keep to its targets: never add new ones. Closing tasks stays the person’s click.",
       "background": "This run works in the background. When a question comes up, take the recommended option and list your assumptions at the top of the answer. Changes still wait for approval as the agent's mode says.",
       "chip": {
         "agent": "Agent",
@@ -5015,7 +5017,7 @@
       }
     },
     "runWithChat": {
-      "message": "Work on the Action Center action AC-{no} “{title}”: read it and its open tasks, then draft what each task needs. Keep to its targets. When a task’s work is done, set it to Ready for review; I close tasks myself.",
+      "message": "Work on the Action Center action AC-{no} ({category}): read it and its open tasks, then draft what each task needs. Keep to its targets. I close tasks myself.",
       "chip": "Action · {title}"
     },
     "runStatus": {

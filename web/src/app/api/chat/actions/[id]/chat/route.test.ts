@@ -63,7 +63,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   fakes.start.mockResolvedValue({
     ok: true,
-    value: { runId: 'run-1', conversationId: 'chat-1', queued: false },
+    value: { runId: 'run-1', conversationId: 'chat-1', queued: false, repeated: false },
   });
 });
 
@@ -76,10 +76,27 @@ describe('/api/chat/actions/{id}/chat', () => {
   it('starts the person’s chat on the action and drives it past the answer', async () => {
     const res = await call();
     expect(res.status).toBe(202);
-    expect(await res.json()).toEqual({ ok: true, chatId: 'chat-1', queued: false });
+    expect(await res.json()).toEqual({
+      ok: true,
+      chatId: 'chat-1',
+      queued: false,
+      repeated: false,
+    });
     expect(fakes.start).toHaveBeenCalledWith(CTX, ACTION, { timezone: 'Europe/Istanbul' });
     expect(fakes.after).toHaveBeenCalledTimes(1);
     expect(fakes.drive).toHaveBeenCalledWith(ACTOR, 'run-1');
+  });
+
+  it('answers a second click with the same chat and drives nothing more', async () => {
+    fakes.start.mockResolvedValueOnce({
+      ok: true,
+      value: { runId: null, conversationId: 'chat-1', queued: false, repeated: true },
+    });
+    const res = await call();
+    expect(res.status).toBe(202);
+    expect(await res.json()).toMatchObject({ chatId: 'chat-1', repeated: true });
+    expect(fakes.after).not.toHaveBeenCalled();
+    expect(fakes.drive).not.toHaveBeenCalled();
   });
 
   it('is not there with Chat off, and checks the plan before anything else', async () => {

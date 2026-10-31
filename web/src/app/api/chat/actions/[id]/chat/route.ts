@@ -18,8 +18,9 @@ const body = z.object({ timezone: z.string().trim().max(64).optional() });
  * agent picker's no-agent choice): starts the person's own Chat run on the
  * action in their default mode, writes "Chat started on this action" to its
  * History, and drives the run past the answer; the side panel opens the
- * chat and follows it. 202 with the chat and whether it waits for a slot.
- * Admins and Managers.
+ * chat and follows it. 202 with the chat and whether it waits for a slot;
+ * a second click by the same person within 60 seconds answers the same chat
+ * (`repeated`) and starts nothing. Admins and Managers.
  *
  * Refusals as values (#1777): 400 a bad body, 401 no session, 402
  * read-only or the demo brand's action, 403 the out-of-permission answer
@@ -44,14 +45,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         ? engineFailureResponse(started.engine)
         : agentRefusalResponse(started.refusal);
     }
-    const { runId, conversationId, queued } = started.value;
+    const { runId, conversationId, queued, repeated } = started.value;
     // Driven here, as a sent message is (streamRun): it goes on when the browser leaves.
-    after(() =>
-      driveRun(actor, runId).catch((err) =>
-        console.error('[chat/actions] a Run with Chat run failed:', err),
-      ),
+    // A repeat's run is already driven by the first click.
+    if (runId) {
+      after(() =>
+        driveRun(actor, runId).catch((err) =>
+          console.error('[chat/actions] a Run with Chat run failed:', err),
+        ),
+      );
+    }
+    return NextResponse.json(
+      { ok: true, chatId: conversationId, queued, repeated },
+      { status: 202 },
     );
-    return NextResponse.json({ ok: true, chatId: conversationId, queued }, { status: 202 });
   } catch (error) {
     console.error('[chat/actions] could not start Chat on an action:', error);
     return runFailure(500, 'failed', 'failed', 'Failed to start Chat');

@@ -68,6 +68,7 @@ vi.mock('@/lib/chat/agent-runs', () => ({
         repeated: false,
         coalesced: false,
         chatId: 'chat-1',
+        stopReason: null,
       },
     },
   })),
@@ -316,6 +317,7 @@ describe('/api/chat/agents/{id}/run and /runs', () => {
       ok: true,
       runs: [{ brand: 'Brand A', status: 'running', repeated: false, coalesced: false }],
       chatId: 'chat-1',
+      stopReason: null,
     });
     expect(runAgentOnAction).toHaveBeenCalledWith(CTX, AGENT, ACTION);
     expect(runAgentNow).not.toHaveBeenCalled();

@@ -144,10 +144,10 @@ describe('ActionDrawer', () => {
     const id = drawer.querySelector<HTMLElement>('[title^="Action ID"]')!;
     expect(id.title).toBe(`Action ID: AC-${action.actionNo}`);
     expect(id.textContent).toBe(`Action ID: AC-${action.actionNo}`);
-    // Only the label gives way, and only beside Run agent in a narrow drawer (a container query).
+    // Only the label gives way, and only beside Run agent.
     const label = id.firstElementChild as HTMLElement;
     expect(label.textContent).toBe('Action ID: ');
-    expect(label.className).toContain('group-has-[[data-run-agent]]/top:sr-only');
+    expect(label.className).toBe('group-has-[[data-run-agent]]/top:sr-only');
     expect(id.closest('.group\\/top')).not.toBeNull();
   });
 

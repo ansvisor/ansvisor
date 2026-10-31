@@ -1,6 +1,6 @@
 'use client';
 
-import { lazy, Suspense, useState, type KeyboardEvent } from 'react';
+import { lazy, Suspense, useCallback, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { Bot, Loader2 } from 'lucide-react';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
@@ -64,6 +64,8 @@ function RunAgentMenu({ action, title, variant, className }: RunAgentProps) {
   const tActions = useTranslations('readOnly.actions');
   const { isLocked, openUpgrade } = useUpgradeGate();
   const [open, setOpen] = useState(false);
+  // Stable: the picker reads the agents once per opening.
+  const close = useCallback(() => setOpen(false), []);
   const label = t('buttonLabel', { title });
 
   return (
@@ -111,7 +113,7 @@ function RunAgentMenu({ action, title, variant, className }: RunAgentProps) {
           <p className="text-xs text-muted-foreground">{t('pickerHint')}</p>
         </div>
         <Suspense fallback={<PickerLoading />}>
-          <RunAgentPicker action={action} onClose={() => setOpen(false)} />
+          <RunAgentPicker action={action} onClose={close} />
         </Suspense>
       </PopoverContent>
     </Popover>

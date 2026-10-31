@@ -37,6 +37,9 @@ type Picker =
   | { kind: 'denied'; denial: ChatDenialCard }
   | ({ kind: 'ready' } & CompatibleAgents);
 
+/** A run's states once it ended (chat_agent_runs.status). */
+const ENDED = ['stopped', 'failed', 'skipped'];
+
 /** What a pick is doing: an agent's run, or Run with Chat. */
 type Busy = { kind: 'agent'; id: string } | { kind: 'chat' } | null;
 
@@ -62,19 +65,23 @@ export function RunAgentPicker({
   const [picker, setPicker] = useState<Picker>({ kind: 'loading' });
   const [busy, setBusy] = useState<Busy>(null);
 
-  // Read each time it opens: agents change, and so does what was last used.
+  // Read each time it opens: agents change, and so does what was last used. A
+  // workspace gone read-only since the page loaded gets the upgrade dialog.
   useEffect(() => {
     let live = true;
     void readCompatibleAgents(action.id).then((answer) => {
       if (!live) return;
       if (answer.ok) setPicker({ kind: 'ready', ...answer });
-      else if (answer.denial) setPicker({ kind: 'denied', denial: answer.denial });
+      else if (answer.failure === 'subscription') {
+        onClose();
+        openUpgrade(tActions('runAgentOnAction'));
+      } else if (answer.denial) setPicker({ kind: 'denied', denial: answer.denial });
       else setPicker({ kind: 'failed', message: answer.message });
     });
     return () => {
       live = false;
     };
-  }, [action.id]);
+  }, [action.id, onClose, openUpgrade, tActions]);
 
   /** The run's chat: in the side panel beside the action, else on Chat's own page. */
   const showChat = useCallback(
@@ -113,7 +120,10 @@ export function RunAgentPicker({
         onClose();
         const run = answer.runs[0];
         const words = { agent: agent.name, no: action.actionNo };
-        if (answer.chatId) {
+        // Ended before it started (the action closed meanwhile): say why, not "queued".
+        if (run && ENDED.includes(run.status)) {
+          toast.error(t('toast.didntStart', { reason: answer.stopReason ?? 'other' }));
+        } else if (answer.chatId) {
           toast(run?.repeated ? t('toast.repeated') : t('toast.started', words));
           showChat(answer.chatId);
         } else if (run?.coalesced) {
@@ -139,7 +149,13 @@ export function RunAgentPicker({
       if (!answer.ok) return refused(answer);
       onClose();
       const words = { no: action.actionNo };
-      toast(answer.queued ? t('toast.chatQueued', words) : t('toast.chatStarted', words));
+      toast(
+        answer.repeated
+          ? t('toast.repeated')
+          : answer.queued
+            ? t('toast.chatQueued', words)
+            : t('toast.chatStarted', words),
+      );
       showChat(answer.chatId);
     } finally {
       setBusy(null);

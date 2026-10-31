@@ -107,14 +107,20 @@ export async function readCompatibleAgents(
   };
 }
 
-/** Run agent on an action: its run, and the run's chat once it started. */
+/** Run agent on an action: its run, the run's chat once it started, or why it didn't. */
 export const runAgentOnAction = (id: string, actionId: string) =>
-  send<{ runs: RunNowItem[]; chatId: string | null }>(`/api/chat/agents/${id}/run`, {
-    body: JSON.stringify({ actionId }),
-  });
+  send<{ runs: RunNowItem[]; chatId: string | null; stopReason?: string | null }>(
+    `/api/chat/agents/${id}/run`,
+    {
+      body: JSON.stringify({ actionId }),
+    },
+  );
 
-/** Run with Chat on an action: the person's chat on it, started or queued. */
+/** Run with Chat on an action: the person's chat on it, started or queued, or the one from a minute ago. */
 export const runChatOnAction = (actionId: string, timezone?: string) =>
-  send<{ chatId: string; queued: boolean }>(`/api/chat/actions/${actionId}/chat`, {
-    body: JSON.stringify(timezone ? { timezone } : {}),
-  });
+  send<{ chatId: string; queued: boolean; repeated?: boolean }>(
+    `/api/chat/actions/${actionId}/chat`,
+    {
+      body: JSON.stringify(timezone ? { timezone } : {}),
+    },
+  );
