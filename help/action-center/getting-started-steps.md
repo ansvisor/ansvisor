@@ -4,11 +4,11 @@ route: /dashboard/action-center/actions
 keywords: [getting started, setup steps, onboarding checklist, new brand, skip get started]
 synonyms: [first steps, setup list, where do I start, onboarding]
 plan: all
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/action-center.mdx]
 ---
 A new brand starts with **Getting started**: a fixed list of 17 steps on the Action Center's **Actions** tab. While it runs, the **Getting started** category opens first and lists the steps with their **Stage**, **Status** and **Ready** time, and a **Getting started** card shows how many are done. Click **All** or another category to see your actions.
@@ -28,7 +28,7 @@ Click a step to open its card: why it matters, how to do it, and when it counts 
 
 ## While the first tracking runs
 
-A new brand's first tracking takes about 30 to 65 minutes. Meanwhile, the steps you can do right away come first and carry a **Ready now** mark: KPIs, competitors, topics and prompts you haven't finished, Google Search Console, Google Analytics and the AI Traffic snippet. The steps that need the first answers say **Arriving now**. Their card shows how far tracking is, such as "Your first answers are arriving (18 of 40) · ~6 min", instead of a page that is still empty. When tracking finishes, the app says **Your first results are ready**, the list goes back to its usual order and those steps open.
+A new brand's first tracking takes from a few minutes to an hour or two at busy times. Meanwhile, the steps you can do right away come first and carry a **Ready now** mark: KPIs, competitors, topics and prompts you haven't finished, Google Search Console, Google Analytics and the AI Traffic snippet. The steps that need the first answers say **Arriving now**. Their card shows how far tracking is, such as "Your first answers are arriving (18 of 40) · ~6 min", instead of a page that is still empty. When tracking finishes, the app says **Your first results are ready**, the list goes back to its usual order and those steps open.
 
 ## Skip the Google steps
 

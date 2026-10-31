@@ -4,11 +4,11 @@ route: /dashboard/content/editor
 keywords: [content rules, run agent, fix open rules, rewrite the whole page, agent suggestions, accept suggestions, rules tab]
 synonyms: [writing rules, style guide rules, apply rules with agent, rewrite page, let the agent fix the page]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/content-editor.mdx]
 ---
 Every page in the Content Editor is written to a set of rules for its page type. The **Rules** chip in the header shows how many the page meets now; click it to open the rules. **Run Agent** asks the Content Agent to suggest changes for the rules the page doesn't meet yet, or to rewrite the whole page to them.
@@ -32,6 +32,8 @@ A decided suggestion can be taken back with **Undo** or **Restore**, and **Undo 
 The **▾** menu beside **Run Agent** also offers **Rewrite the whole page**: one new version written to every rule in the set, with the cited passages kept. It uses more AI usage than fixing open rules. The menu marks it **Recommended** when the page is far off its Length or many rules are open. Pick it, and the button reads **Rewrite page**.
 
 A rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. A rewrite isn't offered once the page is ready or published.
+
+When the quoted passages it keeps stop the page reaching its Length, a note offers **Raise Length to …** and **Rewrite, cited passages too**, which may stop those passages being quoted.
 
 ## Before you run it again
 

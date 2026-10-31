@@ -6,6 +6,7 @@ import {
   type ChatDeliverable,
   type ChatNextMove,
   type ChatRunSummary,
+  type ChatActionSent,
   type ChatStep,
 } from './events';
 import { clientMove } from './next-moves';
@@ -42,6 +43,8 @@ export interface ThreadRun {
   errorReason: string | null;
   /** What could come next once it finished (CHAT-07 §C), best first. */
   nextMoves: ChatNextMove[];
+  /** What it sent to the Action Center (CHAT-09 item 19), in order. */
+  sent: ChatActionSent[];
   /** The Why did it move analyses it kept (CHAT-22 §1), in order. */
   why: ChatWhy[];
 }
@@ -84,6 +87,15 @@ interface FileRow {
 
 /** A run's end as the browser was told it: the event that ended it. */
 const END_EVENTS = ['run.finished', 'run.stopped', 'run.error', 'run.paused_cap'];
+/** What a run sent to the Action Center (CHAT-09 item 19), read back with its end. */
+const SENT_EVENT = 'action.sent';
+
+/** What an ended run's events keep: its end, and what it sent to the Action Center. */
+interface RunEnd {
+  summary: ChatRunSummary | null;
+  errorReason: string | null;
+  sent: ChatActionSent[];
+}
 const ENDED: readonly string[] = ['done', 'stopped', 'error', 'paused_cap'];
 
 /**
@@ -93,16 +105,14 @@ const ENDED: readonly string[] = ['done', 'stopped', 'error', 'paused_cap'];
  * person already read; each was made safe for the browser when it was sent
  * (chatEvent). A read that fails leaves them out: the chat still opens.
  */
-async function readRunEnds(
-  runIds: string[],
-): Promise<Map<string, { summary: ChatRunSummary | null; errorReason: string | null }>> {
-  const ends = new Map<string, { summary: ChatRunSummary | null; errorReason: string | null }>();
+async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
+  const ends = new Map<string, RunEnd>();
   if (runIds.length === 0) return ends;
   const { data, error } = await supabaseAdmin
     .from('chat_run_events')
     .select('run_id, seq, type, data')
     .in('run_id', runIds)
-    .in('type', END_EVENTS)
+    .in('type', [...END_EVENTS, SENT_EVENT])
     .order('seq', { ascending: true });
   if (error) {
     console.error("[chat/thread] could not read the runs' ends:", error.message);
@@ -115,12 +125,17 @@ async function readRunEnds(
     data: unknown;
   }[]) {
     if (!isChatEventType(row.type) || !row.data || typeof row.data !== 'object') continue;
+    const kept = ends.get(row.run_id) ?? { summary: null, errorReason: null, sent: [] };
+    if (row.type === SENT_EVENT) {
+      ends.set(row.run_id, { ...kept, sent: [...kept.sent, row.data as ChatActionSent] });
+      continue;
+    }
     const run = applyChatEvent(emptyRun(), {
       type: row.type,
       seq: row.seq,
       data: row.data,
     } as Parameters<typeof applyChatEvent>[1]);
-    ends.set(row.run_id, { summary: run.summary, errorReason: run.errorReason });
+    ends.set(row.run_id, { ...kept, summary: run.summary, errorReason: run.errorReason });
   }
   return ends;
 }
@@ -285,6 +300,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         summary: ends.get(run.id)?.summary ?? null,
         errorReason: ends.get(run.id)?.errorReason ?? null,
         nextMoves: movesByRun.get(run.id) ?? [],
+        sent: ends.get(run.id)?.sent ?? [],
         why: whyByRun.get(run.id) ?? [],
       },
     ]),

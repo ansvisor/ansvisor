@@ -142,6 +142,30 @@ export interface ChatConfirm {
   noUndo?: true;
   /** What the change leaves behind, under the card ("Its timeline … doesn't come back"). */
   note?: string;
+  /**
+   * What it carries, line by line: the tasks Send to Action Center creates
+   * (CHAT-09 item 18), each with its new text in full (`body`).
+   */
+  items?: { title: string; detail?: string; body?: string }[];
+  /** Why the change: the finding. */
+  why?: string;
+  /** What it aims at. */
+  goal?: string;
+  /** What it is about, by kind, in the person's words: frozen once it's made. */
+  targets?: { kind: 'prompts' | 'pages' | 'competitors' | 'platforms'; values: string[] }[];
+}
+
+/**
+ * What a change sent to the Action Center (CHAT-09 item 19): a new action,
+ * or a finding added to one that already covered it, with Open in Actions.
+ */
+export interface ChatActionSent {
+  kind: 'action_created' | 'action_added';
+  /** "AC-1271" */
+  actionNo: number;
+  /** The new action's title, or the finding added. */
+  title: string;
+  href: ChatHref;
 }
 
 /** The rule behind a refusal (CHAT-20 §4c): denial.ts's kinds. */
@@ -258,6 +282,8 @@ export interface ChatEventPayloads {
   'run.stopped': ChatRunSummary & { reason: 'person' | 'expired' | 'limit' };
   /** A call refused: the out-of-permission answer (CHAT-20 §4c). */
   'access.denied': ChatDenialCard;
+  /** Sent to Action Center, or added to an action there (CHAT-09 item 19). */
+  'action.sent': ChatActionSent;
   // Editor in Chat (CHAT-25 §12, Phase 4): payloads grow with it.
   /** A new version card of a page Chat writes. */
   'deliverable.updated': ChatDeliverable & { version: number };
@@ -292,6 +318,7 @@ const EVENT_TYPES: Record<ChatEventType, true> = {
   'run.paused_cap': true,
   'run.stopped': true,
   'access.denied': true,
+  'action.sent': true,
   'deliverable.updated': true,
   'suggestion.created': true,
   'suggestion.resolved': true,

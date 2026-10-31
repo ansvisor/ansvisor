@@ -105,6 +105,35 @@ describe('loadChatThread', () => {
     });
   });
 
+  it('keeps what a run sent to the Action Center, after a reload (CHAT-09 item 19)', async () => {
+    seed([{ id: 'run-1', status: 'done' }]);
+    fake.db.tables.chat_run_steps = [];
+    const sent = {
+      kind: 'action_created' as const,
+      actionNo: 1271,
+      title: 'Win back pricing citations',
+      href: '/dashboard/action-center/actions/a1' as const,
+    };
+    fake.db.tables.chat_run_events = [
+      event('run-1', chatEvent('action.sent', 1, sent)),
+      event(
+        'run-1',
+        chatEvent('run.finished', 2, {
+          workingMs: 3000,
+          stepCount: 1,
+          sources: [],
+          generatedAt: '2026-10-31T09:00:00.000Z',
+          dataAsOf: null,
+        }),
+      ),
+    ];
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run).toMatchObject({
+      sent: [sent],
+      summary: { workingMs: 3000, stepCount: 1, sources: [] },
+    });
+  });
+
   it("keeps a stopped run's time and steps, its stopped step skipped with why", async () => {
     seed([{ id: 'run-1', status: 'stopped' }]);
     fake.db.tables.chat_run_steps = [

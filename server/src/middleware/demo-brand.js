@@ -81,6 +81,8 @@ export const DEMO_GUARDED = [
   guard('POST /action-center/audits', brandIn('body')),
   guard('POST /action-center/products', brandIn('body')),
   guard('POST /action-center/content-drafts', brandIn('body')),
+  guard('POST /action-center/chat-actions', brandIn('body')),
+  guard('POST /action-center/chat-actions/check', brandIn('body')),
 
   // Site Audit (audits.js).
   guard('POST /audits', brandIn('body')),

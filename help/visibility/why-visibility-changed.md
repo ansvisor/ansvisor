@@ -4,11 +4,11 @@ route: /dashboard/insights
 keywords: [why it changed, visibility breakdown, full breakdown, gains, drops, visibility drop, root cause]
 synonyms: [why did my score drop, why did visibility go up, what moved my score, investigate a drop, score change explained]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/answer-engine-insights.mdx, docs/concepts/visibility-scoring.mdx]
 ---
 When your Visibility goes up or down on **Brand Visibility**, two parts of the page explain it: the **Why it changed** card and the **Visibility Breakdown** panel. Both compare the date range you picked with the period of the same length just before it.
@@ -21,7 +21,7 @@ Visibility changes are in points; Mentions and Citations change in percent. With
 
 ## The Why it changed card
 
-**Why it changed** lists the platforms, topics and prompts that moved your Visibility most, under **Gains** and **Drops**. Each row shows its own score before and after, and its effect on your overall score.
+**Why it changed** lists the platforms, topics and prompts that moved your Visibility most, under **Gains** and **Drops**. Each row shows its own score before and after, and its effect on your overall score. With **All** selected, the card doesn't show. When either period has fewer than 20 answers, it says there are too few answers to explain the change.
 
 A note counts the prompts added during the period: they aren't counted in the change. Click a row, or **Full breakdown**, to open the **Visibility Breakdown** panel.
 

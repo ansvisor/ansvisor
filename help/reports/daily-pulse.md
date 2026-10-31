@@ -4,11 +4,11 @@ route: /dashboard/settings/notifications
 keywords: [daily pulse, digest, notifications, email summary, highlights, warnings]
 synonyms: [daily email, weekly email, brand digest, visibility alerts, stop the emails]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/daily-pulse.mdx]
 ---
 The Daily Pulse is a short digest for each brand that goes out after its scheduled tracking run. It shows the headline numbers for the period, then lists what went well (highlights) and what needs attention (warnings). It comes by email on Ansvisor Cloud, and can also go to your webhook, on cloud and self-hosted alike.
@@ -25,6 +25,10 @@ Open **Settings › Notifications**. Every active brand has its own row with a f
 ## Choose who gets it
 
 Enter email addresses separated by commas. Leave the field empty to send to every member of the organization. Each address is checked when you save: if one isn't valid, the save is rejected and the invalid entries are listed under the field, so fix or remove them and save again. Up to 50 addresses are stored. Recipients apply to the email only, not to the webhook.
+
+## AI Traffic weekly digest
+
+Each brand's row also has **AI Traffic weekly digest**: every Monday, last week's AI visits in one summary line, with the top three changes. It goes to the same recipients, and isn't sent while the Daily Pulse is **Off**.
 
 ## When it is sent
 

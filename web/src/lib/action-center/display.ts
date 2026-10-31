@@ -118,6 +118,14 @@ export function actionTexts(
       description: t('shopping_links.description', { count }),
     };
   }
+  // A finding sent from Chat (CHAT-09 §E) carries the title and the finding
+  // the person approved.
+  if (action.kind === 'chat_finding' && typeof p.title === 'string' && p.title) {
+    return {
+      title: p.title,
+      description: typeof p.why === 'string' && p.why ? p.why : t(`${action.kind}.description`),
+    };
+  }
   // An Improve action carries its own title and "why", written from the
   // prompt's platform states when it was sent (PROMPT-004).
   if (action.kind === 'prompt_improve' && typeof p.title === 'string' && p.title) {
@@ -241,13 +249,21 @@ export function eventTaskText(
   return t(key);
 }
 
+/** Chat's History events about one task (CHAT-09 §D), named as a checked task is. */
+const CHAT_TASK_EVENTS = new Set([
+  'file_attached',
+  'file_detached',
+  'task_ready_for_review',
+  'task_review_withdrawn',
+]);
+
 /** A History entry as a sentence: what happened, to what, by which tool. */
 export function actionEventText(
   event: ActionEvent,
   t: Translator,
   tTasks: Translator & { has?: (key: string) => boolean },
 ): string {
-  return t(`drawer.events.${event.event}`, {
+  const text = t(`drawer.events.${event.event}`, {
     to: String(event.data.to ?? ''),
     count: Number(event.data.count ?? 0),
     // Tasks the writer left for review (AC-010).
@@ -256,11 +272,22 @@ export function actionEventText(
     // and the tool as it is recorded — the tool id is the audit fact, so it
     // is not translated.
     // A checked task is named once (`{task}{title}`): by its own title when it
-    // has one; lines written before the API sent only one carry both.
+    // has one; lines written before the API sent only one carry both. So is a
+    // task Chat attached a file to or set to Ready for review (CHAT-09 §D).
     task:
-      event.event === 'task_checked' && event.data.title
+      (event.event === 'task_checked' || CHAT_TASK_EVENTS.has(event.event)) && event.data.title
         ? ''
         : eventTaskText(event.data.task, tTasks),
+    // Where it came from: `chat` for what Chat did (CHAT-20 §10a).
+    source: String(event.data.source ?? ''),
+    // A finding Chat added, and a file it attached, in their own words.
+    finding: String(event.data.finding ?? ''),
+    file: String(event.data.file ?? ''),
+    // Who undid a Chat action (CHAT-20 §10b): named when they were.
+    by:
+      typeof event.data.by === 'string' && event.data.by
+        ? event.data.by
+        : t('drawer.eventParts.someone'),
     tool: String(event.data.tool ?? ''),
     improved: Number(event.data.improved ?? 0),
     measurable: Number(event.data.measurable ?? 0),
@@ -275,6 +302,19 @@ export function actionEventText(
     day: Number(event.data.day ?? 0),
     final: event.data.final === true ? 'yes' : 'no',
   });
+  if (event.event !== 'evidence_attached') return text;
+  // A finding added from Chat says its note and where it was read, when it has them.
+  const parts = [text];
+  if (typeof event.data.note === 'string' && event.data.note.trim()) {
+    parts.push(t('drawer.eventParts.note', { note: event.data.note.trim() }));
+  }
+  const sources = Array.isArray(event.data.sources)
+    ? event.data.sources.filter((source): source is string => typeof source === 'string')
+    : [];
+  if (sources.length > 0) {
+    parts.push(t('drawer.eventParts.sources', { sources: sources.join(', ') }));
+  }
+  return parts.join(' · ');
 }
 
 /**
@@ -289,8 +329,13 @@ export function actionGoal(
   t: Translator,
   payload?: Record<string, unknown> | null,
 ): string {
-  // An Improve action names its own prompt and platforms (PROMPT-004).
-  if (kind === 'prompt_improve' && typeof payload?.goal === 'string' && payload.goal) {
+  // An Improve action names its own prompt and platforms (PROMPT-004); a
+  // finding sent from Chat its own goal, when it gave one (CHAT-09 §E).
+  if (
+    (kind === 'prompt_improve' || kind === 'chat_finding') &&
+    typeof payload?.goal === 'string' &&
+    payload.goal
+  ) {
     return payload.goal;
   }
   return isActionKind(kind) ? t(`${kind}.goal`) : t('unknown.goal');
@@ -312,6 +357,7 @@ const PERSON_SENT_KINDS: string[] = [
   'shopping_product',
   'shopping_category',
   'shopping_links',
+  'chat_finding',
 ];
 
 /** Compact evidence chips under the title: signal count plus the kind's own
