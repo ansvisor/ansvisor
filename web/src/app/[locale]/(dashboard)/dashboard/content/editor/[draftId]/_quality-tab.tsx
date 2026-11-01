@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from '@/lib/content/authors';
 import { isPageType } from '@/lib/content/drafts';
+import type { SiteType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityBand } from '@/lib/content/quality';
 import type { QualityProfile } from '@/lib/content/quality-profiles';
 import {
@@ -85,7 +86,7 @@ export interface QualityRead {
   /** Where the brand's facts are approved: Brand settings › Brand facts (CE-047). */
   brandFactsPath?: string | null;
   /** The brand's business type: a proof to-do's wording follows it (CE-049). */
-  siteType?: 'b2b' | 'ecommerce' | 'b2c';
+  siteType?: SiteType;
   /** The page read (proof, CE-049; AI checks, CE-050) waits: the AI budget is spent, or its reads for the day made. */
   pagePaused?: boolean;
   pageLimited?: boolean;
