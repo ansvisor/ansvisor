@@ -3,12 +3,13 @@ import express from 'express';
 
 /**
  * Internal requests acting as a member (Chat's triggered runs): with
- * CHAT_INTERNAL_SECRET and X-Acting-User, on the allowed routes only, the
+ * CHAT_ACTING_SECRET and X-Acting-User, on the allowed routes only, the
  * member is known as with a session and checked as one; without the secret
- * the header is ignored, and with it unset the way is closed.
+ * the header is ignored, and with it unset or too short the way is closed.
  */
 
-const SECRET = 'internal-secret-for-tests';
+// 32 characters, the shortest taken.
+const SECRET = 'acting-secret-for-tests-32-chars';
 const ORG = '0a000000-0000-4000-8000-000000000001';
 const OTHER_ORG = '0b000000-0000-4000-8000-000000000002';
 const MANAGER = '1a000000-0000-4000-8000-000000000001';
@@ -24,7 +25,7 @@ const OTHER_BRAND = '3c000000-0000-4000-8000-000000000003';
 const OPP = '4a000000-0000-4000-8000-000000000001';
 const SUGGESTION = '5a000000-0000-4000-8000-000000000001';
 
-const db = vi.hoisted(() => ({ tables: {}, authUsers: {}, sessions: {} }));
+const db = vi.hoisted(() => ({ tables: {}, errors: {}, authUsers: {}, sessions: {} }));
 const supabase = vi.hoisted(() => ({
   getUser: null,
   getUserById: null,
@@ -37,16 +38,18 @@ vi.mock('../config/supabase.js', () => {
       (db.tables[table] ?? []).filter((row) =>
         where.every(([column, values]) => values.includes(row[column])),
       );
+    // A table set to fail answers its error, as PostgREST does.
+    const answer = (data) =>
+      db.errors[table] ? { data: null, error: db.errors[table] } : { data, error: null };
     const chain = {
       select: () => chain,
       eq: (column, value) => (where.push([column, [value]]), chain),
       in: (column, values) => (where.push([column, values]), chain),
       order: () => chain,
       range: () => chain,
-      single: async () => ({ data: rows()[0] ?? null, error: null }),
-      maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }),
-      then: (resolve, reject) =>
-        Promise.resolve({ data: rows(), error: null }).then(resolve, reject),
+      single: async () => answer(rows()[0] ?? null),
+      maybeSingle: async () => answer(rows()[0] ?? null),
+      then: (resolve, reject) => Promise.resolve(answer(rows())).then(resolve, reject),
     };
     return chain;
   };
@@ -81,8 +84,8 @@ const logger = vi.hoisted(() => {
 vi.mock('../lib/logger.js', () => ({ logger, default: logger }));
 
 const { default: Middleware } = await import('./index.js');
-const { ACTING_USER_ROUTES } = await import('./acting-user.js');
-const { DEMO_GUARDED, clearDemoBrandCache } = await import('./demo-brand.js');
+const { ACTING_USER_ROUTES, MIN_SECRET_LENGTH } = await import('./acting-user.js');
+const { DEMO_GUARDED, MAX_IDS, clearDemoBrandCache } = await import('./demo-brand.js');
 const { apiLimiterKey } = await import('./rate-limiter.js');
 const { clearVerifiedTokens, markTokenVerified } = await import('./verified-tokens.js');
 const { requestScope } = await import('../lib/request-scope.js');
@@ -129,10 +132,13 @@ function expectRefused({ req, res, next }, status, code) {
 }
 
 beforeEach(() => {
-  vi.stubEnv('CHAT_INTERNAL_SECRET', SECRET);
+  vi.stubEnv('CHAT_ACTING_SECRET', SECRET);
+  // The server's secret to the web: never this one's.
+  vi.stubEnv('CHAT_INTERNAL_SECRET', 'internal-secret-the-server-sends-to-the-web');
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
   logged.length = 0;
+  db.errors = {};
   clearVerifiedTokens();
   clearDemoBrandCache();
   const authUser = (id, extra = {}) => ({ id, email: `${id.slice(0, 2)}@ansvisor.com`, ...extra });
@@ -280,6 +286,65 @@ describe('the internal secret with a member to act for', () => {
     expect(logged.find((entry) => entry.bindings.actingFor === NO_ORG)).toBeTruthy();
     expect(JSON.stringify(logged)).not.toContain(SECRET);
   });
+
+  it('is closed with a secret shorter than 32 characters, and never sends it to Supabase Auth', async () => {
+    expect(MIN_SECRET_LENGTH).toBe(32);
+    const short = SECRET.slice(0, MIN_SECRET_LENGTH - 1);
+    vi.stubEnv('CHAT_ACTING_SECRET', short);
+    expectRefused(await run({ authorization: `Bearer ${short}` }), 401);
+    expect(supabase.getUser).not.toHaveBeenCalled();
+    expect(supabase.getUserById).not.toHaveBeenCalled();
+    expect(logged.some((entry) => /shorter than 32/.test(entry.args.at(-1)))).toBe(true);
+    expect(JSON.stringify(logged)).not.toContain(short);
+  });
+
+  it('refuses with Chat off on the deployment before reading anyone', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expectRefused(await run(), 403, 'chat_off');
+    // Off the allowed routes too: nothing is read.
+    expectRefused(await run({ path: '/tracking/check' }), 403, 'chat_off');
+    expect(supabase.getUserById).not.toHaveBeenCalled();
+    expect(supabase.getUser).not.toHaveBeenCalled();
+  });
+
+  it('refuses when any brand of a list in the body is another workspace’s', async () => {
+    expectRefused(
+      await run({ body: { brandId: [BRAND, OTHER_BRAND], url: 'https://ansvisor.com/' } }),
+      403,
+      'not_in_workspace',
+    );
+    expectPassedAs(
+      await run({ body: { brandId: [BRAND, SECOND_BRAND], url: 'https://ansvisor.com/' } }),
+      MANAGER,
+    );
+  });
+
+  it('answers 400 for more ids than a request may name', async () => {
+    const ids = Array.from(
+      { length: MAX_IDS + 1 },
+      (_, i) => `3d000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    );
+    const result = await run({ body: { brandId: ids, url: 'https://ansvisor.com/' } });
+    expectRefused(result, 400, 'invalid');
+  });
+
+  it('answers 500, never passing, when a read fails', async () => {
+    supabase.getUserById = vi.fn(async () => {
+      throw new Error('auth is down');
+    });
+    expectRefused(await run(), 500);
+    supabase.getUserById = vi.fn(async (id) => ({ data: { user: db.authUsers[id] }, error: null }));
+
+    for (const table of ['profiles', 'brands', 'content_opportunities']) {
+      db.errors = { [table]: { code: 'XX000', message: `${table} read failed` } };
+      const call =
+        table === 'content_opportunities'
+          ? { method: 'PATCH', path: `/content/${OPP}/status`, body: { status: 'in_progress' } }
+          : {};
+      expectRefused(await run(call), 500);
+    }
+    expect(logged.filter((entry) => entry.level === 'error')).toHaveLength(4);
+  });
 });
 
 describe('without the internal secret', () => {
@@ -299,10 +364,22 @@ describe('without the internal secret', () => {
     expect(supabase.getUserById).not.toHaveBeenCalled();
   });
 
-  it('is closed with CHAT_INTERNAL_SECRET unset', async () => {
-    vi.stubEnv('CHAT_INTERNAL_SECRET', '');
+  it('is closed with CHAT_ACTING_SECRET unset', async () => {
+    vi.stubEnv('CHAT_ACTING_SECRET', '');
     expectRefused(await run(), 401);
     expectRefused(await run({ authorization: 'Bearer ' }), 401);
+    expect(supabase.getUserById).not.toHaveBeenCalled();
+  });
+
+  it('never takes CHAT_INTERNAL_SECRET, the server’s secret to the web', async () => {
+    expectRefused(
+      await run({ authorization: 'Bearer internal-secret-the-server-sends-to-the-web' }),
+      401,
+    );
+    // Even set to the same value: only CHAT_ACTING_SECRET opens the way.
+    vi.stubEnv('CHAT_ACTING_SECRET', '');
+    vi.stubEnv('CHAT_INTERNAL_SECRET', SECRET);
+    expectRefused(await run(), 401);
     expect(supabase.getUserById).not.toHaveBeenCalled();
   });
 });
