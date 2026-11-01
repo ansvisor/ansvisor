@@ -230,6 +230,18 @@ describe('chatComposerSetup', () => {
     expect((await chatComposerSetup()).skills).toEqual([]);
   });
 
+  it("puts the person's focus's skills first in the / menu (CHAT-24 §1)", async () => {
+    facts.ctx = ctxOf('manager', true, true);
+    db.prefs = { focus: ['brand', 'lead'] };
+    const { skills } = await chatComposerSetup();
+    expect(skills.slice(0, 3).map((skill) => skill.name)).toEqual([
+      'wrongclaim',
+      'report',
+      'facts',
+    ]);
+    expect(skills).toHaveLength(14);
+  });
+
   it('passes on the period whose 80% line was seen, and whether Chat runs on its own key', async () => {
     facts.ctx = ctxOf('admin', true, false);
     db.prefs = { default_mode: 'full_auto', usage_notice_period: '2026-10-01' };

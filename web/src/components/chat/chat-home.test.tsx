@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
+import type { FocusArea } from '@/lib/chat/focus';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import type { SinceYouLeft } from '@/lib/chat/since';
@@ -40,9 +41,12 @@ const due = vi.hoisted(() => ({
   since: null as SinceYouLeft | null,
 }));
 vi.mock('@/lib/actions/chat-home', () => ({
+  readFocusFill: vi.fn(async () => ({ ok: false })),
   readHomeShortcuts: due.read,
   readSinceYouLeft: vi.fn(async () => ({ ok: true, since: due.since })),
 }));
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@/lib/analytics', () => analytics);
 vi.mock('@/lib/actions/chat-prefs', () => ({
   saveChatFocus: vi.fn(),
   skipChatFocus: vi.fn(),
@@ -486,5 +490,91 @@ describe('the focus pill (CHAT-24 §3 item 3)', () => {
     );
     await render(view());
     expect(host.querySelector('[data-slot="focus-pill"]')).toBeNull();
+  });
+});
+
+describe('Home by focus (CHAT-24 §4)', () => {
+  const words = (rivalMove: { name: string; points: number } | null = null) => ({
+    fill: { rival: 'Kestrel CRM', topic: 'Integrations', market: null },
+    rivalMove,
+  });
+  const focus = (...areas: FocusArea[]) => ({ areas, onEdit: () => undefined });
+  const chips = () => [...host.querySelectorAll<HTMLElement>('[data-action="home.runShortcut"]')];
+
+  it('takes the picked areas’ shortcuts in turn, five at most beside Ask anything', async () => {
+    await render(view({ focus: focus('comp', 'brand'), words: words() }));
+    expect(chips().map((chip) => chip.textContent)).toEqual([
+      'Competitor moves',
+      'Fact check',
+      'Prompts we lost',
+      'How AI describes us',
+      'Cited for rivals, not us',
+    ]);
+    expect(host.querySelector('[data-action="home.moreShortcuts"]')).not.toBeNull();
+  });
+
+  it('keeps the jobs’ counts and rules, and asks in each shortcut’s words', async () => {
+    const onAsk = vi.fn();
+    analytics.track.mockClear();
+    await render(view({ focus: focus('seo'), words: words(), dueTasks: 4, lostPages: 0, onAsk }));
+    expect(chips().map((chip) => [chip.dataset.skill, chip.textContent])).toEqual([
+      ['tasks', 'Complete tasks 4 due'],
+      ['auditFixes', 'Site audit fixes'],
+      ['report', 'Weekly report'],
+    ]);
+    await act(async () => chips()[2].click());
+    expect(onAsk).toHaveBeenCalledWith("/report Write this week's report on our AI visibility.");
+    expect(analytics.track).toHaveBeenCalledWith('chat_focus_shortcut_clicked', {
+      area: 'seo',
+      skill: 'report',
+    });
+    // A role that only reads: no job that changes things.
+    await render(view({ focus: focus('seo'), words: words(), dueTasks: 4, canChange: false }));
+    expect(chips().map((chip) => chip.dataset.skill)).toEqual(['auditFixes', 'report']);
+  });
+
+  it('starts with four questions in the workspace’s words, a new chat each', async () => {
+    const onAsk = vi.fn();
+    analytics.track.mockClear();
+    await render(view({ focus: focus('pd', 'bd'), words: words(), onAsk }));
+    const questions = [...host.querySelectorAll<HTMLElement>('[data-action="dept.starter"]')];
+    expect(questions.map((q) => q.textContent)).toEqual([
+      '›What do buyers ask AI about Integrations?',
+      '›Where does AI send buyers to our rivals?',
+      '›Which features does AI name for Kestrel CRM but not for us?',
+      '›Which directories and review sites does AI trust in our category?',
+    ]);
+    expect(text()).toContain('Start with a question');
+    await act(async () => questions[1].click());
+    expect(onAsk).toHaveBeenCalledWith('Where does AI send buyers to our rivals?');
+    expect(analytics.track).toHaveBeenCalledWith('chat_starter_clicked', { area: 'bd', index: 1 });
+  });
+
+  it('waits for the words before the questions, and shows none without a focus', async () => {
+    await render(view({ focus: focus('pd'), words: null }));
+    expect(host.querySelector('[data-action="dept.starter"]')).toBeNull();
+    await render(view({ focus: focus(), words: words() }));
+    expect(host.querySelector('[data-action="dept.starter"]')).toBeNull();
+    expect(text()).not.toContain('Start with a question');
+  });
+
+  it('says a competitor’s rise under the greeting, after what needs the person', async () => {
+    await render(
+      view({ focus: focus('pd', 'comp'), words: words({ name: 'Kestrel CRM', points: 4 }) }),
+    );
+    expect(host.querySelector('h1 + p')?.textContent).toBe(
+      'Kestrel CRM’s mention rate rose 4 points this week.',
+    );
+    await render(
+      view({
+        focus: focus('comp'),
+        words: words({ name: 'Kestrel CRM', points: 4 }),
+        inbox: 1,
+        needsYou: 1,
+      }),
+    );
+    expect(host.querySelector('h1 + p')?.textContent).toContain('1 thing needs you');
+    await render(view({ focus: focus('comp'), words: words({ name: 'Kestrel CRM', points: 2 }) }));
+    expect(host.querySelector('h1 + p')?.textContent).toBe('All caught up.');
   });
 });

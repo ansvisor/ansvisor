@@ -1,7 +1,7 @@
 ---
 title: Choose what Chat focuses on
 route: /dashboard/chat
-keywords: [focus, chat focus, focus areas, your focus, choose focus, suggestions for me]
+keywords: [focus, chat focus, focus areas, your focus, choose focus, suggestions for me, start with a question, starter questions]
 synonyms: [interests, what I work on, tailor chat, personalize chat home]
 plan: all
 updated: 2026-10-31
@@ -18,6 +18,14 @@ You can tell Chat what to focus on for you: one or more areas, such as **Competi
 The first time you open Chat, it asks **What should Chat focus on for you?** Pick one or more of the eight areas and select **Continue**. The areas that match what you work on, from your menu settings, start out picked.
 
 **Skip for now** keeps the default Home. Chat asks only once, whichever you choose.
+
+## What changes on Chat Home
+
+With a focus, the chips under **For you now** come from your areas, taken in turn so each one shows: for example **Competitor moves**, **Fact check** or **Buyer questions**. **Complete tasks**, **Win back citations** and **Ready to publish** keep their counts and show only when there is something to do.
+
+**Start with a question** offers four questions from your areas, filled with your own competitors, topics and markets where Ansvisor knows them. Select one to start a new chat with it.
+
+With **Competitors** picked, the line under the greeting can say when a competitor's mention rate rose this week. The skills in the **/** menu list your areas' skills first.
 
 ## Change it later
 
