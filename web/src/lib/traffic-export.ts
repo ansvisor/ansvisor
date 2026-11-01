@@ -28,11 +28,7 @@ import { conversionRate } from '@/lib/traffic-conversions';
 import { ctrPct, impressionsRise } from '@/lib/traffic-google-pages';
 import { botName } from '@/lib/ai-bot-names';
 import { visitChange } from '@/lib/traffic-change';
-import {
-  googleSourceStatus,
-  snippetDetected,
-  type GoogleSourceStatus,
-} from '@/lib/traffic-sources';
+import { googleSourceStatus, snippetStateOf, type GoogleSourceStatus } from '@/lib/traffic-sources';
 
 /** Every section, in the page's order. */
 export const TRAFFIC_EXPORT_SECTIONS = [
@@ -605,6 +601,13 @@ export function trafficTable(
   }
 }
 
+/** The snippet's state as the export's sources rows name it. */
+const SNIPPET_STATE_LABEL = {
+  active: 'active',
+  installed_quiet: 'installedQuiet',
+  not_detected: 'notDetected',
+} as const;
+
 /** What the export was made from: the range, the filters, the sources and when. */
 export function filtersTable(data: TrafficExportData, label: ExportLabel): ExportTable {
   const sourceState = (status: GoogleSourceStatus) => label(`sourceStates.${status}`);
@@ -623,11 +626,7 @@ export function filtersTable(data: TrafficExportData, label: ExportLabel): Expor
       [label('filters.search'), data.search || label('filters.none')],
       [
         label('filters.snippet'),
-        sources
-          ? snippetDetected(sources.snippetLastVisitAt)
-            ? label('sourceStates.active')
-            : label('sourceStates.notDetected')
-          : null,
+        sources ? label(`sourceStates.${SNIPPET_STATE_LABEL[snippetStateOf(sources)]}`) : null,
       ],
       [label('filters.ga'), sources ? sourceState(googleSourceStatus(sources.ga)) : null],
       [label('filters.gsc'), sources ? sourceState(googleSourceStatus(sources.gsc)) : null],

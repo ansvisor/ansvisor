@@ -307,7 +307,7 @@ export default function ContentPlanPage() {
             <div
               role="group"
               aria-label={t('period')}
-              className="inline-flex rounded-lg border bg-muted/40 p-0.5"
+              className="inline-flex h-8 rounded-lg border bg-muted/40 p-0.5"
             >
               {PLAN_PERIODS.map((value) => (
                 <button
@@ -316,7 +316,7 @@ export default function ContentPlanPage() {
                   aria-pressed={days === value}
                   onClick={() => changeDays(value)}
                   className={cn(
-                    'rounded-md px-3 py-1 text-sm transition-colors',
+                    'rounded-md px-3 text-sm transition-colors',
                     days === value
                       ? 'bg-background font-medium shadow-sm'
                       : 'text-muted-foreground hover:text-foreground',

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
+import { focusPicks } from '@/lib/chat/focus';
 import {
   generalPatch,
   generalPatchRefusal,
@@ -44,7 +45,7 @@ async function chatPerson(): Promise<Person | null> {
  * given); false when it isn't theirs to keep. Logs a failure, never throws.
  */
 async function keepPref(
-  row: Record<string, string | boolean | null>,
+  row: Record<string, string | string[] | boolean | null>,
   what: string,
   person?: Person,
 ): Promise<ChatPrefResult> {
@@ -110,6 +111,31 @@ export async function saveUsageNoticePeriod(period: string): Promise<ChatPrefRes
  */
 export async function saveHomeSeen(): Promise<ChatPrefResult> {
   return keepPref({ home_seen_at: new Date().toISOString() }, 'the Home visit');
+}
+
+/**
+ * What Chat focuses on for the person (CHAT-24 §3: the picker on first
+ * open, Settings › General › Your focus, the Home pill), in the order
+ * picked. Empty clears it: Home goes back to the default.
+ */
+export async function saveChatFocus(areas: unknown): Promise<ChatPrefResult> {
+  const parsed = focusPicks.safeParse(areas);
+  if (!parsed.success) return { ok: false };
+  return keepPref({ focus: parsed.data }, 'the focus');
+}
+
+/** "Skip for now" in the focus picker: no focus, and the picker doesn't open by itself again. */
+export async function skipChatFocus(): Promise<ChatPrefResult> {
+  return keepPref({ focus: [] }, 'a skipped focus');
+}
+
+/**
+ * The focus picker opened by itself (chat_user_prefs.focus_prompted_at,
+ * 00408): it shows once per person, so leaving it without a pick doesn't
+ * bring it back on the next visit.
+ */
+export async function markFocusPrompted(): Promise<ChatPrefResult> {
+  return keepPref({ focus_prompted_at: new Date().toISOString() }, 'the focus prompt');
 }
 
 /**

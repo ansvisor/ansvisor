@@ -48,6 +48,11 @@ export interface AuditResult {
   finalUrl: string | null;
   status: 'running' | 'completed' | 'failed';
   totalScore: number | null;
+  /**
+   * The AI-judged signals didn't run and none were kept from an earlier
+   * audit: the score leaves them out and isn't compared with other audits.
+   */
+  partial?: boolean;
   /** Nearest earlier completed audit of the same normalized page, for the report delta. */
   previousScore?: number | null;
   previousCreatedAt?: string | null;
