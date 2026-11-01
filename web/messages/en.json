@@ -6533,6 +6533,12 @@
     "recommendedFix": "Recommended fix",
     "fix": "Fix",
     "signalsEvaluated": "signals evaluated",
+    "recent": {
+      "question": "Audited {minutes} min ago. Open it or audit again?",
+      "open": "Open it",
+      "again": "Audit again",
+      "skipped": "{count, plural, one {# page was} other {# pages were}} audited in the last {minutes} minutes, so {count, plural, one {it wasn't} other {they weren't}} audited again."
+    },
     "partialNote": "The AI checks couldn't run this time, so this score leaves them out and isn't compared with your other audits.",
     "partialNoCredit": "It didn't use one of your monthly audits.",
     "aiRecommendations": "AI Recommendations",

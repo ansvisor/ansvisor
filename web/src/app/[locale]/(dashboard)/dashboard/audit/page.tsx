@@ -17,6 +17,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
+import { useRecentAudit } from '@/components/audit/use-recent-audit';
 import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,7 @@ import {
   type AutoAuditRun,
   type AuditTemplate,
   type AuditedPage,
+  type RecentAudit,
   type AuditOverview,
   type AuditOpportunities,
   type AuditQuota,
@@ -93,6 +95,7 @@ function barClass(score: number | null): string {
 export default function SiteAuditPage() {
   const t = useTranslations('audit');
   const router = useRouter();
+  const { askOne, saySkipped } = useRecentAudit();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const { canManage } = useUserRole();
   // A read-only workspace (plan not active): Run audit, the bulk bars' Audit,
@@ -281,6 +284,27 @@ export default function SiteAuditPage() {
         (pct(dailyPoints[0].totalScore) ?? 0)
       : null;
 
+  // POST returns immediately with a running row (the page's own, when one
+  // runs already); navigate to its detail page, which polls until the audit
+  // completes. A page audited minutes ago asks first: Open it or Audit again.
+  const startAudit = async (brandId: string, target: string, force = false) => {
+    setRunning(true);
+    try {
+      const started = force
+        ? await runAudit(brandId, target, { force: true })
+        : await runAudit(brandId, target);
+      if (started.recent) {
+        setRunning(false);
+        askOne(started.recent, () => void startAudit(brandId, target, true));
+        return;
+      }
+      router.push(`/dashboard/audit/${started.audit.id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('failed'));
+      setRunning(false);
+    }
+  };
+
   const handleRun = guard(
     async () => {
       if (!activeBrandId) {
@@ -291,16 +315,7 @@ export default function SiteAuditPage() {
         toast.error(t('urlRequired'));
         return;
       }
-      setRunning(true);
-      try {
-        // POST returns immediately with a running row; navigate to its detail
-        // page, which polls until the audit completes.
-        const started = await runAudit(activeBrandId, url.trim());
-        router.push(`/dashboard/audit/${started.id}`);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : t('failed'));
-        setRunning(false);
-      }
+      await startAudit(activeBrandId, url.trim());
     },
     { action: tActions('runAudit') },
   );
@@ -376,15 +391,43 @@ export default function SiteAuditPage() {
 
   const selectedPages = pages.filter((p) => selected.has(p.key));
 
+  // Start audits of the pages, BULK_REQUEST_MAX a request (a template's
+  // pages can pass one request's limit). Pages audited minutes ago aren't
+  // started: a notice says so, with Audit again.
+  const auditUrls = async (brandId: string, urls: string[], force = false) => {
+    let started = 0;
+    const recent: RecentAudit[] = [];
+    for (let i = 0; i < urls.length; i += BULK_REQUEST_MAX) {
+      const chunk = urls.slice(i, i + BULK_REQUEST_MAX);
+      const result = force
+        ? await runAuditsBulk(brandId, chunk, { force: true })
+        : await runAuditsBulk(brandId, chunk);
+      started += result.started;
+      recent.push(...result.recent);
+    }
+    if (started > 0) toast.success(t('bulk.started', { count: started }));
+    saySkipped(recent, async () => {
+      try {
+        await auditUrls(
+          brandId,
+          recent.flatMap((r) => (r.url ? [r.url] : [])),
+          true,
+        );
+        await reloadInPlace(brandId);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : t('failed'));
+      }
+    });
+  };
+
   const handleBulkReaudit = async () => {
     if (!activeBrandId || selectedPages.length === 0) return;
     setStartingBulk(true);
     try {
-      const { started } = await runAuditsBulk(
+      await auditUrls(
         activeBrandId,
         selectedPages.map((p) => p.url),
       );
-      toast.success(t('bulk.started', { count: started }));
       setSelected(new Set());
       await reloadInPlace(activeBrandId);
     } catch (err) {
@@ -416,16 +459,7 @@ export default function SiteAuditPage() {
     if (!activeBrandId || oppAuditUrls.length === 0) return;
     setStartingBulk(true);
     try {
-      // A template's pages can pass one request's limit: a request per 50.
-      let started = 0;
-      for (let i = 0; i < oppAuditUrls.length; i += BULK_REQUEST_MAX) {
-        const result = await runAuditsBulk(
-          activeBrandId,
-          oppAuditUrls.slice(i, i + BULK_REQUEST_MAX),
-        );
-        started += result.started;
-      }
-      toast.success(t('bulk.started', { count: started }));
+      await auditUrls(activeBrandId, oppAuditUrls);
       setOppSelected(new Set());
       await reloadInPlace(activeBrandId);
     } catch (err) {
