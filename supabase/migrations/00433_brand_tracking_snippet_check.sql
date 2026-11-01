@@ -23,3 +23,5 @@ comment on column public.brands.snippet_checked_at is
   'AI Traffic: when the server last read the brand''s home page for its tracking snippet (Check again, brand setup).';
 comment on column public.brands.snippet_found_at is
   'AI Traffic: when that read found the snippet (its t.js tag or the tracking code); null when it did not, or none has run.';
+
+notify pgrst, 'reload schema';
