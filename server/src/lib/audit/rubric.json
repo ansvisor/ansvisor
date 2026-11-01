@@ -293,11 +293,11 @@
     {
       "key": "readability",
       "category": "content",
-      "label": "Readability (Flesch)",
-      "what": "Flesch Reading Ease score (target 50–70 for general audiences).",
-      "why": "Engines extract from content humans can read. Sub-30 (academic) and 80+ (childlike) both underperform.",
-      "howToFix": "Aim for 50–70. Under 50: shorten sentences and cut adverbs, about 16 words a sentence. Over 70: write fuller sentences with the detail readers expect.",
-      "source": "Flesch (1948) + adapted by SGE",
+      "label": "Readability",
+      "what": "Reading-ease score in the page's language: Flesch Reading Ease for English (target 50–70), Ateşman for Turkish (50 or more), Amstad, Kandel–Moles or Fernández-Huerta for German, French or Spanish (60 or more); other languages by sentence and word length.",
+      "why": "Engines extract from content humans can read. Dense, academic text underperforms; in English, very simple text (over 70) can leave out the detail readers expect.",
+      "howToFix": "Under the target: shorten sentences and use plainer words, about 16 words a sentence. English over 70: write fuller sentences with the detail readers expect.",
+      "source": "Flesch (1948), Ateşman (1997) + adapted by SGE",
       "impactTier": "standard"
     },
     {
@@ -444,7 +444,7 @@
       "key": "first-person",
       "category": "eeat",
       "label": "First-person evidence",
-      "what": "First-person language indicating real experience ('we tested', 'I built').",
+      "what": "Sentences told in the first person, showing real experience: 'we tested', 'I built', and in Turkish verb endings such as 'gezdik' or 'düşünüyoruz'. Two or more pass. Quotes and stock phrases such as 'Contact us' don't count. Read in English and Turkish.",
       "why": "Google's E-E-A-T update prioritizes lived experience. First-person signals it.",
       "howToFix": "Use first-person sparingly but precisely — 'we tested', 'in our experience', 'I found that…'.",
       "source": "Google E-E-A-T quality rater guidelines",

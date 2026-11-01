@@ -16,6 +16,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { AuditResult, AuditSignal, AuditRecommendation } from '@/lib/actions/audits';
+import {
+  firstPersonEvidence,
+  languageName,
+  readingEvidence,
+  type ReadingEvidence,
+} from '@/lib/audit/reading-evidence';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -168,6 +174,76 @@ function PasteBlocks({ rec }: { rec: AuditRecommendation }) {
   );
 }
 
+/** Readability's finding in parts: its score by the language's formula, then sentences, words and paragraphs. */
+function ReadingFinding({ evidence }: { evidence: ReadingEvidence }) {
+  const t = useTranslations('audit');
+  const tFormula = useTranslations('contentEditor.editor.quality.formulas');
+  const language = languageName(evidence.language);
+  return (
+    <div>
+      <p>
+        <span className="font-medium text-foreground">{t('finding')}: </span>
+        {evidence.formula && evidence.readingScore !== null
+          ? t('evidence.reading', {
+              score: evidence.readingScore,
+              formula: tFormula(evidence.formula),
+              language,
+            })
+          : t('evidence.readingNoFormula', { language })}
+      </p>
+      <ul className="mt-1 list-disc space-y-0.5 pl-5">
+        <li>{t('evidence.sentences', { words: evidence.wordsPerSentence })}</li>
+        <li>
+          {evidence.syllablesPerWord !== null
+            ? t('evidence.words', {
+                syllables: evidence.syllablesPerWord,
+                letters: evidence.lettersPerWord,
+              })
+            : t('evidence.wordsLetters', { letters: evidence.lettersPerWord })}
+        </li>
+        {evidence.wordsPerParagraph !== null && evidence.mobileLinesPerParagraph !== null && (
+          <li>
+            {t('evidence.paragraphs', {
+              words: evidence.wordsPerParagraph,
+              lines: evidence.mobileLinesPerParagraph,
+            })}
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+/** What a check found, from its evidence: its reason, or readability's and first person's counts. */
+function Finding({ signal }: { signal: AuditSignal }) {
+  const t = useTranslations('audit');
+  const evidence = signal.evidence ?? {};
+  if (typeof evidence.reason === 'string' && evidence.reason) {
+    return (
+      <p>
+        <span className="font-medium text-foreground">{t('finding')}: </span>
+        {evidence.reason}
+      </p>
+    );
+  }
+  const reading = signal.key === 'readability' ? readingEvidence(evidence) : null;
+  if (reading) return <ReadingFinding evidence={reading} />;
+  const told = signal.key === 'first-person' ? firstPersonEvidence(evidence) : null;
+  if (told) {
+    return (
+      <p>
+        <span className="font-medium text-foreground">{t('finding')}: </span>
+        {t('evidence.firstPerson', {
+          count: told.firstPersonSentences,
+          total: told.sentences,
+          language: languageName(told.language),
+        })}
+      </p>
+    );
+  }
+  return null;
+}
+
 function SignalRow({
   signal,
   recommendation,
@@ -207,12 +283,7 @@ function SignalRow({
           id={`signal-panel-${signal.key}`}
           className="space-y-2 pb-4 pl-7 text-sm text-muted-foreground"
         >
-          {typeof signal.evidence?.reason === 'string' && signal.evidence.reason && (
-            <p>
-              <span className="font-medium text-foreground">{t('finding')}: </span>
-              {signal.evidence.reason as string}
-            </p>
-          )}
+          <Finding signal={signal} />
           {signal.what && <p>{signal.what}</p>}
           {signal.why && (
             <p>

@@ -38,6 +38,16 @@ const FIXTURE = `<h1>How to brew pour-over coffee at home</h1>
 <h2>Common mistakes</h2>
 <p>Many beginners pour too fast, which makes a weak and sour cup. Others use water that is far too hot, which makes the coffee bitter. A beautiful, quiet morning ritual needs a little patience. Measure your coffee, watch the clock and keep notes on each cup.</p>`;
 
+// Shared with server/src/lib/audit/signals/readability.test.js: the same formula and score in both.
+const SAMPLES = {
+  en: `<h1>Our Cappadocia trip</h1><p>Last spring we toured Cappadocia in three days. We planned the trip two months ahead. We bought our plane tickets early and stayed in a small stone hotel. On the first morning we got up early. We climbed a hill to watch the balloons. The sky filled with hundreds of colorful balloons. We were very happy at that moment.</p><p>In the afternoon we toured the Göreme Open Air Museum. We looked at the old paintings in the rock churches. Our guide told us the history of the region.</p>`,
+  tr: `<h1>Kapadokya gezimiz</h1><p>Geçen bahar Kapadokya'yı üç günde gezdik. Yolculuğu iki ay önceden planladık. Uçak biletlerini erken aldık ve küçük bir taş otelde kaldık. İlk sabah erkenden kalktık. Balonları izlemek için tepeye çıktık. Gökyüzü yüzlerce renkli balonla doldu. O an çok mutlu olduk.</p><p>Öğleden sonra Göreme Açık Hava Müzesi'ni gezdik. Kaya kiliselerindeki eski resimlere baktık. Rehberimiz bize bölgenin tarihini anlattı. Akşam yemeğinde testi kebabı denedik.</p>`,
+  de: `<h1>Unsere Reise nach Kappadokien</h1><p>Im letzten Frühling haben wir Kappadokien in drei Tagen besucht. Wir haben die Reise zwei Monate vorher geplant. Wir haben die Flugtickets früh gekauft und in einem kleinen Steinhotel gewohnt. Am ersten Morgen sind wir früh aufgestanden. Wir sind auf einen Hügel gestiegen, um die Ballons zu sehen. Der Himmel war voller bunter Ballons. In diesem Moment waren wir sehr glücklich.</p>`,
+  fr: `<h1>Notre voyage en Cappadoce</h1><p>Au printemps dernier, nous avons visité la Cappadoce en trois jours. Nous avons préparé le voyage deux mois à l'avance. Nous avons acheté nos billets d'avion tôt et nous avons dormi dans un petit hôtel en pierre. Le premier matin, nous nous sommes levés tôt. Nous sommes montés sur une colline pour voir les ballons. Le ciel était plein de ballons colorés. Nous étions très heureux.</p>`,
+  es: `<h1>Nuestro viaje a Capadocia</h1><p>La primavera pasada visitamos Capadocia en tres días. Planeamos el viaje con dos meses de antelación. Compramos los billetes de avión pronto y nos alojamos en un pequeño hotel de piedra. La primera mañana nos levantamos temprano. Subimos a una colina para ver los globos. El cielo se llenó de cientos de globos de colores. En ese momento fuimos muy felices.</p>`,
+  it: `<h1>Il nostro viaggio in Cappadocia</h1><p>La scorsa primavera abbiamo visitato la Cappadocia in tre giorni. Abbiamo programmato il viaggio con due mesi di anticipo. Abbiamo comprato presto i biglietti aereo e abbiamo dormito in un piccolo albergo di pietra. La prima mattina ci siamo alzati presto. Siamo saliti su una collina per vedere le mongolfiere. Il cielo era pieno di palloni colorati. In quel momento eravamo molto felici.</p>`,
+};
+
 const EASY =
   '<h1>How do small teams forecast pipeline?</h1>' +
   p(
@@ -64,37 +74,76 @@ describe('readability', () => {
       'headingSpacing',
       'passiveJargon',
     ]);
-    // Flesch 101: simpler than the band Site Audit passes (50–70), so no reading-level points.
+    // Flesch 101: simpler than the band Site Audit passes (50–70), so half the reading-level points.
     expect(result.checks.find((c) => c.id === 'readingLevel')).toMatchObject({
       formula: 'flesch',
       value: 101,
       count: 1,
-      points: 0,
+      points: READABILITY_WEIGHTS.readingLevel / 2,
     });
     expect(result.checks.find((c) => c.id === 'longSentences')).toMatchObject({ count: 0 });
     expect(result.checks.find((c) => c.id === 'answerFirst')!.points).toBe(15);
-    expect(result.score).toBe(67);
+    expect(result.score).toBe(77);
   });
 
   it('scores the page Site Audit’s test reads, as Site Audit does', () => {
-    // Shared with server/src/lib/audit/signals/readability.test.js: Flesch 82 in both.
+    // Shared with server/src/lib/audit/signals/readability.test.js: Flesch 82 in both, a warning there.
     expect(check(FIXTURE, 'readingLevel')).toMatchObject({
       formula: 'flesch',
       value: 82,
       count: 1,
-      points: 0,
+      points: READABILITY_WEIGHTS.readingLevel / 2,
       band: { min: 50, max: 70 },
     });
   });
 
-  it('reads English by Site Audit’s band: full 50–70, half 30–50 and 70–80, none past', () => {
+  it('scores each language by its formula, as Site Audit does', () => {
+    // Shared with server/src/lib/audit/signals/readability.test.js: the same
+    // formula and score in both; full points where Site Audit passes, half
+    // where it warns.
+    const full = READABILITY_WEIGHTS.readingLevel;
+    expect(check(SAMPLES.en, 'readingLevel', 'en')).toMatchObject({
+      formula: 'flesch',
+      value: 88,
+      points: full / 2,
+    });
+    expect(check(SAMPLES.tr, 'readingLevel', 'tr')).toMatchObject({
+      formula: 'atesman',
+      value: 84,
+      points: full,
+    });
+    expect(check(SAMPLES.de, 'readingLevel', 'de')).toMatchObject({
+      formula: 'amstad',
+      value: 73,
+      points: full,
+    });
+    expect(check(SAMPLES.fr, 'readingLevel', 'fr')).toMatchObject({
+      formula: 'kandelMoles',
+      value: 87,
+      points: full,
+    });
+    expect(check(SAMPLES.es, 'readingLevel', 'es')).toMatchObject({
+      formula: 'fernandezHuerta',
+      value: 80,
+      points: full,
+    });
+    // No formula for Italian yet: sentence and word length (5.1 letters a word), both short.
+    expect(check(SAMPLES.it, 'readingLevel', 'it')).toMatchObject({
+      formula: null,
+      value: 5.1,
+      points: full,
+    });
+  });
+
+  it('reads English by Site Audit’s band: full 50–70, half from 30 and over 70, none under 30', () => {
     const level = (n: number, times: number) =>
       check(p(Array.from({ length: times }, () => sentence(n)).join(' ')), 'readingLevel')!;
     const full = READABILITY_WEIGHTS.readingLevel;
     // One-syllable words: the sentence's length sets the score.
     expect(level(55, 1)).toMatchObject({ value: 66, points: full, count: 0 });
     expect(level(45, 2)).toMatchObject({ value: 77, points: full / 2, count: 1 });
-    expect(level(20, 3)).toMatchObject({ value: 102, points: 0, count: 1 });
+    // A plain page reads easily: never no points.
+    expect(level(20, 3)).toMatchObject({ value: 102, points: full / 2, count: 1 });
     expect(level(75, 1)).toMatchObject({ value: 46, points: full / 2, count: -1 });
     expect(level(110, 1)).toMatchObject({ value: 11, points: 0, count: -1 });
   });

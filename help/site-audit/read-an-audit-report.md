@@ -1,8 +1,8 @@
 ---
 title: Read a site audit report
 route: /dashboard/audit
-keywords: [audit report, audit score, signals, audit categories, grade]
-synonyms: [audit results, page score, what failed, E-E-A-T score]
+keywords: [audit report, audit score, signals, audit categories, grade, readability, first person]
+synonyms: [audit results, page score, what failed, E-E-A-T score, Flesch, Ateşman, reading score]
 plan: all
 updated: 2026-10-31
 last_checked: 2026-10-31
@@ -40,6 +40,16 @@ The **Signals** section lists every check by category, each with a pass, warning
 - the **Finding**: what this audit saw on the page, when the check reports it;
 - what the signal measures, and **Why** it matters to AI engines;
 - the **Recommended fix** written for this page, or the general **Fix** for signals without one.
+
+## Readability
+
+**Readability** reads the page in its own language: the language the page declares, else the one its words are in. English is scored with Flesch Reading Ease: 50 to 70 passes, 30 to 49 and anything over 70 raise a warning, and under 30 fails, so a plain page is never failed for reading easily. Turkish is scored with Ateşman, and German, French and Spanish with their own formulas: their easy score or more passes. Other languages are read by sentence and word length, and Japanese, Chinese and Thai show n/a for now. The Content Editor scores a page the same way.
+
+The finding shows the score with its formula and language, then its parts: words a sentence, syllables and letters a word, and words a paragraph, with about how many lines a paragraph takes on a phone.
+
+## First-person evidence
+
+**First-person evidence** counts the sentences told as "I" or "we": in Turkish also by their verb endings, such as "gezdik" or "düşünüyoruz". Two or more pass and one raises a warning. Quotes and stock phrases such as "Contact us" don't count. It's read in English and Turkish; pages in other languages show n/a for now.
 
 ## Product pages
 

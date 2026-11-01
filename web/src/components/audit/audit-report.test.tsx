@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import messages from '../../../messages/en.json';
-import type { AuditRecommendation, AuditResult } from '@/lib/actions/audits';
+import type { AuditRecommendation, AuditResult, AuditSignal } from '@/lib/actions/audits';
 import { AuditReport } from './audit-report';
 
 (
@@ -27,7 +27,7 @@ const rec = (over: Partial<AuditRecommendation> = {}): AuditRecommendation => ({
 
 const audit = (
   recommendations: AuditRecommendation[],
-  previous: Pick<AuditResult, 'previousScore' | 'previousCreatedAt'> = {},
+  previous: Partial<Pick<AuditResult, 'previousScore' | 'previousCreatedAt' | 'signals'>> = {},
 ): AuditResult => ({
   id: 'a1',
   brandId: 'b1',
@@ -47,12 +47,26 @@ const audit = (
   ...previous,
 });
 
+const signal = (over: Partial<AuditSignal>): AuditSignal => ({
+  key: 'readability',
+  category: 'content',
+  status: 'pass',
+  score: 1,
+  evidence: {},
+  label: 'Readability',
+  what: null,
+  why: null,
+  howToFix: null,
+  impactTier: 'standard',
+  ...over,
+});
+
 let container: HTMLDivElement;
 let root: Root;
 
 function render(
   recommendations: AuditRecommendation[],
-  previous: Pick<AuditResult, 'previousScore' | 'previousCreatedAt'> = {},
+  previous: Partial<Pick<AuditResult, 'previousScore' | 'previousCreatedAt' | 'signals'>> = {},
 ) {
   act(() => {
     root.render(
@@ -151,5 +165,77 @@ describe('AuditReport score change', () => {
 
     render([], { previousScore: 0.56 });
     expect(container.textContent).not.toContain('since');
+  });
+});
+
+describe('a signal’s finding', () => {
+  /** Opens each signal row, and reads the panels' text. */
+  const open = () => {
+    for (const button of container.querySelectorAll<HTMLButtonElement>('button[aria-controls]')) {
+      act(() => button.click());
+    }
+    return [...container.querySelectorAll('[id^="signal-panel-"]')].map((p) => p.textContent);
+  };
+
+  it('shows readability in parts, with the formula and language it was read in', () => {
+    render([], {
+      signals: [
+        signal({
+          evidence: {
+            language: 'tr',
+            formula: 'atesman',
+            readingScore: 81,
+            wordsPerSentence: 5.6,
+            syllablesPerWord: 2.6,
+            lettersPerWord: 6,
+            wordsPerParagraph: 33,
+            mobileLinesPerParagraph: 6,
+          },
+        }),
+      ],
+    });
+    expect(open()).toEqual([
+      'Finding: Reading score 81 (Ateşman, Turkish)' +
+        'Sentences: 5.6 words on average' +
+        'Words: 2.6 syllables and 6 letters on average' +
+        'Paragraphs: 33 words on average, about 6 lines each on a phone',
+    ]);
+  });
+
+  it('says when a language has no reading formula yet, and counts first-person sentences', () => {
+    render([], {
+      signals: [
+        signal({
+          status: 'warn',
+          evidence: {
+            language: 'it',
+            formula: null,
+            readingScore: null,
+            wordsPerSentence: 24,
+            syllablesPerWord: null,
+            lettersPerWord: 5.1,
+            wordsPerParagraph: null,
+            mobileLinesPerParagraph: null,
+          },
+        }),
+        signal({
+          key: 'first-person',
+          category: 'eeat',
+          label: 'First-person evidence',
+          evidence: { language: 'en', firstPersonSentences: 29, sentences: 35 },
+        }),
+      ],
+    });
+    expect(open()).toEqual([
+      'Finding: No reading-score formula for Italian yet: read by sentence and word length' +
+        'Sentences: 24 words on average' +
+        'Words: 5.1 letters on average',
+      'Finding: 29 sentences of 35 told in the first person (English)',
+    ]);
+  });
+
+  it('shows an older audit’s Flesch score as nothing rather than a part', () => {
+    render([], { signals: [signal({ status: 'fail', evidence: { fleschReadingEase: 27 } })] });
+    expect(open()).toEqual(['']);
   });
 });
