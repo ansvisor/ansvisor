@@ -13,6 +13,7 @@ import {
   openingParagraph,
   pageOffer,
   productJsonLd,
+  webPageJsonLd,
 } from './page-schema';
 
 /** Before you publish's JSON-LD (Quality spec §7, CE-041): from the page's facts, nothing made up. */
@@ -107,6 +108,23 @@ describe('articleJsonLd', () => {
     const result = articleJsonLd({ ...base, isNew: false });
     expect(result).not.toHaveProperty('datePublished');
     expect(result.dateModified).toBe('2026-10-23');
+  });
+});
+
+describe('webPageJsonLd', () => {
+  it('keeps the qualified reviewer separate from the Article author', () => {
+    expect(webPageJsonLd({ title: 'A guide', reviewer: ada })).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: 'A guide',
+      reviewedBy: {
+        '@type': 'Person',
+        name: 'Ada Lovelace',
+        jobTitle: 'Head of Content',
+        image: 'https://cdn.acme.com/ada.jpg',
+        sameAs: ['https://www.linkedin.com/in/ada'],
+      },
+    });
   });
 });
 

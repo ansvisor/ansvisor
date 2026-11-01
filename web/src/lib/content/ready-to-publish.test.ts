@@ -239,6 +239,7 @@ describe('pageFields', () => {
         html,
         sourceUrl: null,
         author: ada,
+        reviewer: { ...ada, name: 'Dr. Grace Hopper' },
         teamByline: 'Acme Team',
       }),
     ).toEqual({
@@ -247,6 +248,7 @@ describe('pageFields', () => {
         'Pour-over coffee takes a dripper, a filter and four minutes. You pour 1.5 litres of hot water over the grounds in slow circles, and the coffee drips through.',
       slug: 'how-to-brew-pour-over-coffee',
       author: 'Ada Lovelace',
+      reviewer: 'Dr. Grace Hopper',
       featuredImage: 'https://cdn.acme.com/pour.jpg',
     });
   });
@@ -258,6 +260,7 @@ describe('pageFields', () => {
         html: '<p>Short.</p>',
         sourceUrl,
         author: null,
+        reviewer: null,
         teamByline: 'Acme Team',
       });
     expect(fields('https://acme.com/blog/pour-over-guide/')).toMatchObject({

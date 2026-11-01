@@ -366,6 +366,8 @@ export interface PageFields {
   slug: string;
   /** The page's author, the team byline, or empty while the authors aren't read. */
   author: string;
+  /** The qualified reviewer; separate from the page author. */
+  reviewer: string;
   featuredImage: string | null;
 }
 
@@ -482,12 +484,14 @@ export function pageFields({
   html,
   sourceUrl,
   author,
+  reviewer = null,
   teamByline,
 }: {
   title: string;
   html: string;
   sourceUrl: string | null;
   author: ContentAuthor | null;
+  reviewer?: ContentAuthor | null;
   teamByline: string;
 }): PageFields {
   return {
@@ -495,6 +499,7 @@ export function pageFields({
     metaDescription: description(fragment(html)),
     slug: slugOf(title, sourceUrl),
     author: author?.name ?? teamByline,
+    reviewer: reviewer ? [reviewer.name, reviewer.title].filter(Boolean).join(', ') : '',
     featuredImage: firstImage(html),
   };
 }

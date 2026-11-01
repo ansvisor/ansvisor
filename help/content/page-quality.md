@@ -1,11 +1,11 @@
 ---
 title: Check a page's Quality in the Content Editor
 route: /dashboard/content/editor
-keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author]
-synonyms: [content quality, quality check, page score, eeat score, ready to publish checklist]
+keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author, qualified reviewer, reviewer, reviewed by]
+synonyms: [content quality, quality check, page score, eeat score, ready to publish checklist, content reviewer, regulated page review]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -46,11 +46,12 @@ The header shows the page's author, picked from **Settings › Authors**, or you
 
 - placeholders, alt text and links;
 - the author;
+- the qualified reviewer on pages that advise on health, money or the law;
 - visible dates;
 - the structured data to paste, if your CMS doesn't add it;
 - a warning when Trust is under 60.
 
-On a page with a shopping path, it also names the product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about.
+Copy and Export carry **Reviewed by** beside **Author** in the page metadata; structured data keeps the reviewer separate from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about.
 
 ## Export with Quality on
 

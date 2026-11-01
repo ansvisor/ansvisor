@@ -26,6 +26,7 @@ const page: PageFields = {
   metaDescription: 'Brew it slowly.',
   slug: 'pour-over-coffee',
   author: 'Ada Lovelace',
+  reviewer: 'Dr. Grace Hopper, Clinical Reviewer',
   featuredImage: null,
 };
 const fields: CmsFields = {
@@ -154,6 +155,7 @@ describe('cmsPage', () => {
       metaDescription: 'Slowly.',
       html: '<p>Brew it slowly.</p>\n<img src="https://cdn.example/cup.jpg" alt="A cup">',
       author: 'Ada Lovelace',
+      reviewer: 'Dr. Grace Hopper, Clinical Reviewer',
       featuredImage: { src: 'https://cdn.example/cup.jpg', alt: 'A cup' },
     });
   });
@@ -216,12 +218,18 @@ describe('cmsSource', () => {
     bodyHtml: '<h1>Pour-over</h1><p>Brew it slowly.</p>',
     sourceUrl: 'https://acme.example/pour-over',
     authorId: 'a1',
+    reviewerId: 'r1',
     authorConfirmed: false,
     language: null,
   };
   const ada = { id: 'a1', name: 'Ada Lovelace' } as ContentAuthor;
+  const reviewer = {
+    id: 'r1',
+    name: 'Dr. Grace Hopper',
+    title: 'Clinical Reviewer',
+  } as ContentAuthor;
   const authors = (bylineInContent: boolean): AuthorsRead => ({
-    authors: [ada],
+    authors: [ada, reviewer],
     brands: [{ id: 'b1', name: 'Acme', bylineInContent }],
     me: { id: 'u1', role: 'admin' },
   });
@@ -242,6 +250,7 @@ describe('cmsSource', () => {
       html: expect.stringContaining('<p>Brew it slowly.</p>'),
       sourceUrl: 'https://acme.example/pour-over',
       author: ada,
+      reviewer,
       teamByline: 'Acme Team',
       byline: null,
     });
@@ -294,9 +303,23 @@ describe('bulkCmsItems', () => {
     html: '<h1>Pour-over</h1>\n<p>Brew it slowly.</p>',
     sourceUrl: null,
     author: null,
+    reviewer: null,
     teamByline: 'Acme Team',
     byline: null,
     ...over,
+  });
+
+  it('includes the reviewer as a WebPage schema node in bulk sends', () => {
+    const reviewer = {
+      id: 'r1',
+      name: 'Dr. Grace Hopper',
+      title: 'Clinical Reviewer',
+    } as ContentAuthor;
+    const [item] = bulkCmsItems([source({ reviewer })], new Map());
+    expect(item.page).toMatchObject({
+      reviewer: 'Dr. Grace Hopper, Clinical Reviewer',
+      html: expect.stringContaining('"reviewedBy"'),
+    });
   });
 
   it('gives each page as the Send dialog would send it, or why it can’t go', () => {
@@ -347,6 +370,7 @@ describe('cmsSendGroups', () => {
     metaDescription: '',
     html: 'x'.repeat(chars),
     author: null,
+    reviewer: null,
     featuredImage: null,
   });
 

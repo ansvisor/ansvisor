@@ -109,6 +109,8 @@ async function render(
     category = null as Parameters<typeof BeforePublish>[0]['category'],
     strict = false,
     shopping = null as Parameters<typeof BeforePublish>[0]['shopping'],
+    reviewer = null as ContentAuthor | null,
+    reviewerRequired = false,
   } = {},
 ) {
   const Wrap = strict ? StrictMode : Fragment;
@@ -124,6 +126,8 @@ async function render(
             onContinue={onContinue}
             onClose={() => {}}
             quality={q}
+            reviewer={reviewer}
+            reviewerRequired={reviewerRequired}
             title={title}
             isNew={isNew}
             pageType={pageType}
@@ -392,6 +396,30 @@ describe('BeforePublish', () => {
       'Article schema with datePublished and dateModified · check itOften added by your CMS. If not, paste the code below into the page.',
       'Ready to paste · doneNo placeholders, all images have alt text, all links work.',
     ]);
+  });
+
+  it('checks for a qualified reviewer on regulated pages and includes WebPage.reviewedBy', async () => {
+    await render(quality(), { mode: 'export', reviewerRequired: true });
+    expect(rows()).toContainEqual(expect.stringContaining('No qualified reviewer named · missing'));
+
+    const reviewer: ContentAuthor = {
+      ...ada,
+      id: 'r1',
+      name: 'Dr. Grace Hopper',
+      title: 'Clinical Reviewer',
+    };
+    await render(quality(), { mode: 'export', reviewer, reviewerRequired: true });
+    expect(rows()).toContainEqual(
+      expect.stringContaining('Qualified reviewer: Dr. Grace Hopper · check it'),
+    );
+    expect(dialog().querySelector('pre')!.textContent).toContain('"@type": "WebPage"');
+    expect(dialog().querySelector('pre')!.textContent).toContain('"reviewedBy"');
+    expect(dialog().querySelector('pre')!.textContent).toContain('"jobTitle": "Clinical Reviewer"');
+
+    // Non-regulated pages don't show a reviewer row or add a WebPage node.
+    await render(quality(), { mode: 'export', reviewer, reviewerRequired: false });
+    expect(rows().join(' ')).not.toContain('Qualified reviewer');
+    expect(dialog().querySelector('pre')!.textContent).not.toContain('"reviewedBy"');
   });
 
   it('gives the JSON-LD from the page, author and site to copy, dated today', async () => {

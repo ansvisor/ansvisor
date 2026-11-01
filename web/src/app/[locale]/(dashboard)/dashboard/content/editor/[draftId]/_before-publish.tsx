@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, Check, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import type { ContentAuthor } from '@/lib/content/authors';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ import {
   productJsonLd,
   type ListedProduct,
   type PageOfferRead,
+  webPageJsonLd,
   jsonLdScript,
   localDate,
   offerText,
@@ -107,6 +109,8 @@ export function BeforePublish({
   product = null,
   category = null,
   shopping = null,
+  reviewer = null,
+  reviewerRequired = false,
 }: {
   /**
    * The page's shopping links against the catalog now (shopping path, part
@@ -115,6 +119,10 @@ export function BeforePublish({
    * null on a page without a shopping path.
    */
   shopping?: ShoppingLinks | 'reading' | 'failed' | null;
+  /** The reviewer selected in the Authors list, when read. */
+  reviewer?: ContentAuthor | null;
+  /** True for a regulated page that must name its qualified reviewer. */
+  reviewerRequired?: boolean;
   /**
    * Phase 3 (CE-053): a product page's Product schema, from its opening
    * paragraph, its images and the price it states (pageOffer); null on
@@ -202,7 +210,7 @@ export function BeforePublish({
     category?.status === 'read' &&
     category.items.length >= MIN_LISTED &&
     jsonLdScript(itemListJsonLd({ name: productName, items: category.items }));
-  const jsonLd = productLd
+  const primaryJsonLd = productLd
     ? productLd
     : itemListLd
       ? itemListLd
@@ -225,6 +233,10 @@ export function BeforePublish({
             }),
           )
         : null;
+  // A qualified reviewer is a WebPage.reviewedBy, never Article.author.
+  const reviewerLd =
+    reviewerRequired && reviewer ? jsonLdScript(webPageJsonLd({ title, reviewer })) : null;
+  const jsonLd = [primaryJsonLd, reviewerLd].filter(Boolean).join('\n') || null;
   // Added here: it counts once the page is read again.
   const [added, setAdded] = useState(false);
   // Where the page's type counts it (CE-052): a product page is the brand's own.
@@ -233,6 +245,28 @@ export function BeforePublish({
       ? null
       : (quality.aiChecks?.disclosure ?? null);
   const brand = quality.brandName || tQuality('yourBrand');
+  let reviewerRow: Row | null = null;
+  if (reviewerRequired) {
+    if (reviewer) {
+      reviewerRow = {
+        state: 'check',
+        title: t('reviewer.named', { name: reviewer.name }),
+        detail: t('reviewer.namedDetail'),
+      };
+    } else if (authorsRead) {
+      reviewerRow = {
+        state: 'missing',
+        title: t('reviewer.none'),
+        detail: t('reviewer.noneDetail'),
+      };
+    } else {
+      reviewerRow = {
+        state: 'check',
+        title: t('reviewer.title'),
+        detail: t('reviewer.unknown'),
+      };
+    }
+  }
   const rows: Row[] = [
     !authorsRead
       ? { state: 'check', title: t('author.ok'), detail: t('author.unknown') }
@@ -259,6 +293,7 @@ export function BeforePublish({
                 title: t('author.none'),
                 detail: t('author.noneDetail', { byline: quality.team }),
               },
+    ...(reviewerRow ? [reviewerRow] : []),
     ...(product
       ? productLd
         ? [
@@ -563,6 +598,9 @@ export function BeforePublish({
               <p className="text-xs text-muted-foreground">
                 {t(productLd ? 'productNote' : itemListLd ? 'itemListNote' : 'datesNote')}
               </p>
+            )}
+            {codeShown && reviewerLd && (
+              <p className="text-xs text-muted-foreground">{t('reviewer.schemaNote')}</p>
             )}
           </div>
         )}
