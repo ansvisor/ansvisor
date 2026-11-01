@@ -647,7 +647,6 @@ function ActionsContent({ brand }: { brand: Brand }) {
     !canManage || !gettingStarted ? null : startedActive ? (
       <Button
         variant="outline"
-        size="sm"
         disabled={switching}
         onClick={guard(() => setConfirmingSkip(true), { action: tActions('skipGettingStarted') })}
       >
@@ -661,7 +660,6 @@ function ActionsContent({ brand }: { brand: Brand }) {
       ) ? (
       <div className="flex flex-col items-end gap-1">
         <Button
-          size="sm"
           disabled={switching}
           onClick={guard(() => start((s) => tStarted('start.started', { count: s?.done ?? 0 })), {
             action: tActions('startGettingStarted'),

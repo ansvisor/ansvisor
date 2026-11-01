@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
+import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { PLANS, type PlanId } from '@/config/plans';
 
 export interface PlanFeature {
@@ -18,6 +19,18 @@ export function aiUsageMultiple(planId: PlanId): number | null {
 }
 
 /**
+ * Whether the plan cards speak of the new Chat (chatMetered): as the AI
+ * usage read says, and where none is read, with no plan active yet
+ * (onboarding's plan step, Choose a plan once one ended, the demo's and the
+ * trial's offers), as the workspace's CHAT_AGENTIC flag does: the flag the
+ * server's chatMetered follows.
+ */
+export function usePlanCardsChatMetered(): boolean {
+  const chatAgentic = useChatAgentic();
+  return useAiUsage().usage?.chatMetered ?? chatAgentic;
+}
+
+/**
  * A plan card's list, as the pricing page puts it: brands, seats, prompts,
  * the answer engines it tracks, content briefs and site audits a month,
  * AI usage as a multiple of Starter's, then what the plan adds. Billing's
@@ -27,7 +40,7 @@ export function aiUsageMultiple(planId: PlanId): number | null {
  */
 export function usePlanFeatures(): (planId: PlanId) => PlanFeature[] {
   const tCards = useTranslations('settings.planCards');
-  const chatMetered = useAiUsage().usage?.chatMetered === true;
+  const chatMetered = usePlanCardsChatMetered();
   return (planId) => {
     const { limits } = PLANS[planId];
     const aiUsage = aiUsageMultiple(planId);

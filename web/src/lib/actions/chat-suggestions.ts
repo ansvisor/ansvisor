@@ -10,6 +10,7 @@ import { readAssignees } from '@/lib/action-center/assignees';
 import { readEntityCounts } from '@/lib/action-center/entity-counts';
 import { ACTION_COLUMNS, actionItemFromRow, type ActionRow } from '@/lib/action-center/rows';
 import { actionPages } from '@/lib/content/action-drafts';
+import { pageKey } from '@/lib/content/sources';
 import type { ActionItem } from '@/lib/actions/action-center';
 import {
   SNOOZE_DAYS,
@@ -89,6 +90,9 @@ export type SuggestionDetailResult =
  * it shows fewer.
  */
 const LIST_MAX = 100;
+
+/** The brand's latest audits a page's last one is looked for in, as the server's recheck reads them. */
+const AUDIT_ROWS = 500;
 
 const DAY_MS = 86_400_000;
 
@@ -300,12 +304,11 @@ export async function readDailySuggestion(id: string): Promise<SuggestionDetailR
       pages.length > 0
         ? me.client
             .from('site_audits')
-            .select('completed_at')
+            .select('url, final_url, completed_at')
             .eq('brand_id', row.brand_id)
             .eq('status', 'completed')
-            .in('url', pages)
             .order('completed_at', { ascending: false })
-            .limit(1)
+            .limit(AUDIT_ROWS)
         : Promise.resolve({ data: [], error: null }),
       personToday(me, now),
     ]);
@@ -325,7 +328,14 @@ export async function readDailySuggestion(id: string): Promise<SuggestionDetailR
       signalCount: 0,
       entityCounts: counts.get(action.id),
     });
-    const auditedAt = ((audit.data ?? []) as { completed_at: string | null }[])[0]?.completed_at;
+    // Its pages' latest audit, by the address asked for or ended at, each as
+    // one page whatever its scheme, www or trailing slash (pageKey).
+    const pageKeys = new Set(pages.map((page) => pageKey(page) ?? page));
+    const auditedAt = (
+      (audit.data ?? []) as { url: string; final_url: string | null; completed_at: string | null }[]
+    ).find((done) =>
+      [done.url, done.final_url].some((url) => url && pageKeys.has(pageKey(url) ?? url)),
+    )?.completed_at;
     return {
       ok: true,
       detail: {
@@ -392,8 +402,8 @@ interface UseRow {
  * A use of one of the person's suggestions (§5): `change` written to it,
  * when it gives one, then its feed's last_used_at, which the nightly job's
  * 30-day pause counts from. `unless` names a stamp the change only fills,
- * never moves. Not one whose action was deleted: nothing to use, and no use
- * of the feed. Its callers check the plan first.
+ * never moves. Not one removed, or whose action was deleted: nothing to
+ * use, and no use of the feed. Its callers check the plan first.
  */
 async function recordUse(
   id: string,
@@ -409,8 +419,8 @@ async function recordUse(
     const me = await chatPerson();
     if (!me) return { ok: false, failure: 'chat_off' };
     // Read through the person's session (their own, in a brand they can
-    // see), and not one whose action was deleted: nothing to use, and no use
-    // of the feed.
+    // see), and not one removed or whose action was deleted: nothing to use,
+    // and no use of the feed.
     const { data: row, error: readError } = await me.client
       .from('chat_suggestions')
       .select(
@@ -419,6 +429,7 @@ async function recordUse(
       .eq('id', parsed.data)
       .eq('user_id', me.userId)
       .eq('organization_id', me.orgId)
+      .is('removed_at', null)
       .is('actions.deleted_at', null)
       .maybeSingle();
     if (readError) {

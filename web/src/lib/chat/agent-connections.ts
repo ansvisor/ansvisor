@@ -139,7 +139,8 @@ export async function readBrandConnections(brandId: string): Promise<Set<string>
 /**
  * The first Required connection of the agent's the brand lacks, or null:
  * Run now and Run agent refuse with it before they queue anything, so a
- * click never gets a run that stops without a word. Server only.
+ * click never gets a run that stops without a word, and Resume before the
+ * agent is on again, so it isn't paused again on its next run. Server only.
  */
 export async function missingRequiredConnection(
   version: { skill_ids: readonly string[]; connections: readonly AgentConnection[] },

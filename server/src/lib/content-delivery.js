@@ -61,6 +61,7 @@ export const deliveryPage = z.object({
   metaDescription: z.string().trim().max(500).default(''),
   html: z.string().min(1).max(MAX_HTML_CHARS),
   author: z.string().trim().max(200).nullable().default(null),
+  reviewer: z.string().trim().max(200).nullable().default(null),
   featuredImage: z
     .object({ src: z.url({ protocol: /^https$/ }).max(2048), alt: z.string().max(500) })
     .nullable()
@@ -207,6 +208,7 @@ export function contentPackage({ delivery, page, brand, html, jsonLd, callback =
       html,
       jsonLd: jsonLd ?? jsonLdOf(html),
       author: page.author,
+      reviewer: page.reviewer,
       featuredImage: page.featuredImage,
       method: page.method ?? null,
       sourceUrl: page.sourceUrl ?? null,
