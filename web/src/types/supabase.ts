@@ -5450,8 +5450,13 @@ export type Database = {
       organization_ai_keys: {
         Row: {
           active: boolean
+          checked_at: string | null
+          failing_since: string | null
+          failure_class: string | null
+          failure_status: number | null
           key_encrypted: string
           key_last4: string
+          notified_at: string | null
           organization_id: string
           provider: string
           set_at: string
@@ -5460,8 +5465,13 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          checked_at?: string | null
+          failing_since?: string | null
+          failure_class?: string | null
+          failure_status?: number | null
           key_encrypted: string
           key_last4: string
+          notified_at?: string | null
           organization_id: string
           provider: string
           set_at?: string
@@ -5470,8 +5480,13 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          checked_at?: string | null
+          failing_since?: string | null
+          failure_class?: string | null
+          failure_status?: number | null
           key_encrypted?: string
           key_last4?: string
+          notified_at?: string | null
           organization_id?: string
           provider?: string
           set_at?: string

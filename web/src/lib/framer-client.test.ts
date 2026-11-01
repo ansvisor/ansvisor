@@ -48,6 +48,7 @@ const BLOG: FramerCollection = {
     { id: 'f-content', name: 'Content', type: 'formattedText', required: false },
     { id: 'f-summary', name: 'Summary', type: 'string', required: false },
     { id: 'f-schema', name: 'Schema markup', type: 'string', required: false },
+    { id: 'f-reviewer', name: 'Reviewed by', type: 'string', required: false },
   ],
 };
 
@@ -141,6 +142,7 @@ describe('suggestFramerMap', () => {
       metaTitle: 'f-seo',
       metaDescription: 'f-summary',
       jsonLd: 'f-schema',
+      reviewer: 'f-reviewer',
     });
   });
 
