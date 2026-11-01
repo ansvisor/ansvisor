@@ -113,6 +113,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         dataAsOf: message.dataAsOf,
         summary: message.run.summary ?? null,
         errorReason: message.run.errorReason ?? null,
+        keyFailed: message.run.keyFailed ?? false,
       };
     }
     return turn;

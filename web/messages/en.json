@@ -3883,6 +3883,14 @@
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
       "queueTimeout": "Too many runs are working at once in this workspace, so this one didn't start. Try again in a moment.",
       "failed": "Something went wrong, so Chat stopped here. What's done so far is kept.",
+      "providerDown": "{provider} didn't answer, so Chat stopped here. What's done so far is kept. Try again in a moment.",
+      "keyStopped": "So Chat stopped here. What's done so far is kept.",
+      "key": {
+        "invalid": "{provider} turned down your workspace's key.",
+        "no_credit": "Your {provider} account is out of credit.",
+        "model": "{provider} can't find the model {model} for your key.",
+        "unreadable": "Your saved {provider} key can't be read any more."
+      },
       "rateHour": "You're sending a lot. Wait a few minutes, then send again.",
       "rateDay": "You've sent today's messages. Chat takes more tomorrow.",
       "notWaiting": "This run isn't waiting for an answer any more.",
@@ -3894,6 +3902,8 @@
     }
   },
   "chatRun": {
+    "keyFix": "Open AI Providers",
+    "keyAskAdmin": "An Admin can fix it in Settings › AI Providers.",
     "tasks": {
       "title": "{due, plural, =0 {Action Center tasks} other {Action Center tasks · # due}}",
       "progress": "Tasks ready",
@@ -5425,7 +5435,8 @@
       "owner_role": "Its owner can't run agents",
       "plan": "Your plan doesn't allow its settings",
       "brand_gone": "Its brands are gone",
-      "manual": "Paused by a person"
+      "manual": "Paused by a person",
+      "own_key": "Your AI key isn't working"
     },
     "line": {
       "draft": "Not on yet",
@@ -5585,7 +5596,8 @@
       "no_answer": "No answer in 7 days",
       "run_cap": "Stopped at its limit",
       "action_closed": "The action was closed",
-      "brand_gone": "Its brand was removed"
+      "brand_gone": "Its brand was removed",
+      "own_key": "Stopped · AI key not working"
     },
     "skippedReason": {
       "coalesced": "Joined another run",

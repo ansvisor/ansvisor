@@ -569,7 +569,11 @@ async function heldTooLong(chatRunId: string, now: Date): Promise<boolean> {
   return !!at && now.getTime() - Date.parse(at) > APPROVAL_TTL_MS;
 }
 
-/** The agent run's state for its Chat run's (§H item 37). */
+/**
+ * The agent run's state for its Chat run's (§H item 37). A Chat run that
+ * ended on the workspace's own key failing is stopped `own_key`, not failed
+ * (AGENT-OWN-KEY §5.2): it doesn't count toward 3 failed runs in a row.
+ */
 export function agentStateOf(chat: Pick<LoadedRun, 'status' | 'progress'>): {
   status: string;
   stopReason?: string;
@@ -582,7 +586,9 @@ export function agentStateOf(chat: Pick<LoadedRun, 'status' | 'progress'>): {
     case 'done':
       return { status: 'done' };
     case 'error':
-      return { status: 'failed' };
+      return chat.progress?.keyFailure
+        ? { status: 'stopped', stopReason: 'own_key' }
+        : { status: 'failed' };
     case 'stopped': {
       const why = chat.progress?.stoppedFor;
       return {
@@ -772,6 +778,11 @@ export async function settleAgentRun(
     // The month's AI limit (not the run's own cap) pauses the agent until it resets (§L item 55).
     if (target.status === 'paused_cap' && capHit !== 'run') {
       await pauseAgentForSystem(run.organization_id, run.agent_id, 'cap');
+    }
+    // The own key failed: a triggered agent pauses until it works (AGENT-OWN-KEY §5.2);
+    // a person's Run now or Run agent doesn't pause it, as with a missing connection.
+    if (target.stopReason === 'own_key' && isTriggered(run.trigger_kind)) {
+      await pauseAgentForSystem(run.organization_id, run.agent_id, 'own_key');
     }
     if (ENDED.includes(target.status)) {
       await markShipped(run.id);
