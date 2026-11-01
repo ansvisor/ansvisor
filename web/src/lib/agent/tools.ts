@@ -287,12 +287,16 @@ export function buildAgentTools(auth: McpAuthContext) {
 
     run_site_audit: tool({
       description:
-        'Run a Site Audit (AEO/GEO page score + AI fix recommendations) for a page URL under a brand. WARNING: this consumes one of the org\'s monthly Site Audit credits (shared with the dashboard) and runs asynchronously (~30s). It returns the new audit id with status "running" — then call get_site_audit with that id until status is "completed" (or "failed") to read the result. Only run on explicit user intent to audit a specific URL; never audit unprompted.',
+        'Run a Site Audit (AEO/GEO page score + AI fix recommendations) for a page URL under a brand. WARNING: this consumes one of the org\'s monthly Site Audit credits (shared with the dashboard) and runs asynchronously (~30s). It returns the new audit id with status "running" — then call get_site_audit with that id until status is "completed" (or "failed") to read the result. A page with an audit already running returns that audit, with no new credit. A page audited in the last 10 minutes returns status "recently_audited" with that audit\'s id and starts nothing: ask the user whether to open it or audit again (force: true). Only run on explicit user intent to audit a specific URL; never audit unprompted.',
       inputSchema: z.object({
         brand_id: z.string().uuid(),
         url: z.string().url(),
+        force: z.boolean().optional(),
       }),
-      execute: async (args) => runSiteAuditFor(auth, args.brand_id, args.url),
+      execute: async (args) =>
+        args.force
+          ? runSiteAuditFor(auth, args.brand_id, args.url, { force: true })
+          : runSiteAuditFor(auth, args.brand_id, args.url),
     }),
 
     get_site_audit: tool({

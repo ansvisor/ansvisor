@@ -200,6 +200,64 @@ describe('loadChatThread', () => {
     expect(thread!.messages[3].run?.tasks?.tasks.map((t) => t.status)).toEqual(['writing']);
   });
 
+  it('gives a deliverable its task back: drafted for it, or its one attachment (W2-12)', async () => {
+    seed([{ id: 'run-1', status: 'done' }]);
+    fake.db.tables.chat_run_steps = [];
+    fake.db.tables.chat_run_events = [];
+    const made = (id: string, title: string) => ({
+      id,
+      run_id: 'run-1',
+      message_id: null,
+      title,
+      type: 'document',
+      formats: ['md'],
+      status: 'draft',
+      content_draft_id: null,
+      created_at: `2026-10-30T09:00:0${id.slice(-1)}.000Z`,
+    });
+    fake.db.tables.chat_files = [
+      made('f1', 'Pricing FAQ'),
+      made('f2', 'Link fixes'),
+      made('f3', 'Notes'),
+    ];
+    fake.db.tables.chat_task_state = [
+      {
+        conversation_id: CHAT,
+        action_task_id: 't1',
+        position: 1,
+        chat_status: 'queued',
+        run_id: 'run-1',
+        file_id: 'f1',
+      },
+    ];
+    fake.db.tables.chat_file_task_links = [{ file_id: 'f2', action_task_id: 't2' }];
+    const parent = { category: 'fix', priority_score: 86, due_date: null };
+    fake.db.tables.action_tasks = [
+      {
+        id: 't1',
+        task_key: null,
+        title: 'Add FAQ block to /pricing',
+        title_params: null,
+        status: 'todo',
+        actions: parent,
+      },
+      {
+        id: 't2',
+        task_key: null,
+        title: 'Fix 2 broken links',
+        title_params: null,
+        status: 'completed',
+        actions: parent,
+      },
+    ];
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run?.deliverables.map((d) => [d.title, d.task ?? null])).toEqual([
+      ['Pricing FAQ', { title: 'Add FAQ block to /pricing', state: 'open' }],
+      ['Link fixes', { title: 'Fix 2 broken links', state: 'done' }],
+      ['Notes', null],
+    ]);
+  });
+
   it('opens the chat without its strip when the strip can’t be read', async () => {
     seed([{ id: 'run-1', status: 'done' }]);
     fake.db.tables.chat_run_steps = [];

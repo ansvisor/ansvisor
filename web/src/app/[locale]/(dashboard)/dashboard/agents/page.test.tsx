@@ -5,8 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 /**
  * Agent Center's pages (CHAT-21 §B, §C, §D), out of Chat at /dashboard/agents:
  * there only with the new Chat on for the workspace (CHAT_AGENTIC), as
- * Chat's own pages, the detail and Edit only for an agent's id the person
- * can see, New agent with its setup; otherwise not found.
+ * Chat's own pages, Ready to use first unless the address says Your agents,
+ * the detail and Edit only for an agent's id the person can see, New agent
+ * with its setup, from a skill or a ready-to-use agent; otherwise not found.
  */
 
 const access = vi.hoisted(() => ({ open: true }));
@@ -17,7 +18,11 @@ const notFound = vi.hoisted(() =>
   }),
 );
 vi.mock('next/navigation', () => ({ notFound }));
-vi.mock('@/components/chat/agents/agents-list', () => ({ AgentsList: () => null }));
+vi.mock('@/components/chat/agents/agent-center', () => ({ AgentCenter: () => null }));
+const locks = vi.hoisted(() => ({
+  'weekly-report': { kind: 'plan', plan: 'Growth', current: 'Starter' },
+}));
+vi.mock('@/lib/chat/agents/ready-setup', () => ({ readPresetLocks: vi.fn(async () => locks) }));
 vi.mock('@/components/chat/agents/agent-detail', () => ({ AgentDetail: () => null }));
 vi.mock('@/components/chat/agents/agent-form', () => ({ AgentForm: () => null }));
 const form = vi.hoisted(() => ({
@@ -42,13 +47,16 @@ const { default: EditAgentPage } = await import('./[id]/edit/page');
 const { default: AgentCenterLayout } = await import('./layout');
 const { AgentsSeen } = await import('@/components/chat/agents/agents-seen');
 const { AgentForm } = await import('@/components/chat/agents/agent-form');
-const { AgentsList } = await import('@/components/chat/agents/agents-list');
+const { AgentCenter } = await import('@/components/chat/agents/agent-center');
 const { AgentDetail } = await import('@/components/chat/agents/agent-detail');
 
 const ID = 'aaaaaaaa-0000-4000-8000-000000000001';
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
 
-const search = (skill?: string) => ({ searchParams: Promise.resolve(skill ? { skill } : {}) });
+const search = (skill?: string, preset?: string) => ({
+  searchParams: Promise.resolve({ ...(skill ? { skill } : {}), ...(preset ? { preset } : {}) }),
+});
+const tabbed = (tab?: string) => ({ searchParams: Promise.resolve(tab ? { tab } : {}) });
 
 beforeEach(() => {
   access.open = true;
@@ -60,14 +68,20 @@ beforeEach(() => {
 describe('Agent Center pages', () => {
   it('are not found while the new Chat is off for the workspace', async () => {
     access.open = false;
-    await expect(AgentsPage()).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(AgentsPage(tabbed())).rejects.toThrow('NEXT_NOT_FOUND');
     await expect(AgentPage(params(ID))).rejects.toThrow('NEXT_NOT_FOUND');
     expect(notFound).toHaveBeenCalledTimes(2);
   });
 
-  it('show the list, and the detail for an agent id', async () => {
-    const list = await AgentsPage();
-    expect(isValidElement(list) && list.type).toBe(AgentsList);
+  it('show Agent Center on Ready to use with its plan locks, Your agents when asked, and the detail for an agent id', async () => {
+    const center = (await AgentsPage(tabbed())) as {
+      type: unknown;
+      props: { initialTab: string; locks: unknown };
+    };
+    expect(isValidElement(center) && center.type).toBe(AgentCenter);
+    expect(center.props).toEqual({ initialTab: 'ready', locks });
+    const yours = (await AgentsPage(tabbed('yours'))) as { props: { initialTab: string } };
+    expect(yours.props.initialTab).toBe('yours');
     const one = await AgentPage(params(ID));
     expect(isValidElement(one) && one.type).toBe(AgentDetail);
     expect((one as { props: { id: string } }).props.id).toBe(ID);
@@ -104,8 +118,22 @@ describe('New agent and Edit (W2-15)', () => {
     };
     expect(isValidElement(page) && page.type).toBe(AgentForm);
     expect(page.props).toMatchObject({ setup: form.setup, initialSkill: 'winback' });
-    const plain = (await NewAgentPage(search())) as { props: { initialSkill: string | null } };
+    const plain = (await NewAgentPage(search())) as {
+      props: { initialSkill: string | null; preset: unknown };
+    };
     expect(plain.props.initialSkill).toBeNull();
+    expect(plain.props.preset).toBeNull();
+  });
+
+  it('show the form from a ready-to-use agent, never from a Soon one or an unknown id', async () => {
+    const page = (await NewAgentPage(search(undefined, 'weekly-report'))) as {
+      props: { preset: { id: string } | null };
+    };
+    expect(page.props.preset?.id).toBe('weekly-report');
+    for (const id of ['onboarding-help', 'nope']) {
+      const other = (await NewAgentPage(search(undefined, id))) as { props: { preset: unknown } };
+      expect(other.props.preset).toBeNull();
+    }
   });
 
   it('show Edit filled with the agent, keyed by its version and last save', async () => {

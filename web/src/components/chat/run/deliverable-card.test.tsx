@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
-import type { ChatDeliverable } from '@/lib/chat/events';
+import type { ChatDeliverable, ChatTaskStrip } from '@/lib/chat/events';
 
 /**
  * An output card (CHAT-06 items 1–6): what a run made, whether it is in
@@ -17,12 +17,30 @@ vi.mock('@/i18n/navigation', () => ({
     </a>
   ),
 }));
-const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }));
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 const getMore = vi.hoisted(() => ({ open: null as ((tab?: string) => void) | null }));
 vi.mock('@/components/ai-usage/get-more-context', () => ({ useGetMore: () => getMore.open }));
 const download = vi.hoisted(() => ({ saveBlob: vi.fn() }));
 vi.mock('@/lib/download', () => download);
+// The person's clicks on a task (CHAT-09 items 13–16), the server's.
+const cardActions = vi.hoisted(() => ({
+  markTaskDoneFromCard: vi.fn(),
+  attachOnlyFromCard: vi.fn(),
+  undoTaskDoneFromCard: vi.fn(),
+}));
+vi.mock('@/lib/actions/chat-task-card', () => cardActions);
+const plan = vi.hoisted(() => ({ locked: false, openUpgrade: vi.fn() }));
+vi.mock('@/components/providers/upgrade-gate', () => ({
+  useUpgradeGate: () => ({
+    isLocked: plan.locked,
+    openUpgrade: plan.openUpgrade,
+    guard:
+      <Args extends unknown[]>(fn: (...args: Args) => unknown, options: { action?: string } = {}) =>
+      (...args: Args) =>
+        plan.locked ? plan.openUpgrade(options.action) : fn(...args),
+  }),
+}));
 
 const { DeliverableCard, filedNumbers } = await import('./deliverable-card');
 
@@ -49,11 +67,14 @@ const fetchMock = vi.fn(
     }),
 );
 
-async function render(deliverable: ChatDeliverable = page) {
+async function render(
+  deliverable: ChatDeliverable = page,
+  props: { canChange?: boolean; onTasks?: (strip: ChatTaskStrip) => void } = {},
+) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <DeliverableCard runId={RUN} n={2} deliverable={deliverable} />
+        <DeliverableCard runId={RUN} n={2} deliverable={deliverable} {...props} />
       </NextIntlClientProvider>,
     );
   });
@@ -70,6 +91,10 @@ const action = (name: string) => container.querySelector(`[data-action="${name}"
 beforeEach(() => {
   toast.mockClear();
   toast.error.mockClear();
+  toast.success.mockClear();
+  plan.locked = false;
+  plan.openUpgrade.mockClear();
+  for (const fn of Object.values(cardActions)) fn.mockReset();
   download.saveBlob.mockClear();
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
@@ -170,5 +195,127 @@ describe('DeliverableCard', () => {
     await click(action('deliverable.getMoreStorage')!);
     expect(getMore.open).toHaveBeenCalledWith('storage');
     getMore.open = null;
+  });
+});
+
+describe('DeliverableCard and its task (CHAT-09 items 12–16)', () => {
+  const forTask: ChatDeliverable = {
+    ...page,
+    task: { title: 'Add FAQ block + schema to /pricing', state: 'open' },
+  };
+  const strip: ChatTaskStrip = {
+    tasks: [
+      {
+        at: 1,
+        title: 'Add FAQ block + schema to /pricing',
+        priority: 86,
+        category: 'fix',
+        status: 'done',
+      },
+    ],
+    ready: 1,
+    total: 1,
+    due: 1,
+  };
+  const done = { ok: true, status: 'done', task: { ...forTask.task, state: 'done' }, strip };
+
+  it('names its task, and marks it done by the person’s click, with Undo in the toast', async () => {
+    const onTasks = vi.fn();
+    cardActions.markTaskDoneFromCard.mockResolvedValue(done);
+    cardActions.undoTaskDoneFromCard.mockResolvedValue({
+      ok: true,
+      status: 'draft',
+      task: forTask.task,
+      strip: { ...strip, ready: 0, tasks: [{ ...strip.tasks[0], status: 'queued' }] },
+    });
+    await render(forTask, { canChange: true, onTasks });
+    expect(container.querySelector('[data-slot="deliverable-task"]')?.textContent).toBe(
+      'Task: Add FAQ block + schema to /pricing',
+    );
+    await click(action('deliverable.attachAndMarkDone')!);
+    // The card names its file by its run and place only.
+    expect(cardActions.markTaskDoneFromCard).toHaveBeenCalledWith(RUN, 2);
+    expect(onTasks).toHaveBeenCalledWith(strip);
+    expect(container.querySelector('[data-slot="task-done"]')?.textContent).toBe(
+      'Done · attached to task',
+    );
+    expect(action('deliverable.attachAndMarkDone')).toBeNull();
+    const [message, options] = toast.success.mock.calls[0] as [
+      string,
+      { action: { label: string; onClick: () => void } },
+    ];
+    expect(message).toBe('Task marked done in Action Center');
+    expect(options.action.label).toBe('Undo');
+    await act(async () => options.action.onClick());
+    expect(cardActions.undoTaskDoneFromCard).toHaveBeenCalledWith(RUN, 2);
+    expect(toast).toHaveBeenCalledWith('Task open again in Action Center');
+    expect(action('deliverable.attachAndMarkDone')).not.toBeNull();
+  });
+
+  it('attaches only from its ⋯ menu, leaving the task open', async () => {
+    cardActions.attachOnlyFromCard.mockResolvedValue({
+      ok: true,
+      status: 'attached',
+      task: forTask.task,
+      strip: null,
+    });
+    await render(forTask, { canChange: true });
+    await click(action('deliverable.more')!);
+    await click(document.querySelector('[data-action="deliverable.attachOnly"]')!);
+    expect(cardActions.attachOnlyFromCard).toHaveBeenCalledWith(RUN, 2);
+    expect(toast).toHaveBeenCalledWith('Attached to the task');
+    // Attached now: Mark done stays, the ⋯ menu goes.
+    expect(action('deliverable.attachAndMarkDone')).not.toBeNull();
+    expect(action('deliverable.more')).toBeNull();
+  });
+
+  it('says why a click didn’t go through, and opens the plan dialog in a read-only workspace', async () => {
+    cardActions.markTaskDoneFromCard.mockResolvedValueOnce({ ok: false, failure: 'changed' });
+    await render(forTask, { canChange: true });
+    await click(action('deliverable.attachAndMarkDone')!);
+    expect(toast.error).toHaveBeenCalledWith(
+      'It changed in Action Center since, so nothing was undone.',
+    );
+    cardActions.markTaskDoneFromCard.mockResolvedValueOnce({ ok: false, failure: 'read_only' });
+    await click(action('deliverable.attachAndMarkDone')!);
+    expect(plan.openUpgrade).toHaveBeenCalledWith('Marking a task done needs a plan');
+    plan.locked = true;
+    await render(forTask, { canChange: true });
+    await click(action('deliverable.attachAndMarkDone')!);
+    expect(cardActions.markTaskDoneFromCard).toHaveBeenCalledTimes(2);
+    expect(plan.openUpgrade).toHaveBeenLastCalledWith('Marking a task done needs a plan');
+  });
+
+  it('shows the task to everyone, its buttons only to an Admin or a Manager', async () => {
+    await render(forTask);
+    expect(container.querySelector('[data-slot="deliverable-task"]')).not.toBeNull();
+    expect(action('deliverable.attachAndMarkDone')).toBeNull();
+    expect(action('deliverable.more')).toBeNull();
+  });
+
+  it('says a task Action Center has done, with or without this file', async () => {
+    await render(
+      { ...forTask, status: 'done', task: { ...forTask.task!, state: 'done' } },
+      {
+        canChange: true,
+      },
+    );
+    expect(container.querySelector('[data-slot="task-done"]')?.textContent).toBe(
+      'Done · attached to task',
+    );
+    // A card of its own: what the first one kept doesn't carry over.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({ ...forTask, task: { ...forTask.task!, state: 'done' } }, { canChange: true });
+    expect(container.querySelector('[data-slot="task-done"]')?.textContent).toBe(
+      'Done in Action Center',
+    );
+    expect(action('deliverable.attachAndMarkDone')).toBeNull();
+  });
+
+  it('offers no task controls on a card without a task', async () => {
+    await render(page, { canChange: true });
+    expect(container.querySelector('[data-slot="deliverable-task"]')).toBeNull();
+    expect(action('deliverable.attachAndMarkDone')).toBeNull();
   });
 });

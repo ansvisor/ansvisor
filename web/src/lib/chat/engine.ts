@@ -144,6 +144,7 @@ import { fileChatOutput } from './file-output';
 import { originPageSchema } from './origin';
 import { CHAT_REFERENCE_TYPES, MAX_REFERENCES } from './references';
 import {
+  linkDeliverable,
   pickTasks,
   queueTasks,
   readStrips,
@@ -2741,6 +2742,7 @@ async function followTaskReads(
       await queueTasks(rc.run.conversationId, rc.run.id, taskIds);
     } else if (typeof input.action_id === 'string') {
       await startAction(supabaseAdmin, rc.run.conversationId, rc.run.id, input.action_id);
+      rc.progress.taskAction = input.action_id;
     }
     rc.progress.taskStrip = true;
   } catch (err) {
@@ -3045,6 +3047,7 @@ async function deliver(
     console.error('[chat] could not file a deliverable:', error);
     return { ok: false as const, failure: 'failed' as const };
   });
+  const task = filed.ok ? await taskOfDeliverable(rc, filed.id, !!made.contentDraftId) : null;
   rc.sink.emit('deliverable.created', {
     title: made.title,
     type: made.type,
@@ -3052,8 +3055,33 @@ async function deliver(
     status: 'draft',
     ...(made.href ? { href: made.href } : {}),
     filed: filed.ok ? 'in_files' : filed.failure,
+    ...(task ? { task } : {}),
   });
   return filed.ok ? filed.id : null;
+}
+
+/**
+ * The task a /tasks run's deliverable is for (CHAT-09 item 12): one of the
+ * action it opened last, when that is certain (task-strip.ts
+ * linkDeliverable); else none, and the card offers no "Task:". Never stops
+ * the run.
+ */
+async function taskOfDeliverable(rc: RunContext, fileId: string, isDraft: boolean) {
+  const actionId = rc.progress.taskAction;
+  if (!actionId || !(rc.progress.skills ?? []).includes(TASKS_SKILL)) return null;
+  try {
+    return await linkDeliverable(
+      supabaseAdmin,
+      rc.run.conversationId,
+      rc.run.id,
+      actionId,
+      fileId,
+      isDraft,
+    );
+  } catch (err) {
+    console.error("[chat/engine] could not keep a deliverable's task:", err);
+    return null;
+  }
 }
 
 // ─── Waiting, approving, skipping ───────────────────────────────────────────

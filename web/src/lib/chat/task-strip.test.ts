@@ -14,8 +14,17 @@ vi.mock('@/lib/supabase/admin', async () => ({
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { STRIP_MAX, pickTasks, queueTasks, readStrips, settleStrip, startAction, weekEndIn } =
-  await import('./task-strip');
+const {
+  STRIP_MAX,
+  pickTasks,
+  queueTasks,
+  readStrips,
+  settleStrip,
+  startAction,
+  weekEndIn,
+  linkDeliverable,
+  readDeliverableTasks,
+} = await import('./task-strip');
 
 const BRAND = 'brand-1';
 const CHAT = 'chat-1';
@@ -219,5 +228,65 @@ describe('readStrips', () => {
   it('fails as the read does', async () => {
     db.failures.chat_task_state = { message: 'down' };
     await expect(readStrips(supabaseAdmin, CHAT, WEEK_END)).rejects.toThrow('down');
+  });
+});
+
+describe('linkDeliverable and readDeliverableTasks (W2-12)', () => {
+  beforeEach(async () => {
+    db.tables.chat_file_task_links = [];
+    await queueTasks(CHAT, RUN, ['t-high-1', 't-high-3', 't-low-1']);
+    await startAction(supabaseAdmin, CHAT, RUN, 'a-due-high');
+  });
+  const fileOf = (taskId: string) =>
+    db.tables.chat_task_state.find((row) => row.action_task_id === taskId)?.file_id ?? null;
+
+  it('ties the file to the one task of the opened action it writes, by its draft', async () => {
+    db.tables.action_tasks.find((t) => t.id === 't-high-3')!.task_key = 'optimize_content';
+    expect(await linkDeliverable(supabaseAdmin, CHAT, RUN, 'a-due-high', 'file-1', true)).toEqual({
+      title: 'Task t-high-3',
+      state: 'open',
+    });
+    expect([fileOf('t-high-1'), fileOf('t-high-3')]).toEqual([null, 'file-1']);
+    // The next file finds that task taken: the other one is certain now.
+    expect(await linkDeliverable(supabaseAdmin, CHAT, RUN, 'a-due-high', 'file-2', false)).toEqual({
+      title: 'Task t-high-1',
+      state: 'open',
+    });
+  });
+
+  it('ties nothing when two tasks could be it, or the action isn’t the one being written', async () => {
+    expect(
+      await linkDeliverable(supabaseAdmin, CHAT, RUN, 'a-due-high', 'file-1', true),
+    ).toBeNull();
+    expect(
+      await linkDeliverable(supabaseAdmin, CHAT, RUN, 'a-due-low', 'file-1', false),
+    ).toBeNull();
+    expect(
+      await linkDeliverable(supabaseAdmin, CHAT, 'run-2', 'a-due-high', 'file-1', false),
+    ).toBeNull();
+    expect(db.tables.chat_task_state.every((row) => !row.file_id)).toBe(true);
+  });
+
+  it('reads each file’s task: the one drafted for first, else its one attached task', async () => {
+    db.tables.chat_task_state.find((row) => row.action_task_id === 't-high-1')!.file_id = 'file-1';
+    db.tables.action_tasks.find((t) => t.id === 't-high-1')!.status = 'completed';
+    db.tables.chat_file_task_links = [
+      { file_id: 'file-1', action_task_id: 't-low-1' },
+      { file_id: 'file-2', action_task_id: 't-low-1' },
+      // Attached to two tasks: no one task is its own.
+      { file_id: 'file-3', action_task_id: 't-low-1' },
+      { file_id: 'file-3', action_task_id: 't-high-3' },
+    ];
+    const tasks = await readDeliverableTasks(supabaseAdmin, CHAT, [
+      'file-1',
+      'file-2',
+      'file-3',
+      'file-4',
+    ]);
+    expect(Object.fromEntries(tasks)).toEqual({
+      'file-1': { title: 'Task t-high-1', state: 'done' },
+      'file-2': { title: 'Task t-low-1', state: 'open' },
+    });
+    expect((await readDeliverableTasks(supabaseAdmin, CHAT, [])).size).toBe(0);
   });
 });

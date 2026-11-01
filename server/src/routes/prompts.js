@@ -43,6 +43,7 @@ import {
   sendImproveToActionCenter,
 } from '../lib/action-center/from-prompt-improve.js';
 import { brandPromptKeys, demandResponse } from '../lib/prompt-demand.js';
+import { yearRule } from '../lib/current-year.js';
 
 const router = Router();
 
@@ -275,7 +276,6 @@ async function settleRating(log, reservation, { modelId, attempts, usage }) {
 async function generateSuggestions(brandId, { orgId, log }) {
   const ctx = await loadSuggestionContext(brandId);
   const langName = getLanguageName(ctx.brand.language);
-  const currentYear = new Date().getFullYear();
 
   // Real Search Console demand (#648) — [] for brands without GSC, which
   // keeps every prompt block below byte-identical to the pre-GSC behavior.
@@ -299,10 +299,11 @@ async function generateSuggestions(brandId, { orgId, log }) {
   const reservation = await reserveRating(orgId, brandId, promptModel, log);
   const rate = reservation !== null;
 
-  const system = `You are an AEO (Answer Engine Optimization) strategist. You suggest NEW search prompts a brand should track in AI engines (ChatGPT, Perplexity, Gemini, Claude). Current year: ${currentYear}.
+  const system = `You are an AEO (Answer Engine Optimization) strategist. You suggest NEW search prompts a brand should track in AI engines (ChatGPT, Perplexity, Gemini, Claude).
 
 RULES:
 - Suggest ${SUGGESTIONS_PER_REFRESH} prompts that are NOT already tracked by this brand.
+${yearRule()}
 - Every suggestion must be distinct: no two may be rephrasings of the same question.
 - Each prompt: 30-100 chars, generic, no brand names, written in ${langName}.
 - Group each prompt under a short topic label (2-4 words). Reuse existing topic labels when they fit; otherwise create a clean new one.
@@ -841,11 +842,11 @@ const promptSuggestionSchema = z.object({
 });
 
 function getSystemPrompt(langName) {
-  const currentYear = new Date().getFullYear();
-  return `You are an AEO (Answer Engine Optimization) expert. Given brand information, generate exactly 10 search prompts that real users would type into AI search engines (ChatGPT, Perplexity, Gemini, Claude, etc.). Current year: ${currentYear}.
+  return `You are an AEO (Answer Engine Optimization) expert. Given brand information, generate exactly 10 search prompts that real users would type into AI search engines (ChatGPT, Perplexity, Gemini, Claude, etc.).
 
 CRITICAL RULES:
 - Do NOT use the brand name in prompts. These must be generic, high-volume industry queries.
+${yearRule()}
 - Each prompt MUST be between 30 and 100 characters long. Aim for 40-80 characters.
 - The goal is to measure whether the brand appears organically in AI responses when users search for general topics.
 - Think about what potential customers search BEFORE they know about any specific brand.
@@ -854,7 +855,7 @@ CRITICAL RULES:
 Generate prompts like these (generic, no brand names):
 - "Best project management tools for remote teams"
 - "How to automate email marketing campaigns"
-- "Top CRM software for small businesses ${currentYear}"
+- "Top CRM software for small businesses"
 - "What is the best way to manage inventory for e-commerce"
 - "Free alternatives to enterprise automation platforms"
 
@@ -867,7 +868,7 @@ Do NOT generate prompts like these (brand-specific, low value):
 Include a diverse mix of:
 - Industry best-of queries ("Best [category] tools", "Top [industry] software")
 - How-to queries related to the brand's domain ("How to [solve problem the brand solves]")
-- Comparison/listicle queries ("Top 10 [product category] in ${currentYear}")
+- Comparison/listicle queries ("Top 10 [product category]")
 - Use-case queries ("Best tool for [specific use case]")
 - Problem-solving queries ("How to fix/improve [pain point]")
 - Recommendation queries ("What [tool type] should I use for [scenario]")
@@ -964,11 +965,12 @@ router.post('/from-topics', async (req, res) => {
         generateObject({
           model: aiModel,
           schema: topicPromptSchema,
-          system: `You are an AEO (Answer Engine Optimization) expert. Generate exactly 5 search prompts per topic that real users would type into AI search engines. Current year: ${new Date().getFullYear()}.
+          system: `You are an AEO (Answer Engine Optimization) expert. Generate exactly 5 search prompts per topic that real users would type into AI search engines.
 
 RULES:
 - Keep prompts SHORT and concise — between 30 and 100 characters. Aim for 40-80 characters.
-- Write them like real quick searches, e.g. "best CRM software for growing small businesses" or "top email marketing tools for startups in ${new Date().getFullYear()}".
+- Write them like real quick searches, e.g. "best CRM software for growing small businesses" or "top email marketing tools for startups".
+${yearRule()}
 - Do NOT use the brand name "${brandName}" in the prompts.
 - Each prompt should be relevant to the specific topic it belongs to.
 - Focus on queries where the brand could organically appear in AI-generated answers.

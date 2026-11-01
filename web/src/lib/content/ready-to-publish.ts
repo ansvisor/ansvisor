@@ -2,7 +2,7 @@ import { slugify } from '@/lib/slug';
 import type { ContentAuthor } from './authors';
 import { ELEMENT_NODE, TEXT_NODE, contentDom } from './dom';
 import { cleanHref, jsonLdText } from './html-allowlist';
-import { firstImage } from './page-schema';
+import { firstImage, jsonLdScript, webPageJsonLd } from './page-schema';
 import { AGENT_PLACEHOLDER, PLACEHOLDER, placeholderIn } from './placeholders';
 import type { LinkCheck } from './quality-checks';
 import { languageCode } from './readability';
@@ -28,6 +28,74 @@ export function fragment(html: string): HTMLElement {
   return root;
 }
 
+/**
+ * Whether a person's name appears in the page's visible text.
+ * Structured data, code, attributes and explicitly hidden content do not count.
+ */
+export function pageNamesPerson(html: string, name: string): boolean {
+  const expected = normalizePageText(name);
+  if (!expected) return false;
+
+  const root = fragment(html);
+  root
+    .querySelectorAll('script, style, template, noscript, [hidden], [aria-hidden="true"]')
+    .forEach((element) => element.remove());
+  // Blocks end a word: "Reviewed by Dr. Grace Hopper</p><p>Coffee" reads as two lines.
+  root
+    .querySelectorAll(TEXT_BLOCKS)
+    .forEach((element) => element.append(root.ownerDocument.createTextNode(' ')));
+  const actual = normalizePageText(root.textContent ?? '');
+  const actualChars = Array.from(actual);
+  const expectedChars = Array.from(expected);
+
+  for (let index = 0; index <= actualChars.length - expectedChars.length; index++) {
+    const matches = expectedChars.every(
+      (character, offset) => actualChars[index + offset] === character,
+    );
+    if (!matches) continue;
+
+    const before = actualChars[index - 1];
+    const after = actualChars[index + expectedChars.length];
+    const isWordCharacter = (character: string | undefined) =>
+      character !== undefined && /[\p{L}\p{N}]/u.test(character);
+
+    if (!isWordCharacter(before) && !isWordCharacter(after)) return true;
+  }
+  return false;
+}
+
+const TEXT_BLOCKS =
+  'p, h1, h2, h3, h4, h5, h6, li, dt, dd, td, th, caption, figcaption, blockquote, div, section, article, aside, header, footer, br';
+
+function normalizePageText(value: string): string {
+  return value.normalize('NFKC').replace(/\s+/gu, ' ').trim().toLocaleLowerCase();
+}
+
+/**
+ * The WebPage.reviewedBy JSON-LD a page goes out with (CE-049), or null: only
+ * once the page's own text names the reviewer, so the structured data says
+ * what the page shows. One rule for Copy, Export, Send to CMS (one page or
+ * many) and the code Before you publish shows; `html` is the page's.
+ */
+export function reviewerJsonLd(
+  title: string,
+  html: string,
+  reviewer: ContentAuthor | null | undefined,
+): string | null {
+  return reviewer && pageNamesPerson(html, reviewer.name)
+    ? jsonLdScript(webPageJsonLd({ title, reviewer }))
+    : null;
+}
+
+/** The page with its reviewer's JSON-LD after it, when reviewerJsonLd gives one. */
+export function withReviewerJsonLd(
+  title: string,
+  html: string,
+  reviewer: ContentAuthor | null | undefined,
+): string {
+  const script = reviewerJsonLd(title, html, reviewer);
+  return script ? `${html}\n${script}` : html;
+}
 /** Headings: a placeholder there is filled first, never left out. */
 const HEADINGS = 'h1, h2, h3, h4, h5, h6';
 
@@ -366,6 +434,8 @@ export interface PageFields {
   slug: string;
   /** The page's author, the team byline, or empty while the authors aren't read. */
   author: string;
+  /** The qualified reviewer; separate from the page author. */
+  reviewer: string;
   featuredImage: string | null;
 }
 
@@ -482,12 +552,14 @@ export function pageFields({
   html,
   sourceUrl,
   author,
+  reviewer = null,
   teamByline,
 }: {
   title: string;
   html: string;
   sourceUrl: string | null;
   author: ContentAuthor | null;
+  reviewer?: ContentAuthor | null;
   teamByline: string;
 }): PageFields {
   return {
@@ -495,6 +567,7 @@ export function pageFields({
     metaDescription: description(fragment(html)),
     slug: slugOf(title, sourceUrl),
     author: author?.name ?? teamByline,
+    reviewer: reviewer ? [reviewer.name, reviewer.title].filter(Boolean).join(', ') : '',
     featuredImage: firstImage(html),
   };
 }
