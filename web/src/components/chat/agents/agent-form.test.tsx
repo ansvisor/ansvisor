@@ -501,6 +501,26 @@ describe('AgentForm: new agent', () => {
     expect(bodyOf(0)).toMatchObject({ visibility: 'workspace', maxMonthShare: 0.3 });
   });
 
+  it('says Max per run and Monthly cap apply on the workspace’s own key, measured at list prices', async () => {
+    await render({ ...SETUP, ownKeyProvider: 'anthropic' });
+    await toLastStep();
+    expect(one('[data-slot="agent-form-key"]')!.textContent).toBe(
+      'Runs on your Anthropic key, which Anthropic bills. Max per run and Monthly cap still apply.',
+    );
+    expect(one('#agent-form-note-max-run')!.textContent).toBe(
+      messages.chatAgents.form.agent.maxRunNoteOwnKey,
+    );
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    await toLastStep();
+    expect(one('[data-slot="agent-form-key"]')!.textContent).toBe('Uses your monthly AI limit');
+    expect(one('#agent-form-note-max-run')!.textContent).toBe(
+      messages.chatAgents.form.agent.maxRunNote,
+    );
+  });
+
   it('moves with the keyboard: arrows choose a skill, each step opens on its title, a problem takes the focus', async () => {
     await render();
     const first = one('[data-skill="winback"]')!;
