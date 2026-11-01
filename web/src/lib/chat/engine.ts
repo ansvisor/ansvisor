@@ -113,7 +113,12 @@ import type { ExplainChangeOutput } from '@/lib/mcp/why';
 import { stepPrompt, todayLine } from './prompt';
 import { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
 import { whyView } from './why/view';
-import { batchSize, type ChatTool, type ChatToolContext } from './registry/define-tool';
+import {
+  batchSize,
+  runsWithoutSession,
+  type ChatTool,
+  type ChatToolContext,
+} from './registry/define-tool';
 import { CHAT_TOOLS, chatTool, chatToolByKey } from './registry/tools';
 import { abortDriver, publishRunEnd, registerDriver, unregisterDriver } from './run-hub';
 import {
@@ -1994,12 +1999,18 @@ async function handleCall(
  * own, or in another person's request): its tool acts as the signed-in
  * person, so what would run by itself (Full auto, Always, a tick) asks
  * first, with no "Don't ask again". The card waits in the owner's Inbox,
- * and their Approve runs it in their own request. A sessionFree row keeps
- * the precedence's decision, read for the run's person as any call's is
- * (role, plan, policy, mode): it runs as them through its runFor (writeCall).
+ * and their Approve runs it in their own request. A sessionFree row whose
+ * way is open (runsWithoutSession) keeps the precedence's decision, read for
+ * the run's person as any call's is (role, plan, policy, mode): it runs as
+ * them through its runFor (writeCall).
  */
 function askWithoutSession(rc: RunContext, tool: ChatTool, decision: ToolDecision): ToolDecision {
-  if (decision.kind !== 'run' || tool.class === 'read' || !withoutSession(rc) || tool.sessionFree) {
+  if (
+    decision.kind !== 'run' ||
+    tool.class === 'read' ||
+    !withoutSession(rc) ||
+    runsWithoutSession(tool)
+  ) {
     return decision;
   }
   return { kind: 'ask', reason: 'no_session', offerDontAskAgain: false };
@@ -2062,8 +2073,13 @@ async function precheckOf(
   ctx: PrecedenceContext | null,
 ): Promise<Record<string, unknown> | null> {
   if (!tool.precheck) return null;
+  const toolCtx = toolContext(rc, ctx?.role ?? rc.role);
   try {
-    const out = await tool.precheck(toolContext(rc, ctx?.role ?? rc.role), input as never);
+    // With no session behind the run, the row's own check as its person.
+    const out =
+      withoutSession(rc) && tool.precheckFor
+        ? await tool.precheckFor(toolCtx, input as never)
+        : await tool.precheck(toolCtx, input as never);
     const said = saidFailure(out);
     return said ? { ...said, ...besideRefusal(out) } : null;
   } catch (err) {
@@ -2920,6 +2936,10 @@ const SAID_FAILURES: Record<string, string> = {
   live_item: 'live_item',
   // An Admin turned publishing off for Managers since the card was decided (push_cms_draft).
   execute_off: 'execute_off',
+  // A run with no session, writing through the API server as its person (lib/chat/actor/api.ts):
+  // Chat off for the workspace, or the server took no one to act as.
+  chat_off: 'chat_off',
+  acting_refused: 'acting_refused',
 };
 
 /**

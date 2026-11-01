@@ -3828,6 +3828,10 @@
     "card": {
       "noSession": "This agent ran on its own, so it asks before changing anything."
     },
+    "acting": {
+      "refused": "This agent couldn't make this change on its own, so nothing changed. Use Run now to make it as you.",
+      "chatOff": "Chat is off for this workspace, so this agent couldn't make this change."
+    },
     "allTime": "All time",
     "lastDays": "Last {count} days",
     "since": "Since {date}",

@@ -215,6 +215,15 @@ interface ToolFields<S extends z.ZodObject> {
   sessionFree?: true;
   runFor?(ctx: ChatToolContext, input: z.output<S>): Promise<unknown>;
   /**
+   * A sessionFree row whose runFor writes through the API server as its
+   * person (lib/chat/actor/api.ts): whether that way is open now
+   * (CHAT_ACTING_SECRET set). Closed, the row asks first in a run with no
+   * session, as a row without runFor does. Without it, always open.
+   */
+  runForOpen?(): boolean;
+  /** A sessionFree row's precheck for a run with no session: the same check, as its person. */
+  precheckFor?(ctx: ChatToolContext, input: z.output<S>): Promise<unknown>;
+  /**
    * A batch row (CHAT-20 §11b: add_prompts, add_competitors, pausing
    * prompts): the input field holding its items. A run's cap counts the
    * items, not the calls (§14), and a call with more than `askAbove` of them
@@ -333,6 +342,12 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
   if ((def.sessionFree === true) !== (def.runFor !== undefined)) {
     throw new Error(`${def.name}: a session-free row has its runFor, and only it`);
   }
+  if ((def.runForOpen || def.precheckFor) && !def.sessionFree) {
+    throw new Error(`${def.name}: only a session-free row says when its runFor runs`);
+  }
+  if (def.precheckFor && !def.precheck) {
+    throw new Error(`${def.name}: a precheck for a run without a session has its precheck`);
+  }
   // A read already reads as the person (the MCP functions); an EXECUTE waits for their click.
   if (def.sessionFree && def.class !== 'write') {
     throw new Error(`${def.name}: only a write runs for its person without a session`);
@@ -378,6 +393,15 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     throw new Error(`${def.name}: an always_card or cost_card write never runs without a card`);
   }
   return { ...def, flags, excludeRoles, executeGroup: null };
+}
+
+/**
+ * Whether a row makes its change in a run with no session behind it now: a
+ * sessionFree row whose runFor's way is open (runForOpen). Any other asks
+ * first in such a run (engine.ts askWithoutSession).
+ */
+export function runsWithoutSession(tool: Pick<ChatTool, 'sessionFree' | 'runForOpen'>): boolean {
+  return tool.sessionFree === true && (tool.runForOpen?.() ?? true);
 }
 
 /** How many items a call carries: its batch's length, or 1 for a row that isn't a batch. */

@@ -83,6 +83,15 @@ vi.mock('@/lib/chat/actor/drafts', () => ({
   createContentDraftFor: tracked.track('chat/actor/drafts.createContentDraftFor'),
   updateContentDraftFor: tracked.track('chat/actor/drafts.updateContentDraftFor'),
 }));
+vi.mock('@/lib/chat/actor/api-writes', () => ({
+  updateOpportunityStatusFor: tracked.track('chat/actor/api-writes.updateOpportunityStatusFor'),
+  dismissSuggestionFor: tracked.track('chat/actor/api-writes.dismissSuggestionFor'),
+  startSiteAuditsFor: tracked.track('chat/actor/api-writes.startSiteAuditsFor'),
+}));
+vi.mock('@/lib/chat/actor/action-center', () => ({
+  createChatActionFor: tracked.track('chat/actor/action-center.createChatActionFor'),
+  checkChatActionCoverFor: tracked.track('chat/actor/action-center.checkChatActionCoverFor'),
+}));
 vi.mock('@/lib/actions/cms-send', () => ({
   sendDraftToCms: tracked.track('actions/cms-send.sendDraftToCms'),
 }));
@@ -121,7 +130,8 @@ vi.mock('@/lib/actions/chat-action-center', () => ({
 
 const { CHAT_TOOLS, chatTool, chatToolByKey, registryCatalog } = await import('./tools');
 const chatTool_ = (name: string) => chatTool(name)!;
-const { BRAND_LOOKUP_TABLES, FIXTURE_IDS, defineTool } = await import('./define-tool');
+const { BRAND_LOOKUP_TABLES, FIXTURE_IDS, defineTool, runsWithoutSession } =
+  await import('./define-tool');
 const { DEFAULT_CHAT_SETTINGS, allowedRoles, allowedTools } = await import('../precedence');
 const { planFactsFromOrgRow } = await import('../plan-facts');
 
@@ -133,6 +143,22 @@ const ctx = {
   role: 'admin' as const,
 };
 const labels = (messages as Record<string, unknown>).chatTools as Record<string, unknown>;
+/** The rows that make their change for a run with no session (sessionFree), in the registry's order. */
+const SESSION_FREE = [
+  'create_draft',
+  'update_opportunity',
+  'dismiss_prompt_suggestion',
+  'create_action',
+  'update_draft',
+  'run_site_audit',
+];
+/** A run's place, as runLoggedWrite gives a write. */
+const place = {
+  conversationId: 'chat-1',
+  runId: 'run-1',
+  approvalKey: 'step-1',
+  executionMode: 'automated' as const,
+};
 
 /** What keeps a row out of the registry: a missing label, a fixture its schema refuses. */
 function rowProblems(tool: ChatTool, chatTools: Record<string, unknown> = labels): string[] {
@@ -388,11 +414,13 @@ describe('the Chat tool registry', () => {
     ]);
   });
 
-  it('makes the drafts’ changes for a run without a session as its person, and no other row’s', async () => {
-    expect(CHAT_TOOLS.filter((tool) => tool.sessionFree).map((tool) => tool.name)).toEqual([
-      'create_draft',
-      'update_draft',
-    ]);
+  it('makes the drafts’ changes for a run without a session as its person, always', async () => {
+    expect(CHAT_TOOLS.filter((tool) => tool.sessionFree).map((tool) => tool.name)).toEqual(
+      SESSION_FREE,
+    );
+    for (const name of ['create_draft', 'update_draft']) {
+      expect(runsWithoutSession(chatTool_(name)), name).toBe(true);
+    }
     const brand = FIXTURE_IDS.brand;
     const item = FIXTURE_IDS.item;
     const create = chatTool_('create_draft');
@@ -416,6 +444,72 @@ describe('the Chat tool registry', () => {
     await expect(create.runFor!({ ...ctx, organizationId: null }, start)).rejects.toThrow(
       /workspace/,
     );
+  });
+
+  it('writes through the API server for a run without a session as its person, while that way is open', async () => {
+    const through = [
+      'update_opportunity',
+      'dismiss_prompt_suggestion',
+      'create_action',
+      'run_site_audit',
+    ];
+    // Closed: no CHAT_ACTING_SECRET, or one shorter than the server takes.
+    for (const secret of ['', 'x'.repeat(31)]) {
+      vi.stubEnv('CHAT_ACTING_SECRET', secret);
+      for (const name of through) expect(runsWithoutSession(chatTool_(name)), name).toBe(false);
+    }
+    vi.stubEnv('CHAT_ACTING_SECRET', 'x'.repeat(32));
+    for (const name of through) expect(runsWithoutSession(chatTool_(name)), name).toBe(true);
+    vi.unstubAllEnvs();
+
+    const item = FIXTURE_IDS.item;
+    const brand = FIXTURE_IDS.brand;
+    const run = async (name: string, input: unknown) => {
+      const tool = chatTool_(name);
+      await tool.runFor!(ctx, tool.inputSchema.parse(input));
+    };
+    await run('update_opportunity', {
+      opportunity_id: item,
+      status: 'dismissed',
+      reason: 'wrong_angle',
+    });
+    await run('update_opportunity', {
+      opportunity_id: item,
+      status: 'reviewed',
+      reason: 'wrong_angle',
+    });
+    await run('dismiss_prompt_suggestion', { suggestion_id: item });
+    await run('run_site_audit', { brand_id: brand, urls: ['https://acme.example/pricing'] });
+    const send = chatTool_('create_action');
+    const proposal = send.inputSchema.parse(send.fixture.input);
+    await send.runFor!({ ...ctx, chat: place }, proposal);
+    await send.precheckFor!(ctx, proposal);
+
+    // The run's person, from its context: never the input's.
+    const person = { userId: 'user-1', organizationId: 'org-1' };
+    expect(calls.map((call) => [call.from, call.args])).toEqual([
+      [
+        'chat/actor/api-writes.updateOpportunityStatusFor',
+        [person, item, 'dismissed', 'wrong_angle'],
+      ],
+      // A reason goes only with a dismissal, as the session's call has it.
+      ['chat/actor/api-writes.updateOpportunityStatusFor', [person, item, 'reviewed', undefined]],
+      ['chat/actor/api-writes.dismissSuggestionFor', [person, item]],
+      [
+        'chat/actor/api-writes.startSiteAuditsFor',
+        [person, brand, ['https://acme.example/pricing'], { force: false }],
+      ],
+      [
+        'chat/actor/action-center.createChatActionFor',
+        [person, brand, expect.objectContaining({ title: proposal.title }), place, false],
+      ],
+      [
+        'chat/actor/action-center.checkChatActionCoverFor',
+        [person, brand, expect.objectContaining({ pages: ['/pricing'] }), 'recover'],
+      ],
+    ]);
+    // Never the session's actions.
+    expect(calls.some((call) => call.from.startsWith('actions/'))).toBe(false);
   });
 
   it("checks Send to Action Center's duplicate before its card, and lets Create anyway go only where it may", async () => {
@@ -660,6 +754,27 @@ describe('approval policies', () => {
     const write = { ...readRow, class: 'write' as const, defaultPolicy: 'ask', maxPolicy: 'ask' };
     const runFor = async () => null;
     expect(defineTool({ ...write, sessionFree: true, runFor } as never).sessionFree).toBe(true);
+    // Its way, and a check of its own for such a run, only with it; that check beside the row's.
+    const precheck = async () => null;
+    const open = () => true;
+    expect(() => defineTool({ ...write, runForOpen: open } as never)).toThrow(/session-free/);
+    expect(() => defineTool({ ...write, precheck, precheckFor: precheck } as never)).toThrow(
+      /session-free/,
+    );
+    expect(() =>
+      defineTool({ ...write, sessionFree: true, runFor, precheckFor: precheck } as never),
+    ).toThrow(/its precheck/);
+    const closed = defineTool({
+      ...write,
+      sessionFree: true,
+      runFor,
+      runForOpen: () => false,
+    } as never);
+    expect(runsWithoutSession(closed)).toBe(false);
+    expect(runsWithoutSession(defineTool({ ...write, sessionFree: true, runFor } as never))).toBe(
+      true,
+    );
+    expect(runsWithoutSession(defineTool(write as never))).toBe(false);
     expect(() => defineTool({ ...write, sessionFree: true } as never)).toThrow(/runFor/);
     expect(() => defineTool({ ...write, runFor } as never)).toThrow(/runFor/);
     // A read reads as the person already; an execute waits for their click.

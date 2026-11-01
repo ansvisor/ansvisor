@@ -2,7 +2,7 @@ import type { Json } from '@/types/supabase';
 import { logActivity, type ActivityApproval, type ActivityPlace } from './activity';
 import { idempotencyKey, requestHash, sweepExpiredKeys, withIdempotencyKey } from './idempotency';
 import type { ChatMode, ChatSurface } from './precedence';
-import type { ChatTool, ChatToolContext } from './registry/define-tool';
+import { runsWithoutSession, type ChatTool, type ChatToolContext } from './registry/define-tool';
 import { undoRule, type WriteRecord } from './undo';
 
 /**
@@ -82,7 +82,7 @@ export async function runLoggedWrite(req: WriteRequest): Promise<WriteOutcome> {
   if (tool.class === 'execute' && req.approval.kind !== 'click') {
     throw new Error("An EXECUTE runs on the person's click only");
   }
-  if (req.withoutSession && !tool.runFor) {
+  if (req.withoutSession && !runsWithoutSession(tool)) {
     throw new Error(`${tool.name} runs only with its person's session`);
   }
   try {

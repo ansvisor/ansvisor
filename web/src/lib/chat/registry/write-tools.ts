@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { updateOpportunityStatus } from '@/lib/actions/content';
 import { createContentDraft } from '@/lib/actions/content-drafts';
 import { actorOf } from '@/lib/chat/actor/access';
+import { actingOpen } from '@/lib/chat/actor/api';
+import { dismissSuggestionFor, updateOpportunityStatusFor } from '@/lib/chat/actor/api-writes';
 import { createContentDraftFor } from '@/lib/chat/actor/drafts';
 import { dismissSuggestion } from '@/lib/actions/prompt-suggestions';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
@@ -20,7 +22,9 @@ import { FIXTURE_IDS, defineTool } from './define-tool';
  * through their session, with the read-only workspace check those actions
  * already run. They need that session: a run with no request behind it
  * (a schedule, CHAT-12) can't call them as they are. A sessionFree row has
- * runFor too, the same change for that run, as its person (lib/chat/actor).
+ * runFor too, the same change for that run, as its person (lib/chat/actor):
+ * a draft with the service role, an opportunity's status or a dismissed
+ * suggestion through the API server as them, while that way is open.
  *
  * minRole follows the role model of 2026-10-29: daily work (drafts, tasks,
  * audits, reports) is open to every role; settings, deleting, adding prompts
@@ -152,6 +156,15 @@ export const WRITE_TOOLS = [
         input.status,
         input.status === 'dismissed' ? input.reason : undefined,
       ),
+    sessionFree: true,
+    runFor: (ctx, input) =>
+      updateOpportunityStatusFor(
+        actorOf(ctx),
+        input.opportunity_id,
+        input.status,
+        input.status === 'dismissed' ? input.reason : undefined,
+      ),
+    runForOpen: actingOpen,
     fixture: { input: { opportunity_id: ITEM, status: 'dismissed', reason: 'not_relevant' } },
   }),
   defineTool({
@@ -176,6 +189,9 @@ export const WRITE_TOOLS = [
       suggestion_id: contentUuid.describe('Suggestion id, from list_prompt_suggestions.'),
     }),
     run: (_ctx, input) => dismissSuggestion(input.suggestion_id),
+    sessionFree: true,
+    runFor: (ctx, input) => dismissSuggestionFor(actorOf(ctx), input.suggestion_id),
+    runForOpen: actingOpen,
     fixture: { input: { suggestion_id: ITEM } },
   }),
   defineTool({

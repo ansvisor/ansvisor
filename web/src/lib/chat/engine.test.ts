@@ -16,6 +16,7 @@ import {
   TOPIC,
   SUGGESTION,
   fakeCreateDraft,
+  fakeUpdateOpportunity,
   seedDraft,
   seedWorkspace,
 } from './testing/chat-fixtures';
@@ -42,6 +43,17 @@ vi.mock('@/lib/actions/content-drafts', () => ({
 vi.mock('@/lib/chat/actor/drafts', () => ({
   createContentDraftFor: vi.fn(),
   updateContentDraftFor: vi.fn(),
+}));
+// The writes through the API server as the run's person (runFor, precheckFor): their requests are
+// tested in actor/api-writes.test.ts and actor/action-center.test.ts.
+vi.mock('@/lib/chat/actor/api-writes', () => ({
+  updateOpportunityStatusFor: vi.fn(),
+  dismissSuggestionFor: vi.fn(),
+  startSiteAuditsFor: vi.fn(),
+}));
+vi.mock('@/lib/chat/actor/action-center', () => ({
+  createChatActionFor: vi.fn(),
+  checkChatActionCoverFor: vi.fn(),
 }));
 vi.mock('@/lib/actions/cms-send', () => ({ sendDraftToCms: vi.fn() }));
 vi.mock('@/lib/actions/reports', () => ({ createReport: vi.fn() }));
@@ -231,6 +243,9 @@ const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { createContentDraftFor, updateContentDraftFor } = await import('@/lib/chat/actor/drafts');
+const { updateOpportunityStatusFor } = await import('@/lib/chat/actor/api-writes');
+const { checkChatActionCoverFor, createChatActionFor } =
+  await import('@/lib/chat/actor/action-center');
 const { requestAccess } = await import('@/lib/actions/chat-access-requests');
 const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
 const { sendDraftToCms } = await import('@/lib/actions/cms-send');
@@ -3471,7 +3486,7 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
       expect(draftNow?.archived_at).not.toBeNull();
     });
 
-    it('still asks where the precedence asks: Ask me first, and a row that needs a session', async () => {
+    it('still asks where the precedence asks: Ask me first, and a row whose way is closed', async () => {
       // Ask me first: the card, as in the person's own run, not the no-session note.
       const asked = await driven(ADMIN, 'ask_first', null, [calls(draft), text('Saved.')]);
       expect(asked).toMatchObject({ status: 'waiting', denials: [] });
@@ -3484,7 +3499,8 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
       expect(createContentDraftFor).not.toHaveBeenCalled();
       expect(runRow(asked.runId).status).toBe('done');
 
-      // A row with no write of its own for a run without a session: its card, saying why.
+      // A row whose write for a run without a session goes through the API server, with that way
+      // closed (no CHAT_ACTING_SECRET here): its card, saying why.
       const dismiss = toolCall('w1', 'update_opportunity', {
         opportunity_id: OPPORTUNITY,
         status: 'dismissed',
@@ -3496,6 +3512,118 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
         cards: [expect.objectContaining({ canDontAskAgain: false, note: NOTE })],
       });
       expect(updateOpportunityStatus).not.toHaveBeenCalled();
+      expect(updateOpportunityStatusFor).not.toHaveBeenCalled();
+    });
+
+    describe('through the API server as the run’s person (CHAT_ACTING_SECRET)', () => {
+      const dismiss = toolCall('w1', 'update_opportunity', {
+        opportunity_id: OPPORTUNITY,
+        status: 'dismissed',
+        reason: 'not_relevant',
+      });
+      const person = { userId: PEOPLE.admin, organizationId: ORG };
+      beforeEach(() => {
+        vi.stubEnv('CHAT_ACTING_SECRET', 'k'.repeat(64));
+        vi.mocked(updateOpportunityStatusFor).mockImplementation(
+          (_actor, id, status, reason) => fakeUpdateOpportunity(db)(id, status, reason) as never,
+        );
+      });
+
+      it('makes the change in Full auto with no card, as the run’s person, logged with its Undo', async () => {
+        const run = await driven(ADMIN, 'full_auto', null, [calls(dismiss), text('Done.')]);
+        expect(run).toMatchObject({ status: 'done', cards: [], denials: [] });
+        expect(updateOpportunityStatus).not.toHaveBeenCalled();
+        expect(updateOpportunityStatusFor).toHaveBeenCalledWith(
+          person,
+          OPPORTUNITY,
+          'dismissed',
+          'not_relevant',
+        );
+        expect(db.tables.chat_activity_log).toEqual([
+          expect.objectContaining({
+            kind: 'change',
+            user_id: PEOPLE.admin,
+            tool_key: 'opportunityStatus',
+            approval_kind: 'auto',
+          }),
+        ]);
+        expect(db.tables.chat_activity_log[0].undo_json).not.toBeNull();
+
+        // Ask me first still asks, and the owner's Approve runs it with their own session.
+        const asked = await driven(ADMIN, 'ask_first', null, [calls(dismiss), text('Done.')]);
+        expect(asked).toMatchObject({ status: 'waiting' });
+        expect(asked.cards).toHaveLength(1);
+        expect((await approve(ADMIN, asked.runId)).ok).toBe(true);
+        expect(updateOpportunityStatus).toHaveBeenCalledTimes(1);
+        expect(updateOpportunityStatusFor).toHaveBeenCalledTimes(1);
+      });
+
+      it('says a refusal of the way in the person’s words, and logs nothing', async () => {
+        const message = 'Chat is off for this workspace, so this agent couldn’t make this change.';
+        vi.mocked(updateOpportunityStatusFor).mockResolvedValue({
+          ok: false,
+          reason: 'chat_off',
+          message,
+        });
+        const { sonnet } = models([READY], [calls(dismiss), text('It couldn’t.')]);
+        const started = await engine.startChatRun(ADMIN, {
+          message: 'Do it',
+          brandId: BRAND,
+          mode: 'full_auto',
+        });
+        if (!started.ok) throw new Error(started.code);
+        await engine.driveRun(ADMIN, started.runId, undefined, { sessionUserId: null });
+        expect(stepsOf(started.runId)[0]).toMatchObject({ status: 'error', detail: message });
+        expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('chat_off');
+        expect(db.tables.chat_activity_log).toEqual([]);
+      });
+
+      it('checks Send to Action Center’s duplicate as the run’s person, then sends it as them', async () => {
+        const send = toolCall('w1', 'create_action', {
+          brand_id: BRAND,
+          title: 'Win back pricing citations on /pricing',
+          category: 'recover',
+          why: 'Google AI Overviews stopped citing /pricing.',
+          pages: ['/pricing'],
+          tasks: [
+            {
+              title: 'Add a pricing FAQ block to /pricing',
+              type: 'on_page',
+              url: '/pricing',
+              done_when: 'The FAQ block is live',
+            },
+          ],
+        });
+        vi.mocked(checkChatActionCoverFor).mockResolvedValue({ ok: true });
+        vi.mocked(createChatActionFor).mockResolvedValue({
+          ok: true,
+          action_id: '88888888-8888-4888-8888-888888888888',
+          action_no: 1271,
+          created: true,
+          href: '/dashboard/action-center/actions/88888888-8888-4888-8888-888888888888',
+        });
+        const run = await driven(ADMIN, 'full_auto', null, [calls(send), text('Sent.')]);
+        expect(run).toMatchObject({ status: 'done', cards: [], denials: [] });
+        expect(checkChatActionCover).not.toHaveBeenCalled();
+        expect(createChatAction).not.toHaveBeenCalled();
+        expect(vi.mocked(checkChatActionCoverFor).mock.calls[0][0]).toEqual(person);
+        const [actor, brand, , place] = vi.mocked(createChatActionFor).mock.calls[0];
+        expect([actor, brand]).toEqual([person, BRAND]);
+        expect(place).toMatchObject({ runId: run.runId, executionMode: 'automated' });
+
+        // A duplicate found first: no card and nothing sent, in a run with no session too.
+        vi.mocked(checkChatActionCoverFor).mockResolvedValue({
+          ok: false,
+          reason: 'duplicate',
+          message: 'AC-1258 already covers this.',
+          action_id: '99999999-9999-4999-8999-999999999999',
+          action_no: 1258,
+          can_create_anyway: false,
+        });
+        const covered = await driven(ADMIN, 'auto', null, [calls(send), text('Covered.')]);
+        expect(covered).toMatchObject({ status: 'done', cards: [] });
+        expect(createChatActionFor).toHaveBeenCalledTimes(1);
+      });
     });
 
     it('decides as for the run’s person: a role that may not change drafts is refused', async () => {
