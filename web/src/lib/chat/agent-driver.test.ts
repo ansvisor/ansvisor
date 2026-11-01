@@ -505,6 +505,23 @@ describe('keeping the agent run in step with its Chat run', () => {
     });
   });
 
+  it('stops a run its own key failed, pauses a triggered agent, and counts neither as failed', async () => {
+    agentRow().fail_count = 2;
+    const keyFailure = { class: 'no_credit', provider: 'openai', status: 429, model: null };
+    const manual = queueRun({ trigger_kind: 'manual' });
+    chatOf(manual, 'error', { keyFailure });
+    expect(await driver.settleAgentRun(manual, { now: NOW })).toBe('stopped');
+    expect(runRow(manual)).toMatchObject({ status: 'stopped', stop_reason: 'own_key' });
+    // A person's Run now doesn't pause it, as with a missing connection.
+    expect(agentRow()).toMatchObject({ status: 'active', fail_count: 2 });
+
+    const triggered = queueRun({ brand_id: null });
+    chatOf(triggered, 'error', { keyFailure });
+    expect(await driver.settleAgentRun(triggered, { now: NOW })).toBe('stopped');
+    expect(runRow(triggered).stop_reason).toBe('own_key');
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'own_key', fail_count: 2 });
+  });
+
   it('stops a triggered run at its own cap, "Stopped at its limit", in its owner’s chat', async () => {
     const id = queueRun();
     const chat = chatOf(id, 'paused_cap', { capHit: 'run' });

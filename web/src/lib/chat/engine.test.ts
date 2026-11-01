@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { APICallError } from 'ai';
 import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -134,6 +135,8 @@ const fakes = vi.hoisted(() => ({
   publishRun: vi.fn(),
   reserve: vi.fn(),
   resolveModels: vi.fn(),
+  markFailing: vi.fn(async () => ({ started: true, since: null })),
+  markWorking: vi.fn(async () => ({ cleared: true, resumed: 0 })),
   openPage: vi.fn(),
   explain: vi.fn(),
 }));
@@ -142,6 +145,11 @@ vi.mock('@/lib/mcp/pages', () => ({ openPageFor: fakes.openPage }));
 // explain_change as it is, reading through a fake of its data layer.
 vi.mock('@/lib/mcp/why', () => ({ explainChangeFor: fakes.explain }));
 vi.mock('./budget', () => ({ reserveChatStep: fakes.reserve }));
+vi.mock('./key-health', () => ({
+  markKeyFailing: fakes.markFailing,
+  markKeyWorking: fakes.markWorking,
+  ownKeyFailure: vi.fn(async () => null),
+}));
 vi.mock('./engine-model', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./engine-model')>()),
   resolveChatModels: fakes.resolveModels,
@@ -298,12 +306,18 @@ function scripted(modelId: string, script: Step[]) {
   return { model, seen, script };
 }
 
-/** Auto: the read script for Haiku, the write script for Sonnet. */
-function useModels(read: Step[], write: Step[]) {
+/** Auto: the read script for Haiku, the write script for Sonnet; on Ansvisor's key unless `key` says. */
+function useModels(
+  read: Step[],
+  write: Step[],
+  key: { source?: 'own' | 'ansvisor'; keyFailing?: boolean } = {},
+) {
   const haiku = scripted('claude-haiku-5-5', read);
   const sonnet = scripted('claude-sonnet-5-5', write);
   fakes.resolveModels.mockResolvedValue({
-    source: 'ansvisor',
+    source: key.source ?? 'ansvisor',
+    provider: 'anthropic',
+    keyFailing: key.keyFailing ?? false,
     phases: 'auto',
     pick: (phase: 'read' | 'write') => ({
       model: phase === 'read' ? haiku.model : sonnet.model,
@@ -2946,6 +2960,103 @@ describe('the AI budget', () => {
       expect(step).not.toHaveProperty('agentRunId');
       expect(step).not.toHaveProperty('feature');
     }
+  });
+});
+
+describe('the own AI key (AGENT-OWN-KEY §5.2)', () => {
+  /** A provider's answer the call fails with; not retried, so the test needn't wait. */
+  const failing = (statusCode: number, body: object) => () => {
+    throw new APICallError({
+      message: 'failed',
+      url: 'https://api.anthropic.com/v1/messages',
+      requestBodyValues: {},
+      statusCode,
+      responseBody: JSON.stringify(body),
+      isRetryable: false,
+    });
+  };
+  const refused = failing(401, {
+    type: 'error',
+    error: { type: 'authentication_error', message: 'invalid x-api-key' },
+  });
+  const overloaded = failing(529, {
+    type: 'error',
+    error: { type: 'overloaded_error', message: 'Overloaded' },
+  });
+  const STOPPED = "So Chat stopped here. What's done so far is kept.";
+
+  it('ends a run on a refused own key after one call, marked failing, without the writing model', async () => {
+    const { haiku, sonnet } = useModels([refused], [text('never')], { source: 'own' });
+    const runId = await turn(ADMIN, 'Hello');
+    expect(haiku.seen).toHaveLength(1);
+    expect(sonnet.seen).toHaveLength(0);
+    expect(runRow(runId)).toMatchObject({ status: 'error', error: 'own_key' });
+    const events = await eventsOf(runId);
+    expect(ofType(events, 'run.error')[0].data).toMatchObject({
+      code: 'own_key',
+      keyFailure: { class: 'invalid', provider: 'anthropic' },
+      reason: `Anthropic turned down your workspace's key. ${STOPPED}`,
+    });
+    expectClean(events);
+    expect(fakes.markFailing).toHaveBeenCalledWith(
+      ADMIN.organizationId,
+      'anthropic',
+      expect.objectContaining({ class: 'invalid', status: 401 }),
+    );
+    const state = db.tables.chat_run_state.find((s) => s.run_id === runId)!;
+    expect((state.progress as { keyFailure?: object }).keyFailure).toEqual({
+      class: 'invalid',
+      provider: 'anthropic',
+      status: 401,
+      model: null,
+    });
+  });
+
+  it('leaves Ansvisor’s own key failing to the old path: the writing model reads, nothing marked', async () => {
+    const { sonnet } = useModels([refused], [text('Hi.')]);
+    const runId = await turn(ADMIN, 'Hello');
+    expect(sonnet.seen).toHaveLength(1);
+    expect(runRow(runId).status).toBe('done');
+    expect(fakes.markFailing).not.toHaveBeenCalled();
+  });
+
+  it('says the provider didn’t answer, and leaves the key unmarked', async () => {
+    const { haiku, sonnet } = useModels([overloaded], [overloaded], { source: 'own' });
+    const runId = await turn(ADMIN, 'Hello');
+    expect([haiku.seen.length, sonnet.seen.length]).toEqual([1, 1]);
+    expect(runRow(runId)).toMatchObject({ status: 'error', error: 'provider_down' });
+    expect(ofType(await eventsOf(runId), 'run.error')[0].data).toMatchObject({
+      code: 'provider_down',
+      reason:
+        "Anthropic didn't answer, so Chat stopped here. What's done so far is kept. Try again in a moment.",
+    });
+    expect(fakes.markFailing).not.toHaveBeenCalled();
+  });
+
+  it('marks a key marked failing working once it answers, once a run', async () => {
+    useModels([READY], [text('Hi.')], { source: 'own', keyFailing: true });
+    await turn(ADMIN, 'Hello');
+    expect(fakes.markWorking).toHaveBeenCalledTimes(1);
+    expect(fakes.markWorking).toHaveBeenCalledWith(ADMIN.organizationId, 'anthropic');
+
+    fakes.markWorking.mockClear();
+    useModels([READY], [text('Hi.')], { source: 'own' });
+    await turn(ADMIN, 'Hello again');
+    expect(fakes.markWorking).not.toHaveBeenCalled();
+  });
+
+  it('stops on a saved key that can’t be read, before any call', async () => {
+    const { OwnKeyUnreadableError } = await import('./key');
+    fakes.resolveModels.mockRejectedValueOnce(new OwnKeyUnreadableError('openai'));
+    const runId = await turn(ADMIN, 'Hello');
+    expect(runRow(runId)).toMatchObject({ status: 'error', error: 'own_key' });
+    expect(ofType(await eventsOf(runId), 'run.error')[0].data).toMatchObject({
+      code: 'own_key',
+      keyFailure: { class: 'unreadable', provider: 'openai' },
+      reason: `Your saved OpenAI key can't be read any more. ${STOPPED}`,
+    });
+    // key.ts marked it where it found it.
+    expect(fakes.markFailing).not.toHaveBeenCalled();
   });
 });
 
