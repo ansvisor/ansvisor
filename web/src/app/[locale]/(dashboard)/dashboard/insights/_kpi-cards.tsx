@@ -170,6 +170,8 @@ interface MetricCardProps {
   icon: LucideIcon;
   value: string;
   delta?: Change | null;
+  /** Beside the value, smaller: "of 36 site pages". */
+  unit?: React.ReactNode;
   sub?: React.ReactNode;
   spark?: (number | null)[] | null;
   quota?: { used: number; limit: number; label: string } | null;
@@ -186,6 +188,7 @@ export function MetricCard({
   icon: Icon,
   value,
   delta,
+  unit,
   sub,
   spark,
   quota,
@@ -242,6 +245,7 @@ export function MetricCard({
         <span className="text-[28px] font-semibold leading-tight tracking-tight tabular-nums">
           {value}
         </span>
+        {unit && <span className="text-sm text-muted-foreground tabular-nums">{unit}</span>}
         {delta && (
           <span className={cn('text-xs font-medium tabular-nums', TONE_TEXT[delta.tone])}>
             {delta.text}
