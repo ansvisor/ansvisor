@@ -11776,8 +11776,14 @@
         "d90": "90d",
         "due": "Day {day}, due {date}",
         "none": "Day {day}, not measured",
-        "measured": "Day {day}: {outcome}"
+        "measured": "Day {day}: {outcome}",
+        "measuredLasting": "Day {day}: {outcome} · {lasting}"
       },
+      "lasting": {
+        "held": "Held",
+        "faded": "Faded"
+      },
+      "capped": "Showing the first {count, number} changes shipped in {month}; the counts above cover only these.",
       "empty": "Nothing shipped in {month}.",
       "emptyFilter": "No actions with this outcome in {month}.",
       "loadFailed": "Couldn't load what Ansvisor did. Try again.",
