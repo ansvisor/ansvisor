@@ -44,7 +44,7 @@ An opportunity built for a group of prompts also shows:
 
 1. The Content Agent builds a brief from the opportunity's prompts, their fan-outs and the pages AI cites for them.
 2. It writes the page from the brief, by your rules and the page type's. For an opportunity on a page you have, it suggests changes to that page instead.
-3. The editor opens and shows the agent at work. You review the page there; nothing is published.
+3. The editor opens and shows the agent at work. You review the page there, with a free estimate of its Site Audit score; nothing is published.
 
 You can stop it from the editor. If the brief can't be built, the agent writes from what there is.
 

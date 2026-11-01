@@ -122,11 +122,13 @@ import {
   exportPlaceholders,
   pasteChecks,
   reviewerJsonLd,
+  pageFields,
   teamName,
   titlePlaceholders,
   withByline,
   withReviewerJsonLd,
 } from '@/lib/content/ready-to-publish';
+import { estimateDocument } from '@/lib/content/audit-estimate';
 import { detectPageType, isSiteType, type SiteType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
 import { inputsGiven, inputsUsed } from '@/lib/content/draft-inputs';
@@ -261,6 +263,7 @@ import {
   writeThirdStep,
 } from './_next-step';
 import { qualitySuggestions, useTodoCopy, type HandOff, type QualityRead } from './_quality-tab';
+import { AuditEstimateCard, AuditEstimateChip, useAuditEstimate } from './_audit-estimate';
 import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusDetail, type AgentFix, type PageRewrite } from './_rules-tab';
@@ -2945,6 +2948,30 @@ export function DraftEditor({
   // an author the person confirmed their site names: the CMS keeps its own.
   const teamByline =
     authorsRead && (pageAuthor || !authorConfirmed.real) ? teamName(language, brandName) : '';
+  // Site Audit's estimate (customer priorities item 9): the page as Export's
+  // HTML file has it, read again once typing pauses, whatever Quality's phase.
+  const estimateDoc = useMemo(() => {
+    const html = publishableHtml(pageHtml);
+    const fields = pageFields({
+      title,
+      html,
+      sourceUrl: draft.sourceUrl,
+      author: pageAuthor,
+      reviewer: pageReviewer,
+      teamByline,
+    });
+    return estimateDocument({
+      title,
+      html: withReviewerJsonLd(
+        title,
+        contentByline ? withByline(html, contentByline) : html,
+        pageReviewer,
+      ),
+      metaDescription: fields.metaDescription,
+      author: fields.author,
+    });
+  }, [pageHtml, title, draft.sourceUrl, pageAuthor, pageReviewer, teamByline, contentByline]);
+  const auditEstimate = useAuditEstimate(draft.id, draft.brandId, estimateDoc);
   // Export (CE-057), once Quality is live: where it goes, its checks and fields.
   // The page as it was when Export opened: what it shows stays still while open.
   const [exportOpen, setExportOpen] = useState<{
@@ -4078,6 +4105,7 @@ export function DraftEditor({
               </span>
             </button>
           )}
+          <AuditEstimateChip state={auditEstimate} />
           {citedCount > 0 && (
             <span
               title={t('cited.chipHint')}
@@ -4327,6 +4355,7 @@ export function DraftEditor({
             onConfirmIntro={() => void confirmIntro()}
             onChangeType={() => setTypeMenuOpen(true)}
             handOff={handOffCard}
+            auditEstimate={<AuditEstimateCard state={auditEstimate} />}
             yourInput={inputsRead.status === 'off' ? null : inputsRead}
             onAddInput={addInput}
             onConfirmAuthor={confirmAuthor}

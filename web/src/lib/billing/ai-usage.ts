@@ -56,9 +56,10 @@ export interface AiUsage {
   /**
    * What work a page asks about before it runs typically takes, as shares of
    * the allowance to a tenth (customer priorities item 9): Write this's brief
-   * and page. Missing from an older API: the page says nothing of it.
+   * and page, and a draft's AI checks for its Site Audit estimate. Missing
+   * from an older API: the page says nothing of it.
    */
-  estimates?: { writeThis?: number };
+  estimates?: { writeThis?: number; auditAiChecks?: number };
 }
 
 /** A count against its plan's limit this period. */

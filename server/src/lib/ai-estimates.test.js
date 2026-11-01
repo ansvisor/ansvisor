@@ -35,3 +35,19 @@ describe('aiEstimateCosts', () => {
     expect(aiEstimateCosts().writeThis).toBeGreaterThan(cheaper);
   });
 });
+
+describe('the AI checks of a draft’s Site Audit estimate', () => {
+  it('prices one call on the audit’s model', async () => {
+    vi.stubEnv('AUDIT_LLM_MODEL', 'google/gemini-3-flash-preview');
+    const { auditAiChecks } = aiEstimateCosts();
+    expect(auditAiChecks).toBeCloseTo(
+      generationCostUsd('google/gemini-3-flash-preview', {
+        inputTokens: 4_000,
+        outputTokens: 1_500,
+      }),
+      6,
+    );
+    // Under 1% of Starter's $5.
+    expect((auditAiChecks * 100) / 5).toBeLessThan(1);
+  });
+});

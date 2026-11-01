@@ -80,15 +80,26 @@ ${pageText}
 Return a verdict for every signal key.`;
 }
 
+/** The model the AI checks run on. */
+export function auditLlmModelId() {
+  return process.env.AUDIT_LLM_MODEL || DEFAULT_MODEL;
+}
+
+/** A typical call's tokens: the page's text (cut at 8,000 characters) with the checks, and 13 verdicts. */
+export const LLM_SIGNALS_TYPICAL_TOKENS = { inputTokens: 4_000, outputTokens: 1_500 };
+
 /**
  * @param {import('./context.js').AuditContext} ctx
+ * @param {{ onUsage?: (usage: object) => Promise<void>|void }} [opts]
+ *   `onUsage`: the answer's tokens, for a caller that charges them (a
+ *   draft's estimate, customer priorities item 9); an audit's are its credit's.
  * @returns {Promise<Array<{ key: string, status: string, score: number|null, evidence: object }>>}
  */
-export async function evaluateLlmSignals(ctx) {
-  const modelString = process.env.AUDIT_LLM_MODEL || DEFAULT_MODEL;
+export async function evaluateLlmSignals(ctx, { onUsage } = {}) {
+  const modelString = auditLlmModelId();
 
   try {
-    const { object } = await withRetry(
+    const { object, usage } = await withRetry(
       () =>
         generateObject({
           model: resolveModel(modelString),
@@ -98,6 +109,7 @@ export async function evaluateLlmSignals(ctx) {
         }),
       { label: 'llm-signals' },
     );
+    if (onUsage && usage) await onUsage(usage);
 
     return LLM_SIGNAL_KEYS.map((key) => {
       const v = object[key];

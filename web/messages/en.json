@@ -7505,6 +7505,38 @@
       },
       "markedReady": "Marked ready. Publish it on your site when you're ready.",
       "markedReadyAction": "Marked ready, and {count, plural, one {its task} other {its # tasks}} in Action AC-{no} {count, plural, one {is} other {are}} done. Publish it on your site when you're ready.",
+      "auditEstimate": {
+        "title": "Site Audit estimate",
+        "free": "free",
+        "score": "≈{score}",
+        "outOf": "{score}/100",
+        "na": "n/a",
+        "note": "From the {count, plural, one {# check} other {# checks}} Site Audit runs on the page and your site, read again as you write.",
+        "noteNoSite": "From the {count, plural, one {# check} other {# checks}} Site Audit runs on the page itself, read again as you write. Site-wide checks join once your site has a Site Audit.",
+        "noteAiMissing": "The {count} checks AI reads aren't in it yet: estimates like this run about 6 points under the full audit.",
+        "noteAi": "With the checks AI read at {time}.",
+        "failed": "Couldn't read the estimate. It's read again as you write.",
+        "categories": {
+          "structure": "Structure",
+          "content": "Content",
+          "authority": "Authority",
+          "trust": "Trust",
+          "eeat": "E-E-A-T"
+        },
+        "estimateAi": "Estimate AI checks",
+        "estimateAiAgain": "Read AI checks again",
+        "estimating": "Reading AI checks…",
+        "usage": "Uses about {estimate} of your {trial, select, yes {trial AI credit} other {monthly AI usage}}",
+        "usageSmall": "Uses under 1% of your {trial, select, yes {trial AI credit} other {monthly AI usage}}",
+        "errors": {
+          "ai_budget": "This month's AI usage is spent, so the AI checks didn't run.",
+          "no_subscription": "The AI checks run with an active plan.",
+          "failed": "The AI checks couldn't run. Try again."
+        },
+        "chip": "Audit ≈{score}",
+        "chipReading": "Audit ≈…",
+        "chipHint": "Site Audit estimate: about where this page would score, free"
+      },
       "agentWriting": {
         "title": "Content Agent is working on this page",
         "titleBrief": "Content Agent is building this page's brief",
@@ -9493,7 +9525,7 @@
         "draftDetail": "The Content Agent writes the page from the brief, by your rules and the page type's.",
         "draftDetailPage": "The Content Agent suggests changes to {page} from the brief, by your rules and the page type's.",
         "review": "You review it",
-        "reviewDetail": "The editor opens as it writes. Nothing is published."
+        "reviewDetail": "The editor opens as it writes, with a free estimate of its Site Audit score. Nothing is published."
       },
       "usage": "Uses about <b>{estimate}</b> of your {trial, select, yes {trial AI credit} other {monthly AI usage}} · {used} used so far",
       "usageSmall": "Uses under <b>1%</b> of your {trial, select, yes {trial AI credit} other {monthly AI usage}} · {used} used so far",

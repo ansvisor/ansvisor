@@ -68,6 +68,12 @@ vi.mock('@/lib/content/agent-runs-client', () => ({
   stopAgentRun: (...args: unknown[]) => stopAgentRun(...args),
   readAutoHandOff: (...args: unknown[]) => readAutoHandOff(...args),
 }));
+// Site Audit's estimate (customer priorities item 9): none read, unless a test says.
+const readAuditEstimate = vi.fn();
+vi.mock('@/lib/content/audit-estimate', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAuditEstimate: (...args: unknown[]) => readAuditEstimate(...args),
+}));
 const getDraftBrief = vi.fn();
 const rebuildDraftBrief = vi.fn();
 const saveDraftRules = vi.fn();
@@ -391,6 +397,7 @@ beforeEach(() => {
   getContentResults.mockReset().mockResolvedValue(null);
   getDraftSources.mockReset().mockResolvedValue(null);
   readAgentRun.mockReset().mockResolvedValue(null);
+  readAuditEstimate.mockReset().mockResolvedValue({ error: 'failed' });
   stopAgentRun.mockReset().mockResolvedValue({ stopped: true });
   getDraftBrief.mockReset().mockResolvedValue({ brief: null });
   rebuildDraftBrief.mockReset();
@@ -476,6 +483,28 @@ describe('the content editor', () => {
     // The HTML block is named, not only an icon.
     expect(button('Add an HTML block')!.textContent).toBe('Add HTML');
     expect(container.querySelector('.ProseMirror h1')!.textContent).toBe('Pipeline forecasting');
+  });
+
+  it('shows Site Audit’s estimate in the header, read from the page as it goes out (customer priorities item 9)', async () => {
+    readAuditEstimate.mockResolvedValue({
+      estimate: {
+        score: 62,
+        categories: { structure: 78, content: 55, authority: 40, trust: 72, eeat: 48 },
+        checks: { page: 18, site: 13, ai: 0 },
+      },
+    });
+    getContentDraft.mockResolvedValue(draft());
+    await renderPage();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 1_100)));
+
+    const [, tags] = container.querySelector('header')!.children;
+    expect(tags.textContent).toContain('Audit ≈62');
+    const [draftId, brandId, doc] = readAuditEstimate.mock.calls.at(-1)!;
+    expect([draftId, brandId]).toEqual(['d1', 'b1']);
+    // The whole page, its head too, as Export's HTML file has it.
+    expect(doc).toMatch(/^<!doctype html>/);
+    expect(doc).toContain('<title>Pipeline forecasting</title>');
+    expect(doc).toContain('<h1>Pipeline forecasting</h1>');
   });
 
   it('remembers the draft for Content › Editor, per brand', async () => {
