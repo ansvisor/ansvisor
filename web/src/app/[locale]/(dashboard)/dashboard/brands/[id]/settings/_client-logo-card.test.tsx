@@ -9,7 +9,7 @@ import type { Brand } from '@/types';
 /**
  * Brand settings › Client logo: Admins and Managers set the client's logo
  * on a plan with white label; others see it; Starter names Growth; a
- * self-host without white label doesn't show the card.
+ * the card isn't shown where white label isn't offered.
  */
 
 const actions = vi.hoisted(() => ({
@@ -22,6 +22,12 @@ const uploadLogo = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/white-label/logo-upload', () => ({ uploadLogo }));
 const plan = vi.hoisted(() => ({ isCloud: true }));
 vi.mock('@/components/providers/plan-provider', () => ({ usePlanContext: () => plan }));
+// Whether this install offers white label: the cloud and a self-host do today.
+const offered = vi.hoisted(() => ({ value: true }));
+vi.mock('@/lib/white-label/kit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/white-label/kit')>()),
+  whiteLabelOffered: () => offered.value,
+}));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 
@@ -40,6 +46,7 @@ const openUpgrade = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
   plan.isCloud = true;
+  offered.value = true;
   actions.getBrandClientLogo.mockResolvedValue({
     ok: true,
     view: { available: true, requiredPlan: 'growth', canEdit: true, logoUrl: null },
@@ -138,8 +145,15 @@ describe('ClientLogoCard', () => {
     expect(container.querySelector('input[type="file"]')).toBeNull();
   });
 
-  it('isn’t shown on a self-host without white label', async () => {
-    plan.isCloud = false;
+  it('shows its logo on white paper in both themes, as the report cover it goes on', async () => {
+    await render();
+    const paper = container.querySelector('[data-testid="logo-paper"]')!;
+    expect(paper.className).toContain('bg-white');
+    expect(paper.className).not.toMatch(/\bbg-muted|dark:/);
+  });
+
+  it('isn’t shown where white label isn’t offered', async () => {
+    offered.value = false;
     await render();
     expect(container.textContent).toBe('');
     expect(actions.getBrandClientLogo).not.toHaveBeenCalled();

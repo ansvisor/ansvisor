@@ -106,12 +106,13 @@ describe('SettingsView', () => {
     expect(off).not.toContain('Chat');
   });
 
-  it('lists White label after Organization on the cloud, and not on a self-host', async () => {
-    isCloud = true;
-    const list = await sections();
-    expect(list.indexOf('White label')).toBe(list.indexOf('Organization') + 1);
+  it('lists White label after Organization, on the cloud and on a self-host', async () => {
+    for (const cloud of [true, false]) {
+      isCloud = cloud;
+      const list = await sections();
+      expect(list.indexOf('White label'), String(cloud)).toBe(list.indexOf('Organization') + 1);
+    }
     isCloud = false;
-    expect(await sections()).not.toContain('White label');
   });
 
   it("counts an Admin's waiting access requests on Roles & access", async () => {
