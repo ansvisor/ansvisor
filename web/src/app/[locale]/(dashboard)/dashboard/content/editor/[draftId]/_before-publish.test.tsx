@@ -111,6 +111,7 @@ async function render(
     shopping = null as Parameters<typeof BeforePublish>[0]['shopping'],
     reviewer = null as ContentAuthor | null,
     reviewerRequired = false,
+    reviewerNamedOnPage = false,
   } = {},
 ) {
   const Wrap = strict ? StrictMode : Fragment;
@@ -398,7 +399,7 @@ describe('BeforePublish', () => {
     ]);
   });
 
-  it('checks for a qualified reviewer on regulated pages and includes WebPage.reviewedBy', async () => {
+  it('checks that a regulated page both selects and names its qualified reviewer', async () => {
     await render(quality(), { mode: 'export', reviewerRequired: true });
     expect(rows()).toContainEqual(expect.stringContaining('No qualified reviewer named · missing'));
 
@@ -408,7 +409,18 @@ describe('BeforePublish', () => {
       name: 'Dr. Grace Hopper',
       title: 'Clinical Reviewer',
     };
+
     await render(quality(), { mode: 'export', reviewer, reviewerRequired: true });
+    expect(rows()).toContainEqual(
+      expect.stringContaining('Reviewer not named in the page text · missing'),
+    );
+
+    await render(quality(), {
+      mode: 'export',
+      reviewer,
+      reviewerRequired: true,
+      reviewerNamedOnPage: true,
+    });
     expect(rows()).toContainEqual(
       expect.stringContaining('Qualified reviewer: Dr. Grace Hopper · check it'),
     );
@@ -420,7 +432,7 @@ describe('BeforePublish', () => {
     await render(quality(), { mode: 'export', reviewer, reviewerRequired: false });
     expect(rows().join(' ')).not.toContain('Qualified reviewer');
     expect(dialog().querySelector('pre')!.textContent).not.toContain('"reviewedBy"');
-  });
+  });;
 
   it('gives the JSON-LD from the page, author and site to copy, dated today', async () => {
     await render(quality());
