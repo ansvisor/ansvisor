@@ -122,7 +122,7 @@ function ExcludedList({
   onRestore,
 }: {
   excluded: ExcludedPage[];
-  onRestore: (urls: string[]) => void;
+  onRestore?: (urls: string[]) => void;
 }) {
   const t = useTranslations('audit.opportunities');
   const [open, setOpen] = useState(false);
@@ -146,18 +146,21 @@ function ExcludedList({
               <span className="min-w-0 flex-1 truncate text-foreground" title={page.url}>
                 {page.path}
               </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => onRestore([page.url])}
-              >
-                {t('restore')}
-              </Button>
+              {onRestore && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => onRestore([page.url])}
+                >
+                  {t('restore')}
+                </Button>
+              )}
             </li>
           ))}
         </ul>
       )}
+      {open && !onRestore && <p className="mt-2">{t('prefsManagersOnly')}</p>}
     </div>
   );
 }
@@ -165,7 +168,9 @@ function ExcludedList({
 /**
  * The Opportunities inbox (SA-004): the brand's pages worth auditing, each
  * with why, pinned pages first. Pages not being audited can be selected for
- * the bulk bar (`toolbar`): Audit selected, Pin, Exclude.
+ * the bulk bar (`toolbar`): Audit selected, Pin, Exclude. Without
+ * `onRestore` (a member who can't change them), excluded pages list without
+ * Restore.
  */
 export function OpportunitiesTable({
   opportunities,
@@ -181,7 +186,7 @@ export function OpportunitiesTable({
   staleDays: number;
   selected: Set<string>;
   onSelect: (keys: string[], on: boolean) => void;
-  onRestore: (urls: string[]) => void;
+  onRestore?: (urls: string[]) => void;
   toolbar?: ReactNode;
 }) {
   const t = useTranslations('audit.opportunities');

@@ -114,7 +114,12 @@ describe('framerSlug', () => {
 });
 
 describe('framerFieldData', () => {
-  const page = { title: '  Cold   brew at home ', metaTitle: '', metaDescription: '' };
+  const page = {
+    title: '  Cold   brew at home ',
+    metaTitle: '',
+    metaDescription: '',
+    reviewer: 'Dr. Grace Hopper, Clinical Reviewer',
+  };
   const body = `<p>${'Cold brew is coffee steeped in cold water for 12 to 18 hours. '.repeat(4)}</p>`;
   const map = {
     title: 'fTitle',
@@ -122,6 +127,7 @@ describe('framerFieldData', () => {
     metaTitle: 'fSeoTitle',
     metaDescription: 'fSeoDesc',
     jsonLd: 'fSchema',
+    reviewer: 'fReviewer',
   };
 
   it('puts each part in its field as Framer takes it, falling back where a page has none', () => {
@@ -139,6 +145,10 @@ describe('framerFieldData', () => {
     expect(data.fSchema).toEqual({
       type: 'string',
       value: '{"@type":"Article","headline":"\\u003c/script>"}',
+    });
+    expect(data.fReviewer).toEqual({
+      type: 'string',
+      value: 'Dr. Grace Hopper, Clinical Reviewer',
     });
     expect(
       framerFieldData({ page: { ...page, title: 'T'.repeat(300) }, body }, map).fTitle.value,
@@ -161,6 +171,7 @@ describe('framerFieldData', () => {
       fSeoTitle: { type: 'string', value: 'Cold brew, simply' },
       fSeoDesc: { type: 'string', value: 'How to make it.' },
       fSchema: { type: 'string', value: '' },
+      fReviewer: { type: 'string', value: 'Dr. Grace Hopper, Clinical Reviewer' },
     });
     expect(
       framerFieldData(
@@ -172,5 +183,12 @@ describe('framerFieldData', () => {
       fBody: { type: 'formattedText', value: '<p>x</p>', contentType: 'html' },
       fSchema: { type: 'string', value: '[{"@type":"Article"},{"@type":"FAQPage"}]' },
     });
+  });
+
+  it('clears the mapped reviewer field when a page has no reviewer', () => {
+    expect(
+      framerFieldData({ page: { ...page, reviewer: '' }, body: '<p>x</p>', jsonLd: [] }, map)
+        .fReviewer,
+    ).toEqual({ type: 'string', value: '' });
   });
 });

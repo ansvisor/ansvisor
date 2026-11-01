@@ -48,7 +48,12 @@ import { useRouter } from '@/i18n/navigation';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { CancelSubscriptionDialog } from './cancel-subscription-dialog';
-import { aiUsageMultiple, usePlanFeatures, type PlanFeature } from './plan-features';
+import {
+  aiUsageMultiple,
+  usePlanCardsChatMetered,
+  usePlanFeatures,
+  type PlanFeature,
+} from './plan-features';
 
 interface SubscriptionData {
   planId: string;
@@ -89,6 +94,7 @@ export function PlanSwitcher({
   // A trial bought starts a new period, its AI usage from 0: the header meter
   // and its banners read it again rather than show the trial's.
   const { refresh: refreshAiUsage } = useAiUsage();
+  const chatMetered = usePlanCardsChatMetered();
   const [loading, setLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -239,13 +245,15 @@ export function PlanSwitcher({
 
   /**
    * The custom plan's points: its AI usage first, set per customer above
-   * Enterprise's floor (2026-10-27), then the pricing page's points.
+   * Enterprise's floor (2026-10-27), then the pricing page's points. With the
+   * new Chat on (chatMetered), its hint says Chat and agents draw on it.
    */
   function customPlanPoints(): PlanFeature[] {
     const aiUsage = aiUsageMultiple('enterprise');
+    const hint = chatMetered ? 'aiUsageCustomHintChat' : 'aiUsageCustomHint';
     return [
       ...(aiUsage
-        ? [{ text: tCards('aiUsageCustom', { count: aiUsage }), hint: tCards('aiUsageCustomHint') }]
+        ? [{ text: tCards('aiUsageCustom', { count: aiUsage }), hint: tCards(hint) }]
         : []),
       ...(t.raw('customPlanPoints') as string[]).map((text) => ({ text })),
     ];

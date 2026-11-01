@@ -67,8 +67,9 @@ export function DateRangeFilter<P extends string = DateRangePreset>({
         <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
           {resolvedLabel}
         </label>
+        {/* h-8: as tall as the selects and buttons beside it, and the date inputs. */}
         <div
-          className="flex rounded-md border overflow-hidden"
+          className="flex h-8 rounded-md border overflow-hidden"
           role="group"
           aria-label={resolvedLabel}
         >

@@ -8,7 +8,8 @@ import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 /**
  * Site Audit on a read-only workspace (plan not active): Run audit, by its
  * button or Enter in the address, opens the upgrade dialog instead of
- * starting an audit. On an active plan it starts one and opens it.
+ * starting an audit. On an active plan it starts one and opens it. Pin,
+ * Exclude and Restore in the Opportunities inbox are for admins and managers.
  */
 
 const audits = vi.hoisted(() => ({
@@ -33,7 +34,8 @@ vi.mock('@/stores/use-brand-store', () => ({
     getState: () => brandState,
   }),
 }));
-vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
+const role = vi.hoisted(() => ({ canManage: true }));
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: role.canManage }) }));
 const push = vi.hoisted(() => vi.fn());
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push }) }));
 vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
@@ -44,10 +46,28 @@ vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
 vi.mock('./_site-trust-card', () => ({ SiteTrustCard: () => null }));
 vi.mock('./_charts', () => ({ ScoreTrendChart: () => null }));
 vi.mock('./_pages-table', () => ({ AuditPagesTable: () => null }));
-vi.mock('./_bulk-bar', () => ({ AuditBulkBar: () => null, ExportMenu: () => null }));
+// The bulk bar shows only the buttons the page puts in it.
+vi.mock('./_bulk-bar', () => ({
+  AuditBulkBar: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  ExportMenu: () => null,
+}));
 vi.mock('./_overview-cards', () => ({ AuditOverviewCards: () => null }));
+// The inbox: what the page hands it, and its bulk bar.
+const inbox = vi.hoisted(() => ({
+  props: null as null | {
+    onSelect: (keys: string[], on: boolean) => void;
+    onRestore?: (urls: string[]) => void;
+  },
+}));
 vi.mock('./_opportunities-table', () => ({
-  OpportunitiesTable: () => null,
+  OpportunitiesTable: (props: {
+    onSelect: (keys: string[], on: boolean) => void;
+    onRestore?: (urls: string[]) => void;
+    toolbar?: ReactNode;
+  }) => {
+    inbox.props = props;
+    return <div>{props.toolbar}</div>;
+  },
   opportunityAuditUrls: () => [],
 }));
 vi.mock('./_settings-dialog', () => ({ AuditSettingsDialog: () => null }));
@@ -57,7 +77,9 @@ vi.mock('./_quota-meter', () => ({ EmptyPoolMessage: () => null }));
 vi.mock('./_use-pages-export', () => ({
   usePagesExport: () => ({ exporting: false, exportAll: vi.fn(), exportPages: vi.fn() }),
 }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// Callable too: a page audited minutes ago asks with a plain toast.
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 
 const { default: SiteAuditPage } = await import('./page');
 
@@ -70,6 +92,8 @@ const openUpgrade = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
+  role.canManage = true;
+  inbox.props = null;
   audits.getAuditHub.mockResolvedValue({
     pages: { pages: [], total: 0, primaryHost: 'acme.com' },
     quota: { used: 0, limit: 10, remaining: 10 },
@@ -80,7 +104,7 @@ beforeEach(() => {
     opportunities: { opportunities: [], excluded: [] },
     latestRun: null,
   });
-  audits.runAudit.mockResolvedValue({ id: 'a1' });
+  audits.runAudit.mockResolvedValue({ audit: { id: 'a1' } });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -169,5 +193,77 @@ describe('SiteAuditPage Run audit', () => {
     await pressEnter();
     expect(audits.runAudit).toHaveBeenCalledExactlyOnceWith('b1', 'https://acme.com');
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('SiteAuditPage a page audited minutes ago', () => {
+  it('asks first: Open it opens that audit, Audit again starts a new one', async () => {
+    const finishedAt = new Date(Date.now() - 4 * 60_000).toISOString();
+    audits.runAudit
+      .mockReset()
+      .mockResolvedValueOnce({ recent: { auditId: 'a0', finishedAt } })
+      .mockResolvedValueOnce({ audit: { id: 'a2' } });
+    await render(false);
+    await act(async () => runButton().click());
+
+    expect(push).not.toHaveBeenCalled();
+    const [question, options] = toast.mock.calls[0] as [
+      string,
+      { cancel: { onClick: () => void }; action: { onClick: () => void } },
+    ];
+    expect(question).toBe('Audited 4 min ago. Open it or audit again?');
+    options.cancel.onClick();
+    expect(push).toHaveBeenCalledWith('/dashboard/audit/a0');
+
+    await act(async () => options.action.onClick());
+    expect(audits.runAudit).toHaveBeenLastCalledWith('b1', 'https://acme.com', { force: true });
+    expect(push).toHaveBeenLastCalledWith('/dashboard/audit/a2');
+  });
+});
+
+describe('SiteAuditPage Opportunities', () => {
+  const page = {
+    key: 'acme.com/pricing',
+    url: 'https://acme.com/pricing',
+    path: '/pricing',
+    title: 'Pricing',
+    reasons: [],
+    pinned: false,
+    running: false,
+    aiVisits: null,
+    lastAudit: null,
+    priority: 50,
+    priorityParts: { value: 50, opportunity: 50, ease: 50 },
+  };
+  const selectPage = async () => {
+    audits.getAuditHubExtras.mockResolvedValue({
+      opportunities: { opportunities: [page], excluded: [], staleDays: 90 },
+      latestRun: null,
+    });
+    await render(false);
+    await act(async () => inbox.props!.onSelect([page.key], true));
+  };
+  const named = (name: string) =>
+    [...container.querySelectorAll('button')].find((b) => b.textContent === name);
+
+  it('lets admins and managers pin, exclude and restore pages', async () => {
+    await selectPage();
+    expect(named('Pin')).toBeDefined();
+    expect(named('Exclude')).toBeDefined();
+    expect(inbox.props!.onRestore).toBeTypeOf('function');
+    expect(container.textContent).not.toContain(
+      'Only admins and managers can pin, exclude or restore pages.',
+    );
+  });
+
+  it('gives other members no Pin, Exclude or Restore: they hold for the whole brand', async () => {
+    role.canManage = false;
+    await selectPage();
+    expect(named('Pin')).toBeUndefined();
+    expect(named('Exclude')).toBeUndefined();
+    expect(inbox.props!.onRestore).toBeUndefined();
+    expect(container.textContent).toContain(
+      'Only admins and managers can pin, exclude or restore pages.',
+    );
   });
 });

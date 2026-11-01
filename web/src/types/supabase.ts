@@ -924,6 +924,7 @@ export type Database = {
       }
       brands: {
         Row: {
+          client_logo_path: string | null
           content_byline: boolean
           content_quality_handoff: boolean
           conversions_consent: string
@@ -956,11 +957,14 @@ export type Database = {
           site_type_detected_at: string | null
           site_type_source: string | null
           slug: string
+          snippet_checked_at: string | null
+          snippet_found_at: string | null
           state: string | null
           tracking_code: string
           updated_at: string
         }
         Insert: {
+          client_logo_path?: string | null
           content_byline?: boolean
           content_quality_handoff?: boolean
           conversions_consent?: string
@@ -993,11 +997,14 @@ export type Database = {
           site_type_detected_at?: string | null
           site_type_source?: string | null
           slug: string
+          snippet_checked_at?: string | null
+          snippet_found_at?: string | null
           state?: string | null
           tracking_code?: string
           updated_at?: string
         }
         Update: {
+          client_logo_path?: string | null
           content_byline?: boolean
           content_quality_handoff?: boolean
           conversions_consent?: string
@@ -1030,6 +1037,8 @@ export type Database = {
           site_type_detected_at?: string | null
           site_type_source?: string | null
           slug?: string
+          snippet_checked_at?: string | null
+          snippet_found_at?: string | null
           state?: string | null
           tracking_code?: string
           updated_at?: string
@@ -5444,8 +5453,13 @@ export type Database = {
       organization_ai_keys: {
         Row: {
           active: boolean
+          checked_at: string | null
+          failing_since: string | null
+          failure_class: string | null
+          failure_status: number | null
           key_encrypted: string
           key_last4: string
+          notified_at: string | null
           organization_id: string
           provider: string
           set_at: string
@@ -5454,8 +5468,13 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          checked_at?: string | null
+          failing_since?: string | null
+          failure_class?: string | null
+          failure_status?: number | null
           key_encrypted: string
           key_last4: string
+          notified_at?: string | null
           organization_id: string
           provider: string
           set_at?: string
@@ -5464,8 +5483,13 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          checked_at?: string | null
+          failing_since?: string | null
+          failure_class?: string | null
+          failure_status?: number | null
           key_encrypted?: string
           key_last4?: string
+          notified_at?: string | null
           organization_id?: string
           provider?: string
           set_at?: string
@@ -6916,6 +6940,7 @@ export type Database = {
           error: string | null
           final_url: string | null
           id: string
+          partial: boolean
           recommendations: Json
           rubric_version: string | null
           signals_evaluated: number | null
@@ -6932,6 +6957,7 @@ export type Database = {
           error?: string | null
           final_url?: string | null
           id?: string
+          partial?: boolean
           recommendations?: Json
           rubric_version?: string | null
           signals_evaluated?: number | null
@@ -6948,6 +6974,7 @@ export type Database = {
           error?: string | null
           final_url?: string | null
           id?: string
+          partial?: boolean
           recommendations?: Json
           rubric_version?: string | null
           signals_evaluated?: number | null
@@ -7210,6 +7237,47 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      white_label_kits: {
+        Row: {
+          accent_color: string | null
+          company_name: string | null
+          created_at: string
+          footer_text: string | null
+          logo_path: string | null
+          organization_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          accent_color?: string | null
+          company_name?: string | null
+          created_at?: string
+          footer_text?: string | null
+          logo_path?: string | null
+          organization_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          accent_color?: string | null
+          company_name?: string | null
+          created_at?: string
+          footer_text?: string | null
+          logo_path?: string | null
+          organization_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "white_label_kits_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]

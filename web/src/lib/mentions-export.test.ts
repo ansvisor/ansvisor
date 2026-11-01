@@ -71,6 +71,16 @@ describe('mentionsExportFileName', () => {
     );
     expect(mentionsExportFileName('', day)).toBe('ansvisor_brand_mentions_2026-10-17.csv');
   });
+
+  it('starts with a white label kit’s word instead, or none', () => {
+    const day = new Date('2026-10-17T09:00:00Z');
+    expect(mentionsExportFileName('acme-coffee', day, 'acme-agency')).toBe(
+      'acme-agency_acme-coffee_mentions_2026-10-17.csv',
+    );
+    expect(mentionsExportFileName('acme-coffee', day, null)).toBe(
+      'acme-coffee_mentions_2026-10-17.csv',
+    );
+  });
 });
 
 describe('utcMinute', () => {

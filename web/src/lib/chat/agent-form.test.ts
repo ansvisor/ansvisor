@@ -5,6 +5,7 @@ import {
   draftFromView,
   firstStepWithProblems,
   formFromAgent,
+  formFromPreset,
   newForm,
   newTriggerDraft,
   patchBody,
@@ -21,6 +22,7 @@ import {
   type TriggerDraft,
 } from './agent-form';
 import { createAgentInput, updateAgentInput } from './agent-rules';
+import { readyPreset } from './agents/catalog';
 import { AGENT_ID, detail } from './testing/agent-fixtures';
 
 /**
@@ -77,9 +79,10 @@ describe('a new agent', () => {
     expect(form.brandIds).toEqual([BRAND_2]);
     expect(form.mode).toBe('auto');
     expect(form.maxRun).toBe('10');
+    // /winback writes its drafts without a CMS or Search Console: both Optional.
     expect(form.connections).toEqual([
-      { key: 'google_search_console', required: true },
-      { key: 'webflow', required: true },
+      { key: 'google_search_console', required: false },
+      { key: 'cms', required: false },
     ]);
     expect(triggerInputOf(form.triggers[0])).toEqual({
       kind: 'schedule',
@@ -112,7 +115,58 @@ describe('a new agent', () => {
     expect(defaultAgentName('x'.repeat(70), null, [])).toHaveLength(60);
   });
 
-  it('keeps Optional connections when its skills change, and only the new skills’ Required ones', () => {
+  it('starts from a ready-to-use agent: its skills, triggers, mode and connections, on the brand on screen', () => {
+    const preset = readyPreset('visibility-watch')!;
+    const form = formFromPreset(SETUP, preset, { timeZone: 'Europe/Istanbul', brandId: BRAND_2 });
+    expect(form.skills).toEqual(['report']);
+    expect(form.brandIds).toEqual([BRAND_2]);
+    expect(form.mode).toBe('auto');
+    expect(form.connections).toEqual([
+      { key: 'google_search_console', required: false },
+      { key: 'google_analytics', required: false },
+    ]);
+    expect(form.triggers.map((t) => t.key)).toEqual(['k0', 'k1']);
+    expect(form.triggers.map(triggerInputOf)).toEqual([
+      {
+        kind: 'schedule',
+        enabled: true,
+        config: {
+          type: 'recurring',
+          rrule: 'FREQ=DAILY;BYHOUR=8;BYMINUTE=0',
+          timezone: 'Europe/Istanbul',
+        },
+      },
+      {
+        kind: 'kpi',
+        enabled: true,
+        config: {
+          kpi: 'ai_visibility',
+          direction: 'any',
+          threshold: 10,
+          unit: 'percent',
+          period: 'day',
+        },
+      },
+    ]);
+    // Nothing named or saved yet: the page names it, the person saves it.
+    expect(form).toMatchObject({ name: '', nameEdited: false, visibility: 'private' });
+    expect(firstStepWithProblems({ ...form, name: 'Visibility Watch' }, ctxOf())).toBeNull();
+    // Manual only: no trigger at all.
+    expect(
+      formFromPreset(SETUP, readyPreset('ready-to-publish')!, { timeZone: 'UTC', brandId: null })
+        .triggers,
+    ).toEqual([]);
+  });
+
+  it('starts a Full auto preset on Auto, ask before changes where the plan or Settings › Chat keep Full auto closed', () => {
+    const preset = readyPreset('weekly-report')!;
+    const at = { timeZone: 'UTC', brandId: null };
+    expect(formFromPreset(SETUP, preset, at).mode).toBe('full_auto');
+    expect(formFromPreset({ ...SETUP, fullAuto: 'plan' }, preset, at).mode).toBe('auto');
+    expect(formFromPreset({ ...SETUP, fullAuto: 'policy' }, preset, at).mode).toBe('auto');
+  });
+
+  it('keeps Optional connections when its skills change, and only the new skills’ own ones', () => {
     expect(
       syncConnections(
         [
@@ -122,9 +176,20 @@ describe('a new agent', () => {
         ['report'],
       ),
     ).toEqual([
-      { key: 'google_search_console', required: true },
+      { key: 'google_search_console', required: false },
       { key: 'google_analytics', required: false },
     ]);
+  });
+
+  it('asks for any CMS only where a skill sends the page, and for any catalog source for /shopping', () => {
+    // /winback drafts without a CMS; /publish then sends it: any CMS becomes Required.
+    expect(syncConnections([], ['winback', 'publish'])).toEqual([
+      { key: 'google_search_console', required: false },
+      { key: 'cms', required: true },
+    ]);
+    expect(syncConnections([], ['tasks'])).toEqual([{ key: 'cms', required: false }]);
+    expect(syncConnections([], ['shopping'])).toEqual([{ key: 'catalog', required: true }]);
+    expect(syncConnections([], ['faq', 'quality'])).toEqual([]);
   });
 });
 

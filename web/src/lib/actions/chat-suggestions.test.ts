@@ -365,6 +365,23 @@ describe('openDailySuggestion', () => {
     expect(writes()).toEqual([]);
   });
 
+  it('writes nothing on one removed: no use of it, nor of the feed', async () => {
+    // The person's session finds it only while it isn't removed.
+    answers['session.chat_suggestions.select.single'] = (call: Call) =>
+      has(call, 'is', 'removed_at', null)
+        ? { data: null, error: null }
+        : {
+            data: { id: SUGGESTION, brand_id: BRAND, seen_at: null, opened_at: null },
+            error: null,
+          };
+    expect(await openDailySuggestion(SUGGESTION)).toEqual({ ok: false, failure: 'not_found' });
+    expect(await startedDailySuggestion(SUGGESTION, 'chat')).toEqual({
+      ok: false,
+      failure: 'not_found',
+    });
+    expect(writes()).toEqual([]);
+  });
+
   it('reads it only while its action is not deleted, so a deleted one writes nothing', async () => {
     await openDailySuggestion(SUGGESTION);
     const read = calls.find((c) => c.table === 'chat_suggestions' && c.op === 'select')!;
@@ -538,6 +555,7 @@ describe('readDailySuggestion', () => {
     priority_reason: null,
     priority_updated_at: null,
   };
+  let audits: { url: string; final_url: string | null; completed_at: string }[] = [];
   const row = {
     id: SUGGESTION,
     brand_id: BRAND,
@@ -564,9 +582,26 @@ describe('readDailySuggestion', () => {
       ],
       error: null,
     };
-    answers['session.site_audits.select'] = {
-      data: [{ completed_at: '2026-10-28T10:00:00Z' }],
-      error: null,
+    audits = [
+      { url: 'https://acme.example/other', final_url: null, completed_at: '2026-10-29T08:00:00Z' },
+      // The action's page, written another way: www, http and a trailing slash.
+      {
+        url: 'http://www.acme.example/ridge-45l/',
+        final_url: null,
+        completed_at: '2026-10-28T10:00:00Z',
+      },
+      {
+        url: 'https://acme.example/ridge-45l',
+        final_url: null,
+        completed_at: '2026-10-01T10:00:00Z',
+      },
+    ];
+    // The brand's audits, newest first; the database keeps to an `in` on url, when asked.
+    answers['session.site_audits.select'] = (call: Call) => {
+      const urls = call.filters.find((f) => f[0] === 'in' && f[1] === 'url')?.[2] as
+        | string[]
+        | undefined;
+      return { data: audits.filter((a) => !urls || urls.includes(a.url)), error: null };
     };
   });
 
@@ -591,6 +626,7 @@ describe('readDailySuggestion', () => {
       method: 'optimize',
       page: 'https://acme.example/ridge-45l',
     });
+    // Its page's latest audit, whatever way the audit wrote its address.
     expect(detail.auditedAt).toBe('2026-10-28T10:00:00Z');
     // 09:00 UTC is the 29th's evening in Auckland, the person's latest answer's zone.
     expect(detail.today).toBe('2026-10-29');
@@ -604,8 +640,28 @@ describe('readDailySuggestion', () => {
     expect(audit.via).toBe('session');
     expect(has(audit, 'eq', 'brand_id', BRAND)).toBe(true);
     expect(has(audit, 'eq', 'status', 'completed')).toBe(true);
-    expect(has(audit, 'in', 'url', action.payload.pages)).toBe(true);
+    expect(has(audit, 'order', 'completed_at', { ascending: false })).toBe(true);
     expect(writes()).toEqual([]);
+  });
+
+  it('finds a page’s audit by the address it ended at, and none for other pages', async () => {
+    audits = [
+      audits[0],
+      {
+        url: 'https://acme.example/r/ridge',
+        final_url: 'https://acme.example/ridge-45l',
+        completed_at: '2026-10-27T10:00:00Z',
+      },
+    ];
+    expect(await readDailySuggestion(SUGGESTION)).toMatchObject({
+      ok: true,
+      detail: { auditedAt: '2026-10-27T10:00:00Z' },
+    });
+    audits = [audits[0]];
+    expect(await readDailySuggestion(SUGGESTION)).toMatchObject({
+      ok: true,
+      detail: { auditedAt: null },
+    });
   });
 
   it('reads no audit for an action with no pages, and starts no editor without writing to do', async () => {
