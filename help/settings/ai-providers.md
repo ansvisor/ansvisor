@@ -1,7 +1,7 @@
 ---
 title: Use your own AI keys
 route: /dashboard/settings/ai-providers
-keywords: [ai providers, own key, api key, openai, anthropic, openrouter]
+keywords: [ai providers, own key, api key, openai, anthropic, openrouter, test ai key, key not working]
 synonyms: [bring your own key, byok, my own openai key, connect my ai account]
 plan: enterprise
 updated: 2026-11-01
@@ -19,7 +19,7 @@ Chat normally runs on your plan's monthly AI limit, and you don't need any key f
 2. Click **Add key** next to the provider and paste the key.
 3. If you save keys for more than one provider, click **Use for Chat** next to the one Chat should run on.
 
-Keys are stored encrypted, and nobody can read a saved key back.
+Keys are stored encrypted, and nobody can read a saved key back. If the server can no longer read the saved key, Chat stops rather than run on your plan's monthly AI limit: save the key again.
 
 ## Agents on your key
 
@@ -32,3 +32,11 @@ If your workspace saved a key before Chat was turned on for it, that key keeps r
 ## Below Enterprise
 
 On the other plans, Chat runs on the plan's monthly AI limit, and **Settings › AI Providers** says own AI keys come with the Enterprise plan. When the limit runs out, an admin can move to a bigger plan on the **Billing** page.
+
+## Check a key
+
+Under each saved key, a line says whether it works: **Working · checked …**, **Not working since …** with why, or **Not checked yet**. Click **Test** to check it now: Ansvisor makes one tiny call on the key, which costs your provider well under a cent. A key is also tested when you save it or click **Use for Chat**. A key the provider turns down, or one that can't reach its model, isn't saved. A key whose account is out of credit is saved with a warning.
+
+## When your key stops working
+
+If the key Chat uses stops working, Chat stops on it and the agents that run on it pause. Nothing moves to your plan's monthly AI limit. Once the key works again, after a passing **Test**, a save or an answer from Chat, the paused agents start again by themselves. If you remove the key, they start again on your plan's monthly AI limit.

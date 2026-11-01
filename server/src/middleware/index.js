@@ -2,6 +2,7 @@ import supabaseAdmin from '../config/supabase.js';
 import logger from '../lib/logger.js';
 import { markTokenVerified } from './verified-tokens.js';
 import { isAllowedOrigin } from './origin-check.js';
+import { authenticateActingUser, carriesActingSecret } from './acting-user.js';
 
 class Middleware {
   async decodeTokenForSocket(socket, next) {
@@ -31,6 +32,10 @@ class Middleware {
   }
 
   async decodeToken(req, res, next) {
+    // The acting secret is never a session: the web's Chat acting as a
+    // member, on a few routes only (acting-user.js). Never sent to Supabase Auth.
+    if (carriesActingSecret(req)) return authenticateActingUser(req, res, next);
+
     try {
       const token = req?.headers?.authorization?.split(' ')[1];
 
