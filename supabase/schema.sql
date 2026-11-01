@@ -51265,6 +51265,391 @@ comment on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, 
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00429_white_label_kits.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00429: White label — an agency's own brand on what it sends its clients
+-- ============================================================================
+-- An agency sends its clients reports with its own logo, color and name, not
+-- Ansvisor's. The app uses a workspace's kit only when its plan has white
+-- label (Growth and Enterprise) and the kit names a company or has a logo;
+-- otherwise everything keeps Ansvisor's look, so a workspace without a kit,
+-- or whose plan no longer has it, sees nothing change.
+--
+--   * The bucket white-label-logos: private. A workspace's logo under
+--     {organization_id}/kit/, a brand's client logo under
+--     {organization_id}/brands/{brand_id}/. PNG, JPEG or SVG, 1 MB an object.
+--     Members have no policy on it, as on chat-files (00411): the app checks
+--     the role, the plan and the brand, then gives a one-time upload address,
+--     and short-lived signed addresses (or the image itself) to show one.
+--   * white_label_kits: one row per workspace (Settings › White label): the
+--     logo's object, the main color (#rrggbb), the company name and the
+--     report footer, and who changed it last and when. Every member reads
+--     it; only an Admin writes it. updated_by is stamped from the session,
+--     so nobody can name someone else. No row = no kit.
+--   * brands.client_logo_path: the client's logo for a brand's report cover
+--     ("Prepared for {brand}"). It follows the brands policies: whoever sees
+--     the brand reads it, Admins and Managers change it.
+
+-- ─── The bucket ─────────────────────────────────────────────────────────────
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'white-label-logos',
+  'white-label-logos',
+  false,
+  1048576,
+  array['image/png', 'image/jpeg', 'image/svg+xml']
+)
+-- Run again, it leaves the bucket as an admin may have set it.
+on conflict (id) do nothing;
+
+-- ─── A workspace's kit ──────────────────────────────────────────────────────
+
+create table if not exists public.white_label_kits (
+  organization_id uuid primary key references public.organizations(id) on delete cascade,
+  -- The logo's object in white-label-logos, in the workspace's own folder.
+  logo_path text check (
+    logo_path is null
+    or (
+      char_length(logo_path) between 1 and 300
+      and starts_with(logo_path, organization_id::text || '/kit/')
+    )
+  ),
+  accent_color text check (accent_color is null or accent_color ~ '^#[0-9a-f]{6}$'),
+  company_name text check (company_name is null or char_length(company_name) between 1 and 100),
+  footer_text text check (footer_text is null or char_length(footer_text) between 1 and 200),
+  updated_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists trg_white_label_kits_updated_at on public.white_label_kits;
+create trigger trg_white_label_kits_updated_at
+  before update on public.white_label_kits
+  for each row execute function public.handle_updated_at();
+
+-- Who changed the kit: the session's person, whatever the write says. The
+-- server's own writes (service role) keep the one they give.
+create or replace function public.white_label_kits_stamp()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if not (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    new.updated_by := auth.uid();
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists white_label_kits_stamp on public.white_label_kits;
+create trigger white_label_kits_stamp
+  before insert or update on public.white_label_kits
+  for each row execute function public.white_label_kits_stamp();
+
+comment on table public.white_label_kits is
+  'White label (00429): a workspace''s kit (Settings › White label): logo, main color, company name, report footer, who changed it and when. Used only on a plan with white_label and with a company name or a logo. Members read; Admins write.';
+comment on column public.white_label_kits.logo_path is
+  'The logo''s object in the private white-label-logos bucket, under {organization_id}/kit/.';
+comment on column public.white_label_kits.accent_color is
+  'The main color, #rrggbb in lower case; reports darken it where it would be too light to read.';
+
+-- ─── A brand's client logo ──────────────────────────────────────────────────
+
+alter table public.brands
+  add column if not exists client_logo_path text;
+
+alter table public.brands
+  drop constraint if exists brands_client_logo_path_check;
+alter table public.brands
+  add constraint brands_client_logo_path_check
+  check (
+    client_logo_path is null
+    or (
+      char_length(client_logo_path) between 1 and 300
+      and starts_with(client_logo_path, organization_id::text || '/brands/' || id::text || '/')
+    )
+  );
+
+comment on column public.brands.client_logo_path is
+  'White label (00429): the client''s logo for the brand''s report cover, in the private white-label-logos bucket under {organization_id}/brands/{brand_id}/. Follows the brands policies.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.white_label_kits enable row level security;
+
+revoke all on table public.white_label_kits from anon, authenticated;
+grant select, insert, update on table public.white_label_kits to authenticated;
+grant all on table public.white_label_kits to service_role;
+
+-- Members of the workspace read its kit.
+drop policy if exists "white_label_kits: member select" on public.white_label_kits;
+create policy "white_label_kits: member select"
+  on public.white_label_kits
+  for select
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+-- Only its Admins write it.
+drop policy if exists "white_label_kits: admin insert" on public.white_label_kits;
+create policy "white_label_kits: admin insert"
+  on public.white_label_kits
+  for insert
+  with check (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and p.role = 'admin'::public.user_role
+    )
+  );
+
+drop policy if exists "white_label_kits: admin update" on public.white_label_kits;
+create policy "white_label_kits: admin update"
+  on public.white_label_kits
+  for update
+  using (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and p.role = 'admin'::public.user_role
+    )
+  )
+  with check (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and p.role = 'admin'::public.user_role
+    )
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00430_site_audit_llm_verdicts.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00430: Site Audit's AI verdicts, kept so an unchanged page keeps its score
+-- ============================================================================
+-- The 13 AI-judged signals (server/src/lib/audit/llm-signals.js) were judged
+-- again on every audit, so an unchanged page's score moved 2–3 points. Each
+-- verdict is kept here by what it was judged from: the hash of the input that
+-- signal reads, the signal, the model and the prompt version. An audit whose
+-- input is the same reads the verdict back with no AI call; a page that
+-- changed is judged again only on the signals whose input changed.
+--
+--   * Rows are shared by every brand: a verdict depends on the hashed input
+--     alone, never on who asked.
+--   * reason: the verdict's one short sentence, as the report shows it.
+--   * used_at: the last audit that read the row. The server's daily run
+--     deletes rows no audit has read for 180 days
+--     (site_audit_llm_verdicts_prune).
+--
+-- site_audits.partial: the AI-judged signals didn't run and the page had no
+-- earlier verdicts to keep, so the score leaves them out. A partial audit is
+-- kept out of the score comparisons (previous score, change, trend).
+--
+-- Server only: no policy lets a member read or write the verdicts.
+
+create table if not exists public.site_audit_llm_verdicts (
+  id uuid primary key default gen_random_uuid(),
+  input_hash text not null check (char_length(input_hash) = 64),
+  signal_key text not null check (char_length(signal_key) between 1 and 100),
+  model text not null check (char_length(model) between 1 and 200),
+  prompt_version text not null check (char_length(prompt_version) between 1 and 50),
+  status text not null check (status in ('pass', 'warn', 'fail', 'na')),
+  score numeric check (score is null or (score >= 0 and score <= 1)),
+  reason text not null default '' check (char_length(reason) <= 500),
+  created_at timestamptz not null default now(),
+  used_at timestamptz not null default now(),
+  unique (input_hash, signal_key, model, prompt_version)
+);
+
+-- The daily prune walks the least recently used first.
+create index if not exists site_audit_llm_verdicts_used_idx
+  on public.site_audit_llm_verdicts (used_at);
+
+comment on table public.site_audit_llm_verdicts is
+  'Site Audit AI verdicts by input hash, signal, model and prompt version (llm-signals.js): an unchanged input reads its verdict back with no AI call. Server only.';
+comment on column public.site_audit_llm_verdicts.input_hash is
+  'sha256 (hex) of the input the signal reads, as the prompt sends it.';
+comment on column public.site_audit_llm_verdicts.used_at is
+  'The last audit that read the row; rows unread for 180 days are pruned daily.';
+
+alter table public.site_audit_llm_verdicts enable row level security;
+revoke all on table public.site_audit_llm_verdicts from anon, authenticated;
+grant all on table public.site_audit_llm_verdicts to service_role;
+
+alter table public.site_audits
+  add column if not exists partial boolean not null default false;
+
+comment on column public.site_audits.partial is
+  'The AI-judged signals did not run and none were kept from an earlier audit of the page: the score leaves them out and is not compared with other audits.';
+
+-- Deletes at most p_limit verdicts no audit has read since p_before, least
+-- recently used first; the server's daily run calls it until fewer come back.
+create or replace function public.site_audit_llm_verdicts_prune(
+  p_before timestamptz,
+  p_limit integer
+)
+returns integer
+language plpgsql
+volatile
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_deleted integer;
+begin
+  delete from public.site_audit_llm_verdicts v
+  where v.id in (
+    select o.id from public.site_audit_llm_verdicts o
+    where o.used_at < p_before
+    order by o.used_at
+    limit p_limit
+  );
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
+end;
+$$;
+
+revoke all on function public.site_audit_llm_verdicts_prune(timestamptz, integer)
+  from public, anon, authenticated;
+grant execute on function public.site_audit_llm_verdicts_prune(timestamptz, integer)
+  to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00431_site_audit_one_run_per_page.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00431: one running audit per page, so the same page never costs twice
+-- ============================================================================
+-- Two requests for the same page at once (or /pricing, /pricing/ and
+-- /pricing?utm=… one after another) each started an audit and each used a
+-- credit. The server now starts an audit of a page only when none is running
+-- for it (routes/audits.js createAndRunAudit), and this index makes the rule
+-- hold when two requests race: the second insert fails and the server
+-- answers with the audit already running, with no credit.
+--
+--   * page_key: the page an audit was asked for, as the server keys pages
+--     (lib/audit/history.js pageKey of the normalized address): the host
+--     without www., lowercased, and the path without a trailing slash; query
+--     and fragment ignored. Filled here for the audits already kept.
+--   * A run older than two hours was cut short by a restart and never
+--     completes (history.js AUDIT_RUN_TIMEOUT_MS); it is marked failed, so it
+--     doesn't hold its page. The server does the same before each start.
+--   * Of two audits of one page running now, the older is marked failed so
+--     the index can be built; it still completes if its job is alive.
+
+alter table public.site_audits add column if not exists page_key text;
+
+comment on column public.site_audits.page_key is
+  'The page the audit was asked for: host without www., lowercased, path without a trailing slash, no query (history.js pageKey). One running audit per brand and page.';
+
+with parts as (
+  select
+    a.id,
+    case when btrim(a.url) ~* '^https?://' then btrim(a.url) else 'https://' || btrim(a.url) end
+      as address
+  from public.site_audits a
+  where a.page_key is null
+)
+update public.site_audits s
+set page_key =
+  regexp_replace(
+    lower(
+      regexp_replace(
+        regexp_replace(coalesce(substring(p.address from '^[A-Za-z]+://([^/?#]*)'), ''), '^.*@', ''),
+        ':[0-9]*$',
+        ''
+      )
+    ),
+    '^www\.',
+    ''
+  )
+  || coalesce(
+    nullif(
+      regexp_replace(coalesce(substring(p.address from '^[A-Za-z]+://[^/?#]*([^?#]*)'), ''), '/+$', ''),
+      ''
+    ),
+    '/'
+  )
+from parts p
+where p.id = s.id;
+
+update public.site_audits
+set status = 'failed',
+    error = coalesce(error, 'The audit was cut short.'),
+    completed_at = coalesce(completed_at, now())
+where status = 'running'
+  and created_at < now() - interval '2 hours';
+
+with ranked as (
+  select
+    id,
+    row_number() over (partition by brand_id, page_key order by created_at desc, id desc) as n
+  from public.site_audits
+  where status = 'running' and page_key is not null
+)
+update public.site_audits s
+set status = 'failed',
+    error = coalesce(s.error, 'Another audit of the page was already running.'),
+    completed_at = coalesce(s.completed_at, now())
+from ranked r
+where r.id = s.id and r.n > 1;
+
+create unique index if not exists site_audits_one_running_per_page
+  on public.site_audits (brand_id, page_key)
+  where status = 'running';
+
+-- A start's look-up: the page's running audit and its audits finished in
+-- the last minutes.
+create index if not exists site_audits_brand_page_idx
+  on public.site_audits (brand_id, page_key, completed_at desc);
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00433_brand_tracking_snippet_check.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00433: whether a brand's tracking snippet is on its site (AI Traffic)
+-- ============================================================================
+-- AI Traffic said "Not detected" for a snippet that hadn't sent an AI visit
+-- in the last week, so a site with the snippet and no AI visitors read the
+-- same as one without it, and MCP and Chat answered 0 visits either way.
+-- The snippet sends nothing for other visitors, and won't: no request is
+-- added to customers' pages. Instead the server reads the brand's home page
+-- when a person asks (Check again) and when the brand is set up, and looks
+-- for the snippet (server/src/lib/tracking-snippet-check.js).
+--
+--   * brands.snippet_checked_at: when the home page was last read for it.
+--   * brands.snippet_found_at: when that read found it; null when it didn't
+--     (or none has run). A read that fails changes neither.
+--
+-- A brand with any AI visit stored has the snippet too, checked or not.
+
+alter table public.brands
+  add column if not exists snippet_checked_at timestamptz,
+  add column if not exists snippet_found_at timestamptz;
+
+comment on column public.brands.snippet_checked_at is
+  'AI Traffic: when the server last read the brand''s home page for its tracking snippet (Check again, brand setup).';
+comment on column public.brands.snippet_found_at is
+  'AI Traffic: when that read found the snippet (its t.js tag or the tracking code); null when it did not, or none has run.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00440_own_key_health.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================

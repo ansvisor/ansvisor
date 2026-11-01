@@ -22,17 +22,14 @@ import type {
   TrafficTrendPoint,
 } from '@/lib/actions/traffic';
 import { csvLine } from '@/lib/csv';
+import { withFileWord } from '@/lib/white-label/kit';
 import { getPlatformName, platformTableRows } from '@/lib/traffic-platforms';
 import { pageStatuses } from '@/lib/traffic-pages';
 import { conversionRate } from '@/lib/traffic-conversions';
 import { ctrPct, impressionsRise } from '@/lib/traffic-google-pages';
 import { botName } from '@/lib/ai-bot-names';
 import { visitChange } from '@/lib/traffic-change';
-import {
-  googleSourceStatus,
-  snippetDetected,
-  type GoogleSourceStatus,
-} from '@/lib/traffic-sources';
+import { googleSourceStatus, snippetStateOf, type GoogleSourceStatus } from '@/lib/traffic-sources';
 
 /** Every section, in the page's order. */
 export const TRAFFIC_EXPORT_SECTIONS = [
@@ -605,6 +602,13 @@ export function trafficTable(
   }
 }
 
+/** The snippet's state as the export's sources rows name it. */
+const SNIPPET_STATE_LABEL = {
+  active: 'active',
+  installed_quiet: 'installedQuiet',
+  not_detected: 'notDetected',
+} as const;
+
 /** What the export was made from: the range, the filters, the sources and when. */
 export function filtersTable(data: TrafficExportData, label: ExportLabel): ExportTable {
   const sourceState = (status: GoogleSourceStatus) => label(`sourceStates.${status}`);
@@ -623,11 +627,7 @@ export function filtersTable(data: TrafficExportData, label: ExportLabel): Expor
       [label('filters.search'), data.search || label('filters.none')],
       [
         label('filters.snippet'),
-        sources
-          ? snippetDetected(sources.snippetLastVisitAt)
-            ? label('sourceStates.active')
-            : label('sourceStates.notDetected')
-          : null,
+        sources ? label(`sourceStates.${SNIPPET_STATE_LABEL[snippetStateOf(sources)]}`) : null,
       ],
       [label('filters.ga'), sources ? sourceState(googleSourceStatus(sources.ga)) : null],
       [label('filters.gsc'), sources ? sourceState(googleSourceStatus(sources.gsc)) : null],
@@ -685,7 +685,8 @@ export function fileSlug(value: string): string {
 
 /**
  * ansvisor-ai-traffic-{brand}-{from}_{to}.{ext} (spec §3.9); a single table
- * adds its name. All time has no first day.
+ * adds its name. All time has no first day. A white label kit's word takes
+ * Ansvisor's place (00429), or none.
  */
 export function trafficExportFileName({
   brand,
@@ -693,6 +694,7 @@ export function trafficExportFileName({
   to,
   ext,
   table,
+  word = 'ansvisor',
 }: {
   brand: string;
   from: string | null;
@@ -700,8 +702,15 @@ export function trafficExportFileName({
   ext: 'xlsx' | 'zip' | 'csv';
   /** The table's sheet name, for a single table. */
   table?: string;
+  /** The word the name starts with (fileWord). */
+  word?: string | null;
 }): string {
   const range = from ? `${from}_${to}` : `all-time_${to}`;
-  const parts = ['ansvisor-ai-traffic', fileSlug(brand), table && fileSlug(table), range];
+  const parts = [
+    withFileWord(word, 'ai-traffic', '-'),
+    fileSlug(brand),
+    table && fileSlug(table),
+    range,
+  ];
   return `${parts.filter(Boolean).join('-')}.${ext}`;
 }

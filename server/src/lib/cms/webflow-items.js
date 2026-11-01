@@ -287,6 +287,7 @@ export function fieldDataFor({ page, slug, body, jsonLd, sentAt }, fieldMap) {
     data[fieldMap.metaDescription] = squash(page.metaDescription) || openingWords(body);
   }
   if (fieldMap.jsonLd) data[fieldMap.jsonLd] = jsonLd?.length ? jsonLdText(jsonLd) : '';
+  if (fieldMap.reviewer) data[fieldMap.reviewer] = squash(page.reviewer ?? '').slice(0, NAME_CHARS);
   if (fieldMap.date && sentAt) data[fieldMap.date] = sentAt.toISOString();
   return data;
 }
