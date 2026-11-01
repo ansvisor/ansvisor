@@ -45,13 +45,15 @@ export function pageNamesPerson(html: string, name: string): boolean {
   const expectedChars = Array.from(expected);
 
   for (let index = 0; index <= actualChars.length - expectedChars.length; index++) {
-    const matches = expectedChars.every((character, offset) => actualChars[index + offset] === character);
+    const matches = expectedChars.every(
+      (character, offset) => actualChars[index + offset] === character,
+    );
     if (!matches) continue;
 
     const before = actualChars[index - 1];
     const after = actualChars[index + expectedChars.length];
     const isWordCharacter = (character: string | undefined) =>
-      character !== undefined && /[\\p{L}\\p{N}]/u.test(character);
+      character !== undefined && /[\p{L}\p{N}]/u.test(character);
 
     if (!isWordCharacter(before) && !isWordCharacter(after)) return true;
   }
@@ -59,7 +61,7 @@ export function pageNamesPerson(html: string, name: string): boolean {
 }
 
 function normalizePageText(value: string): string {
-  return value.normalize('NFKC').replace(/\\s+/gu, ' ').trim().toLocaleLowerCase();
+  return value.normalize('NFKC').replace(/\s+/gu, ' ').trim().toLocaleLowerCase();
 }
 /** Headings: a placeholder there is filled first, never left out. */
 const HEADINGS = 'h1, h2, h3, h4, h5, h6';
