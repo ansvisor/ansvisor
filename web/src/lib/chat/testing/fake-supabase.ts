@@ -81,6 +81,16 @@ export const fakeId = () => {
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
+/** A filter's column of a row: a JSON field (`data->>key`, `data->a->>b`) as PostgREST reads it. */
+function cellOf(row: Row, column: string): unknown {
+  const [base, ...keys] = column.split(/->>?/);
+  let value: unknown = row[base];
+  for (const key of keys) {
+    value = value && typeof value === 'object' ? (value as Row)[key] : undefined;
+  }
+  return value;
+}
+
 /**
  * A select's JSON fields (`alias:column->key`), as PostgREST reads them:
  * each comes with the row under its alias, else its last key, beside the
@@ -253,23 +263,23 @@ export function createFakeSupabase(): FakeSupabase {
           return builder;
         },
         eq(column, value) {
-          filters.push((row) => row[column] === value);
+          filters.push((row) => cellOf(row, column) === value);
           return builder;
         },
         neq(column, value) {
-          filters.push((row) => row[column] !== value);
+          filters.push((row) => cellOf(row, column) !== value);
           return builder;
         },
         in(column, values) {
-          filters.push((row) => values.includes(row[column]));
+          filters.push((row) => values.includes(cellOf(row, column)));
           return builder;
         },
         is(column, value) {
-          filters.push((row) => (row[column] ?? null) === value);
+          filters.push((row) => (cellOf(row, column) ?? null) === value);
           return builder;
         },
         not(column, _operator, value) {
-          filters.push((row) => (row[column] ?? null) !== value);
+          filters.push((row) => (cellOf(row, column) ?? null) !== value);
           return builder;
         },
         lt(column, value) {

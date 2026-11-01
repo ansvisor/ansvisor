@@ -21,6 +21,7 @@ import {
   baselineDays,
   OUTCOMES,
   impactCsv,
+  localDay,
   outcomeCounts,
   type CheckpointMark,
   type ImpactOutcome,
@@ -53,10 +54,6 @@ interface Month {
 
 const monthStart = ({ year, month }: Month, shift = 0) => new Date(year, month + shift, 1);
 
-/** A day as YYYY-MM-DD in the browser's time. */
-const dayKey = (at: Date) =>
-  `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`;
-
 /** The month for the read: its start and end and the month before's start, as instants and days. */
 function rangeOf(month: Month): ImpactRange {
   const [start, end, before] = [monthStart(month), monthStart(month, 1), monthStart(month, -1)];
@@ -64,7 +61,7 @@ function rangeOf(month: Month): ImpactRange {
     from: start.toISOString(),
     to: end.toISOString(),
     previousFrom: before.toISOString(),
-    days: { from: dayKey(start), to: dayKey(end), previousFrom: dayKey(before) },
+    days: { from: localDay(start), to: localDay(end), previousFrom: localDay(before) },
   };
 }
 
@@ -260,6 +257,11 @@ export function ImpactReportView() {
       {report && counts && (
         <>
           <Kpis report={report} month={month} />
+          {report.capped && (
+            <p data-slot="impact-capped" className="text-xs text-muted-foreground">
+              {t('capped', { count: report.rows.length, month: monthName(month) })}
+            </p>
+          )}
           <div role="group" aria-label={t('method.label')} className="flex flex-wrap gap-1.5">
             <span className={CHIP}>{t('method.baseline')}</span>
             <span className={CHIP} title={t('method.checkpointsTip')}>
@@ -437,8 +439,7 @@ function ImpactTable({
 
 function ImpactTableRow({ row, onOpen }: { row: ImpactRow; onOpen: (row: ImpactRow) => void }) {
   const t = useTranslations('reports.impact');
-  const percent = (value: number | null) =>
-    value === null ? '–' : t('percent', { value: Math.round(value) });
+  const percent = (value: number | null) => (value === null ? '–' : t('percent', { value }));
   const measured = row.before !== null && row.after !== null;
   return (
     <tr data-row={row.key} data-outcome={row.outcome} className="align-top">
@@ -573,7 +574,13 @@ function CheckpointStrip({ marks }: { marks: readonly CheckpointMark[] }) {
             </span>
           );
         }
-        const label = t('checkpoint.measured', { day, outcome: t(`outcome.${mark.outcome}`) });
+        const label = mark.lasting
+          ? t('checkpoint.measuredLasting', {
+              day,
+              outcome: t(`outcome.${mark.outcome}`),
+              lasting: t(`lasting.${mark.lasting}`),
+            })
+          : t('checkpoint.measured', { day, outcome: t(`outcome.${mark.outcome}`) });
         return (
           <span
             key={mark.checkpoint}
@@ -599,8 +606,7 @@ function CheckpointStrip({ marks }: { marks: readonly CheckpointMark[] }) {
 /** A row's evidence (item 5's row detail): its windows, numbers, outcome, other changes and checkpoints. */
 function Evidence({ row }: { row: ImpactRow }) {
   const t = useTranslations('reports.impact');
-  const percent = (value: number | null) =>
-    value === null ? '–' : t('percent', { value: Math.round(value) });
+  const percent = (value: number | null) => (value === null ? '–' : t('percent', { value }));
   const baseline = row.window
     ? { from: row.window.preStart, to: row.window.preEnd }
     : baselineDays(row.shippedAt);
@@ -700,6 +706,7 @@ function Evidence({ row }: { row: ImpactRow }) {
                         : mark.checkpoint === 'd7' && mark.direction
                           ? t(`direction.${mark.direction}`)
                           : null,
+                      mark.lasting ? t(`lasting.${mark.lasting}`) : null,
                     ]
                       .filter(Boolean)
                       .join(' · ')}
