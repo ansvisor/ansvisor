@@ -4,7 +4,8 @@
  * in the report's "What counts" (web audit-report), and as wide as the
  * Citations "Institutional" category (web lib/citations/classify.ts): a
  * government or academic site in any country's form, an international body,
- * a reference or research site, or major news.
+ * a reference or research site, or major news; and the sites a brand trusts
+ * (brands.trusted_sources, 00449), set in Settings › Content.
  */
 
 /**
@@ -72,19 +73,25 @@ export const AUTHORITY_KINDS = ['official', 'international', 'research', 'news']
 const onOrUnder = (host, domains) =>
   domains.some((domain) => host === domain || host.endsWith(`.${domain}`));
 
-/**
- * What a link's host counts as, or null when it doesn't count. The host is
- * read without its www. and in lower case.
- */
-export function authorityKind(host) {
-  const h = String(host ?? '')
+/** A host as the lists read it: lower case, without its www. or a final dot. */
+const bareHost = (host) =>
+  String(host ?? '')
     .toLowerCase()
     .replace(/^www\./, '')
     .replace(/\.$/, '');
+
+/**
+ * What a link's host counts as, or null when it doesn't count: one of
+ * AUTHORITY_KINDS, or `trusted` for a site the brand trusts (it or its
+ * pages, docs.example.org for example.org).
+ */
+export function authorityKind(host, trusted = []) {
+  const h = bareHost(host);
   if (!h) return null;
   if (OFFICIAL_PATTERNS.some((re) => re.test(h))) return 'official';
   if (h.endsWith('.int') || onOrUnder(h, INTERNATIONAL_DOMAINS)) return 'international';
   if (onOrUnder(h, RESEARCH_DOMAINS)) return 'research';
   if (onOrUnder(h, NEWS_DOMAINS)) return 'news';
+  if (onOrUnder(h, trusted.map(bareHost).filter(Boolean))) return 'trusted';
   return null;
 }

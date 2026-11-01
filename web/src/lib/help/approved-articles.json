@@ -1486,7 +1486,8 @@
         "page author",
         "qualified reviewer",
         "reviewer",
-        "reviewed by"
+        "reviewed by",
+        "trusted sources"
       ],
       "synonyms": [
         "content quality",
@@ -1515,6 +1516,10 @@
         {
           "heading": "Hand off",
           "text": "**Hand off** asks the Content Agent to fix the open suggestions in one run, as changes for you to review. Your to-dos stay yours. Each Hand off is kept in the page's History, and it uses your workspace's monthly AI usage.\n\nIn **Settings › Content**, admins and managers can have each brand's new pages handed off on their own when they're first opened in the editor."
+        },
+        {
+          "heading": "Trusted sources",
+          "text": "**Trust** counts links to official and research sites as primary sources. In **Settings › Content**, admins and managers can add the sites a brand trusts besides, such as its industry's association or the docs it cites, one per line, up to 50. Links to them, and to their pages, count as primary sources here and as authority links in Site Audit."
         },
         {
           "heading": "Next step",
@@ -2745,7 +2750,7 @@
         },
         {
           "heading": "Authority links",
-          "text": "**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…) and major news."
+          "text": "**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…), major news, and the sites your brand trusts. Add those in **Settings › Content**; **Edit in Settings** takes you there."
         },
         {
           "heading": "Product pages",

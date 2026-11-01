@@ -1,10 +1,15 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { AuditRecommendation, AuditResult } from '@/lib/actions/audits';
 import { AuditReport } from './audit-report';
+
+// Outbound authority links' way to Settings (00449).
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
+}));
 
 (
   globalThis as typeof globalThis & {

@@ -6577,13 +6577,17 @@
         "official": "Government and academic sites: .gov, .edu, .mil and their country forms, such as .gov.tr, .edu.tr, .ac.uk",
         "international": "International bodies: any .int site, un.org, unesco.org, europa.eu, oecd.org, worldbank.org, imf.org",
         "research": "Reference and research: wikipedia.org, doi.org, arxiv.org, nature.com, sciencedirect.com, iso.org, w3.org",
-        "news": "Major news: Reuters, Bloomberg, Financial Times, BBC, The New York Times, The Washington Post"
+        "news": "Major news: Reuters, Bloomberg, Financial Times, BBC, The New York Times, The Washington Post",
+        "trusted": "Your trusted sources:"
       },
+      "editTrusted": "Edit in Settings",
+      "addTrusted": "Add them in Settings",
       "kinds": {
         "official": "Official site",
         "international": "International body",
         "research": "Reference or research",
-        "news": "Major news"
+        "news": "Major news",
+        "trusted": "Your trusted source"
       }
     },
     "finding": "Finding",
@@ -12593,7 +12597,23 @@
       "noBrands": "Add a brand to choose how its pages work.",
       "loading": "Loading the brands",
       "loadFailed": "Couldn't load the brands.",
-      "saveFailed": "Couldn't save that. Try again."
+      "saveFailed": "Couldn't save that. Try again.",
+      "trusted": {
+        "title": "Trusted sources",
+        "description": "Sites your brand trusts, such as your industry's associations or the docs you cite. Links to them count as authority links in Site Audit and as primary sources in the Content Editor's Trust.",
+        "count": "{count, plural, =0 {None yet} one {# site} other {# sites}}",
+        "edit": "Edit",
+        "label": "{brand}'s trusted sources",
+        "hint": "One site per line, like example.org. Its pages count too (docs.example.org). Up to {max}.",
+        "invalid": "{count, plural, one {This isn't a site} other {These aren't sites}}: {lines}",
+        "tooMany": "Up to {max} sites: take {count} out.",
+        "cancel": "Cancel",
+        "save": "Save",
+        "saved": "Trusted sources saved",
+        "saveFailed": "Couldn't save the trusted sources. Try again.",
+        "unavailable": "Trusted sources aren't available yet. Try again later.",
+        "counted": "Counted for every brand"
+      }
     },
     "authors": {
       "title": "Authors",
