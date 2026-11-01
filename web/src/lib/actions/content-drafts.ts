@@ -110,9 +110,9 @@ import {
   type DraftSourcesData,
 } from '@/lib/content/sources';
 import {
-  DRAFT_CHANGE_REFUSED,
   MAX_DRAFT_PROMPTS,
   changeDraft,
+  draftChangeRefused,
   insertDraft,
   isDraftId,
   keepVersion,
@@ -1163,13 +1163,13 @@ export async function updateContentDraft(
 ): Promise<UpdateContentDraftResult> {
   try {
     await assertWritable();
-    if (!isDraftId(id)) return DRAFT_CHANGE_REFUSED.invalid;
+    if (!isDraftId(id)) return draftChangeRefused('invalid');
     const supabase = await createClient();
-    if (!(await isManager(supabase))) return DRAFT_CHANGE_REFUSED.forbidden_role;
+    if (!(await isManager(supabase))) return draftChangeRefused('forbidden_role');
     return await changeDraft(supabase, id, change);
   } catch (err) {
     console.error('Failed to change the draft from Chat:', err);
-    return DRAFT_CHANGE_REFUSED.failed;
+    return draftChangeRefused('failed');
   }
 }
 

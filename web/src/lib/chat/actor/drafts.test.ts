@@ -45,6 +45,9 @@ const OTHERS = '44444444-4444-4444-8444-444444444444';
 const OPPORTUNITY = '55555555-5555-4555-8555-555555555555';
 const OTHERS_OPPORTUNITY = '66666666-6666-4666-8666-666666666666';
 const PROMPT = '77777777-7777-4777-8777-777777777777';
+const OTHERS_PROMPT = '88888888-8888-4888-8888-888888888888';
+const TOPIC = '99999999-9999-4999-8999-999999999999';
+const OTHERS_TOPIC = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const DRAFT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const HIDDEN_DRAFT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const DEMO_DRAFT = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
@@ -101,6 +104,24 @@ function seeded(): FakeSupabase {
     content_opportunities: [
       { id: OPPORTUNITY, brand_id: BRAND, prompt_id: PROMPT, cluster_id: null },
       { id: OTHERS_OPPORTUNITY, brand_id: OTHERS, prompt_id: PROMPT, cluster_id: null },
+    ],
+    // A prompt's brand is its set's, read through prompt_sets!inner: the fake filters on the
+    // embedded column by its dotted name, so each prompt carries its set's brand under it.
+    prompts: [
+      {
+        id: PROMPT,
+        text: 'crm pricing',
+        topic_id: TOPIC,
+        is_active: true,
+        'prompt_sets.brand_id': BRAND,
+      },
+      {
+        id: OTHERS_PROMPT,
+        text: 'crm pricing',
+        topic_id: OTHERS_TOPIC,
+        is_active: true,
+        'prompt_sets.brand_id': OTHERS,
+      },
     ],
     content_drafts: [
       draft(DRAFT, BRAND),
@@ -224,6 +245,27 @@ describe('createContentDraftFor', () => {
     expect(writesOf(fake.admin)).toEqual([]);
   });
 
+  it('starts from a prompt or a topic of the brand’s only', async () => {
+    for (const source of [
+      { kind: 'prompt', id: PROMPT },
+      { kind: 'topic', id: TOPIC },
+    ] as const) {
+      const id = await createContentDraftFor(actor, BRAND, { ...newPage, source });
+      expect(rowOf(fake.admin, id).prompt_ids).toEqual([PROMPT]);
+    }
+    const drafts = fake.admin.tables.content_drafts.length;
+    // Another brand's, which the service role would read past row-level security.
+    for (const source of [
+      { kind: 'prompt', id: OTHERS_PROMPT },
+      { kind: 'topic', id: OTHERS_TOPIC },
+    ] as const) {
+      await expect(createContentDraftFor(actor, BRAND, { ...newPage, source })).rejects.toThrow(
+        'not_found',
+      );
+    }
+    expect(fake.admin.tables.content_drafts).toHaveLength(drafts);
+  });
+
   it('refuses the demo brand and a read-only workspace, writing nothing', async () => {
     await expect(createContentDraftFor(actor, DEMO, newPage)).rejects.toBeInstanceOf(
       DemoBrandError,
@@ -255,6 +297,37 @@ describe('updateContentDraftFor', () => {
     expect(versionsOf(fake.admin)).toEqual([
       { origin: 'agent_before', title: 'Pricing FAQ', body_html: '<h1>Pricing FAQ</h1>' },
     ]);
+  });
+
+  it('finds no archived draft, and keeps off a page the Content Agent is writing', async () => {
+    const row = fake.admin.tables.content_drafts.find((d) => d.id === DRAFT)!;
+    row.archived_at = '2026-10-31T09:00:00.000Z';
+    expect(await updateContentDraftFor(actor, DRAFT, change)).toMatchObject({
+      ok: false,
+      reason: 'not_found',
+    });
+    expect(writesOf(fake.admin)).toEqual([]);
+    // Being written now: the change waits for the agent, as the editor's save does.
+    Object.assign(row, {
+      archived_at: null,
+      agent_state: 'writing',
+      agent_state_at: new Date().toISOString(),
+    });
+    expect(await updateContentDraftFor(actor, DRAFT, change)).toMatchObject({
+      ok: false,
+      reason: 'conflict',
+    });
+    expect(rowOf(fake.admin, DRAFT)).toMatchObject({
+      title: 'Pricing FAQ',
+      body_html: '<h1>Pricing FAQ</h1>',
+    });
+  });
+
+  it('gives each refusal its own object, so no caller changes another’s', async () => {
+    const first = await updateContentDraftFor(actor, 'not-a-draft', change);
+    const second = await updateContentDraftFor(actor, 'not-a-draft', change);
+    expect(second).toEqual(first);
+    expect(second).not.toBe(first);
   });
 
   it('leaves changing a draft to Admins and Managers', async () => {

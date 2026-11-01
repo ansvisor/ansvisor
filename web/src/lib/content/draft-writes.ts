@@ -341,7 +341,7 @@ export type UpdateContentDraftResult =
 type DraftChangeRefusal = Extract<UpdateContentDraftResult, { ok: false }>;
 
 /** The refusals of Chat's change to a draft that come before it is read, the same on both paths. */
-export const DRAFT_CHANGE_REFUSED = {
+const DRAFT_CHANGE_REFUSALS = {
   invalid: { ok: false, reason: 'invalid', message: 'That isn’t a draft’s id.' },
   forbidden_role: {
     ok: false,
@@ -351,6 +351,11 @@ export const DRAFT_CHANGE_REFUSED = {
   not_found: { ok: false, reason: 'not_found', message: 'That draft isn’t in the Library.' },
   failed: { ok: false, reason: 'failed', message: 'The draft couldn’t be changed. Try again.' },
 } as const satisfies Record<string, DraftChangeRefusal>;
+
+/** One of those refusals, a new object each time: a caller may change what it's given. */
+export function draftChangeRefused(reason: keyof typeof DRAFT_CHANGE_REFUSALS): DraftChangeRefusal {
+  return { ...DRAFT_CHANGE_REFUSALS[reason] };
+}
 
 /** Whether `id` is a draft's id at all, before anything is read. */
 export const isDraftId = (id: string): boolean => draftId.safeParse(id).success;
@@ -368,14 +373,14 @@ export async function changeDraft(
   id: string,
   change: { title?: string; bodyHtml?: string },
 ): Promise<UpdateContentDraftResult> {
-  if (!isDraftId(id)) return DRAFT_CHANGE_REFUSED.invalid;
+  if (!isDraftId(id)) return draftChangeRefused('invalid');
   const { data: current, error } = await supabase
     .from('content_drafts')
     .select('title, body_html, updated_at, archived_at')
     .eq('id', id)
     .maybeSingle();
   if (error) return { ok: false, reason: 'failed', message: 'The draft couldn’t be read.' };
-  if (!current || current.archived_at) return DRAFT_CHANGE_REFUSED.not_found;
+  if (!current || current.archived_at) return draftChangeRefused('not_found');
   // The page before goes to History first: without it, Undo couldn't bring it back.
   const { data: version, error: versionError } = await supabase.rpc('content_draft_snapshot', {
     p_draft_id: id,
@@ -402,7 +407,7 @@ export async function changeDraft(
           message: 'The page changed while Chat was saving it. Open it to see the latest.',
         }
       : saved.reason === 'not_found'
-        ? DRAFT_CHANGE_REFUSED.not_found
+        ? draftChangeRefused('not_found')
         : {
             ok: false,
             reason: 'invalid',

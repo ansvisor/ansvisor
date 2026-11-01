@@ -1,8 +1,8 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { DraftStart } from '@/lib/content/drafts';
 import {
-  DRAFT_CHANGE_REFUSED,
   changeDraft,
+  draftChangeRefused,
   insertDraft,
   isDraftId,
   type UpdateContentDraftResult,
@@ -44,9 +44,9 @@ export async function updateContentDraftFor(
   change: { title?: string; bodyHtml?: string },
 ): Promise<UpdateContentDraftResult> {
   try {
-    if (!isDraftId(id)) return DRAFT_CHANGE_REFUSED.invalid;
+    if (!isDraftId(id)) return draftChangeRefused('invalid');
     if (!(await isManagerFor(actor, actor.organizationId))) {
-      return DRAFT_CHANGE_REFUSED.forbidden_role;
+      return draftChangeRefused('forbidden_role');
     }
     const { data, error } = await supabaseAdmin
       .from('content_drafts')
@@ -55,12 +55,12 @@ export async function updateContentDraftFor(
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!data || !(await canAccessBrandFor(actor, data.brand_id))) {
-      return DRAFT_CHANGE_REFUSED.not_found;
+      return draftChangeRefused('not_found');
     }
     await assertWritableFor(actor, data.brand_id);
     return await changeDraft(supabaseAdmin, id, change);
   } catch (err) {
     console.error('Failed to change the draft from Chat:', err);
-    return DRAFT_CHANGE_REFUSED.failed;
+    return draftChangeRefused('failed');
   }
 }

@@ -28,6 +28,7 @@ const BRAND = '11111111-1111-4111-8111-111111111111';
 const SHARED = '22222222-2222-4222-8222-222222222222';
 const DEMO = '33333333-3333-4333-8333-333333333333';
 const OTHERS = '44444444-4444-4444-8444-444444444444';
+const OTHERS_DEMO = '55555555-5555-4555-8555-555555555555';
 const actor = { userId: PERSON, organizationId: ORG };
 
 /** can_access_brand (00388) over the fake's tables, recording whom it was asked about. */
@@ -39,6 +40,7 @@ function seed(db: FakeSupabase) {
       { id: SHARED, organization_id: ORG, is_demo: false },
       { id: DEMO, organization_id: ORG, is_demo: true },
       { id: OTHERS, organization_id: OTHER_ORG, is_demo: false },
+      { id: OTHERS_DEMO, organization_id: OTHER_ORG, is_demo: true },
     ],
     profiles: [{ id: PERSON, organization_id: ORG, role: 'analyst', brand_scope: 'all' }],
     member_brands: [],
@@ -157,6 +159,14 @@ describe('assertWritableFor', () => {
     await expect(assertWritableFor(actor, DEMO)).rejects.toBeInstanceOf(DemoBrandError);
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
     await expect(assertWritableFor(actor, DEMO)).rejects.toBeInstanceOf(DemoBrandError);
+  });
+
+  it('refuses a brand that isn’t the run’s workspace’s, saying nothing of it', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    // Another workspace's demo brand is not found, not the demo brand.
+    for (const brand of [OTHERS, OTHERS_DEMO, '66666666-6666-4666-8666-666666666666']) {
+      await expect(assertWritableFor(actor, brand)).rejects.toThrow('not_found');
+    }
   });
 
   it('never reads the plan self-hosted, and refuses what it can’t read', async () => {

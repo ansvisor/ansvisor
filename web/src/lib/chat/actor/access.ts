@@ -71,7 +71,8 @@ export async function isManagerFor(actor: RunActor, organizationId: string): Pro
  * Refuse a write on the brand as assertWritable refuses the session's: the
  * demo brand (DemoBrandError), and on the cloud a workspace whose plan isn't
  * active, its trial over or canceled (SubscriptionInactiveError); a plan or
- * brand that can't be read refuses too. The demo brand is refused off the
+ * brand that can't be read refuses too, and a brand that isn't the run's
+ * workspace's ('not_found'). The demo brand is refused off the
  * cloud as well: a session's write there meets the database's demo guard
  * (00381), which the service role passes. Whether the person may see the
  * brand is canAccessBrandFor's: call both.
@@ -93,7 +94,9 @@ export async function assertWritableFor(actor: RunActor, brandId: string): Promi
       : null,
   ]);
   if (brand.error) throw new Error(`Could not read the brand: ${brand.error.message}`);
-  if (brand.data?.is_demo) throw new DemoBrandError();
+  // Not the run's workspace's brand: nothing to write, and nothing said about it (its demo flag).
+  if (!brand.data) throw new Error('not_found');
+  if (brand.data.is_demo) throw new DemoBrandError();
   if (!org) return;
   if (org.error) throw new Error(`Could not read the workspace's plan: ${org.error.message}`);
   if (!isSubscriptionActive(org.data?.subscription_status)) throw new SubscriptionInactiveError();
