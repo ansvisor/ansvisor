@@ -10264,6 +10264,7 @@
       "snippetQuiet": "Installed · no AI visits in the last 7 days",
       "snippetNotDetected": "Not detected",
       "snippetNotDetectedOn": "Not detected on {domain}",
+      "snippetChecking": "Checking your home page…",
       "code": "Code",
       "install": "Install",
       "ga": "Google Analytics",

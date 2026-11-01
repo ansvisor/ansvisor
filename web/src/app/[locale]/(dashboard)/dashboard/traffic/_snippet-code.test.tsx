@@ -80,7 +80,11 @@ describe('SnippetDialog', () => {
 
 describe('SnippetBanner', () => {
   const onFound = vi.fn();
-  const renderBanner = async (check?: { domain?: string; checkedAt?: string | null }) => {
+  const renderBanner = async (check?: {
+    domain?: string;
+    checkedAt?: string | null;
+    busy?: boolean;
+  }) => {
     onFound.mockReset();
     await act(async () => {
       root.render(
@@ -93,6 +97,7 @@ describe('SnippetBanner', () => {
                     brandId: 'b1',
                     domain: check.domain,
                     checkedAt: check.checkedAt ?? null,
+                    busy: check.busy,
                     onFound,
                   }
                 : undefined
@@ -147,6 +152,19 @@ describe('SnippetBanner', () => {
     await act(async () => button().click());
     expect(status()).toBe("The check didn't run. Try again.");
     expect(onFound).not.toHaveBeenCalled();
+  });
+
+  it('waits while the page’s first check runs, then says when it checked', async () => {
+    await renderBanner({ domain: 'ansvisor.com', busy: true });
+    const waiting = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Checking…',
+    );
+    expect(waiting?.disabled).toBe(true);
+    expect(status()).toBeNull();
+
+    await renderBanner({ domain: 'ansvisor.com', checkedAt: new Date().toISOString() });
+    expect(button().disabled).toBe(false);
+    expect(status()).toMatch(/^Last checked /);
   });
 
   it('asks for a domain before a brand without one can be checked', async () => {

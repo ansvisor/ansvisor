@@ -71,6 +71,8 @@ export interface SnippetCheckProps {
   domain: string | undefined;
   /** When the home page was last checked, or null. */
   checkedAt: string | null;
+  /** The page's own first check is running: Check again waits for it. */
+  busy?: boolean;
   /** The check found it: the page reads its sources again. */
   onFound: () => void;
 }
@@ -80,21 +82,24 @@ export interface SnippetCheckProps {
  * find reloads the page's sources (the banner goes); otherwise the line
  * says what it saw, or that the domain is missing or didn't answer.
  */
-function CheckAgain({ brandId, domain, checkedAt, onFound }: SnippetCheckProps) {
+function CheckAgain({ brandId, domain, checkedAt, busy = false, onFound }: SnippetCheckProps) {
   const t = useTranslations('traffic.snippetCheck');
   const tCommon = useTranslations('common');
   const [checking, setChecking] = useState(false);
   const [outcome, setOutcome] = useState<Exclude<SnippetCheckStatus, 'found'> | 'failed' | null>(
     null,
   );
-  const [lastChecked, setLastChecked] = useState(checkedAt);
+  // This check's time, else the page's read: a first check that ran shows too.
+  const [checkedHere, setCheckedHere] = useState<string | null>(null);
+  const lastChecked = checkedHere ?? checkedAt;
+  const running = checking || busy;
 
   const run = async () => {
     setChecking(true);
     const result = await checkTrackingSnippet(brandId);
     setChecking(false);
     if (!result.ok) return setOutcome('failed');
-    if (result.checkedAt) setLastChecked(result.checkedAt);
+    if (result.checkedAt) setCheckedHere(result.checkedAt);
     if (result.status === 'found') {
       setOutcome(null);
       return onFound();
@@ -121,15 +126,11 @@ function CheckAgain({ brandId, domain, checkedAt, onFound }: SnippetCheckProps) 
         size="sm"
         variant="outline"
         className="h-7 gap-1.5 text-xs"
-        disabled={checking || !domain}
+        disabled={running || !domain}
         onClick={() => void run()}
       >
-        {checking ? (
-          <Loader2 className="h-3 w-3 animate-spin" />
-        ) : (
-          <RefreshCw className="h-3 w-3" />
-        )}
-        {checking ? t('checking') : t('checkAgain')}
+        {running ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+        {running ? t('checking') : t('checkAgain')}
       </Button>
       {(line || !domain) && (
         <p className="text-xs text-muted-foreground" role="status">

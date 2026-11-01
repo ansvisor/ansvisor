@@ -59,7 +59,10 @@ afterEach(() => {
   container.remove();
 });
 
-function render(sources: TrafficSources | null, { canConnect = true } = {}) {
+function render(
+  sources: TrafficSources | null,
+  { canConnect = true, snippetChecking = false } = {},
+) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -67,6 +70,7 @@ function render(sources: TrafficSources | null, { canConnect = true } = {}) {
           brandId="b1"
           sources={sources}
           domain="acme-coffee.example.com"
+          snippetChecking={snippetChecking}
           hasTrackingCode
           canConnect={canConnect}
           onShowCode={onShowCode}
@@ -207,5 +211,23 @@ describe('SourcesStrip', () => {
         button: 'Code',
       });
     }
+  });
+
+  it("says Checking while the page's first check runs, and only while the snippet isn't seen", () => {
+    render({ ...NO_SNIPPET, ga: source(), gsc: source() }, { snippetChecking: true });
+    expect(cards()[0]).toEqual({
+      title: 'Tracking snippet',
+      line: 'Checking your home page…',
+      button: 'Install',
+    });
+
+    render({ ...NO_SNIPPET, ga: source(), gsc: source() });
+    expect(cards()[0].line).toBe('Not detected on acme-coffee.example.com');
+
+    render(
+      { ...NO_SNIPPET, snippetLastVisitAt: hoursAgo(2), ga: source(), gsc: source() },
+      { snippetChecking: true },
+    );
+    expect(cards()[0].line).toContain('Active');
   });
 });

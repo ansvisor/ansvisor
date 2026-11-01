@@ -680,7 +680,7 @@
         },
         {
           "heading": "Check that the snippet works",
-          "text": "After you publish it, click **Check again**: Ansvisor reads your home page once and looks for the snippet. Your brand's home page is also checked when the brand is set up. The snippet itself adds no request for your other visitors.\n\nThe **Tracking snippet** card then reads:\n\n- **Active · last visit …**: an AI-referred visit in the last week;\n- **Installed · no AI visits in the last 7 days**: the check found it, or it has sent a visit before;\n- **Not detected on** your domain: neither, so the page doesn't show 0 visits as a result.\n\nAdded the snippet with a tag manager? The check can't see it in the page, so the card changes with the first AI visit."
+          "text": "After you publish it, click **Check again**: Ansvisor reads your home page once and looks for the snippet. Your home page is also checked when the brand is set up, or once when you open this page if it never was and no AI visit has arrived: the card reads **Checking your home page…** meanwhile. The snippet itself adds no request for your other visitors.\n\nThe **Tracking snippet** card then reads:\n\n- **Active · last visit …**: an AI-referred visit in the last week;\n- **Installed · no AI visits in the last 7 days**: the check found it, or it has sent a visit before;\n- **Not detected on** your domain: neither, so the page doesn't show 0 visits as a result.\n\nAdded the snippet with a tag manager? The check can't see it in the page, so the card changes with the first AI visit."
         },
         {
           "heading": "What the snippet collects",
