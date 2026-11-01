@@ -402,9 +402,7 @@ describe('BeforePublish', () => {
 
   it('checks that a regulated page both selects and names its qualified reviewer', async () => {
     await render(quality(), { mode: 'export', reviewerRequired: true });
-    expect(rows()).toContainEqual(
-      expect.stringContaining('No qualified reviewer named · missing'),
-    );
+    expect(rows().join(' ')).toContain('No qualified reviewer named · missing');
 
     const reviewer: ContentAuthor = {
       ...ada,
@@ -414,9 +412,7 @@ describe('BeforePublish', () => {
     };
 
     await render(quality(), { mode: 'export', reviewer, reviewerRequired: true });
-    expect(rows()).toContainEqual(
-      expect.stringContaining('Reviewer not named in the page text · missing'),
-    );
+    expect(rows().join(' ')).toContain('Reviewer not named in the page text · missing');
 
     await render(quality(), {
       mode: 'export',
@@ -424,9 +420,7 @@ describe('BeforePublish', () => {
       reviewerRequired: true,
       reviewerNamedOnPage: true,
     });
-    expect(rows()).toContainEqual(
-      expect.stringContaining('Qualified reviewer: Dr. Grace Hopper · check it'),
-    );
+    expect(rows().join(' ')).toContain('Qualified reviewer: Dr. Grace Hopper · check it');
     expect(dialog().querySelector('pre')!.textContent).toContain('"@type": "WebPage"');
     expect(dialog().querySelector('pre')!.textContent).toContain('"reviewedBy"');
     expect(dialog().querySelector('pre')!.textContent).toContain(
