@@ -12,10 +12,20 @@ let ops;
 /** A column, or a JSON path as PostgREST writes one ("source_data->fromAction->>taskId"). */
 const read = (row, col) => col.split(/->>?/).reduce((value, key) => value?.[key], row);
 
+/** The uuid columns a prompt is read by: Postgres refuses text there (22P02). */
+const UUID_COLUMNS = { prompts: ['id'], prompt_cluster_members: ['prompt_id'] };
+const UUID_TEXT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function table(name) {
-  const q = { op: 'select', filters: [], payload: null, returning: false };
+  const q = { op: 'select', filters: [], payload: null, returning: false, invalid: null };
   const rows = () => (db[name] ?? []).filter((row) => q.filters.every((test) => test(row)));
   const run = (single) => {
+    if (q.invalid) {
+      return {
+        data: null,
+        error: { code: '22P02', message: `invalid input syntax for type uuid: "${q.invalid}"` },
+      };
+    }
     if (q.op === 'select') {
       const data = rows();
       return { data: single ? (data[0] ?? null) : data, error: null };
@@ -47,8 +57,15 @@ function table(name) {
   };
   const chain = {
     select: () => ((q.returning = q.op !== 'select'), chain),
-    eq: (col, value) => (q.filters.push((row) => read(row, col) === value), chain),
+    eq: (col, value) => {
+      if (UUID_COLUMNS[name]?.includes(col) && !UUID_TEXT.test(String(value))) q.invalid = value;
+      q.filters.push((row) => read(row, col) === value);
+      return chain;
+    },
     neq: (col, value) => (q.filters.push((row) => read(row, col) !== value), chain),
+    is: (col, value) => (q.filters.push((row) => (read(row, col) ?? null) === value), chain),
+    order: () => chain,
+    range: () => chain,
     limit: () => chain,
     insert: (payload) => ((q.op = 'insert'), (q.payload = payload), chain),
     update: (payload) => ((q.op = 'update'), (q.payload = payload), chain),
@@ -67,7 +84,7 @@ vi.mock('../webhook-dispatch.js', () => ({
 }));
 vi.mock('./from-opportunity.js', () => ({ OPPORTUNITY_ACTION_KIND: 'content_opportunity' }));
 
-const { opportunityFromTask, ownPageOf, sendTaskToContent, sendTaskToWebhook } =
+const { opportunityFromTask, ownPageOf, sendTaskToContent, sendTaskToWebhook, taskQuestion } =
   await import('./task-send.js');
 
 const details = {
@@ -241,6 +258,127 @@ describe('sendTaskToContent', () => {
     db.action_tasks[0].title = null;
     await sendTaskToContent({ taskId: 't1', title: 'Refresh /blog/shipping', userId: null });
     expect(db.content_opportunities[0].title).toBe('Refresh /blog/shipping');
+  });
+});
+
+describe('one open opportunity per question', () => {
+  const QUESTION = 'What are the best coffee subscription services in 2026?';
+  const P1 = '11111111-1111-4111-8111-111111111111';
+  const P2 = '22222222-2222-4222-8222-222222222222';
+  const aboutOnePrompt = () => {
+    db.action_entities = [
+      {
+        action_id: 'a1',
+        entity_type: 'prompts',
+        entity_key: P1,
+        label: QUESTION,
+        removed_at: null,
+      },
+    ];
+    db.prompts = [{ id: P1, text: QUESTION }];
+    db.prompt_cluster_members = [{ prompt_id: P1, cluster_id: 'c9' }];
+  };
+  const openOne = (over = {}) => ({
+    id: 'o-open',
+    brand_id: 'b1',
+    status: 'reviewed',
+    source: 'system',
+    prompt_id: null,
+    cluster_id: 'c1',
+    related_cluster_ids: [],
+    opportunity_score: 52,
+    impact: 'medium',
+    source_data: {
+      promptText: 'What are the best coffee subscription services in 2025?',
+      prompts: ['What are the best coffee subscription services in 2025?'],
+      estAiVolume: 3038,
+      scoreComponents: { demand: 40 },
+    },
+    ...over,
+  });
+
+  it('adds a task about one prompt to the open opportunity on its question, once', async () => {
+    aboutOnePrompt();
+    db.content_opportunities = [openOne()];
+
+    const sent = await sendTaskToContent({ taskId: 't1', title: '', userId: 'u1' });
+    expect(sent).toEqual({ opportunityId: 'o-open', created: false, merged: true });
+    expect(db.content_opportunities).toHaveLength(1);
+    const [opp] = db.content_opportunities;
+    // The opportunity's measured signal and its score stay, a task has none;
+    // the task's higher impact is kept.
+    expect(opp).toMatchObject({ opportunity_score: 52, impact: 'high' });
+    expect(opp.source_data.estAiVolume).toBe(3038);
+    expect(opp.source_data.prompts).toHaveLength(1);
+    expect(opp.source_data.merged).toEqual([
+      expect.objectContaining({ source: 'action', actionNo: 12, taskId: 't1' }),
+    ]);
+    expect(db.action_tasks[0].details.sent.content.opportunityId).toBe('o-open');
+    expect(ops.find((op) => op.table === 'action_events').payload.data).toMatchObject({
+      to: 'content',
+      merged: true,
+    });
+
+    ops = [];
+    expect(await sendTaskToContent({ taskId: 't1', title: '', userId: 'u1' })).toMatchObject({
+      opportunityId: 'o-open',
+    });
+    expect(opp.source_data.merged).toHaveLength(1);
+    expect(ops.filter((op) => op.table === 'action_events')).toHaveLength(0);
+  });
+
+  it("matches the question's cluster too, and never a closed opportunity", async () => {
+    aboutOnePrompt();
+    db.content_opportunities = [
+      openOne({ id: 'o-done', status: 'done' }),
+      openOne({ id: 'o-cluster', source_data: { promptText: 'Other words' }, cluster_id: 'c9' }),
+    ];
+    const sent = await sendTaskToContent({ taskId: 't1', title: '', userId: 'u1' });
+    expect(sent.opportunityId).toBe('o-cluster');
+  });
+
+  it('opens its own opportunity, carrying the question, when none answers it', async () => {
+    aboutOnePrompt();
+    db.content_opportunities = [openOne({ source_data: { promptText: 'Best espresso machines' } })];
+    const sent = await sendTaskToContent({ taskId: 't1', title: '', userId: 'u1' });
+    expect(sent.created).toBe(true);
+    const row = db.content_opportunities.find((r) => r.id === sent.opportunityId);
+    expect(row).toMatchObject({ prompt_id: P1, source_data: { promptText: QUESTION } });
+  });
+
+  it('opens its own opportunity when its action is about several prompts', async () => {
+    aboutOnePrompt();
+    db.action_entities.push({
+      action_id: 'a1',
+      entity_type: 'prompts',
+      entity_key: P2,
+      label: 'Best espresso machines',
+      removed_at: null,
+    });
+    db.content_opportunities = [openOne()];
+    const sent = await sendTaskToContent({ taskId: 't1', title: '', userId: 'u1' });
+    expect(sent.created).toBe(true);
+    expect(db.content_opportunities).toHaveLength(2);
+  });
+
+  it("sends a topic opportunity's task, whose prompt is keyed by the suggestion's text, without a question", async () => {
+    aboutOnePrompt();
+    db.actions[0].kind = 'topic_opportunity';
+    // AC-009: a topic opportunity counts its suggestions, kept by their text.
+    db.action_entities[0].entity_key = QUESTION;
+    db.content_opportunities = [openOne()];
+
+    expect(await taskQuestion('a1')).toBeNull();
+    const sent = await sendTaskToContent({ taskId: 't1', title: '', userId: 'u1' });
+    expect(sent.created).toBe(true);
+    const row = db.content_opportunities.find((r) => r.id === sent.opportunityId);
+    expect(row.prompt_id).toBeNull();
+    expect(row.source_data).not.toHaveProperty('promptText');
+  });
+
+  it('reads the question of a prompt keyed by its id', async () => {
+    aboutOnePrompt();
+    expect(await taskQuestion('a1')).toEqual({ promptId: P1, text: QUESTION, clusterId: 'c9' });
   });
 });
 

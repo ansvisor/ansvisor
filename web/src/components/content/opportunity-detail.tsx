@@ -672,6 +672,33 @@ export function OpportunityDetail({
         </div>
       )}
 
+      {(sd.merged ?? []).length > 0 && (
+        <div className="flex items-start gap-2 rounded-md border bg-muted/40 px-4 py-3 text-xs">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <p>
+            <span className="font-medium">
+              {t('sameQuestionMerged', { count: sd.merged?.length ?? 0 })}
+            </span>{' '}
+            <span className="text-muted-foreground">{t('sameQuestionMergedHint')}</span>
+          </p>
+        </div>
+      )}
+
+      {sd.mergedInto && (
+        <div className="flex items-start gap-2 rounded-md border bg-muted/40 px-4 py-3 text-xs">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <p>
+            <span className="font-medium">{t('mergedInto')}</span>{' '}
+            <Link
+              href={`/dashboard/content?opportunity=${sd.mergedInto}`}
+              className="text-primary hover:underline"
+            >
+              {t('mergedIntoOpen')}
+            </Link>
+          </p>
+        </div>
+      )}
+
       {(sd.duplicatesMerged ?? 0) > 0 && (
         <div className="flex items-start gap-2 rounded-md border bg-muted/40 px-4 py-3 text-xs">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
