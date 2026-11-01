@@ -138,6 +138,22 @@ describe('a new agent', () => {
     expect(syncConnections([], ['shopping'])).toEqual([{ key: 'catalog', required: true }]);
     expect(syncConnections([], ['faq', 'quality'])).toEqual([]);
   });
+
+  it("asks for nothing for the focus areas' skills, and keeps what the person added", () => {
+    expect(syncConnections([], ['questions', 'listings', 'audit-fix'])).toEqual([]);
+    expect(
+      syncConnections(
+        [
+          { key: 'google_search_console', required: false },
+          { key: 'google_analytics', required: false },
+        ],
+        ['rivals', 'report'],
+      ),
+    ).toEqual([
+      { key: 'google_search_console', required: false },
+      { key: 'google_analytics', required: false },
+    ]);
+  });
 });
 
 describe('triggers', () => {

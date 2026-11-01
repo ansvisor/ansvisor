@@ -5649,7 +5649,14 @@
       "answerfirst": "Answer-first rewrite",
       "facts": "Brand facts check",
       "compare": "Comparison page",
-      "translate": "Translate a page"
+      "translate": "Translate a page",
+      "questions": "Buyer questions",
+      "features": "How AI compares us",
+      "gaps": "No clear leader",
+      "markets": "Who AI recommends by market",
+      "listings": "Listing gaps",
+      "rivals": "Rival brief",
+      "audit-fix": "Site audit fixes"
     },
     "form": {
       "titleNew": "New agent",
