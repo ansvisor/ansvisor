@@ -3825,6 +3825,9 @@
       "doneWhen": "Done when: {text}",
       "dailyLimit": "This is one of the {limit} new actions the brand gets today, so Action Center's own new actions wait until tomorrow."
     },
+    "card": {
+      "noSession": "This agent ran on its own, so it asks before changing anything."
+    },
     "allTime": "All time",
     "lastDays": "Last {count} days",
     "since": "Since {date}",
@@ -3908,6 +3911,7 @@
       "ready": "{ready, number} of {total, number} ready",
       "priority": "Priority {score, number}",
       "untitled": "An Action Center task",
+      "changed": "{title}: {status}",
       "status": {
         "queued": "Queued",
         "writing": "Writing",
@@ -5683,7 +5687,14 @@
       "answerfirst": "Answer-first rewrite",
       "facts": "Brand facts check",
       "compare": "Comparison page",
-      "translate": "Translate a page"
+      "translate": "Translate a page",
+      "questions": "Buyer questions",
+      "features": "How AI compares us",
+      "gaps": "No clear leader",
+      "markets": "Who AI recommends by market",
+      "listings": "Listing gaps",
+      "rivals": "Rival brief",
+      "audit-fix": "Site audit fixes"
     },
     "form": {
       "titleNew": "New agent",
@@ -6562,6 +6573,25 @@
     "copyCode": "Copy code",
     "placeholderNote": "Your input needed: replace each highlighted [bracket] with your own details before you publish.",
     "inputNeeded": "Your input needed",
+    "authority": {
+      "found": "Found",
+      "none": "none of the {count} a page needs.",
+      "oneMore": " One more makes it pass.",
+      "others": "The page also links to {sites}, which don't count.",
+      "whatCounts": "What counts",
+      "counts": {
+        "official": "Government and academic sites: .gov, .edu, .mil and their country forms, such as .gov.tr, .edu.tr, .ac.uk",
+        "international": "International bodies: any .int site, un.org, unesco.org, europa.eu, oecd.org, worldbank.org, imf.org",
+        "research": "Reference and research: wikipedia.org, doi.org, arxiv.org, nature.com, sciencedirect.com, iso.org, w3.org",
+        "news": "Major news: Reuters, Bloomberg, Financial Times, BBC, The New York Times, The Washington Post"
+      },
+      "kinds": {
+        "official": "Official site",
+        "international": "International body",
+        "research": "Reference or research",
+        "news": "Major news"
+      }
+    },
     "finding": "Finding",
     "why": "Why",
     "recommendedFix": "Recommended fix",
@@ -13520,7 +13550,8 @@
     "siteTypes": {
       "b2b": "B2B SaaS",
       "ecommerce": "E-commerce",
-      "b2c": "B2C"
+      "b2c": "B2C",
+      "app": "Mobile app"
     },
     "descriptionPlaceholder": "Short description of this brand...",
     "domainCount": "{count, plural, one {# domain} other {# domains}}",
@@ -13609,7 +13640,7 @@
       "stateOptional": "State (optional)",
       "nationwide": "Nationwide (no state)",
       "stateHint": "Localizes AI answers to this state from the next tracking run onward.",
-      "siteTypeHint": "Sets the page types the Content Editor offers: feature and comparison pages for B2B SaaS, product and category pages for e-commerce, destination and help pages for B2C.",
+      "siteTypeHint": "Sets the page types the Content Editor offers: feature and comparison pages for B2B SaaS; product and category pages for e-commerce; destination and help pages for B2C; feature, pricing and help pages for a mobile app.",
       "siteTypeGuessed": "Guessed from the industry and Shopping mode until you pick one.",
       "siteTypeDetected": "Detected automatically from your website. Pick another if it's wrong.",
       "deleteWarning": "This action cannot be undone. All data for this brand (insights, content, competitors) will be permanently deleted.",

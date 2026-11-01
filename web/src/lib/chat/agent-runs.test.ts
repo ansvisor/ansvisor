@@ -218,7 +218,12 @@ describe('Run now', () => {
     const result = await runs.runAgentNow(await ctxOf(PEOPLE.manager), id, {}, NOW, driver);
     expect(result).toMatchObject({ ok: true, value: { runs: [{ status: 'running' }] } });
     const started = runRows()[0];
-    expect(driver).toHaveBeenCalledWith({ id: started.id, organizationId: ORG });
+    // Started in the person's own request: their session goes with it.
+    expect(driver).toHaveBeenCalledWith({
+      id: started.id,
+      organizationId: ORG,
+      sessionUserId: PEOPLE.manager,
+    });
     // Growth: 5 agent runs at once.
     expect(db.log.filter(([name]) => name === 'chat_start_next_agent_run').length).toBeGreaterThan(
       0,
@@ -629,6 +634,7 @@ describe('Run agent on an action', () => {
       ok: true,
       value: { run: { status: 'running', chatId: 'chat-1' } },
     });
+    expect(driver).toHaveBeenCalledWith(expect.objectContaining({ sessionUserId: PEOPLE.manager }));
   });
 
   it('refuses a closed action, an agent that doesn’t cover its brand, and Analysts', async () => {
