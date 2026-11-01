@@ -295,14 +295,16 @@ describe('one page as a spreadsheet row (Excel, CSV)', () => {
 
   it('writes CSV with its header, and Excel with a cell cut at its limit', () => {
     const csv = pageCsv('T', '<p>Done.</p>', fields);
+    // Reviewed by came later: it goes last, so an import by position still fits.
     expect(csv.split('\n')[0]).toBe(
-      'Title,Meta title,Meta description,Slug,Author,Reviewed by,Featured image,Characters,Content,HTML',
+      'Title,Meta title,Meta description,Slug,Author,Featured image,Characters,Content,HTML,Reviewed by',
     );
     expect(csv).toContain('<p>Done.</p>');
     const long = `<p>${'x'.repeat(40_000)}</p>`;
     const [{ data }] = pageWorkbook('T', long, fields);
     expect(data[0][0]).toEqual({ value: 'Title', fontWeight: 'bold' });
-    const content = data[1][8] as string;
+    const content = data[1][7] as string;
+    expect(data[1][9]).toBe('Dr. Grace Hopper, Clinical Reviewer');
     expect(content).toHaveLength(32_767);
     expect(content.endsWith('…')).toBe(true);
   });

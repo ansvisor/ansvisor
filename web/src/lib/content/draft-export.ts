@@ -654,18 +654,21 @@ export function libraryExportFileName(tab: string, format: LibraryExportFormat, 
 
 // ─── One page as a spreadsheet row ──────────────────────────────────────────
 
-/** The page's CSV and sheet header: a CMS's CSV import maps each to a field. */
+/**
+ * The page's CSV and sheet header: a CMS's CSV import maps each to a field.
+ * A new column goes last, so an import that maps them by position still fits.
+ */
 export const PAGE_SHEET_HEADERS = [
   'Title',
   'Meta title',
   'Meta description',
   'Slug',
   'Author',
-  'Reviewed by',
   'Featured image',
   'Characters',
   'Content',
   'HTML',
+  'Reviewed by',
 ];
 
 /** Export's page fields as front matter, read from the page where Export gives none. */
@@ -711,11 +714,11 @@ export function pageSheetRow(
     front.description ?? '',
     front.slug ?? '',
     front.author ?? '',
-    front.reviewed_by ?? '',
     front.image ?? '',
     content.replace(/\n/g, '').length,
     content,
     body,
+    front.reviewed_by ?? '',
   ];
   return Object.fromEntries(PAGE_SHEET_HEADERS.map((header, i) => [header, values[i]]));
 }
@@ -747,11 +750,11 @@ export function pageWorkbook(
         { width: 60 },
         { width: 30 },
         { width: 20 },
-        { width: 38 },
         { width: 40 },
         { width: 11 },
         { width: 80 },
         { width: 80 },
+        { width: 38 },
       ],
       data: [
         PAGE_SHEET_HEADERS.map((value) => ({ value, fontWeight: 'bold' as const })),
