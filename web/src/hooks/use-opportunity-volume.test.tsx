@@ -2,19 +2,18 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ContentOpportunity, OpportunityBasket } from '@/types';
-import { guessedVolumeEstimate, type VolumeEstimate } from '@/lib/volume-estimate';
+import type { QuestionVolume } from '@/lib/content/question-volume';
+import { guessedVolumeEstimate } from '@/lib/volume-estimate';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 
 const getOpportunityBasket = vi.fn<(id: string) => Promise<OpportunityBasket>>();
-const getPromptDemand =
-  vi.fn<(brandId: string, ids: string[]) => Promise<Record<string, VolumeEstimate>>>();
+const getQuestionVolume =
+  vi.fn<(brandId: string, promptId: string) => Promise<QuestionVolume | null>>();
 vi.mock('@/lib/actions/content', () => ({
   getOpportunityBasket: (id: string) => getOpportunityBasket(id),
-}));
-vi.mock('@/lib/actions/action-center', () => ({
-  getPromptDemand: (brandId: string, ids: string[]) => getPromptDemand(brandId, ids),
+  getQuestionVolume: (brandId: string, promptId: string) => getQuestionVolume(brandId, promptId),
 }));
 
 const { useOpportunityVolume } = await import('./use-opportunity-volume');
@@ -39,13 +38,15 @@ const opportunity = (over: Partial<ContentOpportunity> = {}): ContentOpportunity
   id: 'o1',
   brandId: 'b1',
   clusterId: 'c1',
+  promptId: 'p1',
   title: 'Espresso grinders',
   description: '',
   type: 'owned',
   impact: 'high',
   opportunityScore: 70,
   status: 'new',
-  sourceData: { estAiVolume: 1000 },
+  // The sum the score weighs, and its question's own volume.
+  sourceData: { estAiVolume: 112500, questionVolume: 1000, prompts: ['a', 'b', 'c'] },
   createdAt: '2026-09-01T00:00:00.000Z',
   updatedAt: '2026-09-01T00:00:00.000Z',
   ...over,
@@ -64,50 +65,53 @@ const basket = (ids: string[]): OpportunityBasket => ({
   queries: [],
 });
 
-const estimate = (value: number) => guessedVolumeEstimate(value, '2026-10-01T00:00:00Z');
+const question = (value: number): QuestionVolume => ({
+  question: 'Which espresso grinder should I buy for a small cafe?',
+  estimate: guessedVolumeEstimate(value, '2026-10-01T00:00:00Z'),
+  fromHeadTerms: true,
+  closest: null,
+});
 
 beforeEach(() => {
   getOpportunityBasket.mockReset();
-  getPromptDemand.mockReset();
+  getQuestionVolume.mockReset();
 });
 
 afterEach(() => act(() => root.unmount()));
 
-/** A content opportunity's AI volume (PROMPT-013): its prompts' estimates now, read once. */
+/** A content opportunity's AI volume: its question's, one of its prompts (2026-11-01). */
 describe('useOpportunityVolume', () => {
-  it("sums its cluster's prompts' current estimates and hands the basket on", async () => {
+  it("reads its question's volume, not its prompts' sum, and hands the basket on", async () => {
     getOpportunityBasket.mockResolvedValue(basket(['p1', 'p2']));
-    getPromptDemand.mockResolvedValue({ p1: estimate(300), p2: estimate(500) });
+    getQuestionVolume.mockResolvedValue(question(3038));
     const seen = await render(opportunity());
 
     expect(seen[0].volume).toBeUndefined();
     const last = seen.at(-1)!;
-    expect(getPromptDemand).toHaveBeenCalledWith('b1', ['p1', 'p2']);
-    expect(last.volume).toMatchObject({ value: 800, count: 2 });
+    expect(getQuestionVolume).toHaveBeenCalledWith('b1', 'p1');
+    expect(last.volume).toMatchObject({ value: 3038 });
+    expect(last.volume).not.toHaveProperty('count');
+    expect(last.question?.fromHeadTerms).toBe(true);
+    // One of the cluster's prompts, once its basket is in.
+    expect(last.prompts).toBe(2);
     expect(last.basket?.clusters[0].prompts).toHaveLength(2);
     expect(getOpportunityBasket).toHaveBeenCalledTimes(1);
   });
 
-  it('reads one prompt without a basket, keeping its own estimate', async () => {
-    getPromptDemand.mockResolvedValue({ p9: estimate(400) });
-    const last = (await render(opportunity({ clusterId: null, promptId: 'p9' }))).at(-1)!;
+  it('reads one prompt without a basket', async () => {
+    getQuestionVolume.mockResolvedValue(question(400));
+    const last = (
+      await render(opportunity({ clusterId: null, promptId: 'p9', sourceData: {} }))
+    ).at(-1)!;
 
     expect(getOpportunityBasket).not.toHaveBeenCalled();
-    expect(last.volume).toMatchObject({ value: 400, basis: 'guess' });
-    expect(last.volume).not.toHaveProperty('count');
+    expect(last.volume).toMatchObject({ value: 400 });
+    expect(last.prompts).toBe(1);
   });
 
-  it('sums a cluster even when only one of its prompts has an estimate', async () => {
-    getOpportunityBasket.mockResolvedValue(basket(['p1', 'p2']));
-    getPromptDemand.mockResolvedValue({ p1: estimate(300) });
-    const last = (await render(opportunity())).at(-1)!;
-
-    expect(last.volume).toMatchObject({ value: 300, count: 1 });
-  });
-
-  it('falls back to the volume kept on it, undated, when the estimates fail', async () => {
+  it("falls back to its question's volume kept on it, undated, when the read fails", async () => {
     getOpportunityBasket.mockResolvedValue(basket(['p1']));
-    getPromptDemand.mockRejectedValue(new Error('down'));
+    getQuestionVolume.mockRejectedValue(new Error('down'));
     const last = (await render(opportunity())).at(-1)!;
 
     expect(last.volume).toMatchObject({
@@ -118,23 +122,24 @@ describe('useOpportunityVolume', () => {
       confidence: 'low',
       asOf: null,
     });
+    expect(last.question).toBeNull();
   });
 
-  it('marks a failed basket and still shows the kept volume', async () => {
-    getOpportunityBasket.mockRejectedValue(new Error('down'));
-    // A cluster's prompt_id is only its representative: never read as the whole.
-    const last = (await render(opportunity({ promptId: 'p0' }))).at(-1)!;
-
-    expect(last.basketFailed).toBe(true);
-    expect(getPromptDemand).not.toHaveBeenCalled();
-    expect(last.volume).toMatchObject({ basis: 'snapshot', value: 1000 });
-  });
-
-  it('shows nothing when no prompt has an estimate and none was kept', async () => {
+  it("never shows a group's older sum as its volume", async () => {
     getOpportunityBasket.mockResolvedValue(basket(['p1']));
-    getPromptDemand.mockResolvedValue({});
-    const last = (await render(opportunity({ sourceData: {} }))).at(-1)!;
+    getQuestionVolume.mockResolvedValue(null);
+    const last = (await render(opportunity({ sourceData: { estAiVolume: 145000 } }))).at(-1)!;
 
     expect(last.volume).toBeNull();
+  });
+
+  it('shows the kept volume when it has no question to read, and counts the prompts it kept', async () => {
+    getOpportunityBasket.mockRejectedValue(new Error('down'));
+    const last = (await render(opportunity({ promptId: undefined }))).at(-1)!;
+
+    expect(last.basketFailed).toBe(true);
+    expect(getQuestionVolume).not.toHaveBeenCalled();
+    expect(last.volume).toMatchObject({ basis: 'snapshot', value: 1000 });
+    expect(last.prompts).toBe(3);
   });
 });

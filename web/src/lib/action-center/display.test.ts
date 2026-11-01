@@ -461,6 +461,10 @@ describe('actionEventText', () => {
     expect(actionEventText(event('task_sent', { to: 'webhook', title: 'x' }), tPage, t)).toBe(
       'Sent to the webhook: x',
     );
+    // Added to the open opportunity on its question instead of a second one.
+    expect(
+      actionEventText(event('task_sent', { to: 'content', merged: true, title: 'x' }), tPage, t),
+    ).toBe('Added to the open Content opportunity for the same question: x');
   });
 
   it('names a Chat agent run on the action, how it ended, and Run with Chat (W2-17)', () => {

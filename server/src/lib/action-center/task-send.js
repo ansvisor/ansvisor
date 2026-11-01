@@ -15,12 +15,18 @@
  *
  * Either way the task records where it went (details.sent), the action's
  * History says so, and a task that has been sent survives "Regenerate tasks".
+ *
+ * A task about one prompt whose question an open opportunity already answers
+ * joins that opportunity instead of opening a second one
+ * (opportunity-same-question.js).
  */
 
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { dispatchBrandWebhook } from '../webhook-dispatch.js';
 import { ownDomainMatcher } from '../response-parser.js';
+import { loadOpportunityBaskets } from '../open-opportunities.js';
+import { findSameQuestion, mergeOpportunity } from '../opportunity-same-question.js';
 import { OPPORTUNITY_ACTION_KIND } from './from-opportunity.js';
 import { TASK_CHECKS } from './task-writer/quality.js';
 
@@ -105,7 +111,7 @@ export function ownPageOf(where, brandDomains) {
  * on, or a new page when Where names none of the brand's; the asset carries
  * every field Content reads, `pages` included.
  */
-export function opportunityFromTask({ task, title, action, brandDomains }) {
+export function opportunityFromTask({ task, title, action, brandDomains, question = null }) {
   const d = task.details ?? {};
   // The page Where names; else the exact page (AC-010) when the change
   // replaces its text, so it's there. A URL with a change that only adds may
@@ -117,7 +123,8 @@ export function opportunityFromTask({ task, title, action, brandDomains }) {
   const targetPages = page ? [{ url: page, title: '' }] : [];
   return {
     brand_id: action.brand_id,
-    prompt_id: null,
+    // The question it stands for, when its action is about one prompt.
+    prompt_id: question?.promptId ?? null,
     title,
     description: text(d.why) || null,
     type: 'owned',
@@ -127,6 +134,7 @@ export function opportunityFromTask({ task, title, action, brandDomains }) {
     source: 'action',
     decision,
     source_data: {
+      ...(question ? { promptText: question.text } : {}),
       targetPages,
       assets: [
         { key: 'a1', type: 'blog_post', channel: 'owned', decision, title, pages: targetPages },
@@ -204,27 +212,88 @@ async function brandDomainsOf(brandId) {
     .map((d) => d.domain);
 }
 
-async function logSent(action, task, to, title, userId) {
+async function logSent(action, task, to, title, userId, { merged = false } = {}) {
   const { error } = await supabaseAdmin.from('action_events').insert({
     action_id: action.id,
     event: 'task_sent',
-    data: { taskId: task.id, to, title },
+    data: { taskId: task.id, to, title, ...(merged ? { merged: true } : {}) },
     actor_id: userId,
   });
   if (error) logger.warn({ err: error, taskId: task.id }, '[task-send] event insert failed');
 }
 
 /**
+ * The question a task stands for: its action's one prompt (action_entities,
+ * 00244), with the cluster it is in. Null when the action is about no prompt
+ * or several, since a task then asks for more than one question's content.
+ */
+export async function taskQuestion(actionId) {
+  const { data: entities, error } = await supabaseAdmin
+    .from('action_entities')
+    .select('entity_key, label')
+    .eq('action_id', actionId)
+    .eq('entity_type', 'prompts')
+    .is('removed_at', null);
+  if (error) throw new Error(error.message);
+  if ((entities ?? []).length !== 1) return null;
+  const [{ entity_key: promptId, label }] = entities;
+  const [prompt, member] = await Promise.all([
+    supabaseAdmin.from('prompts').select('text').eq('id', promptId).maybeSingle(),
+    supabaseAdmin
+      .from('prompt_cluster_members')
+      .select('cluster_id')
+      .eq('prompt_id', promptId)
+      .maybeSingle(),
+  ]);
+  if (prompt.error) throw new Error(prompt.error.message);
+  if (member.error) throw new Error(member.error.message);
+  const questionText = text(prompt.data?.text) || text(label);
+  if (!questionText) return null;
+  return { promptId, text: questionText, clusterId: member.data?.cluster_id ?? null };
+}
+
+/**
+ * Adds the task to an open opportunity on its question: its prompt and its
+ * action's priority join it, and the opportunity records the task. False
+ * when the task is there already.
+ */
+async function joinOpportunity(target, { task, action, title, question }) {
+  if ((target.source_data?.merged ?? []).some((m) => m.taskId === task.id)) return false;
+  const update = mergeOpportunity(
+    target,
+    {
+      opportunity_score: action.priority_score ?? 0,
+      impact: action.impact,
+      source_data: { promptText: question.text },
+    },
+    {
+      source: 'action',
+      actionId: action.id,
+      actionNo: action.action_no ?? null,
+      taskId: task.id,
+      title,
+    },
+  );
+  const { error } = await supabaseAdmin
+    .from('content_opportunities')
+    .update({ ...update, updated_at: new Date().toISOString() })
+    .eq('id', target.id);
+  if (error) throw new Error(error.message);
+  return true;
+}
+
+/**
  * Send a content task to Content as an opportunity. Sending it again returns
  * the opportunity it already made, while that one is open; two sends at once
- * make one (a unique index, 00151).
+ * make one (a unique index, 00151). A task whose question an open opportunity
+ * already answers joins that one (`merged`).
  *
  * @param {{ taskId: string, title: string, userId: string | null,
  *   loaded?: { task: object, action: object } }} input
  *   `title` is the task's text as the dashboard shows it: a library task's
  *   text is a template only the dashboard renders. `loaded` saves reading
  *   the task again when the caller already has.
- * @returns {Promise<{ opportunityId: string, created: boolean }>}
+ * @returns {Promise<{ opportunityId: string, created: boolean, merged?: boolean }>}
  */
 export async function sendTaskToContent({ taskId, title, userId, loaded }) {
   const { task, action } = loaded ?? (await loadTask(taskId));
@@ -247,11 +316,41 @@ export async function sendTaskToContent({ taskId, title, userId, loaded }) {
     return { opportunityId: already, created: false };
   }
 
+  // One open opportunity per question: the task joins the one that answers it.
+  const question = await taskQuestion(action.id);
+  const target = question
+    ? findSameQuestion(
+        {
+          question: question.text,
+          promptId: question.promptId,
+          clusterIds: question.clusterId ? [question.clusterId] : [],
+        },
+        await loadOpportunityBaskets(action.brand_id),
+      )
+    : null;
+  if (target) {
+    const joined = await joinOpportunity(target, {
+      task,
+      action,
+      title: name.slice(0, 200),
+      question,
+    });
+    if (task.details?.sent?.content?.opportunityId !== target.id) {
+      await markSent(task.id, 'content', {
+        opportunityId: target.id,
+        at: new Date().toISOString(),
+      });
+    }
+    if (joined) await logSent(action, task, 'content', name, userId, { merged: true });
+    return { opportunityId: target.id, created: false, merged: true };
+  }
+
   const row = opportunityFromTask({
     task,
     title: name.slice(0, 200),
     action,
     brandDomains: await brandDomainsOf(action.brand_id),
+    question,
   });
   const { data: created, error } = await supabaseAdmin
     .from('content_opportunities')

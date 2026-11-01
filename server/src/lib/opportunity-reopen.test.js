@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 
-const { GAIN_LOST_RATIO, SCORE_RISE, measuredAfter, reopenReason } =
+const { GAIN_LOST_RATIO, SCORE_RISE, measuredAfter, reopenReason, reopenStrengthened } =
   await import('./opportunity-reopen.js');
 
 describe('reopenReason', () => {
@@ -81,5 +81,15 @@ describe('measuredAfter', () => {
         { ...basket(10), validation: { metrics: [{ metric: 'ai_visibility', after: 10 }] } },
       ]),
     ).toBeNull();
+  });
+});
+
+describe('reopenStrengthened', () => {
+  it('keeps closed the ones the caller skips, as when another open one answers their question', async () => {
+    const measure = vi.fn();
+    const done = [{ id: 'o1', status: 'done', cluster_id: 'c1' }];
+    // Nothing is read: the database client here has no tables.
+    expect(await reopenStrengthened('b1', done, measure, { skip: () => true })).toBe(0);
+    expect(measure).not.toHaveBeenCalled();
   });
 });

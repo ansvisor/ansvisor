@@ -2434,7 +2434,11 @@ export default function PromptsPage() {
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <Card className="lg:col-span-2">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Prompt Volumes</CardTitle>
+                    {/* The chart splits the total estimate: the same badge and note as its card. */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <CardTitle className="text-sm font-medium">Prompt Volumes</CardTitle>
+                      {totalAiVol > 0 && <EstimateBadge estimate={totalEstimate} kind="total" />}
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       {tVolumes('chartCaption', { rate: adoptionRate })}
                     </p>

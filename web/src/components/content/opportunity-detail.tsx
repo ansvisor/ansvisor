@@ -55,6 +55,7 @@ import {
 } from '@/components/content/opportunity-basket';
 import { opportunityDocument, opportunityToMarkdown } from '@/lib/content/opportunity-markdown';
 import { useOpportunityVolume } from '@/hooks/use-opportunity-volume';
+import type { QuestionVolume } from '@/lib/content/question-volume';
 import {
   opportunityCsv,
   opportunityDocx,
@@ -106,6 +107,40 @@ const INTENT_LABELS: Record<string, string> = {
   'problem-solving': 'Problem Solving',
   other: 'Other',
 };
+
+/**
+ * What the volume is of: the question the opportunity is shown with, one of
+ * its prompts, and for a long question, that it is read from head terms, with
+ * the measured phrase closest to its words.
+ */
+function QuestionVolumeNote({
+  question,
+  prompts,
+}: {
+  question: QuestionVolume | null;
+  prompts: number;
+}) {
+  const t = useTranslations('content.detail');
+  return (
+    <span className="block max-w-72 space-y-0.5 text-xs font-normal text-muted-foreground">
+      <span className="block">
+        {question
+          ? t('volumeOfQuestion', { question: question.question, count: prompts })
+          : t('volumeOfPrompts', { count: prompts })}
+      </span>
+      {question?.fromHeadTerms && (
+        <span className="block">
+          {question.closest
+            ? t.rich('volumeHeadTerms', {
+                phrase: question.closest.phrase,
+                range: () => <EstimateRange estimate={question.closest!.estimate} perMonth />,
+              })
+            : t('volumeHeadTermsOnly')}
+        </span>
+      )}
+    </span>
+  );
+}
 
 function StatCard({
   icon: Icon,
@@ -172,7 +207,7 @@ export function OpportunityDetail({
   const [brief, setBrief] = useState<ContentBrief | null>(null);
   const [quota, setQuota] = useState<BriefQuota | null>(null);
   const [fanoutQueries, setFanoutQueries] = useState<FanoutSubQuery[]>([]);
-  const { basket, basketFailed, volume } = useOpportunityVolume(opportunity);
+  const { basket, basketFailed, volume, question, prompts } = useOpportunityVolume(opportunity);
   const router = useRouter();
   // Start's page types are the opportunity's brand's, which may not be the
   // active one (/dashboard/content/[id] opens any of the org's brands).
@@ -671,6 +706,33 @@ export function OpportunityDetail({
         </div>
       )}
 
+      {(sd.merged ?? []).length > 0 && (
+        <div className="flex items-start gap-2 rounded-md border bg-muted/40 px-4 py-3 text-xs">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <p>
+            <span className="font-medium">
+              {t('sameQuestionMerged', { count: sd.merged?.length ?? 0 })}
+            </span>{' '}
+            <span className="text-muted-foreground">{t('sameQuestionMergedHint')}</span>
+          </p>
+        </div>
+      )}
+
+      {sd.mergedInto && (
+        <div className="flex items-start gap-2 rounded-md border bg-muted/40 px-4 py-3 text-xs">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <p>
+            <span className="font-medium">{t('mergedInto')}</span>{' '}
+            <Link
+              href={`/dashboard/content?opportunity=${sd.mergedInto}`}
+              className="text-primary hover:underline"
+            >
+              {t('mergedIntoOpen')}
+            </Link>
+          </p>
+        </div>
+      )}
+
       {(sd.duplicatesMerged ?? 0) > 0 && (
         <div className="flex items-start gap-2 rounded-md border bg-muted/40 px-4 py-3 text-xs">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -737,17 +799,11 @@ export function OpportunityDetail({
                       ) : volume === null ? (
                         '—'
                       ) : (
-                        // The prompts' current estimates, summed (PROMPT-013).
+                        // Its question's estimate, one of its prompts (question-volume.ts).
                         <span className="flex flex-col items-start gap-1">
-                          <EstimateRange
-                            estimate={volume}
-                            kind={'count' in volume ? 'total' : 'prompt'}
-                            perMonth
-                          />
-                          <EstimateBadge
-                            estimate={volume}
-                            kind={'count' in volume ? 'total' : 'prompt'}
-                          />
+                          <EstimateRange estimate={volume} perMonth />
+                          <EstimateBadge estimate={volume} />
+                          <QuestionVolumeNote question={question} prompts={prompts} />
                         </span>
                       )
                     }

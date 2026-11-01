@@ -1,23 +1,23 @@
 ---
 title: How estimated AI search volume works
 route: /dashboard/prompts/insights
-keywords: [ai search volume, estimate, confidence, volume range, estimate badge]
+keywords: [ai search volume, estimate, confidence, volume range, estimate badge, head terms, opportunity volume]
 synonyms: [how many people ask, monthly AI searches, AI volume, est. ai volume]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/prompts.mdx]
 ---
-AI assistants don't publish how often people ask them something, so every AI search volume in Ansvisor is an estimate. It is shown as a range, such as 540–2k, never as a single number. Totals, averages and a prompt's own page add a dashed **Estimate** badge; in tables the range alone marks an estimate.
+AI assistants don't publish how often people ask them something, so every AI search volume in Ansvisor is an estimate. It is shown as a range, such as 540–2k, never as a single number. Totals, averages, a prompt's own page, a content opportunity, the **Prompt Volumes** chart and the Action Center's volumes add a dashed **Estimate** badge; in other tables the range alone marks an estimate.
 
 ## How it's estimated
 
 The estimate is the median monthly Google searches for the prompt's related keywords, times the share of Google searches that now get an AI answer (45% by default; a self-hosted server can change it).
 
-When a prompt's volume is analyzed, Ansvisor picks five short Google keywords for its category and reads their monthly Google searches. Keywords Google has no data for are left out, and the median of the rest is the prompt's **Google Vol.** The Insights tab shows the AI share as **AI Adoption Rate**.
+When a prompt's volume is analyzed, Ansvisor picks five short Google keywords for its category and reads their monthly Google searches. Keywords Google has no data for are left out, and the median of the rest is the prompt's **Google Vol. (head terms)**. The Insights tab shows the AI share as **AI Adoption Rate**.
 
 ## How the range is set
 
@@ -48,6 +48,12 @@ Some estimates are built differently, and their note says so:
 - **Totals and averages** (**Total Est. AI Volume**, **Avg. AI Volume**, and Similar Topics' **Est. AI Volume**): the sum of the lows to the sum of the highs; an average divides both by the prompt count. A total is high-confidence when at least 80% of its volume is, low when more than half is low-confidence, and medium otherwise. The note gives the mix.
 - **One keyword** (each row of Similar Topics): only the AI share is assumed, so it is Medium with a ±25% range, or Low when it has no volume or is over six months old.
 - **An AI's guess** (suggestions from Ansvisor Agents, the Brand Visibility page's Opportunities, and the Action Center's topic opportunities): always Low, from half to twice the guess. Track the prompt to get an estimate from its keywords' Google searches.
+
+## A content opportunity's volume
+
+A content opportunity shows the estimate of its question, the prompt it is shown with, and says it is one of the prompts it answers; it isn't their sum. Its score still weighs all of them.
+
+A long question's estimate comes from short head terms for its category, not its own words, so it says **From head terms** and names the closest measured phrase with that phrase's own estimate, often far lower.
 
 ## Compare prompts by their ranges
 
