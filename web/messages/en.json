@@ -5337,7 +5337,7 @@
       },
       "counts": {
         "cms": "Webflow, WordPress, Framer, Wix or a workflow webhook",
-        "catalog": "Merchant Center, a product feed or a store"
+        "catalog": "Merchant Center, a product feed, an upload or a store"
       }
     },
     "outcomes": {
