@@ -92,8 +92,19 @@ vi.mock('@/lib/chat/key-health', () => ({
   resolveOwnKeyNotices: keys.resolve,
 }));
 
+/** The key guard as the server answers it (lib/chat/own-key-cap.ts). */
+const guards = vi.hoisted(() => ({
+  read: vi.fn(async (): Promise<unknown> => null),
+  forget: vi.fn(),
+}));
+vi.mock('@/lib/chat/own-key-cap', () => ({
+  readOwnKeyGuard: guards.read,
+  forgetOwnKeyCap: guards.forget,
+}));
+
 const { GET, PUT, PATCH, DELETE } = await import('./route');
 const { POST: TEST } = await import('./test/route');
+const { PUT: SET_GUARD } = await import('./guard/route');
 
 const KEY = 'sk-test-0123456789abcdef';
 const send = (method: string, body?: unknown) =>
@@ -110,6 +121,8 @@ beforeEach(() => {
   results = [];
   rpc.mockReset().mockResolvedValue({ data: true, error: null });
   ownKeyAccess.mockReset().mockResolvedValue({ state: 'open' });
+  guards.read.mockReset().mockResolvedValue(null);
+  guards.forget.mockReset();
   // Chat off, as today: a saved key is marked to keep working once it is on.
   vi.stubEnv('CHAT_AGENTIC', 'false');
 });
@@ -552,5 +565,117 @@ describe('testing a key (AGENT-OWN-KEY §5.2 item 7, §11 Q8)', () => {
 
     profile!.role = 'manager';
     expect((await test('openai')).status).toBe(403);
+  });
+});
+
+describe('the key guard (AGENT-OWN-KEY §4.3, PR 9)', () => {
+  const GUARD = { capUsd: 250, usedUsd: 182.4, renewsAt: '2026-11-20T09:00:00.000Z' };
+  const setGuard = (body: unknown) =>
+    SET_GUARD(
+      new Request('http://localhost/api/settings/ai-providers/guard', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+    );
+
+  beforeEach(() => {
+    guards.read.mockResolvedValue(GUARD);
+  });
+
+  it('shows Admins the guard where Chat runs on own keys, with this month’s spend', async () => {
+    for (const access of [{ state: 'plan' }, { state: 'kept', until: '2026-12-01T00:00:00Z' }]) {
+      ownKeyAccess.mockResolvedValue(access);
+      results = [{ data: [], error: null }];
+      expect(await (await GET()).json()).toMatchObject({ guard: GUARD });
+    }
+    expect(guards.read).toHaveBeenCalledWith('org1');
+
+    // The server didn't answer: the card says so.
+    guards.read.mockResolvedValue(null);
+    results = [{ data: [], error: null }];
+    expect(await (await GET()).json()).toMatchObject({ guard: null });
+  });
+
+  it('sends it to nobody else, and nowhere own keys are off', async () => {
+    ownKeyAccess.mockResolvedValue({ state: 'plan' });
+    for (const role of ['manager', 'member', 'analyst']) {
+      profile!.role = role;
+      results = [{ data: [], error: null }];
+      expect(await (await GET()).json()).not.toHaveProperty('guard');
+    }
+    profile!.role = 'admin';
+    for (const state of ['open', 'locked']) {
+      ownKeyAccess.mockResolvedValue({ state });
+      results = [{ data: [], error: null }];
+      expect(await (await GET()).json()).not.toHaveProperty('guard');
+    }
+    expect(guards.read).not.toHaveBeenCalled();
+  });
+
+  it('lets Admins only change it', async () => {
+    profile!.role = 'manager';
+    expect((await setGuard({ capUsd: 300 })).status).toBe(403);
+    expect(queries).toHaveLength(0);
+  });
+
+  it('keeps it from $10 to $10,000', async () => {
+    ownKeyAccess.mockResolvedValue({ state: 'plan' });
+    for (const capUsd of [9.99, 10_000.01, 0, -5, '300', null, Number.NaN]) {
+      expect((await setGuard({ capUsd })).status).toBe(400);
+    }
+    expect(queries).toHaveLength(0);
+  });
+
+  it('saves it to the cent, and the agent checks read it fresh', async () => {
+    ownKeyAccess.mockResolvedValue({ state: 'plan' });
+    results = [{ error: null }];
+    guards.read.mockResolvedValue({ ...GUARD, capUsd: 400.25 });
+    const res = await setGuard({ capUsd: 400.254 });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, guard: { ...GUARD, capUsd: 400.25 } });
+    expect(queries[0].table).toBe('chat_settings');
+    expect(queries[0].calls[0]).toEqual([
+      'upsert',
+      { organization_id: 'org1', own_key_agent_month_usd: 400.25, updated_by: 'u1' },
+      { onConflict: 'organization_id' },
+    ]);
+    expect(guards.forget).toHaveBeenCalledWith('org1');
+  });
+
+  it('answers 404 where own keys are off, and writes nothing', async () => {
+    for (const state of ['open', 'locked']) {
+      ownKeyAccess.mockResolvedValue({ state });
+      expect((await setGuard({ capUsd: 300 })).status).toBe(404);
+    }
+    expect(queries).toHaveLength(0);
+  });
+
+  it('says unavailable before 00442, and 500 on any other failure', async () => {
+    ownKeyAccess.mockResolvedValue({ state: 'plan' });
+    results = [
+      {
+        error: {
+          code: 'PGRST204',
+          message: "Could not find the 'own_key_agent_month_usd' column of 'chat_settings'",
+        } as { message: string },
+      },
+    ];
+    const res = await setGuard({ capUsd: 300 });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ code: 'unavailable' });
+
+    results = [{ error: { message: 'boom' } }];
+    expect((await setGuard({ capUsd: 300 })).status).toBe(500);
+    expect(guards.forget).not.toHaveBeenCalled();
+  });
+
+  it('answers 402 on a read-only workspace', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    org = { subscription_status: 'canceled', stripe_subscription_id: 'sub_1' };
+    ownKeyAccess.mockResolvedValue({ state: 'plan' });
+    const res = await setGuard({ capUsd: 300 });
+    expect(res.status).toBe(402);
+    expect(await res.json()).toMatchObject({ code: 'subscription_inactive' });
+    expect(queries).toHaveLength(0);
   });
 });

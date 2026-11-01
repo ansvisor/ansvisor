@@ -23,7 +23,9 @@ Keys are stored encrypted, and nobody can read a saved key back. If the server c
 
 ## Agents on your key
 
-Agents run on the key too. Each agent's **Max per run** and **Monthly cap** still apply: Ansvisor measures what a run uses at the providers' list prices, so it is an estimate of your bill. Set a spending limit with your provider too: its bill is the real one.
+Agents run on the key too. Each agent's **Max per run** and **Monthly cap** still apply, and one more limit covers all agents on the key together: **Agents on your key**, under the keys. It starts at $250 a month; an admin can set it from $10 to $10,000, but can't turn it off. Only admins see it, with this month's use next to it. Chat you use yourself doesn't count toward it.
+
+Ansvisor measures what agents use at the providers' list prices, so these numbers are estimates of your bill. At the limit, agents pause, and they can't be run by hand either. They start again by themselves when the month renews or when an admin raises the limit. Set a spending limit with your provider too: its bill is the real one.
 
 ## Keys saved before Chat
 

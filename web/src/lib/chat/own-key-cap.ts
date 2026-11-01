@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '@/config/api';
 import { chatRunsOnOwnKey } from './key';
+import type { OwnKeyGuard } from './own-key-guard';
 
 /**
  * The key guard (AGENT-OWN-KEY §4.2): the most all agents may spend on the
@@ -63,19 +64,6 @@ export async function readOwnKeyCap(
     console.error('[chat/agents] the key guard got no answer:', (err as Error)?.name ?? err);
     return null;
   }
-}
-
-/** The guard an Admin sets (00442): $10 to $10,000, $250 unless set. */
-export const OWN_KEY_GUARD_MIN_USD = 10;
-export const OWN_KEY_GUARD_MAX_USD = 10_000;
-export const OWN_KEY_GUARD_DEFAULT_USD = 250;
-
-/** The guard as Settings › AI Providers shows it to Admins (§4.3): dollars at list prices. */
-export interface OwnKeyGuard {
-  capUsd: number;
-  /** This period's estimate of what all agents spent on the key. */
-  usedUsd: number;
-  renewsAt: string | null;
 }
 
 /**

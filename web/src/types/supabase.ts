@@ -2828,6 +2828,7 @@ export type Database = {
           full_auto_for_members: boolean
           manager_execute_off: string[]
           organization_id: string
+          own_key_agent_month_usd: number
           tool_policies: Json
           updated_at: string
           updated_by: string | null
@@ -2840,6 +2841,7 @@ export type Database = {
           full_auto_for_members?: boolean
           manager_execute_off?: string[]
           organization_id: string
+          own_key_agent_month_usd?: number
           tool_policies?: Json
           updated_at?: string
           updated_by?: string | null
@@ -2852,6 +2854,7 @@ export type Database = {
           full_auto_for_members?: boolean
           manager_execute_off?: string[]
           organization_id?: string
+          own_key_agent_month_usd?: number
           tool_policies?: Json
           updated_at?: string
           updated_by?: string | null
