@@ -5092,6 +5092,8 @@
         "invalid": "That choice isn't available for this tool.",
         "locked": "That needs the Growth plan.",
         "read_only": "This workspace is read-only until a plan is active.",
+        "quality_off": "Agents can go live on their own only with Content Quality on.",
+        "unavailable": "This isn't available yet. Try again after the next update.",
         "failed": "Couldn't save it. Try again."
       },
       "switches": {
@@ -5106,6 +5108,7 @@
         "untrusted": "Untrusted content in a run",
         "untrustedNote": "Web pages, uploads, AI answer text, mention snippets",
         "untrustedValue": "Every WRITE shows a card",
+        "untrustedValueGoLive": "Every WRITE shows a card · going live checks the page itself",
         "on": "On",
         "off": "Off",
         "locked": "Needs Growth · you're on {current}"
@@ -5116,7 +5119,8 @@
         "steps": {
           "hard": {
             "name": "Hard rules",
-            "detail": "NEVER tools don't exist · EXECUTE needs a click"
+            "detail": "NEVER tools don't exist · EXECUTE needs a click",
+            "detailGoLive": "NEVER tools don't exist · EXECUTE needs a click, unless an Admin let an agent go live on its own"
           },
           "plan": {
             "name": "Plan gates",
@@ -5167,11 +5171,39 @@
       "execute": {
         "title": "What Managers may take live",
         "note": "EXECUTE always needs a click, whoever runs it. Off, a Manager gets Ask your Admin instead.",
+        "noteGoLive": "EXECUTE needs a click, whoever runs it, unless an Admin let an agent go live on its own below. Off, a Manager gets Ask your Admin instead.",
         "groups": {
           "publishing": "Publishing",
           "email_outreach": "Email and outreach",
           "code_prs": "Code and pull requests",
           "feeds": "Product feeds"
+        }
+      },
+      "goLive": {
+        "title": "Agents that publish on their own",
+        "lead": "Let the agents you choose publish pages and send to your webhook without a click. Off until an Admin turns it on.",
+        "switch": "Allow agents to publish and send on their own",
+        "note": "Only for agents an Admin allows one by one, only in Full auto, at most each agent's daily limit. A page that fails Quality or your brand facts, or a run that read text trying to instruct it, still waits for a click.",
+        "onSince": "On since {date} · by {name}",
+        "onSinceNoName": "On since {date}",
+        "locked": "Needs Growth · you're on {current}",
+        "qualityOff": "Needs Content Quality, which checks each page before it goes live",
+        "turnedOn": "Agents you allow can now publish on their own",
+        "turnedOff": "Agents no longer publish on their own",
+        "dialog": {
+          "title": "Let agents publish on their own?",
+          "points": {
+            "what": "Agents you allow will publish new pages to Webflow, WordPress and Wix, send drafts to your CMS and send pages to your webhook, without anyone clicking.",
+            "responsible": "Your workspace is responsible for what they publish, as if a member had clicked Publish.",
+            "limits": "Each agent needs its own permission from an Admin, runs in Full auto, and goes live at most its daily limit (5 unless an Admin changes it).",
+            "checks": "Before a page goes out, it must pass Quality and match your approved brand facts. If it doesn't, or if the run read text that tried to instruct it, it waits for a click.",
+            "told": "You get an Inbox notice for each one. Pages on WordPress, Webflow and Wix can be taken down in one click. Webhook sends can't be taken back."
+          },
+          "confirm": "I understand, and I'm allowed to decide this for {workspace}.",
+          "yourWorkspace": "this workspace",
+          "recorded": "We keep your name and the time with this setting.",
+          "turnOn": "Turn on",
+          "cancel": "Cancel"
         }
       },
       "autoChoices": {
