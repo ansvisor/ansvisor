@@ -21,18 +21,29 @@ const ANY_SITE = (type: PageType): Record<SiteType, PageType> => ({
   b2b: type,
   ecommerce: type,
   b2c: type,
+  app: type,
 });
 
 /** The types opportunities used before they followed the site, on each kind of site. */
 const OLDER_TYPES: Record<string, Record<SiteType, PageType>> = {
-  pillar_guide: { b2b: 'guide', ecommerce: 'buying_guide', b2c: 'guide' },
-  landing_page: { b2b: 'solution_page', ecommerce: 'collection_page', b2c: 'destination_page' },
+  pillar_guide: { b2b: 'guide', ecommerce: 'buying_guide', b2c: 'guide', app: 'guide' },
+  landing_page: {
+    b2b: 'solution_page',
+    ecommerce: 'collection_page',
+    b2c: 'destination_page',
+    app: 'feature_page',
+  },
   comparison_page: ANY_SITE('comparison'),
   glossary_page: ANY_SITE('definition'),
-  faq_page: { b2b: 'docs_faq', ecommerce: 'help_faq', b2c: 'help_faq' },
+  faq_page: { b2b: 'docs_faq', ecommerce: 'help_faq', b2c: 'help_faq', app: 'help_faq' },
   // Also page types of a shop's, where they stay what they are.
-  product_page: { b2b: 'feature_page', ecommerce: 'product_page', b2c: 'guide' },
-  category_page: { b2b: 'solution_page', ecommerce: 'category_page', b2c: 'guide' },
+  product_page: {
+    b2b: 'feature_page',
+    ecommerce: 'product_page',
+    b2c: 'guide',
+    app: 'feature_page',
+  },
+  category_page: { b2b: 'solution_page', ecommerce: 'category_page', b2c: 'guide', app: 'guide' },
 };
 
 /** An asset's type as the brand's site reads it; null when it isn't one. */
