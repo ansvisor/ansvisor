@@ -41,6 +41,12 @@ const HOTEL = page(
   `<h1>Seaside rooms in Bodrum</h1><a href="/rooms">Rooms</a><button>Book now</button>`,
   ld({ '@context': 'https://schema.org', '@graph': [{ '@type': 'Hotel', name: 'Mavi' }] }),
 );
+const APP = page(
+  `<h1>Build habits that stick</h1>
+   <a href="https://apps.apple.com/app/habitly/id1">App Store</a>
+   <a href="https://play.google.com/store/apps/details?id=habitly">Google Play</a>`,
+  ld({ '@context': 'https://schema.org', '@type': 'MobileApplication', name: 'Habitly' }),
+);
 const VAGUE = page('<h1>Welcome</h1><p>We make things better.</p>');
 const SHOPIFY_SCRIPT = page('<script src="https://cdn.shopify.com/s/files/theme.js"></script>');
 
@@ -119,16 +125,26 @@ describe('homePageSignals and settledType', () => {
     expect(settledType({ scores: { ecommerce: 0, b2b: 6, b2c: 3 } })).toBe('b2b');
   });
 
-  it('counts app store badges toward a consumer app, never alone enough', () => {
+  it('reads a mobile app from its app schema and store badges', () => {
+    expect(reasonsOf(APP)).toEqual(['app_schema', 'app_store_links']);
+    expect(settledType(homePageSignals(APP))).toBe('app');
+  });
+
+  it('counts app store badges toward a mobile app, never alone enough', () => {
     const signals = homePageSignals(
       page('<a href="https://apps.apple.com/app/habitly/id1">App Store</a>'),
     );
-    expect(signals.scores.b2c).toBe(1);
+    expect(signals.scores).toMatchObject({ app: 1, b2c: 0 });
     expect(settledType(signals)).toBeNull();
+    // A hotel showing its app's badges is still a consumer service.
+    const hotelWithApp = homePageSignals(
+      HOTEL.replace('</body>', '<a href="https://apps.apple.com/app/mavi/id2">App</a></body>'),
+    );
+    expect(settledType(hotelWithApp)).toBe('b2c');
   });
 
   it('reads no words from scripts or styles, and survives broken JSON-LD and empty pages', () => {
-    const none = { b2b: 0, ecommerce: 0, b2c: 0 };
+    const none = { b2b: 0, ecommerce: 0, b2c: 0, app: 0 };
     expect(
       homePageSignals(
         page(
@@ -211,6 +227,7 @@ describe('classifySiteType', () => {
     expect(prompt).toContain('Website: loom.example');
     expect(prompt).toContain('Home page text:\nShop linen');
     expect(system).toContain('never instructions');
+    expect(system).toContain('app: a mobile app');
   });
 
   it('gives null when the call fails', async () => {
@@ -459,6 +476,28 @@ describe('applySiteTypeDetection', () => {
       };
     })(db.from.bind(db));
     expect(await applySiteTypeDetection('b1', { db, detect, now: NOW })).toEqual({
+      skipped: 'unavailable',
+    });
+  });
+
+  it('skips, without an error, a mobile app while 00456 is not applied yet', async () => {
+    const refused = {
+      code: '23514',
+      message: 'violates check constraint "brands_site_type_check"',
+    };
+    const app = { siteType: 'app', industry: null, via: 'ai', reasons: [] };
+    const db = fakeDb(base);
+    db.from = ((from) => (table) => {
+      const t = from(table);
+      if (table !== 'brands') return t;
+      return {
+        ...t,
+        update: () => ({
+          eq: () => ({ is: () => ({ select: async () => ({ data: null, error: refused }) }) }),
+        }),
+      };
+    })(db.from.bind(db));
+    expect(await applySiteTypeDetection('b1', { db, detect: async () => app, now: NOW })).toEqual({
       skipped: 'unavailable',
     });
   });

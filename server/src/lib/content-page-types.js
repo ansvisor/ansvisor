@@ -75,10 +75,15 @@ export const PAGE_TYPE_FRESHNESS = {
 };
 
 /** Kinds of site (brands.site_type, 00205), as web/src/lib/content/page-types.ts has them. */
-export const SITE_TYPES = ['b2b', 'ecommerce', 'b2c'];
+export const SITE_TYPES = ['b2b', 'ecommerce', 'b2c', 'app'];
 
 /** Each kind of site as Brand settings names it (web/messages/en.json, siteTypes). */
-export const SITE_TYPE_NAMES = { b2b: 'B2B SaaS', ecommerce: 'E-commerce', b2c: 'B2C' };
+export const SITE_TYPE_NAMES = {
+  b2b: 'B2B SaaS',
+  ecommerce: 'E-commerce',
+  b2c: 'B2C',
+  app: 'Mobile app',
+};
 
 /** The page types each kind of site writes, in the order the editor offers them. */
 export const SITE_PAGE_TYPES = {
@@ -120,6 +125,17 @@ export const SITE_PAGE_TYPES = {
     'help_faq',
     'blog_post',
   ],
+  app: [
+    'feature_page',
+    'comparison',
+    'alternatives',
+    'best_of',
+    'guide',
+    'definition',
+    'pricing',
+    'help_faq',
+    'blog_post',
+  ],
 };
 
 /** Industries that point away from B2B, as the editor guesses them. */
@@ -150,6 +166,7 @@ export const SITE_TYPE_MEANINGS = {
   b2b: 'software or services sold to businesses',
   ecommerce: 'an online shop selling products',
   b2c: 'a service for consumers',
+  app: 'a mobile app people install from an app store',
 };
 
 /**

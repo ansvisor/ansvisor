@@ -462,6 +462,7 @@ describe('testing a key (AGENT-OWN-KEY §5.2 item 7, §11 Q8)', () => {
     keys.keep.mockReset().mockResolvedValue(0);
     keys.read.mockReset().mockResolvedValue(READY);
     keys.resume.mockReset().mockResolvedValue(0);
+    keys.resolve.mockClear();
   });
 
   it('saves nothing for a key its test turns down, and names why under the key', async () => {
@@ -482,6 +483,11 @@ describe('testing a key (AGENT-OWN-KEY §5.2 item 7, §11 Q8)', () => {
     expect(keys.keep).toHaveBeenCalledWith('org1', 'openai', failing('no_credit', 429), {
       active: true,
     });
+    // The old key's notices close first; this key's failure tells the Admins anew.
+    expect(keys.resolve).toHaveBeenCalledWith('org1', 'openai');
+    expect(keys.resolve.mock.invocationCallOrder[0]).toBeLessThan(
+      keys.keep.mock.invocationCallOrder[0],
+    );
 
     keys.test.mockResolvedValue({ outcome: 'unknown' });
     results = [{ error: null }];

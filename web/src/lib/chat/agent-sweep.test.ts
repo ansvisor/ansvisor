@@ -196,7 +196,8 @@ describe('the agents’ sweep', () => {
     expect(runRow('old')).toMatchObject({ status: 'stopped', stop_reason: null });
     expect(runRow('fresh').status).toBe('running');
     expect(counts).toMatchObject({ staleQueued: 1, started: 1 });
-    expect(driver).toHaveBeenCalledWith({ id: 'fresh', organizationId: ORG });
+    // The tick has no one's session: the run's changes ask first.
+    expect(driver).toHaveBeenCalledWith({ id: 'fresh', organizationId: ORG, sessionUserId: null });
   });
 
   it('pauses an active agent with 3 failed runs in a row', async () => {

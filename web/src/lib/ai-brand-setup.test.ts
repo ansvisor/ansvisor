@@ -205,11 +205,16 @@ describe('detectSiteType', () => {
     for (const body of [
       { siteType: null, skipped: 'manual' },
       { siteType: null },
-      { siteType: 'app', industry: 7 },
+      { siteType: 'agency', industry: 7 },
     ]) {
       fetchMock.mockResolvedValue({ ok: true, json: async () => body });
       await expect(detectSiteType('b1')).resolves.toEqual({ siteType: null, industry: null });
     }
+  });
+
+  it('gives back Mobile app (00456)', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ siteType: 'app', via: 'ai' }) });
+    await expect(detectSiteType('b1')).resolves.toEqual({ siteType: 'app', industry: null });
   });
 
   it("throws SetupDailyLimitError past the day's setup calls", async () => {
