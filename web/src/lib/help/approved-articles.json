@@ -2369,7 +2369,7 @@
         },
         {
           "heading": "Pick the date range",
-          "text": "The tab uses the **Prompts** page's date range: 24h, 7d, 30d, 90d or custom. It opens on 7d, because one day of answers holds few searches; a range you picked on another tab carries over."
+          "text": "The tab uses the **Prompts** page's date range: 24h, 7d, 30d, 90d or custom. It opens on 7d, because one day of answers holds few searches; a range you picked on another tab carries over. The tab has no **Location** filter: it shows the searches from every location you track."
         }
       ]
     },
@@ -2829,7 +2829,7 @@
         },
         {
           "heading": "Select, pin or exclude",
-          "text": "Select rows to **Audit selected**, to **Pin** them, so they always come first, or to **Exclude** them. Excluded pages are listed under the table, where **Restore** puts them back."
+          "text": "Select rows to **Audit selected**, to **Pin** them, so they always come first, or to **Exclude** them. Excluded pages are listed under the table, where **Restore** puts them back.\n\nPins and exclusions hold for the whole brand, so only admins and managers see **Pin**, **Exclude** and **Restore**."
         },
         {
           "heading": "The Pages tab",

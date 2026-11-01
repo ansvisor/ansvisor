@@ -57,7 +57,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 /**
  * Site Audit › Settings (SA-006): the organization's auto-audit switch and
  * e-mail, the brand's exclude patterns and its pinned pages. Admins and
- * managers change them; everyone else reads them. With the page's quota, the
+ * managers change them, Unpin included; everyone else reads them. With the page's quota, the
  * switch also says when the runs happen: the last one and the next (the
  * first, when it was just turned on).
  */
@@ -265,19 +265,21 @@ export function AuditSettingsDialog({
                         <span className="truncate" title={page.url}>
                           {pathOf(page.url)}
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={guard(() => void handleUnpin(page.url), {
-                            action: tActions('unpinPages'),
-                          })}
-                          disabled={unpinning !== null}
-                        >
-                          {unpinning === page.url && (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          )}
-                          {t('unpin')}
-                        </Button>
+                        {canManage && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={guard(() => void handleUnpin(page.url), {
+                              action: tActions('unpinPages'),
+                            })}
+                            disabled={unpinning !== null}
+                          >
+                            {unpinning === page.url && (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            )}
+                            {t('unpin')}
+                          </Button>
+                        )}
                       </li>
                     ))}
                   </ul>

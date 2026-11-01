@@ -26,6 +26,12 @@ const getMore = vi.hoisted(() => ({ open: null as ((tab?: string) => void) | nul
 vi.mock('@/components/ai-usage/get-more-context', () => ({ useGetMore: () => getMore.open }));
 const download = vi.hoisted(() => ({ saveBlob: vi.fn() }));
 vi.mock('@/lib/download', () => download);
+// The output card's task clicks (W2-12), which the icons' module brings: the server's.
+vi.mock('@/lib/actions/chat-task-card', () => ({
+  markTaskDoneFromCard: vi.fn(),
+  attachOnlyFromCard: vi.fn(),
+  undoTaskDoneFromCard: vi.fn(),
+}));
 
 const { ChatFiles } = await import('./chat-files');
 
