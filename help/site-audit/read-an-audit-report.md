@@ -47,6 +47,10 @@ The **Signals** section lists every check by category, each with a pass, warning
 - what the signal measures, and **Why** it matters to AI engines;
 - the **Recommended fix** written for this page, or the general **Fix** for signals without one.
 
+## Authority links
+
+**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…) and major news.
+
 ## Product pages
 
 On a product page, one with Product structured data, **Product description opening** checks that the description's first 40 words, or 250 characters, name the product type and at least two key attributes, such as a measure, a material, a fit or a use. ChatGPT appears to read only about that much of a description when it matches products to a shopping question. The finding shows where the opening ends. Other pages show this signal as n/a.

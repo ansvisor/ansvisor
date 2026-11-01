@@ -365,9 +365,12 @@ function proofKind(said, claim, siteType) {
   return /\p{N}/u.test(claim) ? 'number' : null;
 }
 
-/** Whether a page advises consumers on health, finance or law: B2C only. */
+/** The kinds of site that speak to consumers: a B2C service, a mobile app. */
+const CONSUMER_SITES = ['b2c', 'app'];
+
+/** Whether a page advises consumers on health, finance or law: B2C and mobile apps only. */
 const regulatedFor = (said, siteType) =>
-  siteType === 'b2c' && REGULATED.includes(word(said)) ? word(said) : null;
+  CONSUMER_SITES.includes(siteType) && REGULATED.includes(word(said)) ? word(said) : null;
 
 /** A text's words as the page has them, found folded: its own slice, or null. */
 function ownSlice(block, said, min, max) {
@@ -389,7 +392,7 @@ function ownSlice(block, said, min, max) {
  *     (proofKind), once, not inside another of its block's, MAX_PROOFS. A
  *     block that links out keeps its proofs: the editor checks them off
  *     while it does;
- *   * regulated only on a B2C page;
+ *   * regulated only on a B2C or mobile app page;
  *   * checks (CE-050), each found one in its block's own words: answer
  *     first only on the first paragraph under the H1 (past a byline or a
  *     date); recommends only on a page that chooses among options (not

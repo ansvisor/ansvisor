@@ -1615,7 +1615,9 @@
         "create page",
         "optimize page",
         "content agent",
-        "import page"
+        "import page",
+        "page type",
+        "site type"
       ],
       "synonyms": [
         "write a new article",
@@ -1624,7 +1626,7 @@
         "improve an existing page"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1640,7 +1642,7 @@
         },
         {
           "heading": "Pick the page type",
-          "text": "Click **Continue**. Ansvisor picks a **Page type** from the title, the content, the page or the opportunity, and says which. Pick another if it's wrong; you can also change it later in the editor.\n\nFor a new page, **Overview** lists your pages AI already cites for the same prompts, with how many of those prompts each one answers, its AI citations and its Google position. Pick **Optimize … instead** on one of those pages to work on it, or **Create a new page**."
+          "text": "Click **Continue**. Ansvisor picks a **Page type** from the title, the content, the page or the opportunity, and says which. Pick another if it's wrong; you can also change it later in the editor.\n\nThe page types on offer follow the brand's **Site type** in the brand settings: B2B SaaS, E-commerce, B2C or Mobile app. A mobile app, for example, gets **Feature page**, **Pricing** and **Help & FAQ** among its types, and no product or destination pages.\n\nFor a new page, **Overview** lists your pages AI already cites for the same prompts, with how many of those prompts each one answers, its AI citations and its Google position. Pick **Optimize … instead** on one of those pages to work on it, or **Create a new page**."
         },
         {
           "heading": "Choose who does it",
@@ -2748,6 +2750,10 @@
         {
           "heading": "Signals",
           "text": "The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:\n\n- the **Finding**: what this audit saw on the page, when the check reports it;\n- what the signal measures, and **Why** it matters to AI engines;\n- the **Recommended fix** written for this page, or the general **Fix** for signals without one."
+        },
+        {
+          "heading": "Authority links",
+          "text": "**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…) and major news."
         },
         {
           "heading": "Product pages",

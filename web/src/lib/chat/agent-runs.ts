@@ -37,8 +37,14 @@ import {
 /**
  * Hands a started agent run to the Chat engine: its conversation and its
  * Chat run (W2-16). Resolves once the run is handed over, not when it ends.
+ * `sessionUserId`: the person signed in to the request that started it,
+ * null for none (the minute tick, a signal).
  */
-export type AgentRunDriver = (run: { id: string; organizationId: string }) => Promise<void>;
+export type AgentRunDriver = (run: {
+  id: string;
+  organizationId: string;
+  sessionUserId?: string | null;
+}) => Promise<void>;
 
 /**
  * The agent run driver (agent-driver.ts): read when a run starts, so this
@@ -52,12 +58,15 @@ export const AGENT_RUN_DRIVER: AgentRunDriver | null = async (run) =>
  * Starts the workspace's next queued agent runs while it has room
  * (`runsAtOnce`, the plan's) and hands each to the driver. Without a driver
  * nothing starts. A run the driver can't take fails, which frees its place.
- * Answers the runs started; never throws.
+ * `sessionUserId`: the person signed in to this request (Run now, Run
+ * agent), whichever runs start; null without one. Answers the runs
+ * started; never throws.
  */
 export async function startQueuedAgentRuns(
   organizationId: string,
   runsAtOnce: number,
   driver: AgentRunDriver | null = AGENT_RUN_DRIVER,
+  sessionUserId: string | null = null,
 ): Promise<string[]> {
   if (!driver) return [];
   const started: string[] = [];
@@ -73,7 +82,7 @@ export async function startQueuedAgentRuns(
     if (!data) break;
     started.push(data);
     try {
-      await driver({ id: data, organizationId });
+      await driver({ id: data, organizationId, sessionUserId });
     } catch (err) {
       console.error('[chat/agents] the driver could not take a run:', err);
       await supabaseAdmin
@@ -173,7 +182,7 @@ export async function runAgentNow(
   }
   if (claimed) await sweepExpiredKeys(org);
 
-  await startQueuedAgentRuns(org, agentPlanLimits(ctx.plan).runsAtOnce, driver);
+  await startQueuedAgentRuns(org, agentPlanLimits(ctx.plan).runsAtOnce, driver, ctx.actor.userId);
   // What the start made of them: running once a slot took them, else still queued.
   if (ours.some(Boolean)) {
     const { data, error } = await supabaseAdmin
@@ -253,7 +262,7 @@ export async function runAgentOnAction(
   if (result?.kind === 'full') return refused('queue_full', { count: result.waiting });
   const queued = result;
 
-  await startQueuedAgentRuns(org, agentPlanLimits(ctx.plan).runsAtOnce, driver);
+  await startQueuedAgentRuns(org, agentPlanLimits(ctx.plan).runsAtOnce, driver, ctx.actor.userId);
   const run: ActionRunItem = {
     brand: brand.name,
     status: 'queued',
