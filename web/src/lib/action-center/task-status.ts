@@ -21,6 +21,12 @@ export async function logEvent(supabase: Client, actionId: string, event: string
   await supabase
     .from('action_events')
     .insert({ action_id: actionId, event, data, actor_id: auth.user?.id ?? null });
+  // Someone worked on it: it is no longer stale (00432), whatever the change.
+  await supabase
+    .from('actions')
+    .update({ stale_at: null })
+    .eq('id', actionId)
+    .not('stale_at', 'is', null);
 }
 
 /** Bump the action's updated stamp so the table's Updated column tracks real

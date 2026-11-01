@@ -25,6 +25,7 @@ import { recordSignalsForBrand } from './record.js';
 import { generateActionsForBrand } from '../action-center/generate.js';
 import { rescoreBrandActions } from '../action-center/priority-data.js';
 import { sweepActionTasks } from '../action-center/task-writer/index.js';
+import { sweepStaleActions } from '../action-center/stale.js';
 
 /**
  * How far back the sweep looks. Long enough to cover a missed night plus the
@@ -66,6 +67,20 @@ async function rescoreSkippedNight(brandId, now) {
 }
 
 /**
+ * Actions left New with no one on them for a month are marked stale every
+ * night (action-center/stale.js), skipped nights too. Best effort: a list
+ * that can't be marked is no reason to fail the pass.
+ */
+async function markStaleActions(brandId, now) {
+  try {
+    return await sweepStaleActions(brandId, { now });
+  } catch (err) {
+    logger.warn({ brandId, err: err.message }, '[actions] stale sweep failed');
+    return null;
+  }
+}
+
+/**
  * Record signals and consolidate them into actions for one brand, then log
  * the pass against the run it covered.
  *
@@ -95,6 +110,7 @@ export async function runSignalPass(brandId, { runAt, now = new Date() } = {}) {
   const generated = recorded.skipped
     ? await rescoreSkippedNight(brandId, now)
     : await generateActionsForBrand(brandId, { now });
+  const stale = await markStaleActions(brandId, now);
 
   const { error } = await supabaseAdmin.from('signal_runs').upsert(
     {
@@ -102,7 +118,7 @@ export async function runSignalPass(brandId, { runAt, now = new Date() } = {}) {
       tracking_run_at: trackingRunAt,
       ran_at: now.toISOString(),
       outcome: recorded.skipped ? 'skipped' : 'recorded',
-      detail: { signals: recorded, actions: generated },
+      detail: { signals: recorded, actions: generated, stale },
     },
     { onConflict: 'brand_id,tracking_run_at' },
   );
@@ -116,7 +132,7 @@ export async function runSignalPass(brandId, { runAt, now = new Date() } = {}) {
     });
   }
 
-  return { trackingRunAt, signals: recorded, actions: generated };
+  return { trackingRunAt, signals: recorded, actions: generated, stale };
 }
 
 /**

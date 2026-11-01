@@ -14,7 +14,7 @@ vi.mock('@/lib/supabase/server', () => ({
     auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
     from: (table: string) => {
       const chain: Record<string, unknown> = {};
-      for (const method of ['select', 'eq']) chain[method] = () => chain;
+      for (const method of ['select', 'eq', 'not']) chain[method] = () => chain;
       chain.maybeSingle = async () => ({
         data: stored === undefined ? null : { details: stored },
         error: null,

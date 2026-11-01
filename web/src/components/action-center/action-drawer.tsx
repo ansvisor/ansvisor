@@ -32,6 +32,7 @@ import {
   assignAction,
   deleteTask,
   getActionDetail,
+  keepActionRelevant,
   setActionDueDate,
   updateActionStatus,
   updateTaskDetails,
@@ -62,8 +63,13 @@ import {
 import { signalTexts } from '@/lib/signals/display';
 import { isKpiKey } from '@/lib/kpis/registry';
 import { isSuperseded, SignalStatusBadge } from './signal-table';
-import { ActionIcon, PriorityBadge } from './action-table';
-import { priorityReasonText } from '@/lib/action-center/priority';
+import { ActionIcon, PriorityBadge, StalePill } from './action-table';
+import {
+  STALE_AFTER_DAYS,
+  isStale,
+  priorityConfidenceText,
+  priorityReasonText,
+} from '@/lib/action-center/priority';
 import { OpportunityContext } from './opportunity-context';
 import { ActionExportButtons } from './action-export-buttons';
 import { RunAgentButton } from './run-agent-button';
@@ -390,7 +396,8 @@ export function ActionDrawer({
    * A failed save says so and reads the list again, back to what was saved.
    */
   const changeField = async (patch: Partial<ActionItem>, save: () => Promise<void>) => {
-    onPatched(action.id, { ...patch, updatedAt: new Date().toISOString() });
+    // Any change is someone working on it: no longer stale (00432).
+    onPatched(action.id, { ...patch, staleAt: null, updatedAt: new Date().toISOString() });
     try {
       await save();
     } catch {
@@ -488,8 +495,29 @@ export function ActionDrawer({
                   </Badge>
                 ))}
             <RemovedNote payload={action.payload ?? {}} />
+            {isStale(action) && <StalePill />}
           </div>
         </SheetHeader>
+
+        {isStale(action) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-amber-500/30 bg-amber-500/10 px-6 py-2.5 text-xs">
+            <p className="min-w-0 flex-1 text-amber-700 dark:text-amber-400">
+              {t('stale.notice', { days: STALE_AFTER_DAYS })}
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={guard(
+                () =>
+                  void changeField({ staleAt: null }, () => keepActionRelevant(brandId, action.id)),
+                { action: tActions('changeActionStatus') },
+              )}
+            >
+              {t('stale.keep')}
+            </Button>
+          </div>
+        )}
 
         {/* Who has it, where it stands and by when: ahead of the tabs, so they
             read and change without scrolling past the content. */}
@@ -635,6 +663,11 @@ export function ActionDrawer({
                   <section>
                     <p className="text-xs font-medium text-muted-foreground">{t('priority.why')}</p>
                     <p className="mt-1">{priorityReasonText(action.priorityReason, tPriority)}</p>
+                    {action.priorityReason.confidence && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {priorityConfidenceText(action.priorityReason.confidence, tPriority)}
+                      </p>
+                    )}
                   </section>
                   <Separator />
                 </>

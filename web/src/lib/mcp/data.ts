@@ -44,6 +44,11 @@ import {
 } from '@/lib/action-center/task-details';
 import { controlNetOf } from '@/lib/action-center/history';
 import {
+  confidenceNote,
+  parsePriorityReason,
+  type ConfidenceLevel,
+} from '@/lib/action-center/priority';
+import {
   dismissReasonOf,
   missingDismissReason,
   type ActionDismissReason,
@@ -2998,6 +3003,9 @@ export interface ActionListRow {
   due_date: string | null;
   task_progress: { completed: number; total: number };
   priority: ActionPriorityForMcp | null;
+  /** New for 30 days or more with no one's event (00432); never set on another status. */
+  stale: boolean;
+  stale_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -3012,6 +3020,15 @@ export interface ActionPriorityForMcp {
   score: number;
   level: string | null;
   reason: Record<string, unknown> | null;
+  /**
+   * How sure the score is of what it rests on, as a level (`reason.factors.
+   * confidence` is the raw factor), and why: "one kind of finding from one
+   * source". Null from a scorer before it was kept.
+   */
+  confidence: ConfidenceLevel | null;
+  confidence_note: string | null;
+  /** The raw 0–1 factor, as `reason.factors.confidence`. */
+  confidence_score: number | null;
 }
 
 function priorityFor(row: {
@@ -3020,6 +3037,7 @@ function priorityFor(row: {
   priority_reason?: unknown;
 }): ActionPriorityForMcp | null {
   if (row.priority_score === null || row.priority_score === undefined) return null;
+  const confidence = parsePriorityReason(row.priority_reason)?.confidence ?? null;
   return {
     score: Number(row.priority_score),
     level: row.priority_level ?? null,
@@ -3027,7 +3045,16 @@ function priorityFor(row: {
       row.priority_reason && typeof row.priority_reason === 'object'
         ? (row.priority_reason as Record<string, unknown>)
         : null,
+    confidence: confidence?.level ?? null,
+    confidence_note: confidence ? confidenceNote(confidence) : null,
+    confidence_score: confidence?.score ?? null,
   };
+}
+
+/** Stale (00432) only while New: the stamp waits for the nightly pass to clear it. */
+function staleFor(row: { status?: string | null; stale_at?: string | null }) {
+  const stale = row.status === 'new' && Boolean(row.stale_at);
+  return { stale, stale_at: stale ? (row.stale_at ?? null) : null };
 }
 
 export interface ListActionsParams {
@@ -3052,7 +3079,7 @@ export async function listActionsFor(
   let query = supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, target_entity:payload->>targetEntity, target_count:payload->targetCount',
+      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, stale_at, target_entity:payload->>targetEntity, target_count:payload->targetCount',
     )
     .eq('brand_id', params.brandId)
     // A deleted action (00168) is gone for everyone but the nightly generator.
@@ -3121,6 +3148,7 @@ export async function listActionsFor(
         ),
       ),
     }),
+    ...staleFor(r),
     created_at: r.created_at,
     updated_at: r.updated_at,
   }));
@@ -3144,6 +3172,9 @@ export interface ActionDetailForMcp {
   assignee: { id: string; full_name: string | null } | null;
   due_date: string | null;
   priority: ActionPriorityForMcp | null;
+  /** As on list_actions. */
+  stale: boolean;
+  stale_at: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -3229,7 +3260,7 @@ interface ActionDetailRow {
 }
 
 const ACTION_DETAIL_COLUMNS =
-  'id, action_no, brand_id, category, kind, impact, status, outcome, validation, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, brands!inner(organization_id)';
+  'id, action_no, brand_id, category, kind, impact, status, outcome, validation, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, stale_at, brands!inner(organization_id)';
 
 export async function getActionFor(
   auth: McpAuthContext,
@@ -3308,6 +3339,7 @@ export async function getActionFor(
       ...action,
       priority_reason: currentPriorityReason(action.priority_reason, payload),
     }),
+    ...staleFor(action),
     created_at: action.created_at,
     updated_at: action.updated_at,
     completed_at: action.completed_at ?? null,

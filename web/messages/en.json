@@ -1377,7 +1377,15 @@
         "in_progress": "In Progress",
         "on_hold": "On Hold",
         "completed": "Completed",
-        "dismissed": "Dismissed"
+        "dismissed": "Dismissed",
+        "stale": "Stale"
+      },
+      "stale": {
+        "pill": "Stale",
+        "hint": "New for {days} days or more, with no one working on it",
+        "notice": "Stale: this action has been New for {days} days or more and no one has worked on it. It isn't closed: keep it if it still matters, or dismiss it.",
+        "keep": "Still relevant",
+        "kept": "Kept: it's no longer stale"
       },
       "taskProgress": "{completed}/{total} tasks",
       "everyone": "Everyone",
@@ -1406,6 +1414,7 @@
         "in_progress": "In Progress",
         "completed": "Completed",
         "dismissed": "Dismiss",
+        "stillRelevant": "Still relevant",
         "delete": "Delete",
         "deleteNotAllowed": "Only admins and managers can delete actions",
         "deleteTitle": "Delete this action?",
@@ -1488,6 +1497,14 @@
             "rarely": "only {improved} of {results} earlier {results, plural, one {action} other {actions}} of this kind improved results here"
           },
           "sources": "confirmed by {count} sources",
+          "confidence": {
+            "line": "{level} — {why}.",
+            "low": "Low confidence",
+            "medium": "Medium confidence",
+            "high": "High confidence",
+            "found": "{kinds, plural, one {one kind of finding} other {# kinds of finding}}{sources, plural, =0 {} one { from one source} other { from # sources}}",
+            "sent": "rated from what it was sent with, not from detected findings"
+          },
           "sentence": {
             "withWhen": "{what} {when}",
             "withExtras": "{text} — {extras}",
@@ -1759,7 +1776,8 @@
           "outcome_measured": "{day, plural, =0 {} other {Day #{final, select, yes {, final} other {}} · }}{outcome, select, improved {Result: metrics improved after this action closed} mixed {Result: mixed after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}",
           "agent_run_started": "Agent run started{named, select, yes { · {agent}} other {}}",
           "agent_run_completed": "{to, select, done {Agent run completed} failed {Agent run failed} stopped {Agent run stopped} skipped {Agent run skipped} other {Agent run ended}}{named, select, yes { · {agent}} other {}}{reason, select, action_closed { · action closed} other {}}",
-          "chat_started": "Chat started on this action"
+          "chat_started": "Chat started on this action",
+          "still_relevant": "Kept as still relevant: no longer stale"
         },
         "eventParts": {
           "note": "Note: {note}",
