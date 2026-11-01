@@ -1,11 +1,11 @@
 ---
 title: Connect AI traffic data sources
 route: /dashboard/traffic
-keywords: [tracking snippet, connect google analytics, connect search console, data sources, install snippet]
+keywords: [tracking snippet, connect google analytics, connect search console, data sources, install snippet, check again, tracking code not detected]
 synonyms: [set up ai traffic, add tracking code, link analytics, ga4, gsc]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -22,13 +22,21 @@ The **Data sources** strip at the top of **AI Traffic Analytics** shows the four
 
 ## Add the tracking snippet
 
-Copy the snippet from the page. It sits at the top until it has sent a visit in the last week. **Install** in the Data sources strip opens it too; once the snippet sends visits, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.
+Until the snippet is seen on your site, the page opens with **Tracking code not detected on** your domain, the steps to add it and the snippet itself. **Install** in the Data sources strip opens it too; once the snippet is seen, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.
 
 Add it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page.
 
 ## Check that the snippet works
 
-The **Tracking snippet** card reads **Active · last visit …** once the snippet has sent a visit in the last week, otherwise **Not detected**. A visit is stored as soon as an AI-referred visitor lands. Reload the page, or change the range, to see new ones.
+After you publish it, click **Check again**: Ansvisor reads your home page once and looks for the snippet. Your brand's home page is also checked when the brand is set up. The snippet itself adds no request for your other visitors.
+
+The **Tracking snippet** card then reads:
+
+- **Active · last visit …**: an AI-referred visit in the last week;
+- **Installed · no AI visits in the last 7 days**: the check found it, or it has sent a visit before;
+- **Not detected on** your domain: neither, so the page doesn't show 0 visits as a result.
+
+Added the snippet with a tag manager? The check can't see it in the page, so the card changes with the first AI visit.
 
 ## What the snippet collects
 

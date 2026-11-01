@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from '@/i18n/navigation';
+import { Link, useRouter } from '@/i18n/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { createReport, getReports, deleteReport, type ReportListItem } from '@/lib/actions/reports';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { Input } from '@/components/ui/input';
 import {
   Dialog,
@@ -66,6 +67,7 @@ function getDateRange(preset: DatePreset, custom: { from: string; to: string }) 
 
 export default function ReportsPage() {
   const t = useTranslations('reports');
+  const chatAgentic = useChatAgentic();
   const tc = useTranslations('common');
   // A read-only workspace (plan not active): Generate report and Delete open
   // the upgrade dialog instead; reading and downloading reports stay open.
@@ -194,15 +196,27 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       <HeaderWithAiUsage>
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
             <p className="text-muted-foreground">{t('description')}</p>
           </div>
-          <Button className="gap-2" onClick={openDialog} disabled={!activeBrandId}>
-            <Plus className="h-4 w-4" />
-            {t('generateReport')}
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* What Ansvisor did for you (CHAT-22 §2 item 5): kept only with the new Chat on. */}
+            {chatAgentic && (
+              <Link
+                href="/dashboard/reports/impact"
+                data-action="reports.openImpact"
+                className={buttonVariants({ variant: 'outline' })}
+              >
+                {t('impactLink')}
+              </Link>
+            )}
+            <Button className="gap-2" onClick={openDialog} disabled={!activeBrandId}>
+              <Plus className="h-4 w-4" />
+              {t('generateReport')}
+            </Button>
+          </div>
         </div>
       </HeaderWithAiUsage>
 

@@ -47,7 +47,7 @@ import { GoogleTrendView } from './_google-trend';
 import { GoogleSection } from './_google-section';
 import { BotsReportSection } from './_bots-report';
 import { NeedsTag } from './_source-gate';
-import { googleSourceStatus, snippetDetected } from '@/lib/traffic-sources';
+import { googleSourceStatus, snippetStateOf } from '@/lib/traffic-sources';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useLatestRequest } from '@/hooks/use-latest-request';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -624,6 +624,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
     ? googleSourceStatus(sources.gsc) === 'connected'
     : sourcesFailed || null;
 
+  // Where the tracking snippet stands (00433); null while the sources load or couldn't be read.
+  const snippet = sources ? snippetStateOf(sources) : null;
+
   const isEmpty = totalVisits === 0 && logs.length === 0;
   const hasAnyData = summary?.hasAnyData ?? false;
   const trulyEmpty = isEmpty && !hasAnyData;
@@ -735,8 +738,8 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <HeaderWithAiUsage>
+      {/* Header: the meter and Ask Chat at its bottom, beside the range's buttons. */}
+      <HeaderWithAiUsage align="end">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">AI Traffic Analytics</h1>
@@ -783,9 +786,22 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
               onBotsChanged={() => setBotsRevision((n) => n + 1)}
             />
           )}
-          {/* The code stays open only while the snippet sends nothing (F3). */}
-          {(sourcesFailed || (sources && !snippetDetected(sources.snippetLastVisitAt))) && (
-            <SnippetBanner trackingCode={brand.trackingCode} conversions={conversions} />
+          {/* The code stays open only while the snippet isn't seen on the site (F3, 00433). */}
+          {(sourcesFailed || snippet === 'not_detected') && (
+            <SnippetBanner
+              trackingCode={brand.trackingCode}
+              conversions={conversions}
+              check={
+                sources
+                  ? {
+                      brandId: brand.id,
+                      domain: primaryDomain,
+                      checkedAt: sources.snippetCheckedAt,
+                      onFound: () => void loadSources(),
+                    }
+                  : undefined
+              }
+            />
           )}
           <SnippetDialog
             trackingCode={brand.trackingCode}
@@ -800,7 +816,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                 <Globe className="h-10 w-10 mx-auto text-muted-foreground/50" />
                 <h3 className="text-lg font-semibold mt-4">{t('noDataTitle')}</h3>
                 <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-                  {brand.trackingCode ? t('noVisitsDescription') : t('noDataDescriptionNoSnippet')}
+                  {snippet === 'not_detected'
+                    ? t('noDataDescriptionNoSnippet')
+                    : t('noVisitsDescription')}
                 </p>
               </CardContent>
             </Card>

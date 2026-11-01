@@ -231,6 +231,7 @@ import { readUrlChoice } from '@/lib/url-state';
 import { promptsTableState } from './table-state';
 import { formatCompactNumber, formatDate, formatNumber } from '@/lib/format';
 import {
+  AI_ADOPTION_RATE,
   averageEstimate,
   promptVolumeEstimate,
   sumEstimates,
@@ -416,6 +417,15 @@ function defaultRangeFor(tab: string): PromptRangePreset {
   return tab === 'fanout' ? '7d' : DEFAULT_PROMPT_RANGE_PRESET;
 }
 type TabId = (typeof VALID_TABS)[number];
+
+/**
+ * Whether a tab reads the Location filter: only All Prompts' table does.
+ * Topics and Query Fan-out read every location and Insights' volumes carry
+ * none, so the filter and Chat's location chip are left off there.
+ */
+function tabUsesLocation(tab: TabId): boolean {
+  return tab === 'all';
+}
 
 const PROMPT_VIEWS = ['tracked', 'suggestions'] as const;
 type PromptsView = (typeof PROMPT_VIEWS)[number];
@@ -1846,6 +1856,9 @@ export default function PromptsPage() {
   const totalAiVol = volumes.reduce((s, v) => s + v.estAiVolume, 0);
   const totalEstimate = sumEstimates(volumes.map((v) => estimateByPromptId.get(v.promptId)!));
   const averagePerPrompt = averageEstimate(totalEstimate);
+  // The rate the volumes were estimated with, as the AI Adoption Rate card
+  // and the Prompt Volumes caption both say it.
+  const adoptionRate = `${((volumes[0]?.aiVolumeMultiplier ?? AI_ADOPTION_RATE) * 100).toFixed(0)}%`;
   const estimateOf = (v: PromptVolume) => estimateByPromptId.get(v.promptId)!;
   // High Opportunity Prompts: a low-confidence estimate isn't listed on its own.
   const opportunityRows = volumes
@@ -1945,8 +1958,9 @@ export default function PromptsPage() {
     rangePreset,
   ]);
 
-  // Chat's side panel sees the page (W1-08): its range and location, and a
-  // tracked prompt the brand doesn't show up for (the one asked most).
+  // Chat's side panel sees the page (W1-08): its range, its location where
+  // the tab reads one, and a tracked prompt the brand doesn't show up for
+  // (the one asked most).
   const unseen = allPrompts
     .filter((prompt) => (visibility[prompt.id]?.runs ?? 0) > 0)
     .filter((prompt) => visibility[prompt.id].visibleRuns === 0)
@@ -1961,9 +1975,10 @@ export default function PromptsPage() {
               tChatRange(key, values),
             ),
           },
-          filters: regionFilter
-            ? [{ key: 'region', label: formatRegionDisplay(regionFilter), value: regionFilter }]
-            : [],
+          filters:
+            regionFilter && tabUsesLocation(tab)
+              ? [{ key: 'region', label: formatRegionDisplay(regionFilter), value: regionFilter }]
+              : [],
           suggestions: [
             ...(unseen ? [tChat('promptUnseen', { prompt: unseen.text })] : []),
             tChat('promptsNext'),
@@ -2084,7 +2099,8 @@ export default function PromptsPage() {
         {/* Filter bar — same shape and position as Visibility and Citations
             (#713). It sits outside the tab panels because the range governs
             All Prompts, Topics and Query Fan-out. Location doesn't apply to
-            Topics, so it is left off there.
+            Topics or Query Fan-out (it reads every location), so it is left
+            off there.
             Hidden on Insights: that tab shows keyword volume estimates, which
             carry no date dimension, so a range there would be a control that
             changes nothing. */}
@@ -2100,7 +2116,7 @@ export default function PromptsPage() {
               onToChange={setCustomTo}
             />
 
-            {availableRegions.length > 1 && tab !== 'topics' && (
+            {availableRegions.length > 1 && tabUsesLocation(tab) && (
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
                   Location
@@ -2394,7 +2410,7 @@ export default function PromptsPage() {
                 <KpiCard
                   title="AI Adoption Rate"
                   icon={TrendingUp}
-                  value={`${((volumes[0]?.aiVolumeMultiplier ?? 0.15) * 100).toFixed(0)}%`}
+                  value={adoptionRate}
                   sub="of Google search volume"
                 />
                 <KpiCard
@@ -2420,9 +2436,7 @@ export default function PromptsPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium">Prompt Volumes</CardTitle>
                     <p className="text-xs text-muted-foreground">
-                      Total estimated AI-answered queries across all topic clusters, split by
-                      answer-engine share. Weights include Google AI Overviews (~35% of Google
-                      searches), Google AI Mode, and standalone chatbots.
+                      {tVolumes('chartCaption', { rate: adoptionRate })}
                     </p>
                   </CardHeader>
                   <CardContent>

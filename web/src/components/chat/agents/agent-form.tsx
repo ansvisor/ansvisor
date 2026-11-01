@@ -24,6 +24,7 @@ import {
   defaultAgentName,
   firstStepWithProblems,
   formFromAgent,
+  formFromPreset,
   hasProblems,
   newForm,
   newTriggerDraft,
@@ -43,9 +44,12 @@ import {
   ANSVISOR_SKILLS,
   MAX_FOLLOW_ON_SKILLS,
   OPTIONAL_CONNECTIONS,
+  requiredBy as skillNeeding,
+  type SkillConnection,
 } from '@/lib/chat/agent-skills';
 import { engineName, nextRunOf, percentOf, writesAgents } from '@/lib/chat/agent-view';
 import type { AgentDetail } from '@/lib/chat/agents';
+import type { AgentPreset } from '@/lib/chat/agents/catalog';
 import type { ChatDenialCard } from '@/lib/chat/events';
 import { CHAT_MODES, type ChatMode } from '@/lib/chat/precedence';
 import { viewerTimeZone } from '@/lib/time-zone';
@@ -80,7 +84,9 @@ import { useAgentWords } from './agent-words';
  * step is checked before the next opens; what the server refuses (a name
  * taken, the plan's active agents, a one-off in the past…) is shown on the
  * step it belongs to. Analysts and Agency partners, and a Manager on an
- * agent that isn't theirs, see a read-only line with Ask your Admin.
+ * agent that isn't theirs, see a read-only line with Ask your Admin. From a
+ * ready-to-use agent (Agent Center › Ready to use), the steps open filled
+ * with it and named after it; it is saved only as the person saves it.
  */
 
 /** Steps' problems shown once Next (or a save) was tried on them. */
@@ -206,6 +212,7 @@ export function AgentForm({
   setup,
   agent = null,
   initialSkill = null,
+  preset = null,
   now,
   timeZone,
 }: {
@@ -214,6 +221,8 @@ export function AgentForm({
   agent?: AgentDetail | null;
   /** A skill to start from (`?skill=` from a skill's Create agent). */
   initialSkill?: string | null;
+  /** A ready-to-use agent to start from (`?preset=`, "Use this agent"). */
+  preset?: AgentPreset | null;
   now?: Date;
   timeZone?: string;
 }) {
@@ -226,7 +235,12 @@ export function AgentForm({
     () => timeZone ?? viewerTimeZone(),
     () => timeZone ?? null,
   );
-  const back = agent ? `/dashboard/agents/${agent.id}` : '/dashboard/agents';
+  // Back where it was opened from: the agent, Ready to use, or Your agents.
+  const back = agent
+    ? `/dashboard/agents/${agent.id}`
+    : preset
+      ? '/dashboard/agents?tab=ready'
+      : '/dashboard/agents?tab=yours';
   // Editing, the agent's name: "Edit · Citation win-back".
   const title = agent ? t('titleEdit', { name: agent.name }) : t('titleNew');
 
@@ -321,6 +335,7 @@ export function AgentForm({
         setup={setup}
         agent={agent}
         initialSkill={initialSkill}
+        preset={preset}
         now={now}
         zone={zone}
         back={back}
@@ -333,6 +348,7 @@ function AgentFormBody({
   setup,
   agent,
   initialSkill,
+  preset,
   now: nowProp,
   zone,
   back,
@@ -340,6 +356,7 @@ function AgentFormBody({
   setup: AgentFormSetup;
   agent: AgentDetail | null;
   initialSkill: string | null;
+  preset: AgentPreset | null;
   now?: Date;
   zone: string;
   back: string;
@@ -355,23 +372,33 @@ function AgentFormBody({
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
 
   const skillTitle = (id: string) => (tSkills.has(id) ? tSkills(id) : id);
+  const presetName = preset ? tAgents(`presets.${preset.id}.name`) : null;
+  /** The title a new agent is named by (§O): its ready-to-use agent's, while it keeps its skill. */
+  const autoTitle = (skills: readonly string[]) => {
+    const primary = skills[0];
+    if (!primary) return null;
+    return presetName && primary === preset?.skills[0] ? presetName : skillTitle(primary);
+  };
   /** The name a new agent gets while the person hasn't typed one (§O). */
   const named = (next: AgentFormState): AgentFormState => {
     if (next.nameEdited) return next;
-    const primary = next.skills[0];
+    const title = autoTitle(next.skills);
     const brand =
       !next.allBrands && next.brandIds.length === 1
         ? (setup.brands.find((b) => b.id === next.brandIds[0])?.name ?? null)
         : null;
     return {
       ...next,
-      name: primary ? defaultAgentName(skillTitle(primary), brand, setup.takenNames) : '',
+      name: title ? defaultAgentName(title, brand, setup.takenNames) : '',
     };
   };
 
   const [state, setState] = useState<AgentFormState>(() => {
     if (agent) {
       return formFromAgent(agent, setup, { timeZone: zone, triggerKey: (i) => `k${i}` })!;
+    }
+    if (preset) {
+      return named(formFromPreset(setup, preset, { timeZone: zone, brandId: activeBrandId }));
     }
     const skill = initialSkill && ANSVISOR_SKILLS.some((s) => s.id === initialSkill);
     return named(
@@ -541,9 +568,7 @@ function AgentFormBody({
       let saved = base;
       const created = !agent;
       if (!saved) {
-        const answer = await createAgent(
-          createBody(state, setup.role, primary ? skillTitle(primary) : null),
-        );
+        const answer = await createAgent(createBody(state, setup.role, autoTitle(state.skills)));
         if (!answer.ok) return refuse(answer, false);
         const draft = answer.agent;
         saved = draft;
@@ -694,8 +719,7 @@ function AgentFormBody({
       ...state.connections.filter((c) => !c.required).map((c) => c.key),
     ]),
   ].filter((key) => !required.some((c) => c.key === key));
-  const requiredBy = (key: string) =>
-    state.skills.find((id) => ANSVISOR_SKILLS.find((s) => s.id === id)?.uses.includes(key)) ?? null;
+  const requiredBy = (key: string) => skillNeeding(state.skills, key);
   const models = [
     'auto',
     FAST_MODEL,
@@ -836,7 +860,7 @@ function AgentFormBody({
                     {[
                       // A skill kept from elsewhere (a library skill) shows first.
                       ...(primary && !ANSVISOR_SKILLS.some((s) => s.id === primary)
-                        ? [{ id: primary, uses: [] as readonly string[] }]
+                        ? [{ id: primary, uses: [] as readonly SkillConnection[] }]
                         : []),
                       ...ANSVISOR_SKILLS,
                     ].map((skill, i) => {
@@ -860,7 +884,9 @@ function AgentFormBody({
                           <em className={EM}>
                             {skill.uses.length > 0
                               ? t('skill.uses', {
-                                  connections: skill.uses.map(words.connection).join(', '),
+                                  connections: skill.uses
+                                    .map((use) => words.connection(use.key))
+                                    .join(', '),
                                 })
                               : t('skill.noConnection')}
                           </em>
@@ -1109,6 +1135,12 @@ function AgentFormBody({
                       >
                         <div className="min-w-0 flex-1">
                           <b className="font-medium">{words.connection(key)}</b>
+                          {/* "Any CMS": which ones count. */}
+                          {tAgents.has(`connections.counts.${key}`) && (
+                            <em data-slot="connection-counts" className={cn(EM, 'text-xs')}>
+                              {tAgents(`connections.counts.${key}`)}
+                            </em>
+                          )}
                           <em className={cn(EM, 'text-xs')}>
                             {need
                               ? by
@@ -1254,7 +1286,7 @@ function AgentFormBody({
 
                   <SettingRow
                     label={t('agent.maxRun')}
-                    note={t('agent.maxRunNote')}
+                    note={t(setup.ownKeyProvider ? 'agent.maxRunNoteOwnKey' : 'agent.maxRunNote')}
                     noteId="agent-form-note-max-run"
                     htmlFor="agent-max-run"
                   >

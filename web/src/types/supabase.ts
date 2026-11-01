@@ -956,6 +956,8 @@ export type Database = {
           site_type_detected_at: string | null
           site_type_source: string | null
           slug: string
+          snippet_checked_at: string | null
+          snippet_found_at: string | null
           state: string | null
           tracking_code: string
           updated_at: string
@@ -993,6 +995,8 @@ export type Database = {
           site_type_detected_at?: string | null
           site_type_source?: string | null
           slug: string
+          snippet_checked_at?: string | null
+          snippet_found_at?: string | null
           state?: string | null
           tracking_code?: string
           updated_at?: string
@@ -1030,6 +1034,8 @@ export type Database = {
           site_type_detected_at?: string | null
           site_type_source?: string | null
           slug?: string
+          snippet_checked_at?: string | null
+          snippet_found_at?: string | null
           state?: string | null
           tracking_code?: string
           updated_at?: string
@@ -5444,8 +5450,13 @@ export type Database = {
       organization_ai_keys: {
         Row: {
           active: boolean
+          checked_at: string | null
+          failing_since: string | null
+          failure_class: string | null
+          failure_status: number | null
           key_encrypted: string
           key_last4: string
+          notified_at: string | null
           organization_id: string
           provider: string
           set_at: string
@@ -5454,8 +5465,13 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          checked_at?: string | null
+          failing_since?: string | null
+          failure_class?: string | null
+          failure_status?: number | null
           key_encrypted: string
           key_last4: string
+          notified_at?: string | null
           organization_id: string
           provider: string
           set_at?: string
@@ -5464,8 +5480,13 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          checked_at?: string | null
+          failing_since?: string | null
+          failure_class?: string | null
+          failure_status?: number | null
           key_encrypted?: string
           key_last4?: string
+          notified_at?: string | null
           organization_id?: string
           provider?: string
           set_at?: string

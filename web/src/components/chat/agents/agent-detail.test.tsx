@@ -251,11 +251,11 @@ describe('AgentDetail', () => {
     expect(nav.push).toHaveBeenCalledWith('/dashboard/agents/aaaaaaaa-0000-4000-8000-000000000009');
   });
 
-  // Agent Center (/dashboard/agents): its own page now, out of Chat's header.
-  it('leads back to Agent Center from the top', async () => {
+  // Agent Center (/dashboard/agents): its own page now, out of Chat's header; the agents are its Your agents tab.
+  it('leads back to Agent Center from the top, on Your agents', async () => {
     await render();
     const back = action('agents.back')[0];
-    expect(back.getAttribute('href')).toBe('/dashboard/agents');
+    expect(back.getAttribute('href')).toBe('/dashboard/agents?tab=yours');
     expect(back.textContent).toBe('Back to Agent Center');
   });
 
@@ -480,7 +480,7 @@ describe('AgentDetail', () => {
     answer = () => Response.json({ ok: false, failure: 'not_found' }, { status: 404 });
     await render();
     expect(one('[data-slot="agent-error"]')?.textContent).toContain("This agent isn't available.");
-    expect(action('agents.back')[0].getAttribute('href')).toBe('/dashboard/agents');
+    expect(action('agents.back')[0].getAttribute('href')).toBe('/dashboard/agents?tab=yours');
   });
 
   it('keeps the agent when only its runs could not be read', async () => {
@@ -538,7 +538,7 @@ describe('AgentDetail', () => {
       fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => url),
     ).toEqual([`/api/chat/agents/${AGENT_ID}`]);
     expect(toast).toHaveBeenCalledWith('Citation win-back deleted · its runs and files stay');
-    expect(nav.push).toHaveBeenCalledWith('/dashboard/agents');
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/agents?tab=yours');
   });
 
   it('keeps an archived agent when Delete is refused, with the server’s words', async () => {

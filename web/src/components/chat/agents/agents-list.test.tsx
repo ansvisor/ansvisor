@@ -8,12 +8,13 @@ import type { AgentListResult } from '@/lib/chat/agents';
 import { AGENT_ID, NOW, listItem, listResult } from '@/lib/chat/testing/agent-fixtures';
 
 /**
- * Agent Center (CHAT-21 §B; governance mockup #g-agents; CHAT-27 item 24):
- * the tabs with their counts ask the server again; each card shows its
- * state, skills, triggers, next run, scope, last run, outcomes and AI use
- * as a share with its tip, never dollars; Admins and Managers get New
- * agent, Run now and Pause, readers a read-only line instead; a refused
- * button shows the out-of-permission answer; a failed read a plain line.
+ * Agent Center's Your agents tab (CHAT-21 §B; governance mockup #g-agents;
+ * CHAT-27 item 24), as Agent Center shows it: the tabs with their counts
+ * ask the server again; each card shows its state, skills, triggers, next
+ * run, scope, last run, outcomes and AI use as a share with its tip, never
+ * dollars; Admins and Managers get New agent, Run now and Pause, readers a
+ * read-only line instead; a refused button shows the out-of-permission
+ * answer; a failed read a plain line.
  */
 
 vi.mock('@/i18n/navigation', () => ({
@@ -42,7 +43,7 @@ vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: vi.fn(async () => ({ ok: true, id: 'request-1' })),
 }));
 
-const { AgentsList } = await import('./agents-list');
+const { AgentCenter } = await import('./agent-center');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -61,7 +62,7 @@ async function render(role: TeamRole = 'manager') {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <RoleProvider role={role}>
-          <AgentsList now={NOW} timeZone="UTC" />
+          <AgentCenter initialTab="yours" now={NOW} timeZone="UTC" />
         </RoleProvider>
       </NextIntlClientProvider>,
     );
@@ -126,7 +127,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('AgentsList', () => {
+describe('AgentsList (Agent Center › Your agents)', () => {
   it('shows the tabs with their counts and asks the server again for each tab', async () => {
     await render();
     expect(listCalls()).toEqual(['/api/chat/agents?view=mine']);
@@ -359,6 +360,22 @@ describe('AgentsList', () => {
     expect(toast.error).toHaveBeenLastCalledWith('This agent is archived.');
     await click(cards()[0].querySelector<HTMLElement>('[data-action="agents.pauseResume"]')!);
     expect(toast.error).toHaveBeenLastCalledWith("Couldn't do that. Try again.");
+  });
+
+  it('says which brand lacks which Required connection when Resume is refused', async () => {
+    const words =
+      'This agent needs Any CMS, and Brand B doesn’t have it connected. Connect it for that brand, then run the agent again.';
+    answer = (url) =>
+      url.endsWith('/resume')
+        ? Response.json(
+            { ok: false, failure: 'failed', code: 'connection_missing', error: words },
+            { status: 409 },
+          )
+        : Response.json({ ok: true, ...page });
+    await render('admin');
+    await click(cards()[1].querySelector<HTMLElement>('[data-action="agents.pauseResume"]')!);
+    expect(toast.error).toHaveBeenLastCalledWith(words);
+    expect(toast).not.toHaveBeenCalled();
   });
 
   it('says when the list could not be read, with Retry, and no skeleton left behind', async () => {
