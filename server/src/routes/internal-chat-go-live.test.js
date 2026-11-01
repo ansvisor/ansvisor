@@ -66,6 +66,8 @@ const reads = vi.hoisted(() => ({
   page: vi.fn(),
   classes: vi.fn(),
   links: vi.fn(),
+  facts: vi.fn(),
+  siteTrust: vi.fn(),
   reserve: vi.fn(),
   phase: { value: 2 },
 }));
@@ -88,6 +90,12 @@ vi.mock('../lib/content-source-class.js', async (importOriginal) => ({
 vi.mock('../lib/link-check.js', async (importOriginal) => ({
   ...(await importOriginal()),
   checkLinks: (...args) => reads.links(...args),
+}));
+vi.mock('../lib/brand-facts.js', () => ({
+  readBrandFacts: (...args) => reads.facts(...args),
+}));
+vi.mock('../lib/site-trust.js', () => ({
+  readSiteTrust: (...args) => reads.siteTrust(...args),
 }));
 vi.mock('../lib/content-page-context.js', () => ({
   pageReadContext: async () => ({ siteType: 'b2b', brandName: 'Acme', facts: ['Founded 2019'] }),
@@ -383,6 +391,8 @@ describe('POST /api/internal/chat/go-live/quality-reads', () => {
     reads.claims.mockReset().mockResolvedValue({ paragraphs: [], pending: 0, limited: false });
     reads.page.mockReset().mockResolvedValue({ spots: [], proofs: [], checks: null });
     reads.classes.mockReset().mockResolvedValue({ classes: [], limited: false });
+    reads.facts.mockReset().mockResolvedValue({ facts: [], pages: [] });
+    reads.siteTrust.mockReset().mockResolvedValue({ score: 4 });
     reads.reserve.mockReset();
   });
 
@@ -401,7 +411,11 @@ describe('POST /api/internal/chat/go-live/quality-reads', () => {
       claims: { ok: true, value: { paragraphs: [], pending: 0, limited: false } },
       page: { ok: true, value: { spots: [], proofs: [], checks: null } },
       classes: { ok: true, value: { classes: [], limited: false } },
+      facts: { ok: true, value: { facts: [], pages: [] } },
+      siteTrust: { ok: true, value: { score: 4 } },
     });
+    expect(reads.facts).toHaveBeenCalledWith(BRAND, { orgId: ORG });
+    expect(reads.siteTrust).toHaveBeenCalledWith(BRAND, { refresh: false, keptOnly: false });
     expect(reads.reserve).toHaveBeenCalledWith(ORG, { runId: RUN, agentRunId: AGENT_RUN });
     expect(reads.links.mock.calls[0][0]).toEqual([
       'https://sca.coffee/guide',
@@ -451,7 +465,8 @@ describe('POST /api/internal/chat/go-live/quality-reads', () => {
     reads.phase.value = 1;
     const body = await (await ask()).json();
     expect(body.links.ok).toBe(true);
-    for (const read of ['claims', 'page', 'classes']) {
+    expect(body.siteTrust.ok).toBe(true);
+    for (const read of ['claims', 'page', 'classes', 'facts']) {
       expect(body[read]).toEqual({ ok: false, code: 'off' });
     }
     expect(reads.claims).not.toHaveBeenCalled();

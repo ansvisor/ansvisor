@@ -40,8 +40,10 @@
  *   can't place, among those the draft links). A read the draft has kept
  *   costs nothing; a new one is the agent run's own step (feature agent,
  *   within its cap and the month's budget: chat-budget agentRunReserve), not
- *   the workspace's Quality budget. Each read answers on its own, so one that
- *   fails leaves the others: { links, claims, page, classes }, each
+ *   the workspace's Quality budget. With them, the brand's facts (phase 2)
+ *   and its site's trust, as the editor reads them. Each read answers on its
+ *   own, so one that fails leaves the others:
+ *   { links, claims, page, classes, facts, siteTrust }, each
  *   { ok: true, value } or { ok: false, code } (run_cap, ai_budget, off,
  *   failed); the gate holds the page on any it needs that failed.
  *   → 403 { code } for the run checks (chat_off, permission, role, brand,
@@ -58,6 +60,7 @@ import { chatAgenticEnabled } from '../lib/chat-flag.js';
 import { DeliveryError, deliveryPage, sendContentPages } from '../lib/content-delivery.js';
 import { isDemoBrand } from '../middleware/demo-brand.js';
 import { ChatBudgetError, agentRunReserve } from '../lib/chat-budget.js';
+import { readBrandFacts } from '../lib/brand-facts.js';
 import { pageReadContext } from '../lib/content-page-context.js';
 import { qualityPhase } from '../lib/content-quality.js';
 import { readDraftClaims } from '../lib/content-quality-claims.js';
@@ -65,6 +68,7 @@ import { readPage } from '../lib/content-quality-page.js';
 import { MAX_SOURCE_SITES, linkedSites, readSourceClasses } from '../lib/content-source-class.js';
 import { checkLinks, reserveReads } from '../lib/link-check.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
+import { readSiteTrust } from '../lib/site-trust.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
 import logger from '../lib/logger.js';
 
@@ -381,7 +385,7 @@ router.post('/quality-reads', async (req, res) => {
     (site) => linked.has(site) && !linked.get(site).every((href) => kept.has(href)),
   );
   const common = { orgId: body.orgId, draftId: body.draftId };
-  const [links, claims, page, classes] = await Promise.all([
+  const [links, claims, page, classes, facts, siteTrust] = await Promise.all([
     settle(() =>
       checkLinks(hrefs, {
         reserve: (wanted) => reserveReads(body.actingUserId, wanted),
@@ -408,8 +412,10 @@ router.post('/quality-reads', async (req, res) => {
         ? settle(() => readSourceClasses({ ...common, sites, reserve }))
         : { ok: true, value: { classes: [], limited: false } }
       : OFF,
+    phase2 ? settle(() => readBrandFacts(draft.brand_id, { orgId: body.orgId })) : OFF,
+    settle(() => readSiteTrust(draft.brand_id, { refresh: false, keptOnly: false })),
   ]);
-  return res.json({ success: true, links, claims, page, classes });
+  return res.json({ success: true, links, claims, page, classes, facts, siteTrust });
 });
 
 export default router;
