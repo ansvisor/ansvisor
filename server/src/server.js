@@ -27,6 +27,7 @@ import botIngestRoutes from './routes/bot-ingest.js';
 import cloroCallbackRoutes from './routes/cloro-callback.js';
 import internalTriggerTrackingRoutes from './routes/internal-trigger-tracking.js';
 import internalChatBudgetRoutes from './routes/internal-chat-budget.js';
+import internalChatNoticesRoutes from './routes/internal-chat-notices.js';
 import internalChatPagesRoutes from './routes/internal-chat-pages.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
 import { pruneContentVersions } from './lib/content-history.js';
@@ -631,6 +632,11 @@ app.get('/api/internal/integrations-config', (req, res) => {
 // starts, then charged at its real cost or let go (routes/internal-chat-budget.js).
 // With the secret, the /api limiter above doesn't count them (rate-limiter.js).
 app.use('/api/internal/chat/budget', internalChatBudgetRoutes);
+
+// --- Internal Chat notices (CRON_SECRET auth, called by the web's Chat engine and sweep) ---
+// The workspace's own AI key failed: each Admin's Inbox notice and e-mail, once
+// per failure episode and one reminder (routes/internal-chat-notices.js, 00441).
+app.use('/api/internal/chat/notices', internalChatNoticesRoutes);
 
 // --- Internal Chat page reads (CRON_SECRET auth, called by the web's Chat engine) ---
 // fetch_page (CHAT-10 §B): a public page opened through safe-fetch's rules and

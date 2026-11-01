@@ -1,6 +1,7 @@
 import { isAiProvider, type AiProvider } from '@/lib/agent/providers';
 import { isKeyFailureClass, type KeyFailureClass } from '@/lib/agent/key-errors';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { notifyOwnKeyFailure } from './key-notice';
 
 /**
  * An own AI key's health (AGENT-OWN-KEY §5.2, §5.4; 00440): when the
@@ -62,7 +63,8 @@ export async function failingKeyFor(organizationId: string): Promise<FailingKey 
  * failure of an episode sets `failing_since` (a conditional update), so runs
  * that fail at once start one episode; a later failure in it keeps the
  * episode and records its class (invalid → no_credit). `started` is true for
- * the failure that began the episode, the one that tells the Admins.
+ * the failure that began the episode: it tells the Admins (00441), whose
+ * notice a class that changes later doesn't send again.
  */
 export async function markKeyFailing(
   organizationId: string,
@@ -83,7 +85,10 @@ export async function markKeyFailing(
     .is('failing_since', null)
     .select('failing_since');
   if (error) throw new Error(`Could not mark the AI key failing: ${error.message}`);
-  if ((data ?? []).length > 0) return { started: true, since };
+  if ((data ?? []).length > 0) {
+    await notifyOwnKeyFailure(organizationId, provider, since);
+    return { started: true, since };
+  }
 
   const { data: kept, error: keepError } = await supabaseAdmin
     .from('organization_ai_keys')

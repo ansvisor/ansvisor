@@ -36,6 +36,8 @@ function query(table: string) {
 }
 
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { from: (t: string) => query(t) } }));
+const notify = vi.hoisted(() => vi.fn(async () => true));
+vi.mock('./key-notice', () => ({ notifyOwnKeyFailure: notify }));
 
 const { markKeyFailing, markKeyWorking, ownKeyFailure, resumeOwnKeyAgents } =
   await import('./key-health');
@@ -56,6 +58,7 @@ const key = (over: Row = {}): Row => ({
 });
 
 beforeEach(() => {
+  notify.mockClear();
   writes = [];
   tables = {
     organization_ai_keys: [key(), key({ provider: 'anthropic', active: false })],
@@ -78,10 +81,15 @@ describe('markKeyFailing', () => {
       started: true,
       since: T1.toISOString(),
     });
+    // The episode's first failure tells the Admins (00441).
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith(ORG, 'openai', T1.toISOString());
     expect(await markKeyFailing(ORG, 'openai', { class: 'no_credit', status: 429 }, T2)).toEqual({
       started: false,
       since: T1.toISOString(),
     });
+    // A class that changes inside the episode doesn't tell them again.
+    expect(notify).toHaveBeenCalledTimes(1);
     expect(keyRow()).toMatchObject({
       failing_since: T1.toISOString(),
       failure_class: 'no_credit',
