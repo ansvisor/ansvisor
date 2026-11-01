@@ -129,6 +129,7 @@ import {
   disclosureText,
   exportPlaceholders,
   pageFields,
+  pageNamesPerson,
   pasteChecks,
   teamName,
   titlePlaceholders,
@@ -2962,6 +2963,11 @@ export function DraftEditor({
     publishableHtml(
       htmlSource !== null ? htmlFromSource(htmlSource) : (editor?.getHTML() ?? draft.bodyHtml),
     );
+  // The saved reviewer is page metadata; the publish check separately verifies
+  // their name is present in the actual page text (not JSON-LD or attributes).
+  const reviewerNamedOnPage = pageReviewer
+    ? pageNamesPerson(pageToPublish(), pageReviewer.name)
+    : false;
   // The byline line a brand with Add byline to content puts under the H1,
   // in the page's language (its Language rule, else the brand's), as
   // Readability reads it: the language the writer writes the page in.
@@ -4528,6 +4534,7 @@ export function DraftEditor({
           quality={quality}
           reviewer={regulated ? pageReviewer : null}
           reviewerRequired={regulated !== null}
+          reviewerNamedOnPage={reviewerNamedOnPage}
           title={title}
           isNew={draft.method === 'create'}
           pageType={pageType}
