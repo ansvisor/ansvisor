@@ -1,11 +1,11 @@
 ---
 title: Write to the Content Editor rules
 route: /dashboard/content/editor
-keywords: [content rules, run agent, fix open rules, rewrite the whole page, agent suggestions, accept suggestions, rules tab]
+keywords: [content rules, run agent, fix open rules, rewrite the whole page, agent suggestions, accept suggestions, rules tab, brand rules]
 synonyms: [writing rules, style guide rules, apply rules with agent, rewrite page, let the agent fix the page]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -20,6 +20,10 @@ In the side panel, **Instructions** opens on **Rules**. The rules come in five g
 ## Save or reset your rules
 
 Changes to the rules apply to this draft only. **Save as my rules**, for admins and managers, keeps them for your workspace's next drafts of this page type, and **Reset** goes back to the default set. Under **Your text rules**, write a rule in your own words, or use **Paste many** to add several from a style guide.
+
+## Brand rules
+
+Admins and managers keep a brand's rules in **Settings › Content › Brand rules**, one per line, up to 30, such as topics to stay away from. The Content Agent follows them on every page of the brand, before your text rules, and a brand rule wins when they disagree. They change what's written, not the **Rules** count.
 
 ## Fix open rules with Run Agent
 

@@ -58,6 +58,7 @@ import { evaluateLlmSignals, LLM_SIGNAL_KEYS } from '../lib/audit/llm-signals.js
 import { lastPageVerdicts } from '../lib/audit/llm-verdicts.js';
 import { evaluateBrandEntity } from '../lib/audit/external-signals.js';
 import { brandFactsFor, generateRecommendations } from '../lib/audit/recommendations.js';
+import { readBrandRules } from '../lib/brand-rules-read.js';
 import { scoreAudit } from '../lib/audit/scorer.js';
 import { signalsByKey, TOTAL_SIGNALS, RUBRIC_VERSION } from '../lib/audit/rubric.js';
 
@@ -158,6 +159,25 @@ async function countIssues(auditIds) {
   return counts;
 }
 
+/**
+ * The brand as an audit run reads it: its name and description, and the
+ * sites it trusts (00449). A database without that column yet (the API
+ * deployed ahead of its migration) reads none trusted.
+ */
+async function readAuditBrand(brandId) {
+  const read = await supabaseAdmin
+    .from('brands')
+    .select('name, description, trusted_sources')
+    .eq('id', brandId)
+    .single();
+  const missing =
+    (read.error?.code === '42703' || read.error?.code === 'PGRST204') &&
+    (read.error.message ?? '').includes('trusted_sources');
+  return missing
+    ? supabaseAdmin.from('brands').select('name, description').eq('id', brandId).single()
+    : read;
+}
+
 /** site_audits/site_audit_usage.source for a run's audits; a user's are the column default. */
 const sourceColumn = (source) => (source === 'auto' ? { source } : {});
 
@@ -174,11 +194,13 @@ async function runAuditJob(auditId, brandId, url, orgId, source = 'user') {
     // page's own target topic from its content, so an arbitrary URL (a
     // competitor blog, any page) is never judged against this brand's topics.
     const [{ data: brandRow }, { data: domainRows }] = await Promise.all([
-      supabaseAdmin.from('brands').select('name, description').eq('id', brandId).single(),
+      readAuditBrand(brandId),
       supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brandId),
     ]);
 
     const ctx = await buildAuditContext(url);
+    // The sites the brand trusts count as authority links (00449).
+    ctx.trustedSources = brandRow?.trusted_sources ?? [];
 
     // Deterministic engine, the LLM pass, and the Wikidata lookup run
     // concurrently. The latter two degrade to 'na' internally on failure; a
@@ -212,6 +234,8 @@ async function runAuditJob(auditId, brandId, url, orgId, source = 'user') {
     const recommendations = await generateRecommendations(ctx, {
       results,
       brand: brandFactsFor(ctx.url, brandRow, domainRows),
+      // The brand's rules (00450) shape what's recommended on any page it audits.
+      rules: await readBrandRules(brandId),
       auditId,
     });
 

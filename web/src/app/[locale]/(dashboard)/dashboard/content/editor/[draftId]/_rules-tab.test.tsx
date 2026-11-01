@@ -13,6 +13,11 @@ import {
 } from '@/lib/content/rules';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import { RulesTab } from './_rules-tab';
+
+// Brand rules' Edit opens Settings › Content (00450).
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
+}));
 import type { DraftRulesState } from './_use-draft-rules';
 
 (
@@ -99,6 +104,40 @@ afterEach(() => {
 });
 
 describe('the Rules tab', () => {
+  it('shows the brand’s rules above the page’s own, read-only, with Edit in Settings (00450)', async () => {
+    const show = (brandRules?: { rules: string[]; brandName: string }) =>
+      act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages}>
+            <RoleProvider role="admin">
+              <RulesTab
+                state={state()}
+                siteType="b2b"
+                draftPageType="feature_page"
+                brandRules={brandRules}
+              />
+            </RoleProvider>
+          </NextIntlClientProvider>,
+        );
+      });
+    await show({ rules: ['No topics comparing us with a named competitor.'], brandName: 'Acme' });
+    const box = container.querySelector('[data-slot="brand-rules"]')!;
+    expect(box.textContent).toBe(
+      'Brand rulesfrom SettingsEditNo topics comparing us with a named competitor.The Content Agent follows them on every Acme page, before the rules below.',
+    );
+    expect(box.querySelector('a')!.getAttribute('href')).toBe('/dashboard/settings/content');
+    // Above the rule set.
+    expect(
+      box.compareDocumentPosition(container.querySelector('[aria-label="Rule set"]')!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // None, or none read: no box.
+    await show({ rules: [], brandName: 'Acme' });
+    expect(container.querySelector('[data-slot="brand-rules"]')).toBeNull();
+    await show();
+    expect(container.querySelector('[data-slot="brand-rules"]')).toBeNull();
+  });
+
   describe('Run Agent', () => {
     const fix = () => ({ run: vi.fn(), running: false, blocked: null as string | null });
     const show = async (props: Partial<Parameters<typeof RulesTab>[0]>, s = state()) =>

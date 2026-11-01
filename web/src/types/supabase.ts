@@ -924,6 +924,7 @@ export type Database = {
       }
       brands: {
         Row: {
+          brand_rules: string[]
           client_logo_path: string | null
           content_byline: boolean
           content_quality_handoff: boolean
@@ -961,9 +962,11 @@ export type Database = {
           snippet_found_at: string | null
           state: string | null
           tracking_code: string
+          trusted_sources: string[]
           updated_at: string
         }
         Insert: {
+          brand_rules?: string[]
           client_logo_path?: string | null
           content_byline?: boolean
           content_quality_handoff?: boolean
@@ -1001,9 +1004,11 @@ export type Database = {
           snippet_found_at?: string | null
           state?: string | null
           tracking_code?: string
+          trusted_sources?: string[]
           updated_at?: string
         }
         Update: {
+          brand_rules?: string[]
           client_logo_path?: string | null
           content_byline?: boolean
           content_quality_handoff?: boolean
@@ -1041,6 +1046,7 @@ export type Database = {
           snippet_found_at?: string | null
           state?: string | null
           tracking_code?: string
+          trusted_sources?: string[]
           updated_at?: string
         }
         Relationships: [

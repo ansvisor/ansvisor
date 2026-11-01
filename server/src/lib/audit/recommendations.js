@@ -23,6 +23,7 @@ import { signalsByKey } from './rubric.js';
 import { withRetry } from '../retry.js';
 import { logger } from '../logger.js';
 import { onBrandDomain } from './host.js';
+import { brandRulesSection } from '../brand-rules.js';
 import {
   MAX_COPY_CHARS,
   MAX_INPUT_PLACEHOLDERS,
@@ -118,6 +119,8 @@ Put markup (JSON-LD, HTML) only in "code", never in "draft". Code has no length 
 
 When suggesting sources to cite (outbound-authority-links, citation-density, statistic-density), prefer the most recent, currently-authoritative references and do not present older material as if it were current. Never invent URLs or fabricate statistics/dates — only suggest sources you are confident exist.
 
+When BRAND RULES are given, every recommendation, draft and code follows them: a recommendation a rule forbids is left out, never written against it.
+
 Set "draft" and "code" to null when they don't apply. Prioritize by impact. Only return items you can make genuinely specific and useful.`;
 
 const REWRITE_PROMPT = `You shorten AEO/GEO recommendations that broke the length rule. Keep each item's meaning, its [placeholders] and its ref, add no new facts or placeholders, and return every item you are given.
@@ -149,6 +152,15 @@ export function brandFactsFor(url, brandRow, domainRows) {
   const domains = (domainRows ?? []).map((d) => d.domain).filter(Boolean);
   if (!onBrandDomain(url, domains)) return null;
   return { name: brandRow?.name ?? null, description: brandRow?.description ?? null, domains };
+}
+
+/**
+ * The brand's rules (Settings › Content, 00450), on any page it audits: they
+ * shape the recommendations, not the score.
+ */
+function rulesBlock(rules) {
+  const section = brandRulesSection(rules, "BRAND RULES (the brand's own; follow every one):");
+  return section ? `\n${section}\n` : '';
 }
 
 function brandBlock(brand) {
@@ -199,7 +211,10 @@ async function rewriteTooLong(model, items) {
  *   `brand` only when the page is on one of the brand's domains.
  * @returns {Promise<Array<{ signalKey: string, label: string, category: string|null, priority: string, recommendation: string, draft: string|null, code: string|null }>>}
  */
-export async function generateRecommendations(ctx, { results, brand = null, auditId } = {}) {
+export async function generateRecommendations(
+  ctx,
+  { results, brand = null, rules = [], auditId } = {},
+) {
   const failing = (results || []).filter(
     (r) => RECOMMENDABLE_SIGNALS.has(r.key) && (r.status === 'fail' || r.status === 'warn'),
   );
@@ -245,7 +260,7 @@ export async function generateRecommendations(ctx, { results, brand = null, audi
 PAGE URL: ${ctx.url}
 
 Improve THIS page for its own topic/intent (infer it from the content below). Never introduce subject matter the page isn't already about.
-${brandBlock(brand)}
+${brandBlock(brand)}${rulesBlock(rules)}
 FAILING SIGNALS TO FIX:
 ${issues}
 
