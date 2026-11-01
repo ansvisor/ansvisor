@@ -313,8 +313,8 @@ function recommendationFor(key, page, result) {
         product ? productDescription(product).split('. ')[0].replace(/\.?$/, '.') : null,
       );
     case 'readability': {
-      const flesch = result?.evidence?.fleschReadingEase;
-      return typeof flesch === 'number' && flesch > 70
+      const { formula, readingScore } = result?.evidence ?? {};
+      return formula === 'flesch' && typeof readingScore === 'number' && readingScore > 70
         ? write('Add the detail readers expect: fuller sentences on taste, origin and brewing.')
         : write('Shorten the longest sentences; aim for a Flesch score between 50 and 70.');
     }

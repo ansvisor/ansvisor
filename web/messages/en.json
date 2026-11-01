@@ -915,7 +915,17 @@
             "qid": "Wikidata ID",
             "label": "Wikidata label",
             "description": "Wikidata description",
-            "note": "Note"
+            "note": "Note",
+            "language": "Language",
+            "formula": "Formula",
+            "readingScore": "Reading score",
+            "wordsPerSentence": "Words a sentence",
+            "syllablesPerWord": "Syllables a word",
+            "lettersPerWord": "Letters a word",
+            "wordsPerParagraph": "Words a paragraph",
+            "mobileLinesPerParagraph": "Lines a paragraph on a phone",
+            "firstPersonSentences": "First-person sentences",
+            "sentences": "Sentences"
           }
         },
         "mentions": {
@@ -6587,6 +6597,15 @@
       }
     },
     "finding": "Finding",
+    "evidence": {
+      "reading": "Reading score {score, number} ({formula}, {language})",
+      "readingNoFormula": "No reading-score formula for {language} yet: read by sentence and word length",
+      "sentences": "Sentences: {words, number} words on average",
+      "words": "Words: {syllables, number} syllables and {letters, number} letters on average",
+      "wordsLetters": "Words: {letters, number} letters on average",
+      "paragraphs": "Paragraphs: {words, number} words on average, about {lines, plural, one {# line} other {# lines}} each on a phone",
+      "firstPerson": "{count, plural, one {# sentence} other {# sentences}} of {total, number} told in the first person ({language})"
+    },
     "why": "Why",
     "recommendedFix": "Recommended fix",
     "fix": "Fix",

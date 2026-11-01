@@ -7,30 +7,36 @@
  * See structure.js for the evaluator shape.
  */
 
-import { countPhrases } from './helpers.js';
+import { FIRST_PERSON_LANGUAGES, speaksFirstPerson } from './first-person.js';
+import { pageProse, sentencesOf } from './readability.js';
 
-const FIRST_PERSON_PHRASES = [
-  'we tested',
-  'we built',
-  'we found',
-  'we measured',
-  'we analyzed',
-  'we analysed',
-  'in our experience',
-  'in our testing',
-  'our team',
-  'i tested',
-  'i built',
-  'i found',
-  'we ran',
-  'we compared',
-  'when we',
-];
-
+/**
+ * Sentences of the page's own text told in the first person (first-person.js):
+ * two pass, one warns. Its main content as readability reads it (a quote
+ * aside), else its whole text; in its language, English when its words
+ * don't say. A language first person isn't read in yet has no score.
+ */
 export const firstPerson = {
   key: 'first-person',
   evaluate(ctx) {
-    const hits = countPhrases(ctx.text, FIRST_PERSON_PHRASES);
+    const { blocks, language } = pageProse(ctx);
+    const own = blocks.filter((b) => b.tag === 'p' || b.tag === 'li');
+    const lang = language ?? 'en';
+    if (!FIRST_PERSON_LANGUAGES.has(lang)) {
+      return {
+        status: 'na',
+        score: null,
+        evidence: {
+          reason: 'first person is read in English and Turkish only, for now',
+          language: lang,
+        },
+      };
+    }
+    const sentences = own.length
+      ? own.flatMap((b) => sentencesOf(b.text, lang))
+      : sentencesOf(ctx.text ?? '', lang);
+    const told = sentences.filter((s) => speaksFirstPerson(s, lang));
+    const hits = told.length;
     let status = 'fail';
     let score = 0;
     if (hits >= 2) {
@@ -40,7 +46,11 @@ export const firstPerson = {
       status = 'warn';
       score = 0.5;
     }
-    return { status, score, evidence: { evidencePhrases: hits } };
+    return {
+      status,
+      score,
+      evidence: { language: lang, firstPersonSentences: hits, sentences: sentences.length },
+    };
   },
 };
 
