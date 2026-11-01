@@ -322,6 +322,20 @@ describe('AgentForm: new agent', () => {
     expect(needed.querySelector('[data-action="agentNew.toggleConnection"]')).toBeNull();
   });
 
+  it('asks /shopping for any catalog source, uploads included, Required', async () => {
+    await render();
+    await click(one('[data-skill="shopping"]')!);
+    await next();
+    await next();
+    await next();
+    const catalog = one('[data-connection="catalog"]')!;
+    expect(catalog.querySelector('b')?.textContent).toBe('Any catalog source');
+    expect(catalog.querySelector('[data-slot="connection-counts"]')?.textContent).toBe(
+      'Merchant Center, a product feed, an upload or a store',
+    );
+    expect(catalog.textContent).toContain('Required by /shopping');
+  });
+
   it('saves a draft the API takes, then opens it', async () => {
     await render();
     await toLastStep();
