@@ -111,6 +111,7 @@ export function BeforePublish({
   shopping = null,
   reviewer = null,
   reviewerRequired = false,
+  reviewerNamedOnPage = false,
 }: {
   /**
    * The page's shopping links against the catalog now (shopping path, part
@@ -123,6 +124,8 @@ export function BeforePublish({
   reviewer?: ContentAuthor | null;
   /** True for a regulated page that must name its qualified reviewer. */
   reviewerRequired?: boolean;
+  /** Whether the selected reviewer's name appears in visible page text. */
+  reviewerNamedOnPage?: boolean;
   /**
    * Phase 3 (CE-053): a product page's Product schema, from its opening
    * paragraph, its images and the price it states (pageOffer); null on
@@ -247,11 +250,17 @@ export function BeforePublish({
   const brand = quality.brandName || tQuality('yourBrand');
   let reviewerRow: Row | null = null;
   if (reviewerRequired) {
-    if (reviewer) {
+    if (reviewer && reviewerNamedOnPage) {
       reviewerRow = {
         state: 'check',
         title: t('reviewer.named', { name: reviewer.name }),
-        detail: t('reviewer.namedDetail'),
+        detail: t('reviewer.namedDetail', { name: reviewer.name }),
+      };
+    } else if (reviewer) {
+      reviewerRow = {
+        state: 'missing',
+        title: t('reviewer.notOnPage'),
+        detail: t('reviewer.notOnPageDetail', { name: reviewer.name }),
       };
     } else if (authorsRead) {
       reviewerRow = {
