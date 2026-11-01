@@ -41,7 +41,7 @@ export function keyWhy(provider, failureClass) {
 }
 
 /** The dashboard's origin, for the e-mail's link. */
-function appOrigin() {
+export function appOrigin() {
   const raw = process.env.PUBLIC_APP_URL || 'http://localhost:3000';
   try {
     return new URL(raw).origin;
@@ -50,7 +50,7 @@ function appOrigin() {
   }
 }
 
-function escapeHtml(value) {
+export function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -124,7 +124,7 @@ async function claimNotice(orgId, provider, since, reminder, now) {
 }
 
 /** The workspace's Admins, with how each wants to hear when an agent needs them. */
-async function adminsOf(orgId) {
+export async function adminsOf(orgId) {
   const { data, error } = await supabaseAdmin
     .from('profiles')
     .select('id')
@@ -142,7 +142,7 @@ async function adminsOf(orgId) {
   return ids.map((id) => ({ id, notifyVia: via.get(id) ?? 'inbox_email' }));
 }
 
-async function emailOf(id) {
+export async function emailOf(id) {
   const { data } = await supabaseAdmin.auth.admin.getUserById(id);
   return data?.user?.email ?? null;
 }

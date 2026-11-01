@@ -4633,6 +4633,14 @@
       "title": "Inbox",
       "notice": {
         "reminder": "{why} Still not working after 3 days.",
+        "limit80": "Agents have used 80% of their monthly limit on your key",
+        "limit100": "Agents reached their monthly limit on your key · they're paused",
+        "limitUsed": "About {used} of {cap} this month, estimated · renews {date}",
+        "limitUsedNoDate": "About {used} of {cap} this month, estimated",
+        "limitPaused": "They start again on {date}, or when you raise the limit.",
+        "limitPausedNoDate": "They start again when the month renews, or when you raise the limit.",
+        "reviewLimit": "Review limit",
+        "raiseLimit": "Raise limit",
         "fix": "Fix it"
       },
       "lands": "Results from your agents land here.",

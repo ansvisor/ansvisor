@@ -41,6 +41,10 @@ vi.mock('../lib/chat-budget.js', () => ({
   agentUsageShares: (...args) => agentUsageShares(...args),
   ownKeyAgentSpend: (...args) => ownKeyAgentSpend(...args),
 }));
+const warnOwnKeyLimit = vi.fn();
+vi.mock('../lib/chat-notices/own-key-limit.js', () => ({
+  warnOwnKeyLimit: (...args) => warnOwnKeyLimit(...args),
+}));
 
 const { default: router } = await import('./internal-chat-budget.js');
 
@@ -54,6 +58,7 @@ beforeEach(async () => {
   releaseChatStep.mockReset().mockResolvedValue(undefined);
   agentUsageShares.mockReset().mockResolvedValue({ unlimited: false, since: null, shares: [] });
   ownKeyAgentSpend.mockReset();
+  warnOwnKeyLimit.mockReset().mockResolvedValue({ notices: 0, emails: 0, resolved: 0 });
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -321,12 +326,30 @@ describe('GET /api/internal/chat/budget/own-key', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ success: true, ...guard });
     expect(ownKeyAgentSpend).toHaveBeenCalledWith(ORG);
+    // The Admins' 80% and 100% warnings, from the same read (PR 10).
+    expect(warnOwnKeyLimit).toHaveBeenCalledWith(ORG, guard);
+  });
+
+  it('answers even when the warnings fail', async () => {
+    const guard = {
+      reached: false,
+      usedUsd: 210,
+      capUsd: 250,
+      since: '2026-10-20T09:00:00.000Z',
+      renewsAt: '2026-11-20T09:00:00.000Z',
+    };
+    ownKeyAgentSpend.mockResolvedValueOnce(guard);
+    warnOwnKeyLimit.mockRejectedValueOnce(new Error('db down'));
+    const res = await get(`orgId=${ORG}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, ...guard });
   });
 
   it('answers only the web, refuses a query it can’t read, and says when Chat is off', async () => {
     expect((await get(`orgId=${ORG}`, 'nope')).status).toBe(401);
     expect((await get('orgId=nope')).status).toBe(400);
     expect(ownKeyAgentSpend).not.toHaveBeenCalled();
+    expect(warnOwnKeyLimit).not.toHaveBeenCalled();
 
     ownKeyAgentSpend.mockRejectedValueOnce(new ChatBudgetError('chat_off', 403, 'off'));
     const res = await get(`orgId=${ORG}`);

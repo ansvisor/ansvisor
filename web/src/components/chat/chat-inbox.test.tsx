@@ -301,16 +301,69 @@ describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
   });
 
   it('says a reminder is one, and marks nothing read that was read', async () => {
-    await render(<ChatInbox suggestions={ok()} notices={withNotice({ reminder: true, read: true })} />);
+    await render(
+      <ChatInbox suggestions={ok()} notices={withNotice({ reminder: true, read: true })} />,
+    );
     expect(noticeRows()[0].textContent).toContain(
       'Your OpenAI account is out of credit. Still not working after 3 days.',
     );
     expect(notices.read).not.toHaveBeenCalled();
   });
 
+  it('warns at 80% of the key’s agent limit, with the estimate and the way to the limit', async () => {
+    const limit = {
+      id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0a',
+      kind: 'own_key_limit' as const,
+      level: 80 as const,
+      usedUsd: 205.4,
+      capUsd: 250,
+      renewsAt: '2026-11-20T09:00:00.000Z',
+      createdAt: '2026-11-01T08:00:00Z',
+      read: false,
+    };
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: true, notices: [limit] }} />);
+    const [row] = noticeRows();
+    expect(row.getAttribute('data-kind')).toBe('own_key_limit_80');
+    expect(row.textContent).toContain('Agents have used 80% of their monthly limit on your key');
+    expect(row.textContent).toContain('About $205 of $250 this month, estimated · renews Nov 20');
+    const link = row.querySelector('[data-action="inbox.keyLimit"]')!;
+    expect(link.textContent).toBe('Review limit');
+    expect(link.getAttribute('href')).toBe('/dashboard/settings/ai-providers');
+    expect(notices.read).toHaveBeenCalledExactlyOnceWith([limit.id]);
+  });
+
+  it('says the agents paused at the limit, and offers to raise it', async () => {
+    const reached = {
+      id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0b',
+      kind: 'own_key_limit' as const,
+      level: 100 as const,
+      usedUsd: 251.2,
+      capUsd: 250,
+      renewsAt: '2026-11-20T09:00:00.000Z',
+      createdAt: '2026-11-01T08:00:00Z',
+      read: true,
+    };
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: true, notices: [reached] }} />);
+    const [row] = noticeRows();
+    expect(row.textContent).toContain(
+      "Agents reached their monthly limit on your key · they're paused",
+    );
+    expect(row.textContent).toContain('They start again on Nov 20, or when you raise the limit.');
+    expect(row.querySelector('[data-action="inbox.keyLimit"]')!.textContent).toBe('Raise limit');
+    expect(notices.read).not.toHaveBeenCalled();
+  });
+
   it('shows the notice in the Inbox without tabs too, and none that couldn’t be read', async () => {
     list.chats = [];
-    await render(<ChatInboxView status="ready" items={[]} now={null} onRetry={() => {}} notices={withNotice().notices} />);
+    await render(
+      <ChatInboxView
+        status="ready"
+        items={[]}
+        now={null}
+        onRetry={() => {}}
+        notices={withNotice().notices}
+      />,
+    );
     expect(noticeRows()).toHaveLength(1);
     expect(text()).not.toContain('Nothing needs you.');
     expect(text()).toContain('1 needs you.');
