@@ -10,6 +10,7 @@ import {
   MoreHorizontal,
   RotateCcw,
   Send,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -24,9 +25,9 @@ import { LoadingDots } from '@/components/ui/loading-dots';
 
 /**
  * An Opportunities list row's actions, in one "…" menu as the panel keeps
- * its own (the user's spec): Send to Editor (Open draft once one is being
- * written), Send to Plan (Open in Plan once it is a priority there), Send
- * to Workflow, the full page in a new tab, and Dismiss.
+ * its own (the user's spec): Write this and Send to Editor (Open draft once
+ * one is being written), Send to Plan (Open in Plan once it is a priority
+ * there), Send to Workflow, the full page in a new tab, and Dismiss.
  */
 export function OpportunityRowMenu({
   title,
@@ -49,6 +50,8 @@ export function OpportunityRowMenu({
     onRetry?: () => void;
     canStart: boolean;
     onStart: () => void;
+    /** Write this (customer priorities item 9): the brief and the page in one go, beside Start. */
+    onWriteThis?: () => void;
     onOpenDraft: (draftId: string) => void;
   };
   /** Its Plan row's priority mark (undefined while looked up); null when not offered. */
@@ -82,14 +85,38 @@ export function OpportunityRowMenu({
           </DropdownMenuItem>
         ) : (
           editor.canStart && (
-            <DropdownMenuItem
-              className="gap-2"
-              onClick={editor.onStart}
-              disabled={draftId === undefined}
-            >
-              {draftId === undefined ? <LoadingDots /> : <FilePen className="h-3.5 w-3.5" />}
-              {t('sendToEditor')}
-            </DropdownMenuItem>
+            <>
+              {editor.onWriteThis && (
+                <>
+                  <DropdownMenuItem
+                    className="items-start gap-2"
+                    onClick={editor.onWriteThis}
+                    disabled={draftId === undefined}
+                  >
+                    {draftId === undefined ? (
+                      <LoadingDots />
+                    ) : (
+                      <Sparkles className="mt-0.5 h-3.5 w-3.5" />
+                    )}
+                    <span className="flex flex-col">
+                      {t('writeThis.menu')}
+                      <span className="text-[11px] text-muted-foreground">
+                        {t('writeThis.menuHint')}
+                      </span>
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem
+                className="gap-2"
+                onClick={editor.onStart}
+                disabled={draftId === undefined}
+              >
+                {draftId === undefined ? <LoadingDots /> : <FilePen className="h-3.5 w-3.5" />}
+                {t('sendToEditor')}
+              </DropdownMenuItem>
+            </>
           )
         )}
         {plan && (

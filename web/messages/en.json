@@ -7680,6 +7680,7 @@
       "markedReadyAction": "Marked ready, and {count, plural, one {its task} other {its # tasks}} in Action AC-{no} {count, plural, one {is} other {are}} done. Publish it on your site when you're ready.",
       "agentWriting": {
         "title": "Content Agent is working on this page",
+        "titleBrief": "Content Agent is building this page's brief",
         "usual": "Usually a minute or two.",
         "slow": "Taking longer than usual. If it can't finish within a few minutes, this page says so and you can try again.",
         "leave": "You can leave this page meanwhile: the draft waits in Library › In review.",
@@ -9653,6 +9654,26 @@
     "sendToActions": "Send to Actions",
     "draftCheckFailed": "Couldn't check for a draft · Retry",
     "sendToEditor": "Send to Editor",
+    "writeThis": {
+      "menu": "Write this",
+      "menuHint": "Brief and draft in one go",
+      "title": "Write this page",
+      "steps": {
+        "brief": "Brief",
+        "briefDetail": "From the opportunity's {count, plural, one {prompt} other {# prompts}}, their fan-outs and the pages AI cites for them.",
+        "briefDetailAny": "From the opportunity's prompts, their fan-outs and the pages AI cites for them.",
+        "draft": "Draft",
+        "draftDetail": "The Content Agent writes the page from the brief, by your rules and the page type's.",
+        "draftDetailPage": "The Content Agent suggests changes to {page} from the brief, by your rules and the page type's.",
+        "review": "You review it",
+        "reviewDetail": "The editor opens as it writes. Nothing is published."
+      },
+      "usage": "Uses about <b>{estimate}</b> of your {trial, select, yes {trial AI credit} other {monthly AI usage}} · {used} used so far",
+      "usageSmall": "Uses under <b>1%</b> of your {trial, select, yes {trial AI credit} other {monthly AI usage}} · {used} used so far",
+      "cancel": "Cancel",
+      "confirm": "Write this",
+      "pageUnread": "{page} couldn't be read, so there's nothing to suggest changes to yet. Send to Editor starts it from its title."
+    },
     "openDraft": "Open draft",
     "sendToPlan": "Send to Plan",
     "openInPlan": "Open in Plan",

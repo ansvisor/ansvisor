@@ -1045,6 +1045,39 @@ describe('the content editor', () => {
       expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1', 'r2');
     });
 
+    it('shows Write this building the brief first, and stops it (customer priorities item 9)', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          status: 'draft',
+          method: 'create',
+          agentState: 'writing',
+          agentRun: 'write',
+          agentSince: new Date().toISOString(),
+        }),
+      );
+      readAgentRun.mockResolvedValue({
+        id: 'r5',
+        kind: 'brief',
+        steps: [
+          { key: 'gather_sources', count: 12 },
+          { key: 'write_outline', count: null },
+          { key: 'match_fanouts', count: null },
+        ],
+        step: 1,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        stoppedAt: null,
+        outcome: null,
+      });
+      await renderPage();
+      await act(async () => {});
+      const status = container.querySelector('[role="status"]')!;
+      expect(status.textContent).toContain("Content Agent is building this page's brief");
+      expect(status.querySelector('[aria-current="step"]')).not.toBeNull();
+      await act(async () => button('Stop')!.click());
+      expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1', 'r5');
+    });
+
     it('shows only the run the page waits on: a rewrite’s on a new page, never another kind’s', async () => {
       for (const [method, agentRun, kind, shown] of [
         // A new page's rewrite: its run is a rewrite, not the Start's write.

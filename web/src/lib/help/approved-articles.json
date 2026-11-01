@@ -1255,7 +1255,7 @@
         "content suggestions"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1271,7 +1271,7 @@
         },
         {
           "heading": "Quick actions on a row",
-          "text": "Each row's **…** menu has the quick actions:\n\n- **Send to Editor**, or **Open draft** once a draft is being written for it;\n- **Send to Plan**, or **Open in Plan** once it's a priority there, for owned opportunities still open;\n- **Send to Workflow**, for a new opportunity;\n- **Open in new tab**, which opens it as a page of its own;\n- **Dismiss**, for a new one. Undo it from the message that appears.\n\nSend to Plan and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions."
+          "text": "Each row's **…** menu has the quick actions:\n\n- **Write this**, which has the Content Agent brief and write the page in one go for you to review, and **Send to Editor**; **Open draft** takes their place once a draft is being written for it;\n- **Send to Plan**, or **Open in Plan** once it's a priority there, for owned opportunities still open;\n- **Send to Workflow**, for a new opportunity;\n- **Open in new tab**, which opens it as a page of its own;\n- **Dismiss**, for a new one. Undo it from the message that appears.\n\nSend to Plan and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions."
         },
         {
           "heading": "Work on many at once",
@@ -1426,7 +1426,8 @@
         "mark as reviewed",
         "dismiss opportunity",
         "send to actions",
-        "new signal detected"
+        "new signal detected",
+        "write this"
       ],
       "synonyms": [
         "opportunity panel",
@@ -1435,7 +1436,7 @@
         "follow an opportunity"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1451,7 +1452,11 @@
         },
         {
           "heading": "The panel's buttons",
-          "text": "- **Send to Actions** makes the opportunity an action in the Action Center. The button then reads **Open in Actions**.\n- **Generate Brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief Generated**.\n- **Send to Editor** opens **New content** with the opportunity picked: a new page, or the page of yours it names to optimize. Once a draft is being written for it, the button reads **Open draft**. It's offered for owned opportunities that are still open.\n- **Export** downloads the opportunity as CSV, Excel or Word."
+          "text": "- **Send to Actions** makes the opportunity an action in the Action Center. The button then reads **Open in Actions**.\n- **Generate Brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief Generated**.\n- **Send to Editor** opens **New content** with the opportunity picked: a new page, or the page of yours it names to optimize. Once a draft is being written for it, the button reads **Open draft**. It's offered for owned opportunities that are still open.\n- **Write this**, beside it, has the Content Agent brief and write the page in one go. See below.\n- **Export** downloads the opportunity as CSV, Excel or Word."
+        },
+        {
+          "heading": "Write this",
+          "text": "**Write this**, on the panel and in a row's **…** menu, takes an owned opportunity to a page to review in one go. First it says what will happen and about how much of your monthly AI usage it takes. Then:\n\n1. The Content Agent builds a brief from the opportunity's prompts, their fan-outs and the pages AI cites for them.\n2. It writes the page from the brief, by your rules and the page type's. For an opportunity on a page you have, it suggests changes to that page instead.\n3. The editor opens and shows the agent at work. You review the page there; nothing is published.\n\nYou can stop it from the editor. If the brief can't be built, the agent writes from what there is."
         },
         {
           "heading": "The … menu",

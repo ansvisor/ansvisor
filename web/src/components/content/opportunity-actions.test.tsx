@@ -97,6 +97,25 @@ describe('OpportunityActions', () => {
     expect(handlers.start).toHaveBeenCalled();
   });
 
+  it('makes Write this the main one, beside Send to Editor (customer priorities item 9)', async () => {
+    const writeThis = vi.fn();
+    await render(props({ content: { ...props().content, onWriteThis: writeThis } }));
+    expect(front()).toEqual([
+      'Send to Actions',
+      'Generate Brief',
+      'Send to Editor',
+      'Write this',
+      'Export',
+    ]);
+    expect(button('Write this').title).toBe('Brief and draft in one go');
+    await act(async () => button('Write this').click());
+    expect(writeThis).toHaveBeenCalled();
+    expect(handlers.start).not.toHaveBeenCalled();
+    // Open draft takes both places once a draft is being written.
+    await render(props({ content: { ...props().content, onWriteThis: writeThis, draftId: 'd7' } }));
+    expect(front()).toEqual(['Send to Actions', 'Generate Brief', 'Open draft', 'Export']);
+  });
+
   it('shows each one done in its place', async () => {
     await render(
       props({
