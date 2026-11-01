@@ -126,3 +126,20 @@ export function safeImageSrc(input: string): string | null {
   const href = safeLinkHref(input);
   return href && /^https?:/.test(href) ? href : null;
 }
+
+/**
+ * The editor's StarterKit, as its page's schema needs it: H1–H3, no code,
+ * code blocks or rules (pages, not code), links only to safe addresses.
+ * The server reads a page into the same document (doc-text.ts pageDoc).
+ */
+export const EDITOR_STARTER_KIT = {
+  heading: { levels: [1, 2, 3] as (1 | 2 | 3)[] },
+  code: false,
+  codeBlock: false,
+  horizontalRule: false,
+  link: {
+    openOnClick: false,
+    defaultProtocol: 'https',
+    isAllowedUri: (url: string) => safeLinkHref(url) !== null,
+  },
+} as const;

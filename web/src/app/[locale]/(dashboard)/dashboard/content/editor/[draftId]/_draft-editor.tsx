@@ -102,14 +102,17 @@ import {
   htmlFromSource,
   publishableHtml,
 } from '@/lib/content/clean-html';
-import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
+import {
+  EDITOR_STARTER_KIT,
+  PAGE_READ_DELAY_MS,
+  draftTitleFromDoc,
+  safeLinkHref,
+} from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import {
   firstImage,
   isArticlePage,
-  openingParagraph,
   pageName,
-  pageOffer,
   listedProducts,
   MIN_LISTED,
 } from '@/lib/content/page-schema';
@@ -129,39 +132,24 @@ import {
 } from '@/lib/content/ready-to-publish';
 import { detectPageType, isSiteType, type SiteType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
-import { inputsGiven, inputsUsed } from '@/lib/content/draft-inputs';
+import { inputsGiven } from '@/lib/content/draft-inputs';
 import {
-  eeat,
   linksToCheck,
-  shippingOnPage,
   squeeze,
-  trust,
   trustBlocks,
   unplacedSites,
   type ClaimMark,
 } from '@/lib/content/quality-checks';
-import { checkDateOnPage, checkDateText, isCheckDateLine } from '@/lib/content/check-date';
-import {
-  PROFILE_WEIGHTS,
-  checksOff,
-  profileFor,
-  waitsForSiteTrust,
-  weighed,
-  weighedTrust,
-} from '@/lib/content/quality-profiles';
+import { checkDateText, isCheckDateLine } from '@/lib/content/check-date';
+import { checksOff, profileFor } from '@/lib/content/quality-profiles';
 import { caseConfirmed, caseKey, proofKey, qualityTodos } from '@/lib/content/quality-todos';
-import { confirmedFacts, introConfirmKeys, introFacts } from '@/lib/content/intro-facts';
-import { isByline, readability, sentencesOf, withTypeRules } from '@/lib/content/readability';
+import { introConfirmKeys } from '@/lib/content/intro-facts';
+import { isByline } from '@/lib/content/readability';
 import { normalizeDomain } from '@/lib/citations/classify';
-import { brandFactsPath, factMismatches } from '@/lib/content/brand-facts';
-import { feedCheck, type CatalogMatch } from '@/lib/content/feed-match';
-import {
-  MAX_PROOF_TODOS,
-  aiChecksOnPage,
-  pageImages,
-  proofsOnPage,
-  type ProofSpot,
-} from '@/lib/content/page-read';
+import { brandFactsPath } from '@/lib/content/brand-facts';
+import { type CatalogMatch } from '@/lib/content/feed-match';
+import { qualityState } from '@/lib/content/quality-inputs';
+import { MAX_PROOF_TODOS, type ProofSpot } from '@/lib/content/page-read';
 import {
   liveSkips,
   nextStep,
@@ -604,18 +592,7 @@ export function DraftEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-        // Pages, not code: the toolbar has no code or rules.
-        code: false,
-        codeBlock: false,
-        horizontalRule: false,
-        link: {
-          openOnClick: false,
-          defaultProtocol: 'https',
-          isAllowedUri: (url) => safeLinkHref(url) !== null,
-        },
-      }),
+      StarterKit.configure(EDITOR_STARTER_KIT),
       TableKit.configure({ table: { resizable: false } }),
       Image,
       CharacterCount,
@@ -824,10 +801,6 @@ export function DraftEditor({
   const inputsRead = useDraftInputs(draft.id, qualityPhase() >= 2);
   const inputs = inputsRead.status === 'ready' ? inputsRead.inputs : null;
   const inputsPending = inputsRead.status === 'loading';
-  const used = useMemo(
-    () => (inputs ? inputsUsed(pageBlocks.map((b) => b.text).join('\n'), inputs) : null),
-    [inputs, pageBlocks],
-  );
   // With no author picked, the person's own word for the one their site
   // names (00271): ticked here, saved behind, put back if the save fails.
   const [authorConfirmed, setAuthorConfirmed] = useState(draft.authorConfirmed);
@@ -881,18 +854,6 @@ export function DraftEditor({
   // brand's approved facts, read from its own site.
   const factsState = useBrandFacts(draft.brandId, sourcesOn);
   const brandFacts = factsState.status === 'ready' ? factsState.read.facts : null;
-  const factCheck = useMemo(
-    () =>
-      brandFacts
-        ? factMismatches({
-            sentences: pageBlocks.flatMap((b) => sentencesOf(b.text)),
-            facts: brandFacts,
-            brandName,
-            competitorDomains: competitorDomains ?? [],
-          })
-        : null,
-    [brandFacts, pageBlocks, brandName, competitorDomains],
-  );
   const pendingFacts = brandFacts?.filter((f) => f.status === 'pending').length ?? 0;
   const [hadPendingFacts, setHadPendingFacts] = useState(false);
   if (pendingFacts > 0 && !hadPendingFacts) setHadPendingFacts(true);
@@ -936,10 +897,6 @@ export function DraftEditor({
     sourcesOn && !isLocked,
     saving,
   );
-  const proofAsks = useMemo(
-    () => (pageRead.read ? proofsOnPage(pageBlocks, pageRead.read.proofs) : []),
-    [pageRead.read, pageBlocks],
-  );
   // The page read's AI checks (CE-050), on the page as it is: left out
   // before the first read, and once the AI budget or the day's reads are
   // used up (Quality says so), as the score can't follow the page then.
@@ -949,46 +906,11 @@ export function DraftEditor({
   const pageChanging = pageRead.reading || saving;
   // The disclosure line Add line puts in (CE-050) is the disclosure while
   // the page has it: Trust, Quality and Export count it before it is read.
-  const aiChecks = useMemo(() => {
-    const checks =
-      sourcesOn &&
-      pageRead.read?.checks &&
-      pageRead.read.checks.pageType === (pageType ?? null) &&
-      !pageRead.paused &&
-      !pageRead.limited
-        ? aiChecksOnPage(pageBlocks, pageRead.read.checks, pageType, pageChanging)
-        : null;
-    const line = checks?.disclosure?.found === false ? disclosureText(language, brandName) : null;
-    return line && squeeze(pageBlocks.map((b) => b.text).join('')).includes(squeeze(line))
-      ? { ...checks!, disclosure: { found: true, show: line, added: true } }
-      : checks;
-  }, [
-    sourcesOn,
-    pageRead.read,
-    pageChanging,
-    pageRead.paused,
-    pageRead.limited,
-    pageBlocks,
-    pageType,
-    language,
-    brandName,
-  ]);
   // Phase 3 (CE-052): what the scores count, and how much, follows the
   // page's type (an article's before, and for most types).
-  const profile = profileFor(pageType);
-  const weights = PROFILE_WEIGHTS[profile];
   // A comparison's check date (CE-052): E-E-A-T's check and its to-do.
-  const checkDateRead = useMemo(
-    () =>
-      qualityOn && profile === 'comparison' ? checkDateOnPage(pageBlocks.map((b) => b.text)) : null,
-    [qualityOn, profile, pageBlocks],
-  );
   // A product page's shipping and returns (CE-052): Trust's check, and a
   // to-do that needs no Trust read.
-  const shippingRead = useMemo(
-    () => (qualityOn && profile === 'product' ? shippingOnPage(pageHtml, language) : null),
-    [qualityOn, profile, pageHtml, language],
-  );
   // The page type's own rules (the Rules tab's, read from the page): one
   // Readability check on the types that weigh it; not ones read by AI or
   // the product feed, nor ones turned off there.
@@ -1008,19 +930,6 @@ export function DraftEditor({
     // aimAndNow reads only tRules and tStatus.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rules.rules, tRules, tStatus],
-  );
-  const readable = useMemo(
-    () =>
-      qualityOn
-        ? weighed(
-            withTypeRules(
-              readability(pageHtml, language, aiChecks?.answerFirst ?? null),
-              typeRules,
-            ),
-            weights.readability,
-          )
-        : null,
-    [qualityOn, pageHtml, language, aiChecks, weights, typeRules],
   );
   // A proof to-do asked for this session stays, checked once it has a link.
   const [hadProofs, setHadProofs] = useState<ReadonlySet<string>>(() => new Set());
@@ -1072,37 +981,7 @@ export function DraftEditor({
   // language, and the facts the person confirmed. Trust counts them at once
   // (none confirmed until the confirms are read, as a customer case); the
   // to-do waits for the read.
-  const introOn = casesOn && profile === 'category';
-  const intro = useMemo(
-    () => (introOn ? introFacts(pageHtml, language) : []),
-    [introOn, pageHtml, language],
-  );
-  const introConfirmed = useMemo(() => confirmedFacts(introConfirms ?? []), [introConfirms]);
-  const introAll = useMemo(() => [...new Set(intro.flatMap((fact) => fact.facts))], [intro]);
-  const introRead = useMemo(
-    () => (introOn && casesRead ? { facts: intro, confirmed: introConfirmed } : null),
-    [introOn, casesRead, intro, introConfirmed],
-  );
   // The page's customer cases, and how many are confirmed: E-E-A-T's (CE-052).
-  const caseCount = useMemo(() => {
-    if (!casesOn) return null;
-    const asks = proofAsks.filter((ask) => ask.kind === 'customer_case');
-    const confirms = caseConfirms ?? new Set<string>();
-    return {
-      total: asks.length,
-      confirmed: asks.filter((ask) => caseConfirmed(confirms, ask)).length,
-    };
-  }, [casesOn, proofAsks, caseConfirms]);
-  const isCase = (ask: (typeof proofAsks)[number]) => casesOn && ask.kind === 'customer_case';
-  // A case's to-do once the confirms are read: open while not confirmed.
-  const caseOpen = (ask: (typeof proofAsks)[number]) =>
-    isCase(ask) ? casesRead && !caseConfirmed(caseConfirms ?? new Set(), ask) : !ask.linked;
-  const newProofs = proofAsks
-    .filter(caseOpen)
-    .slice(0, MAX_PROOF_TODOS)
-    .map((ask) => (isCase(ask) ? caseKey(ask) : proofKey(ask)))
-    .filter((key) => !hadProofs.has(key));
-  if (newProofs.length > 0) setHadProofs(new Set([...hadProofs, ...newProofs]));
   // The page's images the person confirmed are their own, not stock (CE-049,
   // 00270): E-E-A-T's visual proof. Read once; a confirm adds to it at once.
   const [ownImages, setOwnImages] = useState<ReadonlySet<string> | null>(null);
@@ -1121,68 +1000,118 @@ export function DraftEditor({
       live = false;
     };
   }, [draft.id, sourcesOn]);
-  const images = useMemo(() => (sourcesOn ? pageImages(pageHtml) : []), [sourcesOn, pageHtml]);
   // The visual proof spots still open, as the margin shows them.
   const openSpots =
     editor && pageRead.read ? openSpotPlaces(editor.state.doc, pageRead.read.spots).length : 0;
-  const visualImages = images.length;
-  const visualOwn = ownImages ? images.filter((image) => ownImages.has(image.src)).length : 0;
-  // Once the page's read and the confirmations are in.
-  const visualRead = sourcesOn && pageRead.settled && ownImages !== null;
-  const visual = useMemo(
-    () => (visualRead ? { images: visualImages, own: visualOwn, openSpots } : null),
-    [visualRead, visualImages, visualOwn, openSpots],
+  // E-E-A-T, Trust and Readability from everything they read (CE-039), as
+  // the server's go-live gate computes them (lib/content/quality-inputs.ts):
+  // each waits for its reads, as before.
+  const scores = useMemo(
+    () =>
+      qualityState({
+        html: pageHtml,
+        blocks: pageBlocks,
+        language,
+        brandName,
+        pageType,
+        phase: qualityPhase(),
+        authorsRead: !!authorsRead,
+        author: pageAuthor,
+        authorConfirmed,
+        inputs,
+        inputsPending,
+        linkChecks,
+        brandDomains: brandDomains ?? null,
+        competitorDomains: competitorDomains ?? null,
+        siteTrust,
+        siteTrustRead,
+        brandFacts,
+        keptSources,
+        aiKinds,
+        claimBlocks,
+        pageRead: {
+          read: pageRead.read,
+          paused: pageRead.paused,
+          limited: pageRead.limited,
+          settled: pageRead.settled,
+          changing: pageChanging,
+        },
+        typeRules,
+        caseConfirms,
+        introConfirms,
+        casesRead,
+        ownImages,
+        openSpots,
+        catalog,
+        now: Date.now(),
+      }),
+    [
+      pageHtml,
+      pageBlocks,
+      language,
+      brandName,
+      pageType,
+      authorsRead,
+      pageAuthor,
+      authorConfirmed,
+      inputs,
+      inputsPending,
+      linkChecks,
+      brandDomains,
+      competitorDomains,
+      siteTrust,
+      siteTrustRead,
+      brandFacts,
+      keptSources,
+      aiKinds,
+      claimBlocks,
+      pageRead.read,
+      pageRead.paused,
+      pageRead.limited,
+      pageRead.settled,
+      pageChanging,
+      typeRules,
+      caseConfirms,
+      introConfirms,
+      casesRead,
+      ownImages,
+      openSpots,
+      catalog,
+    ],
   );
+  const {
+    profile,
+    used,
+    proofAsks,
+    aiChecks,
+    checkDateRead,
+    shippingRead,
+    readable,
+    introConfirmed,
+    introAll,
+    introRead,
+    images,
+    visualRead,
+    visual,
+    eeatScore,
+    productSchema,
+    trustScore,
+  } = scores;
+  const isCase = (ask: (typeof proofAsks)[number]) => casesOn && ask.kind === 'customer_case';
+  // A case's to-do once the confirms are read: open while not confirmed.
+  const caseOpen = (ask: (typeof proofAsks)[number]) =>
+    isCase(ask) ? casesRead && !caseConfirmed(caseConfirms ?? new Set(), ask) : !ask.linked;
+  const newProofs = proofAsks
+    .filter(caseOpen)
+    .slice(0, MAX_PROOF_TODOS)
+    .map((ask) => (isCase(ask) ? caseKey(ask) : proofKey(ask)))
+    .filter((key) => !hadProofs.has(key));
+  if (newProofs.length > 0) setHadProofs(new Set([...hadProofs, ...newProofs]));
   // E-E-A-T from the author (and, in phase 2, the person's experience and
   // data, and their own images); with Trust and Readability, the scores and
   // the header chip's average (CE-039).
   // In phase 2 it waits for the visual proof too, so it doesn't move once that lands;
   // on a type that weighs the brand's own information, for the site's trust.
-  const brandInfoRead = !waitsForSiteTrust(profile) || siteTrustRead;
-  const eeatScore = useMemo(
-    () =>
-      qualityOn &&
-      authorsRead &&
-      !inputsPending &&
-      (!sourcesOn || visualRead) &&
-      brandInfoRead &&
-      // Phase 3: the customer cases' confirms are read (CE-052).
-      (!casesOn || casesRead)
-        ? weighed(
-            eeat({
-              author: pageAuthor,
-              used,
-              visual,
-              how: aiChecks?.how ?? null,
-              confirmed: authorConfirmed,
-              // The brand's own information: only a type that weighs it counts it.
-              siteTrust,
-              checkDate: checkDateRead === null ? null : checkDateRead.found,
-              cases: caseCount,
-            }),
-            weights.eeat,
-          )
-        : null,
-    [
-      qualityOn,
-      authorsRead,
-      inputsPending,
-      sourcesOn,
-      visualRead,
-      pageAuthor,
-      used,
-      visual,
-      aiChecks,
-      authorConfirmed,
-      siteTrust,
-      checkDateRead,
-      casesOn,
-      casesRead,
-      caseCount,
-      brandInfoRead,
-      weights,
-    ],
-  );
   // A page that advises consumers on health, finance or law (the page's read)
   // asks for a qualified reviewer, one of Authors.
   const regulated = sourcesOn ? (pageRead.read?.regulated ?? null) : null;
@@ -1190,18 +1119,6 @@ export function DraftEditor({
   // Phase 3 (CE-053): a product page's Product schema in Before you publish,
   // from its opening paragraph, its own images (else its first) and the
   // price it states.
-  const productSchema = useMemo(() => {
-    if (profile !== 'product') return null;
-    const own = images
-      .filter((image) => ownImages?.has(image.src) && /^https:\/\//i.test(image.src))
-      .map((image) => image.src);
-    const first = firstImage(pageHtml);
-    return {
-      description: openingParagraph(pageHtml),
-      images: own.length ? own : first ? [first] : [],
-      offer: pageOffer(pageBlocks.map((block) => block.text)),
-    };
-  }, [profile, images, ownImages, pageHtml, pageBlocks]);
   // Phase 3 (CE-054): a category page's ItemList in Before you publish, from
   // its links to the brand's product pages, read against its site.
   // The brand's domains as the sources read them; failing that, its site's.
@@ -1217,17 +1134,6 @@ export function DraftEditor({
     return { items: listedProducts(pageHtml, domains, site), status: 'read' as const };
   }, [profile, pageHtml, brandDomains, sourcesFailed, siteTrust]);
   // The page's price, GTIN and stock against its product in the feed (CE-053).
-  const feedRead = useMemo(
-    () =>
-      feedOn && catalog?.product && productSchema
-        ? feedCheck({
-            texts: pageBlocks.map((block) => block.text),
-            offer: productSchema.offer,
-            variants: catalog.product.variants,
-          })
-        : null,
-    [feedOn, catalog, productSchema, pageBlocks],
-  );
   // Confirm: only the person can tell their own image from stock.
   const [confirmingImages, setConfirmingImages] = useState(false);
   const openConfirmImages = guard(() => setConfirmingImages(true), {
@@ -1305,70 +1211,8 @@ export function DraftEditor({
       editor.off('blur', recheckClaims);
     };
   }, [editor, recheckClaims]);
-  const sourceRead = useMemo(
-    () =>
-      sourcesOn
-        ? {
-            competitorDomains: competitorDomains ?? [],
-            pageType,
-            kept: new Set(keptSources),
-            ai: aiKinds,
-          }
-        : null,
-    [sourcesOn, competitorDomains, pageType, keptSources, aiKinds],
-  );
   // The brand's own links aren't sources: Trust waits for its domains. The
   // page read's balance and disclosure (phase 2) join when it lands.
-  const trustScore = useMemo(
-    () =>
-      qualityOn && brandDomains && !inputsPending
-        ? weighedTrust(
-            trust({
-              blocks: pageBlocks,
-              links: linkChecks,
-              brandDomains,
-              siteTrust,
-              quote: used ? used.quote : null,
-              sources: sourceRead,
-              claims: claimBlocks,
-              brandFacts: factCheck,
-              proofs: proofAsks,
-              page: aiChecks,
-              // A product page's shipping and returns (CE-052), price and stock (CE-053).
-              shipping: shippingRead,
-              feed: feedRead,
-              intro: introOn
-                ? {
-                    total: introAll.length,
-                    confirmed: introAll.filter((fact) => introConfirmed.has(fact)).length,
-                  }
-                : null,
-              now: Date.now(),
-            }),
-            weights.trust,
-          )
-        : null,
-    [
-      weights,
-      shippingRead,
-      feedRead,
-      introOn,
-      introAll,
-      introConfirmed,
-      qualityOn,
-      pageBlocks,
-      linkChecks,
-      brandDomains,
-      siteTrust,
-      inputsPending,
-      used,
-      sourceRead,
-      claimBlocks,
-      factCheck,
-      proofAsks,
-      aiChecks,
-    ],
-  );
   // Their links underlined in the draft, Quality's suggestion naming them.
   const weakKey = (trustScore?.weak ?? []).map((w) => w.url).join('\n');
   const weakTitle = t('quality.weakSource');

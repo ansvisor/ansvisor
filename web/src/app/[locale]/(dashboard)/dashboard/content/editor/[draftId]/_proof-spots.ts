@@ -3,7 +3,6 @@ import type { Node as PmNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { ProofSpot } from '@/lib/content/page-read';
-import { textRanges } from './_claim-marks';
 
 /**
  * Visual proof spots in the draft's left margin (Quality spec §4b, CE-049):
@@ -38,27 +37,9 @@ interface SpotsState {
 
 export const proofSpotsKey = new PluginKey<SpotsState>('proofSpots');
 
-/** A spot on the page: where its passage's paragraph starts. */
-export interface PlacedSpot {
-  spot: ProofSpot;
-  /** The start of its passage's paragraph's text. */
-  at: number;
-}
+import { openSpotPlaces, type PlacedSpot } from '@/lib/content/doc-text';
 
-/**
- * The spots still open on the page, each where its passage's paragraph
- * starts: one whose passage is gone, or whose paragraph's top-level block
- * an image already follows (its spot was filled), isn't.
- */
-export function openSpotPlaces(doc: PmNode, spots: readonly ProofSpot[]): PlacedSpot[] {
-  return spots.flatMap((spot) => {
-    const [range] = textRanges(doc, spot.passage, spot.block);
-    if (!range) return [];
-    const $from = doc.resolve(range.from);
-    if (doc.maybeChild($from.index(0) + 1)?.type.name === 'image') return [];
-    return [{ spot, at: $from.start() }];
-  });
-}
+export { openSpotPlaces, type PlacedSpot };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = '') {
   const node = document.createElement(tag);
