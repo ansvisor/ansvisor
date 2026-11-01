@@ -35,6 +35,8 @@ You can also start audits from:
 
 Audits started in bulk run a few at a time.
 
+A page has one audit running at a time: starting it again, from any of these places and however its address is written (with or without www, a last slash or a tracking parameter), opens the audit already running and uses no audit. When a page was audited in the last 10 minutes, Site Audit asks first: **Open it** shows that audit, and **Audit again** starts a new one. Pages started together leave those out and say so, with **Audit again**.
+
 <Note>
 Each completed audit uses one of your plan's monthly audits. An audit still running already counts; a failed one doesn't. The **Audits this month** card shows what's left. Self-hosted instances have no monthly limit, but they need a Scrape.do key to fetch pages — see [Environment variables](/self-host/env-variables).
 </Note>

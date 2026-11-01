@@ -6184,6 +6184,12 @@
     "recommendedFix": "Recommended fix",
     "fix": "Fix",
     "signalsEvaluated": "signals evaluated",
+    "recent": {
+      "question": "Audited {minutes} min ago. Open it or audit again?",
+      "open": "Open it",
+      "again": "Audit again",
+      "skipped": "{count, plural, one {# page was} other {# pages were}} audited in the last {minutes} minutes, so {count, plural, one {it wasn't} other {they weren't}} audited again."
+    },
     "aiRecommendations": "AI Recommendations",
     "signals": "Signals",
     "onlyIssues": "Issues only",

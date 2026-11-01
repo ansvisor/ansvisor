@@ -40,6 +40,8 @@ function query(table) {
       filters.in[col] = vals;
       return builder;
     },
+    lt: () => builder,
+    gte: () => builder,
     range: (from, to) => {
       range = [from, to];
       return builder;
@@ -54,7 +56,12 @@ function query(table) {
       if (table === 'site_audits' && filters.in.id) {
         data = audits.filter((a) => filters.in.id.includes(a.id));
       } else if (table === 'site_audits') {
-        data = audits.filter((a) => a.brand_id === filters.eq.brand_id);
+        data = audits.filter(
+          (a) =>
+            a.brand_id === filters.eq.brand_id &&
+            (!filters.eq.status || a.status === filters.eq.status) &&
+            (!filters.in.page_key || filters.in.page_key.includes(a.page_key)),
+        );
         if (range) data = data.slice(range[0], range[1] + 1);
       } else if (table === 'brand_domains') {
         data = domains;
@@ -86,7 +93,8 @@ async function startApp() {
   }));
   // An audit job that never gets its page, so the queue's limit can be seen;
   // a /fail page fails at once.
-  vi.doMock('../lib/audit/context.js', () => ({
+  vi.doMock('../lib/audit/context.js', async (importOriginal) => ({
+    ...(await importOriginal()),
     buildAuditContext: (url) => {
       pagesFetched.push(url);
       if (url.includes('/fail')) return Promise.reject(new Error('blocked'));

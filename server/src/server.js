@@ -57,7 +57,12 @@ import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-callback.js';
 import { sendImproveActionForKeyUser } from './routes/prompts.js';
 import { liveAddress, publishDraftForKeyUser } from './lib/content-published.js';
-import { readOpportunityInbox, startAutoAudits, startSiteAuditForBrand } from './routes/audits.js';
+import {
+  readOpportunityInbox,
+  recentAuditBody,
+  startAutoAudits,
+  startSiteAuditForBrand,
+} from './routes/audits.js';
 import { sweepAutoAudits } from './lib/audit/auto-audit-sweep.js';
 import { PlanLimitError, getAiUsage, getSiteAuditQuotaStatus } from './lib/plan-guard.js';
 import { recountBrandCitations } from './lib/citation-recount.js';
@@ -519,8 +524,10 @@ app.post('/api/internal/content/:id/brief', async (req, res) => {
 // The web MCP layer verifies the caller's `ans_` API key org owns `brandId`
 // before reaching here, so this endpoint just trusts the secret, resolves the
 // brand's org, enforces the monthly Site Audit quota, and starts the detached
-// audit job — returning the new `running` audit (the MCP caller then polls
-// get_site_audit for the result). Never on a demo brand (00380).
+// audit job — returning the new `running` audit, or the page's audit already
+// running (the MCP caller then polls get_site_audit for the result). A page
+// audited in the last minutes answers 409 recently_audited unless `force`.
+// Never on a demo brand (00380).
 app.post('/api/internal/site-audits', async (req, res) => {
   const secret = req.headers.authorization?.replace('Bearer ', '');
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
@@ -528,16 +535,22 @@ app.post('/api/internal/site-audits', async (req, res) => {
   }
 
   try {
-    const { brandId, url } = req.body || {};
+    const { brandId, url, force } = req.body || {};
     if (!brandId || !url) {
       return res.status(400).json({ success: false, message: 'brandId and url are required' });
     }
     if (await isDemoBrand(brandId)) return res.status(402).json(DEMO_BRAND);
-    const audit = await startSiteAuditForBrand(brandId, url);
-    return res.status(202).json({ success: true, audit });
+    const started = await startSiteAuditForBrand(brandId, url, { force: force === true });
+    if (started.recent) return res.status(409).json(recentAuditBody(started.recent));
+    return res.status(202).json({
+      success: true,
+      audit: started.audit,
+      alreadyRunning: started.alreadyRunning === true,
+    });
   } catch (err) {
-    if (err.status === 404) {
-      return res.status(404).json({ success: false, message: err.message });
+    // 404: no such brand; 400: not a page address.
+    if (err.status === 404 || err.status === 400) {
+      return res.status(err.status).json({ success: false, message: err.message });
     }
     // PlanLimitError (audit quota exhausted / inactive subscription) carries a
     // statusCode — surface it so the MCP layer can relay a clear message.
