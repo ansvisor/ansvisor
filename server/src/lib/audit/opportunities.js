@@ -255,6 +255,50 @@ export function buildOpportunities({
 }
 
 /**
+ * How much of the brand's site has a current audit (customer priorities
+ * item 11): the site pages the inbox weighs, by the rules it lists them by
+ * (excluded pages, checkout and legal paths and the brand's exclude
+ * patterns left out unless pinned), each audited within `staleDays`, never
+ * audited, or audited longer ago. `never` and `stale` are the inbox's
+ * Never audited and Audited N days ago rows, so the Pages audited card and
+ * the Not audited filter agree.
+ *
+ * @returns {{ pages: number, audited: number, never: number, stale: number }}
+ */
+export function siteCoverage({
+  sitePages = [],
+  auditPages = [],
+  prefs = [],
+  excludePatterns = [],
+  staleDays,
+  now = Date.now(),
+}) {
+  const excludedByPattern = excludePatternMatcher(excludePatterns);
+  const audits = new Map(auditPages.map((p) => [p.key.toLowerCase(), p]));
+  const prefsByKey = new Map(prefs.map((p) => [p.page_key, p]));
+  const pinned = new Set(
+    prefs.filter((p) => p.state === 'pinned').map((p) => opportunityKey(p.url)),
+  );
+  const staleBefore = now - staleDays * DAY_MS;
+  const coverage = { pages: 0, audited: 0, never: 0, stale: 0 };
+  const seen = new Set();
+  for (const row of sitePages) {
+    const key = opportunityKey(row.url);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    if (prefsByKey.get(key)?.state === 'excluded') continue;
+    const path = pathOf(row.url);
+    if (!pinned.has(key) && (isExcludedPath(path) || excludedByPattern(path))) continue;
+    coverage.pages += 1;
+    const audit = audits.get(key);
+    if (!audit || audit.score === null) coverage.never += 1;
+    else if (Date.parse(audit.lastAuditedAt) < staleBefore) coverage.stale += 1;
+    else coverage.audited += 1;
+  }
+  return coverage;
+}
+
+/**
  * AI visits per page over the window, from ae_page_traffic_evidence: Google
  * Analytics where it has the page, else the tracking snippet, never both
  * added (the snippet counts the visits GA counts), as mergeTrafficPages does.

@@ -67,20 +67,8 @@
       "id": "action-center/action-center-kpis",
       "title": "Track KPIs in the Action Center",
       "route": "/dashboard/action-center/kpis",
-      "keywords": [
-        "kpis",
-        "goals",
-        "targets",
-        "edit kpis",
-        "kpi status",
-        "goal reached"
-      ],
-      "synonyms": [
-        "key metrics",
-        "objectives",
-        "set goals",
-        "performance targets"
-      ],
+      "keywords": ["kpis", "goals", "targets", "edit kpis", "kpi status", "goal reached"],
+      "synonyms": ["key metrics", "objectives", "set goals", "performance targets"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -106,21 +94,8 @@
       "id": "action-center/action-center-overview",
       "title": "Action Center overview",
       "route": "/dashboard/action-center",
-      "keywords": [
-        "action center",
-        "actions",
-        "signals",
-        "kpis",
-        "history",
-        "prioritized work"
-      ],
-      "synonyms": [
-        "to-do list",
-        "work list",
-        "what to do next",
-        "recommendations",
-        "home page"
-      ],
+      "keywords": ["action center", "actions", "signals", "kpis", "history", "prioritized work"],
+      "synonyms": ["to-do list", "work list", "what to do next", "recommendations", "home page"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -150,19 +125,8 @@
       "id": "action-center/action-center-signals",
       "title": "Signals in the Action Center",
       "route": "/dashboard/action-center/signals",
-      "keywords": [
-        "signals",
-        "what changed",
-        "visibility drop",
-        "lost citation",
-        "signal status"
-      ],
-      "synonyms": [
-        "alerts",
-        "changes",
-        "detections",
-        "findings"
-      ],
+      "keywords": ["signals", "what changed", "visibility drop", "lost citation", "signal status"],
+      "synonyms": ["alerts", "changes", "detections", "findings"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -192,19 +156,8 @@
       "id": "action-center/action-history-results",
       "title": "Action history and results",
       "route": "/dashboard/action-center/history",
-      "keywords": [
-        "history",
-        "action results",
-        "scorecard",
-        "success rate",
-        "measured outcome"
-      ],
-      "synonyms": [
-        "what worked",
-        "past actions",
-        "completed actions",
-        "did it work"
-      ],
+      "keywords": ["history", "action results", "scorecard", "success rate", "measured outcome"],
+      "synonyms": ["what worked", "past actions", "completed actions", "did it work"],
       "plan": "all",
       "updated": "2026-10-29",
       "sections": [
@@ -249,12 +202,7 @@
         "why this priority",
         "action ranking"
       ],
-      "synonyms": [
-        "action priority",
-        "ranking",
-        "how actions are sorted",
-        "urgency"
-      ],
+      "synonyms": ["action priority", "ranking", "how actions are sorted", "urgency"],
       "plan": "all",
       "updated": "2026-10-29",
       "sections": [
@@ -302,12 +250,7 @@
         "attached from chat",
         "ready for review"
       ],
-      "synonyms": [
-        "steps",
-        "subtasks",
-        "to-do items",
-        "task checks"
-      ],
+      "synonyms": ["steps", "subtasks", "to-do items", "task checks"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -364,12 +307,7 @@
         "new brand",
         "skip get started"
       ],
-      "synonyms": [
-        "first steps",
-        "setup list",
-        "where do I start",
-        "onboarding"
-      ],
+      "synonyms": ["first steps", "setup list", "where do I start", "onboarding"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -407,19 +345,8 @@
       "id": "action-center/task-review-queue",
       "title": "Review tasks waiting in Needs review",
       "route": "/dashboard/action-center/review",
-      "keywords": [
-        "needs review",
-        "approve task",
-        "dismiss task",
-        "task review",
-        "missing fields"
-      ],
-      "synonyms": [
-        "review queue",
-        "pending tasks",
-        "tasks to approve",
-        "incomplete tasks"
-      ],
+      "keywords": ["needs review", "approve task", "dismiss task", "task review", "missing fields"],
+      "synonyms": ["review queue", "pending tasks", "tasks to approve", "incomplete tasks"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -454,12 +381,7 @@
         "cloudflare",
         "vercel"
       ],
-      "synonyms": [
-        "bot logs",
-        "ai crawlers",
-        "who crawls my site",
-        "bot traffic"
-      ],
+      "synonyms": ["bot logs", "ai crawlers", "who crawls my site", "bot traffic"],
       "plan": "growth",
       "updated": "2026-10-31",
       "sections": [
@@ -496,12 +418,7 @@
         "chatgpt visits",
         "referral trend"
       ],
-      "synonyms": [
-        "traffic from ai",
-        "visitors from chatgpt",
-        "ai referrals",
-        "ai sessions"
-      ],
+      "synonyms": ["traffic from ai", "visitors from chatgpt", "ai referrals", "ai sessions"],
       "plan": "all",
       "updated": "2026-11-01",
       "sections": [
@@ -656,13 +573,7 @@
         "check again",
         "tracking code not detected"
       ],
-      "synonyms": [
-        "set up ai traffic",
-        "add tracking code",
-        "link analytics",
-        "ga4",
-        "gsc"
-      ],
+      "synonyms": ["set up ai traffic", "add tracking code", "link analytics", "ga4", "gsc"],
       "plan": "all",
       "updated": "2026-11-01",
       "sections": [
@@ -998,12 +909,7 @@
         "integrations",
         "application password"
       ],
-      "synonyms": [
-        "cms integration",
-        "link my blog",
-        "set up send to cms",
-        "connect my website"
-      ],
+      "synonyms": ["cms integration", "link my blog", "set up send to cms", "connect my website"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -1117,12 +1023,7 @@
         "history",
         "export"
       ],
-      "synonyms": [
-        "write an article",
-        "edit a draft",
-        "page editor",
-        "finish a page"
-      ],
+      "synonyms": ["write an article", "edit a draft", "page editor", "finish a page"],
       "plan": "all",
       "updated": "2026-10-30",
       "sections": [
@@ -1192,19 +1093,8 @@
       "id": "content/content-library",
       "title": "Manage drafts in the Content Library",
       "route": "/dashboard/content/library",
-      "keywords": [
-        "content library",
-        "drafts",
-        "draft status",
-        "archive",
-        "export drafts"
-      ],
-      "synonyms": [
-        "content list",
-        "my articles",
-        "saved pages",
-        "draft list"
-      ],
+      "keywords": ["content library", "drafts", "draft status", "archive", "export drafts"],
+      "synonyms": ["content list", "my articles", "saved pages", "draft list"],
       "plan": "all",
       "updated": "2026-10-30",
       "sections": [
@@ -1248,12 +1138,7 @@
         "filter opportunities",
         "bulk actions"
       ],
-      "synonyms": [
-        "content optimization",
-        "content gaps",
-        "what to write",
-        "content suggestions"
-      ],
+      "synonyms": ["content optimization", "content gaps", "what to write", "content suggestions"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -1314,12 +1199,7 @@
         "create optimize protect",
         "losing ground"
       ],
-      "synonyms": [
-        "what to write next",
-        "content roadmap",
-        "content priorities",
-        "editorial plan"
-      ],
+      "synonyms": ["what to write next", "content roadmap", "content priorities", "editorial plan"],
       "plan": "all",
       "updated": "2026-10-29",
       "sections": [
@@ -1602,19 +1482,8 @@
       "id": "content/start-new-content",
       "title": "Start a page in New content",
       "route": "/dashboard/content/library",
-      "keywords": [
-        "new content",
-        "create page",
-        "optimize page",
-        "content agent",
-        "import page"
-      ],
-      "synonyms": [
-        "write a new article",
-        "start a draft",
-        "new page",
-        "improve an existing page"
-      ],
+      "keywords": ["new content", "create page", "optimize page", "content agent", "import page"],
+      "synonyms": ["write a new article", "start a draft", "new page", "improve an existing page"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -1820,12 +1689,7 @@
       "id": "mentions/correct-mention-sentiment",
       "title": "Correct a wrong mention sentiment",
       "route": "/dashboard/mentions",
-      "keywords": [
-        "sentiment is wrong",
-        "correct sentiment",
-        "sentiment correction",
-        "wrong tone"
-      ],
+      "keywords": ["sentiment is wrong", "correct sentiment", "sentiment correction", "wrong tone"],
       "synonyms": [
         "fix sentiment",
         "change sentiment",
@@ -1980,17 +1844,8 @@
       "id": "prompts/add-prompts",
       "title": "Add prompts to track",
       "route": "/dashboard/prompts/tracked",
-      "keywords": [
-        "add prompt",
-        "bulk import",
-        "track prompts",
-        "new prompt"
-      ],
-      "synonyms": [
-        "add a question",
-        "add queries",
-        "track a search"
-      ],
+      "keywords": ["add prompt", "bulk import", "track prompts", "new prompt"],
+      "synonyms": ["add a question", "add queries", "track a search"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2028,19 +1883,8 @@
       "id": "prompts/ai-search-volume",
       "title": "How estimated AI search volume works",
       "route": "/dashboard/prompts/insights",
-      "keywords": [
-        "ai search volume",
-        "estimate",
-        "confidence",
-        "volume range",
-        "estimate badge"
-      ],
-      "synonyms": [
-        "how many people ask",
-        "monthly AI searches",
-        "AI volume",
-        "est. ai volume"
-      ],
+      "keywords": ["ai search volume", "estimate", "confidence", "volume range", "estimate badge"],
+      "synonyms": ["how many people ask", "monthly AI searches", "AI volume", "est. ai volume"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2089,11 +1933,7 @@
         "open draft",
         "content for a prompt"
       ],
-      "synonyms": [
-        "write a page for a prompt",
-        "improve ranking",
-        "start a draft from a prompt"
-      ],
+      "synonyms": ["write a page for a prompt", "improve ranking", "start a draft from a prompt"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2135,12 +1975,7 @@
         "people also ask",
         "search console"
       ],
-      "synonyms": [
-        "single prompt view",
-        "is this asked for real",
-        "real demand",
-        "prompt results"
-      ],
+      "synonyms": ["single prompt view", "is this asked for real", "real demand", "prompt results"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2186,12 +2021,7 @@
         "similar topics",
         "high opportunity prompts"
       ],
-      "synonyms": [
-        "prompt volume",
-        "search demand",
-        "keyword volume",
-        "volume analysis"
-      ],
+      "synonyms": ["prompt volume", "search demand", "keyword volume", "volume analysis"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2284,12 +2114,7 @@
         "suggested prompts",
         "source filter"
       ],
-      "synonyms": [
-        "prompt ideas",
-        "recommended prompts",
-        "new prompt ideas",
-        "suggest queries"
-      ],
+      "synonyms": ["prompt ideas", "recommended prompts", "new prompt ideas", "suggest queries"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2394,12 +2219,7 @@
         "topic visibility",
         "top competitor"
       ],
-      "synonyms": [
-        "themes",
-        "prompt groups",
-        "clusters",
-        "categories"
-      ],
+      "synonyms": ["themes", "prompt groups", "clusters", "categories"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2452,12 +2272,7 @@
         "performance filter",
         "paused prompts"
       ],
-      "synonyms": [
-        "prompt list",
-        "my prompts",
-        "prompt table",
-        "tracked queries"
-      ],
+      "synonyms": ["prompt list", "my prompts", "prompt table", "tracked queries"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2559,13 +2374,7 @@
       "id": "reports/looker-studio",
       "title": "Connect Looker Studio",
       "route": "/dashboard/settings/api-keys",
-      "keywords": [
-        "Looker Studio",
-        "connector",
-        "GA4",
-        "blend data",
-        "metric sets"
-      ],
+      "keywords": ["Looker Studio", "connector", "GA4", "blend data", "metric sets"],
       "synonyms": [
         "Google Data Studio",
         "visibility in my own dashboard",
@@ -2657,12 +2466,7 @@
         "send to action center",
         "re-audit"
       ],
-      "synonyms": [
-        "audit fixes",
-        "improve audit score",
-        "fix failed signals",
-        "raise page score"
-      ],
+      "synonyms": ["audit fixes", "improve audit score", "fix failed signals", "raise page score"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2700,20 +2504,8 @@
       "id": "site-audit/read-an-audit-report",
       "title": "Read a site audit report",
       "route": "/dashboard/audit",
-      "keywords": [
-        "audit report",
-        "audit score",
-        "signals",
-        "audit categories",
-        "grade"
-      ],
-      "synonyms": [
-        "audit results",
-        "page score",
-        "what failed",
-        "E-E-A-T score",
-        "score changed"
-      ],
+      "keywords": ["audit report", "audit score", "signals", "audit categories", "grade"],
+      "synonyms": ["audit results", "page score", "what failed", "E-E-A-T score", "score changed"],
       "plan": "all",
       "updated": "2026-11-01",
       "sections": [
@@ -2759,12 +2551,7 @@
         "audit settings",
         "audit again"
       ],
-      "synonyms": [
-        "page audit",
-        "check my page",
-        "scan a page",
-        "AI readiness check"
-      ],
+      "synonyms": ["page audit", "check my page", "scan a page", "AI readiness check"],
       "plan": "all",
       "updated": "2026-11-01",
       "sections": [
@@ -2811,16 +2598,13 @@
         "pages audited",
         "audit opportunities",
         "audited pages",
-        "score over time"
+        "score over time",
+        "not audited",
+        "audit coverage"
       ],
-      "synonyms": [
-        "audit overview",
-        "audit history",
-        "which pages to audit",
-        "audit priority"
-      ],
+      "synonyms": ["audit overview", "audit history", "which pages to audit", "audit priority"],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -2828,7 +2612,7 @@
         },
         {
           "heading": "Summary and cards",
-          "text": "A summary line gives your site score, pages audited, lowest category and next auto-audit. The first three cards count only the pages of your primary domain:\n\n- **Site score**: the average score of each page's latest audit, and its change from each page's previous audit.\n- **Pages audited**: pages of your domain with a completed audit, and how many pages of other sites you audited.\n- **Authority · E-E-A-T**: those two category scores averaged over your pages, and the signals that fail or warn on the most pages.\n- **Audits this month**: audits left this billing month, with the share auto-audit keeps for its next runs."
+          "text": "A summary line gives your site score, pages audited, lowest category and next auto-audit. The first three cards count only the pages of your primary domain:\n\n- **Site score**: the average score of each page's latest audit, and its change from each page's previous audit.\n- **Pages audited**: how many of your site's pages, as your sitemap, Google Analytics and AI citations list them, have an audit from the last 90 days, and how many don't. **See the … not audited** opens those in Opportunities.\n- **Authority · E-E-A-T**: those two category scores averaged over your pages, and the signals that fail or warn on the most pages.\n- **Audits this month**: audits left this billing month, with the share auto-audit keeps for its next runs."
         },
         {
           "heading": "Score over time",
@@ -2836,7 +2620,7 @@
         },
         {
           "heading": "Why a page is in Opportunities",
-          "text": "The **Opportunities** tab is an inbox of pages worth auditing next. Each row shows a **Priority** from 0 to 100, the page, **Why** it's listed, its **AI visits** over the last 30 days and its **Last audit**. A page is listed when:\n\n- **No AI traffic**: it ranks high on your site in Google Analytics but gets no visitors from AI engines. **Targeted, not cited** adds that a tracked prompt points at it and no AI answer cites it;\n- a competitor is cited on prompts where you never are, and this is your closest page;\n- it was **Never audited**, or not in the last 90 days.\n\nAI visits need Google Analytics or the tracking snippet."
+          "text": "The **Opportunities** tab is an inbox of pages worth auditing next. Each row shows a **Priority** from 0 to 100, the page, **Why** it's listed, its **AI visits** over the last 30 days and its **Last audit**. A page is listed when:\n\n- **No AI traffic**: it ranks high on your site in Google Analytics but gets no visitors from AI engines. **Targeted, not cited** adds that a tracked prompt points at it and no AI answer cites it;\n- a competitor is cited on prompts where you never are, and this is your closest page;\n- it was **Never audited**, or not in the last 90 days.\n\nAI visits need Google Analytics or the tracking snippet.\n\nChips above the list show one reason at a time: **All**, **Not audited**, **No AI traffic** or **Competitor cited**, each with its count."
         },
         {
           "heading": "Priority and templates",

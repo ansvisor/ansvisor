@@ -6,6 +6,7 @@ import {
   excludePatternMatcher,
   normalizeExcludePattern,
   opportunityKey,
+  siteCoverage,
 } from './opportunities.js';
 
 const NOW = Date.parse('2026-10-17T12:00:00Z');
@@ -335,5 +336,57 @@ describe('buildOpportunities with competitor-cited pages', () => {
       title: 'Fresh',
       sessions: 12,
     });
+  });
+});
+
+describe('siteCoverage (customer priorities item 11)', () => {
+  const page = (path) => ({ url: `https://acme.com${path}` });
+  const sitePages = [
+    page('/'),
+    page('/pricing'),
+    page('/blog/old'),
+    page('/blog/new/'),
+    page('/checkout'),
+    page('/legal/terms'),
+    page('/careers-at-acme'),
+    page('/pricing/'),
+  ];
+  const auditPages = [
+    audit('https://acme.com/', 0.7, 3),
+    audit('https://acme.com/blog/old', 0.5, 120),
+    // A failed audit is no audit.
+    audit('https://acme.com/blog/new', null, 1, 'failed'),
+  ];
+  const coverage = (over = {}) =>
+    siteCoverage({ sitePages, auditPages, staleDays: 90, now: NOW, ...over });
+
+  it('counts the pages the inbox weighs: audited lately, never, or long ago', () => {
+    // /checkout is left out as the inbox leaves it; /pricing counts once.
+    expect(coverage({ excludePatterns: ['/legal/*', '/careers-at-acme'] })).toEqual({
+      pages: 4,
+      audited: 1,
+      never: 2,
+      stale: 1,
+    });
+  });
+
+  it('agrees with the inbox’s Never audited and Audited N days ago rows', () => {
+    const excludePatterns = ['/legal/*'];
+    const prefs = [
+      { page_key: 'acme.com/pricing', url: 'https://acme.com/pricing', state: 'excluded' },
+      { page_key: 'acme.com/checkout', url: 'https://acme.com/checkout', state: 'pinned' },
+    ];
+    const { rows } = build({ sitePages, auditPages, prefs, excludePatterns });
+    const listed = rows.filter((r) =>
+      r.reasons.some((x) => x.type === 'never_audited' || x.type === 'stale_audit'),
+    );
+    const { never, stale, pages, audited } = coverage({ prefs, excludePatterns });
+    expect(never + stale).toBe(listed.length);
+    // The excluded /pricing is out; the pinned /checkout is in.
+    expect({ pages, audited, never, stale }).toEqual({ pages: 5, audited: 1, never: 3, stale: 1 });
+  });
+
+  it('is nothing for a brand with no site pages', () => {
+    expect(siteCoverage({ staleDays: 90 })).toEqual({ pages: 0, audited: 0, never: 0, stale: 0 });
   });
 });

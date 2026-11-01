@@ -204,6 +204,13 @@ describe('GET /api/audits/opportunities', () => {
       priorityParts: { value: 0.96, opportunity: 0.75, ease: 0.8 },
     });
     expect(body.staleDays).toBe(90);
+    // How much of the site has a current audit, by the inbox's rules (item 11).
+    expect(body.coverage).toEqual({
+      pages: expect.any(Number),
+      audited: expect.any(Number),
+      never: expect.any(Number),
+      stale: expect.any(Number),
+    });
 
     // AI visits over the last 30 days, for the listed pages.
     const { name, args } = rpcCalls.find((c) => c.name === 'ae_page_traffic_evidence');

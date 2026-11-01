@@ -3,7 +3,7 @@
 import { Fragment } from 'react';
 import { useTranslations } from 'next-intl';
 import { CATEGORY_META, pct } from '@/components/audit/audit-report';
-import type { AuditOverview, AuditQuota } from '@/lib/actions/audits';
+import type { AuditOverview, AuditQuota, SiteCoverage } from '@/lib/actions/audits';
 import { nextAutoRun } from '@/lib/audit-auto-runs';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -25,10 +25,13 @@ export function AuditSummaryStrip({
   overview,
   quota,
   now,
+  coverage = null,
 }: {
   overview: AuditOverview | null;
   quota: AuditQuota | null;
   now: Date;
+  /** The site's coverage (customer priorities item 11): "18 of 36 pages audited". */
+  coverage?: SiteCoverage | null;
 }) {
   const t = useTranslations('audit.strip');
   if (!overview) return null;
@@ -54,7 +57,13 @@ export function AuditSummaryStrip({
       </>,
     );
   }
-  items.push(overview.pages > 0 ? t('pages', { count: overview.pages }) : t('noPages'));
+  items.push(
+    coverage && coverage.pages > 0
+      ? t('pagesOf', { audited: coverage.audited, count: coverage.pages })
+      : overview.pages > 0
+        ? t('pages', { count: overview.pages })
+        : t('noPages'),
+  );
   if (overview.lowestCategory) {
     const label =
       CATEGORY_META.find((c) => c.key === overview.lowestCategory?.key)?.label ??

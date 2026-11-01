@@ -3,7 +3,12 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
-import type { AuditAutoStatus, AuditOverview, AuditQuota } from '@/lib/actions/audits';
+import type {
+  AuditAutoStatus,
+  AuditOverview,
+  AuditQuota,
+  SiteCoverage,
+} from '@/lib/actions/audits';
 import { AuditOverviewCards } from './_overview-cards';
 
 (
@@ -92,6 +97,49 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+});
+
+describe('Pages audited, once the site’s pages are read (customer priorities item 11)', () => {
+  const renderCoverage = (coverage: SiteCoverage | null, onShowNotAudited = vi.fn()) => {
+    act(() => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <AuditOverviewCards
+            overview={overview({ pages: 20 })}
+            quota={growth}
+            now={NOW}
+            coverage={coverage}
+            staleDays={90}
+            onShowNotAudited={onShowNotAudited}
+          />
+        </NextIntlClientProvider>,
+      );
+    });
+    return onShowNotAudited;
+  };
+
+  it('says how many of the site’s pages have a current audit, and opens the rest', () => {
+    const open = renderCoverage({ pages: 36, audited: 18, never: 15, stale: 3 });
+    const pages = cards()[1];
+    expect(pages).toContain('18of 36 site pages');
+    expect(pages).toContain('15 never audited · 3 not in 90 days');
+    const see = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'See the 18 not audited →',
+    )!;
+    act(() => see.click());
+    expect(open).toHaveBeenCalled();
+  });
+
+  it('offers nothing to open once every page is audited, and reads as before without site pages', () => {
+    renderCoverage({ pages: 12, audited: 12, never: 0, stale: 0 });
+    expect(cards()[1]).toContain('12of 12 site pages');
+    expect(container.textContent).not.toContain('not audited →');
+    renderCoverage({ pages: 0, audited: 0, never: 0, stale: 0 });
+    expect(cards()[1]).toContain('20');
+    expect(cards()[1]).toContain('on acme.com');
+    renderCoverage(null);
+    expect(cards()[1]).toContain('on acme.com');
+  });
 });
 
 describe('AuditOverviewCards', () => {
