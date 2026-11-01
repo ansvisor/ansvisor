@@ -1255,7 +1255,7 @@
         "content suggestions"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1279,7 +1279,7 @@
         },
         {
           "heading": "Ask for new opportunities",
-          "text": "Admins and managers click **New** to get suggestions now, instead of waiting for the next automatic run. Pick a **Focus**: **Let Ansvisor choose**, a **Topic** or a **Prompt**. You can add your own idea, up to 500 characters, and set **How many**.\n\nOpportunities are written per group of prompts: prompts of one topic that a single page could answer, and that already have tracked answers. Each group gets one opportunity; only **Another angle** adds a second take on it.\n\nTitles leave years out unless the need is about one. A year that has passed in an opportunity's title or question shows as this year; your tracked prompts keep their own words."
+          "text": "Admins and managers click **New** to get suggestions now, instead of waiting for the next automatic run. Pick a **Focus**: **Let Ansvisor choose**, a **Topic** or a **Prompt**. You can add your own idea, up to 500 characters, and set **How many**. New opportunities also follow the brand's rules from **Settings › Content › Brand rules**, such as topics to stay away from.\n\nOpportunities are written per group of prompts: prompts of one topic that a single page could answer, and that already have tracked answers. Each group gets one opportunity; only **Another angle** adds a second take on it.\n\nTitles leave years out unless the need is about one. A year that has passed in an opportunity's title or question shows as this year; your tracked prompts keep their own words."
         },
         {
           "heading": "What each focus picks",
@@ -1368,7 +1368,8 @@
         "rewrite the whole page",
         "agent suggestions",
         "accept suggestions",
-        "rules tab"
+        "rules tab",
+        "brand rules"
       ],
       "synonyms": [
         "writing rules",
@@ -1378,7 +1379,7 @@
         "let the agent fix the page"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1391,6 +1392,10 @@
         {
           "heading": "Save or reset your rules",
           "text": "Changes to the rules apply to this draft only. **Save as my rules**, for admins and managers, keeps them for your workspace's next drafts of this page type, and **Reset** goes back to the default set. Under **Your text rules**, write a rule in your own words, or use **Paste many** to add several from a style guide."
+        },
+        {
+          "heading": "Brand rules",
+          "text": "Admins and managers keep a brand's rules in **Settings › Content › Brand rules**, one per line, up to 30, such as topics to stay away from. The Content Agent follows them on every page of the brand, before your text rules, and a brand rule wins when they disagree. They change what's written, not the **Rules** count."
         },
         {
           "heading": "Fix open rules with Run Agent",
@@ -1486,7 +1491,8 @@
         "page author",
         "qualified reviewer",
         "reviewer",
-        "reviewed by"
+        "reviewed by",
+        "trusted sources"
       ],
       "synonyms": [
         "content quality",
@@ -1515,6 +1521,10 @@
         {
           "heading": "Hand off",
           "text": "**Hand off** asks the Content Agent to fix the open suggestions in one run, as changes for you to review. Your to-dos stay yours. Each Hand off is kept in the page's History, and it uses your workspace's monthly AI usage.\n\nIn **Settings › Content**, admins and managers can have each brand's new pages handed off on their own when they're first opened in the editor."
+        },
+        {
+          "heading": "Trusted sources",
+          "text": "**Trust** counts links to official and research sites as primary sources. In **Settings › Content**, admins and managers can add the sites a brand trusts besides, such as its industry's association or the docs it cites, one per line, up to 50. Links to them, and to their pages, count as primary sources here and as authority links in Site Audit."
         },
         {
           "heading": "Next step",
@@ -2741,11 +2751,11 @@
         },
         {
           "heading": "Signals",
-          "text": "The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:\n\n- the **Finding**: what this audit saw on the page, when the check reports it;\n- what the signal measures, and **Why** it matters to AI engines;\n- the **Recommended fix** written for this page, or the general **Fix** for signals without one."
+          "text": "The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:\n\n- the **Finding**: what this audit saw on the page, when the check reports it;\n- what the signal measures, and **Why** it matters to AI engines;\n- the **Recommended fix** written for this page, or the general **Fix** for signals without one. Recommended fixes follow the brand's rules from **Settings › Content › Brand rules**; the score doesn't change."
         },
         {
           "heading": "Authority links",
-          "text": "**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…) and major news."
+          "text": "**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…), major news, and the sites your brand trusts. Add those in **Settings › Content**; **Edit in Settings** takes you there."
         },
         {
           "heading": "Product pages",

@@ -1,10 +1,15 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { AuditSignal } from '@/lib/actions/audits';
-import { AuthoritySources } from './authority-sources';
+
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
+}));
+
+const { AuthoritySources } = await import('./authority-sources');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -70,7 +75,7 @@ describe('AuthoritySources', () => {
       s.getAttribute('title'),
     );
     expect(chips).toEqual(['Official site', 'International body']);
-    expect(container.querySelectorAll('li')).toHaveLength(4);
+    expect(container.querySelectorAll('li')).toHaveLength(5);
     expect(container.textContent).toContain('.gov.tr, .edu.tr, .ac.uk');
   });
 
@@ -85,5 +90,25 @@ describe('AuthoritySources', () => {
     render({ authorityHosts: [], count: 0 });
     expect(lines()[0]).toBe('Found: none of the 2 a page needs.');
     expect(container.textContent).not.toContain("don't count");
+  });
+
+  it('lists the brand’s trusted sources the audit counted, with the way to Settings (00449)', () => {
+    render({
+      authorityHosts: ['sca.coffee'],
+      count: 1,
+      authorityKinds: { 'sca.coffee': 'trusted' },
+      trustedSources: ['sca.coffee', 'ncausa.org'],
+    });
+    expect(container.querySelector('span[title]')!.getAttribute('title')).toBe(
+      'Your trusted source',
+    );
+    const last = [...container.querySelectorAll('li')].at(-1)!;
+    expect(last.textContent).toBe('Your trusted sources: sca.coffeencausa.orgEdit in Settings');
+    expect(last.querySelector('a')!.getAttribute('href')).toBe('/dashboard/settings/content');
+    // None yet, or an audit from before: the way to add them.
+    render({ authorityHosts: [], count: 0 });
+    expect([...container.querySelectorAll('li')].at(-1)!.textContent).toBe(
+      'Your trusted sources: Add them in Settings',
+    );
   });
 });

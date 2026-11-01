@@ -12,12 +12,15 @@ import {
   type ContentSettings,
 } from '@/lib/actions/content-settings';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { BrandRulesCard } from './brand-rules-card';
+import { TrustedSourcesCard } from './trusted-sources-card';
 
 /**
  * Settings › Content (Quality spec §5, CE-051): per brand, Hand off quality
  * fixes automatically — its new and optimized pages get the Content Agent's
- * quality fixes, left for review. Admins and managers change it; anyone else
- * sees it.
+ * quality fixes, left for review — its Trusted sources (00449) and its
+ * Brand rules (00450). Admins and managers change them; anyone else sees
+ * them.
  */
 export function ContentSection() {
   const t = useTranslations('settings.content');
@@ -70,60 +73,94 @@ export function ContentSection() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('title')}</CardTitle>
-        <CardDescription>{t('description')}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {!read && !failed && (
-          <p className="text-sm text-muted-foreground" aria-busy="true">
-            <LoadingDots />
-            <span className="sr-only">{t('loading')}</span>
-          </p>
-        )}
-        {failed && (
-          <p className="text-sm text-destructive">
-            {t('loadFailed')}{' '}
-            <button type="button" className="underline" onClick={() => void load()}>
-              {tCommon('retry')}
-            </button>
-          </p>
-        )}
-        {read && read.brands.length === 0 && (
-          <p className="text-sm text-muted-foreground">{t('noBrands')}</p>
-        )}
-        {read && read.brands.length > 0 && (
-          <section className="space-y-2" aria-label={t('handOff')}>
-            <ul className="divide-y rounded-xl border">
-              {read.brands.map((brand) => (
-                <li key={brand.id} className="flex items-center gap-3 px-3 py-2.5">
-                  <span
-                    id={`content-${brand.id}`}
-                    className="min-w-0 flex-1 text-sm [overflow-wrap:anywhere]"
-                  >
-                    {brand.name}
-                  </span>
-                  <label className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={saving[brand.id] ?? brand.qualityHandoff}
-                      aria-describedby={`content-${brand.id}`}
-                      disabled={!read.canManage || brand.id in saving}
-                      onCheckedChange={guard(
-                        (checked: boolean) => void toggle(brand.id, checked === true),
-                        { action: tActions('changeContentSettings') },
-                      )}
-                    />
-                    {t('handOff')}
-                  </label>
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs text-muted-foreground">{t('handOffHint')}</p>
-            {!read.canManage && <p className="text-xs text-muted-foreground">{t('managers')}</p>}
-          </section>
-        )}
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('title')}</CardTitle>
+          <CardDescription>{t('description')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!read && !failed && (
+            <p className="text-sm text-muted-foreground" aria-busy="true">
+              <LoadingDots />
+              <span className="sr-only">{t('loading')}</span>
+            </p>
+          )}
+          {failed && (
+            <p className="text-sm text-destructive">
+              {t('loadFailed')}{' '}
+              <button type="button" className="underline" onClick={() => void load()}>
+                {tCommon('retry')}
+              </button>
+            </p>
+          )}
+          {read && read.brands.length === 0 && (
+            <p className="text-sm text-muted-foreground">{t('noBrands')}</p>
+          )}
+          {read && read.brands.length > 0 && (
+            <section className="space-y-2" aria-label={t('handOff')}>
+              <ul className="divide-y rounded-xl border">
+                {read.brands.map((brand) => (
+                  <li key={brand.id} className="flex items-center gap-3 px-3 py-2.5">
+                    <span
+                      id={`content-${brand.id}`}
+                      className="min-w-0 flex-1 text-sm [overflow-wrap:anywhere]"
+                    >
+                      {brand.name}
+                    </span>
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={saving[brand.id] ?? brand.qualityHandoff}
+                        aria-describedby={`content-${brand.id}`}
+                        disabled={!read.canManage || brand.id in saving}
+                        onCheckedChange={guard(
+                          (checked: boolean) => void toggle(brand.id, checked === true),
+                          { action: tActions('changeContentSettings') },
+                        )}
+                      />
+                      {t('handOff')}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">{t('handOffHint')}</p>
+              {!read.canManage && <p className="text-xs text-muted-foreground">{t('managers')}</p>}
+            </section>
+          )}
+        </CardContent>
+      </Card>
+      {read && read.trustedSourcesOn && read.brands.length > 0 && (
+        <TrustedSourcesCard
+          read={read}
+          onSaved={(brandId, sources) =>
+            setRead(
+              (prev) =>
+                prev && {
+                  ...prev,
+                  brands: prev.brands.map((b) =>
+                    b.id === brandId ? { ...b, trustedSources: sources } : b,
+                  ),
+                },
+            )
+          }
+        />
+      )}
+      {read && read.brandRulesOn && read.brands.length > 0 && (
+        <BrandRulesCard
+          read={read}
+          onSaved={(brandId, rules) =>
+            setRead(
+              (prev) =>
+                prev && {
+                  ...prev,
+                  brands: prev.brands.map((b) =>
+                    b.id === brandId ? { ...b, brandRules: rules } : b,
+                  ),
+                },
+            )
+          }
+        />
+      )}
+    </div>
   );
 }

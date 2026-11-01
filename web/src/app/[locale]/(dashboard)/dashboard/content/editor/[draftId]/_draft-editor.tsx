@@ -877,6 +877,8 @@ export function DraftEditor({
   // person kept.
   const sourcesOn = qualityPhase() >= 2;
   const competitorDomains = reads.sources?.data?.competitorDomains;
+  // The sites the brand trusts (Settings › Content, 00449): primary sources.
+  const trustedDomains = reads.sources?.data?.trustedDomains;
   // Phase 2 (CE-047): the page's prices, trial and founding year against the
   // brand's approved facts, read from its own site.
   const factsState = useBrandFacts(draft.brandId, sourcesOn);
@@ -906,9 +908,10 @@ export function DraftEditor({
             competitorDomains: competitorDomains ?? [],
             pageType,
             kept: new Set(keptSources),
+            trustedDomains: trustedDomains ?? [],
           })
         : [],
-    [sourcesOn, brandDomains, pageBlocks, competitorDomains, pageType, keptSources],
+    [sourcesOn, brandDomains, pageBlocks, competitorDomains, pageType, keptSources, trustedDomains],
   );
   const {
     kinds: aiKinds,
@@ -1313,9 +1316,10 @@ export function DraftEditor({
             pageType,
             kept: new Set(keptSources),
             ai: aiKinds,
+            trustedDomains: trustedDomains ?? [],
           }
         : null,
-    [sourcesOn, competitorDomains, pageType, keptSources, aiKinds],
+    [sourcesOn, competitorDomains, pageType, keptSources, aiKinds, trustedDomains],
   );
   // The brand's own links aren't sources: Trust waits for its domains. The
   // page read's balance and disclosure (phase 2) join when it lands.

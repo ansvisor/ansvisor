@@ -3,6 +3,8 @@ import { NoObjectGeneratedError, generateObject } from 'ai';
 import * as cheerio from 'cheerio';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
+import { brandRulesSection } from './brand-rules.js';
+import { readBrandRules } from './brand-rules-read.js';
 import { resolveModel } from './ai-provider.js';
 import {
   CONTENT_WRITE_MAX_TOKENS,
@@ -1140,6 +1142,11 @@ export function buildFixPrompt({
   if (more) lines.push('(The page goes on; suggest changes only to the passages above.)');
   const rules = input.rules.map((r) => `- ${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
   const own = input.textRules.map((text) => `- ${text}`);
+  // The brand's rules (Settings › Content, 00450): before the writer's own, which they outrank.
+  const brandRules = brandRulesSection(
+    brand.rules,
+    "The brand's rules, to follow in every change, before the writer's own:",
+  );
   // Said only when the Length isn't among the rules: the line says it isn't.
   const over = input.rules.some((r) => r.key === 'length') ? '' : overLengthLine(input.overLength);
   return `Brand: ${brand?.name || 'Unknown'}
@@ -1151,7 +1158,7 @@ Page type: ${pageTypeFormat(draft.page_type)}
 
 Rules the page doesn't meet yet (key: rule — what it asks and how the page reads now):
 ${rules.join('\n')}
-${over ? `${over}\n` : ''}${careful ? `${careful}\n` : ''}${livePage ? `${livePage}\n` : ''}${handoff ? `${KEEP_PLACEHOLDERS}\n` : ''}${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
+${over ? `${over}\n` : ''}${careful ? `${careful}\n` : ''}${livePage ? `${livePage}\n` : ''}${handoff ? `${KEEP_PLACEHOLDERS}\n` : ''}${brandRules ? `\n${brandRules}\n` : ''}${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
 The page, passage by passage:
 ${lines.join('\n')}
 
@@ -1276,6 +1283,8 @@ export async function fixDraftRules({ draftId, brandId, input, handoff = null })
     .eq('id', brandId)
     .single();
   if (brandError) throw brandError;
+  // The brand's rules (00450), read here: the prompt puts them first.
+  brand.rules = await readBrandRules(brandId);
   // Turned off since the draft was made: its automatic hand-off doesn't run.
   if (handoff?.origin === 'auto' && brand.content_quality_handoff !== true) {
     throw Object.assign(new Error('The brand hands off no quality fixes'), {
@@ -1427,11 +1436,15 @@ async function fixWithRun({
     queries: input.sources?.queries,
     inputs: inputSources(inputRow, brand.name),
   });
-  // A hand-off's details and the person's own rules are the editor's words:
-  // no fact the agent may write. The brand's approved facts are, read here.
+  // A hand-off's details and the person's and brand's rules are the editor's
+  // words: no fact the agent may write. The brand's approved facts are, read here.
   const ruleWords = handoff
     ? input.rules.map((r) => r.name)
-    : [...input.rules.flatMap((r) => [r.name, r.detail]), ...input.textRules];
+    : [
+        ...input.rules.flatMap((r) => [r.name, r.detail]),
+        ...input.textRules,
+        ...(brand.rules ?? []),
+      ];
   const facts = handoff && ruleKeys.has('trust:brandFacts') ? await approvedFacts(brandId) : [];
   // The shopping path's prices and names: the catalog's, written unmarked.
   const shopping = shoppingGiven(shoppingPath);

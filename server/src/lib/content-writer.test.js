@@ -1454,6 +1454,26 @@ describe('Rewrite the page to these rules', () => {
 describe('the write prompt', () => {
   afterEach(() => vi.unstubAllEnvs());
 
+  it("puts the brand's rules first, before the writer's own (00450)", () => {
+    const prompt = (rules) =>
+      buildWritePrompt({
+        brand: { ...brand, rules },
+        draft: draftRow(),
+        brief: 'No brief.',
+        input: { sources: { length: 3000 }, rules: [], textRules: ['Short sentences.'] },
+      });
+    const written = prompt(['No topics comparing us with a named competitor.']);
+    expect(written).toContain(
+      "The brand's rules, which come first:\n- No topics comparing us with a named competitor.",
+    );
+    expect(written.indexOf("The brand's rules")).toBeLessThan(
+      written.indexOf("The writer's own rules:"),
+    );
+    // None: the prompt is as it was.
+    expect(prompt([])).not.toContain("The brand's rules");
+    expect(prompt(undefined)).not.toContain("The brand's rules");
+  });
+
   it('names the brand’s site type once Quality’s phase 2 is live (CE-056)', () => {
     const write = (phase) => {
       vi.stubEnv('CONTENT_QUALITY_PHASE', phase);

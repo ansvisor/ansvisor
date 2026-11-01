@@ -56778,6 +56778,68 @@ alter table public.chat_agent_runs
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00449_brands_trusted_sources.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00449: The sites a brand trusts as sources
+-- ============================================================================
+-- Customer priorities item 6 (owner decision, 2026-11-01): Site Audit's
+-- "Outbound authority links" counts a shared list of official, research and
+-- news sites. A brand adds the sites it trusts besides, such as its
+-- industry's association or the docs it cites, in Settings › Content:
+--
+--   * Site Audit counts a link to one of them, or one of its pages, as an
+--     authority link;
+--   * the Content Editor's Trust reads it as a primary source.
+--
+-- trusted_sources: hosts as the app saves them (lower case, no scheme, no
+-- www.), at most 50. Admins and managers change them, as the brand's other
+-- settings (brands: admin/manager update).
+
+alter table public.brands
+  add column if not exists trusted_sources text[] not null default '{}'
+    check (cardinality(trusted_sources) <= 50);
+
+comment on column public.brands.trusted_sources is
+  'Customer priorities item 6 (00449): sites the brand trusts as sources (hosts, at most 50); Site Audit counts links to them as authority links and the Content Editor''s Trust as primary sources.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00450_brands_brand_rules.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00450: A brand's rules, in its own words
+-- ============================================================================
+-- Customer priorities item 8 (owner decision, 2026-11-01): one list of
+-- rules per brand, such as "no topics comparing us with a named competitor"
+-- or "cite official sources for health claims", set in Settings › Content
+-- and read by the server where it writes for the brand:
+--
+--   * Site Audit's AI recommendations;
+--   * new content opportunities;
+--   * the Content Agent (writer, agent, rewrite), before the person's own
+--     rules, which it outranks.
+--
+-- The rules shape what's suggested and written; scores don't change.
+--
+-- brand_rules: at most 30 rules of at most 300 characters each, as the app
+-- saves them (trimmed, each once). Admins and managers change them, as the
+-- brand's other settings (brands: admin/manager update).
+
+alter table public.brands
+  add column if not exists brand_rules text[] not null default '{}'
+    check (
+      cardinality(brand_rules) <= 30
+      and char_length(array_to_string(brand_rules, '')) <= 9000
+    );
+
+comment on column public.brands.brand_rules is
+  'Customer priorities item 8 (00450): the brand''s rules in its own words (at most 30, 300 characters each), read by Site Audit''s AI recommendations, the opportunity generator and the Content Agent.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00456_site_type_mobile_app.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
