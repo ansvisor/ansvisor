@@ -12,7 +12,8 @@ import type { FirstRun } from '@/hooks/use-first-run';
  * the row menu, the bulk bar and Analyze open the upgrade dialog, labelled
  * with what was clicked, and write nothing; on an active plan they work as
  * before. The volumes the server refuses it don't read as an outage. The
- * Location filter stays off Query Fan-out, which doesn't use it.
+ * Location filter stays off Query Fan-out, which doesn't use it, and Chat's
+ * side panel hears of a location only on the tab that reads one.
  */
 
 const actions = vi.hoisted(() => ({
@@ -87,7 +88,9 @@ vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (select: (state: unknown) => unknown) =>
     select({ activeBrandId: 'b1', brands: [{ id: 'b1', slug: 'acme', name: 'Acme' }] }),
 }));
-vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
+// The page's query string: empty unless a test says otherwise.
+const query = vi.hoisted(() => ({ search: '' }));
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(query.search) }));
 // The route names the tab: Tracked unless a test opens Insights.
 const nav = vi.hoisted(() => ({ pathname: '/dashboard/prompts/tracked', push: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
@@ -112,6 +115,7 @@ const toast = vi.hoisted(() =>
 vi.mock('sonner', () => ({ toast }));
 
 const { default: PromptsPage } = await import('./page');
+const { ChatPageSetterContext } = await import('@/components/chat/panel/chat-panel-context');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -134,15 +138,17 @@ let container: HTMLDivElement;
 let root: Root;
 const openUpgrade = vi.fn();
 
-async function render(isLocked: boolean) {
+async function render(isLocked: boolean, setChatPage: ((page: unknown) => void) | null = null) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <UpgradeDialogContext.Provider
-          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
-        >
-          <PromptsPage />
-        </UpgradeDialogContext.Provider>
+        <ChatPageSetterContext.Provider value={setChatPage}>
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <PromptsPage />
+          </UpgradeDialogContext.Provider>
+        </ChatPageSetterContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -158,6 +164,7 @@ const dialog = () => document.querySelector('[role="dialog"]');
 beforeEach(() => {
   vi.clearAllMocks();
   nav.pathname = '/dashboard/prompts/tracked';
+  query.search = '';
   filterOptions.regions = [];
   firstRun.run = null;
   contentUsage.value = null;
@@ -268,6 +275,32 @@ describe('the Location filter', () => {
     await render(false);
     expect(container.querySelector('[data-testid="fanout-tab"]')).not.toBeNull();
     expect(locationFilter()).toBeUndefined();
+  });
+});
+
+describe("what Chat's side panel sees", () => {
+  // A link that carries a location from Tracked Prompts to every tab.
+  const filtersOn = async (pathname: string) => {
+    filterOptions.regions = ['US', 'GB'];
+    query.search = 'region=GB';
+    nav.pathname = pathname;
+    const setChatPage = vi.fn();
+    await render(false, setChatPage);
+    return setChatPage.mock.lastCall![0].filters;
+  };
+
+  it('names the location on Tracked Prompts, whose table it filters', async () => {
+    expect(await filtersOn('/dashboard/prompts/tracked')).toEqual([
+      { key: 'region', label: expect.stringContaining('United Kingdom'), value: 'GB' },
+    ]);
+  });
+
+  it.each([
+    ['Query Fan-out', '/dashboard/prompts/fan-outs'],
+    ['Topics', '/dashboard/prompts/topics'],
+    ['Insights', '/dashboard/prompts/insights'],
+  ])("leaves the location out on %s, which doesn't read it", async (_tab, pathname) => {
+    expect(await filtersOn(pathname)).toEqual([]);
   });
 });
 
