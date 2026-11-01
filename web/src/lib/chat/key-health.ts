@@ -1,6 +1,8 @@
 import { isAiProvider, type AiProvider } from '@/lib/agent/providers';
 import { isKeyFailureClass, type KeyFailureClass } from '@/lib/agent/key-errors';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { chatAgenticEnabled } from './flag';
+import { notifyOwnKeyFailure } from './key-notice';
 
 /**
  * An own AI key's health (AGENT-OWN-KEY §5.2, §5.4; 00440): when the
@@ -62,7 +64,8 @@ export async function failingKeyFor(organizationId: string): Promise<FailingKey 
  * failure of an episode sets `failing_since` (a conditional update), so runs
  * that fail at once start one episode; a later failure in it keeps the
  * episode and records its class (invalid → no_credit). `started` is true for
- * the failure that began the episode, the one that tells the Admins.
+ * the failure that began the episode: it tells the Admins (00441), whose
+ * notice a class that changes later doesn't send again.
  */
 export async function markKeyFailing(
   organizationId: string,
@@ -83,7 +86,13 @@ export async function markKeyFailing(
     .is('failing_since', null)
     .select('failing_since');
   if (error) throw new Error(`Could not mark the AI key failing: ${error.message}`);
-  if ((data ?? []).length > 0) return { started: true, since };
+  if ((data ?? []).length > 0) {
+    // The Admins are told while Chat is on for the workspace: its agents run on the key.
+    if (chatAgenticEnabled(organizationId)) {
+      await notifyOwnKeyFailure(organizationId, provider, since);
+    }
+    return { started: true, since };
+  }
 
   const { data: kept, error: keepError } = await supabaseAdmin
     .from('organization_ai_keys')
@@ -132,6 +141,25 @@ export async function markKeyChecked(
 }
 
 /**
+ * The Admins' notices that the key fails (00441) close once it works again
+ * or is removed: their Inbox row goes with them.
+ */
+export async function resolveOwnKeyNotices(
+  organizationId: string,
+  provider: AiProvider,
+  now = new Date(),
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('chat_notices')
+    .update({ resolved_at: now.toISOString() })
+    .eq('organization_id', organizationId)
+    .eq('kind', 'own_key_failed')
+    .eq('payload->>provider', provider)
+    .is('resolved_at', null);
+  if (error) throw new Error(`Could not close the AI key's notices: ${error.message}`);
+}
+
+/**
  * The key works again (a passing test, or any successful call on it): clears
  * the episode and resumes the agents it paused. Writes only when the key was
  * marked failing, so a working key costs no write. `resume: false` for a key
@@ -157,5 +185,9 @@ export async function markKeyWorking(
     .select('provider');
   if (error) throw new Error(`Could not mark the AI key working: ${error.message}`);
   if ((data ?? []).length === 0) return { cleared: false, resumed: 0 };
+  // The notices close even when they can't: the key works, the agents restart.
+  await resolveOwnKeyNotices(organizationId, provider, now).catch((err) =>
+    console.error("[chat/key] could not close the AI key's notices:", err),
+  );
   return { cleared: true, resumed: resume ? await resumeOwnKeyAgents(organizationId, now) : 0 };
 }

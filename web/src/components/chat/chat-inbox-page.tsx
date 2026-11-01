@@ -13,6 +13,7 @@ import {
   startDailySuggestions,
   type SuggestionsReadResult,
 } from '@/lib/actions/chat-suggestions';
+import type { ChatNoticesRead } from '@/lib/actions/chat-notices';
 import type { DailySuggestion, DailySuggestionsRead } from '@/lib/chat/daily-suggestions';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { ChatInboxView, inboxItems, inboxTabOf, useNow } from './chat-inbox';
@@ -150,7 +151,14 @@ export function useInboxDaily(
  * suggestions as the page read them (absent, as it was), on the topic the
  * address names (`?tab=`).
  */
-export function ChatInbox({ suggestions }: { suggestions?: SuggestionsReadResult | null }) {
+export function ChatInbox({
+  suggestions,
+  notices,
+}: {
+  suggestions?: SuggestionsReadResult | null;
+  /** The person's open notices (00441), as the page read them; none when they couldn't be. */
+  notices?: ChatNoticesRead | null;
+}) {
   const { status, chats, refresh } = useChatList();
   const now = useNow();
   const items = useMemo(() => inboxItems(chats), [chats]);
@@ -165,6 +173,7 @@ export function ChatInbox({ suggestions }: { suggestions?: SuggestionsReadResult
       onRetry={() => void refresh()}
       daily={daily}
       initialTab={tab}
+      notices={notices?.ok ? notices.notices : []}
     />
   );
 }

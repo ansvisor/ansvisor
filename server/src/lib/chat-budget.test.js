@@ -26,6 +26,8 @@ let ledger;
 let grants;
 // chat_agent_runs: an agent run's cap and its use (00419).
 let agentRuns;
+// chat_settings: the key guard an Admin set (00442); none reads as $250.
+let chatSettings;
 let rpcCalls;
 let runs;
 let nextId;
@@ -89,6 +91,20 @@ function aiUsageByFeature(args) {
   return { data: [...by].map(([feature, cost_usd]) => ({ feature, cost_usd })), error: null };
 }
 
+/** 00442's chat_own_key_agent_spend, on the ledger: the agents' own-key steps since p_since. */
+function ownKeyAgentSpend(args) {
+  const sum = ledger
+    .filter(
+      (r) =>
+        r.organization_id === args.p_organization_id &&
+        r.own_key &&
+        ['agent', 'schedule'].includes(r.feature) &&
+        r.used_at >= args.p_since,
+    )
+    .reduce((total, r) => total + r.cost_usd, 0);
+  return { data: sum, error: null };
+}
+
 /** 00243's reserve_ai_usage (00405: own-key rows left out), on the ledger. */
 function reserveAiUsage(args) {
   const spent = ledger
@@ -112,6 +128,7 @@ const tables = () => ({
   prompt_improve_usage: ledger,
   ai_credit_grants: grants,
   chat_agent_runs: agentRuns,
+  chat_settings: chatSettings,
 });
 
 /** What PostgREST's filters do, on a row's value: numbers by value, times as ISO strings. */
@@ -201,6 +218,7 @@ beforeEach(async () => {
   ledger = [];
   grants = [];
   agentRuns = [];
+  chatSettings = [];
   rpcCalls = [];
   runs = new Set([RUN]);
   nextId = 1;
@@ -215,6 +233,7 @@ beforeEach(async () => {
         if (fn === 'reserve_ai_usage') return reserveAiUsage(args);
         if (fn === 'ai_usage_by_feature') return aiUsageByFeature(args);
         if (fn === 'chat_agent_usage_shares') return { data: agentShareRows, error: null };
+        if (fn === 'chat_own_key_agent_spend') return ownKeyAgentSpend(args);
         return { data: null, error: { message: `no ${fn}` } };
       },
     },
@@ -735,6 +754,65 @@ describe('each agent’s share of the AI limit', () => {
     expect(rpcCalls).toEqual([]);
     vi.stubEnv('CHAT_AGENTIC', 'false');
     await expect(budget.agentUsageShares('o1')).rejects.toMatchObject({ code: 'chat_off' });
+  });
+});
+
+describe('the key guard: all agents on the workspace’s own key (AGENT-OWN-KEY §4.2)', () => {
+  /** A step already charged this period. */
+  const row = (over) =>
+    ledger.push({
+      id: `r${nextId++}`,
+      organization_id: 'o1',
+      feature: 'agent',
+      cost_usd: 10,
+      own_key: true,
+      used_at: '2026-10-25T00:00:00.000Z',
+      ...over,
+    });
+
+  it('counts only the agents’ own-key steps this period, against $250 until an Admin sets it', async () => {
+    row({ cost_usd: 100 });
+    row({ feature: 'schedule', cost_usd: 60.004 });
+    // Interactive Chat, the AI budget, last period and another workspace: not the guard's.
+    row({ feature: 'chat', cost_usd: 500 });
+    row({ own_key: false, cost_usd: 1000 });
+    row({ used_at: '2026-10-19T00:00:00.000Z', cost_usd: 999 });
+    row({ organization_id: 'o2', cost_usd: 999 });
+
+    expect(await budget.ownKeyAgentSpend('o1')).toEqual({
+      reached: false,
+      usedUsd: 160,
+      capUsd: 250,
+      since: '2026-10-20T09:00:00.000Z',
+      renewsAt: '2026-11-20T09:00:00.000Z',
+    });
+    expect(rpcCalls.at(-1)).toEqual({
+      fn: 'chat_own_key_agent_spend',
+      args: { p_organization_id: 'o1', p_since: '2026-10-20T09:00:00.000Z' },
+    });
+
+    // An Admin's lower limit is reached at it.
+    chatSettings.push({ organization_id: 'o1', own_key_agent_month_usd: '160.00' });
+    expect(await budget.ownKeyAgentSpend('o1')).toMatchObject({ reached: true, capUsd: 160 });
+  });
+
+  it('counts a step on a model the catalog doesn’t know at the fallback price', async () => {
+    const id = await budget.reserveChatStep(
+      'o1',
+      step({ modelId: 'someone/new-model', feature: 'agent', ownKey: true }),
+    );
+    await budget.chargeChatStep('o1', id, {
+      modelId: 'someone/new-model',
+      usage: { inputTokens: 1_000_000, outputTokens: 0 },
+    });
+    // $5 per million input tokens (improve-cost FALLBACK_PRICE).
+    expect((await budget.ownKeyAgentSpend('o1')).usedUsd).toBe(5);
+  });
+
+  it('reads nothing while Chat is off', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    await expect(budget.ownKeyAgentSpend('o1')).rejects.toMatchObject({ code: 'chat_off' });
+    expect(rpcCalls).toEqual([]);
   });
 });
 

@@ -15,8 +15,12 @@ vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('./testing/fake-supabase')).createFakeSupabase(),
 }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
-const fakes = vi.hoisted(() => ({ shares: vi.fn() }));
+const fakes = vi.hoisted(() => ({
+  shares: vi.fn(),
+  keyCap: vi.fn(async (): Promise<{ reached: boolean; renewsAt: string | null } | null> => null),
+}));
 vi.mock('./agent-shares', () => ({ readAgentShares: fakes.shares }));
+vi.mock('./own-key-cap', () => ({ ownKeyCapReached: fakes.keyCap }));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
@@ -123,6 +127,7 @@ function seedTrigger(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fakes.keyCap.mockReset().mockResolvedValue(null);
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
@@ -341,6 +346,19 @@ describe('firing schedules', () => {
     await triggers.fireDueSchedules(AT, driver);
     expect(runs()).toEqual([]);
     expect(db.tables.chat_agents[0]).toMatchObject({ status: 'paused', paused_reason: 'cap' });
+  });
+
+  it('pauses an agent once all agents used the month’s limit on the own key, queuing nothing', async () => {
+    seedAgent();
+    seedTrigger('schedule', WEEKLY_ISTANBUL);
+    fakes.keyCap.mockResolvedValue({ reached: true, renewsAt: '2026-11-20T09:00:00.000Z' });
+    await triggers.fireDueSchedules(AT, driver);
+    expect(runs()).toEqual([]);
+    expect(db.tables.chat_agents[0]).toMatchObject({
+      status: 'paused',
+      paused_reason: 'own_key_cap',
+    });
+    expect(fakes.keyCap).toHaveBeenCalledWith(ORG);
   });
 });
 

@@ -30,6 +30,7 @@ const reserveChatStep = vi.fn();
 const chargeChatStep = vi.fn();
 const releaseChatStep = vi.fn();
 const agentUsageShares = vi.fn();
+const ownKeyAgentSpend = vi.fn();
 vi.mock('../lib/plan-guard.js', () => ({ PlanLimitError }));
 vi.mock('../lib/chat-budget.js', () => ({
   CHAT_BUDGET_FEATURES: ['chat', 'agent', 'schedule', 'image'],
@@ -38,6 +39,7 @@ vi.mock('../lib/chat-budget.js', () => ({
   chargeChatStep: (...args) => chargeChatStep(...args),
   releaseChatStep: (...args) => releaseChatStep(...args),
   agentUsageShares: (...args) => agentUsageShares(...args),
+  ownKeyAgentSpend: (...args) => ownKeyAgentSpend(...args),
 }));
 
 const { default: router } = await import('./internal-chat-budget.js');
@@ -51,6 +53,7 @@ beforeEach(async () => {
   chargeChatStep.mockReset().mockResolvedValue(undefined);
   releaseChatStep.mockReset().mockResolvedValue(undefined);
   agentUsageShares.mockReset().mockResolvedValue({ unlimited: false, since: null, shares: [] });
+  ownKeyAgentSpend.mockReset();
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -298,5 +301,36 @@ describe('GET /api/internal/chat/budget/agent-shares', () => {
     const res = await get(`orgId=${ORG}`);
     expect(res.status).toBe(402);
     expect(await res.json()).toMatchObject({ success: false, error: 'plan_limit' });
+  });
+});
+
+describe('GET /api/internal/chat/budget/own-key', () => {
+  const get = (query, secret = 'shh') =>
+    fetch(`${baseUrl}/own-key?${query}`, { headers: { Authorization: `Bearer ${secret}` } });
+
+  it('answers the key guard: reached or not, what was spent, the limit and when it renews', async () => {
+    const guard = {
+      reached: true,
+      usedUsd: 251.2,
+      capUsd: 250,
+      since: '2026-10-20T09:00:00.000Z',
+      renewsAt: '2026-11-20T09:00:00.000Z',
+    };
+    ownKeyAgentSpend.mockResolvedValueOnce(guard);
+    const res = await get(`orgId=${ORG}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, ...guard });
+    expect(ownKeyAgentSpend).toHaveBeenCalledWith(ORG);
+  });
+
+  it('answers only the web, refuses a query it can’t read, and says when Chat is off', async () => {
+    expect((await get(`orgId=${ORG}`, 'nope')).status).toBe(401);
+    expect((await get('orgId=nope')).status).toBe(400);
+    expect(ownKeyAgentSpend).not.toHaveBeenCalled();
+
+    ownKeyAgentSpend.mockRejectedValueOnce(new ChatBudgetError('chat_off', 403, 'off'));
+    const res = await get(`orgId=${ORG}`);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ success: false, error: 'chat_off' });
   });
 });
