@@ -4438,6 +4438,20 @@
       "byFocus": {
         "rivalRose": "{rival}’s mention rate rose {points, number} points this week.",
         "startTitle": "Start with a question",
+        "newForYou": {
+          "title": "New for you",
+          "skill": "Skill",
+          "skills": {
+            "questions": "Groups new buyer questions by topic, with volume and who AI recommends.",
+            "features": "How AI describes you against each competitor, feature by feature, with quotes.",
+            "gaps": "Finds prompts and segments where no brand leads yet, and suggests what to do.",
+            "markets": "Shows who AI recommends in each market and language you track.",
+            "listings": "Lists the sources AI cites in a market and whether they list you.",
+            "rivals": "A one-page brief on one competitor across all AI platforms.",
+            "audit-fix": "Turns site audit findings into fixes you approve.",
+            "wrongclaim": "Finds AI answers with wrong facts about you and drafts the fixes."
+          }
+        },
         "shortcuts": {
           "boardSummary": "Monthly board summary",
           "boardSummaryMessage": "Write a one-page board summary of this month: our AI visibility, what changed, what our work did and what comes next.",
@@ -6545,6 +6559,7 @@
     "recommendedFix": "Recommended fix",
     "fix": "Fix",
     "signalsEvaluated": "signals evaluated",
+    "partialNote": "The AI checks couldn't run this time, so this score leaves them out and isn't compared with your other audits.",
     "aiRecommendations": "AI Recommendations",
     "signals": "Signals",
     "onlyIssues": "Issues only",
@@ -9982,6 +9997,21 @@
     "noDataDescriptionNoSnippet": "Add the tracking snippet to your website to start collecting AI-referred traffic data.",
     "snippetTitle": "Add this snippet to your website",
     "snippetDescription": "Paste this before the closing <code>{tag}</code> tag to track AI-referred visits.",
+    "snippetCheck": {
+      "title": "Tracking code not detected on {domain}",
+      "titleNoDomain": "Tracking code not detected",
+      "stepCopy": "Copy the snippet below.",
+      "stepPaste": "Paste it before the closing <code>{tag}</code> tag on every page, your 404 page included.",
+      "stepCheck": "Publish the change, then click Check again.",
+      "tagManager": "Added it with a tag manager? It shows here after its first AI visit.",
+      "checkAgain": "Check again",
+      "checking": "Checking…",
+      "lastChecked": "Last checked {when}",
+      "notFound": "Not found on {domain}'s home page yet.",
+      "unreachable": "Couldn't read {domain}'s home page. Try again in a few minutes.",
+      "noDomain": "Add your website's domain in the brand's settings to check it.",
+      "failed": "The check didn't run. Try again."
+    },
     "copySnippet": "Copy tracking script",
     "export": {
       "button": "Export",
@@ -10115,6 +10145,7 @@
       },
       "sourceStates": {
         "active": "Active",
+        "installedQuiet": "Installed, no AI visits in the last 7 days",
         "notDetected": "Not detected",
         "connected": "Connected",
         "syncing": "Syncing",
@@ -10257,7 +10288,10 @@
       "label": "Data sources",
       "snippet": "Tracking snippet",
       "snippetActive": "Active · last visit {when}",
+      "snippetQuiet": "Installed · no AI visits in the last 7 days",
       "snippetNotDetected": "Not detected",
+      "snippetNotDetectedOn": "Not detected on {domain}",
+      "snippetChecking": "Checking your home page…",
       "code": "Code",
       "install": "Install",
       "ga": "Google Analytics",

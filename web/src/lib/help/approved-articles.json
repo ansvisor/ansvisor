@@ -503,7 +503,7 @@
         "ai sessions"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -515,7 +515,7 @@
         },
         {
           "heading": "How visits are counted",
-          "text": "- **One visit per session**: a reload, or a further link from the same answer, continues the visit. The visits card gives the pageviews beside the visits.\n- **Snippet or Google Analytics, never both**: on days the tracking snippet sent any visit, the page counts the snippet's; on other days, Google Analytics'. The visits card says how many days came from Google Analytics.\n- **Recent AI Referral Visits**, at the bottom, shows only the snippet's visits, one row per visit. Search it by address and filter by platform."
+          "text": "- **One visit per session**: a reload, or a further link from the same answer, continues the visit. The visits card gives the pageviews beside the visits.\n- **Snippet or Google Analytics, never both**: on days the tracking snippet sent any visit, the page counts the snippet's; on other days, Google Analytics'. The visits card says how many days came from Google Analytics.\n- **Recent AI Referral Visits**, at the bottom, shows only the snippet's visits, one row per visit. Search it by address and filter by platform.\n- **No snippet, no zero**: until the tracking snippet is seen on your site, the page says **Tracking code not detected** and how to add it, rather than showing 0 visits. Chat and the MCP tools say the same."
         },
         {
           "heading": "Summary line and cards",
@@ -652,7 +652,9 @@
         "connect google analytics",
         "connect search console",
         "data sources",
-        "install snippet"
+        "install snippet",
+        "check again",
+        "tracking code not detected"
       ],
       "synonyms": [
         "set up ai traffic",
@@ -662,7 +664,7 @@
         "gsc"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -674,11 +676,11 @@
         },
         {
           "heading": "Add the tracking snippet",
-          "text": "Copy the snippet from the page. It sits at the top until it has sent a visit in the last week. **Install** in the Data sources strip opens it too; once the snippet sends visits, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.\n\nAdd it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page."
+          "text": "Until the snippet is seen on your site, the page opens with **Tracking code not detected on** your domain, the steps to add it and the snippet itself. **Install** in the Data sources strip opens it too; once the snippet is seen, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.\n\nAdd it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page."
         },
         {
           "heading": "Check that the snippet works",
-          "text": "The **Tracking snippet** card reads **Active · last visit …** once the snippet has sent a visit in the last week, otherwise **Not detected**. A visit is stored as soon as an AI-referred visitor lands. Reload the page, or change the range, to see new ones."
+          "text": "After you publish it, click **Check again**: Ansvisor reads your home page once and looks for the snippet. Your home page is also checked when the brand is set up, or once when you open this page if it never was and no AI visit has arrived: the card reads **Checking your home page…** meanwhile. The snippet itself adds no request for your other visitors.\n\nThe **Tracking snippet** card then reads:\n\n- **Active · last visit …**: an AI-referred visit in the last week;\n- **Installed · no AI visits in the last 7 days**: the check found it, or it has sent a visit before;\n- **Not detected on** your domain: neither, so the page doesn't show 0 visits as a result.\n\nAdded the snippet with a tag manager? The check can't see it in the page, so the card changes with the first AI visit."
         },
         {
           "heading": "What the snippet collects",
@@ -2709,7 +2711,8 @@
         "audit results",
         "page score",
         "what failed",
-        "E-E-A-T score"
+        "E-E-A-T score",
+        "score changed"
       ],
       "plan": "all",
       "updated": "2026-10-31",
@@ -2729,6 +2732,10 @@
         {
           "heading": "How the score is worked out",
           "text": "A category's score is the average of its signals, and the total is the weighted average of the categories. A signal that couldn't be evaluated, shown as n/a, is left out, so it never lowers the score.\n\nMost signals are read straight from the page, its robots.txt and its llms.txt. Thirteen, such as **Direct answer to query** and **Case study evidence**, are judged by an AI model that first works out what the page itself is about, so a page is never judged against a topic it isn't trying to cover. **Brand entity in Wikidata** looks your brand up in Wikidata."
+        },
+        {
+          "heading": "Same page, same score",
+          "text": "The AI keeps its verdict on each of its thirteen signals until the part of the page that signal reads changes, so a page audited again with no changes gets the same score. A page that changed is judged again only on the signals whose part changed.\n\nIf the AI checks can't run, the page keeps the verdicts of its last audit. A page with none, such as one audited for the first time, gets a partial score: the report says the AI checks couldn't run, and the score leaves them out and isn't compared with your other audits."
         },
         {
           "heading": "Signals",

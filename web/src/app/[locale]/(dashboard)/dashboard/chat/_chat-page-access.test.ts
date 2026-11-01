@@ -232,7 +232,7 @@ describe('chatComposerSetup', () => {
   it("lists the library's skills for the / menu, by name and title, and none with the new Chat off", async () => {
     facts.ctx = ctxOf('manager', true, true);
     const { skills } = await chatComposerSetup();
-    expect(skills).toHaveLength(14);
+    expect(skills).toHaveLength(21);
     expect(skills.every((skill) => Object.keys(skill).join() === 'name,title')).toBe(true);
     vi.stubEnv('CHAT_AGENTIC', 'false');
     expect((await chatComposerSetup()).skills).toEqual([]);
@@ -247,7 +247,7 @@ describe('chatComposerSetup', () => {
       'report',
       'facts',
     ]);
-    expect(skills).toHaveLength(14);
+    expect(skills).toHaveLength(21);
   });
 
   it('passes on the period whose 80% line was seen, and whether Chat runs on its own key', async () => {

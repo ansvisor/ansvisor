@@ -956,6 +956,8 @@ export type Database = {
           site_type_detected_at: string | null
           site_type_source: string | null
           slug: string
+          snippet_checked_at: string | null
+          snippet_found_at: string | null
           state: string | null
           tracking_code: string
           updated_at: string
@@ -993,6 +995,8 @@ export type Database = {
           site_type_detected_at?: string | null
           site_type_source?: string | null
           slug: string
+          snippet_checked_at?: string | null
+          snippet_found_at?: string | null
           state?: string | null
           tracking_code?: string
           updated_at?: string
@@ -1030,6 +1034,8 @@ export type Database = {
           site_type_detected_at?: string | null
           site_type_source?: string | null
           slug?: string
+          snippet_checked_at?: string | null
+          snippet_found_at?: string | null
           state?: string | null
           tracking_code?: string
           updated_at?: string
@@ -6931,6 +6937,7 @@ export type Database = {
           error: string | null
           final_url: string | null
           id: string
+          partial: boolean
           recommendations: Json
           rubric_version: string | null
           signals_evaluated: number | null
@@ -6947,6 +6954,7 @@ export type Database = {
           error?: string | null
           final_url?: string | null
           id?: string
+          partial?: boolean
           recommendations?: Json
           rubric_version?: string | null
           signals_evaluated?: number | null
@@ -6963,6 +6971,7 @@ export type Database = {
           error?: string | null
           final_url?: string | null
           id?: string
+          partial?: boolean
           recommendations?: Json
           rubric_version?: string | null
           signals_evaluated?: number | null
