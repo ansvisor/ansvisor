@@ -4487,6 +4487,7 @@
       "countNone": "Pick at least one. Your access stays the same: what you can change still depends on your role.",
       "countSome": "{count, number} selected · your access stays the same: what you can change still depends on your role.",
       "skip": "Skip for now",
+      "cancel": "Cancel",
       "continue": "Continue",
       "saved": "Home focused on {label} · edit it in Settings › General",
       "skipped": "You can choose your focus later in Settings › General",
