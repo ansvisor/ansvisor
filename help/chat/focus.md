@@ -25,6 +25,8 @@ With a focus, the chips under **For you now** come from your areas, taken in tur
 
 **Start with a question** offers four questions from your areas, filled with your own competitors, topics and markets where Ansvisor knows them. Select one to start a new chat with it.
 
+**New for you** lists up to four new skills for your areas, such as **Rival brief** or **Buyer questions**; select one to start a chat with it.
+
 With **Competitors** picked, the line under the greeting can say when a competitor's mention rate rose this week. The skills in the **/** menu list your areas' skills first.
 
 ## Change it later

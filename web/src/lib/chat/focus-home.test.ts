@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import messages from '../../../messages/en.json';
 import { FOCUS_AREAS } from './focus';
 import {
+  FOCUS_NEW,
   FOCUS_SHORTCUTS,
   FOCUS_SKILLS,
   FOCUS_STARTERS,
   focusGreeting,
+  focusNews,
   focusStarters,
   inTurn,
   NO_FILL,
@@ -23,6 +25,7 @@ import library from './skills/library.json';
 const byFocus = messages.chatShell.home.byFocus as {
   shortcuts: Record<string, string>;
   starters: Record<string, string>;
+  newForYou: { skills: Record<string, string> };
 };
 
 describe('inTurn', () => {
@@ -76,6 +79,19 @@ describe('starterWords', () => {
   });
 });
 
+describe('focusNews', () => {
+  it('offers four new skills at most, every picked area in turn, each once', () => {
+    expect(focusNews(['pd', 'bd', 'comp']).map((p) => [p.area, p.skill])).toEqual([
+      ['pd', 'questions'],
+      ['bd', 'listings'],
+      ['comp', 'rivals'],
+      ['pd', 'features'],
+    ]);
+    // Big picture and AI traffic have no new skill yet.
+    expect(focusNews(['lead', 'growth'])).toEqual([]);
+  });
+});
+
 describe('focusGreeting', () => {
   it('says a competitor’s rise from the first area with something to say, 3 points or more', () => {
     const rivalMove = { name: 'Kestrel CRM', points: 4 };
@@ -105,10 +121,26 @@ describe('skillsByFocus', () => {
     expect(skillsByFocus(skills, []).map((s) => s.name)).toEqual(skills.map((s) => s.name));
   });
 
+  it('brings each area’s new skills right after its own', () => {
+    const skills = ['analyze', 'gaps', 'markets', 'rivals', 'listings', 'beat'].map((name) => ({
+      name,
+    }));
+    expect(skillsByFocus(skills, ['comp', 'bd']).map((s) => s.name)).toEqual([
+      'beat',
+      'listings',
+      'rivals',
+      'markets',
+      'gaps',
+      'analyze',
+    ]);
+  });
+
   it('names only skills the library has', () => {
     const names = new Set(library.skills.map((skill) => skill.name));
     for (const area of FOCUS_AREAS) {
-      for (const skill of FOCUS_SKILLS[area]) expect(names).toContain(skill);
+      for (const skill of [...FOCUS_SKILLS[area], ...FOCUS_NEW[area]]) {
+        expect(names).toContain(skill);
+      }
     }
   });
 });
@@ -122,6 +154,8 @@ describe('the words', () => {
         expect(byFocus.shortcuts[shortcut], shortcut).toBeTruthy();
         expect(byFocus.shortcuts[`${shortcut}Message`], shortcut).toBeTruthy();
       }
+      for (const skill of FOCUS_NEW[area])
+        expect(byFocus.newForYou.skills[skill], skill).toBeTruthy();
       for (const starter of FOCUS_STARTERS[area]) {
         const filled = starterWords(starter, { rival: 'R', topic: 'T', market: 'M' }).key;
         const general = starterWords(starter, NO_FILL).key;

@@ -317,6 +317,8 @@
       "reviewBrandFacts": "Reviewing brand facts needs a plan",
       "readBrandFacts": "Reading brand facts again needs a plan",
       "renameOrganization": "Renaming the organization needs a plan",
+      "saveWhiteLabel": "Changing the white label needs a plan",
+      "changeClientLogo": "Changing the client logo needs a plan",
       "inviteMembers": "Inviting members needs a plan",
       "resendInvitations": "Resending invitations needs a plan",
       "changeRoles": "Changing roles needs a plan",
@@ -3822,6 +3824,9 @@
       "doneWhen": "Done when: {text}",
       "dailyLimit": "This is one of the {limit} new actions the brand gets today, so Action Center's own new actions wait until tomorrow."
     },
+    "card": {
+      "noSession": "This agent ran on its own, so it asks before changing anything."
+    },
     "allTime": "All time",
     "lastDays": "Last {count} days",
     "since": "Since {date}",
@@ -3905,6 +3910,7 @@
       "ready": "{ready, number} of {total, number} ready",
       "priority": "Priority {score, number}",
       "untitled": "An Action Center task",
+      "changed": "{title}: {status}",
       "status": {
         "queued": "Queued",
         "writing": "Writing",
@@ -4437,6 +4443,20 @@
       "byFocus": {
         "rivalRose": "{rival}’s mention rate rose {points, number} points this week.",
         "startTitle": "Start with a question",
+        "newForYou": {
+          "title": "New for you",
+          "skill": "Skill",
+          "skills": {
+            "questions": "Groups new buyer questions by topic, with volume and who AI recommends.",
+            "features": "How AI describes you against each competitor, feature by feature, with quotes.",
+            "gaps": "Finds prompts and segments where no brand leads yet, and suggests what to do.",
+            "markets": "Shows who AI recommends in each market and language you track.",
+            "listings": "Lists the sources AI cites in a market and whether they list you.",
+            "rivals": "A one-page brief on one competitor across all AI platforms.",
+            "audit-fix": "Turns site audit findings into fixes you approve.",
+            "wrongclaim": "Finds AI answers with wrong facts about you and drafts the fixes."
+          }
+        },
         "shortcuts": {
           "boardSummary": "Monthly board summary",
           "boardSummaryMessage": "Write a one-page board summary of this month: our AI visibility, what changed, what our work did and what comes next.",
@@ -6539,11 +6559,38 @@
     "copyCode": "Copy code",
     "placeholderNote": "Your input needed: replace each highlighted [bracket] with your own details before you publish.",
     "inputNeeded": "Your input needed",
+    "authority": {
+      "found": "Found",
+      "none": "none of the {count} a page needs.",
+      "oneMore": " One more makes it pass.",
+      "others": "The page also links to {sites}, which don't count.",
+      "whatCounts": "What counts",
+      "counts": {
+        "official": "Government and academic sites: .gov, .edu, .mil and their country forms, such as .gov.tr, .edu.tr, .ac.uk",
+        "international": "International bodies: any .int site, un.org, unesco.org, europa.eu, oecd.org, worldbank.org, imf.org",
+        "research": "Reference and research: wikipedia.org, doi.org, arxiv.org, nature.com, sciencedirect.com, iso.org, w3.org",
+        "news": "Major news: Reuters, Bloomberg, Financial Times, BBC, The New York Times, The Washington Post"
+      },
+      "kinds": {
+        "official": "Official site",
+        "international": "International body",
+        "research": "Reference or research",
+        "news": "Major news"
+      }
+    },
     "finding": "Finding",
     "why": "Why",
     "recommendedFix": "Recommended fix",
     "fix": "Fix",
     "signalsEvaluated": "signals evaluated",
+    "recent": {
+      "question": "Audited {minutes} min ago. Open it or audit again?",
+      "open": "Open it",
+      "again": "Audit again",
+      "skipped": "{count, plural, one {# page was} other {# pages were}} audited in the last {minutes} minutes, so {count, plural, one {it wasn't} other {they weren't}} audited again."
+    },
+    "partialNote": "The AI checks couldn't run this time, so this score leaves them out and isn't compared with your other audits.",
+    "partialNoCredit": "It didn't use one of your monthly audits.",
     "aiRecommendations": "AI Recommendations",
     "signals": "Signals",
     "onlyIssues": "Issues only",
@@ -9981,6 +10028,21 @@
     "noDataDescriptionNoSnippet": "Add the tracking snippet to your website to start collecting AI-referred traffic data.",
     "snippetTitle": "Add this snippet to your website",
     "snippetDescription": "Paste this before the closing <code>{tag}</code> tag to track AI-referred visits.",
+    "snippetCheck": {
+      "title": "Tracking code not detected on {domain}",
+      "titleNoDomain": "Tracking code not detected",
+      "stepCopy": "Copy the snippet below.",
+      "stepPaste": "Paste it before the closing <code>{tag}</code> tag on every page, your 404 page included.",
+      "stepCheck": "Publish the change, then click Check again.",
+      "tagManager": "Added it with a tag manager? It shows here after its first AI visit.",
+      "checkAgain": "Check again",
+      "checking": "Checking…",
+      "lastChecked": "Last checked {when}",
+      "notFound": "Not found on {domain}'s home page yet.",
+      "unreachable": "Couldn't read {domain}'s home page. Try again in a few minutes.",
+      "noDomain": "Add your website's domain in the brand's settings to check it.",
+      "failed": "The check didn't run. Try again."
+    },
     "copySnippet": "Copy tracking script",
     "export": {
       "button": "Export",
@@ -10114,6 +10176,7 @@
       },
       "sourceStates": {
         "active": "Active",
+        "installedQuiet": "Installed, no AI visits in the last 7 days",
         "notDetected": "Not detected",
         "connected": "Connected",
         "syncing": "Syncing",
@@ -10256,7 +10319,10 @@
       "label": "Data sources",
       "snippet": "Tracking snippet",
       "snippetActive": "Active · last visit {when}",
+      "snippetQuiet": "Installed · no AI visits in the last 7 days",
       "snippetNotDetected": "Not detected",
+      "snippetNotDetectedOn": "Not detected on {domain}",
+      "snippetChecking": "Checking your home page…",
       "code": "Code",
       "install": "Install",
       "ga": "Google Analytics",
@@ -12216,6 +12282,8 @@
     "generateReport": "Generate Report",
     "downloadPDF": "Download PDF",
     "downloadFailed": "PDF export failed. Please try again.",
+    "brandingFailed": "Couldn't load your white label kit, so the PDF wasn't made. Try again.",
+    "preparedFor": "Prepared for {brand}",
     "dateRange": "Date Range",
     "platforms": "Platforms",
     "libraryTitle": "Generated Reports",
@@ -12372,6 +12440,53 @@
     "team": "Team",
     "rolesAccess": "Roles & access",
     "chatSettings": "Chat",
+    "whiteLabel": {
+      "title": "White label",
+      "description": "Your agency's brand on what you send clients: your logo, main color, company name and footer instead of Ansvisor's.",
+      "lockedTitle": "White label comes with the {plan} plan",
+      "lockedDescription": "Send clients reports with your agency's logo, color and name instead of Ansvisor's.",
+      "upgrade": "Upgrade",
+      "askAdmin": "Ask an admin of your workspace to upgrade the plan.",
+      "adminOnly": "Only admins change the white label kit.",
+      "logo": "Logo",
+      "logoHint": "PNG, SVG or JPG, up to 1 MB. A wide logo on a transparent background works best.",
+      "noLogo": "No logo",
+      "uploadLogo": "Upload logo",
+      "replaceLogo": "Replace",
+      "removeLogo": "Remove",
+      "uploading": "Uploading…",
+      "logoSaved": "Logo saved.",
+      "logoRemoved": "Logo removed.",
+      "companyName": "Company name",
+      "companyNamePlaceholder": "Your agency's name",
+      "accentColor": "Main color",
+      "accentColorPicker": "Pick the main color",
+      "accentColorInvalid": "Use a hex color, such as #1d4ed8.",
+      "accentColorDarkened": "This color is light on white paper, so text set in it is darkened to stay readable.",
+      "footer": "Report footer",
+      "footerPlaceholder": "Prepared by Acme Agency · acme.com",
+      "footerHint": "One line at the bottom of each page. Leave it empty for none.",
+      "preview": "Preview",
+      "previewTitle": "Monthly visibility report",
+      "previewClient": "Your client",
+      "previewPreparedFor": "Prepared for {brand}",
+      "inUse": "The kit is in use.",
+      "notInUse": "Add a company name or a logo to use the kit. Until then, everything keeps Ansvisor's look.",
+      "lastChanged": "Last changed {date} by {name}",
+      "lastChangedNoName": "Last changed {date}",
+      "saved": "White label saved.",
+      "loadFailed": "Couldn't load the white label settings.",
+      "errors": {
+        "type": "Use a PNG, SVG or JPG image.",
+        "size": "That logo is over 1 MB. Use a smaller one.",
+        "read_only": "This workspace is read-only until a plan is chosen.",
+        "demo": "Nothing on the demo brand can be changed.",
+        "forbidden": "You can't change this with your role.",
+        "locked": "White label comes with a higher plan.",
+        "invalid": "That couldn't be used. Check the color, or use a PNG, a JPG or a plain SVG logo.",
+        "failed": "Couldn't save. Try again."
+      }
+    },
     "menuAccess": {
       "title": "Menu access",
       "new": "New",
@@ -12748,7 +12863,7 @@
       "growth": {
         "tagline": "For growing teams that want to monitor AI visibility and optimize content for AI search.",
         "engines": "ChatGPT, Perplexity, Gemini, Microsoft Copilot, Google AI Mode and Google AI Overviews tracking",
-        "extras": ["Multi-region tracking", "Looker Studio"]
+        "extras": ["Multi-region tracking", "White-label reports & exports", "Looker Studio"]
       },
       "brands": "{count, plural, one {# brand} other {# brands}}",
       "unlimitedBrands": "Unlimited brands",
@@ -13501,6 +13616,15 @@
       "managersOnlyEdit": "Only admins and managers can change these settings.",
       "adminsOnlyDelete": "Only admins can delete a brand.",
       "demoCantDelete": "The demo brand can't be deleted; hide it from the brand menu instead.",
+      "clientLogo": {
+        "title": "Client logo",
+        "description": "Your client's logo for this brand's report cover, beside \"Prepared for {brand}\".",
+        "locked": "Client logos come with white label, on the {plan} plan.",
+        "managersOnly": "Only admins and managers change the client logo.",
+        "saved": "Client logo saved.",
+        "removed": "Client logo removed.",
+        "loadFailed": "Couldn't load the client logo."
+      },
       "conversions": {
         "title": "Conversions from AI visits",
         "description": "Follow visitors who came from an AI assistant to a signup, a demo form or an order, so the Content Editor shows what each page earns.",

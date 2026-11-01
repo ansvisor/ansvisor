@@ -2,10 +2,10 @@
 title: Read a site audit report
 route: /dashboard/audit
 keywords: [audit report, audit score, signals, audit categories, grade]
-synonyms: [audit results, page score, what failed, E-E-A-T score]
+synonyms: [audit results, page score, what failed, E-E-A-T score, score changed]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -33,6 +33,12 @@ A category's score is the average of its signals, and the total is the weighted 
 
 Most signals are read straight from the page, its robots.txt and its llms.txt. Thirteen, such as **Direct answer to query** and **Case study evidence**, are judged by an AI model that first works out what the page itself is about, so a page is never judged against a topic it isn't trying to cover. **Brand entity in Wikidata** looks your brand up in Wikidata.
 
+## Same page, same score
+
+The AI keeps its verdict on each of its thirteen signals until the part of the page that signal reads changes, so a page audited again with no changes gets the same score. A page that changed is judged again only on the signals whose part changed.
+
+If the AI checks can't run, the page keeps the verdicts of its last audit. A page with none, such as one audited for the first time, gets a partial score: the report says the AI checks couldn't run, and the score leaves them out and isn't compared with your other audits. A partial audit doesn't use one of your monthly audits.
+
 ## Signals
 
 The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:
@@ -40,6 +46,10 @@ The **Signals** section lists every check by category, each with a pass, warning
 - the **Finding**: what this audit saw on the page, when the check reports it;
 - what the signal measures, and **Why** it matters to AI engines;
 - the **Recommended fix** written for this page, or the general **Fix** for signals without one.
+
+## Authority links
+
+**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…) and major news.
 
 ## Product pages
 
