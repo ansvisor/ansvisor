@@ -226,7 +226,6 @@ export default function AuditDetailPage() {
               {audit.status === 'completed' && failing > 0 && (
                 <Button
                   variant="outline"
-                  size="sm"
                   className="mr-1 gap-1.5"
                   disabled={sendingToAction}
                   onClick={() => void handleSendToAction()}
