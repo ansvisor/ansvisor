@@ -3,7 +3,9 @@
   "goal": "visibility",
   "businessTypes": [],
   "industries": [],
-  "roles": [],
+  "roles": [
+    "aeo"
+  ],
   "skills": [],
   "triggers": [
     {

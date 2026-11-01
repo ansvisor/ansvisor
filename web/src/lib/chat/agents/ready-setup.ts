@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PLANS } from '@/config/plans';
+import { workAreasOf, type WorkAreaId } from '@/lib/menu-access';
+import { createClient } from '@/lib/supabase/server';
 import { modeDenial } from '../agent-rules';
 import { readAgentContext, type AgentContext } from '../agents';
 import { planGateLock } from '../plan-facts';
@@ -46,5 +48,30 @@ export async function readPresetLocks(): Promise<Record<string, PresetLock>> {
   } catch (err) {
     console.error('[chat/agents] could not read the ready-to-use agents’ plan locks:', err);
     return {};
+  }
+}
+
+/**
+ * The signed-in person's work areas (Settings › Menu access, 00374): the
+ * Ready to use cards made for them come first, marked For your role. None
+ * when they can't be read; the cards then keep the catalog's order.
+ */
+export async function readMyWorkAreas(): Promise<WorkAreaId[]> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return [];
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('work_areas')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return workAreasOf((data?.work_areas as string[] | null | undefined) ?? null);
+  } catch (err) {
+    console.error('[chat/agents] could not read the person’s work areas:', err);
+    return [];
   }
 }

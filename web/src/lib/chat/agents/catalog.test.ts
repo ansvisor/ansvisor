@@ -5,17 +5,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
 import { presetTriggerDraft, triggerError, triggerInputOf } from '../agent-form';
 import { DEFAULT_AGENT_SETTINGS, agentTriggerSchema, modeDenial } from '../agent-rules';
-import { skillConnections } from '../agent-skills';
+import { ANSVISOR_SKILLS, skillConnections } from '../agent-skills';
 import { planFactsFromOrgRow, planGateLock } from '../plan-facts';
 import { SKILL_LIBRARY } from '../skills/library';
+import { SITE_TYPES } from '@/lib/content/page-types';
+import { WORK_AREA_IDS } from '@/lib/menu-access';
 import {
   AGENT_PRESETS,
+  PRESET_BUSINESS_TYPES,
   PRESET_FILTERS,
   PRESET_NEEDS,
   PRESET_ORDER,
+  PRESET_ROLES,
   buildPresetCatalog,
   filterPresets,
   presetFilterOptions,
+  presetFit,
   presetGate,
   presetSameness,
   readyPreset,
@@ -28,7 +33,9 @@ import {
  * which the app reads (refresh: `yarn test -u src/lib/chat/agents`). A
  * ready preset is made only of what works today: skills in the library,
  * triggers New agent offers, a mode its plan gate says honestly. A soon one
- * says what it waits for. No two presets are one agent under two names.
+ * says what it waits for. No two presets are one agent under two names, and
+ * a pack's agent (§8.1 by business type, §8.3 by role) is never a core
+ * agent's skills under another name.
  */
 
 const PRESETS = path.join(__dirname, 'presets');
@@ -38,6 +45,9 @@ const files = readdirSync(PRESETS)
 
 const NOW = new Date('2026-10-31T12:00:00Z');
 const LIBRARY = new Set(SKILL_LIBRARY.map((skill) => skill.name));
+const AGENT_SKILLS = new Set(ANSVISOR_SKILLS.map((skill) => skill.id));
+/** The core agents (AGENTS plan §3): the launch set and what comes next. */
+const CORE = PRESET_ORDER.slice(0, PRESET_ORDER.indexOf('ai-ads-watch') + 1);
 const chatAgents = messages.chatAgents as unknown as {
   presets: Record<string, { name?: string; description?: string }>;
   ready: {
@@ -49,6 +59,11 @@ const chatAgents = messages.chatAgents as unknown as {
   };
   connections: { names: Record<string, string> };
 };
+const workAreaTitles = (
+  messages.settings as unknown as {
+    menuAccess: { areas: Record<string, { title: string }> };
+  }
+).menuAccess.areas;
 
 describe('the preset files', () => {
   it('each keep the format, named by their id, and are what catalog.json holds', async () => {
@@ -60,7 +75,7 @@ describe('the preset files', () => {
     await expect(`${JSON.stringify(catalog, null, 2)}\n`).toMatchFileSnapshot('./catalog.json');
   });
 
-  it('are the launch set ready, and what comes next as Soon', () => {
+  it('are the launch set and the packs that work today ready, and what comes next as Soon', () => {
     const ready = AGENT_PRESETS.filter((preset) => preset.status === 'ready').map((p) => p.id);
     expect(ready).toEqual([
       'visibility-watch',
@@ -71,8 +86,62 @@ describe('the preset files', () => {
       'task-finisher',
       'weekly-report',
       'brand-facts-guardian',
+      'product-answer-pages',
+      'feature-question-coverage',
+      'alternatives-comparison-pages',
+      'integration-questions',
+      'social-proof-pages',
+      'narrative-sentiment-watch',
+      'source-outreach-list',
+      'ceo-brief',
+      'unmet-needs-miner',
+      'market-source-finder',
     ]);
-    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(12);
+    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(21);
+  });
+
+  it('have the business-type packs: three agents for each type, in the plan’s order', () => {
+    const packs = AGENT_PRESETS.filter((preset) => preset.businessTypes.length > 0);
+    expect(packs.map((preset) => [preset.id, preset.businessTypes])).toEqual([
+      ['product-answer-pages', ['ecommerce']],
+      ['shopping-feed-advisor', ['ecommerce']],
+      ['seasonal-prompt-planner', ['ecommerce']],
+      ['app-store-listing', ['app']],
+      ['app-alternatives-watch', ['app']],
+      ['feature-question-coverage', ['app']],
+      ['alternatives-comparison-pages', ['b2b']],
+      ['review-site-presence', ['b2b']],
+      ['integration-questions', ['b2b']],
+      ['reviews-ugc-watch', ['b2c']],
+      ['local-store-locator', ['b2c']],
+      ['social-proof-pages', ['b2c']],
+    ]);
+  });
+
+  it('give the role helpers their work areas; a helper that is a core agent is that core preset', () => {
+    const helpers = AGENT_PRESETS.filter((preset) => preset.roles.length > 0);
+    expect(helpers.map((preset) => [preset.id, preset.roles])).toEqual([
+      ['content-freshness', ['content']],
+      ['prompt-portfolio', ['aeo']],
+      ['technical-fixer', ['aeo', 'developers']],
+      ['content-plan-builder', ['content']],
+      ['narrative-sentiment-watch', ['brand']],
+      ['source-outreach-list', ['brand']],
+      ['ceo-brief', ['leaders']],
+      ['ai-traffic-signups', ['growth']],
+      ['unmet-needs-miner', ['product']],
+      ['market-source-finder', ['bizdev']],
+    ]);
+  });
+
+  it('tag by the brand’s site types and the work areas, labelled as Menu access names them', () => {
+    for (const type of SITE_TYPES) expect(PRESET_BUSINESS_TYPES).toContain(type);
+    expect([...PRESET_ROLES]).toEqual(WORK_AREA_IDS);
+    for (const role of PRESET_ROLES) {
+      expect(chatAgents.ready.roles[role], role).toBe(workAreaTitles[role].title);
+    }
+    expect(Object.keys(chatAgents.ready.roles)).toEqual([...PRESET_ROLES]);
+    expect(Object.keys(chatAgents.ready.businessTypes)).toEqual([...PRESET_BUSINESS_TYPES]);
   });
 
   it('name each in en.json, with its line, and every goal, tag and need they use', () => {
@@ -100,6 +169,13 @@ describe('a ready preset', () => {
       expect(preset.skills.length, preset.id).toBeLessThanOrEqual(3);
       for (const skill of preset.skills)
         expect(LIBRARY.has(skill), `${preset.id}: /${skill}`).toBe(true);
+    }
+  });
+
+  it('is made of skills an agent can use, as New agent offers them', () => {
+    for (const preset of AGENT_PRESETS) {
+      for (const skill of preset.skills)
+        expect(AGENT_SKILLS.has(skill), `${preset.id}: /${skill}`).toBe(true);
     }
   });
 
@@ -177,6 +253,17 @@ describe('no renamed copies', () => {
     }
   });
 
+  it('no pack agent is a core agent’s skills under another name', () => {
+    const core = AGENT_PRESETS.filter((preset) => (CORE as readonly string[]).includes(preset.id));
+    const chains = new Map(core.map((preset) => [preset.skills.join('>'), preset.id]));
+    for (const preset of AGENT_PRESETS.filter((p) => !core.includes(p))) {
+      if (preset.skills.length === 0) continue;
+      const chain = preset.skills.join('>');
+      expect(chains.get(chain), `${preset.id} is ${chains.get(chain)} again`).toBeUndefined();
+      chains.set(chain, preset.id);
+    }
+  });
+
   it('tells two presets apart by their triggers, not their order', () => {
     const one: Pick<AgentPreset, 'skills' | 'triggers'> = {
       skills: ['report'],
@@ -246,9 +333,9 @@ describe('the filters', () => {
     ...over,
   });
 
-  it('show only the goals the presets have, and no filter nobody carries', () => {
+  it('show the goals, business types and work areas the presets have, and no filter nobody carries', () => {
     const options = presetFilterOptions(AGENT_PRESETS);
-    expect(options.map((option) => option.filter)).toEqual(['goal']);
+    expect(options.map((option) => option.filter)).toEqual(['goal', 'businessType', 'role']);
     expect(options[0].values).toEqual([
       'visibility',
       'citations',
@@ -260,18 +347,30 @@ describe('the filters', () => {
       'reporting',
       'help',
     ]);
+    expect(options[1].values).toEqual(['ecommerce', 'app', 'b2b', 'b2c']);
+    // Analytics has no helper of its own yet: no chip for it.
+    expect(options[2].values).toEqual([
+      'leaders',
+      'aeo',
+      'content',
+      'brand',
+      'growth',
+      'product',
+      'bizdev',
+      'developers',
+    ]);
   });
 
   it('show a business type, industry or role once a preset carries one, in their lists’ order', () => {
     const options = presetFilterOptions([
-      fake('a', { businessTypes: ['b2b'], roles: ['founders'] }),
+      fake('a', { businessTypes: ['b2b'], roles: ['leaders'] }),
       fake('b', { goal: 'help', businessTypes: ['ecommerce'], industries: ['saas'] }),
     ]);
     expect(options).toEqual([
       { filter: 'goal', values: ['content', 'help'] },
       { filter: 'businessType', values: ['ecommerce', 'b2b'] },
       { filter: 'industry', values: ['saas'] },
-      { filter: 'role', values: ['founders'] },
+      { filter: 'role', values: ['leaders'] },
     ]);
     expect(PRESET_FILTERS).toEqual(['goal', 'businessType', 'industry', 'role']);
   });
@@ -288,5 +387,59 @@ describe('the filters', () => {
       'a',
     ]);
     expect(filterPresets(list, { goal: null }).map((p) => p.id)).toEqual(['a', 'b', 'soon-1']);
+  });
+
+  it('say whom a preset fits: the brand’s site type first, else a work area', () => {
+    const viewer = { siteType: 'b2b', workAreas: ['content', 'growth'] };
+    expect(presetFit(fake('a', { businessTypes: ['b2b'], roles: ['content'] }), viewer)).toBe(
+      'siteType',
+    );
+    expect(presetFit(fake('b', { businessTypes: ['ecommerce'], roles: ['growth'] }), viewer)).toBe(
+      'role',
+    );
+    expect(presetFit(fake('c', { businessTypes: ['ecommerce'] }), viewer)).toBeNull();
+    // A preset for everyone fits nobody in particular.
+    expect(presetFit(fake('d'), viewer)).toBeNull();
+    expect(
+      presetFit(fake('e', { businessTypes: ['b2b'] }), { siteType: null, workAreas: [] }),
+    ).toBeNull();
+  });
+
+  it('put the presets that fit the person first, ready ones before Soon ones still', () => {
+    const list = [
+      fake('core'),
+      fake('shop', { businessTypes: ['ecommerce'] }),
+      fake('saas', { businessTypes: ['b2b'] }),
+      fake('lead', { roles: ['leaders'] }),
+      fake('saas-soon', { businessTypes: ['b2b'], status: 'soon', needs: ['review_sites'] }),
+      fake('later', { status: 'soon', needs: ['hubspot'] }),
+    ];
+    const ids = (viewer?: { siteType: string | null; workAreas: string[] }) =>
+      filterPresets(list, {}, viewer).map((p) => p.id);
+    expect(ids()).toEqual(['core', 'shop', 'saas', 'lead', 'saas-soon', 'later']);
+    expect(ids({ siteType: 'b2b', workAreas: ['leaders'] })).toEqual([
+      'saas',
+      'lead',
+      'core',
+      'shop',
+      'saas-soon',
+      'later',
+    ]);
+    // A filter keeps its own order rule: the fits first among what it keeps.
+    expect(
+      filterPresets(list, { businessType: 'b2b' }, { siteType: 'ecommerce', workAreas: [] }).map(
+        (p) => p.id,
+      ),
+    ).toEqual(['saas', 'saas-soon']);
+  });
+
+  it('put the packs for an e-commerce brand and a product person first in the catalog', () => {
+    const viewer = { siteType: 'ecommerce', workAreas: ['product'] };
+    const ready = filterPresets(AGENT_PRESETS, {}, viewer).filter((p) => p.status === 'ready');
+    expect(ready.slice(0, 2).map((p) => [p.id, presetFit(p, viewer)])).toEqual([
+      ['product-answer-pages', 'siteType'],
+      ['unmet-needs-miner', 'role'],
+    ]);
+    expect(ready[2].id).toBe('visibility-watch');
   });
 });

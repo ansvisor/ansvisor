@@ -99,7 +99,9 @@
       "goal": "content",
       "businessTypes": [],
       "industries": [],
-      "roles": [],
+      "roles": [
+        "content"
+      ],
       "skills": [
         "refresh"
       ],
@@ -252,7 +254,9 @@
       "goal": "visibility",
       "businessTypes": [],
       "industries": [],
-      "roles": [],
+      "roles": [
+        "aeo"
+      ],
       "skills": [],
       "triggers": [
         {
@@ -349,7 +353,10 @@
       "goal": "technical",
       "businessTypes": [],
       "industries": [],
-      "roles": [],
+      "roles": [
+        "aeo",
+        "developers"
+      ],
       "skills": [],
       "triggers": [],
       "mode": "ask_first",
@@ -464,6 +471,464 @@
       "needs": [
         "ads_data"
       ]
+    },
+    {
+      "id": "product-answer-pages",
+      "goal": "content",
+      "businessTypes": [
+        "ecommerce"
+      ],
+      "industries": [],
+      "roles": [],
+      "skills": [
+        "questions",
+        "answerfirst",
+        "compare"
+      ],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "TU",
+          "time": "09:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [],
+      "status": "ready",
+      "needs": []
+    },
+    {
+      "id": "shopping-feed-advisor",
+      "goal": "shopping",
+      "businessTypes": [
+        "ecommerce"
+      ],
+      "industries": [],
+      "roles": [],
+      "skills": [],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "MO",
+          "time": "09:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [],
+      "status": "soon",
+      "needs": [
+        "catalog_read"
+      ]
+    },
+    {
+      "id": "seasonal-prompt-planner",
+      "goal": "visibility",
+      "businessTypes": [
+        "ecommerce"
+      ],
+      "industries": [],
+      "roles": [],
+      "skills": [],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "month_first",
+          "time": "09:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [],
+      "status": "soon",
+      "needs": [
+        "seasonal_skill",
+        "prompts_skill"
+      ]
+    },
+    {
+      "id": "app-store-listing",
+      "goal": "citations",
+      "businessTypes": [
+        "app"
+      ],
+      "industries": [],
+      "roles": [],
+      "skills": [],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "TH",
+          "time": "09:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [],
+      "status": "soon",
+      "needs": [
+        "app_store_data"
+      ]
+    },
+    {
+      "id": "app-alternatives-watch",
+      "goal": "competitors",
+      "businessTypes": [
+        "app"
+      ],
+      "industries": [],
+      "roles": [],
+      "skills": [],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "MO",
+          "time": "09:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [],
+      "status": "soon",
+      "needs": [
+        "app_store_data"
+      ]
+    },
+    {
+      "id": "feature-question-coverage",
+      "goal": "content",
+      "businessTypes": [
+        "app"
+      ],
+      "industries": [],
+      "roles": [],
+      "skills": [
+        "features",
+        "faq"
+      ],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "WE",
+          "time": "09:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [],
+      "status": "ready",
+      "needs": []
+    },
+    {
+      "id": "alternatives-comparison-pages",
+      "goal": "competitors",
+      "businessTypes": [
+        "b2b"
+      ],
+      "industries": [],
+      "roles": [],
+      "skills": [
+        "compare",
+        "features"
+      ],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "month_first",
+          "time": "09:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [],
+      "status": "ready",
+      "needs": []
+    },
+    {
+      "id": "review-site-presence",
+      "goal": "citations",
+      "businessTypes": [
+        "b2b"
+      ],
+      "industries": [],
+      "roles": [],
+      "skills": [],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "MO",
+          "time": "09:00"
+        }
+      ],
+      "mode": "ask_first",
+      "connections": [],
+      "status": "soon",
+      "needs": [
+        "review_sites"
+      ]
+    },
+    {
+      "id": "integration-questions",
+      "goal": "content",
+      "businessTypes": [
+        "b2b"
+      ],
+      "industries": [],
+      "roles": [],
+      "skills": [
+        "questions",
+        "faq"
+      ],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "TH",
+          "time": "09:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [],
+      "status": "ready",
+      "needs": []
+    },
+    {
+      "id": "reviews-ugc-watch",
+      "goal": "citations",
+      "businessTypes": [
+        "b2c"
+      ],
+      "industries": [],
+      "roles": [],
+      "skills": [],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "MO",
+          "time": "09:00"
+        }
+      ],
+      "mode": "ask_first",
+      "connections": [],
+      "status": "soon",
+      "needs": [
+        "review_sites",
+        "reddit_youtube"
+      ]
+    },
+    {
+      "id": "local-store-locator",
+      "goal": "visibility",
+      "businessTypes": [
+        "b2c"
+      ],
+      "industries": [],
+      "roles": [],
+      "skills": [],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "month_first",
+          "time": "09:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [],
+      "status": "soon",
+      "needs": [
+        "local_listings"
+      ]
+    },
+    {
+      "id": "social-proof-pages",
+      "goal": "content",
+      "businessTypes": [
+        "b2c"
+      ],
+      "industries": [],
+      "roles": [],
+      "skills": [
+        "faq",
+        "facts"
+      ],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "month_first",
+          "time": "10:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [],
+      "status": "ready",
+      "needs": []
+    },
+    {
+      "id": "content-plan-builder",
+      "goal": "content",
+      "businessTypes": [],
+      "industries": [],
+      "roles": [
+        "content"
+      ],
+      "skills": [],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "MO",
+          "time": "09:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [],
+      "status": "soon",
+      "needs": [
+        "content_plan_skill"
+      ]
+    },
+    {
+      "id": "narrative-sentiment-watch",
+      "goal": "visibility",
+      "businessTypes": [],
+      "industries": [],
+      "roles": [
+        "brand"
+      ],
+      "skills": [
+        "features",
+        "wrongclaim"
+      ],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "TH",
+          "time": "09:00"
+        }
+      ],
+      "mode": "ask_first",
+      "connections": [],
+      "status": "ready",
+      "needs": []
+    },
+    {
+      "id": "source-outreach-list",
+      "goal": "citations",
+      "businessTypes": [],
+      "industries": [],
+      "roles": [
+        "brand"
+      ],
+      "skills": [
+        "listings"
+      ],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "month_first",
+          "time": "09:00"
+        }
+      ],
+      "mode": "ask_first",
+      "connections": [],
+      "status": "ready",
+      "needs": []
+    },
+    {
+      "id": "ceo-brief",
+      "goal": "reporting",
+      "businessTypes": [],
+      "industries": [],
+      "roles": [
+        "leaders"
+      ],
+      "skills": [
+        "report",
+        "gaps"
+      ],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "MO",
+          "time": "08:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [
+        {
+          "key": "google_search_console",
+          "required": false
+        },
+        {
+          "key": "google_analytics",
+          "required": false
+        }
+      ],
+      "status": "ready",
+      "needs": []
+    },
+    {
+      "id": "ai-traffic-signups",
+      "goal": "reporting",
+      "businessTypes": [],
+      "industries": [],
+      "roles": [
+        "growth"
+      ],
+      "skills": [],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "MO",
+          "time": "09:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [],
+      "status": "soon",
+      "needs": [
+        "traffic_skill"
+      ]
+    },
+    {
+      "id": "unmet-needs-miner",
+      "goal": "visibility",
+      "businessTypes": [],
+      "industries": [],
+      "roles": [
+        "product"
+      ],
+      "skills": [
+        "gaps",
+        "questions"
+      ],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "month_first",
+          "time": "09:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [],
+      "status": "ready",
+      "needs": []
+    },
+    {
+      "id": "market-source-finder",
+      "goal": "competitors",
+      "businessTypes": [],
+      "industries": [],
+      "roles": [
+        "bizdev"
+      ],
+      "skills": [
+        "markets",
+        "listings"
+      ],
+      "triggers": [
+        {
+          "kind": "schedule",
+          "repeat": "month_first",
+          "time": "09:00"
+        }
+      ],
+      "mode": "auto",
+      "connections": [],
+      "status": "ready",
+      "needs": []
     }
   ]
 }

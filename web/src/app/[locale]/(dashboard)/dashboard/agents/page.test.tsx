@@ -22,7 +22,10 @@ vi.mock('@/components/chat/agents/agent-center', () => ({ AgentCenter: () => nul
 const locks = vi.hoisted(() => ({
   'weekly-report': { kind: 'plan', plan: 'Growth', current: 'Starter' },
 }));
-vi.mock('@/lib/chat/agents/ready-setup', () => ({ readPresetLocks: vi.fn(async () => locks) }));
+vi.mock('@/lib/chat/agents/ready-setup', () => ({
+  readPresetLocks: vi.fn(async () => locks),
+  readMyWorkAreas: vi.fn(async () => ['content', 'growth']),
+}));
 vi.mock('@/components/chat/agents/agent-detail', () => ({ AgentDetail: () => null }));
 vi.mock('@/components/chat/agents/agent-form', () => ({ AgentForm: () => null }));
 const form = vi.hoisted(() => ({
@@ -73,13 +76,13 @@ describe('Agent Center pages', () => {
     expect(notFound).toHaveBeenCalledTimes(2);
   });
 
-  it('show Agent Center on Ready to use with its plan locks, Your agents when asked, and the detail for an agent id', async () => {
+  it('show Agent Center on Ready to use with its plan locks and the person’s work areas, Your agents when asked, and the detail for an agent id', async () => {
     const center = (await AgentsPage(tabbed())) as {
       type: unknown;
-      props: { initialTab: string; locks: unknown };
+      props: { initialTab: string; locks: unknown; workAreas: unknown };
     };
     expect(isValidElement(center) && center.type).toBe(AgentCenter);
-    expect(center.props).toEqual({ initialTab: 'ready', locks });
+    expect(center.props).toEqual({ initialTab: 'ready', locks, workAreas: ['content', 'growth'] });
     const yours = (await AgentsPage(tabbed('yours'))) as { props: { initialTab: string } };
     expect(yours.props.initialTab).toBe('yours');
     const one = await AgentPage(params(ID));
