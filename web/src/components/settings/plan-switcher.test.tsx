@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import { toast } from 'sonner';
 import { RoleProvider } from '@/components/providers/role-provider';
+import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import type { TeamRole } from '@/components/providers/role-provider';
 import { sendCancelFeedback } from '@/lib/actions/cancel-feedback';
 import { PlanSwitcher } from './plan-switcher';
@@ -40,32 +41,37 @@ async function render(
     role = 'admin',
     cancelAtPeriodEnd = false,
     trialOffered = false,
+    chatAgentic = false,
   }: {
     status?: string;
     interval?: string;
     role?: TeamRole;
     cancelAtPeriodEnd?: boolean;
     trialOffered?: boolean;
+    /** The new Chat on for the workspace (CHAT_AGENTIC). */
+    chatAgentic?: boolean;
   } = {},
 ) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <RoleProvider role={role}>
-          <PlanSwitcher
-            subscription={{
-              planId,
-              status,
-              currentPeriodEnd: null,
-              cancelAtPeriodEnd,
-              priceAmount: 49,
-              interval,
-            }}
-            onUpdate={onUpdate}
-            organizationId="org1"
-            trialOffered={trialOffered}
-          />
-        </RoleProvider>
+        <ChatAgenticProvider enabled={chatAgentic}>
+          <RoleProvider role={role}>
+            <PlanSwitcher
+              subscription={{
+                planId,
+                status,
+                currentPeriodEnd: null,
+                cancelAtPeriodEnd,
+                priceAmount: 49,
+                interval,
+              }}
+              onUpdate={onUpdate}
+              organizationId="org1"
+              trialOffered={trialOffered}
+            />
+          </RoleProvider>
+        </ChatAgenticProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -193,6 +199,19 @@ describe('the plan cards', () => {
       'On Enterprise, Chat can also run on your own AI key.',
     );
     expect(hint('Custom AI usage, from 10x')).not.toContain('Agent Chat');
+  });
+
+  it('says the same with the new Chat on where no AI usage is read, as once the plan ended', async () => {
+    const hint = (text: string) =>
+      [...container.querySelectorAll('li span')]
+        .find((el) => el.textContent === text)
+        ?.getAttribute('title');
+    await render('growth', { status: 'canceled', chatAgentic: true });
+    expect(hint('5x AI usage')).toContain('Chat and agents');
+    expect(hint('5x AI usage')).toContain('Your own AI key comes with Enterprise only.');
+    expect(hint('Custom AI usage, from 10x')).toContain(
+      'On Enterprise, Chat can also run on your own AI key.',
+    );
   });
 
   it('says what a custom plan adds, with a way to ask', async () => {
