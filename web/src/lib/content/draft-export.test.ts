@@ -174,6 +174,7 @@ describe('the page fields an export carries (CE-057)', () => {
       rows: [
         ['Meta title', 'Pipeline forecasting: a guide'],
         ['Slug', 'pipeline-forecasting'],
+        ['Reviewed by', 'Dr. Grace Hopper, Clinical Reviewer'],
       ] as [string, string][],
     },
     front: {
@@ -181,27 +182,32 @@ describe('the page fields an export carries (CE-057)', () => {
       description: 'How teams forecast.',
       slug: 'pipeline',
       author: '',
+      reviewed_by: 'Dr. Grace Hopper, Clinical Reviewer',
     },
     head: {
       title: 'Pipeline forecasting: a guide',
       description: 'How "teams" <forecast>.',
       author: 'Ada Lovelace',
+      reviewer: 'Dr. Grace Hopper, Clinical Reviewer',
     },
   };
 
   it('gives Markdown front matter, each value quoted, an empty one left out, the title not again', () => {
     expect(draftMarkdown('Pipeline', '<h1>Pipeline</h1><p>Teams trust it.</p>', fields)).toBe(
-      '---\ntitle: "Pipeline: \\"a guide\\""\ndescription: "How teams forecast."\nslug: "pipeline"\n---\n\nTeams trust it.\n',
+      '---\ntitle: "Pipeline: \\"a guide\\""\ndescription: "How teams forecast."\nslug: "pipeline"\nreviewed_by: "Dr. Grace Hopper, Clinical Reviewer"\n---\n\nTeams trust it.\n',
     );
   });
 
-  it('gives HTML its meta title, description and author', () => {
+  it('gives HTML its meta title, description, author and reviewer', () => {
     const doc = draftHtmlDocument('Pipeline', '<h1>Pipeline</h1>', fields);
     expect(doc).toContain('<title>Pipeline forecasting: a guide</title>');
     expect(doc).toContain(
       '<meta name="description" content="How &quot;teams&quot; &lt;forecast&gt;.">',
     );
     expect(doc).toContain('<meta name="author" content="Ada Lovelace">');
+    expect(doc).toContain(
+      '<meta name="reviewed-by" content="Dr. Grace Hopper, Clinical Reviewer">',
+    );
   });
 
   it('gives Word a table of them on page 1, the page after it', async () => {
@@ -238,6 +244,25 @@ describe('draftExportBlob and draftExportFileName', () => {
     expect(Object.keys(files)).toContain('xl/workbook.xml');
     expect(draftExportFileName('T', 'xlsx')).toBe('ansvisor_content_t.xlsx');
   });
+
+  it('starts the name with a white label kit’s word instead, or none', () => {
+    expect(draftExportFileName('T', 'docx', 'acme-agency')).toBe('acme-agency_content_t.docx');
+    expect(draftExportFileName('T', 'docx', null)).toBe('content_t.docx');
+  });
+
+  it('names a white label kit’s company as the Word file’s author, and nobody without one', async () => {
+    const core = async (author?: string) =>
+      strFromU8(
+        unzipSync(
+          await read(await draftExportBlob('docx', 'T', '<h1>T</h1>', undefined, null, author)),
+        )['docProps/core.xml'],
+      );
+    const branded = await core('Acme Agency');
+    expect(branded).toContain('<dc:creator>Acme Agency</dc:creator>');
+    expect(branded).toContain('<cp:lastModifiedBy>Acme Agency</cp:lastModifiedBy>');
+    expect(await core()).not.toContain('Acme Agency');
+    expect(await core()).not.toMatch(/ansvisor/i);
+  });
 });
 
 describe('one page as a spreadsheet row (Excel, CSV)', () => {
@@ -248,6 +273,7 @@ describe('one page as a spreadsheet row (Excel, CSV)', () => {
       description: 'How teams forecast.',
       slug: 'pipeline-forecasting',
       author: 'Ada Lovelace',
+      reviewed_by: 'Dr. Grace Hopper, Clinical Reviewer',
       image: 'https://acme.example/cover.png',
     },
     head: { title: '', description: '', author: '' },
@@ -260,6 +286,7 @@ describe('one page as a spreadsheet row (Excel, CSV)', () => {
       'Meta description': 'How teams forecast.',
       Slug: 'pipeline-forecasting',
       Author: 'Ada Lovelace',
+      'Reviewed by': 'Dr. Grace Hopper, Clinical Reviewer',
       'Featured image': 'https://acme.example/cover.png',
       Content: expect.stringMatching(
         /^Teams trust it, every week\. See our pricing\.\nHow it works\n/,
@@ -287,14 +314,16 @@ describe('one page as a spreadsheet row (Excel, CSV)', () => {
 
   it('writes CSV with its header, and Excel with a cell cut at its limit', () => {
     const csv = pageCsv('T', '<p>Done.</p>', fields);
+    // Reviewed by came later: it goes last, so an import by position still fits.
     expect(csv.split('\n')[0]).toBe(
-      'Title,Meta title,Meta description,Slug,Author,Featured image,Characters,Content,HTML',
+      'Title,Meta title,Meta description,Slug,Author,Featured image,Characters,Content,HTML,Reviewed by',
     );
     expect(csv).toContain('<p>Done.</p>');
     const long = `<p>${'x'.repeat(40_000)}</p>`;
     const [{ data }] = pageWorkbook('T', long, fields);
     expect(data[0][0]).toEqual({ value: 'Title', fontWeight: 'bold' });
     const content = data[1][7] as string;
+    expect(data[1][9]).toBe('Dr. Grace Hopper, Clinical Reviewer');
     expect(content).toHaveLength(32_767);
     expect(content.endsWith('…')).toBe(true);
   });
@@ -389,5 +418,13 @@ describe('the Library’s Export', () => {
     expect(libraryExportFileName('in_review', 'xlsx', new Date('2026-10-22T10:00:00Z'))).toBe(
       'ansvisor_content_library_in-review_2026-10-22.xlsx',
     );
+    expect(
+      libraryExportFileName('in_review', 'docx', new Date('2026-10-22T10:00:00Z'), 'acme-agency'),
+    ).toBe('acme-agency_content_library_in-review_2026-10-22.docx');
+  });
+
+  it('names a white label kit’s company as the Word file’s author', async () => {
+    const files = unzipSync(await read(await libraryDocx([item()], 'Acme Agency')));
+    expect(strFromU8(files['docProps/core.xml'])).toContain('<dc:creator>Acme Agency</dc:creator>');
   });
 });

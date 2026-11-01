@@ -31,11 +31,13 @@ import {
   withByline,
   withoutLeadingH1,
   withoutPlaceholders,
+  withReviewerJsonLd,
   type PasteChecks,
 } from '@/lib/content/ready-to-publish';
 import { ExportFormatIcon } from '@/components/content/export-format-icon';
 import { saveBlob } from '@/lib/download';
 import { getFaviconUrl } from '@/lib/favicon';
+import { exportAuthor, exportFileWord } from '@/lib/white-label/export-name';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from './_html-block';
 
@@ -164,6 +166,7 @@ export function ExportDialog({
   isNew,
   sourceUrl,
   author,
+  reviewer,
   teamByline,
   siteAuthor = false,
   byline,
@@ -182,6 +185,8 @@ export function ExportDialog({
   /** The live page an optimized draft is for: its address is the slug. */
   sourceUrl: string | null;
   author: ContentAuthor | null;
+  /** The qualified reviewer, separate from the page author. */
+  reviewer: ContentAuthor | null;
   /** The team byline; empty while the authors aren't read, or for the site's own author. */
   teamByline: string;
   /** No author picked, the one the site names confirmed (00271): the CMS keeps its own. */
@@ -246,13 +251,14 @@ export function ExportDialog({
   );
   const ready = left === 0;
   const fields = useMemo(
-    () => pageFields({ title, html: content, sourceUrl, author, teamByline }),
-    [title, content, sourceUrl, author, teamByline],
+    () => pageFields({ title, html: content, sourceUrl, author, reviewer, teamByline }),
+    [title, content, sourceUrl, author, reviewer, teamByline],
   );
-  // The brand's byline line under the H1 (the fields read the page without it).
+  // The brand's byline line under the H1; the qualified reviewer is page metadata,
+  // with a WebPage.reviewedBy node once the page names them, never as article text.
   const withLine = useMemo(
-    () => (byline ? withByline(content, byline) : content),
-    [byline, content],
+    () => withReviewerJsonLd(title, byline ? withByline(content, byline) : content, reviewer),
+    [byline, content, reviewer, title],
   );
   const out = TITLE_FIELD.has(destination) ? withoutLeadingH1(withLine) : withLine;
 
@@ -309,6 +315,7 @@ export function ExportDialog({
         [t('fields.metaDescription'), fields.metaDescription],
         ...(fields.slug ? [[t('fields.slug'), fields.slug] as [string, string]] : []),
         ...(fields.author ? [[t('fields.author'), fields.author] as [string, string]] : []),
+        ...(fields.reviewer ? [[t('fields.reviewer'), fields.reviewer] as [string, string]] : []),
         ...(fields.featuredImage
           ? [[t('fields.featuredImage'), fields.featuredImage] as [string, string]]
           : []),
@@ -319,6 +326,7 @@ export function ExportDialog({
       description: fields.metaDescription,
       slug: fields.slug,
       author: fields.author,
+      ...(fields.reviewer ? { reviewed_by: fields.reviewer } : {}),
       // As Before you publish's JSON-LD: a live page keeps its published
       // date (a site's "date"), and today is when it was updated.
       ...(isNew ? { date: localDate(new Date()) } : { lastmod: localDate(new Date()) }),
@@ -328,14 +336,15 @@ export function ExportDialog({
       title: fields.metaTitle,
       description: fields.metaDescription,
       author: fields.author,
+      reviewer: fields.reviewer,
     },
   };
   const download = async (format: DraftExportFormat) => {
     const name = title.trim() || t('untitled');
     try {
       saveBlob(
-        await draftExportBlob(format, name, withLine, exportFields),
-        draftExportFileName(name, format),
+        await draftExportBlob(format, name, withLine, exportFields, null, await exportAuthor()),
+        draftExportFileName(name, format, await exportFileWord()),
       );
     } catch (err) {
       console.error('Failed to export the page:', err);
@@ -434,6 +443,11 @@ export function ExportDialog({
       shown: fields.author
         ? t(byline ? 'fields.authorInContent' : 'fields.authorValue', { name: fields.author })
         : t(siteAuthor ? 'fields.siteAuthor' : 'fields.noAuthor'),
+    },
+    {
+      label: t('fields.reviewer'),
+      value: fields.reviewer || null,
+      shown: fields.reviewer || t('fields.noReviewer'),
     },
     {
       label: t('fields.featuredImage'),

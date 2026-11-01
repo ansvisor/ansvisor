@@ -196,6 +196,13 @@ describe('actionTexts', () => {
       t,
     );
     expect(texts.title).toBe('Expand the tool list');
+    // Its year as Content shows it: a past one reads as this year.
+    const year = new Date().getUTCFullYear();
+    const dated = actionTexts(
+      action({ kind: 'content_opportunity', payload: { title: 'Best tools of 2025' } }),
+      t,
+    );
+    expect(dated.title).toBe(`Best tools of ${Math.max(year, 2025)}`);
   });
 
   it('names a draft sent from the Content Editor after its page (CE-015)', () => {

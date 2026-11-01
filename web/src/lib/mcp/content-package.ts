@@ -40,6 +40,8 @@ export interface McpCmsPackage {
   json_ld: unknown[];
   /** The author's name for the CMS's author field; null to keep the CMS's own. */
   author: string | null;
+  /** The qualified reviewer's name and credential, separate from the author. */
+  reviewer: string | null;
   featured_image: { src: string; alt: string } | null;
   /** The live page it optimizes; null for a new page. */
   source_url: string | null;
@@ -91,7 +93,7 @@ export async function getContentDraftPackageFor(
   const { data: draft, error } = await supabaseAdmin
     .from('content_drafts')
     .select(
-      'id, brand_id, title, body_html, source_url, author_id, author_real_at, rules, slug, meta_title, meta_description, archived_at, brands!inner(organization_id, name, language)',
+      'id, brand_id, title, body_html, source_url, author_id, reviewer_id, author_real_at, rules, slug, meta_title, meta_description, archived_at, brands!inner(organization_id, name, language)',
     )
     .eq('id', draftId)
     .eq('brands.organization_id', auth.organizationId)
@@ -121,6 +123,7 @@ export async function getContentDraftPackageFor(
       bodyHtml: draft.body_html,
       sourceUrl: draft.source_url,
       authorId: draft.author_id,
+      reviewerId: draft.reviewer_id,
       authorConfirmed: draft.author_real_at !== null,
       language: draftLanguage(draft.rules),
     },
@@ -149,6 +152,7 @@ export async function getContentDraftPackageFor(
     html: page.html,
     json_ld: jsonLdOf(page.html),
     author: page.author,
+    reviewer: page.reviewer,
     featured_image: page.featuredImage,
     source_url: draft.source_url,
   };
