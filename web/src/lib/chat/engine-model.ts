@@ -1,8 +1,9 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import type { LanguageModel } from 'ai';
 import { AGENT_PROVIDER_OPTIONS, buildAgentModel } from '@/lib/agent/model';
-import { chatModelId } from '@/lib/agent/providers';
+import { chatModelId, type AiProvider } from '@/lib/agent/providers';
 import { resolveChatModelKey, type ChatKeySource } from './key';
+import { ownKeyFailure } from './key-health';
 
 /**
  * The models a Chat run calls (CHAT-16 items 5 and 23). Auto, the default:
@@ -54,6 +55,13 @@ export interface ChatModelChoice {
 export interface ChatModels {
   /** Whose key the steps run on: the budget meters Ansvisor's. */
   source: ChatKeySource;
+  /** The key's provider, for its errors' words (AGENT-OWN-KEY §5.2). */
+  provider: AiProvider;
+  /**
+   * The workspace's own key was marked failing when the run started
+   * (00440): the run's first answered call marks it working again.
+   */
+  keyFailing: boolean;
   /** `auto`: Haiku reads, Sonnet writes; `single`: one model does both, in one phase. */
   phases: 'auto' | 'single';
   pick(phase: ChatPhase): ChatModelChoice;
@@ -81,17 +89,29 @@ export function autoModels(apiKey: string, source: ChatKeySource): ChatModels {
     providerOptions: CLAUDE_OPTIONS,
     claude: true,
   };
-  return { source, phases: 'auto', pick: (phase) => (phase === 'read' ? read : write) };
+  return {
+    source,
+    provider: 'anthropic',
+    keyFailing: false,
+    phases: 'auto',
+    pick: (phase) => (phase === 'read' ? read : write),
+  };
 }
 
 /**
  * The run's models, from the key it runs on (resolveChatModelKey); null when
- * the workspace has no key Chat may use.
+ * the workspace has no key Chat may use. Throws OwnKeyUnreadableError when
+ * the workspace's own key can't be read. On the own key, its health is read
+ * once here (a read that fails reads as working).
  */
 export async function resolveChatModels(organizationId: string): Promise<ChatModels | null> {
   const key = await resolveChatModelKey(organizationId);
   if (!key) return null;
-  if (key.config.provider === 'anthropic') return autoModels(key.config.apiKey, key.source);
+  const keyFailing =
+    key.source === 'own' && (await ownKeyFailure(organizationId).catch(() => null)) !== null;
+  if (key.config.provider === 'anthropic') {
+    return { ...autoModels(key.config.apiKey, key.source), keyFailing };
+  }
   // Another provider's own key: its model, as Settings › AI Providers names it, does both.
   const single: ChatModelChoice = {
     model: buildAgentModel(key.config),
@@ -100,7 +120,13 @@ export async function resolveChatModels(organizationId: string): Promise<ChatMod
     providerOptions: AGENT_PROVIDER_OPTIONS,
     claude: false,
   };
-  return { source: key.source, phases: 'single', pick: () => single };
+  return {
+    source: key.source,
+    provider: key.config.provider,
+    keyFailing,
+    phases: 'single',
+    pick: () => single,
+  };
 }
 
 /**

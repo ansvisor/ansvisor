@@ -50,8 +50,8 @@ export function agentStateOf(
 }
 
 /**
- * The page types a draft can be, across brand types (B2B, e-commerce, B2C;
- * SITE_PAGE_TYPES says which). Stored as these keys (content_drafts.page_type);
+ * The page types a draft can be, across brand types (B2B, e-commerce, B2C,
+ * mobile app; SITE_PAGE_TYPES says which). Stored as these keys (content_drafts.page_type);
  * named in en.json under contentEditor.pageTypes.
  */
 export const PAGE_TYPES = [

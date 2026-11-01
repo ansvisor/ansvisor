@@ -1,7 +1,7 @@
 ---
 title: See and run your agents in Agent Center
 route: /dashboard/agents
-keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection]
+keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes]
 synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent]
 plan: all
 updated: 2026-11-01
@@ -76,6 +76,10 @@ Admins and Managers click **New agent** in **Agent Center**. Four steps open, wi
 
 Click **Save as draft** to keep it off, or **Turn on**. If something needs fixing, its step opens and says what to change.
 
+## Skills an agent can use
+
+Step 1 lists the same skills Chat offers. Besides **Win back lost citations**, **Weekly report** and the other content and reporting skills, there are the skills for what you focus on: **Buyer questions**, **How AI compares us**, **No clear leader**, **Who AI recommends by market**, **Listing gaps**, **Rival brief** and **Site audit fixes**. Each card says which connections it uses. These seven work from your Ansvisor data and public pages, so they need no connection. An agent can run up to 2 follow-on skills after its first one, for example **Comparison page** after **How AI compares us**.
+
 ## Connections
 
 Step 4 lists the connections the agent's skills use. **Any CMS** counts Webflow, WordPress, Framer, Wix or a workflow webhook. **Any catalog source** counts Merchant Center, a product feed, an upload or a store.
@@ -98,9 +102,13 @@ Signals that come close together don't each start a run. Signals within 15 minut
 
 ## How a run works
 
-Each run works on one brand, in a chat of its own. A run a trigger started acts as the agent's owner, with their role; **Run now** acts as the person who clicked it. The chat shows in that person's Inbox. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
+Each run works on one brand, in a chat of its own. A run a trigger started acts as the agent's owner, with their role; **Run now** acts as the person who clicked it. The chat shows in that person's Inbox.
 
 A run may use only its share of your monthly AI limit. A run a trigger started ends **Stopped at its limit** when it reaches it; a **Run now** run pauses there instead. After 3 failed runs in a row the agent pauses. When the monthly AI limit is used up, the agent pauses and starts again by itself once the limit resets.
+
+## When a run asks before a change
+
+A run that starts without you, from a trigger or after waiting for a free slot, asks before every change, whatever its mode. A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
 
 ## On your own AI key
 
@@ -115,3 +123,9 @@ The run never adds targets to the action and never closes its tasks. If the acti
 ## Read-only roles
 
 Analysts and Agency partners see agents but can't create, run or change them. Agency partners see only agents that work on brands shared with them. The list says you see agents read-only, with **Ask your Admin** to send a request. If a button is refused, for example by your role or your plan, Chat shows why, who can do it and what to do next.
+
+## When your AI key fails
+
+When your workspace runs on its own AI key and the key fails (the provider turns it down, the account is out of credit, or the key can't reach its model), a run ends **Stopped · AI key not working**. An agent a trigger started pauses with **Your AI key isn't working**. These runs don't count toward 3 failed runs in a row.
+
+While the key fails, Agent Center says so at the top, and **Run now**, **Run agent**, **Turn on** and **Resume** are refused before anything starts. Admins get **Fix in AI Providers**; others read that an Admin can fix it there.
