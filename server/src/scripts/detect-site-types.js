@@ -66,6 +66,7 @@ const counts = {
   b2b: 0,
   ecommerce: 0,
   b2c: 0,
+  app: 0,
   page: 0,
   ai: 0,
   shopping_mode: 0,
@@ -98,7 +99,7 @@ for (const { id, organization_id: orgId } of brands ?? []) {
 
 console.log(
   `${dryRun ? 'Dry run: ' : ''}${brands?.length ?? 0} brands read. ` +
-    `b2b ${counts.b2b}, ecommerce ${counts.ecommerce}, b2c ${counts.b2c}; ` +
+    `b2b ${counts.b2b}, ecommerce ${counts.ecommerce}, b2c ${counts.b2c}, app ${counts.app}; ` +
     `by page ${counts.page}, by model ${counts.ai}, by Shopping mode ${counts.shopping_mode}. ` +
     `${dryRun ? 'Would need the model' : 'Not told'} ${counts.none}, ` +
     `already typed ${counts.skipped}, plan inactive ${counts.inactive}, failed ${counts.failed}.`,
