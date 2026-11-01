@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 import messages from '../../../messages/en.json';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
+import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
 import { ChoosePlanDialog, type PlanPitch } from './choose-plan-dialog';
@@ -57,25 +58,30 @@ async function render({
   action = 'Adding prompts needs a plan',
   demo = null,
   pitch = demo ? { from: 'demo', offer: demo } : null,
+  chatAgentic = false,
 }: {
   role?: TeamRole;
   action?: string | null;
   demo?: 'trial' | 'first_month' | null;
   pitch?: PlanPitch | null;
+  /** The new Chat on for the workspace (CHAT_AGENTIC). */
+  chatAgentic?: boolean;
 } = {}) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <RoleProvider role={role}>
-          <ChoosePlanDialog
-            open
-            onOpenChange={() => {}}
-            action={action}
-            askAdmin="Ask your admin to choose a plan."
-            organizationId="org1"
-            pitch={pitch}
-          />
-        </RoleProvider>
+        <ChatAgenticProvider enabled={chatAgentic}>
+          <RoleProvider role={role}>
+            <ChoosePlanDialog
+              open
+              onOpenChange={() => {}}
+              action={action}
+              askAdmin="Ask your admin to choose a plan."
+              organizationId="org1"
+              pitch={pitch}
+            />
+          </RoleProvider>
+        </ChatAgenticProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -717,5 +723,30 @@ describe("ChoosePlanDialog for a brand that isn't tracked yet", () => {
     expect(dialog().textContent).toContain(
       'Everything you set up for Acme Coffee is here. Pick a plan and Ansvisor starts tracking, writing and fixing for it.',
     );
+  });
+});
+
+// The dialog reads no AI usage (it sits outside the usage's provider, and a
+// workspace without a plan has none): the new Chat's flag says what it covers.
+describe("ChoosePlanDialog's AI usage hint", () => {
+  const hint = () =>
+    [...card('growth').querySelectorAll('li span')]
+      .find((el) => el.textContent === '5x AI usage')
+      ?.getAttribute('title');
+
+  it.each([
+    ['once the plan ended', null],
+    ['from the demo brand', { from: 'demo', offer: 'trial' }],
+    ["for a brand that isn't tracked yet", { from: 'own_brand', offer: 'trial' }],
+  ] as const)('says Chat and agents draw on it with the new Chat on, %s', async (_where, pitch) => {
+    await render({ pitch, chatAgentic: true });
+    expect(hint()).toContain('Chat and agents');
+    expect(hint()).toContain('Your own AI key comes with Enterprise only.');
+    expect(hint()).not.toContain('Agent Chat');
+  });
+
+  it('keeps the older word with the new Chat off', async () => {
+    await render();
+    expect(hint()).toContain('Agent Chat runs on your own AI key.');
   });
 });

@@ -14,6 +14,7 @@ const PART_TYPES = {
   metaTitle: ['PlainText'],
   metaDescription: ['PlainText'],
   jsonLd: ['PlainText'],
+  reviewer: ['PlainText'],
   date: ['DateTime'],
 };
 const PAGE_PARTS = Object.keys(PART_TYPES);
@@ -241,6 +242,7 @@ const HINTS = {
   metaTitle: [/(meta|seo)-?title/],
   metaDescription: [/(meta|seo)-?desc/, /summary/, /excerpt/, /description/],
   jsonLd: [/json-?ld/, /schema/, /structured/],
+  reviewer: [/reviewed?-?by/, /reviewer/],
   date: [/publish/, /\bdate\b/, /\bposted\b/],
 };
 

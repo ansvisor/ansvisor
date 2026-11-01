@@ -20,6 +20,14 @@ export const agentPageId = (value: string) => (UUID.test(value) ? value : null);
 /** The list's tabs, in the mockup's order (§B item 5). */
 export const AGENT_TABS: readonly AgentListView[] = ['mine', 'workspace', 'paused', 'archived'];
 
+/** Agent Center's tabs (AGENTS plan §1): Ready to use first, then Your agents (the list above). */
+export const AGENT_CENTER_TABS = ['ready', 'yours'] as const;
+export type AgentCenterTab = (typeof AGENT_CENTER_TABS)[number];
+
+/** The tab an address names (`?tab=`): Ready to use unless it says Your agents. */
+export const agentCenterTabOf = (value: unknown): AgentCenterTab =>
+  value === 'yours' ? 'yours' : 'ready';
+
 /** The outcome vocabulary (§I item 43), in the order a summary lists it. */
 export const AGENT_OUTCOME_ORDER: readonly AgentOutcome[] = [
   'improved',

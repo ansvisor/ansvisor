@@ -4424,6 +4424,113 @@
         "publishMessage": "Check the {count, plural, one {# ready draft} other {# ready drafts}}, fill their page fields and send them to our CMS as drafts. Going live stays my click.",
         "more": "More"
       },
+      "byFocus": {
+        "rivalRose": "{rival}’s mention rate rose {points, number} points this week.",
+        "startTitle": "Start with a question",
+        "newForYou": {
+          "title": "New for you",
+          "skill": "Skill",
+          "skills": {
+            "questions": "Groups new buyer questions by topic, with volume and who AI recommends.",
+            "features": "How AI describes you against each competitor, feature by feature, with quotes.",
+            "gaps": "Finds prompts and segments where no brand leads yet, and suggests what to do.",
+            "markets": "Shows who AI recommends in each market and language you track.",
+            "listings": "Lists the sources AI cites in a market and whether they list you.",
+            "rivals": "A one-page brief on one competitor across all AI platforms.",
+            "audit-fix": "Turns site audit findings into fixes you approve.",
+            "wrongclaim": "Finds AI answers with wrong facts about you and drafts the fixes."
+          }
+        },
+        "shortcuts": {
+          "boardSummary": "Monthly board summary",
+          "boardSummaryMessage": "Write a one-page board summary of this month: our AI visibility, what changed, what our work did and what comes next.",
+          "whatChanged": "What changed this week",
+          "whatChangedMessage": "What changed in our AI visibility this week, and why?",
+          "competitorMoves": "Competitor moves",
+          "competitorMovesMessage": "Which competitors moved in AI answers this week, and on which prompts?",
+          "promptsLost": "Prompts we lost",
+          "promptsLostMessage": "Which prompts did we lose this week, and who took them?",
+          "citedForRivals": "Cited for rivals, not us",
+          "citedForRivalsMessage": "Which sources do AI engines cite for our competitors but not for us?",
+          "platformShare": "Share of voice by platform",
+          "platformShareMessage": "Show our share of voice against our competitors on each AI platform.",
+          "trafficReport": "AI traffic report",
+          "trafficReportMessage": "Report our AI traffic this month: visits by AI engine, the pages they land on and the change against last month.",
+          "promptsConvert": "Prompts that convert",
+          "promptsConvertMessage": "Which prompts and AI answers bring us visitors who convert?",
+          "landingPages": "Landing pages to fix",
+          "landingPagesMessage": "Which landing pages do AI visitors leave fastest, and what should we fix on them?",
+          "auditFixes": "Site audit fixes",
+          "auditFixesMessage": "Turn our site audit findings into the fixes that matter most for AI answers, highest impact first.",
+          "weeklyReport": "Weekly report",
+          "weeklyReportMessage": "/report Write this week's report on our AI visibility.",
+          "writeNext": "What to write next",
+          "writeNextMessage": "What should we write or update next to be cited more by AI engines?",
+          "qualityPass": "Quality pass",
+          "qualityPassMessage": "/quality Run a quality pass on our open drafts and list what to fix first.",
+          "factCheck": "Fact check",
+          "factCheckMessage": "/wrongclaim Find what AI engines get wrong about us and draft the fixes.",
+          "howAiDescribes": "How AI describes us",
+          "howAiDescribesMessage": "How do AI engines describe our brand, and what do they associate us with?",
+          "sentimentByPlatform": "Sentiment by platform",
+          "sentimentByPlatformMessage": "Show our sentiment in AI answers on each platform, and what drives it.",
+          "storySources": "Sources shaping our story",
+          "storySourcesMessage": "Which sources shape what AI engines say about us?",
+          "buyerQuestions": "Buyer questions",
+          "buyerQuestionsMessage": "Group the questions buyers ask AI in our category by topic, with search volume and who AI recommends.",
+          "howAiCompares": "How AI compares us",
+          "howAiComparesMessage": "How do AI engines compare us with each competitor, feature by feature? Quote the answers.",
+          "unmetNeeds": "Unmet needs",
+          "unmetNeedsMessage": "Which buyer needs and use cases have no clear winner in AI answers yet?",
+          "productDigest": "Product digest",
+          "productDigestMessage": "Write a product digest: what buyers asked AI this week, how AI compared us, and the gaps for our roadmap.",
+          "marketGaps": "Market gaps",
+          "marketGapsMessage": "In which markets and segments does AI recommend our competitors instead of us?",
+          "listingGaps": "Listing gaps",
+          "listingGapsMessage": "Which directories, marketplaces and review sites do AI engines cite in our category, and which don't list us?",
+          "publisherSites": "Publisher sites",
+          "publisherSitesMessage": "Which publisher sites do AI engines cite in our category?",
+          "marketSnapshot": "Market snapshot",
+          "marketSnapshotMessage": "Give me a snapshot of who AI recommends in each of our markets."
+        },
+        "starters": {
+          "winning": "Are we winning in AI search this month?",
+          "recommendedInstead": "Which competitor does AI recommend instead of us?",
+          "lastMonthWork": "What did last month’s work change?",
+          "gainedMost": "Which competitor gained the most this month?",
+          "whyRival": "Why does AI recommend {rival} over us?",
+          "whyRivalAny": "Why does AI recommend our competitors over us?",
+          "lostThisWeek": "Which prompts did we lose this week?",
+          "rivalSources": "Which sources cite our rivals but not us?",
+          "answersSignups": "Which AI answers bring us signups?",
+          "landingLoss": "Which landing pages lose AI visitors?",
+          "risingPrompts": "Which prompts are rising in our category?",
+          "citationChange": "How did our citations change this week, and why?",
+          "shouldCite": "Which pages should AI cite but doesn’t?",
+          "lostToRival": "Which prompts did we lose to {rival}?",
+          "lostToRivalAny": "Which prompts did we lose to competitors?",
+          "writeNextQuestion": "What should we write or update next?",
+          "noGoodAnswer": "Which questions have no good answer yet?",
+          "briefTopic": "Make a brief for “{topic}”",
+          "briefTopicAny": "Make a brief for our most important topic",
+          "describe": "How does AI describe our brand?",
+          "factCheckPricing": "Fact-check what AI says about our pricing",
+          "sentimentChange": "How did our sentiment change this week, and why?",
+          "shapeSources": "Which sources shape what AI says about us?",
+          "buyersAsk": "What do buyers ask AI about {topic}?",
+          "buyersAskAny": "What do buyers ask AI in our category?",
+          "rivalFeatures": "Which features does AI name for {rival} but not for us?",
+          "rivalFeaturesAny": "Which features does AI name for our competitors but not for us?",
+          "noWinner": "Which use cases have no clear winner yet?",
+          "launch": "Did AI pick up our latest launch?",
+          "rivalsInMarket": "Where in {market} does AI send buyers to rivals?",
+          "rivalsInMarketAny": "Where does AI send buyers to our rivals?",
+          "trustedSites": "Which directories and review sites does AI trust in our category?",
+          "segments": "Which segments have no clear leader?",
+          "marketAsk": "How do buyers in {market} ask AI about our category?",
+          "marketAskAny": "How do buyers ask AI about our category?"
+        }
+      },
       "since": {
         "left": "Since you left",
         "oneWin": "One win",
@@ -4436,6 +4543,72 @@
         "whichOnes": "Which ones?",
         "whyMessage": "Why did our {engine} citations drop since {day}?",
         "winMessage": "Which {engine} citations did we win since {day}?"
+      }
+    },
+    "focus": {
+      "title": "What should Chat focus on for you?",
+      "intro": "Pick one or more. Chat tailors your Home, starter questions and skills to them. You can change this anytime in Settings › General.",
+      "groupLabel": "Focus areas",
+      "areas": {
+        "lead": {
+          "title": "Big picture and results",
+          "note": "Visibility in one line, what changed and what it is worth",
+          "name": "Big picture"
+        },
+        "comp": {
+          "title": "Competitors",
+          "note": "Who gained, which prompts you lost and where rivals are cited instead of you",
+          "name": "Competitors"
+        },
+        "growth": {
+          "title": "AI traffic and conversions",
+          "note": "AI visits, key events and the prompts that bring buyers",
+          "name": "AI traffic"
+        },
+        "seo": {
+          "title": "Prompts and citations",
+          "note": "Rankings, drops, site audit and the pages AI should cite",
+          "name": "Prompts and citations"
+        },
+        "content": {
+          "title": "Content",
+          "note": "What to write or update next, briefs and quality passes",
+          "name": "Content"
+        },
+        "brand": {
+          "title": "Brand and reputation",
+          "note": "How AI describes you, sentiment and the sources behind it",
+          "name": "Brand"
+        },
+        "pd": {
+          "title": "Product and buyer needs",
+          "note": "What buyers ask AI, how AI compares you and unmet needs",
+          "name": "Product"
+        },
+        "bd": {
+          "title": "Markets and third-party sources",
+          "note": "Who AI recommends in each market, and the directories, marketplaces, review and publisher sites where you’re missing",
+          "name": "Markets and sources"
+        }
+      },
+      "countNone": "Pick at least one. Your access stays the same: what you can change still depends on your role.",
+      "countSome": "{count, number} selected · your access stays the same: what you can change still depends on your role.",
+      "skip": "Skip for now",
+      "cancel": "Cancel",
+      "continue": "Continue",
+      "saved": "Home focused on {label} · edit it in Settings › General",
+      "skipped": "You can choose your focus later in Settings › General",
+      "failed": "Couldn't save your focus. Try again.",
+      "label": {
+        "one": "{a}",
+        "two": "{a} and {b}",
+        "more": "{a}, {b} +{count, number}"
+      },
+      "pill": {
+        "focused": "Focused on {label}",
+        "edit": "Edit",
+        "none": "Get suggestions for what you work on",
+        "choose": "Choose focus"
       }
     },
     "inbox": {
@@ -4652,6 +4825,12 @@
       },
       "fullAutoPlan": "Full auto needs the Growth plan",
       "fullAutoAdmin": "Your Admin turned Full auto off for your role",
+      "focus": {
+        "label": "Your focus",
+        "note": "Pick one or more. Tailors your Home, starter questions and skill suggestions. Your access stays the same.",
+        "saved": "Home focused on {label}",
+        "cleared": "Focus cleared · default Home"
+      },
       "language": {
         "label": "Answer language",
         "note": "The app stays in English; Chat answers in this language",
@@ -5337,7 +5516,7 @@
       },
       "counts": {
         "cms": "Webflow, WordPress, Framer, Wix or a workflow webhook",
-        "catalog": "Merchant Center, a product feed or a store"
+        "catalog": "Merchant Center, a product feed, an upload or a store"
       }
     },
     "outcomes": {
@@ -5669,12 +5848,12 @@
           "picked": "Picked model"
         },
         "notes": {
-          "auto": "Picks per step · Ansvisor limit",
+          "auto": "Picks a model per step",
           "fast": "Cheaper, for reads and checks",
           "writing": "For drafts and rewrites",
           "picked": "Kept from this agent’s settings"
         },
-        "ownKey": "Runs on your {provider} key · doesn’t use your limit",
+        "ownKey": "Runs on your {provider} key, which {provider} bills. Max per run and Monthly cap still apply.",
         "limit": "Uses your monthly AI limit"
       },
       "agent": {
@@ -5694,6 +5873,7 @@
         "adminsOnlyNote": "Your Admin keeps workspace agents to Admins",
         "maxRun": "Max per run",
         "maxRunNote": "The most one run may use of the monthly AI limit, 1–50%",
+        "maxRunNoteOwnKey": "The most one run may use of the monthly AI limit, 1–50%. On your own key it is measured at list prices.",
         "monthCap": "Monthly cap",
         "monthCapNote": "The most this agent may use of the monthly AI limit a month, 1–100%",
         "monthCapSet": "Set by an Admin · {cap} a month"
@@ -5804,6 +5984,167 @@
       },
       "loadFailed": "Couldn't load the agents.",
       "retry": "Retry"
+    },
+    "center": {
+      "tabs": {
+        "ready": "Ready to use",
+        "yours": "Your agents"
+      }
+    },
+    "ready": {
+      "filters": {
+        "goal": "Goal",
+        "businessType": "Business type",
+        "industry": "Industry",
+        "role": "Role"
+      },
+      "all": "All",
+      "goals": {
+        "visibility": "Visibility",
+        "citations": "Citations",
+        "content": "Content",
+        "competitors": "Competitors",
+        "technical": "Technical",
+        "shopping": "Shopping",
+        "tasks": "Tasks",
+        "reporting": "Reporting",
+        "help": "Help"
+      },
+      "businessTypes": {
+        "ecommerce": "E-commerce",
+        "mobile_app": "Mobile app",
+        "b2b": "B2B",
+        "b2c": "B2C"
+      },
+      "industries": {
+        "healthcare": "Healthcare",
+        "financial_services": "Financial services",
+        "legal": "Legal",
+        "education": "Education",
+        "saas": "SaaS",
+        "ai_companies": "AI companies",
+        "ecommerce_retail": "E-commerce and retail",
+        "consumer_brands": "Consumer brands",
+        "manufacturing": "Manufacturing",
+        "automotive": "Automotive",
+        "real_estate": "Real estate",
+        "travel_hospitality": "Travel and hospitality"
+      },
+      "roles": {
+        "seo_aeo": "SEO and AEO",
+        "content": "Content",
+        "pr_brand": "PR and brand",
+        "founders": "Founders",
+        "growth": "Growth",
+        "product": "Product",
+        "business_development": "Business development",
+        "ecommerce": "E-commerce",
+        "developers": "Developers",
+        "agencies": "Agencies"
+      },
+      "use": "Use this agent",
+      "useLabel": "Use this agent: {name}",
+      "soon": "Soon",
+      "needsLine": "Needs {what}",
+      "needs": {
+        "fanout_skill": "the /fanout skill",
+        "prompts_skill": "the /prompts skill",
+        "setup_skill": "the /setup skill",
+        "help_articles": "approved Help articles",
+        "catalog_trigger": "a catalog sync trigger",
+        "publish_trigger": "a page-published trigger",
+        "sub_agents": "sub-agents",
+        "ship_as_pr": "fixes sent as pull requests",
+        "reddit_youtube": "Reddit and YouTube",
+        "hubspot": "HubSpot",
+        "jira_linear": "Jira or Linear",
+        "brand_access": "access by brand",
+        "ads_data": "ads read from AI answers"
+      },
+      "policyLock": "Your Admin turned Full auto off",
+      "fallbackTip": "Use this agent opens it on Auto, ask before changes"
+    },
+    "presets": {
+      "visibility-watch": {
+        "name": "Visibility Watch",
+        "description": "Says what moved in AI visibility since yesterday and why, with the next moves to make."
+      },
+      "citation-winback": {
+        "name": "Citation Win-back",
+        "description": "When a page loses citations, finds what AI cites instead and drafts a refresh and an FAQ block."
+      },
+      "competitor-watch": {
+        "name": "Competitor Watch",
+        "description": "Finds where a competitor took your place in AI answers and drafts the changes and a comparison page."
+      },
+      "content-freshness": {
+        "name": "Content Freshness",
+        "description": "Finds cited pages with old dates, numbers or examples and drafts the update."
+      },
+      "ready-to-publish": {
+        "name": "Ready to Publish",
+        "description": "Runs a quality pass on a draft, fills its page fields and sends a CMS draft. Going live stays your click."
+      },
+      "task-finisher": {
+        "name": "Task Finisher",
+        "description": "Works through this week’s Action Center tasks by priority and prepares each one. You close the tasks."
+      },
+      "weekly-report": {
+        "name": "Weekly Report",
+        "description": "Your week in AI answers on one page: citations, mentions and share of voice, what changed and why."
+      },
+      "brand-facts-guardian": {
+        "name": "Brand Facts Guardian",
+        "description": "Finds AI answers that get facts about your brand wrong and drafts the fixes against your brand facts."
+      },
+      "fanout-gap-filler": {
+        "name": "Fan-out Gap Filler",
+        "description": "Drafts answer-first sections for the sub-questions AI searches where your brand is missing."
+      },
+      "prompt-portfolio": {
+        "name": "Prompt Portfolio Manager",
+        "description": "Proposes prompts to add and to pause, so tracking stays on what matters."
+      },
+      "onboarding-help": {
+        "name": "Onboarding & Help",
+        "description": "Answers questions about Ansvisor from Help and walks new members through setup."
+      },
+      "shopping-readiness": {
+        "name": "AI Shopping Readiness",
+        "description": "Checks product pages and the feed when the catalog syncs, and drafts the fixes."
+      },
+      "localization": {
+        "name": "Localization",
+        "description": "When a page goes live in your main language, drafts it for your other markets."
+      },
+      "aeo-operator": {
+        "name": "AEO Operator",
+        "description": "Each morning, picks which agents to run within a budget and sends you one summary to approve."
+      },
+      "technical-fixer": {
+        "name": "Crawler & Technical Fixer",
+        "description": "Fixes what keeps AI crawlers out and sends the fix to your site’s code as a pull request."
+      },
+      "third-party-sources": {
+        "name": "Third-party Sources",
+        "description": "Finds the threads, videos and review pages AI cites where you’re missing, and plans outreach."
+      },
+      "revenue-attribution": {
+        "name": "Revenue Attribution",
+        "description": "Each week, the contacts, deals and revenue AI answers brought, by engine and page."
+      },
+      "ticket-loop": {
+        "name": "Ticket Loop",
+        "description": "Sends Action Center tasks to Jira or Linear, follows them and adds the measured result."
+      },
+      "agency-reporter": {
+        "name": "Agency Client Reporter",
+        "description": "A monthly report for each client brand, for agencies."
+      },
+      "ai-ads-watch": {
+        "name": "AI Ads Watch",
+        "description": "Shows who advertises inside AI answers on your prompts, and where."
+      }
     },
     "detail": {
       "owner": "Owner",
@@ -6192,6 +6533,14 @@
     "recommendedFix": "Recommended fix",
     "fix": "Fix",
     "signalsEvaluated": "signals evaluated",
+    "recent": {
+      "question": "Audited {minutes} min ago. Open it or audit again?",
+      "open": "Open it",
+      "again": "Audit again",
+      "skipped": "{count, plural, one {# page was} other {# pages were}} audited in the last {minutes} minutes, so {count, plural, one {it wasn't} other {they weren't}} audited again."
+    },
+    "partialNote": "The AI checks couldn't run this time, so this score leaves them out and isn't compared with your other audits.",
+    "partialNoCredit": "It didn't use one of your monthly audits.",
     "aiRecommendations": "AI Recommendations",
     "signals": "Signals",
     "onlyIssues": "Issues only",
@@ -8135,6 +8484,8 @@
           "slugHint": "The page's address on your site, after the domain.",
           "slugInvalid": "Use letters, digits, dots, - and _ only, up to 200 characters.",
           "slugEmpty": "Add a slug: the page's address on your site, after the domain.",
+          "author": "Author",
+          "reviewer": "Reviewed by",
           "metaTitle": "Meta title",
           "metaDescription": "Meta description",
           "characters": "{count, plural, one {# character} other {# characters}}"
@@ -8427,6 +8778,8 @@
           "metaDescription": "Meta description",
           "slug": "Slug",
           "author": "Author",
+          "reviewer": "Reviewed by",
+          "noReviewer": "No reviewer selected",
           "authorValue": "{name} → your CMS author field",
           "authorInContent": "{name} → in the content, under the H1 (Add byline to content)",
           "featuredImage": "Featured image",
@@ -8503,6 +8856,17 @@
           "confirmedDetail": "You confirmed the page's author is a real person your site names. Check your CMS sets them as the author.",
           "brand": "Your brand's byline",
           "brandDetail": "This page type goes out under {byline}: it needs no author."
+        },
+        "reviewer": {
+          "title": "Qualified reviewer",
+          "named": "Qualified reviewer: {name}",
+          "namedDetail": "The page text names {name}. Export metadata, WebPage structured data and supported CMS reviewer fields carry the reviewer separately from the Article author.",
+          "notOnPage": "Reviewer not named in the page text",
+          "notOnPageDetail": "A reviewer is selected, but the page text doesn't name {name}. Add their name to the page before publishing.",
+          "none": "No qualified reviewer named",
+          "noneDetail": "Choose a qualified person from Authors. Their name and credential will be included in export metadata, supported CMS fields, and WebPage structured data.",
+          "unknown": "The Authors list is still loading, so the reviewer hasn't been confirmed.",
+          "schemaNote": "The WebPage node identifies this qualified reviewer separately from the Article author."
         },
         "dates": {
           "title": "Visible published and updated dates",
@@ -9614,6 +9978,21 @@
     "noDataDescriptionNoSnippet": "Add the tracking snippet to your website to start collecting AI-referred traffic data.",
     "snippetTitle": "Add this snippet to your website",
     "snippetDescription": "Paste this before the closing <code>{tag}</code> tag to track AI-referred visits.",
+    "snippetCheck": {
+      "title": "Tracking code not detected on {domain}",
+      "titleNoDomain": "Tracking code not detected",
+      "stepCopy": "Copy the snippet below.",
+      "stepPaste": "Paste it before the closing <code>{tag}</code> tag on every page, your 404 page included.",
+      "stepCheck": "Publish the change, then click Check again.",
+      "tagManager": "Added it with a tag manager? It shows here after its first AI visit.",
+      "checkAgain": "Check again",
+      "checking": "Checking…",
+      "lastChecked": "Last checked {when}",
+      "notFound": "Not found on {domain}'s home page yet.",
+      "unreachable": "Couldn't read {domain}'s home page. Try again in a few minutes.",
+      "noDomain": "Add your website's domain in the brand's settings to check it.",
+      "failed": "The check didn't run. Try again."
+    },
     "copySnippet": "Copy tracking script",
     "export": {
       "button": "Export",
@@ -9747,6 +10126,7 @@
       },
       "sourceStates": {
         "active": "Active",
+        "installedQuiet": "Installed, no AI visits in the last 7 days",
         "notDetected": "Not detected",
         "connected": "Connected",
         "syncing": "Syncing",
@@ -9889,7 +10269,10 @@
       "label": "Data sources",
       "snippet": "Tracking snippet",
       "snippetActive": "Active · last visit {when}",
+      "snippetQuiet": "Installed · no AI visits in the last 7 days",
       "snippetNotDetected": "Not detected",
+      "snippetNotDetectedOn": "Not detected on {domain}",
+      "snippetChecking": "Checking your home page…",
       "code": "Code",
       "install": "Install",
       "ga": "Google Analytics",
@@ -11776,8 +12159,14 @@
         "d90": "90d",
         "due": "Day {day}, due {date}",
         "none": "Day {day}, not measured",
-        "measured": "Day {day}: {outcome}"
+        "measured": "Day {day}: {outcome}",
+        "measuredLasting": "Day {day}: {outcome} · {lasting}"
       },
+      "lasting": {
+        "held": "Held",
+        "faded": "Faded"
+      },
+      "capped": "Showing the first {count, number} changes shipped in {month}; the counts above cover only these.",
       "empty": "Nothing shipped in {month}.",
       "emptyFilter": "No actions with this outcome in {month}.",
       "loadFailed": "Couldn't load what Ansvisor did. Try again.",
@@ -12703,6 +13092,7 @@
         "metaTitle": "Meta title",
         "metaDescription": "Meta description",
         "jsonLd": "JSON-LD (structured data)",
+        "reviewer": "Qualified reviewer",
         "date": "Date (the day it's first sent)"
       },
       "notSent": "Not sent",
@@ -12838,7 +13228,8 @@
         "body": "Page content (formatted text)",
         "metaTitle": "Meta title",
         "metaDescription": "Meta description",
-        "jsonLd": "JSON-LD (structured data)"
+        "jsonLd": "JSON-LD (structured data)",
+        "reviewer": "Qualified reviewer"
       },
       "notSent": "Not sent",
       "pickField": "Pick a field",

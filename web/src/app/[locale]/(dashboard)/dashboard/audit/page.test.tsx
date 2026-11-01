@@ -77,7 +77,9 @@ vi.mock('./_quota-meter', () => ({ EmptyPoolMessage: () => null }));
 vi.mock('./_use-pages-export', () => ({
   usePagesExport: () => ({ exporting: false, exportAll: vi.fn(), exportPages: vi.fn() }),
 }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// Callable too: a page audited minutes ago asks with a plain toast.
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 
 const { default: SiteAuditPage } = await import('./page');
 
@@ -102,7 +104,7 @@ beforeEach(() => {
     opportunities: { opportunities: [], excluded: [] },
     latestRun: null,
   });
-  audits.runAudit.mockResolvedValue({ id: 'a1' });
+  audits.runAudit.mockResolvedValue({ audit: { id: 'a1' } });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -191,6 +193,31 @@ describe('SiteAuditPage Run audit', () => {
     await pressEnter();
     expect(audits.runAudit).toHaveBeenCalledExactlyOnceWith('b1', 'https://acme.com');
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('SiteAuditPage a page audited minutes ago', () => {
+  it('asks first: Open it opens that audit, Audit again starts a new one', async () => {
+    const finishedAt = new Date(Date.now() - 4 * 60_000).toISOString();
+    audits.runAudit
+      .mockReset()
+      .mockResolvedValueOnce({ recent: { auditId: 'a0', finishedAt } })
+      .mockResolvedValueOnce({ audit: { id: 'a2' } });
+    await render(false);
+    await act(async () => runButton().click());
+
+    expect(push).not.toHaveBeenCalled();
+    const [question, options] = toast.mock.calls[0] as [
+      string,
+      { cancel: { onClick: () => void }; action: { onClick: () => void } },
+    ];
+    expect(question).toBe('Audited 4 min ago. Open it or audit again?');
+    options.cancel.onClick();
+    expect(push).toHaveBeenCalledWith('/dashboard/audit/a0');
+
+    await act(async () => options.action.onClick());
+    expect(audits.runAudit).toHaveBeenLastCalledWith('b1', 'https://acme.com', { force: true });
+    expect(push).toHaveBeenLastCalledWith('/dashboard/audit/a2');
   });
 });
 
