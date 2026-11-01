@@ -46,6 +46,8 @@ export interface ThreadRun {
   summary: ChatRunSummary | null;
   /** Why it ended in error, in its run.error event's words; null without them. */
   errorReason: string | null;
+  /** It ended because the workspace's own AI key failed (run.error `own_key`). */
+  keyFailed: boolean;
   /** What could come next once it finished (CHAT-07 §C), best first. */
   nextMoves: ChatNextMove[];
   /** What it sent to the Action Center (CHAT-09 item 19), in order. */
@@ -101,6 +103,7 @@ const SENT_EVENT = 'action.sent';
 interface RunEnd {
   summary: ChatRunSummary | null;
   errorReason: string | null;
+  keyFailed: boolean;
   sent: ChatActionSent[];
 }
 const ENDED: readonly string[] = ['done', 'stopped', 'error', 'paused_cap'];
@@ -132,7 +135,12 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
     data: unknown;
   }[]) {
     if (!isChatEventType(row.type) || !row.data || typeof row.data !== 'object') continue;
-    const kept = ends.get(row.run_id) ?? { summary: null, errorReason: null, sent: [] };
+    const kept = ends.get(row.run_id) ?? {
+      summary: null,
+      errorReason: null,
+      keyFailed: false,
+      sent: [],
+    };
     if (row.type === SENT_EVENT) {
       ends.set(row.run_id, { ...kept, sent: [...kept.sent, row.data as ChatActionSent] });
       continue;
@@ -142,7 +150,12 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
       seq: row.seq,
       data: row.data,
     } as Parameters<typeof applyChatEvent>[1]);
-    ends.set(row.run_id, { ...kept, summary: run.summary, errorReason: run.errorReason });
+    ends.set(row.run_id, {
+      ...kept,
+      summary: run.summary,
+      errorReason: run.errorReason,
+      keyFailed: run.keyFailed,
+    });
   }
   return ends;
 }
@@ -316,6 +329,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         deliverables: madeByRun.get(run.id) ?? [],
         summary: ends.get(run.id)?.summary ?? null,
         errorReason: ends.get(run.id)?.errorReason ?? null,
+        keyFailed: ends.get(run.id)?.keyFailed ?? false,
         nextMoves: movesByRun.get(run.id) ?? [],
         sent: ends.get(run.id)?.sent ?? [],
         tasks: strips.get(run.id) ?? null,

@@ -473,6 +473,14 @@ describe('writeTasksForAction', () => {
     expect(generateObject.mock.calls[1][0].prompt).toContain(
       'Site type: B2C (a service for consumers). Its page types: destination page, itinerary,',
     );
+
+    // A mobile app (00456): its own page types.
+    db.brands[0] = { ...db.brands[0], site_type: 'app' };
+    generateObject.mockResolvedValueOnce(answer([task()]));
+    await writeTasksForAction('a1', { dryRun: true });
+    expect(generateObject.mock.calls[2][0].prompt).toContain(
+      'Site type: Mobile app (a mobile app people install from an app store). Its page types: feature page, comparison, alternatives,',
+    );
   });
 
   it('calls no model when the signals name nothing to work on', async () => {

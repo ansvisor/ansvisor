@@ -57,6 +57,10 @@ The finding shows the score with its formula and language, then its parts: words
 
 **First-person evidence** counts the sentences told as "I" or "we": in Turkish also by their verb endings, such as "gezdik" or "düşünüyoruz". Two or more pass and one raises a warning. Quotes and stock phrases such as "Contact us" don't count. It's read in English and Turkish; pages in other languages show n/a for now.
 
+## Authority links
+
+**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…) and major news.
+
 ## Product pages
 
 On a product page, one with Product structured data, **Product description opening** checks that the description's first 40 words, or 250 characters, name the product type and at least two key attributes, such as a measure, a material, a fit or a use. ChatGPT appears to read only about that much of a description when it matches products to a shopping question. The finding shows where the opening ends. Other pages show this signal as n/a.

@@ -22,6 +22,7 @@ import {
   readingEvidence,
   type ReadingEvidence,
 } from '@/lib/audit/reading-evidence';
+import { AUTHORITY_SIGNAL, AuthoritySources } from './authority-sources';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -284,7 +285,11 @@ function SignalRow({
           className="space-y-2 pb-4 pl-7 text-sm text-muted-foreground"
         >
           <Finding signal={signal} />
-          {signal.what && <p>{signal.what}</p>}
+          {signal.key === AUTHORITY_SIGNAL ? (
+            <AuthoritySources signal={signal} />
+          ) : (
+            signal.what && <p>{signal.what}</p>
+          )}
           {signal.why && (
             <p>
               <span className="font-medium text-foreground">{t('why')}: </span>
