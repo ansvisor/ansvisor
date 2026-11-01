@@ -59,6 +59,19 @@ describe('pageNamesPerson', () => {
     ).toBe(false);
   });
 
+  it('reads a block’s end as a word’s end', () => {
+    expect(
+      pageNamesPerson(
+        '<p>Reviewed by Dr. Grace Hopper</p><p>Coffee is ready.</p>',
+        'Dr. Grace Hopper',
+      ),
+    ).toBe(true);
+    expect(pageNamesPerson('<h2>Reviewed by</h2><p>Dr. Grace Hopper</p>', 'Dr. Grace Hopper')).toBe(
+      true,
+    );
+    expect(pageNamesPerson('<p>Dr. Grace<br>Hopper</p>', 'Dr. Grace Hopper')).toBe(true);
+  });
+
   it('requires the complete name rather than a substring of another word', () => {
     expect(pageNamesPerson('<p>Annual results are ready.</p>', 'Ann')).toBe(false);
     expect(pageNamesPerson('<p>Reviewed by Ann.</p>', 'Ann')).toBe(true);

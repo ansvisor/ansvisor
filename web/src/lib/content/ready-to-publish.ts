@@ -40,6 +40,10 @@ export function pageNamesPerson(html: string, name: string): boolean {
   root
     .querySelectorAll('script, style, template, noscript, [hidden], [aria-hidden="true"]')
     .forEach((element) => element.remove());
+  // Blocks end a word: "Reviewed by Dr. Grace Hopper</p><p>Coffee" reads as two lines.
+  root
+    .querySelectorAll(TEXT_BLOCKS)
+    .forEach((element) => element.append(root.ownerDocument.createTextNode(' ')));
   const actual = normalizePageText(root.textContent ?? '');
   const actualChars = Array.from(actual);
   const expectedChars = Array.from(expected);
@@ -59,6 +63,9 @@ export function pageNamesPerson(html: string, name: string): boolean {
   }
   return false;
 }
+
+const TEXT_BLOCKS =
+  'p, h1, h2, h3, h4, h5, h6, li, dt, dd, td, th, caption, figcaption, blockquote, div, section, article, aside, header, footer, br';
 
 function normalizePageText(value: string): string {
   return value.normalize('NFKC').replace(/\s+/gu, ' ').trim().toLocaleLowerCase();
