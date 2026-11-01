@@ -174,6 +174,9 @@ export interface AuditedPage {
   auditId: string;
   score: number | null;
   previousScore: number | null;
+  /** The first completed audit's score and when it ran: progress since then. */
+  firstScore: number | null;
+  firstAuditedAt: string | null;
   status: AuditedPageStatus;
   lastAuditedAt: string;
   /** Whether the audit the row opens was an auto-audit run's (SA-006) or a user's. */

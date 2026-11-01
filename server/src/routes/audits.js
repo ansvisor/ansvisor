@@ -683,8 +683,8 @@ router.get('/trend', async (req, res) => {
 
 // GET /api/audits/pages?brandId=…&limit=50&offset=0 — one row per audited
 // page (repeat audits of a URL share it), most recently audited first, with
-// its latest score, the previous one, a status, its trend, its open issues
-// and its runs. `total` is the number of pages, for paging.
+// its latest score, the previous one, its first one, a status, its trend, its
+// open issues and its runs. `total` is the number of pages, for paging.
 // Registered before /:id so "pages" isn't matched as an audit id.
 router.get('/pages', async (req, res) => {
   const userId = req.user?.id;
