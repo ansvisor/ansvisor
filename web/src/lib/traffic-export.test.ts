@@ -122,6 +122,8 @@ const data = (over: Partial<TrafficExportData> = {}): TrafficExportData => ({
   },
   sources: {
     snippetLastVisitAt: new Date().toISOString(),
+    snippetFoundAt: null,
+    snippetCheckedAt: null,
     ga: source(),
     gsc: source({ connected: false }),
   },
@@ -836,5 +838,12 @@ describe('trafficExportFileName', () => {
         table: 'Top landing pages',
       }),
     ).toBe('ansvisor-ai-traffic-acme-coffee-top-landing-pages-all-time_2026-10-18.csv');
+  });
+
+  it('starts with a white label kit’s word instead, or none', () => {
+    const name = (word: string | null) =>
+      trafficExportFileName({ brand: 'acme', from: null, to: '2026-10-18', ext: 'zip', word });
+    expect(name('acme-agency')).toBe('acme-agency-ai-traffic-acme-all-time_2026-10-18.zip');
+    expect(name(null)).toBe('ai-traffic-acme-all-time_2026-10-18.zip');
   });
 });

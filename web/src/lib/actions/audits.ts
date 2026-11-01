@@ -9,6 +9,9 @@ import type { NoPlanMark } from '@/lib/billing/no-plan';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
+/** The API's RECENT_AUDIT_MINUTES (routes/audits.js): a page audited since asks first. */
+const RECENT_AUDIT_MINUTES = 10;
+
 export type AuditSignalStatus = 'pass' | 'warn' | 'fail' | 'na';
 
 export interface AuditSignal {
@@ -48,6 +51,11 @@ export interface AuditResult {
   finalUrl: string | null;
   status: 'running' | 'completed' | 'failed';
   totalScore: number | null;
+  /**
+   * The AI-judged signals didn't run and none were kept from an earlier
+   * audit: the score leaves them out and isn't compared with other audits.
+   */
+  partial?: boolean;
   /** Nearest earlier completed audit of the same normalized page, for the report delta. */
   previousScore?: number | null;
   previousCreatedAt?: string | null;
@@ -190,8 +198,30 @@ async function getSession() {
   return session;
 }
 
-/** Run a new single-page audit (synchronous — returns the completed result). */
-export async function runAudit(brandId: string, url: string): Promise<AuditResult> {
+/** A page's audit finished a few minutes ago, which a start didn't repeat (00431). */
+export interface RecentAudit {
+  auditId: string;
+  finishedAt: string;
+  /** The address asked for, in a bulk start's list. */
+  url?: string;
+}
+
+/** A start of one page: its running audit (new, or the one already running), or a recent one. */
+export type RunAuditResult =
+  | { audit: AuditResult; recent?: undefined }
+  | { audit?: undefined; recent: RecentAudit };
+
+/**
+ * Start a single-page audit. Returns at once with the running audit, which
+ * is the page's audit already running when there is one (no new credit).
+ * A page audited in the last minutes isn't started: `recent` says which
+ * audit, so the caller asks; `force` (Audit again) starts a new one anyway.
+ */
+export async function runAudit(
+  brandId: string,
+  url: string,
+  options: { force?: boolean } = {},
+): Promise<RunAuditResult> {
   const session = await getSession();
 
   const res = await fetch(`${AEO_SERVER_URL}/api/audits`, {
@@ -200,16 +230,19 @@ export async function runAudit(brandId: string, url: string): Promise<AuditResul
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ brandId, url }),
+    body: JSON.stringify({ brandId, url, ...(options.force ? { force: true } : {}) }),
   });
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    if (res.status === 409 && body.error === 'recently_audited' && body.recent) {
+      return { recent: body.recent as RecentAudit };
+    }
     throw new Error(body.message || `Server error: ${res.status}`);
   }
 
   const data = await res.json();
-  return data.audit;
+  return { audit: data.audit };
 }
 
 /** Fetch a single stored audit with all its signal results. */
@@ -306,10 +339,17 @@ export async function getAuditTrend(brandId: string): Promise<AuditTrend> {
 }
 
 /**
- * Re-audit several pages at once. Every page must fit the monthly quota, or
- * none starts; the server runs them a few at a time.
+ * Re-audit several pages at once. Every page started must fit the monthly
+ * quota, or none starts; the server runs them a few at a time. A page with
+ * an audit running keeps it (counted in `started`, no new credit); one
+ * audited in the last minutes isn't started unless `force`, and is listed in
+ * `recent`.
  */
-export async function runAuditsBulk(brandId: string, urls: string[]): Promise<{ started: number }> {
+export async function runAuditsBulk(
+  brandId: string,
+  urls: string[],
+  options: { force?: boolean } = {},
+): Promise<{ started: number; recent: RecentAudit[] }> {
   const session = await getSession();
 
   const res = await fetch(`${AEO_SERVER_URL}/api/audits/bulk`, {
@@ -318,7 +358,7 @@ export async function runAuditsBulk(brandId: string, urls: string[]): Promise<{ 
       Authorization: `Bearer ${session.access_token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ brandId, urls }),
+    body: JSON.stringify({ brandId, urls, ...(options.force ? { force: true } : {}) }),
   });
 
   if (!res.ok) {
@@ -327,11 +367,18 @@ export async function runAuditsBulk(brandId: string, urls: string[]): Promise<{ 
   }
 
   const data = await res.json();
-  return { started: (data.audits ?? []).length };
+  return { started: (data.audits ?? []).length, recent: data.recent ?? [] };
 }
 
 export type StartSiteAuditsResult =
-  | { ok: true; started: number; audits: { id: string; url: string }[] }
+  | {
+      ok: true;
+      started: number;
+      audits: { id: string; url: string }[];
+      /** Pages audited in the last minutes, not started: run again with force to audit them. */
+      recent?: RecentAudit[];
+      message?: string;
+    }
   | { ok: false; reason: 'forbidden_role' | 'quota_exceeded' | 'failed'; message: string };
 
 /**
@@ -345,17 +392,22 @@ export type StartSiteAuditsResult =
 export async function startSiteAudits(
   brandId: string,
   urls: string[],
+  options: { force?: boolean } = {},
 ): Promise<StartSiteAuditsResult> {
   try {
     await assertWritable({ brandId });
-    return await startAudits(brandId, urls);
+    return await startAudits(brandId, urls, options.force === true);
   } catch (err) {
     console.error('Failed to start the audits:', err);
     return { ok: false, reason: 'failed', message: 'The audits couldn’t be started. Try again.' };
   }
 }
 
-async function startAudits(brandId: string, urls: string[]): Promise<StartSiteAuditsResult> {
+async function startAudits(
+  brandId: string,
+  urls: string[],
+  force: boolean,
+): Promise<StartSiteAuditsResult> {
   if (!(await isManager(await createClient()))) {
     return {
       ok: false,
@@ -373,7 +425,11 @@ async function startAudits(brandId: string, urls: string[]): Promise<StartSiteAu
         Authorization: `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(many ? { brandId, urls } : { brandId, url: urls[0] }),
+      body: JSON.stringify({
+        brandId,
+        ...(many ? { urls } : { url: urls[0] }),
+        ...(force ? { force: true } : {}),
+      }),
     });
   } catch (err) {
     console.error('Failed to start the audits:', err);
@@ -384,7 +440,12 @@ async function startAudits(brandId: string, urls: string[]): Promise<StartSiteAu
     message?: string;
     audit?: { id: string; url: string };
     audits?: { id: string; url: string }[];
+    recent?: RecentAudit | RecentAudit[];
   };
+  // A page audited in the last minutes isn't started again: said back, so Chat asks first.
+  if (res.status === 409 && body.error === 'recently_audited' && body.recent) {
+    return recentResult([], [{ ...(body.recent as RecentAudit), url: urls[0] }]);
+  }
   if (!res.ok) {
     return {
       ok: false,
@@ -396,7 +457,25 @@ async function startAudits(brandId: string, urls: string[]): Promise<StartSiteAu
     id: a.id,
     url: a.url,
   }));
-  return { ok: true, started: audits.length, audits };
+  return recentResult(audits, Array.isArray(body.recent) ? body.recent : []);
+}
+
+/** A start's result, saying which pages were audited minutes ago and not started. */
+function recentResult(
+  audits: { id: string; url: string }[],
+  recent: RecentAudit[],
+): StartSiteAuditsResult {
+  if (recent.length === 0) return { ok: true, started: audits.length, audits };
+  const pages = recent
+    .map((r) => `${r.url} (audit ${r.auditId}, finished ${r.finishedAt})`)
+    .join(', ');
+  return {
+    ok: true,
+    started: audits.length,
+    audits,
+    recent,
+    message: `Not started, audited in the last ${RECENT_AUDIT_MINUTES} minutes: ${pages}. Ask whether to open that audit or audit again; to audit again, run this again with force.`,
+  };
 }
 
 /** One of the most common Authority / E-E-A-T gaps across the audited pages. */

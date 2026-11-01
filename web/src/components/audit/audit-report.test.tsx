@@ -32,7 +32,7 @@ const rec = (over: Partial<AuditRecommendation> = {}): AuditRecommendation => ({
 
 const audit = (
   recommendations: AuditRecommendation[],
-  previous: Pick<AuditResult, 'previousScore' | 'previousCreatedAt'> = {},
+  previous: Pick<AuditResult, 'previousScore' | 'previousCreatedAt' | 'partial'> = {},
 ): AuditResult => ({
   id: 'a1',
   brandId: 'b1',
@@ -57,7 +57,7 @@ let root: Root;
 
 function render(
   recommendations: AuditRecommendation[],
-  previous: Pick<AuditResult, 'previousScore' | 'previousCreatedAt'> = {},
+  previous: Pick<AuditResult, 'previousScore' | 'previousCreatedAt' | 'partial'> = {},
 ) {
   act(() => {
     root.render(
@@ -156,5 +156,20 @@ describe('AuditReport score change', () => {
 
     render([], { previousScore: 0.56 });
     expect(container.textContent).not.toContain('since');
+  });
+});
+
+describe('AuditReport partial audit', () => {
+  const PARTIAL = messages.audit.partialNote;
+  const NO_CREDIT = messages.audit.partialNoCredit;
+
+  it("says when the AI checks didn't run, and that it used no audit; not otherwise", () => {
+    render([], { partial: true });
+    expect(container.textContent).toContain(PARTIAL);
+    expect(container.textContent).toContain(NO_CREDIT);
+
+    render([]);
+    expect(container.textContent).not.toContain(PARTIAL);
+    expect(container.textContent).not.toContain(NO_CREDIT);
   });
 });
