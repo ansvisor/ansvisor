@@ -488,7 +488,10 @@ describe('readCatalog through the connector harness', () => {
     );
 
     expect(outcome.status).toBe('ok');
-    expect(outcome.counts.orders).toEqual({ failed: true });
+    expect(outcome.counts.orders).toEqual({
+      failed: true,
+      error: "The store's answer couldn't be read.",
+    });
     expect(products).toHaveLength(1);
     expect(fake.rows('catalog_sources')[0].last_orders_synced_at).toBe('2026-10-01T00:00:00.000Z');
   });

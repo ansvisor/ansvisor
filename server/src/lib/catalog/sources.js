@@ -319,14 +319,25 @@ export async function syncSource(source, { afterSync = queueShoppingCheck, ...op
   return outcome;
 }
 
+/** A store's HTTP client whose every call stops at one deadline, `ms` from now. */
+function withDeadline(request, ms) {
+  const deadline = AbortSignal.timeout(ms);
+  return (address, opts = {}) =>
+    request(address, {
+      ...opts,
+      signal: opts.signal ? AbortSignal.any([opts.signal, deadline]) : deadline,
+    });
+}
+
 /**
  * A store's changed orders (#1275), after its catalog was written. The cursor
  * (`last_orders_synced_at`) moves only past orders saved: to the sync's start
  * once the read is complete, or to the last change read when the connector
  * stopped at its page cap, so a store with more orders catches up over the
  * next runs instead of reading the same first pages again. A failure here
- * leaves the cursor where it was and the catalog's outcome as it is: the
- * orders are tried again by the next sync.
+ * leaves the cursor where it was and the catalog's outcome as it is, and is
+ * kept in plain words in the source's order counts: the orders are tried
+ * again by the next sync. The orders' read has its own deadline (readMs).
  */
 async function syncStoreOrders(source, connector, { request, credentials, db, now, at }) {
   const since = source.last_orders_synced_at ?? null;
@@ -355,7 +366,13 @@ async function syncStoreOrders(source, connector, { request, credentials, db, no
       { err: { name: err?.name, code: err?.code }, sourceId: source.id },
       '[catalog] order sync failed; the next sync tries again',
     );
-    return { failed: true };
+    // Kept with the catalog's counts, so a read that keeps failing (one that
+    // runs out of time, say) shows why. Plain words only, no store text.
+    const error =
+      err instanceof ConnectorHttpError
+        ? failureOf(err).error
+        : "The orders couldn't be synced. The next sync tries again.";
+    return { failed: true, ...(err?.code === 'timeout' ? { timedOut: true } : {}), error };
   }
 }
 
@@ -402,12 +419,7 @@ async function syncOnce(
       } else if (isStore(connector)) {
         credentials = await readCredentials(source.id, { db });
         // Every call the read makes stops at its deadline.
-        const deadline = AbortSignal.timeout(readMs);
-        storeRequest = (address, opts = {}) =>
-          request(address, {
-            ...opts,
-            signal: opts.signal ? AbortSignal.any([opts.signal, deadline]) : deadline,
-          });
+        storeRequest = withDeadline(request, readMs);
         if (!credentials) outcome = NO_SIGN_IN;
         else parsed = await connector.readCatalog(source, { request: storeRequest, credentials });
       } else {
@@ -443,7 +455,9 @@ async function syncOnce(
         typeof connector.syncOrders === 'function'
       ) {
         outcome.counts.orders = await syncStoreOrders(source, connector, {
-          request: storeRequest,
+          // The orders get their own deadline: a large catalog's read can't
+          // spend the time they need.
+          request: withDeadline(request, readMs),
           credentials,
           db,
           now,
