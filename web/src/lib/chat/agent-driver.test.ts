@@ -475,6 +475,39 @@ describe('handing a started run to Chat', () => {
     expect(db.tables.chat_messages.at(-2)!.content_md).not.toContain('isn’t connected');
   });
 
+  it("starts keeping its chat's brands from the run's brand, before its message (00436)", async () => {
+    const started: { chat: unknown; messages: number }[] = [];
+    db.rpcs.chat_start_touched_brands = ({ p_conversation_id }) =>
+      started.push({
+        chat: p_conversation_id,
+        messages: db.tables.chat_messages.filter((m) => m.conversation_id === p_conversation_id)
+          .length,
+      });
+    await driver.openAgentRun(queueRun(), ORG, NOW);
+    expect(started).toEqual([{ chat: db.tables.chat_conversations[0].id, messages: 0 }]);
+  });
+
+  it('stops a run on a brand its person can no longer use, as one gone (BRAND-ACCESS)', async () => {
+    const BRAND_B = '33333333-3333-4333-8333-333333333333';
+    db.tables.brands.push({ id: BRAND_B, organization_id: ORG, name: 'Brand B', is_demo: false });
+    db.tables.chat_agent_versions[0].scope = { all_brands: true };
+    // The owner, whom a triggered run acts as, is narrowed to Brand A.
+    agentRow().owner_id = PEOPLE.manager;
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.brand_scope = 'selected';
+    db.tables.member_brands = [{ user_id: PEOPLE.manager, organization_id: ORG, brand_id: BRAND }];
+    const hidden = queueRun({ brand_id: BRAND_B });
+    expect(await driver.openAgentRun(hidden, ORG, NOW)).toBeNull();
+    expect(runRow(hidden)).toMatchObject({ status: 'stopped', stop_reason: 'brand_gone' });
+    // Brand A is still theirs: the agent stays on, and its run there starts.
+    expect(agentRow().status).toBe('active');
+    expect(await driver.openAgentRun(queueRun({ brand_id: BRAND }), ORG, NOW)).not.toBeNull();
+    // None of its brands left to them: it pauses, as for brands gone.
+    db.tables.member_brands = [];
+    const none = queueRun({ brand_id: BRAND });
+    expect(await driver.openAgentRun(none, ORG, NOW)).toBeNull();
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'brand_gone' });
+  });
+
   it('stops a run whose brand left its scope, and with Chat off starts nothing', async () => {
     db.tables.chat_agent_versions[0].scope = { brand_ids: [] };
     const id = queueRun();

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import messages from '../../../messages/en.json';
 import { PLANS } from '@/config/plans';
 import type { AiProvider } from '@/lib/agent/providers';
+import { hasBrandAccess } from '@/lib/brand-access';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { searchHelp } from '@/lib/help/search';
 import { platformName } from '@/lib/signals/names';
@@ -109,6 +110,13 @@ import {
   type PageSites,
 } from './page-sites';
 import { readBrandIsDemo, readPrecedenceContext, readToolCall } from './precedence-context';
+import {
+  noteTouchedBrands,
+  referenceTouches,
+  startTouchedBrands,
+  touchedByCall,
+  type TouchedBrands,
+} from './touched-brands';
 import type { ExplainChangeOutput } from '@/lib/mcp/why';
 import { stepPrompt, todayLine } from './prompt';
 import { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
@@ -607,6 +615,10 @@ export async function startChatRun(
     if (error) throw new Error(`Chat could not read the chat: ${error.message}`);
     if (!data) return failure(404, 'not_found', t('error.notFound'));
     brandId = (data as { brand_id: string | null }).brand_id;
+    // A chat about a brand the person can no longer use is hidden, and kept (BRAND-ACCESS §9 Q4).
+    if (brandId && !hasBrandAccess(ctx.brandAccess, brandId)) {
+      return failure(404, 'not_found', t('error.notFound'));
+    }
     earlier = await readEarlierRuns(conversationId, input.message);
     fromRun = input.fromRunId ? await fromTaintedRun(conversationId, input.fromRunId) : false;
   } else {
@@ -618,7 +630,10 @@ export async function startChatRun(
         .eq('organization_id', actor.organizationId)
         .maybeSingle();
       if (error) throw new Error(`Chat could not read the brand: ${error.message}`);
-      if (!data) return failure(404, 'not_found', t('error.notFound'));
+      // A brand of the workspace the person can't use is as one that isn't there.
+      if (!data || !hasBrandAccess(ctx.brandAccess, input.brandId)) {
+        return failure(404, 'not_found', t('error.notFound'));
+      }
       brandId = input.brandId;
     }
     conversationId = await insertRow(
@@ -634,6 +649,12 @@ export async function startChatRun(
       },
       'start a chat',
     );
+    // A new chat keeps the brands it touches from here on (00436), before anything is in it.
+    await startTouchedBrands(conversationId);
+  }
+  // What the message references with @ goes in with it: its brands are noted first.
+  if (!(await noteTouchedBrands(conversationId, await referenceTouches(input)))) {
+    throw new Error("Chat could not note the brands of the message's references");
   }
 
   const timezone = validTimezone(input.timezone);
@@ -757,6 +778,8 @@ interface RunContext {
   batchAnswer?: string;
   /** The agent run this chat is (CHAT-21 §H item 36): its steps are held within its cap too. */
   agentRunId: string | null;
+  /** The brands this request noted on the chat already (touched-brands.ts); '*': the workspace. */
+  touchedNoted?: Set<string>;
   /**
    * Whose session the request driving the run carries: a change runs as the
    * signed-in person. When it isn't the actor (an agent run nobody's session
@@ -1917,6 +1940,33 @@ async function callFacts(rc: RunContext, tool: ChatTool, input: Record<string, u
   return { ctx, call };
 }
 
+/**
+ * Notes the brands a call touches on its chat (touched-brands.ts), once a
+ * run: false when the note failed, and the call must not run.
+ */
+async function noteCallBrands(
+  rc: RunContext,
+  tool: ChatTool,
+  brandId: string | null,
+  ctx: PrecedenceContext | null,
+): Promise<boolean> {
+  const touched = touchedByCall(tool, brandId, ctx?.brandAccess ?? null);
+  // The chat's own brand is in its set from its start (startTouchedBrands).
+  const noted = (rc.touchedNoted ??= new Set(rc.brand ? [rc.brand.id] : []));
+  const fresh: TouchedBrands =
+    touched === 'workspace'
+      ? noted.has(WHOLE_WORKSPACE)
+        ? []
+        : 'workspace'
+      : touched.filter((id) => !noted.has(id));
+  if (!(await noteTouchedBrands(rc.run.conversationId, fresh))) return false;
+  for (const id of fresh === 'workspace' ? [WHOLE_WORKSPACE] : fresh) noted.add(id);
+  return true;
+}
+
+/** touchedNoted's key for the whole workspace. */
+const WHOLE_WORKSPACE = '*';
+
 /** One call, decided on facts read for it now (CHAT-20 §4 "Role change mid-run"). */
 async function handleCall(
   rc: RunContext,
@@ -1963,6 +2013,11 @@ async function handleCall(
 
   const { ctx, call: facts } = await callFacts(rc, tool, input);
   const decision = askWithoutSession(rc, tool, decideForEngine(tool, ctx, facts));
+  // What it may read or change is noted on the chat first (BRAND-ACCESS §10, 00436): a shared
+  // chat with no brand then shows only to people who can use every brand it touched.
+  if (decision.kind !== 'deny' && !(await noteCallBrands(rc, tool, facts.brandId, ctx))) {
+    return result(call, { code: 'failed' }, true);
+  }
   // A change its own check refuses before its card (Send to Action Center's duplicate): no card.
   if (decision.kind !== 'deny' && tool.class !== 'read') {
     const refused = await precheckOf(rc, tool, input, ctx);
@@ -2056,7 +2111,10 @@ async function precheckOf(
 ): Promise<Record<string, unknown> | null> {
   if (!tool.precheck) return null;
   try {
-    const out = await tool.precheck(toolContext(rc, ctx?.role ?? rc.role), input as never);
+    const out = await tool.precheck(
+      toolContext(rc, ctx?.role ?? rc.role, ctx?.brandAccess),
+      input as never,
+    );
     const said = saidFailure(out);
     return said ? { ...said, ...besideRefusal(out) } : null;
   } catch (err) {
@@ -2498,6 +2556,7 @@ async function runRead(
   input: Record<string, unknown>,
   role: PrecedenceContext['role'],
   pageSites?: ChatToolContext['pageSites'],
+  brandAccess?: PrecedenceContext['brandAccess'],
 ): Promise<{ ok: true; value: unknown } | { ok: false; timedOut: boolean; error: string }> {
   let last: { timedOut: boolean; error: string } = { timedOut: false, error: '' };
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -2507,7 +2566,9 @@ async function runRead(
     try {
       const value = await Promise.race([
         tool.run(
-          pageSites ? { ...toolContext(rc, role), pageSites } : toolContext(rc, role),
+          pageSites
+            ? { ...toolContext(rc, role, brandAccess), pageSites }
+            : toolContext(rc, role, brandAccess),
           input as never,
         ),
         new Promise<never>((_, reject) => {
@@ -2532,14 +2593,23 @@ async function runRead(
 
 class ReadTimeout extends Error {}
 
-/** Who a tool acts as: the signed-in person, with their live role (lib/agent/auth.ts's shape). */
-function toolContext(rc: RunContext, role: PrecedenceContext['role']): McpAuthContext {
+/**
+ * Who a tool acts as: the signed-in person, with their live role (lib/agent/auth.ts's
+ * shape), and the brands they may use as this call's precedence read them, so a read
+ * that lists brands doesn't read them again.
+ */
+function toolContext(
+  rc: RunContext,
+  role: PrecedenceContext['role'],
+  brandAccess?: PrecedenceContext['brandAccess'],
+): McpAuthContext {
   return {
     userId: rc.actor.userId,
     email: rc.actor.email,
     organizationId: rc.actor.organizationId,
     role: role as UserRole,
     apiKeyId: 'agent-internal',
+    ...(brandAccess !== undefined ? { brandAccess } : {}),
   };
 }
 
@@ -2641,7 +2711,7 @@ async function readCall(
   if (kept) {
     read = kept;
   } else {
-    const outcome = await runRead(rc, tool, input, rc.role, pageSites);
+    const outcome = await runRead(rc, tool, input, rc.role, pageSites, ctx?.brandAccess);
     // A page that couldn't be opened says why ({ ok: false, code, message }).
     const refusal = outcome.ok ? readRefusal(outcome.value) : null;
     if (!outcome.ok || refusal) {
@@ -2965,7 +3035,7 @@ async function writeCall(
   const outcome = await runLoggedWrite({
     tool,
     input,
-    ctx: toolContext(rc, ctx?.role ?? rc.role),
+    ctx: toolContext(rc, ctx?.role ?? rc.role, ctx?.brandAccess),
     organizationId: rc.actor.organizationId,
     userId: rc.actor.userId,
     brandId: facts.brandId,

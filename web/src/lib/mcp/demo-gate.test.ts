@@ -108,6 +108,7 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   rows = {
     organizations: { [ORG]: { plan: 'growth', subscription_status: 'active' } },
+    profiles: { 'user-1': { role: 'admin', organization_id: ORG, brand_scope: 'all' } },
     brands: {
       'demo-brand': { organization_id: ORG, is_demo: true, demo_hidden_at: null, name: 'Brewline' },
       'own-brand': { organization_id: ORG, is_demo: false, demo_hidden_at: null, name: 'Acme' },
@@ -218,6 +219,25 @@ describe('listBrandsFor', () => {
   it('leaves the demo brand out once hidden', async () => {
     rows.brands['demo-brand'].demo_hidden_at = '2026-10-28T12:00:00Z';
     const brands = await listBrandsFor(AUTH);
+    expect(brands.map((b) => b.id)).toEqual(['own-brand']);
+  });
+
+  it('lists only the brands shared with a Selected-brands person, and the demo brand (BRAND-ACCESS)', async () => {
+    rows.profiles['user-1'] = { role: 'manager', organization_id: ORG, brand_scope: 'selected' };
+    rows.member_brands = {};
+    expect((await listBrandsFor(AUTH)).map((b) => b.id)).toEqual(['demo-brand']);
+    rows.member_brands = {
+      grant: { user_id: 'user-1', organization_id: ORG, brand_id: 'own-brand' },
+    };
+    expect((await listBrandsFor(AUTH)).map((b) => b.id)).toEqual(['demo-brand', 'own-brand']);
+    // Someone who isn't a member of the workspace (any more) lists none.
+    rows.profiles['user-1'] = { role: 'admin', organization_id: 'org-2' };
+    expect(await listBrandsFor(AUTH)).toEqual([]);
+  });
+
+  it('takes the brands its caller read already (Chat), reading no profile', async () => {
+    delete rows.profiles;
+    const brands = await listBrandsFor({ ...AUTH, brandAccess: ['own-brand'] });
     expect(brands.map((b) => b.id)).toEqual(['own-brand']);
   });
 });

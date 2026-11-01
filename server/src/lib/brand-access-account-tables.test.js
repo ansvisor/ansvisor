@@ -18,6 +18,7 @@ const files = readdirSync(dir)
 
 const ACCOUNT = '00390_brand_access_account_tables.sql';
 const CHAT = '00424_brand_access_chat_tables.sql';
+const TOUCHED = '00436_chat_touched_brands.sql';
 
 /** A migration's SQL without its comments, on one line. */
 const read = (file) =>
@@ -153,9 +154,10 @@ describe('the brand tables 00390 and 00424 take', () => {
     '%s "%s": the same rule as before, for signed-in people, within brand access',
     (table, name) => {
       const history = policiesOf(table).history.filter((p) => p.name === name);
-      const now = history.at(-1);
-      const before = history.at(-2);
-      expect([ACCOUNT, CHAT]).toContain(now.file);
+      // As 00390 or 00424 made it (00436 widens two of them for touched brands, below).
+      const now = history.findLast((p) => [ACCOUNT, CHAT].includes(p.file));
+      const before = history[history.indexOf(now) - 1];
+      expect(history.at(-1).file === now.file || history.at(-1).file === TOUCHED).toBe(true);
       expect(before.file < now.file).toBe(true);
 
       expect(now.roles).toBe('authenticated');
@@ -185,6 +187,15 @@ describe('the brand tables 00390 and 00424 take', () => {
       'chat_conversations: chat_conversations: shared select',
       'chat_files: chat_files: member select',
     ]);
+    // …or to people who can access every brand it touched (00436): a shared chat, a file.
+    expect(
+      withoutBrand(
+        'brand_id is null and touched_brand_ids <@ array(select public.user_brand_ids())',
+      ),
+    ).toEqual([
+      'chat_conversations: chat_conversations: shared select',
+      'chat_files: chat_files: member select',
+    ]);
     // The person's own (and admins'): what they wrote, did or asked.
     expect(withoutBrand('brand_id is null or brand_id in')).toEqual([
       'agent_conversations: Users read own conversations',
@@ -205,6 +216,87 @@ describe('the brand tables 00390 and 00424 take', () => {
       const changer = created(ACCOUNT).some(([t]) => t === table) ? ACCOUNT : CHAT;
       expect(maker < changer, table).toBe(true);
     }
+  });
+});
+
+describe('the brands a chat touched (00436)', () => {
+  /** Without spaces or case, as conditions() compares them. */
+  const squash = (text) => text.replace(/\s+/g, '').toLowerCase();
+  const BRANDED = squash('brand_id in (select public.user_brand_ids())');
+  // A row of one of the person's brands: for Selected brands, every brand it touched theirs too.
+  const BRANDED_TOUCHED = squash(`(
+    brand_id in (select public.user_brand_ids())
+    and ((select public.user_has_all_brands()) or touched_brand_ids <@ array(select public.user_brand_ids()))
+  )`);
+  // A row with no brand, on the same terms.
+  const NO_BRAND_TOUCHED = squash(
+    'or (brand_id is null and touched_brand_ids <@ array(select public.user_brand_ids()))',
+  );
+  const touched = [
+    ['chat_conversations', 'chat_conversations: shared select', true],
+    ['chat_files', 'chat_files: member select', true],
+    ['chat_conversations', 'chat_conversations: agent run select', false],
+  ];
+
+  it.each(touched)(
+    '%s "%s": 00424\'s rule, and for Selected brands every brand it touched theirs',
+    (table, name, noBrand) => {
+      const history = policiesOf(table).history.filter((p) => p.name === name);
+      const now = history.at(-1);
+      const before = history.at(-2);
+      expect([now.file, before.file]).toEqual([TOUCHED, CHAT]);
+      expect(now.roles).toBe('authenticated');
+      expect(now.command).toBe(before.command);
+      const [condition] = conditions(now.body);
+      expect(condition).toContain(BRANDED_TOUCHED);
+      expect(condition.includes(NO_BRAND_TOUCHED)).toBe(noBrand);
+      // Everything else is 00424's.
+      expect(condition.replace(BRANDED_TOUCHED, BRANDED).replace(NO_BRAND_TOUCHED, '')).toBe(
+        conditions(before.body)[0],
+      );
+    },
+  );
+
+  it("keeps the set only for the server, and copies a chat's onto its files", () => {
+    const sql = read(TOUCHED);
+    for (const fn of [
+      'chat_start_touched_brands(uuid)',
+      'chat_note_touched_brands(uuid, uuid[], boolean)',
+    ]) {
+      const name = fn.replace(/[()[\]]/g, '\\$&');
+      expect(sql).toMatch(
+        new RegExp(`revoke all on function public\\.${name} from public, anon, authenticated`),
+      );
+      expect(sql).toMatch(new RegExp(`grant execute on function public\\.${name} to service_role`));
+    }
+    // Not known (null) for every chat there is, and every file a chat made: only new chats
+    // start a set; a file no chat made holds its own brand's data.
+    expect(sql).toMatch(/add column if not exists touched_brand_ids uuid\[\];/);
+    expect(sql).toMatch(
+      /update public\.chat_files f set touched_brand_ids = array\[f\.brand_id\] where f\.touched_brand_ids is null and f\.brand_id is not null and f\.conversation_id is null and f\.origin <> 'chat'/,
+    );
+    expect(sql).not.toMatch(/touched_brand_ids uuid\[\] (?:not null|default)/);
+    expect(sql).toMatch(
+      /create trigger chat_files_touched_brands before insert on public\.chat_files for each row/,
+    );
+  });
+
+  it("takes Chat's agents by can_see_chat_agent, for signed-in people", () => {
+    const agents = policiesOf('chat_agents');
+    const now = agents.now.get('chat_agents: member select');
+    expect(now).toMatchObject({ file: TOUCHED, roles: 'authenticated', command: 'select' });
+    // The caller's own organization first, so the function runs on their agents only.
+    expect(conditions(now.body)).toEqual([
+      'using:organization_idin(selectp.organization_idfrompublic.profilespwherep.id=auth.uid())andpublic.can_see_chat_agent(id)',
+    ]);
+    const fn = lastFunction('can_see_chat_agent');
+    expect(fn.file).toBe(TOUCHED);
+    expect(fn.header).toMatch(/stable security definer set search_path = ''/);
+    // 00419's rule stays: the organization, and an admin, a workspace agent or one's own.
+    expect(fn.body).toMatch(
+      /p\.role = 'admin' or a\.visibility = 'workspace' or a\.owner_id = p\.id/,
+    );
+    expect(fn.body).toMatch(/p\.role = 'admin' or p\.brand_scope = 'all'/);
   });
 });
 

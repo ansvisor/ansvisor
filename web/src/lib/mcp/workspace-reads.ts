@@ -1,3 +1,4 @@
+import { allowedBrands, brandAccessFor } from '@/lib/brand-access';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { readMemberEmails } from '@/lib/member-emails';
@@ -40,10 +41,11 @@ export async function listMembersFor(auth: McpAuthContext) {
   };
 }
 
+/** What is connected, per brand for the brands the person may use (BRAND-ACCESS). */
 export async function listConnectionsFor(auth: McpAuthContext) {
   if (!auth.organizationId) return null;
   const orgId = auth.organizationId;
-  const [integrations, brands, aiKeys] = await Promise.all([
+  const [integrations, brands, aiKeys, access] = await Promise.all([
     supabaseAdmin
       .from('integration_connections')
       .select('provider, status')
@@ -56,11 +58,12 @@ export async function listConnectionsFor(auth: McpAuthContext) {
       .from('organization_ai_keys')
       .select('provider, active')
       .eq('organization_id', orgId),
+    brandAccessFor(auth),
   ]);
   for (const read of [integrations, brands, aiKeys]) {
     if (read.error) throw new Error(read.error.message);
   }
-  const brandRows = brands.data ?? [];
+  const brandRows = allowedBrands(access, brands.data ?? []);
   const [cms, keys] = await Promise.all([
     brandRows.length
       ? supabaseAdmin

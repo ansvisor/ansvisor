@@ -1,5 +1,5 @@
-import { z } from 'zod';
 import { isCloud, isSubscriptionActive } from '@/config/plans';
+import { canAccessBrand } from '@/lib/brand-access';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { MANAGER_ROLES } from '@/lib/mcp/role-gate';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -26,28 +26,15 @@ export function actorOf(ctx: Pick<McpAuthContext, 'userId' | 'organizationId'>):
   return { userId: ctx.userId, organizationId: ctx.organizationId };
 }
 
-const uuid = z.guid();
-
 /**
  * Whether the person may see the brand now (BRAND-ACCESS, 00388
  * can_access_brand): a brand of the run's workspace, which they are still in,
  * and they are an Admin, have All brands, have it shared, or it is the demo
  * brand. A brand of another workspace, or one they left, is not theirs.
+ * The web's one rule (lib/brand-access.ts).
  */
 export async function canAccessBrandFor(actor: RunActor, brandId: string): Promise<boolean> {
-  if (!uuid.safeParse(brandId).success) return false;
-  const [brand, access] = await Promise.all([
-    supabaseAdmin
-      .from('brands')
-      .select('id')
-      .eq('id', brandId)
-      .eq('organization_id', actor.organizationId)
-      .maybeSingle(),
-    supabaseAdmin.rpc('can_access_brand', { p_brand_id: brandId, p_user_id: actor.userId }),
-  ]);
-  if (brand.error) throw new Error(`Could not read the brand: ${brand.error.message}`);
-  if (access.error) throw new Error(`Could not read the brand's access: ${access.error.message}`);
-  return brand.data !== null && access.data === true;
+  return canAccessBrand(actor.userId, brandId, actor.organizationId);
 }
 
 /**

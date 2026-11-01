@@ -44,6 +44,7 @@ import {
 } from './engine';
 import { OPEN_RUN_STATUSES, loadRun, newProgress, type LoadedRun } from './engine-store';
 import { chatAgenticEnabled } from './flag';
+import { startTouchedBrands } from './touched-brands';
 
 /**
  * The agent run driver (CHAT-21 §H, CHAT-27 §E; W2-16): runs a started
@@ -412,7 +413,9 @@ export async function openAgentRun(
   if (await agentMonthCapReached(organizationId, agent.row.id, agent.row.max_month_share)) {
     return endBeforeStart(run, 'stopped', { pause: 'cap', now });
   }
-  const brand = (await runnableBrands(organizationId, version.scope)).find(
+  // The run's brand, as the person it acts as may use it now (BRAND-ACCESS §5.3): one taken
+  // from them since it was queued is gone for this run, as a deleted one is.
+  const brand = (await runnableBrands(organizationId, version.scope, ctx.viewer.brandAccess)).find(
     (b) => b.id === run.brand_id,
   );
   if (!brand) return endBeforeStart(run, 'stopped', { stopReason: 'brand_gone', now });
@@ -470,6 +473,8 @@ export async function openAgentRun(
     if ((err as { code?: string }).code === '23505') return null;
     throw err;
   }
+  // Its chat keeps the brands it touches from its own on (00436), before anything is in it.
+  await startTouchedBrands(conversationId);
   await insertId(
     'chat_messages',
     {

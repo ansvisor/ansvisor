@@ -190,6 +190,12 @@ interface ToolFields<S extends z.ZodObject> {
   planGate: PlanGate | null;
   /** Where a call's brand comes from; null for a row about no brand. */
   brandOf: BrandOf | null;
+  /**
+   * A row about no brand whose answer names every brand the person can
+   * access (the brand list, the connections): a chat it runs in has touched
+   * each of them (lib/chat/touched-brands.ts, 00436).
+   */
+  namesBrands?: true;
   costClass: CostClass;
   /**
    * The key under `chatTools` in messages/en.json (`name` for Settings, `step`
@@ -325,6 +331,9 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     if (!(field in def.inputSchema.shape)) {
       throw new Error(`${def.name}: its brand comes from ${field}, which its input lacks`);
     }
+  }
+  if (def.namesBrands && def.brandOf) {
+    throw new Error(`${def.name}: a row about one brand doesn't name every brand`);
   }
   if (def.batch && !(def.batch.field in def.inputSchema.shape)) {
     throw new Error(`${def.name}: its items are in ${def.batch.field}, which its input lacks`);

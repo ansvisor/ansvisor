@@ -123,6 +123,7 @@ export const READ_TOOLS = [
     minRole: 'analyst',
     planGate: null,
     brandOf: null,
+    namesBrands: true,
     costClass: 'C1',
     labelKey: 'brands',
     route: '/dashboard/brands',

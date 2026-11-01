@@ -64,14 +64,45 @@ beforeEach(() => {
   db.log = [];
   db.tables = {
     profiles: [
-      { id: PEOPLE.admin, role: 'admin', organization_id: ORG, full_name: 'Alex Kim' },
-      { id: PEOPLE.manager, role: 'manager', organization_id: ORG, full_name: 'Jo Park' },
-      { id: PEOPLE.otherManager, role: 'manager', organization_id: ORG, full_name: 'Sam Lee' },
+      {
+        id: PEOPLE.admin,
+        role: 'admin',
+        organization_id: ORG,
+        brand_scope: 'all',
+        full_name: 'Alex Kim',
+      },
+      {
+        id: PEOPLE.manager,
+        role: 'manager',
+        organization_id: ORG,
+        brand_scope: 'all',
+        full_name: 'Jo Park',
+      },
+      {
+        id: PEOPLE.otherManager,
+        role: 'manager',
+        organization_id: ORG,
+        brand_scope: 'all',
+        full_name: 'Sam Lee',
+      },
     ],
     brands: [{ id: BRAND, organization_id: ORG, name: 'Ansvisor' }],
     chat_conversations: [],
     chat_runs: [],
     chat_run_steps: [],
+    member_brands: [],
+  };
+  // can_access_brand (00388): a brand of the person's organization, with All brands or shared.
+  db.rpcs = {
+    can_access_brand: ({ p_brand_id, p_user_id }) => {
+      const person = db.tables.profiles.find((p) => p.id === p_user_id);
+      const brand = db.tables.brands.find((b) => b.id === p_brand_id);
+      if (!person || !brand || brand.organization_id !== person.organization_id) return false;
+      return (
+        person.brand_scope === 'all' ||
+        db.tables.member_brands.some((m) => m.user_id === p_user_id && m.brand_id === p_brand_id)
+      );
+    },
   };
   vi.mocked(stopChatRun).mockClear();
 });
@@ -250,6 +281,22 @@ describe('createChat', () => {
       origin: 'panel',
       origin_page: '/dashboard/visibility',
     });
+  });
+
+  it('refuses a brand the person may not use (BRAND-ACCESS), and keeps the brands it touches', async () => {
+    const SECOND = CHAT(8);
+    db.tables.brands.push({ id: SECOND, organization_id: ORG, name: 'Second' });
+    db.tables.member_brands = [{ user_id: ME.userId, brand_id: SECOND }];
+    db.tables.profiles.find((p) => p.id === ME.userId)!.brand_scope = 'selected';
+    const started: unknown[] = [];
+    db.rpcs.chat_start_touched_brands = ({ p_conversation_id }) => started.push(p_conversation_id);
+    expect(
+      await chats.createChat(reader, ME, chats.createInput.parse({ brandId: BRAND })),
+    ).toBeNull();
+    expect(db.tables.chat_conversations).toEqual([]);
+    const made = await chats.createChat(reader, ME, chats.createInput.parse({ brandId: SECOND }));
+    expect(made).toMatchObject({ brand: 'Second' });
+    expect(started).toEqual([db.tables.chat_conversations[0].id]);
   });
 
   it("refuses another workspace's brand, and a full address as its page", async () => {
