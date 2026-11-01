@@ -64,6 +64,7 @@ export function listResult(
 ): AgentListResult {
   return {
     agents,
+    keyFailure: null,
     counts: { mine: 2, workspace: 5, paused: 1, archived: 3 },
     active: 4,
     activeInWorkspace: 4,

@@ -235,6 +235,29 @@ describe('AgentsList (Agent Center › Your agents)', () => {
     expect(second.querySelector('[data-action="agents.pauseResume"]')).toBeNull();
   });
 
+  it('says while the workspace’s own key fails: Fix in AI Providers for an Admin, ask an Admin otherwise', async () => {
+    page.keyFailure = { class: 'no_credit', provider: 'openai' };
+    await render('admin');
+    const banner = () => container.querySelector('[data-slot="agents-key-banner"]')!;
+    expect(banner().textContent).toContain('Your OpenAI key isn’t working · agents are paused');
+    expect(banner().textContent).toContain('Your OpenAI account is out of credit.');
+    expect(action('agents.fixKey')[0].getAttribute('href')).toBe(
+      '/dashboard/settings/ai-providers',
+    );
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render('manager');
+    expect(action('agents.fixKey')).toHaveLength(0);
+    expect(banner().textContent).toContain('An Admin can fix it in Settings › AI Providers.');
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    page.keyFailure = null;
+    await render('admin');
+    expect(container.querySelector('[data-slot="agents-key-banner"]')).toBeNull();
+  });
+
   it('shows Analysts and Agency partners no write buttons, a read-only line, and the Workspace tab first', async () => {
     // What the server gives a reader: nothing to press.
     page.agents = page.agents.map((a) => ({

@@ -36,6 +36,8 @@ You write no migration, no route and no UI.
 | `fields` | What the person types to connect, in order: `{ name, label, secret?, placeholder?, help? }`. A `secret` field is typed like a password and never shown again. Use `help` to say where in the store to find it, and which access to give it. |
 | `connect(input, ctx)` | Checks `input` (the fields' values, as strings) with the store. Returns `{ account, url?, label?, credentials }` (see below). |
 | `readCatalog(source, ctx)` | Reads the store's products. Returns `{ items, errors, format }`, where `format` is your `kind`. |
+| `syncOrders(source, ctx)` | Optional. `ctx.since` is the cursor: read orders changed after it, oldest change first. Returns `{ orders, skipped?, truncated?, cursor? }`; the shared sync persists the normalized order summaries and line items, then moves the cursor to the sync's start, or, when `truncated` (a page cap was hit), to `cursor`: the last change read. A failed order read leaves the cursor and the catalog's outcome as they were. Removing the store removes its orders. |
+| `handleWebhook(event)` | Optional, connector-level verification/normalization. A receiver route and dispatch plumbing are still required before platform webhooks run automatically. |
 | `disconnect(source, ctx)` | Optional. Revokes the sign-in at the store when the person removes it, where the platform allows. It's best effort: the source is removed anyway. |
 
 What `connect` returns:
@@ -46,14 +48,14 @@ What `connect` returns:
 
 What `ctx` holds:
 - `ctx.request` is the HTTP client, and the only way to call the platform.
-- In `readCatalog` and `disconnect`, `ctx.credentials` is what `connect` returned as `credentials`.
-- `source` has `id`, `kind`, `url`, `account` and `format`.
+- In `readCatalog`, `syncOrders` and `disconnect`, `ctx.credentials` is what `connect` returned as `credentials`.
+- `source` has `id`, `kind`, `url`, `account`, `format` and, for incremental order sync, `last_orders_synced_at`.
 
 ### What `readCatalog` returns
 
 Build each item with `toItem(attributes, n, 'Item')` from `server/src/lib/feeds/item.js`.
 
-- **Attributes:** use Google product feed attribute names: `id`, `item_group_id`, `title`, `description`, `link`, `image_link`, `additional_image_link`, `brand`, `gtin`, `mpn`, `price`, `sale_price`, `availability`, `color`, `size`, `material`, `product_type`.
+- **Attributes:** use Google product feed attribute names: `id`, `item_group_id`, `title`, `description`, `link`, `image_link`, `additional_image_link`, `brand`, `gtin`, `sku`, `mpn`, `price`, `sale_price`, `availability`, `color`, `size`, `material`, `product_type`. Optional `product_types` links the item to multiple categories; the first sorted category remains `product_type`.
 - **Required:** an item needs `id`, `title`, `link`, `price` (for example `"129.00 USD"`) and `availability`. An item without them comes back as an error, which you add to `errors`. The person sees the first five.
 - **One item per variant.** Put the product's own id in `item_group_id`, and its own name in `title`. The variant's color and size go in `color` and `size`.
 
@@ -161,15 +163,16 @@ Copy this into your pull request. Every connector is reviewed against it.
 
 - [ ] **Least access:** it asks only for what the feature needs (read-only products), and `help` says which permission to give.
 - [ ] **Credentials** live only in the credential store. None is in code, logs, error messages, fixtures, screenshots or the PR. Keys go in headers, not addresses, where the platform allows.
-- [ ] **No buyer or customer personal data** is read or kept. Orders, when they come, keep only the id, date, line items, revenue and channel.
+- [ ] **No buyer or customer personal data** is kept. If orders are synced, the shared order writer allowlists order id/date/status/channel/currency/totals/refunds and line-item product/variation ids, quantity and revenue; it never persists billing, shipping, customer or raw payload fields.
 - [ ] **Removal:** `disconnect` revokes the sign-in where the platform allows. The platform's data deletion requests are handled where it sends them.
 - [ ] **Rate limits:** every call goes through `ctx.request`, pages are capped, and the platform's documented limits are respected.
 - [ ] **The platform's data rules** are respected (for example, restricted data on marketplaces).
 - [ ] **Tests** run with the harness, with no network and no account. Contributors build against their own sandbox or test accounts. Production keys live only with the core team.
 - [ ] **Words:** errors a person sees say what to do, in plain words.
 
-## Not here yet
+## Current limits
 
-- **Orders and webhooks** (`syncOrders(since)`, `handleWebhook(event)`) come with the first store that needs them (Shopify, [#1265](https://github.com/ansvisor/ansvisor/issues/1265)).
+- **Orders:** store connectors may implement `syncOrders(source, ctx)`; the shared persistence path lives in `server/src/lib/catalog/orders.js` and records an incremental cursor in `catalog_sources.last_orders_synced_at`. Only normalized fields are persisted.
+- **Webhooks:** connectors may implement and test signature verification/normalization, but an HTTP receiver and routing/dispatch plumbing are not wired yet. Scheduled and on-demand sync remain the source of truth.
 - **OAuth sign-in:** platforms that sign in through a redirect (Etsy, eBay, Amazon) need a callback the plumbing doesn't have yet, unless Composio handles their sign-in, as it does Google's (see above). Open an issue before you start one.
 - **API keys:** stores that sign in with keys (WooCommerce, Walmart, Trendyol, Hepsiburada) work today.
