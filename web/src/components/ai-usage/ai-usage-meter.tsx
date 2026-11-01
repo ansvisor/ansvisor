@@ -263,13 +263,20 @@ export function AiUsageMeter({
               )}
             </p>
           )}
+          {/* With the new Chat on (chatMetered), an own key runs it only on
+            Enterprise or for a key kept from before it (ownKeyAllowed), so
+            the line says where Chat keeps working. */}
           {tone === 'exhausted' && (
             <p className="mt-2 text-xs text-red-700 dark:text-red-400">
               {usage.trial
-                ? t('popover.exhaustedTrial')
+                ? t(usage.chatMetered ? 'popover.exhaustedTrialChat' : 'popover.exhaustedTrial')
                 : resets
-                  ? t('popover.exhausted', { date: resets })
-                  : t('popover.exhaustedNoDate')}
+                  ? t(usage.chatMetered ? 'popover.exhaustedChat' : 'popover.exhausted', {
+                      date: resets,
+                    })
+                  : t(
+                      usage.chatMetered ? 'popover.exhaustedNoDateChat' : 'popover.exhaustedNoDate',
+                    )}
             </p>
           )}
 

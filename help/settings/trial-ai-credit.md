@@ -4,8 +4,8 @@ route: /dashboard/settings/billing
 keywords: [trial ai credit, free trial, start my plan now, ai usage, trial ends, buy now]
 synonyms: [trial ai limit, out of ai credit, end my trial, upgrade from trial, ai used up]
 plan: starter
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-10-31
+last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -16,7 +16,7 @@ During the free trial, the AI features share a starter AI credit: Improve sugges
 ## Where you see it
 
 - The **AI** button at the top right of each page reads **Trial credit**, then **Almost used** from 80%, and **Used up** once it's spent. Click it to see what the credit covers and when the trial ends.
-- The AI usage card in **Settings › Billing** shows the same.
+- The AI usage card in **Settings › Billing** shows the same, and so does the usage next to **Settings** in Chat's menu.
 - From 80%, a note under the page header says the credit is almost used.
 
 ## Start your plan now
@@ -35,4 +35,4 @@ Only admins can start or buy the plan. Other members see a note to ask an admin 
 
 ## Once the credit is used up
 
-AI features stop until the plan starts, now or when the trial ends. Agent Chat on your own AI key keeps working.
+AI features stop until the plan starts, now or when the trial ends. Chat keeps working only where it runs on your workspace's own AI key: own keys come with the Enterprise plan, and a key saved before Chat was turned on for your workspace keeps running it for 30 days. Where Chat isn't turned on yet, Agent Chat on your own AI key keeps working.
