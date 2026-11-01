@@ -7,7 +7,6 @@ import { apiFailure, type ApiFailure } from '@/lib/api-failure';
 import type { ContentUsage } from '@/lib/content-usage';
 import { assertWritable } from '@/lib/subscription-guard';
 import type { NoPlanMark } from '@/lib/billing/no-plan';
-import { readQuestionVolume } from '@/lib/content/question-volume-read';
 import type { QuestionVolume } from '@/lib/content/question-volume';
 
 const AEO_SERVER_URL = API_BASE_URL;
@@ -351,6 +350,9 @@ export async function getQuestionVolume(
   promptId: string,
 ): Promise<QuestionVolume | null> {
   const supabase = await createClient();
+  // Imported here: the admin client is created at module load and needs the
+  // service-role env, which only this read uses (as tracking.ts does).
+  const { readQuestionVolume } = await import('@/lib/content/question-volume-read');
   return readQuestionVolume(supabase, brandId, promptId);
 }
 
