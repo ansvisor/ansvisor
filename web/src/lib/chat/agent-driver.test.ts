@@ -24,7 +24,11 @@ const fakes = vi.hoisted(() => ({
   stopChat: vi.fn(),
 }));
 vi.mock('@/lib/mcp/account', () => ({ getAiUsageFor: fakes.usage }));
-vi.mock('./key', () => ({ resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })) }));
+const ownKey = vi.hoisted(() => ({ failing: null as { class: string; provider: string } | null }));
+vi.mock('./key', () => ({
+  resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
+  failingOwnKey: vi.fn(async () => ownKey.failing),
+}));
 vi.mock('./agent-shares', () => ({ readAgentShares: vi.fn(async () => null) }));
 vi.mock('./engine', () => ({
   APPROVAL_TTL_MS: 7 * 24 * 60 * 60 * 1000,
@@ -129,6 +133,7 @@ function chatOf(agentRunId: string, status: string, progress: Record<string, unk
 
 beforeEach(() => {
   vi.clearAllMocks();
+  ownKey.failing = null;
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
@@ -384,6 +389,22 @@ describe('handing a started run to Chat', () => {
     const manual = queueRun({ trigger_kind: 'manual', acting_user_id: PEOPLE.manager });
     expect(await driver.openAgentRun(manual, ORG, NOW)).toBeNull();
     expect(runRow(manual).status).toBe('stopped');
+    expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
+  });
+
+  it('stops a queued run on a failing own key before any call, pausing a triggered agent', async () => {
+    ownKey.failing = { class: 'invalid', provider: 'anthropic' };
+    const id = queueRun();
+    expect(await driver.openAgentRun(id, ORG, NOW)).toBeNull();
+    expect(runRow(id)).toMatchObject({ status: 'stopped', stop_reason: 'own_key' });
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'own_key' });
+    expect(db.tables.chat_conversations).toEqual([]);
+
+    // Run now stops the same, and leaves the agent as it is.
+    Object.assign(agentRow(), { status: 'active', paused_reason: null });
+    const manual = queueRun({ trigger_kind: 'manual', acting_user_id: PEOPLE.manager });
+    expect(await driver.openAgentRun(manual, ORG, NOW)).toBeNull();
+    expect(runRow(manual)).toMatchObject({ status: 'stopped', stop_reason: 'own_key' });
     expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
   });
 

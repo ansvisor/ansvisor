@@ -33,6 +33,7 @@ import {
 import { cn } from '@/lib/utils';
 import { AgentDenial, FormulaChips, StatusLine, liveRunOf } from './agent-parts';
 import { readAgents } from './agent-requests';
+import { AgentsKeyBanner } from '@/components/chat/own-key-notice';
 import { useAgentWords, type AgentWords } from './agent-words';
 import { useAgentActions } from './use-agent-actions';
 
@@ -335,6 +336,8 @@ export function AgentsList({ now: nowProp, timeZone }: { now?: Date; timeZone?: 
           <AskAdminButton asked={tList('readOnly.asked')} ruleKind="role" />
         </div>
       )}
+
+      {data?.keyFailure && <AgentsKeyBanner failing={data.keyFailure} />}
 
       {actions.denial && <AgentDenial denial={actions.denial} onClose={actions.clearDenial} />}
 

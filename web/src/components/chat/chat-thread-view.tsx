@@ -48,6 +48,8 @@ import { NextMoves } from './run/next-moves';
 import { RunAnswer } from './run/run-answer';
 import { StaffDebug } from './run/staff-debug';
 import { useChatDebug } from './chat-debug';
+import type { FailingKey } from '@/lib/chat/key-health';
+import { ChatKeyNotice } from './own-key-notice';
 import { ChatUsageNotice, ComposerUsageMeter, chatAtCap } from './chat-usage';
 
 interface Turn {
@@ -175,6 +177,7 @@ export function ChatThreadView({
   pageRoute,
   draft,
   onOwnKey = false,
+  keyFailure = null,
   skills,
 }: {
   thread: ChatThread | null;
@@ -199,6 +202,8 @@ export function ChatThreadView({
   draft?: ComposerDraft | null;
   /** Chat runs on the workspace's own key: a used-up allowance doesn't pause it. */
   onOwnKey?: boolean;
+  /** That own key is marked failing: one line over the composer (AGENT-OWN-KEY §5.2 item 5). */
+  keyFailure?: FailingKey | null;
   /** The enabled skills, for the / menu (CHAT-13 item 5). */
   skills?: ChatSkillItem[];
 }) {
@@ -630,7 +635,10 @@ export function ChatThreadView({
         }
       >
         {(!thread || thread.mine) && (
-          <ChatUsageNotice seenPeriod={usageNoticeSeen} onOwnKey={onOwnKey} />
+          <>
+            <ChatKeyNotice failing={keyFailure} />
+            <ChatUsageNotice seenPeriod={usageNoticeSeen} onOwnKey={onOwnKey} />
+          </>
         )}
         <ChatComposer
           variant={variant}

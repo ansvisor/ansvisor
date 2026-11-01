@@ -179,6 +179,8 @@ If your connection drops while Chat works, the line with the steps says **Reconn
 
 If your workspace runs Chat on its own AI key and the provider turns the key down, the account is out of credit, or the key can't reach its model, the answer stops and says which. Admins get **Open AI Providers**; others read that an Admin can fix it there. When the provider doesn't answer at all, the answer says so: try again in a moment.
 
+While the key isn't working, a line above the message box says why. You can still send: the key may work again, for example once the account has credit.
+
 ## AI usage
 
 Chat draws on your workspace's monthly AI usage, shared by every seat. The meter under the box shows how much is used; click it for what used it and when it resets. From 80% it turns amber, and a line above the box says so once a month, on whichever device you are on; **×** closes it.

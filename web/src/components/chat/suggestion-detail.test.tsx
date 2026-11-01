@@ -157,6 +157,7 @@ const setup: ChatComposerSetup = {
   fullAutoOffByAdmin: false,
   usageNoticeSeen: null,
   onOwnKey: false,
+  keyFailure: null,
   skills: [],
 };
 const moves = () => ({
