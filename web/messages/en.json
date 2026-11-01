@@ -8511,7 +8511,9 @@
         "reviewer": {
           "title": "Qualified reviewer",
           "named": "Qualified reviewer: {name}",
-          "namedDetail": "The reviewer is included in export metadata. CMS reviewer fields and WebPage structured data are sent where the destination supports them or fields are mapped; check that your CMS template displays the reviewer to readers.",
+          "namedDetail": "The page text names {name}. Export metadata, WebPage structured data and supported CMS reviewer fields carry the reviewer separately from the Article author.",
+          "notOnPage": "Reviewer not named in the page text",
+          "notOnPageDetail": "A reviewer is selected, but the page text doesn't name {name}. Add their name to the page before publishing.",
           "none": "No qualified reviewer named",
           "noneDetail": "Choose a qualified person from Authors. Their name and credential will be included in export metadata, supported CMS fields, and WebPage structured data.",
           "unknown": "The Authors list is still loading, so the reviewer hasn't been confirmed.",
