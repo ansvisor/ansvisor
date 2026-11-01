@@ -41,18 +41,26 @@ export function pageNamesPerson(html: string, name: string): boolean {
     .querySelectorAll('script, style, template, noscript, [hidden], [aria-hidden="true"]')
     .forEach((element) => element.remove());
   const actual = normalizePageText(root.textContent ?? '');
-  const escaped = expected.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\  root.innerHTML = html;
-  return root;
-}
+  const actualChars = Array.from(actual);
+  const expectedChars = Array.from(expected);
 
-');
-  return new RegExp(`(?:^|[^\\\\p{L}\\\\p{N}])${escaped}(?=$|[^\\\\p{L}\\\\p{N}])`, 'u').test(actual);
+  for (let index = 0; index <= actualChars.length - expectedChars.length; index++) {
+    const matches = expectedChars.every((character, offset) => actualChars[index + offset] === character);
+    if (!matches) continue;
+
+    const before = actualChars[index - 1];
+    const after = actualChars[index + expectedChars.length];
+    const isWordCharacter = (character: string | undefined) =>
+      character !== undefined && /[\\p{L}\\p{N}]/u.test(character);
+
+    if (!isWordCharacter(before) && !isWordCharacter(after)) return true;
+  }
+  return false;
 }
 
 function normalizePageText(value: string): string {
   return value.normalize('NFKC').replace(/\\s+/gu, ' ').trim().toLocaleLowerCase();
 }
-
 /** Headings: a placeholder there is filled first, never left out. */
 const HEADINGS = 'h1, h2, h3, h4, h5, h6';
 
