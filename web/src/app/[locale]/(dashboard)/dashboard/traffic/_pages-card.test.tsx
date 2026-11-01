@@ -26,12 +26,16 @@ const runAudit = vi.fn();
 const runAuditsBulk = vi.fn();
 const getAuditQuota = vi.fn();
 const push = vi.fn();
-const toast = vi.hoisted(() => ({
-  error: vi.fn(),
-  loading: vi.fn(() => 'toast-1'),
-  success: vi.fn(),
-  info: vi.fn(),
-}));
+// Callable too: a page audited minutes ago asks with a plain toast.
+const toast = vi.hoisted(() =>
+  Object.assign(vi.fn(), {
+    error: vi.fn(),
+    loading: vi.fn(() => 'toast-1'),
+    success: vi.fn(),
+    info: vi.fn(),
+    dismiss: vi.fn(),
+  }),
+);
 vi.mock('@/lib/actions/traffic', () => ({
   sendTrafficPagesToActionCenter: (...args: unknown[]) => sendTrafficPagesToActionCenter(...args),
 }));
@@ -131,7 +135,10 @@ beforeEach(() => {
   // Unlimited unless a test says otherwise.
   getAuditQuota.mockReset().mockResolvedValue({ used: 3, limit: -1, remaining: -1 });
   push.mockReset();
-  for (const fn of Object.values(toast)) fn.mockClear();
+  toast.mockClear();
+  for (const fn of [toast.error, toast.loading, toast.success, toast.info, toast.dismiss]) {
+    fn.mockClear();
+  }
   suggestForPage.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -213,7 +220,7 @@ describe('PagesCard', () => {
     getTrafficPages.mockResolvedValue(
       pages([page({ citations: 6 }), page({ page: '/about', valueRank: 2 })]),
     );
-    runAudit.mockResolvedValue({ id: 'audit-1' });
+    runAudit.mockResolvedValue({ audit: { id: 'audit-1' } });
     await render();
 
     // Nothing points at /about: its next step is prompts suggested for it.
@@ -450,7 +457,7 @@ describe('PagesCard', () => {
 
   it('audits a page on a domain stored with its scheme', async () => {
     getTrafficPages.mockResolvedValue(pages([page({ citations: 6 })]));
-    runAudit.mockResolvedValue({ id: 'audit-2' });
+    runAudit.mockResolvedValue({ audit: { id: 'audit-2' } });
     await render({ domain: 'https://acme-coffee.example.com/' });
     await act(async () => button('Audit page').click());
     expect(runAudit).toHaveBeenCalledWith(BRAND, 'https://acme-coffee.example.com/gifts');
@@ -541,7 +548,7 @@ describe('PagesCard actions (AT-006 part B)', () => {
         page({ page: '/about', valueRank: 3 }),
       ]),
     );
-    runAuditsBulk.mockResolvedValue({ started: 2 });
+    runAuditsBulk.mockResolvedValue({ started: 2, recent: [] });
     await render();
 
     await act(async () => button('Audit 2 cited pages').click());
@@ -555,6 +562,54 @@ describe('PagesCard actions (AT-006 part B)', () => {
     );
     // The month's audits are read again after.
     expect(getAuditQuota).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks first about a page audited minutes ago: Open it, or Audit again', async () => {
+    getTrafficPages.mockResolvedValue(pages([page({ citations: 6 })]));
+    const finishedAt = new Date(Date.now() - 3 * 60_000).toISOString();
+    runAudit
+      .mockResolvedValueOnce({ recent: { auditId: 'audit-0', finishedAt } })
+      .mockResolvedValueOnce({ audit: { id: 'audit-3' } });
+    await render();
+
+    await act(async () => button('Audit page').click());
+    expect(push).not.toHaveBeenCalled();
+    const [question, options] = toast.mock.calls[0] as [
+      string,
+      { cancel: { onClick: () => void }; action: { onClick: () => void } },
+    ];
+    expect(question).toBe('Audited 3 min ago. Open it or audit again?');
+
+    options.cancel.onClick();
+    expect(push).toHaveBeenCalledWith('/dashboard/audit/audit-0');
+
+    await act(async () => options.action.onClick());
+    expect(runAudit).toHaveBeenLastCalledWith(BRAND, 'https://acme-coffee.example.com/gifts', {
+      force: true,
+    });
+    expect(push).toHaveBeenLastCalledWith('/dashboard/audit/audit-3');
+  });
+
+  it('says which pages were audited minutes ago and not started, with Audit again', async () => {
+    getTrafficPages.mockResolvedValue(
+      pages([page({ citations: 6 }), page({ page: '/menu', citations: 2, valueRank: 2 })]),
+    );
+    const menu = 'https://acme-coffee.example.com/menu';
+    runAuditsBulk
+      .mockResolvedValueOnce({
+        started: 1,
+        recent: [{ url: menu, auditId: 'audit-0', finishedAt: new Date().toISOString() }],
+      })
+      .mockResolvedValueOnce({ started: 1, recent: [] });
+    await render();
+
+    await act(async () => button('Audit 2 cited pages').click());
+    expect(toast.success).toHaveBeenCalledWith('1 audit started', expect.anything());
+    const [notice, options] = toast.mock.calls[0] as [string, { action: { onClick: () => void } }];
+    expect(notice).toBe("1 page was audited in the last 10 minutes, so it wasn't audited again.");
+
+    await act(async () => options.action.onClick());
+    expect(runAuditsBulk).toHaveBeenLastCalledWith(BRAND, [menu], { force: true });
   });
 
   it('sends and audits Cited, not clicked as its own list', async () => {
@@ -572,7 +627,7 @@ describe('PagesCard actions (AT-006 part B)', () => {
       actionNo: 73,
       created: true,
     });
-    runAuditsBulk.mockResolvedValue({ started: 2 });
+    runAuditsBulk.mockResolvedValue({ started: 2, recent: [] });
 
     await act(async () => button('Send to Action Center').click());
     expect(sendTrafficPagesToActionCenter).toHaveBeenCalledWith(

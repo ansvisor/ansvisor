@@ -904,7 +904,6 @@ export default function ContentPage() {
     <Button
       onClick={guard(() => setNewOpen(true), { action: tActions('generateOpportunities') })}
       disabled={generating || loading || limitReached}
-      size="sm"
       className="gap-2"
       title={limitReached ? t('newLimitTooltip', { date: resetsOn }) : undefined}
     >
@@ -1127,18 +1126,12 @@ export default function ContentPage() {
               onClick={handleExportCsv}
               disabled={exporting || loading || total === 0}
               variant="outline"
-              size="sm"
               className="gap-2"
             >
               {exporting ? <LoadingDots /> : <Download className="h-4 w-4" />}
               {tCommon('exportCsv')}
             </Button>
-            <Button
-              onClick={() => setWebhookOpen(true)}
-              variant="outline"
-              size="sm"
-              className="gap-2"
-            >
+            <Button onClick={() => setWebhookOpen(true)} variant="outline" className="gap-2">
               <Settings2 className="h-4 w-4" />
               {t('webhook.title')}
             </Button>

@@ -92,6 +92,8 @@ beforeEach(() => {
   ]);
   loaders.getTrafficSources.mockResolvedValue({
     snippetLastVisitAt: '2026-10-17T09:30:00Z',
+    snippetFoundAt: null,
+    snippetCheckedAt: null,
     ga: ga(),
     gsc: ga({ connected: false }),
   });
