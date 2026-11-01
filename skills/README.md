@@ -23,7 +23,7 @@ behaves like an AEO analyst who's been on your account for six months.
 
 ## Ansvisor skills (Chat)
 
-Chat in Ansvisor uses the fourteen skills below. Each is one `SKILL.md` in
+Chat in Ansvisor uses the twenty-one skills below. Each is one `SKILL.md` in
 the [Agent Skills](https://agentskills.io/specification) format:
 instructions only, no scripts or reference files. Chat lists their names and
 descriptions, and loads a skill's text when it picks the skill or when you
@@ -45,6 +45,13 @@ start a message with its `/name`.
 | [`facts`](./facts) | Brand facts check |
 | [`compare`](./compare) | Comparison page |
 | [`translate`](./translate) | Translate a page |
+| [`questions`](./questions) | Buyer questions |
+| [`features`](./features) | How AI compares us |
+| [`gaps`](./gaps) | No clear leader |
+| [`markets`](./markets) | Who AI recommends by market |
+| [`listings`](./listings) | Listing gaps |
+| [`rivals`](./rivals) | Rival brief |
+| [`audit-fix`](./audit-fix) | Site audit fixes |
 
 CI checks every one of them (`web/src/lib/chat/skills/library.test.ts`):
 the front matter (`name` matches the folder, `description` up to 1,024
@@ -141,7 +148,7 @@ Every folder under `skills/` other than the two AEO coach flavours is one of
 Chat's Ansvisor skills, and CI checks it as one. So there are two kinds of
 contribution:
 
-**A skill for Chat.** Ansvisor's own skills are the fourteen listed above.
+**A skill for Chat.** Ansvisor's own skills are the twenty-one listed above.
 Adding one (or changing one) means, in the same PR:
 
 ```

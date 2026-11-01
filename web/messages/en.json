@@ -4427,6 +4427,20 @@
       "byFocus": {
         "rivalRose": "{rival}’s mention rate rose {points, number} points this week.",
         "startTitle": "Start with a question",
+        "newForYou": {
+          "title": "New for you",
+          "skill": "Skill",
+          "skills": {
+            "questions": "Groups new buyer questions by topic, with volume and who AI recommends.",
+            "features": "How AI describes you against each competitor, feature by feature, with quotes.",
+            "gaps": "Finds prompts and segments where no brand leads yet, and suggests what to do.",
+            "markets": "Shows who AI recommends in each market and language you track.",
+            "listings": "Lists the sources AI cites in a market and whether they list you.",
+            "rivals": "A one-page brief on one competitor across all AI platforms.",
+            "audit-fix": "Turns site audit findings into fixes you approve.",
+            "wrongclaim": "Finds AI answers with wrong facts about you and drafts the fixes."
+          }
+        },
         "shortcuts": {
           "boardSummary": "Monthly board summary",
           "boardSummaryMessage": "Write a one-page board summary of this month: our AI visibility, what changed, what our work did and what comes next.",
