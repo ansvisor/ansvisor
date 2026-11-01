@@ -30,6 +30,10 @@ export const SKIPPED = {
     "Drafts sent to a webhook or a CMS: a demo brand never sends anything out (its drafts are the Content module's).",
   catalog_images:
     'Product images: the demo shows none, so no page of it ever loads an image from outside.',
+  catalog_orders:
+    'A demo brand has no connected merchant store; real orders and refund totals are private purchase history, not feed catalog sample data.',
+  catalog_order_items:
+    'The demo catalog is built from a public product feed and has no order history; order line items must not imply a merchant’s real purchases.',
   catalog_item_issues:
     "Merchant Center's item issues: the demo's catalog comes from a product feed, and Merchant Center shows as Soon in the demo.",
 

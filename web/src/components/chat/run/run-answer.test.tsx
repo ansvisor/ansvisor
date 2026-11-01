@@ -1,13 +1,22 @@
-import { act } from 'react';
+import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
+import { RoleContext, type TeamRole } from '@/components/providers/role-provider';
 import type { ChatStep } from '@/lib/chat/events';
 import { emptyRun, type ClientRun } from '@/lib/chat/run-state';
 
-// The result card's module, where the stamp comes from, links with the app's navigation.
-vi.mock('@/i18n/navigation', () => ({ Link: () => null }));
+// The result card's module, where the stamp comes from, links with the app's navigation;
+// only the own key's fix link is drawn.
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...rest }: { href: string; children?: ReactNode }) =>
+    (rest as { 'data-action'?: string })['data-action'] === 'run.fixKey' ? (
+      <a href={href} {...rest}>
+        {children}
+      </a>
+    ) : null,
+}));
 
 const { RunAnswer } = await import('./run-answer');
 
@@ -202,6 +211,37 @@ describe('RunAnswer', () => {
     expect(container.querySelector('[data-action="answer.toggleSteps"]')!.textContent).toContain(
       'Stopped: something went wrong',
     );
+  });
+
+  it('says where to fix a failed own key: Open AI Providers for an Admin, ask an Admin otherwise', async () => {
+    const reason =
+      "Anthropic turned down your workspace's key. So Chat stopped here. What's done so far is kept.";
+    const failed = run({ status: 'error', errorReason: reason, keyFailed: true });
+    const as = async (role: TeamRole) =>
+      act(async () => {
+        root.render(
+          <RoleContext.Provider value={{ role }}>
+            <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+              <RunAnswer workingMs={0} timezone="UTC" run={failed} />
+            </NextIntlClientProvider>
+          </RoleContext.Provider>,
+        );
+      });
+    const box = () => container.querySelector('[data-slot="run-error"]')!;
+
+    await as('admin');
+    expect(box().textContent).toContain(reason);
+    const fix = box().querySelector<HTMLAnchorElement>('[data-action="run.fixKey"]')!;
+    expect(fix.getAttribute('href')).toBe('/dashboard/settings/ai-providers');
+    expect(fix.textContent).toBe('Open AI Providers');
+
+    await as('manager');
+    expect(box().querySelector('[data-action="run.fixKey"]')).toBeNull();
+    expect(box().textContent).toContain('An Admin can fix it in Settings › AI Providers.');
+
+    // Any other error says neither.
+    await render({ run: run({ status: 'error', errorReason: 'Something went wrong.' }) });
+    expect(box().textContent).not.toContain('AI Providers');
   });
 
   it('says "Stopped after 41s · 5 steps" after a Stop, its stopped step skipped, its text kept', async () => {

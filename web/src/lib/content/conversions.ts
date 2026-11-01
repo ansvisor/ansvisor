@@ -44,12 +44,15 @@ export type ResultKey = ConversionGoal | 'revenue' | 'units';
 /**
  * What each kind of site counts (spec §7 point 26): a B2B site its signups
  * and demo forms (its revenue comes with CE-024), a shop its orders, revenue
- * and units, a B2C site its bookings, revenue and newsletter signups.
+ * and units, a B2C site its bookings, revenue and newsletter signups, a
+ * mobile app's site its signups and newsletter signups (installs happen in
+ * the app stores, where the snippet can't follow).
  */
 export const SITE_RESULTS: Record<SiteType, readonly ResultKey[]> = {
   b2b: ['signup', 'demo'],
   ecommerce: ['order', 'revenue', 'units'],
   b2c: ['booking', 'revenue', 'newsletter'],
+  app: ['signup', 'newsletter'],
 };
 
 export type ResultCard =
