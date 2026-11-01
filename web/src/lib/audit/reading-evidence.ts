@@ -67,6 +67,8 @@ export function firstPersonEvidence(evidence: Record<string, unknown>): FirstPer
 let names: Intl.DisplayNames | null = null;
 /** A two-letter language code by its English name ("tr" → "Turkish"), else the code. */
 export function languageName(code: string): string {
+  // Node 20's Intl names an empty code "root" instead of throwing.
+  if (!code) return '';
   try {
     names ??= new Intl.DisplayNames(['en'], { type: 'language' });
     return names.of(code) ?? code;
