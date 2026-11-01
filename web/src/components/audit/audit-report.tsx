@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { AuditResult, AuditSignal, AuditRecommendation } from '@/lib/actions/audits';
+import { AUTHORITY_SIGNAL, AuthoritySources } from './authority-sources';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -213,7 +214,11 @@ function SignalRow({
               {signal.evidence.reason as string}
             </p>
           )}
-          {signal.what && <p>{signal.what}</p>}
+          {signal.key === AUTHORITY_SIGNAL ? (
+            <AuthoritySources signal={signal} />
+          ) : (
+            signal.what && <p>{signal.what}</p>
+          )}
           {signal.why && (
             <p>
               <span className="font-medium text-foreground">{t('why')}: </span>

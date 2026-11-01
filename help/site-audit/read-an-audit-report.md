@@ -4,8 +4,8 @@ route: /dashboard/audit
 keywords: [audit report, audit score, signals, audit categories, grade]
 synonyms: [audit results, page score, what failed, E-E-A-T score]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -40,6 +40,10 @@ The **Signals** section lists every check by category, each with a pass, warning
 - the **Finding**: what this audit saw on the page, when the check reports it;
 - what the signal measures, and **Why** it matters to AI engines;
 - the **Recommended fix** written for this page, or the general **Fix** for signals without one.
+
+## Authority links
+
+**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…) and major news.
 
 ## Product pages
 
