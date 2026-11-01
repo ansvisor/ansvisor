@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { AuditResult, AuditSignal, AuditRecommendation } from '@/lib/actions/audits';
+import { AUTHORITY_SIGNAL, AuthoritySources } from './authority-sources';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -213,7 +214,11 @@ function SignalRow({
               {signal.evidence.reason as string}
             </p>
           )}
-          {signal.what && <p>{signal.what}</p>}
+          {signal.key === AUTHORITY_SIGNAL ? (
+            <AuthoritySources signal={signal} />
+          ) : (
+            signal.what && <p>{signal.what}</p>
+          )}
           {signal.why && (
             <p>
               <span className="font-medium text-foreground">{t('why')}: </span>
@@ -343,7 +348,10 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
             {audit.partial && (
               <p className="flex items-start justify-center gap-1.5 text-xs text-amber-700 sm:justify-start dark:text-amber-400">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                {t('partialNote')}
+                <span>
+                  {t('partialNote')}
+                  <span className="block">{t('partialNoCredit')}</span>
+                </span>
               </p>
             )}
           </div>

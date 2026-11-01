@@ -44550,6 +44550,125 @@ update public.getting_started gs
    );
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00384_catalog_orders.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00384: orders from store connectors (#1275)
+-- ============================================================================
+-- Store connectors may sync order totals and line items for revenue reporting.
+-- This deliberately excludes buyer/customer fields: no names, emails, phone
+-- numbers, addresses, billing/shipping blobs, or raw order payloads are stored.
+--
+-- last_orders_synced_at is the incremental WooCommerce modified-time cursor.
+-- An order sync advances it only after the normalized orders and line items
+-- have been persisted successfully.
+
+alter table public.catalog_sources
+  add column if not exists last_orders_synced_at timestamptz;
+
+create table if not exists public.catalog_orders (
+  id uuid primary key default gen_random_uuid(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  source text not null check (source ~ '^[a-z][a-z0-9_]{1,39}$'),
+  external_id text not null check (char_length(external_id) between 1 and 300),
+  placed_at timestamptz not null,
+  modified_at timestamptz,
+  status text not null default '' check (char_length(status) <= 50),
+  channel text not null default '' check (char_length(channel) <= 100),
+  currency text check (currency is null or currency ~ '^[A-Z]{3}$'),
+  total numeric(14, 2) not null default 0 check (total >= 0),
+  refunded_total numeric(14, 2) not null default 0 check (refunded_total >= 0),
+  content_hash text not null check (content_hash ~ '^[0-9a-f]{40}$'),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (brand_id, source, external_id)
+);
+
+create index if not exists catalog_orders_brand_placed_idx
+  on public.catalog_orders (brand_id, placed_at desc);
+create index if not exists catalog_orders_source_modified_idx
+  on public.catalog_orders (source, modified_at asc);
+
+create table if not exists public.catalog_order_items (
+  id uuid primary key default gen_random_uuid(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  order_id uuid not null references public.catalog_orders(id) on delete cascade,
+  external_line_id text not null check (char_length(external_line_id) between 1 and 300),
+  external_product_id text not null check (char_length(external_product_id) between 1 and 300),
+  external_variation_id text check (
+    external_variation_id is null or char_length(external_variation_id) between 1 and 300
+  ),
+  quantity integer not null check (quantity > 0),
+  revenue numeric(14, 2) not null default 0 check (revenue >= 0),
+  created_at timestamptz not null default now(),
+  unique (order_id, external_line_id)
+);
+
+create index if not exists catalog_order_items_order_idx
+  on public.catalog_order_items (order_id);
+create index if not exists catalog_order_items_brand_product_idx
+  on public.catalog_order_items (brand_id, external_product_id);
+
+-- Orders and their product/variation identifiers are available to workspace
+-- members; only the service role writes them.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['catalog_orders', 'catalog_order_items']
+  loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('revoke all on table public.%I from anon, authenticated', t);
+    execute format('grant select on table public.%I to authenticated', t);
+    execute format('grant all on table public.%I to service_role', t);
+    execute format('drop policy if exists %I on public.%I', t || ': member select', t);
+    execute format(
+      'create policy %I on public.%I for select using (
+         brand_id in (
+           select b.id from public.brands b
+           join public.profiles p on p.organization_id = b.organization_id
+           where p.id = auth.uid()
+         )
+       )',
+      t || ': member select',
+      t
+    );
+  end loop;
+end $$;
+
+-- A removed source takes its orders with it, as it does its products (00279):
+-- same function, one more delete; the order lines go with their orders (on
+-- delete cascade).
+create or replace function public.catalog_sources_forget()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  delete from public.catalog_products
+  where brand_id = old.brand_id
+    and source = 'src_' || replace(old.id::text, '-', '');
+  delete from public.catalog_variants
+  where brand_id = old.brand_id
+    and source = 'src_' || replace(old.id::text, '-', '');
+  delete from public.catalog_orders
+  where brand_id = old.brand_id
+    and source = 'src_' || replace(old.id::text, '-', '');
+  return old;
+end;
+$$;
+
+revoke all on function public.catalog_sources_forget() from public, anon, authenticated;
+
+comment on table public.catalog_orders is
+  'Store order summaries for revenue reporting. Contains ids, dates, status, source channel and money totals only; never buyer personal data.';
+comment on table public.catalog_order_items is
+  'Store order line items by external product/variation id, quantity and revenue. No product payload or buyer personal data.';
+comment on column public.catalog_sources.last_orders_synced_at is
+  'Incremental cursor for order changes; advanced only after normalized orders and line items are stored.';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00385_first_results_email.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -51265,6 +51384,174 @@ comment on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, 
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00429_white_label_kits.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00429: White label — an agency's own brand on what it sends its clients
+-- ============================================================================
+-- An agency sends its clients reports with its own logo, color and name, not
+-- Ansvisor's. The app uses a workspace's kit only when its plan has white
+-- label (Growth and Enterprise) and the kit names a company or has a logo;
+-- otherwise everything keeps Ansvisor's look, so a workspace without a kit,
+-- or whose plan no longer has it, sees nothing change.
+--
+--   * The bucket white-label-logos: private. A workspace's logo under
+--     {organization_id}/kit/, a brand's client logo under
+--     {organization_id}/brands/{brand_id}/. PNG, JPEG or SVG, 1 MB an object.
+--     Members have no policy on it, as on chat-files (00411): the app checks
+--     the role, the plan and the brand, then gives a one-time upload address,
+--     and short-lived signed addresses (or the image itself) to show one.
+--   * white_label_kits: one row per workspace (Settings › White label): the
+--     logo's object, the main color (#rrggbb), the company name and the
+--     report footer, and who changed it last and when. Every member reads
+--     it; only an Admin writes it. updated_by is stamped from the session,
+--     so nobody can name someone else. No row = no kit.
+--   * brands.client_logo_path: the client's logo for a brand's report cover
+--     ("Prepared for {brand}"). It follows the brands policies: whoever sees
+--     the brand reads it, Admins and Managers change it.
+
+-- ─── The bucket ─────────────────────────────────────────────────────────────
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'white-label-logos',
+  'white-label-logos',
+  false,
+  1048576,
+  array['image/png', 'image/jpeg', 'image/svg+xml']
+)
+-- Run again, it leaves the bucket as an admin may have set it.
+on conflict (id) do nothing;
+
+-- ─── A workspace's kit ──────────────────────────────────────────────────────
+
+create table if not exists public.white_label_kits (
+  organization_id uuid primary key references public.organizations(id) on delete cascade,
+  -- The logo's object in white-label-logos, in the workspace's own folder.
+  logo_path text check (
+    logo_path is null
+    or (
+      char_length(logo_path) between 1 and 300
+      and starts_with(logo_path, organization_id::text || '/kit/')
+    )
+  ),
+  accent_color text check (accent_color is null or accent_color ~ '^#[0-9a-f]{6}$'),
+  company_name text check (company_name is null or char_length(company_name) between 1 and 100),
+  footer_text text check (footer_text is null or char_length(footer_text) between 1 and 200),
+  updated_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists trg_white_label_kits_updated_at on public.white_label_kits;
+create trigger trg_white_label_kits_updated_at
+  before update on public.white_label_kits
+  for each row execute function public.handle_updated_at();
+
+-- Who changed the kit: the session's person, whatever the write says. The
+-- server's own writes (service role) keep the one they give.
+create or replace function public.white_label_kits_stamp()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if not (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    new.updated_by := auth.uid();
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists white_label_kits_stamp on public.white_label_kits;
+create trigger white_label_kits_stamp
+  before insert or update on public.white_label_kits
+  for each row execute function public.white_label_kits_stamp();
+
+comment on table public.white_label_kits is
+  'White label (00429): a workspace''s kit (Settings › White label): logo, main color, company name, report footer, who changed it and when. Used only on a plan with white_label and with a company name or a logo. Members read; Admins write.';
+comment on column public.white_label_kits.logo_path is
+  'The logo''s object in the private white-label-logos bucket, under {organization_id}/kit/.';
+comment on column public.white_label_kits.accent_color is
+  'The main color, #rrggbb in lower case; reports darken it where it would be too light to read.';
+
+-- ─── A brand's client logo ──────────────────────────────────────────────────
+
+alter table public.brands
+  add column if not exists client_logo_path text;
+
+alter table public.brands
+  drop constraint if exists brands_client_logo_path_check;
+alter table public.brands
+  add constraint brands_client_logo_path_check
+  check (
+    client_logo_path is null
+    or (
+      char_length(client_logo_path) between 1 and 300
+      and starts_with(client_logo_path, organization_id::text || '/brands/' || id::text || '/')
+    )
+  );
+
+comment on column public.brands.client_logo_path is
+  'White label (00429): the client''s logo for the brand''s report cover, in the private white-label-logos bucket under {organization_id}/brands/{brand_id}/. Follows the brands policies.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.white_label_kits enable row level security;
+
+revoke all on table public.white_label_kits from anon, authenticated;
+grant select, insert, update on table public.white_label_kits to authenticated;
+grant all on table public.white_label_kits to service_role;
+
+-- Members of the workspace read its kit.
+drop policy if exists "white_label_kits: member select" on public.white_label_kits;
+create policy "white_label_kits: member select"
+  on public.white_label_kits
+  for select
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+-- Only its Admins write it.
+drop policy if exists "white_label_kits: admin insert" on public.white_label_kits;
+create policy "white_label_kits: admin insert"
+  on public.white_label_kits
+  for insert
+  with check (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and p.role = 'admin'::public.user_role
+    )
+  );
+
+drop policy if exists "white_label_kits: admin update" on public.white_label_kits;
+create policy "white_label_kits: admin update"
+  on public.white_label_kits
+  for update
+  using (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and p.role = 'admin'::public.user_role
+    )
+  )
+  with check (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and p.role = 'admin'::public.user_role
+    )
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00430_site_audit_llm_verdicts.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -51356,6 +51643,97 @@ revoke all on function public.site_audit_llm_verdicts_prune(timestamptz, integer
   from public, anon, authenticated;
 grant execute on function public.site_audit_llm_verdicts_prune(timestamptz, integer)
   to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00431_site_audit_one_run_per_page.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00431: one running audit per page, so the same page never costs twice
+-- ============================================================================
+-- Two requests for the same page at once (or /pricing, /pricing/ and
+-- /pricing?utm=… one after another) each started an audit and each used a
+-- credit. The server now starts an audit of a page only when none is running
+-- for it (routes/audits.js createAndRunAudit), and this index makes the rule
+-- hold when two requests race: the second insert fails and the server
+-- answers with the audit already running, with no credit.
+--
+--   * page_key: the page an audit was asked for, as the server keys pages
+--     (lib/audit/history.js pageKey of the normalized address): the host
+--     without www., lowercased, and the path without a trailing slash; query
+--     and fragment ignored. Filled here for the audits already kept.
+--   * A run older than two hours was cut short by a restart and never
+--     completes (history.js AUDIT_RUN_TIMEOUT_MS); it is marked failed, so it
+--     doesn't hold its page. The server does the same before each start.
+--   * Of two audits of one page running now, the older is marked failed so
+--     the index can be built; it still completes if its job is alive.
+
+alter table public.site_audits add column if not exists page_key text;
+
+comment on column public.site_audits.page_key is
+  'The page the audit was asked for: host without www., lowercased, path without a trailing slash, no query (history.js pageKey). One running audit per brand and page.';
+
+with parts as (
+  select
+    a.id,
+    case when btrim(a.url) ~* '^https?://' then btrim(a.url) else 'https://' || btrim(a.url) end
+      as address
+  from public.site_audits a
+  where a.page_key is null
+)
+update public.site_audits s
+set page_key =
+  regexp_replace(
+    lower(
+      regexp_replace(
+        regexp_replace(coalesce(substring(p.address from '^[A-Za-z]+://([^/?#]*)'), ''), '^.*@', ''),
+        ':[0-9]*$',
+        ''
+      )
+    ),
+    '^www\.',
+    ''
+  )
+  || coalesce(
+    nullif(
+      regexp_replace(coalesce(substring(p.address from '^[A-Za-z]+://[^/?#]*([^?#]*)'), ''), '/+$', ''),
+      ''
+    ),
+    '/'
+  )
+from parts p
+where p.id = s.id;
+
+update public.site_audits
+set status = 'failed',
+    error = coalesce(error, 'The audit was cut short.'),
+    completed_at = coalesce(completed_at, now())
+where status = 'running'
+  and created_at < now() - interval '2 hours';
+
+with ranked as (
+  select
+    id,
+    row_number() over (partition by brand_id, page_key order by created_at desc, id desc) as n
+  from public.site_audits
+  where status = 'running' and page_key is not null
+)
+update public.site_audits s
+set status = 'failed',
+    error = coalesce(s.error, 'Another audit of the page was already running.'),
+    completed_at = coalesce(s.completed_at, now())
+from ranked r
+where r.id = s.id and r.n > 1;
+
+create unique index if not exists site_audits_one_running_per_page
+  on public.site_audits (brand_id, page_key)
+  where status = 'running';
+
+-- A start's look-up: the page's running audit and its audits finished in
+-- the last minutes.
+create index if not exists site_audits_brand_page_idx
+  on public.site_audits (brand_id, page_key, completed_at desc);
 
 notify pgrst, 'reload schema';
 
@@ -51496,4 +51874,45 @@ alter table public.chat_agent_runs
   );
 
 notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00456_site_type_mobile_app.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00456: Mobile app as a brand's site type
+-- ============================================================================
+-- A brand's site type (00205) was b2b, ecommerce or b2c. A brand whose
+-- business is a mobile app now picks 'app' (Agent Center's business type of
+-- the same key): its Content Editor page types, opportunities and task
+-- wording follow it. The two tables keyed by the brand's site type take it
+-- too: My rules saved for an app brand (content_rule_sets, 00227) and its
+-- pages' quality reads (content_quality_pages, 00270). Same checks, with
+-- 'app' added. Constraint swaps on small tables: existing rows already pass.
+
+alter table public.brands
+  drop constraint if exists brands_site_type_check;
+
+alter table public.brands
+  add constraint brands_site_type_check
+    check (site_type in ('b2b', 'ecommerce', 'b2c', 'app'));
+
+comment on column public.brands.site_type is
+  'Content Editor (CE-023): b2b, ecommerce, b2c or app (a mobile app, 00456); sets the page types the editor offers. Null = guessed from industry and shopping_mode_enabled.';
+
+alter table public.content_rule_sets
+  drop constraint if exists content_rule_sets_site_type_check;
+
+alter table public.content_rule_sets
+  add constraint content_rule_sets_site_type_check
+    check (site_type in ('b2b', 'ecommerce', 'b2c', 'app'));
+
+comment on column public.content_rule_sets.site_type is
+  'Content Editor (CE-009): the kind of site the set is for (b2b, ecommerce, b2c or app, as brands.site_type); a brand''s drafts start from its own kind''s set.';
+
+alter table public.content_quality_pages
+  drop constraint if exists content_quality_pages_site_type_check;
+
+alter table public.content_quality_pages
+  add constraint content_quality_pages_site_type_check
+    check (site_type in ('b2b', 'ecommerce', 'b2c', 'app'));
 

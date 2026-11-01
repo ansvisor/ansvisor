@@ -343,7 +343,7 @@ describe('keptPageRead', () => {
     ]);
   });
 
-  it('asks a shop or consumer page for no customer case unless the claim names one; regulated only for B2C', () => {
+  it('asks a shop or consumer page for no customer case unless the claim names one; regulated only for B2C and mobile apps', () => {
     const cases = {
       spots: [],
       proofs: [
@@ -356,6 +356,8 @@ describe('keptPageRead', () => {
     expect(keptOf(cases).regulated).toBeNull();
     expect(keptOf(cases, 'b2b').proofs).toHaveLength(2);
     expect(keptOf({ ...cases, regulated: ' Health ' }, 'b2c').regulated).toBe('health');
+    expect(keptOf({ ...cases, regulated: 'finance' }, 'app').regulated).toBe('finance');
+    expect(keptOf(cases, 'app').proofs).toEqual([]);
     const trusted = pageOutline(
       `${HTML}<p>Trusted by 400 hiking clubs across Europe and the US.</p>` +
         '<p>Trusted by Alpine Club Zermatt and their guides since 2019.</p>' +

@@ -106,6 +106,9 @@ vi.mock('./_brand-facts-tab', () => ({
   BrandFactsTab: ({ brandId }: { brandId: string }) => <p data-testid="brand-facts">{brandId}</p>,
 }));
 
+// The client logo is _client-logo-card.test.tsx's.
+vi.mock('./_client-logo-card', () => ({ ClientLogoCard: () => null }));
+
 import BrandSettingsPage from './page';
 
 afterEach(() => {
@@ -211,6 +214,14 @@ describe('brand settings site type', () => {
     const { container, root, siteType } = await render();
     expect(siteType?.textContent).toBe('siteTypes.ecommerce');
     expect(container.textContent).toContain('settings.siteTypeHint');
+    expect(container.textContent).not.toContain('settings.siteTypeGuessed');
+    await act(async () => root.unmount());
+  });
+
+  it('shows Mobile app when the brand chose it', async () => {
+    brand.siteType = 'app';
+    const { container, root, siteType } = await render();
+    expect(siteType?.textContent).toBe('siteTypes.app');
     expect(container.textContent).not.toContain('settings.siteTypeGuessed');
     await act(async () => root.unmount());
   });

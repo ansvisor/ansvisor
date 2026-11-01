@@ -156,12 +156,15 @@ describe('AuditReport score change', () => {
 
 describe('AuditReport partial audit', () => {
   const PARTIAL = messages.audit.partialNote;
+  const NO_CREDIT = messages.audit.partialNoCredit;
 
-  it("says when the AI checks didn't run, and not otherwise", () => {
+  it("says when the AI checks didn't run, and that it used no audit; not otherwise", () => {
     render([], { partial: true });
     expect(container.textContent).toContain(PARTIAL);
+    expect(container.textContent).toContain(NO_CREDIT);
 
     render([]);
     expect(container.textContent).not.toContain(PARTIAL);
+    expect(container.textContent).not.toContain(NO_CREDIT);
   });
 });

@@ -37,6 +37,10 @@ const confirmOwnImage = vi.fn();
 const getBrandFacts = vi.fn();
 const checkDraftLinks = vi.fn();
 const getSiteTrust = vi.fn();
+// No white label kit: downloads keep Ansvisor's names (export-name.test.ts has a kit's).
+vi.mock('@/lib/actions/white-label', () => ({
+  getExportBranding: async () => ({ ok: true, branding: null }),
+}));
 vi.mock('@/lib/actions/audits', () => ({
   getSiteTrust: (...args: unknown[]) => getSiteTrust(...args),
 }));
@@ -636,10 +640,11 @@ describe('the content editor', () => {
         await renderPage();
         expect(getMyRuleSets).toHaveBeenCalledTimes(1);
         const items = await openTypes();
-        expect(items.slice(0, 4).map((item) => item.textContent)).toEqual([
+        expect(items.slice(0, 5).map((item) => item.textContent)).toEqual([
           'B2B SaaS',
           'E-commerce',
           'B2C',
+          'Mobile app',
           'Feature page',
         ]);
         // No site type picked yet: the one shown is guessed.
@@ -655,7 +660,7 @@ describe('the content editor', () => {
         expect(getMyRuleSets).toHaveBeenCalledTimes(2);
         // A shop's page types now, the type picked kept on the list.
         const types = (await openTypes()).map((item) => item.textContent);
-        expect(types.slice(3, 5)).toEqual(['Product page', 'Category page']);
+        expect(types.slice(4, 6)).toEqual(['Product page', 'Category page']);
         expect(types.at(-1)).toBe('Feature page');
 
         // Kept as it was when it can't be saved.
@@ -665,7 +670,7 @@ describe('the content editor', () => {
           document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')[2].click(),
         );
         expect(toast.error).toHaveBeenCalledWith("Couldn't change the site type. Try again.");
-        expect((await openTypes())[3].textContent).toBe('Product page');
+        expect((await openTypes())[4].textContent).toBe('Product page');
       });
 
       it('saves a detected page type again for the new site type', async () => {

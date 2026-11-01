@@ -802,10 +802,13 @@ export async function settleAgentRun(
 export interface AgentRunDriverDeps {
   /** Runs the drive past the request's answer (next/server's after()). */
   background: (task: () => Promise<void>) => void;
-  /** The Chat engine's driver. */
-  drive: (actor: ChatActor, chatRunId: string) => Promise<void>;
+  /** The Chat engine's driver, with whose session the request carries (null for none). */
+  drive: (actor: ChatActor, chatRunId: string, sessionUserId: string | null) => Promise<void>;
   now: () => Date;
 }
+
+const driveAgentRun: AgentRunDriverDeps['drive'] = (actor, chatRunId, sessionUserId) =>
+  driveRun(actor, chatRunId, undefined, { sessionUserId });
 
 /** after() in a request; outside one (a script, a test), on its own. */
 function inBackground(task: () => Promise<void>) {
@@ -822,16 +825,20 @@ function inBackground(task: () => Promise<void>) {
  * The driver: hands a started run to Chat (openAgentRun) and drives it in
  * the background, then keeps the agent run in step (settleAgentRun). The
  * next queued run starts on the minute tick, not here. Resolves once the
- * run is handed over, not when it ends.
+ * run is handed over, not when it ends. The request's session drives the
+ * run's changes only when it is the person the run acts as (their own Run
+ * now or Run agent); otherwise (the tick, a signal, another person's
+ * click) each change asks first.
  */
 export function createAgentRunDriver(deps: Partial<AgentRunDriverDeps> = {}): AgentRunDriver {
-  const { background = inBackground, drive = driveRun, now = () => new Date() } = deps;
-  const driver: AgentRunDriver = async ({ id, organizationId }) => {
+  const { background = inBackground, drive = driveAgentRun, now = () => new Date() } = deps;
+  const driver: AgentRunDriver = async ({ id, organizationId, sessionUserId = null }) => {
     const opened = await openAgentRun(id, organizationId, now());
     if (!opened) return;
+    const session = sessionUserId === opened.actor.userId ? sessionUserId : null;
     background(async () => {
       try {
-        await drive(opened.actor, opened.chatRunId);
+        await drive(opened.actor, opened.chatRunId, session);
       } finally {
         await settleAgentRun(opened.agentRunId, { now: now() });
       }
