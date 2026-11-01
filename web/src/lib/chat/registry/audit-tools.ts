@@ -56,7 +56,7 @@ export const AUDIT_TOOLS = [
     class: 'write',
     area: 'site_audit',
     description:
-      "Audit pages of the brand's site in Site Audit: one URL by default, or several at once. Each page uses one of the month's Site Audit audits; several start only if all fit. Only pages the person asked for.",
+      "Audit pages of the brand's site in Site Audit: one URL by default, or several at once. Each page uses one of the month's Site Audit audits; several start only if all fit. A page with an audit running gets that one back, with no new audit used. A page audited in the last 10 minutes isn't started: the result lists it, so ask whether to open that audit or audit it again, and only then run again with force. Only pages the person asked for.",
     defaultPolicy: 'ask',
     maxPolicy: 'ask',
     // A card in every mode, with what it uses of the quota (§9 row 37).
@@ -79,8 +79,17 @@ export const AUDIT_TOOLS = [
         .min(1)
         .max(10)
         .describe('The pages to audit, as full addresses.'),
+      force: z
+        .boolean()
+        .optional()
+        .describe(
+          'Audit again a page audited in the last 10 minutes. Only after the person said to.',
+        ),
     }),
-    run: (_ctx, input) => startSiteAudits(input.brand_id, input.urls),
+    run: (_ctx, input) =>
+      input.force
+        ? startSiteAudits(input.brand_id, input.urls, { force: true })
+        : startSiteAudits(input.brand_id, input.urls),
     target: async (input) => {
       const pages = listWords(auditPages(input.urls));
       // What the card's Approve uses of the month's audits.

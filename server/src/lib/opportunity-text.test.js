@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   LEAKED_REFERENCE,
   cleanStoredOpportunity,
@@ -135,5 +135,33 @@ describe('cleanStoredOpportunity', () => {
       source_data: { prompts: ['A', 'B'] },
     };
     expect(cleanStoredOpportunity(row).title).toBe('Merge with this prompt');
+  });
+
+  it('reads a past year in its titles and question as this year, and stores nothing', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2027-01-02T00:00:00Z'));
+    try {
+      const row = {
+        cluster_id: 'c1',
+        title: 'Expand the coffee subscription guide into a 2026 ranking',
+        description: 'Ranked in 2026.',
+        source_data: {
+          promptText: 'What are the best coffee subscription services in 2026?',
+          assets: [{ key: 'a1', title: 'The 2025-2026 buying guide' }],
+        },
+      };
+      const clean = cleanStoredOpportunity(row);
+      expect(clean.title).toBe('Expand the coffee subscription guide into a 2027 ranking');
+      expect(clean.source_data.promptText).toBe(
+        'What are the best coffee subscription services in 2027?',
+      );
+      expect(clean.source_data.assets[0].title).toBe('The 2026-2027 buying guide');
+      // Only titles and the question: a description is what the model wrote then.
+      expect(clean.description).toBe('Ranked in 2026.');
+      expect(row.title).toContain('2026');
+      expect(row.source_data.promptText).toContain('2026');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

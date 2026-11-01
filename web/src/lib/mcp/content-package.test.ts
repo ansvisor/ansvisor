@@ -72,6 +72,7 @@ describe('getContentDraftPackageFor', () => {
       html: EXPECTED_HTML,
       json_ld: [JSON_LD_PARSED],
       author: 'Ada Lovelace',
+      reviewer: null,
       featured_image: { src: 'https://acme.example/cold-brew.jpg', alt: 'A jar of cold brew' },
       source_url: null,
     });

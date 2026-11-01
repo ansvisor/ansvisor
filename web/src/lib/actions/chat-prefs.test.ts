@@ -48,12 +48,15 @@ vi.mock('@/lib/chat/general-settings', async (original) => ({
 }));
 
 const {
+  markFocusPrompted,
+  saveChatFocus,
   saveChatGeneralSettings,
   saveChatMenuOpen,
   saveChatPanelSize,
   saveChatRailOpen,
   saveHomeSeen,
   saveUsageNoticePeriod,
+  skipChatFocus,
 } = await import('./chat-prefs');
 const { readChatGeneral } = await import('@/lib/chat/general-settings');
 
@@ -215,5 +218,41 @@ describe('saveHomeSeen', () => {
         options: { onConflict: 'user_id' },
       },
     ]);
+  });
+});
+
+describe('saveChatFocus, skipChatFocus and markFocusPrompted (CHAT-24 §3)', () => {
+  it('keeps the picks in their order, a skip as none, and when the picker opened', async () => {
+    expect(await saveChatFocus(['pd', 'comp'])).toEqual({ ok: true });
+    expect(await saveChatFocus([])).toEqual({ ok: true });
+    expect(await skipChatFocus()).toEqual({ ok: true });
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-31T09:00:00Z'));
+    expect(await markFocusPrompted()).toEqual({ ok: true });
+    vi.useRealTimers();
+    expect(db.upserts.map((u) => u.row)).toEqual([
+      { user_id: 'user-1', focus: ['pd', 'comp'] },
+      { user_id: 'user-1', focus: [] },
+      { user_id: 'user-1', focus: [] },
+      { user_id: 'user-1', focus_prompted_at: '2026-10-31T09:00:00.000Z' },
+    ]);
+  });
+
+  it('keeps no area it does not know, none twice, and nothing that is not a list', async () => {
+    for (const bad of [['pd', 'pd'], ['devtools'], 'pd', null, [1]]) {
+      expect(await saveChatFocus(bad)).toEqual({ ok: false });
+    }
+    expect(db.upserts).toEqual([]);
+  });
+
+  it('does nothing while the new Chat is off, and answers a failure as a value', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await saveChatFocus(['lead'])).toEqual({ ok: false });
+    expect(await skipChatFocus()).toEqual({ ok: false });
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    db.error = { message: 'nope' };
+    expect(await saveChatFocus(['lead'])).toEqual({ ok: false });
+    db.throws = true;
+    expect(await markFocusPrompted()).toEqual({ ok: false });
   });
 });

@@ -262,7 +262,7 @@ describe('requireFeature', () => {
   });
 
   it('still refuses a feature that plan never had', async () => {
-    const { res, next } = await call('GET', 'white_label', { readOnly: true });
+    const { res, next } = await call('GET', 'sso_saml', { readOnly: true });
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(403);
   });
@@ -279,6 +279,6 @@ describe('requireFeature', () => {
     expect((await call('GET', 'prompt_improve')).next).toHaveBeenCalledOnce();
     expect((await call('GET', 'prompt_improve', { readOnly: true })).next).toHaveBeenCalledOnce();
     expect((await call('POST', 'prompt_improve')).next).toHaveBeenCalledOnce();
-    expect((await call('GET', 'white_label')).res.status).toHaveBeenCalledWith(403);
+    expect((await call('GET', 'sso_saml')).res.status).toHaveBeenCalledWith(403);
   });
 });

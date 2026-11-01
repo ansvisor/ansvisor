@@ -8,6 +8,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
 import { recordAccessDenied } from './access-log';
 import { logActivity, summaryValue } from './activity';
+import { connectionName, missingRequiredConnection } from './agent-connections';
 import {
   AGENT_PAUSED_REASONS,
   AGENT_STATUSES,
@@ -1168,7 +1169,8 @@ export async function runnableBrands(
  * its mode and engines for the person it acts as, a brand of its scope is
  * there, and the AI limit isn't used up. Its Required connections are
  * checked for the run's brand before the run (agent-driver.ts,
- * agent-connections.ts); its skills (CHAT-13) once their registry exists.
+ * agent-connections.ts), and for each brand of its scope on Resume; its
+ * skills (CHAT-13) once their registry exists.
  */
 export async function runChecks(
   ctx: AgentContext,
@@ -1574,7 +1576,8 @@ const STATE_SUMMARY: Record<AgentLifecycleAction, AgentSummaryKey> = {
 /**
  * A change of state a person asks for (§G item 33): Activate a draft and
  * Resume a paused agent after the activation checks (item 21; Activate
- * makes the person its owner, the one its triggered runs act as), Pause
+ * makes the person its owner, the one its triggered runs act as; Resume
+ * also wants each brand's Required connections, as Run now does), Pause
  * (a person's reason, `manual`), Archive (its waiting runs stop; a running
  * one finishes), Restore (back to paused, never straight to active), and
  * Delete once archived (its runs, chats and files stay).
@@ -1622,6 +1625,19 @@ export async function changeAgentState(
       triggerInputs(await triggersOf([row.id])),
     );
     if (failing) return failing;
+    // A brand without a Required connection would pause it again on its next run
+    // (agent-driver.ts): Resume refuses, naming both, as Run now does (§H item 42).
+    if (action === 'resume' && agent.version) {
+      for (const brand of await runnableBrands(org, agent.version.scope)) {
+        const missing = await missingRequiredConnection(agent.version, brand.id);
+        if (missing) {
+          return refused('connection_missing', {
+            name: connectionName(missing),
+            brand: brand.name,
+          });
+        }
+      }
+    }
     patch.paused_reason = null;
     patch.activated_at = now.toISOString();
     if (action === 'activate') patch.owner_id = ctx.actor.userId;
