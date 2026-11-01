@@ -4,7 +4,8 @@ import { refreshYears } from './current-year';
 import type { DraftMethod } from './drafts';
 import { opportunityStart } from './opportunity-start';
 import { pagePath } from './overlap';
-import { detectPageType, type PageType, type SiteType } from './page-types';
+import type { PageType } from './drafts';
+import { detectPageType, type SiteType } from './page-types';
 import { startPageType } from './start';
 
 /** The draft Write this starts for an opportunity, as Start would open it. */
