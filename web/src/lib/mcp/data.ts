@@ -13,6 +13,8 @@ import {
 import { classifyArticleType } from '@/lib/citations/article-type';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
+import { readSnippet } from '@/lib/traffic-snippet';
+import { snippetState, type SnippetState } from '@/lib/traffic-sources';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
@@ -55,6 +57,7 @@ import {
   filterPromptSuggestionEngines,
   promptSuggestionsAreStale,
 } from './prompt-suggestions-utils';
+import { refreshYears } from '@/lib/content/current-year';
 
 /**
  * Pure data-fetch functions shared by the MCP route and the parallel REST
@@ -997,7 +1000,8 @@ export async function listContentOpportunitiesFor(
     const prompt = Array.isArray(r.prompts) ? (r.prompts[0] ?? null) : r.prompts;
     return {
       id: r.id,
-      title: r.title,
+      // A past year in it reads as this year, as Content shows it (current-year.ts).
+      title: refreshYears(r.title),
       description: r.description,
       type: r.type,
       impact: r.impact,
@@ -1379,6 +1383,24 @@ export async function getSiteAuditFor(
   };
 }
 
+/** An opportunity's question and asset titles, a past year read as this one, as Content shows them. */
+function withCurrentYear(sd: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!sd) return null;
+  return {
+    ...sd,
+    ...(typeof sd.promptText === 'string' ? { promptText: refreshYears(sd.promptText) } : {}),
+    ...(Array.isArray(sd.assets)
+      ? {
+          assets: sd.assets.map((a: unknown) =>
+            a && typeof a === 'object' && typeof (a as { title?: unknown }).title === 'string'
+              ? { ...a, title: refreshYears((a as { title: string }).title) }
+              : a,
+          ),
+        }
+      : {}),
+  };
+}
+
 export async function getContentOpportunityFor(
   auth: McpAuthContext,
   opportunityId: string,
@@ -1417,15 +1439,16 @@ export async function getContentOpportunityFor(
 
   return {
     id: r.id,
-    title: r.title,
+    title: refreshYears(r.title),
     description: r.description,
     type: r.type,
     impact: r.impact,
     opportunity_score: Number(r.opportunity_score ?? 0),
     status: r.status,
     prompt_id: r.prompt_id,
+    // The tracked prompt's own text, as it is tracked.
     prompt_text: prompt?.text ?? null,
-    source_data: r.source_data ?? null,
+    source_data: withCurrentYear(r.source_data),
     brief: r.brief ?? null,
     created_at: r.created_at ?? '',
     updated_at: r.updated_at ?? '',
@@ -2242,6 +2265,13 @@ export interface AiTrafficParams {
 }
 
 export interface AiTrafficOutput {
+  /**
+   * Whether the tracking snippet is installed (traffic-sources.ts
+   * snippetState): 'not_detected' (not seen on the site, so no visit can
+   * be counted yet), 'installed_quiet' (installed, no AI visit in the last
+   * 7 days) or 'active'.
+   */
+  tracking: SnippetState;
   total_visits: number;
   platform_breakdown: Array<{
     platform: string;
@@ -2290,8 +2320,9 @@ export async function getAiTrafficFor(
     url: string;
     country: string | null;
   }> = [];
-  const [totalVisits] = await Promise.all([
+  const [totalVisits, snippet] = await Promise.all([
     countTrafficLogs(supabaseAdmin, params.brandId, range),
+    readSnippet(supabaseAdmin, params.brandId),
     scanTrafficLogs(
       supabaseAdmin,
       params.brandId,
@@ -2337,6 +2368,7 @@ export async function getAiTrafficFor(
     .sort((a, b) => b.visits - a.visits);
 
   return {
+    tracking: snippetState(snippet),
     total_visits: totalVisits,
     platform_breakdown,
     top_pages,

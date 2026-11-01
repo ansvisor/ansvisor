@@ -44,6 +44,7 @@ const page = (n: number) => ({
   body_html: `<h1>Draft ${n}</h1>`,
   source_url: null,
   author_id: null,
+  reviewer_id: null,
   author_real_at: null,
   rules: null,
 });
@@ -64,6 +65,7 @@ describe('getContentDraftPages', () => {
       bodyHtml: '<h1>Draft 3</h1>',
       sourceUrl: null,
       authorId: null,
+      reviewerId: null,
       authorConfirmed: false,
       language: null,
     });
@@ -76,6 +78,7 @@ describe('getContentDraftPages', () => {
       {
         ...page(1),
         author_id: id(7),
+        reviewer_id: id(8),
         author_real_at: '2026-10-24T10:00:00Z',
         rules: rules({ value: ' Turkish ' }),
       },
@@ -84,10 +87,10 @@ describe('getContentDraftPages', () => {
       { ...page(3), rules: rules({ on: true }) },
     ];
     const { pages } = await getContentDraftPages(BRAND, [id(1), id(2), id(3)]);
-    expect(pages.map((p) => [p.authorId, p.authorConfirmed, p.language])).toEqual([
-      [id(7), true, 'Turkish'],
-      [null, false, null],
-      [null, false, null],
+    expect(pages.map((p) => [p.authorId, p.reviewerId, p.authorConfirmed, p.language])).toEqual([
+      [id(7), id(8), true, 'Turkish'],
+      [null, null, false, null],
+      [null, null, false, null],
     ]);
   });
 

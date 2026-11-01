@@ -73,6 +73,7 @@ const row = (key: string, more: Partial<ImpactRow> = {}): ImpactRow => ({
       outcome: 'pending',
       effect: 33,
       direction: 'up',
+      lasting: null,
       measuredAt: null,
     },
     {
@@ -81,6 +82,7 @@ const row = (key: string, more: Partial<ImpactRow> = {}): ImpactRow => ({
       outcome: 'improved',
       effect: 50,
       direction: 'up',
+      lasting: null,
       measuredAt: null,
     },
     { checkpoint: 'd30', state: 'due', dueOn: '2026-11-02' },
@@ -114,6 +116,7 @@ const report = (more: Partial<ImpactReport> = {}): ImpactReport => ({
           outcome: 'not_measurable',
           effect: null,
           direction: null,
+          lasting: null,
           measuredAt: null,
         },
         { checkpoint: 'd30', state: 'none' },
@@ -127,6 +130,7 @@ const report = (more: Partial<ImpactReport> = {}): ImpactReport => ({
       checkpoint: 'd7',
     }),
   ],
+  capped: false,
   summary: { shipped: 3, previous: 10, improved: 1, judged: 1, pending: 1 },
   traffic: { current: 120, previous: 100, pages: 2 },
   generatedAt: '2026-10-31T09:14:00.000Z',
@@ -209,7 +213,7 @@ describe('ImpactReportView', () => {
     const first = $('[data-row="r1"]')!;
     expect(first.textContent).toContain('AC-1241 · Action Center · published to your CMS by you');
     expect(first.textContent).toContain('Shipped Oct 3 · 6 prompts');
-    expect(first.textContent).toContain('33% → 83%');
+    expect(first.textContent).toContain('33.3% → 83.3%');
     expect(first.textContent).toContain('40% → 40%');
     expect(first.textContent).toContain('+50 pts');
     expect(
@@ -248,6 +252,79 @@ describe('ImpactReportView', () => {
     expect(drawer).toContain('OutcomeImproved · High confidence');
     expect(drawer).toContain('Same windowNo other shipped change on these prompts');
     expect(drawer).toContain('Day 30Confirmeddue Nov 2');
+  });
+
+  it('shows whether day 90’s effect lasted, Held or Faded, as the job kept it', async () => {
+    const at90 = (lasting: 'held' | 'faded' | null) =>
+      row('r1', {
+        checkpoint: 'd90',
+        effect: 12.5,
+        checkpoints: [
+          ...row('r1').checkpoints.slice(0, 2),
+          {
+            checkpoint: 'd30',
+            state: 'measured',
+            outcome: 'improved',
+            effect: 14,
+            direction: 'up',
+            lasting: null,
+            measuredAt: null,
+          },
+          {
+            checkpoint: 'd90',
+            state: 'measured',
+            outcome: lasting === 'faded' ? 'no_meaningful_change' : 'improved',
+            effect: 12.5,
+            direction: 'up',
+            lasting,
+            measuredAt: null,
+          },
+        ],
+      });
+    read.mockResolvedValue({ ok: true, report: report({ rows: [at90('held')] }) });
+    await render();
+    const box = $('[data-row="r1"] [data-checkpoint="d90"]')!;
+    expect(box.textContent).toBe('+12.5');
+    expect(box.getAttribute('aria-label')).toBe('Day 90: Improved · Held');
+    await click($('[data-row="r1"] [data-action="impact.openEvidence"]')!);
+    const drawer = $('[data-slot="impact-evidence"]')!.textContent;
+    expect(drawer).toContain('Day 90Lasting effectImproved · +12.5 pts · Held');
+    // Day 30 has none to keep: only day 90 says whether it lasted.
+    expect(drawer).toContain('Day 30ConfirmedImproved · +14 pts');
+    expect(drawer).not.toContain('+14 pts · ');
+
+    read.mockResolvedValue({ ok: true, report: report({ rows: [at90('faded')] }) });
+    await click($('[data-action="impact.changeMonth"]')!);
+    expect($('[data-row="r1"] [data-checkpoint="d90"]')!.getAttribute('aria-label')).toBe(
+      'Day 90: No meaningful change · Faded',
+    );
+
+    read.mockResolvedValue({ ok: true, report: report({ rows: [at90(null)] }) });
+    await click($('[data-action="impact.changeMonth"]')!);
+    expect($('[data-row="r1"] [data-checkpoint="d90"]')!.getAttribute('aria-label')).toBe(
+      'Day 90: Improved',
+    );
+  });
+
+  it('rounds before, after, control and lift the same, so a row adds up as shown', async () => {
+    read.mockResolvedValue({
+      ok: true,
+      report: report({
+        rows: [
+          row('r1', { before: 33.3, after: 50, controlBefore: 40, controlAfter: 40, effect: 16.7 }),
+        ],
+      }),
+    });
+    await render();
+    const first = $('[data-row="r1"]')!.textContent;
+    expect(first).toContain('33.3% → 50%');
+    expect(first).toContain('40% → 40%');
+    expect(first).toContain('+16.7 pts');
+    await click($('[data-row="r1"] [data-action="impact.openEvidence"]')!);
+    const drawer = $('[data-slot="impact-evidence"]')!.textContent;
+    expect(drawer).toContain('Before33.3%');
+    expect(drawer).toContain('Latest50%');
+    expect(drawer).toContain('Lift vs control+16.7 pts');
   });
 
   it('says why a change can’t be measured', async () => {
@@ -310,6 +387,7 @@ describe('ImpactReportView', () => {
                 outcome: 'pending',
                 effect: null,
                 direction: 'up',
+                lasting: null,
                 measuredAt: null,
               },
               { checkpoint: 'd14', state: 'due', dueOn: '2026-10-17' },
@@ -362,6 +440,42 @@ describe('ImpactReportView', () => {
       ['img', 'Day 30, due Nov 2'],
       ['img', 'Day 90, due Jan 1'],
     ]);
+  });
+
+  it('says when a month has more changes than it lists', async () => {
+    await render();
+    expect($('[data-slot="impact-capped"]')).toBeNull();
+    read.mockResolvedValue({ ok: true, report: report({ capped: true }) });
+    await click([...document.querySelectorAll('[data-action="impact.changeMonth"]')][0]);
+    expect($('[data-slot="impact-capped"]')!.textContent).toBe(
+      'Showing the first 3 changes shipped in September 2026; the counts above cover only these.',
+    );
+  });
+
+  it('dates a change shipped near midnight the same on the page and in the CSV', async () => {
+    // Late on Oct 3 in UTC is Oct 4 here: both say Oct 4, the browser's day.
+    const tz = process.env.TZ;
+    process.env.TZ = 'Pacific/Kiritimati';
+    try {
+      read.mockResolvedValue({
+        ok: true,
+        report: report({ rows: [row('r1', { shippedAt: '2026-10-03T22:30:00.000Z' })] }),
+      });
+      await render();
+      expect($('[data-row="r1"]')!.textContent).toContain('Shipped Oct 4');
+      await click($('[data-action="impact.export"]')!);
+      await click($('[data-action="impact.exportCsv"]')!);
+      const [blob] = download.saveBlob.mock.calls[0] as [Blob, string];
+      const csv = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsText(blob);
+      });
+      expect(csv.split('\n')[1]).toContain(',2026-10-04,');
+    } finally {
+      if (tz === undefined) delete process.env.TZ;
+      else process.env.TZ = tz;
+    }
   });
 
   it('downloads the month as CSV', async () => {

@@ -36,11 +36,13 @@ export function parseListPage(query = {}) {
 /**
  * Turn completed audit rows read NEWEST first into the chart's points: keep
  * only audits of the primary domain (host of final_url, else url) and return
- * them oldest → newest so the chart ends at the latest audit.
+ * them oldest → newest so the chart ends at the latest audit. A partial audit
+ * (its AI-judged signals didn't run) isn't a point: its score isn't compared.
  */
 export function buildTrendPoints(rowsNewestFirst, primaryHost) {
   if (!primaryHost) return [];
   return (rowsNewestFirst ?? [])
+    .filter((r) => r.partial !== true)
     .filter((r) => (normHost(r.final_url) ?? normHost(r.url)) === primaryHost)
     .map((r) => ({
       id: r.id,
@@ -119,6 +121,9 @@ export function pageStatus(latestRun, current, previous) {
  * failed, so the page isn't left Running (and the hub polling) for good.
  * lastAuditSource says whether the audit the row opens was an auto-audit
  * run's (SA-006) or a user's; rows read without `source` count as the user's.
+ * A partial audit (its AI-judged signals didn't run) is never compared: the
+ * page keeps its latest complete score, and shows a partial one only when it
+ * has no other, with no previous score.
  */
 export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
   const groups = new Map();
@@ -137,16 +142,18 @@ export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
           ? 'failed'
           : r.status,
       totalScore: r.total_score === null ? null : Number(r.total_score),
+      partial: r.partial === true,
       createdAt: r.created_at,
       source: r.source === 'auto' ? 'auto' : 'user',
     });
   }
 
   return [...groups.values()].map(({ key, host, path, runs }) => {
-    const completed = runs.filter((r) => r.status === 'completed' && r.totalScore !== null);
+    const scored = runs.filter((r) => r.status === 'completed' && r.totalScore !== null);
+    const completed = scored.filter((r) => !r.partial);
     const latest = runs[0];
-    const current = completed[0] ?? null;
-    const previous = completed[1] ?? null;
+    const current = completed[0] ?? scored[0] ?? null;
+    const previous = completed[0] ? (completed[1] ?? null) : null;
     return {
       key,
       host,
@@ -171,8 +178,9 @@ export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
 /**
  * Find the immediately previous completed, scored audit for one audit's page.
  * This assumes the same created_at / id descending order used by readBrandAudits.
- * Strictly earlier created_at timestamps are required; a failed, running, or
- * unscored audit never becomes the comparison point.
+ * Strictly earlier created_at timestamps are required; a failed, running,
+ * unscored or partial audit never becomes the comparison point, and a
+ * partial audit has none.
  */
 export function findPreviousCompletedAudit(rowsNewestFirst, auditId) {
   const seen = new Set();
@@ -189,7 +197,9 @@ export function findPreviousCompletedAudit(rowsNewestFirst, auditId) {
 
     if (!foundCurrent) {
       if (row.id !== auditId) continue;
-      if (row.status !== 'completed' || row.total_score == null) return null;
+      if (row.status !== 'completed' || row.total_score == null || row.partial === true) {
+        return null;
+      }
 
       currentCreatedAt = Date.parse(row.created_at);
       if (!Number.isFinite(currentCreatedAt)) return null;
@@ -201,7 +211,7 @@ export function findPreviousCompletedAudit(rowsNewestFirst, auditId) {
     const createdAt = Date.parse(row.created_at);
     if (!Number.isFinite(createdAt) || createdAt >= currentCreatedAt) continue;
     if (key !== currentKey) continue;
-    if (row.status !== 'completed' || row.total_score == null) continue;
+    if (row.status !== 'completed' || row.total_score == null || row.partial === true) continue;
 
     return {
       auditId: row.id,

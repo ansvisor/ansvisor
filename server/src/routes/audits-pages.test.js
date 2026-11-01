@@ -12,6 +12,7 @@ let signals;
 let domains;
 let signalQueries;
 let inserted;
+let updated;
 let enforce;
 let pagesFetched;
 let auditsModule;
@@ -23,15 +24,22 @@ function query(table) {
   const filters = { eq: {}, in: {} };
   let range = null;
   let insertRows = null;
+  let one = false;
   const builder = {
     insert: (rows) => {
-      insertRows = rows;
+      insertRows = Array.isArray(rows) ? rows : [rows];
       return builder;
     },
     select: () => builder,
-    single: () => builder,
+    single: () => {
+      one = true;
+      return builder;
+    },
     order: () => builder,
-    update: () => builder,
+    update: (values) => {
+      updated.push({ table, values });
+      return builder;
+    },
     eq: (col, val) => {
       filters.eq[col] = val;
       return builder;
@@ -49,7 +57,7 @@ function query(table) {
       if (insertRows) {
         const rows = insertRows.map((r, i) => ({ id: `new-${inserted.length + i}`, ...r }));
         inserted.push(...rows);
-        return resolve({ data: rows, error: null });
+        return resolve({ data: one ? rows[0] : rows, error: null });
       }
       if (table === 'site_audits' && filters.in.id) {
         data = audits.filter((a) => filters.in.id.includes(a.id));
@@ -85,18 +93,22 @@ async function startApp() {
     PlanLimitError: class PlanLimitError extends Error {},
   }));
   // An audit job that never gets its page, so the queue's limit can be seen;
-  // a /fail page fails at once.
+  // a /fail page fails at once, and a /ready page is read.
   vi.doMock('../lib/audit/context.js', () => ({
     buildAuditContext: (url) => {
       pagesFetched.push(url);
       if (url.includes('/fail')) return Promise.reject(new Error('blocked'));
+      if (url.includes('/ready')) return Promise.resolve({ url });
       return new Promise(() => {});
     },
   }));
   vi.doMock('../lib/audit/engine.js', () => ({ runSignals: vi.fn() }));
   vi.doMock('../lib/audit/llm-signals.js', () => ({ evaluateLlmSignals: vi.fn() }));
   vi.doMock('../lib/audit/external-signals.js', () => ({ evaluateBrandEntity: vi.fn() }));
-  vi.doMock('../lib/audit/recommendations.js', () => ({ generateRecommendations: vi.fn() }));
+  vi.doMock('../lib/audit/recommendations.js', () => ({
+    brandFactsFor: vi.fn(),
+    generateRecommendations: vi.fn(),
+  }));
   vi.doMock('../lib/logger.js', () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     return { default: logger, logger };
@@ -131,6 +143,7 @@ const audit = (id, url, day, score, status = 'completed') => ({
 beforeEach(async () => {
   signalQueries = [];
   inserted = [];
+  updated = [];
   pagesFetched = [];
   enforce = vi.fn(async () => ({ remaining: 10 }));
   domains = [{ domain: 'https://www.Acme.com/', is_primary: true }];
@@ -270,6 +283,45 @@ describe('POST /api/audits/bulk', () => {
     expect((await post({ brandId, urls: ['not a url'] })).status).toBe(400);
     expect((await post({ urls: ['https://acme.com/'] })).status).toBe(400);
     expect(inserted).toEqual([]);
+  });
+});
+
+describe('POST /api/audits', () => {
+  it("stores whether the audit is partial, with the page's last AI verdicts on hand", async () => {
+    const { runSignals } = await import('../lib/audit/engine.js');
+    const { evaluateLlmSignals } = await import('../lib/audit/llm-signals.js');
+    const { evaluateBrandEntity } = await import('../lib/audit/external-signals.js');
+    const { generateRecommendations } = await import('../lib/audit/recommendations.js');
+    runSignals.mockResolvedValue([{ key: 'https', status: 'pass', score: 1, evidence: {} }]);
+    evaluateLlmSignals.mockResolvedValue({
+      results: [
+        {
+          key: 'direct-answer',
+          status: 'na',
+          score: null,
+          evidence: { error: 'LLM evaluation unavailable' },
+        },
+      ],
+      partial: true,
+    });
+    evaluateBrandEntity.mockResolvedValue({ key: 'brand-entity', status: 'na', score: null });
+    generateRecommendations.mockResolvedValue([]);
+
+    const res = await fetch(baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId: 'b1', url: 'https://acme.com/ready' }),
+    });
+    expect(res.status).toBe(202);
+    await vi.waitFor(() => {
+      expect(updated.some((u) => u.values.status === 'completed')).toBe(true);
+    });
+
+    expect(updated.find((u) => u.values.status === 'completed').values).toMatchObject({
+      partial: true,
+      total_score: 1,
+    });
+    expect(evaluateLlmSignals.mock.calls[0][1].lastVerdicts).toBeTypeOf('function');
   });
 });
 

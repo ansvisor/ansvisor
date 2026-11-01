@@ -41,6 +41,7 @@ export const DRAFT_ROW = {
   ].join(''),
   source_url: null,
   author_id: AUTHOR_ID,
+  reviewer_id: null,
   author_real_at: null,
   rules: null,
   slug: 'cold-brew-at-home',

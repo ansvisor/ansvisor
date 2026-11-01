@@ -567,7 +567,8 @@ async function getShoppingSnapshot(
 /**
  * Latest completed Site Audit as of the period end, with the prior audit's
  * score for the delta. Audits aren't period-bound like the other metrics, so
- * "as of dateTo" keeps historical reports honest.
+ * "as of dateTo" keeps historical reports honest. A partial audit (its
+ * AI-judged signals didn't run) is never compared, so it's left out.
  */
 async function getAuditSnapshot(brandId: string, dateTo: string): Promise<ReportAuditScore | null> {
   const supabase = await createClient();
@@ -576,6 +577,7 @@ async function getAuditSnapshot(brandId: string, dateTo: string): Promise<Report
     .select('url, total_score, created_at')
     .eq('brand_id', brandId)
     .eq('status', 'completed')
+    .eq('partial', false)
     .lte('created_at', dateTo)
     .order('created_at', { ascending: false })
     .limit(2);

@@ -449,6 +449,25 @@ describe('checkFieldMap', () => {
     });
   });
 
+  it('maps the reviewer to a string field without making it universally required', () => {
+    const reviewer = { id: 'fReviewer', name: 'Reviewed by', type: 'string', required: false };
+    const fieldsWithReviewer = [...fields, reviewer];
+    expect(
+      checkFieldMap({ title: 'fTitle', body: 'fBody', reviewer: 'fReviewer' }, fieldsWithReviewer),
+    ).toEqual({
+      ok: true,
+      map: { title: 'fTitle', body: 'fBody', reviewer: 'fReviewer' },
+    });
+    const required = fieldsWithReviewer.map((field) =>
+      field.id === 'fReviewer' ? { ...field, required: true } : field,
+    );
+    expect(
+      checkFieldMap({ title: 'fTitle', body: 'fBody', reviewer: 'fReviewer' }, required).problems,
+    ).toEqual([
+      'The collection requires Reviewed by, which Send to CMS doesn’t fill: make it optional in Framer, or pick another collection',
+    ]);
+  });
+
   it('keeps a map that fills every field the collection requires', () => {
     const required = fields.map((f) => (f.id === 'fTitle' ? { ...f, required: true } : f));
     expect(checkFieldMap({ title: 'fTitle', body: 'fBody' }, required)).toEqual({

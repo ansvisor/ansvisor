@@ -200,5 +200,8 @@ export function framerFieldData({ page, body, jsonLd }, fieldMap) {
   }
   // Empty when the page has none: a JSON-LD dropped from the page is cleared in Framer too.
   if (fieldMap.jsonLd) data[fieldMap.jsonLd] = text(jsonLd?.length ? jsonLdText(jsonLd) : '');
+  if (fieldMap.reviewer) {
+    data[fieldMap.reviewer] = text(squash(page.reviewer ?? '').slice(0, NAME_CHARS));
+  }
   return data;
 }

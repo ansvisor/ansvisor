@@ -182,6 +182,9 @@ describe('buildPagePrompt', () => {
     });
     expect(system).toContain('whose best answer is ONE page');
     expect(system).toContain('sourceQuery');
+    // This year, and no year unless one belongs (current-year.js).
+    expect(system).toContain(`Current year: ${new Date().getUTCFullYear()}`);
+    expect(system).toContain('Leave years out');
     expect(prompt).toContain('The page: /gifts');
     expect(prompt).toContain('Coffee gifts — Gift boxes');
     expect(prompt).toContain('90 sessions');
