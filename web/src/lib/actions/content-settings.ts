@@ -47,11 +47,22 @@ export async function getContentSettings(): Promise<ContentSettings | null> {
       id: b.id,
       name: b.name,
       qualityHandoff: b.content_quality_handoff,
-      trustedSources: trustedSourcesOn && 'trusted_sources' in b ? b.trusted_sources : [],
+      trustedSources: trustedSourcesOn ? listIn(b, 'trusted_sources') : [],
     })),
     canManage: profile.role === 'admin' || profile.role === 'manager',
     trustedSourcesOn,
   };
+}
+
+/**
+ * A list column of a brand row, read from the query with it or the one
+ * without (before its migration): its strings, else none. Read, not
+ * narrowed with `in`, which types the column the other query lacks as
+ * unknown.
+ */
+function listIn(row: object, column: string): string[] {
+  const value: unknown = (row as Record<string, unknown>)[column];
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 }
 
 /** A database without 00449 has no brands.trusted_sources (42703 on a read, PGRST204 on a write). */
