@@ -652,7 +652,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Content opportunity',
       description:
-        "Get full details of a specific content opportunity, including raw AI visibility gap metrics, intent, competitor references, and the generated content brief if one already exists. source_data.estAiVolume is the sum of its prompts' estimated AI searches a month when the opportunity was made or last updated: an estimate, not a measurement, and possibly out of date; get_prompt_volumes has each prompt's current estimate with its range and confidence. Use this when the user picks a specific opportunity from the list and wants to inspect it further or start writing.",
+        "Get full details of a specific content opportunity, including raw AI visibility gap metrics, intent, competitor references, and the generated content brief if one already exists. `volume` is its estimated AI searches a month as the Content page shows it: its question's (prompt_text), with its range, confidence, source and date, `of_prompts` (the question is one of them) and, for a long question, `from_head_terms` with `closest_phrase` (its related keyword closest to its words, with that keyword's own estimate); null when the prompt has no volume. It is an estimate, not a measurement: quote it as a range with its source. source_data.estAiVolume is the sum of its prompts' estimates the score's demand weighs, not its volume; get_prompt_volumes has each prompt's. Use this when the user picks a specific opportunity from the list and wants to inspect it further or start writing.",
       inputSchema: {
         opportunity_id: relaxedUuid.describe(
           'Content opportunity UUID, from list_content_opportunities.',

@@ -2021,7 +2021,9 @@
         "estimate",
         "confidence",
         "volume range",
-        "estimate badge"
+        "estimate badge",
+        "head terms",
+        "opportunity volume"
       ],
       "synonyms": [
         "how many people ask",
@@ -2030,15 +2032,15 @@
         "est. ai volume"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
-          "text": "AI assistants don't publish how often people ask them something, so every AI search volume in Ansvisor is an estimate. It is shown as a range, such as 540–2k, never as a single number. Totals, averages and a prompt's own page add a dashed **Estimate** badge; in tables the range alone marks an estimate."
+          "text": "AI assistants don't publish how often people ask them something, so every AI search volume in Ansvisor is an estimate. It is shown as a range, such as 540–2k, never as a single number. Totals, averages, a prompt's own page, a content opportunity, the **Prompt Volumes** chart and the Action Center's volumes add a dashed **Estimate** badge; in other tables the range alone marks an estimate."
         },
         {
           "heading": "How it's estimated",
-          "text": "The estimate is the median monthly Google searches for the prompt's related keywords, times the share of Google searches that now get an AI answer (45% by default; a self-hosted server can change it).\n\nWhen a prompt's volume is analyzed, Ansvisor picks five short Google keywords for its category and reads their monthly Google searches. Keywords Google has no data for are left out, and the median of the rest is the prompt's **Google Vol.** The Insights tab shows the AI share as **AI Adoption Rate**."
+          "text": "The estimate is the median monthly Google searches for the prompt's related keywords, times the share of Google searches that now get an AI answer (45% by default; a self-hosted server can change it).\n\nWhen a prompt's volume is analyzed, Ansvisor picks five short Google keywords for its category and reads their monthly Google searches. Keywords Google has no data for are left out, and the median of the rest is the prompt's **Google Vol. (head terms)**. The Insights tab shows the AI share as **AI Adoption Rate**."
         },
         {
           "heading": "How the range is set",
@@ -2059,6 +2061,10 @@
         {
           "heading": "Totals, single keywords and AI guesses",
           "text": "Some estimates are built differently, and their note says so:\n\n- **Totals and averages** (**Total Est. AI Volume**, **Avg. AI Volume**, and Similar Topics' **Est. AI Volume**): the sum of the lows to the sum of the highs; an average divides both by the prompt count. A total is high-confidence when at least 80% of its volume is, low when more than half is low-confidence, and medium otherwise. The note gives the mix.\n- **One keyword** (each row of Similar Topics): only the AI share is assumed, so it is Medium with a ±25% range, or Low when it has no volume or is over six months old.\n- **An AI's guess** (suggestions from Ansvisor Agents, the Brand Visibility page's Opportunities, and the Action Center's topic opportunities): always Low, from half to twice the guess. Track the prompt to get an estimate from its keywords' Google searches."
+        },
+        {
+          "heading": "A content opportunity's volume",
+          "text": "A content opportunity shows the estimate of its question, the prompt it is shown with, and says it is one of the prompts it answers; it isn't their sum. Its score still weighs all of them.\n\nA long question's estimate comes from short head terms for its category, not its own words, so it says **From head terms** and names the closest measured phrase with that phrase's own estimate, often far lower."
         },
         {
           "heading": "Compare prompts by their ranges",
@@ -2181,7 +2187,7 @@
         "volume analysis"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -2193,7 +2199,7 @@
         },
         {
           "heading": "What the tab shows",
-          "text": "For analyzed prompts you see:\n\n- **Prompts Analyzed**, with how many keywords they cover, and **Total Est. AI Volume** and **Avg. AI Volume** across your prompts.\n- Two **Prompt Volumes** cards: a chart of the total by answer engine, and a table with each prompt's **Google Vol.** and **Est. AI Vol.**\n- Each prompt's **Intent**: Comparison, How-to, What is, Best / Top, vs. / Review, Recommendation, Problem Solving or Other.\n- **High Opportunity Prompts**: the prompts with the most estimated AI searches. A low-confidence estimate isn't listed there on its own.\n- **Similar Topics**: the most-searched keyword clusters across your prompts. **See all** opens its own page.\n- **AI Adoption Rate**: the share of Google searches that get an AI answer, used in every estimate."
+          "text": "For analyzed prompts you see:\n\n- **Prompts Analyzed**, with how many keywords they cover, and **Total Est. AI Volume** and **Avg. AI Volume** across your prompts.\n- Two **Prompt Volumes** cards: a chart of the total by answer engine, and a table with each prompt's **Google Vol. (head terms)** and **Est. AI Vol.**\n- Each prompt's **Intent**: Comparison, How-to, What is, Best / Top, vs. / Review, Recommendation, Problem Solving or Other.\n- **High Opportunity Prompts**: the prompts with the most estimated AI searches. A low-confidence estimate isn't listed there on its own.\n- **Similar Topics**: the most-searched keyword clusters across your prompts. **See all** opens its own page.\n- **AI Adoption Rate**: the share of Google searches that get an AI answer, used in every estimate."
         },
         {
           "heading": "Where else estimated volumes show",

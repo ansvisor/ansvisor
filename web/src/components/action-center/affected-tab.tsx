@@ -23,8 +23,9 @@ import {
   type AffectedPrompt,
 } from '@/lib/action-center/affected';
 import { getPlatformName } from '@/lib/traffic-platforms';
-import type { VolumeEstimate } from '@/lib/volume-estimate';
+import { sumEstimates, type VolumeEstimate } from '@/lib/volume-estimate';
 import {
+  EstimateBadge,
   EstimateNoteTooltip,
   EstimateRange,
   createEstimateNoteHandle,
@@ -96,7 +97,21 @@ function PromptsTable({
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs">{t('prompt')}</TableHead>
-              {show.volume && <TableHead className="text-right text-xs">{t('volume')}</TableHead>}
+              {show.volume && (
+                <TableHead className="text-right text-xs">
+                  {/* The column's estimates as one total, so its badge says
+                      what they are and where they come from. */}
+                  <span className="inline-flex items-center gap-1.5">
+                    {t('volume')}
+                    <EstimateBadge
+                      estimate={sumEstimates(
+                        rows.map(volumeOf).filter((v): v is VolumeEstimate => v !== null),
+                      )}
+                      kind="total"
+                    />
+                  </span>
+                </TableHead>
+              )}
               {show.platforms && (
                 <TableHead className="text-xs">
                   {show.lost ? t('lostOn') : t('platforms')}

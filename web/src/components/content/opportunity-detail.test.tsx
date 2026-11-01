@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { ContentOpportunity } from '@/types';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { keywordVolumeEstimate } from '@/lib/volume-estimate';
 
 /**
  * The opportunity panel on a read-only workspace (plan not active): its
@@ -33,8 +34,10 @@ const plan = vi.hoisted(() => ({
   setPlanRowPriority: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/actions/content-plan', () => plan);
+const NO_VOLUME = { basket: null, basketFailed: false, volume: null, question: null, prompts: 1 };
+const volumeRead = vi.hoisted(() => ({ value: null as unknown }));
 vi.mock('@/hooks/use-opportunity-volume', () => ({
-  useOpportunityVolume: () => ({ basket: null, basketFailed: false, volume: null }),
+  useOpportunityVolume: () => volumeRead.value ?? NO_VOLUME,
 }));
 // An admin or a manager unless a test says otherwise.
 const viewer = vi.hoisted(() => ({ canManage: true }));
@@ -123,6 +126,7 @@ const moreItem = async (item: string) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  volumeRead.value = null;
   viewer.canManage = true;
   newContent.open = false;
   content.getOpportunity.mockResolvedValue(OPPORTUNITY);
@@ -249,5 +253,33 @@ describe("the opportunity panel's Dismiss", () => {
     const items = await menuItems();
     expect(items).toContain('Mark as reviewed');
     expect(items).not.toContain('Dismiss');
+  });
+});
+
+describe("the opportunity's volume (2026-11-01)", () => {
+  it("is its question's, one of its prompts, from head terms with the closest measured phrase", async () => {
+    const now = new Date('2026-11-01T00:00:00Z');
+    const question = 'What are the best coffee subscription services in 2026?';
+    volumeRead.value = {
+      ...NO_VOLUME,
+      volume: keywordVolumeEstimate(6751, 0.45, '2026-10-20T00:00:00Z', now),
+      question: {
+        question,
+        estimate: keywordVolumeEstimate(6751, 0.45, '2026-10-20T00:00:00Z', now),
+        fromHeadTerms: true,
+        closest: {
+          phrase: 'best coffee subscription 2026',
+          estimate: keywordVolumeEstimate(1300, 0.45, '2026-10-20T00:00:00Z', now),
+        },
+      },
+      prompts: 3,
+    };
+    await render(false);
+    const text = container.textContent ?? '';
+    expect(text).toContain('Estimate');
+    expect(text).toContain(`For “${question}”, one of 3 prompts`);
+    expect(text).toContain(
+      'From head terms. Closest measured phrase: “best coffee subscription 2026”',
+    );
   });
 });

@@ -242,6 +242,12 @@ export interface ContentOpportunitySourceData {
     intent: number;
   };
   windowDays?: number;
+  /**
+   * Its question's estimated AI volume when it was made: what its volume
+   * reads as (question-volume.ts). `estAiVolume` is its prompts' sum, which
+   * the score's demand weighs.
+   */
+  questionVolume?: number;
   targetPages?: OpportunityPage[];
   assets?: OpportunityAsset[];
   /** Action Center actions sent from this opportunity, by asset key ('all' for the whole). */

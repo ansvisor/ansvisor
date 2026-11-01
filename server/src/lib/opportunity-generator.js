@@ -68,7 +68,7 @@ const SYSTEM_PROMPT = `You are an AEO content strategist. Each cluster below is 
 
 Rules:
 - One opportunity per cluster, for the content that answers all of its prompts. Name the need, not a single prompt.
-- Be concrete and actionable, and reference the data: volume, visibility, the strongest competitor's visibility, competitors.
+- Be concrete and actionable, and reference the data: visibility, the strongest competitor's visibility, competitors. Don't state a search volume: it is an estimate the page shows with its source.
 - Categorize as "owned" (content the brand controls) or "earned" (third-party content, PR, reviews).
 - Existing opportunities from other topics are listed. If a cluster needs the same content as one of them — the same user need and the same piece of content, answering the cluster's prompts without becoming a different page — set sameAs to its bracketed E index. Otherwise set sameAs to null. Sharing words, a topic or a product category is not enough.
 - Decide what the content is, given the brand's pages listed under each cluster:
@@ -133,7 +133,10 @@ function sourceData({ clusters, topicName, metrics, components, queries }) {
     topicName: topicName(primary),
     relatedTopics: related.map(topicName),
     prompts: clusters.flatMap((c) => c.promptTexts),
+    // What the score's demand adds up; the opportunity's volume is its
+    // question's (questionVolume), as the page shows it.
     estAiVolume: metrics.demand,
+    questionVolume: metrics.representative?.volume ?? 0,
     visibilityScore: metrics.visibility,
     topCompetitorVisibility: metrics.topCompetitorVisibility,
     competitorGap: metrics.competitorGap,
@@ -619,7 +622,7 @@ ${c.promptTexts
   .map((t) => `- ${t}`)
   .join('\n')}
 Searches AI engines ran for these prompts: ${basket.top.map((q) => q.query).join('; ') || 'none recorded'}
-Est. AI volume: ${m.demand}/mo | Brand visibility: ${m.visibility}% | Strongest competitor: ${m.topCompetitorVisibility}% | Competitors visible: ${m.competitorsCited.join(', ') || 'none'}
+Brand visibility: ${m.visibility}% | Strongest competitor: ${m.topCompetitorVisibility}% | Competitors visible: ${m.competitorsCited.join(', ') || 'none'}
 Brand pages that may cover this need:
 ${pages.map(pageLine).join('\n') || 'none found'}`;
   };

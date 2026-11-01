@@ -7,6 +7,8 @@ import { apiFailure, type ApiFailure } from '@/lib/api-failure';
 import type { ContentUsage } from '@/lib/content-usage';
 import { assertWritable } from '@/lib/subscription-guard';
 import type { NoPlanMark } from '@/lib/billing/no-plan';
+import { readQuestionVolume } from '@/lib/content/question-volume-read';
+import type { QuestionVolume } from '@/lib/content/question-volume';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
@@ -338,6 +340,18 @@ export async function getOpportunityBasket(id: string): Promise<OpportunityBaske
   }
 
   return res.json();
+}
+
+/**
+ * An opportunity's volume: its question's, the prompt it is shown with
+ * (question-volume.ts). Null when the prompt isn't the brand's or has none.
+ */
+export async function getQuestionVolume(
+  brandId: string,
+  promptId: string,
+): Promise<QuestionVolume | null> {
+  const supabase = await createClient();
+  return readQuestionVolume(supabase, brandId, promptId);
 }
 
 export interface BriefQuota extends NoPlanMark {

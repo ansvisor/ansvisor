@@ -55,6 +55,11 @@ import {
   filterPromptSuggestionEngines,
   promptSuggestionsAreStale,
 } from './prompt-suggestions-utils';
+import { readQuestionVolume } from '@/lib/content/question-volume-read';
+import {
+  opportunityVolumeForMcp,
+  type OpportunityVolumeForMcp,
+} from '@/lib/content/question-volume';
 
 /**
  * Pure data-fetch functions shared by the MCP route and the parallel REST
@@ -1022,6 +1027,12 @@ export interface ContentOpportunityDetail {
   status: string;
   prompt_id: string | null;
   prompt_text: string | null;
+  /**
+   * Its estimated AI searches a month, as the Content page shows it: its
+   * question's (prompt_text), one of `of_prompts` it answers
+   * (question-volume.ts). Null when its prompt has no volume.
+   */
+  volume: OpportunityVolumeForMcp | null;
   source_data: Record<string, unknown> | null;
   brief: Record<string, unknown> | null;
   created_at: string;
@@ -1388,7 +1399,7 @@ export async function getContentOpportunityFor(
   const { data, error } = await supabaseAdmin
     .from('content_opportunities')
     .select(
-      'id, title, description, type, impact, opportunity_score, status, prompt_id, created_at, updated_at, source_data, brief, prompts(text), brands!inner(organization_id)',
+      'id, brand_id, title, description, type, impact, opportunity_score, status, prompt_id, created_at, updated_at, source_data, brief, prompts(text), brands!inner(organization_id)',
     )
     .eq('id', opportunityId)
     .eq('brands.organization_id', auth.organizationId)
@@ -1399,6 +1410,7 @@ export async function getContentOpportunityFor(
 
   const r = data as unknown as {
     id: string;
+    brand_id: string;
     title: string;
     description: string | null;
     type: string;
@@ -1414,6 +1426,12 @@ export async function getContentOpportunityFor(
   };
 
   const prompt = Array.isArray(r.prompts) ? (r.prompts[0] ?? null) : r.prompts;
+  // The organization is checked above: its prompt is read as the brand's.
+  const question = r.prompt_id
+    ? await readQuestionVolume(supabaseAdmin, r.brand_id, r.prompt_id)
+    : null;
+  const kept = r.source_data?.prompts;
+  const prompts = Array.isArray(kept) ? kept.length : 1;
 
   return {
     id: r.id,
@@ -1425,6 +1443,7 @@ export async function getContentOpportunityFor(
     status: r.status,
     prompt_id: r.prompt_id,
     prompt_text: prompt?.text ?? null,
+    volume: opportunityVolumeForMcp(question, prompts),
     source_data: r.source_data ?? null,
     brief: r.brief ?? null,
     created_at: r.created_at ?? '',
