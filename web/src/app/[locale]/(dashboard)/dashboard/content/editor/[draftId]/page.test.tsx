@@ -2668,74 +2668,60 @@ describe('the content editor', () => {
     expect(toast.success).toHaveBeenLastCalledWith('HTML copied');
   });
 
-  it('copies the selected reviewer as WebPage metadata, separately from page text', async () => {
-    const reviewer: ContentAuthor = {
-      id: 'r1',
-      name: 'Dr. Grace Hopper',
-      title: 'Clinical Reviewer',
-      bio: null,
-      photoUrl: null,
-      sameAs: [],
-      userId: null,
-      createdBy: 'u1',
-      defaultFor: [],
-      pages: 0,
-    };
+  const reviewerAuthor: ContentAuthor = {
+    id: 'r1',
+    name: 'Dr. Grace Hopper',
+    title: 'Clinical Reviewer',
+    bio: null,
+    photoUrl: null,
+    sameAs: [],
+    userId: null,
+    createdBy: 'u1',
+    defaultFor: [],
+    pages: 0,
+  };
+  /** Copy HTML with Quality on and Dr. Grace Hopper picked as the reviewer. */
+  const copyWithReviewer = async (bodyHtml: string) => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     getContentAuthors.mockResolvedValue({
-      authors: [reviewer],
+      authors: [reviewerAuthor],
       brands: [{ id: 'b1', name: 'Acme' }],
       me: { id: 'u1', role: 'analyst' },
     });
-    getContentDraft.mockResolvedValue(draft({ reviewerId: 'r1' }));
-    await renderPage();
+    process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+    try {
+      getContentDraft.mockResolvedValue(draft({ reviewerId: 'r1', bodyHtml }));
+      await renderPage();
+      await act(async () => button('Copy HTML')!.click());
+      return writeText.mock.calls[0][0] as string;
+    } finally {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    }
+  };
 
-    await act(async () => button('Copy HTML')!.click());
-
-    const copied = writeText.mock.calls[0][0] as string;
+  it('copies the reviewer as WebPage metadata once the page names them', async () => {
+    const copied = await copyWithReviewer(
+      '<h1>Pipeline</h1><p>Reviewed by Dr. Grace Hopper</p><p>Teams trust it.</p>',
+    );
     expect(copied).toMatch(/"@type":\s*"WebPage"/);
     expect(copied).toContain('"reviewedBy"');
     expect(copied).toMatch(/"name":\s*"Dr\. Grace Hopper"/);
-    expect(copied).not.toContain('<p>Reviewed by Dr. Grace Hopper</p>');
   });
 
-  it('exports a selected reviewer in Markdown metadata when Quality is off', async () => {
-    const reviewer: ContentAuthor = {
-      id: 'r1',
-      name: 'Dr. Grace Hopper',
-      title: 'Clinical Reviewer',
-      bio: null,
-      photoUrl: null,
-      sameAs: [],
-      userId: null,
-      createdBy: 'u1',
-      defaultFor: [],
-      pages: 0,
-    };
-    getContentAuthors.mockResolvedValue({
-      authors: [reviewer],
-      brands: [{ id: 'b1', name: 'Acme' }],
-      me: { id: 'u1', role: 'analyst' },
-    });
-    getContentDraft.mockResolvedValue(draft({ reviewerId: 'r1' }));
+  it('copies and exports as before with Quality off: no reviewer, no authors read', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    getContentDraft.mockResolvedValue(
+      draft({
+        reviewerId: 'r1',
+        bodyHtml: '<h1>Pipeline</h1><p>Reviewed by Dr. Grace Hopper</p>',
+      }),
+    );
     await renderPage();
-
-    const trigger = [...container.querySelectorAll<HTMLButtonElement>('header button')].find(
-      (b) => b.textContent === 'Export',
-    )!;
-    await act(async () => {
-      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
-      trigger.click();
-    });
-    const markdown = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
-      (item) => item.textContent === 'Export Markdown',
-    )!;
-    await act(async () => markdown.click());
-
-    const [blob] = saveBlob.mock.calls[0] as [Blob, string];
-    const exported = await blob.text();
-    expect(exported).toContain('reviewed_by: "Dr. Grace Hopper, Clinical Reviewer"');
+    await act(async () => button('Copy HTML')!.click());
+    expect(writeText.mock.calls[0][0]).not.toContain('reviewedBy');
+    expect(getContentAuthors).not.toHaveBeenCalled();
   });
 
   it('exports the page from the header, as Markdown here', async () => {
@@ -2769,9 +2755,7 @@ describe('the content editor', () => {
       reader.onload = () => resolve(reader.result as string);
       reader.readAsText(blob);
     });
-    expect(text).toBe(
-      '---\ntitle: "Pipeline forecasting"\ndescription: "Teams trust it."\nslug: "pipeline-forecasting"\n---\n\nTeams **trust** it.\n',
-    );
+    expect(text).toBe('# Pipeline forecasting\n\nTeams **trust** it.\n');
   });
 
   it('shows the link the cursor is in, to open in a new tab', async () => {

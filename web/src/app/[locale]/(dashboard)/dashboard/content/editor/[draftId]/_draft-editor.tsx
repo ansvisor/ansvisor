@@ -71,12 +71,7 @@ import { getSiteTrust } from '@/lib/actions/audits';
 import { getContentAuthors } from '@/lib/actions/content-authors';
 import { readAgentRun, stopAgentRun } from '@/lib/content/agent-runs-client';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
-import {
-  authorInitials,
-  canEditAuthor,
-  type AuthorsRead,
-  type ContentAuthor,
-} from '@/lib/content/authors';
+import { authorInitials, canEditAuthor, type AuthorsRead } from '@/lib/content/authors';
 import type { SiteTrust } from '@/lib/content/site-trust';
 import {
   AGENT_POLL_MS,
@@ -90,7 +85,6 @@ import {
   draftExportBlob,
   draftExportFileName,
   type DraftExportFormat,
-  type ExportFields,
 } from '@/lib/content/draft-export';
 import type { DraftVersion } from '@/lib/content/history';
 import {
@@ -128,7 +122,6 @@ import {
   bylineText,
   disclosureText,
   exportPlaceholders,
-  pageFields,
   pageNamesPerson,
   pasteChecks,
   teamName,
@@ -423,7 +416,6 @@ export function DraftEditor({
   agentFinished?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor');
-  const tExportDialog = useTranslations('contentEditor.editor.exportDialog');
   const tNext = useTranslations('contentEditor.editor.nextStep');
   const tPublish = useTranslations('contentEditor.publish');
   // A read-only workspace (plan not active): the page opens read-only and
@@ -799,9 +791,6 @@ export function DraftEditor({
   // Who the page is by (CE-038): page metadata, shown in the header and in a
   // Page info strip outside the page; with Quality's first phase.
   const [authorsRead, setAuthorsRead] = useState<AuthorsRead | null>(null);
-  // When Quality is off, a saved reviewer still belongs in legacy exports;
-  // read only that person without enabling the Quality menus or author byline.
-  const [savedReviewerAuthor, setSavedReviewerAuthor] = useState<ContentAuthor | null>(null);
   // Read, or failed to: the header's score waits for it either way.
   const [authorsTried, setAuthorsTried] = useState(false);
   const [authorId, setAuthorId] = useState(draft.authorId);
@@ -823,26 +812,6 @@ export function DraftEditor({
       live = false;
     };
   }, [qualityOn]);
-
-  useEffect(() => {
-    if (qualityOn || !draft.reviewerId) {
-      setSavedReviewerAuthor(null);
-      return;
-    }
-    let live = true;
-    getContentAuthors()
-      .then((read) => {
-        if (live) {
-          setSavedReviewerAuthor(
-            read?.authors.find((author) => author.id === draft.reviewerId) ?? null,
-          );
-        }
-      })
-      .catch((err) => console.error('Failed to read the saved reviewer:', err));
-    return () => {
-      live = false;
-    };
-  }, [qualityOn, draft.reviewerId]);
   const storeBrandName = useBrandStore((s) => s.brands.find((b) => b.id === draft.brandId)?.name);
   const brandName =
     authorsRead?.brands.find((b) => b.id === draft.brandId)?.name ?? storeBrandName ?? '';
@@ -1217,7 +1186,7 @@ export function DraftEditor({
   // A page that advises consumers on health, finance or law (the page's read)
   // asks for a qualified reviewer, one of Authors.
   const regulated = sourcesOn ? (pageRead.read?.regulated ?? null) : null;
-  const pageReviewer = authorsRead?.authors.find((a) => a.id === reviewerId) ?? savedReviewerAuthor;
+  const pageReviewer = authorsRead?.authors.find((a) => a.id === reviewerId) ?? null;
   // Phase 3 (CE-053): a product page's Product schema in Before you publish,
   // from its opening paragraph, its own images (else its first) and the
   // price it states.
@@ -3021,55 +2990,9 @@ export function DraftEditor({
       htmlSource !== null ? htmlFromSource(htmlSource) : editor.getHTML(),
     );
     const name = title.trim() || t('untitled');
-    const fields = pageFields({
-      title,
-      html,
-      sourceUrl: draft.sourceUrl,
-      author: pageAuthor,
-      reviewer: pageReviewer,
-      teamByline,
-    });
-    const withLine = contentByline ? withByline(html, contentByline) : html;
-    const reviewerSchema = pageReviewer
-      ? jsonLdScript(webPageJsonLd({ title, reviewer: pageReviewer }))
-      : null;
-    const exportHtml = reviewerSchema ? `${withLine}\n${reviewerSchema}` : withLine;
-    const exportFields: ExportFields = {
-      table: {
-        note: tExportDialog('fields.note'),
-        rows: [
-          [tExportDialog('fields.metaTitle'), fields.metaTitle],
-          [tExportDialog('fields.metaDescription'), fields.metaDescription],
-          ...(fields.slug ? [[tExportDialog('fields.slug'), fields.slug] as [string, string]] : []),
-          ...(fields.author
-            ? [[tExportDialog('fields.author'), fields.author] as [string, string]]
-            : []),
-          ...(fields.reviewer
-            ? [[tExportDialog('fields.reviewer'), fields.reviewer] as [string, string]]
-            : []),
-          ...(fields.featuredImage
-            ? [[tExportDialog('fields.featuredImage'), fields.featuredImage] as [string, string]]
-            : []),
-        ],
-      },
-      front: {
-        title: fields.metaTitle,
-        description: fields.metaDescription,
-        slug: fields.slug,
-        author: fields.author,
-        ...(fields.reviewer ? { reviewed_by: fields.reviewer } : {}),
-        ...(fields.featuredImage ? { image: fields.featuredImage } : {}),
-      },
-      head: {
-        title: fields.metaTitle,
-        description: fields.metaDescription,
-        author: fields.author,
-        reviewer: fields.reviewer,
-      },
-    };
     try {
       saveBlob(
-        await draftExportBlob(format, name, exportHtml, exportFields, draft.sourceUrl),
+        await draftExportBlob(format, name, html, undefined, draft.sourceUrl),
         draftExportFileName(name, format),
       );
     } catch (err) {
