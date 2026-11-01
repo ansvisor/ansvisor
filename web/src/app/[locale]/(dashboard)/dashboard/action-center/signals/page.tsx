@@ -55,6 +55,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { toCsv } from '@/lib/csv';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
+import { exportFileName } from '@/lib/white-label/export-name';
 import type { KpiTrendPoint } from '@/lib/actions/kpis';
 import { signalChangeTone, signedPercent, type SignalMetric } from '@/lib/signals/metrics';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
@@ -275,7 +276,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
     [signals, platform],
   );
 
-  const handleExportCsv = useCallback(() => {
+  const handleExportCsv = useCallback(async () => {
     if (visible.length === 0) return;
 
     const rows = visible.map((signal) => ({
@@ -298,7 +299,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
     const slug = brand.slug ?? 'brand';
 
     link.href = url;
-    link.download = `ansvisor_${slug}_signals_${date}.csv`;
+    link.download = await exportFileName(`${slug}_signals_${date}.csv`);
     link.click();
 
     URL.revokeObjectURL(url);

@@ -33,6 +33,7 @@ import {
   readableOn,
 } from '@/lib/white-label/kit';
 import { uploadLogo, type LogoUploadError } from '@/lib/white-label/logo-upload';
+import { forgetExportBranding } from '@/lib/white-label/export-name';
 
 /** The reports' own accent while a kit has no color: Ansvisor's indigo. */
 const DEFAULT_ACCENT = '#6366f1';
@@ -191,6 +192,8 @@ export function WhiteLabelSection() {
       return;
     }
     toast.success(t('saved'));
+    // Downloads are named after the kit: read it again on the next one.
+    forgetExportBranding();
     await load();
   }
 
@@ -200,6 +203,7 @@ export function WhiteLabelSection() {
     const set = await setWhiteLabelLogo(uploaded.path).catch(() => FAILED);
     if (!set.ok) return fail(set.failure, tActions('saveWhiteLabel'));
     toast.success(t('logoSaved'));
+    forgetExportBranding();
     await load(true);
   }
 
@@ -207,6 +211,7 @@ export function WhiteLabelSection() {
     const set = await setWhiteLabelLogo(null).catch(() => FAILED);
     if (!set.ok) return fail(set.failure, tActions('saveWhiteLabel'));
     toast.success(t('logoRemoved'));
+    forgetExportBranding();
     await load(true);
   }
 

@@ -3,7 +3,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { supabaseAdmin } from '@/lib/supabase/admin';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { getMinimumPlanForFeature, hasFeature, type PlanId } from '@/config/plans';
 import {
@@ -76,6 +75,14 @@ export interface ClientLogoView {
   logoUrl: string | null;
 }
 
+/**
+ * The service-role client, imported once, when first needed: it is created
+ * at module load and needs the service-role env, and pages that only name
+ * their downloads import this module too (lib/white-label/export-name.ts).
+ */
+let adminClient: Promise<typeof import('@/lib/supabase/admin').supabaseAdmin> | null = null;
+const admin = () => (adminClient ??= import('@/lib/supabase/admin').then((m) => m.supabaseAdmin));
+
 /** How long a logo's signed address works: enough to show it on the page. */
 const LOGO_URL_SECONDS = 10 * 60;
 
@@ -125,7 +132,7 @@ function refusal(err: unknown): { ok: false; failure: WhiteLabelFailure } {
 
 async function signedLogoUrl(path: string | null): Promise<string | null> {
   if (!path) return null;
-  const { data, error } = await supabaseAdmin.storage
+  const { data, error } = await (await admin()).storage
     .from(WHITE_LABEL_BUCKET)
     .createSignedUrl(path, LOGO_URL_SECONDS);
   if (error || !data) {
@@ -141,7 +148,7 @@ async function logoUploadTicket(
   type: string,
 ): Promise<LogoUploadTicket | { ok: false; failure: WhiteLabelFailure }> {
   const path = `${folder}${randomUUID()}.${logoExtension(type)}`;
-  const { data, error } = await supabaseAdmin.storage
+  const { data, error } = await (await admin()).storage
     .from(WHITE_LABEL_BUCKET)
     .createSignedUploadUrl(path);
   if (error || !data) {
@@ -158,7 +165,7 @@ async function logoUploadTicket(
  */
 async function uploadedLogoOk(path: string): Promise<boolean> {
   const type = logoTypeOf(path);
-  const { data, error } = await supabaseAdmin.storage.from(WHITE_LABEL_BUCKET).download(path);
+  const { data, error } = await (await admin()).storage.from(WHITE_LABEL_BUCKET).download(path);
   if (error || !data || !type) return false;
   const ok =
     data.size <= LOGO_MAX_BYTES && logoBytesOk(new Uint8Array(await data.arrayBuffer()), type);
@@ -169,7 +176,7 @@ async function uploadedLogoOk(path: string): Promise<boolean> {
 /** Deletes a logo nothing points to any more; a failure is only logged. */
 async function removeLogo(path: string | null) {
   if (!path) return;
-  const { error } = await supabaseAdmin.storage.from(WHITE_LABEL_BUCKET).remove([path]);
+  const { error } = await (await admin()).storage.from(WHITE_LABEL_BUCKET).remove([path]);
   if (error) console.error('White label: could not delete an old logo:', error.message);
 }
 
@@ -206,7 +213,7 @@ export async function getWhiteLabelSettings(): Promise<
     const [logoUrl, updatedBy] = await Promise.all([
       signedLogoUrl(kit?.logo_path ?? null),
       kit?.updated_by
-        ? supabaseAdmin
+        ? (await admin())
             .from('profiles')
             .select('full_name')
             .eq('id', kit.updated_by)
@@ -483,7 +490,7 @@ export async function setBrandClientLogo(
 async function logoDataUrl(path: string | null): Promise<string | null> {
   if (!path) return null;
   const type = logoTypeOf(path);
-  const { data, error } = await supabaseAdmin.storage.from(WHITE_LABEL_BUCKET).download(path);
+  const { data, error } = await (await admin()).storage.from(WHITE_LABEL_BUCKET).download(path);
   if (error || !data || !type) throw new Error(`Could not read a logo: ${error?.message ?? path}`);
   return `data:${type};base64,${Buffer.from(await data.arrayBuffer()).toString('base64')}`;
 }
@@ -532,6 +539,39 @@ export async function getReportBranding(
     };
   } catch (err) {
     console.error('White label: could not read a report’s kit:', err);
+    return { ok: false, failure: 'failed' };
+  }
+}
+
+// ─── Downloads ───────────────────────────────────────────────────────────────
+
+/**
+ * The kit a workspace's downloads are named with: its company name while
+ * the kit is in use (kitInUse), null without one. Pages read it once a page
+ * load (lib/white-label/export-name.ts); the AI Traffic export's route, on
+ * the server, for each file.
+ */
+export async function getExportBranding(): Promise<
+  { ok: true; branding: { companyName: string | null } | null } | { ok: false; failure: 'failed' }
+> {
+  try {
+    const me = await member();
+    if (!me) return { ok: false, failure: 'failed' };
+    if (!(await whiteLabelOn(me.organizationId))) return { ok: true, branding: null };
+    const { data, error } = await me.supabase
+      .from('white_label_kits')
+      .select('company_name, logo_path')
+      .eq('organization_id', me.organizationId)
+      .maybeSingle();
+    if (error) {
+      console.error('White label: could not read the kit for a download:', error.message);
+      return { ok: false, failure: 'failed' };
+    }
+    const inUse =
+      data !== null && kitInUse({ companyName: data.company_name, logoPath: data.logo_path }, true);
+    return { ok: true, branding: inUse ? { companyName: data.company_name } : null };
+  } catch (err) {
+    console.error('White label: could not read the kit for a download:', err);
     return { ok: false, failure: 'failed' };
   }
 }

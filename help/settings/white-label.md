@@ -34,6 +34,8 @@ With the kit in use, a brand's reports carry it. The report's page opens with a 
 
 **Download PDF** makes the PDF with the same cover, your main color on its rules and bars, your footer line at the bottom of each page, and your company name as its author. It no longer carries Ansvisor's footer or names Ansvisor as its author, and its file name starts with your company's name.
 
+Downloads from the other pages, such as CSV files, Excel sheets and Word files, also start their names with your company's name instead of Ansvisor's, and a Word file names your company as its author. Emails keep Ansvisor's look for now.
+
 ## Who can change it
 
 Only admins change the kit; everyone else in the workspace sees it. Under it, the section says when it was last changed and by whom.
