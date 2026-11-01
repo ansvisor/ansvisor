@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { assertBrandAccess } from '../lib/access.js';
+import { DEMO_BRAND, isDemoBrand } from '../middleware/demo-brand.js';
 import { fixDraftRules, fixRulesInput } from '../lib/content-agent.js';
 import { handOffDraft, handOffInput } from '../lib/content-handoff.js';
 import { qualityPhase } from '../lib/content-quality.js';
@@ -536,7 +537,8 @@ const estimateBody = z.object({
  * draft-estimate.js): { score, categories, checks: { page, site, ai } }, and
  * with `ai` the AI checks' `verdicts`, to send back with later readings.
  * The page's checks are free; the AI checks are Quality's AI usage (429
- * ai_budget once it is spent, 402 without an active plan).
+ * ai_budget once it is spent, 402 without an active plan; 402 demo_brand on
+ * the demo brand, whose free checks still run).
  */
 router.post('/:draftId/audit-estimate', auditEstimateLimiter, async (req, res) => {
   const draftId = z.guid().safeParse(req.params.draftId);
@@ -574,6 +576,8 @@ router.post('/:draftId/audit-estimate', auditEstimateLimiter, async (req, res) =
     const [page, site] = await Promise.all([runSignals(ctx), readSiteSignals(brandId)]);
     let read = verdicts;
     if (ai) {
+      // The free checks run on the demo brand's sample drafts; the AI checks spend, so not there.
+      if (await isDemoBrand([brandId])) return res.status(402).json(DEMO_BRAND);
       const budget = await reserveAiBudget(brandRes.data?.organization_id, {
         feature: 'quality',
         modelId: auditLlmModel(),

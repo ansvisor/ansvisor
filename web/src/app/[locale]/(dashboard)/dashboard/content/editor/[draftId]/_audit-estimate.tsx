@@ -55,7 +55,9 @@ export function useAuditEstimate(
   const [estimatingAi, setEstimatingAi] = useState(false);
   // The verdicts a reading sends back: the latest, without reading again when they land.
   const verdicts = useRef<AiVerdict[] | undefined>(undefined);
-  verdicts.current = ai?.verdicts;
+  useEffect(() => {
+    verdicts.current = ai?.verdicts;
+  }, [ai]);
 
   useEffect(() => {
     let live = true;

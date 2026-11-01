@@ -46,6 +46,12 @@ vi.mock('../lib/plan-guard.js', async (importOriginal) => ({
   reserveAiBudget: (...args) => reserveAiBudget(...args),
 }));
 
+const demo = vi.hoisted(() => ({ value: false }));
+vi.mock('../middleware/demo-brand.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  isDemoBrand: async () => demo.value,
+}));
+
 const { default: router } = await import('./content-drafts.js');
 const { PlanLimitError } = await import('../lib/plan-guard.js');
 const { LLM_SIGNAL_KEYS } = await import('../lib/audit/llm-signals.js');
@@ -149,6 +155,19 @@ describe('POST /api/content-drafts/:draftId/audit-estimate', () => {
     expect(body.checks.ai).toBe(13);
     expect(body.score).toBeGreaterThan(free.score);
     expect(reserveAiBudget).not.toHaveBeenCalled();
+  });
+
+  it('estimates the demo brand’s drafts for free, and refuses their AI checks before any spend', async () => {
+    demo.value = true;
+    try {
+      expect((await estimate()).status).toBe(200);
+      const res = await estimate({ ai: true });
+      expect(res.status).toBe(402);
+      expect(await res.json()).toMatchObject({ code: 'demo_brand' });
+      expect(reserveAiBudget).not.toHaveBeenCalled();
+    } finally {
+      demo.value = false;
+    }
   });
 
   it('says the AI usage is spent, or there is no plan, before any call', async () => {
