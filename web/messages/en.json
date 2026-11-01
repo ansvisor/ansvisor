@@ -12136,6 +12136,22 @@
         "saveFailed": "Couldn't save the trusted sources. Try again.",
         "unavailable": "Trusted sources aren't available yet. Try again later.",
         "counted": "Counted for every brand"
+      },
+      "rules": {
+        "title": "Brand rules",
+        "description": "Rules in your own words, such as topics to stay away from. Site Audit's recommendations, new opportunities and the Content Agent follow them. Scores don't change.",
+        "count": "{count, plural, =0 {None yet} one {# rule} other {# rules}}",
+        "edit": "Edit",
+        "label": "{brand}'s rules",
+        "hint": "One rule per line, up to {length} characters each and {max} rules.",
+        "tooLong": "{count, plural, one {Line {lines} is} other {Lines {lines} are}} longer than {length} characters.",
+        "tooMany": "Up to {max} rules: take {count} out.",
+        "cancel": "Cancel",
+        "save": "Save",
+        "saved": "Brand rules saved",
+        "saveFailed": "Couldn't save the rules. Try again.",
+        "unavailable": "Brand rules aren't available yet. Try again later.",
+        "note": "Each draft's own rules and your My rules still apply in the Content Editor; a brand rule comes first when they disagree."
       }
     },
     "authors": {

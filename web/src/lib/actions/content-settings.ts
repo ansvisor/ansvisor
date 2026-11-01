@@ -4,14 +4,23 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { assertWritable } from '@/lib/subscription-guard';
 import { MAX_TRUSTED_SOURCES, trustedHost } from '@/lib/content/trusted-sources';
+import { brandRulesValid } from '@/lib/content/brand-rules';
 
 /** Settings › Content: a brand's Content Editor settings. */
 export interface ContentSettings {
-  brands: { id: string; name: string; qualityHandoff: boolean; trustedSources: string[] }[];
+  brands: {
+    id: string;
+    name: string;
+    qualityHandoff: boolean;
+    trustedSources: string[];
+    brandRules: string[];
+  }[];
   /** Admins and managers change them (brands: admin/manager update). */
   canManage: boolean;
   /** The database has brands.trusted_sources (00449): Trusted sources shows. */
   trustedSourcesOn: boolean;
+  /** The database has brands.brand_rules (00450): Brand rules shows. */
+  brandRulesOn: boolean;
 }
 
 /** The organization's brands, each with its Content settings; null without a workspace. */
@@ -27,20 +36,21 @@ export async function getContentSettings(): Promise<ContentSettings | null> {
   if (profileError) throw new Error(profileError.message);
   if (!profile?.organization_id) return null;
   const columns = 'id, name, content_quality_handoff' as const;
-  const read = await supabase
-    .from('brands')
-    .select(`${columns}, trusted_sources` as const)
-    .eq('organization_id', profile.organization_id)
-    .order('name');
-  // The web ahead of 00449: the brands without it, and no Trusted sources.
-  const trustedSourcesOn = !missingTrustedSources(read.error);
-  const { data, error } = trustedSourcesOn
-    ? read
-    : await supabase
-        .from('brands')
-        .select(columns)
-        .eq('organization_id', profile.organization_id)
-        .order('name');
+  const brands = <C extends string>(select: C) =>
+    supabase
+      .from('brands')
+      .select(select)
+      .eq('organization_id', profile.organization_id)
+      .order('name');
+  // The web ahead of its migrations, applied in order: without 00450 the
+  // brands are read with no rules, without 00449 with no trusted sources
+  // either, and the cards for what's missing don't show.
+  const read = await brands(`${columns}, trusted_sources, brand_rules` as const);
+  const brandRulesOn =
+    !missingColumn(read.error, 'brand_rules') && !missingColumn(read.error, 'trusted_sources');
+  const before00450 = brandRulesOn ? read : await brands(`${columns}, trusted_sources` as const);
+  const trustedSourcesOn = !missingColumn(before00450.error, 'trusted_sources');
+  const { data, error } = trustedSourcesOn ? before00450 : await brands(columns);
   if (error) throw new Error(error.message);
   return {
     brands: (data ?? []).map((b) => ({
@@ -48,19 +58,24 @@ export async function getContentSettings(): Promise<ContentSettings | null> {
       name: b.name,
       qualityHandoff: b.content_quality_handoff,
       trustedSources: trustedSourcesOn && 'trusted_sources' in b ? b.trusted_sources : [],
+      brandRules: brandRulesOn && 'brand_rules' in b ? b.brand_rules : [],
     })),
     canManage: profile.role === 'admin' || profile.role === 'manager',
     trustedSourcesOn,
+    brandRulesOn,
   };
 }
 
-/** A database without 00449 has no brands.trusted_sources (42703 on a read, PGRST204 on a write). */
-function missingTrustedSources(error: { code?: string; message?: string } | null): boolean {
+/** A database without a brands column yet (42703 on a read, PGRST204 on a write). */
+function missingColumn(error: { code?: string; message?: string } | null, column: string): boolean {
   return (
     (error?.code === '42703' || error?.code === 'PGRST204') &&
-    (error.message ?? '').includes('trusted_sources')
+    (error.message ?? '').includes(column)
   );
 }
+
+const missingTrustedSources = (error: { code?: string; message?: string } | null) =>
+  missingColumn(error, 'trusted_sources');
 
 const trustedSources = z
   .array(z.string())
@@ -121,4 +136,39 @@ export async function setBrandQualityHandoff(brandId: string, on: boolean): Prom
     .select('id');
   if (error) throw new Error(error.message);
   if (!data?.length) throw new Error('forbidden');
+}
+
+/**
+ * A brand's rules in its own words (customer priorities item 8, 00450), as
+ * Settings › Content saves them: parseBrandRules' (trimmed, each once), at
+ * most 30 of 300 characters. Admins and managers; never throws: what was
+ * saved, or why not (`unavailable` before 00450).
+ */
+export async function setBrandRules(
+  brandId: string,
+  rules: string[],
+): Promise<
+  { ok: true; rules: string[] } | { ok: false; reason: 'invalid' | 'unavailable' | 'failed' }
+> {
+  if (!z.guid().safeParse(brandId).success || !Array.isArray(rules) || !brandRulesValid(rules)) {
+    return { ok: false, reason: 'invalid' };
+  }
+  try {
+    await assertWritable({ brandId });
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('brands')
+      .update({ brand_rules: rules })
+      .eq('id', brandId)
+      .select('brand_rules');
+    if (missingColumn(error, 'brand_rules')) return { ok: false, reason: 'unavailable' };
+    if (error || !data?.length) {
+      if (error) console.error('[content-settings] could not save the brand rules:', error.message);
+      return { ok: false, reason: 'failed' };
+    }
+    return { ok: true, rules: data[0].brand_rules };
+  } catch (err) {
+    console.error('[content-settings] could not save the brand rules:', err);
+    return { ok: false, reason: 'failed' };
+  }
 }
