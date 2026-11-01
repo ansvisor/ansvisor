@@ -29,6 +29,7 @@ import { loadOpportunityBaskets } from '../open-opportunities.js';
 import { findSameQuestion, mergeOpportunity } from '../opportunity-same-question.js';
 import { OPPORTUNITY_ACTION_KIND } from './from-opportunity.js';
 import { TASK_CHECKS } from './task-writer/quality.js';
+import { UUID } from './validate.js';
 
 export class TaskSendError extends Error {
   constructor(code, message, status = 422) {
@@ -225,7 +226,10 @@ async function logSent(action, task, to, title, userId, { merged = false } = {})
 /**
  * The question a task stands for: its action's one prompt (action_entities,
  * 00244), with the cluster it is in. Null when the action is about no prompt
- * or several, since a task then asks for more than one question's content.
+ * or several, since a task then asks for more than one question's content,
+ * and when its one prompt is keyed by text rather than by a prompt id (a
+ * topic_opportunity keys its suggestions by their text): there is no prompt
+ * to read, and the uuid columns would refuse the text (22P02).
  */
 export async function taskQuestion(actionId) {
   const { data: entities, error } = await supabaseAdmin
@@ -237,6 +241,7 @@ export async function taskQuestion(actionId) {
   if (error) throw new Error(error.message);
   if ((entities ?? []).length !== 1) return null;
   const [{ entity_key: promptId, label }] = entities;
+  if (!UUID.test(promptId ?? '')) return null;
   const [prompt, member] = await Promise.all([
     supabaseAdmin.from('prompts').select('text').eq('id', promptId).maybeSingle(),
     supabaseAdmin
