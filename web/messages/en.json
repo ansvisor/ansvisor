@@ -3897,6 +3897,7 @@
       "ready": "{ready, number} of {total, number} ready",
       "priority": "Priority {score, number}",
       "untitled": "An Action Center task",
+      "changed": "{title}: {status}",
       "status": {
         "queued": "Queued",
         "writing": "Writing",
