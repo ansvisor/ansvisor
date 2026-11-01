@@ -21,11 +21,13 @@ const fakes = vi.hoisted(() => ({
   shares: vi.fn(),
   chatSweep: vi.fn(),
   endHeld: vi.fn(),
+  onOwnKey: vi.fn(async () => false),
 }));
 vi.mock('@/lib/mcp/account', () => ({ getAiUsageFor: fakes.usage }));
 vi.mock('./key', () => ({
   resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
   failingOwnKey: vi.fn(async () => null),
+  chatRunsOnOwnKey: fakes.onOwnKey,
 }));
 vi.mock('./agent-shares', () => ({ readAgentShares: fakes.shares }));
 vi.mock('./engine', () => ({
@@ -220,6 +222,42 @@ describe('the agents’ sweep', () => {
     expect(runRow('held')).toMatchObject({ status: 'stopped', stop_reason: null });
     expect(fakes.endHeld).toHaveBeenCalledWith(heldChat, 'paused_cap', 'limit');
     expect(runRow('held-manual').status).toBe('paused_cap');
+  });
+
+  it('resumes agents paused for the own key once it works, or Chat no longer runs on it (AGENT-OWN-KEY §5.4)', async () => {
+    db.tables.chat_agents = [
+      agent(AGENT, { status: 'paused', paused_reason: 'own_key' }),
+      agent(OTHER_AGENT, { status: 'paused', paused_reason: 'manual' }),
+    ];
+    db.tables.organization_ai_keys = [
+      {
+        organization_id: ORG,
+        provider: 'openai',
+        active: true,
+        failing_since: '2026-11-02T10:00:00.000Z',
+        failure_class: 'no_credit',
+        failure_status: 429,
+      },
+    ];
+    // Still failing on the key Chat runs on: stays paused.
+    fakes.onOwnKey.mockResolvedValue(true);
+    expect((await sweepAgents(NOW, driver)).failed).toEqual([]);
+    expect(agentRow().status).toBe('paused');
+
+    // The key works again.
+    db.tables.organization_ai_keys[0].failing_since = null;
+    db.tables.organization_ai_keys[0].failure_class = null;
+    expect((await sweepAgents(NOW, driver)).resumed).toBe(1);
+    expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
+    expect(agentRow(OTHER_AGENT).status).toBe('paused');
+
+    // Chat no longer runs on the key (removed, or a plan without own keys).
+    Object.assign(agentRow(), { status: 'paused', paused_reason: 'own_key' });
+    db.tables.organization_ai_keys[0].failing_since = '2026-11-02T10:00:00.000Z';
+    db.tables.organization_ai_keys[0].failure_class = 'no_credit';
+    fakes.onOwnKey.mockResolvedValue(false);
+    expect((await sweepAgents(NOW, driver)).resumed).toBe(1);
+    expect(agentRow().status).toBe('active');
   });
 
   it('keeps an agent paused while its own monthly cap is used', async () => {

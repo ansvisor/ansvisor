@@ -22,7 +22,27 @@ export async function readActiveKey(organizationId: string): Promise<ActiveKeyRe
     .eq('organization_id', organizationId)
     .eq('active', true)
     .maybeSingle();
+  return keyReadOf(data);
+}
 
+/** A provider's saved key, as readActiveKey reads the active one, and whether Chat uses it. */
+export async function readProviderKey(
+  organizationId: string,
+  provider: AiProvider,
+): Promise<ActiveKeyRead & { active: boolean }> {
+  const { data, error } = await supabaseAdmin
+    .from('organization_ai_keys')
+    .select('provider, key_encrypted, settings, active')
+    .eq('organization_id', organizationId)
+    .eq('provider', provider)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the AI key: ${error.message}`);
+  return { ...keyReadOf(data), active: data?.active === true };
+}
+
+function keyReadOf(
+  data: { provider: unknown; key_encrypted: string | null; settings: unknown } | null,
+): ActiveKeyRead {
   if (!data?.key_encrypted || !isAiProvider(data.provider)) return { state: 'none' };
   const apiKey = decryptApiKey(data.key_encrypted);
   if (!apiKey) return { state: 'unreadable', provider: data.provider };
