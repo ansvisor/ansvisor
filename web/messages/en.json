@@ -6531,6 +6531,25 @@
     "copyCode": "Copy code",
     "placeholderNote": "Your input needed: replace each highlighted [bracket] with your own details before you publish.",
     "inputNeeded": "Your input needed",
+    "authority": {
+      "found": "Found",
+      "none": "none of the {count} a page needs.",
+      "oneMore": " One more makes it pass.",
+      "others": "The page also links to {sites}, which don't count.",
+      "whatCounts": "What counts",
+      "counts": {
+        "official": "Government and academic sites: .gov, .edu, .mil and their country forms, such as .gov.tr, .edu.tr, .ac.uk",
+        "international": "International bodies: any .int site, un.org, unesco.org, europa.eu, oecd.org, worldbank.org, imf.org",
+        "research": "Reference and research: wikipedia.org, doi.org, arxiv.org, nature.com, sciencedirect.com, iso.org, w3.org",
+        "news": "Major news: Reuters, Bloomberg, Financial Times, BBC, The New York Times, The Washington Post"
+      },
+      "kinds": {
+        "official": "Official site",
+        "international": "International body",
+        "research": "Reference or research",
+        "news": "Major news"
+      }
+    },
     "finding": "Finding",
     "why": "Why",
     "recommendedFix": "Recommended fix",
