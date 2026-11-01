@@ -5,7 +5,7 @@ import express from 'express';
  * Route-level tests for the Opportunities inbox: GET /api/audits/opportunities
  * reads the GA page opportunities, site pages, audits and pins/exclusions,
  * adds each page's AI visits, and PUT /api/audits/opportunities/prefs pins,
- * excludes or clears pages.
+ * excludes or clears pages, for admins and managers only.
  */
 
 let tables;
@@ -13,6 +13,9 @@ let rpcCalls;
 let writes;
 let server;
 let baseUrl;
+// The brand access check (#1888): the brand, or a refusal for a person
+// without it.
+let brandAccess;
 
 function query(table) {
   const filters = {};
@@ -34,8 +37,12 @@ function query(table) {
       return builder;
     },
     limit: () => builder,
+    single: () => {
+      builder.one = true;
+      return builder;
+    },
     maybeSingle: () => {
-      builder.single = true;
+      builder.one = true;
       return builder;
     },
     upsert: (rows, opts) => {
@@ -59,7 +66,7 @@ function query(table) {
         ? data.slice(filters.range[0], filters.range[1] + 1)
         : data.slice(0, 1000);
       if (table === 'brands') data = (tables.brands ?? []).find((b) => b.id === filters.id) ?? null;
-      else if (builder.single) data = data[0] ?? null;
+      else if (builder.one) data = data[0] ?? null;
       return resolve({ data, error: null });
     },
   };
@@ -91,7 +98,7 @@ async function startApp() {
       },
     },
   }));
-  vi.doMock('../lib/access.js', () => ({ assertBrandAccess: async () => ({ orgId: 'org-1' }) }));
+  vi.doMock('../lib/access.js', () => ({ assertBrandAccess: () => brandAccess() }));
   vi.doMock('../lib/plan-guard.js', () => ({
     requireFeature: () => (req, res, next) => next(),
     enforceSiteAuditQuota: vi.fn(),
@@ -130,9 +137,11 @@ async function startApp() {
 const brandId = '33333333-3333-3333-3333-333333333333';
 
 beforeEach(async () => {
+  brandAccess = async () => ({ orgId: 'org-1' });
   rpcCalls = [];
   writes = [];
   tables = {
+    profiles: [{ id: 'u1', role: 'admin' }],
     brands: [{ id: brandId, ga_property_id: 'properties/1' }],
     brand_domains: [{ brand_id: brandId, domain: 'www.acme.com', is_primary: true }],
     page_opportunities: [
@@ -438,6 +447,41 @@ describe('PUT /api/audits/opportunities/prefs', () => {
         filters: { brand_id: brandId, page_key: ['acme.com/blog'] },
       }),
     ]);
+  });
+
+  it('lets a manager pin, and refuses an analyst before writing anything', async () => {
+    tables.profiles = [{ id: 'u1', role: 'manager' }];
+    expect((await put({ brandId, urls: ['https://acme.com/blog'], state: 'pinned' })).status).toBe(
+      200,
+    );
+    expect(writes).toHaveLength(1);
+
+    writes = [];
+    tables.profiles = [{ id: 'u1', role: 'analyst' }];
+    for (const state of ['pinned', 'excluded', null]) {
+      const res = await put({ brandId, urls: ['https://acme.com/blog'], state });
+      expect(res.status).toBe(403);
+      expect((await res.json()).message).toBe('Only admins and managers can pin or exclude pages.');
+    }
+    expect(writes).toEqual([]);
+  });
+
+  it('refuses an agency partner, and a manager without access to the brand', async () => {
+    tables.profiles = [{ id: 'u1', role: 'agency_partner' }];
+    let res = await put({ brandId, urls: ['https://acme.com/blog'], state: 'excluded' });
+    expect(res.status).toBe(403);
+
+    tables.profiles = [{ id: 'u1', role: 'manager' }];
+    brandAccess = async () => {
+      throw Object.assign(new Error("You don't have access to this brand"), {
+        status: 403,
+        code: 'no_brand_access',
+      });
+    };
+    res = await put({ brandId, urls: ['https://acme.com/blog'], state: 'pinned' });
+    expect(res.status).toBe(403);
+    expect((await res.json()).message).toBe("You don't have access to this brand");
+    expect(writes).toEqual([]);
   });
 
   it('refuses an unknown state, no URLs or something that is not a URL', async () => {

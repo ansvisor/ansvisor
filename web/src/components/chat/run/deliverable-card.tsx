@@ -1,11 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
+  Check,
   Code,
   Copy,
   Download,
+  Ellipsis,
   FileBarChart,
   FileText,
   Image as ImageIcon,
@@ -19,8 +22,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useGetMore } from '@/components/ai-usage/get-more-context';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { buttonVariants } from '@/components/ui/button';
 import { Link } from '@/i18n/navigation';
-import type { ChatDeliverable } from '@/lib/chat/events';
+import {
+  attachOnlyFromCard,
+  markTaskDoneFromCard,
+  undoTaskDoneFromCard,
+  type TaskCardResult,
+} from '@/lib/actions/chat-task-card';
+import type { ChatDeliverable, ChatTaskStrip } from '@/lib/chat/events';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 
@@ -65,19 +76,34 @@ function fileNameOf(res: Response, fallback: string): string {
  * Files, or why not (item 29). Copy and Download read its file, in the
  * formats its type offers; a page Chat saved opens in the Content Editor.
  * `n` is its place among the run's deliverables, which names its file.
+ *
+ * A deliverable drafted for an Action Center task (CHAT-09 items 12–16)
+ * says "Task: {title}" and, for an Admin or a Manager (`canChange`), offers
+ * Attach to task & mark done, with Undo in its toast, and Attach only in
+ * its ⋯ menu: the person's own clicks, never Chat's. `onTasks` gets the
+ * run's task strip as it stands after one.
  */
 export function DeliverableCard({
   runId,
   n,
   deliverable,
+  canChange = false,
+  onTasks,
 }: {
   runId: string;
   n: number;
   deliverable: ChatDeliverable;
+  canChange?: boolean;
+  onTasks?: (strip: ChatTaskStrip) => void;
 }) {
   const t = useTranslations('chatDeliverable');
   const tFormats = useTranslations('chatAnswer.formats');
+  const tReadOnly = useTranslations('readOnly.actions');
   const openGetMore = useGetMore();
+  const { guard, openUpgrade } = useUpgradeGate();
+  const [fileStatus, setFileStatus] = useState(deliverable.status);
+  const [task, setTask] = useState(deliverable.task ?? null);
+  const [busy, setBusy] = useState(false);
   const Icon = DELIVERABLE_ICONS[deliverable.type] ?? FileText;
   const filed = isFiled(deliverable);
   const formats = FORMAT_ORDER.filter((format) => deliverable.formats.includes(format));
@@ -113,6 +139,48 @@ export function DeliverableCard({
     toast(t('downloaded', { name }));
   }
 
+  /** A click's answer: the card and the strip as they stand, or why not. */
+  function settle(result: TaskCardResult, label: string): boolean {
+    if (result.ok) {
+      setFileStatus(result.status);
+      setTask(result.task);
+      if (result.strip) onTasks?.(result.strip);
+      return true;
+    }
+    if (result.failure === 'read_only') openUpgrade(label);
+    else toast.error(t(`task.failed.${result.failure}`));
+    return false;
+  }
+
+  async function change(
+    write: (runId: string, n: number) => Promise<TaskCardResult>,
+    label: string,
+  ): Promise<boolean> {
+    setBusy(true);
+    try {
+      return settle(await write(runId, n), label);
+    } catch {
+      toast.error(t('task.failed.failed'));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const doneLabel = tReadOnly('markTaskDone');
+  async function markDone() {
+    if (!(await change(markTaskDoneFromCard, doneLabel))) return;
+    toast.success(t('task.markedDone'), {
+      action: { label: t('task.undo'), onClick: () => void undo() },
+    });
+  }
+  async function undo() {
+    if (await change(undoTaskDoneFromCard, doneLabel)) toast(t('task.undone'));
+  }
+  async function attachOnly() {
+    if (await change(attachOnlyFromCard, tReadOnly('attachFiles'))) toast(t('task.attached'));
+  }
+
   const status =
     deliverable.filed === 'storage_full'
       ? t('storageFull')
@@ -142,6 +210,11 @@ export function DeliverableCard({
           >
             {t(`types.${deliverable.type}`)} · {status}
           </p>
+          {task && (
+            <p data-slot="deliverable-task" className="truncate text-xs text-muted-foreground">
+              {t('task.line', { title: task.title || t('task.untitled') })}
+            </p>
+          )}
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-1">
@@ -199,7 +272,87 @@ export function DeliverableCard({
             {t('openEditor')}
           </Link>
         )}
+        {filed && task && (
+          <TaskControls
+            fileStatus={fileStatus}
+            taskState={task.state}
+            canChange={canChange}
+            busy={busy}
+            onMarkDone={guard(() => void markDone(), { action: doneLabel })}
+            onAttachOnly={guard(() => void attachOnly(), { action: tReadOnly('attachFiles') })}
+          />
+        )}
       </div>
     </article>
+  );
+}
+
+/**
+ * The card's task controls (CHAT-09 items 13, 16): "Done · attached to task"
+ * once it is; "Done in Action Center" for a task closed there; else, for
+ * an Admin or a Manager, Attach to task & mark done, and Attach only in ⋯
+ * while the file isn't attached yet.
+ */
+function TaskControls({
+  fileStatus,
+  taskState,
+  canChange,
+  busy,
+  onMarkDone,
+  onAttachOnly,
+}: {
+  fileStatus: ChatDeliverable['status'];
+  taskState: 'open' | 'done';
+  canChange: boolean;
+  busy: boolean;
+  onMarkDone: () => void;
+  onAttachOnly: () => void;
+}) {
+  const t = useTranslations('chatDeliverable.task');
+  if (taskState === 'done') {
+    return (
+      <span
+        data-slot="task-done"
+        className="ml-auto inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300"
+      >
+        <Check className="size-3" aria-hidden />
+        {fileStatus === 'done' ? t('doneAttached') : t('doneInActionCenter')}
+      </span>
+    );
+  }
+  if (!canChange) return null;
+  return (
+    <div className="ml-auto flex items-center gap-1">
+      <button
+        type="button"
+        data-action="deliverable.attachAndMarkDone"
+        disabled={busy}
+        onClick={onMarkDone}
+        className={buttonVariants({ size: 'sm' })}
+      >
+        {t('markDone')}
+      </button>
+      {fileStatus === 'draft' && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            data-action="deliverable.more"
+            aria-label={t('more')}
+            disabled={busy}
+            className={ACTION}
+          >
+            <Ellipsis className="size-3.5" aria-hidden />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem
+              data-action="deliverable.attachOnly"
+              onClick={onAttachOnly}
+              className="text-[13px]"
+            >
+              {t('attachOnly')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
   );
 }

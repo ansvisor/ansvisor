@@ -77,6 +77,9 @@
       "exhausted": "Used up. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "Used up. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
       "exhaustedTrial": "Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working.",
+      "exhaustedChat": "Used up. AI features stop until {date}; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedNoDateChat": "Used up. AI features stop until it resets; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedTrialChat": "Start your plan now for its full monthly AI usage; Chat keeps working only where it runs on your workspace's own AI key.",
       "none": "No AI usage yet this month.",
       "ownKey": "Agent Chat, on your own AI key",
       "notCounted": "Not counted",
@@ -92,7 +95,10 @@
       "seeUsage": "See usage",
       "exhausted": "You've used this month's AI limit. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "You've used this month's AI limit. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
-      "exhaustedTrial": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working."
+      "exhaustedTrial": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working.",
+      "exhaustedChat": "You've used this month's AI limit. AI features stop until {date}; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedNoDateChat": "You've used this month's AI limit. AI features stop until it resets; Chat keeps working only where it runs on your workspace's own AI key.",
+      "exhaustedTrialChat": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Chat keeps working only where it runs on your workspace's own AI key."
     },
     "startNow": {
       "button": "Start my plan now",
@@ -297,6 +303,8 @@
       "setProductFeed": "Changing the product feed setting needs a plan",
       "generateReports": "Generating reports needs a plan",
       "deleteReports": "Deleting reports needs a plan",
+      "markTaskDone": "Marking a task done needs a plan",
+      "attachFiles": "Attaching files needs a plan",
       "startChat": "Starting a chat needs a plan",
       "sendChat": "Chatting with the agent needs a plan",
       "addBrands": "Adding brands needs a plan",
@@ -4130,7 +4138,27 @@
     "download": "Download",
     "downloaded": "Downloaded {name}",
     "downloadFailed": "Couldn't download that. Try again.",
-    "openEditor": "Open in Content Editor"
+    "openEditor": "Open in Content Editor",
+    "task": {
+      "line": "Task: {title}",
+      "untitled": "An Action Center task",
+      "markDone": "Attach to task & mark done",
+      "more": "More for this file",
+      "attachOnly": "Attach only",
+      "doneAttached": "Done · attached to task",
+      "doneInActionCenter": "Done in Action Center",
+      "markedDone": "Task marked done in Action Center",
+      "undo": "Undo",
+      "undone": "Task open again in Action Center",
+      "attached": "Attached to the task",
+      "failed": {
+        "not_found": "That file or task isn't there any more.",
+        "forbidden": "Only an Admin or a Manager can close tasks from Chat.",
+        "closed": "Its action is closed in Action Center.",
+        "changed": "It changed in Action Center since, so nothing was undone.",
+        "failed": "Couldn't change the task. Try again."
+      }
+    }
   },
   "chatFiles": {
     "title": "Files",
@@ -5196,6 +5224,7 @@
       "action_not_found": "This action isn't available.",
       "action_closed": "This action is closed. Reopen it in Action Center to run an agent on it.",
       "queue_full": "{count, plural, one {# run already waits} other {# runs already wait}} for this agent on this brand. Try again once one has started.",
+      "connection_missing": "This agent needs {name}, and {brand} doesn’t have it connected. Connect it for that brand, then run the agent again.",
       "failed": "Something went wrong with this agent. Try again."
     },
     "status": {
@@ -5292,6 +5321,8 @@
       "required": "Required",
       "optional": "Optional",
       "names": {
+        "cms": "Any CMS",
+        "catalog": "Any catalog source",
         "google_search_console": "Google Search Console",
         "gsc": "Google Search Console",
         "google_analytics": "Google Analytics",
@@ -5304,6 +5335,10 @@
         "hubspot": "HubSpot",
         "github": "GitHub",
         "merchant_center": "Merchant Center"
+      },
+      "counts": {
+        "cms": "Webflow, WordPress, Framer, Wix or a workflow webhook",
+        "catalog": "Merchant Center, a product feed or a store"
       }
     },
     "outcomes": {
@@ -5336,6 +5371,7 @@
       "earlier": "{count, plural, one {One more fire came while it waited (cooldown or daily limit): it's in the scope too.} other {# more fires came while it waited (cooldown or daily limit): they're in the scope too.}}",
       "action": "It works on one Action Center action, AC-{no} ({category}); its title and open tasks when the run was asked for are in the scope. Read it with its tasks first and keep to its targets: never add new ones. Closing tasks stays the person’s click.",
       "background": "This run works in the background. When a question comes up, take the recommended option and list your assumptions at the top of the answer. Changes still wait for approval as the agent's mode says.",
+      "notConnected": "{name} isn’t connected for this brand. Do everything else without it, and say so in one line: “{name} isn’t connected. I can do everything else without it.”",
       "chip": {
         "agent": "Agent",
         "brand": "Brand",
@@ -5932,6 +5968,7 @@
       "empty": "No pages to audit right now. Opportunities come from Google Analytics (valuable pages without AI traffic), from prompts where a competitor is cited and you aren't, and from your site's pages that were never audited or not in {days} days.",
       "showMore": "Show more",
       "prefsFailed": "Couldn't update the pages",
+      "prefsManagersOnly": "Only admins and managers can pin, exclude or restore pages.",
       "templatePages": "· {pages} pages",
       "templateFixOnce": "Fix once, applies to {pages} pages",
       "templateAudited": "{audited} of {pages}",
@@ -10304,6 +10341,7 @@
       "totalSub": "from {google} Google searches",
       "averageTitle": "Avg. AI Volume",
       "averageSub": "per prompt",
+      "chartCaption": "Total estimated AI-answered queries across all topic clusters (Google volume × the {rate} AI adoption rate), split by answer-engine share: Google AI Overviews, Google AI Mode and standalone chatbots.",
       "googleColumn": "Google Vol. (head terms)",
       "googleTip": "Monthly Google searches of the prompt's related head terms, from DataForSEO: the median of those with search data. Not its own words: a long question is searched far less as it is written.",
       "aiColumn": "Est. AI Vol.",
@@ -11654,6 +11692,161 @@
     }
   },
   "reports": {
+    "impactLink": "What Ansvisor did for you",
+    "impact": {
+      "title": "What Ansvisor did for you",
+      "subtitle": "{brand} · shipped actions measured against untouched similar prompts",
+      "subtitleNoBrand": "Shipped actions measured against untouched similar prompts",
+      "generated": "Generated {date} · {time}",
+      "dataAsOf": "Data as of {date}, {time}",
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month",
+      "export": "Export",
+      "exportCsv": "Download CSV",
+      "exported": "Downloaded {name}",
+      "kpi": {
+        "shipped": "Actions shipped",
+        "shippedBefore": "{month}: {count, number}",
+        "improved": "Improved",
+        "improvedValue": "{improved, number} of {judged, number}",
+        "improvedSub": "verdict at 14 days · {pending, number} pending",
+        "traffic": "AI traffic to changed pages",
+        "trafficSub": "Google Analytics · vs {month}",
+        "trafficNew": "New",
+        "trafficConnect": "Connect Google Analytics to see it",
+        "trafficConnectLink": "Connect"
+      },
+      "method": {
+        "label": "How it is measured",
+        "baseline": "Baseline: 14 days before ship",
+        "checkpoints": "Checkpoints: 7 · 14 · 30 · 90 days",
+        "checkpointsTip": "7 days: pending, early signal · 14 days: first verdict · 30 days: confirmed · 90 days: lasting effect",
+        "control": "Control: untouched similar prompts",
+        "minChange": "Min. change: 3 pts",
+        "noCost": "Scheduled tracking data · no extra cost",
+        "correlation": "Correlation, not causation"
+      },
+      "filterLabel": "Filter by outcome",
+      "filters": {
+        "all": "All"
+      },
+      "outcome": {
+        "improved": "Improved",
+        "pending": "Pending",
+        "pendingEarly": "Pending · early signal",
+        "no_meaningful_change": "No meaningful change",
+        "declined": "Declined",
+        "not_measurable": "Not measurable"
+      },
+      "confidence": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High"
+      },
+      "columns": {
+        "action": "Action",
+        "beforeAfter": "Before → After",
+        "control": "Control",
+        "lift": "Lift",
+        "checkpoints": "Checkpoints",
+        "outcome": "Outcome",
+        "confidence": "Confidence"
+      },
+      "source": {
+        "chat": "Chat",
+        "action_center": "Action Center",
+        "content_editor": "Content Editor"
+      },
+      "kind": {
+        "cms_publish": "published to your CMS",
+        "pr_merged": "pull request merged",
+        "manual": "marked as shipped",
+        "third_party_observed": "seen in AI answers"
+      },
+      "by": {
+        "you": "by you",
+        "teammate": "by {name}",
+        "teammateUnnamed": "by a teammate",
+        "automation": "automatically"
+      },
+      "shipped": "Shipped {date}",
+      "prompts": "{count, plural, =0 {no tracked prompt} one {# prompt} other {# prompts}}",
+      "percent": "{value, number}%",
+      "lift": "{value} pts",
+      "direction": {
+        "up": "Early direction: up",
+        "flat": "Early direction: flat",
+        "down": "Early direction: down"
+      },
+      "checkpoint": {
+        "d7": "7d",
+        "d14": "14d",
+        "d30": "30d",
+        "d90": "90d",
+        "due": "Day {day}, due {date}",
+        "none": "Day {day}, not measured",
+        "measured": "Day {day}: {outcome}"
+      },
+      "empty": "Nothing shipped in {month}.",
+      "emptyFilter": "No actions with this outcome in {month}.",
+      "loadFailed": "Couldn't load what Ansvisor did. Try again.",
+      "retry": "Retry",
+      "noBrand": "Pick a brand to see what Ansvisor did for it.",
+      "drawer": {
+        "baseline": "Baseline",
+        "baselineValue": "{from} – {to} · 14 days before ship",
+        "targets": "Target prompts",
+        "targetsValue": "{count, plural, =0 {None tracked} one {# · frozen as it shipped} other {# · frozen as it shipped}}",
+        "pages": "Pages",
+        "before": "Before",
+        "latest": "Latest",
+        "controlValue": "Control prompts",
+        "lift": "Lift vs control",
+        "outcome": "Outcome",
+        "outcomeWithConfidence": "{outcome} · {confidence} confidence",
+        "why": "Why",
+        "sameWindow": "Same window",
+        "sameWindowNone": "No other shipped change on these prompts",
+        "sameWindowRow": "{title} · {count, plural, one {# prompt} other {# prompts}} in common",
+        "who": "Who did it",
+        "checkpoints": "Checkpoints · scheduled tracking data, no extra cost",
+        "checkpointRow": {
+          "d7": "Pending · early signal",
+          "d14": "First verdict",
+          "d30": "Confirmed",
+          "d90": "Lasting effect"
+        },
+        "day": "Day {day}",
+        "dueOn": "due {date}"
+      },
+      "reasons": {
+        "too_few_runs": "Too few tracking runs on these prompts to compare.",
+        "too_few_controls": "Not enough similar prompts to compare.",
+        "too_few_prompts": "Too few target prompts for a verdict.",
+        "targets_removed": "Its prompts were removed from tracking.",
+        "engine_not_on_plan": "Its engines aren't on your plan.",
+        "overlapping_change": "Another shipped change works on the same prompts.",
+        "no_targets": "No tracked prompt targets this action.",
+        "plan_inactive": "Measuring stopped while your plan wasn't active.",
+        "other": "It can't be measured."
+      },
+      "csv": {
+        "change": "Change",
+        "shipped": "Shipped",
+        "source": "Source",
+        "action": "Action",
+        "prompts": "Target prompts",
+        "metric": "Metric",
+        "before": "Before (%)",
+        "after": "After (%)",
+        "controlBefore": "Control before (%)",
+        "controlAfter": "Control after (%)",
+        "lift": "Lift (pts)",
+        "checkpoint": "Checkpoint",
+        "outcome": "Outcome",
+        "confidence": "Confidence"
+      }
+    },
     "title": "Reports",
     "description": "Export and share your AI visibility reports.",
     "generateReport": "Generate Report",
@@ -12191,7 +12384,7 @@
       "growth": {
         "tagline": "For growing teams that want to monitor AI visibility and optimize content for AI search.",
         "engines": "ChatGPT, Perplexity, Gemini, Microsoft Copilot, Google AI Mode and Google AI Overviews tracking",
-        "extras": ["Multi-region tracking", "White-label reports & Looker Studio"]
+        "extras": ["Multi-region tracking", "Looker Studio"]
       },
       "brands": "{count, plural, one {# brand} other {# brands}}",
       "unlimitedBrands": "Unlimited brands",
@@ -12203,7 +12396,9 @@
       "aiUsage": "{count}x AI usage",
       "aiUsageCustom": "Custom AI usage, from {count}x",
       "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. The free trial comes with a smaller allowance.",
-      "aiUsageCustomHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. Ansvisor sets the amount with you."
+      "aiUsageCustomHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. Ansvisor sets the amount with you.",
+      "aiUsageHintChat": "A monthly allowance for Ansvisor's AI features: Chat and agents, Improve suggestions, the Content Editor's AI and the Action Center's task writing. Your own AI key comes with Enterprise only. The free trial comes with a smaller allowance.",
+      "aiUsageCustomHintChat": "A monthly allowance for Ansvisor's AI features: Chat and agents, Improve suggestions, the Content Editor's AI and the Action Center's task writing. On Enterprise, Chat can also run on your own AI key. Ansvisor sets the amount with you."
     },
     "contactUs": "Contact Us",
     "integrations": "Integrations",

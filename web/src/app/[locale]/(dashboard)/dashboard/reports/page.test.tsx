@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 
 /**
  * Reports on a read-only workspace (plan not active): the reports list and
@@ -23,7 +24,14 @@ vi.mock('@/stores/use-brand-store', () => ({
     select({ activeBrandId: 'b1', brands: [brand] }),
 }));
 const push = vi.hoisted(() => vi.fn());
-vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push }) }));
+vi.mock('@/i18n/navigation', () => ({
+  useRouter: () => ({ push }),
+  Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
@@ -62,15 +70,17 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-async function render(isLocked: boolean) {
+async function render(isLocked: boolean, chatAgentic = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <UpgradeDialogContext.Provider
-          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
-        >
-          <ReportsPage />
-        </UpgradeDialogContext.Provider>
+        <ChatAgenticProvider enabled={chatAgentic}>
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <ReportsPage />
+          </UpgradeDialogContext.Provider>
+        </ChatAgenticProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -101,5 +111,14 @@ describe('Reports', () => {
     await act(async () => generate().click());
     expect(dialog()).not.toBeNull();
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+
+  it('links What Ansvisor did for you only with the new Chat on (CHAT-22 §2 item 5)', async () => {
+    await render(false);
+    expect(container.querySelector('[data-action="reports.openImpact"]')).toBeNull();
+    await render(false, true);
+    const link = container.querySelector('[data-action="reports.openImpact"]')!;
+    expect(link.textContent).toBe('What Ansvisor did for you');
+    expect(link.getAttribute('href')).toBe('/dashboard/reports/impact');
   });
 });

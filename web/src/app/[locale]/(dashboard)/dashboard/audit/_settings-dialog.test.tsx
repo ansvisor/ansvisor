@@ -198,12 +198,18 @@ describe('AuditSettingsDialog', () => {
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
-  it("is read-only for members who can't manage it, who can still unpin", async () => {
+  it("is read-only for members who can't manage it, pinned pages with no Unpin", async () => {
     await render(false);
     expect(dialog().textContent).toContain('Only admins and managers can change these settings.');
     expect(dialog().querySelector('textarea')!.disabled).toBe(true);
     expect(button('Save').disabled).toBe(true);
+    expect(dialog().textContent).toContain('/about');
+    expect(button('Unpin')).toBeUndefined();
+    expect(actions.setOpportunityPrefs).not.toHaveBeenCalled();
+  });
 
+  it('lets admins and managers unpin a page', async () => {
+    await render();
     await act(async () => button('Unpin').click());
     expect(actions.setOpportunityPrefs).toHaveBeenCalledWith(
       BRAND,
