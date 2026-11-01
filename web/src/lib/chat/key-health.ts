@@ -159,20 +159,6 @@ export async function resolveOwnKeyNotices(
   if (error) throw new Error(`Could not close the AI key's notices: ${error.message}`);
 }
 
-/** A test of the key ran (Settings › AI Providers' Test, Save, Use for Chat): when. */
-export async function markKeyChecked(
-  organizationId: string,
-  provider: AiProvider,
-  now = new Date(),
-): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from('organization_ai_keys')
-    .update({ checked_at: now.toISOString() })
-    .eq('organization_id', organizationId)
-    .eq('provider', provider);
-  if (error) throw new Error(`Could not keep when the AI key was checked: ${error.message}`);
-}
-
 /**
  * The key works again (a passing test, or any successful call on it): clears
  * the episode and resumes the agents it paused. Writes only when the key was
