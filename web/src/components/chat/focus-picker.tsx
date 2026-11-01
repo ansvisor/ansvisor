@@ -48,11 +48,14 @@ export function useChatFocus(): ChatFocusValue | null {
 export function FocusPicker({
   initial,
   busy,
+  editing = false,
   onContinue,
   onSkip,
 }: {
   initial: readonly FocusArea[];
   busy: boolean;
+  /** Opened to change a focus (Home's pill): its way out is Cancel, which keeps it. */
+  editing?: boolean;
   onContinue: (picks: FocusArea[]) => void;
   onSkip: () => void;
 }) {
@@ -114,7 +117,7 @@ export function FocusPicker({
             onClick={onSkip}
             className="h-8 rounded-lg border bg-card px-3 text-[13px] text-foreground outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
           >
-            {t('skip')}
+            {editing ? t('cancel') : t('skip')}
           </button>
           <button
             type="button"
@@ -213,6 +216,12 @@ export function ChatFocusGate({
   };
 
   const skip = async () => {
+    // From Home's pill the person is changing a focus they have: leaving
+    // keeps it as it was. Only the first, unasked opening keeps "no focus".
+    if (picking?.source === 'home_pill') {
+      setPicking(null);
+      return;
+    }
     setBusy(true);
     const kept = await skipChatFocus().catch(() => ({ ok: false as const }));
     setBusy(false);
@@ -229,7 +238,13 @@ export function ChatFocusGate({
   return (
     <ChatFocusContext.Provider value={{ focus, edit }}>
       {picking && (
-        <FocusPicker initial={picking.picks} busy={busy} onContinue={keep} onSkip={skip} />
+        <FocusPicker
+          initial={picking.picks}
+          busy={busy}
+          editing={picking.source === 'home_pill'}
+          onContinue={keep}
+          onSkip={skip}
+        />
       )}
       <div
         data-slot="focus-home"
