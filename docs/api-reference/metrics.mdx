@@ -110,7 +110,7 @@ The domains and URLs AI engines cite around the brand: totals, a source-type bre
 GET /api/v1/ai-traffic?brand_id=<uuid>&date_from=2026-06-01&date_to=2026-06-30
 ```
 
-Visits referred by AI platforms, collected by the tracking pixel: `total_visits`, `platform_breakdown`, `top_pages` (top 10 paths) and `country_breakdown`.
+Visits referred by AI platforms, collected by the tracking pixel: `tracking`, `total_visits`, `platform_breakdown`, `top_pages` (top 10 paths) and `country_breakdown`. `tracking` says whether the tracking snippet is installed: `not_detected` (not seen on the brand's site, so a `total_visits` of 0 means nothing is measured yet), `installed_quiet` (installed, no AI visit in the last 7 days) or `active`.
 
 ### Prompt performance
 
