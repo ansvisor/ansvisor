@@ -287,9 +287,22 @@ describe('buildAuditPages', () => {
       auditId: 'b2',
       score: 0.65,
       previousScore: null,
+      firstScore: null,
+      firstAuditedAt: null,
       status: 'needs_work',
       trend: [],
     });
+  });
+
+  it('skips partial runs for the first score too', () => {
+    const partial = (r) => ({ ...r, partial: true });
+    const [page] = buildAuditPages([
+      row('a3', 'https://acme.com/pricing', '2026-10-20T09:00:00Z', '0.7'),
+      row('a2', 'https://acme.com/pricing', '2026-10-10T09:00:00Z', '0.6'),
+      // The page's oldest run was partial: never its first score.
+      partial(row('a1', 'https://acme.com/pricing', '2026-10-01T09:00:00Z', '0.4')),
+    ]);
+    expect(page).toMatchObject({ firstScore: 0.6, firstAuditedAt: '2026-10-10T09:00:00Z' });
   });
 
   it('draws the trend from the newest completed scores, oldest first', () => {

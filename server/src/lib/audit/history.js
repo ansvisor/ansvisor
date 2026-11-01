@@ -124,7 +124,7 @@ export function pageStatus(latestRun, current, previous) {
  * run's (SA-006) or a user's; rows read without `source` count as the user's.
  * A partial audit (its AI-judged signals didn't run) is never compared: the
  * page keeps its latest complete score, and shows a partial one only when it
- * has no other, with no previous score.
+ * has no other, with no previous or first score.
  */
 export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
   const groups = new Map();
@@ -155,9 +155,10 @@ export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
     const latest = runs[0];
     const current = completed[0] ?? scored[0] ?? null;
     const previous = completed[0] ? (completed[1] ?? null) : null;
-    // Every audit of the brand is read: the oldest completed one is the page's
-    // first, a partial one only when the page has nothing else, as `current`.
-    const first = completed.at(-1) ?? scored.at(-1) ?? null;
+    // Every audit of the brand is read: the oldest complete one is the page's
+    // first. Partial runs are skipped, as for `previous`: a page with only
+    // partial audits has no first score to compare with.
+    const first = completed.at(-1) ?? null;
     return {
       key,
       host,
