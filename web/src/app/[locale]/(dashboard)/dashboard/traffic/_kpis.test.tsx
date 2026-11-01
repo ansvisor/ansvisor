@@ -58,6 +58,8 @@ const notConnected = synced({ connected: false, mapped: false, lastDataAt: null,
 
 const sources = (ga: SourceState, gsc: SourceState): TrafficSources => ({
   snippetLastVisitAt: '2026-10-18T09:00:00.000Z',
+  snippetFoundAt: null,
+  snippetCheckedAt: null,
   ga,
   gsc,
 });

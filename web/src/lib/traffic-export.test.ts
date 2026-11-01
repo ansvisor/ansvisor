@@ -122,6 +122,8 @@ const data = (over: Partial<TrafficExportData> = {}): TrafficExportData => ({
   },
   sources: {
     snippetLastVisitAt: new Date().toISOString(),
+    snippetFoundAt: null,
+    snippetCheckedAt: null,
     ga: source(),
     gsc: source({ connected: false }),
   },

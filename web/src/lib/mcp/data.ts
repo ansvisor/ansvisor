@@ -13,6 +13,8 @@ import {
 import { classifyArticleType } from '@/lib/citations/article-type';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
+import { readSnippet } from '@/lib/traffic-snippet';
+import { snippetState, type SnippetState } from '@/lib/traffic-sources';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
@@ -2242,6 +2244,13 @@ export interface AiTrafficParams {
 }
 
 export interface AiTrafficOutput {
+  /**
+   * Whether the tracking snippet is installed (traffic-sources.ts
+   * snippetState): 'not_detected' (not seen on the site, so no visit can
+   * be counted yet), 'installed_quiet' (installed, no AI visit in the last
+   * 7 days) or 'active'.
+   */
+  tracking: SnippetState;
   total_visits: number;
   platform_breakdown: Array<{
     platform: string;
@@ -2290,8 +2299,9 @@ export async function getAiTrafficFor(
     url: string;
     country: string | null;
   }> = [];
-  const [totalVisits] = await Promise.all([
+  const [totalVisits, snippet] = await Promise.all([
     countTrafficLogs(supabaseAdmin, params.brandId, range),
+    readSnippet(supabaseAdmin, params.brandId),
     scanTrafficLogs(
       supabaseAdmin,
       params.brandId,
@@ -2337,6 +2347,7 @@ export async function getAiTrafficFor(
     .sort((a, b) => b.visits - a.visits);
 
   return {
+    tracking: snippetState(snippet),
     total_visits: totalVisits,
     platform_breakdown,
     top_pages,
