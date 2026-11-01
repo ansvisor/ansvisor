@@ -161,6 +161,21 @@ describe('ChatFocusGate', () => {
     );
   });
 
+  it('leaves a focus as it was when the pill’s picker is cancelled', async () => {
+    await render(['growth', 'content'], false);
+    await click('[data-slot="home"] [data-action="dept.change"]');
+    expect($('[data-action="dept.skip"]')?.textContent).toBe('Cancel');
+    await click('[data-dept="growth"]');
+    await click('[data-action="dept.skip"]');
+    expect(prefs.skipChatFocus).not.toHaveBeenCalled();
+    expect(prefs.saveChatFocus).not.toHaveBeenCalled();
+    expect(homeShown()).toBe(true);
+    expect($('[data-slot="home-focus"]')?.textContent).toBe('growth,content');
+    expect(analytics.track).not.toHaveBeenCalledWith('chat_focus_skipped');
+    await click('[data-slot="home"] [data-action="dept.change"]');
+    expect(pressed()).toEqual(['growth', 'content']);
+  });
+
   it('starts "Choose focus" with the work areas’ picks when there are none', async () => {
     await render([], false, ['pd']);
     await click('[data-slot="home"] [data-action="dept.change"]');

@@ -29,7 +29,7 @@ With **Competitors** picked, the line under the greeting can say when a competit
 
 ## Change it later
 
-Under the greeting on Chat Home, a line shows your focus, such as **Focused on Product and Markets and sources**. Select **Edit** to open the picker with your picks on. With no focus, the line says **Get suggestions for what you work on**; select **Choose focus**.
+Under the greeting on Chat Home, a line shows your focus, such as **Focused on Product and Markets and sources**. Select **Edit** to open the picker with your picks on; **Cancel** leaves your focus as it was. With no focus, the line says **Get suggestions for what you work on**; select **Choose focus**.
 
 You can also change it in **Settings** in the chat menu, under **Your focus**. Each change is kept at once and follows you to every device. Clear every box to go back to the default Home.
 
