@@ -20,7 +20,7 @@ import {
 import { auditContextOf } from '../lib/audit/context.js';
 import { draftEstimate, readSiteSignals } from '../lib/audit/draft-estimate.js';
 import { runSignals } from '../lib/audit/engine.js';
-import { LLM_SIGNAL_KEYS, auditLlmModelId, evaluateLlmSignals } from '../lib/audit/llm-signals.js';
+import { LLM_SIGNAL_KEYS, auditLlmModel, evaluateLlmSignals } from '../lib/audit/llm-signals.js';
 import { stopDraftRun } from '../lib/content-runs.js';
 import { startDraftWriting, writeDraftInput } from '../lib/content-writer.js';
 import supabaseAdmin from '../config/supabase.js';
@@ -576,14 +576,15 @@ router.post('/:draftId/audit-estimate', auditEstimateLimiter, async (req, res) =
     if (ai) {
       const budget = await reserveAiBudget(brandRes.data?.organization_id, {
         feature: 'quality',
-        modelId: auditLlmModelId(),
+        modelId: auditLlmModel(),
         draftId: draftId.data,
         holdUsd: ESTIMATE_AI_HOLD_USD,
       });
       try {
-        read = (await evaluateLlmSignals(ctx, { onUsage: (usage) => budget.charge(usage) })).map(
-          ({ key, status, score }) => ({ key, status, score }),
-        );
+        const { results } = await evaluateLlmSignals(ctx, {
+          onUsage: (usage) => budget.charge(usage),
+        });
+        read = results.map(({ key, status, score }) => ({ key, status, score }));
       } finally {
         await budget.release();
       }

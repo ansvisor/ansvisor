@@ -124,6 +124,7 @@ import { LoadingDots } from '@/components/ui/loading-dots';
 import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
 import { toCsv } from '@/lib/csv';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
+import { exportFileName } from '@/lib/white-label/export-name';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const GENERATION_STORAGE_KEY = 'aeo:content-generation';
@@ -834,7 +835,9 @@ export default function ContentPage() {
       const link = document.createElement('a');
       const date = new Date().toISOString().slice(0, 10);
       link.href = url;
-      link.download = `ansvisor_${activeBrandSlug ?? 'brand'}_content-opportunities_${date}.csv`;
+      link.download = await exportFileName(
+        `${activeBrandSlug ?? 'brand'}_content-opportunities_${date}.csv`,
+      );
       link.click();
       URL.revokeObjectURL(url);
     } catch (err) {

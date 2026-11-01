@@ -66,12 +66,15 @@ beforeEach(async () => {
   reserveAiBudget.mockReset().mockResolvedValue(budget);
   evaluateLlmSignals.mockReset().mockImplementation(async (_ctx, { onUsage }) => {
     await onUsage({ inputTokens: 4000, outputTokens: 1500 });
-    return LLM_SIGNAL_KEYS.map((key) => ({
-      key,
-      status: 'pass',
-      score: 1,
-      evidence: { reason: 'ok' },
-    }));
+    return {
+      results: LLM_SIGNAL_KEYS.map((key) => ({
+        key,
+        status: 'pass',
+        score: 1,
+        evidence: { reason: 'ok' },
+      })),
+      partial: false,
+    };
   });
   const app = express();
   app.use(express.json({ limit: '5mb' }));

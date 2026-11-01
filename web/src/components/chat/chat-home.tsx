@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
@@ -8,8 +8,18 @@ import { Link, useRouter } from '@/i18n/navigation';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
-import { readHomeShortcuts, readSinceYouLeft } from '@/lib/actions/chat-home';
+import { readFocusFill, readHomeShortcuts, readSinceYouLeft } from '@/lib/actions/chat-home';
+import { track } from '@/lib/analytics';
 import type { FocusArea } from '@/lib/chat/focus';
+import {
+  focusGreeting,
+  focusNews,
+  focusStarters,
+  NO_FILL,
+  starterWords,
+  type FocusFill,
+  type RivalMove,
+} from '@/lib/chat/focus-home';
 import { dayPartOf, endOfWeek } from '@/lib/chat/home';
 import { formatNumber } from '@/lib/format';
 import type { SinceMove, SinceYouLeft } from '@/lib/chat/since';
@@ -46,6 +56,122 @@ export interface ChatHomeViewProps {
   since?: SinceYouLeft | null;
   /** The person's focus and the pill that opens the picker (CHAT-24 §3); none without it. */
   focus?: { areas: FocusArea[]; onEdit: () => void } | null;
+  /**
+   * The workspace's words the focus fills its questions and line with
+   * (CHAT-24 §4); null until read, so no question shows in the wrong words.
+   */
+  words?: { fill: FocusFill; rivalMove: RivalMove | null } | null;
+}
+
+/**
+ * "New for you" (CHAT-24 §4f, mockup `.nfy`): up to four new skills for the
+ * picked areas, in turn, hidden when none matches. One starts a new chat
+ * with the skill, which asks what it needs before it changes anything.
+ */
+function NewForYou({
+  areas,
+  starting,
+  onAsk,
+}: {
+  areas: readonly FocusArea[];
+  starting: boolean;
+  onAsk: (message: string) => void;
+}) {
+  const t = useTranslations('chatShell.home.byFocus.newForYou');
+  const titleId = useId();
+  const picks = focusNews(areas);
+  if (picks.length === 0) return null;
+  return (
+    <div className="@container mb-4">
+      <div
+        id={titleId}
+        className="mx-0.5 mb-1 text-[11px] tracking-[.4px] text-muted-foreground uppercase"
+      >
+        {t('title')}
+      </div>
+      <div role="group" aria-labelledby={titleId} className="grid gap-2 @lg:grid-cols-2">
+        {picks.map((pick) => (
+          <button
+            key={pick.skill}
+            type="button"
+            data-action="dept.openNew"
+            data-skill={pick.skill}
+            disabled={starting}
+            onClick={() => {
+              track('chat_focus_new_clicked', { area: pick.area, skill: pick.skill });
+              onAsk(`/${pick.skill}`);
+            }}
+            className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-xl border bg-card px-3 py-2.5 text-left outline-none hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+          >
+            <span className="rounded-md border px-1.5 py-px text-[10.5px] tracking-[.05em] text-muted-foreground uppercase">
+              {t('skill')}
+            </span>
+            <b className="text-[13px] font-semibold">/{pick.skill}</b>
+            <span className="col-span-full text-[12.5px] leading-[1.4] text-muted-foreground">
+              {t(`skills.${pick.skill}`)}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Start with a question" (CHAT-24 §4, mockup `.stq`): four questions, every
+ * picked area in turn, filled with the workspace's own competitor, topic
+ * and market or in their general wording. One starts a new chat with it.
+ */
+function StartWithQuestion({
+  areas,
+  fill,
+  starting,
+  onAsk,
+}: {
+  areas: readonly FocusArea[];
+  fill: FocusFill;
+  starting: boolean;
+  onAsk: (message: string) => void;
+}) {
+  const t = useTranslations('chatShell.home.byFocus');
+  const titleId = useId();
+  const picks = focusStarters(areas);
+  if (picks.length === 0) return null;
+  return (
+    <div className="@container mb-4">
+      <div
+        id={titleId}
+        className="mx-0.5 mb-1 text-[11px] tracking-[.4px] text-muted-foreground uppercase"
+      >
+        {t('startTitle')}
+      </div>
+      <div role="group" aria-labelledby={titleId} className="grid gap-2 @lg:grid-cols-2">
+        {picks.map((pick, index) => {
+          const words = starterWords(pick.starter, fill);
+          const question = t(`starters.${words.key}`, words.values);
+          return (
+            <button
+              key={pick.starter}
+              type="button"
+              data-action="dept.starter"
+              data-starter={pick.starter}
+              disabled={starting}
+              onClick={() => {
+                track('chat_starter_clicked', { area: pick.area, index });
+                onAsk(question);
+              }}
+              className="flex items-start gap-2 rounded-xl border bg-card px-3 py-2.5 text-left text-[13px] leading-[1.4] outline-none hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+            >
+              <span aria-hidden="true" className="text-muted-foreground">
+                ›
+              </span>
+              {question}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 const shortDay = (date: Date, utc = false) =>
@@ -152,8 +278,12 @@ export function ChatHomeView({
   starting,
   since = null,
   focus = null,
+  words = null,
 }: ChatHomeViewProps) {
   const t = useTranslations('chatShell.home');
+  const areas = focus?.areas ?? [];
+  // The focus's line (CHAT-24 §4) when nothing needs the person: what needs them comes first.
+  const focusLine = needsYou === 0 && words ? focusGreeting(areas, words) : null;
   const part = now ? dayPartOf(now.getHours()) : null;
   // The first block says "Since you left"; a win beside a drop is "One win".
   const blocks = since
@@ -180,6 +310,8 @@ export function ChatHomeView({
               </Link>
               .
             </>
+          ) : focusLine ? (
+            t(`byFocus.${focusLine.key}`, focusLine.values)
           ) : inbox > 0 ? (
             t('workedWhileAway')
           ) : (
@@ -215,7 +347,12 @@ export function ChatHomeView({
         canChange={canChange}
         starting={starting}
         onAsk={onAsk}
+        focus={areas}
       />
+      {areas.length > 0 && words && (
+        <StartWithQuestion areas={areas} fill={words.fill} starting={starting} onAsk={onAsk} />
+      )}
+      <NewForYou areas={areas} starting={starting} onAsk={onAsk} />
     </div>
   );
 }
@@ -270,7 +407,14 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
     readyDrafts: number;
   } | null>(null);
   const [since, setSince] = useState<{ brandId: string; since: SinceYouLeft } | null>(null);
+  const [words, setWords] = useState<{
+    key: string;
+    fill: FocusFill;
+    rivalMove: RivalMove | null;
+  } | null>(null);
   const [starting, setStarting] = useState(false);
+  const focusKey = focusCtx?.focus.join(',') ?? '';
+  const wordsKey = `${brandId}|${focusKey}`;
   const items = useMemo(() => inboxItems(chats), [chats]);
   const needsYou = items.filter((c) => c.state === 'needsYou').length;
   const weekEnd = now ? endOfWeek(now) : null;
@@ -314,6 +458,25 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
       current = false;
     };
   }, [brandId]);
+
+  useEffect(() => {
+    if (!brandId || !focusKey) return;
+    let current = true;
+    const key = `${brandId}|${focusKey}`;
+    const unknown = { key, fill: NO_FILL, rivalMove: null };
+    void readFocusFill(brandId, focusKey.split(','))
+      .then((result) => {
+        if (current) {
+          setWords(result.ok ? { key, fill: result.fill, rivalMove: result.rivalMove } : unknown);
+        }
+      })
+      .catch(() => {
+        if (current) setWords(unknown);
+      });
+    return () => {
+      current = false;
+    };
+  }, [brandId, focusKey]);
 
   useHomeSeen();
 
@@ -361,6 +524,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
       starting={starting}
       since={since && since.brandId === brandId ? since.since : null}
       focus={focusCtx ? { areas: focusCtx.focus, onEdit: focusCtx.edit } : null}
+      words={words && words.key === wordsKey ? words : null}
     />
   );
 }

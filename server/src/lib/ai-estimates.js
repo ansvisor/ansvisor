@@ -5,7 +5,7 @@
  * stay on the server. Typical, not a promise: a longer page takes more.
  */
 
-import { LLM_SIGNALS_TYPICAL_TOKENS, auditLlmModelId } from './audit/llm-signals.js';
+import { LLM_SIGNALS_TYPICAL_TOKENS, auditLlmModel } from './audit/llm-signals.js';
 import { contentReadModelId, contentWriteModelId } from './content-brief.js';
 import { generationCostUsd, searchCostUsd } from './improve-cost.js';
 
@@ -27,7 +27,7 @@ export function aiEstimateCosts() {
       generationCostUsd(contentReadModelId(), WRITE_THIS.brief) +
       generationCostUsd(contentWriteModelId(), WRITE_THIS.page) +
       searchCostUsd(WRITE_THIS.searches),
-    // A draft's Site Audit estimate with its AI checks: one call (llm-signals.js).
-    auditAiChecks: generationCostUsd(auditLlmModelId(), LLM_SIGNALS_TYPICAL_TOKENS),
+    // A draft's Site Audit estimate with its AI checks: its views' calls (llm-signals.js).
+    auditAiChecks: generationCostUsd(auditLlmModel(), LLM_SIGNALS_TYPICAL_TOKENS),
   };
 }

@@ -37,12 +37,12 @@ describe('aiEstimateCosts', () => {
 });
 
 describe('the AI checks of a draft’s Site Audit estimate', () => {
-  it('prices one call on the audit’s model', async () => {
+  it('prices its views’ calls on the audit’s model', async () => {
     vi.stubEnv('AUDIT_LLM_MODEL', 'google/gemini-3-flash-preview');
     const { auditAiChecks } = aiEstimateCosts();
     expect(auditAiChecks).toBeCloseTo(
       generationCostUsd('google/gemini-3-flash-preview', {
-        inputTokens: 4_000,
+        inputTokens: 5_000,
         outputTokens: 1_500,
       }),
       6,

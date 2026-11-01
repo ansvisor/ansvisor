@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { focusFromWorkAreas, focusOf, type FocusArea } from '@/lib/chat/focus';
+import { skillsByFocus } from '@/lib/chat/focus-home';
 import { firstNameOf } from '@/lib/chat/home';
 import { importLegacyChats } from '@/lib/chat/legacy-import';
 import { chatRunsOnOwnKey } from '@/lib/chat/key';
@@ -138,8 +139,8 @@ export async function chatFocusState(): Promise<ChatFocusState> {
  * (chat_user_prefs.default_mode; Auto, ask before changes, when none), and
  * Full auto as the server will decide it, the period whose 80% usage line
  * the person already saw, whether Chat runs on the workspace's own key, and
- * the skills in the / menu. A value that can't be read falls back to the
- * careful one.
+ * the skills in the / menu, their focus's first (CHAT-24 §1). A value that
+ * can't be read falls back to the careful one.
  */
 export async function chatComposerSetup(): Promise<ChatComposerSetup> {
   const supabase = await createClient();
@@ -156,7 +157,7 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
   const [{ data: prefs }, ctx, onOwnKey] = await Promise.all([
     supabase
       .from('chat_user_prefs')
-      .select('default_mode, usage_notice_period')
+      .select('default_mode, usage_notice_period, focus')
       .eq('user_id', user.id)
       .maybeSingle(),
     readPrecedenceContext({
@@ -171,6 +172,6 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
     ...composerSetupOf(prefs?.default_mode, ctx),
     usageNoticeSeen: prefs?.usage_notice_period ?? null,
     onOwnKey,
-    skills: skillMenuOf(profile.organization_id),
+    skills: skillsByFocus(skillMenuOf(profile.organization_id), focusOf(prefs?.focus) ?? []),
   };
 }

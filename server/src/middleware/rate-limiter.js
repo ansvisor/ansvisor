@@ -259,6 +259,19 @@ export const webhookTestLimiter = rateLimit({
   },
 });
 
+// AI Traffic's Check again: one read of the brand's home page each.
+export const snippetCheckLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 export const brandFactsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
