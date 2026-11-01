@@ -88,15 +88,16 @@ const NOT_BRAND_DATA = {
 /**
  * Tables without a brand_id that hold a brand's data but don't reach it yet,
  * and the BRAND-ACCESS PR that takes them:
- *   * chat_agents (and its versions and triggers): an agent names its brands
- *     in its version's scope (jsonb); who sees which agent is Chat's rule
- *     (agent-rules canSeeAgent), PR 9.
+ *   * chat_agents (and its versions, triggers and go-live permission): an
+ *     agent names its brands in its version's scope (jsonb); who sees which
+ *     agent is Chat's rule (agent-rules canSeeAgent), PR 9.
  *   * integration_connections: the Account's Google connection, which lists
  *     every brand's properties; per brand in PR 14.
  * Nobody can be narrowed while this list has a table (the last test below).
  */
 const DEFERRED = {
   chat_agents: 'PR 9',
+  chat_agent_go_live: 'PR 9',
   chat_agent_triggers: 'PR 9',
   chat_agent_versions: 'PR 9',
   integration_connections: 'PR 14',
