@@ -90,6 +90,14 @@ export function seoTags(page, jsonLd = []) {
       disabled: false,
     });
   }
+  if (page.reviewer) {
+    tags.push({
+      type: 'meta',
+      props: { name: 'reviewed-by', content: page.reviewer },
+      custom: true,
+      disabled: false,
+    });
+  }
   for (const block of jsonLd) {
     tags.push({
       type: 'script',

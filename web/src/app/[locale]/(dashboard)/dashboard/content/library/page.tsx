@@ -648,6 +648,7 @@ export default function ContentLibraryPage() {
           html={sending.source.html}
           sourceUrl={sending.source.sourceUrl}
           author={sending.source.author}
+          reviewer={sending.source.reviewer}
           teamByline={sending.source.teamByline}
           byline={sending.source.byline}
           // Placeholders are filled in the editor.

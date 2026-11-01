@@ -7,6 +7,10 @@ import type { ContentAuthor } from '@/lib/content/authors';
 import type { PasteChecks } from '@/lib/content/ready-to-publish';
 
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));
+// No white label kit: downloads keep Ansvisor's names (export-name.test.ts has a kit's).
+vi.mock('@/lib/actions/white-label', () => ({
+  getExportBranding: async () => ({ ok: true, branding: null }),
+}));
 vi.mock('sonner', () => ({ toast }));
 const saveBlob = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/download', () => ({ saveBlob }));
@@ -64,6 +68,7 @@ async function render(over: Partial<Parameters<typeof ExportDialog>[0]> = {}) {
           isNew
           sourceUrl={null}
           author={ada}
+          reviewer={null}
           teamByline="Acme Team"
           byline={null}
           checks={checks}
@@ -300,10 +305,59 @@ describe('ExportDialog', () => {
       'Meta descriptionBrew it slowly.Copy',
       'Slugpour-overCopy',
       'AuthorAda Lovelace → your CMS author fieldCopy',
+      'Reviewed byNo reviewer selected',
       'Featured imageNone in the page',
     ]);
     await act(async () => button('Copy Author')!.click());
     expect(writeText).toHaveBeenCalledWith('Ada Lovelace');
+  });
+
+  it('adds WebPage.reviewedBy to HTML and the reviewer to export metadata', async () => {
+    const reviewer: ContentAuthor = {
+      ...ada,
+      id: 'r1',
+      name: 'Dr. Grace Hopper',
+      title: 'Clinical Reviewer',
+    };
+    await render({
+      html: '<h1>Pour-over</h1><p>Reviewed by Dr. Grace Hopper.</p><p>Done.</p>',
+      reviewer,
+      initialDestination: 'html',
+    });
+
+    expect(dialog().textContent).toContain('Reviewed byDr. Grace Hopper, Clinical ReviewerCopy');
+    await act(async () => button('Download HTML')!.click());
+
+    const [format, , html, fields] = draftExportBlob.mock.calls[0] as [
+      string,
+      string,
+      string,
+      {
+        table: { rows: [string, string][] };
+        front: Record<string, string>;
+        head: { reviewer?: string };
+      },
+    ];
+    expect(format).toBe('html');
+    expect(html).toContain('"reviewedBy"');
+    expect(html).toMatch(/"name":\s*"Dr\. Grace Hopper"/);
+    expect(fields.table.rows).toContainEqual([
+      'Reviewed by',
+      'Dr. Grace Hopper, Clinical Reviewer',
+    ]);
+    expect(fields.front).toMatchObject({
+      reviewed_by: 'Dr. Grace Hopper, Clinical Reviewer',
+    });
+    expect(fields.head.reviewer).toBe('Dr. Grace Hopper, Clinical Reviewer');
+  });
+
+  it('leaves WebPage.reviewedBy out while the page doesn’t name the reviewer', async () => {
+    const reviewer = { ...ada, id: 'r1', name: 'Dr. Grace Hopper' } as ContentAuthor;
+    await render({ html: '<h1>Pour-over</h1><p>Done.</p>', reviewer, initialDestination: 'html' });
+    await act(async () => button('Download HTML')!.click());
+    const html = draftExportBlob.mock.calls[0][2] as string;
+    expect(html).toContain('<p>Done.</p>');
+    expect(html).not.toContain('reviewedBy');
   });
 
   it('downloads Word and Markdown with the page fields, and remembers the destination', async () => {
@@ -335,6 +389,8 @@ describe('ExportDialog', () => {
         }),
         front: expect.objectContaining({ slug: 'pour-over', author: 'Ada Lovelace' }),
       }),
+      null,
+      undefined,
     );
     expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'ansvisor_content_pour-over.docx');
     expect(localStorage.getItem('aeo:content-export-destination')).toBe('docx');
@@ -423,6 +479,8 @@ describe('ExportDialog', () => {
       'Pour-over',
       '<p>Done.</p>',
       expect.objectContaining({ front: expect.objectContaining({ slug: 'pour-over' }) }),
+      null,
+      undefined,
     );
     expect(saveBlob).toHaveBeenLastCalledWith(expect.any(Blob), 'ansvisor_content_pour-over.xlsx');
     await act(async () => destination('CSV').click());
@@ -432,6 +490,8 @@ describe('ExportDialog', () => {
       'Pour-over',
       '<p>Done.</p>',
       expect.anything(),
+      null,
+      undefined,
     );
     expect(saveBlob).toHaveBeenLastCalledWith(expect.any(Blob), 'ansvisor_content_pour-over.csv');
   });
@@ -471,6 +531,8 @@ describe('ExportDialog', () => {
       'Pour-over',
       '<h1>Pour-over</h1><p>By Ada Lovelace</p><p>Done.</p>',
       expect.anything(),
+      null,
+      undefined,
     );
     await act(async () => destination('HTML').click());
     await act(async () => button('Copy HTML')!.click());
@@ -490,6 +552,8 @@ describe('ExportDialog', () => {
       'Pour-over',
       '<p>Done.</p>',
       expect.anything(),
+      null,
+      undefined,
     );
   });
 });

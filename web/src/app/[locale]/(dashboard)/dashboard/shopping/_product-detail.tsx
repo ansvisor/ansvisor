@@ -91,10 +91,7 @@ export function ProductDetailView({
               href={product.url}
               target="_blank"
               rel="noopener noreferrer"
-              className={cn(
-                buttonVariants({ variant: 'outline', size: 'sm' }),
-                'ml-auto shrink-0 gap-1.5',
-              )}
+              className={cn(buttonVariants({ variant: 'outline' }), 'ml-auto shrink-0 gap-1.5')}
             >
               {t('viewPage')}
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />

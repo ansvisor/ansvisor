@@ -156,6 +156,7 @@ describe('readImpactReport', () => {
       ['r2', 'Change b', 'pending', { who: 'teammate', name: 'Alex Kim' }],
     ]);
     expect(report.summary).toEqual({ shipped: 2, previous: 3, improved: 1, judged: 1, pending: 1 });
+    expect(report.capped).toBe(false);
     expect(report.dataAsOf).toBe('2026-10-20T06:00:00Z');
     const read = calls.find((c) => c.table === 'ship_events' && !c.options)!;
     expect(read.columns).toContain('impact_measurements!impact_measurements_ship_event_id_fkey(');
@@ -176,6 +177,28 @@ describe('readImpactReport', () => {
     );
     // Only teammates are named: the reader is "you".
     expect(assignees.read.mock.calls[0][2]).toEqual(['teammate-1']);
+  });
+
+  it('lists a month’s first 500 changes, and says when it has more', async () => {
+    answers.ship_events = {
+      data: Array.from({ length: 501 }, (_, i) => shipRow(`s${i}`)),
+      error: null,
+    };
+    const result = await readImpactReport(BRAND, RANGE);
+    if (!result.ok) throw new Error('not read');
+    expect(result.report.rows).toHaveLength(500);
+    expect(result.report.rows.at(-1)?.title).toBe('Change s499');
+    expect(result.report.summary.shipped).toBe(500);
+    expect(result.report.capped).toBe(true);
+    // One more than it lists, to tell.
+    const read = calls.find((c) => c.table === 'ship_events' && !c.options)!;
+    expect(read.filters).toContainEqual(['limit', 501]);
+    answers.ship_events = {
+      data: Array.from({ length: 500 }, (_, i) => shipRow(`s${i}`)),
+      error: null,
+    };
+    const all = await readImpactReport(BRAND, RANGE);
+    expect(all.ok && [all.report.rows.length, all.report.capped]).toEqual([500, false]);
   });
 
   it('sums the AI traffic of the changed pages this month and the one before, by their path', async () => {

@@ -76,6 +76,14 @@ describe('buildTrendPoints', () => {
     expect(buildTrendPoints([row('a', 'https://example.com/', 'x')], null)).toEqual([]);
     expect(buildTrendPoints(null, 'example.com')).toEqual([]);
   });
+
+  it('leaves out a partial audit: its score is never compared', () => {
+    const newestFirst = [
+      { ...row('b', 'https://example.com/', '2026-03-02T00:00:00Z', '0.9'), partial: true },
+      row('a', 'https://example.com/', '2026-03-01T00:00:00Z'),
+    ];
+    expect(buildTrendPoints(newestFirst, 'example.com').map((p) => p.id)).toEqual(['a']);
+  });
 });
 
 describe('pageKey', () => {
@@ -253,6 +261,37 @@ describe('buildAuditPages', () => {
     expect(cutShort.runs[0]).toMatchObject({ id: 'a2', status: 'failed' });
   });
 
+  it('keeps the last complete score after a partial audit, which is never compared', () => {
+    const partial = (r) => ({ ...r, partial: true });
+    const [page] = buildAuditPages([
+      partial(row('a3', 'https://acme.com/pricing', '2026-10-15T09:00:00Z', '0.72')),
+      row('a2', 'https://acme.com/pricing', '2026-10-14T09:00:00Z', '0.63'),
+      row('a1', 'https://acme.com/pricing', '2026-10-01T09:00:00Z', '0.58'),
+    ]);
+    expect(page).toMatchObject({
+      auditId: 'a2',
+      score: 0.63,
+      previousScore: 0.58,
+      status: 'improving',
+      trend: [0.58, 0.63],
+      runCount: 3,
+    });
+    expect(page.runs[0]).toMatchObject({ id: 'a3', partial: true });
+
+    // A page with only partial audits shows the latest, with nothing to compare.
+    const [only] = buildAuditPages([
+      partial(row('b2', 'https://acme.com/blog', '2026-10-15T09:00:00Z', '0.65')),
+      partial(row('b1', 'https://acme.com/blog', '2026-10-14T09:00:00Z', '0.55')),
+    ]);
+    expect(only).toMatchObject({
+      auditId: 'b2',
+      score: 0.65,
+      previousScore: null,
+      status: 'needs_work',
+      trend: [],
+    });
+  });
+
   it('draws the trend from the newest completed scores, oldest first', () => {
     const rows = Array.from({ length: PAGE_TREND_POINTS + 3 }, (_, i) =>
       row(
@@ -321,6 +360,16 @@ describe('findPreviousCompletedAudit', () => {
     ];
 
     expect(findPreviousCompletedAudit(rows, 'current')).toBeNull();
+  });
+
+  it('never compares a partial audit, as the current one or the previous', () => {
+    const rows = [
+      { ...row('current', 'https://acme.com/', '2026-10-10T09:00:00Z', '0.7'), partial: false },
+      { ...row('partial', 'https://acme.com/', '2026-10-09T09:00:00Z', '0.9'), partial: true },
+      row('previous', 'https://acme.com/', '2026-10-08T09:00:00Z', '0.6'),
+    ];
+    expect(findPreviousCompletedAudit(rows, 'current')?.auditId).toBe('previous');
+    expect(findPreviousCompletedAudit(rows, 'partial')).toBeNull();
   });
 
   it('returns null when the current audit is missing, unfinished, or has no score', () => {

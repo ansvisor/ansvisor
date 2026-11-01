@@ -4,8 +4,8 @@ route: /dashboard/traffic
 keywords: [ai referral traffic, ai traffic analytics, ai visits, chatgpt visits, referral trend]
 synonyms: [traffic from ai, visitors from chatgpt, ai referrals, ai sessions]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -24,6 +24,7 @@ Each figure is compared with the period of the same length just before. Below 30
 - **One visit per session**: a reload, or a further link from the same answer, continues the visit. The visits card gives the pageviews beside the visits.
 - **Snippet or Google Analytics, never both**: on days the tracking snippet sent any visit, the page counts the snippet's; on other days, Google Analytics'. The visits card says how many days came from Google Analytics.
 - **Recent AI Referral Visits**, at the bottom, shows only the snippet's visits, one row per visit. Search it by address and filter by platform.
+- **No snippet, no zero**: until the tracking snippet is seen on your site, the page says **Tracking code not detected** and how to add it, rather than showing 0 visits. Chat and the MCP tools say the same.
 
 ## Summary line and cards
 

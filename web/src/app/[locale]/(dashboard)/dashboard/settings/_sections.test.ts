@@ -52,6 +52,18 @@ describe('Content (CE-051)', () => {
   });
 });
 
+describe('White label (00429)', () => {
+  it('opens on its own address on the cloud, where a plan has it or locks it', () => {
+    expect(hasSettingsSection('white-label', cloud)).toBe(true);
+    expect(resolveSettingsSection('white-label', cloud)).toBe('white-label');
+  });
+
+  it('is there on a self-host too, whose plan has white label', () => {
+    expect(hasSettingsSection('white-label', selfHost)).toBe(true);
+    expect(resolveSettingsSection('white-label', selfHost)).toBe('white-label');
+  });
+});
+
 describe('settingsSectionPath', () => {
   it('keeps the locale prefix and replaces the section', () => {
     expect(settingsSectionPath('/dashboard/settings', 'team')).toBe('/dashboard/settings/team');
