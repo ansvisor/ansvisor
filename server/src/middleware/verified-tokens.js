@@ -56,6 +56,25 @@ export function verifiedUserId(authorizationHeader) {
 }
 
 /**
+ * Internal requests acting as a member (acting-user.js), by the secret's
+ * header and the X-Acting-User they sent: that member's own bucket, once
+ * acting-user.js has checked the pair. The secret's header alone earns
+ * none, and a session's token with an X-Acting-User keeps its own.
+ */
+function actingKey(authorizationHeader, actingHeader) {
+  if (typeof actingHeader !== 'string' || !authorizationHeader) return null;
+  return `${authorizationHeader}\nacting-for:${actingHeader}`;
+}
+
+export function markActingUserVerified(authorizationHeader, actingHeader, userId) {
+  users.mark(actingKey(authorizationHeader, actingHeader), userId);
+}
+
+export function verifiedActingUserId(authorizationHeader, actingHeader) {
+  return users.get(actingKey(authorizationHeader, actingHeader));
+}
+
+/**
  * AI-bot senders (AT-010) whose secret named a live connection, mapped to
  * the connection's id. Kept apart from users, so a bot secret never earns
  * a dashboard bucket. Each accepted request marks it again, so a sender

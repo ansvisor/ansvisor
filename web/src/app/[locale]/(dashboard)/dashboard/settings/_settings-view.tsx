@@ -20,6 +20,7 @@ import { AiProvidersSection } from '@/components/settings/ai-providers-section';
 import { NotificationsSection } from '@/components/settings/notifications-section';
 import { IntegrationsSection } from '@/components/settings/integrations-section';
 import { OrganizationSection } from '@/components/settings/organization-section';
+import { WhiteLabelSection } from '@/components/settings/white-label-section';
 import { MenuAccessSection } from '@/components/settings/menu-access-section';
 import { WorkAreasCard } from '@/components/settings/work-areas-card';
 import { useCanManageMenus } from '@/components/providers/menu-access-provider';
@@ -111,6 +112,7 @@ export function SettingsView({ section }: { section: SettingsSection }) {
   const labels: Record<SettingsSection, string> = {
     account: t('account'),
     organization: t('organization'),
+    'white-label': t('whiteLabel.title'),
     team: t('team'),
     'roles-access': t('rolesAccess'),
     'menu-access': t('menuAccess.title'),
@@ -232,6 +234,10 @@ export function SettingsView({ section }: { section: SettingsSection }) {
 
           {/* Organization */}
           {active === 'organization' && <OrganizationSection />}
+
+          {active === 'white-label' && hasSettingsSection('white-label', { isCloud }) && (
+            <WhiteLabelSection />
+          )}
 
           {/* Team */}
           {active === 'team' && <TeamSection />}

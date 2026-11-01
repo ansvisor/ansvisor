@@ -1607,7 +1607,9 @@
         "create page",
         "optimize page",
         "content agent",
-        "import page"
+        "import page",
+        "page type",
+        "site type"
       ],
       "synonyms": [
         "write a new article",
@@ -1616,7 +1618,7 @@
         "improve an existing page"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1632,7 +1634,7 @@
         },
         {
           "heading": "Pick the page type",
-          "text": "Click **Continue**. Ansvisor picks a **Page type** from the title, the content, the page or the opportunity, and says which. Pick another if it's wrong; you can also change it later in the editor.\n\nFor a new page, **Overview** lists your pages AI already cites for the same prompts, with how many of those prompts each one answers, its AI citations and its Google position. Pick **Optimize … instead** on one of those pages to work on it, or **Create a new page**."
+          "text": "Click **Continue**. Ansvisor picks a **Page type** from the title, the content, the page or the opportunity, and says which. Pick another if it's wrong; you can also change it later in the editor.\n\nThe page types on offer follow the brand's **Site type** in the brand settings: B2B SaaS, E-commerce, B2C or Mobile app. A mobile app, for example, gets **Feature page**, **Pricing** and **Help & FAQ** among its types, and no product or destination pages.\n\nFor a new page, **Overview** lists your pages AI already cites for the same prompts, with how many of those prompts each one answers, its AI citations and its Google position. Pick **Optimize … instead** on one of those pages to work on it, or **Create a new page**."
         },
         {
           "heading": "Choose who does it",
@@ -2641,7 +2643,7 @@
         },
         {
           "heading": "Download a PDF",
-          "text": "**Download PDF** saves the report as a PDF with the same sections as the web view, the executive summary included. Its text stays selectable and sharp at any zoom, and the file is small enough to attach to an email."
+          "text": "**Download PDF** saves the report as a PDF with the same sections as the web view, the executive summary included. Its text stays selectable and sharp at any zoom, and the file is small enough to attach to an email. With white label in use, the report and its PDF carry your agency's logo, color, name and footer instead of Ansvisor's, with a \"Prepared for\" cover."
         }
       ]
     },
@@ -2715,7 +2717,7 @@
         "score changed"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -2735,11 +2737,15 @@
         },
         {
           "heading": "Same page, same score",
-          "text": "The AI keeps its verdict on each of its thirteen signals until the part of the page that signal reads changes, so a page audited again with no changes gets the same score. A page that changed is judged again only on the signals whose part changed.\n\nIf the AI checks can't run, the page keeps the verdicts of its last audit. A page with none, such as one audited for the first time, gets a partial score: the report says the AI checks couldn't run, and the score leaves them out and isn't compared with your other audits."
+          "text": "The AI keeps its verdict on each of its thirteen signals until the part of the page that signal reads changes, so a page audited again with no changes gets the same score. A page that changed is judged again only on the signals whose part changed.\n\nIf the AI checks can't run, the page keeps the verdicts of its last audit. A page with none, such as one audited for the first time, gets a partial score: the report says the AI checks couldn't run, and the score leaves them out and isn't compared with your other audits. A partial audit doesn't use one of your monthly audits."
         },
         {
           "heading": "Signals",
           "text": "The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:\n\n- the **Finding**: what this audit saw on the page, when the check reports it;\n- what the signal measures, and **Why** it matters to AI engines;\n- the **Recommended fix** written for this page, or the general **Fix** for signals without one."
+        },
+        {
+          "heading": "Authority links",
+          "text": "**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…) and major news."
         },
         {
           "heading": "Product pages",
@@ -2756,7 +2762,8 @@
         "run audit",
         "audit a page",
         "auto-audit",
-        "audit settings"
+        "audit settings",
+        "audit again"
       ],
       "synonyms": [
         "page audit",
@@ -2765,7 +2772,7 @@
         "AI readiness check"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -2782,6 +2789,10 @@
         {
           "heading": "Other ways to start an audit",
           "text": "- **Audit selected** on the **Opportunities** tab;\n- **Re-audit** on the pages you select on the **Pages** tab;\n- **Audit page** on a landing page of the **AI Referral Traffic** page, or **Audit pages** for several;\n- the re-run icon at the top of a report, to audit the same page again;\n- auto-audit, which audits your top-priority pages on its own.\n\nAudits started in bulk run a few at a time."
+        },
+        {
+          "heading": "Auditing a page again",
+          "text": "A page has one audit running at a time. Starting it again, from any of these places, opens the audit already running and uses no audit, however the address is written: with or without www, a last slash or a tracking parameter.\n\nWhen a page was audited in the last 10 minutes, Site Audit asks first: **Open it** shows that audit, and **Audit again** starts a new one. Pages started together leave those out and say so, with **Audit again**."
         },
         {
           "heading": "Your monthly audits",

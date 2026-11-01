@@ -57,6 +57,8 @@ export interface ClientRun {
   dataAsOf: string | null;
   /** Why it ended in error, in words, when the server gave them. */
   errorReason: string | null;
+  /** It ended because the workspace's own AI key failed (AGENT-OWN-KEY §5.2): where to fix it shows. */
+  keyFailed: boolean;
   /** The last event applied: a reconnect asks for the ones after it. */
   lastSeq: number;
 }
@@ -78,6 +80,7 @@ export function emptyRun(status: ClientRunStatus = 'running'): ClientRun {
     generatedAt: null,
     dataAsOf: null,
     errorReason: null,
+    keyFailed: false,
     lastSeq: 0,
   };
 }
@@ -162,8 +165,8 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
       return { ...next, status: 'stopped', confirm: null, question: null, summary };
     }
     case 'run.error': {
-      const { code: _code, reason, ...summary } = event.data;
-      void _code;
+      const { code, reason, keyFailure: _keyFailure, ...summary } = event.data;
+      void _keyFailure;
       return {
         ...next,
         status: 'error',
@@ -171,6 +174,7 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
         question: null,
         summary,
         errorReason: reason ?? null,
+        keyFailed: code === 'own_key',
       };
     }
     case 'run.paused_cap': {

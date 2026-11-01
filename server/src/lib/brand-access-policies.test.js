@@ -82,6 +82,7 @@ const NOT_BRAND_DATA = {
   site_audit_auto_runs:
     "The Account's monthly auto-audit runs: slots and audit ids; each audit's rows are its brand's.",
   site_audit_settings: "The Account's auto-audit switch.",
+  white_label_kits: "The Account's white-label kit, shared by its brands (00429).",
 };
 
 /**

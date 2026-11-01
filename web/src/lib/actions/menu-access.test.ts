@@ -132,12 +132,20 @@ describe('getMyMenu', () => {
   });
 
   it('has Agent Center only with the new Chat on for the workspace', async () => {
-    signedInAs({ role: 'admin', work_areas: ['aeo'] });
+    signedInAs({ role: 'analyst', menu_hidden: ['agents'] });
+    answers['user.organization_menu_roles.select'] = { data: null, error: null };
     vi.stubEnv('CHAT_AGENTIC', 'false');
     expect((await getMyMenu()).hidden).not.toContain('agents');
     vi.stubEnv('CHAT_AGENTIC', 'true');
     vi.stubEnv('CHAT_AGENTIC_ORGS', ORG);
-    expect((await getMyMenu()).hidden).toEqual(expect.arrayContaining(['agent', 'agents']));
+    expect((await getMyMenu()).hidden).toContain('agents');
+    // AEO/GEO & Audit and Analytics keep it, without Chat.
+    for (const area of ['aeo', 'analytics']) {
+      signedInAs({ role: 'admin', work_areas: [area] });
+      const { hidden } = await getMyMenu();
+      expect(hidden, area).toContain('agent');
+      expect(hidden, area).not.toContain('agents');
+    }
     vi.unstubAllEnvs();
   });
 });

@@ -191,7 +191,9 @@ export type AskReason =
   | 'full_auto_off'
   | 'mcp'
   | 'dont_ask_again_off'
-  | 'tainted';
+  | 'tainted'
+  /** The engine's: a change in a run no session is behind (engine.ts askWithoutSession). */
+  | 'no_session';
 
 export type ToolDecision =
   /** It runs now: a READ, or a WRITE set to Always, in Full auto, or under the person's tick. */

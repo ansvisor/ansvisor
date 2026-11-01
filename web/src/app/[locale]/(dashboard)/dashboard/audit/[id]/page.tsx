@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Loader2, ArrowLeft, Trash2, RefreshCw, AlertCircle, ListChecks } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
+import { useRecentAudit } from '@/components/audit/use-recent-audit';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,6 +36,7 @@ export default function AuditDetailPage() {
   const id = params.id as string;
   const t = useTranslations('audit');
   const router = useRouter();
+  const { askOne } = useRecentAudit();
   const tFailed = t('failed');
   // A read-only workspace (plan not active): Re-audit and Delete open the
   // upgrade dialog instead (Delete without its confirm).
@@ -196,19 +198,30 @@ export default function AuditDetailPage() {
     }
   };
 
-  // Re-run the audit on the same URL → navigate to the new audit's detail page.
-  const handleRefresh = async () => {
-    if (!audit) return;
+  // Re-run the audit on the same URL → navigate to the new audit's detail
+  // page (the page's own when one runs already). An audit finished minutes
+  // ago asks first: Open it or Audit again.
+  const rerun = async (brandId: string, url: string, force = false) => {
     setRerunning(true);
 
     try {
-      const started = await runAudit(audit.brandId, audit.url);
-      router.push(`/dashboard/audit/${started.id}`);
+      const started = force
+        ? await runAudit(brandId, url, { force: true })
+        : await runAudit(brandId, url);
+      if (started.recent) {
+        askOne(started.recent, () => void rerun(brandId, url, true));
+        return;
+      }
+      router.push(`/dashboard/audit/${started.audit.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : tFailed);
     } finally {
       setRerunning(false);
     }
+  };
+  const handleRefresh = async () => {
+    if (!audit) return;
+    await rerun(audit.brandId, audit.url);
   };
 
   return (

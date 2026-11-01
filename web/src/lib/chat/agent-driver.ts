@@ -179,6 +179,8 @@ function pauseFor(refusal: AgentRefusal): Exclude<AgentPausedReason, 'manual'> |
   if (refusal.kind === 'denied') return 'plan';
   if (refusal.code === 'no_brand') return 'brand_gone';
   if (refusal.code === 'ai_limit') return 'cap';
+  // The workspace's own key is marked failing (AGENT-OWN-KEY §5.2 item 4).
+  if (refusal.code === 'own_key_failed') return 'own_key';
   return null;
 }
 
@@ -192,7 +194,7 @@ async function endBeforeStart(
     now,
   }: {
     pause?: Exclude<AgentPausedReason, 'manual'> | null;
-    stopReason?: 'brand_gone' | 'action_closed' | null;
+    stopReason?: 'brand_gone' | 'action_closed' | 'own_key' | null;
     now: Date;
   },
 ): Promise<null> {
@@ -401,7 +403,7 @@ export async function openAgentRun(
     const pause = pauseFor(failing.refusal);
     return endBeforeStart(run, 'stopped', {
       pause,
-      stopReason: pause === 'brand_gone' ? 'brand_gone' : null,
+      stopReason: pause === 'brand_gone' || pause === 'own_key' ? pause : null,
       now,
     });
   }
@@ -569,7 +571,11 @@ async function heldTooLong(chatRunId: string, now: Date): Promise<boolean> {
   return !!at && now.getTime() - Date.parse(at) > APPROVAL_TTL_MS;
 }
 
-/** The agent run's state for its Chat run's (§H item 37). */
+/**
+ * The agent run's state for its Chat run's (§H item 37). A Chat run that
+ * ended on the workspace's own key failing is stopped `own_key`, not failed
+ * (AGENT-OWN-KEY §5.2): it doesn't count toward 3 failed runs in a row.
+ */
 export function agentStateOf(chat: Pick<LoadedRun, 'status' | 'progress'>): {
   status: string;
   stopReason?: string;
@@ -582,7 +588,9 @@ export function agentStateOf(chat: Pick<LoadedRun, 'status' | 'progress'>): {
     case 'done':
       return { status: 'done' };
     case 'error':
-      return { status: 'failed' };
+      return chat.progress?.keyFailure
+        ? { status: 'stopped', stopReason: 'own_key' }
+        : { status: 'failed' };
     case 'stopped': {
       const why = chat.progress?.stoppedFor;
       return {
@@ -773,6 +781,11 @@ export async function settleAgentRun(
     if (target.status === 'paused_cap' && capHit !== 'run') {
       await pauseAgentForSystem(run.organization_id, run.agent_id, 'cap');
     }
+    // The own key failed: a triggered agent pauses until it works (AGENT-OWN-KEY §5.2);
+    // a person's Run now or Run agent doesn't pause it, as with a missing connection.
+    if (target.stopReason === 'own_key' && isTriggered(run.trigger_kind)) {
+      await pauseAgentForSystem(run.organization_id, run.agent_id, 'own_key');
+    }
     if (ENDED.includes(target.status)) {
       await markShipped(run.id);
       if (target.status === 'done' || target.status === 'failed') {
@@ -789,10 +802,13 @@ export async function settleAgentRun(
 export interface AgentRunDriverDeps {
   /** Runs the drive past the request's answer (next/server's after()). */
   background: (task: () => Promise<void>) => void;
-  /** The Chat engine's driver. */
-  drive: (actor: ChatActor, chatRunId: string) => Promise<void>;
+  /** The Chat engine's driver, with whose session the request carries (null for none). */
+  drive: (actor: ChatActor, chatRunId: string, sessionUserId: string | null) => Promise<void>;
   now: () => Date;
 }
+
+const driveAgentRun: AgentRunDriverDeps['drive'] = (actor, chatRunId, sessionUserId) =>
+  driveRun(actor, chatRunId, undefined, { sessionUserId });
 
 /** after() in a request; outside one (a script, a test), on its own. */
 function inBackground(task: () => Promise<void>) {
@@ -809,16 +825,20 @@ function inBackground(task: () => Promise<void>) {
  * The driver: hands a started run to Chat (openAgentRun) and drives it in
  * the background, then keeps the agent run in step (settleAgentRun). The
  * next queued run starts on the minute tick, not here. Resolves once the
- * run is handed over, not when it ends.
+ * run is handed over, not when it ends. The request's session drives the
+ * run's changes only when it is the person the run acts as (their own Run
+ * now or Run agent); otherwise (the tick, a signal, another person's
+ * click) each change asks first.
  */
 export function createAgentRunDriver(deps: Partial<AgentRunDriverDeps> = {}): AgentRunDriver {
-  const { background = inBackground, drive = driveRun, now = () => new Date() } = deps;
-  const driver: AgentRunDriver = async ({ id, organizationId }) => {
+  const { background = inBackground, drive = driveAgentRun, now = () => new Date() } = deps;
+  const driver: AgentRunDriver = async ({ id, organizationId, sessionUserId = null }) => {
     const opened = await openAgentRun(id, organizationId, now());
     if (!opened) return;
+    const session = sessionUserId === opened.actor.userId ? sessionUserId : null;
     background(async () => {
       try {
-        await drive(opened.actor, opened.chatRunId);
+        await drive(opened.actor, opened.chatRunId, session);
       } finally {
         await settleAgentRun(opened.agentRunId, { now: now() });
       }
