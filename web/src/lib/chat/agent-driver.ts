@@ -412,7 +412,9 @@ export async function openAgentRun(
   if (await agentMonthCapReached(organizationId, agent.row.id, agent.row.max_month_share)) {
     return endBeforeStart(run, 'stopped', { pause: 'cap', now });
   }
-  const brand = (await runnableBrands(organizationId, version.scope)).find(
+  // The run's brand, as the person it acts as may use it now (BRAND-ACCESS §5.3): one taken
+  // from them since it was queued is gone for this run, as a deleted one is.
+  const brand = (await runnableBrands(organizationId, version.scope, ctx.viewer.brandAccess)).find(
     (b) => b.id === run.brand_id,
   );
   if (!brand) return endBeforeStart(run, 'stopped', { stopReason: 'brand_gone', now });

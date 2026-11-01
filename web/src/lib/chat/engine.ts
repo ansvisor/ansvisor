@@ -4,6 +4,7 @@ import { z } from 'zod';
 import messages from '../../../messages/en.json';
 import { PLANS } from '@/config/plans';
 import type { AiProvider } from '@/lib/agent/providers';
+import { hasBrandAccess } from '@/lib/brand-access';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { searchHelp } from '@/lib/help/search';
 import { platformName } from '@/lib/signals/names';
@@ -109,6 +110,12 @@ import {
   type PageSites,
 } from './page-sites';
 import { readBrandIsDemo, readPrecedenceContext, readToolCall } from './precedence-context';
+import {
+  noteTouchedBrands,
+  startTouchedBrands,
+  touchedByCall,
+  type TouchedBrands,
+} from './touched-brands';
 import type { ExplainChangeOutput } from '@/lib/mcp/why';
 import { stepPrompt, todayLine } from './prompt';
 import { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
@@ -607,6 +614,10 @@ export async function startChatRun(
     if (error) throw new Error(`Chat could not read the chat: ${error.message}`);
     if (!data) return failure(404, 'not_found', t('error.notFound'));
     brandId = (data as { brand_id: string | null }).brand_id;
+    // A chat about a brand the person can no longer use is hidden, and kept (BRAND-ACCESS §9 Q4).
+    if (brandId && !hasBrandAccess(ctx.brandAccess, brandId)) {
+      return failure(404, 'not_found', t('error.notFound'));
+    }
     earlier = await readEarlierRuns(conversationId, input.message);
     fromRun = input.fromRunId ? await fromTaintedRun(conversationId, input.fromRunId) : false;
   } else {
@@ -618,7 +629,10 @@ export async function startChatRun(
         .eq('organization_id', actor.organizationId)
         .maybeSingle();
       if (error) throw new Error(`Chat could not read the brand: ${error.message}`);
-      if (!data) return failure(404, 'not_found', t('error.notFound'));
+      // A brand of the workspace the person can't use is as one that isn't there.
+      if (!data || !hasBrandAccess(ctx.brandAccess, input.brandId)) {
+        return failure(404, 'not_found', t('error.notFound'));
+      }
       brandId = input.brandId;
     }
     conversationId = await insertRow(
@@ -634,6 +648,8 @@ export async function startChatRun(
       },
       'start a chat',
     );
+    // A new chat keeps the brands it touches from here on (00436), before anything is in it.
+    await startTouchedBrands(conversationId);
   }
 
   const timezone = validTimezone(input.timezone);
@@ -757,6 +773,8 @@ interface RunContext {
   batchAnswer?: string;
   /** The agent run this chat is (CHAT-21 §H item 36): its steps are held within its cap too. */
   agentRunId: string | null;
+  /** The brands this request noted on the chat already (touched-brands.ts); '*': the workspace. */
+  touchedNoted?: Set<string>;
   /**
    * Whose session the request driving the run carries: a change runs as the
    * signed-in person. When it isn't the actor (an agent run nobody's session
@@ -1917,6 +1935,32 @@ async function callFacts(rc: RunContext, tool: ChatTool, input: Record<string, u
   return { ctx, call };
 }
 
+/**
+ * Notes the brands a call touches on its chat (touched-brands.ts), once a
+ * run: false when the note failed, and the call must not run.
+ */
+async function noteCallBrands(
+  rc: RunContext,
+  tool: ChatTool,
+  brandId: string | null,
+  ctx: PrecedenceContext | null,
+): Promise<boolean> {
+  const touched = touchedByCall(tool, brandId, ctx?.brandAccess ?? null);
+  const noted = (rc.touchedNoted ??= new Set());
+  const fresh: TouchedBrands =
+    touched === 'workspace'
+      ? noted.has(WHOLE_WORKSPACE)
+        ? []
+        : 'workspace'
+      : touched.filter((id) => !noted.has(id));
+  if (!(await noteTouchedBrands(rc.run.conversationId, fresh))) return false;
+  for (const id of fresh === 'workspace' ? [WHOLE_WORKSPACE] : fresh) noted.add(id);
+  return true;
+}
+
+/** touchedNoted's key for the whole workspace. */
+const WHOLE_WORKSPACE = '*';
+
 /** One call, decided on facts read for it now (CHAT-20 §4 "Role change mid-run"). */
 async function handleCall(
   rc: RunContext,
@@ -1963,6 +2007,11 @@ async function handleCall(
 
   const { ctx, call: facts } = await callFacts(rc, tool, input);
   const decision = askWithoutSession(rc, tool, decideForEngine(tool, ctx, facts));
+  // What it may read or change is noted on the chat first (BRAND-ACCESS §10, 00436): a shared
+  // chat with no brand then shows only to people who can use every brand it touched.
+  if (decision.kind !== 'deny' && !(await noteCallBrands(rc, tool, facts.brandId, ctx))) {
+    return result(call, { code: 'failed' }, true);
+  }
   // A change its own check refuses before its card (Send to Action Center's duplicate): no card.
   if (decision.kind !== 'deny' && tool.class !== 'read') {
     const refused = await precheckOf(rc, tool, input, ctx);

@@ -4909,3 +4909,126 @@ describe('the /tasks task strip (W2-11, CHAT-09 §B)', () => {
     delete db.failures.chat_task_state;
   });
 });
+
+describe('brand access (BRAND-ACCESS PR 9)', () => {
+  const SECOND = '77777777-7777-4777-8777-777777777777';
+  const touchedOf = (chatId: string) =>
+    db.tables.chat_conversations.find((c) => c.id === chatId)?.touched_brand_ids;
+  /** An Admin narrows the Analyst to these brands (00388). */
+  const narrow = (...brandIds: string[]) => {
+    db.tables.profiles.find((p) => p.id === PEOPLE.analyst)!.brand_scope = 'selected';
+    db.tables.member_brands = brandIds.map((brand_id) => ({
+      user_id: PEOPLE.analyst,
+      organization_id: ORG,
+      brand_id,
+    }));
+  };
+
+  beforeEach(() => {
+    db.tables.brands.push({ id: SECOND, organization_id: ORG, name: 'Contoso' });
+    // 00436's functions, on the fake's chats.
+    db.rpcs.chat_start_touched_brands = ({ p_conversation_id }) => {
+      const chat = db.tables.chat_conversations.find((c) => c.id === p_conversation_id);
+      const empty = !db.tables.chat_messages.some((m) => m.conversation_id === p_conversation_id);
+      if (chat && (chat.touched_brand_ids ?? null) === null && empty) {
+        chat.touched_brand_ids = chat.brand_id ? [chat.brand_id] : [];
+      }
+    };
+    db.rpcs.chat_note_touched_brands = ({ p_conversation_id, p_brand_ids, p_whole_workspace }) => {
+      const chat = db.tables.chat_conversations.find((c) => c.id === p_conversation_id);
+      if (!chat || (chat.touched_brand_ids ?? null) === null) return;
+      chat.touched_brand_ids = p_whole_workspace
+        ? null
+        : [...new Set([...(chat.touched_brand_ids as string[]), ...(p_brand_ids as string[])])];
+    };
+  });
+
+  it('keeps the brands a chat with no brand touched, each noted before its call reads', async () => {
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: SECOND })), READY],
+      [text('Contoso is up.')],
+    );
+    const started = await engine.startChatRun(ADMIN, { message: 'How is Contoso?', mode: 'auto' });
+    if (!started.ok) throw new Error('not started');
+    // Started before its message went in: no brand, nothing touched yet.
+    expect(touchedOf(started.conversationId)).toEqual([]);
+    const atRead: unknown[] = [];
+    fakes.readRun.mockImplementationOnce(async () => {
+      atRead.push(touchedOf(started.conversationId));
+      return { rows: [{ prompt: 'best crm' }], change_pct: 12, data_as_of: DATA_AS_OF };
+    });
+    await engine.driveRun(ADMIN, started.runId);
+    // Noted before the read ran.
+    expect(atRead).toEqual([[SECOND]]);
+    expect(touchedOf(started.conversationId)).toEqual([SECOND]);
+  });
+
+  it("starts a brand's chat from its brand, and keeps every brand its calls named", async () => {
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: SECOND })), READY],
+      [text('Both read.')],
+    );
+    const runId = await turn(ADMIN, 'Compare with Contoso');
+    const chat = runRow(runId).conversation_id as string;
+    expect(touchedOf(chat)).toEqual([BRAND, SECOND]);
+  });
+
+  it('reads nothing when the note fails: a shared chat would show it to anyone', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: SECOND })), READY],
+      [text('Could not read.')],
+    );
+    const original = db.rpc.bind(db);
+    const rpc = vi
+      .spyOn(db, 'rpc')
+      .mockImplementation(async (name, args) =>
+        name === 'chat_note_touched_brands'
+          ? { data: null, error: { code: '57014', message: 'timeout' } }
+          : original(name, args),
+      );
+    await turn(ADMIN, 'How is Contoso?');
+    expect(fakes.readRun).not.toHaveBeenCalled();
+    rpc.mockRestore();
+    logged.mockRestore();
+  });
+
+  it("doesn't start a chat on a brand the person may not use, nor go on with one they lost", async () => {
+    useModels([READY], [text('Fine.')]);
+    const before = await engine.startChatRun(ANALYST, { message: 'Hi', brandId: BRAND });
+    if (!before.ok) throw new Error('not started');
+    await engine.driveRun(ANALYST, before.runId);
+
+    narrow(SECOND);
+    expect(
+      await engine.startChatRun(ANALYST, { message: 'Hi', brandId: BRAND, mode: 'auto' }),
+    ).toMatchObject({ ok: false, status: 404, code: 'not_found' });
+    // Their own chat about it is hidden, and kept (§9 Q4).
+    expect(
+      await engine.startChatRun(ANALYST, {
+        message: 'And now?',
+        conversationId: before.conversationId,
+      }),
+    ).toMatchObject({ ok: false, status: 404, code: 'not_found' });
+    expect(db.tables.chat_conversations.find((c) => c.id === before.conversationId)).toBeTruthy();
+
+    // A brand shared with them works as before.
+    useModels([READY], [text('Contoso is fine.')]);
+    expect(
+      await engine.startChatRun(ANALYST, { message: 'Hi', brandId: SECOND, mode: 'auto' }),
+    ).toMatchObject({ ok: true });
+  });
+
+  it("refuses a call on a brand that wasn't shared, as a brand not found, and notes nothing", async () => {
+    narrow(SECOND);
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('No access.')],
+    );
+    const started = await engine.startChatRun(ANALYST, { message: 'And Northwind?', mode: 'auto' });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ANALYST, started.runId);
+    expect(fakes.readRun).not.toHaveBeenCalled();
+    expect(touchedOf(started.conversationId)).toEqual([]);
+  });
+});

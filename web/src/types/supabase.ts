@@ -2173,6 +2173,7 @@ export type Database = {
           search_tsv: unknown
           shared_at: string | null
           title: string | null
+          touched_brand_ids: string[] | null
           updated_at: string
           user_id: string
         }
@@ -2192,6 +2193,7 @@ export type Database = {
           search_tsv?: never
           shared_at?: string | null
           title?: string | null
+          touched_brand_ids?: string[] | null
           updated_at?: string
           user_id: string
         }
@@ -2211,6 +2213,7 @@ export type Database = {
           search_tsv?: never
           shared_at?: string | null
           title?: string | null
+          touched_brand_ids?: string[] | null
           updated_at?: string
           user_id?: string
         }
@@ -2300,6 +2303,7 @@ export type Database = {
           tags: string[]
           timezone: string | null
           title: string
+          touched_brand_ids: string[] | null
           type: string
           updated_at: string
           version: number
@@ -2329,6 +2333,7 @@ export type Database = {
           tags?: string[]
           timezone?: string | null
           title: string
+          touched_brand_ids?: string[] | null
           type: string
           updated_at?: string
           version?: number
@@ -2358,6 +2363,7 @@ export type Database = {
           tags?: string[]
           timezone?: string | null
           title?: string
+          touched_brand_ids?: string[] | null
           type?: string
           updated_at?: string
           version?: number
@@ -7434,6 +7440,7 @@ export type Database = {
         Args: { p_brand_id: string; p_user_id?: string }
         Returns: boolean
       }
+      can_see_chat_agent: { Args: { p_agent_id: string }; Returns: boolean }
       chat_agent_usage_shares: {
         Args: { p_budget: number; p_organization_id: string; p_since: string }
         Returns: {
@@ -7451,6 +7458,14 @@ export type Database = {
         Args: { p_run_id: string; p_user_limit: number; p_workspace_limit: number }
         Returns: boolean
       }
+      chat_note_touched_brands: {
+        Args: {
+          p_brand_ids: string[]
+          p_conversation_id: string
+          p_whole_workspace?: boolean
+        }
+        Returns: undefined
+      }
       chat_run_limits: {
         Args: { p_organization_id: string; p_user_id: string }
         Returns: Json
@@ -7458,6 +7473,10 @@ export type Database = {
       chat_start_next_agent_run: {
         Args: { p_organization_id: string; p_workspace_limit: number }
         Returns: string
+      }
+      chat_start_touched_brands: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
       }
       chat_text_array_distinct: {
         Args: { p_values: string[] }

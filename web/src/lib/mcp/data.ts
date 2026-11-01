@@ -1,6 +1,7 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { allowedBrands, readBrandAccess } from '@/lib/brand-access';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import type { Citation } from '@/types';
 import {
@@ -78,22 +79,26 @@ export interface BrandRow {
 }
 
 /**
- * The organization's brands, newest first. The demo brand is one of them,
+ * The organization's brands the person may use (BRAND-ACCESS: all, or the
+ * ones shared with them), newest first. The demo brand is one of them,
  * marked is_demo, unless the organization hid it (once a plan was bought, or
  * from the brand menu).
  */
 export async function listBrandsFor(auth: McpAuthContext): Promise<BrandRow[]> {
   if (!auth.organizationId) return [];
 
-  const { data, error } = await supabaseAdmin
-    .from('brands')
-    .select('id, name, slug, industry, region, created_at, is_demo')
-    .eq('organization_id', auth.organizationId)
-    .or('is_demo.eq.false,demo_hidden_at.is.null')
-    .order('created_at', { ascending: false });
+  const [{ data, error }, access] = await Promise.all([
+    supabaseAdmin
+      .from('brands')
+      .select('id, name, slug, industry, region, created_at, is_demo')
+      .eq('organization_id', auth.organizationId)
+      .or('is_demo.eq.false,demo_hidden_at.is.null')
+      .order('created_at', { ascending: false }),
+    readBrandAccess(auth.userId, auth.organizationId),
+  ]);
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as BrandRow[];
+  return allowedBrands(access, (data ?? []) as BrandRow[]);
 }
 
 export interface VisibilitySummaryParams {

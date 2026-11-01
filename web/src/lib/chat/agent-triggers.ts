@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { readBrandAccess } from '@/lib/brand-access';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
@@ -486,6 +487,20 @@ export interface FireCounts {
 const noFires = (): FireCounts => ({ fired: 0, queued: 0, coalesced: 0, skipped: 0, failed: 0 });
 
 /**
+ * The brands a fire queues runs on: its scope's that the owner may use now,
+ * since a triggered run acts as them (all_brands is all of theirs,
+ * BRAND-ACCESS §5.3); the run checks again when it starts. An agent with no
+ * owner, or one no longer in the workspace, queues on its scope's brands as
+ * before: its run stops before it starts and pauses it (owner_role).
+ */
+async function fireBrands(agent: FiringAgent): Promise<{ id: string; name: string }[]> {
+  const access = agent.ownerId
+    ? ((await readBrandAccess(agent.ownerId, agent.organizationId)) ?? 'all')
+    : 'all';
+  return runnableBrands(agent.organizationId, agent.data.scope, access);
+}
+
+/**
  * Queues a fire on each brand, one brand's failure apart from the others':
  * it is logged and counted. Answers whether any brand's run was queued.
  */
@@ -627,7 +642,7 @@ async function fireSchedule(
     at: now.toISOString(),
     ...(config.type === 'recurring' ? { timezone: config.timezone } : {}),
   };
-  const brands = await runnableBrands(agent.organizationId, agent.data.scope);
+  const brands = await fireBrands(agent);
   // Claimed: a brand that fails doesn't stop the others.
   return queueOnBrands(
     agent,
@@ -776,7 +791,7 @@ export async function fireSignals(
     if (matched.length === 0) continue;
     // One trigger's failure is its own: the others still fire.
     try {
-      const brands = await runnableBrands(agent.organizationId, agent.data.scope);
+      const brands = await fireBrands(agent);
       if (!brands.some((b) => b.id === brandRow.id)) continue;
       counts.fired += 1;
       if (await monthCapUsed(agent)) continue;

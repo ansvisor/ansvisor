@@ -252,6 +252,28 @@ describe('createChat', () => {
     });
   });
 
+  it('refuses a brand the person may not use (BRAND-ACCESS), and keeps the brands it touches', async () => {
+    const SECOND = CHAT(8);
+    db.tables.brands.push({ id: SECOND, organization_id: ORG, name: 'Second' });
+    db.tables.member_brands = [{ user_id: ME.userId, brand_id: SECOND }];
+    db.tables.profiles.find((p) => p.id === ME.userId)!.brand_scope = 'selected';
+    const started: unknown[] = [];
+    db.rpcs = {
+      // can_access_brand (00388) for Selected brands: the brands shared with them.
+      can_access_brand: ({ p_brand_id, p_user_id }) =>
+        db.tables.member_brands.some((m) => m.user_id === p_user_id && m.brand_id === p_brand_id),
+      chat_start_touched_brands: ({ p_conversation_id }) => started.push(p_conversation_id),
+    };
+    expect(
+      await chats.createChat(reader, ME, chats.createInput.parse({ brandId: BRAND })),
+    ).toBeNull();
+    expect(db.tables.chat_conversations).toEqual([]);
+    const made = await chats.createChat(reader, ME, chats.createInput.parse({ brandId: SECOND }));
+    expect(made).toMatchObject({ brand: 'Second' });
+    expect(started).toEqual([db.tables.chat_conversations[0].id]);
+    db.rpcs = {};
+  });
+
   it("refuses another workspace's brand, and a full address as its page", async () => {
     db.tables.brands.push({ id: CHAT(9), organization_id: OTHER_ORG, name: 'Other' });
     expect(

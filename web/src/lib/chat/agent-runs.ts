@@ -137,7 +137,7 @@ export async function runAgentNow(
 
   const failing = await runChecks(ctx, agent, ctx.viewer.role, await readTriggerInputs(row.id));
   if (failing) return failing;
-  let brands = await runnableBrands(org, version.scope);
+  let brands = await runnableBrands(org, version.scope, ctx.viewer.brandAccess);
   if (input.brandId) {
     brands = brands.filter((b) => b.id === input.brandId);
     if (brands.length === 0) return refused('brand_not_found');
@@ -239,7 +239,9 @@ export async function runAgentOnAction(
   const { snapshot, brand: actionBrand } = action.value;
   const failing = await runChecks(ctx, agent, ctx.viewer.role, await readTriggerInputs(row.id));
   if (failing) return failing;
-  const brand = (await runnableBrands(org, version.scope)).find((b) => b.id === actionBrand.id);
+  const brand = (await runnableBrands(org, version.scope, ctx.viewer.brandAccess)).find(
+    (b) => b.id === actionBrand.id,
+  );
   if (!brand) return refused('brand_not_found');
   const missing = await missingRequiredConnection(version, brand.id);
   if (missing) {

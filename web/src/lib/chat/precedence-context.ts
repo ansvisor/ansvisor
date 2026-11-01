@@ -1,3 +1,4 @@
+import { brandAccessOf, readAccessProfile } from '@/lib/brand-access';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-guard';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Database } from '@/types/supabase';
@@ -24,9 +25,10 @@ import {
 
 /**
  * What the approval precedence decides on, read fresh for each tool call:
- * the person's live role, the workspace's plan, its Chat settings and the
- * person's "Don't ask again" ticks. Nothing is kept between calls, so a role,
- * a plan or a setting changed mid-run counts from the next call (CHAT-20 §4).
+ * the person's live role and the brands they may use (lib/brand-access.ts),
+ * the workspace's plan, its Chat settings and the person's "Don't ask
+ * again" ticks. Nothing is kept between calls, so a role, a brand, a plan or
+ * a setting changed mid-run counts from the next call (CHAT-20 §4).
  * Read with the service role: these are the server's facts, and a scheduled
  * run has no session (CHAT-12). Server only.
  */
@@ -69,20 +71,6 @@ export function parseChatSettings(row: SettingsRow | null): ChatSettings {
 }
 
 /**
- * The brands a person may use. Every member uses every brand of their
- * workspace today, as the app does: sharing chosen brands with an Agency
- * partner is a Team feature of Wave 2, and until then they act as Analysts.
- */
-export async function readBrandAccess(
-  userId: string,
-  organizationId: string,
-): Promise<PrecedenceContext['brandAccess']> {
-  void userId;
-  void organizationId;
-  return 'all';
-}
-
-/**
  * Whether a brand is the demo brand of sample data (brands.is_demo, 00380),
  * as the server's demo guard reads it. A brand that isn't found isn't one.
  */
@@ -105,12 +93,8 @@ export async function readBrandIsDemo(brandId: string): Promise<boolean> {
 export async function readPrecedenceContext(
   req: PrecedenceRequest,
 ): Promise<PrecedenceContext | null> {
-  const [profile, org, settings, choices, brandAccess] = await Promise.all([
-    supabaseAdmin
-      .from('profiles')
-      .select('role, organization_id')
-      .eq('id', req.userId)
-      .maybeSingle(),
+  const [profile, org, settings, choices] = await Promise.all([
+    readAccessProfile(req.userId),
     supabaseAdmin
       .from('organizations')
       .select(ORG_PLAN_COLUMNS)
@@ -126,14 +110,15 @@ export async function readPrecedenceContext(
       .select('tool_key')
       .eq('user_id', req.userId)
       .eq('organization_id', req.organizationId),
-    readBrandAccess(req.userId, req.organizationId),
   ]);
-  for (const result of [profile, org, settings, choices]) {
+  for (const result of [org, settings, choices]) {
     if (result.error) throw new Error(`Could not read Chat's permissions: ${result.error.message}`);
   }
 
-  const role = parseTeamRole(profile.data?.role);
-  if (!role || profile.data?.organization_id !== req.organizationId || !org.data) return null;
+  const role = parseTeamRole(profile?.role);
+  if (!role || profile?.organization_id !== req.organizationId || !org.data) return null;
+  // The brands they may use (BRAND-ACCESS, 00388), read now: a brand taken away counts at once.
+  const brandAccess = (await brandAccessOf(profile, req.userId, req.organizationId)) ?? [];
 
   return {
     organizationId: req.organizationId,

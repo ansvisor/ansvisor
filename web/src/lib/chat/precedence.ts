@@ -1,5 +1,6 @@
 import type { TeamRole } from '@/components/providers/role-provider';
 import type { PlanId } from '@/config/plans';
+import type { BrandAccess } from '@/lib/brand-access';
 import { planGateLock, type PlanFacts } from './plan-facts';
 import {
   WRITE_POLICIES,
@@ -145,7 +146,7 @@ export interface PrecedenceContext {
   /** Label keys of the tools the person ticked "Don't ask again" on. */
   autoChoices: ReadonlySet<string>;
   /** The brands the person may use: all of the workspace's, or the ones shared with them. */
-  brandAccess: 'all' | readonly string[];
+  brandAccess: BrandAccess;
   /** An injection attempt was found in this run (§16a rule 3). */
   injectionDetected: boolean;
 }

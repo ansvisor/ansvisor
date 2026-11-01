@@ -144,6 +144,31 @@ describe('Run now', () => {
     expect(one).toMatchObject({ ok: true, value: { runs: [{ brand: 'Brand A' }] } });
   });
 
+  it("runs a Selected-brands person's agent on their brands only: All brands is all of theirs", async () => {
+    const id = await agentOf(PEOPLE.manager);
+    // An Admin narrows them to Brand A (BRAND-ACCESS): the run checks their access now.
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.brand_scope = 'selected';
+    db.tables.member_brands = [{ user_id: PEOPLE.manager, organization_id: ORG, brand_id: BRAND }];
+    const ctx = await ctxOf(PEOPLE.manager);
+    expect(await runs.runAgentNow(ctx, id, {}, NOW, null)).toMatchObject({
+      ok: true,
+      value: { runs: [{ brand: 'Brand A', status: 'queued' }] },
+    });
+    expect(runRows().map((r) => r.brand_id)).toEqual([BRAND]);
+    // A brand of the scope they don't have is as one that isn't there.
+    expect(await runs.runAgentNow(ctx, id, { brandId: BRAND_2 }, NOW, null)).toMatchObject({
+      ok: false,
+      refusal: { code: 'brand_not_found' },
+    });
+    // With none of its brands left to them, nothing runs.
+    db.tables.member_brands = [];
+    expect(await runs.runAgentNow(await ctxOf(PEOPLE.manager), id, {}, NOW, null)).toMatchObject({
+      ok: false,
+      refusal: { code: 'no_brand' },
+    });
+    expect(runRows()).toHaveLength(1);
+  });
+
   it('refuses before queuing anything when a brand lacks a Required connection, naming both', async () => {
     const id = await agentOf(PEOPLE.manager, { skills: ['publish'] });
     // Brand A sends pages to WordPress; Brand B has no CMS.

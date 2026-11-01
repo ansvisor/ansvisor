@@ -254,6 +254,16 @@ describe('firing schedules', () => {
     expect(runs()).toHaveLength(2);
   });
 
+  it('queues on the brands its owner may use: All brands is all of theirs (BRAND-ACCESS)', async () => {
+    seedAgent({}, { brand_ids: undefined, all_brands: true });
+    seedTrigger('schedule', WEEKLY_ISTANBUL);
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.brand_scope = 'selected';
+    db.tables.member_brands = [{ user_id: PEOPLE.manager, organization_id: ORG, brand_id: BRAND }];
+    const counts = await triggers.fireDueSchedules(AT, driver);
+    expect(counts).toMatchObject({ fired: 1, queued: 1 });
+    expect(runs().map((r) => r.brand_id)).toEqual([BRAND]);
+  });
+
   it('fires a slot once when two crons find it due together', async () => {
     seedTrigger('schedule', WEEKLY_ISTANBUL);
     const [a, b] = await Promise.all([
@@ -433,6 +443,13 @@ describe('signals', () => {
       last_fired_at: T0.toISOString(),
       cooldown_until: new Date(T0.getTime() + triggers.COOLDOWN_MS).toISOString(),
     });
+  });
+
+  it('fires nothing on a brand its owner may no longer use (BRAND-ACCESS)', async () => {
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.brand_scope = 'selected';
+    db.tables.member_brands = [];
+    expect((await fire(1, T0)).fired).toBe(0);
+    expect(runs()).toEqual([]);
   });
 
   it('fires nothing for a brand outside its scope, the demo brand, or with Chat off', async () => {

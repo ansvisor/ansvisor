@@ -295,3 +295,71 @@ describe("a call's brand", () => {
     await expect(readBrandIsDemo(BRAND_A)).rejects.toThrow(/timeout/);
   });
 });
+
+describe("a Selected-brands person's brands (BRAND-ACCESS)", () => {
+  const HIDDEN = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const DEMO = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const filter = (filters: Filters, column: string) => filters.find(([c]) => c === column)?.[1];
+
+  beforeEach(() => {
+    db.tables.profiles = { role: 'manager', organization_id: ORG, brand_scope: 'selected' };
+    db.tables.member_brands = [{ brand_id: BRAND_A }];
+    db.tables.brands = (filters: Filters) => {
+      if (filter(filters, 'is_demo') === true) return [{ id: DEMO }];
+      const id = filter(filters, 'id');
+      const org = filter(filters, 'organization_id');
+      return [BRAND_A, HIDDEN, DEMO].includes(id as string) && (org === undefined || org === ORG)
+        ? { id, is_demo: id === DEMO }
+        : null;
+    };
+  });
+
+  it('are read for each call: the brands shared with them in this workspace, and the demo brand', async () => {
+    expect((await readPrecedenceContext(request))?.brandAccess).toEqual([BRAND_A, DEMO]);
+    expect(db.reads.find((read) => read.table === 'member_brands')?.filters).toEqual([
+      ['user_id', USER],
+      ['organization_id', ORG],
+    ]);
+    // An Admin, or All brands, has every brand: no grant is read.
+    db.reads = [];
+    db.tables.profiles = { role: 'admin', organization_id: ORG, brand_scope: 'selected' };
+    expect((await readPrecedenceContext(request))?.brandAccess).toBe('all');
+    db.tables.profiles = { role: 'manager', organization_id: ORG, brand_scope: 'all' };
+    expect((await readPrecedenceContext(request))?.brandAccess).toBe('all');
+    expect(db.reads.some((read) => read.table === 'member_brands')).toBe(false);
+  });
+
+  it("refuse a brand of the workspace that wasn't shared with them, as one that isn't there", async () => {
+    const context = (await readPrecedenceContext(request))!;
+    const addForBrand = { ...addPrompts, ...byInput };
+    const hidden = await readToolCall(context, byInput, { brand_id: HIDDEN }, false);
+    // Its demo flag isn't read: a brand outside the scope is refused before its state matters.
+    expect(hidden).toEqual({ brandId: HIDDEN, brandIsDemo: false, tainted: false });
+    expect(decideToolCall(addForBrand, context, hidden)).toEqual({
+      kind: 'deny',
+      denial: { code: 'brand_scope' },
+    });
+    const shared = await readToolCall(context, byInput, { brand_id: BRAND_A }, false);
+    expect(decideToolCall(addForBrand, context, shared)).toMatchObject({ kind: 'ask' });
+    // The demo brand is everyone's to read, never to change.
+    const demo = await readToolCall(context, byInput, { brand_id: DEMO }, false);
+    expect(decideToolCall(addForBrand, context, demo)).toEqual({
+      kind: 'deny',
+      denial: { code: 'demo_brand' },
+    });
+  });
+
+  it('count a brand taken away from the next call on', async () => {
+    const first = (await readPrecedenceContext(request))!;
+    db.tables.member_brands = [];
+    const next = (await readPrecedenceContext(request))!;
+    const call = { brandId: BRAND_A, brandIsDemo: false, tainted: false };
+    expect(decideToolCall({ ...addPrompts, ...byInput }, first, call)).toMatchObject({
+      kind: 'ask',
+    });
+    expect(decideToolCall({ ...addPrompts, ...byInput }, next, call)).toEqual({
+      kind: 'deny',
+      denial: { code: 'brand_scope' },
+    });
+  });
+});
