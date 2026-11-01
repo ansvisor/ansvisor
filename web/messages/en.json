@@ -5516,7 +5516,7 @@
       },
       "counts": {
         "cms": "Webflow, WordPress, Framer, Wix or a workflow webhook",
-        "catalog": "Merchant Center, a product feed or a store"
+        "catalog": "Merchant Center, a product feed, an upload or a store"
       }
     },
     "outcomes": {
@@ -5855,12 +5855,12 @@
           "picked": "Picked model"
         },
         "notes": {
-          "auto": "Picks per step · Ansvisor limit",
+          "auto": "Picks a model per step",
           "fast": "Cheaper, for reads and checks",
           "writing": "For drafts and rewrites",
           "picked": "Kept from this agent’s settings"
         },
-        "ownKey": "Runs on your {provider} key · doesn’t use your limit",
+        "ownKey": "Runs on your {provider} key, which {provider} bills. Max per run and Monthly cap still apply.",
         "limit": "Uses your monthly AI limit"
       },
       "agent": {
@@ -5880,6 +5880,7 @@
         "adminsOnlyNote": "Your Admin keeps workspace agents to Admins",
         "maxRun": "Max per run",
         "maxRunNote": "The most one run may use of the monthly AI limit, 1–50%",
+        "maxRunNoteOwnKey": "The most one run may use of the monthly AI limit, 1–50%. On your own key it is measured at list prices.",
         "monthCap": "Monthly cap",
         "monthCapNote": "The most this agent may use of the monthly AI limit a month, 1–100%",
         "monthCapSet": "Set by an Admin · {cap} a month"
@@ -6625,6 +6626,7 @@
     "recommendedFix": "Recommended fix",
     "fix": "Fix",
     "signalsEvaluated": "signals evaluated",
+    "partialNote": "The AI checks couldn't run this time, so this score leaves them out and isn't compared with your other audits.",
     "aiRecommendations": "AI Recommendations",
     "signals": "Signals",
     "onlyIssues": "Issues only",
@@ -8568,6 +8570,8 @@
           "slugHint": "The page's address on your site, after the domain.",
           "slugInvalid": "Use letters, digits, dots, - and _ only, up to 200 characters.",
           "slugEmpty": "Add a slug: the page's address on your site, after the domain.",
+          "author": "Author",
+          "reviewer": "Reviewed by",
           "metaTitle": "Meta title",
           "metaDescription": "Meta description",
           "characters": "{count, plural, one {# character} other {# characters}}"
@@ -8860,6 +8864,8 @@
           "metaDescription": "Meta description",
           "slug": "Slug",
           "author": "Author",
+          "reviewer": "Reviewed by",
+          "noReviewer": "No reviewer selected",
           "authorValue": "{name} → your CMS author field",
           "authorInContent": "{name} → in the content, under the H1 (Add byline to content)",
           "featuredImage": "Featured image",
@@ -8936,6 +8942,17 @@
           "confirmedDetail": "You confirmed the page's author is a real person your site names. Check your CMS sets them as the author.",
           "brand": "Your brand's byline",
           "brandDetail": "This page type goes out under {byline}: it needs no author."
+        },
+        "reviewer": {
+          "title": "Qualified reviewer",
+          "named": "Qualified reviewer: {name}",
+          "namedDetail": "The page text names {name}. Export metadata, WebPage structured data and supported CMS reviewer fields carry the reviewer separately from the Article author.",
+          "notOnPage": "Reviewer not named in the page text",
+          "notOnPageDetail": "A reviewer is selected, but the page text doesn't name {name}. Add their name to the page before publishing.",
+          "none": "No qualified reviewer named",
+          "noneDetail": "Choose a qualified person from Authors. Their name and credential will be included in export metadata, supported CMS fields, and WebPage structured data.",
+          "unknown": "The Authors list is still loading, so the reviewer hasn't been confirmed.",
+          "schemaNote": "The WebPage node identifies this qualified reviewer separately from the Article author."
         },
         "dates": {
           "title": "Visible published and updated dates",
@@ -10047,6 +10064,21 @@
     "noDataDescriptionNoSnippet": "Add the tracking snippet to your website to start collecting AI-referred traffic data.",
     "snippetTitle": "Add this snippet to your website",
     "snippetDescription": "Paste this before the closing <code>{tag}</code> tag to track AI-referred visits.",
+    "snippetCheck": {
+      "title": "Tracking code not detected on {domain}",
+      "titleNoDomain": "Tracking code not detected",
+      "stepCopy": "Copy the snippet below.",
+      "stepPaste": "Paste it before the closing <code>{tag}</code> tag on every page, your 404 page included.",
+      "stepCheck": "Publish the change, then click Check again.",
+      "tagManager": "Added it with a tag manager? It shows here after its first AI visit.",
+      "checkAgain": "Check again",
+      "checking": "Checking…",
+      "lastChecked": "Last checked {when}",
+      "notFound": "Not found on {domain}'s home page yet.",
+      "unreachable": "Couldn't read {domain}'s home page. Try again in a few minutes.",
+      "noDomain": "Add your website's domain in the brand's settings to check it.",
+      "failed": "The check didn't run. Try again."
+    },
     "copySnippet": "Copy tracking script",
     "export": {
       "button": "Export",
@@ -10180,6 +10212,7 @@
       },
       "sourceStates": {
         "active": "Active",
+        "installedQuiet": "Installed, no AI visits in the last 7 days",
         "notDetected": "Not detected",
         "connected": "Connected",
         "syncing": "Syncing",
@@ -10322,7 +10355,10 @@
       "label": "Data sources",
       "snippet": "Tracking snippet",
       "snippetActive": "Active · last visit {when}",
+      "snippetQuiet": "Installed · no AI visits in the last 7 days",
       "snippetNotDetected": "Not detected",
+      "snippetNotDetectedOn": "Not detected on {domain}",
+      "snippetChecking": "Checking your home page…",
       "code": "Code",
       "install": "Install",
       "ga": "Google Analytics",
@@ -12209,8 +12245,14 @@
         "d90": "90d",
         "due": "Day {day}, due {date}",
         "none": "Day {day}, not measured",
-        "measured": "Day {day}: {outcome}"
+        "measured": "Day {day}: {outcome}",
+        "measuredLasting": "Day {day}: {outcome} · {lasting}"
       },
+      "lasting": {
+        "held": "Held",
+        "faded": "Faded"
+      },
+      "capped": "Showing the first {count, number} changes shipped in {month}; the counts above cover only these.",
       "empty": "Nothing shipped in {month}.",
       "emptyFilter": "No actions with this outcome in {month}.",
       "loadFailed": "Couldn't load what Ansvisor did. Try again.",
@@ -13136,6 +13178,7 @@
         "metaTitle": "Meta title",
         "metaDescription": "Meta description",
         "jsonLd": "JSON-LD (structured data)",
+        "reviewer": "Qualified reviewer",
         "date": "Date (the day it's first sent)"
       },
       "notSent": "Not sent",
@@ -13271,7 +13314,8 @@
         "body": "Page content (formatted text)",
         "metaTitle": "Meta title",
         "metaDescription": "Meta description",
-        "jsonLd": "JSON-LD (structured data)"
+        "jsonLd": "JSON-LD (structured data)",
+        "reviewer": "Qualified reviewer"
       },
       "notSent": "Not sent",
       "pickField": "Pick a field",

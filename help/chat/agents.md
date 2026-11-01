@@ -86,9 +86,9 @@ Step 1 lists the same skills Chat offers. Besides **Win back lost citations**, *
 
 ## Connections
 
-Step 4 lists the connections the agent's skills use. **Any CMS** counts Webflow, WordPress, Framer, Wix or a workflow webhook. **Any catalog source** counts Merchant Center, a product feed or a store.
+Step 4 lists the connections the agent's skills use. **Any CMS** counts Webflow, WordPress, Framer, Wix or a workflow webhook. **Any catalog source** counts Merchant Center, a product feed, an upload or a store.
 
-A **Required** connection is one a skill can't work without, such as a CMS for **Ready to publish**. If the brand doesn't have it, the run doesn't start: **Run now** and **Run agent** say which brand lacks it, and an agent that runs on its own pauses with "A required connection is off". An **Optional** one, such as Search Console for **Weekly report**, helps but isn't needed: without it, the agent does everything else and says what it couldn't use.
+A **Required** connection is one a skill can't work without, such as a CMS for **Ready to publish**. If the brand doesn't have it, the run doesn't start: **Run now** and **Run agent** say which brand lacks it, and an agent that runs on its own pauses with "A required connection is off". **Resume** doesn't turn the agent back on until every brand in its scope has its Required connections: it says which brand lacks which one. An **Optional** one, such as Search Console for **Weekly report**, helps but isn't needed: without it, the agent does everything else and says what it couldn't use.
 
 ## Edit or delete an agent
 
@@ -109,6 +109,10 @@ Signals that come close together don't each start a run. Signals within 15 minut
 Each run works on one brand, in a chat of its own. A run a trigger started acts as the agent's owner, with their role; **Run now** acts as the person who clicked it. The chat shows in that person's Inbox. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
 
 A run may use only its share of your monthly AI limit. A run a trigger started ends **Stopped at its limit** when it reaches it; a **Run now** run pauses there instead. After 3 failed runs in a row the agent pauses. When the monthly AI limit is used up, the agent pauses and starts again by itself once the limit resets.
+
+## On your own AI key
+
+When your workspace runs Chat on its own AI key, agents run on it too. The provider bills your account, and your monthly AI limit doesn't move. **Max per run** and **Monthly cap** still apply: what a run uses is measured at the providers' list prices.
 
 ## Run an agent from Action Center
 

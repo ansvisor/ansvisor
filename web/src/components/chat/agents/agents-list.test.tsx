@@ -362,6 +362,22 @@ describe('AgentsList (Agent Center › Your agents)', () => {
     expect(toast.error).toHaveBeenLastCalledWith("Couldn't do that. Try again.");
   });
 
+  it('says which brand lacks which Required connection when Resume is refused', async () => {
+    const words =
+      'This agent needs Any CMS, and Brand B doesn’t have it connected. Connect it for that brand, then run the agent again.';
+    answer = (url) =>
+      url.endsWith('/resume')
+        ? Response.json(
+            { ok: false, failure: 'failed', code: 'connection_missing', error: words },
+            { status: 409 },
+          )
+        : Response.json({ ok: true, ...page });
+    await render('admin');
+    await click(cards()[1].querySelector<HTMLElement>('[data-action="agents.pauseResume"]')!);
+    expect(toast.error).toHaveBeenLastCalledWith(words);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
   it('says when the list could not be read, with Retry, and no skeleton left behind', async () => {
     answer = () => Response.json({ ok: false, failure: 'failed' }, { status: 500 });
     await render();

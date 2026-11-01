@@ -382,6 +382,20 @@ describe('AgentForm: new agent', () => {
     expect(needed.querySelector('[data-action="agentNew.toggleConnection"]')).toBeNull();
   });
 
+  it('asks /shopping for any catalog source, uploads included, Required', async () => {
+    await render();
+    await click(one('[data-skill="shopping"]')!);
+    await next();
+    await next();
+    await next();
+    const catalog = one('[data-connection="catalog"]')!;
+    expect(catalog.querySelector('b')?.textContent).toBe('Any catalog source');
+    expect(catalog.querySelector('[data-slot="connection-counts"]')?.textContent).toBe(
+      'Merchant Center, a product feed, an upload or a store',
+    );
+    expect(catalog.textContent).toContain('Required by /shopping');
+  });
+
   it("offers the focus areas' seven skills after the fourteen, needing no connection", async () => {
     await render();
     const skills = all('[data-skill]').map((b) => b.getAttribute('data-skill'));
@@ -588,6 +602,26 @@ describe('AgentForm: new agent', () => {
     await type(one('[data-action="agentNew.maxMonth"]')!, '30');
     await click(action('agentNew.saveDraft')[0]);
     expect(bodyOf(0)).toMatchObject({ visibility: 'workspace', maxMonthShare: 0.3 });
+  });
+
+  it('says Max per run and Monthly cap apply on the workspace’s own key, measured at list prices', async () => {
+    await render({ ...SETUP, ownKeyProvider: 'anthropic' });
+    await toLastStep();
+    expect(one('[data-slot="agent-form-key"]')!.textContent).toBe(
+      'Runs on your Anthropic key, which Anthropic bills. Max per run and Monthly cap still apply.',
+    );
+    expect(one('#agent-form-note-max-run')!.textContent).toBe(
+      messages.chatAgents.form.agent.maxRunNoteOwnKey,
+    );
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    await toLastStep();
+    expect(one('[data-slot="agent-form-key"]')!.textContent).toBe('Uses your monthly AI limit');
+    expect(one('#agent-form-note-max-run')!.textContent).toBe(
+      messages.chatAgents.form.agent.maxRunNote,
+    );
   });
 
   it('moves with the keyboard: arrows choose a skill, each step opens on its title, a problem takes the focus', async () => {
