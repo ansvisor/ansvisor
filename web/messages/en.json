@@ -5502,7 +5502,7 @@
       },
       "counts": {
         "cms": "Webflow, WordPress, Framer, Wix or a workflow webhook",
-        "catalog": "Merchant Center, a product feed or a store"
+        "catalog": "Merchant Center, a product feed, an upload or a store"
       }
     },
     "outcomes": {
@@ -5834,12 +5834,12 @@
           "picked": "Picked model"
         },
         "notes": {
-          "auto": "Picks per step · Ansvisor limit",
+          "auto": "Picks a model per step",
           "fast": "Cheaper, for reads and checks",
           "writing": "For drafts and rewrites",
           "picked": "Kept from this agent’s settings"
         },
-        "ownKey": "Runs on your {provider} key · doesn’t use your limit",
+        "ownKey": "Runs on your {provider} key, which {provider} bills. Max per run and Monthly cap still apply.",
         "limit": "Uses your monthly AI limit"
       },
       "agent": {
@@ -5859,6 +5859,7 @@
         "adminsOnlyNote": "Your Admin keeps workspace agents to Admins",
         "maxRun": "Max per run",
         "maxRunNote": "The most one run may use of the monthly AI limit, 1–50%",
+        "maxRunNoteOwnKey": "The most one run may use of the monthly AI limit, 1–50%. On your own key it is measured at list prices.",
         "monthCap": "Monthly cap",
         "monthCapNote": "The most this agent may use of the monthly AI limit a month, 1–100%",
         "monthCapSet": "Set by an Admin · {cap} a month"
@@ -5969,6 +5970,167 @@
       },
       "loadFailed": "Couldn't load the agents.",
       "retry": "Retry"
+    },
+    "center": {
+      "tabs": {
+        "ready": "Ready to use",
+        "yours": "Your agents"
+      }
+    },
+    "ready": {
+      "filters": {
+        "goal": "Goal",
+        "businessType": "Business type",
+        "industry": "Industry",
+        "role": "Role"
+      },
+      "all": "All",
+      "goals": {
+        "visibility": "Visibility",
+        "citations": "Citations",
+        "content": "Content",
+        "competitors": "Competitors",
+        "technical": "Technical",
+        "shopping": "Shopping",
+        "tasks": "Tasks",
+        "reporting": "Reporting",
+        "help": "Help"
+      },
+      "businessTypes": {
+        "ecommerce": "E-commerce",
+        "mobile_app": "Mobile app",
+        "b2b": "B2B",
+        "b2c": "B2C"
+      },
+      "industries": {
+        "healthcare": "Healthcare",
+        "financial_services": "Financial services",
+        "legal": "Legal",
+        "education": "Education",
+        "saas": "SaaS",
+        "ai_companies": "AI companies",
+        "ecommerce_retail": "E-commerce and retail",
+        "consumer_brands": "Consumer brands",
+        "manufacturing": "Manufacturing",
+        "automotive": "Automotive",
+        "real_estate": "Real estate",
+        "travel_hospitality": "Travel and hospitality"
+      },
+      "roles": {
+        "seo_aeo": "SEO and AEO",
+        "content": "Content",
+        "pr_brand": "PR and brand",
+        "founders": "Founders",
+        "growth": "Growth",
+        "product": "Product",
+        "business_development": "Business development",
+        "ecommerce": "E-commerce",
+        "developers": "Developers",
+        "agencies": "Agencies"
+      },
+      "use": "Use this agent",
+      "useLabel": "Use this agent: {name}",
+      "soon": "Soon",
+      "needsLine": "Needs {what}",
+      "needs": {
+        "fanout_skill": "the /fanout skill",
+        "prompts_skill": "the /prompts skill",
+        "setup_skill": "the /setup skill",
+        "help_articles": "approved Help articles",
+        "catalog_trigger": "a catalog sync trigger",
+        "publish_trigger": "a page-published trigger",
+        "sub_agents": "sub-agents",
+        "ship_as_pr": "fixes sent as pull requests",
+        "reddit_youtube": "Reddit and YouTube",
+        "hubspot": "HubSpot",
+        "jira_linear": "Jira or Linear",
+        "brand_access": "access by brand",
+        "ads_data": "ads read from AI answers"
+      },
+      "policyLock": "Your Admin turned Full auto off",
+      "fallbackTip": "Use this agent opens it on Auto, ask before changes"
+    },
+    "presets": {
+      "visibility-watch": {
+        "name": "Visibility Watch",
+        "description": "Says what moved in AI visibility since yesterday and why, with the next moves to make."
+      },
+      "citation-winback": {
+        "name": "Citation Win-back",
+        "description": "When a page loses citations, finds what AI cites instead and drafts a refresh and an FAQ block."
+      },
+      "competitor-watch": {
+        "name": "Competitor Watch",
+        "description": "Finds where a competitor took your place in AI answers and drafts the changes and a comparison page."
+      },
+      "content-freshness": {
+        "name": "Content Freshness",
+        "description": "Finds cited pages with old dates, numbers or examples and drafts the update."
+      },
+      "ready-to-publish": {
+        "name": "Ready to Publish",
+        "description": "Runs a quality pass on a draft, fills its page fields and sends a CMS draft. Going live stays your click."
+      },
+      "task-finisher": {
+        "name": "Task Finisher",
+        "description": "Works through this week’s Action Center tasks by priority and prepares each one. You close the tasks."
+      },
+      "weekly-report": {
+        "name": "Weekly Report",
+        "description": "Your week in AI answers on one page: citations, mentions and share of voice, what changed and why."
+      },
+      "brand-facts-guardian": {
+        "name": "Brand Facts Guardian",
+        "description": "Finds AI answers that get facts about your brand wrong and drafts the fixes against your brand facts."
+      },
+      "fanout-gap-filler": {
+        "name": "Fan-out Gap Filler",
+        "description": "Drafts answer-first sections for the sub-questions AI searches where your brand is missing."
+      },
+      "prompt-portfolio": {
+        "name": "Prompt Portfolio Manager",
+        "description": "Proposes prompts to add and to pause, so tracking stays on what matters."
+      },
+      "onboarding-help": {
+        "name": "Onboarding & Help",
+        "description": "Answers questions about Ansvisor from Help and walks new members through setup."
+      },
+      "shopping-readiness": {
+        "name": "AI Shopping Readiness",
+        "description": "Checks product pages and the feed when the catalog syncs, and drafts the fixes."
+      },
+      "localization": {
+        "name": "Localization",
+        "description": "When a page goes live in your main language, drafts it for your other markets."
+      },
+      "aeo-operator": {
+        "name": "AEO Operator",
+        "description": "Each morning, picks which agents to run within a budget and sends you one summary to approve."
+      },
+      "technical-fixer": {
+        "name": "Crawler & Technical Fixer",
+        "description": "Fixes what keeps AI crawlers out and sends the fix to your site’s code as a pull request."
+      },
+      "third-party-sources": {
+        "name": "Third-party Sources",
+        "description": "Finds the threads, videos and review pages AI cites where you’re missing, and plans outreach."
+      },
+      "revenue-attribution": {
+        "name": "Revenue Attribution",
+        "description": "Each week, the contacts, deals and revenue AI answers brought, by engine and page."
+      },
+      "ticket-loop": {
+        "name": "Ticket Loop",
+        "description": "Sends Action Center tasks to Jira or Linear, follows them and adds the measured result."
+      },
+      "agency-reporter": {
+        "name": "Agency Client Reporter",
+        "description": "A monthly report for each client brand, for agencies."
+      },
+      "ai-ads-watch": {
+        "name": "AI Ads Watch",
+        "description": "Shows who advertises inside AI answers on your prompts, and where."
+      }
     },
     "detail": {
       "owner": "Owner",
@@ -8300,6 +8462,8 @@
           "slugHint": "The page's address on your site, after the domain.",
           "slugInvalid": "Use letters, digits, dots, - and _ only, up to 200 characters.",
           "slugEmpty": "Add a slug: the page's address on your site, after the domain.",
+          "author": "Author",
+          "reviewer": "Reviewed by",
           "metaTitle": "Meta title",
           "metaDescription": "Meta description",
           "characters": "{count, plural, one {# character} other {# characters}}"
@@ -8592,6 +8756,8 @@
           "metaDescription": "Meta description",
           "slug": "Slug",
           "author": "Author",
+          "reviewer": "Reviewed by",
+          "noReviewer": "No reviewer selected",
           "authorValue": "{name} → your CMS author field",
           "authorInContent": "{name} → in the content, under the H1 (Add byline to content)",
           "featuredImage": "Featured image",
@@ -8668,6 +8834,17 @@
           "confirmedDetail": "You confirmed the page's author is a real person your site names. Check your CMS sets them as the author.",
           "brand": "Your brand's byline",
           "brandDetail": "This page type goes out under {byline}: it needs no author."
+        },
+        "reviewer": {
+          "title": "Qualified reviewer",
+          "named": "Qualified reviewer: {name}",
+          "namedDetail": "The page text names {name}. Export metadata, WebPage structured data and supported CMS reviewer fields carry the reviewer separately from the Article author.",
+          "notOnPage": "Reviewer not named in the page text",
+          "notOnPageDetail": "A reviewer is selected, but the page text doesn't name {name}. Add their name to the page before publishing.",
+          "none": "No qualified reviewer named",
+          "noneDetail": "Choose a qualified person from Authors. Their name and credential will be included in export metadata, supported CMS fields, and WebPage structured data.",
+          "unknown": "The Authors list is still loading, so the reviewer hasn't been confirmed.",
+          "schemaNote": "The WebPage node identifies this qualified reviewer separately from the Article author."
         },
         "dates": {
           "title": "Visible published and updated dates",
@@ -11941,8 +12118,14 @@
         "d90": "90d",
         "due": "Day {day}, due {date}",
         "none": "Day {day}, not measured",
-        "measured": "Day {day}: {outcome}"
+        "measured": "Day {day}: {outcome}",
+        "measuredLasting": "Day {day}: {outcome} · {lasting}"
       },
+      "lasting": {
+        "held": "Held",
+        "faded": "Faded"
+      },
+      "capped": "Showing the first {count, number} changes shipped in {month}; the counts above cover only these.",
       "empty": "Nothing shipped in {month}.",
       "emptyFilter": "No actions with this outcome in {month}.",
       "loadFailed": "Couldn't load what Ansvisor did. Try again.",
@@ -12868,6 +13051,7 @@
         "metaTitle": "Meta title",
         "metaDescription": "Meta description",
         "jsonLd": "JSON-LD (structured data)",
+        "reviewer": "Qualified reviewer",
         "date": "Date (the day it's first sent)"
       },
       "notSent": "Not sent",
@@ -13003,7 +13187,8 @@
         "body": "Page content (formatted text)",
         "metaTitle": "Meta title",
         "metaDescription": "Meta description",
-        "jsonLd": "JSON-LD (structured data)"
+        "jsonLd": "JSON-LD (structured data)",
+        "reviewer": "Qualified reviewer"
       },
       "notSent": "Not sent",
       "pickField": "Pick a field",
