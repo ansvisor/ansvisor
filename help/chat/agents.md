@@ -4,8 +4,8 @@ route: /dashboard/agents
 keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes]
 synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-02
+last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -108,7 +108,7 @@ A run may use only its share of your monthly AI limit. A run a trigger started e
 
 ## When a run asks before a change
 
-A run that starts without you, from a trigger or after waiting for a free slot, asks before every change, whatever its mode. A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
+A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. A run that starts without you, from a trigger or after waiting for a free slot, asks before most changes, whatever its mode. Creating and changing Content drafts still follow the mode: in **Full auto** the run saves them without asking, with the role and access of the person it acts as, and in **Ask me first** it asks. Every change is in the **Activity** log, with **Undo**. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
 
 ## On your own AI key
 

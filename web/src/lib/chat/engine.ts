@@ -760,10 +760,15 @@ interface RunContext {
   /**
    * Whose session the request driving the run carries: a change runs as the
    * signed-in person. When it isn't the actor (an agent run nobody's session
-   * is behind), every change asks first (askWithoutSession).
+   * is behind), a change asks first (askWithoutSession), unless its row runs
+   * for its person without one (sessionFree: its runFor makes it).
    */
   sessionUserId: string | null;
 }
+
+/** No session of the run's person is behind it: an agent run on its own, or in another's request. */
+const withoutSession = (rc: Pick<RunContext, 'actor' | 'sessionUserId'>) =>
+  rc.sessionUserId !== rc.actor.userId;
 
 const workedMs = (rc: Pick<RunContext, 'run' | 'segmentStart'>) =>
   rc.run.workingMs + (Date.now() - rc.segmentStart);
@@ -1989,10 +1994,12 @@ async function handleCall(
  * own, or in another person's request): its tool acts as the signed-in
  * person, so what would run by itself (Full auto, Always, a tick) asks
  * first, with no "Don't ask again". The card waits in the owner's Inbox,
- * and their Approve runs it in their own request.
+ * and their Approve runs it in their own request. A sessionFree row keeps
+ * the precedence's decision, read for the run's person as any call's is
+ * (role, plan, policy, mode): it runs as them through its runFor (writeCall).
  */
 function askWithoutSession(rc: RunContext, tool: ChatTool, decision: ToolDecision): ToolDecision {
-  if (decision.kind !== 'run' || tool.class === 'read' || rc.sessionUserId === rc.actor.userId) {
+  if (decision.kind !== 'run' || tool.class === 'read' || !withoutSession(rc) || tool.sessionFree) {
     return decision;
   }
   return { kind: 'ask', reason: 'no_session', offerDontAskAgain: false };
@@ -2930,7 +2937,8 @@ function saidFailure(output: unknown): { code: string; message: string } | null 
 /**
  * A change: run once under its approval (runLoggedWrite logs it, with Undo),
  * on its own step, or on the card's step once approved. An approval used for
- * other arguments (approval_mismatch) shows the card again.
+ * other arguments (approval_mismatch) shows the card again. With no session
+ * of the run's person behind it, its row's runFor makes it, as them.
  */
 async function writeCall(
   rc: RunContext,
@@ -2974,6 +2982,9 @@ async function writeCall(
     approval,
     place: { conversationId: rc.run.conversationId, runId: rc.run.id, stepId },
     approvalKey: stepId,
+    // No session behind the run: only a sessionFree row's change runs then (askWithoutSession);
+    // a card's Approve runs in its person's own request.
+    withoutSession: withoutSession(rc),
   });
 
   if (outcome.code === 'approval_mismatch') {

@@ -38,6 +38,12 @@ export interface WriteRequest {
    * person clicks, or the step that ran it without one). Its repeats share it.
    */
   approvalKey: string;
+  /**
+   * No session of the person is behind the call (an agent run on its own):
+   * a sessionFree row's runFor makes the change, as `ctx`'s person, instead
+   * of `run`, whose server action reads the session.
+   */
+  withoutSession?: boolean;
 }
 
 export type WriteOutcome =
@@ -67,13 +73,17 @@ const refused = (output: unknown): boolean =>
 /**
  * Never throws for a failure on the way (the engine and server actions call
  * it): `failed`. Only a call against the rules (a read, an EXECUTE without
- * its click) throws, before anything runs.
+ * its click, a change without a session whose row needs one) throws, before
+ * anything runs.
  */
 export async function runLoggedWrite(req: WriteRequest): Promise<WriteOutcome> {
   const { tool } = req;
   if (tool.class === 'read') throw new Error('A read changes nothing to log');
   if (tool.class === 'execute' && req.approval.kind !== 'click') {
     throw new Error("An EXECUTE runs on the person's click only");
+  }
+  if (req.withoutSession && !tool.runFor) {
+    throw new Error(`${tool.name} runs only with its person's session`);
   }
   try {
     return await run(req);
@@ -96,18 +106,19 @@ async function run(req: WriteRequest): Promise<WriteOutcome> {
     async () => {
       const before = rule ? await rule.before(req.input) : null;
       // Where it runs, for a row that records it on what it changes (Action History, §10a).
-      const output = await tool.run(
-        {
-          ...req.ctx,
-          chat: {
-            conversationId: req.place.conversationId,
-            runId: req.place.runId,
-            approvalKey: req.approvalKey,
-            executionMode: req.approval.kind === 'auto' ? 'automated' : 'assisted',
-          },
+      const ctx: ChatToolContext = {
+        ...req.ctx,
+        chat: {
+          conversationId: req.place.conversationId,
+          runId: req.place.runId,
+          approvalKey: req.approvalKey,
+          executionMode: req.approval.kind === 'auto' ? 'automated' : 'assisted',
         },
-        req.input as never,
-      );
+      };
+      // No session: the row's own write for the run's person (runLoggedWrite checked it has one).
+      const output = req.withoutSession
+        ? await tool.runFor!(ctx, req.input as never)
+        : await tool.run(ctx, req.input as never);
       // The change is made: whatever happens to its log row, it isn't made again.
       let activityId: string | null = null;
       if (!refused(output)) {
