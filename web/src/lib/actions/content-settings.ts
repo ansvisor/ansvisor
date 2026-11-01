@@ -172,3 +172,31 @@ export async function setBrandRules(
     return { ok: false, reason: 'failed' };
   }
 }
+
+/**
+ * A brand's rules (00450) for the Content Editor's Rules tab, which shows
+ * them above the page's own. Anyone who can read the brand reads them;
+ * none for a brand without, before 00450, or when they can't be read.
+ * Never throws.
+ */
+export async function getBrandRules(brandId: string): Promise<string[]> {
+  if (!z.guid().safeParse(brandId).success) return [];
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('brands')
+      .select('brand_rules')
+      .eq('id', brandId)
+      .maybeSingle();
+    if (error) {
+      if (!missingColumn(error, 'brand_rules')) {
+        console.error('[content-settings] could not read the brand rules:', error.message);
+      }
+      return [];
+    }
+    return data?.brand_rules ?? [];
+  } catch (err) {
+    console.error('[content-settings] could not read the brand rules:', err);
+    return [];
+  }
+}

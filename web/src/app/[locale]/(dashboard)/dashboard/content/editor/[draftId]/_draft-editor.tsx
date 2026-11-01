@@ -67,6 +67,7 @@ import {
   startAgentWriting,
   startPageRewrite,
 } from '@/lib/actions/content-drafts';
+import { getBrandRules } from '@/lib/actions/content-settings';
 import { getSiteTrust } from '@/lib/actions/audits';
 import { getContentAuthors } from '@/lib/actions/content-authors';
 import { readAgentRun, stopAgentRun } from '@/lib/content/agent-runs-client';
@@ -813,6 +814,15 @@ export function DraftEditor({
   const brandName =
     authorsRead?.brands.find((b) => b.id === draft.brandId)?.name ?? storeBrandName ?? '';
   const pageAuthor = authorsRead?.authors.find((a) => a.id === authorId) ?? null;
+  // The brand's rules (Settings › Content, 00450), read once: Rules shows them above the page's own.
+  const [brandRules, setBrandRules] = useState<string[]>([]);
+  useEffect(() => {
+    let live = true;
+    void getBrandRules(draft.brandId).then((rules) => live && setBrandRules(rules));
+    return () => {
+      live = false;
+    };
+  }, [draft.brandId]);
   const pageBlocks = useMemo(() => (qualityOn ? trustBlocks(pageHtml) : []), [qualityOn, pageHtml]);
   // Brief › Your input (CE-048), with Quality's second phase: what the page
   // uses of it counts once it is read.
@@ -4291,6 +4301,7 @@ export function DraftEditor({
             bodyHtml={pageHtml}
             pageType={pageType}
             rules={rulesShown}
+            brandRules={{ rules: brandRules, brandName }}
             reads={reads}
             tabRequest={tabRequest}
             agentFix={agentFix}

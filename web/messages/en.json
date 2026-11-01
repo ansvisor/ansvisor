@@ -9001,6 +9001,12 @@
       },
       "rules": {
         "set": "Rule set",
+        "brandRules": {
+          "title": "Brand rules",
+          "fromSettings": "from Settings",
+          "edit": "Edit",
+          "note": "The Content Agent follows them on every {brand} page, before the rules below."
+        },
         "setName": "{type} · Ansvisor default",
         "pickSet": "Pick a page type",
         "met": "{met} of {total} rules met",

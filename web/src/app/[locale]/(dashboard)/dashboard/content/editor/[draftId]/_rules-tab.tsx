@@ -53,6 +53,7 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { RunCard } from './_run-card';
 import { WorkingDots } from './_working-dots';
 import type { DraftRulesState } from './_use-draft-rules';
+import { BrandRulesBox } from './_brand-rules-box';
 
 /** Rules with an explanation on hover (spec §10). */
 const HINTED = new Set([
@@ -226,6 +227,7 @@ export function RulesTab({
   pageRewrite,
   dataLine,
   onOpenSources,
+  brandRules,
 }: {
   state: DraftRulesState;
   siteType: SiteType;
@@ -239,6 +241,8 @@ export function RulesTab({
    * gets them; none while the sources are read, or when the draft has prompts.
    */
   onOpenSources?: () => void;
+  /** The brand's rules from Settings › Content (00450), shown read-only above the page's own. */
+  brandRules?: { rules: string[]; brandName: string };
 }) {
   const t = useTranslations('contentEditor.editor.rules');
   const tSuggestions = useTranslations('contentEditor.editor.suggestions');
@@ -412,6 +416,8 @@ export function RulesTab({
           )}
         </RunCard>
       )}
+
+      {brandRules && <BrandRulesBox rules={brandRules.rules} brandName={brandRules.brandName} />}
 
       <div className="space-y-1.5">
         <span className="text-xs text-muted-foreground">{t('set')}</span>
