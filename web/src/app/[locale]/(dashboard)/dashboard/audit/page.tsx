@@ -57,6 +57,11 @@ import { AuditPagesTable } from './_pages-table';
 import { AuditBulkBar, ExportMenu } from './_bulk-bar';
 import { AuditOverviewCards } from './_overview-cards';
 import { OpportunitiesTable, opportunityAuditUrls } from './_opportunities-table';
+import {
+  OpportunityFilterChips,
+  matchesFilter,
+  type OpportunityFilter,
+} from './_opportunity-filter';
 import { AuditSettingsDialog } from './_settings-dialog';
 import { AutoRunNotice } from './_auto-run-notice';
 import { AuditSummaryStrip } from './_summary-strip';
@@ -128,6 +133,8 @@ export default function SiteAuditPage() {
   // The inbox loads after the rest of the hub (getAuditHubExtras).
   const [oppsLoading, setOppsLoading] = useState(true);
   const [oppSelected, setOppSelected] = useState<Set<string>>(() => new Set());
+  // Opportunities shown by why they're listed (customer priorities item 11).
+  const [oppFilter, setOppFilter] = useState<OpportunityFilter>('all');
   // Opportunities when it lists pages, else Pages; chosen once per brand.
   const [tab, setTab] = useState<ListTab | null>(null);
   const [startingBulk, setStartingBulk] = useState(false);
@@ -172,6 +179,7 @@ export default function SiteAuditPage() {
     // A selection, and the tab, belong to the brand they were made on.
     setSelected(new Set());
     setOppSelected(new Set());
+    setOppFilter('all');
     // The store may only know the brand after the first render: that's the one it opened with.
     linked.current.brandId ??= activeBrandId;
     setTab(activeBrandId === linked.current.brandId ? linked.current.tab : null);
@@ -448,7 +456,18 @@ export default function SiteAuditPage() {
       return next;
     });
 
-  const selectedOpps = (opps?.opportunities ?? []).filter((o) => oppSelected.has(o.key));
+  // The rows the filter shows; one with none left (the list read again) shows them all.
+  const filteredOpps = (opps?.opportunities ?? []).filter((o) => matchesFilter(o, oppFilter));
+  const filterShown: OpportunityFilter = filteredOpps.length > 0 ? oppFilter : 'all';
+  const shownOpps = filterShown === oppFilter ? filteredOpps : (opps?.opportunities ?? []);
+  // Only rows on screen go to the bulk bar: a filter hides the others' ticks.
+  const selectedOpps = shownOpps.filter((o) => oppSelected.has(o.key));
+  // Pages audited's link: Opportunities, on the pages without a current audit.
+  const showNotAudited = () => {
+    setOppFilter('notAudited');
+    showList('opportunities');
+    listsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const oppAuditUrls = opportunityAuditUrls(selectedOpps);
   // Pin and Exclude by page; a template is excluded by its pattern (SA-007).
@@ -604,7 +623,12 @@ export default function SiteAuditPage() {
       />
 
       {/* Summary strip, as in the v2 mockup (SA-019) */}
-      <AuditSummaryStrip overview={loading ? null : overview} quota={quota} now={new Date(nowMs)} />
+      <AuditSummaryStrip
+        overview={loading ? null : overview}
+        quota={quota}
+        now={new Date(nowMs)}
+        coverage={opps?.coverage ?? null}
+      />
 
       {/* Run bar */}
       <Card>
@@ -661,6 +685,9 @@ export default function SiteAuditPage() {
           overview={loading ? null : overview}
           quota={quota}
           now={new Date(nowMs)}
+          coverage={opps?.coverage ?? null}
+          staleDays={opps?.staleDays}
+          onShowNotAudited={showNotAudited}
           onOpenSettings={() => setSettingsOpen(true)}
         />
       )}
@@ -856,9 +883,17 @@ export default function SiteAuditPage() {
           {opps && (
             <TabsContent value="opportunities" className="mt-3">
               <OpportunitiesTable
-                opportunities={opps.opportunities}
+                opportunities={shownOpps}
                 excluded={opps.excluded}
                 staleDays={opps.staleDays}
+                filters={
+                  <OpportunityFilterChips
+                    opportunities={opps.opportunities}
+                    filter={filterShown}
+                    onFilter={setOppFilter}
+                    staleDays={opps.staleDays}
+                  />
+                }
                 selected={oppSelected}
                 onSelect={handleOppSelect}
                 // Pins and exclusions hold for the whole brand: admins and

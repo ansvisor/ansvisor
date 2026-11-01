@@ -6332,6 +6332,14 @@
         "pinned": "Pinned"
       },
       "auditSelected": "Audit selected",
+      "filter": {
+        "label": "Show",
+        "all": "All",
+        "notAudited": "Not audited",
+        "noAiTraffic": "No AI traffic",
+        "competitorCited": "Competitor cited",
+        "notAuditedHint": "Never audited, or not in {days} days"
+      },
       "pin": "Pin",
       "unpin": "Unpin",
       "exclude": "Exclude",
@@ -6363,6 +6371,10 @@
       "pagesAuditedTip": "Pages of {domain} with a completed audit. Audits of other sites are listed under Pages but left out of these cards.",
       "pagesSub": "on {domain}",
       "pagesSubOther": "+ {count} on other sites",
+      "coverageOf": "of {count, plural, one {# site page} other {# site pages}}",
+      "coverageSub": "{never} never audited · {stale} not in {days} days",
+      "coverageTip": "Pages of your site with an audit in the last {days} days, of those Ansvisor keeps from your sitemap, Google Analytics and the pages AI cites (up to 500). Pages you exclude in Site Audit settings, and checkout, login and legal pages, aren't counted.",
+      "seeNotAudited": "See the {count} not audited →",
       "authority": "Authority · E-E-A-T",
       "authorityTip": "The Authority and E-E-A-T scores, averaged over each page's latest audit, and the signals that fail or warn on the most pages.",
       "gapsSub": "Top gaps",
@@ -6398,6 +6410,7 @@
     "strip": {
       "siteScore": "<b>{score}</b> site score",
       "pages": "{count, plural, one {# page} other {# pages}} audited",
+      "pagesOf": "{audited} of {count, plural, one {# page} other {# pages}} audited",
       "noPages": "No pages audited yet",
       "lowest": "Lowest: <b>{category} {score}</b>",
       "nextAuto": "Next auto-audit <b>{when}</b> · {count, plural, one {# page} other {# pages}}",
