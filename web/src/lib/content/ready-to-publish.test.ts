@@ -43,7 +43,10 @@ describe('fragment', () => {
 describe('pageNamesPerson', () => {
   it('finds a reviewer name in visible page text, ignoring case and whitespace', () => {
     expect(
-      pageNamesPerson('<h1>Guide</h1><p>Reviewed by <strong>Dr. Grace Hopper</strong>.</p>', 'dr. grace  hopper'),
+      pageNamesPerson(
+        '<h1>Guide</h1><p>Reviewed by <strong>Dr. Grace Hopper</strong>.</p>',
+        'dr. grace  hopper',
+      ),
     ).toBe(true);
   });
 
