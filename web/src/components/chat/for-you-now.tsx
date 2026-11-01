@@ -2,6 +2,9 @@
 
 import { useId } from 'react';
 import { useTranslations } from 'next-intl';
+import { track } from '@/lib/analytics';
+import type { FocusArea } from '@/lib/chat/focus';
+import { FOCUS_SHORTCUTS, inTurn, SHORTCUT_SKILL, type FocusShortcut } from '@/lib/chat/focus-home';
 import { cn } from '@/lib/utils';
 
 /** Chips at most, Ask anything included; More ▾ after them (CHAT-08 v2: max 6 + More). */
@@ -23,6 +26,19 @@ export interface ForYouNowProps {
   starting: boolean;
   /** Asks Chat in a new chat. */
   onAsk: (message: string) => void;
+  /** The person's focus (CHAT-24 §4): its areas' shortcuts in turn, in place of the jobs. */
+  focus?: readonly FocusArea[];
+}
+
+/** A chip: the job or shortcut, its skill, its count when it has one, and what it asks. */
+interface Job {
+  key: string;
+  skill: string;
+  label: string;
+  count?: string;
+  message: string;
+  /** The focus area it came from. */
+  area?: FocusArea;
 }
 
 /**
@@ -37,6 +53,11 @@ export interface ForYouNowProps {
  * as "which pages, and what AI cites instead" — and no More, as their
  * composer has no / menu. Quality pass and Weekly report wait for their
  * data: drafts' quality scores aren't kept, and schedules come in Wave 3.
+ *
+ * With a focus picked (CHAT-24 §4), the chips are its areas' shortcuts,
+ * taken in turn so every area shows (CHAT-08 v2's six chips, Ask anything
+ * included). The three jobs keep their counts and their rules; the other
+ * shortcuts carry no count, as nothing counts them yet.
  */
 export function ForYouNow({
   dueTasks,
@@ -45,37 +66,69 @@ export function ForYouNow({
   canChange,
   starting,
   onAsk,
+  focus = [],
 }: ForYouNowProps) {
   const t = useTranslations('chatShell.home.forYou');
+  const tf = useTranslations('chatShell.home.byFocus.shortcuts');
   const titleId = useId();
-  const jobs = [
+  const tasks: Job | null =
     dueTasks && canChange
       ? {
+          key: 'tasks',
           skill: 'tasks',
           label: t('tasks'),
           count: t('tasksCount', { count: dueTasks }),
           message: t('tasksMessage'),
         }
-      : null,
-    lostPages
-      ? {
-          skill: 'winback',
-          label: t('winBack'),
-          count: t('winBackCount', { count: lostPages }),
-          message: t(canChange ? 'winBackMessage' : 'winBackReadMessage', { count: lostPages }),
-        }
-      : null,
+      : null;
+  const winBack: Job | null = lostPages
+    ? {
+        key: 'winBack',
+        skill: 'winback',
+        label: t('winBack'),
+        count: t('winBackCount', { count: lostPages }),
+        message: t(canChange ? 'winBackMessage' : 'winBackReadMessage', { count: lostPages }),
+      }
+    : null;
+  const publish: Job | null =
     readyDrafts && canChange
       ? {
+          key: 'publish',
           skill: 'publish',
           label: t('publish'),
           count: t('publishCount', { count: readyDrafts }),
           message: t('publishMessage', { count: readyDrafts }),
         }
-      : null,
-  ]
-    .filter((job) => job !== null)
-    .slice(0, MAX_CHIPS - 1);
+      : null;
+  /** A focus shortcut's chip, or null for a job with nothing to do. */
+  const shortcutJob = (shortcut: FocusShortcut, area: FocusArea): Job | null => {
+    const job =
+      shortcut === 'tasks'
+        ? tasks
+        : shortcut === 'winBack'
+          ? winBack
+          : shortcut === 'publish'
+            ? publish
+            : {
+                key: shortcut,
+                skill: SHORTCUT_SKILL[shortcut] ?? shortcut,
+                label: tf(shortcut),
+                message: tf(`${shortcut}Message`),
+              };
+    return job && { ...job, area };
+  };
+  const jobs =
+    focus.length > 0
+      ? inTurn(
+          focus.map((area) =>
+            FOCUS_SHORTCUTS[area]
+              .map((shortcut) => shortcutJob(shortcut, area))
+              .filter((job) => job !== null),
+          ),
+          MAX_CHIPS - 1,
+          (job) => job.key,
+        )
+      : [tasks, winBack, publish].filter((job) => job !== null).slice(0, MAX_CHIPS - 1);
 
   return (
     <div className="mb-4">
@@ -98,18 +151,28 @@ export function ForYouNow({
         </button>
         {jobs.map((job) => (
           <button
-            key={job.skill}
+            key={job.key}
             type="button"
             data-action="home.runShortcut"
             data-skill={job.skill}
             disabled={starting}
             className={CHIP}
-            onClick={() => onAsk(job.message)}
+            onClick={() => {
+              if (job.area) {
+                track('chat_focus_shortcut_clicked', { area: job.area, skill: job.skill });
+              }
+              onAsk(job.message);
+            }}
           >
-            {job.label}{' '}
-            <b className="rounded-md bg-amber-50 px-1.5 text-[11.5px] font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-              {job.count}
-            </b>
+            {job.label}
+            {job.count && (
+              <>
+                {' '}
+                <b className="rounded-md bg-amber-50 px-1.5 text-[11.5px] font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                  {job.count}
+                </b>
+              </>
+            )}
           </button>
         ))}
         {canChange && (

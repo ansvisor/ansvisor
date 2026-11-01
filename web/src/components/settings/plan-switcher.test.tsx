@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import { toast } from 'sonner';
 import { RoleProvider } from '@/components/providers/role-provider';
+import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import type { TeamRole } from '@/components/providers/role-provider';
 import { sendCancelFeedback } from '@/lib/actions/cancel-feedback';
 import { PlanSwitcher } from './plan-switcher';
@@ -16,8 +17,10 @@ vi.mock('@/lib/actions/cancel-feedback', () => ({
 const refresh = vi.hoisted(() => vi.fn());
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
 const refreshAiUsage = vi.hoisted(() => vi.fn());
+// The workspace's AI usage: unread unless a test turns the new Chat on (chatMetered).
+const aiUsage = vi.hoisted(() => ({ usage: null as { chatMetered: boolean } | null }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({
-  useAiUsage: () => ({ usage: null, refresh: refreshAiUsage }),
+  useAiUsage: () => ({ usage: aiUsage.usage, refresh: refreshAiUsage }),
 }));
 
 (
@@ -38,32 +41,37 @@ async function render(
     role = 'admin',
     cancelAtPeriodEnd = false,
     trialOffered = false,
+    chatAgentic = false,
   }: {
     status?: string;
     interval?: string;
     role?: TeamRole;
     cancelAtPeriodEnd?: boolean;
     trialOffered?: boolean;
+    /** The new Chat on for the workspace (CHAT_AGENTIC). */
+    chatAgentic?: boolean;
   } = {},
 ) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <RoleProvider role={role}>
-          <PlanSwitcher
-            subscription={{
-              planId,
-              status,
-              currentPeriodEnd: null,
-              cancelAtPeriodEnd,
-              priceAmount: 49,
-              interval,
-            }}
-            onUpdate={onUpdate}
-            organizationId="org1"
-            trialOffered={trialOffered}
-          />
-        </RoleProvider>
+        <ChatAgenticProvider enabled={chatAgentic}>
+          <RoleProvider role={role}>
+            <PlanSwitcher
+              subscription={{
+                planId,
+                status,
+                currentPeriodEnd: null,
+                cancelAtPeriodEnd,
+                priceAmount: 49,
+                interval,
+              }}
+              onUpdate={onUpdate}
+              organizationId="org1"
+              trialOffered={trialOffered}
+            />
+          </RoleProvider>
+        </ChatAgenticProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -122,6 +130,7 @@ const cards = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  aiUsage.usage = null;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -155,7 +164,8 @@ describe('the plan cards', () => {
         '500 site audits a month',
         '5x AI usage',
         'Multi-region tracking',
-        'White-label reports & Looker Studio',
+        'White-label reports & exports',
+        'Looker Studio',
       ],
     });
     expect(container.textContent).not.toContain('8 answer engines');
@@ -168,6 +178,40 @@ describe('the plan cards', () => {
     );
     expect(container.textContent).toContain(
       'For small teams getting started with AI visibility monitoring and optimization.',
+    );
+  });
+
+  it('says Chat and agents draw on AI usage once the new Chat is on, own keys on Enterprise only', async () => {
+    const hint = (text: string) =>
+      [...container.querySelectorAll('li span')]
+        .find((el) => el.textContent === text)
+        ?.getAttribute('title');
+    await render('growth');
+    expect(hint('5x AI usage')).toContain('Agent Chat runs on your own AI key.');
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    aiUsage.usage = { chatMetered: true };
+    await render('growth');
+    expect(hint('5x AI usage')).toBe(
+      "A monthly allowance for Ansvisor's AI features: Chat and agents, Improve suggestions, the Content Editor's AI and the Action Center's task writing. Your own AI key comes with Enterprise only. The free trial comes with a smaller allowance.",
+    );
+    expect(hint('Custom AI usage, from 10x')).toContain(
+      'On Enterprise, Chat can also run on your own AI key.',
+    );
+    expect(hint('Custom AI usage, from 10x')).not.toContain('Agent Chat');
+  });
+
+  it('says the same with the new Chat on where no AI usage is read, as once the plan ended', async () => {
+    const hint = (text: string) =>
+      [...container.querySelectorAll('li span')]
+        .find((el) => el.textContent === text)
+        ?.getAttribute('title');
+    await render('growth', { status: 'canceled', chatAgentic: true });
+    expect(hint('5x AI usage')).toContain('Chat and agents');
+    expect(hint('5x AI usage')).toContain('Your own AI key comes with Enterprise only.');
+    expect(hint('Custom AI usage, from 10x')).toContain(
+      'On Enterprise, Chat can also run on your own AI key.',
     );
   });
 
@@ -452,7 +496,8 @@ describe('choosing a plan once the old one has ended', () => {
     expect(toggle().textContent).toBe('Show plan details');
     expect(toggle().getAttribute('aria-expanded')).toBe('false');
     expect(details().className).toContain('invisible');
-    expect(details().textContent).toContain('White-label reports & Looker Studio');
+    expect(details().textContent).toContain('White-label reports & exports');
+    expect(details().textContent).toContain('Looker Studio');
 
     await act(async () => toggle().click());
     expect(toggle().textContent).toBe('Hide plan details');

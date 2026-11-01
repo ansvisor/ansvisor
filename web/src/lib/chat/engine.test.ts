@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { APICallError } from 'ai';
 import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -134,6 +135,8 @@ const fakes = vi.hoisted(() => ({
   publishRun: vi.fn(),
   reserve: vi.fn(),
   resolveModels: vi.fn(),
+  markFailing: vi.fn(async () => ({ started: true, since: null })),
+  markWorking: vi.fn(async () => ({ cleared: true, resumed: 0 })),
   openPage: vi.fn(),
   explain: vi.fn(),
 }));
@@ -142,6 +145,11 @@ vi.mock('@/lib/mcp/pages', () => ({ openPageFor: fakes.openPage }));
 // explain_change as it is, reading through a fake of its data layer.
 vi.mock('@/lib/mcp/why', () => ({ explainChangeFor: fakes.explain }));
 vi.mock('./budget', () => ({ reserveChatStep: fakes.reserve }));
+vi.mock('./key-health', () => ({
+  markKeyFailing: fakes.markFailing,
+  markKeyWorking: fakes.markWorking,
+  ownKeyFailure: vi.fn(async () => null),
+}));
 vi.mock('./engine-model', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./engine-model')>()),
   resolveChatModels: fakes.resolveModels,
@@ -235,7 +243,8 @@ const { readPrecedenceContext } = await import('./precedence-context');
 const { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } = await import('./rules');
 const { ASK_TOOL } = await import('./asks');
 const { NEXT_MOVES_TOOL } = await import('./next-moves');
-const { SKILL_LIBRARY, USE_SKILL_TOOL } = await import('./skills/library');
+const { MAX_LISTED_SKILLS, SKILL_LIBRARY, USE_SKILL_TOOL, enabledSkills, skillsForPrompt } =
+  await import('./skills/library');
 
 type ChatEvent = import('./events').ChatEvent;
 type ChatActor = import('./engine').ChatActor;
@@ -298,12 +307,18 @@ function scripted(modelId: string, script: Step[]) {
   return { model, seen, script };
 }
 
-/** Auto: the read script for Haiku, the write script for Sonnet. */
-function useModels(read: Step[], write: Step[]) {
+/** Auto: the read script for Haiku, the write script for Sonnet; on Ansvisor's key unless `key` says. */
+function useModels(
+  read: Step[],
+  write: Step[],
+  key: { source?: 'own' | 'ansvisor'; keyFailing?: boolean } = {},
+) {
   const haiku = scripted('claude-haiku-5-5', read);
   const sonnet = scripted('claude-sonnet-5-5', write);
   fakes.resolveModels.mockResolvedValue({
-    source: 'ansvisor',
+    source: key.source ?? 'ansvisor',
+    provider: 'anthropic',
+    keyFailing: key.keyFailing ?? false,
     phases: 'auto',
     pick: (phase: 'read' | 'write') => ({
       model: phase === 'read' ? haiku.model : sonnet.model,
@@ -2949,6 +2964,103 @@ describe('the AI budget', () => {
   });
 });
 
+describe('the own AI key (AGENT-OWN-KEY §5.2)', () => {
+  /** A provider's answer the call fails with; not retried, so the test needn't wait. */
+  const failing = (statusCode: number, body: object) => () => {
+    throw new APICallError({
+      message: 'failed',
+      url: 'https://api.anthropic.com/v1/messages',
+      requestBodyValues: {},
+      statusCode,
+      responseBody: JSON.stringify(body),
+      isRetryable: false,
+    });
+  };
+  const refused = failing(401, {
+    type: 'error',
+    error: { type: 'authentication_error', message: 'invalid x-api-key' },
+  });
+  const overloaded = failing(529, {
+    type: 'error',
+    error: { type: 'overloaded_error', message: 'Overloaded' },
+  });
+  const STOPPED = "So Chat stopped here. What's done so far is kept.";
+
+  it('ends a run on a refused own key after one call, marked failing, without the writing model', async () => {
+    const { haiku, sonnet } = useModels([refused], [text('never')], { source: 'own' });
+    const runId = await turn(ADMIN, 'Hello');
+    expect(haiku.seen).toHaveLength(1);
+    expect(sonnet.seen).toHaveLength(0);
+    expect(runRow(runId)).toMatchObject({ status: 'error', error: 'own_key' });
+    const events = await eventsOf(runId);
+    expect(ofType(events, 'run.error')[0].data).toMatchObject({
+      code: 'own_key',
+      keyFailure: { class: 'invalid', provider: 'anthropic' },
+      reason: `Anthropic turned down your workspace's key. ${STOPPED}`,
+    });
+    expectClean(events);
+    expect(fakes.markFailing).toHaveBeenCalledWith(
+      ADMIN.organizationId,
+      'anthropic',
+      expect.objectContaining({ class: 'invalid', status: 401 }),
+    );
+    const state = db.tables.chat_run_state.find((s) => s.run_id === runId)!;
+    expect((state.progress as { keyFailure?: object }).keyFailure).toEqual({
+      class: 'invalid',
+      provider: 'anthropic',
+      status: 401,
+      model: null,
+    });
+  });
+
+  it('leaves Ansvisor’s own key failing to the old path: the writing model reads, nothing marked', async () => {
+    const { sonnet } = useModels([refused], [text('Hi.')]);
+    const runId = await turn(ADMIN, 'Hello');
+    expect(sonnet.seen).toHaveLength(1);
+    expect(runRow(runId).status).toBe('done');
+    expect(fakes.markFailing).not.toHaveBeenCalled();
+  });
+
+  it('says the provider didn’t answer, and leaves the key unmarked', async () => {
+    const { haiku, sonnet } = useModels([overloaded], [overloaded], { source: 'own' });
+    const runId = await turn(ADMIN, 'Hello');
+    expect([haiku.seen.length, sonnet.seen.length]).toEqual([1, 1]);
+    expect(runRow(runId)).toMatchObject({ status: 'error', error: 'provider_down' });
+    expect(ofType(await eventsOf(runId), 'run.error')[0].data).toMatchObject({
+      code: 'provider_down',
+      reason:
+        "Anthropic didn't answer, so Chat stopped here. What's done so far is kept. Try again in a moment.",
+    });
+    expect(fakes.markFailing).not.toHaveBeenCalled();
+  });
+
+  it('marks a key marked failing working once it answers, once a run', async () => {
+    useModels([READY], [text('Hi.')], { source: 'own', keyFailing: true });
+    await turn(ADMIN, 'Hello');
+    expect(fakes.markWorking).toHaveBeenCalledTimes(1);
+    expect(fakes.markWorking).toHaveBeenCalledWith(ADMIN.organizationId, 'anthropic');
+
+    fakes.markWorking.mockClear();
+    useModels([READY], [text('Hi.')], { source: 'own' });
+    await turn(ADMIN, 'Hello again');
+    expect(fakes.markWorking).not.toHaveBeenCalled();
+  });
+
+  it('stops on a saved key that can’t be read, before any call', async () => {
+    const { OwnKeyUnreadableError } = await import('./key');
+    fakes.resolveModels.mockRejectedValueOnce(new OwnKeyUnreadableError('openai'));
+    const runId = await turn(ADMIN, 'Hello');
+    expect(runRow(runId)).toMatchObject({ status: 'error', error: 'own_key' });
+    expect(ofType(await eventsOf(runId), 'run.error')[0].data).toMatchObject({
+      code: 'own_key',
+      keyFailure: { class: 'unreadable', provider: 'openai' },
+      reason: `Your saved OpenAI key can't be read any more. ${STOPPED}`,
+    });
+    // key.ts marked it where it found it.
+    expect(fakes.markFailing).not.toHaveBeenCalled();
+  });
+});
+
 describe('refusals', () => {
   it('shows the out-of-permission answer and records each refusal', async () => {
     const { sonnet } = useModels(
@@ -3224,6 +3336,59 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     const after = await attempt('manager', 'full_auto', dismiss);
     expect(after).toMatchObject({ waits: true, cards: 1 });
     expect(updateOpportunityStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks before a change in a run no session is behind (an agent on its own): Full auto, Always and a tick', async () => {
+    const NOTE = 'This agent ran on its own, so it asks before changing anything.';
+    /** An Admin's turn, driven in a request with `session`'s session (null: none, the minute tick). */
+    async function driven(mode: Mode, session: string | null) {
+      models([READY], [calls(dismiss), text('Done.')]);
+      const started = await engine.startChatRun(ADMIN, { message: 'Do it', brandId: BRAND, mode });
+      if (!started.ok) throw new Error(`not started: ${started.code}`);
+      await engine.driveRun(ADMIN, started.runId, undefined, { sessionUserId: session });
+      const events = await eventsOf(started.runId);
+      expectClean(events);
+      return {
+        runId: started.runId,
+        waits: runRow(started.runId).status === 'waiting',
+        cards: ofType(events, 'confirm.required').map((e) => e.data),
+      };
+    }
+
+    // Full auto in the Admin's own request: it runs.
+    expect(await driven('full_auto', PEOPLE.admin)).toMatchObject({ waits: false, cards: [] });
+    expect(updateOpportunityStatus).toHaveBeenCalledTimes(1);
+    // With no session, or another person's: its card, saying why, without "Don't ask again".
+    for (const session of [null, PEOPLE.manager]) {
+      expect(await driven('full_auto', session), String(session)).toMatchObject({
+        waits: true,
+        cards: [expect.objectContaining({ canDontAskAgain: false, note: NOTE })],
+      });
+    }
+    expect(updateOpportunityStatus).toHaveBeenCalledTimes(1);
+    // The owner's Approve, in their own request, makes it once.
+    const held = await driven('full_auto', null);
+    expect((await approve(ADMIN, held.runId)).ok).toBe(true);
+    expect(updateOpportunityStatus).toHaveBeenCalledTimes(2);
+    expect(runRow(held.runId).status).toBe('done');
+
+    // An Admin's Always, and the person's tick in Auto: they run with the session, ask without.
+    settings({ tool_policies: { opportunityStatus: 'always' } });
+    expect(await driven('auto', PEOPLE.admin)).toMatchObject({ waits: false, cards: [] });
+    expect(await driven('auto', null)).toMatchObject({
+      waits: true,
+      cards: [expect.objectContaining({ canDontAskAgain: false, note: NOTE })],
+    });
+    settings({});
+    db.tables.chat_auto_choices = [
+      { user_id: PEOPLE.admin, organization_id: ORG, tool_key: 'opportunityStatus' },
+    ];
+    expect(await driven('auto', PEOPLE.admin)).toMatchObject({ waits: false, cards: [] });
+    expect(await driven('auto', null)).toMatchObject({
+      waits: true,
+      cards: [expect.objectContaining({ canDontAskAgain: false, note: NOTE })],
+    });
+    expect(updateOpportunityStatus).toHaveBeenCalledTimes(4);
   });
 
   it('keeps Full auto to Growth and up, paid: Starter and the trial get the card', async () => {
@@ -4335,8 +4500,18 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
       expect(systems).toHaveLength(2);
       const workspace = String(systems[1].content);
       expect(workspace).toContain('<available_skills>');
-      for (const s of SKILL_LIBRARY) {
-        expect(workspace).toContain(`${s.name}: ${s.description}`);
+      // More skills than a prompt lists: the 20 that best match the request.
+      const enabled = enabledSkills(ADMIN.organizationId);
+      const listed = skillsForPrompt(enabled, {
+        typed: [],
+        used: [],
+        request: 'How are we doing?',
+      });
+      expect(listed).toHaveLength(Math.min(enabled.length, MAX_LISTED_SKILLS));
+      for (const s of enabled) {
+        const line = `${s.name}: ${s.description}`;
+        if (listed.includes(s)) expect(workspace).toContain(line);
+        else expect(workspace).not.toContain(line);
         const bodyLine = s.body.split('\n').find((line) => line.length > 60)!;
         expect(systems.map((m) => String(m.content)).join('\n')).not.toContain(bodyLine);
       }
@@ -4658,6 +4833,66 @@ describe('the /tasks task strip (W2-11, CHAT-09 §B)', () => {
     const runId = await turn(ADMIN, 'What is open in my Action Center?');
     expect(ofType(await eventsOf(runId), 'tasks.updated')).toEqual([]);
     expect(db.tables.chat_task_state).toEqual([]);
+  });
+
+  const draftCall = calls(
+    toolCall('w1', 'create_draft', {
+      brand_id: BRAND,
+      title: 'Pricing FAQ',
+      page_type: 'docs_faq',
+      source: { kind: 'content' },
+    }),
+  );
+
+  it('ties a deliverable to the task of the action it opened, only when it is certain (W2-12)', async () => {
+    // Two tasks of the opened action are Writing: the page draft is the one with a draft to write.
+    db.tables.action_tasks[0].task_key = 'optimize_content';
+    useModels(
+      [
+        calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })),
+        calls(toolCall('r2', 'get_action', { brand_id: BRAND, action_id: 'a-top' })),
+        READY,
+      ],
+      [draftCall, text('I drafted the FAQ.')],
+    );
+    const runId = await turn(ADMIN, '/tasks Start the top task.', 'full_auto');
+    // The Action Center's tasks are text from outside the workspace's numbers (§16a): the draft asks first.
+    if (runRow(runId).status === 'waiting') await approve(ADMIN, runId);
+    const events = await eventsOf(runId);
+    const [made] = ofType(events, 'deliverable.created').map((e) => e.data);
+    expect(made.task).toEqual({ title: 'Add FAQ block + schema to /pricing', state: 'open' });
+    const file = db.tables.chat_files.find((f) => f.run_id === runId)!;
+    expect(
+      db.tables.chat_task_state.map((row) => [row.action_task_id, row.file_id ?? null]),
+    ).toEqual([
+      ['t-faq', file.id],
+      ['t-links', null],
+      ['t-guide', null],
+    ]);
+    expectClean(events);
+  });
+
+  it('ties no deliverable to a task when no action was opened, or the task isn’t certain', async () => {
+    useModels(
+      [calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })), READY],
+      [draftCall, text('Drafted.')],
+    );
+    const first = await turn(ADMIN, '/tasks Draft something.', 'full_auto');
+    if (runRow(first).status === 'waiting') await approve(ADMIN, first);
+    expect(ofType(await eventsOf(first), 'deliverable.created')[0].data.task).toBeUndefined();
+    // Opened, but two of its tasks could be it: none.
+    useModels(
+      [
+        calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })),
+        calls(toolCall('r2', 'get_action', { brand_id: BRAND, action_id: 'a-top' })),
+        READY,
+      ],
+      [draftCall, text('Drafted.')],
+    );
+    const second = await turn(ADMIN, '/tasks Draft something.', 'full_auto');
+    if (runRow(second).status === 'waiting') await approve(ADMIN, second);
+    expect(ofType(await eventsOf(second), 'deliverable.created')[0].data.task).toBeUndefined();
+    expect(db.tables.chat_task_state.every((row) => !row.file_id)).toBe(true);
   });
 
   it('answers all the same when the strip can’t be kept', async () => {

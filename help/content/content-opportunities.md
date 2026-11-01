@@ -58,6 +58,8 @@ Admins and managers click **New** to get suggestions now, instead of waiting for
 
 Opportunities are written per group of prompts: prompts of one topic that a single page could answer, and that already have tracked answers. Each group gets one opportunity; only **Another angle** adds a second take on it.
 
+Titles leave years out unless the need is about one. A year that has passed in an opportunity's title or question shows as this year; your tracked prompts keep their own words.
+
 ## What each focus picks
 
 - **Let Ansvisor choose** takes the highest-scoring groups that have no opportunity yet, one from each topic first.

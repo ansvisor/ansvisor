@@ -8,6 +8,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
 import { recordAccessDenied } from './access-log';
 import { logActivity, summaryValue } from './activity';
+import { connectionName, missingRequiredConnection } from './agent-connections';
 import {
   AGENT_PAUSED_REASONS,
   AGENT_STATUSES,
@@ -57,7 +58,8 @@ import { buildActionDenial } from './denial';
 import { canonicalJson } from './idempotency';
 import type { ChatActor } from './engine';
 import type { ChatDenialCard } from './events';
-import { resolveChatModelKey } from './key';
+import { OwnKeyUnreadableError, failingOwnKey, resolveChatModelKey } from './key';
+import type { FailingKey, OwnKeyFailure } from './key-health';
 import { planFactsFromOrgRow, type PlanFacts } from './plan-facts';
 import { parseTeamRole, type ChatMode, type ToolDenial } from './precedence';
 import { readBrandAccess } from './precedence-context';
@@ -172,6 +174,8 @@ export type AgentRefusalCode =
   | 'action_not_found'
   | 'action_closed'
   | 'queue_full'
+  | 'connection_missing'
+  | 'own_key_failed'
   | 'failed';
 
 export type AgentRefusal =
@@ -200,6 +204,8 @@ export type AgentResult<T> = { ok: true; value: T } | { ok: false; refusal: Agen
 type Refused = { ok: false; refusal: AgentRefusal };
 
 const refusalT = createTranslator({ locale: 'en', messages, namespace: 'chatAgents.refusal' });
+const ownKeyT = createTranslator({ locale: 'en', messages, namespace: 'chatAgents.ownKey' });
+const settingsT = createTranslator({ locale: 'en', messages, namespace: 'settings' });
 const askedT = createTranslator({ locale: 'en', messages, namespace: 'chatAgents.asked' });
 
 const REFUSAL_STATUS: Record<AgentRefusalCode, number> = {
@@ -223,6 +229,8 @@ const REFUSAL_STATUS: Record<AgentRefusalCode, number> = {
   action_not_found: 404,
   action_closed: 409,
   queue_full: 409,
+  connection_missing: 409,
+  own_key_failed: 409,
   failed: 500,
 };
 
@@ -552,6 +560,11 @@ export interface AgentListItem {
 
 export interface AgentListResult {
   agents: AgentListItem[];
+  /**
+   * The workspace runs on its own AI key and it is marked failing
+   * (AGENT-OWN-KEY §5.2 item 6): Agent Center's banner. Null otherwise.
+   */
+  keyFailure: FailingKey | null;
   /** The tabs' counts (§B item 5). */
   counts: Record<AgentListView, number>;
   /** Active agents the person sees ("Agents 6", §A item 1). */
@@ -873,7 +886,7 @@ export async function listAgents(
   );
   const ids = shown.map((a) => a.row.id);
 
-  const [triggers, runs, brands, owners, shares] = await Promise.all([
+  const [triggers, runs, brands, owners, shares, key] = await Promise.all([
     triggersOf(ids),
     ids.length
       ? supabaseAdmin
@@ -889,6 +902,7 @@ export async function listAgents(
       shown.map((a) => a.row.owner_id).filter((id): id is string => !!id),
     ),
     ids.length ? readAgentShares(org, 'days30') : Promise.resolve(null),
+    failingOwnKey(org),
   ]);
   if (runs.error) throw new Error(`Could not read the agents' runs: ${runs.error.message}`);
   const runRows = (runs.data ?? []) as RunRow[];
@@ -905,6 +919,7 @@ export async function listAgents(
       }),
     ),
     counts,
+    keyFailure: key ? { class: key.class, provider: key.provider } : null,
     active: visible.filter((a) => a.row.status === 'active').length,
     activeInWorkspace: rows.filter((r) => r.status === 'active').length,
     activeLimit: agentPlanLimits(ctx.plan).activeAgents,
@@ -1134,7 +1149,11 @@ const sameInstant = (a: string, b: string) => a === b || Date.parse(a) === Date.
  */
 async function aiLimitReached(ctx: AgentContext): Promise<boolean> {
   try {
-    const key = await resolveChatModelKey(ctx.actor.organizationId);
+    const key = await resolveChatModelKey(ctx.actor.organizationId).catch((err: unknown) => {
+      // A saved key that can't be read is still the workspace's own: no AI limit.
+      if (err instanceof OwnKeyUnreadableError) return { source: 'own' as const };
+      throw err;
+    });
     if (key?.source === 'own') return false;
     const usage = await getAiUsageFor({
       userId: ctx.actor.userId,
@@ -1164,9 +1183,10 @@ export async function runnableBrands(
  * Whether the agent may run with these settings now (§D item 21: on
  * Activate, on Resume and before a run): the plan and Settings › Chat allow
  * its mode and engines for the person it acts as, a brand of its scope is
- * there, and the AI limit isn't used up. Its skills (CHAT-13) and its
- * Required connections are the trigger runner's to check (W2-16) once
- * those registries exist.
+ * there, and the AI limit isn't used up. Its Required connections are
+ * checked for the run's brand before the run (agent-driver.ts,
+ * agent-connections.ts), and for each brand of its scope on Resume; its
+ * skills (CHAT-13) once their registry exists.
  */
 export async function runChecks(
   ctx: AgentContext,
@@ -1184,8 +1204,18 @@ export async function runChecks(
   if ((await runnableBrands(ctx.actor.organizationId, version.scope)).length === 0) {
     return refused('no_brand');
   }
+  // The workspace's own key is marked failing (AGENT-OWN-KEY §5.2 item 4): nothing is queued.
+  const key = await failingOwnKey(ctx.actor.organizationId);
+  if (key) return refused('own_key_failed', { why: ownKeyWhy(key) });
   if (await aiLimitReached(ctx)) return refused('ai_limit');
   return null;
+}
+
+/** Why the workspace's own key fails, in words, by its provider's name. */
+export function ownKeyWhy(key: Pick<OwnKeyFailure, 'class' | 'provider'>): string {
+  return ownKeyT(`why.${key.class}`, {
+    provider: settingsT(`agent_providers.${key.provider}.name` as never),
+  });
 }
 
 /** An agent's triggers as their inputs read back (the checks that name engines read them). */
@@ -1572,7 +1602,8 @@ const STATE_SUMMARY: Record<AgentLifecycleAction, AgentSummaryKey> = {
 /**
  * A change of state a person asks for (§G item 33): Activate a draft and
  * Resume a paused agent after the activation checks (item 21; Activate
- * makes the person its owner, the one its triggered runs act as), Pause
+ * makes the person its owner, the one its triggered runs act as; Resume
+ * also wants each brand's Required connections, as Run now does), Pause
  * (a person's reason, `manual`), Archive (its waiting runs stop; a running
  * one finishes), Restore (back to paused, never straight to active), and
  * Delete once archived (its runs, chats and files stay).
@@ -1620,6 +1651,19 @@ export async function changeAgentState(
       triggerInputs(await triggersOf([row.id])),
     );
     if (failing) return failing;
+    // A brand without a Required connection would pause it again on its next run
+    // (agent-driver.ts): Resume refuses, naming both, as Run now does (§H item 42).
+    if (action === 'resume' && agent.version) {
+      for (const brand of await runnableBrands(org, agent.version.scope)) {
+        const missing = await missingRequiredConnection(agent.version, brand.id);
+        if (missing) {
+          return refused('connection_missing', {
+            name: connectionName(missing),
+            brand: brand.name,
+          });
+        }
+      }
+    }
     patch.paused_reason = null;
     patch.activated_at = now.toISOString();
     if (action === 'activate') patch.owner_id = ctx.actor.userId;

@@ -1,8 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
+import { focusFromWorkAreas, focusOf, type FocusArea } from '@/lib/chat/focus';
+import { skillsByFocus } from '@/lib/chat/focus-home';
 import { firstNameOf } from '@/lib/chat/home';
 import { importLegacyChats } from '@/lib/chat/legacy-import';
 import { chatRunsOnOwnKey } from '@/lib/chat/key';
+import { failingKeyFor } from '@/lib/chat/key-health';
 import { CAREFUL_SETUP, composerSetupOf, type ChatComposerSetup } from '@/lib/chat/composer-setup';
 import { readPrecedenceContext } from '@/lib/chat/precedence-context';
 import { skillMenuOf } from '@/lib/chat/skills/library';
@@ -92,13 +95,53 @@ export async function chatFirstName(): Promise<string | null> {
   );
 }
 
+/** What Chat focuses on for the person (CHAT-24 §3), as Home and Settings › General open. */
+export interface ChatFocusState {
+  /** The picked areas, in order; empty when skipped or cleared; null when never asked. */
+  focus: FocusArea[] | null;
+  /** The picker opens by itself: never answered and never shown (it shows once). */
+  ask: boolean;
+  /** The picks the picker starts with when there are none: from the person's work areas. */
+  prefill: FocusArea[];
+}
+
+const NO_FOCUS: ChatFocusState = { focus: null, ask: false, prefill: [] };
+
+/**
+ * The person's focus, whether the picker should open by itself, and the
+ * picks their work areas (Settings › Menu access) suggest. A read that
+ * fails opens Home as it is, without the picker.
+ */
+export async function chatFocusState(): Promise<ChatFocusState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NO_FOCUS;
+  const [profile, prefs] = await Promise.all([
+    supabase.from('profiles').select('work_areas').eq('id', user.id).maybeSingle(),
+    supabase
+      .from('chat_user_prefs')
+      .select('focus, focus_prompted_at')
+      .eq('user_id', user.id)
+      .maybeSingle(),
+  ]);
+  if (prefs.error) return NO_FOCUS;
+  const focus = focusOf(prefs.data?.focus);
+  return {
+    focus,
+    ask: focus === null && !prefs.data?.focus_prompted_at,
+    prefill: focusFromWorkAreas(profile.data?.work_areas ?? null),
+  };
+}
+
 /**
  * The composer's setup: the default mode the person chose in Chat's settings
  * (chat_user_prefs.default_mode; Auto, ask before changes, when none), and
  * Full auto as the server will decide it, the period whose 80% usage line
  * the person already saw, whether Chat runs on the workspace's own key, and
- * the skills in the / menu. A value that can't be read falls back to the
- * careful one.
+ * the skills in the / menu, their focus's first (CHAT-24 §1). A value that
+ * can't be read falls back to the careful one.
  */
 export async function chatComposerSetup(): Promise<ChatComposerSetup> {
   const supabase = await createClient();
@@ -115,7 +158,7 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
   const [{ data: prefs }, ctx, onOwnKey] = await Promise.all([
     supabase
       .from('chat_user_prefs')
-      .select('default_mode, usage_notice_period')
+      .select('default_mode, usage_notice_period, focus')
       .eq('user_id', user.id)
       .maybeSingle(),
     readPrecedenceContext({
@@ -130,6 +173,8 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
     ...composerSetupOf(prefs?.default_mode, ctx),
     usageNoticeSeen: prefs?.usage_notice_period ?? null,
     onOwnKey,
-    skills: skillMenuOf(profile.organization_id),
+    // Read only where Chat runs on the own key (AGENT-OWN-KEY §5.2 item 5).
+    keyFailure: onOwnKey ? await failingKeyFor(profile.organization_id) : null,
+    skills: skillsByFocus(skillMenuOf(profile.organization_id), focusOf(prefs?.focus) ?? []),
   };
 }

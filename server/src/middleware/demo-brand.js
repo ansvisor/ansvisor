@@ -100,8 +100,10 @@ export const DEMO_GUARDED = [
   guard('POST /brand-facts/fetch', brandIn('body')),
   guard('PATCH /brand-facts/:id', rowIn('brand_facts', 'path')),
 
-  // Brands (brands.js): reading the site's home page, and AI, for its kind.
+  // Brands (brands.js): reading the site's home page, and AI, for its kind,
+  // and for the tracking snippet (a demo brand's site is a sample).
   guard('POST /brands/:id/detect-site-type', brandIn('path', 'id')),
+  guard('POST /brands/:id/tracking-snippet/check', brandIn('path', 'id')),
 
   // Product catalog (catalog.js): the demo's stores are samples, so neither
   // connecting, syncing nor removing one may reach a store.
@@ -351,7 +353,7 @@ function guidOf(value) {
 export const MAX_IDS = 500;
 
 /** A request that names more than MAX_IDS ids. */
-class TooManyIds extends Error {}
+export class TooManyIds extends Error {}
 
 /** Brands remembered at most; the oldest goes first. */
 export const MAX_CACHED_BRANDS = 10_000;

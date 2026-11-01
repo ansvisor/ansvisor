@@ -25,7 +25,7 @@ export interface Brand {
   language?: string;
   trackingCode?: string;
   shoppingModeEnabled: boolean;
-  /** b2b, ecommerce or b2c (Content Editor page types); unset = guessed (siteTypeOf). */
+  /** b2b, ecommerce, b2c or app (Content Editor page types); unset = guessed (siteTypeOf). */
   siteType?: string;
   /** auto = detected from the brand's site at setup or by its catalog; manual = a person chose it (00379). */
   siteTypeSource?: 'auto' | 'manual';

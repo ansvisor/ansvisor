@@ -117,6 +117,7 @@ describe('fieldDataFor', () => {
     title: 'Cold brew at home',
     metaTitle: '',
     metaDescription: '',
+    reviewer: 'Dr. Grace Hopper, Clinical Reviewer',
   };
   const body = `<p>${'Cold brew is coffee steeped in cold water for 12 to 18 hours. '.repeat(4)}</p>`;
 
@@ -133,6 +134,7 @@ describe('fieldDataFor', () => {
         metaTitle: 'seo-title',
         metaDescription: 'post-summary',
         jsonLd: 'schema',
+        reviewer: 'reviewed-by',
       },
     );
     expect(data.name).toBe('Cold brew at home');
@@ -144,6 +146,7 @@ describe('fieldDataFor', () => {
     expect(data['post-summary'].length).toBeLessThanOrEqual(160);
     expect(data.schema).toBe('{"@type":"Article","headline":"\\u003c/script>"}');
     expect(JSON.parse(data.schema)).toEqual({ '@type': 'Article', headline: '</script>' });
+    expect(data['reviewed-by']).toBe('Dr. Grace Hopper, Clinical Reviewer');
   });
 
   it('sends the page’s own meta, several JSON-LD blocks as a list, and nothing for a part the map leaves out', () => {
@@ -188,5 +191,13 @@ describe('fieldDataFor', () => {
       slug: 's',
       b: '<p>x</p>',
     });
+  });
+  it('clears the mapped reviewer field when a page has no reviewer', () => {
+    expect(
+      fieldDataFor(
+        { page: { ...page, reviewer: '' }, slug: 's', body: '<p>x</p>', jsonLd: [] },
+        { body: 'b', reviewer: 'reviewed-by' },
+      ),
+    ).toEqual({ name: 'Cold brew at home', slug: 's', b: '<p>x</p>', 'reviewed-by': '' });
   });
 });

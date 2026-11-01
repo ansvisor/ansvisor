@@ -2,6 +2,7 @@ import type { ActionEvent, ActionItem } from '@/lib/actions/action-center';
 import { isActionKind } from '@/lib/action-center/registry';
 import { pagePath } from '@/lib/content/overlap';
 import { formatEstimateRange, guessedVolumeEstimate } from '@/lib/volume-estimate';
+import { refreshYears } from '@/lib/content/current-year';
 
 /**
  * Composes what an action row shows from `kind` + `payload`, mirroring the
@@ -78,7 +79,8 @@ export function actionTexts(
   }
   // An action sent from a content opportunity is named after the work itself.
   if (action.kind === 'content_opportunity' && typeof p.title === 'string' && p.title) {
-    return { title: p.title, description: t(`${action.kind}.description`) };
+    // The opportunity's title as Content shows it, a past year read as this one.
+    return { title: refreshYears(p.title), description: t(`${action.kind}.description`) };
   }
   // A draft sent from the Content Editor (CE-015) is named after its page.
   if (action.kind === 'content_draft' && typeof p.title === 'string' && p.title) {

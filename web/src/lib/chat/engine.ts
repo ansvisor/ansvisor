@@ -3,6 +3,7 @@ import { Output, streamText, tool as aiTool, type ModelMessage, type ToolSet } f
 import { z } from 'zod';
 import messages from '../../../messages/en.json';
 import { PLANS } from '@/config/plans';
+import type { AiProvider } from '@/lib/agent/providers';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { searchHelp } from '@/lib/help/search';
 import { platformName } from '@/lib/signals/names';
@@ -14,6 +15,7 @@ import { recordAccessDenied } from './access-log';
 import { approvalFor, type ActivityApproval } from './activity';
 import { reserveChatStep, type ChatStepUsage } from './budget';
 import { buildDenial } from './denial';
+import { KeyFailureError, ProviderDownError, stepFailure, type RunKeyFailure } from './engine-key';
 import {
   estimateInputTokens,
   resolveChatModels,
@@ -44,6 +46,7 @@ import {
   isChatHref,
   maskIds,
   type ChatDenialCard,
+  type ChatEventPayloads,
   type ChatRunSummary,
   type ChatStepScope,
 } from './events';
@@ -81,6 +84,8 @@ import {
   validMoves,
 } from './next-moves';
 import { requestHash } from './idempotency';
+import { OwnKeyUnreadableError } from './key';
+import { markKeyFailing, markKeyWorking } from './key-health';
 import {
   CHAT_MODES,
   allowedTools,
@@ -144,6 +149,7 @@ import { fileChatOutput } from './file-output';
 import { originPageSchema } from './origin';
 import { CHAT_REFERENCE_TYPES, MAX_REFERENCES } from './references';
 import {
+  linkDeliverable,
   pickTasks,
   queueTasks,
   readStrips,
@@ -190,6 +196,7 @@ import { MAX_UPLOADS } from './uploads';
 
 const t = createTranslator({ locale: 'en', messages, namespace: 'chatEngine' });
 const toolT = createTranslator({ locale: 'en', messages, namespace: 'chatTools' });
+const settingsT = createTranslator({ locale: 'en', messages, namespace: 'settings' });
 
 /** What a row's card says under it, when it has words for that (chatTools.{key}.note). */
 function toolNote(tool: Pick<ChatTool, 'labelKey'>): string | null {
@@ -750,6 +757,12 @@ interface RunContext {
   batchAnswer?: string;
   /** The agent run this chat is (CHAT-21 §H item 36): its steps are held within its cap too. */
   agentRunId: string | null;
+  /**
+   * Whose session the request driving the run carries: a change runs as the
+   * signed-in person. When it isn't the actor (an agent run nobody's session
+   * is behind), every change asks first (askWithoutSession).
+   */
+  sessionUserId: string | null;
 }
 
 const workedMs = (rc: Pick<RunContext, 'run' | 'segmentStart'>) =>
@@ -760,12 +773,15 @@ const workedMs = (rc: Pick<RunContext, 'run' | 'segmentStart'>) =>
  * tool calls and its events. Picks up a waiting one with `resume`. Never
  * throws: what fails ends the run in error, in words, with what was done
  * kept. Meant to run in the request's background (after()), so a browser
- * that goes away doesn't stop it (CHAT-03 item 21).
+ * that goes away doesn't stop it (CHAT-03 item 21). `sessionUserId`: whose
+ * session the request carries, left out in the actor's own request (the run
+ * routes); null for none (an agent run the minute tick or a signal started).
  */
 export async function driveRun(
   actor: ChatActor,
   runId: string,
   resume?: ResumeAction,
+  { sessionUserId = actor.userId }: { sessionUserId?: string | null } = {},
 ): Promise<void> {
   const controller = registerDriver(runId);
   const segmentStart = Date.now();
@@ -803,6 +819,7 @@ export async function driveRun(
       sink,
       controller.signal,
       segmentStart,
+      sessionUserId,
     );
     if (!rc) return;
     if (resume && run.pending) {
@@ -818,7 +835,7 @@ export async function driveRun(
   } catch (err) {
     console.error('[chat/engine] a run failed:', err);
     const ended = rc
-      ? failRun(rc)
+      ? endForFailure(rc, err)
       : loaded && sink
         ? endInError(
             loaded,
@@ -880,6 +897,7 @@ async function openContext(
   sink: RunEventSink,
   signal: AbortSignal,
   segmentStart: number,
+  sessionUserId: string | null,
 ): Promise<RunContext | null> {
   const progress = run.progress as Progress;
   const base = { run, segmentStart };
@@ -889,7 +907,21 @@ async function openContext(
     mode: run.mode,
     surface: 'chat',
   });
-  const models = ctx ? await resolveChatModels(actor.organizationId) : null;
+  let models: ChatModels | null = null;
+  try {
+    models = ctx ? await resolveChatModels(actor.organizationId) : null;
+  } catch (err) {
+    if (!(err instanceof OwnKeyUnreadableError)) throw err;
+    // Marked failing where it was found (key.ts); the run stops on it, never on Ansvisor's key.
+    const failure = {
+      class: 'unreadable' as const,
+      provider: err.provider,
+      status: null,
+      model: null,
+    };
+    await endOnKey(run, sink, workedMs(base), failure, progress, { marked: true });
+    return null;
+  }
   if (!ctx || !models) {
     await endInError(run, sink, workedMs(base), ctx ? t('error.noKey') : t('error.notFound'));
     return null;
@@ -925,6 +957,7 @@ async function openContext(
     offered: new Map(offered.map((tool) => [tool.name, tool])),
     refused,
     agentRunId,
+    sessionUserId,
     skills: runSkills(actor.organizationId, progress, history.plan),
   };
 }
@@ -1121,6 +1154,7 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
         return 'ended';
       }
       await budget.charge(stepUsage(await result.usage), Date.now() - called);
+      await keyAnswered(rc);
       rc.progress.modelSteps += 1;
     } catch (err) {
       out.close();
@@ -1130,8 +1164,11 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
         return 'ended';
       }
       await budget.release();
+      const failure = stepFailure(rc.models, choice.budgetModel, err);
+      // The own key failed: Chat's answer would run on the same key, so the run stops here.
+      if (failure instanceof KeyFailureError) throw failure;
       // Words already shown: the run ends in error (driveRun), what's shown kept.
-      if (rc.progress.text) throw err;
+      if (rc.progress.text) throw failure ?? err;
       console.error('[chat/engine] a Help answer failed; Chat answers as usual:', err);
       await endStep({
         status: 'error',
@@ -1382,6 +1419,7 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
     }
     const [usage, response] = await Promise.all([result.usage, result.response]);
     await budget.charge(stepUsage(usage), Date.now() - called);
+    await keyAnswered(rc);
     const responseMessages = response.messages as ModelMessage[];
     return { kind: 'ok', toolCalls, responseMessages, answered: answeredIds(responseMessages) };
   } catch (err) {
@@ -1392,13 +1430,16 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
       return { kind: 'ended' };
     }
     await budget.release();
+    const failure = stepFailure(rc.models, choice.budgetModel, err);
+    // The own key failed: the writing model runs on the same key, a second sure failure.
+    if (failure instanceof KeyFailureError) throw failure;
     if (phase === 'read') {
       // The reading model failed: the writing one reads for itself rather than losing the run.
       console.error('[chat/engine] a reading step failed; the writing model reads:', err);
       rc.progress.phase = 'write';
       return { kind: 'ok', toolCalls: [], responseMessages: [], answered: new Set() };
     }
-    throw err;
+    throw failure ?? err;
   } finally {
     await budget.release();
   }
@@ -1921,7 +1962,7 @@ async function handleCall(
   }
 
   const { ctx, call: facts } = await callFacts(rc, tool, input);
-  const decision = decideForEngine(tool, ctx, facts);
+  const decision = askWithoutSession(rc, tool, decideForEngine(tool, ctx, facts));
   // A change its own check refuses before its card (Send to Action Center's duplicate): no card.
   if (decision.kind !== 'deny' && tool.class !== 'read') {
     const refused = await precheckOf(rc, tool, input, ctx);
@@ -1941,6 +1982,20 @@ async function handleCall(
     case 'click':
       return openCard(rc, tool, call, input, facts, decision);
   }
+}
+
+/**
+ * A change in a run no session is behind (an agent's that started on its
+ * own, or in another person's request): its tool acts as the signed-in
+ * person, so what would run by itself (Full auto, Always, a tick) asks
+ * first, with no "Don't ask again". The card waits in the owner's Inbox,
+ * and their Approve runs it in their own request.
+ */
+function askWithoutSession(rc: RunContext, tool: ChatTool, decision: ToolDecision): ToolDecision {
+  if (decision.kind !== 'run' || tool.class === 'read' || rc.sessionUserId === rc.actor.userId) {
+    return decision;
+  }
+  return { kind: 'ask', reason: 'no_session', offerDontAskAgain: false };
 }
 
 /** A refusal: the out-of-permission answer to the browser, its record, and its words to the model. */
@@ -2156,6 +2211,11 @@ async function openCard(
   rc.sink.emit('step.started', { step: clientStep(row) });
   const digest = cardDigest(tool, input);
   const offerDontAskAgain = decision.kind === 'ask' && decision.offerDontAskAgain;
+  const notes = cardNotes(tool);
+  // Why a change its mode would make by itself asks: no session is behind the run.
+  if (decision.kind === 'ask' && decision.reason === 'no_session') {
+    notes.note = [t('card.noSession'), notes.note].filter(Boolean).join(' ');
+  }
   rc.sink.emit('confirm.required', {
     n,
     action: toolWords(tool, 'name'),
@@ -2163,7 +2223,7 @@ async function openCard(
     digest,
     canDontAskAgain: offerDontAskAgain,
     // A WRITE whose change can't be undone once made (§9) says so on its card.
-    ...cardNotes(tool),
+    ...notes,
     ...(await cardDetailsOf(tool, input)),
   });
   return {
@@ -2741,6 +2801,7 @@ async function followTaskReads(
       await queueTasks(rc.run.conversationId, rc.run.id, taskIds);
     } else if (typeof input.action_id === 'string') {
       await startAction(supabaseAdmin, rc.run.conversationId, rc.run.id, input.action_id);
+      rc.progress.taskAction = input.action_id;
     }
     rc.progress.taskStrip = true;
   } catch (err) {
@@ -3045,6 +3106,7 @@ async function deliver(
     console.error('[chat] could not file a deliverable:', error);
     return { ok: false as const, failure: 'failed' as const };
   });
+  const task = filed.ok ? await taskOfDeliverable(rc, filed.id, !!made.contentDraftId) : null;
   rc.sink.emit('deliverable.created', {
     title: made.title,
     type: made.type,
@@ -3052,8 +3114,33 @@ async function deliver(
     status: 'draft',
     ...(made.href ? { href: made.href } : {}),
     filed: filed.ok ? 'in_files' : filed.failure,
+    ...(task ? { task } : {}),
   });
   return filed.ok ? filed.id : null;
+}
+
+/**
+ * The task a /tasks run's deliverable is for (CHAT-09 item 12): one of the
+ * action it opened last, when that is certain (task-strip.ts
+ * linkDeliverable); else none, and the card offers no "Task:". Never stops
+ * the run.
+ */
+async function taskOfDeliverable(rc: RunContext, fileId: string, isDraft: boolean) {
+  const actionId = rc.progress.taskAction;
+  if (!actionId || !(rc.progress.skills ?? []).includes(TASKS_SKILL)) return null;
+  try {
+    return await linkDeliverable(
+      supabaseAdmin,
+      rc.run.conversationId,
+      rc.run.id,
+      actionId,
+      fileId,
+      isDraft,
+    );
+  } catch (err) {
+    console.error("[chat/engine] could not keep a deliverable's task:", err);
+    return null;
+  }
 }
 
 // ─── Waiting, approving, skipping ───────────────────────────────────────────
@@ -3545,15 +3632,71 @@ async function failRun(rc: RunContext, reason?: string): Promise<void> {
   await endInError(rc.run, rc.sink, workedMs(rc), reason ?? t('error.failed'), rc.progress);
 }
 
+/** A provider's name as Settings › AI Providers shows it. */
+const providerName = (provider: AiProvider) =>
+  settingsT(`agent_providers.${provider}.name` as never);
+
+/** A run's end for what failed (AGENT-OWN-KEY §5.2): the own key, a provider that didn't answer, or anything else. */
+async function endForFailure(rc: RunContext, err: unknown): Promise<void> {
+  if (err instanceof KeyFailureError) {
+    return endOnKey(rc.run, rc.sink, workedMs(rc), err.failure, rc.progress);
+  }
+  if (err instanceof ProviderDownError) {
+    const reason = t('error.providerDown', { provider: providerName(err.provider) });
+    return endInError(rc.run, rc.sink, workedMs(rc), reason, rc.progress, 'provider_down');
+  }
+  return failRun(rc);
+}
+
+/**
+ * The run stops on the workspace's own key (AGENT-OWN-KEY §5.2): the key is
+ * marked failing (one episode however many runs fail at once), the run ends
+ * `own_key` with the class's words, and its progress keeps why, for its
+ * agent run (agentStateOf: stopped, own_key).
+ */
+async function endOnKey(
+  run: LoadedRun,
+  sink: RunEventSink,
+  workingMs: number,
+  failure: RunKeyFailure,
+  progress: RunProgress,
+  { marked = false }: { marked?: boolean } = {},
+): Promise<void> {
+  if (!marked) {
+    await markKeyFailing(run.organizationId, failure.provider, failure).catch((err) =>
+      console.error('[chat/engine] could not mark the key failing:', err),
+    );
+  }
+  const why = t(`error.key.${failure.class}`, {
+    provider: providerName(failure.provider),
+    model: failure.model ?? '',
+  });
+  const reason = `${why} ${t('error.keyStopped')}`;
+  const ended = { ...progress, keyFailure: failure };
+  await endInError(run, sink, workingMs, reason, ended, 'own_key', {
+    keyFailure: { class: failure.class, provider: failure.provider },
+  });
+}
+
+/** An answered call on a key marked failing when the run started: it works again (§5.4). */
+async function keyAnswered(rc: RunContext): Promise<void> {
+  if (!rc.models.keyFailing) return;
+  rc.models.keyFailing = false;
+  await markKeyWorking(rc.run.organizationId, rc.models.provider).catch((err) =>
+    console.error('[chat/engine] could not mark the key working:', err),
+  );
+}
+
 async function endInError(
   run: LoadedRun,
   sink: RunEventSink,
   workingMs: number,
   reason: string,
   progress: RunProgress = run.progress,
+  code: 'failed' | 'own_key' | 'provider_down' = 'failed',
+  extra: Pick<ChatEventPayloads['run.error'], 'keyFailure'> = {},
 ): Promise<void> {
-  if (!(await moveRun(run.id, OPEN_RUN_STATUSES, 'error', { error: 'failed', finished: true })))
-    return;
+  if (!(await moveRun(run.id, OPEN_RUN_STATUSES, 'error', { error: code, finished: true }))) return;
   for (const step of await openSteps(run.id)) {
     const row = await updateStep(step.id, { status: 'error', detail: t('step.failed') });
     sink.emit('step.finished', { step: clientStep(row) });
@@ -3561,7 +3704,7 @@ async function endInError(
   await saveAnswer(run.messageId, { text: progress.text });
   await saveState(run.id, { progress, workingMs, pending: null, waitingSince: null });
   await showStrip({ ...run, progress }, sink, true);
-  sink.emit('run.error', { ...summaryOf(progress, workingMs), code: 'failed', reason });
+  sink.emit('run.error', { ...summaryOf(progress, workingMs), code, reason, ...extra });
 }
 
 /** The driver's Stop: the run is marked stopped (if a Stop request hasn't already) and says so. */

@@ -33,7 +33,7 @@ vi.mock('@/lib/supabase/server', () => ({
     from: (table: string) => {
       const chain: Record<string, unknown> = {};
       let page = 0;
-      for (const name of ['select', 'eq', 'in', 'lte', 'is', 'order', 'range']) {
+      for (const name of ['select', 'eq', 'in', 'lte', 'gte', 'is', 'order', 'range']) {
         chain[name] = (...args: unknown[]) => {
           db.calls.push([table, name, ...args]);
           if (name === 'range') page = (args[0] as number) / 1000;
@@ -64,7 +64,7 @@ vi.mock('@/lib/supabase/admin', () => ({
   },
 }));
 
-const { readHomeShortcuts, readSinceYouLeft } = await import('./chat-home');
+const { readFocusFill, readHomeShortcuts, readSinceYouLeft } = await import('./chat-home');
 
 const lost = (...urls: string[]) => ({ lostUrls: urls.map((url) => ({ url })) });
 const tables = () => [...new Set(db.calls.map(([table]) => table))];
@@ -276,5 +276,114 @@ describe('readSinceYouLeft', () => {
     db.single.chat_user_prefs = { data: null, error: { message: 'nope' } };
     expect(await readSinceYouLeft(BRAND)).toEqual({ ok: false });
     logged.mockRestore();
+  });
+});
+
+describe('readFocusFill (CHAT-24 §4)', () => {
+  const day = (
+    competitor_id: string,
+    d: string,
+    answer_count: number,
+    mention_answers: number,
+  ) => ({
+    competitor_id,
+    day: d,
+    answer_count,
+    mention_answers,
+  });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-31T12:00:00Z'));
+    db.answers = {
+      insights_competitor_daily: {
+        data: [
+          // Kestrel: 20% the week before, 30% this week (from Oct 25).
+          day('c1', '2026-10-20', 50, 10),
+          day('c1', '2026-10-29', 50, 15),
+          // Lumora: mentioned most, but its rate fell.
+          day('c2', '2026-10-20', 50, 30),
+          day('c2', '2026-10-29', 50, 28),
+          // Too few answers this week to count a move.
+          day('c3', '2026-10-20', 50, 1),
+          day('c3', '2026-10-29', 4, 4),
+          // Not one of the brand's competitors.
+          day('gone', '2026-10-29', 50, 50),
+        ],
+        error: null,
+      },
+      competitors: {
+        data: [
+          { id: 'c1', name: 'Kestrel CRM' },
+          { id: 'c2', name: 'Lumora' },
+          { id: 'c3', name: 'Corvio' },
+        ],
+        error: null,
+      },
+      prompts: {
+        data: [
+          { topic_id: 't1', regions: ['US'] },
+          { topic_id: 't1', regions: ['US', 'DE'] },
+          { topic_id: 't2', regions: ['US-CA'] },
+          { topic_id: 't3', regions: [] },
+          { topic_id: 't3', regions: [] },
+          { topic_id: 't3', regions: [] },
+        ],
+        error: null,
+      },
+      topics: {
+        data: [
+          { id: 't1', name: 'Integrations', is_active: true },
+          { id: 't2', name: 'Pricing', is_active: null },
+          { id: 't3', name: 'Old', is_active: false },
+        ],
+        error: null,
+      },
+    };
+  });
+
+  it('fills the questions with the most mentioned competitor, the busiest topic and a second country', async () => {
+    expect(await readFocusFill(BRAND, ['comp', 'pd', 'bd'])).toEqual({
+      ok: true,
+      fill: { rival: 'Lumora', topic: 'Integrations', market: 'Germany' },
+      rivalMove: { name: 'Kestrel CRM', points: 10 },
+    });
+    const gte = db.calls.find(
+      ([table, name]) => table === 'insights_competitor_daily' && name === 'gte',
+    );
+    expect(gte).toEqual(['insights_competitor_daily', 'gte', 'day', '2026-10-18']);
+  });
+
+  it('reads only what the picked areas use', async () => {
+    expect(await readFocusFill(BRAND, ['lead', 'growth'])).toEqual({
+      ok: true,
+      fill: { rival: null, topic: null, market: null },
+      rivalMove: null,
+    });
+    expect(tables()).toEqual(['profiles']);
+    // Prompts and citations names a competitor, but has no line to say a move with.
+    expect(await readFocusFill(BRAND, ['seo'])).toMatchObject({
+      fill: { rival: 'Lumora', topic: null, market: null },
+      rivalMove: null,
+    });
+  });
+
+  it('leaves the market unknown with one country tracked', async () => {
+    db.answers.prompts = { data: [{ topic_id: 't2', regions: ['US', 'US-NY'] }], error: null };
+    expect(await readFocusFill(BRAND, ['bd', 'content'])).toMatchObject({
+      fill: { topic: 'Pricing', market: null },
+    });
+  });
+
+  it('answers a bad request, the new Chat off or a failed read as a value', async () => {
+    expect(await readFocusFill('nope', ['comp'])).toEqual({ ok: false });
+    expect(await readFocusFill(BRAND, ['devtools'])).toEqual({ ok: false });
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await readFocusFill(BRAND, ['comp'])).toEqual({ ok: false });
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    db.answers.competitors = { data: null, error: { message: 'down' } };
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(await readFocusFill(BRAND, ['comp'])).toEqual({ ok: false });
+    errorLog.mockRestore();
   });
 });

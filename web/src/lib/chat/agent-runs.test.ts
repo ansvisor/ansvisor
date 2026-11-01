@@ -18,7 +18,11 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
 vi.mock('@/lib/mcp/account', () => ({
   getAiUsageFor: vi.fn(async () => ({ active_plan: true, unlimited: false, percent_used: 5 })),
 }));
-vi.mock('./key', () => ({ resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })) }));
+const ownKey = vi.hoisted(() => ({ failing: null as { class: string; provider: string } | null }));
+vi.mock('./key', () => ({
+  resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
+  failingOwnKey: vi.fn(async () => ownKey.failing),
+}));
 vi.mock('./agent-shares', () => ({ readAgentShares: vi.fn(async () => null) }));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
@@ -65,6 +69,7 @@ function startNext(args: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+  ownKey.failing = null;
   seedWorkspace(db);
   db.unique = { ...db.unique, chat_agents: [['organization_id', 'name']] };
   const iso = () => NOW.toISOString();
@@ -139,13 +144,60 @@ describe('Run now', () => {
     expect(one).toMatchObject({ ok: true, value: { runs: [{ brand: 'Brand A' }] } });
   });
 
+  it('refuses before queuing anything when a brand lacks a Required connection, naming both', async () => {
+    const id = await agentOf(PEOPLE.manager, { skills: ['publish'] });
+    // Brand A sends pages to WordPress; Brand B has no CMS.
+    db.tables.brand_cms_connections = [
+      { brand_id: BRAND, provider: 'wordpress', status: 'connected' },
+    ];
+    const ctx = await ctxOf(PEOPLE.manager);
+    const result = await runs.runAgentNow(ctx, id, {}, NOW, null);
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: {
+        status: 409,
+        code: 'connection_missing',
+        message:
+          'This agent needs Any CMS, and Brand B doesn’t have it connected. Connect it for that brand, then run the agent again.',
+      },
+    });
+    // Nothing half-run: not even Brand A's run is queued.
+    expect(runRows()).toEqual([]);
+    // The brand that has one runs.
+    expect(await runs.runAgentNow(ctx, id, { brandId: BRAND }, NOW, null)).toMatchObject({
+      ok: true,
+      value: { runs: [{ brand: 'Brand A', status: 'queued' }] },
+    });
+  });
+
+  it('refuses while the workspace’s own key fails, queuing nothing on any brand (409)', async () => {
+    const id = await agentOf(PEOPLE.manager, { skills: ['winback'] });
+    ownKey.failing = { class: 'no_credit', provider: 'openai' };
+    const result = await runs.runAgentNow(await ctxOf(PEOPLE.manager), id, {}, NOW, null);
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: {
+        status: 409,
+        code: 'own_key_failed',
+        message:
+          'Your OpenAI account is out of credit. An Admin can fix it in Settings › AI Providers, then run the agent again.',
+      },
+    });
+    expect(runRows()).toEqual([]);
+  });
+
   it('starts it in a free slot when a driver can take it, with the plan’s runs at once', async () => {
     const id = await agentOf(PEOPLE.manager, { scope: { brand_ids: [BRAND] } });
     const driver = vi.fn(async () => {});
     const result = await runs.runAgentNow(await ctxOf(PEOPLE.manager), id, {}, NOW, driver);
     expect(result).toMatchObject({ ok: true, value: { runs: [{ status: 'running' }] } });
     const started = runRows()[0];
-    expect(driver).toHaveBeenCalledWith({ id: started.id, organizationId: ORG });
+    // Started in the person's own request: their session goes with it.
+    expect(driver).toHaveBeenCalledWith({
+      id: started.id,
+      organizationId: ORG,
+      sessionUserId: PEOPLE.manager,
+    });
     // Growth: 5 agent runs at once.
     expect(db.log.filter(([name]) => name === 'chat_start_next_agent_run').length).toBeGreaterThan(
       0,
@@ -347,6 +399,27 @@ describe('Run agent on an action', () => {
     db.rpcs.action_entity_counts = () => [];
   });
 
+  it('refuses Run agent when the action’s brand lacks a Required connection, queuing nothing', async () => {
+    const id = await agentOf(PEOPLE.manager, { skills: ['shopping'] });
+    const result = await runs.runAgentOnAction(await ctxOf(PEOPLE.manager), id, ACTION, NOW, null);
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'connection_missing',
+        detail: { name: 'Any catalog source', brand: 'Brand B' },
+      },
+    });
+    expect(runRows()).toEqual([]);
+  });
+
+  it('refuses Run agent while the workspace’s own key fails, queuing nothing', async () => {
+    const id = await agentOf(PEOPLE.manager, { skills: ['winback'] });
+    ownKey.failing = { class: 'invalid', provider: 'anthropic' };
+    const result = await runs.runAgentOnAction(await ctxOf(PEOPLE.manager), id, ACTION, NOW, null);
+    expect(result).toMatchObject({ ok: false, refusal: { status: 409, code: 'own_key_failed' } });
+    expect(runRows()).toEqual([]);
+  });
+
   it('queues one run on the action’s brand, scoped to it, as the person who clicked', async () => {
     const id = await agentOf(PEOPLE.manager, { name: 'Citation win-back' });
     const result = await runs.runAgentOnAction(await ctxOf(PEOPLE.manager), id, ACTION, NOW, null);
@@ -527,6 +600,7 @@ describe('Run agent on an action', () => {
       ok: true,
       value: { run: { status: 'running', chatId: 'chat-1' } },
     });
+    expect(driver).toHaveBeenCalledWith(expect.objectContaining({ sessionUserId: PEOPLE.manager }));
   });
 
   it('refuses a closed action, an agent that doesn’t cover its brand, and Analysts', async () => {

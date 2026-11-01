@@ -17,7 +17,7 @@ import { searchChatReferences } from '@/lib/actions/chat-references';
 import { ANSWER_MAX, composerAnswer, recommendedLabel } from '@/lib/chat/asks';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import { ghostOf } from '@/lib/chat/next-moves';
-import type { ChatEvent } from '@/lib/chat/events';
+import type { ChatEvent, ChatTaskStrip } from '@/lib/chat/events';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { readSse } from '@/lib/chat/run-hub';
 import {
@@ -48,6 +48,8 @@ import { NextMoves } from './run/next-moves';
 import { RunAnswer } from './run/run-answer';
 import { StaffDebug } from './run/staff-debug';
 import { useChatDebug } from './chat-debug';
+import type { FailingKey } from '@/lib/chat/key-health';
+import { ChatKeyNotice } from './own-key-notice';
 import { ChatUsageNotice, ComposerUsageMeter, chatAtCap } from './chat-usage';
 
 interface Turn {
@@ -113,6 +115,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         dataAsOf: message.dataAsOf,
         summary: message.run.summary ?? null,
         errorReason: message.run.errorReason ?? null,
+        keyFailed: message.run.keyFailed ?? false,
       };
     }
     return turn;
@@ -174,6 +177,7 @@ export function ChatThreadView({
   pageRoute,
   draft,
   onOwnKey = false,
+  keyFailure = null,
   skills,
 }: {
   thread: ChatThread | null;
@@ -198,6 +202,8 @@ export function ChatThreadView({
   draft?: ComposerDraft | null;
   /** Chat runs on the workspace's own key: a used-up allowance doesn't pause it. */
   onOwnKey?: boolean;
+  /** That own key is marked failing: one line over the composer (AGENT-OWN-KEY §5.2 item 5). */
+  keyFailure?: FailingKey | null;
   /** The enabled skills, for the / menu (CHAT-13 item 5). */
   skills?: ChatSkillItem[];
 }) {
@@ -591,6 +597,12 @@ export function ChatThreadView({
                   onSkip={() => answer(turn, 'skip')}
                   onAnswerQuestion={(value) => answerQuestion(turn, value)}
                   onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
+                  canChangeTasks={canManage && (!thread || thread.mine)}
+                  onTasks={(strip) =>
+                    updateRun(turn.key, (was) =>
+                      was.run ? { ...was, run: { ...was.run, tasks: strip } } : was,
+                    )
+                  }
                   onRetry={retryOf(index)}
                   onSendToActionCenter={sendToActionCenterOf(index)}
                 />
@@ -623,7 +635,10 @@ export function ChatThreadView({
         }
       >
         {(!thread || thread.mine) && (
-          <ChatUsageNotice seenPeriod={usageNoticeSeen} onOwnKey={onOwnKey} />
+          <>
+            <ChatKeyNotice failing={keyFailure} />
+            <ChatUsageNotice seenPeriod={usageNoticeSeen} onOwnKey={onOwnKey} />
+          </>
         )}
         <ChatComposer
           variant={variant}
@@ -687,6 +702,8 @@ function Answer({
   onSkip,
   onAnswerQuestion,
   onFiled,
+  canChangeTasks,
+  onTasks,
   onRetry,
   onSendToActionCenter,
 }: {
@@ -697,6 +714,10 @@ function Answer({
   onSkip: () => Promise<void>;
   onAnswerQuestion: (value: QuestionAnswerValue) => Promise<boolean>;
   onFiled: (fileId: string) => void;
+  /** Its deliverables' Attach to task & mark done (CHAT-09 item 13): Admins and Managers, in their own chat. */
+  canChangeTasks: boolean;
+  /** The run's task strip after such a click. */
+  onTasks: (strip: ChatTaskStrip) => void;
   /** Sends its question again; none while another run works, or on a teammate's chat. */
   onRetry?: () => void;
   /** Send to Action Center (CHAT-09 item 18): the latest answer, for Admins and Managers. */
@@ -781,6 +802,8 @@ function Answer({
             // Its place among the filed ones, as the server counts them: one not filed has none.
             n={filedAt[i] ?? 0}
             deliverable={deliverable}
+            canChange={canChangeTasks}
+            onTasks={onTasks}
           />
         ))}
       {run.sent.map((sent, i) => (

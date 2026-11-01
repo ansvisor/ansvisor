@@ -45,7 +45,9 @@ export function menuSectionsFor(chatAgentic: boolean): string[] {
 
 /**
  * What a person works on or leads, with the sections that work needs. They
- * follow the audiences on ansvisor.com › Solutions.
+ * follow the audiences on ansvisor.com › Solutions. Agent Center is in every
+ * area Chat is in, right after it; AEO/GEO & Audit, Developers and Analytics
+ * have it without Chat, right after Action Center.
  */
 export const WORK_AREAS = [
   {
@@ -63,7 +65,7 @@ export const WORK_AREAS = [
   },
   {
     id: 'aeo',
-    sections: ['action-center', 'content', 'audit', 'citations', 'traffic', 'reports'],
+    sections: ['action-center', 'agents', 'content', 'audit', 'citations', 'traffic', 'reports'],
   },
   {
     id: 'content',
@@ -125,12 +127,13 @@ export const WORK_AREAS = [
   },
   {
     id: 'developers',
-    sections: ['action-center', 'audit', 'prompts', 'citations', 'traffic', 'reports'],
+    sections: ['action-center', 'agents', 'audit', 'prompts', 'citations', 'traffic', 'reports'],
   },
   {
     id: 'analytics',
     sections: [
       'action-center',
+      'agents',
       'insights',
       'competitors',
       'prompts',

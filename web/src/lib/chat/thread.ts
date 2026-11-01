@@ -13,7 +13,7 @@ import {
 import { clientMove } from './next-moves';
 import { applyChatEvent, emptyRun } from './run-state';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
-import { readStrips, weekEndIn } from './task-strip';
+import { readDeliverableTasks, readStrips, weekEndIn, type DeliverableTask } from './task-strip';
 import type { WhyResult } from './why/explain';
 import { whyView, type ChatWhy } from './why/view';
 
@@ -46,6 +46,8 @@ export interface ThreadRun {
   summary: ChatRunSummary | null;
   /** Why it ended in error, in its run.error event's words; null without them. */
   errorReason: string | null;
+  /** It ended because the workspace's own AI key failed (run.error `own_key`). */
+  keyFailed: boolean;
   /** What could come next once it finished (CHAT-07 §C), best first. */
   nextMoves: ChatNextMove[];
   /** What it sent to the Action Center (CHAT-09 item 19), in order. */
@@ -101,6 +103,7 @@ const SENT_EVENT = 'action.sent';
 interface RunEnd {
   summary: ChatRunSummary | null;
   errorReason: string | null;
+  keyFailed: boolean;
   sent: ChatActionSent[];
 }
 const ENDED: readonly string[] = ['done', 'stopped', 'error', 'paused_cap'];
@@ -132,7 +135,12 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
     data: unknown;
   }[]) {
     if (!isChatEventType(row.type) || !row.data || typeof row.data !== 'object') continue;
-    const kept = ends.get(row.run_id) ?? { summary: null, errorReason: null, sent: [] };
+    const kept = ends.get(row.run_id) ?? {
+      summary: null,
+      errorReason: null,
+      keyFailed: false,
+      sent: [],
+    };
     if (row.type === SENT_EVENT) {
       ends.set(row.run_id, { ...kept, sent: [...kept.sent, row.data as ChatActionSent] });
       continue;
@@ -142,7 +150,12 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
       seq: row.seq,
       data: row.data,
     } as Parameters<typeof applyChatEvent>[1]);
-    ends.set(row.run_id, { ...kept, summary: run.summary, errorReason: run.errorReason });
+    ends.set(row.run_id, {
+      ...kept,
+      summary: run.summary,
+      errorReason: run.errorReason,
+      keyFailed: run.keyFailed,
+    });
   }
   return ends;
 }
@@ -275,6 +288,12 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   // An answer saved to Files names its message; what a run made doesn't.
   const fileByRun = new Map<string, string>();
   const madeByRun = new Map<string, ChatDeliverable[]>();
+  const madeIds = ((files.data ?? []) as FileRow[]).filter((f) => f.run_id && !f.message_id);
+  const tasksOfFiles = await readFileTasks(
+    supabase,
+    conversationId,
+    madeIds.map((f) => f.id),
+  );
   for (const f of (files.data ?? []) as FileRow[]) {
     if (!f.run_id) continue;
     if (f.message_id) {
@@ -290,6 +309,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         status: f.status,
         ...(f.content_draft_id ? { href: `/dashboard/content/editor/${f.content_draft_id}` } : {}),
         filed: 'in_files',
+        ...(tasksOfFiles.has(f.id) ? { task: tasksOfFiles.get(f.id) } : {}),
       },
     ]);
   }
@@ -309,6 +329,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         deliverables: madeByRun.get(run.id) ?? [],
         summary: ends.get(run.id)?.summary ?? null,
         errorReason: ends.get(run.id)?.errorReason ?? null,
+        keyFailed: ends.get(run.id)?.keyFailed ?? false,
         nextMoves: movesByRun.get(run.id) ?? [],
         sent: ends.get(run.id)?.sent ?? [],
         tasks: strips.get(run.id) ?? null,
@@ -360,6 +381,20 @@ async function readThreadStrips(
     return strips;
   } catch (err) {
     console.error("[chat/thread] could not read the chat's task strip:", err);
+    return new Map();
+  }
+}
+
+/** The tasks of the chat's deliverables (CHAT-09 item 12), read as the person; a failed read loses them, not the chat. */
+async function readFileTasks(
+  db: Awaited<ReturnType<typeof createClient>>,
+  conversationId: string,
+  fileIds: string[],
+): Promise<Map<string, DeliverableTask>> {
+  try {
+    return await readDeliverableTasks(db, conversationId, fileIds);
+  } catch (err) {
+    console.error("[chat/thread] could not read the deliverables' tasks:", err);
     return new Map();
   }
 }

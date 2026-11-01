@@ -5,8 +5,9 @@
  */
 
 import type { IntegrationProvider } from '@/lib/actions/integrations';
+import type { TrafficSources } from '@/lib/actions/traffic';
 
-/** A snippet with no visit for this long reads as not detected, and its code box opens. */
+/** A snippet with an AI visit this recent reads as active. */
 export const SNIPPET_ACTIVE_DAYS = 7;
 
 const DAY_MS = 86_400_000;
@@ -15,6 +16,34 @@ const DAY_MS = 86_400_000;
 export function snippetDetected(lastVisitAt: string | null, now = Date.now()): boolean {
   if (!lastVisitAt) return false;
   return now - new Date(lastVisitAt).getTime() < SNIPPET_ACTIVE_DAYS * DAY_MS;
+}
+
+/**
+ * Where the tracking snippet stands, as AI Traffic, MCP and Chat say it:
+ * active with an AI visit in the last week; installed and quiet when the
+ * home page check found it (00433) or any AI visit was ever stored; else
+ * not detected, where "0 visits" means nothing yet. The snippet sends
+ * nothing for other visitors, so a quiet one is only seen by the check.
+ */
+export type SnippetState = 'not_detected' | 'installed_quiet' | 'active';
+
+export function snippetState(
+  snippet: { lastVisitAt: string | null; foundAt: string | null },
+  now = Date.now(),
+): SnippetState {
+  if (snippetDetected(snippet.lastVisitAt, now)) return 'active';
+  return snippet.lastVisitAt || snippet.foundAt ? 'installed_quiet' : 'not_detected';
+}
+
+/** The snippet's state from the page's sources read. */
+export function snippetStateOf(
+  sources: Pick<TrafficSources, 'snippetLastVisitAt' | 'snippetFoundAt'>,
+  now = Date.now(),
+): SnippetState {
+  return snippetState(
+    { lastVisitAt: sources.snippetLastVisitAt, foundAt: sources.snippetFoundAt },
+    now,
+  );
 }
 
 /**

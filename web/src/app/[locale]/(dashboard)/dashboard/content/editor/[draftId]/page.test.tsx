@@ -9,6 +9,7 @@ import { PlanProvider } from '@/components/providers/plan-provider';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
+import type { ContentAuthor } from '@/lib/content/authors';
 import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
@@ -36,6 +37,10 @@ const confirmOwnImage = vi.fn();
 const getBrandFacts = vi.fn();
 const checkDraftLinks = vi.fn();
 const getSiteTrust = vi.fn();
+// No white label kit: downloads keep Ansvisor's names (export-name.test.ts has a kit's).
+vi.mock('@/lib/actions/white-label', () => ({
+  getExportBranding: async () => ({ ok: true, branding: null }),
+}));
 vi.mock('@/lib/actions/audits', () => ({
   getSiteTrust: (...args: unknown[]) => getSiteTrust(...args),
 }));
@@ -635,10 +640,11 @@ describe('the content editor', () => {
         await renderPage();
         expect(getMyRuleSets).toHaveBeenCalledTimes(1);
         const items = await openTypes();
-        expect(items.slice(0, 4).map((item) => item.textContent)).toEqual([
+        expect(items.slice(0, 5).map((item) => item.textContent)).toEqual([
           'B2B SaaS',
           'E-commerce',
           'B2C',
+          'Mobile app',
           'Feature page',
         ]);
         // No site type picked yet: the one shown is guessed.
@@ -654,7 +660,7 @@ describe('the content editor', () => {
         expect(getMyRuleSets).toHaveBeenCalledTimes(2);
         // A shop's page types now, the type picked kept on the list.
         const types = (await openTypes()).map((item) => item.textContent);
-        expect(types.slice(3, 5)).toEqual(['Product page', 'Category page']);
+        expect(types.slice(4, 6)).toEqual(['Product page', 'Category page']);
         expect(types.at(-1)).toBe('Feature page');
 
         // Kept as it was when it can't be saved.
@@ -664,7 +670,7 @@ describe('the content editor', () => {
           document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')[2].click(),
         );
         expect(toast.error).toHaveBeenCalledWith("Couldn't change the site type. Try again.");
-        expect((await openTypes())[3].textContent).toBe('Product page');
+        expect((await openTypes())[4].textContent).toBe('Product page');
       });
 
       it('saves a detected page type again for the new site type', async () => {
@@ -2665,6 +2671,68 @@ describe('the content editor', () => {
     // The block went in where the cursor was: the start, as nothing was clicked.
     expect(writeText).toHaveBeenLastCalledWith(`${code}\n<h1>Trail Runner X</h1>`);
     expect(toast.success).toHaveBeenLastCalledWith('HTML copied');
+  });
+
+  const reviewerAuthor: ContentAuthor = {
+    id: 'r1',
+    name: 'Dr. Grace Hopper',
+    title: 'Clinical Reviewer',
+    bio: null,
+    photoUrl: null,
+    sameAs: [],
+    userId: null,
+    createdBy: 'u1',
+    defaultFor: [],
+    pages: 0,
+  };
+  /** Copy HTML with Quality on and Dr. Grace Hopper picked as the reviewer. */
+  const copyWithReviewer = async (bodyHtml: string) => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    getContentAuthors.mockResolvedValue({
+      authors: [reviewerAuthor],
+      brands: [{ id: 'b1', name: 'Acme' }],
+      me: { id: 'u1', role: 'analyst' },
+    });
+    process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+    try {
+      getContentDraft.mockResolvedValue(draft({ reviewerId: 'r1', bodyHtml }));
+      await renderPage();
+      await act(async () => button('Copy HTML')!.click());
+      return writeText.mock.calls[0][0] as string;
+    } finally {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    }
+  };
+
+  it('copies the reviewer as WebPage metadata once the page names them', async () => {
+    const copied = await copyWithReviewer(
+      '<h1>Pipeline</h1><p>Reviewed by Dr. Grace Hopper</p><p>Teams trust it.</p>',
+    );
+    expect(copied).toMatch(/"@type":\s*"WebPage"/);
+    expect(copied).toContain('"reviewedBy"');
+    expect(copied).toMatch(/"name":\s*"Dr\. Grace Hopper"/);
+  });
+
+  it('copies no reviewedBy while the page doesn’t name the reviewer, as Before you publish says', async () => {
+    const copied = await copyWithReviewer('<h1>Pipeline</h1><p>Teams trust it.</p>');
+    expect(copied).toContain('<p>Teams trust it.</p>');
+    expect(copied).not.toContain('reviewedBy');
+  });
+
+  it('copies and exports as before with Quality off: no reviewer, no authors read', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    getContentDraft.mockResolvedValue(
+      draft({
+        reviewerId: 'r1',
+        bodyHtml: '<h1>Pipeline</h1><p>Reviewed by Dr. Grace Hopper</p>',
+      }),
+    );
+    await renderPage();
+    await act(async () => button('Copy HTML')!.click());
+    expect(writeText.mock.calls[0][0]).not.toContain('reviewedBy');
+    expect(getContentAuthors).not.toHaveBeenCalled();
   });
 
   it('exports the page from the header, as Markdown here', async () => {

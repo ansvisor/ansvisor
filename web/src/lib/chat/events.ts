@@ -23,6 +23,8 @@
  * (isChatEventType), so a newer server never breaks an open page.
  */
 
+import type { KeyFailureClass } from '@/lib/agent/key-errors';
+import type { AiProvider } from '@/lib/agent/providers';
 import type { ChatWhy } from './why/view';
 
 // ─── Steps ──────────────────────────────────────────────────────────────────
@@ -244,6 +246,12 @@ export interface ChatDeliverable {
    * file is the run's n-th deliverable, never named by its id here.
    */
   filed?: 'in_files' | 'storage_full' | 'failed';
+  /**
+   * The Action Center task it was drafted for (CHAT-09 item 12): "Task:
+   * {title}" on its card, with Attach to task & mark done; `done` once
+   * Action Center has the task completed. None when that isn't certain.
+   */
+  task?: { title: string; state: 'open' | 'done' };
 }
 
 /**
@@ -297,9 +305,15 @@ export interface ChatEventPayloads {
   'run.finished': ChatRunSummary & { generatedAt: string; dataAsOf: string | null };
   /**
    * code: a standard result code (CHAT-20 §11a); the browser shows its words,
-   * or `reason`, the server's own plain words when it has them.
+   * or `reason`, the server's own plain words when it has them. `own_key`:
+   * the workspace's own AI key failed, `keyFailure` saying why and whose
+   * (AGENT-OWN-KEY §5.2); `provider_down`: the provider didn't answer.
    */
-  'run.error': ChatRunSummary & { code: 'failed' | 'timeout'; reason?: string };
+  'run.error': ChatRunSummary & {
+    code: 'failed' | 'timeout' | 'own_key' | 'provider_down';
+    reason?: string;
+    keyFailure?: { class: KeyFailureClass; provider: AiProvider };
+  };
   /**
    * The next step would pass a limit: the month's AI limit (CHAT-04 item
    * 17), or with `limit: 'run'` an agent run's own cap (CHAT-27 item 22).

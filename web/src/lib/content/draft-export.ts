@@ -2,6 +2,7 @@ import type { Sheet } from 'write-excel-file/browser';
 import { BYTE_ORDER_MARK } from '@/lib/action-center/export';
 import { toCsv } from '@/lib/csv';
 import { slugify } from '@/lib/slug';
+import { withFileWord } from '@/lib/white-label/kit';
 import { ELEMENT_NODE, TEXT_NODE, parseHtml } from './dom';
 import { safeLinkHref } from './editor';
 import { pageFields, withoutLeadingH1 } from './ready-to-publish';
@@ -39,7 +40,7 @@ export interface ExportFields {
   /** Markdown's front matter, in order. */
   front: Record<string, string>;
   /** HTML's head. */
-  head: { title: string; description: string; author: string };
+  head: { title: string; description: string; author: string; reviewer?: string };
 }
 
 /** A stretch of text with one format; a link carries its address. */
@@ -223,6 +224,9 @@ export function draftHtmlDocument(title: string, html: string, fields?: ExportFi
       ? [`<meta name="description" content="${escapeAttribute(head.description)}">`]
       : []),
     ...(head?.author ? [`<meta name="author" content="${escapeAttribute(head.author)}">`] : []),
+    ...(head?.reviewer
+      ? [`<meta name="reviewed-by" content="${escapeAttribute(head.reviewer)}">`]
+      : []),
     '</head>',
     '<body>',
     html.trim(),
@@ -381,14 +385,22 @@ export function docxBlocks(m: Docx, blocks: DraftBlock[]): DocxChild[] {
 /**
  * A Word document of sections, each starting on a page of its own, with the
  * lists' numbering; `note`, when given, is a small grey line in every page's
- * header and footer (Chat's "Generated …" line, CHAT-06 item 40).
+ * header and footer (Chat's "Generated …" line, CHAT-06 item 40). `author`,
+ * when given, is its author (a white label kit's company, 00429).
  */
-export function docxDocument(m: Docx, title: string, sections: DocxChild[][], note?: string) {
+export function docxDocument(
+  m: Docx,
+  title: string,
+  sections: DocxChild[][],
+  note?: string,
+  author?: string,
+) {
   const noteLine = () => [
     new m.Paragraph({ children: [new m.TextRun({ text: note, size: 16, color: '6B7280' })] }),
   ];
   return new m.Document({
     title,
+    ...(author ? { creator: author, lastModifiedBy: author } : {}),
     numbering: {
       config: [
         {
@@ -420,7 +432,12 @@ export function docxDocument(m: Docx, title: string, sections: DocxChild[][], no
  * on the page; the page fields, if any, as a table on page 1 to delete or
  * keep.
  */
-export async function draftDocx(title: string, html: string, fields?: ExportFields): Promise<Blob> {
+export async function draftDocx(
+  title: string,
+  html: string,
+  fields?: ExportFields,
+  author?: string,
+): Promise<Blob> {
   // Loaded on the click: the library is only needed to write the file.
   const m = await import('docx');
   const blocks = draftBlocks(title, html);
@@ -440,14 +457,15 @@ export async function draftDocx(title: string, html: string, fields?: ExportFiel
   const sections = table.length
     ? [docxBlocks(m, table), docxBlocks(m, blocks)]
     : [docxBlocks(m, blocks)];
-  return m.Packer.toBlob(docxDocument(m, name, sections));
+  return m.Packer.toBlob(docxDocument(m, name, sections, undefined, author));
 }
 
 /**
  * The file for a format: Word and Excel built on the click, CSV, HTML and
  * Markdown as UTF-8 text; with the page fields, each carries them its own way.
  * `sourceUrl` is the live page an optimize draft is for: without Export's
- * fields, Excel's and CSV's slug is its, as Export's is.
+ * fields, Excel's and CSV's slug is its, as Export's is. `author` is the Word
+ * file's (a white label kit's company).
  */
 export async function draftExportBlob(
   format: DraftExportFormat,
@@ -455,8 +473,9 @@ export async function draftExportBlob(
   html: string,
   fields?: ExportFields,
   sourceUrl: string | null = null,
+  author?: string,
 ): Promise<Blob> {
-  if (format === 'docx') return draftDocx(title, html, fields);
+  if (format === 'docx') return draftDocx(title, html, fields, author);
   if (format === 'csv') {
     // The mark tells Excel the file is UTF-8, as the Library's CSV does.
     return new Blob([BYTE_ORDER_MARK, pageCsv(title, html, fields, sourceUrl)], {
@@ -473,10 +492,17 @@ export async function draftExportBlob(
     : new Blob([draftMarkdown(title, html, fields)], { type: 'text/markdown;charset=utf-8' });
 }
 
-/** "ansvisor_content_pipeline-forecasting.docx". */
-export function draftExportFileName(title: string, format: DraftExportFormat): string {
+/**
+ * "ansvisor_content_pipeline-forecasting.docx"; `word` is a white label
+ * kit's in its place (exportFileWord), or none.
+ */
+export function draftExportFileName(
+  title: string,
+  format: DraftExportFormat,
+  word: string | null = 'ansvisor',
+): string {
   const slug = slugify(title).slice(0, 60).replace(/-+$/, '') || 'page';
-  return `ansvisor_content_${slug}.${format}`;
+  return withFileWord(word, `content_${slug}.${format}`);
 }
 
 // ─── The Library's Export (CE-002) ──────────────────────────────────────────
@@ -617,7 +643,7 @@ export function libraryWorkbook(items: LibraryExportItem[]): Sheet<Blob>[] {
  * Export Word: every draft in one document, each from a page of its own,
  * under a line saying where it stands.
  */
-export async function libraryDocx(items: LibraryExportItem[]): Promise<Blob> {
+export async function libraryDocx(items: LibraryExportItem[], author?: string): Promise<Blob> {
   const m = await import('docx');
   // One count for the whole file, so a list doesn't go on from another page's.
   const counter = { lists: 0 };
@@ -641,17 +667,31 @@ export async function libraryDocx(items: LibraryExportItem[]): Promise<Blob> {
     }),
     ...docxBlocks(m, draftBlocks(item.title, item.html, counter)),
   ]);
-  return m.Packer.toBlob(docxDocument(m, 'Content Library', sections));
+  return m.Packer.toBlob(docxDocument(m, 'Content Library', sections, undefined, author));
 }
 
-/** "ansvisor_content_library_in-review_2026-10-22.xlsx". */
-export function libraryExportFileName(tab: string, format: LibraryExportFormat, now: Date): string {
-  return `ansvisor_content_library_${tab.replace(/_/g, '-')}_${now.toISOString().slice(0, 10)}.${format}`;
+/**
+ * "ansvisor_content_library_in-review_2026-10-22.xlsx"; `word` is a white
+ * label kit's in its place, or none.
+ */
+export function libraryExportFileName(
+  tab: string,
+  format: LibraryExportFormat,
+  now: Date,
+  word: string | null = 'ansvisor',
+): string {
+  return withFileWord(
+    word,
+    `content_library_${tab.replace(/_/g, '-')}_${now.toISOString().slice(0, 10)}.${format}`,
+  );
 }
 
 // ─── One page as a spreadsheet row ──────────────────────────────────────────
 
-/** The page's CSV and sheet header: a CMS's CSV import maps each to a field. */
+/**
+ * The page's CSV and sheet header: a CMS's CSV import maps each to a field.
+ * A new column goes last, so an import that maps them by position still fits.
+ */
 export const PAGE_SHEET_HEADERS = [
   'Title',
   'Meta title',
@@ -662,6 +702,7 @@ export const PAGE_SHEET_HEADERS = [
   'Characters',
   'Content',
   'HTML',
+  'Reviewed by',
 ];
 
 /** Export's page fields as front matter, read from the page where Export gives none. */
@@ -679,6 +720,8 @@ function frontOf(
     title: read.metaTitle,
     description: read.metaDescription,
     slug: read.slug,
+    author: read.author,
+    reviewed_by: read.reviewer,
     image: read.featuredImage ?? '',
   };
 }
@@ -709,6 +752,7 @@ export function pageSheetRow(
     content.replace(/\n/g, '').length,
     content,
     body,
+    front.reviewed_by ?? '',
   ];
   return Object.fromEntries(PAGE_SHEET_HEADERS.map((header, i) => [header, values[i]]));
 }
@@ -744,6 +788,7 @@ export function pageWorkbook(
         { width: 11 },
         { width: 80 },
         { width: 80 },
+        { width: 38 },
       ],
       data: [
         PAGE_SHEET_HEADERS.map((value) => ({ value, fontWeight: 'bold' as const })),

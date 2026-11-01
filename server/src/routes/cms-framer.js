@@ -54,7 +54,14 @@ const mapInput = z.object({
   collectionId: framerId.min(1),
   // The parts of a page, each a field's id or none; no other key.
   fieldMap: z
-    .object({ title: part, body: part, metaTitle: part, metaDescription: part, jsonLd: part })
+    .object({
+      title: part,
+      body: part,
+      metaTitle: part,
+      metaDescription: part,
+      jsonLd: part,
+      reviewer: part,
+    })
     .strict(),
 });
 

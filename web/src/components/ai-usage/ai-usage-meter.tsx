@@ -47,6 +47,8 @@ const LABEL_KEY = {
   unlimited: 'meter.label',
 } as const satisfies Record<UsageTone, string>;
 
+const ALIGN_CLASS = { start: 'sm:items-start', end: 'sm:items-end' } as const;
+
 /**
  * A page's header row with the AI usage meter at its far right, on the
  * title's line (AI usage spec §3.1): the same place on every page, however
@@ -56,23 +58,30 @@ const LABEL_KEY = {
  * page spaces its parts; `banner={false}` leaves it to the page, for a row
  * with more of its header under it. Chat's "Ask Chat" follows the meter, at
  * the top right of the page (CHAT-01 item 13); `askChat={false}` leaves it
- * out, for a row in a drawer.
+ * out, for a row in a drawer. Both are a default button's height, so the
+ * page's own header buttons line up with them when they are one too and sit
+ * where `align` puts them: at the top, on the title's line (most pages), or
+ * at the bottom, beside controls with a label above them (a date range).
  */
 export function HeaderWithAiUsage({
   children,
   banner = true,
   askChat = true,
+  align = 'start',
   className,
 }: {
   children: ReactNode;
   banner?: boolean;
   askChat?: boolean;
+  align?: 'start' | 'end';
   /** On the header row: room for a drawer's close button, for one. */
   className?: string;
 }) {
   return (
     <>
-      <div className={cn('flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3', className)}>
+      <div
+        className={cn('flex flex-col gap-2 sm:flex-row sm:gap-3', ALIGN_CLASS[align], className)}
+      >
         <div className="min-w-0 sm:flex-1">{children}</div>
         <AiUsageMeter className="self-end sm:self-auto" />
         {askChat && <AskChatButton className="self-end sm:self-auto" />}
@@ -263,13 +272,20 @@ export function AiUsageMeter({
               )}
             </p>
           )}
+          {/* With the new Chat on (chatMetered), an own key runs it only on
+            Enterprise or for a key kept from before it (ownKeyAllowed), so
+            the line says where Chat keeps working. */}
           {tone === 'exhausted' && (
             <p className="mt-2 text-xs text-red-700 dark:text-red-400">
               {usage.trial
-                ? t('popover.exhaustedTrial')
+                ? t(usage.chatMetered ? 'popover.exhaustedTrialChat' : 'popover.exhaustedTrial')
                 : resets
-                  ? t('popover.exhausted', { date: resets })
-                  : t('popover.exhaustedNoDate')}
+                  ? t(usage.chatMetered ? 'popover.exhaustedChat' : 'popover.exhausted', {
+                      date: resets,
+                    })
+                  : t(
+                      usage.chatMetered ? 'popover.exhaustedNoDateChat' : 'popover.exhaustedNoDate',
+                    )}
             </p>
           )}
 

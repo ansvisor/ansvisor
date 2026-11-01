@@ -24,6 +24,7 @@ Fed to the Next.js app. Variables prefixed with `NEXT_PUBLIC_` are exposed to th
 | `STRIPE_WEBHOOK_SECRET` | cloud only | Stripe webhook signing secret |
 | `CRON_SECRET` | cloud; self-host with Chat | Shared secret the web app sends to the server's internal endpoints: Vercel cron, and Chat's AI budget for each model step when `CHAT_AGENTIC` is on. Self-hosted with Chat on, set it here and in the server's `.env` to the same value, or Chat can't answer. |
 | `CHAT_INTERNAL_SECRET` | optional | With the new Chat on (`CHAT_AGENTIC=true`): the secret the server sends to this app's `/api/internal/chat/agents/*` endpoints, which fire agent schedules and Signal triggers and sweep agent runs. Same value as the server's. Unset: agents run only with **Run now**. Generate with `openssl rand -hex 32` |
+| `CHAT_ACTING_SECRET` | optional | With the new Chat on (`CHAT_AGENTIC=true`): the secret this app sends to the API server, with `X-Acting-User: <member id>`, for an agent's triggered run's writes there (an opportunity's status, a dismissed prompt suggestion, Send to Action Center, Site Audit, a report's summary), which have no one's session. A secret of its own, not `CHAT_INTERNAL_SECRET`'s value; same value as the server's. At least 32 characters; unset or shorter: the server refuses those writes. Generate with `openssl rand -hex 32` |
 
 \* You need **at least one AI provider key** for tracking to work. Configure providers per-brand in the dashboard.
 
@@ -45,9 +46,10 @@ Fed to the Express API + workers.
 | `TOPIC_SUGGESTION_MODEL` | optional | LLM for topic suggestions |
 | `PROMPT_SUGGESTION_MODEL` | optional | LLM for prompt suggestions |
 | `COMPETITOR_SUGGESTION_MODEL` | optional | LLM for competitor suggestions |
+| `TAVILY_API_KEY` | optional | Runs the web search for topic and competitor suggestions through Tavily instead of the model provider's own search tool (useful when a free provider key's search is quota-limited). Each search uses a Tavily credit plus one extra model call. Without it, a quota-limited search falls back to research from the model's own knowledge. |
 | `CONTENT_READ_MODEL` | optional | LLM the Content Editor reads and judges with: the brief (**Rebuild outline**) and Quality's checks. Default: `anthropic/claude-haiku-5-5` when `ANTHROPIC_API_KEY` is set, else `IMPROVE_SUGGESTION_MODEL`, then `DEFAULT_SUGGESTION_MODEL`, then `google/gemini-3-flash-preview`. `QUALITY_CHECK_MODEL`, when set, still picks Quality's model. |
 | `CONTENT_WRITE_MODEL` | optional | LLM the Content Agent writes with: pages written or rewritten whole and its suggestions. Default: `anthropic/claude-sonnet-5-5` when `ANTHROPIC_API_KEY` is set, else the same fallbacks as `CONTENT_READ_MODEL`. A Claude model must support structured outputs (Claude 4.5 models or newer). |
-| `AUDIT_LLM_MODEL` | optional | LLM for the Site Audit's LLM-judged signals + AI recommendations (default: `google/gemini-3-flash-preview`) |
+| `AUDIT_LLM_MODEL` | optional | LLM for the Site Audit's LLM-judged signals + AI recommendations. Use a pinned, versioned id, not a `-preview` or `-latest` alias: each signal's verdict is kept by model id and judged again only when the page or the model changes. Default: `google/gemini-3.8-flash` for the signals, `google/gemini-3-flash-preview` for the recommendations |
 | `ALLOWED_ORIGINS` | ✅ | Comma-separated list of web origins allowed to call the API (for CORS) |
 | `IS_CLOUD` | optional | `"true"` only for the official cloud build |
 | `DATAFORSEO_LOGIN` | optional | DataForSEO login (for prompt volume analysis) |
@@ -60,6 +62,7 @@ Fed to the Express API + workers.
 | `AI_VOLUME_MULTIPLIER` | optional | Estimated AI search adoption rate (default `0.45` = 45% of a prompt's Google volume, the median of its keywords' monthly searches; AI Overviews appear on roughly 43–48% of Google searches) |
 | `CRON_SECRET` | cloud; self-host with Chat | Shared secret with web's `CRON_SECRET` (the same value); protects the internal endpoints: cron, and Chat's AI budget when `CHAT_AGENTIC` is on |
 | `CHAT_INTERNAL_SECRET` | optional | With the new Chat on (`CHAT_AGENTIC=true`): every minute the server calls the web app (`PUBLIC_APP_URL`) to fire agent schedules and sweep agent runs, and after each signal pass sends it the new signals for Signal triggers. Same value as the web's. Unset: agents run only with **Run now**. Not in `NODE_ENV=development`; there, run `node src/scripts/chat-agents-tick.js` |
+| `CHAT_ACTING_SECRET` | optional | With the new Chat on (`CHAT_AGENTIC=true`): an agent's triggered run has no one's session, so the web app's writes through this API for it (an opportunity's status, a dismissed prompt suggestion, Send to Action Center, Site Audit, a report's summary) send this secret with `X-Acting-User: <member id>`, checked as that member's own session would be (their workspace with Chat on, their brand access, their role), on those routes only. A secret of its own, not `CHAT_INTERNAL_SECRET`'s value; same value as the web's. At least 32 characters; unset or shorter: those writes are refused. Generate with `openssl rand -hex 32` |
 
 ## Tips for production
 
