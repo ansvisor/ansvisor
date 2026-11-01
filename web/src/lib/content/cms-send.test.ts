@@ -399,6 +399,28 @@ describe('bulkCmsItems', () => {
     expect(unnamed.page?.html).not.toContain('reviewedBy');
   });
 
+  it('sends an article with both its Article schema and its reviewer’s WebPage node', () => {
+    vi.useFakeTimers({ now: new Date(2026, 10, 1, 12), toFake: ['Date'] });
+    const reviewer = {
+      id: 'r1',
+      name: 'Dr. Grace Hopper',
+      title: 'Clinical Reviewer',
+    } as ContentAuthor;
+    const named = '<h1>Pour-over</h1>\n<p>Reviewed by Dr. Grace Hopper.</p>';
+    const [item] = bulkCmsItems(
+      [source({ reviewer, html: named, schema: schema({ pageType: 'guide' }) })],
+      new Map(),
+    );
+    const nodes = item
+      .page!.html.split('<script type="application/ld+json">')
+      .slice(1)
+      .map((part) => JSON.parse(part.slice(0, part.indexOf('</script>'))));
+    expect(nodes).toEqual([
+      expect.objectContaining({ '@type': 'Article', headline: 'Pour-over' }),
+      expect.objectContaining({ '@type': 'WebPage', reviewedBy: expect.anything() }),
+    ]);
+  });
+
   it('gives each page as the Send dialog would send it, or why it can’t go', () => {
     const items = bulkCmsItems(
       [
