@@ -32,3 +32,22 @@ function chatAgenticOrgs(): string[] {
     .map((id) => id.trim().toLowerCase())
     .filter(Boolean);
 }
+
+/**
+ * Agents that publish and send on their own (AUTONOMOUS-GO-LIVE §9) behind
+ * CHAT_AUTO_GO_LIVE, on top of CHAT_AGENTIC: off unless "true", and
+ * CHAT_AUTO_GO_LIVE_ORGS narrows it as CHAT_AGENTIC_ORGS does. Staff's
+ * rollout list and kill switch on the cloud; a self-hosted operator's own
+ * opt-in. Off, Settings › Chat hides the switch and no agent goes live on
+ * its own. The API server reads the same variables (lib/chat-flag.js).
+ */
+export function autoGoLiveEnabled(organizationId?: string | null): boolean {
+  if (!chatAgenticEnabled(organizationId)) return false;
+  if (process.env.CHAT_AUTO_GO_LIVE !== 'true') return false;
+  const orgs = (process.env.CHAT_AUTO_GO_LIVE_ORGS ?? '')
+    .split(',')
+    .map((id) => id.trim().toLowerCase())
+    .filter(Boolean);
+  if (orgs.length === 0) return true;
+  return !!organizationId && orgs.includes(organizationId.trim().toLowerCase());
+}
