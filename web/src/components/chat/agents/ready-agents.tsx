@@ -11,11 +11,15 @@ import {
   AGENT_PRESETS,
   filterPresets,
   presetFilterOptions,
+  presetFit,
   type AgentPreset,
   type PresetFilter,
+  type PresetFit,
   type PresetLock,
 } from '@/lib/chat/agents/catalog';
+import { siteTypeOf } from '@/lib/content/page-types';
 import { cn } from '@/lib/utils';
+import { useBrandStore } from '@/stores/use-brand-store';
 import { FormulaChips } from './agent-parts';
 import type { AgentWords } from './agent-words';
 
@@ -28,7 +32,9 @@ import type { AgentWords } from './agent-words';
  * on until the person does it there. A Soon card says what it waits for and
  * opens nothing. Analysts and Agency partners see the cards with the line
  * the list gives them. Filters: the goal, and business type, industry and
- * role once a preset carries one.
+ * role once a preset carries one. The agents made for the site type of the
+ * brand on screen, or for one of the person's work areas, come first in
+ * their group, marked For your site type or For your role.
  */
 
 const FILTER_KEYS: Record<PresetFilter, string> = {
@@ -75,11 +81,13 @@ function FilterChip({
 function PresetCard({
   preset,
   lock,
+  fit,
   writer,
   words,
 }: {
   preset: AgentPreset;
   lock: PresetLock | undefined;
+  fit: PresetFit | null;
   writer: boolean;
   words: AgentWords;
 }) {
@@ -100,6 +108,7 @@ function PresetCard({
       data-slot="preset-card"
       data-preset={preset.id}
       data-status={preset.status}
+      data-fit={fit ?? undefined}
       aria-label={name}
       className={cn(
         'flex min-w-0 flex-col gap-[9px] rounded-[14px] border bg-card p-3.5 shadow-[0_1px_2px_rgba(10,10,10,.04)]',
@@ -112,6 +121,14 @@ function PresetCard({
         <h3 className="min-w-0 flex-1 truncate text-sm font-semibold" title={name}>
           {name}
         </h3>
+        {fit && (
+          <span
+            data-slot="preset-fit"
+            className="shrink-0 rounded-full bg-green-100 px-2 py-px text-[11px] font-medium text-green-700 dark:bg-green-950 dark:text-green-300"
+          >
+            {t(`fit.${fit}`)}
+          </span>
+        )}
       </div>
 
       <p className="text-[12.5px] leading-[1.45] text-muted-foreground">
@@ -183,19 +200,25 @@ export function ReadyAgents({
   locks,
   writer,
   words,
+  workAreas = [],
   presets = AGENT_PRESETS,
 }: {
   locks: Record<string, PresetLock>;
   /** Admins and Managers: they make agents. */
   writer: boolean;
   words: AgentWords;
+  /** The person's work areas (Settings › Menu access). */
+  workAreas?: readonly string[];
   /** The catalog; a test's own list otherwise. */
   presets?: readonly AgentPreset[];
 }) {
   const t = useTranslations('chatAgents.ready');
   const options = useMemo(() => presetFilterOptions(presets), [presets]);
   const [picked, setPicked] = useState<Partial<Record<PresetFilter, string | null>>>({});
-  const shown = filterPresets(presets, picked);
+  const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
+  // The brand on screen's site type, guessed while it isn't set; none before the brands load.
+  const viewer = { siteType: activeBrand ? siteTypeOf(activeBrand) : null, workAreas };
+  const shown = filterPresets(presets, picked, viewer);
   const pick = (filter: PresetFilter, value: string | null) =>
     setPicked((was) => ({ ...was, [filter]: value }));
 
@@ -246,6 +269,7 @@ export function ReadyAgents({
             key={preset.id}
             preset={preset}
             lock={locks[preset.id]}
+            fit={presetFit(preset, viewer)}
             writer={writer}
             words={words}
           />

@@ -6,6 +6,22 @@ import messages from '../../../../messages/en.json';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import type { PresetLock } from '@/lib/chat/agents/catalog';
 import { NOW, listResult } from '@/lib/chat/testing/agent-fixtures';
+import { useBrandStore } from '@/stores/use-brand-store';
+import type { Brand } from '@/types';
+
+// An in-memory localStorage for the brand store, before it loads: the test environment has none.
+vi.hoisted(() => {
+  const memory = new Map<string, string>();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => memory.get(key) ?? null,
+      setItem: (key: string, value: string) => memory.set(key, String(value)),
+      removeItem: (key: string) => memory.delete(key),
+      clear: () => memory.clear(),
+    },
+  });
+});
 
 /**
  * Agent Center › Ready to use (AGENTS plan §1, §3; CHAT-21 §D item 15),
@@ -13,8 +29,10 @@ import { NOW, listResult } from '@/lib/chat/testing/agent-fixtures';
  * with its skills, triggers and mode and Use this agent, which opens New
  * agent filled with it; then the Soon cards, which say what they wait for
  * and open nothing. A mode the plan keeps closed shows its lock; readers
- * see the list's line instead of Use this agent. Only the goals the
- * presets have are filters. The tab is kept in the address.
+ * see the list's line instead of Use this agent. Filters: the goals, the
+ * business types and the work areas the presets have. The packs for the
+ * brand's site type and the person's work areas come first, marked. The
+ * tab is kept in the address.
  */
 
 vi.mock('@/i18n/navigation', () => ({
@@ -46,12 +64,19 @@ async function render(
   role: TeamRole = 'manager',
   locks: Record<string, PresetLock> = {},
   initialTab?: 'ready' | 'yours',
+  workAreas: string[] = [],
 ) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <RoleProvider role={role}>
-          <AgentCenter initialTab={initialTab} locks={locks} now={NOW} timeZone="UTC" />
+          <AgentCenter
+            initialTab={initialTab}
+            locks={locks}
+            workAreas={workAreas}
+            now={NOW}
+            timeZone="UTC"
+          />
         </RoleProvider>
       </NextIntlClientProvider>,
     );
@@ -62,6 +87,15 @@ const all = (selector: string) => [...container.querySelectorAll<HTMLElement>(se
 const action = (name: string) => all(`[data-action="${name}"]`);
 const cards = () => all('[data-slot="preset-card"]');
 const card = (id: string) => container.querySelector<HTMLElement>(`[data-preset="${id}"]`)!;
+const ids = () => cards().map((c) => c.getAttribute('data-preset'));
+const chips = (filter: string) =>
+  all(`[data-action="agents.readyFilter"][data-filter="${filter}"]`);
+const chip = (filter: string, label: string) => chips(filter).find((c) => c.textContent === label)!;
+/** The brand on screen, as the brand switcher keeps it. */
+function onBrand(siteType: string | undefined) {
+  const brand = { id: 'brand-1', name: 'Ansvisor', siteType, shoppingModeEnabled: false } as Brand;
+  useBrandStore.setState({ brands: [brand], activeBrandId: brand.id, loaded: true });
+}
 const panel = (tab: string) =>
   container.querySelector<HTMLElement>(`[data-slot="agent-center-${tab}"]`)!;
 async function click(el: HTMLElement) {
@@ -81,6 +115,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  useBrandStore.setState({ brands: [], activeBrandId: null, loaded: false });
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
@@ -113,7 +148,7 @@ describe('Agent Center tabs', () => {
 });
 
 describe('Ready to use', () => {
-  it('shows the eight ready agents first, then the Soon ones', async () => {
+  it('shows the eight launch agents first, then the ready packs, then the Soon ones', async () => {
     await render();
     const shown = cards();
     expect(shown.slice(0, 8).map((c) => c.getAttribute('data-preset'))).toEqual([
@@ -126,8 +161,11 @@ describe('Ready to use', () => {
       'weekly-report',
       'brand-facts-guardian',
     ]);
-    expect(shown.slice(8).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
-    expect(shown).toHaveLength(20);
+    expect(shown.slice(8, 18).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
+    expect(shown.slice(18).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
+    expect(shown).toHaveLength(39);
+    // No brand on screen and no work areas: nothing is marked.
+    expect(all('[data-slot="preset-fit"]')).toHaveLength(0);
   });
 
   it('gives a ready card its line, skills, mode and triggers, and Use this agent into New agent', async () => {
@@ -152,7 +190,7 @@ describe('Ready to use', () => {
     expect(card('ready-to-publish').querySelector('[data-cell="trigger"]')?.textContent).toBe(
       'TriggerManual only',
     );
-    expect(action('agents.usePreset')).toHaveLength(8);
+    expect(action('agents.usePreset')).toHaveLength(18);
   });
 
   it('says what a Soon card waits for, and opens nothing from it', async () => {
@@ -207,12 +245,9 @@ describe('Ready to use', () => {
     }
   });
 
-  it('filters by goal, with only the goals the agents have and no other filter yet', async () => {
+  it('filters by goal, with only the goals the agents have', async () => {
     await render();
-    const groups = all('[data-slot="agent-center-ready"] [role="group"]');
-    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual(['Goal']);
-    const chips = action('agents.readyFilter');
-    expect(chips.map((chip) => chip.textContent)).toEqual([
+    expect(chips('goal').map((c) => c.textContent)).toEqual([
       'All',
       'Visibility',
       'Citations',
@@ -224,15 +259,101 @@ describe('Ready to use', () => {
       'Reporting',
       'Help',
     ]);
-    expect(chips[0].getAttribute('aria-pressed')).toBe('true');
+    expect(chips('goal')[0].getAttribute('aria-pressed')).toBe('true');
 
-    await click(chips.find((chip) => chip.textContent === 'Reporting')!);
-    expect(cards().map((c) => c.getAttribute('data-preset'))).toEqual([
+    await click(chip('goal', 'Reporting'));
+    expect(ids()).toEqual([
       'weekly-report',
+      'ceo-brief',
       'revenue-attribution',
       'agency-reporter',
+      'ai-traffic-signups',
     ]);
-    await click(action('agents.readyFilter')[0]);
-    expect(cards()).toHaveLength(20);
+    await click(chips('goal')[0]);
+    expect(cards()).toHaveLength(39);
+  });
+
+  it('filters by business type and by role beside the goal, each with the values the agents have', async () => {
+    await render();
+    const groups = all('[data-slot="agent-center-ready"] [role="group"]');
+    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual([
+      'Goal',
+      'Business type',
+      'For your role',
+    ]);
+    expect(chips('businessType').map((c) => c.textContent)).toEqual([
+      'All',
+      'E-commerce',
+      'Mobile app',
+      'B2B',
+      'B2C',
+    ]);
+    expect(chips('role').map((c) => c.textContent)).toEqual([
+      'All',
+      'Founders & leaders',
+      'AEO/GEO & Audit',
+      'Content',
+      'Brand & PR',
+      'Growth',
+      'Product Development',
+      'Business Development',
+      'Developers',
+    ]);
+
+    await click(chip('businessType', 'B2C'));
+    expect(ids()).toEqual(['social-proof-pages', 'reviews-ugc-watch', 'local-store-locator']);
+    expect(card('reviews-ugc-watch').textContent).toContain(
+      'Needs review site data and Reddit and YouTube',
+    );
+    // Two filters at once keep what both match.
+    await click(chip('goal', 'Content'));
+    expect(ids()).toEqual(['social-proof-pages']);
+    await click(chips('goal')[0]);
+    await click(chips('businessType')[0]);
+
+    await click(chip('role', 'Content'));
+    expect(ids()).toEqual(['content-freshness', 'content-plan-builder']);
+    await click(chip('role', 'AEO/GEO & Audit'));
+    expect(ids()).toEqual(['prompt-portfolio', 'technical-fixer']);
+  });
+
+  it('puts the agents for the brand’s site type and the person’s work areas first, marked', async () => {
+    onBrand('b2b');
+    await render('manager', {}, undefined, ['product', 'content']);
+    expect(ids().slice(0, 5)).toEqual([
+      'content-freshness',
+      'alternatives-comparison-pages',
+      'integration-questions',
+      'unmet-needs-miner',
+      'visibility-watch',
+    ]);
+    const fit = (id: string) => card(id).querySelector('[data-slot="preset-fit"]')?.textContent;
+    expect(fit('alternatives-comparison-pages')).toBe('For your site type');
+    expect(fit('unmet-needs-miner')).toBe('For your role');
+    expect(fit('content-freshness')).toBe('For your role');
+    expect(fit('visibility-watch')).toBeUndefined();
+    expect(fit('product-answer-pages')).toBeUndefined();
+    // The Soon ones still come last, theirs first among them.
+    const soon = cards().filter((c) => c.getAttribute('data-status') === 'soon');
+    expect(soon.slice(0, 2).map((c) => c.getAttribute('data-preset'))).toEqual([
+      'review-site-presence',
+      'content-plan-builder',
+    ]);
+    expect(cards()).toHaveLength(39);
+  });
+
+  it('reads a brand without a site type as its guess, and an e-commerce brand gets its pack', async () => {
+    onBrand(undefined);
+    await render();
+    // Unset and nothing else to go by: guessed B2B, as Content's page types are.
+    expect(ids().slice(0, 2)).toEqual(['alternatives-comparison-pages', 'integration-questions']);
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    onBrand('ecommerce');
+    await render();
+    expect(ids()[0]).toBe('product-answer-pages');
+    expect(card('product-answer-pages').getAttribute('data-fit')).toBe('siteType');
+    // Mobile app isn't a site type a brand has yet: its pack is never marked.
+    expect(card('feature-question-coverage').getAttribute('data-fit')).toBeNull();
   });
 });

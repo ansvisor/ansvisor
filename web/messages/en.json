@@ -6002,7 +6002,7 @@
         "goal": "Goal",
         "businessType": "Business type",
         "industry": "Industry",
-        "role": "Role"
+        "role": "For your role"
       },
       "all": "All",
       "goals": {
@@ -6018,7 +6018,7 @@
       },
       "businessTypes": {
         "ecommerce": "E-commerce",
-        "mobile_app": "Mobile app",
+        "app": "Mobile app",
         "b2b": "B2B",
         "b2c": "B2C"
       },
@@ -6037,16 +6037,15 @@
         "travel_hospitality": "Travel and hospitality"
       },
       "roles": {
-        "seo_aeo": "SEO and AEO",
+        "leaders": "Founders & leaders",
+        "aeo": "AEO/GEO & Audit",
         "content": "Content",
-        "pr_brand": "PR and brand",
-        "founders": "Founders",
+        "brand": "Brand & PR",
         "growth": "Growth",
-        "product": "Product",
-        "business_development": "Business development",
-        "ecommerce": "E-commerce",
+        "product": "Product Development",
+        "bizdev": "Business Development",
         "developers": "Developers",
-        "agencies": "Agencies"
+        "analytics": "Analytics"
       },
       "use": "Use this agent",
       "useLabel": "Use this agent: {name}",
@@ -6065,10 +6064,21 @@
         "hubspot": "HubSpot",
         "jira_linear": "Jira or Linear",
         "brand_access": "access by brand",
-        "ads_data": "ads read from AI answers"
+        "ads_data": "ads read from AI answers",
+        "catalog_read": "a skill that reads your product catalog",
+        "seasonal_skill": "a seasonal demand skill",
+        "app_store_data": "App Store and Google Play data",
+        "review_sites": "review site data",
+        "local_listings": "local listings data",
+        "content_plan_skill": "a content plan skill",
+        "traffic_skill": "an AI traffic skill"
       },
       "policyLock": "Your Admin turned Full auto off",
-      "fallbackTip": "Use this agent opens it on Auto, ask before changes"
+      "fallbackTip": "Use this agent opens it on Auto, ask before changes",
+      "fit": {
+        "siteType": "For your site type",
+        "role": "For your role"
+      }
     },
     "presets": {
       "visibility-watch": {
@@ -6150,6 +6160,82 @@
       "ai-ads-watch": {
         "name": "AI Ads Watch",
         "description": "Shows who advertises inside AI answers on your prompts, and where."
+      },
+      "product-answer-pages": {
+        "name": "Product Answer Pages",
+        "description": "Finds the “best X for Y” questions buyers ask AI and drafts answer-first product copy and comparison tables."
+      },
+      "shopping-feed-advisor": {
+        "name": "Shopping Feed Advisor",
+        "description": "Finds the product attributes your feed lacks for AI shopping and prepares the fixes for your feed."
+      },
+      "seasonal-prompt-planner": {
+        "name": "Seasonal Prompt Planner",
+        "description": "Before peaks such as Black Friday or back-to-school, proposes the prompts to track and the pages to prepare."
+      },
+      "app-store-listing": {
+        "name": "App Store Listing for AI",
+        "description": "Checks the app store pages AI cites for “best app for…” questions and drafts changes to your listing."
+      },
+      "app-alternatives-watch": {
+        "name": "App Alternatives Watch",
+        "description": "Finds where AI lists rival apps instead of yours, and the store pages behind it."
+      },
+      "feature-question-coverage": {
+        "name": "Feature-question Coverage",
+        "description": "Finds the features AI credits to rivals but not to you, and drafts help answers to “can it do…” questions."
+      },
+      "alternatives-comparison-pages": {
+        "name": "Alternatives & Comparison Pages",
+        "description": "Drafts “X vs Y” and alternatives pages, then checks them against how AI compares you, feature by feature."
+      },
+      "review-site-presence": {
+        "name": "Review-site Presence",
+        "description": "Checks the review sites AI cites in your category, how they show you, and the profile tasks to do. It never posts."
+      },
+      "integration-questions": {
+        "name": "Integration Questions",
+        "description": "Finds the “does it work with…” questions buyers ask AI and drafts answers for your docs and integration pages."
+      },
+      "reviews-ugc-watch": {
+        "name": "Reviews & UGC Watch",
+        "description": "Watches the review sites and communities AI cites about you and plans what to answer. It never posts."
+      },
+      "local-store-locator": {
+        "name": "Local & Store Locator",
+        "description": "Checks the local listings and store pages AI uses for “near me” questions."
+      },
+      "social-proof-pages": {
+        "name": "Social-proof Pages",
+        "description": "Drafts the FAQ answers AI quotes on returns, shipping and guarantees, checked against your brand facts."
+      },
+      "content-plan-builder": {
+        "name": "Content Plan Builder",
+        "description": "Each week, turns content opportunities into a plan and a brief for each page."
+      },
+      "narrative-sentiment-watch": {
+        "name": "Narrative & Sentiment Watch",
+        "description": "How AI describes your brand on each engine, in its own words, and the wrong claims to fix."
+      },
+      "source-outreach-list": {
+        "name": "Source Outreach List",
+        "description": "Lists the publications and directories AI cites for your topics, whether each lists you, and the next step. It never sends."
+      },
+      "ceo-brief": {
+        "name": "CEO Brief",
+        "description": "Each Monday, one page for leaders: whether AI recommends you more, what moved, and where to win next."
+      },
+      "ai-traffic-signups": {
+        "name": "AI Traffic → Signups",
+        "description": "Shows the prompts and pages that bring AI visitors who sign up."
+      },
+      "unmet-needs-miner": {
+        "name": "Unmet Needs Miner",
+        "description": "Finds what buyers ask AI about your category that no brand answers well yet."
+      },
+      "market-source-finder": {
+        "name": "Market & Source Finder",
+        "description": "Shows the markets where AI sends buyers to rivals, and the sources it trusts there."
       }
     },
     "detail": {
