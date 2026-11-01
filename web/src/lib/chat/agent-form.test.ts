@@ -77,9 +77,10 @@ describe('a new agent', () => {
     expect(form.brandIds).toEqual([BRAND_2]);
     expect(form.mode).toBe('auto');
     expect(form.maxRun).toBe('10');
+    // /winback writes its drafts without a CMS or Search Console: both Optional.
     expect(form.connections).toEqual([
-      { key: 'google_search_console', required: true },
-      { key: 'webflow', required: true },
+      { key: 'google_search_console', required: false },
+      { key: 'cms', required: false },
     ]);
     expect(triggerInputOf(form.triggers[0])).toEqual({
       kind: 'schedule',
@@ -112,7 +113,7 @@ describe('a new agent', () => {
     expect(defaultAgentName('x'.repeat(70), null, [])).toHaveLength(60);
   });
 
-  it('keeps Optional connections when its skills change, and only the new skills’ Required ones', () => {
+  it('keeps Optional connections when its skills change, and only the new skills’ own ones', () => {
     expect(
       syncConnections(
         [
@@ -122,9 +123,20 @@ describe('a new agent', () => {
         ['report'],
       ),
     ).toEqual([
-      { key: 'google_search_console', required: true },
+      { key: 'google_search_console', required: false },
       { key: 'google_analytics', required: false },
     ]);
+  });
+
+  it('asks for any CMS only where a skill sends the page, and for any catalog source for /shopping', () => {
+    // /winback drafts without a CMS; /publish then sends it: any CMS becomes Required.
+    expect(syncConnections([], ['winback', 'publish'])).toEqual([
+      { key: 'google_search_console', required: false },
+      { key: 'cms', required: true },
+    ]);
+    expect(syncConnections([], ['tasks'])).toEqual([{ key: 'cms', required: false }]);
+    expect(syncConnections([], ['shopping'])).toEqual([{ key: 'catalog', required: true }]);
+    expect(syncConnections([], ['faq', 'quality'])).toEqual([]);
   });
 });
 
