@@ -1581,8 +1581,8 @@ export default function CompetitorsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <HeaderWithAiUsage>
+      {/* Header: the meter and Ask Chat at its bottom, beside the range's buttons. */}
+      <HeaderWithAiUsage align="end">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>

@@ -17,7 +17,8 @@ import { StartPlanNow } from './start-plan-now';
  * (AI usage spec §4): amber from 80%, with where to see it; red once used up,
  * saying until when AI features stop, with where to get more (other members
  * are told to ask an admin). Nothing below 80%. In the free trial it names
- * no share, and an admin can start the plan here (Start my plan now).
+ * no share, and an admin can start the plan here (Start my plan now). With
+ * the new Chat on, it says Chat goes on only on the workspace's own key.
  */
 export function AiUsageBanner({ className }: { className?: string }) {
   const t = useTranslations('aiUsage');
@@ -67,11 +68,13 @@ export function AiUsageBanner({ className }: { className?: string }) {
     >
       <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-500" />
       <p className="min-w-0 flex-1 text-red-900 dark:text-red-200">
+        {/* With the new Chat on (chatMetered), an own key runs it only on
+          Enterprise or for a key kept from before it (ownKeyAllowed). */}
         {usage.trial
-          ? t('banner.exhaustedTrial')
+          ? t(usage.chatMetered ? 'banner.exhaustedTrialChat' : 'banner.exhaustedTrial')
           : resets
-            ? t('banner.exhausted', { date: resets })
-            : t('banner.exhaustedNoDate')}
+            ? t(usage.chatMetered ? 'banner.exhaustedChat' : 'banner.exhausted', { date: resets })
+            : t(usage.chatMetered ? 'banner.exhaustedNoDateChat' : 'banner.exhaustedNoDate')}
         {!canAdmin && (
           <>
             {' '}

@@ -10,10 +10,8 @@ import {
   type ReactNode,
 } from 'react';
 import { useTranslations } from 'next-intl';
-import { Lock, Plus } from 'lucide-react';
 import { AgentAvatar } from '@/components/agentic/agent-avatar';
 import { ListDot } from '@/components/agentic/list-dot';
-import { AskAdminButton } from '@/components/chat-access/ask-admin-button';
 import { RoleContext } from '@/components/providers/role-provider';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -37,15 +35,15 @@ import { useAgentWords, type AgentWords } from './agent-words';
 import { useAgentActions } from './use-agent-actions';
 
 /**
- * Agent Center (CHAT-21 §B; governance mockup `#g-agents`; CHAT-27 item
- * 24), its own page under Chat on the menu: the agents the person may see, in the tabs Mine · Workspace ·
- * Paused · Archived with their counts, and a search by name or skill. One
- * card per agent: its state, skills and mode, its triggers in short, next
- * run, scope, last run, the last 30 days' outcomes and its AI use as a
- * share of the monthly limit with a thin bar. Admins and Managers get New
- * agent; each card's Run now and Pause / Resume are the ones the server's
- * `can` gives the row. Analysts and Agency partners read, with a line that
- * says so and Ask your Admin.
+ * Agent Center's Your agents tab (CHAT-21 §B; governance mockup `#g-agents`;
+ * CHAT-27 item 24; agent-center.tsx holds the title, New agent and the
+ * tabs): the agents the person may see, under Mine · Workspace · Paused ·
+ * Archived with their counts, and a search by name or skill. One card per
+ * agent: its state, skills and mode, its triggers in short, next run,
+ * scope, last run, the last 30 days' outcomes and its AI use as a share of
+ * the monthly limit with a thin bar. Each card's Run now and Pause / Resume
+ * are the ones the server's `can` gives the row. Analysts and Agency
+ * partners read, and start on Workspace.
  */
 
 /** The search asks once the typing stops. */
@@ -228,9 +226,17 @@ function AgentCard({
   );
 }
 
-export function AgentsList({ now: nowProp, timeZone }: { now?: Date; timeZone?: string }) {
+export function AgentsList({
+  now: nowProp,
+  timeZone,
+  onSummary,
+}: {
+  now?: Date;
+  timeZone?: string;
+  /** The agents on and the plan's most, for Agent Center's count beside its title. */
+  onSummary?: (summary: { active: number; activeLimit: number | null }) => void;
+}) {
   const tList = useTranslations('chatAgents.list');
-  const tRoles = useTranslations('chatAccess.roleNames');
   const { role } = useContext(RoleContext);
   const writer = writesAgents(role);
   // Analysts and Agency partners own no agents: they start on the workspace's.
@@ -276,66 +282,13 @@ export function AgentsList({ now: nowProp, timeZone }: { now?: Date; timeZone?: 
   const data = list.data;
   const loading = list.status === 'loading' && !data;
   const agents = data?.agents ?? [];
-  const activeLimit = data?.activeLimit ?? null;
+
+  useEffect(() => {
+    if (data) onSummary?.({ active: data.active, activeLimit: data.activeLimit });
+  }, [data, onSummary]);
 
   return (
-    <div className="max-w-[1100px]">
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold tracking-[-.4px]">{tList('title')}</h1>
-        {data && (
-          <span
-            data-slot="agents-count"
-            title={tList('activeTip', {
-              active: data.active,
-              limit: activeLimit === null ? 'none' : String(activeLimit),
-            })}
-            className="rounded-md bg-muted px-1.5 text-[11.5px] font-medium text-foreground/70 tabular-nums"
-          >
-            {data.active}
-          </span>
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          <div
-            title={tList('formulaTip')}
-            className="flex items-center gap-1 text-[11.5px] text-muted-foreground max-[900px]:hidden"
-          >
-            {(['skill', 'mode', 'connections', 'model'] as const).map((part, i) => (
-              <span key={part} className="flex items-center gap-1">
-                {i > 0 && <span aria-hidden>+</span>}
-                <span className="rounded-[7px] border bg-muted/50 px-[7px] py-px text-foreground/80">
-                  {tList(`formula.${part}`)}
-                </span>
-              </span>
-            ))}
-          </div>
-          {writer && (
-            <Link
-              href="/dashboard/agents/new"
-              data-action="agents.new"
-              className={buttonVariants({ variant: 'default' })}
-            >
-              <Plus aria-hidden />
-              {tList('newAgent')}
-            </Link>
-          )}
-        </div>
-      </div>
-
-      {!writer && (
-        <div
-          role="note"
-          data-slot="agents-read-only"
-          className="mb-1 grid grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-xl border bg-muted/50 px-3.5 py-2.5 text-[13px]"
-        >
-          <Lock className="size-4 text-muted-foreground" aria-hidden />
-          <div className="min-w-0">
-            <b className="font-semibold">{tList('readOnly.title', { role: tRoles(role) })}</b>
-            <em className="ml-1.5 text-muted-foreground not-italic">{tList('readOnly.detail')}</em>
-          </div>
-          <AskAdminButton asked={tList('readOnly.asked')} ruleKind="role" />
-        </div>
-      )}
-
+    <div>
       {actions.denial && <AgentDenial denial={actions.denial} onClose={actions.clearDenial} />}
 
       <div className="my-3 flex flex-wrap items-center gap-1.5">

@@ -235,7 +235,8 @@ const { readPrecedenceContext } = await import('./precedence-context');
 const { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } = await import('./rules');
 const { ASK_TOOL } = await import('./asks');
 const { NEXT_MOVES_TOOL } = await import('./next-moves');
-const { SKILL_LIBRARY, USE_SKILL_TOOL } = await import('./skills/library');
+const { MAX_LISTED_SKILLS, SKILL_LIBRARY, USE_SKILL_TOOL, enabledSkills, skillsForPrompt } =
+  await import('./skills/library');
 
 type ChatEvent = import('./events').ChatEvent;
 type ChatActor = import('./engine').ChatActor;
@@ -4335,8 +4336,18 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
       expect(systems).toHaveLength(2);
       const workspace = String(systems[1].content);
       expect(workspace).toContain('<available_skills>');
-      for (const s of SKILL_LIBRARY) {
-        expect(workspace).toContain(`${s.name}: ${s.description}`);
+      // More skills than a prompt lists: the 20 that best match the request.
+      const enabled = enabledSkills(ADMIN.organizationId);
+      const listed = skillsForPrompt(enabled, {
+        typed: [],
+        used: [],
+        request: 'How are we doing?',
+      });
+      expect(listed).toHaveLength(Math.min(enabled.length, MAX_LISTED_SKILLS));
+      for (const s of enabled) {
+        const line = `${s.name}: ${s.description}`;
+        if (listed.includes(s)) expect(workspace).toContain(line);
+        else expect(workspace).not.toContain(line);
         const bodyLine = s.body.split('\n').find((line) => line.length > 60)!;
         expect(systems.map((m) => String(m.content)).join('\n')).not.toContain(bodyLine);
       }
@@ -4658,6 +4669,66 @@ describe('the /tasks task strip (W2-11, CHAT-09 §B)', () => {
     const runId = await turn(ADMIN, 'What is open in my Action Center?');
     expect(ofType(await eventsOf(runId), 'tasks.updated')).toEqual([]);
     expect(db.tables.chat_task_state).toEqual([]);
+  });
+
+  const draftCall = calls(
+    toolCall('w1', 'create_draft', {
+      brand_id: BRAND,
+      title: 'Pricing FAQ',
+      page_type: 'docs_faq',
+      source: { kind: 'content' },
+    }),
+  );
+
+  it('ties a deliverable to the task of the action it opened, only when it is certain (W2-12)', async () => {
+    // Two tasks of the opened action are Writing: the page draft is the one with a draft to write.
+    db.tables.action_tasks[0].task_key = 'optimize_content';
+    useModels(
+      [
+        calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })),
+        calls(toolCall('r2', 'get_action', { brand_id: BRAND, action_id: 'a-top' })),
+        READY,
+      ],
+      [draftCall, text('I drafted the FAQ.')],
+    );
+    const runId = await turn(ADMIN, '/tasks Start the top task.', 'full_auto');
+    // The Action Center's tasks are text from outside the workspace's numbers (§16a): the draft asks first.
+    if (runRow(runId).status === 'waiting') await approve(ADMIN, runId);
+    const events = await eventsOf(runId);
+    const [made] = ofType(events, 'deliverable.created').map((e) => e.data);
+    expect(made.task).toEqual({ title: 'Add FAQ block + schema to /pricing', state: 'open' });
+    const file = db.tables.chat_files.find((f) => f.run_id === runId)!;
+    expect(
+      db.tables.chat_task_state.map((row) => [row.action_task_id, row.file_id ?? null]),
+    ).toEqual([
+      ['t-faq', file.id],
+      ['t-links', null],
+      ['t-guide', null],
+    ]);
+    expectClean(events);
+  });
+
+  it('ties no deliverable to a task when no action was opened, or the task isn’t certain', async () => {
+    useModels(
+      [calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })), READY],
+      [draftCall, text('Drafted.')],
+    );
+    const first = await turn(ADMIN, '/tasks Draft something.', 'full_auto');
+    if (runRow(first).status === 'waiting') await approve(ADMIN, first);
+    expect(ofType(await eventsOf(first), 'deliverable.created')[0].data.task).toBeUndefined();
+    // Opened, but two of its tasks could be it: none.
+    useModels(
+      [
+        calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })),
+        calls(toolCall('r2', 'get_action', { brand_id: BRAND, action_id: 'a-top' })),
+        READY,
+      ],
+      [draftCall, text('Drafted.')],
+    );
+    const second = await turn(ADMIN, '/tasks Draft something.', 'full_auto');
+    if (runRow(second).status === 'waiting') await approve(ADMIN, second);
+    expect(ofType(await eventsOf(second), 'deliverable.created')[0].data.task).toBeUndefined();
+    expect(db.tables.chat_task_state.every((row) => !row.file_id)).toBe(true);
   });
 
   it('answers all the same when the strip can’t be kept', async () => {

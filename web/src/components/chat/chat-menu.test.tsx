@@ -33,13 +33,19 @@ vi.mock('@/components/agentic/runs-tray', () => ({
 vi.mock('@/lib/actions/chat-prefs', () => ({
   saveChatMenuOpen: vi.fn(async () => ({ ok: true })),
 }));
-const usage = vi.hoisted(() => ({ percentUsed: null as number | null }));
+const usage = vi.hoisted(() => ({ percentUsed: null as number | null, trial: false }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({
   useAiUsage: () => ({
     usage:
       usage.percentUsed === null
         ? null
-        : { unlimited: false, percentUsed: usage.percentUsed, features: [], plan: 'growth' },
+        : {
+            unlimited: false,
+            percentUsed: usage.percentUsed,
+            features: [],
+            plan: 'growth',
+            trial: usage.trial,
+          },
     refresh: () => undefined,
   }),
 }));
@@ -86,6 +92,7 @@ beforeEach(() => {
   nav.push.mockClear();
   vi.mocked(saveChatMenuOpen).mockClear();
   usage.percentUsed = null;
+  usage.trial = false;
   window.sessionStorage.clear();
   wide = true;
   window.matchMedia = ((query: string) => ({
@@ -386,6 +393,27 @@ describe('ChatShell', () => {
     usage.percentUsed = 85;
     await render(menu([]));
     expect(action('chatMenu.openSettings')[0].querySelector('i')?.className).toContain('amber');
+  });
+
+  it('names the free trial’s credit in words beside Settings, as the header’s meter', async () => {
+    usage.trial = true;
+    const shown = async (percent: number) => {
+      act(() => root.unmount());
+      root = createRoot(host);
+      usage.percentUsed = percent;
+      await render(menu([]));
+      return action('chatMenu.openSettings')[0];
+    };
+    let settings = await shown(18);
+    expect(settings.textContent).toBe('SettingsTrial credit');
+    expect(settings.querySelector('i')).toBeNull();
+    expect(settings.querySelector('[title="AI: the free trial\'s AI credit"]')).not.toBeNull();
+    settings = await shown(85);
+    expect(settings.textContent).toBe('SettingsAlmost used');
+    expect(settings.innerHTML).toContain('text-amber-700');
+    settings = await shown(100);
+    expect(settings.textContent).toBe('SettingsUsed up');
+    expect(settings.innerHTML).toContain('text-red-700');
   });
 
   it('gives a Chat page Back to Chat and the breadcrumb, back to the last conversation', async () => {

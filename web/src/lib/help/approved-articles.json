@@ -503,7 +503,7 @@
         "ai sessions"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -515,7 +515,7 @@
         },
         {
           "heading": "How visits are counted",
-          "text": "- **One visit per session**: a reload, or a further link from the same answer, continues the visit. The visits card gives the pageviews beside the visits.\n- **Snippet or Google Analytics, never both**: on days the tracking snippet sent any visit, the page counts the snippet's; on other days, Google Analytics'. The visits card says how many days came from Google Analytics.\n- **Recent AI Referral Visits**, at the bottom, shows only the snippet's visits, one row per visit. Search it by address and filter by platform."
+          "text": "- **One visit per session**: a reload, or a further link from the same answer, continues the visit. The visits card gives the pageviews beside the visits.\n- **Snippet or Google Analytics, never both**: on days the tracking snippet sent any visit, the page counts the snippet's; on other days, Google Analytics'. The visits card says how many days came from Google Analytics.\n- **Recent AI Referral Visits**, at the bottom, shows only the snippet's visits, one row per visit. Search it by address and filter by platform.\n- **No snippet, no zero**: until the tracking snippet is seen on your site, the page says **Tracking code not detected** and how to add it, rather than showing 0 visits. Chat and the MCP tools say the same."
         },
         {
           "heading": "Summary line and cards",
@@ -652,7 +652,9 @@
         "connect google analytics",
         "connect search console",
         "data sources",
-        "install snippet"
+        "install snippet",
+        "check again",
+        "tracking code not detected"
       ],
       "synonyms": [
         "set up ai traffic",
@@ -662,7 +664,7 @@
         "gsc"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -674,11 +676,11 @@
         },
         {
           "heading": "Add the tracking snippet",
-          "text": "Copy the snippet from the page. It sits at the top until it has sent a visit in the last week. **Install** in the Data sources strip opens it too; once the snippet sends visits, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.\n\nAdd it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page."
+          "text": "Until the snippet is seen on your site, the page opens with **Tracking code not detected on** your domain, the steps to add it and the snippet itself. **Install** in the Data sources strip opens it too; once the snippet is seen, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.\n\nAdd it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page."
         },
         {
           "heading": "Check that the snippet works",
-          "text": "The **Tracking snippet** card reads **Active · last visit …** once the snippet has sent a visit in the last week, otherwise **Not detected**. A visit is stored as soon as an AI-referred visitor lands. Reload the page, or change the range, to see new ones."
+          "text": "After you publish it, click **Check again**: Ansvisor reads your home page once and looks for the snippet. Your home page is also checked when the brand is set up, or once when you open this page if it never was and no AI visit has arrived: the card reads **Checking your home page…** meanwhile. The snippet itself adds no request for your other visitors.\n\nThe **Tracking snippet** card then reads:\n\n- **Active · last visit …**: an AI-referred visit in the last week;\n- **Installed · no AI visits in the last 7 days**: the check found it, or it has sent a visit before;\n- **Not detected on** your domain: neither, so the page doesn't show 0 visits as a result.\n\nAdded the snippet with a tag manager? The check can't see it in the page, so the card changes with the first AI visit."
         },
         {
           "heading": "What the snippet collects",
@@ -1277,7 +1279,7 @@
         },
         {
           "heading": "Ask for new opportunities",
-          "text": "Admins and managers click **New** to get suggestions now, instead of waiting for the next automatic run. Pick a **Focus**: **Let Ansvisor choose**, a **Topic** or a **Prompt**. You can add your own idea, up to 500 characters, and set **How many**.\n\nOpportunities are written per group of prompts: prompts of one topic that a single page could answer, and that already have tracked answers. Each group gets one opportunity; only **Another angle** adds a second take on it."
+          "text": "Admins and managers click **New** to get suggestions now, instead of waiting for the next automatic run. Pick a **Focus**: **Let Ansvisor choose**, a **Topic** or a **Prompt**. You can add your own idea, up to 500 characters, and set **How many**.\n\nOpportunities are written per group of prompts: prompts of one topic that a single page could answer, and that already have tracked answers. Each group gets one opportunity; only **Another angle** adds a second take on it.\n\nTitles leave years out unless the need is about one. A year that has passed in an opportunity's title or question shows as this year; your tracked prompts keep their own words."
         },
         {
           "heading": "What each focus picks",
@@ -1481,17 +1483,22 @@
         "hand off",
         "next step",
         "before you publish",
-        "page author"
+        "page author",
+        "qualified reviewer",
+        "reviewer",
+        "reviewed by"
       ],
       "synonyms": [
         "content quality",
         "quality check",
         "page score",
         "eeat score",
-        "ready to publish checklist"
+        "ready to publish checklist",
+        "content reviewer",
+        "regulated page review"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1519,7 +1526,7 @@
         },
         {
           "heading": "Before you publish",
-          "text": "**Mark ready** opens **Before you publish** first. It checks:\n\n- placeholders, alt text and links;\n- the author;\n- visible dates;\n- the structured data to paste, if your CMS doesn't add it;\n- a warning when Trust is under 60.\n\nOn a page with a shopping path, it also names the product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about."
+          "text": "**Mark ready** opens **Before you publish** first. It checks:\n\n- placeholders, alt text and links;\n- the author;\n- the qualified reviewer on pages that advise on health, money or the law;\n- visible dates;\n- the structured data to paste, if your CMS doesn't add it;\n- a warning when Trust is under 60.\n\nCopy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about."
         },
         {
           "heading": "Export with Quality on",
@@ -1537,16 +1544,21 @@
         "wordpress",
         "framer",
         "draft post",
-        "last send"
+        "last send",
+        "qualified reviewer",
+        "reviewer metadata",
+        "reviewed by"
       ],
       "synonyms": [
         "push to cms",
         "publish to blog",
         "send to website",
-        "export to cms"
+        "export to cms",
+        "send reviewer",
+        "reviewer field"
       ],
       "plan": "all",
-      "updated": "2026-10-29",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1554,7 +1566,7 @@
         },
         {
           "heading": "Send one page",
-          "text": "In the editor, click the paper-plane icon in the header. With Quality on, **Before you publish** opens first when it has something to ask about, such as a missing author, open placeholders, missing alt text or broken links. Check it and click **Continue to send**. From the Library, open a row's **…** menu and pick **Send to CMS**.\n\nThe dialog fills the **Slug**, **Meta title** and **Meta description** from the page; change them before sending if you like. What you send is kept on the draft, so the next send starts from it."
+          "text": "In the editor, click the paper-plane icon in the header. With Quality on, **Before you publish** opens first when it has something to ask about, such as a missing author, open placeholders, missing alt text or broken links. Check it and click **Continue to send**. From the Library, open a row's **…** menu and pick **Send to CMS**.\n\nThe dialog fills the **Slug**, **Meta title** and **Meta description** from the page; change them before sending if you like. For a regulated page, a selected qualified reviewer is sent separately from its author; the dialog shows both metadata lines. What you send is kept on the draft, so the next send starts from it."
         },
         {
           "heading": "Choose where it goes",
@@ -1582,7 +1594,7 @@
         },
         {
           "heading": "What each CMS leaves out",
-          "text": "- **Webflow**: tables go as lists, and images aren't sent. An empty meta description goes as the page's opening words.\n- **WordPress**: the meta title and the structured data aren't sent, so set them in your SEO plugin. Images keep their addresses, and no featured image or category is set.\n- **Framer**: tables go as tables, and images aren't sent. Another item in the collection with the same slug stops the send.\n- **Wix**: images aren't sent, and no cover image or category is set. Sending again replaces the post's text, so add images in Wix after your last send.\n\nAdd images in your CMS. The slug may also change slightly there: lowercase, without accents, with dots turned into dashes."
+          "text": "- **Webflow**: Tables become lists; images aren't sent. Reviewer metadata requires a mapped optional Plain Text field; show it in the collection template. Empty meta descriptions use the page's opening words.\n- **WordPress**: Reviewer metadata and structured data aren't sent; the adapter can't map custom metadata or repurpose the post author. Set the meta title and structured data in your SEO plugin. Images keep their addresses; no featured image or category is set.\n- **Framer**: Tables stay tables; images aren't sent. Reviewer metadata requires a mapped optional string field; show it in the page template. Duplicate slugs stop the send.\n- **Wix**: Images, cover images and categories aren't sent. Reviewer metadata is an SEO tag, not visible text; show it in the page template. Resending replaces post text, so add images after the last send.\n\nAdd images in your CMS. The slug may change slightly there: lowercase, without accents, with dots turned into dashes."
         }
       ]
     },
@@ -2362,7 +2374,7 @@
         },
         {
           "heading": "Pick the date range",
-          "text": "The tab uses the **Prompts** page's date range: 24h, 7d, 30d, 90d or custom. It opens on 7d, because one day of answers holds few searches; a range you picked on another tab carries over."
+          "text": "The tab uses the **Prompts** page's date range: 24h, 7d, 30d, 90d or custom. It opens on 7d, because one day of answers holds few searches; a range you picked on another tab carries over. The tab has no **Location** filter: it shows the searches from every location you track."
         }
       ]
     },
@@ -2827,7 +2839,7 @@
         },
         {
           "heading": "Select, pin or exclude",
-          "text": "Select rows to **Audit selected**, to **Pin** them, so they always come first, or to **Exclude** them. Excluded pages are listed under the table, where **Restore** puts them back."
+          "text": "Select rows to **Audit selected**, to **Pin** them, so they always come first, or to **Exclude** them. Excluded pages are listed under the table, where **Restore** puts them back.\n\nPins and exclusions hold for the whole brand, so only admins and managers see **Pin**, **Exclude** and **Restore**."
         },
         {
           "heading": "The Pages tab",

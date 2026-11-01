@@ -51,4 +51,4 @@ Admins and managers can click **+** on a search to track it as a prompt of its o
 
 ## Pick the date range
 
-The tab uses the **Prompts** page's date range: 24h, 7d, 30d, 90d or custom. It opens on 7d, because one day of answers holds few searches; a range you picked on another tab carries over.
+The tab uses the **Prompts** page's date range: 24h, 7d, 30d, 90d or custom. It opens on 7d, because one day of answers holds few searches; a range you picked on another tab carries over. The tab has no **Location** filter: it shows the searches from every location you track.

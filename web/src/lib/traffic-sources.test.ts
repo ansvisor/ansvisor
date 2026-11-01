@@ -5,6 +5,8 @@ import {
   gscPropertyHost,
   sectionsNeeding,
   snippetDetected,
+  snippetState,
+  snippetStateOf,
   sourceHost,
 } from './traffic-sources';
 
@@ -20,6 +22,24 @@ describe('snippetDetected', () => {
   it('reads an older last visit, or none, as not detected', () => {
     expect(snippetDetected(daysAgo(7.1), NOW)).toBe(false);
     expect(snippetDetected(null, NOW)).toBe(false);
+  });
+});
+
+describe('snippetState', () => {
+  it('is active with an AI visit in the last 7 days', () => {
+    expect(snippetState({ lastVisitAt: daysAgo(1), foundAt: null }, NOW)).toBe('active');
+  });
+
+  it('is installed and quiet when the home page check found it, or a visit came before', () => {
+    expect(snippetState({ lastVisitAt: null, foundAt: daysAgo(2) }, NOW)).toBe('installed_quiet');
+    expect(snippetState({ lastVisitAt: daysAgo(40), foundAt: null }, NOW)).toBe('installed_quiet');
+  });
+
+  it('is not detected with no visit ever and no check that found it', () => {
+    expect(snippetState({ lastVisitAt: null, foundAt: null }, NOW)).toBe('not_detected');
+    expect(snippetStateOf({ snippetLastVisitAt: null, snippetFoundAt: null }, NOW)).toBe(
+      'not_detected',
+    );
   });
 });
 

@@ -26,6 +26,7 @@ function sendPage() {
       bodyHtml: DRAFT_ROW.body_html,
       sourceUrl: DRAFT_ROW.source_url,
       authorId: DRAFT_ROW.author_id,
+      reviewerId: DRAFT_ROW.reviewer_id ?? null,
       authorConfirmed: false,
       language: null,
     },

@@ -115,9 +115,10 @@ export function FormulaDialog() {
 
             <Section title="Net sentiment">
               <p>
-                Of the answers that name or cite you, the share that is positive minus the share
-                that is negative, in points. Sentiment is shown alongside Visibility but is not part
-                of the score.
+                Of the answers that name you, the share that is positive minus the share that is
+                negative, in points. Answers that only cite your site aren&apos;t counted: they are
+                always neutral. Sentiment is shown alongside Visibility but is not part of the
+                score.
               </p>
               <Formula>
                 Net sentiment = positive answers % − negative answers % (of answers naming you, as

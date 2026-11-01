@@ -872,6 +872,22 @@ router.get('/opportunities', async (req, res) => {
   }
 });
 
+/**
+ * Roles that may change Site Audit settings and the brand's pinned and
+ * excluded pages, as for Daily Pulse's.
+ */
+const SETTINGS_ROLES = ['admin', 'manager'];
+
+async function canChangeSettings(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single();
+  if (error) throw error;
+  return SETTINGS_ROLES.includes(data?.role);
+}
+
 const prefsSchema = z.object({
   brandId: z.guid(),
   urls: z
@@ -884,7 +900,8 @@ const prefsSchema = z.object({
 });
 
 // PUT /api/audits/opportunities/prefs — pin, exclude or clear pages of the
-// Opportunities inbox ({ brandId, urls, state }).
+// Opportunities inbox ({ brandId, urls, state }). They hold for the whole
+// brand, so admins and managers only, as the settings.
 router.put('/opportunities/prefs', async (req, res) => {
   const userId = req.user?.id;
   const parsed = prefsSchema.safeParse(req.body ?? {});
@@ -898,6 +915,12 @@ router.put('/opportunities/prefs', async (req, res) => {
 
   try {
     await assertBrandAccess(brandId, userId);
+    if (!(await canChangeSettings(userId))) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admins and managers can pin or exclude pages.',
+      });
+    }
 
     const byKey = new Map(urls.map((url) => [opportunityKey(url), url]));
     const { error } =
@@ -961,19 +984,6 @@ router.get('/templates', async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
-
-/** Roles that may change Site Audit settings, as for Daily Pulse's. */
-const SETTINGS_ROLES = ['admin', 'manager'];
-
-async function canChangeSettings(userId) {
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', userId)
-    .single();
-  if (error) throw error;
-  return SETTINGS_ROLES.includes(data?.role);
-}
 
 /**
  * Site Audit settings as the Settings dialog shows them (SA-006): the org's
