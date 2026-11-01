@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { AgentFormSetup } from './agent-form';
 import { AGENT_ENGINES, enginesDenial, modeDenial } from './agent-rules';
 import { readAgent, readAgentContext, type AgentContext, type AgentDetail } from './agents';
-import { resolveChatModelKey } from './key';
+import { OwnKeyUnreadableError, resolveChatModelKey } from './key';
 import { chatActor } from './run-api';
 
 /**
@@ -22,16 +22,20 @@ const TOPICS_MAX = 500;
 
 export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSetup> {
   const org = ctx.actor.organizationId;
-  const [brands, agents, key] = await Promise.all([
+  const [brands, agents, ownKeyProvider] = await Promise.all([
     supabaseAdmin.from('brands').select('id, name, is_demo').eq('organization_id', org),
     supabaseAdmin
       .from('chat_agents')
       .select('name, visibility, owner_id')
       .eq('organization_id', org),
-    resolveChatModelKey(org).catch((err) => {
-      console.error('[chat/agents] could not read whose key Chat runs on:', err);
-      return null;
-    }),
+    resolveChatModelKey(org)
+      .then((resolved) => (resolved?.source === 'own' ? resolved.config.provider : null))
+      .catch((err) => {
+        // A saved key that can't be read is still the one agents run on.
+        if (err instanceof OwnKeyUnreadableError) return err.provider;
+        console.error('[chat/agents] could not read whose key Chat runs on:', err);
+        return null;
+      }),
   ]);
   if (brands.error) throw new Error(`Could not read the brands: ${brands.error.message}`);
   if (agents.error) throw new Error(`Could not read the agents' names: ${agents.error.message}`);
@@ -85,7 +89,7 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
     workspaceAgentsAdminsOnly: ctx.settings.workspaceAgentsAdminsOnly,
     runShareDefault: ctx.settings.runShareDefault,
     takenNames: seen,
-    ownKeyProvider: key?.source === 'own' ? key.config.provider : null,
+    ownKeyProvider,
   };
 }
 

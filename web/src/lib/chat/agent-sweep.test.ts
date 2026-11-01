@@ -21,7 +21,10 @@ const fakes = vi.hoisted(() => ({
   shares: vi.fn(),
   chatSweep: vi.fn(),
   endHeld: vi.fn(),
+  onOwnKey: vi.fn(async () => false),
+  notify: vi.fn(async () => true),
 }));
+vi.mock('./key-notice', () => ({ notifyOwnKeyFailure: fakes.notify }));
 vi.mock('@/lib/mcp/account', () => ({ getAiUsageFor: fakes.usage }));
 const keyCap = vi.hoisted(() => ({
   reached: null as { reached: boolean; renewsAt: string | null } | null,
@@ -31,10 +34,10 @@ vi.mock('./own-key-cap', () => ({
   ownKeyCapReached: vi.fn(async () => keyCap.reached),
   readOwnKeyCap: vi.fn(async () => keyCap.read),
 }));
-const onOwnKey = vi.hoisted(() => ({ value: true }));
 vi.mock('./key', () => ({
   resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
-  chatRunsOnOwnKey: vi.fn(async () => onOwnKey.value),
+  failingOwnKey: vi.fn(async () => null),
+  chatRunsOnOwnKey: fakes.onOwnKey,
 }));
 vi.mock('./agent-shares', () => ({ readAgentShares: fakes.shares }));
 vi.mock('./engine', () => ({
@@ -47,7 +50,7 @@ vi.mock('./engine', () => ({
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { sweepAgents, STALE_QUEUE_MS } = await import('./agent-sweep');
+const { sweepAgents, OWN_KEY_REMINDER_MS, STALE_QUEUE_MS } = await import('./agent-sweep');
 
 const NOW = new Date('2026-11-02T12:00:00.000Z');
 const AGENT = 'abababab-0000-4000-8000-000000000001';
@@ -159,6 +162,7 @@ beforeEach(() => {
   db.tables.chat_runs = [];
   db.tables.chat_run_state = [];
   db.tables.ship_events = [];
+  db.tables.organization_ai_keys = [];
   db.rpcs = { chat_start_next_agent_run: startNext };
 });
 
@@ -206,7 +210,7 @@ describe('the agents’ sweep', () => {
   });
 
   it('resumes agents paused at the own key’s monthly limit once there is room again (AGENT-OWN-KEY §4.2)', async () => {
-    onOwnKey.value = true;
+    fakes.onOwnKey.mockResolvedValue(true);
     db.tables.chat_agents = [
       agent(AGENT, { status: 'paused', paused_reason: 'own_key_cap' }),
       agent(OTHER_AGENT, { status: 'paused', paused_reason: 'manual' }),
@@ -230,11 +234,10 @@ describe('the agents’ sweep', () => {
 
     // Chat no longer runs on the key: it resumes on the AI limit, unread.
     Object.assign(agentRow(), { status: 'paused', paused_reason: 'own_key_cap' });
-    onOwnKey.value = false;
+    fakes.onOwnKey.mockResolvedValue(false);
     keyCap.read = null;
     expect((await sweepAgents(NOW, driver)).resumed).toBe(1);
     expect(agentRow().status).toBe('active');
-    onOwnKey.value = true;
   });
 
   it('resumes an agent paused for the AI limit once there is room, and stops its triggered runs held there', async () => {
@@ -263,6 +266,76 @@ describe('the agents’ sweep', () => {
     expect(runRow('held')).toMatchObject({ status: 'stopped', stop_reason: null });
     expect(fakes.endHeld).toHaveBeenCalledWith(heldChat, 'paused_cap', 'limit');
     expect(runRow('held-manual').status).toBe('paused_cap');
+  });
+
+  it('resumes agents paused for the own key once it works, or Chat no longer runs on it (AGENT-OWN-KEY §5.4)', async () => {
+    db.tables.chat_agents = [
+      agent(AGENT, { status: 'paused', paused_reason: 'own_key' }),
+      agent(OTHER_AGENT, { status: 'paused', paused_reason: 'manual' }),
+    ];
+    db.tables.organization_ai_keys = [
+      {
+        organization_id: ORG,
+        provider: 'openai',
+        active: true,
+        failing_since: '2026-11-02T10:00:00.000Z',
+        failure_class: 'no_credit',
+        failure_status: 429,
+      },
+    ];
+    // Still failing on the key Chat runs on: stays paused.
+    fakes.onOwnKey.mockResolvedValue(true);
+    expect((await sweepAgents(NOW, driver)).failed).toEqual([]);
+    expect(agentRow().status).toBe('paused');
+
+    // The key works again.
+    db.tables.organization_ai_keys[0].failing_since = null;
+    db.tables.organization_ai_keys[0].failure_class = null;
+    expect((await sweepAgents(NOW, driver)).resumed).toBe(1);
+    expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
+    expect(agentRow(OTHER_AGENT).status).toBe('paused');
+
+    // Chat no longer runs on the key (removed, or a plan without own keys).
+    Object.assign(agentRow(), { status: 'paused', paused_reason: 'own_key' });
+    db.tables.organization_ai_keys[0].failing_since = '2026-11-02T10:00:00.000Z';
+    db.tables.organization_ai_keys[0].failure_class = 'no_credit';
+    fakes.onOwnKey.mockResolvedValue(false);
+    expect((await sweepAgents(NOW, driver)).resumed).toBe(1);
+    expect(agentRow().status).toBe('active');
+  });
+
+  it('reminds the Admins once of an own key still failing 3 days in (AGENT-OWN-KEY §5.3)', async () => {
+    const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
+    const due = ago(OWN_KEY_REMINDER_MS + 60_000);
+    db.tables.organization_ai_keys = [
+      // Told as it began: its reminder is due.
+      { organization_id: ORG, provider: 'openai', failing_since: due, notified_at: due },
+      // Not 3 days yet.
+      {
+        organization_id: ORG,
+        provider: 'anthropic',
+        failing_since: ago(OWN_KEY_REMINDER_MS - 60_000),
+        notified_at: null,
+      },
+      // Reminded already.
+      {
+        organization_id: ORG,
+        provider: 'google',
+        failing_since: ago(OWN_KEY_REMINDER_MS + 120_000),
+        notified_at: ago(30_000),
+      },
+      // Works.
+      { organization_id: ORG, provider: 'azure', failing_since: null, notified_at: null },
+    ];
+    expect((await sweepAgents(NOW, driver)).reminded).toBe(1);
+    expect(fakes.notify).toHaveBeenCalledTimes(1);
+    expect(fakes.notify).toHaveBeenCalledWith(ORG, 'openai', due, { reminder: true });
+
+    // Chat off for the workspace: no one is reminded.
+    fakes.notify.mockClear();
+    vi.stubEnv('CHAT_AGENTIC_ORGS', 'ffffffff-0000-4000-8000-000000000000');
+    expect((await sweepAgents(NOW, driver)).reminded).toBe(0);
+    expect(fakes.notify).not.toHaveBeenCalled();
   });
 
   it('keeps an agent paused while its own monthly cap is used', async () => {

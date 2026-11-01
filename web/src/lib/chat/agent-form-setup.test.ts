@@ -13,7 +13,16 @@ vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('./testing/fake-supabase')).createFakeSupabase(),
 }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
-const key = vi.hoisted(() => ({ own: false }));
+const key = vi.hoisted(() => {
+  class OwnKeyUnreadableError extends Error {
+    provider: string;
+    constructor(provider: string) {
+      super('unreadable');
+      this.provider = provider;
+    }
+  }
+  return { own: false, unreadable: false, OwnKeyUnreadableError };
+});
 const keyCap = vi.hoisted(() => ({
   reached: null as { reached: boolean; renewsAt: string | null } | null,
   read: null as { reached: boolean; renewsAt: string | null } | null,
@@ -23,11 +32,13 @@ vi.mock('./own-key-cap', () => ({
   readOwnKeyCap: vi.fn(async () => keyCap.read),
 }));
 vi.mock('./key', () => ({
-  resolveChatModelKey: vi.fn(async () =>
-    key.own
+  OwnKeyUnreadableError: key.OwnKeyUnreadableError,
+  resolveChatModelKey: vi.fn(async () => {
+    if (key.unreadable) throw new key.OwnKeyUnreadableError('azure');
+    return key.own
       ? { source: 'own', config: { provider: 'openai', apiKey: 'k', settings: {} } }
-      : { source: 'ansvisor', config: { provider: 'anthropic', apiKey: 'k', settings: {} } },
-  ),
+      : { source: 'ansvisor', config: { provider: 'anthropic', apiKey: 'k', settings: {} } };
+  }),
 }));
 vi.mock('./agent-shares', () => ({ readAgentShares: vi.fn(async () => null) }));
 
@@ -154,5 +165,10 @@ describe('agentFormSetupFor', () => {
   it('says whose key Chat runs on: the workspace’s own, by provider', async () => {
     key.own = true;
     expect((await setupOf(PEOPLE.admin)).ownKeyProvider).toBe('openai');
+    // A saved key that can't be read is still the one agents run on, not the AI limit.
+    key.unreadable = true;
+    expect((await setupOf(PEOPLE.admin)).ownKeyProvider).toBe('azure');
+    key.own = false;
+    key.unreadable = false;
   });
 });

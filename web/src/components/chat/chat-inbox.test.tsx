@@ -73,6 +73,8 @@ vi.mock('@/lib/actions/chat-suggestions', () => ({
   setDailySuggestions: server.set,
   startDailySuggestions: server.start,
 }));
+const notices = vi.hoisted(() => ({ read: vi.fn(async () => true) }));
+vi.mock('@/lib/actions/chat-notices', () => ({ markChatNoticesRead: notices.read }));
 const list = vi.hoisted(() => ({ chats: [] as ChatListItem[] }));
 vi.mock('./chat-list-provider', () => ({
   useChatList: () => ({ status: 'ready', chats: list.chats, refresh: async () => undefined }),
@@ -258,6 +260,63 @@ describe('the topic tabs', () => {
     );
     expect(tabs()).toEqual(['All0', 'Daily suggestions0', 'Needs you0', 'Runs0']);
     expect(text()).toContain('Nothing here.');
+  });
+});
+
+describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
+  const KEY_NOTICE = {
+    id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c09',
+    kind: 'own_key_failed' as const,
+    provider: 'openai' as const,
+    class: 'no_credit' as const,
+    reminder: false,
+    createdAt: '2026-10-29T08:00:00Z',
+    read: false,
+  };
+  const withNotice = (over: Partial<typeof KEY_NOTICE> = {}) => ({
+    ok: true as const,
+    notices: [{ ...KEY_NOTICE, ...over }],
+  });
+  const noticeRows = () => [...host.querySelectorAll('[data-slot="inbox-notice"]')];
+
+  beforeEach(() => notices.read.mockClear());
+
+  it('leads Needs you and All with the key’s notice, counted in both, with Fix it', async () => {
+    await render(<ChatInbox suggestions={ok()} notices={withNotice()} />);
+    expect(tabs()).toEqual(['All6', 'Daily suggestions3', 'Needs you2', 'Runs1']);
+    expect(text()).toContain('2 need you · 1 running · 3 suggestions this week.');
+    const [row] = noticeRows();
+    expect(row.textContent).toContain('Your OpenAI key isn’t working · agents are paused');
+    expect(row.textContent).toContain('Your OpenAI account is out of credit.');
+    expect(row.querySelector('[data-action="inbox.fixKey"]')!.getAttribute('href')).toBe(
+      '/dashboard/settings/ai-providers',
+    );
+    // Shown: marked read, once.
+    expect(notices.read).toHaveBeenCalledExactlyOnceWith([KEY_NOTICE.id]);
+
+    await openTab('needsYou');
+    expect(noticeRows()).toHaveLength(1);
+    await openTab('runs');
+    expect(noticeRows()).toHaveLength(0);
+  });
+
+  it('says a reminder is one, and marks nothing read that was read', async () => {
+    await render(<ChatInbox suggestions={ok()} notices={withNotice({ reminder: true, read: true })} />);
+    expect(noticeRows()[0].textContent).toContain(
+      'Your OpenAI account is out of credit. Still not working after 3 days.',
+    );
+    expect(notices.read).not.toHaveBeenCalled();
+  });
+
+  it('shows the notice in the Inbox without tabs too, and none that couldn’t be read', async () => {
+    list.chats = [];
+    await render(<ChatInboxView status="ready" items={[]} now={null} onRetry={() => {}} notices={withNotice().notices} />);
+    expect(noticeRows()).toHaveLength(1);
+    expect(text()).not.toContain('Nothing needs you.');
+    expect(text()).toContain('1 needs you.');
+
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: false }} />);
+    expect(noticeRows()).toHaveLength(0);
   });
 });
 

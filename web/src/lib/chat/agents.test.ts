@@ -16,7 +16,12 @@ vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('./testing/fake-supabase')).createFakeSupabase(),
 }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
-const usage = vi.hoisted(() => ({ percent: 10, own: false, shares: null as unknown }));
+const usage = vi.hoisted(() => ({
+  percent: 10,
+  own: false,
+  shares: null as unknown,
+  keyFailing: null as { class: string; provider: string } | null,
+}));
 vi.mock('@/lib/mcp/account', () => ({
   getAiUsageFor: vi.fn(async () => ({
     active_plan: true,
@@ -34,6 +39,7 @@ vi.mock('./own-key-cap', () => ({
 }));
 vi.mock('./key', () => ({
   resolveChatModelKey: vi.fn(async () => ({ source: usage.own ? 'own' : 'ansvisor' })),
+  failingOwnKey: vi.fn(async () => usage.keyFailing ?? null),
 }));
 vi.mock('./agent-shares', () => ({ readAgentShares: vi.fn(async () => usage.shares) }));
 
@@ -81,6 +87,7 @@ beforeEach(() => {
   usage.percent = 10;
   usage.own = false;
   usage.shares = null;
+  usage.keyFailing = null;
   db.unique = {
     ...db.unique,
     chat_agents: [['organization_id', 'name']],
@@ -599,6 +606,35 @@ describe('changing an agent', () => {
 });
 
 describe('states', () => {
+  it('refuses Activate and Resume while the workspace’s own key fails, and lets them once it works', async () => {
+    const { id } = await create(PEOPLE.manager, { visibility: 'workspace' });
+    const admin = await ctxOf(PEOPLE.admin);
+    usage.own = true;
+    usage.keyFailing = { class: 'invalid', provider: 'anthropic' };
+    expect(await agents.changeAgentState(admin, id, 'activate', NOW)).toMatchObject({
+      ok: false,
+      refusal: {
+        status: 409,
+        code: 'own_key_failed',
+        message:
+          'Anthropic turned down your workspace’s key. An Admin can fix it in Settings › AI Providers, then run the agent again.',
+      },
+    });
+    expect(agentRow(id).status).toBe('draft');
+
+    usage.keyFailing = null;
+    expect((await agents.changeAgentState(admin, id, 'activate', NOW)).ok).toBe(true);
+    // Paused for the key, it stays paused while the key fails.
+    db.tables.chat_agents.find((a) => a.id === id)!.status = 'paused';
+    db.tables.chat_agents.find((a) => a.id === id)!.paused_reason = 'own_key';
+    usage.keyFailing = { class: 'no_credit', provider: 'openai' };
+    expect(await agents.changeAgentState(admin, id, 'resume')).toMatchObject({
+      ok: false,
+      refusal: { code: 'own_key_failed' },
+    });
+    expect(agentRow(id)).toMatchObject({ status: 'paused', paused_reason: 'own_key' });
+  });
+
   it('activates a draft (the person becomes its owner), pauses, resumes, archives, restores and deletes', async () => {
     const { id } = await create(PEOPLE.manager, { visibility: 'workspace' });
     const admin = await ctxOf(PEOPLE.admin);
@@ -910,7 +946,19 @@ describe('reading', () => {
     const list = await agents.listAgents(manager, { view: 'mine' }, NOW);
     expect(list.agents.map((a) => a.name)).toEqual(['Mine private']);
     expect(list.counts).toEqual({ mine: 1, workspace: 1, paused: 1, archived: 0 });
-    expect(list).toMatchObject({ active: 0, activeInWorkspace: 0, activeLimit: 25 });
+    expect(list).toMatchObject({
+      active: 0,
+      activeInWorkspace: 0,
+      activeLimit: 25,
+      keyFailure: null,
+    });
+    // The own key failing: the banner's class and provider, no dates.
+    usage.keyFailing = { class: 'model', provider: 'azure' };
+    expect((await agents.listAgents(manager, { view: 'mine' }, NOW)).keyFailure).toEqual({
+      class: 'model',
+      provider: 'azure',
+    });
+    usage.keyFailing = null;
     const workspace = await agents.listAgents(manager, { view: 'workspace' }, NOW);
     expect(workspace.agents.map((a) => [a.name, a.mine])).toEqual([['Shared', false]]);
 

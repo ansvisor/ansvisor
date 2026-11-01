@@ -324,6 +324,7 @@
       "changeRoles": "Changing roles needs a plan",
       "saveAiKeys": "Saving an AI key needs a plan",
       "switchAiProvider": "Switching Chat's AI provider needs a plan",
+      "testAiKey": "Testing an AI key needs a plan",
       "addCatalogSources": "Adding catalog sources needs a plan",
       "syncCatalog": "Syncing the catalog needs a plan",
       "removeCatalogSources": "Removing catalog sources needs a plan",
@@ -3880,6 +3881,14 @@
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
       "queueTimeout": "Too many runs are working at once in this workspace, so this one didn't start. Try again in a moment.",
       "failed": "Something went wrong, so Chat stopped here. What's done so far is kept.",
+      "providerDown": "{provider} didn't answer, so Chat stopped here. What's done so far is kept. Try again in a moment.",
+      "keyStopped": "So Chat stopped here. What's done so far is kept.",
+      "key": {
+        "invalid": "{provider} turned down your workspace's key.",
+        "no_credit": "Your {provider} account is out of credit.",
+        "model": "{provider} can't find the model {model} for your key.",
+        "unreadable": "Your saved {provider} key can't be read any more."
+      },
       "rateHour": "You're sending a lot. Wait a few minutes, then send again.",
       "rateDay": "You've sent today's messages. Chat takes more tomorrow.",
       "notWaiting": "This run isn't waiting for an answer any more.",
@@ -3891,6 +3900,8 @@
     }
   },
   "chatRun": {
+    "keyFix": "Open AI Providers",
+    "keyAskAdmin": "An Admin can fix it in Settings › AI Providers.",
     "tasks": {
       "title": "{due, plural, =0 {Action Center tasks} other {Action Center tasks · # due}}",
       "progress": "Tasks ready",
@@ -4615,6 +4626,10 @@
     },
     "inbox": {
       "title": "Inbox",
+      "notice": {
+        "reminder": "{why} Still not working after 3 days.",
+        "fix": "Fix it"
+      },
       "lands": "Results from your agents land here.",
       "landsWithSuggestions": "Results from your agents and daily suggestions land here.",
       "nothingNeedsYou": "Nothing needs you.",
@@ -5406,7 +5421,20 @@
       "action_closed": "This action is closed. Reopen it in Action Center to run an agent on it.",
       "queue_full": "{count, plural, one {# run already waits} other {# runs already wait}} for this agent on this brand. Try again once one has started.",
       "connection_missing": "This agent needs {name}, and {brand} doesn’t have it connected. Connect it for that brand, then run the agent again.",
+      "own_key_failed": "{why} An Admin can fix it in Settings › AI Providers, then run the agent again.",
       "failed": "Something went wrong with this agent. Try again."
+    },
+    "ownKey": {
+      "why": {
+        "invalid": "{provider} turned down your workspace’s key.",
+        "no_credit": "Your {provider} account is out of credit.",
+        "model": "{provider} can’t reach the model set for your key.",
+        "unreadable": "Your saved {provider} key can’t be read any more."
+      },
+      "banner": "Your {provider} key isn’t working · agents are paused",
+      "fix": "Fix in AI Providers",
+      "askAdmin": "An Admin can fix it in Settings › AI Providers.",
+      "composer": "{why} Chat stops on it until it’s fixed."
     },
     "status": {
       "draft": "Draft",
@@ -5423,7 +5451,8 @@
       "owner_role": "Its owner can't run agents",
       "plan": "Your plan doesn't allow its settings",
       "brand_gone": "Its brands are gone",
-      "manual": "Paused by a person"
+      "manual": "Paused by a person",
+      "own_key": "Your AI key isn't working"
     },
     "line": {
       "draft": "Not on yet",
@@ -5583,7 +5612,8 @@
       "no_answer": "No answer in 7 days",
       "run_cap": "Stopped at its limit",
       "action_closed": "The action was closed",
-      "brand_gone": "Its brand was removed"
+      "brand_gone": "Its brand was removed",
+      "own_key": "Stopped · AI key not working"
     },
     "skippedReason": {
       "coalesced": "Joined another run",
@@ -12840,6 +12870,7 @@
     "revokeApiKeyConfirm": "Revoke this API key? Clients using it will lose access immediately.",
     "revoke": "Revoke",
     "agent_removeKeyConfirm": "Remove the {provider} API key? If Chat uses it, Chat switches to the most recently saved other key, or stays locked until a new one is saved.",
+    "agent_removeKeyConfirmChat": "Remove the {provider} API key? If Chat uses it, Chat switches to the most recently saved other key, or to your plan’s monthly AI limit when there is none. Agents paused because this key failed start again.",
     "remove": "Remove",
     "apiKeys_description": "Long-lived tokens for the Ansvisor MCP server and other external clients. Keys are shown once at creation — store them somewhere safe.",
     "apiKeys_mcpEndpoint": "MCP endpoint",
@@ -12903,6 +12934,24 @@
     "agent_saved": "{provider} key saved",
     "agent_switched": "Chat now uses {provider}",
     "agent_removed": "Key removed",
+    "agent_health": {
+      "working": "Working · checked {when}",
+      "failing": "Not working since {date}: {why}",
+      "unchecked": "Not checked yet"
+    },
+    "agent_test": "Test",
+    "agent_testing": "Testing…",
+    "agent_testWorks": "Your {provider} key works.",
+    "agent_testResumed": "{count, plural, one {# paused agent started again.} other {# paused agents started again.}}",
+    "agent_testUnknown": "Couldn’t check the key just now. Try again in a moment.",
+    "agent_keyError": {
+      "invalid": "{provider} turned down this key.",
+      "no_credit": "Your {provider} account is out of credit.",
+      "model": "{provider} can’t find the model {model} for this key.",
+      "unreadable": "Your saved {provider} key can’t be read any more."
+    },
+    "agent_savedNoCredit": "Saved. Your {provider} account is out of credit, so Chat and agents stop on it until it has credit.",
+    "agent_savedUnchecked": "Saved. Couldn’t check the key just now.",
     "agent_removeKey": "Remove key",
     "agent_adminOnly": "Admin-only setting",
     "agent_adminOnlyHint": "Only org admins can add, replace, or remove AI provider keys. Ask an admin if you need one changed.",

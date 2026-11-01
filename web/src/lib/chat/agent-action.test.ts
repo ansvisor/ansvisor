@@ -26,7 +26,10 @@ vi.mock('./own-key-cap', () => ({
   ownKeyCapReached: vi.fn(async () => keyCap.reached),
   readOwnKeyCap: vi.fn(async () => keyCap.read),
 }));
-vi.mock('./key', () => ({ resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })) }));
+vi.mock('./key', () => ({
+  resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
+  failingOwnKey: vi.fn(async () => null),
+}));
 vi.mock('./agent-shares', () => ({ readAgentShares: vi.fn(async () => null) }));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');

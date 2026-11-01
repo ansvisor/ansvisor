@@ -32,7 +32,11 @@ vi.mock('./own-key-cap', () => ({
   ownKeyCapReached: vi.fn(async () => keyCap.reached),
   readOwnKeyCap: vi.fn(async () => keyCap.read),
 }));
-vi.mock('./key', () => ({ resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })) }));
+const ownKey = vi.hoisted(() => ({ failing: null as { class: string; provider: string } | null }));
+vi.mock('./key', () => ({
+  resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
+  failingOwnKey: vi.fn(async () => ownKey.failing),
+}));
 vi.mock('./agent-shares', () => ({ readAgentShares: vi.fn(async () => null) }));
 vi.mock('./engine', () => ({
   APPROVAL_TTL_MS: 7 * 24 * 60 * 60 * 1000,
@@ -139,6 +143,7 @@ beforeEach(() => {
   keyCap.reached = null;
   keyCap.read = null;
   vi.clearAllMocks();
+  ownKey.failing = null;
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
@@ -413,6 +418,22 @@ describe('handing a started run to Chat', () => {
     expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
   });
 
+  it('stops a queued run on a failing own key before any call, pausing a triggered agent', async () => {
+    ownKey.failing = { class: 'invalid', provider: 'anthropic' };
+    const id = queueRun();
+    expect(await driver.openAgentRun(id, ORG, NOW)).toBeNull();
+    expect(runRow(id)).toMatchObject({ status: 'stopped', stop_reason: 'own_key' });
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'own_key' });
+    expect(db.tables.chat_conversations).toEqual([]);
+
+    // Run now stops the same, and leaves the agent as it is.
+    Object.assign(agentRow(), { status: 'active', paused_reason: null });
+    const manual = queueRun({ trigger_kind: 'manual', acting_user_id: PEOPLE.manager });
+    expect(await driver.openAgentRun(manual, ORG, NOW)).toBeNull();
+    expect(runRow(manual)).toMatchObject({ status: 'stopped', stop_reason: 'own_key' });
+    expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
+  });
+
   it('holds a skill’s Required connection even when the saved list leaves it out or has it Optional', async () => {
     // Saved through the API: /publish, with no connections at all.
     Object.assign(db.tables.chat_agent_versions[0], { skill_ids: ['publish'], connections: [] });
@@ -529,6 +550,23 @@ describe('keeping the agent run in step with its Chat run', () => {
       status: 'paused',
       paused_reason: 'failures',
     });
+  });
+
+  it('stops a run its own key failed, pauses a triggered agent, and counts neither as failed', async () => {
+    agentRow().fail_count = 2;
+    const keyFailure = { class: 'no_credit', provider: 'openai', status: 429, model: null };
+    const manual = queueRun({ trigger_kind: 'manual' });
+    chatOf(manual, 'error', { keyFailure });
+    expect(await driver.settleAgentRun(manual, { now: NOW })).toBe('stopped');
+    expect(runRow(manual)).toMatchObject({ status: 'stopped', stop_reason: 'own_key' });
+    // A person's Run now doesn't pause it, as with a missing connection.
+    expect(agentRow()).toMatchObject({ status: 'active', fail_count: 2 });
+
+    const triggered = queueRun({ brand_id: null });
+    chatOf(triggered, 'error', { keyFailure });
+    expect(await driver.settleAgentRun(triggered, { now: NOW })).toBe('stopped');
+    expect(runRow(triggered).stop_reason).toBe('own_key');
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'own_key', fail_count: 2 });
   });
 
   it('stops a triggered run at its own cap, "Stopped at its limit", in its owner’s chat', async () => {

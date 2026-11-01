@@ -23,7 +23,11 @@ import { CHAT_MODES, type ChatMode, type ToolDenial } from './precedence';
 export const AGENT_STATUSES = ['draft', 'active', 'paused', 'archived'] as const;
 export type AgentStatus = (typeof AGENT_STATUSES)[number];
 
-/** Why an agent is paused (§G item 34): `manual` a person paused it; the rest the system did. */
+/**
+ * Why an agent is paused (§G item 34): `manual` a person paused it; the rest
+ * the system did. `own_key`: the workspace's own AI key failed (00440); the
+ * agent starts again by itself once the key works.
+ */
 export const AGENT_PAUSED_REASONS = [
   'cap',
   // All agents reached the month's limit on the workspace's own key (AGENT-OWN-KEY §4.2).
@@ -35,6 +39,7 @@ export const AGENT_PAUSED_REASONS = [
   'plan',
   'brand_gone',
   'manual',
+  'own_key',
 ] as const;
 export type AgentPausedReason = (typeof AGENT_PAUSED_REASONS)[number];
 

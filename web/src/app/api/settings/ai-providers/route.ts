@@ -1,11 +1,21 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeRefusal } from '@/lib/subscription-guard';
 import { encryptApiKey, last4 } from '@/lib/agent/key-encryption';
+import { isKeyFailureClass } from '@/lib/agent/key-errors';
 import { isAiProvider, parseProviderSettings, type AiProvider } from '@/lib/agent/providers';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { ownKeyAccess, type OwnKeyAccess } from '@/lib/chat/key';
+import { readProviderKey } from '@/lib/agent/key';
+import { resolveOwnKeyNotices, resumeOwnKeyAgents } from '@/lib/chat/key-health';
+import {
+  keepKeyCheck,
+  keyCheckOf,
+  testOwnKey,
+  testSavedKey,
+  type KeyTestResult,
+} from '@/lib/chat/key-test';
+import { getAdmin, getCallerAndOrg } from './_admin';
 
 /**
  * GET / PUT / PATCH / DELETE /api/settings/ai-providers
@@ -38,44 +48,6 @@ import { ownKeyAccess, type OwnKeyAccess } from '@/lib/chat/key';
  *   adding a payment instrument (which is effectively what a provider key
  *   is) shouldn't be a non-admin action.
  */
-
-async function getCallerAndOrg() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: 'Unauthorized' as const };
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, role, organization_id')
-    .eq('id', user.id)
-    .single();
-
-  if (!profile?.organization_id) return { error: 'No organization' as const };
-
-  return {
-    user,
-    profile: profile as { id: string; role: string; organization_id: string },
-  };
-}
-
-type Caller = Exclude<Awaited<ReturnType<typeof getCallerAndOrg>>, { error: string }>;
-
-/** The caller when they may change the keys, or the response that says why not. */
-async function getAdmin(): Promise<Caller | NextResponse> {
-  const ctx = await getCallerAndOrg();
-  if ('error' in ctx) {
-    return NextResponse.json(
-      { error: ctx.error },
-      { status: ctx.error === 'Unauthorized' ? 401 : 400 },
-    );
-  }
-  if (ctx.profile.role !== 'admin') {
-    return NextResponse.json({ error: 'Only admins can manage AI provider keys' }, { status: 403 });
-  }
-  return ctx;
-}
 
 /** Under a lock on the org's keys (00188); with onlyIfNone, only while none is Chat's. */
 async function setActive(organizationId: string, provider: AiProvider, onlyIfNone = false) {
@@ -116,6 +88,44 @@ async function markLegacyKey(organizationId: string) {
     .update({ legacy_key_grandfathered: true })
     .eq('id', organizationId)
     .neq('plan', 'enterprise');
+}
+
+/**
+ * A key its test turned down (AGENT-OWN-KEY §11 Q8): not saved or switched
+ * to. `code` names the class for the page's words; the field is the key.
+ */
+function keyRefused(result: Extract<KeyTestResult, { outcome: 'failing' }>) {
+  return NextResponse.json(
+    { error: KEY_REFUSED[result.class], code: `key_${result.class}`, field: 'apiKey' },
+    { status: 400 },
+  );
+}
+
+const KEY_REFUSED: Record<Extract<KeyTestResult, { outcome: 'failing' }>['class'], string> = {
+  invalid: 'The provider turned down this key',
+  no_credit: "The provider's account is out of credit",
+  model: "The provider can't find the model for this key",
+  unreadable: "The saved key can't be read any more",
+};
+
+/**
+ * Keeps a test's result on the key (lib/chat/key-test.ts keepKeyCheck): what
+ * the page says after a save or a switch, and how many paused agents started
+ * again. A keep that fails leaves the key unchecked.
+ */
+async function keptCheck(
+  organizationId: string,
+  provider: AiProvider,
+  result: KeyTestResult,
+  active: boolean,
+) {
+  let resumed = 0;
+  try {
+    resumed = await keepKeyCheck(organizationId, provider, result, { active });
+  } catch (err) {
+    console.error('[ai-providers] could not keep the key check:', err);
+  }
+  return { check: keyCheckOf(result), resumed };
 }
 
 /** Own keys need Enterprise once Chat is on (CHAT-16 item 19). */
@@ -171,7 +181,9 @@ export async function GET() {
 
   const { data, error } = await supabaseAdmin
     .from('organization_ai_keys')
-    .select('provider, key_last4, settings, active, set_at, set_by')
+    .select(
+      'provider, key_last4, settings, active, set_at, set_by, checked_at, failing_since, failure_class, failure_status',
+    )
     .eq('organization_id', ctx.profile.organization_id);
 
   if (error) {
@@ -212,6 +224,12 @@ export async function GET() {
       active: row.active,
       setAt: row.set_at,
       setByEmail: row.set_by ? (emails.get(row.set_by) ?? null) : null,
+      // Its health (00440): when it was last tested, and why and since when it fails.
+      health: {
+        checkedAt: row.checked_at ?? null,
+        failingSince: row.failing_since ?? null,
+        failureClass: isKeyFailureClass(row.failure_class) ? row.failure_class : null,
+      },
     })),
   });
 }
@@ -251,6 +269,12 @@ export async function PUT(req: Request) {
 
   const notAllowed = await keyChangeRefusal(ctx.profile.organization_id, provider);
   if (notAllowed) return notAllowed;
+
+  // With Chat on, the new key is tested before it's kept (AGENT-OWN-KEY §11 Q8).
+  const tested = chatAgenticEnabled(ctx.profile.organization_id)
+    ? await testOwnKey({ provider, apiKey, settings: parsed.settings })
+    : null;
+  if (tested?.outcome === 'failing' && keyCheckOf(tested) === 'refused') return keyRefused(tested);
 
   let encrypted: string;
   try {
@@ -296,7 +320,12 @@ export async function PUT(req: Request) {
   if (markError) {
     return NextResponse.json({ error: markError.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
+  if (!tested) return NextResponse.json({ ok: true });
+  const saved = await readProviderKey(organizationId, provider).catch(() => null);
+  return NextResponse.json({
+    ok: true,
+    ...(await keptCheck(organizationId, provider, tested, saved?.active === true)),
+  });
 }
 
 export async function PATCH(req: Request) {
@@ -311,14 +340,43 @@ export async function PATCH(req: Request) {
   }
   const notAllowed = await keyChangeRefusal(ctx.profile.organization_id, body.provider);
   if (notAllowed) return notAllowed;
-  const { data, error } = await setActive(ctx.profile.organization_id, body.provider);
+  const organizationId = ctx.profile.organization_id;
+
+  // With Chat on, the key is tested before Chat uses it (AGENT-OWN-KEY §8 item 3).
+  let tested: KeyTestResult | null = null;
+  if (chatAgenticEnabled(organizationId)) {
+    let saved;
+    try {
+      saved = await readProviderKey(organizationId, body.provider);
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'Failed to read the key' },
+        { status: 500 },
+      );
+    }
+    if (saved.state === 'none') {
+      return NextResponse.json({ error: 'No key is saved for this provider' }, { status: 404 });
+    }
+    tested = await testSavedKey(saved);
+    if (tested.outcome === 'failing' && keyCheckOf(tested) === 'refused') {
+      // Kept on the key, so the page says why it wasn't switched to.
+      await keptCheck(organizationId, body.provider, tested, false);
+      return keyRefused(tested);
+    }
+  }
+
+  const { data, error } = await setActive(organizationId, body.provider);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   if (!data) {
     return NextResponse.json({ error: 'No key is saved for this provider' }, { status: 404 });
   }
-  return NextResponse.json({ ok: true });
+  if (!tested) return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    ...(await keptCheck(organizationId, body.provider, tested, true)),
+  });
 }
 
 /**
@@ -334,6 +392,10 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: 'Unknown provider' }, { status: 400 });
   }
   const organizationId = ctx.profile.organization_id;
+  // Chat's key, whose agents paused when it failed start again once it's gone (§5.4).
+  const wasChatKey =
+    chatAgenticEnabled(organizationId) &&
+    (await readProviderKey(organizationId, provider).catch(() => null))?.active === true;
   // Removed, and when it was Chat's key the most recently saved other one
   // takes over, in one transaction under a lock on the org's keys (00188).
   const { error } = await supabaseAdmin.rpc('remove_ai_provider_key', {
@@ -349,5 +411,14 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: legacyError.message }, { status: 500 });
     }
   }
+  if (wasChatKey) {
+    await resumeOwnKeyAgents(organizationId).catch((err) =>
+      console.error('[ai-providers] could not resume the agents:', err),
+    );
+  }
+  // A removed key fails no more: the Admins' notices about it close (00441).
+  await resolveOwnKeyNotices(organizationId, provider).catch((err) =>
+    console.error("[ai-providers] could not close the key's notices:", err),
+  );
   return NextResponse.json({ ok: true });
 }

@@ -179,6 +179,8 @@ function pauseFor(refusal: AgentRefusal): Exclude<AgentPausedReason, 'manual'> |
   if (refusal.kind === 'denied') return 'plan';
   if (refusal.code === 'no_brand') return 'brand_gone';
   if (refusal.code === 'ai_limit') return 'cap';
+  // The workspace's own key is marked failing (AGENT-OWN-KEY §5.2 item 4).
+  if (refusal.code === 'own_key_failed') return 'own_key';
   // All agents reached the month's limit on the workspace's own key (AGENT-OWN-KEY §4.2).
   if (refusal.code === 'own_key_cap') return 'own_key_cap';
   return null;
@@ -194,7 +196,7 @@ async function endBeforeStart(
     now,
   }: {
     pause?: Exclude<AgentPausedReason, 'manual'> | null;
-    stopReason?: 'brand_gone' | 'action_closed' | null;
+    stopReason?: 'brand_gone' | 'action_closed' | 'own_key' | null;
     now: Date;
   },
 ): Promise<null> {
@@ -403,7 +405,7 @@ export async function openAgentRun(
     const pause = pauseFor(failing.refusal);
     return endBeforeStart(run, 'stopped', {
       pause,
-      stopReason: pause === 'brand_gone' ? 'brand_gone' : null,
+      stopReason: pause === 'brand_gone' || pause === 'own_key' ? pause : null,
       now,
     });
   }
@@ -571,7 +573,11 @@ async function heldTooLong(chatRunId: string, now: Date): Promise<boolean> {
   return !!at && now.getTime() - Date.parse(at) > APPROVAL_TTL_MS;
 }
 
-/** The agent run's state for its Chat run's (§H item 37). */
+/**
+ * The agent run's state for its Chat run's (§H item 37). A Chat run that
+ * ended on the workspace's own key failing is stopped `own_key`, not failed
+ * (AGENT-OWN-KEY §5.2): it doesn't count toward 3 failed runs in a row.
+ */
 export function agentStateOf(chat: Pick<LoadedRun, 'status' | 'progress'>): {
   status: string;
   stopReason?: string;
@@ -584,7 +590,9 @@ export function agentStateOf(chat: Pick<LoadedRun, 'status' | 'progress'>): {
     case 'done':
       return { status: 'done' };
     case 'error':
-      return { status: 'failed' };
+      return chat.progress?.keyFailure
+        ? { status: 'stopped', stopReason: 'own_key' }
+        : { status: 'failed' };
     case 'stopped': {
       const why = chat.progress?.stoppedFor;
       return {
@@ -774,6 +782,11 @@ export async function settleAgentRun(
     // The month's AI limit (not the run's own cap) pauses the agent until it resets (§L item 55).
     if (target.status === 'paused_cap' && capHit !== 'run') {
       await pauseAgentForSystem(run.organization_id, run.agent_id, 'cap');
+    }
+    // The own key failed: a triggered agent pauses until it works (AGENT-OWN-KEY §5.2);
+    // a person's Run now or Run agent doesn't pause it, as with a missing connection.
+    if (target.stopReason === 'own_key' && isTriggered(run.trigger_kind)) {
+      await pauseAgentForSystem(run.organization_id, run.agent_id, 'own_key');
     }
     if (ENDED.includes(target.status)) {
       await markShipped(run.id);
