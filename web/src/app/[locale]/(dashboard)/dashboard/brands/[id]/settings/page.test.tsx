@@ -214,6 +214,14 @@ describe('brand settings site type', () => {
     expect(container.textContent).not.toContain('settings.siteTypeGuessed');
     await act(async () => root.unmount());
   });
+
+  it('shows Mobile app when the brand chose it', async () => {
+    brand.siteType = 'app';
+    const { container, root, siteType } = await render();
+    expect(siteType?.textContent).toBe('siteTypes.app');
+    expect(container.textContent).not.toContain('settings.siteTypeGuessed');
+    await act(async () => root.unmount());
+  });
 });
 
 describe('brand settings Shopping mode', () => {
