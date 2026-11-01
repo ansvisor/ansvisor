@@ -46,6 +46,7 @@ import {
   type RecentAudit,
   type AuditOverview,
   type AuditOpportunities,
+  type AuditOpportunity,
   type AuditQuota,
   type AuditTrend,
 } from '@/lib/actions/audits';
@@ -56,7 +57,12 @@ import { ScoreTrendChart } from './_charts';
 import { AuditPagesTable } from './_pages-table';
 import { AuditBulkBar, ExportMenu } from './_bulk-bar';
 import { AuditOverviewCards } from './_overview-cards';
-import { OpportunitiesTable, opportunityAuditUrls } from './_opportunities-table';
+import {
+  OpportunitiesTable,
+  opportunityAuditUrls,
+  opportunityPagesToAudit,
+} from './_opportunities-table';
+import { AuditConfirmDialog, type PageToAudit } from './_audit-confirm-dialog';
 import {
   OpportunityFilterChips,
   matchesFilter,
@@ -135,6 +141,13 @@ export default function SiteAuditPage() {
   const [oppSelected, setOppSelected] = useState<Set<string>>(() => new Set());
   // Opportunities shown by why they're listed (customer priorities item 11).
   const [oppFilter, setOppFilter] = useState<OpportunityFilter>('all');
+  // A bulk audit asks first (item 11): which pages, from where, and when it was asked.
+  const [confirm, setConfirm] = useState<{
+    pages: PageToAudit[];
+    mode: 'notAudited' | 'picked';
+    target: 'opportunities' | 'pages';
+    at: number;
+  } | null>(null);
   // Opportunities when it lists pages, else Pages; chosen once per brand.
   const [tab, setTab] = useState<ListTab | null>(null);
   const [startingBulk, setStartingBulk] = useState(false);
@@ -428,15 +441,22 @@ export default function SiteAuditPage() {
     });
   };
 
-  const handleBulkReaudit = async () => {
-    if (!activeBrandId || selectedPages.length === 0) return;
+  // Re-audit on the Pages tab: asks first, with the pages audited this week.
+  const confirmReaudit = () =>
+    setConfirm({
+      pages: selectedPages.map((p) => ({ url: p.url, path: p.path, lastAuditAt: p.lastAuditedAt })),
+      mode: 'picked',
+      target: 'pages',
+      at: Date.now(),
+    });
+
+  const handleBulkReaudit = async (urls: string[]) => {
+    if (!activeBrandId || urls.length === 0) return;
     setStartingBulk(true);
     try {
-      await auditUrls(
-        activeBrandId,
-        selectedPages.map((p) => p.url),
-      );
+      await auditUrls(activeBrandId, urls);
       setSelected(new Set());
+      setConfirm(null);
       await reloadInPlace(activeBrandId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('failed'));
@@ -474,12 +494,22 @@ export default function SiteAuditPage() {
   const selectedOppUrls = selectedOpps.flatMap((o) => (!o.template && o.url ? [o.url] : []));
   const selectedTemplates = selectedOpps.filter((o) => o.template).map((o) => o.path);
 
-  const handleAuditOpps = async () => {
-    if (!activeBrandId || oppAuditUrls.length === 0) return;
+  // Audit selected, and Not audited's Audit all: ask first, most valuable first.
+  const confirmOpps = (rows: AuditOpportunity[], mode: 'notAudited' | 'picked') =>
+    setConfirm({
+      pages: opportunityPagesToAudit(rows.filter((o) => !o.running)),
+      mode,
+      target: 'opportunities',
+      at: Date.now(),
+    });
+
+  const handleAuditOpps = async (urls: string[]) => {
+    if (!activeBrandId || urls.length === 0) return;
     setStartingBulk(true);
     try {
-      await auditUrls(activeBrandId, oppAuditUrls);
+      await auditUrls(activeBrandId, urls);
       setOppSelected(new Set());
+      setConfirm(null);
       await reloadInPlace(activeBrandId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('failed'));
@@ -607,6 +637,21 @@ export default function SiteAuditPage() {
           </Button>
         </div>
       </HeaderWithAiUsage>
+      <AuditConfirmDialog
+        // Each asking starts over: Leave out the recent ones ticked again.
+        key={confirm?.at}
+        pages={confirm?.pages ?? null}
+        mode={confirm?.mode ?? 'picked'}
+        ordered={confirm?.target === 'pages' ? 'shown' : 'value'}
+        staleDays={opps?.staleDays ?? 90}
+        quota={quota}
+        starting={startingBulk}
+        now={confirm?.at ?? nowMs}
+        onConfirm={(urls) =>
+          void (confirm?.target === 'pages' ? handleBulkReaudit(urls) : handleAuditOpps(urls))
+        }
+        onOpenChange={(open) => !open && setConfirm(null)}
+      />
       <AuditSettingsDialog
         brandId={activeBrandId}
         open={settingsOpen}
@@ -892,6 +937,22 @@ export default function SiteAuditPage() {
                     filter={filterShown}
                     onFilter={setOppFilter}
                     staleDays={opps.staleDays}
+                    action={
+                      filterShown === 'notAudited' && (
+                        <Button
+                          size="sm"
+                          className="ml-2 h-7 rounded-full px-3 text-xs"
+                          disabled={startingBulk}
+                          onClick={guard(() => confirmOpps(shownOpps, 'notAudited'), {
+                            action: tActions('auditPages'),
+                          })}
+                        >
+                          {t('opportunities.auditAll', {
+                            count: shownOpps.filter((o) => !o.running).length,
+                          })}
+                        </Button>
+                      )
+                    }
                   />
                 }
                 selected={oppSelected}
@@ -913,7 +974,9 @@ export default function SiteAuditPage() {
                       quota={quota}
                       starting={startingBulk}
                       auditLabel={t('opportunities.auditSelected')}
-                      onAudit={guard(handleAuditOpps, { action: tActions('auditPages') })}
+                      onAudit={guard(() => confirmOpps(selectedOpps, 'picked'), {
+                        action: tActions('auditPages'),
+                      })}
                       onClear={() => setOppSelected(new Set())}
                     >
                       {canManage && (
@@ -994,7 +1057,7 @@ export default function SiteAuditPage() {
                       count={selectedPages.length}
                       quota={quota}
                       starting={startingBulk}
-                      onAudit={guard(handleBulkReaudit, { action: tActions('auditPages') })}
+                      onAudit={guard(confirmReaudit, { action: tActions('auditPages') })}
                       onExport={(format) => exportPages(selectedPages, format)}
                       onClear={() => setSelected(new Set())}
                     />

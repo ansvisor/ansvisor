@@ -67,11 +67,11 @@ describe('AuditBulkBar', () => {
     expect(onClear).toHaveBeenCalledOnce();
   });
 
-  it('keeps Re-audit off when the selection is over what is left', () => {
+  it('lets a selection over what is left start, the first that fit going now (item 11), and none with none left', () => {
     render(12, { used: 92, limit: 100, remaining: 8 });
-    expect(usage()?.textContent).toBe('Uses 12 of your 8 audits · select up to 8');
-    expect(usage()?.className).toContain('text-destructive');
-    expect(button('Re-audit').disabled).toBe(true);
+    expect(usage()?.textContent).toBe('Uses 12 of your 8 audits · 8 go now, the rest wait');
+    expect(usage()?.className).toContain('text-amber-700');
+    expect(button('Re-audit').disabled).toBe(false);
 
     render(1, { used: 100, limit: 100, remaining: 0 });
     expect(usage()?.textContent).toBe('No audits left this month');
@@ -116,8 +116,8 @@ describe('AuditBulkBar', () => {
 
   it("counts a template's pages, not the rows, against what's left (SA-007)", () => {
     render(1, { used: 0, limit: 100, remaining: 20 }, false, 26);
-    expect(usage()?.textContent).toBe('Uses 26 of your 20 audits · select up to 20');
-    expect(button('Re-audit').disabled).toBe(true);
+    expect(usage()?.textContent).toBe('Uses 26 of your 20 audits · 20 go now, the rest wait');
+    expect(button('Re-audit').disabled).toBe(false);
     // Nothing to audit (a template audited in full): the button stays off.
     render(1, { used: 0, limit: 100, remaining: 20 }, false, 0);
     expect(button('Re-audit').disabled).toBe(true);

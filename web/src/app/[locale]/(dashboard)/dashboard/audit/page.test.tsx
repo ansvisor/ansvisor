@@ -69,7 +69,10 @@ const inbox = vi.hoisted(() => ({
     onRestore?: (urls: string[]) => void;
   },
 }));
-vi.mock('./_opportunities-table', () => ({
+vi.mock('./_opportunities-table', async (importOriginal) => ({
+  // The real helpers: what an audit of the rows starts.
+  opportunityPagesToAudit: (await importOriginal<typeof import('./_opportunities-table')>())
+    .opportunityPagesToAudit,
   OpportunitiesTable: (props: {
     opportunities: { path: string }[];
     onSelect: (keys: string[], on: boolean) => void;
@@ -307,6 +310,23 @@ describe('SiteAuditPage Opportunities', () => {
     // All again, from its chip.
     await act(async () => (container.querySelector('[role=radio]') as HTMLElement).click());
     expect(inbox.props!.opportunities).toHaveLength(2);
+
+    // Not audited's Audit all asks first, then audits them (part 2).
+    await act(async () => cards.props!.onShowNotAudited!());
+    audits.runAuditsBulk.mockResolvedValue({ started: 1, recent: [] });
+    const auditAll = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Audit all 1',
+    )!;
+    await act(async () => auditAll.click());
+    const dialog = document.querySelector('[role=dialog]')!;
+    expect(dialog.textContent).toContain('Audit 1 page');
+    expect(dialog.textContent).toContain('Uses 1 of the 10 audits left this month.');
+    expect(audits.runAuditsBulk).not.toHaveBeenCalled();
+    const go = [...dialog.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Audit 1 page',
+    )!;
+    await act(async () => go.click());
+    expect(audits.runAuditsBulk).toHaveBeenCalledWith('b1', ['https://acme.com/new']);
   });
 
   it('lets admins and managers pin, exclude and restore pages', async () => {

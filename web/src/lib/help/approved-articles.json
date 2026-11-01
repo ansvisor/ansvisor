@@ -2549,7 +2549,9 @@
         "audit a page",
         "auto-audit",
         "audit settings",
-        "audit again"
+        "audit again",
+        "bulk audit",
+        "audit all"
       ],
       "synonyms": ["page audit", "check my page", "scan a page", "AI readiness check"],
       "plan": "all",
@@ -2569,7 +2571,11 @@
         },
         {
           "heading": "Other ways to start an audit",
-          "text": "- **Audit selected** on the **Opportunities** tab;\n- **Re-audit** on the pages you select on the **Pages** tab;\n- **Audit page** on a landing page of the **AI Referral Traffic** page, or **Audit pages** for several;\n- the re-run icon at the top of a report, to audit the same page again;\n- auto-audit, which audits your top-priority pages on its own.\n\nAudits started in bulk run a few at a time."
+          "text": "- **Audit selected** on the **Opportunities** tab, or **Audit all** under its **Not audited** filter;\n- **Re-audit** on the pages you select on the **Pages** tab;\n- **Audit page** on a landing page of the **AI Referral Traffic** page, or **Audit pages** for several;\n- the re-run icon at the top of a report, to audit the same page again;\n- auto-audit, which audits your top-priority pages on its own.\n\nAudits started in bulk run a few at a time."
+        },
+        {
+          "heading": "Before a bulk audit",
+          "text": "Audit selected, Audit all and Re-audit ask first. They list the pages and say how many of the month's audits they use.\n\nPages audited in the last 7 days are left out, since a page that hasn't changed scores the same. Untick **Leave out** to include them.\n\nWhen fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month."
         },
         {
           "heading": "Auditing a page again",

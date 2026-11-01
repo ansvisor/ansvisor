@@ -6293,6 +6293,7 @@
         "pinned": "Pinned"
       },
       "auditSelected": "Audit selected",
+      "auditAll": "Audit all {count}",
       "filter": {
         "label": "Show",
         "all": "All",
@@ -6424,11 +6425,32 @@
       "toolbar": "Actions for the selected pages",
       "selected": "{count} selected",
       "uses": "Uses {count} of your {remaining} audits",
-      "overQuota": "Uses {count} of your {remaining} audits · select up to {remaining}",
+      "overQuota": "Uses {count} of your {remaining} audits · {remaining} go now, the rest wait",
       "noneLeft": "No audits left this month",
       "reaudit": "Re-audit",
       "clear": "Clear selection",
       "started": "{count, plural, one {# audit started} other {# audits started}} · they run a few at a time"
+    },
+    "confirm": {
+      "title": "Audit {count, plural, one {# page} other {# pages}}",
+      "notAudited": "The pages of your site never audited, or not in {days} days, most valuable first.",
+      "picked": {
+        "value": "The pages you picked, most valuable first.",
+        "shown": "The pages you picked, in the order shown."
+      },
+      "list": "{pages}{count, plural, =0 {} other { and # more}}",
+      "recent": "Leave out the {count, plural, one {# page} other {# pages}} audited in the last {days} days",
+      "recentPages": "{pages}{count, plural, =0 {} other { and # more}}. A page that hasn't changed scores the same.",
+      "recentPage": "{page} on {date}",
+      "noLimit": "Your plan has no monthly limit. A page already being audited isn't started twice.",
+      "noneLeft": "No audits left this month.",
+      "uses": "Uses <b>{count}</b> of the <b>{remaining}</b> audits left this month. A page already being audited isn't started twice.",
+      "over": {
+        "value": "Only {remaining} left this month: the {remaining} most valuable go now, the other {rest} stay in this list.",
+        "shown": "Only {remaining} left this month: the first {remaining} go now, the other {rest} stay selected."
+      },
+      "cancel": "Cancel",
+      "confirm": "Audit {count, plural, one {# page} other {# pages}}"
     },
     "export": {
       "button": "Export",
