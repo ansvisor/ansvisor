@@ -129,6 +129,7 @@ async function render(
             quality={q}
             reviewer={reviewer}
             reviewerRequired={reviewerRequired}
+            reviewerNamedOnPage={reviewerNamedOnPage}
             title={title}
             isNew={isNew}
             pageType={pageType}
@@ -401,7 +402,9 @@ describe('BeforePublish', () => {
 
   it('checks that a regulated page both selects and names its qualified reviewer', async () => {
     await render(quality(), { mode: 'export', reviewerRequired: true });
-    expect(rows()).toContainEqual(expect.stringContaining('No qualified reviewer named · missing'));
+    expect(rows()).toContainEqual(
+      expect.stringContaining('No qualified reviewer named · missing'),
+    );
 
     const reviewer: ContentAuthor = {
       ...ada,
@@ -426,13 +429,15 @@ describe('BeforePublish', () => {
     );
     expect(dialog().querySelector('pre')!.textContent).toContain('"@type": "WebPage"');
     expect(dialog().querySelector('pre')!.textContent).toContain('"reviewedBy"');
-    expect(dialog().querySelector('pre')!.textContent).toContain('"jobTitle": "Clinical Reviewer"');
+    expect(dialog().querySelector('pre')!.textContent).toContain(
+      '"jobTitle": "Clinical Reviewer"',
+    );
 
     // Non-regulated pages don't show a reviewer row or add a WebPage node.
     await render(quality(), { mode: 'export', reviewer, reviewerRequired: false });
     expect(rows().join(' ')).not.toContain('Qualified reviewer');
     expect(dialog().querySelector('pre')!.textContent).not.toContain('"reviewedBy"');
-  });;
+  });
 
   it('gives the JSON-LD from the page, author and site to copy, dated today', async () => {
     await render(quality());
