@@ -114,7 +114,8 @@ export function pageStatus(latestRun, current, previous) {
 /**
  * Group audit rows read NEWEST first into one entry per page (pageKey of
  * final_url, else url), most recently audited page first. Each page carries
- * its latest completed score and audit, the one before it, a status, its
+ * its latest completed score and audit, the one before it, its first
+ * completed score and when (progress since the first audit), a status, its
  * trend and its runs. A run still `running` past AUDIT_RUN_TIMEOUT_MS reads as
  * failed, so the page isn't left Running (and the hub polling) for good.
  * lastAuditSource says whether the audit the row opens was an auto-audit
@@ -147,6 +148,8 @@ export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
     const latest = runs[0];
     const current = completed[0] ?? null;
     const previous = completed[1] ?? null;
+    // Every audit of the brand is read: the oldest completed one is the page's first.
+    const first = completed.at(-1) ?? null;
     return {
       key,
       host,
@@ -155,6 +158,8 @@ export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
       auditId: (current ?? latest).id,
       score: current?.totalScore ?? null,
       previousScore: previous?.totalScore ?? null,
+      firstScore: first?.totalScore ?? null,
+      firstAuditedAt: first?.createdAt ?? null,
       status: pageStatus(latest, current, previous),
       lastAuditedAt: (current ?? latest).createdAt,
       lastAuditSource: (current ?? latest).source,

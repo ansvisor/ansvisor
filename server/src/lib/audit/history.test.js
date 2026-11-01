@@ -129,7 +129,7 @@ describe('buildAuditPages', () => {
     created_at,
   });
 
-  it('gives each page one row with its latest score, the previous one and its runs', () => {
+  it('gives each page one row with its latest score, the previous one, the first and its runs', () => {
     const pages = buildAuditPages([
       row('a3', 'https://acme.com/pricing/', '2026-10-14T09:00:00Z', '0.63'),
       row('b1', 'https://acme.com/blog', '2026-10-12T09:00:00Z', '0.74'),
@@ -145,13 +145,37 @@ describe('buildAuditPages', () => {
       auditId: 'a3',
       score: 0.63,
       previousScore: 0.58,
+      firstScore: 0.5,
+      firstAuditedAt: '2026-09-20T09:00:00Z',
       status: 'improving',
       lastAuditedAt: '2026-10-14T09:00:00Z',
       trend: [0.5, 0.58, 0.63],
       runCount: 3,
     });
     expect(pages[0].runs.map((r) => r.id)).toEqual(['a3', 'a2', 'a1']);
-    expect(pages[1]).toMatchObject({ score: 0.74, previousScore: null, status: 'good' });
+    // Audited once: its first score is its current one.
+    expect(pages[1]).toMatchObject({
+      score: 0.74,
+      previousScore: null,
+      firstScore: 0.74,
+      firstAuditedAt: '2026-10-12T09:00:00Z',
+      status: 'good',
+    });
+  });
+
+  it('takes the first score from the oldest completed audit, not a failed or unscored one', () => {
+    const [page] = buildAuditPages([
+      row('a4', 'https://acme.com/pricing', '2026-10-20T09:00:00Z', '0.7'),
+      row('a3', 'https://acme.com/pricing', '2026-10-10T09:00:00Z', '0.6'),
+      row('a2', 'https://acme.com/pricing', '2026-10-01T09:00:00Z', null),
+      row('a1', 'https://acme.com/pricing', '2026-09-20T09:00:00Z', null, 'failed'),
+    ]);
+    expect(page).toMatchObject({ firstScore: 0.6, firstAuditedAt: '2026-10-10T09:00:00Z' });
+
+    const [never] = buildAuditPages([
+      row('b1', 'https://acme.com/blog', '2026-10-01T09:00:00Z', null, 'failed'),
+    ]);
+    expect(never).toMatchObject({ score: null, firstScore: null, firstAuditedAt: null });
   });
 
   it("says whether the audit a row opens was an auto-audit run's", () => {
