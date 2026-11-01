@@ -260,11 +260,12 @@ export async function markTaskDoneFromCard(runId: string, n: number): Promise<Ta
         conversationId: card.conversationId,
         runId,
       };
+      // Of two clicks at once, the one that completes it is in History.
       await writeTaskStatus(
         card.supabase,
         { brandId: task.actions!.brand_id, actionId: task.action_id, taskId: task.id },
         'completed',
-        { data },
+        { data, onlyIfChanged: true },
       );
     }
     return {
@@ -281,7 +282,8 @@ export async function markTaskDoneFromCard(runId: string, n: number): Promise<Ta
 
 /**
  * Attach only (CHAT-09 item 16): the file linked to its task and
- * `attached`, the task left open, through W2-10's attach (History from Chat).
+ * `attached`, the task left open, through W2-10's attach (History from
+ * Chat, with the card's chat and run, as a mark done's).
  */
 export async function attachOnlyFromCard(runId: string, n: number): Promise<TaskCardResult> {
   try {
@@ -295,7 +297,10 @@ export async function attachOnlyFromCard(runId: string, n: number): Promise<Task
     if (!(await isManager(card.supabase))) return failure('forbidden');
     const { task, file } = card;
     if (CLOSED_ACTIONS.includes(task.actions?.status ?? '')) return failure('closed');
-    const attached = await attachFileToTask(task.actions!.brand_id, task.id, file.id);
+    const attached = await attachFileToTask(task.actions!.brand_id, task.id, file.id, {
+      conversationId: card.conversationId,
+      runId,
+    });
     if (!attached.ok) {
       return failure(
         attached.reason === 'forbidden_role'
@@ -382,6 +387,8 @@ export async function undoTaskDoneFromCard(runId: string, n: number): Promise<Ta
         skipReason:
           from === 'skipped' && typeof data.skipReason === 'string' ? data.skipReason : null,
         data: { source: 'chat', via: 'undo', fileId: file.id },
+        // Of two Undos at once, the one that puts it back is in History.
+        onlyIfChanged: true,
       },
     );
     const fileFrom =

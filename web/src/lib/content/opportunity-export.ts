@@ -1,6 +1,7 @@
 import type { Sheet } from 'write-excel-file/browser';
 import { toCsv } from '@/lib/csv';
 import { slugify } from '@/lib/slug';
+import { withFileWord } from '@/lib/white-label/kit';
 import type { OpportunityDocument, OpportunityLine } from './opportunity-markdown';
 
 /**
@@ -85,8 +86,11 @@ export function opportunityWorkbook(doc: OpportunityDocument): Sheet<Blob>[] {
   ];
 }
 
-/** Export Word: the title, then each section's heading, fields and lists. */
-export async function opportunityDocx(doc: OpportunityDocument): Promise<Blob> {
+/**
+ * Export Word: the title, then each section's heading, fields and lists.
+ * `author` is the file's (a white label kit's company, 00429).
+ */
+export async function opportunityDocx(doc: OpportunityDocument, author?: string): Promise<Blob> {
   // Loaded on the click: the library is only needed to write the file.
   const { Document, HeadingLevel, Packer, Paragraph, TextRun } = await import('docx');
   const paragraphs = (line: OpportunityLine) => {
@@ -114,6 +118,7 @@ export async function opportunityDocx(doc: OpportunityDocument): Promise<Blob> {
   };
   const document = new Document({
     title: doc.title,
+    ...(author ? { creator: author, lastModifiedBy: author } : {}),
     sections: [
       {
         children: [
@@ -130,11 +135,15 @@ export async function opportunityDocx(doc: OpportunityDocument): Promise<Blob> {
   return Packer.toBlob(document);
 }
 
-/** "ansvisor_opportunity_office-coffee-subscriptions.xlsx". */
+/**
+ * "ansvisor_opportunity_office-coffee-subscriptions.xlsx"; `word` is a white
+ * label kit's in its place, or none.
+ */
 export function opportunityExportFileName(
   doc: OpportunityDocument,
   extension: OpportunityExportFormat,
+  word: string | null = 'ansvisor',
 ): string {
   const slug = slugify(doc.title).slice(0, 60).replace(/-+$/, '') || 'export';
-  return `ansvisor_opportunity_${slug}.${extension}`;
+  return withFileWord(word, `opportunity_${slug}.${extension}`);
 }

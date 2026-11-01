@@ -11,7 +11,8 @@ import { chatActor, runFailure } from '@/lib/chat/run-api';
  * owner or an Admin.
  *
  * Answers the agent's detail. Refusals as values (#1777): 402 read-only,
- * 403 the out-of-permission answer (CHAT-20 §4c), 404, 409 the wrong state.
+ * 403 the out-of-permission answer (CHAT-20 §4c), 404, 409 the wrong state
+ * or a brand of its scope without a Required connection (`connection_missing`).
  */
 export async function POST(_req: Request, { params }: AgentParams) {
   try {

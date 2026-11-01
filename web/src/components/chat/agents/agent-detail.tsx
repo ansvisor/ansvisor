@@ -270,7 +270,7 @@ export function AgentDetail({
       // A read still on its way would bring back "isn't available": it is dropped.
       asked.current++;
       setConfirmDelete(false);
-      router.push('/dashboard/agents');
+      router.push('/dashboard/agents?tab=yours');
     },
   });
 
@@ -305,7 +305,7 @@ export function AgentDetail({
           </button>
         ) : (
           <Link
-            href="/dashboard/agents"
+            href="/dashboard/agents?tab=yours"
             data-action="agents.back"
             className="underline underline-offset-2 hover:text-foreground"
           >
@@ -357,7 +357,7 @@ export function AgentDetail({
       {actions.denial && <AgentDenial denial={actions.denial} onClose={actions.clearDenial} />}
 
       <Link
-        href="/dashboard/agents"
+        href="/dashboard/agents?tab=yours"
         data-action="agents.back"
         className="mb-2 inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground"
       >
