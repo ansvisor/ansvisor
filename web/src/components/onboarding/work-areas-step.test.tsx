@@ -77,9 +77,15 @@ describe('WorkAreasStep', () => {
       'Action Center · Chat · Agent Center · Brand Visibility',
     );
     expect(container.textContent).toContain('13 of 13 sections');
+    // Developers keeps Agent Center without Chat, right after Action Center.
+    expect(button('Developers').textContent).toContain('Action Center · Agent Center · ');
     act(() => button('Developers').click());
+    expect(menu()).toContain('Agent Center');
+    expect(menu()).not.toContain('Chat');
+    expect(container.textContent).toContain('7 of 13 sections');
+    act(() => button('Developers').click());
+    act(() => button('Analytics').click());
     expect(menu()).not.toContain('Agent Center');
-    expect(container.textContent).toContain('6 of 13 sections');
   });
 
   it('narrows the menu as areas are picked, and saves them on Continue', async () => {
