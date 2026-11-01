@@ -2694,9 +2694,9 @@ describe('the content editor', () => {
     await act(async () => button('Copy HTML')!.click());
 
     const copied = writeText.mock.calls[0][0] as string;
-    expect(copied).toMatch(/"@type":\\s*"WebPage"/);
+    expect(copied).toMatch(/"@type":\s*"WebPage"/);
     expect(copied).toContain('"reviewedBy"');
-    expect(copied).toMatch(/"name":\\s*"Dr\\. Grace Hopper"/);
+    expect(copied).toMatch(/"name":\s*"Dr\. Grace Hopper"/);
     expect(copied).not.toContain('<p>Reviewed by Dr. Grace Hopper</p>');
   });
 
