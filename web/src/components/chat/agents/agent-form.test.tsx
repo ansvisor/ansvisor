@@ -396,6 +396,35 @@ describe('AgentForm: new agent', () => {
     expect(catalog.textContent).toContain('Required by /shopping');
   });
 
+  it("offers the focus areas' seven skills after the fourteen, needing no connection", async () => {
+    await render();
+    const skills = all('[data-skill]').map((b) => b.getAttribute('data-skill'));
+    expect(skills).toHaveLength(21);
+    expect(skills.slice(14)).toEqual([
+      'questions',
+      'features',
+      'gaps',
+      'markets',
+      'listings',
+      'rivals',
+      'audit-fix',
+    ]);
+    expect(one('[data-skill="listings"]')!.textContent).toBe(
+      '/listingsListing gapsNo connection needed',
+    );
+
+    await click(one('[data-skill="audit-fix"]')!);
+    expect(summary('name')).toBe('Site audit fixes');
+    expect(summary('connections')).toBe('No connections');
+    // A focus skill follows another one, from the same list.
+    const options = [
+      ...one('[data-action="agentNew.addFollowOn"]')!.querySelectorAll('option'),
+    ].map((o) => o.textContent);
+    expect(options).toContain('/rivals · Rival brief');
+    await type(one('[data-action="agentNew.addFollowOn"]')!, 'rivals');
+    expect(summary('skill')).toBe('/audit-fix/rivals');
+  });
+
   it('saves a draft the API takes, then opens it', async () => {
     await render();
     await toLastStep();

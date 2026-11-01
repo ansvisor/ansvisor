@@ -3,31 +3,8 @@
  * to a later LLM phase). See structure.js for the evaluator shape.
  */
 
+import { authorityKind } from '../authority-sources.js';
 import { jsonLd, classifyLinks, metaContent } from './helpers.js';
-
-// Hosts / suffixes that count as authoritative outbound targets.
-const AUTHORITY_PATTERNS = [
-  /(^|\.)edu$/,
-  /(^|\.)gov$/,
-  /(^|\.)wikipedia\.org$/,
-  /(^|\.)who\.int$/,
-  /(^|\.)nih\.gov$/,
-  /ncbi\.nlm\.nih\.gov$/,
-  /(^|\.)nature\.com$/,
-  /sciencedirect\.com$/,
-  /(^|\.)doi\.org$/,
-  /arxiv\.org$/,
-  /(^|\.)nytimes\.com$/,
-  /(^|\.)washingtonpost\.com$/,
-  /(^|\.)bloomberg\.com$/,
-  /(^|\.)reuters\.com$/,
-  /(^|\.)ft\.com$/,
-  /(^|\.)bbc\.(com|co\.uk)$/,
-];
-
-function isAuthorityHost(host) {
-  return AUTHORITY_PATTERNS.some((re) => re.test(host));
-}
 
 /** Collect candidate dates (ms) from JSON-LD, <time datetime>, and OG meta. */
 function collectDates(ctx) {
@@ -50,13 +27,22 @@ function collectDates(ctx) {
   return out;
 }
 
+/** Other sites the report names beside what counted, for "why doesn't mine count". */
+const OTHER_HOSTS_SHOWN = 5;
+
 export const outboundAuthorityLinks = {
   key: 'outbound-authority-links',
   evaluate(ctx) {
     const { external } = classifyLinks(ctx);
-    const authority = [
-      ...new Set(external.filter((u) => isAuthorityHost(u.host)).map((u) => u.host)),
-    ];
+    const hosts = [...new Set(external.map((u) => u.hostname.toLowerCase().replace(/^www\./, '')))];
+    const kinds = Object.fromEntries(
+      hosts.flatMap((host) => {
+        const kind = authorityKind(host);
+        return kind ? [[host, kind]] : [];
+      }),
+    );
+    const authority = Object.keys(kinds);
+    const others = hosts.filter((host) => !kinds[host]).slice(0, OTHER_HOSTS_SHOWN);
     const count = authority.length;
     let status = 'fail';
     let score = 0;
@@ -67,7 +53,17 @@ export const outboundAuthorityLinks = {
       status = 'warn';
       score = 0.5;
     }
-    return { status, score, evidence: { authorityHosts: authority.slice(0, 8), count } };
+    return {
+      status,
+      score,
+      evidence: {
+        authorityHosts: authority.slice(0, 8),
+        count,
+        // What each counted as (authority-sources.js), and sites that didn't count.
+        authorityKinds: Object.fromEntries(authority.slice(0, 8).map((h) => [h, kinds[h]])),
+        otherHosts: others,
+      },
+    };
   },
 };
 

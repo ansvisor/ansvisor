@@ -174,7 +174,7 @@
       "key": "outbound-authority-links",
       "category": "authority",
       "label": "Outbound authority links",
-      "what": "Links to .edu, .gov, Wikipedia, peer-reviewed journals, or top-tier news sources.",
+      "what": "Links to official sites (government, academic or international bodies), reference and research sites, or major news.",
       "why": "Linking out to trusted sources transfers authority backwards (citation graph effect).",
       "howToFix": "Cite primary sources with real <a> tags, not bare-text references. Aim for 2–3 per long page.",
       "source": "GEO paper §4.2 + Anthropic retrieval docs",

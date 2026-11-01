@@ -639,6 +639,49 @@ describe('the driver', () => {
     expect(runRow(waiting).status).toBe('queued');
   });
 
+  /** A driver that keeps whose session each drive had. */
+  function sessionDriver() {
+    const tasks: (() => Promise<void>)[] = [];
+    const sessions: (string | null)[] = [];
+    const run = driver.createAgentRunDriver({
+      background: (task) => tasks.push(task),
+      drive: async (_actor, _chatRunId, sessionUserId) => {
+        sessions.push(sessionUserId);
+      },
+      now: () => NOW,
+    });
+    return { run, tasks, sessions };
+  }
+
+  it('drives a run the minute tick started with no session, so its changes ask first', async () => {
+    const { run, tasks, sessions } = sessionDriver();
+    const id = queueRun({ status: 'queued', started_at: null });
+    expect(await driver.startNextAgentRuns(ORG, run)).toEqual([id]);
+    await tasks[0]();
+    expect(sessions).toEqual([null]);
+  });
+
+  it('drives a Run now with the clicking person’s session, and a run another person’s click starts with none', async () => {
+    const { startQueuedAgentRuns } = await import('./agent-runs');
+    const { run, tasks, sessions } = sessionDriver();
+    // One run at a time per agent and brand: each ends before the next starts.
+    const startIn = async (over: Record<string, unknown>, sessionUserId: string) => {
+      const id = queueRun({ status: 'queued', started_at: null, ...over });
+      expect(await startQueuedAgentRuns(ORG, 1, run, sessionUserId)).toEqual([id]);
+      await tasks.at(-1)!();
+      runRow(id).status = 'done';
+    };
+    const manual = { trigger_kind: 'manual', evidence_json: {} };
+
+    // The Manager's own Run now, in their request: their session drives it.
+    await startIn({ ...manual, acting_user_id: PEOPLE.manager }, PEOPLE.manager);
+    // The Admin's triggered run, picked from the queue in the Manager's request.
+    await startIn({}, PEOPLE.manager);
+    // Another Manager's Run now that waited, picked in this Manager's request.
+    await startIn({ ...manual, acting_user_id: PEOPLE.otherManager }, PEOPLE.manager);
+    expect(sessions).toEqual([PEOPLE.manager, null, null]);
+  });
+
   it('settles the run even when the drive throws', async () => {
     const tasks: (() => Promise<void>)[] = [];
     const run = driver.createAgentRunDriver({

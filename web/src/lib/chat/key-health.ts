@@ -126,6 +126,20 @@ export async function resumeOwnKeyAgents(
   return (data ?? []).length;
 }
 
+/** A test of the key ran (Settings › AI Providers' Test, Save, Use for Chat): when. */
+export async function markKeyChecked(
+  organizationId: string,
+  provider: AiProvider,
+  now = new Date(),
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('organization_ai_keys')
+    .update({ checked_at: now.toISOString() })
+    .eq('organization_id', organizationId)
+    .eq('provider', provider);
+  if (error) throw new Error(`Could not keep when the AI key was checked: ${error.message}`);
+}
+
 /**
  * The Admins' notices that the key fails (00441) close once it works again
  * or is removed: their Inbox row goes with them.
