@@ -1,7 +1,6 @@
 import type { DraftPage } from '@/lib/actions/content-drafts';
 import type { AuthorsRead, ContentAuthor } from '@/lib/content/authors';
 import { publishableHtml } from '@/lib/content/clean-html';
-import { jsonLdScript, webPageJsonLd } from '@/lib/content/page-schema';
 import {
   bylineText,
   exportPlaceholders,
@@ -12,6 +11,7 @@ import {
   withByline,
   withoutDangling,
   withoutLeadingH1,
+  withReviewerJsonLd,
   type PageFields,
 } from '@/lib/content/ready-to-publish';
 
@@ -219,13 +219,10 @@ export function cmsPage({
   page: PageFields;
   /** The byline line the brand puts in the content, or null. */
   byline: string | null;
-  /** The selected qualified reviewer, for the WebPage.reviewedBy node. */
+  /** The selected qualified reviewer: its WebPage.reviewedBy once the page names them. */
   reviewer?: ContentAuthor | null;
 }): CmsPage {
-  const withLine = byline ? withByline(html, byline) : html;
-  const withReviewerSchema = reviewer
-    ? `${withLine}\n${jsonLdScript(webPageJsonLd({ title, reviewer }))}`
-    : withLine;
+  const withLine = withReviewerJsonLd(title, byline ? withByline(html, byline) : html, reviewer);
   const src = page.featuredImage;
   const image = src?.startsWith('https://') && src.length <= IMAGE_SRC_MAX ? src : null;
   return {
@@ -234,7 +231,7 @@ export function cmsPage({
     slug: fields.slug.trim(),
     metaTitle: fields.metaTitle.trim(),
     metaDescription: fields.metaDescription.trim(),
-    html: withoutLeadingH1(withReviewerSchema),
+    html: withoutLeadingH1(withLine),
     author: page.author.trim().slice(0, AUTHOR_MAX) || null,
     reviewer: page.reviewer.trim().slice(0, AUTHOR_MAX) || null,
     featuredImage: image ? { src: image, alt: altOf(html, image).slice(0, ALT_MAX) } : null,

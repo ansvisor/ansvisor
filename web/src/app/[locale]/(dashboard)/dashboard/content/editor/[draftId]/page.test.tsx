@@ -2709,6 +2709,12 @@ describe('the content editor', () => {
     expect(copied).toMatch(/"name":\s*"Dr\. Grace Hopper"/);
   });
 
+  it('copies no reviewedBy while the page doesn’t name the reviewer, as Before you publish says', async () => {
+    const copied = await copyWithReviewer('<h1>Pipeline</h1><p>Teams trust it.</p>');
+    expect(copied).toContain('<p>Teams trust it.</p>');
+    expect(copied).not.toContain('reviewedBy');
+  });
+
   it('copies and exports as before with Quality off: no reviewer, no authors read', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });

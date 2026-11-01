@@ -2,7 +2,7 @@ import { slugify } from '@/lib/slug';
 import type { ContentAuthor } from './authors';
 import { ELEMENT_NODE, TEXT_NODE, contentDom } from './dom';
 import { cleanHref, jsonLdText } from './html-allowlist';
-import { firstImage } from './page-schema';
+import { firstImage, jsonLdScript, webPageJsonLd } from './page-schema';
 import { AGENT_PLACEHOLDER, PLACEHOLDER, placeholderIn } from './placeholders';
 import type { LinkCheck } from './quality-checks';
 import { languageCode } from './readability';
@@ -69,6 +69,32 @@ const TEXT_BLOCKS =
 
 function normalizePageText(value: string): string {
   return value.normalize('NFKC').replace(/\s+/gu, ' ').trim().toLocaleLowerCase();
+}
+
+/**
+ * The WebPage.reviewedBy JSON-LD a page goes out with (CE-049), or null: only
+ * once the page's own text names the reviewer, so the structured data says
+ * what the page shows. One rule for Copy, Export, Send to CMS (one page or
+ * many) and the code Before you publish shows; `html` is the page's.
+ */
+export function reviewerJsonLd(
+  title: string,
+  html: string,
+  reviewer: ContentAuthor | null | undefined,
+): string | null {
+  return reviewer && pageNamesPerson(html, reviewer.name)
+    ? jsonLdScript(webPageJsonLd({ title, reviewer }))
+    : null;
+}
+
+/** The page with its reviewer's JSON-LD after it, when reviewerJsonLd gives one. */
+export function withReviewerJsonLd(
+  title: string,
+  html: string,
+  reviewer: ContentAuthor | null | undefined,
+): string {
+  const script = reviewerJsonLd(title, html, reviewer);
+  return script ? `${html}\n${script}` : html;
 }
 /** Headings: a placeholder there is filled first, never left out. */
 const HEADINGS = 'h1, h2, h3, h4, h5, h6';

@@ -11,9 +11,11 @@ import {
   pageFields,
   pageNamesPerson,
   pasteChecks,
+  reviewerJsonLd,
   teamName,
   titlePlaceholders,
   withByline,
+  withReviewerJsonLd,
   withoutLeadingH1,
   withoutPlaceholders,
 } from './ready-to-publish';
@@ -75,6 +77,32 @@ describe('pageNamesPerson', () => {
   it('requires the complete name rather than a substring of another word', () => {
     expect(pageNamesPerson('<p>Annual results are ready.</p>', 'Ann')).toBe(false);
     expect(pageNamesPerson('<p>Reviewed by Ann.</p>', 'Ann')).toBe(true);
+  });
+});
+
+describe('reviewerJsonLd', () => {
+  const grace = {
+    id: 'r1',
+    name: 'Dr. Grace Hopper',
+    title: 'Clinical Reviewer',
+  } as ContentAuthor;
+
+  it('gives the WebPage.reviewedBy node only once the page names the reviewer', () => {
+    const named = '<h1>Guide</h1><p>Reviewed by Dr. Grace Hopper.</p>';
+    expect(reviewerJsonLd('Guide', named, grace)).toContain('"reviewedBy"');
+    expect(withReviewerJsonLd('Guide', named, grace)).toMatch(
+      /^<h1>Guide<\/h1><p>Reviewed by Dr\. Grace Hopper\.<\/p>\n<script type="application\/ld\+json">/,
+    );
+    expect(reviewerJsonLd('Guide', '<h1>Guide</h1><p>Done.</p>', grace)).toBeNull();
+    expect(withReviewerJsonLd('Guide', '<p>Done.</p>', grace)).toBe('<p>Done.</p>');
+    expect(reviewerJsonLd('Guide', named, null)).toBeNull();
+  });
+
+  it("keeps a reviewer's words from closing the script", () => {
+    const sly = { ...grace, name: 'Eve', title: '</script><img src=x onerror=alert(1)>' };
+    const script = reviewerJsonLd('Guide', '<p>Reviewed by Eve.</p>', sly)!;
+    expect(script.match(/<\/script>/g)).toHaveLength(1);
+    expect(script).not.toContain('<img');
   });
 });
 

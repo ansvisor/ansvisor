@@ -23,7 +23,7 @@ import {
   type DraftExportFormat,
   type ExportFields,
 } from '@/lib/content/draft-export';
-import { jsonLdScript, localDate, webPageJsonLd } from '@/lib/content/page-schema';
+import { localDate } from '@/lib/content/page-schema';
 import {
   exportPlaceholders,
   pageFields,
@@ -31,6 +31,7 @@ import {
   withByline,
   withoutLeadingH1,
   withoutPlaceholders,
+  withReviewerJsonLd,
   type PasteChecks,
 } from '@/lib/content/ready-to-publish';
 import { ExportFormatIcon } from '@/components/content/export-format-icon';
@@ -253,11 +254,11 @@ export function ExportDialog({
     [title, content, sourceUrl, author, reviewer, teamByline],
   );
   // The brand's byline line under the H1; the qualified reviewer is page metadata,
-  // carried separately as a WebPage.reviewedBy node, never as article text.
-  const withLine = useMemo(() => {
-    const line = byline ? withByline(content, byline) : content;
-    return reviewer ? `${line}\n${jsonLdScript(webPageJsonLd({ title, reviewer }))}` : line;
-  }, [byline, content, reviewer, title]);
+  // with a WebPage.reviewedBy node once the page names them, never as article text.
+  const withLine = useMemo(
+    () => withReviewerJsonLd(title, byline ? withByline(content, byline) : content, reviewer),
+    [byline, content, reviewer, title],
+  );
   const out = TITLE_FIELD.has(destination) ? withoutLeadingH1(withLine) : withLine;
 
   const pick = (next: ExportDestination) => {

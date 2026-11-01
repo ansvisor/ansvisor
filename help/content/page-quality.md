@@ -51,7 +51,7 @@ The header shows the page's author, picked from **Settings › Authors**, or you
 - the structured data to paste, if your CMS doesn't add it;
 - a warning when Trust is under 60.
 
-Copy and Export carry **Reviewed by** beside **Author** in the page metadata; structured data keeps the reviewer separate from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about.
+Copy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about.
 
 ## Export with Quality on
 

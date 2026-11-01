@@ -20,7 +20,6 @@ import {
   productJsonLd,
   type ListedProduct,
   type PageOfferRead,
-  webPageJsonLd,
   jsonLdScript,
   localDate,
   offerText,
@@ -111,7 +110,7 @@ export function BeforePublish({
   shopping = null,
   reviewer = null,
   reviewerRequired = false,
-  reviewerNamedOnPage = false,
+  reviewerLd = null,
 }: {
   /**
    * The page's shopping links against the catalog now (shopping path, part
@@ -124,8 +123,11 @@ export function BeforePublish({
   reviewer?: ContentAuthor | null;
   /** True for a regulated page that must name its qualified reviewer. */
   reviewerRequired?: boolean;
-  /** Whether the selected reviewer's name appears in visible page text. */
-  reviewerNamedOnPage?: boolean;
+  /**
+   * The reviewer's WebPage JSON-LD as the page goes out (reviewerJsonLd):
+   * null until the page's text names them.
+   */
+  reviewerLd?: string | null;
   /**
    * Phase 3 (CE-053): a product page's Product schema, from its opening
    * paragraph, its images and the price it states (pageOffer); null on
@@ -236,9 +238,8 @@ export function BeforePublish({
             }),
           )
         : null;
-  // A qualified reviewer is a WebPage.reviewedBy, never Article.author.
-  const reviewerLd =
-    reviewerRequired && reviewer ? jsonLdScript(webPageJsonLd({ title, reviewer })) : null;
+  // A qualified reviewer is a WebPage.reviewedBy, never Article.author: the
+  // node that goes out with the page, shown as it goes.
   const jsonLd = [primaryJsonLd, reviewerLd].filter(Boolean).join('\n') || null;
   // Added here: it counts once the page is read again.
   const [added, setAdded] = useState(false);
@@ -249,8 +250,8 @@ export function BeforePublish({
       : (quality.aiChecks?.disclosure ?? null);
   const brand = quality.brandName || tQuality('yourBrand');
   let reviewerRow: Row | null = null;
-  if (reviewerRequired) {
-    if (reviewer && reviewerNamedOnPage) {
+  if (reviewerRequired || reviewer) {
+    if (reviewer && reviewerLd) {
       reviewerRow = {
         state: 'check',
         title: t('reviewer.named', { name: reviewer.name }),

@@ -6,6 +6,7 @@ import messages from '../../../../../../../../messages/en.json';
 import type { ContentAuthor } from '@/lib/content/authors';
 import { eeat, trust, trustBlocks, type TrustRead } from '@/lib/content/quality-checks';
 import { qualityTodos } from '@/lib/content/quality-todos';
+import { reviewerJsonLd } from '@/lib/content/ready-to-publish';
 import type { ShoppingLinks } from '@/lib/content/shopping-check';
 import type { SiteTrust } from '@/lib/content/site-trust';
 
@@ -111,7 +112,7 @@ async function render(
     shopping = null as Parameters<typeof BeforePublish>[0]['shopping'],
     reviewer = null as ContentAuthor | null,
     reviewerRequired = false,
-    reviewerNamedOnPage = false,
+    reviewerLd = null as string | null,
   } = {},
 ) {
   const Wrap = strict ? StrictMode : Fragment;
@@ -129,7 +130,7 @@ async function render(
             quality={q}
             reviewer={reviewer}
             reviewerRequired={reviewerRequired}
-            reviewerNamedOnPage={reviewerNamedOnPage}
+            reviewerLd={reviewerLd}
             title={title}
             isNew={isNew}
             pageType={pageType}
@@ -414,20 +415,31 @@ describe('BeforePublish', () => {
     await render(quality(), { mode: 'export', reviewer, reviewerRequired: true });
     expect(rows().join(' ')).toContain('Reviewer not named in the page text · missing');
 
-    await render(quality(), {
-      mode: 'export',
+    // Named on the page: the node that goes out with it (reviewerJsonLd's).
+    const reviewerLd = reviewerJsonLd(
+      'How small teams forecast',
+      '<p>Reviewed by Dr. Grace Hopper</p>',
       reviewer,
-      reviewerRequired: true,
-      reviewerNamedOnPage: true,
-    });
+    );
+    await render(quality(), { mode: 'export', reviewer, reviewerRequired: true, reviewerLd });
     expect(rows().join(' ')).toContain('Qualified reviewer: Dr. Grace Hopper · check it');
     expect(dialog().querySelector('pre')!.textContent).toContain('"@type": "WebPage"');
     expect(dialog().querySelector('pre')!.textContent).toContain('"reviewedBy"');
     expect(dialog().querySelector('pre')!.textContent).toContain('"jobTitle": "Clinical Reviewer"');
 
-    // Non-regulated pages don't show a reviewer row or add a WebPage node.
-    await render(quality(), { mode: 'export', reviewer, reviewerRequired: false });
-    expect(rows().join(' ')).not.toContain('Qualified reviewer');
+    // Not named: no WebPage node is shown, as none goes out.
+    await render(quality(), { mode: 'export', reviewer, reviewerRequired: true });
+    expect(dialog().querySelector('pre')!.textContent).not.toContain('"reviewedBy"');
+
+    // A page no longer read as regulated keeps the reviewer picked for it, and
+    // shows what goes out with it: Copy, Export and Send carry them all the same.
+    await render(quality(), { mode: 'export', reviewer, reviewerLd });
+    expect(rows().join(' ')).toContain('Qualified reviewer: Dr. Grace Hopper · check it');
+    expect(dialog().querySelector('pre')!.textContent).toContain('"reviewedBy"');
+
+    // No reviewer and not regulated: no row, no WebPage node.
+    await render(quality(), { mode: 'export' });
+    expect(rows().join(' ')).not.toContain('reviewer');
     expect(dialog().querySelector('pre')!.textContent).not.toContain('"reviewedBy"');
   });
 

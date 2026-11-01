@@ -315,11 +315,15 @@ describe('bulkCmsItems', () => {
       name: 'Dr. Grace Hopper',
       title: 'Clinical Reviewer',
     } as ContentAuthor;
-    const [item] = bulkCmsItems([source({ reviewer })], new Map());
+    const named = '<h1>Pour-over</h1>\n<p>Reviewed by Dr. Grace Hopper.</p>';
+    const [item] = bulkCmsItems([source({ reviewer, html: named })], new Map());
     expect(item.page).toMatchObject({
       reviewer: 'Dr. Grace Hopper, Clinical Reviewer',
       html: expect.stringContaining('"reviewedBy"'),
     });
+    // A page that doesn't name them goes without the node, as the editor's does.
+    const [unnamed] = bulkCmsItems([source({ reviewer })], new Map());
+    expect(unnamed.page?.html).not.toContain('reviewedBy');
   });
 
   it('gives each page as the Send dialog would send it, or why it can’t go', () => {

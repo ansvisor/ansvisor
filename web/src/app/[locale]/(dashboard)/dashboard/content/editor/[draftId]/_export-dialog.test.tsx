@@ -316,7 +316,7 @@ describe('ExportDialog', () => {
       title: 'Clinical Reviewer',
     };
     await render({
-      html: '<h1>Pour-over</h1><p>Done.</p>',
+      html: '<h1>Pour-over</h1><p>Reviewed by Dr. Grace Hopper.</p><p>Done.</p>',
       reviewer,
       initialDestination: 'html',
     });
@@ -345,6 +345,15 @@ describe('ExportDialog', () => {
       reviewed_by: 'Dr. Grace Hopper, Clinical Reviewer',
     });
     expect(fields.head.reviewer).toBe('Dr. Grace Hopper, Clinical Reviewer');
+  });
+
+  it('leaves WebPage.reviewedBy out while the page doesn’t name the reviewer', async () => {
+    const reviewer = { ...ada, id: 'r1', name: 'Dr. Grace Hopper' } as ContentAuthor;
+    await render({ html: '<h1>Pour-over</h1><p>Done.</p>', reviewer, initialDestination: 'html' });
+    await act(async () => button('Download HTML')!.click());
+    const html = draftExportBlob.mock.calls[0][2] as string;
+    expect(html).toContain('<p>Done.</p>');
+    expect(html).not.toContain('reviewedBy');
   });
 
   it('downloads Word and Markdown with the page fields, and remembers the destination', async () => {

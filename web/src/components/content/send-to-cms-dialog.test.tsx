@@ -155,7 +155,7 @@ describe('SendDialog', () => {
       name: 'Dr. Grace Hopper',
       title: 'Clinical Reviewer',
     } as ContentAuthor;
-    await render({ reviewer });
+    await render({ reviewer, html: `${HTML}\n<p>Reviewed by Dr. Grace Hopper.</p>` });
     expect(dialog().textContent).toContain('Reviewed byDr. Grace Hopper, Clinical Reviewer');
     await act(async () => button('Send').click());
     expect(sendPagesToCms).toHaveBeenCalledWith(
@@ -169,6 +169,14 @@ describe('SendDialog', () => {
       ],
       'webhook',
     );
+  });
+
+  it('sends no WebPage.reviewedBy while the page doesn’t name the reviewer', async () => {
+    const reviewer = { id: 'r1', name: 'Dr. Grace Hopper' } as ContentAuthor;
+    await render({ reviewer });
+    await act(async () => button('Send').click());
+    const [[, [page]]] = sendPagesToCms.mock.calls as [[string, [{ html: string }]]];
+    expect(page.html).not.toContain('reviewedBy');
   });
 
   it('starts from what the draft kept and says where the page went live', async () => {

@@ -107,13 +107,11 @@ import { JsonLd } from '@/lib/content/json-ld-node';
 import {
   firstImage,
   isArticlePage,
-  jsonLdScript,
   openingParagraph,
   pageName,
   pageOffer,
   listedProducts,
   MIN_LISTED,
-  webPageJsonLd,
 } from '@/lib/content/page-schema';
 import { PLACEHOLDER, pagePlaceholders } from '@/lib/content/placeholders';
 import { HANDOFF_KEYS, handOffItems } from '@/lib/content/hand-off';
@@ -122,11 +120,12 @@ import {
   bylineText,
   disclosureText,
   exportPlaceholders,
-  pageNamesPerson,
   pasteChecks,
+  reviewerJsonLd,
   teamName,
   titlePlaceholders,
   withByline,
+  withReviewerJsonLd,
 } from '@/lib/content/ready-to-publish';
 import { detectPageType, isSiteType, type SiteType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
@@ -2932,11 +2931,6 @@ export function DraftEditor({
     publishableHtml(
       htmlSource !== null ? htmlFromSource(htmlSource) : (editor?.getHTML() ?? draft.bodyHtml),
     );
-  // The saved reviewer is page metadata; the publish check separately verifies
-  // their name is present in the actual page text (not JSON-LD or attributes).
-  const reviewerNamedOnPage = pageReviewer
-    ? pageNamesPerson(pageToPublish(), pageReviewer.name)
-    : false;
   // The byline line a brand with Add byline to content puts under the H1,
   // in the page's language (its Language rule, else the brand's), as
   // Readability reads it: the language the writer writes the page in.
@@ -2972,12 +2966,12 @@ export function DraftEditor({
       setExportOpen({ html, destination: 'html' });
       return;
     }
-    const withLine = contentByline ? withByline(html, contentByline) : html;
-    const reviewerSchema = pageReviewer
-      ? jsonLdScript(webPageJsonLd({ title, reviewer: pageReviewer }))
-      : null;
     void copyToClipboard(
-      reviewerSchema ? `${withLine}\n${reviewerSchema}` : withLine,
+      withReviewerJsonLd(
+        title,
+        contentByline ? withByline(html, contentByline) : html,
+        pageReviewer,
+      ),
       t('copyHtmlDone'),
       t('copyHtmlFailed', { html: '</> HTML' }),
     );
@@ -3278,6 +3272,12 @@ export function DraftEditor({
       linksUnread: links.count - links.read,
     };
   }, [publishOpen, linkChecks, title]);
+  // The reviewer's WebPage node as the page goes out, read once Before you
+  // publish opens, from the page as it was then (not on every keystroke).
+  const reviewerLd = useMemo(
+    () => (publishOpen ? reviewerJsonLd(title, publishOpen.html, pageReviewer) : null),
+    [publishOpen, title, pageReviewer],
+  );
   /** Marks it ready; past Before you publish's warning, logged with its facts. */
   const markReady = async (anyway?: ReadyAnyway) => {
     if (lockedFor('markReady')) return;
@@ -4455,9 +4455,9 @@ export function DraftEditor({
           }}
           onClose={() => setPublishOpen(null)}
           quality={quality}
-          reviewer={regulated ? pageReviewer : null}
+          reviewer={pageReviewer}
           reviewerRequired={regulated !== null}
-          reviewerNamedOnPage={reviewerNamedOnPage}
+          reviewerLd={reviewerLd}
           title={title}
           isNew={draft.method === 'create'}
           pageType={pageType}
