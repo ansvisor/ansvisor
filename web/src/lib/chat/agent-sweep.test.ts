@@ -22,7 +22,9 @@ const fakes = vi.hoisted(() => ({
   chatSweep: vi.fn(),
   endHeld: vi.fn(),
   onOwnKey: vi.fn(async () => false),
+  notify: vi.fn(async () => true),
 }));
+vi.mock('./key-notice', () => ({ notifyOwnKeyFailure: fakes.notify }));
 vi.mock('@/lib/mcp/account', () => ({ getAiUsageFor: fakes.usage }));
 vi.mock('./key', () => ({
   resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
@@ -40,7 +42,7 @@ vi.mock('./engine', () => ({
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { sweepAgents, STALE_QUEUE_MS } = await import('./agent-sweep');
+const { sweepAgents, OWN_KEY_REMINDER_MS, STALE_QUEUE_MS } = await import('./agent-sweep');
 
 const NOW = new Date('2026-11-02T12:00:00.000Z');
 const AGENT = 'abababab-0000-4000-8000-000000000001';
@@ -150,6 +152,7 @@ beforeEach(() => {
   db.tables.chat_runs = [];
   db.tables.chat_run_state = [];
   db.tables.ship_events = [];
+  db.tables.organization_ai_keys = [];
   db.rpcs = { chat_start_next_agent_run: startNext };
 });
 
@@ -258,6 +261,40 @@ describe('the agents’ sweep', () => {
     fakes.onOwnKey.mockResolvedValue(false);
     expect((await sweepAgents(NOW, driver)).resumed).toBe(1);
     expect(agentRow().status).toBe('active');
+  });
+
+  it('reminds the Admins once of an own key still failing 3 days in (AGENT-OWN-KEY §5.3)', async () => {
+    const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
+    const due = ago(OWN_KEY_REMINDER_MS + 60_000);
+    db.tables.organization_ai_keys = [
+      // Told as it began: its reminder is due.
+      { organization_id: ORG, provider: 'openai', failing_since: due, notified_at: due },
+      // Not 3 days yet.
+      {
+        organization_id: ORG,
+        provider: 'anthropic',
+        failing_since: ago(OWN_KEY_REMINDER_MS - 60_000),
+        notified_at: null,
+      },
+      // Reminded already.
+      {
+        organization_id: ORG,
+        provider: 'google',
+        failing_since: ago(OWN_KEY_REMINDER_MS + 120_000),
+        notified_at: ago(30_000),
+      },
+      // Works.
+      { organization_id: ORG, provider: 'azure', failing_since: null, notified_at: null },
+    ];
+    expect((await sweepAgents(NOW, driver)).reminded).toBe(1);
+    expect(fakes.notify).toHaveBeenCalledTimes(1);
+    expect(fakes.notify).toHaveBeenCalledWith(ORG, 'openai', due, { reminder: true });
+
+    // Chat off for the workspace: no one is reminded.
+    fakes.notify.mockClear();
+    vi.stubEnv('CHAT_AGENTIC_ORGS', 'ffffffff-0000-4000-8000-000000000000');
+    expect((await sweepAgents(NOW, driver)).reminded).toBe(0);
+    expect(fakes.notify).not.toHaveBeenCalled();
   });
 
   it('keeps an agent paused while its own monthly cap is used', async () => {

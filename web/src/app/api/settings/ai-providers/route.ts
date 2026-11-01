@@ -7,7 +7,7 @@ import { isAiProvider, parseProviderSettings, type AiProvider } from '@/lib/agen
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { ownKeyAccess, type OwnKeyAccess } from '@/lib/chat/key';
 import { readProviderKey } from '@/lib/agent/key';
-import { resumeOwnKeyAgents } from '@/lib/chat/key-health';
+import { resolveOwnKeyNotices, resumeOwnKeyAgents } from '@/lib/chat/key-health';
 import {
   keepKeyCheck,
   keyCheckOf,
@@ -416,5 +416,9 @@ export async function DELETE(req: Request) {
       console.error('[ai-providers] could not resume the agents:', err),
     );
   }
+  // A removed key fails no more: the Admins' notices about it close (00441).
+  await resolveOwnKeyNotices(organizationId, provider).catch((err) =>
+    console.error("[ai-providers] could not close the key's notices:", err),
+  );
   return NextResponse.json({ ok: true });
 }

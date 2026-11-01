@@ -78,6 +78,7 @@ const keys = vi.hoisted(() => ({
   keep: vi.fn(async () => 0),
   read: vi.fn(async (): Promise<unknown> => ({ state: 'none', active: false })),
   resume: vi.fn(async () => 0),
+  resolve: vi.fn(async () => {}),
 }));
 vi.mock('@/lib/chat/key-test', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/chat/key-test')>()),
@@ -86,7 +87,10 @@ vi.mock('@/lib/chat/key-test', async (importOriginal) => ({
   keepKeyCheck: keys.keep,
 }));
 vi.mock('@/lib/agent/key', () => ({ readProviderKey: keys.read }));
-vi.mock('@/lib/chat/key-health', () => ({ resumeOwnKeyAgents: keys.resume }));
+vi.mock('@/lib/chat/key-health', () => ({
+  resumeOwnKeyAgents: keys.resume,
+  resolveOwnKeyNotices: keys.resolve,
+}));
 
 const { GET, PUT, PATCH, DELETE } = await import('./route');
 const { POST: TEST } = await import('./test/route');
@@ -310,6 +314,8 @@ describe('DELETE', () => {
       p_provider: 'openai',
     });
     expect(queries).toHaveLength(0);
+    // A removed key fails no more: the Admins' notices about it close.
+    expect(keys.resolve).toHaveBeenCalledWith('org1', 'openai');
   });
 
   it("clears the Anthropic key's old copy too", async () => {

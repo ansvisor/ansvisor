@@ -1,6 +1,7 @@
 import { isAiProvider, type AiProvider } from '@/lib/agent/providers';
 import { isKeyFailureClass, type KeyFailureClass } from '@/lib/agent/key-errors';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { chatAgenticEnabled } from './flag';
 import { notifyOwnKeyFailure } from './key-notice';
 
 /**
@@ -86,7 +87,10 @@ export async function markKeyFailing(
     .select('failing_since');
   if (error) throw new Error(`Could not mark the AI key failing: ${error.message}`);
   if ((data ?? []).length > 0) {
-    await notifyOwnKeyFailure(organizationId, provider, since);
+    // The Admins are told while Chat is on for the workspace: its agents run on the key.
+    if (chatAgenticEnabled(organizationId)) {
+      await notifyOwnKeyFailure(organizationId, provider, since);
+    }
     return { started: true, since };
   }
 
@@ -120,6 +124,25 @@ export async function resumeOwnKeyAgents(
     .select('id');
   if (error) throw new Error(`Could not resume the agents: ${error.message}`);
   return (data ?? []).length;
+}
+
+/**
+ * The Admins' notices that the key fails (00441) close once it works again
+ * or is removed: their Inbox row goes with them.
+ */
+export async function resolveOwnKeyNotices(
+  organizationId: string,
+  provider: AiProvider,
+  now = new Date(),
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('chat_notices')
+    .update({ resolved_at: now.toISOString() })
+    .eq('organization_id', organizationId)
+    .eq('kind', 'own_key_failed')
+    .eq('payload->>provider', provider)
+    .is('resolved_at', null);
+  if (error) throw new Error(`Could not close the AI key's notices: ${error.message}`);
 }
 
 /** A test of the key ran (Settings › AI Providers' Test, Save, Use for Chat): when. */
@@ -162,5 +185,9 @@ export async function markKeyWorking(
     .select('provider');
   if (error) throw new Error(`Could not mark the AI key working: ${error.message}`);
   if ((data ?? []).length === 0) return { cleared: false, resumed: 0 };
+  // The notices close even when they can't: the key works, the agents restart.
+  await resolveOwnKeyNotices(organizationId, provider, now).catch((err) =>
+    console.error("[chat/key] could not close the AI key's notices:", err),
+  );
   return { cleared: true, resumed: resume ? await resumeOwnKeyAgents(organizationId, now) : 0 };
 }

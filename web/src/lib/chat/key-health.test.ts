@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * AGENT-OWN-KEY §5.2, §5.4: one failure episode however many runs fail at
@@ -9,6 +9,12 @@ type Row = Record<string, unknown>;
 let tables: Record<string, Row[]>;
 let writes: { table: string; values: Row }[];
 
+/** A column, or a JSON field as PostgREST names it ("payload->>provider"). */
+const cell = (row: Row, col: string) => {
+  const [column, field] = col.split('->>');
+  return field === undefined ? row[column] : (row[column] as Row | undefined)?.[field];
+};
+
 function query(table: string) {
   const filters: ((row: Row) => boolean)[] = [];
   let values: Row | null = null;
@@ -16,7 +22,7 @@ function query(table: string) {
   const builder = {
     select: () => builder,
     update: (v: Row) => ((values = v), builder),
-    eq: (col: string, val: unknown) => (filters.push((r) => r[col] === val), builder),
+    eq: (col: string, val: unknown) => (filters.push((r) => cell(r, col) === val), builder),
     is: (col: string, val: null) => (filters.push((r) => (r[col] ?? null) === val), builder),
     not: (col: string, _op: 'is', val: null) => (
       filters.push((r) => (r[col] ?? null) !== val),
@@ -39,7 +45,7 @@ vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { from: (t: string) => q
 const notify = vi.hoisted(() => vi.fn(async () => true));
 vi.mock('./key-notice', () => ({ notifyOwnKeyFailure: notify }));
 
-const { markKeyFailing, markKeyWorking, ownKeyFailure, resumeOwnKeyAgents } =
+const { markKeyFailing, markKeyWorking, ownKeyFailure, resolveOwnKeyNotices, resumeOwnKeyAgents } =
   await import('./key-health');
 
 const ORG = 'org-1';
@@ -59,6 +65,7 @@ const key = (over: Row = {}): Row => ({
 
 beforeEach(() => {
   notify.mockClear();
+  vi.stubEnv('CHAT_AGENTIC', 'true');
   writes = [];
   tables = {
     organization_ai_keys: [key(), key({ provider: 'anthropic', active: false })],
@@ -68,12 +75,34 @@ beforeEach(() => {
       { id: 'a3', organization_id: ORG, status: 'active', paused_reason: null },
       { id: 'a4', organization_id: 'org-2', status: 'paused', paused_reason: 'own_key' },
     ],
+    chat_notices: [
+      notice('n1', { provider: 'openai' }),
+      notice('n2', { provider: 'openai', reminder: true }),
+      notice('n3', { provider: 'anthropic' }),
+      { ...notice('n4', { provider: 'openai' }), organization_id: 'org-2' },
+    ],
   };
+});
+
+function notice(id: string, payload: Row): Row {
+  return {
+    id,
+    organization_id: ORG,
+    kind: 'own_key_failed',
+    payload: { class: 'no_credit', ...payload },
+    resolved_at: null,
+  };
+}
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 const keyRow = (provider = 'openai') =>
   tables.organization_ai_keys.find((r) => r.provider === provider)!;
 const agent = (id: string) => tables.chat_agents.find((r) => r.id === id)!;
+const openNotices = () =>
+  tables.chat_notices.filter((n) => n.resolved_at === null).map((n) => n.id);
 
 describe('markKeyFailing', () => {
   it('starts one episode however many runs fail, and keeps the latest class', async () => {
@@ -97,6 +126,15 @@ describe('markKeyFailing', () => {
     });
     // Another provider's saved key isn't touched.
     expect(keyRow('anthropic').failing_since).toBeNull();
+  });
+
+  it('tells no one while Chat is off for the workspace', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await markKeyFailing(ORG, 'openai', { class: 'invalid', status: 401 }, T1)).toEqual({
+      started: true,
+      since: T1.toISOString(),
+    });
+    expect(notify).not.toHaveBeenCalled();
   });
 });
 
@@ -139,9 +177,19 @@ describe('markKeyWorking', () => {
     });
     expect(agent('a2')).toMatchObject({ status: 'paused', paused_reason: 'manual' });
     expect(agent('a4')).toMatchObject({ status: 'paused', paused_reason: 'own_key' });
+    // Its notices close, reminder too; another key's and another workspace's stay.
+    expect(openNotices()).toEqual(['n3', 'n4']);
 
     // A second success finds nothing to clear.
     expect(await markKeyWorking(ORG, 'openai', T2)).toEqual({ cleared: false, resumed: 0 });
+  });
+});
+
+describe('resolveOwnKeyNotices', () => {
+  it("closes the key's open notices in the workspace", async () => {
+    await resolveOwnKeyNotices(ORG, 'anthropic', T2);
+    expect(openNotices()).toEqual(['n1', 'n2', 'n4']);
+    expect(tables.chat_notices.find((n) => n.id === 'n3')!.resolved_at).toBe(T2.toISOString());
   });
 });
 
