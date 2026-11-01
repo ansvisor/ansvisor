@@ -42,6 +42,7 @@ import { VisitListSourceNote } from './_visit-list-note';
 import { EngagedCell, KeyEventsCell, PlatformValueNote } from './_platform-value';
 import { ExportMenu, TableExport, useTrafficExport } from './_export';
 import { SourcesStrip } from './_sources-strip';
+import { useFirstSnippetCheck } from './_use-first-snippet-check';
 import { SnippetBanner, SnippetDialog } from './_snippet-code';
 import { GoogleTrendView } from './_google-trend';
 import { GoogleSection } from './_google-section';
@@ -593,6 +594,13 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   }, [loadLogs]);
 
   const primaryDomain = brand.domains.find((d) => d.isPrimary)?.domain ?? brand.domains[0]?.domain;
+  // A brand never checked for the snippet is checked once as the page opens.
+  const snippetChecking = useFirstSnippetCheck({
+    brandId: brand.id,
+    sources,
+    domain: primaryDomain,
+    onChecked: () => void loadSources(),
+  });
 
   // A new range shows only a spinner until the page and every section have
   // its data, rather than one range's numbers beside another's.
@@ -778,6 +786,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
               brandId={brand.id}
               sources={sources}
               domain={primaryDomain}
+              snippetChecking={snippetChecking}
               hasTrackingCode={Boolean(brand.trackingCode)}
               canConnect={canManage}
               onShowCode={() => setCodeOpen(true)}
@@ -797,6 +806,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                       brandId: brand.id,
                       domain: primaryDomain,
                       checkedAt: sources.snippetCheckedAt,
+                      busy: snippetChecking,
                       onFound: () => void loadSources(),
                     }
                   : undefined

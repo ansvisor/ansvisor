@@ -28,7 +28,7 @@ Add it to the head of every page you want to track, your 404 page included, so *
 
 ## Check that the snippet works
 
-After you publish it, click **Check again**: Ansvisor reads your home page once and looks for the snippet. Your brand's home page is also checked when the brand is set up. The snippet itself adds no request for your other visitors.
+After you publish it, click **Check again**: Ansvisor reads your home page once and looks for the snippet. Your home page is also checked when the brand is set up, or once when you open this page if it never was and no AI visit has arrived: the card reads **Checking your home page…** meanwhile. The snippet itself adds no request for your other visitors.
 
 The **Tracking snippet** card then reads:
 

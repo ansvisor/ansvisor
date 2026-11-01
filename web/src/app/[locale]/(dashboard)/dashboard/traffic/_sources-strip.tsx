@@ -119,13 +119,15 @@ export function GoogleSource({
  * missing, with a way to connect it without leaving the page (fixes F8).
  * The snippet is active, installed and quiet (the home page check found it,
  * or it sent a visit before: 00433), or not detected on the brand's domain;
- * its code moves behind its Code button once it's seen (F3). AI bots come
- * from the brand's Cloudflare or Vercel (AT-010).
+ * its code moves behind its Code button once it's seen (F3). While the
+ * page's first check of the home page runs, it says so. AI bots come from
+ * the brand's Cloudflare or Vercel (AT-010).
  */
 export function SourcesStrip({
   brandId,
   sources,
   domain,
+  snippetChecking = false,
   hasTrackingCode,
   canConnect,
   onShowCode,
@@ -138,6 +140,8 @@ export function SourcesStrip({
   sources: TrafficSources | null;
   /** The brand's primary domain, for the GA4 property line and the snippet's. */
   domain: string | undefined;
+  /** The page's first check of the home page for the snippet is running. */
+  snippetChecking?: boolean;
   hasTrackingCode: boolean;
   canConnect: boolean;
   onShowCode: () => void;
@@ -155,6 +159,7 @@ export function SourcesStrip({
 
   const snippet = snippetStateOf(sources);
   const seen = snippet !== 'not_detected';
+  const checking = snippetChecking && !seen;
   return (
     <section
       aria-label={t('label')}
@@ -163,16 +168,18 @@ export function SourcesStrip({
       className="grid gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-2 min-[75rem]:grid-cols-4"
     >
       <SourceCard
-        tone={seen ? 'on' : 'off'}
+        tone={seen ? 'on' : checking ? 'sync' : 'off'}
         title={t('snippet')}
         line={
-          snippet === 'active'
-            ? t('snippetActive', { when: formatRelative(sources.snippetLastVisitAt, tCommon) })
-            : snippet === 'installed_quiet'
-              ? t('snippetQuiet')
-              : domain
-                ? t('snippetNotDetectedOn', { domain })
-                : t('snippetNotDetected')
+          checking
+            ? t('snippetChecking')
+            : snippet === 'active'
+              ? t('snippetActive', { when: formatRelative(sources.snippetLastVisitAt, tCommon) })
+              : snippet === 'installed_quiet'
+                ? t('snippetQuiet')
+                : domain
+                  ? t('snippetNotDetectedOn', { domain })
+                  : t('snippetNotDetected')
         }
         action={
           hasTrackingCode ? (
