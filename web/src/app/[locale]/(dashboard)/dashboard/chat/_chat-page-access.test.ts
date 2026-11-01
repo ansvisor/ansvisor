@@ -18,8 +18,11 @@ const db = vi.hoisted(() => ({
     legacy_imported_at?: string | null;
     default_mode?: string | null;
     usage_notice_period?: string | null;
+    focus?: string[] | null;
+    focus_prompted_at?: string | null;
   } | null,
   prefsError: null as { message: string } | null,
+  workAreas: [] as string[] | null,
   confirmedAt: null as string | null,
 }));
 
@@ -43,7 +46,7 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: () => ({
           maybeSingle: async () =>
             table === 'profiles'
-              ? { data: { organization_id: 'org-1' }, error: null }
+              ? { data: { organization_id: 'org-1', work_areas: db.workAreas }, error: null }
               : { data: db.prefs, error: db.prefsError },
         }),
       }),
@@ -67,13 +70,15 @@ vi.mock('@/lib/chat/key', () => ({
 }));
 
 const { importLegacyChats } = await import('@/lib/chat/legacy-import');
-const { chatPageOpen, chatShellPrefs, chatComposerSetup } = await import('./_chat-page-access');
+const { chatPageOpen, chatShellPrefs, chatComposerSetup, chatFocusState } =
+  await import('./_chat-page-access');
 
 beforeEach(() => {
   vi.stubEnv('CHAT_AGENTIC', 'true');
   db.prefs = null;
   db.prefsError = null;
   db.confirmedAt = null;
+  db.workAreas = [];
   facts.ctx = null;
   facts.fail = false;
   facts.ownKey = false;
@@ -236,5 +241,32 @@ describe('chatComposerSetup', () => {
     // A key that can't be read: the careful answer, and the server's hold still decides.
     facts.ownKey = 'throws';
     expect((await chatComposerSetup()).onOwnKey).toBe(false);
+  });
+});
+
+describe('chatFocusState (CHAT-24 §3)', () => {
+  it('opens the picker once, for someone never asked, with their work areas picked', async () => {
+    db.workAreas = ['product', 'bizdev', 'developers', 'aeo', 'unknown'];
+    expect(await chatFocusState()).toEqual({
+      focus: null,
+      ask: true,
+      prefill: ['pd', 'bd', 'seo'],
+    });
+    // Shown once already, left without a pick: it doesn't open by itself again.
+    db.prefs = { focus: null, focus_prompted_at: '2026-10-31T09:00:00.000Z' };
+    expect((await chatFocusState()).ask).toBe(false);
+  });
+
+  it('keeps the picks in their order, and a skip as none', async () => {
+    db.prefs = { focus: ['brand', 'comp', 'brand', 'nope'], focus_prompted_at: null };
+    expect(await chatFocusState()).toEqual({ focus: ['brand', 'comp'], ask: false, prefill: [] });
+    db.prefs = { focus: [], focus_prompted_at: null };
+    expect(await chatFocusState()).toMatchObject({ focus: [], ask: false });
+  });
+
+  it('opens Home as it is, without the picker, when the settings could not be read', async () => {
+    db.prefsError = { message: 'down' };
+    db.workAreas = null;
+    expect(await chatFocusState()).toEqual({ focus: null, ask: false, prefill: [] });
   });
 });

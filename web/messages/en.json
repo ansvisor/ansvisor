@@ -4438,6 +4438,72 @@
         "winMessage": "Which {engine} citations did we win since {day}?"
       }
     },
+    "focus": {
+      "title": "What should Chat focus on for you?",
+      "intro": "Pick one or more. Chat tailors your Home, starter questions and skills to them. You can change this anytime in Settings › General.",
+      "groupLabel": "Focus areas",
+      "areas": {
+        "lead": {
+          "title": "Big picture and results",
+          "note": "Visibility in one line, what changed and what it is worth",
+          "name": "Big picture"
+        },
+        "comp": {
+          "title": "Competitors",
+          "note": "Who gained, which prompts you lost and where rivals are cited instead of you",
+          "name": "Competitors"
+        },
+        "growth": {
+          "title": "AI traffic and conversions",
+          "note": "AI visits, key events and the prompts that bring buyers",
+          "name": "AI traffic"
+        },
+        "seo": {
+          "title": "Prompts and citations",
+          "note": "Rankings, drops, site audit and the pages AI should cite",
+          "name": "Prompts and citations"
+        },
+        "content": {
+          "title": "Content",
+          "note": "What to write or update next, briefs and quality passes",
+          "name": "Content"
+        },
+        "brand": {
+          "title": "Brand and reputation",
+          "note": "How AI describes you, sentiment and the sources behind it",
+          "name": "Brand"
+        },
+        "pd": {
+          "title": "Product and buyer needs",
+          "note": "What buyers ask AI, how AI compares you and unmet needs",
+          "name": "Product"
+        },
+        "bd": {
+          "title": "Markets and third-party sources",
+          "note": "Who AI recommends in each market, and the directories, marketplaces, review and publisher sites where you’re missing",
+          "name": "Markets and sources"
+        }
+      },
+      "countNone": "Pick at least one. Your access stays the same: what you can change still depends on your role.",
+      "countSome": "{count, number} selected · your access stays the same: what you can change still depends on your role.",
+      "skip": "Skip for now",
+      "cancel": "Cancel",
+      "continue": "Continue",
+      "saved": "Home focused on {label} · edit it in Settings › General",
+      "skipped": "You can choose your focus later in Settings › General",
+      "failed": "Couldn't save your focus. Try again.",
+      "label": {
+        "one": "{a}",
+        "two": "{a} and {b}",
+        "more": "{a}, {b} +{count, number}"
+      },
+      "pill": {
+        "focused": "Focused on {label}",
+        "edit": "Edit",
+        "none": "Get suggestions for what you work on",
+        "choose": "Choose focus"
+      }
+    },
     "inbox": {
       "title": "Inbox",
       "lands": "Results from your agents land here.",
@@ -4652,6 +4718,12 @@
       },
       "fullAutoPlan": "Full auto needs the Growth plan",
       "fullAutoAdmin": "Your Admin turned Full auto off for your role",
+      "focus": {
+        "label": "Your focus",
+        "note": "Pick one or more. Tailors your Home, starter questions and skill suggestions. Your access stays the same.",
+        "saved": "Home focused on {label}",
+        "cleared": "Focus cleared · default Home"
+      },
       "language": {
         "label": "Answer language",
         "note": "The app stays in English; Chat answers in this language",

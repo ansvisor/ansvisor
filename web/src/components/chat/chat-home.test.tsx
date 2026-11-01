@@ -43,6 +43,11 @@ vi.mock('@/lib/actions/chat-home', () => ({
   readHomeShortcuts: due.read,
   readSinceYouLeft: vi.fn(async () => ({ ok: true, since: due.since })),
 }));
+vi.mock('@/lib/actions/chat-prefs', () => ({
+  saveChatFocus: vi.fn(),
+  skipChatFocus: vi.fn(),
+  markFocusPrompted: vi.fn(),
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (pick: (s: { activeBrandId: string }) => unknown) =>
     pick({ activeBrandId: due.brand }),
@@ -454,5 +459,32 @@ describe('ChatInboxView', () => {
   it('says one line when nothing is there', async () => {
     await render(<ChatInboxView status="ready" now={null} onRetry={() => undefined} items={[]} />);
     expect(text()).toBe('InboxNothing needs you. Results from your agents land here.');
+  });
+});
+
+describe('the focus pill (CHAT-24 §3 item 3)', () => {
+  it('says what Chat focuses on under the greeting, and Edit opens the picker', async () => {
+    const onEdit = vi.fn();
+    await render(view({ focus: { areas: ['pd', 'bd'], onEdit } }));
+    const pill = host.querySelector('[data-slot="focus-pill"]')!;
+    expect(pill.textContent).toBe('Focused on Product and Markets and sourcesEdit');
+    await act(async () => (pill.querySelector('button') as HTMLButtonElement).click());
+    expect(onEdit).toHaveBeenCalledOnce();
+  });
+
+  it('names the first two of three or more, and the rest as a count', async () => {
+    await render(view({ focus: { areas: ['lead', 'comp', 'brand'], onEdit: () => undefined } }));
+    const pill = host.querySelector('[data-slot="focus-pill"]')!;
+    expect(pill.textContent).toBe('Focused on Big picture, Competitors +1Edit');
+    expect(pill.getAttribute('title')).toBe('Big picture, Competitors, Brand');
+  });
+
+  it('offers a focus without one, and shows no pill outside Chat Home', async () => {
+    await render(view({ focus: { areas: [], onEdit: () => undefined } }));
+    expect(host.querySelector('[data-slot="focus-pill"]')?.textContent).toBe(
+      'Get suggestions for what you work onChoose focus',
+    );
+    await render(view());
+    expect(host.querySelector('[data-slot="focus-pill"]')).toBeNull();
   });
 });
