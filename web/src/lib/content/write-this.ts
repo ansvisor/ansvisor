@@ -1,10 +1,9 @@
 import type { ContentOpportunity } from '@/types';
 import { opportunityPageType } from './asset-types';
 import { refreshYears } from './current-year';
-import type { DraftMethod } from './drafts';
+import type { DraftMethod, PageType } from './drafts';
 import { opportunityStart } from './opportunity-start';
 import { pagePath } from './overlap';
-import type { PageType } from './drafts';
 import { detectPageType, type SiteType } from './page-types';
 import { startPageType } from './start';
 
