@@ -579,7 +579,7 @@ describe('AgentForm: new agent', () => {
     await render({ ...SETUP, ownKeyProvider: 'anthropic' });
     await toLastStep();
     expect(one('[data-slot="agent-form-key"]')!.textContent).toBe(
-      'Runs on your Anthropic key, which Anthropic bills. Max per run and Monthly cap still apply.',
+      "Runs on your Anthropic key, which Anthropic bills. Max per run and the key's monthly limit still apply.",
     );
     expect(one('#agent-form-note-max-run')!.textContent).toBe(
       messages.chatAgents.form.agent.maxRunNoteOwnKey,
