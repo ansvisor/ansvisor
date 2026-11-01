@@ -15,6 +15,9 @@ const TrendChart = dynamic(() => import('../../insights/_charts').then((m) => m.
 });
 import { toast } from 'sonner';
 import { getReport, type Report } from '@/lib/actions/reports';
+import { getReportBranding } from '@/lib/actions/white-label';
+import { reportFileName, reportLook, type ReportBranding } from '@/lib/white-label/kit';
+import { pdfImage } from '@/lib/white-label/pdf-image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +36,8 @@ import { REPORT_TEMPLATES } from '@/lib/reports/templates';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const KNOWN_TEMPLATE_IDS = new Set<string>(REPORT_TEMPLATES.map((tpl) => tpl.id));
+
+const BRANDING_FAILED = { ok: false, failure: 'failed' } as const;
 
 /** Signed percentage delta, or an explicit raw count for a new zero-base metric. */
 function Delta({ value, zeroBaseCount }: { value: number | null; zeroBaseCount?: number }) {
@@ -78,6 +83,44 @@ function KpiCard({
   );
 }
 
+/**
+ * The white label kit's cover (00429), as the PDF opens: the agency's logo
+ * (or its name), "Prepared for" the brand, the client's logo, and the kit's
+ * color under them. The paper is white in both themes, as the PDF is.
+ */
+function ReportCover({ branding, brandName }: { branding: ReportBranding; brandName: string }) {
+  const t = useTranslations('reports');
+  const look = reportLook(branding);
+  return (
+    <div className="rounded-lg border bg-white p-5 text-zinc-900 shadow-sm">
+      <div className="flex min-h-10 items-center justify-between gap-4">
+        {branding.logo ? (
+          // eslint-disable-next-line @next/next/no-img-element -- the logo itself, as a data URL
+          <img
+            src={branding.logo}
+            alt={branding.companyName ?? ''}
+            className="max-h-10 max-w-48 object-contain"
+          />
+        ) : (
+          <span className="font-semibold">{branding.companyName}</span>
+        )}
+        {branding.clientLogo && (
+          // eslint-disable-next-line @next/next/no-img-element -- the logo itself, as a data URL
+          <img
+            src={branding.clientLogo}
+            alt={brandName}
+            className="max-h-10 max-w-48 object-contain"
+          />
+        )}
+      </div>
+      <p className="mt-3 text-sm font-medium" style={{ color: look.textAccent }}>
+        {t('preparedFor', { brand: brandName })}
+      </p>
+      <div className="mt-3 h-0.5" style={{ backgroundColor: look.accent }} />
+    </div>
+  );
+}
+
 export default function ReportDetailPage() {
   const params = useParams();
   const id = params.id as string;
@@ -89,14 +132,25 @@ export default function ReportDetailPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [downloading, setDownloading] = useState(false);
+  // The white label kit the report is shown and downloaded with (null: none);
+  // undefined until it is read, or when it couldn't be.
+  const [branding, setBranding] = useState<ReportBranding | null | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setLoadFailed(false);
+    setBranding(undefined);
     getReport(id)
       .then((r) => {
-        if (!cancelled) setReport(r);
+        if (cancelled) return;
+        setReport(r);
+        if (!r) return;
+        void getReportBranding(r.brandId)
+          .catch(() => BRANDING_FAILED)
+          .then((read) => {
+            if (!cancelled && read.ok) setBranding(read.branding);
+          });
       })
       .catch((err) => {
         console.error('Failed to load report:', err);
@@ -177,21 +231,32 @@ export default function ReportDetailPage() {
   const handleDownloadPdf = async () => {
     setDownloading(true);
     try {
-      const [{ pdf }, { ReportPdfDocument }] = await Promise.all([
+      // A kit that couldn't be read is read again: a PDF in Ansvisor's look
+      // must not go to an agency's client by mistake.
+      let kit = branding;
+      if (kit === undefined) {
+        const read = await getReportBranding(report.brandId).catch(() => BRANDING_FAILED);
+        if (!read.ok) {
+          toast.error(t('brandingFailed'));
+          return;
+        }
+        kit = read.branding;
+        setBranding(kit);
+      }
+      const [{ pdf }, { ReportPdfDocument }, logo, clientLogo] = await Promise.all([
         import('@react-pdf/renderer'),
         import('./_report-pdf'),
+        pdfImage(kit?.logo ?? null),
+        pdfImage(kit?.clientLogo ?? null),
       ]);
-      const blob = await pdf(<ReportPdfDocument report={report} />).toBlob();
+      const blob = await pdf(
+        <ReportPdfDocument report={report} branding={kit && { ...kit, logo, clientLogo }} />,
+      ).toBlob();
 
-      const slug =
-        payload.brandName
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/(^-|-$)/g, '') || 'brand';
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `ansvisor_${slug}_report_${report.dateTo.slice(0, 10)}.pdf`;
+      a.download = reportFileName(kit, payload.brandName, report.dateTo);
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -205,7 +270,7 @@ export default function ReportDetailPage() {
   return (
     <div className="space-y-6">
       <HeaderWithAiUsage>
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
             <Link
               href="/dashboard/reports"
@@ -238,6 +303,8 @@ export default function ReportDetailPage() {
       {/* Everything below renders from the immutable saved payload; the
           container id is the future PDF capture root. */}
       <div id="report-root" className="space-y-6">
+        {branding && <ReportCover branding={branding} brandName={payload.brandName} />}
+
         {/* A section that could not be gathered is named here rather than
             silently absent — otherwise the report reads as though the brand
             had no data for it. */}

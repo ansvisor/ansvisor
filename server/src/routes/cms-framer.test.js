@@ -130,6 +130,7 @@ const BLOG = {
     { id: 'fBody', name: 'Content', type: 'formattedText' },
     { id: 'fSeo', name: 'SEO Title', type: 'string' },
     { id: 'fCover', name: 'Cover', type: 'image' },
+    { id: 'fReviewer', name: 'Reviewed by', type: 'string' },
   ],
 };
 
@@ -428,13 +429,19 @@ describe('PUT where pages go', () => {
     rows = [connectedRow({ collection_id: null, collection_name: null, field_map: {} })];
     const res = await call('PUT', {
       collectionId: 'cBlog',
-      fieldMap: { title: 'fTitle', body: 'fBody', metaTitle: 'fSeo', metaDescription: null },
+      fieldMap: {
+        title: 'fTitle',
+        body: 'fBody',
+        metaTitle: 'fSeo',
+        metaDescription: null,
+        reviewer: 'fReviewer',
+      },
     });
     expect(res.status).toBe(200);
     expect((await res.json()).connection).toMatchObject({
       collectionId: 'cBlog',
       collectionName: 'Blog',
-      fieldMap: { title: 'fTitle', body: 'fBody', metaTitle: 'fSeo' },
+      fieldMap: { title: 'fTitle', body: 'fBody', metaTitle: 'fSeo', reviewer: 'fReviewer' },
     });
     expect(framer.collectionOf).toHaveBeenCalledWith(PROJECT, KEY, 'cBlog');
   });
