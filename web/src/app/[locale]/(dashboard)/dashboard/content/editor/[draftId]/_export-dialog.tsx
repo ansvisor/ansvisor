@@ -184,7 +184,7 @@ export function ExportDialog({
   sourceUrl: string | null;
   author: ContentAuthor | null;
   /** The page's qualified reviewer (CE-049), or null where none is picked. */
-  reviewer: ContentAuthor | null;
+  reviewer?: ContentAuthor | null;
   /** The team byline; empty while the authors aren't read, or for the site's own author. */
   teamByline: string;
   /** No author picked, the one the site names confirmed (00271): the CMS keeps its own. */
