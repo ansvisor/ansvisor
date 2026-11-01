@@ -242,7 +242,11 @@ describe('GET /ai-usage', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(usage);
     expect(getOrgIdForUser).toHaveBeenCalledWith('u1');
-    expect(getAiUsage).toHaveBeenCalledWith('o1');
+    // With what Write this typically costs, which it turns into a share.
+    expect(getAiUsage).toHaveBeenCalledWith('o1', {
+      estimates: { writeThis: expect.any(Number) },
+    });
+    expect(getAiUsage.mock.calls[0][1].estimates.writeThis).toBeGreaterThan(0);
   });
 
   it('has no budget to show without an organization (self-hosted)', async () => {
