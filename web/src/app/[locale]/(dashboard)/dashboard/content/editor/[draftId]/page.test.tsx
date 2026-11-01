@@ -37,6 +37,10 @@ const confirmOwnImage = vi.fn();
 const getBrandFacts = vi.fn();
 const checkDraftLinks = vi.fn();
 const getSiteTrust = vi.fn();
+// No white label kit: downloads keep Ansvisor's names (export-name.test.ts has a kit's).
+vi.mock('@/lib/actions/white-label', () => ({
+  getExportBranding: async () => ({ ok: true, branding: null }),
+}));
 vi.mock('@/lib/actions/audits', () => ({
   getSiteTrust: (...args: unknown[]) => getSiteTrust(...args),
 }));

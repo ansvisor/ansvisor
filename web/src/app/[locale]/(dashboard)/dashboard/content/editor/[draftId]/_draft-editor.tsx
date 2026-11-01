@@ -202,6 +202,7 @@ import {
 import { shoppingLinks, type ShoppingLinks } from '@/lib/content/shopping-check';
 import { aiUsageTone } from '@/lib/billing/ai-usage';
 import { saveBlob } from '@/lib/download';
+import { exportAuthor, exportFileWord } from '@/lib/white-label/export-name';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -2986,8 +2987,8 @@ export function DraftEditor({
     const name = title.trim() || t('untitled');
     try {
       saveBlob(
-        await draftExportBlob(format, name, html, undefined, draft.sourceUrl),
-        draftExportFileName(name, format),
+        await draftExportBlob(format, name, html, undefined, draft.sourceUrl, await exportAuthor()),
+        draftExportFileName(name, format, await exportFileWord()),
       );
     } catch (err) {
       console.error('Failed to export the page:', err);

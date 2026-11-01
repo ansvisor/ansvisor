@@ -64,6 +64,7 @@ import {
 } from '@/lib/content/opportunity-export';
 import { BYTE_ORDER_MARK } from '@/lib/action-center/export';
 import { saveBlob } from '@/lib/download';
+import { exportAuthor, exportFileWord } from '@/lib/white-label/export-name';
 import { canWriteOpportunity, opportunityStart } from '@/lib/content/opportunity-start';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { siteTypeOf } from '@/lib/content/page-types';
@@ -460,8 +461,8 @@ export function OpportunityDetail({
   // Export (the user's spec): what Copy All Data copies, as a file.
   const handleExport = async (format: OpportunityExportFormat) => {
     const doc = opportunityDocument(opportunity, brief, fanoutQueries, assetTypeLabel, volume);
-    const fileName = opportunityExportFileName(doc, format);
     try {
+      const fileName = opportunityExportFileName(doc, format, await exportFileWord());
       if (format === 'csv') {
         saveBlob(
           new Blob([BYTE_ORDER_MARK, opportunityCsv(doc)], { type: 'text/csv;charset=utf-8;' }),
@@ -471,7 +472,7 @@ export function OpportunityDetail({
         const { default: writeXlsxFile } = await import('write-excel-file/browser');
         await writeXlsxFile(opportunityWorkbook(doc)).toFile(fileName);
       } else {
-        saveBlob(await opportunityDocx(doc), fileName);
+        saveBlob(await opportunityDocx(doc, await exportAuthor()), fileName);
       }
     } catch (err) {
       console.error('Export failed:', err);

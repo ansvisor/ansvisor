@@ -257,6 +257,7 @@ import {
   type PositionsRange,
 } from '@/lib/positions-range';
 import { viewerTimeZone } from '@/lib/time-zone';
+import { exportFileName } from '@/lib/white-label/export-name';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 // ─── Info Tooltip ─────────────────────────────────────────────────────────────
@@ -1905,7 +1906,7 @@ export default function PromptsPage() {
 
   const canExport = !loading && allPrompts.length > 0;
 
-  const handleExportCsv = useCallback(() => {
+  const handleExportCsv = useCallback(async () => {
     if (!canExport) return;
 
     const rangeSuffix = rangePreset;
@@ -1944,7 +1945,7 @@ export default function PromptsPage() {
     const slug = activeBrand?.slug ?? 'brand';
 
     link.href = url;
-    link.download = `ansvisor_${slug}_prompts_${date}.csv`;
+    link.download = await exportFileName(`${slug}_prompts_${date}.csv`);
     link.click();
 
     URL.revokeObjectURL(url);

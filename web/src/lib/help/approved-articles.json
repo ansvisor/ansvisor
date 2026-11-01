@@ -67,8 +67,20 @@
       "id": "action-center/action-center-kpis",
       "title": "Track KPIs in the Action Center",
       "route": "/dashboard/action-center/kpis",
-      "keywords": ["kpis", "goals", "targets", "edit kpis", "kpi status", "goal reached"],
-      "synonyms": ["key metrics", "objectives", "set goals", "performance targets"],
+      "keywords": [
+        "kpis",
+        "goals",
+        "targets",
+        "edit kpis",
+        "kpi status",
+        "goal reached"
+      ],
+      "synonyms": [
+        "key metrics",
+        "objectives",
+        "set goals",
+        "performance targets"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -94,8 +106,21 @@
       "id": "action-center/action-center-overview",
       "title": "Action Center overview",
       "route": "/dashboard/action-center",
-      "keywords": ["action center", "actions", "signals", "kpis", "history", "prioritized work"],
-      "synonyms": ["to-do list", "work list", "what to do next", "recommendations", "home page"],
+      "keywords": [
+        "action center",
+        "actions",
+        "signals",
+        "kpis",
+        "history",
+        "prioritized work"
+      ],
+      "synonyms": [
+        "to-do list",
+        "work list",
+        "what to do next",
+        "recommendations",
+        "home page"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -125,8 +150,19 @@
       "id": "action-center/action-center-signals",
       "title": "Signals in the Action Center",
       "route": "/dashboard/action-center/signals",
-      "keywords": ["signals", "what changed", "visibility drop", "lost citation", "signal status"],
-      "synonyms": ["alerts", "changes", "detections", "findings"],
+      "keywords": [
+        "signals",
+        "what changed",
+        "visibility drop",
+        "lost citation",
+        "signal status"
+      ],
+      "synonyms": [
+        "alerts",
+        "changes",
+        "detections",
+        "findings"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -156,8 +192,19 @@
       "id": "action-center/action-history-results",
       "title": "Action history and results",
       "route": "/dashboard/action-center/history",
-      "keywords": ["history", "action results", "scorecard", "success rate", "measured outcome"],
-      "synonyms": ["what worked", "past actions", "completed actions", "did it work"],
+      "keywords": [
+        "history",
+        "action results",
+        "scorecard",
+        "success rate",
+        "measured outcome"
+      ],
+      "synonyms": [
+        "what worked",
+        "past actions",
+        "completed actions",
+        "did it work"
+      ],
       "plan": "all",
       "updated": "2026-10-29",
       "sections": [
@@ -202,7 +249,12 @@
         "why this priority",
         "action ranking"
       ],
-      "synonyms": ["action priority", "ranking", "how actions are sorted", "urgency"],
+      "synonyms": [
+        "action priority",
+        "ranking",
+        "how actions are sorted",
+        "urgency"
+      ],
       "plan": "all",
       "updated": "2026-10-29",
       "sections": [
@@ -250,7 +302,12 @@
         "attached from chat",
         "ready for review"
       ],
-      "synonyms": ["steps", "subtasks", "to-do items", "task checks"],
+      "synonyms": [
+        "steps",
+        "subtasks",
+        "to-do items",
+        "task checks"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -307,7 +364,12 @@
         "new brand",
         "skip get started"
       ],
-      "synonyms": ["first steps", "setup list", "where do I start", "onboarding"],
+      "synonyms": [
+        "first steps",
+        "setup list",
+        "where do I start",
+        "onboarding"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -345,8 +407,19 @@
       "id": "action-center/task-review-queue",
       "title": "Review tasks waiting in Needs review",
       "route": "/dashboard/action-center/review",
-      "keywords": ["needs review", "approve task", "dismiss task", "task review", "missing fields"],
-      "synonyms": ["review queue", "pending tasks", "tasks to approve", "incomplete tasks"],
+      "keywords": [
+        "needs review",
+        "approve task",
+        "dismiss task",
+        "task review",
+        "missing fields"
+      ],
+      "synonyms": [
+        "review queue",
+        "pending tasks",
+        "tasks to approve",
+        "incomplete tasks"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -381,7 +454,12 @@
         "cloudflare",
         "vercel"
       ],
-      "synonyms": ["bot logs", "ai crawlers", "who crawls my site", "bot traffic"],
+      "synonyms": [
+        "bot logs",
+        "ai crawlers",
+        "who crawls my site",
+        "bot traffic"
+      ],
       "plan": "growth",
       "updated": "2026-10-31",
       "sections": [
@@ -418,9 +496,14 @@
         "chatgpt visits",
         "referral trend"
       ],
-      "synonyms": ["traffic from ai", "visitors from chatgpt", "ai referrals", "ai sessions"],
+      "synonyms": [
+        "traffic from ai",
+        "visitors from chatgpt",
+        "ai referrals",
+        "ai sessions"
+      ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -432,7 +515,7 @@
         },
         {
           "heading": "How visits are counted",
-          "text": "- **One visit per session**: a reload, or a further link from the same answer, continues the visit. The visits card gives the pageviews beside the visits.\n- **Snippet or Google Analytics, never both**: on days the tracking snippet sent any visit, the page counts the snippet's; on other days, Google Analytics'. The visits card says how many days came from Google Analytics.\n- **Recent AI Referral Visits**, at the bottom, shows only the snippet's visits, one row per visit. Search it by address and filter by platform."
+          "text": "- **One visit per session**: a reload, or a further link from the same answer, continues the visit. The visits card gives the pageviews beside the visits.\n- **Snippet or Google Analytics, never both**: on days the tracking snippet sent any visit, the page counts the snippet's; on other days, Google Analytics'. The visits card says how many days came from Google Analytics.\n- **Recent AI Referral Visits**, at the bottom, shows only the snippet's visits, one row per visit. Search it by address and filter by platform.\n- **No snippet, no zero**: until the tracking snippet is seen on your site, the page says **Tracking code not detected** and how to add it, rather than showing 0 visits. Chat and the MCP tools say the same."
         },
         {
           "heading": "Summary line and cards",
@@ -569,11 +652,19 @@
         "connect google analytics",
         "connect search console",
         "data sources",
-        "install snippet"
+        "install snippet",
+        "check again",
+        "tracking code not detected"
       ],
-      "synonyms": ["set up ai traffic", "add tracking code", "link analytics", "ga4", "gsc"],
+      "synonyms": [
+        "set up ai traffic",
+        "add tracking code",
+        "link analytics",
+        "ga4",
+        "gsc"
+      ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -585,11 +676,11 @@
         },
         {
           "heading": "Add the tracking snippet",
-          "text": "Copy the snippet from the page. It sits at the top until it has sent a visit in the last week. **Install** in the Data sources strip opens it too; once the snippet sends visits, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.\n\nAdd it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page."
+          "text": "Until the snippet is seen on your site, the page opens with **Tracking code not detected on** your domain, the steps to add it and the snippet itself. **Install** in the Data sources strip opens it too; once the snippet is seen, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.\n\nAdd it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page."
         },
         {
           "heading": "Check that the snippet works",
-          "text": "The **Tracking snippet** card reads **Active · last visit …** once the snippet has sent a visit in the last week, otherwise **Not detected**. A visit is stored as soon as an AI-referred visitor lands. Reload the page, or change the range, to see new ones."
+          "text": "After you publish it, click **Check again**: Ansvisor reads your home page once and looks for the snippet. Your home page is also checked when the brand is set up, or once when you open this page if it never was and no AI visit has arrived: the card reads **Checking your home page…** meanwhile. The snippet itself adds no request for your other visitors.\n\nThe **Tracking snippet** card then reads:\n\n- **Active · last visit …**: an AI-referred visit in the last week;\n- **Installed · no AI visits in the last 7 days**: the check found it, or it has sent a visit before;\n- **Not detected on** your domain: neither, so the page doesn't show 0 visits as a result.\n\nAdded the snippet with a tag manager? The check can't see it in the page, so the card changes with the first AI visit."
         },
         {
           "heading": "What the snippet collects",
@@ -907,7 +998,12 @@
         "integrations",
         "application password"
       ],
-      "synonyms": ["cms integration", "link my blog", "set up send to cms", "connect my website"],
+      "synonyms": [
+        "cms integration",
+        "link my blog",
+        "set up send to cms",
+        "connect my website"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -1021,7 +1117,12 @@
         "history",
         "export"
       ],
-      "synonyms": ["write an article", "edit a draft", "page editor", "finish a page"],
+      "synonyms": [
+        "write an article",
+        "edit a draft",
+        "page editor",
+        "finish a page"
+      ],
       "plan": "all",
       "updated": "2026-10-30",
       "sections": [
@@ -1091,8 +1192,19 @@
       "id": "content/content-library",
       "title": "Manage drafts in the Content Library",
       "route": "/dashboard/content/library",
-      "keywords": ["content library", "drafts", "draft status", "archive", "export drafts"],
-      "synonyms": ["content list", "my articles", "saved pages", "draft list"],
+      "keywords": [
+        "content library",
+        "drafts",
+        "draft status",
+        "archive",
+        "export drafts"
+      ],
+      "synonyms": [
+        "content list",
+        "my articles",
+        "saved pages",
+        "draft list"
+      ],
       "plan": "all",
       "updated": "2026-10-30",
       "sections": [
@@ -1136,7 +1248,12 @@
         "filter opportunities",
         "bulk actions"
       ],
-      "synonyms": ["content optimization", "content gaps", "what to write", "content suggestions"],
+      "synonyms": [
+        "content optimization",
+        "content gaps",
+        "what to write",
+        "content suggestions"
+      ],
       "plan": "all",
       "updated": "2026-11-01",
       "sections": [
@@ -1197,7 +1314,12 @@
         "create optimize protect",
         "losing ground"
       ],
-      "synonyms": ["what to write next", "content roadmap", "content priorities", "editorial plan"],
+      "synonyms": [
+        "what to write next",
+        "content roadmap",
+        "content priorities",
+        "editorial plan"
+      ],
       "plan": "all",
       "updated": "2026-10-29",
       "sections": [
@@ -1485,8 +1607,19 @@
       "id": "content/start-new-content",
       "title": "Start a page in New content",
       "route": "/dashboard/content/library",
-      "keywords": ["new content", "create page", "optimize page", "content agent", "import page"],
-      "synonyms": ["write a new article", "start a draft", "new page", "improve an existing page"],
+      "keywords": [
+        "new content",
+        "create page",
+        "optimize page",
+        "content agent",
+        "import page"
+      ],
+      "synonyms": [
+        "write a new article",
+        "start a draft",
+        "new page",
+        "improve an existing page"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -1692,7 +1825,12 @@
       "id": "mentions/correct-mention-sentiment",
       "title": "Correct a wrong mention sentiment",
       "route": "/dashboard/mentions",
-      "keywords": ["sentiment is wrong", "correct sentiment", "sentiment correction", "wrong tone"],
+      "keywords": [
+        "sentiment is wrong",
+        "correct sentiment",
+        "sentiment correction",
+        "wrong tone"
+      ],
       "synonyms": [
         "fix sentiment",
         "change sentiment",
@@ -1847,8 +1985,17 @@
       "id": "prompts/add-prompts",
       "title": "Add prompts to track",
       "route": "/dashboard/prompts/tracked",
-      "keywords": ["add prompt", "bulk import", "track prompts", "new prompt"],
-      "synonyms": ["add a question", "add queries", "track a search"],
+      "keywords": [
+        "add prompt",
+        "bulk import",
+        "track prompts",
+        "new prompt"
+      ],
+      "synonyms": [
+        "add a question",
+        "add queries",
+        "track a search"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -1886,8 +2033,19 @@
       "id": "prompts/ai-search-volume",
       "title": "How estimated AI search volume works",
       "route": "/dashboard/prompts/insights",
-      "keywords": ["ai search volume", "estimate", "confidence", "volume range", "estimate badge"],
-      "synonyms": ["how many people ask", "monthly AI searches", "AI volume", "est. ai volume"],
+      "keywords": [
+        "ai search volume",
+        "estimate",
+        "confidence",
+        "volume range",
+        "estimate badge"
+      ],
+      "synonyms": [
+        "how many people ask",
+        "monthly AI searches",
+        "AI volume",
+        "est. ai volume"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -1936,7 +2094,11 @@
         "open draft",
         "content for a prompt"
       ],
-      "synonyms": ["write a page for a prompt", "improve ranking", "start a draft from a prompt"],
+      "synonyms": [
+        "write a page for a prompt",
+        "improve ranking",
+        "start a draft from a prompt"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -1978,7 +2140,12 @@
         "people also ask",
         "search console"
       ],
-      "synonyms": ["single prompt view", "is this asked for real", "real demand", "prompt results"],
+      "synonyms": [
+        "single prompt view",
+        "is this asked for real",
+        "real demand",
+        "prompt results"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2024,7 +2191,12 @@
         "similar topics",
         "high opportunity prompts"
       ],
-      "synonyms": ["prompt volume", "search demand", "keyword volume", "volume analysis"],
+      "synonyms": [
+        "prompt volume",
+        "search demand",
+        "keyword volume",
+        "volume analysis"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2117,7 +2289,12 @@
         "suggested prompts",
         "source filter"
       ],
-      "synonyms": ["prompt ideas", "recommended prompts", "new prompt ideas", "suggest queries"],
+      "synonyms": [
+        "prompt ideas",
+        "recommended prompts",
+        "new prompt ideas",
+        "suggest queries"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2222,7 +2399,12 @@
         "topic visibility",
         "top competitor"
       ],
-      "synonyms": ["themes", "prompt groups", "clusters", "categories"],
+      "synonyms": [
+        "themes",
+        "prompt groups",
+        "clusters",
+        "categories"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2275,7 +2457,12 @@
         "performance filter",
         "paused prompts"
       ],
-      "synonyms": ["prompt list", "my prompts", "prompt table", "tracked queries"],
+      "synonyms": [
+        "prompt list",
+        "my prompts",
+        "prompt table",
+        "tracked queries"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2377,7 +2564,13 @@
       "id": "reports/looker-studio",
       "title": "Connect Looker Studio",
       "route": "/dashboard/settings/api-keys",
-      "keywords": ["Looker Studio", "connector", "GA4", "blend data", "metric sets"],
+      "keywords": [
+        "Looker Studio",
+        "connector",
+        "GA4",
+        "blend data",
+        "metric sets"
+      ],
       "synonyms": [
         "Google Data Studio",
         "visibility in my own dashboard",
@@ -2453,7 +2646,7 @@
         },
         {
           "heading": "Download a PDF",
-          "text": "**Download PDF** saves the report as a PDF with the same sections as the web view, the executive summary included. Its text stays selectable and sharp at any zoom, and the file is small enough to attach to an email."
+          "text": "**Download PDF** saves the report as a PDF with the same sections as the web view, the executive summary included. Its text stays selectable and sharp at any zoom, and the file is small enough to attach to an email. With white label in use, the report and its PDF carry your agency's logo, color, name and footer instead of Ansvisor's, with a \"Prepared for\" cover."
         }
       ]
     },
@@ -2469,7 +2662,12 @@
         "send to action center",
         "re-audit"
       ],
-      "synonyms": ["audit fixes", "improve audit score", "fix failed signals", "raise page score"],
+      "synonyms": [
+        "audit fixes",
+        "improve audit score",
+        "fix failed signals",
+        "raise page score"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -2507,10 +2705,22 @@
       "id": "site-audit/read-an-audit-report",
       "title": "Read a site audit report",
       "route": "/dashboard/audit",
-      "keywords": ["audit report", "audit score", "signals", "audit categories", "grade"],
-      "synonyms": ["audit results", "page score", "what failed", "E-E-A-T score"],
+      "keywords": [
+        "audit report",
+        "audit score",
+        "signals",
+        "audit categories",
+        "grade"
+      ],
+      "synonyms": [
+        "audit results",
+        "page score",
+        "what failed",
+        "E-E-A-T score",
+        "score changed"
+      ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -2529,6 +2739,10 @@
           "text": "A category's score is the average of its signals, and the total is the weighted average of the categories. A signal that couldn't be evaluated, shown as n/a, is left out, so it never lowers the score.\n\nMost signals are read straight from the page, its robots.txt and its llms.txt. Thirteen, such as **Direct answer to query** and **Case study evidence**, are judged by an AI model that first works out what the page itself is about, so a page is never judged against a topic it isn't trying to cover. **Brand entity in Wikidata** looks your brand up in Wikidata."
         },
         {
+          "heading": "Same page, same score",
+          "text": "The AI keeps its verdict on each of its thirteen signals until the part of the page that signal reads changes, so a page audited again with no changes gets the same score. A page that changed is judged again only on the signals whose part changed.\n\nIf the AI checks can't run, the page keeps the verdicts of its last audit. A page with none, such as one audited for the first time, gets a partial score: the report says the AI checks couldn't run, and the score leaves them out and isn't compared with your other audits. A partial audit doesn't use one of your monthly audits."
+        },
+        {
           "heading": "Signals",
           "text": "The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:\n\n- the **Finding**: what this audit saw on the page, when the check reports it;\n- what the signal measures, and **Why** it matters to AI engines;\n- the **Recommended fix** written for this page, or the general **Fix** for signals without one."
         },
@@ -2542,10 +2756,22 @@
       "id": "site-audit/run-a-site-audit",
       "title": "Run a site audit",
       "route": "/dashboard/audit",
-      "keywords": ["site audit", "run audit", "audit a page", "auto-audit", "audit settings"],
-      "synonyms": ["page audit", "check my page", "scan a page", "AI readiness check"],
+      "keywords": [
+        "site audit",
+        "run audit",
+        "audit a page",
+        "auto-audit",
+        "audit settings",
+        "audit again"
+      ],
+      "synonyms": [
+        "page audit",
+        "check my page",
+        "scan a page",
+        "AI readiness check"
+      ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -2562,6 +2788,10 @@
         {
           "heading": "Other ways to start an audit",
           "text": "- **Audit selected** on the **Opportunities** tab;\n- **Re-audit** on the pages you select on the **Pages** tab;\n- **Audit page** on a landing page of the **AI Referral Traffic** page, or **Audit pages** for several;\n- the re-run icon at the top of a report, to audit the same page again;\n- auto-audit, which audits your top-priority pages on its own.\n\nAudits started in bulk run a few at a time."
+        },
+        {
+          "heading": "Auditing a page again",
+          "text": "A page has one audit running at a time. Starting it again, from any of these places, opens the audit already running and uses no audit, however the address is written: with or without www, a last slash or a tracking parameter.\n\nWhen a page was audited in the last 10 minutes, Site Audit asks first: **Open it** shows that audit, and **Audit again** starts a new one. Pages started together leave those out and say so, with **Audit again**."
         },
         {
           "heading": "Your monthly audits",
@@ -2588,7 +2818,12 @@
         "audited pages",
         "score over time"
       ],
-      "synonyms": ["audit overview", "audit history", "which pages to audit", "audit priority"],
+      "synonyms": [
+        "audit overview",
+        "audit history",
+        "which pages to audit",
+        "audit priority"
+      ],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [

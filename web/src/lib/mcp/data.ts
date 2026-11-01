@@ -13,6 +13,8 @@ import {
 import { classifyArticleType } from '@/lib/citations/article-type';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
+import { readSnippet } from '@/lib/traffic-snippet';
+import { snippetState, type SnippetState } from '@/lib/traffic-sources';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
@@ -1120,7 +1122,13 @@ export interface SiteAuditRun {
   id: string;
   brandId: string;
   url: string;
+  /** "running", or "recently_audited": the page's audit of minutes ago, not run again. */
   status: string;
+  /** The page's audit already running: no new credit was used. */
+  alreadyRunning?: boolean;
+  /** When the recent audit finished. */
+  finishedAt?: string;
+  message?: string;
 }
 
 export interface SiteAuditListRow {
@@ -1251,6 +1259,7 @@ export async function runSiteAuditFor(
   auth: McpAuthContext,
   brandId: string,
   url: string,
+  options: { force?: boolean } = {},
 ): Promise<SiteAuditRun | null> {
   if (!auth.organizationId) return null;
 
@@ -1278,10 +1287,29 @@ export async function runSiteAuditFor(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${cronSecret}`,
     },
-    body: JSON.stringify({ brandId, url }),
+    body: JSON.stringify({ brandId, url, ...(options.force ? { force: true } : {}) }),
   });
 
   if (res.status === 404) return null;
+
+  // Audited in the last minutes (00431): not run again, so the agent asks first.
+  if (res.status === 409) {
+    const body = (await res.json().catch(() => null)) as {
+      error?: string;
+      message?: string;
+      recent?: { auditId: string; finishedAt: string };
+    } | null;
+    if (body?.error === 'recently_audited' && body.recent) {
+      return {
+        id: body.recent.auditId,
+        brandId,
+        url,
+        status: 'recently_audited',
+        finishedAt: body.recent.finishedAt,
+        message: `${body.message ?? 'This page was audited minutes ago.'} Read it with get_site_audit, or ask the user, and run run_site_audit again with force: true to audit it again (uses one audit).`,
+      };
+    }
+  }
 
   if (!res.ok) {
     // Surface the server's message (e.g. the monthly-quota / inactive-subscription
@@ -1292,12 +1320,14 @@ export async function runSiteAuditFor(
 
   const body = (await res.json()) as {
     audit: { id: string; brandId: string; url: string; status: string };
+    alreadyRunning?: boolean;
   };
   return {
     id: body.audit.id,
     brandId: body.audit.brandId,
     url: body.audit.url,
     status: body.audit.status,
+    ...(body.alreadyRunning ? { alreadyRunning: true } : {}),
   };
 }
 
@@ -2263,6 +2293,13 @@ export interface AiTrafficParams {
 }
 
 export interface AiTrafficOutput {
+  /**
+   * Whether the tracking snippet is installed (traffic-sources.ts
+   * snippetState): 'not_detected' (not seen on the site, so no visit can
+   * be counted yet), 'installed_quiet' (installed, no AI visit in the last
+   * 7 days) or 'active'.
+   */
+  tracking: SnippetState;
   total_visits: number;
   platform_breakdown: Array<{
     platform: string;
@@ -2311,8 +2348,9 @@ export async function getAiTrafficFor(
     url: string;
     country: string | null;
   }> = [];
-  const [totalVisits] = await Promise.all([
+  const [totalVisits, snippet] = await Promise.all([
     countTrafficLogs(supabaseAdmin, params.brandId, range),
+    readSnippet(supabaseAdmin, params.brandId),
     scanTrafficLogs(
       supabaseAdmin,
       params.brandId,
@@ -2358,6 +2396,7 @@ export async function getAiTrafficFor(
     .sort((a, b) => b.visits - a.visits);
 
   return {
+    tracking: snippetState(snippet),
     total_visits: totalVisits,
     platform_breakdown,
     top_pages,
