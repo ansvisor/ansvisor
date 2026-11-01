@@ -498,6 +498,7 @@ const PART_TYPES = {
   metaTitle: ['string'],
   metaDescription: ['string'],
   jsonLd: ['string'],
+  reviewer: ['string'],
 };
 const PAGE_PARTS = Object.keys(PART_TYPES);
 /** The parts every map places. */

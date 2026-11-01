@@ -11,7 +11,14 @@ import { INTEGRATION_READ_TIMEOUT_MS } from '@/lib/integrations-client';
  */
 
 /** The parts of a page a field map places. */
-export const WEBFLOW_PARTS = ['body', 'metaTitle', 'metaDescription', 'jsonLd', 'date'] as const;
+export const WEBFLOW_PARTS = [
+  'body',
+  'metaTitle',
+  'metaDescription',
+  'jsonLd',
+  'reviewer',
+  'date',
+] as const;
 export type WebflowPart = (typeof WEBFLOW_PARTS)[number];
 export type WebflowFieldMap = Partial<Record<WebflowPart, string>>;
 /** The Webflow field types each part may go to. */
@@ -20,6 +27,7 @@ export const WEBFLOW_PART_TYPES: Record<WebflowPart, string> = {
   metaTitle: 'PlainText',
   metaDescription: 'PlainText',
   jsonLd: 'PlainText',
+  reviewer: 'PlainText',
   date: 'DateTime',
 };
 

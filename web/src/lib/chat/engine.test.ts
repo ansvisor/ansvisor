@@ -235,7 +235,8 @@ const { readPrecedenceContext } = await import('./precedence-context');
 const { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } = await import('./rules');
 const { ASK_TOOL } = await import('./asks');
 const { NEXT_MOVES_TOOL } = await import('./next-moves');
-const { SKILL_LIBRARY, USE_SKILL_TOOL } = await import('./skills/library');
+const { MAX_LISTED_SKILLS, SKILL_LIBRARY, USE_SKILL_TOOL, enabledSkills, skillsForPrompt } =
+  await import('./skills/library');
 
 type ChatEvent = import('./events').ChatEvent;
 type ChatActor = import('./engine').ChatActor;
@@ -4388,8 +4389,18 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
       expect(systems).toHaveLength(2);
       const workspace = String(systems[1].content);
       expect(workspace).toContain('<available_skills>');
-      for (const s of SKILL_LIBRARY) {
-        expect(workspace).toContain(`${s.name}: ${s.description}`);
+      // More skills than a prompt lists: the 20 that best match the request.
+      const enabled = enabledSkills(ADMIN.organizationId);
+      const listed = skillsForPrompt(enabled, {
+        typed: [],
+        used: [],
+        request: 'How are we doing?',
+      });
+      expect(listed).toHaveLength(Math.min(enabled.length, MAX_LISTED_SKILLS));
+      for (const s of enabled) {
+        const line = `${s.name}: ${s.description}`;
+        if (listed.includes(s)) expect(workspace).toContain(line);
+        else expect(workspace).not.toContain(line);
         const bodyLine = s.body.split('\n').find((line) => line.length > 60)!;
         expect(systems.map((m) => String(m.content)).join('\n')).not.toContain(bodyLine);
       }

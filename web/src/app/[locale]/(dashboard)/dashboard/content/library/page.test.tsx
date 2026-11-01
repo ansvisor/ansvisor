@@ -498,6 +498,7 @@ describe('Send to CMS from a Library row (#1331)', () => {
           bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams save [figure] hours.</p>',
           sourceUrl: null,
           authorId: null,
+          reviewerId: null,
           authorConfirmed: false,
           language: null,
         },
