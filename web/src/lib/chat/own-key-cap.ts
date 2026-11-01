@@ -65,6 +65,62 @@ export async function readOwnKeyCap(
   }
 }
 
+/** The guard an Admin sets (00442): $10 to $10,000, $250 unless set. */
+export const OWN_KEY_GUARD_MIN_USD = 10;
+export const OWN_KEY_GUARD_MAX_USD = 10_000;
+export const OWN_KEY_GUARD_DEFAULT_USD = 250;
+
+/** The guard as Settings › AI Providers shows it to Admins (§4.3): dollars at list prices. */
+export interface OwnKeyGuard {
+  capUsd: number;
+  /** This period's estimate of what all agents spent on the key. */
+  usedUsd: number;
+  renewsAt: string | null;
+}
+
+/**
+ * The guard with this period's spend, for the Admins' card (PR 9): always
+ * read fresh, and only by the settings route, which checks the caller is an
+ * Admin. Null when the server didn't answer.
+ */
+export async function readOwnKeyGuard(organizationId: string): Promise<OwnKeyGuard | null> {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    console.error('[chat/agents] CRON_SECRET must be configured for the key guard');
+    return null;
+  }
+  const query = new URLSearchParams({ orgId: organizationId });
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/internal/chat/budget/own-key?${query}`, {
+      headers: { Authorization: `Bearer ${secret}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(OWN_KEY_CAP_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => null)) as {
+      capUsd?: unknown;
+      usedUsd?: unknown;
+      renewsAt?: unknown;
+    } | null;
+    const capUsd = Number(body?.capUsd);
+    const usedUsd = Number(body?.usedUsd);
+    if (!Number.isFinite(capUsd) || !Number.isFinite(usedUsd)) return null;
+    return {
+      capUsd,
+      usedUsd,
+      renewsAt: typeof body?.renewsAt === 'string' ? body.renewsAt : null,
+    };
+  } catch (err) {
+    console.error('[chat/agents] the key guard got no answer:', (err as Error)?.name ?? err);
+    return null;
+  }
+}
+
+/** A guard changed on this server: its next read is fresh. */
+export function forgetOwnKeyCap(organizationId: string): void {
+  cache.delete(organizationId);
+}
+
 /**
  * The guard when it is reached and Chat runs on the workspace's own key, else
  * null. Read on a fire, before every run starts and on Run now; a guard that
