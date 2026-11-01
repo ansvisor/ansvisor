@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { ContentAuthor } from '@/lib/content/authors';
+import { articleSchemaInput, schemaAuthor } from '@/lib/content/page-schema';
 import { eeat, trust, trustBlocks, type TrustRead } from '@/lib/content/quality-checks';
 import { qualityTodos } from '@/lib/content/quality-todos';
 import type { ShoppingLinks } from '@/lib/content/shopping-check';
@@ -91,6 +92,7 @@ const clean = { placeholders: 0, imagesWithoutAlt: 0, linksBroken: 0, linksUnrea
 const onContinue = vi.fn();
 const onFillNow = vi.fn();
 const onAddDisclosure = vi.fn();
+const onSchemaLeftOut = vi.fn();
 
 async function render(
   q: QualityRead,
@@ -109,8 +111,27 @@ async function render(
     category = null as Parameters<typeof BeforePublish>[0]['category'],
     strict = false,
     shopping = null as Parameters<typeof BeforePublish>[0]['shopping'],
+    schemaLeftOut = false,
+    ownArticleSchema = false,
   } = {},
 ) {
+  // As the editor makes it (00448): the author it names, the site's pages Site trust found.
+  const articleSchema = {
+    input: articleSchemaInput({
+      title,
+      author: schemaAuthor({
+        authorsOn: true,
+        authorsRead: q.eeat !== null,
+        author: q.author,
+        confirmedReal: q.authorConfirmed?.real ?? false,
+      }),
+      siteTrust: q.siteTrust,
+      brandName: q.brandName,
+      isNew,
+    }),
+    pageType,
+    leftOut: schemaLeftOut,
+  };
   const Wrap = strict ? StrictMode : Fragment;
   await act(async () => {
     root.render(
@@ -125,9 +146,11 @@ async function render(
             onClose={() => {}}
             quality={q}
             title={title}
-            isNew={isNew}
             pageType={pageType}
             image={image}
+            articleSchema={articleSchema}
+            ownArticleSchema={ownArticleSchema}
+            onSchemaLeftOut={onSchemaLeftOut}
             linksPending={linksPending}
             product={product}
             category={category}
@@ -387,9 +410,9 @@ describe('BeforePublish', () => {
   it('says what the CMS does: the author, the dates and the Article schema', async () => {
     await render(quality());
     expect(rows()).toEqual([
-      "Author for your CMS · check itSet Ada Lovelace as the page's author in your CMS. Its template shows the byline; nothing is added to the content.",
+      "Author: Ada Lovelace · doneAda Lovelace is named in the page's Article schema. Set them as the author in your CMS too, so its template shows the byline.",
       'Visible published and updated dates · check itMost CMSs (WordPress, Webflow, Shopify) add these for you. Check your page.',
-      'Article schema with datePublished and dateModified · check itOften added by your CMS. If not, paste the code below into the page.',
+      "Article schema with the authorAdded · doneAnsvisor adds it to the page it sends to your CMS and to exports, with Ada Lovelace as the author. The page's text doesn't change. WordPress leaves it out: add it with your SEO plugin.",
       'Ready to paste · doneNo placeholders, all images have alt text, all links work.',
     ]);
   });
@@ -413,6 +436,35 @@ describe('BeforePublish', () => {
     await act(async () => button('Copy JSON-LD')!.click());
     expect(writeText).toHaveBeenCalledWith(dialog().querySelector('pre')!.textContent);
     expect(toast.success).toHaveBeenCalledWith('JSON-LD copied');
+  });
+
+  it('says the code is the one Ansvisor adds, and leaves it out on Leave it out (00448)', async () => {
+    await render(quality());
+    expect(dialog().textContent).toContain('The code Ansvisor adds to the page');
+    await act(async () => button('Leave it out')!.click());
+    expect(onSchemaLeftOut).toHaveBeenCalledWith(true);
+  });
+
+  it('says a left-out schema is left out, with the code to paste and Add it back', async () => {
+    await render(quality(), { schemaLeftOut: true });
+    expect(rows()[2]).toBe(
+      "Article schema left out · check itYou left Ansvisor's Article schema out of this page, for a CMS that adds its own. If yours doesn't, paste the code below into the page.",
+    );
+    // The author row no longer says the schema names them.
+    expect(rows()[0]).toContain('Author for your CMS');
+    expect(dialog().textContent).not.toContain('The code Ansvisor adds');
+    expect(jsonLd()['@type']).toBe('Article');
+    await act(async () => button('Add it back')!.click());
+    expect(onSchemaLeftOut).toHaveBeenCalledWith(false);
+  });
+
+  it('says why Ansvisor adds none to a page with an Article schema of its own', async () => {
+    await render(quality(), { ownArticleSchema: true });
+    expect(rows()[2]).toBe(
+      'Article schema on the page · doneYour page already has an Article schema, so Ansvisor leaves its own out.',
+    );
+    expect(button('Leave it out')).toBeUndefined();
+    expect(dialog().querySelector('pre')).toBeNull();
   });
 
   it('leaves the headline out while the title has a placeholder, and says why', async () => {
@@ -589,10 +641,9 @@ describe('BeforePublish', () => {
     await render(quality({ author: null }), { isNew: false, image: null });
     const [author, , schema] = rows();
     expect(author).toBe(
-      "No author yet · missingThe page goes out as Acme Team, with the brand's Organization schema. A real author raises E-E-A-T.",
+      'No author yet · missingThe page goes out as Acme Team: its Article schema names Acme as the author. A real author raises E-E-A-T.',
     );
-    expect(schema).toContain('Article schema with dateModified');
-    expect(schema).toContain('It gives only the updated date');
+    expect(schema).toContain('with Acme as the author');
     expect(jsonLd().author).toEqual({
       '@type': 'Organization',
       name: 'Acme',
@@ -673,8 +724,11 @@ describe('BeforePublish', () => {
     expect(dialog().querySelector('pre')).toBeNull();
     // Copy JSON-LD is still there, for a CMS that doesn't add it.
     expect(button('Copy JSON-LD')).toBeDefined();
-    await act(async () => button("Show the JSON-LD, for a CMS that doesn't add it")!.click());
+    await act(async () => button('Show the code Ansvisor adds')!.click());
     expect(jsonLd()['@type']).toBe('Article');
+    // Left out: the code to paste, for a CMS that doesn't add it.
+    await render(quality(), { mode: 'send', schemaLeftOut: true });
+    expect(button("Show the JSON-LD, for a CMS that doesn't add it")).toBeDefined();
     // Export and Mark ready show it as before.
     await render(quality(), { mode: 'export' });
     expect(dialog().querySelector('pre')).not.toBeNull();
@@ -685,7 +739,7 @@ describe('BeforePublish', () => {
     // The dialog moves focus in a frame after it opens: clicked before that, on a
     // slow run, it takes the focus back from the code.
     await vi.waitFor(() => expect(document.activeElement).toBe(button('Continue to send')));
-    const show = button("Show the JSON-LD, for a CMS that doesn't add it")!;
+    const show = button('Show the code Ansvisor adds')!;
     expect(show.getAttribute('aria-expanded')).toBe('false');
     await act(async () => show.click());
     expect(show.getAttribute('aria-expanded')).toBe('true');

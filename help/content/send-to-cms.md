@@ -4,8 +4,8 @@ route: /dashboard/content/library
 keywords: [send to cms, webflow, wordpress, framer, draft post, last send]
 synonyms: [push to cms, publish to blog, send to website, export to cms]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -57,5 +57,7 @@ Sending a page again updates the same Webflow or Framer item, the same WordPress
 - **WordPress**: the meta title and the structured data aren't sent, so set them in your SEO plugin. Images keep their addresses, and no featured image or category is set.
 - **Framer**: tables go as tables, and images aren't sent. Another item in the collection with the same slug stops the send.
 - **Wix**: images aren't sent, and no cover image or category is set. Sending again replaces the post's text, so add images in Wix after your last send.
+
+An article goes with the Article schema Ansvisor adds, its author included, unless you left it out in **Before you publish**.
 
 Add images in your CMS. The slug may also change slightly there: lowercase, without accents, with dots turned into dashes.

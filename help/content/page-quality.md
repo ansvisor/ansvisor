@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author]
 synonyms: [content quality, quality check, page score, eeat score, ready to publish checklist]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -47,10 +47,12 @@ The header shows the page's author, picked from **Settings › Authors**, or you
 - placeholders, alt text and links;
 - the author;
 - visible dates;
-- the structured data to paste, if your CMS doesn't add it;
+- the Article schema Ansvisor adds;
 - a warning when Trust is under 60.
 
 On a page with a shopping path, it also names the product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about.
+
+An article goes to your CMS and to exports with an Article schema that names its author, or your brand when it has none. The page's text doesn't change. If your CMS adds its own, click **Leave it out**; **Add it back** undoes it. A page with an Article schema of its own gets none. WordPress leaves the schema out: add it with your SEO plugin.
 
 ## Export with Quality on
 

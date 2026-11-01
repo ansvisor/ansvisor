@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ContentAuthor } from './authors';
+import type { SiteTrust } from './site-trust';
 import {
   articleJsonLd,
+  articleSchemaInput,
+  articleSchemaPlan,
   firstImage,
+  hasArticleSchema,
   isArticlePage,
   itemListJsonLd,
   jsonLdScript,
@@ -13,6 +17,9 @@ import {
   openingParagraph,
   pageOffer,
   productJsonLd,
+  schemaAuthor,
+  withArticleSchema,
+  type AddedArticleSchema,
 } from './page-schema';
 
 /** Before you publish's JSON-LD (Quality spec §7, CE-041): from the page's facts, nothing made up. */
@@ -107,6 +114,141 @@ describe('articleJsonLd', () => {
     const result = articleJsonLd({ ...base, isNew: false });
     expect(result).not.toHaveProperty('datePublished');
     expect(result.dateModified).toBe('2026-10-23');
+  });
+});
+
+describe('schemaAuthor (customer priorities item 7)', () => {
+  const read = { authorsOn: true, authorsRead: true, confirmedReal: false };
+  it("names the page's author, else the brand", () => {
+    expect(schemaAuthor({ ...read, author: ada })).toBe(ada);
+    expect(schemaAuthor({ ...read, author: null })).toBeNull();
+  });
+
+  it('leaves the author out while unknown, or when the site names its own (00271)', () => {
+    expect(schemaAuthor({ ...read, authorsRead: false, author: null })).toBeUndefined();
+    expect(schemaAuthor({ ...read, author: null, confirmedReal: true })).toBeUndefined();
+    // A picked author still counts.
+    expect(schemaAuthor({ ...read, author: ada, confirmedReal: true })).toBe(ada);
+  });
+
+  it('goes out under the brand while authors are off (Quality phase 0)', () => {
+    expect(
+      schemaAuthor({ authorsOn: false, authorsRead: false, author: null, confirmedReal: false }),
+    ).toBeNull();
+  });
+});
+
+describe('articleSchemaInput', () => {
+  const siteTrust = {
+    checks: {
+      organizationSchema: { ok: true, url: 'https://acme.com/' },
+      authorPages: {
+        ok: true,
+        authors: [{ name: 'Ada Lovelace', url: 'https://acme.com/authors/ada-lovelace' }],
+      },
+    },
+  } as unknown as SiteTrust;
+
+  it("takes the author's and the brand's pages from Site trust, when it read them", () => {
+    expect(
+      articleSchemaInput({ title: 'T', author: ada, siteTrust, brandName: 'Acme', isNew: true }),
+    ).toEqual({
+      title: 'T',
+      author: ada,
+      authorUrl: 'https://acme.com/authors/ada-lovelace',
+      brandName: 'Acme',
+      brandUrl: 'https://acme.com/',
+      isNew: true,
+    });
+    expect(
+      articleSchemaInput({
+        title: 'T',
+        author: null,
+        siteTrust: null,
+        brandName: 'Acme',
+        isNew: false,
+      }),
+    ).toMatchObject({ authorUrl: null, brandUrl: null });
+  });
+});
+
+describe('hasArticleSchema', () => {
+  const script = (value: unknown) =>
+    `<p>Hi</p><script type="application/ld+json">${JSON.stringify(value)}</script>`;
+
+  it('finds an Article, or a kind of one, in the page’s own JSON-LD, its @graph too', () => {
+    expect(hasArticleSchema(script({ '@type': 'Article' }))).toBe(true);
+    expect(hasArticleSchema(script({ '@type': 'BlogPosting' }))).toBe(true);
+    expect(hasArticleSchema(script({ '@type': ['WebPage', 'NewsArticle'] }))).toBe(true);
+    expect(
+      hasArticleSchema(
+        script({ '@graph': [{ '@type': 'Organization' }, { '@type': 'TechArticle' }] }),
+      ),
+    ).toBe(true);
+    expect(hasArticleSchema(script({ '@type': 'https://schema.org/Article' }))).toBe(true);
+  });
+
+  it('is false for other schema, broken JSON or none', () => {
+    expect(hasArticleSchema(script({ '@type': 'FAQPage' }))).toBe(false);
+    expect(hasArticleSchema('<script type="application/ld+json">{oops</script>')).toBe(false);
+    expect(hasArticleSchema('<p>No schema</p>')).toBe(false);
+  });
+});
+
+describe('articleSchemaPlan and withArticleSchema (00448)', () => {
+  const schema = (over: Partial<AddedArticleSchema> = {}): AddedArticleSchema => ({
+    input: {
+      title: 'How small teams forecast pipeline',
+      author: ada,
+      authorUrl: null,
+      brandName: 'Acme',
+      brandUrl: null,
+      isNew: true,
+    },
+    pageType: 'blog_post',
+    leftOut: false,
+    ...over,
+  });
+  const page =
+    '<h1>How small teams forecast pipeline</h1><img src="https://cdn.acme.com/a.jpg"><p>Text.</p>';
+  const now = new Date(2026, 10, 1, 12);
+  const added = (html: string) => {
+    const [, json] = html.match(/<script type="application\/ld\+json">([\s\S]*)<\/script>$/) ?? [];
+    return json ? JSON.parse(json) : null;
+  };
+
+  it("adds the Article schema at the page's end, its author in it; the page's text stays", () => {
+    const html = withArticleSchema(page, schema(), now);
+    expect(html.startsWith(page)).toBe(true);
+    expect(added(html)).toMatchObject({
+      '@type': 'Article',
+      headline: 'How small teams forecast pipeline',
+      author: { '@type': 'Person', name: 'Ada Lovelace' },
+      image: 'https://cdn.acme.com/a.jpg',
+      datePublished: '2026-11-01',
+      dateModified: '2026-11-01',
+    });
+    // No author picked: the brand, as its Organization.
+    expect(
+      added(withArticleSchema(page, schema({ input: { ...schema().input, author: null } }), now))
+        .author,
+    ).toEqual({
+      '@type': 'Organization',
+      name: 'Acme',
+    });
+    expect(articleSchemaPlan(page, 'blog_post', false)).toBe('added');
+  });
+
+  it('adds none when left out, when the page has its own, or for a page that isn’t an article', () => {
+    expect(withArticleSchema(page, schema({ leftOut: true }), now)).toBe(page);
+    expect(articleSchemaPlan(page, 'blog_post', true)).toBe('leftOut');
+
+    const own = `${page}<script type="application/ld+json">{"@type":"BlogPosting"}</script>`;
+    expect(withArticleSchema(own, schema(), now)).toBe(own);
+    expect(articleSchemaPlan(own, 'blog_post', true)).toBe('own');
+
+    expect(withArticleSchema(page, schema({ pageType: 'product_page' }), now)).toBe(page);
+    expect(articleSchemaPlan(page, 'product_page', false)).toBe('none');
   });
 });
 

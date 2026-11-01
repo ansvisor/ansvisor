@@ -3620,6 +3620,7 @@ export type Database = {
           restored_at: string | null
           reviewer_id: string | null
           rules: Json | null
+          schema_left_out: boolean
           source_url: string | null
           score_after: number | null
           score_before: number | null
@@ -3662,6 +3663,7 @@ export type Database = {
           restored_at?: string | null
           reviewer_id?: string | null
           rules?: Json | null
+          schema_left_out?: boolean
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null
@@ -3704,6 +3706,7 @@ export type Database = {
           restored_at?: string | null
           reviewer_id?: string | null
           rules?: Json | null
+          schema_left_out?: boolean
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null

@@ -4,8 +4,9 @@ import { factValueText, pagePrices, priceRanges } from './brand-facts';
 import { TEXT_NODE, parseHtml } from './dom';
 import type { PageType } from './drafts';
 import { PLACEHOLDER } from './placeholders';
-import { cleanHref, decodeHtmlBlock } from './html-allowlist';
+import { cleanHref, decodeHtmlBlock, jsonLdScripts } from './html-allowlist';
 import { isByline, sentencesOf } from './readability';
+import type { SiteTrust } from './site-trust';
 
 /**
  * The page's JSON-LD for Before you publish (Content Editor Quality spec §7,
@@ -116,6 +117,151 @@ export function articleJsonLd({
     ...(isNew ? { datePublished: today } : {}),
     dateModified: today,
   };
+}
+
+/**
+ * Who an Article schema names (articleJsonLd's `author`): the page's author,
+ * a Person; null for the brand, its Organization; undefined, left out, while
+ * the authors aren't read or when, with none picked, the person confirmed
+ * their site names its own (00271). With authors off (Quality phase 0)
+ * there are none to read, and the page goes out under the brand.
+ */
+export function schemaAuthor({
+  authorsOn,
+  authorsRead,
+  author,
+  confirmedReal,
+}: {
+  authorsOn: boolean;
+  authorsRead: boolean;
+  author: ContentAuthor | null;
+  confirmedReal: boolean;
+}): ContentAuthor | null | undefined {
+  if (!authorsOn) return null;
+  if (!authorsRead || (!author && confirmedReal)) return undefined;
+  return author;
+}
+
+/**
+ * The page's Article schema facts but its image and date, which are read as
+ * it goes out: the author's page and the brand's home page as Site trust
+ * found them, if it did.
+ */
+export function articleSchemaInput({
+  title,
+  author,
+  siteTrust,
+  brandName,
+  isNew,
+}: {
+  title: string;
+  author: ContentAuthor | null | undefined;
+  siteTrust: SiteTrust | null;
+  brandName: string;
+  isNew: boolean;
+}): Omit<ArticleSchemaInput, 'image' | 'today'> {
+  return {
+    title,
+    author,
+    authorUrl:
+      (author && siteTrust?.checks.authorPages.authors.find((a) => a.name === author.name)?.url) ||
+      null,
+    brandName,
+    brandUrl: siteTrust?.checks.organizationSchema.url ?? null,
+    isNew,
+  };
+}
+
+/**
+ * The schema.org types that are an Article or a kind of one: a page whose
+ * JSON-LD already names one has its own, and Ansvisor adds none.
+ */
+const ARTICLE_TYPES = new Set([
+  'Article',
+  'AdvertiserContentArticle',
+  'AnalysisNewsArticle',
+  'BlogPosting',
+  'LiveBlogPosting',
+  'NewsArticle',
+  'OpinionNewsArticle',
+  'Report',
+  'ReportageNewsArticle',
+  'ReviewNewsArticle',
+  'SatiricalArticle',
+  'ScholarlyArticle',
+  'SocialMediaPosting',
+  'TechArticle',
+]);
+
+/** The @type names in a JSON-LD text, its @graph's too. */
+function schemaTypes(text: string): string[] {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  const types: string[] = [];
+  const visit = (node: unknown) => {
+    if (Array.isArray(node)) return node.forEach(visit);
+    if (typeof node !== 'object' || node === null) return;
+    const { '@type': type, '@graph': graph } = node as Record<string, unknown>;
+    for (const name of Array.isArray(type) ? type : [type]) {
+      if (typeof name === 'string') types.push(name.replace(/^(https?:\/\/)?schema\.org\//, ''));
+    }
+    visit(graph);
+  };
+  visit(value);
+  return types;
+}
+
+/** Whether the page's own JSON-LD already makes it an Article (or a kind of one). */
+export function hasArticleSchema(html: string): boolean {
+  return jsonLdScripts(html).some(({ text }) =>
+    schemaTypes(text).some((t) => ARTICLE_TYPES.has(t)),
+  );
+}
+
+/**
+ * What Ansvisor does with an article page's Article schema as it goes to a
+ * CMS or an export (customer priorities item 7, 00448): `added`; `leftOut`
+ * by the person, for a CMS that writes its own; `own`, the page has one
+ * already; `none` for a page type that isn't an article.
+ */
+export type ArticleSchemaPlan = 'added' | 'leftOut' | 'own' | 'none';
+
+export function articleSchemaPlan(
+  html: string,
+  pageType: string | null,
+  leftOut: boolean,
+): ArticleSchemaPlan {
+  if (!isArticlePage(pageType)) return 'none';
+  if (hasArticleSchema(html)) return 'own';
+  return leftOut ? 'leftOut' : 'added';
+}
+
+/** What the Article schema Ansvisor adds is made of, with the page's type and the person's choice. */
+export interface AddedArticleSchema {
+  input: Omit<ArticleSchemaInput, 'image' | 'today'>;
+  pageType: string | null;
+  leftOut: boolean;
+}
+
+/**
+ * The page as it goes to a CMS or an export, with its Article schema at the
+ * end (the page's text doesn't change): its own image, today's date. As it
+ * was unless articleSchemaPlan adds it.
+ */
+export function withArticleSchema(
+  html: string,
+  { input, pageType, leftOut }: AddedArticleSchema,
+  now = new Date(),
+): string {
+  if (articleSchemaPlan(html, pageType, leftOut) !== 'added') return html;
+  const script = jsonLdScript(
+    articleJsonLd({ ...input, image: firstImage(html), today: localDate(now) }),
+  );
+  return `${html}\n${script}`;
 }
 
 /**

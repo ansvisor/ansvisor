@@ -115,6 +115,19 @@ const source = (id: string, title: string, body: string): CmsSource => ({
   author: null,
   teamByline: '',
   byline: null,
+  // A page with no Article schema to add: its own type isn't an article (00448).
+  schema: {
+    input: {
+      title,
+      author: null,
+      authorUrl: null,
+      brandName: 'Acme',
+      brandUrl: null,
+      isNew: true,
+    },
+    pageType: 'product_page',
+    leftOut: false,
+  },
 });
 const drafts = [
   draft('d1', 'Pour-over'),

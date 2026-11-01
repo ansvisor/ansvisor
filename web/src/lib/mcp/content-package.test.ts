@@ -20,14 +20,26 @@ import { htmlBlockElement } from '@/lib/content/html-allowlist';
 
 let draft: Record<string, unknown> | null;
 const draftFilters: [string, unknown][] = [];
+// A database without 00448: a read of schema_left_out fails as Postgres says.
+let before00448 = false;
 
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
     from: () => {
+      let columns = '';
       const chain = {
-        select: () => chain,
+        select: (read: string) => ((columns = read), chain),
         eq: (column: string, value: unknown) => (draftFilters.push([column, value]), chain),
-        maybeSingle: async () => ({ data: draft, error: null }),
+        maybeSingle: async () =>
+          before00448 && columns.includes('schema_left_out')
+            ? {
+                data: null,
+                error: {
+                  code: '42703',
+                  message: 'column content_drafts.schema_left_out does not exist',
+                },
+              }
+            : { data: draft, error: null },
       };
       return chain;
     },
@@ -50,6 +62,7 @@ const auth: McpAuthContext = {
 beforeEach(() => {
   draft = { ...DRAFT_ROW };
   draftFilters.length = 0;
+  before00448 = false;
   readContentAuthors.mockReset().mockResolvedValue(AUTHORS);
   // The authors, and so the byline, are read once Quality is live.
   vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '1');
@@ -77,6 +90,25 @@ describe('getContentDraftPackageFor', () => {
     });
     expect(draftFilters).toContainEqual(['brands.organization_id', 'org-1']);
     expect(readContentAuthors).toHaveBeenCalledWith(expect.anything(), 'org-1', expect.anything());
+  });
+
+  it('adds an article its Article schema with the author, unless left out (00448)', async () => {
+    draft = { ...DRAFT_ROW, body_html: '<h1>Cold brew</h1><p>Steep it slowly.</p>' };
+    delete draft.schema_left_out;
+    // The web ahead of its migration: read without the column, as not left out.
+    before00448 = true;
+    const result = await getContentDraftPackageFor(auth, DRAFT_ID);
+    expect('json_ld' in result && result.json_ld).toEqual([
+      expect.objectContaining({
+        '@type': 'Article',
+        author: expect.objectContaining({ '@type': 'Person', name: 'Ada Lovelace' }),
+      }),
+    ]);
+
+    before00448 = false;
+    draft = { ...draft, schema_left_out: true };
+    const leftOut = await getContentDraftPackageFor(auth, DRAFT_ID);
+    expect('json_ld' in leftOut && leftOut.json_ld).toEqual([]);
   });
 
   it('cleans what a CMS mustn’t run, as the editor does', async () => {
