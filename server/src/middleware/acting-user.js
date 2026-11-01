@@ -32,7 +32,7 @@ import { assertBrandAccess, brandAccessOf, NOT_IN_WORKSPACE } from '../lib/acces
 import { chatAgenticDeployed, chatAgenticEnabled } from '../lib/chat-flag.js';
 import logger from '../lib/logger.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
-import { TooManyIds, brandsNamedBy, demoRouteFor } from './demo-brand.js';
+import { BadPathParam, TooManyIds, brandsNamedBy, demoRouteFor } from './demo-brand.js';
 import { markActingUserVerified } from './verified-tokens.js';
 
 /** The header naming the member an internal request acts for (Express lower-cases it). */
@@ -165,6 +165,9 @@ export async function authenticateActingUser(req, res, next) {
   } catch (err) {
     if (err instanceof TooManyIds) {
       return refuse(res, 400, 'Too many ids at once', 'invalid');
+    }
+    if (err instanceof BadPathParam) {
+      return refuse(res, 400, 'Invalid path', 'invalid');
     }
     if (err?.status) {
       acting.warn({ ...where, status: err.status, code: err.code }, 'acting member refused');
