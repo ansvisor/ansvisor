@@ -9,6 +9,7 @@ import {
   exportPlaceholders,
   fragment,
   pageFields,
+  pageNamesPerson,
   pasteChecks,
   teamName,
   titlePlaceholders,
@@ -36,6 +37,28 @@ describe('fragment', () => {
     );
     expect(root.ownerDocument).not.toBe(document);
     expect(root.firstElementChild?.tagName).toBe('SCRIPT');
+  });
+});
+
+describe('pageNamesPerson', () => {
+  it('finds a reviewer name in visible page text, ignoring case and whitespace', () => {
+    expect(
+      pageNamesPerson('<h1>Guide</h1><p>Reviewed by <strong>Dr. Grace Hopper</strong>.</p>', 'dr. grace  hopper'),
+    ).toBe(true);
+  });
+
+  it('does not count names in structured data, attributes or hidden content', () => {
+    expect(
+      pageNamesPerson(
+        '<img alt="Dr. Grace Hopper"><script type="application/ld+json">{"name":"Dr. Grace Hopper"}</script><p hidden>Dr. Grace Hopper</p><p>Welcome.</p>',
+        'Dr. Grace Hopper',
+      ),
+    ).toBe(false);
+  });
+
+  it('requires the complete name rather than a substring of another word', () => {
+    expect(pageNamesPerson('<p>Annual results are ready.</p>', 'Ann')).toBe(false);
+    expect(pageNamesPerson('<p>Reviewed by Ann.</p>', 'Ann')).toBe(true);
   });
 });
 
