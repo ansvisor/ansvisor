@@ -52,24 +52,31 @@ const CONVERTED_IN_CITATIONS = [
 ];
 
 /**
+ * BRAND-ACCESS PR 5: the Insights, Mentions and Topics functions. Unlike the
+ * citation functions they let the service role through, as before.
+ */
+const INSIGHTS = '00434_brand_access_insights_functions.sql';
+const CONVERTED_IN_INSIGHTS = [
+  'insights_same_prompt_compare',
+  'insights_same_prompt_compare_daily',
+  'insights_change_drivers',
+  'insights_change_drivers_daily',
+  'insights_topic_competitors_daily',
+  'head_to_head_daily',
+  'prompt_visibility_summaries',
+  'prompt_position_summaries_json',
+  'topics_overview_window',
+  'mentions_overview',
+  'mentions_list',
+  'mentions_perception',
+];
+
+/**
  * Functions a signed-in person can call that still check only the
  * organization, and the BRAND-ACCESS PR that takes them. A function here that
  * now checks brand access: take it off.
  */
 const TO_CONVERT: Record<string, string> = {
-  // Insights, Mentions, Topics.
-  head_to_head_daily: 'PR 5',
-  insights_change_drivers: 'PR 5',
-  insights_change_drivers_daily: 'PR 5',
-  insights_same_prompt_compare: 'PR 5',
-  insights_same_prompt_compare_daily: 'PR 5',
-  insights_topic_competitors_daily: 'PR 5',
-  mentions_list: 'PR 5',
-  mentions_overview: 'PR 5',
-  mentions_perception: 'PR 5',
-  prompt_position_summaries_json: 'PR 5',
-  prompt_visibility_summaries: 'PR 5',
-  topics_overview_window: 'PR 5',
   // AI traffic.
   ai_bot_report: 'PR 6',
   ai_traffic_broken_links: 'PR 6',
@@ -471,9 +478,16 @@ function withoutCheck(body: string): string {
       '<check>',
     )
     .replace(/select 1 where public\.can_access_brand\(p_brand_id\)/gi, '<check>')
-    .replace(/if not exists \( <check> \) then/gi, 'if not <check> then')
-    .replace(/if not public\.can_access_brand\(p_brand_id\) then/gi, 'if not <check> then');
+    .replace(/\bnot exists \( <check> \)/gi, 'not <check>')
+    .replace(/\bnot public\.can_access_brand\(p_brand_id\)/gi, 'not <check>');
 }
+
+/**
+ * A header read without "or replace": a function first made by `create
+ * function` (after a drop) is replaced with `create or replace`.
+ */
+const replaced = (header: string) =>
+  header.replace(/^create (?:or replace )?function\b/, 'create function');
 
 describe('the security definer functions a signed-in person can call', () => {
   it('finds them, with their brand arguments and checks', () => {
@@ -518,7 +532,7 @@ describe('the security definer functions a signed-in person can call', () => {
   });
 
   it('leave each function to a later BRAND-ACCESS PR, or say why it needs no brand check', () => {
-    for (const [name, pr] of Object.entries(TO_CONVERT)) expect(pr, name).toMatch(/^PR [56]$/);
+    for (const [name, pr] of Object.entries(TO_CONVERT)) expect(pr, name).toMatch(/^PR 6$/);
     for (const [name, why] of Object.entries(NO_BRAND_CHECK)) {
       expect(why.length, name).toBeGreaterThan(20);
       expect(TO_CONVERT, name).not.toHaveProperty(name);
@@ -533,54 +547,98 @@ describe('the security definer functions a signed-in person can call', () => {
   });
 });
 
-describe('the citation and report functions (00426)', () => {
-  const converted = CONVERTED_IN_CITATIONS.flatMap(byName);
-  /** 00426's definition and the one it replaced; later migrations may redefine them again. */
-  const pair = (fn: Fn) => {
-    const at = fn.definitions.findIndex((d) => d.migration === CITATIONS);
-    return { before: fn.definitions[at - 1], after: fn.definitions[at], at };
-  };
+/**
+ * A wave of BRAND-ACCESS PR 4–6: each function's last definition asks
+ * can_access_brand instead of the organization, keeps the rest of the one it
+ * replaces and its grants, and says brand access in its comment. The service
+ * role stays as it was: the citation functions never let it through, the
+ * Insights, Mentions and Topics ones do (their callers check the brand).
+ */
+function describeWave(
+  title: string,
+  migration: string,
+  names: string[],
+  { serviceRoleThrough }: { serviceRoleThrough: boolean },
+) {
+  describe(title, () => {
+    const converted = names.flatMap(byName);
+    /** The wave's definition and the one it replaced; later migrations may redefine them again. */
+    const pair = (fn: Fn) => {
+      const at = fn.definitions.findIndex((d) => d.migration === migration);
+      return { before: fn.definitions[at - 1], after: fn.definitions[at], at };
+    };
 
-  it('ask can_access_brand(p_brand_id) in their last definition, not the organization', () => {
-    for (const name of CONVERTED_IN_CITATIONS) expect(byName(name), name).toHaveLength(1);
-    for (const fn of converted) {
-      expect(code(last(fn).body), fn.name).toMatch(/\bpublic\.can_access_brand\(p_brand_id\)/);
-      expect(organizationOnly(fn), fn.name).toBe(false);
-      expect(TO_CONVERT, fn.name).not.toHaveProperty(fn.name);
-    }
-  });
+    it('ask can_access_brand(p_brand_id) in their last definition, not the organization', () => {
+      for (const name of names) expect(byName(name), name).toHaveLength(1);
+      for (const fn of converted) {
+        expect(code(last(fn).body), fn.name).toMatch(/\bpublic\.can_access_brand\(p_brand_id\)/);
+        expect(organizationOnly(fn), fn.name).toBe(false);
+        expect(TO_CONVERT, fn.name).not.toHaveProperty(fn.name);
+      }
+    });
 
-  it('keep the rest of the definition they replace, word for word', () => {
-    // create or replace resets what a definition doesn't repeat: the
-    // arguments, result, language, volatility, security definer and every
-    // setting (search_path, work_mem, plan_cache_mode) stay as they were.
-    for (const fn of converted) {
-      const { before, after, at } = pair(fn);
-      expect(at, fn.name).toBeGreaterThan(0);
-      expect(after.header, fn.name).toBe(before.header);
-      expect(after.header, fn.name).toMatch(/\bsecurity definer\b/);
-      expect(withoutCheck(before.body), fn.name).toContain('<check>');
-      expect(withoutCheck(after.body), fn.name).toBe(withoutCheck(before.body));
-    }
-  });
+    it('keep the rest of the definition they replace, word for word', () => {
+      // create or replace resets what a definition doesn't repeat: the
+      // arguments, result, language, volatility, security definer and every
+      // setting (search_path, work_mem, plan_cache_mode) stay as they were.
+      for (const fn of converted) {
+        const { before, after, at } = pair(fn);
+        expect(at, fn.name).toBeGreaterThan(0);
+        expect(replaced(after.header), fn.name).toBe(replaced(before.header));
+        expect(after.header, fn.name).toMatch(/\bsecurity definer\b/);
+        expect(withoutCheck(before.body), fn.name).toContain('<check>');
+        expect(withoutCheck(after.body), fn.name).toBe(withoutCheck(before.body));
+      }
+    });
 
-  it('keep their grants: 00426 grants and revokes nothing', () => {
-    const own = all.filter((statement) => statement.migration === CITATIONS);
-    expect(own.length).toBeGreaterThan(CONVERTED_IN_CITATIONS.length);
-    expect(own.filter((s) => /^(?:grant|revoke)\b/i.test(s.text))).toEqual([]);
-    for (const fn of converted) expect(fn.authenticated, fn.name).toBe(true);
-  });
+    it(`${serviceRoleThrough ? 'still let' : "still don't let"} the service role through`, () => {
+      const through =
+        /\bif auth\.role\(\) is distinct from 'service_role' and not public\.can_access_brand\(p_brand_id\) then\b/;
+      for (const fn of converted) {
+        const body = code(pair(fn).after.body);
+        if (serviceRoleThrough) expect(body, fn.name).toMatch(through);
+        else expect(body, fn.name).not.toMatch(/service_role/);
+      }
+    });
 
-  it('say brand access in their comments', () => {
-    const comments = all
-      .filter((statement) => statement.migration === CITATIONS)
-      .map((statement) => oneLine(statement.text))
-      .filter((text) => /^comment on function/i.test(text));
-    for (const name of CONVERTED_IN_CITATIONS) {
-      const own = comments.filter((text) => text.startsWith(`comment on function public.${name}(`));
-      expect(own, name).toHaveLength(1);
-      expect(own[0], name).toMatch(/can_access_brand/);
-      expect(own[0], name).not.toMatch(/organization only|organization check|org-membership/i);
-    }
+    it(`keep their grants: ${migration.slice(0, 5)} grants and revokes nothing`, () => {
+      const own = all.filter((statement) => statement.migration === migration);
+      expect(own.length).toBeGreaterThan(names.length);
+      expect(own.filter((s) => /^(?:grant|revoke)\b/i.test(s.text))).toEqual([]);
+      for (const fn of converted) expect(fn.authenticated, fn.name).toBe(true);
+    });
+
+    it('say brand access in their comments', () => {
+      const comments = all
+        .filter((statement) => statement.migration === migration)
+        .map((statement) => oneLine(statement.text))
+        .filter((text) => /^comment on function/i.test(text));
+      for (const name of names) {
+        const own = comments.filter((text) =>
+          text.startsWith(`comment on function public.${name}(`),
+        );
+        expect(own, name).toHaveLength(1);
+        expect(own[0], name).toMatch(/can_access_brand/);
+        expect(own[0], name).not.toMatch(
+          /organization only|organization check|org-membership|member of the brand/i,
+        );
+        expect(own[0], name).toMatch(
+          serviceRoleThrough ? /\bfor the service role\b/ : /\bthe service role included\b/,
+        );
+      }
+    });
   });
+}
+
+describeWave('the citation and report functions (00426)', CITATIONS, CONVERTED_IN_CITATIONS, {
+  serviceRoleThrough: false,
 });
+
+describeWave(
+  'the Insights, Mentions and Topics functions (00434)',
+  INSIGHTS,
+  CONVERTED_IN_INSIGHTS,
+  {
+    serviceRoleThrough: true,
+  },
+);
