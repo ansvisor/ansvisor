@@ -301,7 +301,9 @@ describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
   });
 
   it('says a reminder is one, and marks nothing read that was read', async () => {
-    await render(<ChatInbox suggestions={ok()} notices={withNotice({ reminder: true, read: true })} />);
+    await render(
+      <ChatInbox suggestions={ok()} notices={withNotice({ reminder: true, read: true })} />,
+    );
     expect(noticeRows()[0].textContent).toContain(
       'Your OpenAI account is out of credit. Still not working after 3 days.',
     );
@@ -310,7 +312,15 @@ describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
 
   it('shows the notice in the Inbox without tabs too, and none that couldn’t be read', async () => {
     list.chats = [];
-    await render(<ChatInboxView status="ready" items={[]} now={null} onRetry={() => {}} notices={withNotice().notices} />);
+    await render(
+      <ChatInboxView
+        status="ready"
+        items={[]}
+        now={null}
+        onRetry={() => {}}
+        notices={withNotice().notices}
+      />,
+    );
     expect(noticeRows()).toHaveLength(1);
     expect(text()).not.toContain('Nothing needs you.');
     expect(text()).toContain('1 needs you.');
