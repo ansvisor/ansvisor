@@ -230,7 +230,8 @@ describe('signBody', () => {
 
 describe('sendContentPages', () => {
   it('sends one page as a package, signed, and keeps its slug and meta on the draft', async () => {
-    const sent = await send();
+    const reviewer = 'Dr. Grace Hopper, Clinical Reviewer';
+    const sent = await send([page({ reviewer })]);
     expect(db.rpc).toEqual([
       {
         fn: 'reserve_content_deliveries',
@@ -261,6 +262,7 @@ describe('sendContentPages', () => {
         html: '<h2>Why</h2><p>Because.</p>',
         jsonLd: [],
         author: 'Ada Lovelace',
+        reviewer: 'Dr. Grace Hopper, Clinical Reviewer',
         method: 'create',
         sourceUrl: null,
         pageType: 'blog_post',
