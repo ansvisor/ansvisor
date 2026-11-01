@@ -3235,7 +3235,12 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
   const publish = toolCall('e1', 'publish_page', { brand_id: BRAND, title: 'Pricing FAQ' });
 
   beforeEach(() => {
-    db.tables.profiles.push({ id: AGENCY, role: 'agency_partner', organization_id: ORG });
+    db.tables.profiles.push({
+      id: AGENCY,
+      role: 'agency_partner',
+      organization_id: ORG,
+      brand_scope: 'all',
+    });
   });
 
   /** A workspace's Chat settings row (00401), as an Admin set it. */
@@ -4961,6 +4966,53 @@ describe('brand access (BRAND-ACCESS PR 9)', () => {
     // Noted before the read ran.
     expect(atRead).toEqual([[SECOND]]);
     expect(touchedOf(started.conversationId)).toEqual([SECOND]);
+  });
+
+  it("notes nothing again for the chat's own brand, and hands the read the access it read", async () => {
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Fine.')],
+    );
+    const runId = await turn(ADMIN, 'How is Northwind?');
+    expect(touchedOf(runRow(runId).conversation_id as string)).toEqual([BRAND]);
+    expect(db.log.filter(([name]) => name === 'chat_note_touched_brands')).toEqual([]);
+    // The precedence read the person's brands for this call: the read takes them, not again.
+    expect(fakes.readRun).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: PEOPLE.admin, brandAccess: 'all' }),
+      expect.anything(),
+    );
+  });
+
+  it('notes the brands of what a message references, before the message goes in', async () => {
+    const PROMPT_ID = '88888888-8888-4888-8888-888888888888';
+    db.tables.prompts = [{ id: PROMPT_ID, prompt_sets: { brand_id: SECOND } }];
+    const atInsert: unknown[] = [];
+    const original = db.from.bind(db);
+    const from = vi.spyOn(db, 'from').mockImplementation((table: string) => {
+      if (table === 'chat_messages' && atInsert.length === 0) {
+        atInsert.push(touchedOf(db.tables.chat_conversations.at(-1)?.id as string));
+      }
+      return original(table);
+    });
+    useModels([READY], [text('Noted.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'About this prompt',
+      mode: 'auto',
+      references: [{ type: 'prompt', id: PROMPT_ID, label: 'best crm' }],
+    });
+    from.mockRestore();
+    if (!started.ok) throw new Error('not started');
+    expect(atInsert).toEqual([[SECOND]]);
+    expect(touchedOf(started.conversationId)).toEqual([SECOND]);
+    // A chart of a page that names no brand can't be told: the whole workspace, not known.
+    useModels([READY], [text('Noted.')]);
+    const other = await engine.startChatRun(ADMIN, {
+      message: 'This chart',
+      mode: 'auto',
+      references: [{ type: 'chart', id: 'visibility-trend', label: 'Visibility trend' }],
+    });
+    if (!other.ok) throw new Error('not started');
+    expect(touchedOf(other.conversationId)).toBeNull();
   });
 
   it("starts a brand's chat from its brand, and keeps every brand its calls named", async () => {

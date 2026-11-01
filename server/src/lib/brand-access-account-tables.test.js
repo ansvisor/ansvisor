@@ -220,24 +220,40 @@ describe('the brand tables 00390 and 00424 take', () => {
 });
 
 describe('the brands a chat touched (00436)', () => {
+  /** Without spaces or case, as conditions() compares them. */
+  const squash = (text) => text.replace(/\s+/g, '').toLowerCase();
+  const BRANDED = squash('brand_id in (select public.user_brand_ids())');
+  // A row of one of the person's brands: for Selected brands, every brand it touched theirs too.
+  const BRANDED_TOUCHED = squash(`(
+    brand_id in (select public.user_brand_ids())
+    and ((select public.user_has_all_brands()) or touched_brand_ids <@ array(select public.user_brand_ids()))
+  )`);
+  // A row with no brand, on the same terms.
+  const NO_BRAND_TOUCHED = squash(
+    'or (brand_id is null and touched_brand_ids <@ array(select public.user_brand_ids()))',
+  );
   const touched = [
-    ['chat_conversations', 'chat_conversations: shared select'],
-    ['chat_files', 'chat_files: member select'],
+    ['chat_conversations', 'chat_conversations: shared select', true],
+    ['chat_files', 'chat_files: member select', true],
+    ['chat_conversations', 'chat_conversations: agent run select', false],
   ];
 
   it.each(touched)(
-    '%s "%s": 00424\'s rule, and a row with no brand for whoever can access every brand it touched',
-    (table, name) => {
+    '%s "%s": 00424\'s rule, and for Selected brands every brand it touched theirs',
+    (table, name, noBrand) => {
       const history = policiesOf(table).history.filter((p) => p.name === name);
       const now = history.at(-1);
       const before = history.at(-2);
       expect([now.file, before.file]).toEqual([TOUCHED, CHAT]);
       expect(now.roles).toBe('authenticated');
       expect(now.command).toBe(before.command);
-      const added =
-        ' or (brand_id is null and touched_brand_ids <@ array(select public.user_brand_ids()))';
-      expect(now.body).toContain(added);
-      expect(conditions(now.body.replace(added, ''))).toEqual(conditions(before.body));
+      const [condition] = conditions(now.body);
+      expect(condition).toContain(BRANDED_TOUCHED);
+      expect(condition.includes(NO_BRAND_TOUCHED)).toBe(noBrand);
+      // Everything else is 00424's.
+      expect(condition.replace(BRANDED_TOUCHED, BRANDED).replace(NO_BRAND_TOUCHED, '')).toBe(
+        conditions(before.body)[0],
+      );
     },
   );
 
@@ -253,8 +269,12 @@ describe('the brands a chat touched (00436)', () => {
       );
       expect(sql).toMatch(new RegExp(`grant execute on function public\\.${name} to service_role`));
     }
-    // Not known (null) for every chat and file there is: only new chats start a set.
+    // Not known (null) for every chat there is, and every file a chat made: only new chats
+    // start a set; a file no chat made holds its own brand's data.
     expect(sql).toMatch(/add column if not exists touched_brand_ids uuid\[\];/);
+    expect(sql).toMatch(
+      /update public\.chat_files f set touched_brand_ids = array\[f\.brand_id\] where f\.touched_brand_ids is null and f\.brand_id is not null and f\.conversation_id is null and f\.origin <> 'chat'/,
+    );
     expect(sql).not.toMatch(/touched_brand_ids uuid\[\] (?:not null|default)/);
     expect(sql).toMatch(
       /create trigger chat_files_touched_brands before insert on public\.chat_files for each row/,
@@ -265,7 +285,10 @@ describe('the brands a chat touched (00436)', () => {
     const agents = policiesOf('chat_agents');
     const now = agents.now.get('chat_agents: member select');
     expect(now).toMatchObject({ file: TOUCHED, roles: 'authenticated', command: 'select' });
-    expect(conditions(now.body)).toEqual(['using:public.can_see_chat_agent(id)']);
+    // The caller's own organization first, so the function runs on their agents only.
+    expect(conditions(now.body)).toEqual([
+      'using:organization_idin(selectp.organization_idfrompublic.profilespwherep.id=auth.uid())andpublic.can_see_chat_agent(id)',
+    ]);
     const fn = lastFunction('can_see_chat_agent');
     expect(fn.file).toBe(TOUCHED);
     expect(fn.header).toMatch(/stable security definer set search_path = ''/);

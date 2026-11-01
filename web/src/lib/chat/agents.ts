@@ -6,6 +6,7 @@ import {
   brandAccessOf,
   hasBrandAccess,
   readAccessProfile,
+  readBrandAccess,
   type BrandAccess,
 } from '@/lib/brand-access';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
@@ -1213,8 +1214,8 @@ export async function runnableBrands(
  * Whether the agent may run with these settings now (§D item 21: on
  * Activate, on Resume and before a run): the plan and Settings › Chat allow
  * its mode and engines for the person it acts as, a brand of its scope is
- * there that the person in `ctx` may use (on a run, the person it acts as:
- * their access read again), and the AI limit isn't used up. Its Required
+ * there that they may use (`access`, theirs: the person in `ctx` by
+ * default, the owner on Resume), and the AI limit isn't used up. Its Required
  * connections are checked for the run's brand before the run (agent-driver.ts,
  * agent-connections.ts), and for each brand of its scope on Resume; its
  * skills (CHAT-13) once their registry exists.
@@ -1224,6 +1225,7 @@ export async function runChecks(
   agent: LoadedAgent,
   actingRole: AgentViewer['role'],
   triggers: readonly AgentTriggerInput[],
+  access: BrandAccess = ctx.viewer.brandAccess,
 ): Promise<Refused | null> {
   const version = agent.version;
   if (!version) return refused('failed');
@@ -1232,10 +1234,7 @@ export async function runChecks(
     enginesDenial(ctx.plan, enginesNamed(version.scope, triggers)),
   ]);
   if (denial) return denial;
-  if (
-    (await runnableBrands(ctx.actor.organizationId, version.scope, ctx.viewer.brandAccess))
-      .length === 0
-  ) {
+  if ((await runnableBrands(ctx.actor.organizationId, version.scope, access)).length === 0) {
     return refused('no_brand');
   }
   // The workspace's own key is marked failing (AGENT-OWN-KEY §5.2 item 4): nothing is queued.
@@ -1670,6 +1669,12 @@ export async function changeAgentState(
     // Triggered runs act as the owner (Addendum 2 H): Activate makes the person the owner.
     const ownerRole = action === 'activate' ? ctx.viewer.role : await ownerRoleOf(org, row);
     if (!ownerRole) return refused('owner_role');
+    // Its brands are the owner's too (BRAND-ACCESS §5.3): an Admin resuming someone else's
+    // agent is held to the brands its owner may use.
+    const ownerAccess =
+      action === 'resume' && row.owner_id && row.owner_id !== ctx.actor.userId
+        ? ((await readBrandAccess(row.owner_id, org)) ?? [])
+        : ctx.viewer.brandAccess;
     const limit = agentPlanLimits(ctx.plan).activeAgents;
     if (limit !== null && (await activeCount(org, row.id)) >= limit) {
       return refused('agent_limit', { limit });
@@ -1679,12 +1684,13 @@ export async function changeAgentState(
       agent,
       ownerRole,
       triggerInputs(await triggersOf([row.id])),
+      ownerAccess,
     );
     if (failing) return failing;
     // A brand without a Required connection would pause it again on its next run
     // (agent-driver.ts): Resume refuses, naming both, as Run now does (§H item 42).
     if (action === 'resume' && agent.version) {
-      for (const brand of await runnableBrands(org, agent.version.scope, ctx.viewer.brandAccess)) {
+      for (const brand of await runnableBrands(org, agent.version.scope, ownerAccess)) {
         const missing = await missingRequiredConnection(agent.version, brand.id);
         if (missing) {
           return refused('connection_missing', {

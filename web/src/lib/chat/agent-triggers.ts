@@ -489,7 +489,9 @@ const noFires = (): FireCounts => ({ fired: 0, queued: 0, coalesced: 0, skipped:
 /**
  * The brands a fire queues runs on: its scope's that the owner may use now,
  * since a triggered run acts as them (all_brands is all of theirs,
- * BRAND-ACCESS §5.3); the run checks again when it starts. An agent with no
+ * BRAND-ACCESS §5.3); the run checks again when it starts. When its scope
+ * still has brands but the owner may use none of them, nothing is queued
+ * and the agent pauses, as for brands gone (brand_gone). An agent with no
  * owner, or one no longer in the workspace, queues on its scope's brands as
  * before: its run stops before it starts and pauses it (owner_role).
  */
@@ -497,7 +499,15 @@ async function fireBrands(agent: FiringAgent): Promise<{ id: string; name: strin
   const access = agent.ownerId
     ? ((await readBrandAccess(agent.ownerId, agent.organizationId)) ?? 'all')
     : 'all';
-  return runnableBrands(agent.organizationId, agent.data.scope, access);
+  const brands = await runnableBrands(agent.organizationId, agent.data.scope, access);
+  if (
+    brands.length === 0 &&
+    access !== 'all' &&
+    (await runnableBrands(agent.organizationId, agent.data.scope, 'all')).length > 0
+  ) {
+    await pauseAgentForSystem(agent.organizationId, agent.id, 'brand_gone');
+  }
+  return brands;
 }
 
 /**

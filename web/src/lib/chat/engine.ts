@@ -112,6 +112,7 @@ import {
 import { readBrandIsDemo, readPrecedenceContext, readToolCall } from './precedence-context';
 import {
   noteTouchedBrands,
+  referenceTouches,
   startTouchedBrands,
   touchedByCall,
   type TouchedBrands,
@@ -650,6 +651,10 @@ export async function startChatRun(
     );
     // A new chat keeps the brands it touches from here on (00436), before anything is in it.
     await startTouchedBrands(conversationId);
+  }
+  // What the message references with @ goes in with it: its brands are noted first.
+  if (!(await noteTouchedBrands(conversationId, await referenceTouches(input)))) {
+    throw new Error("Chat could not note the brands of the message's references");
   }
 
   const timezone = validTimezone(input.timezone);
@@ -1946,7 +1951,8 @@ async function noteCallBrands(
   ctx: PrecedenceContext | null,
 ): Promise<boolean> {
   const touched = touchedByCall(tool, brandId, ctx?.brandAccess ?? null);
-  const noted = (rc.touchedNoted ??= new Set());
+  // The chat's own brand is in its set from its start (startTouchedBrands).
+  const noted = (rc.touchedNoted ??= new Set(rc.brand ? [rc.brand.id] : []));
   const fresh: TouchedBrands =
     touched === 'workspace'
       ? noted.has(WHOLE_WORKSPACE)
@@ -2105,7 +2111,10 @@ async function precheckOf(
 ): Promise<Record<string, unknown> | null> {
   if (!tool.precheck) return null;
   try {
-    const out = await tool.precheck(toolContext(rc, ctx?.role ?? rc.role), input as never);
+    const out = await tool.precheck(
+      toolContext(rc, ctx?.role ?? rc.role, ctx?.brandAccess),
+      input as never,
+    );
     const said = saidFailure(out);
     return said ? { ...said, ...besideRefusal(out) } : null;
   } catch (err) {
@@ -2547,6 +2556,7 @@ async function runRead(
   input: Record<string, unknown>,
   role: PrecedenceContext['role'],
   pageSites?: ChatToolContext['pageSites'],
+  brandAccess?: PrecedenceContext['brandAccess'],
 ): Promise<{ ok: true; value: unknown } | { ok: false; timedOut: boolean; error: string }> {
   let last: { timedOut: boolean; error: string } = { timedOut: false, error: '' };
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -2556,7 +2566,9 @@ async function runRead(
     try {
       const value = await Promise.race([
         tool.run(
-          pageSites ? { ...toolContext(rc, role), pageSites } : toolContext(rc, role),
+          pageSites
+            ? { ...toolContext(rc, role, brandAccess), pageSites }
+            : toolContext(rc, role, brandAccess),
           input as never,
         ),
         new Promise<never>((_, reject) => {
@@ -2581,14 +2593,23 @@ async function runRead(
 
 class ReadTimeout extends Error {}
 
-/** Who a tool acts as: the signed-in person, with their live role (lib/agent/auth.ts's shape). */
-function toolContext(rc: RunContext, role: PrecedenceContext['role']): McpAuthContext {
+/**
+ * Who a tool acts as: the signed-in person, with their live role (lib/agent/auth.ts's
+ * shape), and the brands they may use as this call's precedence read them, so a read
+ * that lists brands doesn't read them again.
+ */
+function toolContext(
+  rc: RunContext,
+  role: PrecedenceContext['role'],
+  brandAccess?: PrecedenceContext['brandAccess'],
+): McpAuthContext {
   return {
     userId: rc.actor.userId,
     email: rc.actor.email,
     organizationId: rc.actor.organizationId,
     role: role as UserRole,
     apiKeyId: 'agent-internal',
+    ...(brandAccess !== undefined ? { brandAccess } : {}),
   };
 }
 
@@ -2690,7 +2711,7 @@ async function readCall(
   if (kept) {
     read = kept;
   } else {
-    const outcome = await runRead(rc, tool, input, rc.role, pageSites);
+    const outcome = await runRead(rc, tool, input, rc.role, pageSites, ctx?.brandAccess);
     // A page that couldn't be opened says why ({ ok: false, code, message }).
     const refusal = outcome.ok ? readRefusal(outcome.value) : null;
     if (!outcome.ok || refusal) {
@@ -3014,7 +3035,7 @@ async function writeCall(
   const outcome = await runLoggedWrite({
     tool,
     input,
-    ctx: toolContext(rc, ctx?.role ?? rc.role),
+    ctx: toolContext(rc, ctx?.role ?? rc.role, ctx?.brandAccess),
     organizationId: rc.actor.organizationId,
     userId: rc.actor.userId,
     brandId: facts.brandId,

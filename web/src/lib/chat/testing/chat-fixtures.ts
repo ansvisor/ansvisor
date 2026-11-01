@@ -43,11 +43,12 @@ export function seedWorkspace(db: FakeSupabase): void {
     chat_idempotency_keys: () => ({ created_at: iso() }),
   };
   db.tables = {
+    // Everyone starts with All brands (00388), as profiles.brand_scope's default.
     profiles: [
-      { id: PEOPLE.admin, role: 'admin', organization_id: ORG },
-      { id: PEOPLE.manager, role: 'manager', organization_id: ORG },
-      { id: PEOPLE.analyst, role: 'analyst', organization_id: ORG },
-      { id: PEOPLE.otherManager, role: 'manager', organization_id: ORG },
+      { id: PEOPLE.admin, role: 'admin', organization_id: ORG, brand_scope: 'all' },
+      { id: PEOPLE.manager, role: 'manager', organization_id: ORG, brand_scope: 'all' },
+      { id: PEOPLE.analyst, role: 'analyst', organization_id: ORG, brand_scope: 'all' },
+      { id: PEOPLE.otherManager, role: 'manager', organization_id: ORG, brand_scope: 'all' },
     ],
     organizations: [
       { id: ORG, plan: 'growth', subscription_status: 'active', plan_overrides: null },

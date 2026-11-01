@@ -1,4 +1,4 @@
-import { allowedBrands, readBrandAccess } from '@/lib/brand-access';
+import { allowedBrands, brandAccessFor } from '@/lib/brand-access';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { readMemberEmails } from '@/lib/member-emails';
@@ -58,7 +58,7 @@ export async function listConnectionsFor(auth: McpAuthContext) {
       .from('organization_ai_keys')
       .select('provider, active')
       .eq('organization_id', orgId),
-    readBrandAccess(auth.userId, orgId),
+    brandAccessFor(auth),
   ]);
   for (const read of [integrations, brands, aiKeys]) {
     if (read.error) throw new Error(read.error.message);

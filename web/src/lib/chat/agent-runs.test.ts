@@ -596,7 +596,12 @@ describe('Run agent on an action', () => {
 
   it('refuses Agency partners, as Analysts', async () => {
     const PARTNER = 'aaaaaaaa-0000-4000-8000-000000000005';
-    db.tables.profiles.push({ id: PARTNER, role: 'agency_partner', organization_id: ORG });
+    db.tables.profiles.push({
+      id: PARTNER,
+      role: 'agency_partner',
+      organization_id: ORG,
+      brand_scope: 'all',
+    });
     const id = await agentOf(PEOPLE.manager, { visibility: 'workspace' });
     expect(await runs.runAgentOnAction(await ctxOf(PARTNER), id, ACTION, NOW, null)).toMatchObject({
       ok: false,

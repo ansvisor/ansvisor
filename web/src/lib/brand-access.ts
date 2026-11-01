@@ -15,7 +15,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
  *
  * Read fresh on each call, with the service role: access taken away counts
  * from the next call. Before 00388 there is no brand_scope and everyone has
- * All brands, as 00388 starts them. Server only.
+ * All brands, as 00388 starts them; a scope it doesn't know is the closed
+ * side (Selected brands). Server only.
  */
 
 /** The brands a person may use: all of their organization's, or these ids (the demo brand's with them). */
@@ -31,8 +32,6 @@ export interface AccessProfile {
 
 /** A column that isn't there: Postgres' code, and PostgREST's for its schema cache. */
 const MISSING_COLUMN = new Set(['42703', 'PGRST204']);
-/** A function that isn't there: PostgREST doesn't know it, or Postgres doesn't. */
-const MISSING_FUNCTION = new Set(['PGRST202', '42883']);
 let warnedNoBrandScope = false;
 
 const uuid = z.guid();
@@ -62,9 +61,12 @@ export async function readAccessProfile(userId: string): Promise<AccessProfile |
   return profile ? { ...profile, brand_scope: 'all' } : null;
 }
 
-/** All brands: an Admin always (D3), and everyone not narrowed to Selected brands. */
+/**
+ * All brands: an Admin always (D3), and a profile whose scope says 'all'.
+ * Anything else, a scope it doesn't know included, has Selected brands.
+ */
 export function hasAllBrands(profile: AccessProfile): boolean {
-  return profile.role === 'admin' || profile.brand_scope !== 'selected';
+  return profile.role === 'admin' || profile.brand_scope === 'all';
 }
 
 /**
@@ -115,6 +117,21 @@ export async function readBrandAccess(
 }
 
 /**
+ * The access of the person a tool acts for: what the caller read already
+ * (Chat's precedence reads it for each call, McpAuthContext.brandAccess),
+ * else read now. Null without a workspace, or for someone not in it.
+ */
+export async function brandAccessFor(auth: {
+  userId: string;
+  organizationId: string | null;
+  brandAccess?: BrandAccess | null;
+}): Promise<BrandAccess | null> {
+  if (!auth.organizationId) return null;
+  if (auth.brandAccess !== undefined) return auth.brandAccess;
+  return readBrandAccess(auth.userId, auth.organizationId);
+}
+
+/**
  * Whether the access reaches a brand of the organization it was read for.
  * 'all' says nothing of another organization's brand: find the brand in
  * the organization first. Null (not a member) reaches none.
@@ -137,7 +154,8 @@ export function allowedBrands<T extends { id: string }>(
  * database's can_access_brand, asked with the service role). With
  * `organizationId`, the brand must be that organization's too (the
  * workspace a run or a key acts in). An id that isn't one, or a brand
- * that isn't there, is no one's. A read that fails throws.
+ * that isn't there, is no one's. A read that fails throws, and so does a
+ * database without can_access_brand (00388): no answer on a guess.
  */
 export async function canAccessBrand(
   userId: string,
@@ -157,17 +175,6 @@ export async function canAccessBrand(
     supabaseAdmin.rpc('can_access_brand', { p_brand_id: brandId, p_user_id: userId }),
   ]);
   if (brand?.error) throw new Error(`Could not read the brand: ${brand.error.message}`);
-  if (brand && !brand.data) return false;
-  if (!access.error) return access.data === true;
-  if (!MISSING_FUNCTION.has(access.error.code ?? '')) {
-    throw new Error(`Could not read the brand's access: ${access.error.message}`);
-  }
-  // Before 00388 everyone has All brands: a brand of the person's organization.
-  const [profile, row] = await Promise.all([
-    readAccessProfile(userId),
-    supabaseAdmin.from('brands').select('organization_id').eq('id', brandId).maybeSingle(),
-  ]);
-  if (row.error) throw new Error(`Could not read the brand: ${row.error.message}`);
-  const org = (row.data as { organization_id: string } | null)?.organization_id;
-  return !!org && profile?.organization_id === org;
+  if (access.error) throw new Error(`Could not read the brand's access: ${access.error.message}`);
+  return (!brand || brand.data !== null) && access.data === true;
 }

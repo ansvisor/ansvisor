@@ -93,7 +93,7 @@ const request = {
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   db.tables = {
-    profiles: { role: 'manager', organization_id: ORG },
+    profiles: { role: 'manager', organization_id: ORG, brand_scope: 'all' },
     organizations: { plan: 'growth', subscription_status: 'active', plan_overrides: null },
     chat_settings: null,
     chat_auto_choices: [],
@@ -112,7 +112,7 @@ describe('readPrecedenceContext', () => {
     ).toMatchObject({ kind: 'ask' });
 
     // An Admin makes them an Analyst while the run goes on.
-    db.tables.profiles = { role: 'analyst', organization_id: ORG };
+    db.tables.profiles = { role: 'analyst', organization_id: ORG, brand_scope: 'all' };
     const next = await readPrecedenceContext(request);
     expect(next?.role).toBe('analyst');
     expect(
@@ -129,7 +129,7 @@ describe('readPrecedenceContext', () => {
 
   it('acts with live roles only, and only in the workspace the person belongs to now', async () => {
     for (const role of ['owner', 'editor', 'viewer', null]) {
-      db.tables.profiles = { role, organization_id: ORG };
+      db.tables.profiles = { role, organization_id: ORG, brand_scope: 'all' };
       expect(await readPrecedenceContext(request)).toBeNull();
     }
     db.tables.profiles = { role: 'admin', organization_id: OTHER_ORG };

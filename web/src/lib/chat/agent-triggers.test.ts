@@ -262,6 +262,21 @@ describe('firing schedules', () => {
     const counts = await triggers.fireDueSchedules(AT, driver);
     expect(counts).toMatchObject({ fired: 1, queued: 1 });
     expect(runs().map((r) => r.brand_id)).toEqual([BRAND]);
+    expect(db.tables.chat_agents[0].status).toBe('active');
+  });
+
+  it('pauses an agent whose owner may use none of its brands, as for brands gone', async () => {
+    seedAgent({}, { brand_ids: [BRAND, BRAND_2] });
+    seedTrigger('schedule', WEEKLY_ISTANBUL);
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.brand_scope = 'selected';
+    db.tables.member_brands = [];
+    const counts = await triggers.fireDueSchedules(AT, driver);
+    expect(counts).toMatchObject({ queued: 0 });
+    expect(runs()).toEqual([]);
+    expect(db.tables.chat_agents[0]).toMatchObject({
+      status: 'paused',
+      paused_reason: 'brand_gone',
+    });
   });
 
   it('fires a slot once when two crons find it due together', async () => {
@@ -445,11 +460,23 @@ describe('signals', () => {
     });
   });
 
-  it('fires nothing on a brand its owner may no longer use (BRAND-ACCESS)', async () => {
+  it('fires nothing on a brand its owner may no longer use, and pauses with none left (BRAND-ACCESS)', async () => {
+    seedAgent({}, { brand_ids: [BRAND, BRAND_2] });
     db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.brand_scope = 'selected';
-    db.tables.member_brands = [];
+    // Brand B is still theirs: a signal on Brand A fires nothing, and the agent stays on.
+    db.tables.member_brands = [
+      { user_id: PEOPLE.manager, organization_id: ORG, brand_id: BRAND_2 },
+    ];
     expect((await fire(1, T0)).fired).toBe(0);
+    expect(db.tables.chat_agents[0].status).toBe('active');
+    // None of them left: it pauses.
+    db.tables.member_brands = [];
+    expect((await fire(2, T0)).fired).toBe(0);
     expect(runs()).toEqual([]);
+    expect(db.tables.chat_agents[0]).toMatchObject({
+      status: 'paused',
+      paused_reason: 'brand_gone',
+    });
   });
 
   it('fires nothing for a brand outside its scope, the demo brand, or with Chat off', async () => {

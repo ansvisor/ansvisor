@@ -4,11 +4,12 @@
 -- BRAND-ACCESS PR 9 (Chat). 00424 let a Selected-brands person read a chat or
 -- a file only about a brand they can access: one with no brand (about the
 -- whole workspace) may hold any brand's data, since each call in it picks its
--- own brand, so only admins and All-brands people read someone else's. This
--- migration keeps which brands such a chat touched, and lets the person read
--- it when every one of them is theirs. It also takes Chat's agents, whose
--- brands live in their version's scope, the last of Chat's tables that
--- didn't look at the brand.
+-- own brand, so only admins and All-brands people read someone else's. A
+-- chat about one brand can read another brand's data too. This migration
+-- keeps which brands a chat touched, and lets a Selected-brands person read
+-- someone else's chat, or a file, only when every one of them is theirs. It
+-- also takes Chat's agents, whose brands live in their version's scope, the
+-- last of Chat's tables that didn't look at the brand.
 --
 -- Nothing changes yet: everyone has All brands until the Team screen narrows
 -- someone, and for All-brands people every rule below passes the same rows
@@ -19,16 +20,22 @@
 --     call runs. Null is "not known": every chat from before this migration,
 --     one Chat didn't start itself (an old Agent chat copied in), and one
 --     whose calls listed every brand of the workspace. A chat Chat starts
---     begins with its own brand, or none (chat_start_touched_brands), and
---     only while nothing is in it. A deleted brand's chat keeps the brand's
---     id here after its brand_id goes (on delete set null).
+--     (a person's, an agent run's) begins with its own brand, or none
+--     (chat_start_touched_brands), and only while nothing is in it. A
+--     deleted brand's chat keeps the brand's id here after its brand_id goes
+--     (on delete set null).
 --   * chat_files.touched_brand_ids: a file filed from a chat keeps the
 --     chat's set as it was then, and its own brand (the insert trigger). A
---     file from no chat (a task's, a schedule's) is not known.
---   * The shared chats' and the files' policies: a row with no brand is read
---     by admins and All-brands people, as before, or by someone who can
---     access every brand it touched. Not known reads as touching every
---     brand. The author's own chats are as 00424 left them.
+--     file made outside a chat (a task's, an editor's, a schedule's) holds
+--     its own brand's data: its brand, or not known without one; the files
+--     there are now get the same.
+--   * The shared chats', agent runs' chats' and files' policies: admins and
+--     All-brands people read what they read before. Someone with Selected
+--     brands reads a row about one of their brands only when every brand it
+--     touched is theirs too, and a row with no brand on the same terms. Not
+--     known reads as touching every brand: the chats from before this
+--     migration stay hidden from them. The author's own chats are as 00424
+--     left them.
 --   * chat_note_touched_brands and chat_start_touched_brands: the server's
 --     only (service role).
 --   * can_see_chat_agent(agent): who sees an agent, as the web's canSeeAgent
@@ -115,7 +122,8 @@ grant execute on function public.chat_note_touched_brands(uuid, uuid[], boolean)
 comment on function public.chat_note_touched_brands(uuid, uuid[], boolean) is
   'Brand access (00436): adds the brands a call touches to its chat''s touched_brand_ids; the whole workspace sets it to null (not known). The server''s only, before the call runs.';
 
--- A file takes its chat's set as it is when filed, and its own brand.
+-- A file takes its chat's set as it is when filed, and its own brand; one
+-- made outside a chat, its own brand (not known without one).
 create or replace function public.chat_files_touched_brands()
 returns trigger
 language plpgsql
@@ -126,6 +134,10 @@ begin
     select c.touched_brand_ids into new.touched_brand_ids
     from public.chat_conversations c
     where c.id = new.conversation_id;
+  elsif new.brand_id is not null then
+    new.touched_brand_ids := array[new.brand_id];
+  else
+    new.touched_brand_ids := null;
   end if;
   if new.touched_brand_ids is not null
     and new.brand_id is not null
@@ -143,10 +155,21 @@ create trigger chat_files_touched_brands
   before insert on public.chat_files
   for each row execute function public.chat_files_touched_brands();
 
+-- The files there are that no chat made (origin task, editor, schedule) hold
+-- their own brand's data. A chat's file stays not known: its chat's brands
+-- were never kept.
+update public.chat_files f
+set touched_brand_ids = array[f.brand_id]
+where f.touched_brand_ids is null
+  and f.brand_id is not null
+  and f.conversation_id is null
+  and f.origin <> 'chat';
+
 -- ── chat_conversations, chat_files ──────────────────────────────────────────
--- A row with no brand: admins and All-brands people (00424), or someone who
--- can access every brand it touched. `<@ array(select …)` runs the access
--- rule once per query; null (not known) is never contained.
+-- Admins and All-brands people as before (00424). Someone with Selected
+-- brands: a row of one of their brands whose touched brands are all theirs,
+-- or a row with no brand on the same terms. `<@ array(select …)` runs the
+-- access rule once per query; null (not known) is never contained.
 
 drop policy if exists "chat_conversations: shared select" on public.chat_conversations;
 create policy "chat_conversations: shared select"
@@ -160,9 +183,39 @@ create policy "chat_conversations: shared select"
       select p.organization_id from public.profiles p where p.id = auth.uid()
     )
     and (
-      brand_id in (select public.user_brand_ids())
+      (
+        brand_id in (select public.user_brand_ids())
+        and (
+          (select public.user_has_all_brands())
+          or touched_brand_ids <@ array(select public.user_brand_ids())
+        )
+      )
       or (brand_id is null and (select public.user_has_all_brands()))
       or (brand_id is null and touched_brand_ids <@ array(select public.user_brand_ids()))
+    )
+  );
+
+-- An agent run's chat: whoever reads the run (00419, 00424), on the same terms.
+drop policy if exists "chat_conversations: agent run select" on public.chat_conversations;
+create policy "chat_conversations: agent run select"
+  on public.chat_conversations
+  for select
+  to authenticated
+  using (
+    agent_run_id in (select r.id from public.chat_agent_runs r)
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (
+      (
+        brand_id in (select public.user_brand_ids())
+        and (
+          (select public.user_has_all_brands())
+          or touched_brand_ids <@ array(select public.user_brand_ids())
+        )
+      )
+      or (brand_id is null and (select public.user_has_all_brands()))
     )
   );
 
@@ -176,7 +229,13 @@ create policy "chat_files: member select"
       select p.organization_id from public.profiles p where p.id = auth.uid()
     )
     and (
-      brand_id in (select public.user_brand_ids())
+      (
+        brand_id in (select public.user_brand_ids())
+        and (
+          (select public.user_has_all_brands())
+          or touched_brand_ids <@ array(select public.user_brand_ids())
+        )
+      )
       or (brand_id is null and (select public.user_has_all_brands()))
       or (brand_id is null and touched_brand_ids <@ array(select public.user_brand_ids()))
     )
@@ -231,11 +290,17 @@ grant execute on function public.can_see_chat_agent(uuid) to authenticated, serv
 comment on function public.can_see_chat_agent(uuid) is
   'Brand access (00436): whether the caller sees the Chat agent, as the web''s canSeeAgent: an admin, a workspace agent or their own, and with Selected brands only one whose brands are all theirs, or their own on All brands. Backs chat_agents'' policy; its versions, triggers and runs follow it.';
 
+-- The organization first, so the function runs only on the caller's own agents.
 drop policy if exists "chat_agents: member select" on public.chat_agents;
 create policy "chat_agents: member select"
   on public.chat_agents
   for select
   to authenticated
-  using (public.can_see_chat_agent(id));
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and public.can_see_chat_agent(id)
+  );
 
 notify pgrst, 'reload schema';

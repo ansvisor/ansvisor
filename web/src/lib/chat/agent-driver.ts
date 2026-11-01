@@ -44,6 +44,7 @@ import {
 } from './engine';
 import { OPEN_RUN_STATUSES, loadRun, newProgress, type LoadedRun } from './engine-store';
 import { chatAgenticEnabled } from './flag';
+import { startTouchedBrands } from './touched-brands';
 
 /**
  * The agent run driver (CHAT-21 §H, CHAT-27 §E; W2-16): runs a started
@@ -472,6 +473,8 @@ export async function openAgentRun(
     if ((err as { code?: string }).code === '23505') return null;
     throw err;
   }
+  // Its chat keeps the brands it touches from its own on (00436), before anything is in it.
+  await startTouchedBrands(conversationId);
   await insertId(
     'chat_messages',
     {

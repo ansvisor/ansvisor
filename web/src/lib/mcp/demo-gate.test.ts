@@ -234,4 +234,10 @@ describe('listBrandsFor', () => {
     rows.profiles['user-1'] = { role: 'admin', organization_id: 'org-2' };
     expect(await listBrandsFor(AUTH)).toEqual([]);
   });
+
+  it('takes the brands its caller read already (Chat), reading no profile', async () => {
+    delete rows.profiles;
+    const brands = await listBrandsFor({ ...AUTH, brandAccess: ['own-brand'] });
+    expect(brands.map((b) => b.id)).toEqual(['own-brand']);
+  });
 });

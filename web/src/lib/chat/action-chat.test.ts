@@ -143,7 +143,12 @@ describe('Run with Chat', () => {
       },
     });
     const PARTNER = 'aaaaaaaa-0000-4000-8000-000000000005';
-    db.tables.profiles.push({ id: PARTNER, role: 'agency_partner', organization_id: ORG });
+    db.tables.profiles.push({
+      id: PARTNER,
+      role: 'agency_partner',
+      organization_id: ORG,
+      brand_scope: 'all',
+    });
     expect(await startActionChat(await ctxOf(PARTNER), ACTION)).toMatchObject({
       ok: false,
       refusal: { kind: 'denied', code: 'forbidden_role' },

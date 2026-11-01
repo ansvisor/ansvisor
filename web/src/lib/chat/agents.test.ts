@@ -1252,6 +1252,44 @@ describe('brand access (Selected brands)', () => {
     expect(detail?.scope).toEqual({ allBrands: true, brands: ['Brand A', 'Demo'] });
   });
 
+  it("holds an Admin's Resume to the brands its owner may use, connections included", async () => {
+    const agent = await create(PEOPLE.manager, {
+      scope: { all_brands: true },
+      skills: ['publish'],
+    });
+    // Brand A sends pages to WordPress; Brand B has no CMS.
+    db.tables.brand_cms_connections = [
+      { brand_id: BRAND, provider: 'wordpress', status: 'connected' },
+    ];
+    const manager = await ctxOf(PEOPLE.manager);
+    expect(await agents.changeAgentState(manager, agent.id, 'activate', NOW)).toMatchObject({
+      ok: true,
+    });
+    expect(await agents.changeAgentState(manager, agent.id, 'pause', NOW)).toMatchObject({
+      ok: true,
+    });
+    const admin = await ctxOf(PEOPLE.admin);
+    // Its runs act as the Manager, who has All brands: Brand B would lack the CMS.
+    expect(await agents.changeAgentState(admin, agent.id, 'resume', NOW)).toMatchObject({
+      ok: false,
+      refusal: { code: 'connection_missing' },
+    });
+    // Narrowed to Brand A, the owner's brands all have it: the Admin's own don't count.
+    narrow(PEOPLE.manager, BRAND);
+    expect(await agents.changeAgentState(admin, agent.id, 'resume', NOW)).toMatchObject({
+      ok: true,
+    });
+    expect(await agents.changeAgentState(admin, agent.id, 'pause', NOW)).toMatchObject({
+      ok: true,
+    });
+    // None of its brands left to the owner: nothing to run on.
+    narrow(PEOPLE.manager);
+    expect(await agents.changeAgentState(admin, agent.id, 'resume', NOW)).toMatchObject({
+      ok: false,
+      refusal: { code: 'no_brand' },
+    });
+  });
+
   it('hides the agents, runs and brand names they may not see', async () => {
     const shared = await create(PEOPLE.otherManager, {
       name: 'On both',

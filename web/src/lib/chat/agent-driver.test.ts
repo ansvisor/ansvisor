@@ -475,6 +475,18 @@ describe('handing a started run to Chat', () => {
     expect(db.tables.chat_messages.at(-2)!.content_md).not.toContain('isn’t connected');
   });
 
+  it("starts keeping its chat's brands from the run's brand, before its message (00436)", async () => {
+    const started: { chat: unknown; messages: number }[] = [];
+    db.rpcs.chat_start_touched_brands = ({ p_conversation_id }) =>
+      started.push({
+        chat: p_conversation_id,
+        messages: db.tables.chat_messages.filter((m) => m.conversation_id === p_conversation_id)
+          .length,
+      });
+    await driver.openAgentRun(queueRun(), ORG, NOW);
+    expect(started).toEqual([{ chat: db.tables.chat_conversations[0].id, messages: 0 }]);
+  });
+
   it('stops a run on a brand its person can no longer use, as one gone (BRAND-ACCESS)', async () => {
     const BRAND_B = '33333333-3333-4333-8333-333333333333';
     db.tables.brands.push({ id: BRAND_B, organization_id: ORG, name: 'Brand B', is_demo: false });

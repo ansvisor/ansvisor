@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import type { BrandAccess } from '@/lib/brand-access';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import {
   mcpWriteAccess,
@@ -29,6 +30,12 @@ export interface McpAuthContext {
   /** The user's role in the organization: the tools that need one check it (lib/mcp/role-gate.ts). */
   role: UserRole | null;
   apiKeyId: string;
+  /**
+   * The brands the user may use, when the caller read them already (Chat's
+   * precedence, for each call); absent, a tool reads them itself
+   * (lib/brand-access.ts brandAccessFor).
+   */
+  brandAccess?: BrandAccess | null;
 }
 
 /** The methods that change something: a read-only workspace's REST routes refuse them. */

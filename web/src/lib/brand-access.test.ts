@@ -21,6 +21,7 @@ const { createFakeSupabase } = await import('@/lib/chat/testing/fake-supabase');
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const {
   allowedBrands,
+  brandAccessFor,
   brandAccessOf,
   canAccessBrand,
   hasBrandAccess,
@@ -142,7 +143,13 @@ describe('readBrandAccess', () => {
   });
 
   it('decides from a profile already read, without reading it again', async () => {
-    expect(await brandAccessOf({ role: 'analyst', organization_id: ORG }, PERSON, ORG)).toBe('all');
+    expect(
+      await brandAccessOf(
+        { role: 'analyst', organization_id: ORG, brand_scope: 'all' },
+        PERSON,
+        ORG,
+      ),
+    ).toBe('all');
     share(BRAND);
     expect(
       await brandAccessOf(
@@ -152,6 +159,26 @@ describe('readBrandAccess', () => {
       ),
     ).toEqual([BRAND, DEMO]);
     expect(fake.db.log.map(([table]) => table)).not.toContain('profiles');
+  });
+
+  it('reads a scope it doesn’t know, or none, as Selected brands: the closed side', async () => {
+    share(SHARED);
+    for (const brand_scope of [undefined, null, 'everything']) {
+      expect(
+        await brandAccessOf({ role: 'manager', organization_id: ORG, brand_scope }, PERSON, ORG),
+      ).toEqual([SHARED, DEMO]);
+    }
+  });
+});
+
+describe('brandAccessFor', () => {
+  it('takes the access its caller read already, and reads it otherwise', async () => {
+    const auth = { userId: PERSON, organizationId: ORG };
+    expect(await brandAccessFor({ ...auth, brandAccess: [SHARED] })).toEqual([SHARED]);
+    expect(await brandAccessFor({ ...auth, brandAccess: null })).toBeNull();
+    expect(fake.db.log).toEqual([]);
+    expect(await brandAccessFor(auth)).toBe('all');
+    expect(await brandAccessFor({ ...auth, organizationId: null })).toBeNull();
   });
 });
 
@@ -191,10 +218,8 @@ describe('canAccessBrand', () => {
     await expect(canAccessBrand(PERSON, BRAND, ORG)).rejects.toThrow(/timeout/);
   });
 
-  it('is the person’s organization’s brand before 00388, when can_access_brand isn’t there', async () => {
+  it('answers nothing on a guess: without can_access_brand (before 00388) it throws', async () => {
     delete fake.db.rpcs.can_access_brand;
-    expect(await canAccessBrand(PERSON, BRAND)).toBe(true);
-    expect(await canAccessBrand(PERSON, OTHERS)).toBe(false);
-    expect(await canAccessBrand(PERSON, '55555555-5555-4555-8555-555555555555')).toBe(false);
+    await expect(canAccessBrand(PERSON, BRAND)).rejects.toThrow(/brand's access/);
   });
 });

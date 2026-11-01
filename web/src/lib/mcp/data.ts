@@ -1,7 +1,7 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { allowedBrands, readBrandAccess } from '@/lib/brand-access';
+import { allowedBrands, brandAccessFor } from '@/lib/brand-access';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import type { Citation } from '@/types';
 import {
@@ -94,7 +94,7 @@ export async function listBrandsFor(auth: McpAuthContext): Promise<BrandRow[]> {
       .eq('organization_id', auth.organizationId)
       .or('is_demo.eq.false,demo_hidden_at.is.null')
       .order('created_at', { ascending: false }),
-    readBrandAccess(auth.userId, auth.organizationId),
+    brandAccessFor(auth),
   ]);
 
   if (error) throw new Error(error.message);

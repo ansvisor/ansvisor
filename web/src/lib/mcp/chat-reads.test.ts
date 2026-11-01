@@ -60,11 +60,11 @@ const mocks = vi.hoisted(() => ({
   getTrafficGoogleTotals: vi.fn(),
   readMemberEmails: vi.fn(),
   readPrecedenceContext: vi.fn(),
-  readBrandAccess: vi.fn(),
+  brandAccessFor: vi.fn(),
 }));
 vi.mock('@/lib/brand-access', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/brand-access')>()),
-  readBrandAccess: mocks.readBrandAccess,
+  brandAccessFor: mocks.brandAccessFor,
 }));
 vi.mock('./data', () => ({
   brandInOrg: mocks.brandInOrg,
@@ -107,7 +107,7 @@ beforeEach(() => {
   reads.org = { plan: 'starter', subscription_status: 'active', plan_overrides: null };
   for (const fn of Object.values(mocks)) fn.mockReset();
   mocks.brandInOrg.mockResolvedValue(true);
-  mocks.readBrandAccess.mockResolvedValue('all');
+  mocks.brandAccessFor.mockResolvedValue('all');
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -444,9 +444,11 @@ describe('Workspace reads', () => {
       { id: BRAND, name: 'Acme', gsc_property: 'sc', ga_property_id: null },
       { id: 'brand-2', name: 'Hidden', gsc_property: 'sc', ga_property_id: 'ga' },
     ];
-    mocks.readBrandAccess.mockResolvedValue([BRAND]);
+    mocks.brandAccessFor.mockResolvedValue([BRAND]);
     const read = await listConnectionsFor(auth());
-    expect(mocks.readBrandAccess).toHaveBeenCalledWith('u1', ORG);
+    expect(mocks.brandAccessFor).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u1', organizationId: ORG }),
+    );
     expect(read?.google).toEqual([{ brand: 'Acme', search_console: true, analytics: false }]);
     expect(JSON.stringify(read)).not.toContain('Hidden');
   });

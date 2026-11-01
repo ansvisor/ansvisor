@@ -819,7 +819,12 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
   });
 
   it('never offers a CMS send to an Analyst or an Agency partner, in any mode', async () => {
-    db.tables.profiles.push({ id: AGENCY, role: 'agency_partner', organization_id: ORG });
+    db.tables.profiles.push({
+      id: AGENCY,
+      role: 'agency_partner',
+      organization_id: ORG,
+      brand_scope: 'all',
+    });
     const tool = chatTool('push_cms_draft')!;
     for (const userId of [PEOPLE.analyst, AGENCY]) {
       for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
