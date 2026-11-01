@@ -135,7 +135,12 @@ function PresetCard({
         {tAgents(`presets.${preset.id}.description`)}
       </p>
 
-      <FormulaChips agent={{ skills: preset.skills, mode: preset.mode }} words={words} />
+      {/* On a card, a long formula wraps rather than cutting the mode off. */}
+      <FormulaChips
+        agent={{ skills: preset.skills, mode: preset.mode }}
+        words={words}
+        className="flex-wrap"
+      />
       {ready && lock && (
         <span
           data-slot="preset-lock"
