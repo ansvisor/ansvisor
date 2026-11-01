@@ -1263,7 +1263,7 @@ function AgentFormBody({
 
                   <SettingRow
                     label={t('agent.maxRun')}
-                    note={t('agent.maxRunNote')}
+                    note={t(setup.ownKeyProvider ? 'agent.maxRunNoteOwnKey' : 'agent.maxRunNote')}
                     noteId="agent-form-note-max-run"
                     htmlFor="agent-max-run"
                   >

@@ -5669,12 +5669,12 @@
           "picked": "Picked model"
         },
         "notes": {
-          "auto": "Picks per step · Ansvisor limit",
+          "auto": "Picks a model per step",
           "fast": "Cheaper, for reads and checks",
           "writing": "For drafts and rewrites",
           "picked": "Kept from this agent’s settings"
         },
-        "ownKey": "Runs on your {provider} key · doesn’t use your limit",
+        "ownKey": "Runs on your {provider} key, which {provider} bills. Max per run and Monthly cap still apply.",
         "limit": "Uses your monthly AI limit"
       },
       "agent": {
@@ -5694,6 +5694,7 @@
         "adminsOnlyNote": "Your Admin keeps workspace agents to Admins",
         "maxRun": "Max per run",
         "maxRunNote": "The most one run may use of the monthly AI limit, 1–50%",
+        "maxRunNoteOwnKey": "The most one run may use of the monthly AI limit, 1–50%. On your own key it is measured at list prices.",
         "monthCap": "Monthly cap",
         "monthCapNote": "The most this agent may use of the monthly AI limit a month, 1–100%",
         "monthCapSet": "Set by an Admin · {cap} a month"
