@@ -958,6 +958,7 @@ export type Database = {
           slug: string
           state: string | null
           tracking_code: string
+          trusted_sources: string[]
           updated_at: string
         }
         Insert: {
@@ -995,6 +996,7 @@ export type Database = {
           slug: string
           state?: string | null
           tracking_code?: string
+          trusted_sources?: string[]
           updated_at?: string
         }
         Update: {
@@ -1032,6 +1034,7 @@ export type Database = {
           slug?: string
           state?: string | null
           tracking_code?: string
+          trusted_sources?: string[]
           updated_at?: string
         }
         Relationships: [

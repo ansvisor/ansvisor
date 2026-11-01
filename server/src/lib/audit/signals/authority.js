@@ -35,9 +35,11 @@ export const outboundAuthorityLinks = {
   evaluate(ctx) {
     const { external } = classifyLinks(ctx);
     const hosts = [...new Set(external.map((u) => u.hostname.toLowerCase().replace(/^www\./, '')))];
+    // The brand's own trusted sources (00449), read with the brand for its run.
+    const trusted = Array.isArray(ctx.trustedSources) ? ctx.trustedSources : [];
     const kinds = Object.fromEntries(
       hosts.flatMap((host) => {
-        const kind = authorityKind(host);
+        const kind = authorityKind(host, trusted);
         return kind ? [[host, kind]] : [];
       }),
     );
@@ -62,6 +64,8 @@ export const outboundAuthorityLinks = {
         // What each counted as (authority-sources.js), and sites that didn't count.
         authorityKinds: Object.fromEntries(authority.slice(0, 8).map((h) => [h, kinds[h]])),
         otherHosts: others,
+        // The brand's trusted sources this run counted, as the report lists them.
+        trustedSources: trusted,
       },
     };
   },

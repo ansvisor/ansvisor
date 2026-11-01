@@ -1,11 +1,11 @@
 ---
 title: Check a page's Quality in the Content Editor
 route: /dashboard/content/editor
-keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author]
+keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author, trusted sources]
 synonyms: [content quality, quality check, page score, eeat score, ready to publish checklist]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -29,6 +29,10 @@ At the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your 
 **Hand off** asks the Content Agent to fix the open suggestions in one run, as changes for you to review. Your to-dos stay yours. Each Hand off is kept in the page's History, and it uses your workspace's monthly AI usage.
 
 In **Settings › Content**, admins and managers can have each brand's new pages handed off on their own when they're first opened in the editor.
+
+## Trusted sources
+
+**Trust** counts links to official and research sites as primary sources. In **Settings › Content**, admins and managers can add the sites a brand trusts besides, such as its industry's association or the docs it cites, one per line, up to 50. Links to them, and to their pages, count as primary sources here and as authority links in Site Audit.
 
 ## Next step
 

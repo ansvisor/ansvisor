@@ -2170,16 +2170,23 @@ export async function getDraftSources(
 ): Promise<{ data: DraftSourcesData; choices: DraftSourceChoice[] } | null> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
-  const [sourcesRes, choicesRes] = await Promise.all([
+  const [sourcesRes, choicesRes, trustedRes] = await Promise.all([
     supabase.rpc('content_draft_sources', { p_draft_id: id, p_days: SOURCES_DAYS }),
     supabase.from('content_draft_sources').select('kind, ref, included, added').eq('draft_id', id),
+    // The sites the draft's brand trusts (00449). A database before it, or a
+    // read that fails, trusts none: Trust reads the page as before.
+    supabase.from('content_drafts').select('brands(trusted_sources)').eq('id', id).maybeSingle(),
   ]);
   if (sourcesRes.error) throw new Error(sourcesRes.error.message);
   if (choicesRes.error) throw new Error(choicesRes.error.message);
   if (!sourcesRes.data) return null;
   const kinds: readonly string[] = DRAFT_SOURCE_KINDS;
+  const trusted = trustedRes.error ? null : trustedRes.data?.brands?.trusted_sources;
   return {
-    data: sourcesRes.data as unknown as DraftSourcesData,
+    data: {
+      ...(sourcesRes.data as unknown as DraftSourcesData),
+      trustedDomains: Array.isArray(trusted) ? trusted : [],
+    },
     choices: (choicesRes.data ?? [])
       .filter((row) => kinds.includes(row.kind))
       .map((row) => ({

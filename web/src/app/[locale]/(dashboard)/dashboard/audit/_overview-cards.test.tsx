@@ -6,6 +6,11 @@ import messages from '../../../../../../messages/en.json';
 import type { AuditAutoStatus, AuditOverview, AuditQuota } from '@/lib/actions/audits';
 import { AuditOverviewCards } from './_overview-cards';
 
+// The report's helpers come with its Settings link (00449).
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
+}));
+
 (
   globalThis as typeof globalThis & {
     IS_REACT_ACT_ENVIRONMENT: boolean;

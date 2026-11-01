@@ -43,7 +43,7 @@ The **Signals** section lists every check by category, each with a pass, warning
 
 ## Authority links
 
-**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…) and major news.
+**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…), major news, and the sites your brand trusts. Add those in **Settings › Content**; **Edit in Settings** takes you there.
 
 ## Product pages
 
