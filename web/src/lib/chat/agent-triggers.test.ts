@@ -15,7 +15,10 @@ vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('./testing/fake-supabase')).createFakeSupabase(),
 }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
-const fakes = vi.hoisted(() => ({ shares: vi.fn(), keyCap: vi.fn(async () => null) }));
+const fakes = vi.hoisted(() => ({
+  shares: vi.fn(),
+  keyCap: vi.fn(async (): Promise<{ reached: boolean; renewsAt: string | null } | null> => null),
+}));
 vi.mock('./agent-shares', () => ({ readAgentShares: fakes.shares }));
 vi.mock('./own-key-cap', () => ({ ownKeyCapReached: fakes.keyCap }));
 
