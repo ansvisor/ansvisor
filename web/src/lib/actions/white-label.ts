@@ -23,6 +23,7 @@ import {
   logoExtension,
   logoTypeOf,
   type KitTextInput,
+  type ReportBranding,
 } from '@/lib/white-label/kit';
 
 /**
@@ -473,5 +474,64 @@ export async function setBrandClientLogo(
     return { ok: true };
   } catch (err) {
     return refusal(err);
+  }
+}
+
+// ─── Reports ─────────────────────────────────────────────────────────────────
+
+/** A logo, read from the bucket, as a data URL; null for no logo. */
+async function logoDataUrl(path: string | null): Promise<string | null> {
+  if (!path) return null;
+  const type = logoTypeOf(path);
+  const { data, error } = await supabaseAdmin.storage.from(WHITE_LABEL_BUCKET).download(path);
+  if (error || !data || !type) throw new Error(`Could not read a logo: ${error?.message ?? path}`);
+  return `data:${type};base64,${Buffer.from(await data.arrayBuffer()).toString('base64')}`;
+}
+
+/**
+ * The kit a brand's report is shown and downloaded with: the workspace's,
+ * with the brand's client logo, when it is in use (kitInUse); null keeps
+ * Ansvisor's look. The logos come as the images themselves, for the PDF the
+ * browser draws. A failed read is a failure, not null: a PDF in Ansvisor's
+ * look must not go to an agency's client by mistake.
+ */
+export async function getReportBranding(
+  brandId: string,
+): Promise<{ ok: true; branding: ReportBranding | null } | { ok: false; failure: 'failed' }> {
+  try {
+    if (!brandIdInput.safeParse(brandId).success) return { ok: false, failure: 'failed' };
+    const me = await member();
+    if (!me) return { ok: false, failure: 'failed' };
+    if (!(await whiteLabelOn(me.organizationId))) return { ok: true, branding: null };
+    const [read, brand] = await Promise.all([
+      me.supabase
+        .from('white_label_kits')
+        .select('company_name, accent_color, footer_text, logo_path')
+        .eq('organization_id', me.organizationId)
+        .maybeSingle(),
+      readBrand(me.supabase, brandId),
+    ]);
+    if (read.error) throw new Error(`Could not read the kit: ${read.error.message}`);
+    const kit = read.data;
+    if (!kit || !kitInUse({ companyName: kit.company_name, logoPath: kit.logo_path }, true)) {
+      return { ok: true, branding: null };
+    }
+    const [logo, clientLogo] = await Promise.all([
+      logoDataUrl(kit.logo_path),
+      logoDataUrl(brand?.client_logo_path ?? null),
+    ]);
+    return {
+      ok: true,
+      branding: {
+        companyName: kit.company_name,
+        accentColor: kit.accent_color,
+        footerText: kit.footer_text,
+        logo,
+        clientLogo,
+      },
+    };
+  } catch (err) {
+    console.error('White label: could not read a report’s kit:', err);
+    return { ok: false, failure: 'failed' };
   }
 }

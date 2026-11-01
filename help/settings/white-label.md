@@ -28,6 +28,12 @@ The kit is used once it has a company name or a logo, on a plan with white label
 
 A light main color, such as yellow, is hard to read as text on white paper. The rules and bars keep your color, and text set in it is darkened just enough to stay readable. The section warns you when that happens.
 
+## Where your kit appears
+
+With the kit in use, a brand's reports carry it. The report's page opens with a cover: your logo (or your company name without one), "Prepared for" and the brand's name, and the client's logo when the brand has one.
+
+**Download PDF** makes the PDF with the same cover, your main color on its rules and bars, your footer line at the bottom of each page, and your company name as its author. It no longer carries Ansvisor's footer or names Ansvisor as its author, and its file name starts with your company's name.
+
 ## Who can change it
 
 Only admins change the kit; everyone else in the workspace sees it. Under it, the section says when it was last changed and by whom.
@@ -36,6 +42,6 @@ On a plan without white label, the section is locked and names the plan that has
 
 ## Add a client logo to a brand
 
-Open the brand's **Brand settings**. On the **General** tab, **Client logo** takes the client's logo for that brand, in the same formats as your own.
+Open the brand's **Brand settings**. On the **General** tab, **Client logo** takes the client's logo for that brand, in the same formats as your own. It goes on the cover of the brand's reports, beside "Prepared for" and the brand's name.
 
 Admins and managers upload, replace and remove it; everyone who can see the brand sees it. The demo brand has none.

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PLANS, getMinimumPlanForFeature, hasFeature } from '@/config/plans';
 import {
+  ANSVISOR_REPORT_FOOTER,
   LOGO_MAX_BYTES,
+  REPORT_ACCENT,
   clientLogoFolder,
   contrastRatio,
   isLogoPathIn,
@@ -11,10 +13,15 @@ import {
   logoBytesOk,
   logoProblem,
   logoTypeOf,
+  fileWord,
   normalizeHex,
   readableOn,
+  reportFileName,
+  reportLook,
   svgLooksUnsafe,
   whiteLabelOffered,
+  withFileWord,
+  type ReportBranding,
 } from './kit';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -144,5 +151,71 @@ describe('kitTextSchema', () => {
     expect(kitTextSchema.safeParse({ ...ok, footerText: 'one\ntwo' }).success).toBe(false);
     expect(kitTextSchema.safeParse({ ...ok, accentColor: 'red' }).success).toBe(false);
     expect(kitTextSchema.safeParse(ok).success).toBe(true);
+  });
+});
+
+describe('reportLook', () => {
+  const kit: ReportBranding = {
+    companyName: 'Acme Agency',
+    accentColor: '#ffff00',
+    footerText: 'acme.com',
+    logo: null,
+    clientLogo: null,
+  };
+
+  it('is Ansvisor’s own without a kit, as before', () => {
+    expect(reportLook(null)).toEqual({
+      branded: false,
+      accent: REPORT_ACCENT,
+      textAccent: REPORT_ACCENT,
+      author: 'Ansvisor',
+      footer: ANSVISOR_REPORT_FOOTER,
+    });
+  });
+
+  it('takes the kit’s color, darkened for text, its footer and its company as the author', () => {
+    const look = reportLook(kit);
+    expect(look).toMatchObject({
+      branded: true,
+      accent: '#ffff00',
+      author: 'Acme Agency',
+      footer: 'acme.com',
+    });
+    expect(contrastRatio(look.textAccent, '#ffffff')).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('keeps the report’s accent without a color, and names no author or footer it lacks', () => {
+    expect(reportLook({ ...kit, accentColor: null, companyName: null, footerText: null })).toEqual({
+      branded: true,
+      accent: REPORT_ACCENT,
+      textAccent: REPORT_ACCENT,
+      author: undefined,
+      footer: null,
+    });
+  });
+});
+
+describe('file names', () => {
+  it('start with Ansvisor’s word without a kit, the company’s with one, and none with only a logo', () => {
+    expect(fileWord(null)).toBe('ansvisor');
+    expect(fileWord({ companyName: 'Acme Ajans Şirketi' })).toBe('acme-ajans-sirketi');
+    expect(fileWord({ companyName: null })).toBeNull();
+    expect(fileWord({ companyName: '***' })).toBeNull();
+    expect(fileWord({ companyName: 'x'.repeat(60) })).toHaveLength(40);
+    expect(withFileWord('acme', 'prompts.csv')).toBe('acme_prompts.csv');
+    expect(withFileWord('acme', 'ai-traffic.xlsx', '-')).toBe('acme-ai-traffic.xlsx');
+    expect(withFileWord(null, 'prompts.csv')).toBe('prompts.csv');
+  });
+
+  it('name a report’s PDF as before without a kit, and after the agency with one', () => {
+    expect(reportFileName(null, 'Northwind Coffee', '2026-10-31T00:00:00Z')).toBe(
+      'ansvisor_northwind-coffee_report_2026-10-31.pdf',
+    );
+    expect(reportFileName({ companyName: 'Acme Agency' }, 'Northwind', '2026-10-31')).toBe(
+      'acme-agency_northwind_report_2026-10-31.pdf',
+    );
+    expect(reportFileName({ companyName: null }, 'Northwind', '2026-10-31')).toBe(
+      'northwind_report_2026-10-31.pdf',
+    );
   });
 });

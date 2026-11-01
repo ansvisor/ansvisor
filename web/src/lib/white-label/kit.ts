@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PLANS, hasFeature } from '@/config/plans';
+import { slugify } from '@/lib/slug';
 
 /**
  * White label (00429): an agency's own logo, main color, company name and
@@ -179,3 +180,93 @@ export const kitTextSchema = z.object({
 });
 
 export type KitTextInput = z.input<typeof kitTextSchema>;
+
+// ─── Reports and exports ─────────────────────────────────────────────────────
+
+/** A report's own accent without a kit: Ansvisor's indigo. */
+export const REPORT_ACCENT = '#6366f1';
+/** A report's footer without a kit. */
+export const ANSVISOR_REPORT_FOOTER = 'Generated with Ansvisor · www.ansvisor.com';
+
+/**
+ * A kit in use, as a report and its PDF show it; null keeps Ansvisor's
+ * look. The logos are the images themselves (data URLs): the PDF is drawn
+ * in the browser, and the bucket stays private.
+ */
+export interface ReportBranding {
+  companyName: string | null;
+  accentColor: string | null;
+  footerText: string | null;
+  logo: string | null;
+  clientLogo: string | null;
+}
+
+/** What a report looks like: with a kit, or Ansvisor's own without one. */
+export interface ReportLook {
+  branded: boolean;
+  /** Rules, bars and lines. */
+  accent: string;
+  /** Text set in the accent, darkened where the kit's color is too light to read. */
+  textAccent: string;
+  /** The PDF's author and creator; none for a kit with only a logo. */
+  author: string | undefined;
+  /** The line at the bottom of each page; none for a kit without one. */
+  footer: string | null;
+}
+
+export function reportLook(branding: ReportBranding | null): ReportLook {
+  if (!branding) {
+    return {
+      branded: false,
+      accent: REPORT_ACCENT,
+      textAccent: REPORT_ACCENT,
+      author: 'Ansvisor',
+      footer: ANSVISOR_REPORT_FOOTER,
+    };
+  }
+  // No color in the kit: the report's own, as it is.
+  const accent = branding.accentColor ?? REPORT_ACCENT;
+  return {
+    branded: true,
+    accent,
+    textAccent: branding.accentColor ? readableOn(accent) : REPORT_ACCENT,
+    author: branding.companyName ?? undefined,
+    footer: branding.footerText,
+  };
+}
+
+/**
+ * The word a downloaded file's name starts with: the company's, as a slug,
+ * with a kit in use; Ansvisor's without one (null); none for a kit with only
+ * a logo.
+ */
+export function fileWord(branding: { companyName: string | null } | null): string | null {
+  if (!branding) return 'ansvisor';
+  return (
+    slugify(branding.companyName ?? '')
+      .slice(0, 40)
+      .replace(/-+$/, '') || null
+  );
+}
+
+/** `rest` after the file word and `separator`, or `rest` alone for none. */
+export function withFileWord(word: string | null, rest: string, separator = '_'): string {
+  return word ? `${word}${separator}${rest}` : rest;
+}
+
+/**
+ * A report PDF's name: "acme-agency_northwind_report_2026-10-31.pdf" with a
+ * kit, "ansvisor_northwind_report_…" without one, as before.
+ */
+export function reportFileName(
+  branding: { companyName: string | null } | null,
+  brandName: string,
+  dateTo: string,
+): string {
+  const brand =
+    brandName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '') || 'brand';
+  return withFileWord(fileWord(branding), `${brand}_report_${dateTo.slice(0, 10)}.pdf`);
+}

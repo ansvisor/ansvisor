@@ -12234,6 +12234,8 @@
     "generateReport": "Generate Report",
     "downloadPDF": "Download PDF",
     "downloadFailed": "PDF export failed. Please try again.",
+    "brandingFailed": "Couldn't load your white label kit, so the PDF wasn't made. Try again.",
+    "preparedFor": "Prepared for {brand}",
     "dateRange": "Date Range",
     "platforms": "Platforms",
     "libraryTitle": "Generated Reports",
