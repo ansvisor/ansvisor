@@ -57,7 +57,7 @@ import { buildActionDenial } from './denial';
 import { canonicalJson } from './idempotency';
 import type { ChatActor } from './engine';
 import type { ChatDenialCard } from './events';
-import { resolveChatModelKey } from './key';
+import { OwnKeyUnreadableError, resolveChatModelKey } from './key';
 import { planFactsFromOrgRow, type PlanFacts } from './plan-facts';
 import { parseTeamRole, type ChatMode, type ToolDenial } from './precedence';
 import { readBrandAccess } from './precedence-context';
@@ -1136,7 +1136,11 @@ const sameInstant = (a: string, b: string) => a === b || Date.parse(a) === Date.
  */
 async function aiLimitReached(ctx: AgentContext): Promise<boolean> {
   try {
-    const key = await resolveChatModelKey(ctx.actor.organizationId);
+    const key = await resolveChatModelKey(ctx.actor.organizationId).catch((err: unknown) => {
+      // A saved key that can't be read is still the workspace's own: no AI limit.
+      if (err instanceof OwnKeyUnreadableError) return { source: 'own' as const };
+      throw err;
+    });
     if (key?.source === 'own') return false;
     const usage = await getAiUsageFor({
       userId: ctx.actor.userId,

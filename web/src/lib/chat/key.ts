@@ -1,9 +1,10 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isCloud } from '@/config/plans';
-import { resolveAgentModelConfig } from '@/lib/agent/key';
+import { readActiveKey, resolveAgentModelConfig } from '@/lib/agent/key';
 import type { AgentModelConfig } from '@/lib/agent/model';
-import { isAiProvider } from '@/lib/agent/providers';
+import { isAiProvider, type AiProvider } from '@/lib/agent/providers';
 import { chatAgenticEnabled } from './flag';
+import { markKeyFailing } from './key-health';
 
 /**
  * Whose key a Chat step runs on (CHAT-16 item 22, owner decision 11 of the
@@ -17,6 +18,21 @@ export type ChatKeySource = 'own' | 'ansvisor';
 export interface ChatModelKey {
   source: ChatKeySource;
   config: AgentModelConfig;
+}
+
+/**
+ * The workspace's own key is the one Chat runs on, but its saved envelope
+ * can't be decrypted (AGENT-OWN-KEY §5.1 `unreadable`): Chat stops on it
+ * rather than move to Ansvisor's key and the AI limit.
+ */
+export class OwnKeyUnreadableError extends Error {
+  readonly provider: AiProvider;
+
+  constructor(provider: AiProvider) {
+    super(`The saved ${provider} key can't be read.`);
+    this.name = 'OwnKeyUnreadableError';
+    this.provider = provider;
+  }
 }
 
 /** What decides whether a workspace's own key may run Chat. */
@@ -118,7 +134,9 @@ export async function ownKeyAccess(organizationId: string): Promise<OwnKeyAccess
  * The key a Chat step runs on, in order:
  *   1. The workspace's own (its active key in Settings › AI Providers), on
  *      Enterprise or for a kept key's 30 days (ownKeyAccess): the provider
- *      bills the workspace, and the usage percent doesn't move.
+ *      bills the workspace, and the usage percent doesn't move. One that
+ *      can't be decrypted throws OwnKeyUnreadableError and is marked
+ *      failing (lib/chat/key-health.ts): never Ansvisor's key in its place.
  *   2. Ansvisor's (ANTHROPIC_API_KEY; Auto is Anthropic first-party): the
  *      step draws on the workspace's AI budget.
  * Null when neither is there. Self-hosted, the operator's own key is
@@ -136,8 +154,15 @@ export async function resolveChatModelKey(organizationId: string): Promise<ChatM
 
   const access = await ownKeyAccess(organizationId);
   if (access.state === 'plan' || access.state === 'kept') {
-    const own = await resolveAgentModelConfig(organizationId);
-    if (own) return { source: 'own', config: own };
+    const own = await readActiveKey(organizationId);
+    if (own.state === 'ready') return { source: 'own', config: own.config };
+    if (own.state === 'unreadable') {
+      await markKeyFailing(organizationId, own.provider, {
+        class: 'unreadable',
+        status: null,
+      }).catch((err) => console.error('[chat/key] could not mark the key failing:', err));
+      throw new OwnKeyUnreadableError(own.provider);
+    }
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -149,7 +174,8 @@ export async function resolveChatModelKey(organizationId: string): Promise<ChatM
 /**
  * Whether the workspace's Chat runs on its own key, as resolveChatModelKey
  * would pick it, without decrypting the key: ownKeyAccess allows own keys and
- * Settings › AI Providers has an active one. Such steps never draw on the AI
+ * Settings › AI Providers has an active one. One that can't be decrypted
+ * counts too: Chat stops on it rather than move to the AI limit. Such steps never draw on the AI
  * budget (reserve_chat_ai_usage writes them unchecked), so the composer
  * stays on at the cap. False with Chat off or self-hosted, where nothing is
  * metered, and when it can't be read: the server's hold still decides a run.

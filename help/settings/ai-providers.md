@@ -4,8 +4,8 @@ route: /dashboard/settings/ai-providers
 keywords: [ai providers, own key, api key, openai, anthropic, openrouter]
 synonyms: [bring your own key, byok, my own openai key, connect my ai account]
 plan: enterprise
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -19,7 +19,7 @@ Chat normally runs on your plan's monthly AI limit, and you don't need any key f
 2. Click **Add key** next to the provider and paste the key.
 3. If you save keys for more than one provider, click **Use for Chat** next to the one Chat should run on.
 
-Keys are stored encrypted, and nobody can read a saved key back.
+Keys are stored encrypted, and nobody can read a saved key back. If the server can no longer read the saved key, Chat stops rather than run on your plan's monthly AI limit: save the key again.
 
 ## Keys saved before Chat
 
