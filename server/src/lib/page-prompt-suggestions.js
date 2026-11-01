@@ -21,6 +21,7 @@ import { getLanguageName } from './languages.js';
 import { withRetry } from './retry.js';
 import { isCoveredByPrompts, normalizeTokens } from './gsc-suggestions.js';
 import { readPage, summaryText, toAbsoluteUrl } from './ga-suggestions.js';
+import { yearRule } from './current-year.js';
 
 /** Suggestions asked for; the schema floor keeps a short answer usable. */
 export const PAGE_SUGGESTIONS = 5;
@@ -206,10 +207,11 @@ async function searchConsoleRows(brandId) {
 /** The model's instructions and request, for one page. */
 export function buildPagePrompt({ context, page, summary, figures, queries }) {
   const langName = getLanguageName(context.brand.language);
-  const system = `You are an AEO (Answer Engine Optimization) strategist. You suggest NEW prompts people would ask an AI assistant (ChatGPT, Perplexity, Gemini, Claude) whose best answer is ONE page of a brand's site, so the brand can track whether AI answers cite that page. Current year: ${new Date().getFullYear()}.
+  const system = `You are an AEO (Answer Engine Optimization) strategist. You suggest NEW prompts people would ask an AI assistant (ChatGPT, Perplexity, Gemini, Claude) whose best answer is ONE page of a brand's site, so the brand can track whether AI answers cite that page.
 
 RULES:
 - Suggest ${PAGE_SUGGESTIONS} prompts that are NOT already tracked by this brand. No two may be rephrasings of the same question.
+${yearRule()}
 - Each prompt: 30-100 chars, generic, no brand names, written in ${langName}.
 - Write at the level of the need the page serves, NOT the page's product name or URL.
 - Group each prompt under a short topic label (2-4 words). Reuse existing topic labels when they fit.

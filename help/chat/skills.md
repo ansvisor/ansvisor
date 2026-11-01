@@ -1,7 +1,7 @@
 ---
 title: Skills in Chat
 route: /dashboard/chat
-keywords: [skills, skill, slash menu, ansvisor skills, used skill, faq from fan-outs, weekly report, win back citations, ready to publish]
+keywords: [skills, skill, slash menu, ansvisor skills, used skill, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps]
 synonyms: [slash commands, playbooks, how-tos, templates]
 plan: all
 updated: 2026-10-31
@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: false
 sources: [web/messages/en.json, skills/README.md]
 ---
-Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has fourteen Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Ready to publish** and **Weekly report**.
+Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-one Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Ready to publish**, **Weekly report**, **Buyer questions** and **Rival brief**.
 
 ## Use a skill
 

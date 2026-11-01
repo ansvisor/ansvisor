@@ -750,6 +750,52 @@ describe('states', () => {
     });
   });
 
+  it('won’t resume while a brand of its scope lacks a Required connection, naming both', async () => {
+    const { id } = await create(PEOPLE.manager, {
+      skills: ['publish'],
+      scope: { brand_ids: [BRAND, BRAND_2] },
+    });
+    const ctx = await ctxOf(PEOPLE.manager);
+    await agents.changeAgentState(ctx, id, 'activate');
+    // Its last run found Brand B without a CMS: the runner paused it (agent-driver.ts).
+    await agents.pauseAgentForSystem(ORG, id, 'connection');
+    db.tables.brand_cms_connections = [
+      { brand_id: BRAND, provider: 'wordpress', status: 'connected' },
+    ];
+    expect(await agents.changeAgentState(ctx, id, 'resume')).toMatchObject({
+      ok: false,
+      refusal: {
+        status: 409,
+        code: 'connection_missing',
+        detail: { name: 'Any CMS', brand: 'Brand B' },
+        message:
+          'This agent needs Any CMS, and Brand B doesn’t have it connected. Connect it for that brand, then run the agent again.',
+      },
+    });
+    expect(agentRow(id)).toMatchObject({ status: 'paused', paused_reason: 'connection' });
+    expect(logRows('agentResumed')).toEqual([]);
+
+    // Once Brand B sends pages through a workflow webhook, it resumes.
+    db.tables.webhook_configs = [
+      { brand_id: BRAND_2, events: ['content_draft.sent'], is_active: true },
+    ];
+    expect(await agents.changeAgentState(ctx, id, 'resume')).toMatchObject({
+      ok: true,
+      value: { status: 'active', pausedReason: null },
+    });
+  });
+
+  it('resumes with no connection at all when its connections are Optional', async () => {
+    const { id } = await create(PEOPLE.manager, { skills: ['winback'] });
+    const ctx = await ctxOf(PEOPLE.manager);
+    await agents.changeAgentState(ctx, id, 'activate');
+    await agents.pauseAgentForSystem(ORG, id, 'connection');
+    expect(await agents.changeAgentState(ctx, id, 'resume')).toMatchObject({
+      ok: true,
+      value: { status: 'active', pausedReason: null },
+    });
+  });
+
   it('pauses an active agent for a reason of the system’s', async () => {
     const { id } = await create(PEOPLE.manager);
     expect(await agents.pauseAgentForSystem(ORG, id, 'failures')).toBe(false);
