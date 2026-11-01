@@ -28,6 +28,31 @@ export function fragment(html: string): HTMLElement {
   return root;
 }
 
+/**
+ * Whether a person's name appears in the page's visible text.
+ * Structured data, code, attributes and explicitly hidden content do not count.
+ */
+export function pageNamesPerson(html: string, name: string): boolean {
+  const expected = normalizePageText(name);
+  if (!expected) return false;
+
+  const root = fragment(html);
+  root
+    .querySelectorAll('script, style, template, noscript, [hidden], [aria-hidden="true"]')
+    .forEach((element) => element.remove());
+  const actual = normalizePageText(root.textContent ?? '');
+  const escaped = expected.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\  root.innerHTML = html;
+  return root;
+}
+
+');
+  return new RegExp(`(?:^|[^\\\\p{L}\\\\p{N}])${escaped}(?=$|[^\\\\p{L}\\\\p{N}])`, 'u').test(actual);
+}
+
+function normalizePageText(value: string): string {
+  return value.normalize('NFKC').replace(/\\s+/gu, ' ').trim().toLocaleLowerCase();
+}
+
 /** Headings: a placeholder there is filled first, never left out. */
 const HEADINGS = 'h1, h2, h3, h4, h5, h6';
 
