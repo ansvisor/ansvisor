@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
-import { verifiedBotConnection, verifiedUserId } from './verified-tokens.js';
+import { verifiedActingUserId, verifiedBotConnection, verifiedUserId } from './verified-tokens.js';
 
 /**
  * Anonymous bucket key. IPv4 (including v4-mapped IPv6) keys on the exact
@@ -34,11 +34,24 @@ export function anonymousIpKey(ip) {
  * too (it isn't verified yet) — one request per token per half hour, noise.
  * Rotating IPs to evade the anonymous limit remains an infra-level concern
  * (WAF/CDN), same as before this limiter existed.
+ *
+ * An internal request acting as a member (acting-user.js) counts in that
+ * member's bucket, once the member has been checked: the web's triggered
+ * Chat runs share the limits of the person they run for.
  */
 export function apiLimiterKey(req) {
-  const userId = verifiedUserId(req.headers.authorization);
+  const userId = verifiedCaller(req);
   if (userId) return 'user:' + userId;
   return anonymousIpKey(req.ip);
+}
+
+/** The verified person a request comes from, by their token or the member it acts for. */
+function verifiedCaller(req) {
+  const { authorization } = req.headers;
+  return (
+    verifiedActingUserId(authorization, req.headers['x-acting-user']) ??
+    verifiedUserId(authorization)
+  );
 }
 
 /**
@@ -70,7 +83,7 @@ export const apiLimiter = rateLimit({
   // A verified user's bucket only needs to absorb their own burst (several
   // tabs polling tracking status every 15s plus normal navigation).
   // Unverified traffic keeps the tighter IP limit.
-  max: (req) => (verifiedUserId(req.headers.authorization) ? 1000 : 250),
+  max: (req) => (verifiedCaller(req) ? 1000 : 250),
   keyGenerator: apiLimiterKey,
   standardHeaders: true,
   legacyHeaders: false,
