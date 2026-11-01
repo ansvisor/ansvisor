@@ -95,6 +95,11 @@ export interface ActionItem {
   taskTotal: number;
   taskCompleted: number;
   signalCount: number;
+  /**
+   * When the nightly pass found it New with no one's event for a month
+   * (00432); null when it isn't stale. Shown only while the action is New.
+   */
+  staleAt?: string | null;
   /** 0–100 (AC-006); null until the server has scored the action. */
   priorityScore: number | null;
   priorityLevel: PriorityLevel | null;
@@ -347,6 +352,12 @@ async function logEvent(
   await supabase
     .from('action_events')
     .insert({ action_id: actionId, event, data, actor_id: auth.user?.id ?? null });
+  // Someone worked on it: it is no longer stale (00432), whatever the change.
+  await supabase
+    .from('actions')
+    .update({ stale_at: null })
+    .eq('id', actionId)
+    .not('stale_at', 'is', null);
 }
 
 /** Bump the action's updated stamp so the table's Updated column tracks real
@@ -395,6 +406,22 @@ export async function updateActionStatus(
     to: status,
     ...(dismissReason ? { reason: dismissReason } : {}),
   });
+}
+
+/**
+ * Still relevant on a stale action (00432): no longer stale, and its month
+ * starts again from this History line, as from anyone's change.
+ */
+export async function keepActionRelevant(brandId: string, actionId: string): Promise<void> {
+  await assertWritable({ brandId });
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('actions')
+    .update({ stale_at: null, updated_at: new Date().toISOString() })
+    .eq('brand_id', brandId)
+    .eq('id', actionId);
+  if (error) throw new Error(error.message);
+  await logEvent(supabase, actionId, 'still_relevant', {});
 }
 
 /**

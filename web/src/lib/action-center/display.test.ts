@@ -456,6 +456,12 @@ describe('actionEventText', () => {
     );
   });
 
+  it('says a stale action was kept (00432)', () => {
+    expect(actionEventText(event('still_relevant', {}), tPage, t)).toBe(
+      'Kept as still relevant: no longer stale',
+    );
+  });
+
   it('names a Chat agent run on the action, how it ended, and Run with Chat (W2-17)', () => {
     expect(
       actionEventText(

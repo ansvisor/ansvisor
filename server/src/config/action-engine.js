@@ -264,6 +264,14 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     restAfterCloseDays: 14,
 
     /**
+     * How long an action may stay New with no one's event (an assignment, an
+     * edit, a task's status, a send) before it is marked stale. Not closed:
+     * it is shown as Stale until someone keeps it with Still relevant or acts
+     * on it. A month is four nightly weeks of it being passed over.
+     */
+    staleAfterDays: 30,
+
+    /**
      * How many new actions one brand may be given in a day.
      *
      * A ceiling, not a target. Today it binds on nothing: eight definitions
