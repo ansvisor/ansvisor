@@ -547,7 +547,7 @@ export const READ_TOOLS = [
     class: 'read',
     area: 'ai_traffic',
     description:
-      "Visits AI assistants sent to the brand's site over a period: total, by platform, top pages and countries.",
+      "Visits AI assistants sent to the brand's site over a period: total, by platform, top pages and countries, and whether the tracking snippet is installed (tracking: not_detected means 0 visits measures nothing yet; installed_quiet; active).",
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },

@@ -16,7 +16,7 @@ import type { TrafficSources } from '@/lib/actions/traffic';
 import {
   INTEGRATIONS_SETTINGS_PATH,
   googleSourceStatus,
-  snippetDetected,
+  snippetStateOf,
   sourceHost,
 } from '@/lib/traffic-sources';
 
@@ -117,8 +117,10 @@ export function GoogleSource({
  * The data sources strip (AT-001): what feeds the page — the tracking
  * snippet, Google Analytics, Google Search Console and AI bots — and what's
  * missing, with a way to connect it without leaving the page (fixes F8).
- * The snippet's code moves behind its Code button once it sends visits
- * (F3). AI bots come from the brand's Cloudflare or Vercel (AT-010).
+ * The snippet is active, installed and quiet (the home page check found it,
+ * or it sent a visit before: 00433), or not detected on the brand's domain;
+ * its code moves behind its Code button once it's seen (F3). AI bots come
+ * from the brand's Cloudflare or Vercel (AT-010).
  */
 export function SourcesStrip({
   brandId,
@@ -134,7 +136,7 @@ export function SourcesStrip({
   brandId: string;
   /** Null while loading. */
   sources: TrafficSources | null;
-  /** The brand's primary domain, for the GA4 property line. */
+  /** The brand's primary domain, for the GA4 property line and the snippet's. */
   domain: string | undefined;
   hasTrackingCode: boolean;
   canConnect: boolean;
@@ -151,7 +153,8 @@ export function SourcesStrip({
     return <Skeleton className="h-[62px] w-full rounded-xl" />;
   }
 
-  const detected = snippetDetected(sources.snippetLastVisitAt);
+  const snippet = snippetStateOf(sources);
+  const seen = snippet !== 'not_detected';
   return (
     <section
       aria-label={t('label')}
@@ -160,23 +163,27 @@ export function SourcesStrip({
       className="grid gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-2 min-[75rem]:grid-cols-4"
     >
       <SourceCard
-        tone={detected ? 'on' : 'off'}
+        tone={seen ? 'on' : 'off'}
         title={t('snippet')}
         line={
-          detected
+          snippet === 'active'
             ? t('snippetActive', { when: formatRelative(sources.snippetLastVisitAt, tCommon) })
-            : t('snippetNotDetected')
+            : snippet === 'installed_quiet'
+              ? t('snippetQuiet')
+              : domain
+                ? t('snippetNotDetectedOn', { domain })
+                : t('snippetNotDetected')
         }
         action={
           hasTrackingCode ? (
             <Button
-              variant={detected ? 'outline' : 'default'}
+              variant={seen ? 'outline' : 'default'}
               size="sm"
               className="h-7 gap-1.5 text-xs"
               onClick={onShowCode}
             >
               <Code className="h-3 w-3" />
-              {detected ? t('code') : t('install')}
+              {seen ? t('code') : t('install')}
             </Button>
           ) : undefined
         }
