@@ -158,6 +158,7 @@ describe('the plan cards', () => {
         '500 site audits a month',
         '5x AI usage',
         'Multi-region tracking',
+        'White-label reports & exports',
         'Looker Studio',
       ],
     });
@@ -476,8 +477,8 @@ describe('choosing a plan once the old one has ended', () => {
     expect(toggle().textContent).toBe('Show plan details');
     expect(toggle().getAttribute('aria-expanded')).toBe('false');
     expect(details().className).toContain('invisible');
+    expect(details().textContent).toContain('White-label reports & exports');
     expect(details().textContent).toContain('Looker Studio');
-    expect(details().textContent).not.toMatch(/white.label/i);
 
     await act(async () => toggle().click());
     expect(toggle().textContent).toBe('Hide plan details');
