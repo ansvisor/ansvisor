@@ -57,6 +57,7 @@ import {
   setContentDraftAuthor,
   setContentDraftReviewer,
   confirmDraftAuthor,
+  setDraftSchemaLeftOut,
   keepDraftSource,
   confirmDraftItem,
   confirmOwnImage,
@@ -105,13 +106,18 @@ import {
 import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import {
+  articleSchemaInput,
   firstImage,
+  hasArticleSchema,
   isArticlePage,
   openingParagraph,
   pageName,
   pageOffer,
   listedProducts,
   MIN_LISTED,
+  schemaAuthor,
+  withArticleSchema,
+  type AddedArticleSchema,
 } from '@/lib/content/page-schema';
 import { PLACEHOLDER, pagePlaceholders } from '@/lib/content/placeholders';
 import { HANDOFF_KEYS, handOffItems } from '@/lib/content/hand-off';
@@ -872,6 +878,36 @@ export function DraftEditor({
       live = false;
     };
   }, [qualityOn, draft.brandId]);
+  // The Article schema an article page goes out with (customer priorities
+  // item 7, 00448): to the CMS and in exports, the author in it, unless the
+  // person left it out for a CMS that writes its own. Saved behind, put back
+  // if the save fails.
+  const [schemaLeftOut, setSchemaLeftOut] = useState(draft.schemaLeftOut);
+  const addedSchema: AddedArticleSchema = {
+    input: articleSchemaInput({
+      title,
+      author: schemaAuthor({
+        authorsOn: qualityOn,
+        authorsRead: authorsRead !== null,
+        author: pageAuthor,
+        confirmedReal: authorConfirmed.real,
+      }),
+      siteTrust,
+      brandName,
+      isNew: draft.method === 'create',
+    }),
+    pageType,
+    leftOut: schemaLeftOut,
+  };
+  const leaveOutSchema = (leftOut: boolean) => {
+    if (lockedFor('leaveOutSchema')) return;
+    setSchemaLeftOut(leftOut);
+    void setDraftSchemaLeftOut(draft.id, leftOut).then((saved) => {
+      if (saved) return;
+      setSchemaLeftOut(!leftOut);
+      toast.error(t('beforePublish.schema.leaveOutFailed'));
+    });
+  };
   // Phase 2 (CE-046): what kind of source each link is, competitors' pages
   // by the brand's competitors (read with the sources), less the ones the
   // person kept.
@@ -2953,7 +2989,7 @@ export function DraftEditor({
     destination?: ExportDestination;
   } | null>(null);
   const openExport = (destination?: ExportDestination) =>
-    setExportOpen({ html: pageToPublish(), destination });
+    setExportOpen({ html: withArticleSchema(pageToPublish(), addedSchema), destination });
   // Its checks, read again only as the link reads land, not on every render.
   const exportChecks = useMemo(
     () => (exportOpen ? pasteChecks(exportOpen.html, linkChecks) : null),
@@ -2961,7 +2997,7 @@ export function DraftEditor({
   );
   const copyPageHtml = () => {
     if (!editor) return;
-    const html = pageToPublish();
+    const html = withArticleSchema(pageToPublish(), addedSchema);
     // No copy carries a placeholder: Export says so, and offers to leave them out.
     if (quality && exportPlaceholders(html) > 0) {
       setExportOpen({ html, destination: 'html' });
@@ -2981,8 +3017,9 @@ export function DraftEditor({
   /** Export: the page as Copy HTML gives it, as a Word, Excel, CSV, HTML or Markdown file. */
   const exportPage = async (format: DraftExportFormat) => {
     if (!editor) return;
-    const html = publishableHtml(
-      htmlSource !== null ? htmlFromSource(htmlSource) : editor.getHTML(),
+    const html = withArticleSchema(
+      publishableHtml(htmlSource !== null ? htmlFromSource(htmlSource) : editor.getHTML()),
+      addedSchema,
     );
     const name = title.trim() || t('untitled');
     try {
@@ -3203,7 +3240,7 @@ export function DraftEditor({
       toast.error(t('send.unsaved'));
       return;
     }
-    setSendOpen({ html: pageToPublish() });
+    setSendOpen({ html: withArticleSchema(pageToPublish(), addedSchema) });
   };
   /**
    * Mark published (CE-013), once the page is saved: the server keeps it in
@@ -4460,9 +4497,11 @@ export function DraftEditor({
           reviewerRequired={regulated !== null}
           reviewerLd={reviewerLd}
           title={title}
-          isNew={draft.method === 'create'}
           pageType={pageType}
           image={firstImage(pageHtml)}
+          articleSchema={addedSchema}
+          ownArticleSchema={hasArticleSchema(publishOpen.html)}
+          onSchemaLeftOut={leaveOutSchema}
           linksPending={linksPending}
           // Not while the HTML view holds the page: its source is what goes out.
           disclosureLine={htmlSource === null ? disclosureLine : null}

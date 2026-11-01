@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { readContentAuthors } from '@/lib/content/authors-read';
 import { bulkCmsItems, cmsSource, type BulkProblem } from '@/lib/content/cms-send';
+import { missingSchemaLeftOut } from '@/lib/content/drafts';
 import { withContentDom } from '@/lib/content/server-dom';
 import { qualityPhase } from '@/lib/content/quality';
 import { fragment } from '@/lib/content/ready-to-publish';
@@ -90,14 +91,23 @@ export async function getContentDraftPackageFor(
 ): Promise<McpCmsPackage | McpPackageError> {
   const notFound: McpPackageError = { error: 'not_found', message: 'Draft not found' };
   if (!auth.organizationId) return notFound;
-  const { data: draft, error } = await supabaseAdmin
+  const columns =
+    'id, brand_id, title, body_html, source_url, author_id, reviewer_id, author_real_at, rules, page_type, method, slug, meta_title, meta_description, archived_at, brands!inner(organization_id, name, language)' as const;
+  const read = await supabaseAdmin
     .from('content_drafts')
-    .select(
-      'id, brand_id, title, body_html, source_url, author_id, reviewer_id, author_real_at, rules, slug, meta_title, meta_description, archived_at, brands!inner(organization_id, name, language)',
-    )
+    .select(`${columns}, schema_left_out` as const)
     .eq('id', draftId)
     .eq('brands.organization_id', auth.organizationId)
     .maybeSingle();
+  // The web ahead of 00448: the draft without it, as not left out.
+  const { data: draft, error } = missingSchemaLeftOut(read.error)
+    ? await supabaseAdmin
+        .from('content_drafts')
+        .select(columns)
+        .eq('id', draftId)
+        .eq('brands.organization_id', auth.organizationId)
+        .maybeSingle()
+    : read;
   if (error) throw new Error(error.message);
   if (!draft || draft.archived_at) return notFound;
   const brand = (Array.isArray(draft.brands) ? draft.brands[0] : draft.brands) as {
@@ -126,6 +136,9 @@ export async function getContentDraftPackageFor(
       reviewerId: draft.reviewer_id,
       authorConfirmed: draft.author_real_at !== null,
       language: draftLanguage(draft.rules),
+      pageType: draft.page_type,
+      isNew: draft.method === 'create',
+      schemaLeftOut: 'schema_left_out' in draft && draft.schema_left_out === true,
     },
     authors,
     brandId: draft.brand_id,

@@ -10,6 +10,8 @@ const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')
 
 let stored: Record<string, unknown>[];
 let reads: { brand: unknown; ids: string[] }[];
+// A database without 00448: a read of schema_left_out fails as Postgres says.
+let before00448 = false;
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
@@ -17,8 +19,9 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     from: () => {
       const read = { brand: undefined as unknown, ids: [] as string[] };
+      let columns = '';
       const chain: Record<string, unknown> = {
-        select: () => chain,
+        select: (cols: string) => ((columns = cols), chain),
         eq: (col: string, v: unknown) => (col === 'brand_id' && (read.brand = v), chain),
         in: (_col: string, ids: string[]) => {
           read.ids = ids;
@@ -26,10 +29,20 @@ vi.mock('@/lib/supabase/server', () => ({
           return chain;
         },
         then: (resolve: (r: unknown) => void) =>
-          resolve({
-            data: stored.filter((row) => read.ids.includes(row.id as string)),
-            error: null,
-          }),
+          resolve(
+            before00448 && columns.includes('schema_left_out')
+              ? {
+                  data: null,
+                  error: {
+                    code: '42703',
+                    message: 'column content_drafts.schema_left_out does not exist',
+                  },
+                }
+              : {
+                  data: stored.filter((row) => read.ids.includes(row.id as string)),
+                  error: null,
+                },
+          ),
       };
       return chain;
     },
@@ -47,14 +60,27 @@ const page = (n: number) => ({
   reviewer_id: null,
   author_real_at: null,
   rules: null,
+  page_type: 'guide',
+  method: 'create',
+  schema_left_out: false,
 });
 
 beforeEach(() => {
   stored = [page(1), page(2), page(3)];
   reads = [];
+  before00448 = false;
 });
 
 describe('getContentDraftPages', () => {
+  it('reads the pages before 00448 too, none left out', async () => {
+    stored = [{ ...page(1), schema_left_out: undefined }];
+    before00448 = true;
+    const { pages } = await getContentDraftPages(BRAND, [id(1)]);
+    expect(pages).toEqual([expect.objectContaining({ id: id(1), schemaLeftOut: false })]);
+    // Asked once with the column, then again without it.
+    expect(reads).toHaveLength(2);
+  });
+
   it("reads the brand's pages in one call, in the order given, leaving out one gone", async () => {
     const { pages, rest } = await getContentDraftPages(BRAND, [id(3), id(9), id(1)]);
     expect(rest).toEqual([]);
@@ -68,6 +94,9 @@ describe('getContentDraftPages', () => {
       reviewerId: null,
       authorConfirmed: false,
       language: null,
+      pageType: 'guide',
+      isNew: true,
+      schemaLeftOut: false,
     });
     expect(reads).toEqual([{ brand: BRAND, ids: [id(3), id(9), id(1)] }]);
   });

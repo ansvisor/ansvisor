@@ -12,6 +12,7 @@ interface Call {
   op: string;
   value?: unknown;
   filters: [string, string, unknown][];
+  columns?: string;
 }
 let calls: Call[];
 // What the next update returns: its row, or none (RLS, or not found).
@@ -30,6 +31,8 @@ let upsertError: { code: string; message: string } | null;
 let queue: Record<string, unknown>[][];
 // A read that fails, when a test needs one.
 let readError: string | null;
+// A column the database doesn't have yet (the web ahead of its migration).
+let missingColumn: string | null;
 
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () => new Map()) }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
@@ -50,14 +53,28 @@ vi.mock('@/lib/supabase/server', () => ({
     from: () => {
       const call: Call = { op: 'select', filters: [] };
       calls.push(call);
+      // As PostgREST answers a column it doesn't know: 42703 on a read, PGRST204 on a write.
+      const unknownColumn = () =>
+        missingColumn !== null &&
+        (call.op === 'update'
+          ? Object.hasOwn(call.value as object, missingColumn)
+          : (call.columns ?? '').includes(missingColumn));
       const result = () =>
-        call.op === 'update'
-          ? { data: updates.length ? updates.shift()! : updated, error: null }
-          : call.op === 'insert'
-            ? { data: { id: 'new-draft' }, error: null }
-            : { data: row, error: null };
+        unknownColumn()
+          ? {
+              data: null,
+              error: {
+                code: call.op === 'update' ? 'PGRST204' : '42703',
+                message: `column content_drafts.${missingColumn} does not exist`,
+              },
+            }
+          : call.op === 'update'
+            ? { data: updates.length ? updates.shift()! : updated, error: null }
+            : call.op === 'insert'
+              ? { data: { id: 'new-draft' }, error: null }
+              : { data: row, error: null };
       const chain: Record<string, unknown> = {
-        select: () => chain,
+        select: (columns?: string) => (call.op === 'select' && (call.columns = columns), chain),
         eq: (col: string, v: unknown) => (call.filters.push(['eq', col, v]), chain),
         in: (col: string, v: unknown) => (call.filters.push(['in', col, v]), chain),
         gte: (col: string, v: unknown) => (call.filters.push(['gte', col, v]), chain),
@@ -120,6 +137,7 @@ const {
   saveContentDraft,
   setContentDraftAuthor,
   confirmDraftAuthor,
+  setDraftSchemaLeftOut,
   setContentDraftPageType,
   unmarkContentDraftReady,
   confirmOwnImage,
@@ -140,6 +158,7 @@ beforeEach(() => {
   upsertError = null;
   queue = [];
   readError = null;
+  missingColumn = null;
   rpcCalls = [];
   rpcResult = { data: 'v-new', error: null };
   completeDraftTasks.mockReset().mockResolvedValue(0);
@@ -905,6 +924,25 @@ describe('getContentDraft', () => {
     await expect(getContentDraft(DRAFT)).resolves.toMatchObject({ siteType: 'ecommerce' });
   });
 
+  it('opens a draft on a database before 00448, its Article schema not left out', async () => {
+    row = {
+      id: DRAFT,
+      brand_id: 'b1',
+      title: '',
+      page_type: 'guide',
+      method: 'create',
+      body_html: '',
+    };
+    missingColumn = 'schema_left_out';
+    await expect(getContentDraft(DRAFT)).resolves.toMatchObject({ schemaLeftOut: false });
+    // Asked with the column, then again without it.
+    expect(calls.map((c) => c.columns?.includes('schema_left_out'))).toEqual([true, false]);
+
+    missingColumn = null;
+    row = { ...row, schema_left_out: true };
+    await expect(getContentDraft(DRAFT)).resolves.toMatchObject({ schemaLeftOut: true });
+  });
+
   it('reads nothing for a malformed id', async () => {
     await expect(getContentDraft('../etc')).resolves.toBeNull();
     expect(calls).toEqual([]);
@@ -1259,5 +1297,21 @@ describe('getCatalogMatch (Quality CE-053)', () => {
     // Two products by that name: whose page this is isn't sure.
     queue = [[{ brand_id: 'b1', source_url: null }], [{ id: 'p0' }], [{ id: 'p1' }, { id: 'p2' }]];
     expect(await getCatalogMatch(DRAFT, 'Ridge 28')).toEqual({ connected: true, product: null });
+  });
+});
+
+describe('setDraftSchemaLeftOut (00448)', () => {
+  it('keeps the choice on the draft, and says false when it can’t, never throwing', async () => {
+    updated = { id: DRAFT };
+    await expect(setDraftSchemaLeftOut(DRAFT, true)).resolves.toBe(true);
+    expect(calls.at(-1)).toMatchObject({ op: 'update', value: { schema_left_out: true } });
+    // The web ahead of 00448: not saved, the editor puts it back.
+    missingColumn = 'schema_left_out';
+    await expect(setDraftSchemaLeftOut(DRAFT, false)).resolves.toBe(false);
+    // Not found (RLS) or a malformed id: not saved either.
+    missingColumn = null;
+    updated = null;
+    await expect(setDraftSchemaLeftOut(DRAFT, false)).resolves.toBe(false);
+    await expect(setDraftSchemaLeftOut('nope', true)).resolves.toBe(false);
   });
 });
