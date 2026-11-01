@@ -58,6 +58,8 @@ Sending a page again updates the same Webflow or Framer item, the same WordPress
 - **Framer**: Tables stay tables; images aren't sent. Reviewer metadata requires a mapped optional string field; show it in the page template. Duplicate slugs stop the send.
 - **Wix**: Images, cover images and categories aren't sent. Reviewer metadata is an SEO tag, not visible text; show it in the page template. Resending replaces post text, so add images after the last send.
 
-An article goes with the Article schema Ansvisor adds, its author included, unless you left it out in **Before you publish**.
+Add images in your CMS. The slug may change slightly there: lowercase, without accents, with dots turned into dashes.
 
-Add images in your CMS. The slug may also change slightly there: lowercase, without accents, with dots turned into dashes.
+## The Article schema
+
+An article goes with the Article schema Ansvisor adds, its author included, unless you left it out in **Before you publish**. WordPress doesn't take it: add it with your SEO plugin.

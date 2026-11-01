@@ -53,6 +53,8 @@ The header shows the page's author, picked from **Settings › Authors**, or you
 
 Copy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about.
 
+## The Article schema
+
 An article goes to your CMS and to exports with an Article schema that names its author, or your brand when it has none. The page's text doesn't change. If your CMS adds its own, click **Leave it out**; **Add it back** undoes it. A page with an Article schema of its own gets none. WordPress leaves the schema out: add it with your SEO plugin.
 
 ## Export with Quality on
