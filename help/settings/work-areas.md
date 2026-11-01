@@ -23,7 +23,7 @@ Each person can say what they work on or lead. Their left menu then keeps only t
 - **Product Development**: Action Center, Chat, Agent Center, Brand Visibility, Prompts, Mentions, Product Visibility, Reports.
 - **Business Development**: Action Center, Chat, Agent Center, Brand Visibility, Prompts, Mentions, Citations, Reports, Competitors.
 - **Developers**: Action Center, Agent Center, Audit, Prompts, Citations, AI Referral Traffic, Reports.
-- **Analytics**: Action Center, Brand Visibility, Prompts, Mentions, Citations, Product Visibility, AI Referral Traffic, Reports, Competitors.
+- **Analytics**: Action Center, Agent Center, Brand Visibility, Prompts, Mentions, Citations, Product Visibility, AI Referral Traffic, Reports, Competitors.
 
 ## When you're asked
 

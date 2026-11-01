@@ -123,8 +123,8 @@ describe('hiddenMenuSections', () => {
 });
 
 // Agent Center (/dashboard/agents), right under Chat and only with the new
-// Chat on: the same rule as Chat for roles, and in Chat's work areas plus
-// AEO/GEO & Audit and Developers.
+// Chat on: the same rule as Chat for roles, and in every work area: right
+// after Chat where Chat is, else right after Action Center.
 describe('Agent Center', () => {
   const chatOff = menuSectionsFor(false);
 
@@ -143,22 +143,22 @@ describe('Agent Center', () => {
     expect(hidden({ workAreas: ['content'] })).not.toContain('agents');
   });
 
-  it('is in AEO/GEO & Audit and Developers without Chat, right after Action Center', () => {
+  it('is in AEO/GEO & Audit, Developers and Analytics without Chat, after Action Center', () => {
     const alone = WORK_AREAS.filter((area) => {
       const sections = area.sections as readonly string[];
       return sections.includes('agents') && !sections.includes('agent');
     });
-    expect(alone.map((area) => area.id)).toEqual(['aeo', 'developers']);
+    expect(alone.map((area) => area.id)).toEqual(['aeo', 'developers', 'analytics']);
     for (const area of alone)
       expect(area.sections.slice(0, 2)).toEqual([ALWAYS_ON_SECTION, 'agents']);
-    for (const workAreas of [['aeo'], ['developers']]) {
+    for (const workAreas of [['aeo'], ['developers'], ['analytics']]) {
       expect(hidden({ workAreas })).toContain('agent');
       expect(hidden({ workAreas })).not.toContain('agents');
     }
-    // An area with neither leaves both off.
-    expect(hidden({ workAreas: ['analytics'] })).toEqual(
-      expect.arrayContaining(['agent', 'agents']),
-    );
+    // So every work area keeps it.
+    expect(
+      WORK_AREAS.every((area) => (area.sections as readonly string[]).includes('agents')),
+    ).toBe(true);
   });
 
   it('is on every role’s menu until someone hides it, as Chat is', () => {

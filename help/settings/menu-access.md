@@ -29,7 +29,7 @@ Only admins choose who changes menus. A manager who becomes another role stops c
 
 - **Admin** always sees **Everything**.
 - **Action Center** is on everyone's menu and can't be turned off.
-- **Use a set…** fills a role's column from a work area's ready-made set, or **Everything**. Adjust it from there. **Agent Center** is in the sets with Chat, and in the **AEO/GEO & Audit** and **Developers** sets without it.
+- **Use a set…** fills a role's column from a work area's ready-made set, or **Everything**. Adjust it from there. **Agent Center** is in every set: right after Chat where the set has Chat, else right after Action Center.
 
 Until an admin hides something, every role sees every section.
 

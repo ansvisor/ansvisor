@@ -85,7 +85,8 @@ describe('WorkAreasStep', () => {
     expect(container.textContent).toContain('7 of 13 sections');
     act(() => button('Developers').click());
     act(() => button('Analytics').click());
-    expect(menu()).not.toContain('Agent Center');
+    expect(menu()).toContain('Agent Center');
+    expect(menu()).not.toContain('Chat');
   });
 
   it('narrows the menu as areas are picked, and saves them on Continue', async () => {
