@@ -58,6 +58,7 @@ const page: CmsPage = {
   metaDescription: 'Brew it slowly.',
   html: '<p>Brew it slowly.</p>',
   author: null,
+  reviewer: null,
   featuredImage: null,
 };
 const fetchMock = vi.fn();

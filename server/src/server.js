@@ -30,6 +30,7 @@ import internalChatBudgetRoutes from './routes/internal-chat-budget.js';
 import internalChatPagesRoutes from './routes/internal-chat-pages.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
 import { pruneContentVersions } from './lib/content-history.js';
+import { pruneLlmVerdicts } from './lib/audit/llm-verdicts.js';
 import {
   createJob,
   cleanupStaleJobs,
@@ -357,6 +358,11 @@ async function runDailyTracking() {
   // Content Editor versions past their 90 days (CE-018).
   pruneContentVersions().catch((err) => {
     logger.error({ err }, '[content-history] daily prune failed');
+  });
+
+  // Site Audit's kept AI verdicts no audit has read for 180 days (00430).
+  pruneLlmVerdicts().catch((err) => {
+    logger.error({ err }, '[audit] daily AI verdicts prune failed');
   });
 
   // Chat's attachments past their 90 days (00409): each file, then its row.

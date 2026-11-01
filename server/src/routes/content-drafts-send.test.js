@@ -101,7 +101,16 @@ describe('POST /api/content-drafts/send', () => {
       orgId: 'o1',
       brandId: BRAND,
       userId: 'u1',
-      pages: [{ ...page, metaTitle: '', metaDescription: '', author: null, featuredImage: null }],
+      pages: [
+        {
+          ...page,
+          metaTitle: '',
+          metaDescription: '',
+          author: null,
+          reviewer: null,
+          featuredImage: null,
+        },
+      ],
       target: 'webhook',
     });
   });

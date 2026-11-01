@@ -54,7 +54,8 @@ import { SUBSCRIPTION_INACTIVE } from '../middleware/subscription.js';
 import { buildTemplates, templateOf, templateOpportunities } from '../lib/audit/templates.js';
 import { ENGINE_THRESHOLDS } from '../config/action-engine.js';
 import { runSignals } from '../lib/audit/engine.js';
-import { evaluateLlmSignals } from '../lib/audit/llm-signals.js';
+import { evaluateLlmSignals, LLM_SIGNAL_KEYS } from '../lib/audit/llm-signals.js';
+import { lastPageVerdicts } from '../lib/audit/llm-verdicts.js';
 import { evaluateBrandEntity } from '../lib/audit/external-signals.js';
 import { brandFactsFor, generateRecommendations } from '../lib/audit/recommendations.js';
 import { scoreAudit } from '../lib/audit/scorer.js';
@@ -90,6 +91,7 @@ function assembleAudit(audit, signalRows) {
     finalUrl: audit.final_url ?? null,
     status: audit.status,
     totalScore: audit.total_score === null ? null : Number(audit.total_score),
+    partial: audit.partial === true,
     categoryScores: audit.category_scores ?? {},
     signalsEvaluated: audit.signals_evaluated ?? null,
     signalsTotal: audit.signals_total ?? TOTAL_SIGNALS,
@@ -121,7 +123,7 @@ function readBrandAudits(brandId) {
   return readAllRpcRows('site_audits', (from, to) =>
     supabaseAdmin
       .from('site_audits')
-      .select('id, url, final_url, status, total_score, created_at, source')
+      .select('id, url, final_url, status, total_score, partial, created_at, source')
       .eq('brand_id', brandId)
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
@@ -178,14 +180,17 @@ async function runAuditJob(auditId, brandId, url, orgId, source = 'user') {
 
     const ctx = await buildAuditContext(url);
 
-    // Deterministic engine, the batched LLM pass, and the Wikidata lookup run
-    // concurrently. The latter two degrade to 'na' internally on failure.
+    // Deterministic engine, the LLM pass, and the Wikidata lookup run
+    // concurrently. The latter two degrade to 'na' internally on failure; a
+    // failed LLM call keeps the page's last verdicts, else marks it partial.
     const [deterministic, llm, brandEntity] = await Promise.all([
       runSignals(ctx),
-      evaluateLlmSignals(ctx),
+      evaluateLlmSignals(ctx, {
+        lastVerdicts: () => lastPageVerdicts(brandId, ctx.url, LLM_SIGNAL_KEYS),
+      }),
       evaluateBrandEntity(brandRow?.name),
     ]);
-    const results = [...deterministic, ...llm, brandEntity];
+    const results = [...deterministic, ...llm.results, brandEntity];
 
     const { totalScore, categoryScores } = scoreAudit(results);
     const signalsEvaluated = results.filter((r) => r.status !== 'na').length;
@@ -216,6 +221,7 @@ async function runAuditJob(auditId, brandId, url, orgId, source = 'user') {
         status: 'completed',
         final_url: ctx.url,
         total_score: totalScore,
+        partial: llm.partial,
         category_scores: categoryScores,
         signals_evaluated: signalsEvaluated,
         signals_total: TOTAL_SIGNALS,
@@ -656,7 +662,7 @@ router.get('/trend', async (req, res) => {
 
     const { data: rows } = await supabaseAdmin
       .from('site_audits')
-      .select('id, url, final_url, total_score, category_scores, created_at')
+      .select('id, url, final_url, total_score, partial, category_scores, created_at')
       .eq('brand_id', brandId)
       .eq('status', 'completed')
       .order('created_at', { ascending: false })

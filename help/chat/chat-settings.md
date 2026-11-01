@@ -1,7 +1,7 @@
 ---
 title: Change your Chat settings
 route: /dashboard/chat/settings
-keywords: [chat settings, default mode, ask chat on every page, full auto]
+keywords: [chat settings, default mode, your focus, ask chat on every page, full auto]
 synonyms: [chat preferences, chat options, run mode default]
 plan: all
 updated: 2026-10-31
@@ -16,6 +16,10 @@ sources: [web/messages/en.json]
 ## Default mode
 
 **Default mode** is how much the agent does on its own when you start a job: **Ask me first**, **Auto, ask before changes** or **Full auto**. New chats start in it. Nothing is published or sent without your click. **Full auto** needs the Growth plan, and your Admin can turn it off for everyone but Admins; when it is locked, point at it to see why. Analysts and Agency partners only read, so they have no default mode.
+
+## Your focus
+
+**Your focus** lists the eight areas Chat can focus on for you, such as **Competitors** or **Content**. Tick the ones you work on: Chat Home and its suggestions follow them. Your focus doesn't change what you can do; your role decides that.
 
 ## Chat on every page
 
