@@ -423,9 +423,7 @@ describe('BeforePublish', () => {
     expect(rows().join(' ')).toContain('Qualified reviewer: Dr. Grace Hopper · check it');
     expect(dialog().querySelector('pre')!.textContent).toContain('"@type": "WebPage"');
     expect(dialog().querySelector('pre')!.textContent).toContain('"reviewedBy"');
-    expect(dialog().querySelector('pre')!.textContent).toContain(
-      '"jobTitle": "Clinical Reviewer"',
-    );
+    expect(dialog().querySelector('pre')!.textContent).toContain('"jobTitle": "Clinical Reviewer"');
 
     // Non-regulated pages don't show a reviewer row or add a WebPage node.
     await render(quality(), { mode: 'export', reviewer, reviewerRequired: false });
