@@ -2,7 +2,7 @@ import supabaseAdmin from '../config/supabase.js';
 import logger from '../lib/logger.js';
 import { markTokenVerified } from './verified-tokens.js';
 import { isAllowedOrigin } from './origin-check.js';
-import { authenticateActingUser, carriesActingSecret } from './acting-user.js';
+import { ACTING_USER_HEADER, authenticateActingUser, carriesActingSecret } from './acting-user.js';
 
 class Middleware {
   async decodeTokenForSocket(socket, next) {
@@ -35,6 +35,15 @@ class Middleware {
     // The acting secret is never a session: the web's Chat acting as a
     // member, on a few routes only (acting-user.js). Never sent to Supabase Auth.
     if (carriesActingSecret(req)) return authenticateActingUser(req, res, next);
+    // A request acting as a member without the secret (another one, a web and a server whose
+    // values differ): refused here, so what it carries never reaches Supabase Auth.
+    if (req?.headers?.[ACTING_USER_HEADER] !== undefined) {
+      (req.log ?? logger).warn(
+        { method: req.method, path: req.path },
+        'request acting for a member without the acting secret',
+      );
+      return res.status(401).json({ message: 'Unauthorized API Request' });
+    }
 
     try {
       const token = req?.headers?.authorization?.split(' ')[1];

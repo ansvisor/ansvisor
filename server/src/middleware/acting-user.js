@@ -15,7 +15,9 @@
  *
  * Only the routes of ACTING_USER_ROUTES take it. The secret is never a
  * session: elsewhere it is refused (401) and never sent to Supabase Auth.
- * Without the secret, X-Acting-User is ignored everywhere, so only the
+ * Without the secret, a request with X-Acting-User is refused (401) by
+ * decodeToken before its token reaches Supabase Auth (a web whose value
+ * differs from this server's would send its secret there), so only the
  * secret opens acting as someone. With CHAT_ACTING_SECRET unset, or
  * shorter than MIN_SECRET_LENGTH, the way is closed; with the new Chat off
  * on this deployment, it is refused before anyone is read. The member must
@@ -43,9 +45,12 @@ export const MIN_SECRET_LENGTH = 32;
 
 /**
  * The routes, under /api, an internal request may act as a member on: the
- * writes Chat's tools make through this API (web/src/lib/actions). Each is a
- * DEMO_GUARDED route (middleware/demo-brand.js), whose entry says where the
- * request names its brand, so the brand is checked here too.
+ * writes the web makes through this API for a run with no session
+ * (web/src/lib/chat/actor), and no others. Site Audit's starts and a
+ * report's summary aren't: their Chat changes always wait on the person's
+ * card, whose Approve runs with their session. Each is a DEMO_GUARDED route
+ * (middleware/demo-brand.js), whose entry says where the request names its
+ * brand, so the brand is checked here too.
  */
 export const ACTING_USER_ROUTES = Object.freeze([
   // An opportunity's status (content.ts updateOpportunityStatus).
@@ -55,11 +60,6 @@ export const ACTING_USER_ROUTES = Object.freeze([
   // Send to Action Center and its duplicate check (chat-action-center.ts).
   'POST /action-center/chat-actions/check',
   'POST /action-center/chat-actions',
-  // run_site_audit, one page or several (audits.ts startSiteAudits).
-  'POST /audits',
-  'POST /audits/bulk',
-  // build_report's summary (reports.ts createReport).
-  'POST /reports/summary',
 ]);
 
 const ALLOWED = new Set(ACTING_USER_ROUTES);

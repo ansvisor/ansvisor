@@ -4,8 +4,9 @@ import express from 'express';
 /**
  * Internal requests acting as a member (Chat's triggered runs): with
  * CHAT_ACTING_SECRET and X-Acting-User, on the allowed routes only, the
- * member is known as with a session and checked as one; without the secret
- * the header is ignored, and with it unset or too short the way is closed.
+ * member is known as with a session and checked as one; the header without
+ * the secret is refused before Supabase Auth, and with the secret unset or
+ * too short the way is closed.
  */
 
 // 32 characters, the shortest taken.
@@ -99,8 +100,8 @@ function makeRes() {
 
 function makeReq({
   method = 'POST',
-  path = '/audits',
-  body = { brandId: BRAND, url: 'https://ansvisor.com/' },
+  path = '/action-center/chat-actions',
+  body = { brandId: BRAND },
   authorization = `Bearer ${SECRET}`,
   actingFor = MANAGER,
 } = {}) {
@@ -201,9 +202,6 @@ describe('the internal secret with a member to act for', () => {
       { method: 'POST', path: `/prompts/suggestions/${SUGGESTION}/dismiss`, body: {} },
       { path: '/action-center/chat-actions/check', body: { brandId: BRAND } },
       { path: '/action-center/chat-actions', body: { brandId: BRAND } },
-      { path: '/audits', body: { brandId: BRAND, url: 'https://ansvisor.com/' } },
-      { path: '/audits/bulk', body: { brandId: BRAND, urls: ['https://ansvisor.com/'] } },
-      { path: '/reports/summary', body: { brandId: BRAND, snapshot: {} } },
     ];
     expect(calls).toHaveLength(ACTING_USER_ROUTES.length);
     for (const call of calls) expectPassedAs(await run(call), MANAGER);
@@ -215,26 +213,34 @@ describe('the internal secret with a member to act for', () => {
     expectRefused(await run(calls[1]), 403, 'not_in_workspace');
   });
 
+  it('takes no route the web doesn’t act on: Site Audit’s starts and a report’s summary', async () => {
+    expect(ACTING_USER_ROUTES).toEqual([
+      'PATCH /content/:id/status',
+      'POST /prompts/suggestions/:id/dismiss',
+      'POST /action-center/chat-actions/check',
+      'POST /action-center/chat-actions',
+    ]);
+    for (const call of [
+      { path: '/audits', body: { brandId: BRAND, url: 'https://ansvisor.com/' } },
+      { path: '/audits/bulk', body: { brandId: BRAND, urls: ['https://ansvisor.com/'] } },
+      { path: '/reports/summary', body: { brandId: BRAND, snapshot: {} } },
+    ]) {
+      expectRefused(await run(call), 401);
+    }
+    expect(supabase.getUser).not.toHaveBeenCalled();
+    expect(supabase.getUserById).not.toHaveBeenCalled();
+  });
+
   it('names its brand on every allowed route, as the demo brand check reads it', () => {
     const guarded = new Set(DEMO_GUARDED.map((entry) => entry.route));
     for (const route of ACTING_USER_ROUTES) expect(guarded.has(route), route).toBe(true);
   });
 
   it('refuses a brand of another workspace, or one the member was not given', async () => {
-    expectRefused(
-      await run({ body: { brandId: OTHER_BRAND, url: 'https://ansvisor.com/' } }),
-      403,
-      'not_in_workspace',
-    );
+    expectRefused(await run({ body: { brandId: OTHER_BRAND } }), 403, 'not_in_workspace');
     // Selected brands: only the granted one.
     expectRefused(await run({ actingFor: NARROWED }), 403, 'no_brand_access');
-    expectPassedAs(
-      await run({
-        actingFor: NARROWED,
-        body: { brandId: SECOND_BRAND, url: 'https://ansvisor.com/' },
-      }),
-      NARROWED,
-    );
+    expectPassedAs(await run({ actingFor: NARROWED, body: { brandId: SECOND_BRAND } }), NARROWED);
   });
 
   it('leaves a row it cannot find to the route, which answers 404 itself', async () => {
@@ -308,15 +314,8 @@ describe('the internal secret with a member to act for', () => {
   });
 
   it('refuses when any brand of a list in the body is another workspace’s', async () => {
-    expectRefused(
-      await run({ body: { brandId: [BRAND, OTHER_BRAND], url: 'https://ansvisor.com/' } }),
-      403,
-      'not_in_workspace',
-    );
-    expectPassedAs(
-      await run({ body: { brandId: [BRAND, SECOND_BRAND], url: 'https://ansvisor.com/' } }),
-      MANAGER,
-    );
+    expectRefused(await run({ body: { brandId: [BRAND, OTHER_BRAND] } }), 403, 'not_in_workspace');
+    expectPassedAs(await run({ body: { brandId: [BRAND, SECOND_BRAND] } }), MANAGER);
   });
 
   it('answers 400 for more ids than a request may name', async () => {
@@ -324,7 +323,7 @@ describe('the internal secret with a member to act for', () => {
       { length: MAX_IDS + 1 },
       (_, i) => `3d000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
     );
-    const result = await run({ body: { brandId: ids, url: 'https://ansvisor.com/' } });
+    const result = await run({ body: { brandId: ids } });
     expectRefused(result, 400, 'invalid');
   });
 
@@ -348,26 +347,36 @@ describe('the internal secret with a member to act for', () => {
 });
 
 describe('without the internal secret', () => {
-  it('ignores X-Acting-User with a session: the session is the person, on any route', async () => {
-    for (const path of ['/audits', '/tracking/check']) {
+  it('refuses X-Acting-User before Supabase Auth, a session’s token too, on any route', async () => {
+    for (const path of ['/action-center/chat-actions', '/tracking/check']) {
       const result = await run({ path, authorization: 'Bearer session-token', actingFor: MANAGER });
-      expectPassedAs(result, SESSION_USER);
+      expectRefused(result, 401);
       expect(result.req.actingFor).toBeUndefined();
     }
+    expect(supabase.getUser).not.toHaveBeenCalled();
     expect(supabase.getUserById).not.toHaveBeenCalled();
+    expect(logged.some((entry) => /without the acting secret/.test(entry.args.at(-1)))).toBe(true);
+    // The session alone is the person, as always.
+    expectPassedAs(
+      await run({ authorization: 'Bearer session-token', actingFor: null }),
+      SESSION_USER,
+    );
   });
 
-  it('refuses a wrong secret as any token that is not a session', async () => {
+  it('refuses a wrong secret, never sending it to Supabase Auth (a web whose value differs)', async () => {
     expectRefused(await run({ authorization: 'Bearer not-the-secret' }), 401);
     expectRefused(await run({ authorization: `Bearer ${SECRET}x` }), 401);
     expectRefused(await run({ authorization: null }), 401);
+    expect(supabase.getUser).not.toHaveBeenCalled();
     expect(supabase.getUserById).not.toHaveBeenCalled();
+    expect(JSON.stringify(logged)).not.toContain(SECRET);
   });
 
   it('is closed with CHAT_ACTING_SECRET unset', async () => {
     vi.stubEnv('CHAT_ACTING_SECRET', '');
     expectRefused(await run(), 401);
     expectRefused(await run({ authorization: 'Bearer ' }), 401);
+    expect(supabase.getUser).not.toHaveBeenCalled();
     expect(supabase.getUserById).not.toHaveBeenCalled();
   });
 
