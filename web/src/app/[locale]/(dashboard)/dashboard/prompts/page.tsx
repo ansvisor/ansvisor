@@ -418,6 +418,15 @@ function defaultRangeFor(tab: string): PromptRangePreset {
 }
 type TabId = (typeof VALID_TABS)[number];
 
+/**
+ * Whether a tab reads the Location filter: only All Prompts' table does.
+ * Topics and Query Fan-out read every location and Insights' volumes carry
+ * none, so the filter and Chat's location chip are left off there.
+ */
+function tabUsesLocation(tab: TabId): boolean {
+  return tab === 'all';
+}
+
 const PROMPT_VIEWS = ['tracked', 'suggestions'] as const;
 type PromptsView = (typeof PROMPT_VIEWS)[number];
 
@@ -1949,8 +1958,9 @@ export default function PromptsPage() {
     rangePreset,
   ]);
 
-  // Chat's side panel sees the page (W1-08): its range and location, and a
-  // tracked prompt the brand doesn't show up for (the one asked most).
+  // Chat's side panel sees the page (W1-08): its range, its location where
+  // the tab reads one, and a tracked prompt the brand doesn't show up for
+  // (the one asked most).
   const unseen = allPrompts
     .filter((prompt) => (visibility[prompt.id]?.runs ?? 0) > 0)
     .filter((prompt) => visibility[prompt.id].visibleRuns === 0)
@@ -1965,9 +1975,10 @@ export default function PromptsPage() {
               tChatRange(key, values),
             ),
           },
-          filters: regionFilter
-            ? [{ key: 'region', label: formatRegionDisplay(regionFilter), value: regionFilter }]
-            : [],
+          filters:
+            regionFilter && tabUsesLocation(tab)
+              ? [{ key: 'region', label: formatRegionDisplay(regionFilter), value: regionFilter }]
+              : [],
           suggestions: [
             ...(unseen ? [tChat('promptUnseen', { prompt: unseen.text })] : []),
             tChat('promptsNext'),
@@ -2105,7 +2116,7 @@ export default function PromptsPage() {
               onToChange={setCustomTo}
             />
 
-            {availableRegions.length > 1 && tab !== 'topics' && tab !== 'fanout' && (
+            {availableRegions.length > 1 && tabUsesLocation(tab) && (
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
                   Location

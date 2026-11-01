@@ -4,8 +4,8 @@ route: /dashboard/settings/ai-providers
 keywords: [ai providers, own key, api key, openai, anthropic, openrouter]
 synonyms: [bring your own key, byok, my own openai key, connect my ai account]
 plan: enterprise
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -20,6 +20,10 @@ Chat normally runs on your plan's monthly AI limit, and you don't need any key f
 3. If you save keys for more than one provider, click **Use for Chat** next to the one Chat should run on.
 
 Keys are stored encrypted, and nobody can read a saved key back.
+
+## Agents on your key
+
+Agents run on the key too. Each agent's **Max per run** and **Monthly cap** still apply: Ansvisor measures what a run uses at the providers' list prices, so it is an estimate of your bill. Set a spending limit with your provider too: its bill is the real one.
 
 ## Keys saved before Chat
 
