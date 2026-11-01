@@ -52,7 +52,6 @@ vi.mock('@/lib/chat/actor/drafts', () => ({
 vi.mock('@/lib/chat/actor/api-writes', () => ({
   updateOpportunityStatusFor: vi.fn(),
   dismissSuggestionFor: vi.fn(),
-  startSiteAuditsFor: vi.fn(),
 }));
 vi.mock('@/lib/actions/cms-send', () => ({ sendDraftToCms: vi.fn() }));
 vi.mock('@/lib/actions/reports', () => ({ createReport: vi.fn() }));

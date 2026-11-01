@@ -2,9 +2,6 @@ import { createTranslator } from 'next-intl';
 import { z } from 'zod';
 import messages from '../../../../messages/en.json';
 import { getAuditQuota, startSiteAudits } from '@/lib/actions/audits';
-import { actorOf } from '@/lib/chat/actor/access';
-import { actingOpen } from '@/lib/chat/actor/api';
-import { startSiteAuditsFor } from '@/lib/chat/actor/api-writes';
 import { contentUuid, isHttpUrl } from '@/lib/mcp/content-schemas';
 import { FIXTURE_IDS, defineTool } from './define-tool';
 import { listWords } from './targets';
@@ -15,10 +12,7 @@ import { listWords } from './targets';
  * Site Audit quota (the API's check), as the signed-in member. Every start
  * asks, in every mode, with what it uses of the quota on the card
  * (`cost_card`, CHAT-04): ten one-page calls ask ten times. Admins and
- * Managers (DECISIONS T). Its results stay once it ran: no Undo (§9). Its
- * runFor starts them as a run's person with no session behind it, through
- * the API server; with its card in every mode, the engine doesn't call it
- * yet: the card's Approve runs in its person's own request.
+ * Managers (DECISIONS T). Its results stay once it ran: no Undo (§9).
  */
 
 const BRAND = FIXTURE_IDS.brand;
@@ -96,10 +90,6 @@ export const AUDIT_TOOLS = [
       input.force
         ? startSiteAudits(input.brand_id, input.urls, { force: true })
         : startSiteAudits(input.brand_id, input.urls),
-    sessionFree: true,
-    runFor: (ctx, input) =>
-      startSiteAuditsFor(actorOf(ctx), input.brand_id, input.urls, { force: input.force === true }),
-    runForOpen: actingOpen,
     target: async (input) => {
       const pages = listWords(auditPages(input.urls));
       // What the card's Approve uses of the month's audits.

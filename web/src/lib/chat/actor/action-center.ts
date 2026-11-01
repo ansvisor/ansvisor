@@ -55,8 +55,10 @@ export async function checkChatActionCoverFor(
     const { path, body } = coverRequest(brandId, entities, category);
     return coverResult(await apiAs(actor, `/api/action-center${path}`, { method: 'POST', body }));
   } catch (err) {
-    // Creating checks again, and says a refusal of the way in its words.
-    console.error('[chat/actor] could not check for a covering action:', err);
+    // Creating checks again, and acts on a refusal of the way (api.ts says it once).
+    if (!actingRefusalOf(err)) {
+      console.error('[chat/actor] could not check for a covering action:', err);
+    }
     return { ok: true };
   }
 }

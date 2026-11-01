@@ -24,9 +24,6 @@ const actor = { userId: PERSON, organizationId: ORG };
 vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('@/lib/chat/testing/fake-supabase')).createFakeSupabase(),
 }));
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: async () => ({ auth: { getSession: async () => ({ data: { session: null } }) } }),
-}));
 vi.mock('@/config/api', () => ({ API_BASE_URL: 'http://api.test' }));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
@@ -198,12 +195,14 @@ describe('checkChatActionCoverFor', () => {
     expect(await checkChatActionCoverFor(actor, BRAND, entities)).toEqual({ ok: true });
   });
 
-  it('lets the send check again when it couldn’t check', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('lets the send check again when it couldn’t check, logging only a real failure', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     answer(403, { code: 'chat_off' });
     expect(await checkChatActionCoverFor(actor, BRAND, entities)).toEqual({ ok: true });
+    expect(error).not.toHaveBeenCalled();
     fetchMock.mockRejectedValueOnce(new Error('ECONNREFUSED'));
     expect(await checkChatActionCoverFor(actor, BRAND, entities)).toEqual({ ok: true });
-    vi.mocked(console.error).mockRestore();
+    expect(error).toHaveBeenCalledTimes(1);
+    error.mockRestore();
   });
 });

@@ -4,11 +4,13 @@ import { createClient } from '@/lib/supabase/server';
 import { assertWritable } from '@/lib/subscription-guard';
 import { isManager } from '@/lib/session-role';
 import { API_BASE_URL } from '@/config/api';
-import { auditStartRequest, auditStartResult } from '@/lib/audit/start-answer';
 import type { SiteTrust } from '@/lib/content/site-trust';
 import type { NoPlanMark } from '@/lib/billing/no-plan';
 
 const AEO_SERVER_URL = API_BASE_URL;
+
+/** The API's RECENT_AUDIT_MINUTES (routes/audits.js): a page audited since asks first. */
+const RECENT_AUDIT_MINUTES = 10;
 
 export type AuditSignalStatus = 'pass' | 'warn' | 'fail' | 'na';
 
@@ -414,22 +416,66 @@ async function startAudits(
     };
   }
   const session = await getSession();
-  const { path, body } = auditStartRequest(brandId, urls, force);
+  const many = urls.length > 1;
   let res: Response;
   try {
-    res = await fetch(`${AEO_SERVER_URL}${path}`, {
+    res = await fetch(`${AEO_SERVER_URL}/api/audits${many ? '/bulk' : ''}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        brandId,
+        ...(many ? { urls } : { url: urls[0] }),
+        ...(force ? { force: true } : {}),
+      }),
     });
   } catch (err) {
     console.error('Failed to start the audits:', err);
     return { ok: false, reason: 'failed', message: 'Site Audit couldn’t be reached. Try again.' };
   }
-  return auditStartResult(urls, res, await res.json().catch(() => ({})));
+  const body = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    message?: string;
+    audit?: { id: string; url: string };
+    audits?: { id: string; url: string }[];
+    recent?: RecentAudit | RecentAudit[];
+  };
+  // A page audited in the last minutes isn't started again: said back, so Chat asks first.
+  if (res.status === 409 && body.error === 'recently_audited' && body.recent) {
+    return recentResult([], [{ ...(body.recent as RecentAudit), url: urls[0] }]);
+  }
+  if (!res.ok) {
+    return {
+      ok: false,
+      reason: body.error === 'quota_exceeded' ? 'quota_exceeded' : 'failed',
+      message: body.message || `Server error: ${res.status}`,
+    };
+  }
+  const audits = (many ? (body.audits ?? []) : body.audit ? [body.audit] : []).map((a) => ({
+    id: a.id,
+    url: a.url,
+  }));
+  return recentResult(audits, Array.isArray(body.recent) ? body.recent : []);
+}
+
+/** A start's result, saying which pages were audited minutes ago and not started. */
+function recentResult(
+  audits: { id: string; url: string }[],
+  recent: RecentAudit[],
+): StartSiteAuditsResult {
+  if (recent.length === 0) return { ok: true, started: audits.length, audits };
+  const pages = recent
+    .map((r) => `${r.url} (audit ${r.auditId}, finished ${r.finishedAt})`)
+    .join(', ');
+  return {
+    ok: true,
+    started: audits.length,
+    audits,
+    recent,
+    message: `Not started, audited in the last ${RECENT_AUDIT_MINUTES} minutes: ${pages}. Ask whether to open that audit or audit again; to audit again, run this again with force.`,
+  };
 }
 
 /** One of the most common Authority / E-E-A-T gaps across the audited pages. */

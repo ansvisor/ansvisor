@@ -2,28 +2,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * A run's write through the API server for its person (apiAs): their own
- * session's token in their own request; otherwise CHAT_ACTING_SECRET with
- * X-Acting-User naming the run's person, never another person's session,
- * and nothing sent while the way is closed. The server's refusals of the
- * way (401, 403 chat_off) come back as the person's words.
+ * A run's write through the API server for its person (apiAs): always
+ * CHAT_ACTING_SECRET with X-Acting-User naming the run's person, never a
+ * session's token or a cookie, and nothing sent while the way is closed.
+ * The server's refusals of the way (401, 403 chat_off) come back as the
+ * person's words.
  */
 
 const SECRET = 'a'.repeat(64);
 const PERSON = 'aaaaaaaa-0000-4000-8000-000000000001';
-const OTHER = 'aaaaaaaa-0000-4000-8000-000000000002';
 const actor = { userId: PERSON, organizationId: 'org-1' };
 
-const session = vi.hoisted(() => ({
-  current: null as { user: { id: string }; access_token: string } | null,
-  outsideRequest: false,
-}));
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: async () => {
-    if (session.outsideRequest) throw new Error('cookies was called outside a request scope');
-    return { auth: { getSession: async () => ({ data: { session: session.current } }) } };
-  },
-}));
+// A request's session, which apiAs never reads: the run's person is the context's.
+const cookies = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/supabase/server', () => ({ createClient: cookies }));
 vi.mock('@/config/api', () => ({ API_BASE_URL: 'http://api.test' }));
 
 const { ACTING_USER_HEADER, ActingRefusedError, actingOpen, apiAs } = await import('./api');
@@ -38,8 +30,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('fetch', fetchMock);
   vi.stubEnv('CHAT_ACTING_SECRET', SECRET);
-  session.current = null;
-  session.outsideRequest = false;
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -69,28 +59,18 @@ describe('the acting way', () => {
     });
   });
 
-  it('acts with the secret outside a request too (the minute tick’s background)', async () => {
-    session.outsideRequest = true;
+  it('never reads a session or a cookie: the run’s person is the context’s', async () => {
+    answer(200, {});
     answer(200, {});
     await post();
-    expect(sentHeaders()[ACTING_USER_HEADER]).toBe(PERSON);
-  });
-
-  it('uses the person’s own session in their own request, and never another person’s', async () => {
-    session.current = { user: { id: PERSON }, access_token: 'their-token' };
-    answer(200, {});
-    await post();
-    expect(sentHeaders()).toEqual({
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer their-token',
+    await apiAs({ ...actor, userId: 'aaaaaaaa-0000-4000-8000-000000000002' }, '/api/audits', {
+      method: 'POST',
     });
-
-    // A teammate's Run now picked this run: their cookies are theirs, not the run's person's.
-    session.current = { user: { id: OTHER }, access_token: 'teammate-token' };
-    answer(200, {});
-    await post();
-    expect(sentHeaders().Authorization).toBe(`Bearer ${SECRET}`);
-    expect(sentHeaders()[ACTING_USER_HEADER]).toBe(PERSON);
+    expect(cookies).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.map(([, init]) => init.headers[ACTING_USER_HEADER])).toEqual([
+      PERSON,
+      'aaaaaaaa-0000-4000-8000-000000000002',
+    ]);
   });
 
   it('sends nothing while the way is closed: the person’s words instead', async () => {
@@ -106,19 +86,21 @@ describe('the acting way', () => {
   });
 
   it('says the server’s refusals of the way in the person’s words: 401, and Chat off', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error');
     answer(401, { message: 'Unauthorized API Request' });
     await expect(post()).rejects.toMatchObject({ refusal: { reason: 'acting_refused' } });
+    // The secrets differ: a setup to fix, said once as a warning, never with the secret.
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(SECRET);
     answer(403, { code: 'chat_off', message: 'Chat is off for this workspace' });
     await expect(post()).rejects.toMatchObject({ refusal: { reason: 'chat_off' } });
     // Any other refusal is the route's own answer, for the caller to read.
     answer(403, { code: 'no_brand_access' });
     expect(await post()).toEqual({ status: 403, ok: false, body: { code: 'no_brand_access' } });
-    // With the person's own session, a 401 is their session's: the caller's to read.
-    session.current = { user: { id: PERSON }, access_token: 'their-token' };
-    answer(401, {});
-    expect(await post()).toMatchObject({ status: 401, ok: false });
-    vi.mocked(console.error).mockRestore();
+    expect(error).not.toHaveBeenCalled();
+    warn.mockRestore();
+    error.mockRestore();
   });
 
   it('sends no body or content type for a request without one, and reads an empty answer', async () => {

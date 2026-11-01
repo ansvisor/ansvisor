@@ -70,6 +70,10 @@ const refused = (output: unknown): boolean =>
   !Array.isArray(output) &&
   (output as { ok?: unknown }).ok === false;
 
+/** A run with no session whose write the API server took as no one (lib/chat/actor/api.ts). */
+const wayRefused = (output: unknown): boolean =>
+  refused(output) && (output as { reason?: unknown }).reason === 'acting_refused';
+
 /**
  * Never throws for a failure on the way (the engine and server actions call
  * it): `failed`. Only a call against the rules (a read, an EXECUTE without
@@ -130,6 +134,9 @@ async function run(req: WriteRequest): Promise<WriteOutcome> {
       }
       return { result: toJson(output), activityId };
     },
+    // The API server took no one to act as (acting_refused): nothing changed, and the
+    // approval is its person's to give again on its card, with the same key.
+    { keep: (result) => !wayRefused(result) },
   );
 
   if (outcome.kind === 'mismatch') return { code: 'approval_mismatch' };

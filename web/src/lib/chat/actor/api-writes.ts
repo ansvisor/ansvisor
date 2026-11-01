@@ -1,18 +1,15 @@
-import type { StartSiteAuditsResult } from '@/lib/actions/audits';
-import { auditStartRequest, auditStartResult } from '@/lib/audit/start-answer';
 import type { ContentOpportunity } from '@/types';
-import { assertWritableFor, isManagerFor, type RunActor } from './access';
+import type { RunActor } from './access';
 import { actingRefusalOf, apiAs, type ActingRefusal } from './api';
 
 /**
  * Chat's writes through the API server for a run with no session behind it
- * (update_opportunity, dismiss_prompt_suggestion, run_site_audit runFor):
- * the same requests as updateOpportunityStatus, dismissSuggestion and
- * startSiteAudits, sent as the run's person (api.ts). The API checks them
- * as their session (the demo brand, the plan, the brand, the route's role);
- * what the session's action checks before it sends is checked here too. A
- * refusal of the acting way comes back as a value the engine says. Server
- * only, and never a server action: the person is the caller's word.
+ * (update_opportunity, dismiss_prompt_suggestion runFor): the same requests
+ * as updateOpportunityStatus and dismissSuggestion, sent as the run's
+ * person (api.ts). The API checks them as their session would be (the demo
+ * brand, the plan, the brand, the route's role), as it checks the session's
+ * own. A refusal of the acting way comes back as a value the engine acts
+ * on. Server only, and never a server action: the person is the caller's word.
  */
 
 /** updateOpportunityStatus for the run's person: the opportunity, or why the way refused. */
@@ -53,32 +50,5 @@ export async function dismissSuggestionFor(
     const refused = actingRefusalOf(err);
     if (refused) return refused;
     throw err;
-  }
-}
-
-/** startSiteAudits for the run's person: an Admin's or a Manager's, on a brand it may write. */
-export async function startSiteAuditsFor(
-  actor: RunActor,
-  brandId: string,
-  urls: string[],
-  options: { force?: boolean } = {},
-): Promise<StartSiteAuditsResult | ActingRefusal> {
-  try {
-    await assertWritableFor(actor, brandId);
-    if (!(await isManagerFor(actor, actor.organizationId))) {
-      return {
-        ok: false,
-        reason: 'forbidden_role',
-        message: 'Only an admin or a manager can start audits from Chat.',
-      };
-    }
-    const { path, body } = auditStartRequest(brandId, urls, options.force === true);
-    const res = await apiAs(actor, path, { method: 'POST', body });
-    return auditStartResult(urls, res, res.body);
-  } catch (err) {
-    const refused = actingRefusalOf(err);
-    if (refused) return refused;
-    console.error('Failed to start the audits:', err);
-    return { ok: false, reason: 'failed', message: 'The audits couldn’t be started. Try again.' };
   }
 }

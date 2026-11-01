@@ -86,7 +86,6 @@ vi.mock('@/lib/chat/actor/drafts', () => ({
 vi.mock('@/lib/chat/actor/api-writes', () => ({
   updateOpportunityStatusFor: tracked.track('chat/actor/api-writes.updateOpportunityStatusFor'),
   dismissSuggestionFor: tracked.track('chat/actor/api-writes.dismissSuggestionFor'),
-  startSiteAuditsFor: tracked.track('chat/actor/api-writes.startSiteAuditsFor'),
 }));
 vi.mock('@/lib/chat/actor/action-center', () => ({
   createChatActionFor: tracked.track('chat/actor/action-center.createChatActionFor'),
@@ -150,7 +149,6 @@ const SESSION_FREE = [
   'dismiss_prompt_suggestion',
   'create_action',
   'update_draft',
-  'run_site_audit',
 ];
 /** A run's place, as runLoggedWrite gives a write. */
 const place = {
@@ -447,12 +445,7 @@ describe('the Chat tool registry', () => {
   });
 
   it('writes through the API server for a run without a session as its person, while that way is open', async () => {
-    const through = [
-      'update_opportunity',
-      'dismiss_prompt_suggestion',
-      'create_action',
-      'run_site_audit',
-    ];
+    const through = ['update_opportunity', 'dismiss_prompt_suggestion', 'create_action'];
     // Closed: no CHAT_ACTING_SECRET, or one shorter than the server takes.
     for (const secret of ['', 'x'.repeat(31)]) {
       vi.stubEnv('CHAT_ACTING_SECRET', secret);
@@ -479,7 +472,6 @@ describe('the Chat tool registry', () => {
       reason: 'wrong_angle',
     });
     await run('dismiss_prompt_suggestion', { suggestion_id: item });
-    await run('run_site_audit', { brand_id: brand, urls: ['https://acme.example/pricing'] });
     const send = chatTool_('create_action');
     const proposal = send.inputSchema.parse(send.fixture.input);
     await send.runFor!({ ...ctx, chat: place }, proposal);
@@ -495,10 +487,6 @@ describe('the Chat tool registry', () => {
       // A reason goes only with a dismissal, as the session's call has it.
       ['chat/actor/api-writes.updateOpportunityStatusFor', [person, item, 'reviewed', undefined]],
       ['chat/actor/api-writes.dismissSuggestionFor', [person, item]],
-      [
-        'chat/actor/api-writes.startSiteAuditsFor',
-        [person, brand, ['https://acme.example/pricing'], { force: false }],
-      ],
       [
         'chat/actor/action-center.createChatActionFor',
         [person, brand, expect.objectContaining({ title: proposal.title }), place, false],

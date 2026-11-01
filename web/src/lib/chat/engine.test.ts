@@ -49,7 +49,6 @@ vi.mock('@/lib/chat/actor/drafts', () => ({
 vi.mock('@/lib/chat/actor/api-writes', () => ({
   updateOpportunityStatusFor: vi.fn(),
   dismissSuggestionFor: vi.fn(),
-  startSiteAuditsFor: vi.fn(),
 }));
 vi.mock('@/lib/chat/actor/action-center', () => ({
   createChatActionFor: vi.fn(),
@@ -3523,6 +3522,21 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
         reason: 'not_relevant',
       });
       const person = { userId: PEOPLE.admin, organizationId: ORG };
+      const send = toolCall('w1', 'create_action', {
+        brand_id: BRAND,
+        title: 'Win back pricing citations on /pricing',
+        category: 'recover',
+        why: 'Google AI Overviews stopped citing /pricing.',
+        pages: ['/pricing'],
+        tasks: [
+          {
+            title: 'Add a pricing FAQ block to /pricing',
+            type: 'on_page',
+            url: '/pricing',
+            done_when: 'The FAQ block is live',
+          },
+        ],
+      });
       beforeEach(() => {
         vi.stubEnv('CHAT_ACTING_SECRET', 'k'.repeat(64));
         vi.mocked(updateOpportunityStatusFor).mockImplementation(
@@ -3579,22 +3593,33 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
         expect(db.tables.chat_activity_log).toEqual([]);
       });
 
-      it('checks Send to Action Center’s duplicate as the run’s person, then sends it as them', async () => {
-        const send = toolCall('w1', 'create_action', {
-          brand_id: BRAND,
-          title: 'Win back pricing citations on /pricing',
-          category: 'recover',
-          why: 'Google AI Overviews stopped citing /pricing.',
-          pages: ['/pricing'],
-          tasks: [
-            {
-              title: 'Add a pricing FAQ block to /pricing',
-              type: 'on_page',
-              url: '/pricing',
-              done_when: 'The FAQ block is live',
-            },
-          ],
+      it('asks its person when the server takes no one to act as (acting_refused)', async () => {
+        const NOTE = 'This agent ran on its own, so it asks before changing anything.';
+        vi.mocked(updateOpportunityStatusFor).mockResolvedValue({
+          ok: false,
+          reason: 'acting_refused',
+          message: 'This agent couldn’t make this change on its own, so nothing changed.',
         });
+        const held = await driven(ADMIN, 'full_auto', null, [calls(dismiss), text('Done.')]);
+        expect(held).toMatchObject({
+          status: 'waiting',
+          cards: [expect.objectContaining({ canDontAskAgain: false, note: NOTE })],
+        });
+        // Nothing changed or logged; its step waits as a card, no longer a change made by itself.
+        expect(db.tables.chat_activity_log).toEqual([]);
+        expect(stepsOf(held.runId)[0]).toMatchObject({ status: 'waiting' });
+        expect(stepsOf(held.runId)[0].debug_json).not.toHaveProperty('auto');
+        // The owner's Approve makes it with their own session, on the same approval.
+        expect((await approve(ADMIN, held.runId)).ok).toBe(true);
+        expect(updateOpportunityStatus).toHaveBeenCalledTimes(1);
+        expect(updateOpportunityStatusFor).toHaveBeenCalledTimes(1);
+        expect(runRow(held.runId).status).toBe('done');
+        expect(db.tables.chat_activity_log).toEqual([
+          expect.objectContaining({ kind: 'change', approval_kind: 'ask' }),
+        ]);
+      });
+
+      it('checks Send to Action Center’s duplicate as the run’s person, then sends it as them', async () => {
         vi.mocked(checkChatActionCoverFor).mockResolvedValue({ ok: true });
         vi.mocked(createChatActionFor).mockResolvedValue({
           ok: true,
@@ -3624,6 +3649,33 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
         const covered = await driven(ADMIN, 'auto', null, [calls(send), text('Covered.')]);
         expect(covered).toMatchObject({ status: 'done', cards: [] });
         expect(createChatActionFor).toHaveBeenCalledTimes(1);
+      });
+
+      it('checks and sends with the session in the person’s own request, never as the run’s person', async () => {
+        vi.mocked(checkChatActionCover).mockResolvedValue({ ok: true });
+        vi.mocked(createChatAction).mockResolvedValue({
+          ok: true,
+          action_id: '88888888-8888-4888-8888-888888888888',
+          action_no: 1271,
+          created: true,
+          href: '/dashboard/action-center/actions/88888888-8888-4888-8888-888888888888',
+        });
+        const run = await driven(ADMIN, 'full_auto', PEOPLE.admin, [calls(send), text('Sent.')]);
+        expect(run).toMatchObject({ status: 'done', cards: [] });
+        expect(checkChatActionCover).toHaveBeenCalledTimes(1);
+        expect(createChatAction).toHaveBeenCalledTimes(1);
+        expect(checkChatActionCoverFor).not.toHaveBeenCalled();
+        expect(createChatActionFor).not.toHaveBeenCalled();
+      });
+
+      it('checks nothing before the card while the way is closed: no one else’s session either', async () => {
+        vi.stubEnv('CHAT_ACTING_SECRET', '');
+        const run = await driven(ADMIN, 'full_auto', null, [calls(send), text('Asked.')]);
+        expect(run).toMatchObject({ status: 'waiting' });
+        expect(run.cards).toHaveLength(1);
+        expect(checkChatActionCover).not.toHaveBeenCalled();
+        expect(checkChatActionCoverFor).not.toHaveBeenCalled();
+        expect(createChatActionFor).not.toHaveBeenCalled();
       });
     });
 

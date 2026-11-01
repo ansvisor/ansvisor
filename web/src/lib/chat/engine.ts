@@ -2125,7 +2125,8 @@ async function deny(
  * A WRITE's own check before its card (its row's `precheck`, CHAT-20 §12):
  * the refusal the model is told, in its §11a code and words, with what it
  * says beside them (the action that covers a finding). Null to go on, and
- * when the check itself fails: the change checks again.
+ * when the check itself fails: the change checks again. In a run with no
+ * session, only the row's precheckFor checks, as the run's person.
  */
 async function precheckOf(
   rc: RunContext,
@@ -2133,14 +2134,16 @@ async function precheckOf(
   input: Record<string, unknown>,
   ctx: PrecedenceContext | null,
 ): Promise<Record<string, unknown> | null> {
-  if (!tool.precheck) return null;
-  const toolCtx = toolContext(rc, ctx?.role ?? rc.role);
+  // With no session behind the run, the row's own check as its person, while its way is open;
+  // else none: a request's session there isn't the person's (the change checks again).
+  const which = withoutSession(rc)
+    ? runsWithoutSession(tool)
+      ? ('precheckFor' as const)
+      : null
+    : ('precheck' as const);
+  if (!which || !tool[which]) return null;
   try {
-    // With no session behind the run, the row's own check as its person.
-    const out =
-      withoutSession(rc) && tool.precheckFor
-        ? await tool.precheckFor(toolCtx, input as never)
-        : await tool.precheck(toolCtx, input as never);
+    const out = await tool[which]!(toolContext(rc, ctx?.role ?? rc.role), input as never);
     const said = saidFailure(out);
     return said ? { ...said, ...besideRefusal(out) } : null;
   } catch (err) {
@@ -2983,6 +2986,9 @@ function typedFailure(output: unknown): string | null {
   return typeof record.reason === 'string' ? record.reason : 'failed';
 }
 
+/** A run with no session whose write the API server took as no one: it asks instead (writeCall). */
+const ACTING_REFUSED = 'acting_refused';
+
 /** The refusals an action says in its own words, as CHAT-20 §11a's codes. */
 const SAID_FAILURES: Record<string, string> = {
   quota_exceeded: 'quota_exceeded',
@@ -3068,17 +3074,27 @@ async function writeCall(
     withoutSession: withoutSession(rc),
   });
 
-  if (outcome.code === 'approval_mismatch') {
-    row = await updateStep(stepId, { status: 'waiting' });
+  // The API server took no one to act as for a run with no session (lib/chat/actor/api.ts):
+  // nothing changed, so it asks its person, as a change with no way of its own does.
+  const wayRefused =
+    outcome.code === 'ok' && typedFailure(outcome.output) === ACTING_REFUSED && !cardStepId;
+  if (outcome.code === 'approval_mismatch' || wayRefused) {
+    row = await updateStep(stepId, {
+      status: 'waiting',
+      // Its card's Approve is the person's: not a change made by itself (History's mode).
+      ...(wayRefused ? { debug: { input, toolCallId: call.toolCallId } } : {}),
+    });
     rc.sink.emit('step.updated', { step: clientStep(row) });
     const digest = cardDigest(tool, input);
+    const notes = cardNotes(tool);
+    if (wayRefused) notes.note = [t('card.noSession'), notes.note].filter(Boolean).join(' ');
     rc.sink.emit('confirm.required', {
       n: row.position,
       action: toolWords(tool, 'name'),
       target,
       digest,
       canDontAskAgain: false,
-      ...cardNotes(tool),
+      ...notes,
       ...(await cardDetailsOf(tool, input)),
     });
     return {
