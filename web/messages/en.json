@@ -5419,7 +5419,20 @@
       "action_closed": "This action is closed. Reopen it in Action Center to run an agent on it.",
       "queue_full": "{count, plural, one {# run already waits} other {# runs already wait}} for this agent on this brand. Try again once one has started.",
       "connection_missing": "This agent needs {name}, and {brand} doesn’t have it connected. Connect it for that brand, then run the agent again.",
+      "own_key_failed": "{why} An Admin can fix it in Settings › AI Providers, then run the agent again.",
       "failed": "Something went wrong with this agent. Try again."
+    },
+    "ownKey": {
+      "why": {
+        "invalid": "{provider} turned down your workspace’s key.",
+        "no_credit": "Your {provider} account is out of credit.",
+        "model": "{provider} can’t reach the model set for your key.",
+        "unreadable": "Your saved {provider} key can’t be read any more."
+      },
+      "banner": "Your {provider} key isn’t working · agents are paused",
+      "fix": "Fix in AI Providers",
+      "askAdmin": "An Admin can fix it in Settings › AI Providers.",
+      "composer": "{why} Chat stops on it until it’s fixed."
     },
     "status": {
       "draft": "Draft",

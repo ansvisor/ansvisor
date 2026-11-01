@@ -18,7 +18,11 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
 vi.mock('@/lib/mcp/account', () => ({
   getAiUsageFor: vi.fn(async () => ({ active_plan: true, unlimited: false, percent_used: 5 })),
 }));
-vi.mock('./key', () => ({ resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })) }));
+const ownKey = vi.hoisted(() => ({ failing: null as { class: string; provider: string } | null }));
+vi.mock('./key', () => ({
+  resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
+  failingOwnKey: vi.fn(async () => ownKey.failing),
+}));
 vi.mock('./agent-shares', () => ({ readAgentShares: vi.fn(async () => null) }));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
@@ -65,6 +69,7 @@ function startNext(args: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+  ownKey.failing = null;
   seedWorkspace(db);
   db.unique = { ...db.unique, chat_agents: [['organization_id', 'name']] };
   const iso = () => NOW.toISOString();
@@ -163,6 +168,22 @@ describe('Run now', () => {
       ok: true,
       value: { runs: [{ brand: 'Brand A', status: 'queued' }] },
     });
+  });
+
+  it('refuses while the workspace’s own key fails, queuing nothing on any brand (409)', async () => {
+    const id = await agentOf(PEOPLE.manager, { skills: ['winback'] });
+    ownKey.failing = { class: 'no_credit', provider: 'openai' };
+    const result = await runs.runAgentNow(await ctxOf(PEOPLE.manager), id, {}, NOW, null);
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: {
+        status: 409,
+        code: 'own_key_failed',
+        message:
+          'Your OpenAI account is out of credit. An Admin can fix it in Settings › AI Providers, then run the agent again.',
+      },
+    });
+    expect(runRows()).toEqual([]);
   });
 
   it('starts it in a free slot when a driver can take it, with the plan’s runs at once', async () => {
@@ -388,6 +409,14 @@ describe('Run agent on an action', () => {
         detail: { name: 'Any catalog source', brand: 'Brand B' },
       },
     });
+    expect(runRows()).toEqual([]);
+  });
+
+  it('refuses Run agent while the workspace’s own key fails, queuing nothing', async () => {
+    const id = await agentOf(PEOPLE.manager, { skills: ['winback'] });
+    ownKey.failing = { class: 'invalid', provider: 'anthropic' };
+    const result = await runs.runAgentOnAction(await ctxOf(PEOPLE.manager), id, ACTION, NOW, null);
+    expect(result).toMatchObject({ ok: false, refusal: { status: 409, code: 'own_key_failed' } });
     expect(runRows()).toEqual([]);
   });
 

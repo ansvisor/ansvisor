@@ -4,7 +4,7 @@ import { readActiveKey, resolveAgentModelConfig } from '@/lib/agent/key';
 import type { AgentModelConfig } from '@/lib/agent/model';
 import { isAiProvider, type AiProvider } from '@/lib/agent/providers';
 import { chatAgenticEnabled } from './flag';
-import { markKeyFailing } from './key-health';
+import { markKeyFailing, ownKeyFailure, type OwnKeyFailure } from './key-health';
 
 /**
  * Whose key a Chat step runs on (CHAT-16 item 22, owner decision 11 of the
@@ -192,4 +192,20 @@ export async function chatRunsOnOwnKey(organizationId: string): Promise<boolean>
     .eq('active', true)
     .maybeSingle();
   return !!key?.key_encrypted && isAiProvider(key.provider);
+}
+
+/**
+ * The workspace's own key, when Chat runs on it and it is marked failing
+ * (AGENT-OWN-KEY §5.2 items 4–6): agents are refused until it works, and
+ * Agent Center and the composer say so. Null otherwise, and when it can't be
+ * read: a run that starts meets the key anyway.
+ */
+export async function failingOwnKey(organizationId: string): Promise<OwnKeyFailure | null> {
+  try {
+    if (!(await chatRunsOnOwnKey(organizationId))) return null;
+    return await ownKeyFailure(organizationId);
+  } catch (err) {
+    console.error("[chat/key] could not read the AI key's health:", err);
+    return null;
+  }
 }

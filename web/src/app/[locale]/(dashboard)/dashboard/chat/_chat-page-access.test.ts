@@ -68,6 +68,10 @@ vi.mock('@/lib/chat/key', () => ({
     return facts.ownKey;
   }),
 }));
+const keyHealth = vi.hoisted(() => ({
+  failingKeyFor: vi.fn(async (): Promise<unknown> => null),
+}));
+vi.mock('@/lib/chat/key-health', () => keyHealth);
 
 const { importLegacyChats } = await import('@/lib/chat/legacy-import');
 const { chatPageOpen, chatShellPrefs, chatComposerSetup, chatFocusState } =
@@ -170,6 +174,7 @@ describe('chatComposerSetup', () => {
       fullAutoOffByAdmin: true,
       usageNoticeSeen: null,
       onOwnKey: false,
+      keyFailure: null,
       skills: SKILL_MENU,
     });
   });
@@ -182,6 +187,7 @@ describe('chatComposerSetup', () => {
       fullAutoOffByAdmin: false,
       usageNoticeSeen: null,
       onOwnKey: false,
+      keyFailure: null,
       skills: SKILL_MENU,
     });
   });
@@ -199,6 +205,7 @@ describe('chatComposerSetup', () => {
       fullAutoOffByAdmin: false,
       usageNoticeSeen: null,
       onOwnKey: false,
+      keyFailure: null,
       skills: SKILL_MENU,
     });
   });
@@ -217,6 +224,7 @@ describe('chatComposerSetup', () => {
       fullAutoOffByAdmin: false,
       usageNoticeSeen: null,
       onOwnKey: false,
+      keyFailure: null,
       skills: SKILL_MENU,
     });
   });
@@ -253,6 +261,21 @@ describe('chatComposerSetup', () => {
     // A key that can't be read: the careful answer, and the server's hold still decides.
     facts.ownKey = 'throws';
     expect((await chatComposerSetup()).onOwnKey).toBe(false);
+  });
+
+  it('says the own key fails, read only where Chat runs on it (AGENT-OWN-KEY §5.2)', async () => {
+    facts.ctx = ctxOf('admin', true, false);
+    keyHealth.failingKeyFor.mockClear();
+    facts.ownKey = false;
+    expect((await chatComposerSetup()).keyFailure).toBeNull();
+    expect(keyHealth.failingKeyFor).not.toHaveBeenCalled();
+
+    facts.ownKey = true;
+    keyHealth.failingKeyFor.mockResolvedValueOnce({ class: 'no_credit', provider: 'openai' });
+    expect((await chatComposerSetup()).keyFailure).toEqual({
+      class: 'no_credit',
+      provider: 'openai',
+    });
   });
 });
 

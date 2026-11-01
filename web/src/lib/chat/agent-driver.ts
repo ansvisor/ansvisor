@@ -179,6 +179,8 @@ function pauseFor(refusal: AgentRefusal): Exclude<AgentPausedReason, 'manual'> |
   if (refusal.kind === 'denied') return 'plan';
   if (refusal.code === 'no_brand') return 'brand_gone';
   if (refusal.code === 'ai_limit') return 'cap';
+  // The workspace's own key is marked failing (AGENT-OWN-KEY §5.2 item 4).
+  if (refusal.code === 'own_key_failed') return 'own_key';
   return null;
 }
 
@@ -192,7 +194,7 @@ async function endBeforeStart(
     now,
   }: {
     pause?: Exclude<AgentPausedReason, 'manual'> | null;
-    stopReason?: 'brand_gone' | 'action_closed' | null;
+    stopReason?: 'brand_gone' | 'action_closed' | 'own_key' | null;
     now: Date;
   },
 ): Promise<null> {
@@ -401,7 +403,7 @@ export async function openAgentRun(
     const pause = pauseFor(failing.refusal);
     return endBeforeStart(run, 'stopped', {
       pause,
-      stopReason: pause === 'brand_gone' ? 'brand_gone' : null,
+      stopReason: pause === 'brand_gone' || pause === 'own_key' ? pause : null,
       now,
     });
   }

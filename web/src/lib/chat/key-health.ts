@@ -18,6 +18,9 @@ export interface OwnKeyFailure {
   since: string;
 }
 
+/** A failing own key as the browser is told it: its class and provider, no dates. */
+export type FailingKey = Pick<OwnKeyFailure, 'class' | 'provider'>;
+
 /**
  * The workspace's active own key, if it is marked failing, read without
  * decrypting it. Null when there is no active key or it works. Whether the
@@ -39,6 +42,19 @@ export async function ownKeyFailure(organizationId: string): Promise<OwnKeyFailu
     status: data.failure_status ?? null,
     since: data.failing_since,
   };
+}
+
+/**
+ * ownKeyFailure for the browser, where Chat already runs on the own key
+ * (chatRunsOnOwnKey): its class and provider, or null. A read that fails is
+ * null: a run meets the key anyway.
+ */
+export async function failingKeyFor(organizationId: string): Promise<FailingKey | null> {
+  const failure = await ownKeyFailure(organizationId).catch((err) => {
+    console.error("[chat/key-health] could not read the AI key's health:", err);
+    return null;
+  });
+  return failure ? { class: failure.class, provider: failure.provider } : null;
 }
 
 /**

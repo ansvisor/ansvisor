@@ -1,3 +1,4 @@
+import type { FailingKey } from './key-health';
 import { CHAT_MODES, type ChatMode, type PrecedenceContext } from './precedence';
 
 /**
@@ -31,6 +32,11 @@ export interface ChatComposerSetup {
    * draw on the AI budget, so a used-up allowance doesn't pause it.
    */
   onOwnKey: boolean;
+  /**
+   * That own key is marked failing (AGENT-OWN-KEY §5.2 item 5): the composer
+   * says so, and sending stays on. Null otherwise.
+   */
+  keyFailure: FailingKey | null;
   /** The / menu's Skills group: the enabled skills (skillMenuOf); none while the new Chat is off. */
   skills: ChatSkillItem[];
 }
@@ -51,6 +57,7 @@ export const CAREFUL_SETUP: ChatComposerSetup = {
   ...CAREFUL_MODES,
   usageNoticeSeen: null,
   onOwnKey: false,
+  keyFailure: null,
   skills: [],
 };
 

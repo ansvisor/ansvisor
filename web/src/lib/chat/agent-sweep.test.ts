@@ -23,7 +23,10 @@ const fakes = vi.hoisted(() => ({
   endHeld: vi.fn(),
 }));
 vi.mock('@/lib/mcp/account', () => ({ getAiUsageFor: fakes.usage }));
-vi.mock('./key', () => ({ resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })) }));
+vi.mock('./key', () => ({
+  resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
+  failingOwnKey: vi.fn(async () => null),
+}));
 vi.mock('./agent-shares', () => ({ readAgentShares: fakes.shares }));
 vi.mock('./engine', () => ({
   APPROVAL_TTL_MS: 7 * 24 * 60 * 60 * 1000,

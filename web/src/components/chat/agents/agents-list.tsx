@@ -31,6 +31,7 @@ import {
 import { cn } from '@/lib/utils';
 import { AgentDenial, FormulaChips, StatusLine, liveRunOf } from './agent-parts';
 import { readAgents } from './agent-requests';
+import { AgentsKeyBanner } from '@/components/chat/own-key-notice';
 import { useAgentWords, type AgentWords } from './agent-words';
 import { useAgentActions } from './use-agent-actions';
 
@@ -289,6 +290,8 @@ export function AgentsList({
 
   return (
     <div>
+      {data?.keyFailure && <AgentsKeyBanner failing={data.keyFailure} />}
+
       {actions.denial && <AgentDenial denial={actions.denial} onClose={actions.clearDenial} />}
 
       <div className="my-3 flex flex-wrap items-center gap-1.5">

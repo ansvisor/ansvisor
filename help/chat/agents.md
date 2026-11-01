@@ -123,3 +123,5 @@ Analysts and Agency partners see agents but can't create, run or change them. Ag
 ## When your AI key fails
 
 When your workspace runs on its own AI key and the key fails (the provider turns it down, the account is out of credit, or the key can't reach its model), a run ends **Stopped · AI key not working**. An agent a trigger started pauses with **Your AI key isn't working**. These runs don't count toward 3 failed runs in a row.
+
+While the key fails, Agent Center says so at the top, and **Run now**, **Run agent**, **Turn on** and **Resume** are refused before anything starts. Admins get **Fix in AI Providers**; others read that an Admin can fix it there.
