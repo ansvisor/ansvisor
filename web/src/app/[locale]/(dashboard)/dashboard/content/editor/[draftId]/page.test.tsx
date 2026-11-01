@@ -72,6 +72,12 @@ vi.mock('@/lib/content/agent-runs-client', () => ({
   stopAgentRun: (...args: unknown[]) => stopAgentRun(...args),
   readAutoHandOff: (...args: unknown[]) => readAutoHandOff(...args),
 }));
+// Site Audit's estimate (customer priorities item 9): none read, unless a test says.
+const readAuditEstimate = vi.fn();
+vi.mock('@/lib/content/audit-estimate', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAuditEstimate: (...args: unknown[]) => readAuditEstimate(...args),
+}));
 const getDraftBrief = vi.fn();
 const rebuildDraftBrief = vi.fn();
 const saveDraftRules = vi.fn();
@@ -395,6 +401,7 @@ beforeEach(() => {
   getContentResults.mockReset().mockResolvedValue(null);
   getDraftSources.mockReset().mockResolvedValue(null);
   readAgentRun.mockReset().mockResolvedValue(null);
+  readAuditEstimate.mockReset().mockResolvedValue({ error: 'failed' });
   stopAgentRun.mockReset().mockResolvedValue({ stopped: true });
   getDraftBrief.mockReset().mockResolvedValue({ brief: null });
   rebuildDraftBrief.mockReset();
@@ -480,6 +487,28 @@ describe('the content editor', () => {
     // The HTML block is named, not only an icon.
     expect(button('Add an HTML block')!.textContent).toBe('Add HTML');
     expect(container.querySelector('.ProseMirror h1')!.textContent).toBe('Pipeline forecasting');
+  });
+
+  it('shows Site Audit’s estimate in the header, read from the page as it goes out (customer priorities item 9)', async () => {
+    readAuditEstimate.mockResolvedValue({
+      estimate: {
+        score: 62,
+        categories: { structure: 78, content: 55, authority: 40, trust: 72, eeat: 48 },
+        checks: { page: 18, site: 13, ai: 0 },
+      },
+    });
+    getContentDraft.mockResolvedValue(draft());
+    await renderPage();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 1_100)));
+
+    const [, tags] = container.querySelector('header')!.children;
+    expect(tags.textContent).toContain('Audit ≈62');
+    const [draftId, brandId, doc] = readAuditEstimate.mock.calls.at(-1)!;
+    expect([draftId, brandId]).toEqual(['d1', 'b1']);
+    // The whole page, its head too, as Export's HTML file has it.
+    expect(doc).toMatch(/^<!doctype html>/);
+    expect(doc).toContain('<title>Pipeline forecasting</title>');
+    expect(doc).toContain('<h1>Pipeline forecasting</h1>');
   });
 
   it('remembers the draft for Content › Editor, per brand', async () => {
@@ -1043,6 +1072,39 @@ describe('the content editor', () => {
       ]);
       await act(async () => button('Stop')!.click());
       expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1', 'r2');
+    });
+
+    it('shows Write this building the brief first, and stops it (customer priorities item 9)', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          status: 'draft',
+          method: 'create',
+          agentState: 'writing',
+          agentRun: 'write',
+          agentSince: new Date().toISOString(),
+        }),
+      );
+      readAgentRun.mockResolvedValue({
+        id: 'r5',
+        kind: 'brief',
+        steps: [
+          { key: 'gather_sources', count: 12 },
+          { key: 'write_outline', count: null },
+          { key: 'match_fanouts', count: null },
+        ],
+        step: 1,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        stoppedAt: null,
+        outcome: null,
+      });
+      await renderPage();
+      await act(async () => {});
+      const status = container.querySelector('[role="status"]')!;
+      expect(status.textContent).toContain("Content Agent is building this page's brief");
+      expect(status.querySelector('[aria-current="step"]')).not.toBeNull();
+      await act(async () => button('Stop')!.click());
+      expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1', 'r5');
     });
 
     it('shows only the run the page waits on: a rewrite’s on a new page, never another kind’s', async () => {

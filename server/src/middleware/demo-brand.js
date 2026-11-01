@@ -230,6 +230,10 @@ export const DEMO_GUARDED = [
 /** The write routes left open on a demo brand, and why. */
 export const DEMO_OPEN = [
   open(
+    'POST /content-drafts/:draftId/audit-estimate',
+    "Site Audit's estimate of a draft: its page checks are free and write nothing; its AI checks, which spend, refuse the demo brand in the route itself, so its sample drafts still get an estimate.",
+  ),
+  open(
     'POST /billing/cancel-feedback',
     "The organization's own: why its plan is cancelled. Names no brand.",
   ),

@@ -29,6 +29,7 @@ import {
   briefRulesOn,
   contentReadModelId,
   contentWriteModelId,
+  rebuildDraftBrief,
   rebuildSources,
 } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
@@ -85,6 +86,7 @@ import {
   textLength,
 } from './content-rewrite.js';
 import {
+  RunStoppedError,
   advanceRun,
   finishRun,
   fixUnderWay,
@@ -159,6 +161,12 @@ export const writeDraftInput = z.object({
    * hold those only AI can read (tone, language).
    */
   counted: z.number().int().min(0).max(60).optional(),
+  /**
+   * Write this (customer priorities item 9): the brief is built from these
+   * sources first, in the same run, and the page written from it. A draft
+   * with a brief of its own keeps it.
+   */
+  buildBrief: z.boolean().optional(),
 });
 
 export const pageSchema = z.object({
@@ -652,19 +660,66 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
       });
     }
 
-    // Written before the answer, so the editor reads its steps, and Stop finds
-    // it, at once; with its claim, the one a Stop on it lets go of.
     const held = { ...draft, agent_state: 'writing', agent_state_at: claimedAt };
-    const run = await startWritingRun(held, input, rewrite);
-    runDraftWriting({ draft: held, brand, model, modelId, input, budget, rewrite, run }).catch(
-      (err) => logger.error({ err, draftId }, '[content-writer] run failed'),
-    );
+    if (input.buildBrief && !rewrite && !draft.brief) {
+      // Write this: the brief's run first, holding the claim, then the page's.
+      briefThenWrite({ draft: held, brand, model, modelId, input, budget }).catch((err) =>
+        logger.error({ err, draftId }, '[content-writer] run failed'),
+      );
+    } else {
+      // Written before the answer, so the editor reads its steps, and Stop finds
+      // it, at once; with its claim, the one a Stop on it lets go of.
+      const run = await startWritingRun(held, input, rewrite);
+      runDraftWriting({ draft: held, brand, model, modelId, input, budget, rewrite, run }).catch(
+        (err) => logger.error({ err, draftId }, '[content-writer] run failed'),
+      );
+    }
   } catch (err) {
     // Not started: the hold goes.
     await budget.release();
     throw err;
   }
   return { started: true };
+}
+
+/**
+ * Write this (customer priorities item 9): the draft's brief built from the
+ * sources the page is written from, as the editor's Build brief builds it
+ * (its own run, shown step by step, holding the draft's claim so a Stop lets
+ * go of it), then the page written from it. A brief that can't be built (no
+ * sources, the AI budget, the model) leaves the page written from what there
+ * is, as Start writes it; a Stop ends both, and the hold on the budget goes.
+ */
+async function briefThenWrite({ draft, brand, model, modelId, input, budget }) {
+  let brief = null;
+  try {
+    brief = await rebuildDraftBrief({
+      draftId: draft.id,
+      brandId: draft.brand_id,
+      sources: input.sources,
+      // As the editor's rulesForBrief: a rebuild writes the keywords anew from the sources.
+      rules: input.rules.filter((rule) => rule.key !== 'keywords'),
+      claimedAt: draft.agent_state_at,
+    });
+  } catch (err) {
+    if (err instanceof RunStoppedError) {
+      await budget.release();
+      // The Stop let go of the claim; this only ends one it couldn't.
+      await finish(draft, { agent_state: null }).catch((finishErr) =>
+        logger.error({ err: finishErr, draftId: draft.id }, '[content-writer] state not saved'),
+      );
+      return { stopped: true };
+    }
+    logger.warn({ err, draftId: draft.id }, '[content-writer] brief not built, writing without it');
+  }
+  return runDraftWriting({
+    draft: brief ? { ...draft, brief } : draft,
+    brand,
+    model,
+    modelId,
+    input,
+    budget,
+  });
 }
 
 /**
