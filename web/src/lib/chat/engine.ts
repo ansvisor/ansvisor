@@ -751,6 +751,12 @@ interface RunContext {
   batchAnswer?: string;
   /** The agent run this chat is (CHAT-21 §H item 36): its steps are held within its cap too. */
   agentRunId: string | null;
+  /**
+   * Whose session the request driving the run carries: a change runs as the
+   * signed-in person. When it isn't the actor (an agent run nobody's session
+   * is behind), every change asks first (askWithoutSession).
+   */
+  sessionUserId: string | null;
 }
 
 const workedMs = (rc: Pick<RunContext, 'run' | 'segmentStart'>) =>
@@ -761,12 +767,15 @@ const workedMs = (rc: Pick<RunContext, 'run' | 'segmentStart'>) =>
  * tool calls and its events. Picks up a waiting one with `resume`. Never
  * throws: what fails ends the run in error, in words, with what was done
  * kept. Meant to run in the request's background (after()), so a browser
- * that goes away doesn't stop it (CHAT-03 item 21).
+ * that goes away doesn't stop it (CHAT-03 item 21). `sessionUserId`: whose
+ * session the request carries, left out in the actor's own request (the run
+ * routes); null for none (an agent run the minute tick or a signal started).
  */
 export async function driveRun(
   actor: ChatActor,
   runId: string,
   resume?: ResumeAction,
+  { sessionUserId = actor.userId }: { sessionUserId?: string | null } = {},
 ): Promise<void> {
   const controller = registerDriver(runId);
   const segmentStart = Date.now();
@@ -804,6 +813,7 @@ export async function driveRun(
       sink,
       controller.signal,
       segmentStart,
+      sessionUserId,
     );
     if (!rc) return;
     if (resume && run.pending) {
@@ -881,6 +891,7 @@ async function openContext(
   sink: RunEventSink,
   signal: AbortSignal,
   segmentStart: number,
+  sessionUserId: string | null,
 ): Promise<RunContext | null> {
   const progress = run.progress as Progress;
   const base = { run, segmentStart };
@@ -926,6 +937,7 @@ async function openContext(
     offered: new Map(offered.map((tool) => [tool.name, tool])),
     refused,
     agentRunId,
+    sessionUserId,
     skills: runSkills(actor.organizationId, progress, history.plan),
   };
 }
@@ -1922,7 +1934,7 @@ async function handleCall(
   }
 
   const { ctx, call: facts } = await callFacts(rc, tool, input);
-  const decision = decideForEngine(tool, ctx, facts);
+  const decision = askWithoutSession(rc, tool, decideForEngine(tool, ctx, facts));
   // A change its own check refuses before its card (Send to Action Center's duplicate): no card.
   if (decision.kind !== 'deny' && tool.class !== 'read') {
     const refused = await precheckOf(rc, tool, input, ctx);
@@ -1942,6 +1954,20 @@ async function handleCall(
     case 'click':
       return openCard(rc, tool, call, input, facts, decision);
   }
+}
+
+/**
+ * A change in a run no session is behind (an agent's that started on its
+ * own, or in another person's request): its tool acts as the signed-in
+ * person, so what would run by itself (Full auto, Always, a tick) asks
+ * first, with no "Don't ask again". The card waits in the owner's Inbox,
+ * and their Approve runs it in their own request.
+ */
+function askWithoutSession(rc: RunContext, tool: ChatTool, decision: ToolDecision): ToolDecision {
+  if (decision.kind !== 'run' || tool.class === 'read' || rc.sessionUserId === rc.actor.userId) {
+    return decision;
+  }
+  return { kind: 'ask', reason: 'no_session', offerDontAskAgain: false };
 }
 
 /** A refusal: the out-of-permission answer to the browser, its record, and its words to the model. */
@@ -2157,6 +2183,11 @@ async function openCard(
   rc.sink.emit('step.started', { step: clientStep(row) });
   const digest = cardDigest(tool, input);
   const offerDontAskAgain = decision.kind === 'ask' && decision.offerDontAskAgain;
+  const notes = cardNotes(tool);
+  // Why a change its mode would make by itself asks: no session is behind the run.
+  if (decision.kind === 'ask' && decision.reason === 'no_session') {
+    notes.note = [t('card.noSession'), notes.note].filter(Boolean).join(' ');
+  }
   rc.sink.emit('confirm.required', {
     n,
     action: toolWords(tool, 'name'),
@@ -2164,7 +2195,7 @@ async function openCard(
     digest,
     canDontAskAgain: offerDontAskAgain,
     // A WRITE whose change can't be undone once made (§9) says so on its card.
-    ...cardNotes(tool),
+    ...notes,
     ...(await cardDetailsOf(tool, input)),
   });
   return {

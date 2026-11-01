@@ -3227,6 +3227,59 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     expect(updateOpportunityStatus).toHaveBeenCalledTimes(2);
   });
 
+  it('asks before a change in a run no session is behind (an agent on its own): Full auto, Always and a tick', async () => {
+    const NOTE = 'This agent ran on its own, so it asks before changing anything.';
+    /** An Admin's turn, driven in a request with `session`'s session (null: none, the minute tick). */
+    async function driven(mode: Mode, session: string | null) {
+      models([READY], [calls(dismiss), text('Done.')]);
+      const started = await engine.startChatRun(ADMIN, { message: 'Do it', brandId: BRAND, mode });
+      if (!started.ok) throw new Error(`not started: ${started.code}`);
+      await engine.driveRun(ADMIN, started.runId, undefined, { sessionUserId: session });
+      const events = await eventsOf(started.runId);
+      expectClean(events);
+      return {
+        runId: started.runId,
+        waits: runRow(started.runId).status === 'waiting',
+        cards: ofType(events, 'confirm.required').map((e) => e.data),
+      };
+    }
+
+    // Full auto in the Admin's own request: it runs.
+    expect(await driven('full_auto', PEOPLE.admin)).toMatchObject({ waits: false, cards: [] });
+    expect(updateOpportunityStatus).toHaveBeenCalledTimes(1);
+    // With no session, or another person's: its card, saying why, without "Don't ask again".
+    for (const session of [null, PEOPLE.manager]) {
+      expect(await driven('full_auto', session), String(session)).toMatchObject({
+        waits: true,
+        cards: [expect.objectContaining({ canDontAskAgain: false, note: NOTE })],
+      });
+    }
+    expect(updateOpportunityStatus).toHaveBeenCalledTimes(1);
+    // The owner's Approve, in their own request, makes it once.
+    const held = await driven('full_auto', null);
+    expect((await approve(ADMIN, held.runId)).ok).toBe(true);
+    expect(updateOpportunityStatus).toHaveBeenCalledTimes(2);
+    expect(runRow(held.runId).status).toBe('done');
+
+    // An Admin's Always, and the person's tick in Auto: they run with the session, ask without.
+    settings({ tool_policies: { opportunityStatus: 'always' } });
+    expect(await driven('auto', PEOPLE.admin)).toMatchObject({ waits: false, cards: [] });
+    expect(await driven('auto', null)).toMatchObject({
+      waits: true,
+      cards: [expect.objectContaining({ canDontAskAgain: false, note: NOTE })],
+    });
+    settings({});
+    db.tables.chat_auto_choices = [
+      { user_id: PEOPLE.admin, organization_id: ORG, tool_key: 'opportunityStatus' },
+    ];
+    expect(await driven('auto', PEOPLE.admin)).toMatchObject({ waits: false, cards: [] });
+    expect(await driven('auto', null)).toMatchObject({
+      waits: true,
+      cards: [expect.objectContaining({ canDontAskAgain: false, note: NOTE })],
+    });
+    expect(updateOpportunityStatus).toHaveBeenCalledTimes(4);
+  });
+
   it('keeps Full auto to Growth and up, paid: Starter and the trial get the card', async () => {
     for (const [plan, status] of [
       ['starter', 'active'],

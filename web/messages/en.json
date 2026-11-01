@@ -3824,6 +3824,9 @@
       "doneWhen": "Done when: {text}",
       "dailyLimit": "This is one of the {limit} new actions the brand gets today, so Action Center's own new actions wait until tomorrow."
     },
+    "card": {
+      "noSession": "This agent ran on its own, so it asks before changing anything."
+    },
     "allTime": "All time",
     "lastDays": "Last {count} days",
     "since": "Since {date}",

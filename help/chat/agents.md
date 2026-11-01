@@ -98,9 +98,13 @@ Signals that come close together don't each start a run. Signals within 15 minut
 
 ## How a run works
 
-Each run works on one brand, in a chat of its own. A run a trigger started acts as the agent's owner, with their role; **Run now** acts as the person who clicked it. The chat shows in that person's Inbox. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
+Each run works on one brand, in a chat of its own. A run a trigger started acts as the agent's owner, with their role; **Run now** acts as the person who clicked it. The chat shows in that person's Inbox.
 
 A run may use only its share of your monthly AI limit. A run a trigger started ends **Stopped at its limit** when it reaches it; a **Run now** run pauses there instead. After 3 failed runs in a row the agent pauses. When the monthly AI limit is used up, the agent pauses and starts again by itself once the limit resets.
+
+## When a run asks before a change
+
+A run that starts without you, from a trigger or after waiting for a free slot, asks before every change, whatever its mode. A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
 
 ## On your own AI key
 
