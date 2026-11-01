@@ -48,7 +48,12 @@ import { useRouter } from '@/i18n/navigation';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { CancelSubscriptionDialog } from './cancel-subscription-dialog';
-import { aiUsageMultiple, usePlanFeatures, type PlanFeature } from './plan-features';
+import {
+  aiUsageMultiple,
+  usePlanCardsChatMetered,
+  usePlanFeatures,
+  type PlanFeature,
+} from './plan-features';
 
 interface SubscriptionData {
   planId: string;
@@ -88,7 +93,8 @@ export function PlanSwitcher({
   const router = useRouter();
   // A trial bought starts a new period, its AI usage from 0: the header meter
   // and its banners read it again rather than show the trial's.
-  const { usage: aiUsageRead, refresh: refreshAiUsage } = useAiUsage();
+  const { refresh: refreshAiUsage } = useAiUsage();
+  const chatMetered = usePlanCardsChatMetered();
   const [loading, setLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -244,7 +250,7 @@ export function PlanSwitcher({
    */
   function customPlanPoints(): PlanFeature[] {
     const aiUsage = aiUsageMultiple('enterprise');
-    const hint = aiUsageRead?.chatMetered ? 'aiUsageCustomHintChat' : 'aiUsageCustomHint';
+    const hint = chatMetered ? 'aiUsageCustomHintChat' : 'aiUsageCustomHint';
     return [
       ...(aiUsage
         ? [{ text: tCards('aiUsageCustom', { count: aiUsage }), hint: tCards(hint) }]

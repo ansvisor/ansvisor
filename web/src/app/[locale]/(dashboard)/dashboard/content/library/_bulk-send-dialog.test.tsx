@@ -113,6 +113,7 @@ const source = (id: string, title: string, body: string): CmsSource => ({
   html: `<h1>${title}</h1>\n${body}`,
   sourceUrl: null,
   author: null,
+  reviewer: null,
   teamByline: '',
   byline: null,
   // A page with no Article schema to add: its own type isn't an article (00448).

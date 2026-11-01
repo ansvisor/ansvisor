@@ -18,6 +18,7 @@ import {
   pageOffer,
   productJsonLd,
   schemaAuthor,
+  webPageJsonLd,
   withArticleSchema,
   type AddedArticleSchema,
 } from './page-schema';
@@ -249,6 +250,23 @@ describe('articleSchemaPlan and withArticleSchema (00448)', () => {
 
     expect(withArticleSchema(page, schema({ pageType: 'product_page' }), now)).toBe(page);
     expect(articleSchemaPlan(page, 'product_page', false)).toBe('none');
+  });
+});
+
+describe('webPageJsonLd', () => {
+  it('keeps the qualified reviewer separate from the Article author', () => {
+    expect(webPageJsonLd({ title: 'A guide', reviewer: ada })).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: 'A guide',
+      reviewedBy: {
+        '@type': 'Person',
+        name: 'Ada Lovelace',
+        jobTitle: 'Head of Content',
+        image: 'https://cdn.acme.com/ada.jpg',
+        sameAs: ['https://www.linkedin.com/in/ada'],
+      },
+    });
   });
 });
 

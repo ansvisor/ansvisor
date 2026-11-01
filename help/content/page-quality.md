@@ -1,8 +1,8 @@
 ---
 title: Check a page's Quality in the Content Editor
 route: /dashboard/content/editor
-keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author]
-synonyms: [content quality, quality check, page score, eeat score, ready to publish checklist]
+keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author, qualified reviewer, reviewer, reviewed by]
+synonyms: [content quality, quality check, page score, eeat score, ready to publish checklist, content reviewer, regulated page review]
 plan: all
 updated: 2026-11-01
 last_checked: 2026-11-01
@@ -46,11 +46,12 @@ The header shows the page's author, picked from **Settings › Authors**, or you
 
 - placeholders, alt text and links;
 - the author;
+- the qualified reviewer on pages that advise on health, money or the law;
 - visible dates;
 - the Article schema Ansvisor adds;
 - a warning when Trust is under 60.
 
-On a page with a shopping path, it also names the product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about.
+Copy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about.
 
 An article goes to your CMS and to exports with an Article schema that names its author, or your brand when it has none. The page's text doesn't change. If your CMS adds its own, click **Leave it out**; **Add it back** undoes it. A page with an Article schema of its own gets none. WordPress leaves the schema out: add it with your SEO plugin.
 

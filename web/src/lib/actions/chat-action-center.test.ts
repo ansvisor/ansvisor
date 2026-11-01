@@ -295,11 +295,32 @@ describe('attachToAction (Add to AC-{n})', () => {
           conversationId: CHAT,
           runId: RUN,
           execution: { mode: 'automated' },
+          idempotencyKey: 'chat:step-1',
         },
       }),
     ]);
     // Its targets never grow: the action itself isn't written.
     expect(JSON.stringify(db.tables.actions)).toBe(before);
+  });
+
+  it('adds the finding once per approval: a retry finds the event it wrote', async () => {
+    stepFor('attach_to_action');
+    const finding = { finding: 'Lost 6 citations on /pricing.' };
+    const first = await attachToAction(ACTION, finding, place);
+    expect(first).toMatchObject({ ok: true });
+    expect(await attachToAction(ACTION, finding, place)).toEqual(first);
+    // Closed since: the retry still answers what its approval did.
+    db.tables.actions[0].status = 'completed';
+    expect(await attachToAction(ACTION, finding, place)).toEqual(first);
+    expect(events('evidence_attached')).toHaveLength(1);
+
+    // Another approval is another finding.
+    db.tables.actions[0].status = 'new';
+    db.tables.chat_run_steps.push({ ...db.tables.chat_run_steps[0], id: 'step-2' });
+    await attachToAction(ACTION, finding, { ...place, approvalKey: 'step-2' });
+    expect(
+      events('evidence_attached').map((e) => (e.data as Record<string, unknown>).idempotencyKey),
+    ).toEqual(['chat:step-1', 'chat:step-2']);
   });
 
   it('refuses a closed action, and one it can’t find', async () => {
@@ -349,6 +370,23 @@ describe('attachFileToTask (Attach only)', () => {
       already: true,
     });
     expect(events('file_attached')).toHaveLength(1);
+  });
+
+  it("records a card's chat and run (Attach only), only when they are the person's own", async () => {
+    await attachFileToTask(BRAND, TASK, FILE, { conversationId: CHAT, runId: RUN });
+    expect(events('file_attached')[0].data).toMatchObject({
+      conversationId: CHAT,
+      runId: RUN,
+      // The person's own click: no change Chat made.
+      execution: null,
+    });
+
+    db.tables.chat_file_task_links = [];
+    db.tables.action_events = [];
+    // A run of another chat isn't recorded as this one's.
+    db.tables.chat_runs.push({ id: 'other-run', conversation_id: 'other-chat' });
+    await attachFileToTask(BRAND, TASK, FILE, { conversationId: CHAT, runId: 'other-run' });
+    expect(events('file_attached')[0].data).toMatchObject({ conversationId: null, runId: null });
   });
 
   it("refuses another brand's task or file, and a closed action's task", async () => {

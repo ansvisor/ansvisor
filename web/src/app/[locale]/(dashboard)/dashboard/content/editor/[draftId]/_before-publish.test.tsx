@@ -7,6 +7,7 @@ import type { ContentAuthor } from '@/lib/content/authors';
 import { articleSchemaInput, schemaAuthor } from '@/lib/content/page-schema';
 import { eeat, trust, trustBlocks, type TrustRead } from '@/lib/content/quality-checks';
 import { qualityTodos } from '@/lib/content/quality-todos';
+import { reviewerJsonLd } from '@/lib/content/ready-to-publish';
 import type { ShoppingLinks } from '@/lib/content/shopping-check';
 import type { SiteTrust } from '@/lib/content/site-trust';
 
@@ -113,6 +114,9 @@ async function render(
     shopping = null as Parameters<typeof BeforePublish>[0]['shopping'],
     schemaLeftOut = false,
     ownArticleSchema = false,
+    reviewer = null as ContentAuthor | null,
+    reviewerRequired = false,
+    reviewerLd = null as string | null,
   } = {},
 ) {
   // As the editor makes it (00448): the author it names, the site's pages Site trust found.
@@ -145,6 +149,9 @@ async function render(
             onContinue={onContinue}
             onClose={() => {}}
             quality={q}
+            reviewer={reviewer}
+            reviewerRequired={reviewerRequired}
+            reviewerLd={reviewerLd}
             title={title}
             pageType={pageType}
             image={image}
@@ -415,6 +422,48 @@ describe('BeforePublish', () => {
       "Article schema with the authorAdded · doneAnsvisor adds it to the page it sends to your CMS and to exports, with Ada Lovelace as the author. The page's text doesn't change. WordPress leaves it out: add it with your SEO plugin.",
       'Ready to paste · doneNo placeholders, all images have alt text, all links work.',
     ]);
+  });
+
+  it('checks that a regulated page both selects and names its qualified reviewer', async () => {
+    await render(quality(), { mode: 'export', reviewerRequired: true });
+    expect(rows().join(' ')).toContain('No qualified reviewer named · missing');
+
+    const reviewer: ContentAuthor = {
+      ...ada,
+      id: 'r1',
+      name: 'Dr. Grace Hopper',
+      title: 'Clinical Reviewer',
+    };
+
+    await render(quality(), { mode: 'export', reviewer, reviewerRequired: true });
+    expect(rows().join(' ')).toContain('Reviewer not named in the page text · missing');
+
+    // Named on the page: the node that goes out with it (reviewerJsonLd's).
+    const reviewerLd = reviewerJsonLd(
+      'How small teams forecast',
+      '<p>Reviewed by Dr. Grace Hopper</p>',
+      reviewer,
+    );
+    await render(quality(), { mode: 'export', reviewer, reviewerRequired: true, reviewerLd });
+    expect(rows().join(' ')).toContain('Qualified reviewer: Dr. Grace Hopper · check it');
+    expect(dialog().querySelector('pre')!.textContent).toContain('"@type": "WebPage"');
+    expect(dialog().querySelector('pre')!.textContent).toContain('"reviewedBy"');
+    expect(dialog().querySelector('pre')!.textContent).toContain('"jobTitle": "Clinical Reviewer"');
+
+    // Not named: no WebPage node is shown, as none goes out.
+    await render(quality(), { mode: 'export', reviewer, reviewerRequired: true });
+    expect(dialog().querySelector('pre')!.textContent).not.toContain('"reviewedBy"');
+
+    // A page no longer read as regulated keeps the reviewer picked for it, and
+    // shows what goes out with it: Copy, Export and Send carry them all the same.
+    await render(quality(), { mode: 'export', reviewer, reviewerLd });
+    expect(rows().join(' ')).toContain('Qualified reviewer: Dr. Grace Hopper · check it');
+    expect(dialog().querySelector('pre')!.textContent).toContain('"reviewedBy"');
+
+    // No reviewer and not regulated: no row, no WebPage node.
+    await render(quality(), { mode: 'export' });
+    expect(rows().join(' ')).not.toContain('reviewer');
+    expect(dialog().querySelector('pre')!.textContent).not.toContain('"reviewedBy"');
   });
 
   it('gives the JSON-LD from the page, author and site to copy, dated today', async () => {

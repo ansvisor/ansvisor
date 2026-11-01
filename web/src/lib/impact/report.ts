@@ -36,6 +36,8 @@ export type CheckpointMark =
       effect: number | null;
       /** Day 7's direction, when it has no verdict. */
       direction: 'up' | 'flat' | 'down' | null;
+      /** Day 90's: whether it held the verdict before it, as the job kept it (lastingOf); else null. */
+      lasting: 'held' | 'faded' | null;
       measuredAt: string | null;
     }
   | { checkpoint: Checkpoint; state: 'due'; dueOn: string }
@@ -103,6 +105,24 @@ const textOr = (value: unknown): string | null =>
   typeof value === 'string' && value ? value : null;
 const oneOf = <T extends string>(value: unknown, list: readonly T[]): T | null =>
   (list as readonly unknown[]).includes(value) ? (value as T) : null;
+/**
+ * A percentage or an effect in points to one decimal, as the job stores
+ * them: every number on the page and in the CSV is rounded the same, so a
+ * row's before, after, control and lift add up as shown.
+ */
+const pointsOr = (value: unknown): number | null => {
+  const n = numberOr(value);
+  return n === null ? null : Math.round(n * 10) / 10 || 0;
+};
+
+/**
+ * A day as YYYY-MM-DD in the browser's time: the page's month, and the day
+ * a change shipped, on the page and in the CSV alike.
+ */
+export function localDay(at: Date | string): string {
+  const d = typeof at === 'string' ? new Date(at) : at;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 /**
  * The baseline's days, YYYY-MM-DD, as the job sets them (checkpointWindow):
@@ -140,8 +160,9 @@ export function checkpointMarks(
         state: 'measured',
         outcome: oneOf(entry.outcome, OUTCOMES) ?? 'pending',
         // Day 7 is an early signal: its direction only, never a number of points.
-        effect: checkpoint === 'd7' ? null : numberOr(entry.effect),
+        effect: checkpoint === 'd7' ? null : pointsOr(entry.effect),
         direction: oneOf(entry.direction, ['up', 'flat', 'down'] as const),
+        lasting: checkpoint === 'd90' ? oneOf(entry.lasting, ['held', 'faded'] as const) : null,
         measuredAt: textOr(entry.measured_at),
       };
     }
@@ -213,11 +234,11 @@ export function impactRow(
     confidence: oneOf(m.confidence, ['low', 'medium', 'high'] as const),
     checkpoint,
     metric: oneOf(primary.metric, ['visibility', 'citations'] as const),
-    before: numberOr(primary.before),
-    after: numberOr(primary.after),
-    controlBefore: numberOr(primary.control_before),
-    controlAfter: numberOr(primary.control_after),
-    effect: checkpoint === 'd7' ? null : numberOr(primary.effect),
+    before: pointsOr(primary.before),
+    after: pointsOr(primary.after),
+    controlBefore: pointsOr(primary.control_before),
+    controlAfter: pointsOr(primary.control_after),
+    effect: checkpoint === 'd7' ? null : pointsOr(primary.effect),
     direction:
       checkpoint === 'd7' ? oneOf(primary.direction, ['up', 'flat', 'down'] as const) : null,
     window:
@@ -297,13 +318,14 @@ export interface CsvWords {
 
 /**
  * The month's rows as CSV (Export ▾, CSV only for now): one line a change,
- * numbers as numbers, as the table shows them.
+ * numbers as numbers, as the table shows them, and the day it shipped in
+ * the browser's time, as the page dates it.
  */
 export function impactCsv(rows: readonly ImpactRow[], words: CsvWords): string {
   const lines = rows.map((row) =>
     csvLine([
       row.title,
-      row.shippedAt.slice(0, 10),
+      localDay(row.shippedAt),
       words.source(row.source),
       row.actionNo !== null ? `AC-${row.actionNo}` : '',
       row.targetPrompts,

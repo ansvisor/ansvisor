@@ -1,8 +1,8 @@
 ---
 title: Send a page to your CMS
 route: /dashboard/content/library
-keywords: [send to cms, webflow, wordpress, framer, draft post, last send]
-synonyms: [push to cms, publish to blog, send to website, export to cms]
+keywords: [send to cms, webflow, wordpress, framer, draft post, last send, qualified reviewer, reviewer metadata, reviewed by]
+synonyms: [push to cms, publish to blog, send to website, export to cms, send reviewer, reviewer field]
 plan: all
 updated: 2026-11-01
 last_checked: 2026-11-01
@@ -17,7 +17,7 @@ sources: [docs/guides/send-to-cms.mdx, docs/guides/content-editor.mdx]
 
 In the editor, click the paper-plane icon in the header. With Quality on, **Before you publish** opens first when it has something to ask about, such as a missing author, open placeholders, missing alt text or broken links. Check it and click **Continue to send**. From the Library, open a row's **…** menu and pick **Send to CMS**.
 
-The dialog fills the **Slug**, **Meta title** and **Meta description** from the page; change them before sending if you like. What you send is kept on the draft, so the next send starts from it.
+The dialog fills the **Slug**, **Meta title** and **Meta description** from the page; change them before sending if you like. For a regulated page, a selected qualified reviewer is sent separately from its author; the dialog shows both metadata lines. What you send is kept on the draft, so the next send starts from it.
 
 ## Choose where it goes
 
@@ -53,10 +53,10 @@ Sending a page again updates the same Webflow or Framer item, the same WordPress
 
 ## What each CMS leaves out
 
-- **Webflow**: tables go as lists, and images aren't sent. An empty meta description goes as the page's opening words.
-- **WordPress**: the meta title and the structured data aren't sent, so set them in your SEO plugin. Images keep their addresses, and no featured image or category is set.
-- **Framer**: tables go as tables, and images aren't sent. Another item in the collection with the same slug stops the send.
-- **Wix**: images aren't sent, and no cover image or category is set. Sending again replaces the post's text, so add images in Wix after your last send.
+- **Webflow**: Tables become lists; images aren't sent. Reviewer metadata requires a mapped optional Plain Text field; show it in the collection template. Empty meta descriptions use the page's opening words.
+- **WordPress**: Reviewer metadata and structured data aren't sent; the adapter can't map custom metadata or repurpose the post author. Set the meta title and structured data in your SEO plugin. Images keep their addresses; no featured image or category is set.
+- **Framer**: Tables stay tables; images aren't sent. Reviewer metadata requires a mapped optional string field; show it in the page template. Duplicate slugs stop the send.
+- **Wix**: Images, cover images and categories aren't sent. Reviewer metadata is an SEO tag, not visible text; show it in the page template. Resending replaces post text, so add images after the last send.
 
 An article goes with the Article schema Ansvisor adds, its author included, unless you left it out in **Before you publish**.
 

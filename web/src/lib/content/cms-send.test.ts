@@ -26,6 +26,7 @@ const page: PageFields = {
   metaDescription: 'Brew it slowly.',
   slug: 'pour-over-coffee',
   author: 'Ada Lovelace',
+  reviewer: 'Dr. Grace Hopper, Clinical Reviewer',
   featuredImage: null,
 };
 const fields: CmsFields = {
@@ -154,6 +155,7 @@ describe('cmsPage', () => {
       metaDescription: 'Slowly.',
       html: '<p>Brew it slowly.</p>\n<img src="https://cdn.example/cup.jpg" alt="A cup">',
       author: 'Ada Lovelace',
+      reviewer: 'Dr. Grace Hopper, Clinical Reviewer',
       featuredImage: { src: 'https://cdn.example/cup.jpg', alt: 'A cup' },
     });
   });
@@ -216,6 +218,7 @@ describe('cmsSource', () => {
     bodyHtml: '<h1>Pour-over</h1><p>Brew it slowly.</p>',
     sourceUrl: 'https://acme.example/pour-over',
     authorId: 'a1',
+    reviewerId: 'r1',
     authorConfirmed: false,
     language: null,
     pageType: 'guide',
@@ -223,11 +226,16 @@ describe('cmsSource', () => {
     schemaLeftOut: false,
   };
   const ada = { id: 'a1', name: 'Ada Lovelace', sameAs: [] } as unknown as ContentAuthor;
+  const reviewer = {
+    id: 'r1',
+    name: 'Dr. Grace Hopper',
+    title: 'Clinical Reviewer',
+  } as ContentAuthor;
   // The authors are read once Quality is live (its phase 1), as readCmsSources reads them.
   beforeEach(() => vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '1'));
   afterEach(() => vi.unstubAllEnvs());
   const authors = (bylineInContent: boolean): AuthorsRead => ({
-    authors: [ada],
+    authors: [ada, reviewer],
     brands: [{ id: 'b1', name: 'Acme', bylineInContent }],
     me: { id: 'u1', role: 'admin' },
   });
@@ -248,6 +256,7 @@ describe('cmsSource', () => {
       html: expect.stringContaining('<p>Brew it slowly.</p>'),
       sourceUrl: 'https://acme.example/pour-over',
       author: ada,
+      reviewer,
       teamByline: 'Acme Team',
       byline: null,
       schema: {
@@ -345,6 +354,7 @@ describe('bulkCmsItems', () => {
     html: '<h1>Pour-over</h1>\n<p>Brew it slowly.</p>',
     sourceUrl: null,
     author: null,
+    reviewer: null,
     teamByline: 'Acme Team',
     byline: null,
     schema: schema(),
@@ -370,6 +380,23 @@ describe('bulkCmsItems', () => {
       datePublished: '2026-11-01',
     });
     expect(leftOut.page!.html).toBe('<p>Brew it slowly.</p>');
+  });
+
+  it('includes the reviewer as a WebPage schema node in bulk sends', () => {
+    const reviewer = {
+      id: 'r1',
+      name: 'Dr. Grace Hopper',
+      title: 'Clinical Reviewer',
+    } as ContentAuthor;
+    const named = '<h1>Pour-over</h1>\n<p>Reviewed by Dr. Grace Hopper.</p>';
+    const [item] = bulkCmsItems([source({ reviewer, html: named })], new Map());
+    expect(item.page).toMatchObject({
+      reviewer: 'Dr. Grace Hopper, Clinical Reviewer',
+      html: expect.stringContaining('"reviewedBy"'),
+    });
+    // A page that doesn't name them goes without the node, as the editor's does.
+    const [unnamed] = bulkCmsItems([source({ reviewer })], new Map());
+    expect(unnamed.page?.html).not.toContain('reviewedBy');
   });
 
   it('gives each page as the Send dialog would send it, or why it can’t go', () => {
@@ -420,6 +447,7 @@ describe('cmsSendGroups', () => {
     metaDescription: '',
     html: 'x'.repeat(chars),
     author: null,
+    reviewer: null,
     featuredImage: null,
   });
 

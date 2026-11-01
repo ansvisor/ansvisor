@@ -56,6 +56,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { exportFileName } from '@/lib/white-label/export-name';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import {
   Plus,
@@ -1525,7 +1526,7 @@ export default function CompetitorsPage() {
   const selectedCompetitor = competitors.find((c) => c.id === selectedCompetitorId);
   const today = new Date().toISOString().slice(0, 10);
 
-  function exportBenchmark() {
+  async function exportBenchmark() {
     if (!brand || !comparisonData?.brands.length) return;
     const rows = comparisonData.brands.map((e) => ({
       name: e.name,
@@ -1540,11 +1541,11 @@ export default function CompetitorsPage() {
     }));
     downloadCsv(
       toCsv(rows, BENCHMARK_EXPORT_HEADERS),
-      `ansvisor_${brand.slug}_competitors_${today}.csv`,
+      await exportFileName(`${brand.slug}_competitors_${today}.csv`),
     );
   }
 
-  function exportHeadToHead() {
+  async function exportHeadToHead() {
     if (!brand || !h2hData?.groups.length || !selectedCompetitor) return;
     const rows = h2hData.groups.map((g) => ({
       prompt: g.promptText,
@@ -1559,7 +1560,9 @@ export default function CompetitorsPage() {
     }));
     downloadCsv(
       toCsv(rows, HEAD_TO_HEAD_EXPORT_HEADERS),
-      `ansvisor_${brand.slug}_head-to-head_${slugify(selectedCompetitor.name)}_${today}.csv`,
+      await exportFileName(
+        `${brand.slug}_head-to-head_${slugify(selectedCompetitor.name)}_${today}.csv`,
+      ),
     );
   }
 
@@ -1581,8 +1584,8 @@ export default function CompetitorsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <HeaderWithAiUsage>
+      {/* Header: the meter and Ask Chat at its bottom, beside the range's buttons. */}
+      <HeaderWithAiUsage align="end">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>

@@ -41,6 +41,8 @@ export interface McpCmsPackage {
   json_ld: unknown[];
   /** The author's name for the CMS's author field; null to keep the CMS's own. */
   author: string | null;
+  /** The qualified reviewer's name and credential, separate from the author. */
+  reviewer: string | null;
   featured_image: { src: string; alt: string } | null;
   /** The live page it optimizes; null for a new page. */
   source_url: string | null;
@@ -90,7 +92,7 @@ export async function getContentDraftPackageFor(
   const notFound: McpPackageError = { error: 'not_found', message: 'Draft not found' };
   if (!auth.organizationId) return notFound;
   const columns =
-    'id, brand_id, title, body_html, source_url, author_id, author_real_at, rules, page_type, method, slug, meta_title, meta_description, archived_at, brands!inner(organization_id, name, language)' as const;
+    'id, brand_id, title, body_html, source_url, author_id, reviewer_id, author_real_at, rules, page_type, method, slug, meta_title, meta_description, archived_at, brands!inner(organization_id, name, language)' as const;
   const read = await supabaseAdmin
     .from('content_drafts')
     .select(`${columns}, schema_left_out` as const)
@@ -131,6 +133,7 @@ export async function getContentDraftPackageFor(
       bodyHtml: draft.body_html,
       sourceUrl: draft.source_url,
       authorId: draft.author_id,
+      reviewerId: draft.reviewer_id,
       authorConfirmed: draft.author_real_at !== null,
       language: draftLanguage(draft.rules),
       pageType: draft.page_type,
@@ -162,6 +165,7 @@ export async function getContentDraftPackageFor(
     html: page.html,
     json_ld: jsonLdOf(page.html),
     author: page.author,
+    reviewer: page.reviewer,
     featured_image: page.featuredImage,
     source_url: draft.source_url,
   };

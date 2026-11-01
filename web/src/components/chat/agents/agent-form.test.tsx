@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
 import type { AgentFormSetup } from '@/lib/chat/agent-form';
 import type { AgentDetail } from '@/lib/chat/agents';
+import { readyPreset } from '@/lib/chat/agents/catalog';
 import { ADMIN_CAN, AGENT_ID, NOTHING_CAN, NOW, detail } from '@/lib/chat/testing/agent-fixtures';
 
 /**
@@ -64,11 +65,21 @@ const fetchMock = vi.fn(async (url: string, init?: RequestInit) => answer(url, i
 async function settle() {
   await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 }
-async function render(setup: AgentFormSetup = SETUP, agent: AgentDetail | null = null) {
+async function render(
+  setup: AgentFormSetup = SETUP,
+  agent: AgentDetail | null = null,
+  preset: string | null = null,
+) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <AgentForm setup={setup} agent={agent} now={NOW} timeZone="UTC" />
+        <AgentForm
+          setup={setup}
+          agent={agent}
+          preset={readyPreset(preset)}
+          now={NOW}
+          timeZone="UTC"
+        />
       </NextIntlClientProvider>,
     );
   });
@@ -178,6 +189,55 @@ afterEach(() => {
 });
 
 describe('AgentForm: new agent', () => {
+  it('opens filled from a ready-to-use agent, named after it, and saves nothing until a click', async () => {
+    await render(SETUP, null, 'competitor-watch');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(step()).toBe('0');
+    expect(one('[data-skill="beat"]')!.getAttribute('aria-checked')).toBe('true');
+    expect(summary('skill')).toBe('/beat/compare');
+    expect(summary('trigger')).toBe('New Compete signal · +1');
+    expect(summary('scope')).toBe('Ansvisor');
+    expect(summary('mode')).toBe('Auto, ask before changes');
+    expect(summary('name')).toBe('Competitor Watch');
+    expect(action('agentNew.cancel')[0].getAttribute('href')).toBe('/dashboard/agents?tab=ready');
+    // Every step is ready as it opens: Save as draft sends it as filled in, named by the server (§O).
+    await click(one('[data-step-button="3"]')!);
+    expect(step()).toBe('3');
+    await click(action('agentNew.saveDraft')[0]);
+    expect(calls()).toEqual(['POST /api/chat/agents']);
+    expect(bodyOf(0)).toMatchObject({
+      name: 'Competitor Watch',
+      autoName: true,
+      skills: ['beat', 'compare'],
+      mode: 'auto',
+      connections: [],
+      scope: { brand_ids: [BRAND] },
+      triggers: [
+        { kind: 'signal', config: { category: 'compete' }, enabled: true },
+        {
+          kind: 'schedule',
+          config: { type: 'recurring', rrule: 'FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0' },
+          enabled: true,
+        },
+      ],
+    });
+  });
+
+  it('opens a Full auto agent on Auto, ask before changes where the plan keeps Full auto closed', async () => {
+    await render(SETUP, null, 'weekly-report');
+    expect(summary('mode')).toBe('Auto, ask before changes');
+    expect(summary('name')).toBe('Weekly Report');
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({ ...SETUP, fullAuto: 'open', planName: 'Growth' }, null, 'weekly-report');
+    expect(summary('mode')).toBe('Full auto');
+  });
+
+  it('goes back to Your agents from a New agent that starts empty', async () => {
+    await render();
+    expect(action('agentNew.cancel')[0].getAttribute('href')).toBe('/dashboard/agents?tab=yours');
+  });
+
   it('walks Skill · Trigger · Mode & approvals · Connections & model, stopping where a step isn’t ready', async () => {
     await render();
     expect(one('h1')!.textContent).toBe('New agent');
@@ -320,6 +380,20 @@ describe('AgentForm: new agent', () => {
     const needed = one('[data-connection="cms"]')!;
     expect(needed.textContent).toContain('Required by /publish');
     expect(needed.querySelector('[data-action="agentNew.toggleConnection"]')).toBeNull();
+  });
+
+  it('asks /shopping for any catalog source, uploads included, Required', async () => {
+    await render();
+    await click(one('[data-skill="shopping"]')!);
+    await next();
+    await next();
+    await next();
+    const catalog = one('[data-connection="catalog"]')!;
+    expect(catalog.querySelector('b')?.textContent).toBe('Any catalog source');
+    expect(catalog.querySelector('[data-slot="connection-counts"]')?.textContent).toBe(
+      'Merchant Center, a product feed, an upload or a store',
+    );
+    expect(catalog.textContent).toContain('Required by /shopping');
   });
 
   it('saves a draft the API takes, then opens it', async () => {
@@ -499,6 +573,26 @@ describe('AgentForm: new agent', () => {
     await type(one('[data-action="agentNew.maxMonth"]')!, '30');
     await click(action('agentNew.saveDraft')[0]);
     expect(bodyOf(0)).toMatchObject({ visibility: 'workspace', maxMonthShare: 0.3 });
+  });
+
+  it('says Max per run and Monthly cap apply on the workspace’s own key, measured at list prices', async () => {
+    await render({ ...SETUP, ownKeyProvider: 'anthropic' });
+    await toLastStep();
+    expect(one('[data-slot="agent-form-key"]')!.textContent).toBe(
+      'Runs on your Anthropic key, which Anthropic bills. Max per run and Monthly cap still apply.',
+    );
+    expect(one('#agent-form-note-max-run')!.textContent).toBe(
+      messages.chatAgents.form.agent.maxRunNoteOwnKey,
+    );
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    await toLastStep();
+    expect(one('[data-slot="agent-form-key"]')!.textContent).toBe('Uses your monthly AI limit');
+    expect(one('#agent-form-note-max-run')!.textContent).toBe(
+      messages.chatAgents.form.agent.maxRunNote,
+    );
   });
 
   it('moves with the keyboard: arrows choose a skill, each step opens on its title, a problem takes the focus', async () => {

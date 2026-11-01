@@ -127,9 +127,11 @@ import {
   disclosureText,
   exportPlaceholders,
   pasteChecks,
+  reviewerJsonLd,
   teamName,
   titlePlaceholders,
   withByline,
+  withReviewerJsonLd,
 } from '@/lib/content/ready-to-publish';
 import { detectPageType, isSiteType, type SiteType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
@@ -206,6 +208,7 @@ import {
 import { shoppingLinks, type ShoppingLinks } from '@/lib/content/shopping-check';
 import { aiUsageTone } from '@/lib/billing/ai-usage';
 import { saveBlob } from '@/lib/download';
+import { exportAuthor, exportFileWord } from '@/lib/white-label/export-name';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -3001,7 +3004,11 @@ export function DraftEditor({
       return;
     }
     void copyToClipboard(
-      contentByline ? withByline(html, contentByline) : html,
+      withReviewerJsonLd(
+        title,
+        contentByline ? withByline(html, contentByline) : html,
+        pageReviewer,
+      ),
       t('copyHtmlDone'),
       t('copyHtmlFailed', { html: '</> HTML' }),
     );
@@ -3017,8 +3024,8 @@ export function DraftEditor({
     const name = title.trim() || t('untitled');
     try {
       saveBlob(
-        await draftExportBlob(format, name, html, undefined, draft.sourceUrl),
-        draftExportFileName(name, format),
+        await draftExportBlob(format, name, html, undefined, draft.sourceUrl, await exportAuthor()),
+        draftExportFileName(name, format, await exportFileWord()),
       );
     } catch (err) {
       console.error('Failed to export the page:', err);
@@ -3303,6 +3310,12 @@ export function DraftEditor({
       linksUnread: links.count - links.read,
     };
   }, [publishOpen, linkChecks, title]);
+  // The reviewer's WebPage node as the page goes out, read once Before you
+  // publish opens, from the page as it was then (not on every keystroke).
+  const reviewerLd = useMemo(
+    () => (publishOpen ? reviewerJsonLd(title, publishOpen.html, pageReviewer) : null),
+    [publishOpen, title, pageReviewer],
+  );
   /** Marks it ready; past Before you publish's warning, logged with its facts. */
   const markReady = async (anyway?: ReadyAnyway) => {
     if (lockedFor('markReady')) return;
@@ -4391,6 +4404,7 @@ export function DraftEditor({
           isNew={draft.method === 'create'}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
+          reviewer={pageReviewer}
           teamByline={teamByline}
           siteAuthor={!pageAuthor && authorConfirmed.real}
           byline={contentByline}
@@ -4438,6 +4452,7 @@ export function DraftEditor({
           html={sendOpen.html}
           sourceUrl={draft.sourceUrl}
           author={pageAuthor}
+          reviewer={pageReviewer}
           teamByline={teamByline}
           byline={contentByline}
           onFillNow={() => {
@@ -4478,6 +4493,9 @@ export function DraftEditor({
           }}
           onClose={() => setPublishOpen(null)}
           quality={quality}
+          reviewer={pageReviewer}
+          reviewerRequired={regulated !== null}
+          reviewerLd={reviewerLd}
           title={title}
           pageType={pageType}
           image={firstImage(pageHtml)}

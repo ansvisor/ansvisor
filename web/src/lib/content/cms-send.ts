@@ -18,6 +18,7 @@ import {
   withByline,
   withoutDangling,
   withoutLeadingH1,
+  withReviewerJsonLd,
   type PageFields,
 } from '@/lib/content/ready-to-publish';
 
@@ -39,6 +40,7 @@ export interface CmsPage {
   metaDescription: string;
   html: string;
   author: string | null;
+  reviewer: string | null;
   featuredImage: { src: string; alt: string } | null;
 }
 
@@ -148,6 +150,8 @@ export interface CmsSource {
   html: string;
   sourceUrl: string | null;
   author: ContentAuthor | null;
+  /** Qualified reviewer (CE-049), not the page author. */
+  reviewer: ContentAuthor | null;
   /**
    * The brand's team in the page's language, for the CMS's author field when
    * the page has no author (teamName); empty while the authors aren't read.
@@ -184,6 +188,7 @@ export function cmsSource({
 }): CmsSource {
   const language = page.language ?? brandLanguage;
   const author = authors?.authors.find((a) => a.id === page.authorId) ?? null;
+  const reviewer = authors?.authors.find((a) => a.id === page.reviewerId) ?? null;
   const inContent = authors?.brands.find((b) => b.id === brandId)?.bylineInContent ?? false;
   const confirmed = !author && page.authorConfirmed;
   return {
@@ -192,6 +197,7 @@ export function cmsSource({
     html: publishableHtml(page.bodyHtml),
     sourceUrl: page.sourceUrl,
     author,
+    reviewer,
     teamByline: authors && !confirmed ? teamName(language, brandName) : '',
     byline: inContent && !confirmed ? bylineText(language, author?.name ?? null, brandName) : null,
     // As Before you publish shows it; Site trust isn't read here, so no pages of theirs.
@@ -230,6 +236,7 @@ export function cmsPage({
   fields,
   page,
   byline,
+  reviewer = null,
 }: {
   draftId: string;
   title: string;
@@ -239,8 +246,10 @@ export function cmsPage({
   page: PageFields;
   /** The byline line the brand puts in the content, or null. */
   byline: string | null;
+  /** The selected qualified reviewer: its WebPage.reviewedBy once the page names them. */
+  reviewer?: ContentAuthor | null;
 }): CmsPage {
-  const withLine = byline ? withByline(html, byline) : html;
+  const withLine = withReviewerJsonLd(title, byline ? withByline(html, byline) : html, reviewer);
   const src = page.featuredImage;
   const image = src?.startsWith('https://') && src.length <= IMAGE_SRC_MAX ? src : null;
   return {
@@ -251,6 +260,7 @@ export function cmsPage({
     metaDescription: fields.metaDescription.trim(),
     html: withoutLeadingH1(withLine),
     author: page.author.trim().slice(0, AUTHOR_MAX) || null,
+    reviewer: page.reviewer.trim().slice(0, AUTHOR_MAX) || null,
     featuredImage: image ? { src: image, alt: altOf(html, image).slice(0, ALT_MAX) } : null,
   };
 }
@@ -305,7 +315,17 @@ export function bulkCmsItems(
       draftId,
       title,
       problem,
-      page: problem ? null : cmsPage({ draftId, title, html, fields, page, byline: source.byline }),
+      page: problem
+        ? null
+        : cmsPage({
+            draftId,
+            title,
+            html,
+            fields,
+            page,
+            byline: source.byline,
+            reviewer: source.reviewer,
+          }),
     };
   });
 }
