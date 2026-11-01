@@ -148,7 +148,11 @@ timestamps (`date_from` / `date_to`).
   competitor, you). Filter with `source_filter`: `all`, `owned`,
   `competitor` or `external`.
 - **`get_ai_traffic`** — visits referred by AI engines: per platform,
-  top landing pages, countries.
+  top landing pages, countries. Read `tracking` first: `not_detected`
+  (the tracking snippet isn't seen on the brand's site, so 0 visits
+  means nothing is measured yet: say so and point to installing it on
+  the AI Traffic page), `installed_quiet` (installed, no AI visit in
+  the last 7 days) or `active`.
 - **`list_reports`** — the brand's saved reports, newest first: `id`,
   `title`, `template`, `date_from` / `date_to` and `created_at`.
   `limit` (default 50, max 100).
@@ -243,7 +247,12 @@ answers; no LLM is called.
   **`get_site_audit`** — page audit allowance, past audits, one audit's
   scores and fixes.
 - **`run_site_audit`** — audit a URL. Uses a monthly credit and runs
-  ~30s; poll `get_site_audit` *(write)*.
+  ~30s; poll `get_site_audit` *(write)*. A page with an audit already
+  running returns that audit (`alreadyRunning: true`) and uses no
+  credit. A page audited in the last 10 minutes returns status
+  `recently_audited` with that audit's id and starts nothing: read it
+  with `get_site_audit`, or ask the user and pass `force: true` to
+  audit it again (uses a credit).
 
 **Content Editor**
 
@@ -714,6 +723,9 @@ When the user asks how AI describes the brand, why sentiment moved
   give its range and say so.
 - **Don't claim a citation count is good or bad in isolation.** It
   only matters relative to mentions (see scoring reference).
+- **Don't read 0 AI visits as no AI traffic.** When `get_ai_traffic`
+  says `tracking: "not_detected"`, nothing is measured yet: say the
+  tracking snippet isn't installed instead.
 - **Don't call a write tool to "check" something.** Read tools exist
   for every write; use them.
 - **Don't recommend "improve SEO" — this is not SEO.** AEO is about
