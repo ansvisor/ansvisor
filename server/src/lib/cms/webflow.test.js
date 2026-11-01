@@ -170,6 +170,29 @@ describe('suggestFieldMap', () => {
 });
 
 describe('checkFieldMap', () => {
+  it('maps the reviewer to a plain-text field without making it universally required', () => {
+    const reviewer = {
+      slug: 'reviewed-by',
+      name: 'Reviewed by',
+      type: 'PlainText',
+      required: false,
+    };
+    const fields = [...blog, reviewer];
+    expect(suggestFieldMap(fields).reviewer).toBe('reviewed-by');
+    expect(checkFieldMap({ body: 'post-body', reviewer: 'reviewed-by' }, fields)).toEqual({
+      ok: true,
+      map: { body: 'post-body', reviewer: 'reviewed-by' },
+    });
+    const required = fields.map((field) =>
+      field.slug === 'reviewed-by' ? { ...field, required: true } : field,
+    );
+    expect(
+      checkFieldMap({ body: 'post-body', reviewer: 'reviewed-by' }, required).problems,
+    ).toEqual([
+      'The collection requires Reviewed by, which Send to CMS doesn’t fill: make it optional in Webflow, or pick another collection',
+    ]);
+  });
+
   it('keeps a map that fits the collection', () => {
     expect(
       checkFieldMap({ body: 'post-body', metaDescription: 'post-summary', jsonLd: '' }, blog),

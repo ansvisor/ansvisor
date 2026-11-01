@@ -116,6 +116,18 @@ describe('seoTags', () => {
     ]);
   });
 
+  it('includes the qualified reviewer in a custom SEO metadata tag', () => {
+    expect(seoTags({ title: 'T', reviewer: 'Dr. Grace Hopper, Clinical Reviewer' })).toEqual([
+      { type: 'title', children: 'T', custom: false, disabled: false },
+      {
+        type: 'meta',
+        props: { name: 'reviewed-by', content: 'Dr. Grace Hopper, Clinical Reviewer' },
+        custom: true,
+        disabled: false,
+      },
+    ]);
+  });
+
   it('escapes every "<" in the JSON-LD, so it can’t end the script it goes in', () => {
     const [tag] = seoTags({}, [{ '@type': 'Article', headline: 'Cold brew </script><b>x' }]);
     expect(tag.children).not.toContain('<');
