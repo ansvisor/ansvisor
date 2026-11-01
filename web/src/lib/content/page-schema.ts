@@ -56,6 +56,27 @@ export function firstImage(html: string): string | null {
   return null;
 }
 
+export interface ReviewerSchemaInput {
+  title: string;
+  reviewer: ContentAuthor;
+}
+
+/** A WebPage with the qualified reviewer as schema.org's reviewedBy Person. */
+export function webPageJsonLd({ title, reviewer }: ReviewerSchemaInput): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    ...(pageName(title) ? { name: pageName(title) } : {}),
+    reviewedBy: {
+      '@type': 'Person',
+      name: reviewer.name,
+      ...(reviewer.title ? { jobTitle: reviewer.title } : {}),
+      ...(reviewer.photoUrl ? { image: reviewer.photoUrl } : {}),
+      ...(reviewer.sameAs?.length ? { sameAs: reviewer.sameAs } : {}),
+    },
+  };
+}
+
 export interface ArticleSchemaInput {
   title: string;
   /** The page's author; undefined while the authors aren't read (it is left out). */

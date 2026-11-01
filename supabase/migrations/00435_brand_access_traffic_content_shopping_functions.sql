@@ -25,10 +25,10 @@
 --     seed_kpi_presets (00163), override_mention_sentiment (00223) and
 --     approve_action_task_review (00375).
 --
--- The third of three waves (BRAND-ACCESS PR 4–6): 00426 took the citation
--- and report functions; Insights, Mentions and Topics are the other wave.
--- web/src/lib/brand-access-functions.test.ts lists the functions still to do
--- and fails on a new one that checks only the organization.
+-- The last of three waves (BRAND-ACCESS PR 4–6), after the citation and
+-- report functions (00426) and Insights, Mentions and Topics (00434). None
+-- is left to convert: web/src/lib/brand-access-functions.test.ts fails on a
+-- new function that checks only the organization.
 --
 -- Nothing changes yet: everyone has All brands until the Team screen narrows
 -- someone, and for an All-brands person can_access_brand(brand) is true

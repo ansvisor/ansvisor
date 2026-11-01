@@ -7,6 +7,7 @@ import {
   impactCsv,
   impactRow,
   impactSummary,
+  localDay,
   outcomeCounts,
   pageKey,
   type ImpactRow,
@@ -201,6 +202,39 @@ describe('impactRow', () => {
     // From day 14 the effect is the job's, and there is no early direction.
     expect(impactRow(ship(), ME, names)).toMatchObject({ effect: 50, direction: null });
   });
+
+  it('rounds every percentage and effect to one decimal, as the job stores them', () => {
+    const row = impactRow(
+      ship({
+        measurement: {
+          ...ship().measurement,
+          metrics: [
+            {
+              metric: 'visibility',
+              before: 33.333,
+              after: 50.04,
+              control_before: 40.06,
+              control_after: 39.96,
+              effect: 16.666,
+            },
+          ],
+          checkpoints_json: [{ checkpoint: 'd14', outcome: 'improved', effect: -0.04 }],
+        },
+      }),
+      ME,
+      names,
+    );
+    expect(row).toMatchObject({
+      before: 33.3,
+      after: 50,
+      controlBefore: 40.1,
+      controlAfter: 40,
+      effect: 16.7,
+    });
+    // Never a "-0".
+    const d14 = row.checkpoints[1];
+    expect(d14.state === 'measured' && Object.is(d14.effect, 0)).toBe(true);
+  });
 });
 
 describe('checkpointMarks', () => {
@@ -220,6 +254,34 @@ describe('checkpointMarks', () => {
       effect: 1,
     });
     expect(marks[3]).toEqual({ checkpoint: 'd90', state: 'due', dueOn: '2027-01-01' });
+  });
+
+  it('keeps day 90’s lasting effect as the job stored it, held or faded, and no other day’s', () => {
+    const marks = checkpointMarks(
+      '2026-07-03T10:00:00.000Z',
+      [
+        { checkpoint: 'd14', outcome: 'improved', effect: 12, lasting: 'held' },
+        { checkpoint: 'd30', outcome: 'improved', effect: 11 },
+        { checkpoint: 'd90', outcome: 'no_meaningful_change', effect: 1, lasting: 'faded' },
+      ],
+      false,
+    );
+    expect(marks.map((m) => m.state === 'measured' && m.lasting)).toEqual([
+      false,
+      null,
+      null,
+      'faded',
+    ]);
+    const held = (lasting: unknown) =>
+      checkpointMarks(
+        '2026-07-03T10:00:00.000Z',
+        [{ checkpoint: 'd90', outcome: 'improved', effect: 9, lasting }],
+        false,
+      )[3];
+    expect(held('held')).toMatchObject({ state: 'measured', lasting: 'held' });
+    // None to hold (no verdict before it), or of another shape: none shown.
+    expect(held(null)).toMatchObject({ state: 'measured', lasting: null });
+    expect(held('kept')).toMatchObject({ state: 'measured', lasting: null });
   });
 });
 
@@ -276,6 +338,30 @@ describe('pageKey', () => {
   });
 });
 
+/** Runs `fn` with the browser in another time zone. */
+function inZone<T>(zone: string, fn: () => T): T {
+  const tz = process.env.TZ;
+  process.env.TZ = zone;
+  try {
+    return fn();
+  } finally {
+    if (tz === undefined) delete process.env.TZ;
+    else process.env.TZ = tz;
+  }
+}
+
+describe('localDay', () => {
+  it('is the day in the browser’s time, for an instant or a date', () => {
+    inZone('Europe/Istanbul', () => {
+      expect(localDay('2026-10-31T22:30:00.000Z')).toBe('2026-11-01');
+      expect(localDay(new Date(2026, 9, 1))).toBe('2026-10-01');
+    });
+    inZone('America/Los_Angeles', () => {
+      expect(localDay('2026-11-01T05:30:00.000Z')).toBe('2026-10-31');
+    });
+  });
+});
+
 describe('impactCsv', () => {
   it('writes a line a change, numbers as numbers, a formula never run', () => {
     const csv = impactCsv(
@@ -310,6 +396,23 @@ describe('impactCsv', () => {
       `"'=HYPERLINK(""x"")",2026-10-03,action_center,AC-1241,2,visibility,33.3,83.3,40,40,50,d14,IMPROVED,HIGH`,
       'FAQ block on /pricing,2026-10-03,action_center,,0,,,,,,,,PENDING,',
     ]);
+  });
+
+  it('dates a change shipped near midnight on the day the page shows: the browser’s', () => {
+    const words = {
+      headers: [],
+      outcome: (o: string) => o,
+      confidence: (c: string) => c,
+      source: (s: string) => s,
+    };
+    // Late on Oct 31 in UTC is Nov 1 in Istanbul, and still Oct 31 in Los Angeles.
+    const late = [impactRow(ship({ shipped_at: '2026-10-31T22:30:00.000Z' }), ME, names)];
+    expect(inZone('Europe/Istanbul', () => impactCsv(late, words)).split('\n')[1]).toContain(
+      ',2026-11-01,',
+    );
+    expect(inZone('America/Los_Angeles', () => impactCsv(late, words)).split('\n')[1]).toContain(
+      ',2026-10-31,',
+    );
   });
 });
 

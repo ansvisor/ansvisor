@@ -160,6 +160,14 @@ describe('markTaskDoneFromCard', () => {
     expect(events()).toEqual([]);
   });
 
+  it('writes one event for two clicks at once: the one that completes the task', async () => {
+    const both = await Promise.all([markTaskDoneFromCard(RUN, 1), markTaskDoneFromCard(RUN, 1)]);
+    for (const result of both) expect(result).toMatchObject({ ok: true, status: 'done' });
+    expect(task().status).toBe('completed');
+    expect(events()).toHaveLength(1);
+    expect(events()[0].data).toMatchObject({ to: 'completed', from: 'todo', linked: true });
+  });
+
   it('finds the task by the file’s one attachment when its run didn’t draft it for one', async () => {
     db.tables.chat_task_state = [];
     db.tables.chat_file_task_links = [{ file_id: FILE, action_task_id: TASK, attached_by: ME }];
@@ -259,6 +267,14 @@ describe('undoTaskDoneFromCard', () => {
     expect(events()[1].data).toMatchObject({ source: 'chat', via: 'undo' });
   });
 
+  it('writes one event for two Undos at once', async () => {
+    await markTaskDoneFromCard(RUN, 1);
+    const both = await Promise.all([undoTaskDoneFromCard(RUN, 1), undoTaskDoneFromCard(RUN, 1)]);
+    for (const result of both) expect(result).toMatchObject({ ok: true, status: 'draft' });
+    expect(task().status).toBe('todo');
+    expect(events().map((e) => (e.data as { to: string }).to)).toEqual(['completed', 'todo']);
+  });
+
   it('puts a skipped task back with its why', async () => {
     task().status = 'skipped';
     task().skip_reason = 'Covered by the new page';
@@ -346,6 +362,8 @@ describe('attachOnlyFromCard', () => {
       expect.objectContaining({ file_id: FILE, action_task_id: TASK, attached_by: ME }),
     ]);
     expect(events().map((e) => [e.event, e.actor_id])).toEqual([['file_attached', ME]]);
+    // Its History event names the card's chat and run, as a mark done's does.
+    expect(events()[0].data).toMatchObject({ source: 'chat', conversationId: CHAT, runId: RUN });
   });
 
   it('refuses as Mark done does', async () => {

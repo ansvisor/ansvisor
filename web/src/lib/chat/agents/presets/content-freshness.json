@@ -1,0 +1,25 @@
+{
+  "id": "content-freshness",
+  "goal": "content",
+  "businessTypes": [],
+  "industries": [],
+  "roles": [],
+  "skills": [
+    "refresh"
+  ],
+  "triggers": [
+    {
+      "kind": "schedule",
+      "repeat": "month_first",
+      "time": "09:00"
+    },
+    {
+      "kind": "signal",
+      "category": "protect"
+    }
+  ],
+  "mode": "auto",
+  "connections": [],
+  "status": "ready",
+  "needs": []
+}
