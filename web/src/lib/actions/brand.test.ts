@@ -156,6 +156,11 @@ describe('updateBrand site type (Content Editor CE-023)', () => {
     expect(brand.siteType).toBe('ecommerce');
   });
 
+  it('saves Mobile app (00456)', async () => {
+    await updateBrand('b1', { siteType: 'app' });
+    expect(updates).toEqual([{ site_type: 'app' }]);
+  });
+
   it('refuses a site type it doesn’t know, before writing', async () => {
     await expect(
       updateBrand('b1', { siteType: 'agency' as Parameters<typeof updateBrand>[1]['siteType'] }),

@@ -205,6 +205,15 @@ interface ToolFields<S extends z.ZodObject> {
   inputSchema: S;
   run(ctx: ChatToolContext, input: z.output<S>): Promise<unknown>;
   /**
+   * A WRITE that can also run with no session behind it (a schedule's or a
+   * signal's run, CHAT-12), where `run`'s server action has no one signed in.
+   * Its runFor makes the same change as the run's person, with the service
+   * role, after checking them as their session would be checked
+   * (lib/chat/actor). Nothing calls it yet: the engine still calls `run`.
+   */
+  sessionFree?: true;
+  runFor?(ctx: ChatToolContext, input: z.output<S>): Promise<unknown>;
+  /**
    * A batch row (CHAT-20 §11b: add_prompts, add_competitors, pausing
    * prompts): the input field holding its items. A run's cap counts the
    * items, not the calls (§14), and a call with more than `askAbove` of them
@@ -319,6 +328,13 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
   }
   if (def.batch && !(def.batch.field in def.inputSchema.shape)) {
     throw new Error(`${def.name}: its items are in ${def.batch.field}, which its input lacks`);
+  }
+  if ((def.sessionFree === true) !== (def.runFor !== undefined)) {
+    throw new Error(`${def.name}: a session-free row has its runFor, and only it`);
+  }
+  // A read already reads as the person (the MCP functions); an EXECUTE waits for their click.
+  if (def.sessionFree && def.class !== 'write') {
+    throw new Error(`${def.name}: only a write runs for its person without a session`);
   }
   const excludeRoles = [...(def.excludeRoles ?? [])];
   if (excludeRoles.length > 0 && (def.minRole !== 'analyst' || excludeRoles.includes('admin'))) {

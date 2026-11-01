@@ -10,6 +10,7 @@ import type { ChatTaskStrip } from '@/lib/chat/events';
  * header with the tasks due and how many are ready, a row per task with
  * "Priority 86 · Fix" and Chat's status, and once the run ended the line
  * saying the person closes the tasks in Action Center, with the way there.
+ * Screen readers hear its changes once, and its bar reads "2 of 4 ready".
  */
 
 vi.mock('@/i18n/navigation', () => ({
@@ -93,6 +94,7 @@ describe('TaskStrip', () => {
     expect(bar.getAttribute('aria-label')).toBe('Tasks ready');
     expect(bar.getAttribute('aria-valuenow')).toBe('2');
     expect(bar.getAttribute('aria-valuemax')).toBe('4');
+    expect(bar.getAttribute('aria-valuetext')).toBe('2 of 4 ready');
     expect((bar.firstElementChild as HTMLElement).style.width).toBe('50%');
     expect(host.textContent).toContain('2 of 4 ready');
     expect(rows()).toEqual([
@@ -134,5 +136,43 @@ describe('TaskStrip', () => {
     expect(pill('ready_for_review')).toContain('dark:text-amber-300');
     expect(pill('done')).toContain('dark:text-green-300');
     expect(pill('queued')).toContain('text-muted-foreground');
+  });
+
+  it('says once what changed, and nothing as it first draws', async () => {
+    const news = () => $('[data-slot="task-strip-news"]')!;
+    await render(<TaskStrip strip={strip} ended={false} />);
+    expect(news().getAttribute('aria-live')).toBe('polite');
+    expect(news().className).toContain('sr-only');
+    expect(news().textContent).toBe('');
+    // A row's status moves, and how many are ready with it.
+    const reviewed: ChatTaskStrip = {
+      ...strip,
+      tasks: strip.tasks.map((task) =>
+        task.at === 2 ? { ...task, status: 'ready_for_review' } : task,
+      ),
+      ready: 3,
+    };
+    await render(<TaskStrip strip={reviewed} ended={false} />);
+    expect(news().textContent).toBe(
+      'Fix wrong platform claim on /pricing: Ready for review. 3 of 4 ready',
+    );
+    // The same strip again says nothing new.
+    await render(<TaskStrip strip={{ ...reviewed, tasks: [...reviewed.tasks] }} ended={false} />);
+    expect(news().textContent).toBe(
+      'Fix wrong platform claim on /pricing: Ready for review. 3 of 4 ready',
+    );
+    // A status alone, with the count as it was.
+    const writing: ChatTaskStrip = {
+      ...reviewed,
+      tasks: reviewed.tasks.map((task) => (task.at === 3 ? { ...task, status: 'writing' } : task)),
+    };
+    await render(<TaskStrip strip={writing} ended={false} />);
+    expect(news().textContent).toBe('Add FAQPage schema: Writing');
+  });
+
+  it('says nothing as its first tasks come in', async () => {
+    await render(<TaskStrip strip={{ tasks: [], ready: 0, total: 0, due: 0 }} ended={false} />);
+    await render(<TaskStrip strip={strip} ended={false} />);
+    expect($('[data-slot="task-strip-news"]')?.textContent).toBe('');
   });
 });

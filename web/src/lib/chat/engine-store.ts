@@ -8,6 +8,7 @@ import {
   type ChatEventPayloads,
   type ChatEventType,
 } from './events';
+import type { RunKeyFailure } from './engine-key';
 import type { ChatPhase } from './engine-model';
 import type { NextMoveInput } from './next-moves';
 import type { PageSites } from './page-sites';
@@ -150,6 +151,11 @@ export interface RunProgress {
   capHit?: 'run' | 'month';
   /** Why a stopped run stopped (its run.stopped reason), for its agent run (CHAT-21 §H). */
   stoppedFor?: ChatStopReason;
+  /**
+   * The run ended on the workspace's own key failing (AGENT-OWN-KEY §5.2):
+   * its agent run is stopped `own_key`, and a triggered agent pauses.
+   */
+  keyFailure?: RunKeyFailure;
   /**
    * Its scope holds text from outside the workspace's own numbers (an Action
    * Center action's title and tasks, CHAT-21 §F): the models read it as
