@@ -45,6 +45,14 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: vi.fn(),
   updateContentDraft: vi.fn(),
 }));
+vi.mock('@/lib/chat/actor/drafts', () => ({
+  createContentDraftFor: vi.fn(),
+  updateContentDraftFor: vi.fn(),
+}));
+vi.mock('@/lib/chat/actor/api-writes', () => ({
+  updateOpportunityStatusFor: vi.fn(),
+  dismissSuggestionFor: vi.fn(),
+}));
 vi.mock('@/lib/actions/cms-send', () => ({ sendDraftToCms: vi.fn() }));
 vi.mock('@/lib/actions/reports', () => ({ createReport: vi.fn() }));
 vi.mock('@/lib/actions/audits', () => ({ startSiteAudits: vi.fn(), getAuditQuota: vi.fn() }));
@@ -67,6 +75,8 @@ vi.mock('@/lib/actions/chat-action-center', () => ({
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft, updateContentDraft } = await import('@/lib/actions/content-drafts');
+const { createContentDraftFor, updateContentDraftFor } = await import('@/lib/chat/actor/drafts');
+const { updateOpportunityStatusFor } = await import('@/lib/chat/actor/api-writes');
 const { sendDraftToCms } = await import('@/lib/actions/cms-send');
 const { createReport } = await import('@/lib/actions/reports');
 const { startSiteAudits } = await import('@/lib/actions/audits');
@@ -159,6 +169,12 @@ beforeEach(() => {
   seedWorkspace(db);
   vi.mocked(createContentDraft).mockImplementation(fakeCreateDraft(db) as never);
   vi.mocked(updateContentDraft).mockImplementation(fakeUpdateContentDraft(db) as never);
+  vi.mocked(createContentDraftFor).mockImplementation((_actor, brandId, start) =>
+    fakeCreateDraft(db)(brandId, start),
+  );
+  vi.mocked(updateContentDraftFor).mockImplementation(
+    (_actor, id, change) => fakeUpdateContentDraft(db)(id, change) as never,
+  );
   vi.mocked(sendDraftToCms).mockImplementation(fakeSendDraftToCms() as never);
   vi.mocked(createReport).mockImplementation(fakeCreateReport(db) as never);
   vi.mocked(startSiteAudits).mockImplementation(fakeStartSiteAudits() as never);
@@ -317,6 +333,95 @@ describe('every WRITE that ran is in the Activity log (§21)', () => {
     expect(activitySummary('dismissSuggestionUndo', { text: 'best crm' })).toBe(
       'Brought back the prompt suggestion “best crm”',
     );
+  });
+});
+
+describe('a change with no session behind it (an agent run on its own)', () => {
+  /** The run's person, as the engine's tool context names them. */
+  const person = {
+    userId: PEOPLE.admin,
+    email: 'admin@example.com',
+    organizationId: ORG,
+    role: 'admin' as const,
+    apiKeyId: 'agent-internal',
+  };
+  const write = (tool: ChatTool, approvalKey: string) =>
+    runLoggedWrite({
+      tool,
+      input: tool.inputSchema.parse(INPUTS[tool.name]),
+      ctx: person,
+      organizationId: ORG,
+      userId: PEOPLE.admin,
+      brandId: BRAND,
+      surface: 'chat',
+      mode: 'full_auto',
+      approval: { kind: 'auto', via: 'full_auto' },
+      place: { conversationId: 'chat-1', runId: 'run-1', stepId: approvalKey },
+      approvalKey,
+      withoutSession: true,
+    });
+
+  it.each([
+    ['create_draft', () => createContentDraftFor, () => createContentDraft],
+    ['update_draft', () => updateContentDraftFor, () => updateContentDraft],
+  ] as const)(
+    '%s: its runFor makes it as the run’s person, logged with its Undo',
+    async (name, ownWrite, sessionAction) => {
+      if (NEEDS_DRAFT.has(name)) seedDraft(db);
+      const outcome = await write(chatTool(name)!, 'step-1');
+      expect(outcome).toMatchObject({ code: 'ok', repeated: false });
+      expect(sessionAction()).not.toHaveBeenCalled();
+      expect(ownWrite()).toHaveBeenCalledTimes(1);
+      // The person comes from the run's context, never from the input.
+      expect(vi.mocked(ownWrite()).mock.calls[0][0]).toEqual({
+        userId: PEOPLE.admin,
+        organizationId: ORG,
+      });
+      const [row] = db.tables.chat_activity_log;
+      expect(row).toMatchObject({
+        user_id: PEOPLE.admin,
+        approval_kind: 'auto',
+        auto_via: 'full_auto',
+        run_id: 'run-1',
+        tool_key: chatTool(name)!.labelKey,
+      });
+      expect(row.undo_json).toEqual(expect.any(Object));
+      // A repeat of the approval makes nothing again.
+      expect(await write(chatTool(name)!, 'step-1')).toMatchObject({ code: 'ok', repeated: true });
+      expect(ownWrite()).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('refuses a row whose way is closed or that has none, before anything runs', async () => {
+    // Through the API server, with no CHAT_ACTING_SECRET here; and a row with no runFor.
+    for (const name of ['update_opportunity', 'add_topic']) {
+      await expect(write(chatTool(name)!, 'step-2')).rejects.toThrow(
+        /only with its person's session/,
+      );
+    }
+    expect(updateOpportunityStatus).not.toHaveBeenCalled();
+    expect(updateOpportunityStatusFor).not.toHaveBeenCalled();
+    expect(addBrandTopic).not.toHaveBeenCalled();
+    expect(db.tables.chat_activity_log).toEqual([]);
+    expect(db.tables.chat_idempotency_keys ?? []).toEqual([]);
+  });
+
+  it('writes through the API server as the run’s person while that way is open, with its Undo', async () => {
+    vi.stubEnv('CHAT_ACTING_SECRET', 'k'.repeat(64));
+    vi.mocked(updateOpportunityStatusFor).mockImplementation(
+      (_actor, id, status, reason) => fakeUpdateOpportunity(db)(id, status, reason) as never,
+    );
+    expect(await write(chatTool('update_opportunity')!, 'step-3')).toMatchObject({ code: 'ok' });
+    expect(updateOpportunityStatus).not.toHaveBeenCalled();
+    expect(vi.mocked(updateOpportunityStatusFor).mock.calls[0]).toEqual([
+      { userId: PEOPLE.admin, organizationId: ORG },
+      OPPORTUNITY,
+      'dismissed',
+      'not_relevant',
+    ]);
+    const [row] = db.tables.chat_activity_log;
+    expect(row).toMatchObject({ user_id: PEOPLE.admin, tool_key: 'opportunityStatus' });
+    expect(row.undo_json).toEqual(expect.any(Object));
   });
 });
 
