@@ -16,6 +16,7 @@ import {
   getTrafficVisitsForExport,
   getUntrackedGoogleQueries,
 } from '@/lib/actions/traffic';
+import { getExportBranding } from '@/lib/actions/white-label';
 import { utcDay } from '@/lib/dates';
 import { UNTRACKED_QUERY_SCAN } from '@/lib/traffic-google-pages';
 import {
@@ -32,6 +33,7 @@ import {
   type TrafficExportSection,
   type UnreadSection,
 } from '@/lib/traffic-export';
+import { fileWord } from '@/lib/white-label/kit';
 
 /**
  * GET /api/traffic/export — the AI Traffic page as a file (AT-015, spec
@@ -190,12 +192,15 @@ export async function GET(req: Request) {
       unread,
     };
 
+    // A white label kit's word in Ansvisor's place (00429); none when it can't be read.
+    const branding = await getExportBranding();
     const fileName = trafficExportFileName({
       brand: (brand.slug as string | null) || (brand.name as string),
       from,
       to,
       ext: q.format,
       table: q.section ? label(`sheets.${q.section}`) : undefined,
+      word: branding.ok ? fileWord(branding.branding) : null,
     });
 
     let body: BodyInit;

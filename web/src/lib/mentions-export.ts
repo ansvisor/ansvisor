@@ -1,6 +1,7 @@
 import { csvLine, toCsv } from '@/lib/csv';
 import { mentionPlatformLabel } from '@/lib/mentions-headline';
 import type { MentionRow } from '@/lib/mentions-list';
+import { withFileWord } from '@/lib/white-label/kit';
 
 /**
  * Export CSV on the Mentions & Sentiment page (MS-13): the mentions under the
@@ -56,9 +57,16 @@ export function mentionsCsv(facts: ExportFact[], rows: MentionRow[]): string {
   return [...head, '', toCsv(rows.map(exportRow), MENTION_EXPORT_HEADERS)].join('\n');
 }
 
-/** "ansvisor_acme-coffee_mentions_2026-10-17.csv", as the other pages name theirs. */
-export function mentionsExportFileName(slug: string, now = new Date()): string {
-  return `ansvisor_${slug || 'brand'}_mentions_${now.toISOString().slice(0, 10)}.csv`;
+/**
+ * "ansvisor_acme-coffee_mentions_2026-10-17.csv", as the other pages name
+ * theirs; `word` is a white label kit's in Ansvisor's place, or none.
+ */
+export function mentionsExportFileName(
+  slug: string,
+  now = new Date(),
+  word: string | null = 'ansvisor',
+): string {
+  return withFileWord(word, `${slug || 'brand'}_mentions_${now.toISOString().slice(0, 10)}.csv`);
 }
 
 /** A moment as the file states it: "2026-10-17 09:12", in UTC. */
