@@ -108,7 +108,7 @@ A run may use only its share of your monthly AI limit. A run a trigger started e
 
 ## When a run asks before a change
 
-A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. A run that starts without you, from a trigger or after waiting for a free slot, asks before most changes, whatever its mode. Creating and changing Content drafts still follow the mode: in **Full auto** the run saves them without asking, with the role and access of the person it acts as, and in **Ask me first** it asks. Every change is in the **Activity** log, with **Undo**. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
+A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. A run that starts without you, from a trigger or after waiting for a free slot, asks before most changes, whatever its mode. Creating and changing Content drafts still follow the mode: in **Full auto** the run saves them without asking, with the role and access of the person it acts as, and in **Ask me first** it asks. A run checks the agent's mode again before each change, so if you set it to **Ask me first**, its next change asks. Every change is in the **Activity** log, with **Undo**. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
 
 ## On your own AI key
 

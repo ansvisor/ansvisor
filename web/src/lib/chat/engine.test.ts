@@ -3413,7 +3413,7 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
 
     /** `actor`'s turn driven in a request with `session`'s session (null: none, the minute tick). */
     async function driven(actor: ChatActor, mode: Mode, session: string | null, write: Step[]) {
-      models([READY], write);
+      const { sonnet } = models([READY], write);
       const started = await engine.startChatRun(actor, { message: 'Do it', brandId: BRAND, mode });
       if (!started.ok) throw new Error(`not started: ${started.code}`);
       await engine.driveRun(actor, started.runId, undefined, { sessionUserId: session });
@@ -3424,6 +3424,7 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
         status: runRow(started.runId).status,
         cards: ofType(events, 'confirm.required').map((e) => e.data),
         denials: ofType(events, 'access.denied').map((e) => e.data),
+        offered: sonnet.seen[0]?.tools?.map((t) => t.name) ?? [],
       };
     }
 
@@ -3533,6 +3534,113 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
       if (!started.ok) throw new Error(started.code);
       await engine.driveRun(ANALYST, started.runId, undefined, { sessionUserId: null });
       expect(sonnet.seen[0].tools?.map((t) => t.name)).not.toContain('update_draft');
+    });
+
+    it('keeps the Admin’s policy and Full auto for members: Never refuses, Ask and members ask', async () => {
+      // An Admin switched it off: not offered, and the call turned away, nothing made.
+      settings({ tool_policies: { saveDraft: 'never' } });
+      const never = await driven(ADMIN, 'full_auto', null, [calls(draft), text('I can’t.')]);
+      expect(never).toMatchObject({ status: 'done', cards: [] });
+      expect(never.offered).not.toContain('create_draft');
+      // Ask, in every mode: its card, Full auto too.
+      settings({ tool_policies: { saveDraft: 'ask' } });
+      const asked = await driven(ADMIN, 'full_auto', null, [calls(draft), text('Saved.')]);
+      expect(asked).toMatchObject({ status: 'waiting', denials: [] });
+      expect(asked.cards).toHaveLength(1);
+      // "Full auto for members" off: an Analyst's Full auto asks; an Admin's still runs.
+      settings({ full_auto_for_members: false });
+      const member = await driven(ANALYST, 'full_auto', null, [calls(draft), text('Saved.')]);
+      expect(member).toMatchObject({ status: 'waiting', denials: [] });
+      expect(member.cards).toHaveLength(1);
+      expect(createContentDraftFor).not.toHaveBeenCalled();
+      const admin = await driven(ADMIN, 'full_auto', null, [calls(draft), text('Saved.')]);
+      expect(admin).toMatchObject({ status: 'done', cards: [] });
+      expect(createContentDraftFor).toHaveBeenCalledTimes(1);
+      expect(createContentDraft).not.toHaveBeenCalled();
+    });
+
+    describe('in an agent run, the mode now (the agent’s, and Full auto for agents)', () => {
+      const AGENT = 'abababab-0000-4000-8000-000000000001';
+      const AGENT_RUN = 'abababab-0000-4000-8000-000000000002';
+
+      /** The agent behind the run: its current version's mode, and the Admin's switch for agents. */
+      function agent(mode: Mode, agentsFullAuto = true) {
+        db.tables.chat_agent_runs = [{ id: AGENT_RUN, organization_id: ORG, agent_id: AGENT }];
+        db.tables.chat_agents = [{ id: AGENT, organization_id: ORG, version: 2 }];
+        db.tables.chat_agent_versions = [
+          { agent_id: AGENT, version: 1, mode: 'full_auto' },
+          { agent_id: AGENT, version: 2, mode },
+        ];
+        settings({ agents_full_auto: agentsFullAuto });
+      }
+
+      /** An agent run that started in Full auto, its writer calling `call` after `meanwhile`. */
+      async function agentRun(meanwhile: () => void = () => {}) {
+        const writer: Step = () => {
+          meanwhile();
+          return simulateReadableStream({
+            chunks: [{ type: 'stream-start', warnings: [] }, ...calls(draft)],
+          }) as ReadableStream;
+        };
+        models([READY], [writer, text('Done.')]);
+        const started = await engine.startChatRun(ADMIN, {
+          message: 'Do it',
+          brandId: BRAND,
+          mode: 'full_auto',
+        });
+        if (!started.ok) throw new Error(started.code);
+        const run = runRow(started.runId);
+        const chat = db.tables.chat_conversations.find((c) => c.id === run.conversation_id)!;
+        chat.agent_run_id = AGENT_RUN;
+        await engine.driveRun(ADMIN, started.runId, undefined, { sessionUserId: null });
+        const events = await eventsOf(started.runId);
+        return {
+          status: runRow(started.runId).status,
+          cards: ofType(events, 'confirm.required').map((e) => e.data),
+        };
+      }
+
+      it('makes the change while the agent and the Admin still allow Full auto', async () => {
+        agent('full_auto');
+        expect(await agentRun()).toMatchObject({ status: 'done', cards: [] });
+        expect(createContentDraftFor).toHaveBeenCalledTimes(1);
+      });
+
+      it('asks once an Admin turned Full auto off for agents, read at the change', async () => {
+        agent('full_auto');
+        const run = await agentRun(() => {
+          db.tables.chat_settings[0].agents_full_auto = false;
+        });
+        expect(run.status).toBe('waiting');
+        expect(run.cards).toHaveLength(1);
+        expect(createContentDraftFor).not.toHaveBeenCalled();
+      });
+
+      it('asks once the agent was set to Ask me first, read at the change', async () => {
+        agent('full_auto');
+        const run = await agentRun(() => {
+          db.tables.chat_agents[0].version = 3;
+          db.tables.chat_agent_versions.push({ agent_id: AGENT, version: 3, mode: 'ask_first' });
+        });
+        expect(run.status).toBe('waiting');
+        expect(run.cards).toHaveLength(1);
+        expect(createContentDraftFor).not.toHaveBeenCalled();
+      });
+
+      it('asks when the agent can’t be read, and leaves a person’s own chat to its mode', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        agent('full_auto');
+        db.failures.chat_agent_versions = { message: 'down' };
+        expect(await agentRun()).toMatchObject({ status: 'waiting' });
+        expect(createContentDraftFor).not.toHaveBeenCalled();
+        vi.mocked(console.error).mockRestore();
+        db.failures = {};
+        // Not an agent run: Full auto for agents is about agents only.
+        agent('ask_first', false);
+        const own = await driven(ADMIN, 'full_auto', PEOPLE.admin, [calls(draft), text('Saved.')]);
+        expect(own).toMatchObject({ status: 'done', cards: [] });
+        expect(createContentDraft).toHaveBeenCalledTimes(1);
+      });
     });
 
     it('leaves the person’s own Run now as it was: their session makes the change', async () => {

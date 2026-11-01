@@ -92,6 +92,7 @@ import {
   decideOrDeny,
   decideToolCall,
   listingDenial,
+  type ChatMode,
   type PrecedenceContext,
   type ToolCall,
   type ToolDecision,
@@ -1825,15 +1826,74 @@ async function handleCalls(
   return 'continue';
 }
 
-/** What a call's precedence context is read with: an injection found in the run asks first (§16a rule 3). */
-const contextFor = (rc: RunContext) =>
+/**
+ * What a call's precedence context is read with: an injection found in the
+ * run asks first (§16a rule 3). `mode`: the run's mode now, for a change
+ * (agentModeNow); the mode it started in otherwise.
+ */
+const contextFor = (rc: RunContext, mode: ChatMode = rc.run.mode) =>
   readPrecedenceContext({
     userId: rc.actor.userId,
     organizationId: rc.actor.organizationId,
-    mode: rc.progress.injection ? 'ask_first' : rc.run.mode,
+    mode: rc.progress.injection ? 'ask_first' : mode,
     surface: 'chat',
     injectionDetected: rc.progress.injection === true,
   });
+
+const MODE_RANK: Record<ChatMode, number> = { ask_first: 0, auto: 1, full_auto: 2 };
+
+/**
+ * An agent run's mode for a change, read fresh for each one (a run a
+ * trigger started goes on for minutes with no one watching): the mode it
+ * started in, or the agent's own mode now when it was set lower since, and
+ * Ask me first once an Admin turned Full auto off for agents (Settings ›
+ * Chat) under a run that started in it. What can't be read asks first. A
+ * person's own chat keeps its mode: they change it themselves.
+ */
+async function agentModeNow(rc: RunContext): Promise<ChatMode> {
+  const started = rc.run.mode;
+  if (!rc.agentRunId || started === 'ask_first') return started;
+  try {
+    const [run, settings] = await Promise.all([
+      supabaseAdmin
+        .from('chat_agent_runs')
+        .select('agent_id')
+        .eq('id', rc.agentRunId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('chat_settings')
+        .select('agents_full_auto')
+        .eq('organization_id', rc.actor.organizationId)
+        .maybeSingle(),
+    ]);
+    if (run.error) throw new Error(run.error.message);
+    if (settings.error) throw new Error(settings.error.message);
+    if (started === 'full_auto' && settings.data?.agents_full_auto === false) return 'ask_first';
+    const agentId = (run.data as { agent_id: string | null } | null)?.agent_id;
+    if (!agentId) return 'ask_first';
+    const { data: agent, error: agentError } = await supabaseAdmin
+      .from('chat_agents')
+      .select('version')
+      .eq('id', agentId)
+      .eq('organization_id', rc.actor.organizationId)
+      .maybeSingle();
+    if (agentError) throw new Error(agentError.message);
+    if (!agent) return 'ask_first';
+    const { data: version, error: versionError } = await supabaseAdmin
+      .from('chat_agent_versions')
+      .select('mode')
+      .eq('agent_id', agentId)
+      .eq('version', (agent as { version: number }).version)
+      .maybeSingle();
+    if (versionError) throw new Error(versionError.message);
+    const now = CHAT_MODES.find((mode) => mode === (version as { mode?: string } | null)?.mode);
+    if (!now) return 'ask_first';
+    return MODE_RANK[now] < MODE_RANK[started] ? now : started;
+  } catch (err) {
+    console.error("[chat/engine] could not read an agent's mode now:", err);
+    return 'ask_first';
+  }
+}
 
 /** The read that opens a web page (CHAT-10 §B): its own step, words and rules. */
 const PAGE_TOOL = 'fetch_page';
@@ -1909,7 +1969,8 @@ function readRefusal(output: unknown): { code: string; message: string } | null 
 }
 
 async function callFacts(rc: RunContext, tool: ChatTool, input: Record<string, unknown>) {
-  const ctx = await contextFor(rc);
+  // A change is decided in the mode the run has now; a read runs in any.
+  const ctx = await contextFor(rc, tool.class === 'read' ? rc.run.mode : await agentModeNow(rc));
   const call: ToolCall = ctx
     ? await readToolCall(
         ctx,
