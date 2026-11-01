@@ -79,6 +79,10 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: tracked.track('actions/content-drafts.createContentDraft'),
   updateContentDraft: tracked.track('actions/content-drafts.updateContentDraft'),
 }));
+vi.mock('@/lib/chat/actor/drafts', () => ({
+  createContentDraftFor: tracked.track('chat/actor/drafts.createContentDraftFor'),
+  updateContentDraftFor: tracked.track('chat/actor/drafts.updateContentDraftFor'),
+}));
 vi.mock('@/lib/actions/cms-send', () => ({
   sendDraftToCms: tracked.track('actions/cms-send.sendDraftToCms'),
 }));
@@ -384,6 +388,36 @@ describe('the Chat tool registry', () => {
     ]);
   });
 
+  it('makes the drafts’ changes for a run without a session as its person, and no other row’s', async () => {
+    expect(CHAT_TOOLS.filter((tool) => tool.sessionFree).map((tool) => tool.name)).toEqual([
+      'create_draft',
+      'update_draft',
+    ]);
+    const brand = FIXTURE_IDS.brand;
+    const item = FIXTURE_IDS.item;
+    const create = chatTool_('create_draft');
+    const start = create.inputSchema.parse(create.fixture.input);
+    await create.run(ctx, start);
+    await create.runFor!(ctx, start);
+    const update = chatTool_('update_draft');
+    await update.runFor!(ctx, update.inputSchema.parse({ draft_id: item, title: 'Plans' }));
+
+    const person = { userId: 'user-1', organizationId: 'org-1' };
+    const [viaSession, viaRun, change] = calls.map((call) => [call.from, call.args] as const);
+    expect(viaSession[0]).toBe('actions/content-drafts.createContentDraft');
+    // The same start the session's call gets, for the run's person.
+    expect(viaRun).toEqual(['chat/actor/drafts.createContentDraftFor', [person, ...viaSession[1]]]);
+    expect(viaRun[1]).toEqual([person, brand, expect.objectContaining({ typePicked: false })]);
+    expect(change).toEqual([
+      'chat/actor/drafts.updateContentDraftFor',
+      [person, item, { title: 'Plans', bodyHtml: undefined }],
+    ]);
+    // A context with no workspace has no one to act for.
+    await expect(create.runFor!({ ...ctx, organizationId: null }, start)).rejects.toThrow(
+      /workspace/,
+    );
+  });
+
   it("checks Send to Action Center's duplicate before its card, and lets Create anyway go only where it may", async () => {
     const send = chatTool_('create_action');
     const input = send.inputSchema.parse(send.fixture.input);
@@ -620,6 +654,25 @@ describe('approval policies', () => {
     expect(() =>
       defineTool({ ...readRow, class: 'execute', maxPolicy: 'ask_full_auto' } as never),
     ).toThrow(/click/);
+  });
+
+  it('runs only a write for its person without a session, and only with its runFor', () => {
+    const write = { ...readRow, class: 'write' as const, defaultPolicy: 'ask', maxPolicy: 'ask' };
+    const runFor = async () => null;
+    expect(defineTool({ ...write, sessionFree: true, runFor } as never).sessionFree).toBe(true);
+    expect(() => defineTool({ ...write, sessionFree: true } as never)).toThrow(/runFor/);
+    expect(() => defineTool({ ...write, runFor } as never)).toThrow(/runFor/);
+    // A read reads as the person already; an execute waits for their click.
+    expect(() => defineTool({ ...readRow, sessionFree: true, runFor })).toThrow(/only a write/);
+    expect(() =>
+      defineTool({
+        ...readRow,
+        class: 'execute',
+        executeGroup: 'publishing',
+        sessionFree: true,
+        runFor,
+      }),
+    ).toThrow(/only a write/);
   });
 
   it("refuses a write's policy past what its flags allow", () => {

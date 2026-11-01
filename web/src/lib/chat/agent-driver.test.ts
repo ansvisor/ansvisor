@@ -24,7 +24,11 @@ const fakes = vi.hoisted(() => ({
   stopChat: vi.fn(),
 }));
 vi.mock('@/lib/mcp/account', () => ({ getAiUsageFor: fakes.usage }));
-vi.mock('./key', () => ({ resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })) }));
+const ownKey = vi.hoisted(() => ({ failing: null as { class: string; provider: string } | null }));
+vi.mock('./key', () => ({
+  resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
+  failingOwnKey: vi.fn(async () => ownKey.failing),
+}));
 vi.mock('./agent-shares', () => ({ readAgentShares: vi.fn(async () => null) }));
 vi.mock('./engine', () => ({
   APPROVAL_TTL_MS: 7 * 24 * 60 * 60 * 1000,
@@ -129,6 +133,7 @@ function chatOf(agentRunId: string, status: string, progress: Record<string, unk
 
 beforeEach(() => {
   vi.clearAllMocks();
+  ownKey.failing = null;
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
@@ -387,6 +392,22 @@ describe('handing a started run to Chat', () => {
     expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
   });
 
+  it('stops a queued run on a failing own key before any call, pausing a triggered agent', async () => {
+    ownKey.failing = { class: 'invalid', provider: 'anthropic' };
+    const id = queueRun();
+    expect(await driver.openAgentRun(id, ORG, NOW)).toBeNull();
+    expect(runRow(id)).toMatchObject({ status: 'stopped', stop_reason: 'own_key' });
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'own_key' });
+    expect(db.tables.chat_conversations).toEqual([]);
+
+    // Run now stops the same, and leaves the agent as it is.
+    Object.assign(agentRow(), { status: 'active', paused_reason: null });
+    const manual = queueRun({ trigger_kind: 'manual', acting_user_id: PEOPLE.manager });
+    expect(await driver.openAgentRun(manual, ORG, NOW)).toBeNull();
+    expect(runRow(manual)).toMatchObject({ status: 'stopped', stop_reason: 'own_key' });
+    expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
+  });
+
   it('holds a skill’s Required connection even when the saved list leaves it out or has it Optional', async () => {
     // Saved through the API: /publish, with no connections at all.
     Object.assign(db.tables.chat_agent_versions[0], { skill_ids: ['publish'], connections: [] });
@@ -505,6 +526,23 @@ describe('keeping the agent run in step with its Chat run', () => {
     });
   });
 
+  it('stops a run its own key failed, pauses a triggered agent, and counts neither as failed', async () => {
+    agentRow().fail_count = 2;
+    const keyFailure = { class: 'no_credit', provider: 'openai', status: 429, model: null };
+    const manual = queueRun({ trigger_kind: 'manual' });
+    chatOf(manual, 'error', { keyFailure });
+    expect(await driver.settleAgentRun(manual, { now: NOW })).toBe('stopped');
+    expect(runRow(manual)).toMatchObject({ status: 'stopped', stop_reason: 'own_key' });
+    // A person's Run now doesn't pause it, as with a missing connection.
+    expect(agentRow()).toMatchObject({ status: 'active', fail_count: 2 });
+
+    const triggered = queueRun({ brand_id: null });
+    chatOf(triggered, 'error', { keyFailure });
+    expect(await driver.settleAgentRun(triggered, { now: NOW })).toBe('stopped');
+    expect(runRow(triggered).stop_reason).toBe('own_key');
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'own_key', fail_count: 2 });
+  });
+
   it('stops a triggered run at its own cap, "Stopped at its limit", in its owner’s chat', async () => {
     const id = queueRun();
     const chat = chatOf(id, 'paused_cap', { capHit: 'run' });
@@ -599,6 +637,49 @@ describe('the driver', () => {
     // No chain: the waiting run isn't started from this drive's background task.
     expect(tasks).toHaveLength(1);
     expect(runRow(waiting).status).toBe('queued');
+  });
+
+  /** A driver that keeps whose session each drive had. */
+  function sessionDriver() {
+    const tasks: (() => Promise<void>)[] = [];
+    const sessions: (string | null)[] = [];
+    const run = driver.createAgentRunDriver({
+      background: (task) => tasks.push(task),
+      drive: async (_actor, _chatRunId, sessionUserId) => {
+        sessions.push(sessionUserId);
+      },
+      now: () => NOW,
+    });
+    return { run, tasks, sessions };
+  }
+
+  it('drives a run the minute tick started with no session, so its changes ask first', async () => {
+    const { run, tasks, sessions } = sessionDriver();
+    const id = queueRun({ status: 'queued', started_at: null });
+    expect(await driver.startNextAgentRuns(ORG, run)).toEqual([id]);
+    await tasks[0]();
+    expect(sessions).toEqual([null]);
+  });
+
+  it('drives a Run now with the clicking person’s session, and a run another person’s click starts with none', async () => {
+    const { startQueuedAgentRuns } = await import('./agent-runs');
+    const { run, tasks, sessions } = sessionDriver();
+    // One run at a time per agent and brand: each ends before the next starts.
+    const startIn = async (over: Record<string, unknown>, sessionUserId: string) => {
+      const id = queueRun({ status: 'queued', started_at: null, ...over });
+      expect(await startQueuedAgentRuns(ORG, 1, run, sessionUserId)).toEqual([id]);
+      await tasks.at(-1)!();
+      runRow(id).status = 'done';
+    };
+    const manual = { trigger_kind: 'manual', evidence_json: {} };
+
+    // The Manager's own Run now, in their request: their session drives it.
+    await startIn({ ...manual, acting_user_id: PEOPLE.manager }, PEOPLE.manager);
+    // The Admin's triggered run, picked from the queue in the Manager's request.
+    await startIn({}, PEOPLE.manager);
+    // Another Manager's Run now that waited, picked in this Manager's request.
+    await startIn({ ...manual, acting_user_id: PEOPLE.otherManager }, PEOPLE.manager);
+    expect(sessions).toEqual([PEOPLE.manager, null, null]);
   });
 
   it('settles the run even when the drive throws', async () => {
