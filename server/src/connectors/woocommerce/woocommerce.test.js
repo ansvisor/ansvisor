@@ -368,6 +368,55 @@ describe('readCatalog through the connector harness', () => {
     expect(fake.rows('catalog_sources')[0].last_orders_synced_at).toBeTruthy();
   });
 
+  it('keeps only published products and enabled variations', async () => {
+    await api.close();
+    const listed = [
+      simple(101, { status: 'publish' }),
+      simple(102, { status: 'draft' }),
+      simple(103, { status: 'pending' }),
+      simple(104, { status: 'private' }),
+      { ...variable, status: 'publish' },
+    ];
+    api = await startFakeApi({
+      'GET /wp-json/wc/store/v1/products': () => ({
+        json: [{ id: 101, prices: { currency_code: 'USD' } }],
+      }),
+      'GET /wp-json/wc/v3/products/categories': () => ({
+        headers: { 'x-wp-totalpages': '1' },
+        json: [],
+      }),
+      // Answers like WooCommerce: `status` filters, and its default is `any`.
+      'GET /wp-json/wc/v3/products': (req) => ({
+        headers: { 'x-wp-totalpages': '1' },
+        json: listed.filter(
+          (p) => (req.query.status ?? 'any') === 'any' || p.status === req.query.status,
+        ),
+      }),
+      'GET /wp-json/wc/v3/products/202/variations': () => ({
+        headers: { 'x-wp-totalpages': '1' },
+        json: [
+          variation(2011, 'Red', '42', { status: 'publish' }),
+          variation(2012, 'Blue', '43', { status: 'private' }),
+        ],
+      }),
+      'GET /wp-json/wc/v3/orders': () => ({ headers: { 'x-wp-totalpages': '1' }, json: [] }),
+    });
+
+    const { outcome, products, variants } = await runSync(wooCommerce, source(), {
+      credentials: { consumerKey: CONSUMER_KEY, consumerSecret: CONSUMER_SECRET },
+      request: api.request,
+    });
+
+    expect(outcome).toMatchObject({ status: 'ok', counts: { items: 2, skipped: 0 } });
+    expect(products.map((p) => p.external_id).sort()).toEqual(['101', '202']);
+    expect(variants.map((v) => v.external_id).sort()).toEqual(['101', '2011']);
+    expect(
+      api.calls
+        .filter((call) => call.path === '/wp-json/wc/v3/products' && call.query.page)
+        .map((call) => call.query.status),
+    ).toEqual(['publish']);
+  });
+
   it('fails closed when the product pagination cap would make the snapshot incomplete', async () => {
     await api.close();
     api = await startFakeApi({

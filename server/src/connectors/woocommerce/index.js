@@ -440,6 +440,16 @@ export function verifyWebhookSignature(rawBody, signature, secret) {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
+/**
+ * Whether a product or variation is live on the store. Products are asked for
+ * with `status=publish`; this also drops a variation that's switched off
+ * (`private`), and anything else a store's API lets through. A row without a
+ * status (an older API) is kept.
+ */
+function isPublished(item) {
+  return item?.status == null || item.status === 'publish';
+}
+
 function assertCompletePages(result, resource) {
   if (result.truncated) {
     throw new ConnectorHttpError(
@@ -520,11 +530,20 @@ export default {
     );
 
     // Read the full snapshot: the shared sync marks products missing from it as removed.
-    const productsResult = await listPages(request, `${base}/products`, credentials, PRODUCT_ERROR);
+    // Only published products: the API's default (`any`) also lists drafts,
+    // pending and private ones, whose pages shoppers can't open.
+    const productsResult = await listPages(
+      request,
+      `${base}/products`,
+      credentials,
+      PRODUCT_ERROR,
+      { status: 'publish' },
+    );
     assertCompletePages(productsResult, 'products');
 
     let row = 0;
     for (const product of productsResult.items) {
+      if (!isPublished(product)) continue;
       const productId = product?.id == null ? '' : String(product.id);
       if (!/^\d+$/.test(productId)) {
         row += 1;
@@ -557,6 +576,8 @@ export default {
         }
 
         for (const variation of variations.items) {
+          // A disabled variation (`private`) can't be bought: not a live product.
+          if (!isPublished(variation)) continue;
           row += 1;
           const out = toItem(
             attributesOf(product, variation, categoriesById, storeCurrency),
