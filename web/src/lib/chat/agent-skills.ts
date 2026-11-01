@@ -13,6 +13,13 @@
  * drafts without a CMS, and /report and /winback read without Search
  * Console: those are Optional, and a run without them does the rest
  * (§H item 42).
+ *
+ * Then CHAT-24 §5's seven for the focus areas (W2-23b), in the library's
+ * order (SKILL_ORDER). Their SKILL.md files read only Ansvisor's own data
+ * (answers, fan-outs, citations, mentions, the site audit and the pages
+ * they fetch) and save page work as drafts, so they use no connection:
+ * /listings reads the sites AI cites, not a catalog, and /audit-fix writes
+ * a robots or CMS change for the person to make.
  */
 
 /** A connection a skill uses, and whether it can't work without it. */
@@ -51,6 +58,13 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   { id: 'facts', uses: [] },
   { id: 'compare', uses: [] },
   { id: 'translate', uses: [] },
+  { id: 'questions', uses: [] },
+  { id: 'features', uses: [] },
+  { id: 'gaps', uses: [] },
+  { id: 'markets', uses: [] },
+  { id: 'listings', uses: [] },
+  { id: 'rivals', uses: [] },
+  { id: 'audit-fix', uses: [] },
 ];
 
 /** Connections any agent may add as Optional (mockup: Google Analytics). */
