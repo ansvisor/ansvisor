@@ -35,13 +35,10 @@ export async function getContentSettings(): Promise<ContentSettings | null> {
     .maybeSingle();
   if (profileError) throw new Error(profileError.message);
   if (!profile?.organization_id) return null;
+  const orgId = profile.organization_id;
   const columns = 'id, name, content_quality_handoff' as const;
   const brands = <C extends string>(select: C) =>
-    supabase
-      .from('brands')
-      .select(select)
-      .eq('organization_id', profile.organization_id)
-      .order('name');
+    supabase.from('brands').select(select).eq('organization_id', orgId).order('name');
   // The web ahead of its migrations, applied in order: without 00450 the
   // brands are read with no rules, without 00449 with no trusted sources
   // either, and the cards for what's missing don't show.
