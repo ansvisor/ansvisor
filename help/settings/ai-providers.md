@@ -19,7 +19,7 @@ Chat normally runs on your plan's monthly AI limit, and you don't need any key f
 2. Click **Add key** next to the provider and paste the key.
 3. If you save keys for more than one provider, click **Use for Chat** next to the one Chat should run on.
 
-Keys are stored encrypted, and nobody can read a saved key back.
+Keys are stored encrypted, and nobody can read a saved key back. If the server can no longer read the saved key, Chat stops rather than run on your plan's monthly AI limit: save the key again.
 
 ## Agents on your key
 
