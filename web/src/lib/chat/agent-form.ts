@@ -24,6 +24,7 @@ import {
 } from './agent-schedule';
 import { skillConnections } from './agent-skills';
 import type { AgentDetail, AgentTriggerView } from './agents';
+import type { AgentPreset, PresetTrigger } from './agents/catalog';
 import type { ChatMode } from './precedence';
 
 /**
@@ -481,6 +482,59 @@ export function newForm(
     maxRun: String(Math.round(setup.runShareDefault * 100)),
     monthCapOn: false,
     maxMonth: '',
+  };
+}
+
+/** A ready-to-use agent's default trigger as the Trigger step edits it, on the person's clock. */
+export function presetTriggerDraft(
+  trigger: PresetTrigger,
+  key: string,
+  timeZone: string,
+): TriggerDraft {
+  const draft = newTriggerDraft(trigger.kind, key, timeZone);
+  if (draft.kind === 'schedule' && trigger.kind === 'schedule') {
+    return { ...draft, repeat: trigger.repeat, time: trigger.time };
+  }
+  if (draft.kind === 'signal' && trigger.kind === 'signal') {
+    return { ...draft, category: trigger.category };
+  }
+  if (draft.kind === 'kpi' && trigger.kind === 'kpi') {
+    return {
+      ...draft,
+      kpi: trigger.kpi,
+      direction: trigger.direction,
+      threshold: String(trigger.threshold),
+      unit: trigger.unit,
+      period: trigger.period,
+    };
+  }
+  return draft;
+}
+
+/**
+ * A new agent's form from a ready-to-use agent (Agent Center › Ready to
+ * use, "Use this agent"): its skills, triggers, mode and connections, on
+ * the brand on screen. Full auto where the plan or Settings › Chat keeps it
+ * closed starts on Auto, ask before changes: the card said so. Only filled
+ * in, never saved: the person saves it.
+ */
+export function formFromPreset(
+  setup: Pick<AgentFormSetup, 'brands' | 'runShareDefault' | 'fullAuto'>,
+  preset: Pick<AgentPreset, 'skills' | 'triggers' | 'mode' | 'connections'>,
+  options: { timeZone: string; brandId: string | null },
+): AgentFormState {
+  const skills = [...preset.skills];
+  return {
+    ...newForm(setup, { ...options, skill: null, triggerKey: 'k0' }),
+    skills,
+    triggers: preset.triggers.map((trigger, i) =>
+      presetTriggerDraft(trigger, `k${i}`, options.timeZone),
+    ),
+    mode: preset.mode === 'full_auto' && setup.fullAuto !== 'open' ? 'auto' : preset.mode,
+    connections: syncConnections(
+      preset.connections.filter((c) => !c.required),
+      skills,
+    ),
   };
 }
 

@@ -130,16 +130,76 @@ const FAILED = (what: string): ChatActionFailure => ({
 const actionHref = (id: string) => `/dashboard/action-center/actions/${id}` as const;
 
 /** How the change was approved, for History's execution.mode (§10a): as the server read it. */
-const executionOf = (where: Where | null) => (where ? { mode: where.executionMode } : null);
+const executionOf = (where: Where | null) =>
+  where?.executionMode ? { mode: where.executionMode } : null;
 
 /** Where a change was made, as the server read it: never as a caller said it. */
 interface Where {
   conversationId: string;
   brandId: string | null;
   runId: string;
-  /** The run step it runs on: one per approval, its idempotency key. */
-  approvalKey: string;
-  executionMode: 'assisted' | 'automated';
+  /** The run step it runs on: one per approval, its idempotency key. None for a card's click. */
+  approvalKey: string | null;
+  /** None for the person's own click on a card: no change Chat made. */
+  executionMode: 'assisted' | 'automated' | null;
+}
+
+/**
+ * A click on a deliverable's card in the person's own chat (W2-12's Attach
+ * only): the chat and the card's run, with no approval step.
+ */
+export interface ChatCardPlace {
+  conversationId: string;
+  runId: string;
+}
+
+/** The person's own chat, read as them. */
+async function ownChat(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  conversationId: string,
+): Promise<{ id: string; brandId: string | null } | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: chat, error } = await supabase
+    .from('chat_conversations')
+    .select('id, user_id, brand_id')
+    .eq('id', conversationId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  // A teammate's shared chat is theirs to work in, not this person's.
+  if (!chat || chat.user_id !== user.id) return null;
+  return { id: chat.id as string, brandId: (chat.brand_id as string | null) ?? null };
+}
+
+/**
+ * The chat and run a card's click names, read on the server as placeOf
+ * reads a run's: the person's own chat and a run of it. Null when either
+ * doesn't hold: nothing of it is recorded then.
+ */
+async function cardPlaceOf(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  place: ChatCardPlace,
+): Promise<Where | null> {
+  if (!place.conversationId || !place.runId) return null;
+  const chat = await ownChat(supabase, place.conversationId);
+  if (!chat) return null;
+  const { data: run, error } = await supabaseAdmin
+    .from('chat_runs')
+    .select('id')
+    .eq('id', place.runId)
+    .eq('conversation_id', chat.id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!run) return null;
+  return {
+    conversationId: chat.id,
+    brandId: chat.brandId,
+    runId: (run as { id: string }).id,
+    approvalKey: null,
+    executionMode: null,
+  };
 }
 
 /**
@@ -156,18 +216,8 @@ async function placeOf(
   tool: string,
 ): Promise<Where | null> {
   if (!place?.conversationId || !place.runId || !place.approvalKey) return null;
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: chat, error } = await supabase
-    .from('chat_conversations')
-    .select('id, user_id, brand_id')
-    .eq('id', place.conversationId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  // A teammate's shared chat is theirs to work in, not this person's.
-  if (!chat || chat.user_id !== user.id) return null;
+  const chat = await ownChat(supabase, place.conversationId);
+  if (!chat) return null;
   const { data: step, error: stepError } = await supabaseAdmin
     .from('chat_run_steps')
     .select('id, run_id, status, tool, debug_json, chat_runs!inner(conversation_id)')
@@ -192,8 +242,8 @@ async function placeOf(
     return null;
   }
   return {
-    conversationId: chat.id as string,
-    brandId: (chat.brand_id as string | null) ?? null,
+    conversationId: chat.id,
+    brandId: chat.brandId,
     runId: row.run_id,
     approvalKey: row.id,
     executionMode: row.debug_json?.auto === true ? 'automated' : 'assisted',
@@ -370,6 +420,8 @@ const CLOSED: ChatActionFailure = {
  * Add to AC-{n} (attach_to_action): the finding as evidence on an action
  * that already covers it, with a note, in its History. The action's
  * targets, tasks and everything else stay as they are (CHAT-20 §12 rule 1).
+ * The event carries its approval's key (`chat:{step}`, as Send to Action
+ * Center's): a retried approval finds the event it wrote and adds none.
  */
 export async function attachToAction(
   actionId: string,
@@ -386,8 +438,29 @@ export async function attachToAction(
     const action = await openAction(supabase, actionId);
     if (!action || !(await canUseBrand(supabase, action.brand_id))) return NOT_FOUND('action');
     await assertWritable({ brandId: action.brand_id });
-    if (action.status === 'completed' || action.status === 'dismissed') return CLOSED;
+    const added = (eventId: string) => ({
+      ok: true as const,
+      action_id: action.id,
+      action_no: Number(action.action_no),
+      event_id: eventId,
+      href: actionHref(action.id),
+    });
     const where = await placeOf(supabase, place, 'attach_to_action');
+    // One per approval (the run step): a retry finds what it wrote (§11c).
+    const key = where?.approvalKey ? `chat:${where.approvalKey}` : null;
+    if (key) {
+      const { data: again, error: againError } = await supabase
+        .from('action_events')
+        .select('id')
+        .eq('action_id', action.id)
+        .eq('event', 'evidence_attached')
+        .eq('data->>idempotencyKey', key)
+        .limit(1)
+        .maybeSingle();
+      if (againError) throw new Error(againError.message);
+      if (again) return added((again as { id: string }).id);
+    }
+    if (action.status === 'completed' || action.status === 'dismissed') return CLOSED;
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -405,18 +478,13 @@ export async function attachToAction(
           conversationId: where?.conversationId ?? null,
           runId: where?.runId ?? null,
           execution: executionOf(where),
+          ...(key ? { idempotencyKey: key } : {}),
         } as Json,
       })
       .select('id')
       .single();
     if (error) throw new Error(error.message);
-    return {
-      ok: true,
-      action_id: action.id,
-      action_no: Number(action.action_no),
-      event_id: (event as { id: string }).id,
-      href: actionHref(action.id),
-    };
+    return added((event as { id: string }).id);
   } catch (err) {
     console.error('[chat/action-center] could not add the finding:', err);
     return FAILED("The finding couldn't be added.");
@@ -451,13 +519,14 @@ async function brandTask(
  * Attach only (attach_file_to_task, CHAT-09 item 16): a file in Files, or a
  * draft filed there, linked to a task (`attached_by` the person), its status
  * `attached`. The task isn't marked done: that is the person's click.
- * Attaching it again changes nothing.
+ * Attaching it again changes nothing. From a card's Attach only (W2-12),
+ * `place` is the card's chat and run, which History records as the run's.
  */
 export async function attachFileToTask(
   brandId: string,
   taskId: string,
   fileId: string,
-  place?: Place,
+  place?: Place | ChatCardPlace,
 ): Promise<
   | { ok: true; file_id: string; task_id: string; action_id: string; already: boolean }
   | ChatActionFailure
@@ -503,7 +572,10 @@ export async function attachFileToTask(
       .eq('status', 'draft');
     if (statusError) throw new Error(statusError.message);
 
-    const where = await placeOf(supabase, place, 'attach_file_to_task');
+    const where =
+      place && typeof place === 'object' && !('approvalKey' in place)
+        ? await cardPlaceOf(supabase, place)
+        : await placeOf(supabase, place, 'attach_file_to_task');
     const { error: eventError } = await supabase.from('action_events').insert({
       action_id: task.action_id,
       event: 'file_attached',

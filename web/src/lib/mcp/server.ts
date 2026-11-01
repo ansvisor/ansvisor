@@ -1055,7 +1055,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'AI traffic',
       description:
-        'Get AI-referral traffic analytics for a brand over an optional date range. Returns total visits, platform breakdown (visits per AI engine), top landing pages, and country segmentation. Use this to answer questions about traffic referred by ChatGPT, Claude, Perplexity, Gemini, Copilot, etc.',
+        "Get AI-referral traffic analytics for a brand over an optional date range. Returns total visits, platform breakdown (visits per AI engine), top landing pages, and country segmentation. Use this to answer questions about traffic referred by ChatGPT, Claude, Perplexity, Gemini, Copilot, etc. `tracking` says whether the tracking snippet is installed: 'not_detected' (not seen on the brand's site, so 0 visits means nothing is measured yet: say so and point to installing it on the AI Traffic page), 'installed_quiet' (installed, no AI visit in the last 7 days) or 'active'.",
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         date_from: z

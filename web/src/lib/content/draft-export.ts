@@ -39,7 +39,7 @@ export interface ExportFields {
   /** Markdown's front matter, in order. */
   front: Record<string, string>;
   /** HTML's head. */
-  head: { title: string; description: string; author: string };
+  head: { title: string; description: string; author: string; reviewer?: string };
 }
 
 /** A stretch of text with one format; a link carries its address. */
@@ -223,6 +223,9 @@ export function draftHtmlDocument(title: string, html: string, fields?: ExportFi
       ? [`<meta name="description" content="${escapeAttribute(head.description)}">`]
       : []),
     ...(head?.author ? [`<meta name="author" content="${escapeAttribute(head.author)}">`] : []),
+    ...(head?.reviewer
+      ? [`<meta name="reviewed-by" content="${escapeAttribute(head.reviewer)}">`]
+      : []),
     '</head>',
     '<body>',
     html.trim(),
@@ -651,7 +654,10 @@ export function libraryExportFileName(tab: string, format: LibraryExportFormat, 
 
 // ─── One page as a spreadsheet row ──────────────────────────────────────────
 
-/** The page's CSV and sheet header: a CMS's CSV import maps each to a field. */
+/**
+ * The page's CSV and sheet header: a CMS's CSV import maps each to a field.
+ * A new column goes last, so an import that maps them by position still fits.
+ */
 export const PAGE_SHEET_HEADERS = [
   'Title',
   'Meta title',
@@ -662,6 +668,7 @@ export const PAGE_SHEET_HEADERS = [
   'Characters',
   'Content',
   'HTML',
+  'Reviewed by',
 ];
 
 /** Export's page fields as front matter, read from the page where Export gives none. */
@@ -679,6 +686,8 @@ function frontOf(
     title: read.metaTitle,
     description: read.metaDescription,
     slug: read.slug,
+    author: read.author,
+    reviewed_by: read.reviewer,
     image: read.featuredImage ?? '',
   };
 }
@@ -709,6 +718,7 @@ export function pageSheetRow(
     content.replace(/\n/g, '').length,
     content,
     body,
+    front.reviewed_by ?? '',
   ];
   return Object.fromEntries(PAGE_SHEET_HEADERS.map((header, i) => [header, values[i]]));
 }
@@ -744,6 +754,7 @@ export function pageWorkbook(
         { width: 11 },
         { width: 80 },
         { width: 80 },
+        { width: 38 },
       ],
       data: [
         PAGE_SHEET_HEADERS.map((value) => ({ value, fontWeight: 'bold' as const })),
