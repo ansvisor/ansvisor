@@ -2968,12 +2968,8 @@ describe('the AI budget', () => {
     budgetHolds();
     const answer = Array.from({ length: 40 }, (_, i) => `w${i}`).join(' ');
     fakes.readRun.mockResolvedValue({ answers: [{ answer }] });
-    const read = () =>
-      useModels(
-        [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
-        [text('Done.')],
-      );
-    read();
+    const readSteps = () => [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY];
+    useModels(readSteps(), [text('Done.')]);
     const started = await engine.startChatRun(ADMIN, {
       message: 'What do AI answers say about us?',
       brandId: BRAND,
@@ -2987,7 +2983,7 @@ describe('the AI budget', () => {
     expect(kept?.full).toBe(false);
     expect(copiedFrom(answer, kept)).toBe(true);
 
-    read();
+    useModels(readSteps(), [text('Done.')]);
     const own = await turn(ADMIN, 'What do AI answers say about us?');
     const ownState = db.tables.chat_run_state.find((s) => s.run_id === own)!;
     expect(ownState.progress).not.toHaveProperty('untrustedShingles');

@@ -51,9 +51,11 @@ export function wordsOf(text: string): string[] {
     .filter(Boolean);
 }
 
-const FNV_OFFSET = 0xcbf29ce484222325n;
-const FNV_PRIME = 0x100000001b3n;
-const MASK = (1n << 64n) - 1n;
+// BigInt() rather than literals: the web's TypeScript targets below ES2020.
+const FNV_OFFSET = BigInt('0xcbf29ce484222325');
+const FNV_PRIME = BigInt('0x100000001b3');
+const MASK = (BigInt(1) << BigInt(64)) - BigInt(1);
+const SIX_BITS = BigInt(63);
 const BASE64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
 /** FNV-1a, 64 bits, over a word's code points. */
@@ -68,7 +70,7 @@ function wordHash(word: string): bigint {
 
 function encode(h: bigint): string {
   let out = '';
-  for (let i = 0; i < HASH_CHARS; i++) out += BASE64URL[Number((h >> BigInt(i * 6)) & 63n)];
+  for (let i = 0; i < HASH_CHARS; i++) out += BASE64URL[Number((h >> BigInt(i * 6)) & SIX_BITS)];
   return out;
 }
 
