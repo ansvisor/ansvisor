@@ -172,13 +172,15 @@ export function keptClaims(paragraph, claims) {
  * One call's reads of up to PARAGRAPHS_PER_CALL paragraphs: their claims,
  * by hash, and whether the answer missed the schema.
  */
-async function readCall({ orgId, draftId, modelId, paragraphs }) {
-  const budget = await reserveAiBudget(orgId, {
-    feature: 'quality',
-    modelId,
-    draftId,
-    holdUsd: CLAIMS_HOLD_USD,
-  });
+async function readCall({ orgId, draftId, modelId, paragraphs, reserve = null }) {
+  const budget = reserve
+    ? await reserve({ modelId, holdUsd: CLAIMS_HOLD_USD })
+    : await reserveAiBudget(orgId, {
+        feature: 'quality',
+        modelId,
+        draftId,
+        holdUsd: CLAIMS_HOLD_USD,
+      });
   // Each paragraph asked about is read, its claims or none: one the model
   // left out isn't asked again after every save.
   const read = new Map(paragraphs.map((p) => [p.hash, []]));
@@ -261,9 +263,12 @@ function batchesOf(paragraphs, calls, alone = new Set()) {
  * to its sources' kinds. Reads draw on the workspace's AI budget as
  * "quality"; a spent budget throws PlanLimitError (429).
  *
- * @param {{ orgId: string, draftId: string, html: string, skip?: string }} input
+ * `reserve`, when given, holds each model call in place of the workspace's
+ * Quality budget (chat-budget agentRunReserve: an agent run's own steps).
+ *
+ * @param {{ orgId: string, draftId: string, html: string, skip?: string, reserve?: Function|null }} input
  */
-export async function readDraftClaims({ orgId, draftId, html, skip = '' }) {
+export async function readDraftClaims({ orgId, draftId, html, skip = '', reserve = null }) {
   const paragraphs = draftParagraphs(html);
   const { data: rows, error } = await supabaseAdmin
     .from('content_quality_claims')
@@ -317,7 +322,7 @@ export async function readDraftClaims({ orgId, draftId, html, skip = '' }) {
       const reads = [];
       for (const batch of batches) {
         try {
-          reads.push(await readCall({ orgId, draftId, modelId, paragraphs: batch }));
+          reads.push(await readCall({ orgId, draftId, modelId, paragraphs: batch, reserve }));
         } catch (err) {
           if (!reads.length) throw err;
           logger.warn(

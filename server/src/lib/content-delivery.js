@@ -585,6 +585,9 @@ async function myRuleSets(orgId, siteType, drafts) {
  * them. One page is sent before this returns; more go on in the background,
  * so a CMS isn't sent 25 posts at once.
  *
+ * `agentRunId`: the agent run that sends on its own (00444), kept on each
+ * delivery; `userId` is then the person the run acts as.
+ *
  * @returns {Promise<{ batchId: string|null, deliveries: object[], skipped: number }>}
  *   deliveries: the sent one (one page) or the queued ones (more); skipped:
  *   pages past the day's cap
@@ -595,6 +598,7 @@ export async function sendContentPages({
   userId,
   pages: asked,
   target = 'webhook',
+  agentRunId = null,
 }) {
   // A page named twice goes once.
   const byId = new Map(asked.map((p) => [p.draftId, p]));
@@ -645,6 +649,20 @@ export async function sendContentPages({
       `This workspace has sent ${DAILY_DELIVERIES} pages in the last 24 hours. Try again later.`,
       429,
     );
+  }
+  if (agentRunId) {
+    // Before it goes: the Library and the ship event read who sent it from the row.
+    // Not kept, it still goes: its go-live step names the delivery too.
+    const { error: agentError } = await supabaseAdmin
+      .from('content_draft_deliveries')
+      .update({ agent_run_id: agentRunId })
+      .in(
+        'id',
+        rows.map((row) => row.id),
+      );
+    if (agentError) {
+      logger.warn({ err: agentError }, '[content-delivery] agent run not kept on the send');
+    }
   }
 
   // The reserved pages, in the order they go; their slug and meta stay on the draft.

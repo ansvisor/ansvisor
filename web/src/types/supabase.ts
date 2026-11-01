@@ -1797,6 +1797,167 @@ export type Database = {
           },
         ]
       }
+      chat_agent_go_live: {
+        Row: {
+          agent_id: string
+          daily_limit: number
+          granted_at: string
+          granted_by: string | null
+          organization_id: string
+          skill_checksums: Json
+          version: number
+        }
+        Insert: {
+          agent_id: string
+          daily_limit?: number
+          granted_at?: string
+          granted_by?: string | null
+          organization_id: string
+          skill_checksums?: Json
+          version: number
+        }
+        Update: {
+          agent_id?: string
+          daily_limit?: number
+          granted_at?: string
+          granted_by?: string | null
+          organization_id?: string
+          skill_checksums?: Json
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_agent_go_live_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: true
+            referencedRelation: "chat_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_go_live_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_agent_go_live_events: {
+        Row: {
+          agent_id: string | null
+          agent_run_id: string | null
+          brand_id: string
+          content_draft_id: string | null
+          created_at: string
+          delivery_id: string | null
+          error: string | null
+          external_id: string | null
+          finished_at: string | null
+          id: string
+          kind: string
+          organization_id: string
+          published_url: string | null
+          run_id: string | null
+          status: string
+          taken_down_at: string | null
+          taken_down_by: string | null
+          target: string
+          tool_key: string
+        }
+        Insert: {
+          agent_id?: string | null
+          agent_run_id?: string | null
+          brand_id: string
+          content_draft_id?: string | null
+          created_at?: string
+          delivery_id?: string | null
+          error?: string | null
+          external_id?: string | null
+          finished_at?: string | null
+          id?: string
+          kind: string
+          organization_id: string
+          published_url?: string | null
+          run_id?: string | null
+          status?: string
+          taken_down_at?: string | null
+          taken_down_by?: string | null
+          target: string
+          tool_key: string
+        }
+        Update: {
+          agent_id?: string | null
+          agent_run_id?: string | null
+          brand_id?: string
+          content_draft_id?: string | null
+          created_at?: string
+          delivery_id?: string | null
+          error?: string | null
+          external_id?: string | null
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          organization_id?: string
+          published_url?: string | null
+          run_id?: string | null
+          status?: string
+          taken_down_at?: string | null
+          taken_down_by?: string | null
+          target?: string
+          tool_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_agent_go_live_events_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_go_live_events_agent_run_id_fkey"
+            columns: ["agent_run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agent_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_go_live_events_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_go_live_events_content_draft_id_fkey"
+            columns: ["content_draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_go_live_events_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "content_draft_deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_go_live_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_go_live_events_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_agent_runs: {
         Row: {
           acting_user_id: string | null
@@ -2780,6 +2941,10 @@ export type Database = {
         Row: {
           agent_run_share_default: number
           agents_full_auto: boolean
+          auto_go_live_at: string | null
+          auto_go_live_by: string | null
+          auto_go_live_groups: string[]
+          auto_go_live_terms: number | null
           dont_ask_again: boolean
           full_auto_for_members: boolean
           manager_execute_off: string[]
@@ -2792,6 +2957,10 @@ export type Database = {
         Insert: {
           agent_run_share_default?: number
           agents_full_auto?: boolean
+          auto_go_live_at?: string | null
+          auto_go_live_by?: string | null
+          auto_go_live_groups?: string[]
+          auto_go_live_terms?: number | null
           dont_ask_again?: boolean
           full_auto_for_members?: boolean
           manager_execute_off?: string[]
@@ -2804,6 +2973,10 @@ export type Database = {
         Update: {
           agent_run_share_default?: number
           agents_full_auto?: boolean
+          auto_go_live_at?: string | null
+          auto_go_live_by?: string | null
+          auto_go_live_groups?: string[]
+          auto_go_live_terms?: number | null
           dont_ask_again?: boolean
           full_auto_for_members?: boolean
           manager_execute_off?: string[]
@@ -3944,6 +4117,7 @@ export type Database = {
       }
       content_draft_deliveries: {
         Row: {
+          agent_run_id: string | null
           batch_id: string | null
           brand_id: string
           created_at: string
@@ -3965,6 +4139,7 @@ export type Database = {
           title: string
         }
         Insert: {
+          agent_run_id?: string | null
           batch_id?: string | null
           brand_id: string
           created_at?: string
@@ -3986,6 +4161,7 @@ export type Database = {
           title: string
         }
         Update: {
+          agent_run_id?: string | null
           batch_id?: string | null
           brand_id?: string
           created_at?: string
@@ -4007,6 +4183,13 @@ export type Database = {
           title?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "content_draft_deliveries_agent_run_id_fkey"
+            columns: ["agent_run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agent_runs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "content_draft_deliveries_brand_id_fkey"
             columns: ["brand_id"]
@@ -7828,6 +8011,17 @@ export type Database = {
           title: string | null
         }[]
       }
+      finish_agent_go_live: {
+        Args: {
+          p_delivery_id?: string
+          p_error?: string
+          p_external_id?: string
+          p_id: string
+          p_published_url?: string
+          p_status: string
+        }
+        Returns: boolean
+      }
       ga_page_ai_visibility: {
         Args: { p_brand_id: string; p_since: string }
         Returns: {
@@ -8361,6 +8555,21 @@ export type Database = {
           topic_name: string
           visible_runs: number
         }[]
+      }
+      reserve_agent_go_live: {
+        Args: {
+          p_agent_id: string
+          p_agent_run_id: string
+          p_brand_id: string
+          p_content_draft_id: string
+          p_kind: string
+          p_limit: number
+          p_organization_id: string
+          p_run_id: string
+          p_target: string
+          p_tool_key: string
+        }
+        Returns: string
       }
       seed_kpi_presets: {
         Args: { p_brand_id: string; p_kpis: Json }

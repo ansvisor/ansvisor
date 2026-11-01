@@ -171,6 +171,15 @@ describe('draftParagraphs', () => {
 });
 
 describe('readDraftClaims', () => {
+  it('holds each call on the meter it is given, for an agent run (AUTONOMOUS-GO-LIVE §6.2)', async () => {
+    const meter = { charge: vi.fn(), release: vi.fn(), keep: vi.fn() };
+    const reserve = vi.fn(async () => meter);
+    await read({ reserve });
+    expect(reserve).toHaveBeenCalledWith({ modelId: expect.any(String), holdUsd: CLAIMS_HOLD_USD });
+    expect(reserves).toEqual([]);
+    expect(meter.charge).toHaveBeenCalledWith({ inputTokens: 300, outputTokens: 40 });
+  });
+
   it('reads the paragraphs not read yet in one call, keeps each, and holds the budget as quality', async () => {
     const result = await read();
     expect(result).toEqual({
