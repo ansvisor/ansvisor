@@ -43,16 +43,14 @@ export async function PUT(req: Request) {
     if (access.state !== 'plan' && access.state !== 'kept') {
       return NextResponse.json({ error: 'Own AI keys are not on' }, { status: 404 });
     }
-    const { error } = await supabaseAdmin
-      .from('chat_settings')
-      .upsert(
-        {
-          organization_id: organizationId,
-          own_key_agent_month_usd: capUsd,
-          updated_by: ctx.user.id,
-        },
-        { onConflict: 'organization_id' },
-      );
+    const { error } = await supabaseAdmin.from('chat_settings').upsert(
+      {
+        organization_id: organizationId,
+        own_key_agent_month_usd: capUsd,
+        updated_by: ctx.user.id,
+      },
+      { onConflict: 'organization_id' },
+    );
     if (error) {
       // The web ahead of 00442: nothing to keep it in yet.
       if (
