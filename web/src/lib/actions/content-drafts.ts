@@ -319,6 +319,8 @@ export interface DraftPage {
   sourceUrl: string | null;
   /** Who the page is by (CE-038), for Send to CMS. */
   authorId: string | null;
+  /** The qualified reviewer chosen for a regulated page (CE-049). */
+  reviewerId: string | null;
   /**
    * The person confirmed their site names the page's author (00271): with
    * none picked, Send to CMS names no team, the CMS keeps its own.
@@ -357,7 +359,7 @@ export async function getContentDraftPages(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_drafts')
-    .select('id, title, body_html, source_url, author_id, author_real_at, rules')
+    .select('id, title, body_html, source_url, author_id, reviewer_id, author_real_at, rules')
     .eq('brand_id', brandId)
     .in('id', parsed.data);
   if (error) throw new Error(error.message);
@@ -370,6 +372,7 @@ export async function getContentDraftPages(
         bodyHtml: row.body_html,
         sourceUrl: row.source_url,
         authorId: row.author_id,
+        reviewerId: row.reviewer_id ?? null,
         authorConfirmed: row.author_real_at !== null,
         language: draftLanguage(row.rules),
       },
