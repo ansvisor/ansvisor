@@ -52,12 +52,29 @@ describe('sendActionTask', () => {
       to: 'content',
       opportunityId: 'o1',
       created: true,
+      merged: false,
     });
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://api.example/api/action-center/tasks/t1/send');
     expect(JSON.parse(String(init.body))).toEqual({
       to: 'content',
       title: 'Add a table to /pricing',
+    });
+  });
+
+  it('says when the task joined the open opportunity on its question', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ opportunityId: 'o9', created: false, merged: true })),
+      ),
+    );
+    expect(await sendActionTask('t1', 'content', 'x')).toEqual({
+      to: 'content',
+      opportunityId: 'o9',
+      created: false,
+      merged: true,
     });
   });
 
