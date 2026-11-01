@@ -14,6 +14,14 @@ vi.mock('@/lib/supabase/admin', async () => ({
 }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
 const key = vi.hoisted(() => ({ own: false }));
+const keyCap = vi.hoisted(() => ({
+  reached: null as { reached: boolean; renewsAt: string | null } | null,
+  read: null as { reached: boolean; renewsAt: string | null } | null,
+}));
+vi.mock('./own-key-cap', () => ({
+  ownKeyCapReached: vi.fn(async () => keyCap.reached),
+  readOwnKeyCap: vi.fn(async () => keyCap.read),
+}));
 vi.mock('./key', () => ({
   resolveChatModelKey: vi.fn(async () =>
     key.own

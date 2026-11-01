@@ -24,6 +24,14 @@ vi.mock('@/lib/mcp/account', () => ({
     percent_used: usage.percent,
   })),
 }));
+const keyCap = vi.hoisted(() => ({
+  reached: null as { reached: boolean; renewsAt: string | null } | null,
+  read: null as { reached: boolean; renewsAt: string | null } | null,
+}));
+vi.mock('./own-key-cap', () => ({
+  ownKeyCapReached: vi.fn(async () => keyCap.reached),
+  readOwnKeyCap: vi.fn(async () => keyCap.read),
+}));
 vi.mock('./key', () => ({
   resolveChatModelKey: vi.fn(async () => ({ source: usage.own ? 'own' : 'ansvisor' })),
 }));

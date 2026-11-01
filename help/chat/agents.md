@@ -4,8 +4,8 @@ route: /dashboard/agents
 keywords: [agents, agent center, chat agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection]
 synonyms: [my agents, saved agents, automations, scheduled agents, agent history, what does this agent cost, make an agent, change an agent, remove an agent]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -99,6 +99,10 @@ A run may use only its share of your monthly AI limit. A run a trigger started e
 Admins and Managers can also start an agent from an open action in Action Center: **Run agent** on the action's row or at the top of the open action lists the agents that work on its brand. The run works on that action alone, acts as the person who clicked, and opens beside the action. Its chat is named after the agent and the action, and **Run history** shows its trigger as **Run agent from an action**.
 
 The run never adds targets to the action and never closes its tasks. If the action is completed or dismissed, the run stops with **The action was closed**. The action's **History** shows **Agent run started** and **Agent run completed**.
+
+## Your key's monthly agent limit
+
+When your workspace runs on its own AI key, all agents together may spend at most a monthly limit on it: $250 unless an Admin sets another, from $10 to $10,000. It is measured at the providers' list prices, and it can't be turned off. Once agents reach it, each agent pauses when it next runs, with **Key's monthly agent limit reached**, and **Run now** and **Run agent** are refused. They start again by themselves when the month renews, or when an Admin raises the limit in **Settings › AI Providers**. Chats you start yourself don't count toward it.
 
 ## Read-only roles
 

@@ -7,6 +7,8 @@ import { isTriggered, readArmedOrgs } from './agent-triggers';
 import { pauseAgentForSystem } from './agents';
 import { endHeldRun, sweepChatRuns } from './engine';
 import { chatAgenticEnabled } from './flag';
+import { chatRunsOnOwnKey } from './key';
+import { readOwnKeyCap } from './own-key-cap';
 
 /**
  * The agents' sweep (CHAT-21 §G, §H, §M; W2-16), on the server's minute
@@ -144,6 +146,43 @@ async function stopHeldTriggeredRuns(agentId: string, now: Date): Promise<void> 
   }
 }
 
+/**
+ * Agents paused because all agents reached the month's limit on the
+ * workspace's own key (own_key_cap, AGENT-OWN-KEY §4.2) start again once
+ * there is room: the period renewed, or an Admin raised the limit; also
+ * once Chat no longer runs on the key. Each workspace's guard is read fresh;
+ * one that can't be read waits for the next sweep.
+ */
+async function resumeKeyCapPausedAgents(now: Date): Promise<number> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_agents')
+    .select('id, organization_id')
+    .eq('status', 'paused')
+    .eq('paused_reason', 'own_key_cap')
+    .limit(SWEEP_ROWS);
+  if (error) throw new Error(`Could not read the paused agents: ${error.message}`);
+  const rows = (data ?? []) as { id: string; organization_id: string }[];
+  let resumed = 0;
+  for (const orgId of new Set(rows.map((r) => r.organization_id))) {
+    if (
+      (await chatRunsOnOwnKey(orgId)) &&
+      (await readOwnKeyCap(orgId, { fresh: true }))?.reached !== false
+    ) {
+      continue;
+    }
+    const { data: moved, error: moveError } = await supabaseAdmin
+      .from('chat_agents')
+      .update({ status: 'active', paused_reason: null, activated_at: now.toISOString() })
+      .eq('organization_id', orgId)
+      .eq('status', 'paused')
+      .eq('paused_reason', 'own_key_cap')
+      .select('id');
+    if (moveError) throw new Error(`Could not resume the agents: ${moveError.message}`);
+    resumed += (moved ?? []).length;
+  }
+  return resumed;
+}
+
 /** One sweep (above); answers what each part did, for the cron's log. */
 export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Promise<AgentSweep> {
   const counts: AgentSweep = {
@@ -243,6 +282,11 @@ export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Pro
         console.error('[chat/agents] could not start a workspace’s runs:', err);
       }
     }
+  });
+
+  // After the start: an agent resumed here runs on its next fire.
+  await part('keyCap', async () => {
+    counts.resumed += await resumeKeyCapPausedAgents(now);
   });
   return counts;
 }

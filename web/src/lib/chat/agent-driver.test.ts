@@ -24,6 +24,14 @@ const fakes = vi.hoisted(() => ({
   stopChat: vi.fn(),
 }));
 vi.mock('@/lib/mcp/account', () => ({ getAiUsageFor: fakes.usage }));
+const keyCap = vi.hoisted(() => ({
+  reached: null as { reached: boolean; renewsAt: string | null } | null,
+  read: null as { reached: boolean; renewsAt: string | null } | null,
+}));
+vi.mock('./own-key-cap', () => ({
+  ownKeyCapReached: vi.fn(async () => keyCap.reached),
+  readOwnKeyCap: vi.fn(async () => keyCap.read),
+}));
 vi.mock('./key', () => ({ resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })) }));
 vi.mock('./agent-shares', () => ({ readAgentShares: vi.fn(async () => null) }));
 vi.mock('./engine', () => ({
@@ -128,6 +136,8 @@ function chatOf(agentRunId: string, status: string, progress: Record<string, unk
 }
 
 beforeEach(() => {
+  keyCap.reached = null;
+  keyCap.read = null;
   vi.clearAllMocks();
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('CHAT_AGENTIC', 'true');
@@ -365,6 +375,22 @@ describe('handing a started run to Chat', () => {
     runRow(triggered).status = 'done';
     const under = queueRun({ trigger_kind: 'manual', acting_user_id: PEOPLE.manager });
     expect(await driver.openAgentRun(under, ORG, NOW)).not.toBeNull();
+  });
+
+  it('stops a queued run once all agents used the month’s limit on the own key, pausing a triggered agent', async () => {
+    keyCap.reached = { reached: true, renewsAt: '2026-11-20T09:00:00.000Z' };
+    const id = queueRun();
+    expect(await driver.openAgentRun(id, ORG, NOW)).toBeNull();
+    expect(runRow(id).status).toBe('stopped');
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'own_key_cap' });
+    expect(db.tables.chat_conversations).toEqual([]);
+
+    // Run now stops the same, and leaves the agent as it is.
+    Object.assign(agentRow(), { status: 'active', paused_reason: null });
+    const manual = queueRun({ trigger_kind: 'manual', acting_user_id: PEOPLE.manager });
+    expect(await driver.openAgentRun(manual, ORG, NOW)).toBeNull();
+    expect(runRow(manual).status).toBe('stopped');
+    expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
   });
 
   it('pauses a triggered agent whose brand lacks a Required connection, and starts nothing', async () => {

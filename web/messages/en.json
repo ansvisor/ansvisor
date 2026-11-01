@@ -5219,6 +5219,7 @@
       "agent_limit": "Your plan keeps up to {limit, plural, one {# agent} other {# agents}} on at once. Pause or archive one to turn this one on.",
       "no_brand": "None of this agent's brands is left. Pick a brand in its scope.",
       "ai_limit": "This month's AI limit is used up, so the agent can't start. It can run again once the limit resets.",
+      "own_key_cap": "Agents have used this month's limit on your own AI key. An Admin can raise it in Settings › AI Providers, or it renews on {date}.",
       "owner_role": "This agent's owner can't run agents any more. An Admin can take it over.",
       "action_not_found": "This action isn't available.",
       "action_closed": "This action is closed. Reopen it in Action Center to run an agent on it.",
@@ -5233,6 +5234,7 @@
       "archived": "Archived"
     },
     "pausedReason": {
+      "own_key_cap": "Key's monthly agent limit reached",
       "cap": "AI limit reached",
       "connection": "A required connection is off",
       "skill_off": "A skill is off",

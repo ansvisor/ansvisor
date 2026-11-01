@@ -50,8 +50,9 @@ import supabaseAdmin from '../config/supabase.js';
 import { chatAgenticEnabled } from './chat-flag.js';
 import { drawCredits } from './ai-credits.js';
 import { cacheSplit, generationCostUsd } from './improve-cost.js';
-import { CHAT_AI_FEATURES, aiBudgetOf, aiBudgetUsedUp } from './plan-guard.js';
+import { CHAT_AI_FEATURES, aiBudgetOf, aiBudgetUsedUp, quotaPeriodStart } from './plan-guard.js';
 import { logger } from './logger.js';
+import { shiftMonthClamped } from './quota-period.js';
 
 /** What a Chat step can be metered as: a run's model step, then agents, scheduled runs, images. */
 export const CHAT_BUDGET_FEATURES = CHAT_AI_FEATURES;
@@ -307,5 +308,50 @@ export async function agentUsageShares(orgId, { days = null } = {}) {
       ownKeyShare: Number(row.own_key_share) || 0,
       runs: Number(row.runs) || 0,
     })),
+  };
+}
+
+/**
+ * The agents' monthly limit on the workspace's own key when no Admin set it
+ * (AGENT-OWN-KEY D5, 00442's default).
+ */
+export const OWN_KEY_AGENT_CAP_DEFAULT_USD = 250;
+
+/**
+ * The key guard (AGENT-OWN-KEY §4.2): what all agents' runs spent on the
+ * workspace's own key this AI period (the meter's, so it renews with it),
+ * at the price each step was charged, holds in flight at their worst case,
+ * against the Admin's monthly limit (chat_settings.own_key_agent_month_usd,
+ * $250 without a row). `reached` at or past it: the agents pause
+ * (own_key_cap) and Run now is refused until the period renews or an Admin
+ * raises it. Dollars only for the Admins' settings card; the agent checks
+ * read `reached` alone. Interactive Chat isn't counted (§4.4).
+ */
+export async function ownKeyAgentSpend(orgId, now = new Date()) {
+  assertChatOn(orgId);
+  const periodStart = await quotaPeriodStart(orgId, now);
+  const since = periodStart.toISOString();
+  const [{ data: settings, error: settingsError }, { data: spent, error }] = await Promise.all([
+    supabaseAdmin
+      .from('chat_settings')
+      .select('own_key_agent_month_usd')
+      .eq('organization_id', orgId)
+      .maybeSingle(),
+    supabaseAdmin.rpc('chat_own_key_agent_spend', {
+      p_organization_id: orgId,
+      p_since: since,
+    }),
+  ]);
+  if (settingsError) throw new Error(settingsError.message);
+  if (error) throw new Error(error.message);
+  const capUsd = Number(settings?.own_key_agent_month_usd ?? OWN_KEY_AGENT_CAP_DEFAULT_USD);
+  const usedUsd = Number(spent) || 0;
+  return {
+    reached: usedUsd >= capUsd,
+    // To the cent: an estimate at list prices.
+    usedUsd: Math.round(usedUsd * 100) / 100,
+    capUsd,
+    since,
+    renewsAt: shiftMonthClamped(periodStart, 1).toISOString(),
   };
 }

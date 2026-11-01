@@ -58,6 +58,7 @@ import { canonicalJson } from './idempotency';
 import type { ChatActor } from './engine';
 import type { ChatDenialCard } from './events';
 import { resolveChatModelKey } from './key';
+import { ownKeyCapReached } from './own-key-cap';
 import { planFactsFromOrgRow, type PlanFacts } from './plan-facts';
 import { parseTeamRole, type ChatMode, type ToolDenial } from './precedence';
 import { readBrandAccess } from './precedence-context';
@@ -168,6 +169,7 @@ export type AgentRefusalCode =
   | 'agent_limit'
   | 'no_brand'
   | 'ai_limit'
+  | 'own_key_cap'
   | 'owner_role'
   | 'action_not_found'
   | 'action_closed'
@@ -220,6 +222,7 @@ const REFUSAL_STATUS: Record<AgentRefusalCode, number> = {
   agent_limit: 403,
   no_brand: 409,
   ai_limit: 429,
+  own_key_cap: 429,
   owner_role: 409,
   action_not_found: 404,
   action_closed: 409,
@@ -1187,7 +1190,22 @@ export async function runChecks(
     return refused('no_brand');
   }
   if (await aiLimitReached(ctx)) return refused('ai_limit');
+  // All agents reached the month's limit on the workspace's own key (AGENT-OWN-KEY §4.2).
+  const keyCap = await ownKeyCapReached(ctx.actor.organizationId);
+  if (keyCap) return refused('own_key_cap', { date: renewsOn(keyCap.renewsAt) });
   return null;
+}
+
+/** When the AI period renews, as the refusal says it: "November 20, 2026". */
+function renewsOn(at: string | null): string {
+  const date = at ? new Date(at) : null;
+  if (!date || Number.isNaN(date.getTime())) return 'the next period';
+  return date.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 /** An agent's triggers as their inputs read back (the checks that name engines read them). */
