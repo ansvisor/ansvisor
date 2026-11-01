@@ -9,7 +9,6 @@ import {
   AuditEstimateChip,
   ESTIMATE_DELAY_MS,
   useAuditEstimate,
-  type AuditEstimateState,
 } from './_audit-estimate';
 
 /**
@@ -47,10 +46,9 @@ const VERDICTS = [{ key: 'direct-answer', status: 'pass', score: 1 }];
 
 let container: HTMLDivElement;
 let root: Root;
-let state: AuditEstimateState;
 
 function Harness({ doc }: { doc: string }) {
-  state = useAuditEstimate('d1', 'b1', doc);
+  const state = useAuditEstimate('d1', 'b1', doc);
   return (
     <>
       <AuditEstimateChip state={state} />
