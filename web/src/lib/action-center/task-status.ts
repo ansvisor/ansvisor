@@ -36,20 +36,30 @@ export async function touchAction(supabase: Client, brandId: string, actionId: s
 /**
  * A task's status, as the drawer sets it: the row (a skip with why, any
  * other status clearing it), its `task_status` event with what `data` adds
- * (Chat's source and file), and the action's Updated stamp.
+ * (Chat's source and file), and the action's Updated stamp. `onlyIfChanged`
+ * (Chat's card): a task already at the status isn't written, nor its event
+ * or stamp, so of two clicks at once only one is in History. Says whether
+ * the row was written.
  */
 export async function writeTaskStatus(
   supabase: Client,
   task: { brandId: string; actionId: string; taskId: string },
   status: TaskStatus,
-  { skipReason = null, data = {} }: { skipReason?: string | null; data?: EventData } = {},
-): Promise<void> {
-  const { error } = await supabase
+  {
+    skipReason = null,
+    data = {},
+    onlyIfChanged = false,
+  }: { skipReason?: string | null; data?: EventData; onlyIfChanged?: boolean } = {},
+): Promise<boolean> {
+  let write = supabase
     .from('action_tasks')
     .update({ status, skip_reason: skipReason, updated_at: new Date().toISOString() })
     .eq('action_id', task.actionId)
     .eq('id', task.taskId);
+  if (onlyIfChanged) write = write.neq('status', status);
+  const { data: written, error } = await write.select('id');
   if (error) throw new Error(error.message);
+  if (onlyIfChanged && (written ?? []).length === 0) return false;
   await logEvent(supabase, task.actionId, 'task_status', {
     taskId: task.taskId,
     to: status,
@@ -57,4 +67,5 @@ export async function writeTaskStatus(
     ...data,
   });
   await touchAction(supabase, task.brandId, task.actionId);
+  return true;
 }

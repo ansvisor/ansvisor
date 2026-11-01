@@ -30,6 +30,7 @@ import { loadClusterOpportunities, loadOpportunityBaskets } from './open-opportu
 import { basket, duplicateThreshold, findDuplicate, storedBasket } from './opportunity-dedup.js';
 import { loadClusters } from './prompt-clusters.js';
 import { cleanOpportunityText } from './opportunity-text.js';
+import { yearRule } from './current-year.js';
 import {
   focusClusters,
   loadPageFocus,
@@ -82,6 +83,7 @@ Rules:
 - Add supporting assets only when the data calls for them, up to ${MAX_SUPPORTING_ASSETS}, each a different piece of work. Owned ones are of the brand's content types too. For example: a comparison or alternatives page when people compare named products; a definition or FAQ page for a term the main content relies on; an earned third-party article when competitors are visible and the brand is not; a backlink when the brand's page exists but is not cited. Give each a short title saying what to make or do. Most opportunities need none or one.
 - Earned assets (third_party_article, backlink) live on other sites: set their channel to "earned", decision to "create" and pageIndexes to empty.
 - Write for the brand's marketing team: do not use the words "cluster" or "prompt" in titles or descriptions.
+- Titles and descriptions follow the year rule given with the clusters: a year in them goes stale on New Year's Day.
 - Refer to clusters and existing opportunities only through clusterIndex and sameAs. Never mention a bracketed index in a title or description.`;
 
 /** @param {string[]} types - what an asset can be on the brand's site (assetTypes) */
@@ -557,7 +559,10 @@ ${alternativeOf ? `${alternativeInstruction(alternativeOf)}\n\n` : ''}${
     idea
       ? `The user asked for ideas around: "${idea.slice(0, IDEA_MAX_LENGTH)}". Shape the opportunities toward it wherever the clusters' prompts allow; never invent a need the data doesn't show.\n\n`
       : ''
-  }Write every title and description in ${getLanguageName(brand.language)}.`;
+  }Year rule for titles and descriptions:
+${yearRule()}
+
+Write every title and description in ${getLanguageName(brand.language)}.`;
 
   onProgress?.({ phase: 'analyzing', message: 'Generating opportunities with AI...' });
   const { object } = await generateObject({
