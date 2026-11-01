@@ -231,9 +231,10 @@ async function runAuditJob(auditId, brandId, url, orgId, source = 'user') {
     // Don't let a failed completion update leave the row stuck in 'running'.
     if (completeErr) throw completeErr;
 
-    // Charge the monthly quota only for audits that actually completed; an
-    // auto-audit run's audits are charged as its own (SA-006).
-    if (orgId) {
+    // Charge the monthly quota only for audits that actually completed, and
+    // not for a partial one, whose AI checks didn't run; an auto-audit run's
+    // audits are charged as its own (SA-006).
+    if (orgId && !llm.partial) {
       await supabaseAdmin
         .from('site_audit_usage')
         .insert({ organization_id: orgId, audit_id: auditId, ...sourceColumn(source) });

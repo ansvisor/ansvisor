@@ -2703,7 +2703,7 @@
         "score changed"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -2723,7 +2723,7 @@
         },
         {
           "heading": "Same page, same score",
-          "text": "The AI keeps its verdict on each of its thirteen signals until the part of the page that signal reads changes, so a page audited again with no changes gets the same score. A page that changed is judged again only on the signals whose part changed.\n\nIf the AI checks can't run, the page keeps the verdicts of its last audit. A page with none, such as one audited for the first time, gets a partial score: the report says the AI checks couldn't run, and the score leaves them out and isn't compared with your other audits."
+          "text": "The AI keeps its verdict on each of its thirteen signals until the part of the page that signal reads changes, so a page audited again with no changes gets the same score. A page that changed is judged again only on the signals whose part changed.\n\nIf the AI checks can't run, the page keeps the verdicts of its last audit. A page with none, such as one audited for the first time, gets a partial score: the report says the AI checks couldn't run, and the score leaves them out and isn't compared with your other audits. A partial audit doesn't use one of your monthly audits."
         },
         {
           "heading": "Signals",

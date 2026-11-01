@@ -6156,6 +6156,7 @@
     "fix": "Fix",
     "signalsEvaluated": "signals evaluated",
     "partialNote": "The AI checks couldn't run this time, so this score leaves them out and isn't compared with your other audits.",
+    "partialNoCredit": "It didn't use one of your monthly audits.",
     "aiRecommendations": "AI Recommendations",
     "signals": "Signals",
     "onlyIssues": "Issues only",
