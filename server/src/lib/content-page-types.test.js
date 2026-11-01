@@ -6,6 +6,7 @@ import {
   PAGE_TYPE_SECTION_FORMATS,
   SITE_PAGE_TYPES,
   SITE_TYPES,
+  SITE_TYPE_NAMES,
   siteTypeLine,
   pageTypeFormat,
   sitePageTypeLines,
@@ -63,6 +64,7 @@ describe('pageTypeFormat', () => {
 describe('siteTypeOf', () => {
   it('takes the site type picked, else guesses it as the editor does', () => {
     expect(siteTypeOf({ siteType: 'b2c', industry: 'E-commerce & Retail' })).toBe('b2c');
+    expect(siteTypeOf({ siteType: 'app', shoppingModeEnabled: true })).toBe('app');
     expect(siteTypeOf({ siteType: null, shoppingModeEnabled: true })).toBe('ecommerce');
     expect(siteTypeOf({ siteType: 'retail', industry: 'Fashion & Apparel' })).toBe('ecommerce');
     expect(siteTypeOf({ industry: 'Travel & Hospitality' })).toBe('b2c');
@@ -82,6 +84,12 @@ describe('siteTypeOf', () => {
       const list = sites.match(new RegExp(`\\b${site}: \\[([\\s\\S]*?)\\]`))[1];
       expect(SITE_PAGE_TYPES[site]).toEqual([...list.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]));
     }
+    expect(SITE_TYPES).toEqual(
+      source
+        .match(/export const SITE_TYPES = \[([^\]]*)\]/)[1]
+        .match(/'([a-z0-9]+)'/g)
+        .map((m) => m.slice(1, -1)),
+    );
     const industries = block('const INDUSTRY_SITE_TYPES');
     const guesses = [...industries.matchAll(/^\s*'?([^':\n]+)'?: '([a-z0-9]+)',$/gm)];
     expect(guesses).toHaveLength(6);
@@ -95,6 +103,11 @@ describe('sitePageTypeLines', () => {
     expect(lines).toHaveLength(SITE_PAGE_TYPES.b2c.length);
     expect(lines[0]).toBe(
       '- destination_page: Destination page: a place, what to do there and when to go',
+    );
+    // A mobile app's site (00456), as opportunities read it.
+    expect(sitePageTypeLines('app').split('\n')).toHaveLength(SITE_PAGE_TYPES.app.length);
+    expect(sitePageTypeLines('app')).toContain(
+      '- pricing: Pricing: the plans, their prices and what each includes',
     );
   });
 });
@@ -120,5 +133,15 @@ describe('siteTypeLine (Quality CE-056)', () => {
     expect(siteTypeLine(null)).toBe(
       'Site type: B2B SaaS (software or services sold to businesses)\n',
     );
+    expect(siteTypeLine({ site_type: 'app' })).toBe(
+      'Site type: Mobile app (a mobile app people install from an app store)\n',
+    );
+  });
+
+  it('names each kind of site as Brand settings does', () => {
+    const messages = JSON.parse(
+      readFileSync(new URL('../../../web/messages/en.json', import.meta.url), 'utf8'),
+    );
+    expect(SITE_TYPE_NAMES).toEqual(messages.brands.siteTypes);
   });
 });
