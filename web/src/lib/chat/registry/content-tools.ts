@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { sendDraftToCms } from '@/lib/actions/cms-send';
 import { updateContentDraft } from '@/lib/actions/content-drafts';
+import { actorOf } from '@/lib/chat/actor/access';
+import { updateContentDraftFor } from '@/lib/chat/actor/drafts';
 import { CHAT_CMS_TARGETS, CMS_NAMES } from '@/lib/content/cms-names';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { contentUuid } from '@/lib/mcp/content-schemas';
@@ -11,7 +13,8 @@ import { draftPage, draftTitle, pageChanges } from './targets';
  * Chat's Content Library rows beyond create_draft (CHAT-20 §9 rows 55, 58):
  * changing a draft (a WRITE), and sending one to the brand's CMS as a draft
  * (an EXECUTE in the publishing group: it leaves Ansvisor). Each calls a
- * server action over the editor's own path, as the signed-in member. Both
+ * server action over the editor's own path, as the signed-in member; a
+ * change also has its write for a run without a session (runFor). Both
  * are Admins' and Managers' (DECISIONS T: an Analyst's Chat only creates
  * drafts; the API sends pages for Admins and Managers). Going live in a CMS
  * (publish_cms) has no row: no CMS the app sends to is published from it yet.
@@ -51,6 +54,12 @@ export const CONTENT_TOOLS = [
       }),
     run: (_ctx, input) =>
       updateContentDraft(input.draft_id, { title: input.title, bodyHtml: input.body_html }),
+    sessionFree: true,
+    runFor: async (ctx, input) =>
+      updateContentDraftFor(actorOf(ctx), input.draft_id, {
+        title: input.title,
+        bodyHtml: input.body_html,
+      }),
     target: async (input) => {
       const now = await draftPage(input.draft_id);
       if (!now) return input.title ? `“${input.title}”` : null;

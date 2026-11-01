@@ -7,6 +7,8 @@ import { isTriggered, readArmedOrgs } from './agent-triggers';
 import { pauseAgentForSystem } from './agents';
 import { endHeldRun, sweepChatRuns } from './engine';
 import { chatAgenticEnabled } from './flag';
+import { chatRunsOnOwnKey } from './key';
+import { ownKeyFailure, resumeOwnKeyAgents } from './key-health';
 
 /**
  * The agents' sweep (CHAT-21 §G, §H, §M; W2-16), on the server's minute
@@ -104,6 +106,35 @@ async function resumeCapPausedAgents(now: Date): Promise<number> {
       if ((moved ?? []).length === 0) continue;
       resumed += 1;
       await stopHeldTriggeredRuns(agent.id, now);
+    }
+  }
+  return resumed;
+}
+
+/**
+ * Agents paused because the workspace's own key failed start again once it
+ * works, or once Chat no longer runs on it (removed, or the plan no longer
+ * includes own keys): AGENT-OWN-KEY §5.4's backstop for the settings route.
+ * A workspace whose key can't be read now waits for the next sweep.
+ */
+async function resumeOwnKeyPausedAgents(now: Date): Promise<number> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_agents')
+    .select('organization_id')
+    .eq('status', 'paused')
+    .eq('paused_reason', 'own_key')
+    .limit(SWEEP_ROWS);
+  if (error) throw new Error(`Could not read the paused agents: ${error.message}`);
+  const orgs = new Set(
+    ((data ?? []) as { organization_id: string }[]).map((r) => r.organization_id),
+  );
+  let resumed = 0;
+  for (const orgId of orgs) {
+    try {
+      const failing = (await chatRunsOnOwnKey(orgId)) && (await ownKeyFailure(orgId)) !== null;
+      if (!failing) resumed += await resumeOwnKeyAgents(orgId, now);
+    } catch (err) {
+      console.error("[chat/agents] could not read the AI key's health:", err);
     }
   }
   return resumed;
@@ -223,6 +254,10 @@ export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Pro
 
   await part('resume', async () => {
     counts.resumed = await resumeCapPausedAgents(now);
+  });
+
+  await part('ownKey', async () => {
+    counts.resumed += await resumeOwnKeyPausedAgents(now);
   });
 
   // The workspaces' waiting runs start here, in this request of their own (not chained).
