@@ -102,7 +102,12 @@ import {
   htmlFromSource,
   publishableHtml,
 } from '@/lib/content/clean-html';
-import { PAGE_READ_DELAY_MS, draftTitleFromDoc, safeLinkHref } from '@/lib/content/editor';
+import {
+  EDITOR_STARTER_KIT,
+  PAGE_READ_DELAY_MS,
+  draftTitleFromDoc,
+  safeLinkHref,
+} from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import {
   firstImage,
@@ -587,18 +592,7 @@ export function DraftEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-        // Pages, not code: the toolbar has no code or rules.
-        code: false,
-        codeBlock: false,
-        horizontalRule: false,
-        link: {
-          openOnClick: false,
-          defaultProtocol: 'https',
-          isAllowedUri: (url) => safeLinkHref(url) !== null,
-        },
-      }),
+      StarterKit.configure(EDITOR_STARTER_KIT),
       TableKit.configure({ table: { resizable: false } }),
       Image,
       CharacterCount,

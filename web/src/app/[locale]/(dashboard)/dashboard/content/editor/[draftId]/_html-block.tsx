@@ -3,7 +3,6 @@
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Node } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
 import { Code2, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -17,12 +16,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { formatNumber } from '@/lib/format';
-import {
-  MAX_HTML_BLOCK_LENGTH,
-  decodeHtmlBlock,
-  encodeHtmlBlock,
-} from '@/lib/content/html-allowlist';
+import { MAX_HTML_BLOCK_LENGTH } from '@/lib/content/html-allowlist';
 import { cn } from '@/lib/utils';
+import { HtmlBlockNode } from '@/lib/content/html-block-node';
 
 /**
  * HTML blocks (the user's request beside CE-020, as Webflow's custom code in
@@ -31,33 +27,7 @@ import { cn } from '@/lib/utils';
  * text, the draft stores it encoded (html-allowlist.ts), and Copy HTML gives
  * it back unchanged.
  */
-export const HtmlBlock = Node.create({
-  name: 'htmlBlock',
-  group: 'block',
-  atom: true,
-  selectable: true,
-  draggable: false,
-
-  addAttributes() {
-    return { code: { default: '', rendered: false } };
-  },
-
-  parseHTML() {
-    return [
-      {
-        tag: 'div[data-html-block]',
-        getAttrs: (el) => {
-          const code = decodeHtmlBlock(el.getAttribute('data-html-block') ?? '');
-          return code ? { code } : false;
-        },
-      },
-    ];
-  },
-
-  renderHTML({ node }) {
-    return ['div', { 'data-html-block': encodeHtmlBlock(node.attrs.code as string) }];
-  },
-
+export const HtmlBlock = HtmlBlockNode.extend({
   addNodeView() {
     return ReactNodeViewRenderer(HtmlBlockView);
   },
