@@ -54,6 +54,7 @@ async function render(over: Partial<Parameters<typeof SendDialog>[0]> = {}) {
           html={HTML}
           sourceUrl={null}
           author={ada}
+          reviewer={null}
           teamByline="Acme Team"
           byline={null}
           onFillNow={onFillNow}
@@ -117,6 +118,8 @@ describe('SendDialog', () => {
     expect(field('cms-slug').value).toBe('pour-over');
     expect(field('cms-meta-title').value).toBe('Pour-over');
     expect(field('cms-meta-description').value).toBe('Brew it slowly.');
+    expect(dialog().textContent).toContain('AuthorAda Lovelace');
+    expect(dialog().textContent).not.toContain('Reviewed by');
     expect(dialog().textContent).toContain('15 characters');
 
     await act(async () => button('Send').click());
@@ -132,6 +135,7 @@ describe('SendDialog', () => {
           // The brand's byline line stays; the CMS's title field carries the H1.
           html: '<p>By Ada Lovelace</p>\n<p>Brew it slowly.</p>',
           author: 'Ada Lovelace',
+          reviewer: null,
           featuredImage: null,
         },
       ],
@@ -143,6 +147,36 @@ describe('SendDialog', () => {
     expect(onSent).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'sent', target: 'webhook', error: null }),
     );
+  });
+
+  it('sends a qualified reviewer separately from the page author', async () => {
+    const reviewer = {
+      id: 'r1',
+      name: 'Dr. Grace Hopper',
+      title: 'Clinical Reviewer',
+    } as ContentAuthor;
+    await render({ reviewer, html: `${HTML}\n<p>Reviewed by Dr. Grace Hopper.</p>` });
+    expect(dialog().textContent).toContain('Reviewed byDr. Grace Hopper, Clinical Reviewer');
+    await act(async () => button('Send').click());
+    expect(sendPagesToCms).toHaveBeenCalledWith(
+      'brand-1',
+      [
+        expect.objectContaining({
+          author: 'Ada Lovelace',
+          reviewer: 'Dr. Grace Hopper, Clinical Reviewer',
+          html: expect.stringContaining('"reviewedBy"'),
+        }),
+      ],
+      'webhook',
+    );
+  });
+
+  it('sends no WebPage.reviewedBy while the page doesn’t name the reviewer', async () => {
+    const reviewer = { id: 'r1', name: 'Dr. Grace Hopper' } as ContentAuthor;
+    await render({ reviewer });
+    await act(async () => button('Send').click());
+    const [[, [page]]] = sendPagesToCms.mock.calls as [[string, [{ html: string }]]];
+    expect(page.html).not.toContain('reviewedBy');
   });
 
   it('starts from what the draft kept and says where the page went live', async () => {

@@ -4,29 +4,29 @@ import { useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Link, useRouter } from '@/i18n/navigation';
-import { saveChatGeneralSettings } from '@/lib/actions/chat-prefs';
+import { saveChatFocus, saveChatGeneralSettings } from '@/lib/actions/chat-prefs';
+import { track } from '@/lib/analytics';
+import { FOCUS_AREAS, type FocusArea } from '@/lib/chat/focus';
 import type {
-  AnswerLanguage,
   ChatGeneralAccess,
   ChatGeneralSettings,
   GeneralPatch,
-  NotifyChannel,
 } from '@/lib/chat/general-settings';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { cn } from '@/lib/utils';
+import { useFocusLabel } from './focus-picker';
 
 /**
  * Chat's Settings (CHAT-01 owner update 2026-10-26; CHAT-23
  * `chatSettings.*`; mockup #s-settings), General: the person's own
  * preferences. Each pick is kept at once on the person (every device); one
  * that can't be kept goes back and says so. Default mode is for the roles
- * that change things; Full auto says why it's locked; Inbox + Slack waits
- * for Slack. The mockup's other tabs come with their pages.
+ * that change things; Full auto says why it's locked. Your focus (CHAT-24
+ * §3 item 2) is for everyone: it only changes what Chat suggests. The
+ * mockup's other tabs come with their pages.
  */
 
 const MODES: ChatMode[] = ['ask_first', 'auto', 'full_auto'];
-const LANGUAGES: AnswerLanguage[] = ['en', 'tr', 'de'];
-const CHANNELS: NotifyChannel[] = ['inbox_email', 'inbox', 'inbox_slack'];
 
 /** One setting (mockup `.srow2`): its name and a muted line, the control on the right. */
 function Row({ label, note, children }: { label: string; note: string; children: ReactNode }) {
@@ -77,19 +77,22 @@ function Switch({
   );
 }
 
-const SELECT =
-  'h-7 rounded-lg border bg-background px-2 text-[12.5px] text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
-
 export function ChatSettings({
   initial,
   access,
+  focus: savedFocus,
 }: {
   initial: ChatGeneralSettings;
   access: ChatGeneralAccess;
+  /** What Chat focuses on for the person, in the order picked. */
+  focus: FocusArea[];
 }) {
   const t = useTranslations('chatShell.settings');
+  const tf = useTranslations('chatShell.focus');
+  const focusLabel = useFocusLabel();
   const router = useRouter();
   const [settings, setSettings] = useState(initial);
+  const [focus, setFocus] = useState(savedFocus);
 
   /** Shows the pick at once and keeps it; a refusal puts the old value back. */
   const change = async (patch: GeneralPatch) => {
@@ -103,6 +106,21 @@ export function ChatSettings({
       // The dashboard's layout reads it: Ask Chat and Ctrl J follow on every page.
       router.refresh();
     }
+  };
+
+  /** Turns an area on (after the others) or off; one that isn't kept goes back. */
+  const changeFocus = async (area: FocusArea, on: boolean) => {
+    const before = focus;
+    const next = on ? [...focus.filter((a) => a !== area), area] : focus.filter((a) => a !== area);
+    setFocus(next);
+    const saved = await saveChatFocus(next).catch(() => ({ ok: false as const }));
+    if (!saved.ok) {
+      setFocus(before);
+      toast.error(t('failed'));
+      return;
+    }
+    track('chat_focus_saved', { areas: next, count: next.length, source: 'settings' });
+    toast(next.length ? t('focus.saved', { label: focusLabel(next) }) : t('focus.cleared'));
   };
 
   const lockTip =
@@ -184,57 +202,32 @@ export function ChatSettings({
             </Row>
           )}
 
-          <Row label={t('language.label')} note={t('language.note')}>
-            <select
-              data-action="chatSettings.answerLanguage"
-              aria-label={t('language.label')}
-              value={settings.answerLanguage ?? ''}
-              onChange={(event) =>
-                void change({
-                  answerLanguage: (event.target.value || null) as AnswerLanguage | null,
-                })
-              }
-              className={SELECT}
+          <Row label={t('focus.label')} note={t('focus.note')}>
+            <span
+              role="group"
+              aria-label={t('focus.label')}
+              className="grid shrink-0 grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]"
             >
-              <option value="">{t('language.same')}</option>
-              {LANGUAGES.map((language) => (
-                <option key={language} value={language}>
-                  {t(`language.${language}`)}
-                </option>
+              {FOCUS_AREAS.map((area) => (
+                <label key={area} className="flex items-center gap-[7px] whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    data-action="chatSettings.focus"
+                    value={area}
+                    checked={focus.includes(area)}
+                    onChange={(event) => void changeFocus(area, event.target.checked)}
+                    className="accent-foreground"
+                  />
+                  {tf(`areas.${area}.name`)}
+                </label>
               ))}
-            </select>
+            </span>
           </Row>
 
-          <Row label={t('notify.label')} note={t('notify.note')}>
-            <select
-              data-action="chatSettings.notifyChannel"
-              aria-label={t('notify.label')}
-              value={settings.notifyVia}
-              onChange={(event) => void change({ notifyVia: event.target.value as NotifyChannel })}
-              className={SELECT}
-            >
-              {CHANNELS.map((channel) => (
-                <option
-                  key={channel}
-                  value={channel}
-                  disabled={channel === 'inbox_slack' && !access.slack}
-                >
-                  {channel === 'inbox_slack' && !access.slack
-                    ? t('notify.slackSoon')
-                    : t(`notify.${channel}`)}
-                </option>
-              ))}
-            </select>
-          </Row>
-
-          <Row label={t('thought.label')} note={t('thought.note')}>
-            <Switch
-              checked={settings.showThought}
-              label={t('thought.label')}
-              action="chatSettings.toggleThinking"
-              onChange={(next) => void change({ showThought: next })}
-            />
-          </Row>
+          {/* Answer language, "Notify me when an agent needs me" and "Show Thought
+              for N s" are kept on the person but nothing reads them yet (Chat
+              answers in the question's language), so they stay hidden until
+              they're wired up; their saved values and schema stay. */}
 
           <Row label={t('everyPage.label')} note={t('everyPage.note')}>
             <Switch

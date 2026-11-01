@@ -160,6 +160,8 @@ export interface RunProgress {
   skills?: string[];
   /** The run put Action Center tasks in its chat's task strip (CHAT-09 §B): it shows it as it ends. */
   taskStrip?: boolean;
+  /** The action a /tasks run opened last (get_action): what it files next is for its task. */
+  taskAction?: string;
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {

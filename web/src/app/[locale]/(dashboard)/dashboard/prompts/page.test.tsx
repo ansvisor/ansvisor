@@ -11,7 +11,9 @@ import type { FirstRun } from '@/hooks/use-first-run';
  * Tracked Prompts on a read-only workspace (plan not active): Add prompt,
  * the row menu, the bulk bar and Analyze open the upgrade dialog, labelled
  * with what was clicked, and write nothing; on an active plan they work as
- * before. The volumes the server refuses it don't read as an outage.
+ * before. The volumes the server refuses it don't read as an outage. The
+ * Location filter stays off Query Fan-out, which doesn't use it, and Chat's
+ * side panel hears of a location only on the tab that reads one.
  */
 
 const actions = vi.hoisted(() => ({
@@ -34,8 +36,10 @@ const volumes = vi.hoisted(() => ({
   refreshVolumes: vi.fn(),
 }));
 vi.mock('@/lib/actions/volumes', () => volumes);
+// The brand's locations, as the Location filter reads them: none unless a test says so.
+const filterOptions = vi.hoisted(() => ({ regions: [] as string[] }));
 vi.mock('@/lib/actions/tracking', () => ({
-  getBrandFilterOptions: vi.fn(async () => ({ regions: [] })),
+  getBrandFilterOptions: vi.fn(async () => ({ regions: filterOptions.regions })),
 }));
 // The brand's topics, as the Add Prompt dialog reads them: one unless a test says none.
 const topicActions = vi.hoisted(() => ({ getTopics: vi.fn() }));
@@ -79,11 +83,14 @@ vi.mock('./_topics-tab', () => ({
     return <div data-testid="topics-tab" />;
   },
 }));
+vi.mock('./_fanout-tab', () => ({ QueryFanoutTab: () => <div data-testid="fanout-tab" /> }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (select: (state: unknown) => unknown) =>
     select({ activeBrandId: 'b1', brands: [{ id: 'b1', slug: 'acme', name: 'Acme' }] }),
 }));
-vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
+// The page's query string: empty unless a test says otherwise.
+const query = vi.hoisted(() => ({ search: '' }));
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(query.search) }));
 // The route names the tab: Tracked unless a test opens Insights.
 const nav = vi.hoisted(() => ({ pathname: '/dashboard/prompts/tracked', push: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
@@ -108,6 +115,7 @@ const toast = vi.hoisted(() =>
 vi.mock('sonner', () => ({ toast }));
 
 const { default: PromptsPage } = await import('./page');
+const { ChatPageSetterContext } = await import('@/components/chat/panel/chat-panel-context');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -130,15 +138,17 @@ let container: HTMLDivElement;
 let root: Root;
 const openUpgrade = vi.fn();
 
-async function render(isLocked: boolean) {
+async function render(isLocked: boolean, setChatPage: ((page: unknown) => void) | null = null) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <UpgradeDialogContext.Provider
-          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
-        >
-          <PromptsPage />
-        </UpgradeDialogContext.Provider>
+        <ChatPageSetterContext.Provider value={setChatPage}>
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <PromptsPage />
+          </UpgradeDialogContext.Provider>
+        </ChatPageSetterContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -154,6 +164,8 @@ const dialog = () => document.querySelector('[role="dialog"]');
 beforeEach(() => {
   vi.clearAllMocks();
   nav.pathname = '/dashboard/prompts/tracked';
+  query.search = '';
+  filterOptions.regions = [];
   firstRun.run = null;
   contentUsage.value = null;
   getOpenSuggestionForPrompt.mockResolvedValue(null);
@@ -244,6 +256,51 @@ describe('Tracked Prompts on a read-only workspace', () => {
     await act(async () => button('Pause')!.click());
     expect(actions.setPromptsActive).toHaveBeenCalledWith(['p1'], false);
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Location filter', () => {
+  const locationFilter = () =>
+    [...container.querySelectorAll('label')].find((l) => l.textContent === 'Location');
+
+  it('shows on Tracked Prompts for a brand tracked in more than one location', async () => {
+    filterOptions.regions = ['US', 'GB'];
+    await render(false);
+    expect(locationFilter()).toBeDefined();
+  });
+
+  it("is left off Query Fan-out, which doesn't use it", async () => {
+    filterOptions.regions = ['US', 'GB'];
+    nav.pathname = '/dashboard/prompts/fan-outs';
+    await render(false);
+    expect(container.querySelector('[data-testid="fanout-tab"]')).not.toBeNull();
+    expect(locationFilter()).toBeUndefined();
+  });
+});
+
+describe("what Chat's side panel sees", () => {
+  // A link that carries a location from Tracked Prompts to every tab.
+  const filtersOn = async (pathname: string) => {
+    filterOptions.regions = ['US', 'GB'];
+    query.search = 'region=GB';
+    nav.pathname = pathname;
+    const setChatPage = vi.fn();
+    await render(false, setChatPage);
+    return setChatPage.mock.lastCall![0].filters;
+  };
+
+  it('names the location on Tracked Prompts, whose table it filters', async () => {
+    expect(await filtersOn('/dashboard/prompts/tracked')).toEqual([
+      { key: 'region', label: expect.stringContaining('United Kingdom'), value: 'GB' },
+    ]);
+  });
+
+  it.each([
+    ['Query Fan-out', '/dashboard/prompts/fan-outs'],
+    ['Topics', '/dashboard/prompts/topics'],
+    ['Insights', '/dashboard/prompts/insights'],
+  ])("leaves the location out on %s, which doesn't read it", async (_tab, pathname) => {
+    expect(await filtersOn(pathname)).toEqual([]);
   });
 });
 
@@ -560,5 +617,40 @@ describe('the volume quota without an active plan', () => {
     expect(container.textContent).not.toContain('No active plan');
     expect(reds().length).toBeGreaterThan(0);
     expect(button('Analyze Volumes')!.disabled).toBe(true);
+  });
+});
+
+describe('the Prompt Volumes chart', () => {
+  it('says the rate the volumes were estimated with, as the AI Adoption Rate card does', async () => {
+    nav.pathname = '/dashboard/prompts/insights';
+    actions.getPromptsPageData.mockResolvedValue({
+      quota: { used: 1, limit: 10, remaining: 9 },
+      promptSets: [{ prompts: [prompt] }],
+      visibility: {},
+      positions: {},
+      volumes: [
+        {
+          id: 'v1',
+          promptId: 'p1',
+          promptText: prompt.text,
+          promptCategory: 'Coffee',
+          intent: 'commercial',
+          keywords: ['coffee subscription'],
+          googleVolumes: { 'coffee subscription': 1000 },
+          totalGoogleVolume: 1000,
+          aiVolumeMultiplier: 0.4,
+          estAiVolume: 400,
+          competitionIndex: null,
+          competition: null,
+          fetchedAt: '2026-10-20T00:00:00.000Z',
+        },
+      ],
+    });
+    await render(false);
+    // The row's rate, not the default: the card and the caption say the same
+    // one, and the caption claims no other share of Google searches.
+    expect(container.textContent).toContain('AI Adoption Rate40%');
+    expect(container.textContent).toContain('Google volume × the 40% AI adoption rate');
+    expect(container.textContent).not.toMatch(/~\d+% of Google searches/);
   });
 });
