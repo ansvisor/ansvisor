@@ -1253,7 +1253,7 @@
         "content suggestions"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1277,7 +1277,7 @@
         },
         {
           "heading": "Ask for new opportunities",
-          "text": "Admins and managers click **New** to get suggestions now, instead of waiting for the next automatic run. Pick a **Focus**: **Let Ansvisor choose**, a **Topic** or a **Prompt**. You can add your own idea, up to 500 characters, and set **How many**.\n\nOpportunities are written per group of prompts: prompts of one topic that a single page could answer, and that already have tracked answers. Each group gets one opportunity; only **Another angle** adds a second take on it."
+          "text": "Admins and managers click **New** to get suggestions now, instead of waiting for the next automatic run. Pick a **Focus**: **Let Ansvisor choose**, a **Topic** or a **Prompt**. You can add your own idea, up to 500 characters, and set **How many**. New opportunities also follow the brand's rules from **Settings › Content › Brand rules**, such as topics to stay away from.\n\nOpportunities are written per group of prompts: prompts of one topic that a single page could answer, and that already have tracked answers. Each group gets one opportunity; only **Another angle** adds a second take on it."
         },
         {
           "heading": "What each focus picks",
@@ -1366,7 +1366,8 @@
         "rewrite the whole page",
         "agent suggestions",
         "accept suggestions",
-        "rules tab"
+        "rules tab",
+        "brand rules"
       ],
       "synonyms": [
         "writing rules",
@@ -1376,7 +1377,7 @@
         "let the agent fix the page"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1389,6 +1390,10 @@
         {
           "heading": "Save or reset your rules",
           "text": "Changes to the rules apply to this draft only. **Save as my rules**, for admins and managers, keeps them for your workspace's next drafts of this page type, and **Reset** goes back to the default set. Under **Your text rules**, write a rule in your own words, or use **Paste many** to add several from a style guide."
+        },
+        {
+          "heading": "Brand rules",
+          "text": "Admins and managers keep a brand's rules in **Settings › Content › Brand rules**, one per line, up to 30, such as topics to stay away from. The Content Agent follows them on every page of the brand, before your text rules, and a brand rule wins when they disagree. They change what's written, not the **Rules** count."
         },
         {
           "heading": "Fix open rules with Run Agent",
@@ -2727,7 +2732,7 @@
         },
         {
           "heading": "Signals",
-          "text": "The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:\n\n- the **Finding**: what this audit saw on the page, when the check reports it;\n- what the signal measures, and **Why** it matters to AI engines;\n- the **Recommended fix** written for this page, or the general **Fix** for signals without one."
+          "text": "The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:\n\n- the **Finding**: what this audit saw on the page, when the check reports it;\n- what the signal measures, and **Why** it matters to AI engines;\n- the **Recommended fix** written for this page, or the general **Fix** for signals without one. Recommended fixes follow the brand's rules from **Settings › Content › Brand rules**; the score doesn't change."
         },
         {
           "heading": "Authority links",

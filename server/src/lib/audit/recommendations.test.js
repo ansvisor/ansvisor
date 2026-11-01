@@ -140,6 +140,23 @@ describe('generateRecommendations', () => {
     expect(prompt).toContain('- Domains: ansvisor.com');
   });
 
+  it("gives the model the brand's rules on any page it audits, and none without (00450)", async () => {
+    modelReturns([]);
+    await generateRecommendations(ctx, {
+      results,
+      brand: null,
+      rules: ['No topics comparing us with a named competitor.'],
+    });
+    const { system, prompt } = generateObject.mock.calls[0][0];
+    expect(system).toContain('When BRAND RULES are given, every recommendation');
+    expect(prompt).toContain(
+      "BRAND RULES (the brand's own; follow every one):\n- No topics comparing us with a named competitor.",
+    );
+    modelReturns([]);
+    await generateRecommendations(ctx, { results, brand });
+    expect(generateObject.mock.calls[1][0].prompt).not.toContain('BRAND RULES');
+  });
+
   it('tells the model which side of 50–70 a page reads, to rewrite it that way', async () => {
     modelReturns([]);
     await generateRecommendations(ctx, {

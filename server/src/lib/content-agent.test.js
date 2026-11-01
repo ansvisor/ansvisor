@@ -229,6 +229,26 @@ describe('the page as the agent reads it', () => {
     expect(prompt).not.toContain('The page goes on');
   });
 
+  it("puts the brand's rules before the writer's own in every change (00450)", () => {
+    const prompt = buildFixPrompt({
+      brand: {
+        name: 'Acme Coffee',
+        language: 'en',
+        rules: ['Cite official sources for health claims.'],
+      },
+      draft: rows.content_drafts,
+      passages: draftPassages(BODY),
+      lockedKeys: new Set(),
+      input: input(),
+    });
+    expect(prompt).toContain(
+      "The brand's rules, to follow in every change, before the writer's own:\n- Cite official sources for health claims.",
+    );
+    expect(prompt.indexOf("The brand's rules")).toBeLessThan(
+      prompt.indexOf("The writer's own rules"),
+    );
+  });
+
   describe('with Quality’s phase 2 live', () => {
     afterEach(() => vi.unstubAllEnvs());
 

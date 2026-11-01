@@ -39,7 +39,7 @@ The **Signals** section lists every check by category, each with a pass, warning
 
 - the **Finding**: what this audit saw on the page, when the check reports it;
 - what the signal measures, and **Why** it matters to AI engines;
-- the **Recommended fix** written for this page, or the general **Fix** for signals without one.
+- the **Recommended fix** written for this page, or the general **Fix** for signals without one. Recommended fixes follow the brand's rules from **Settings › Content › Brand rules**; the score doesn't change.
 
 ## Authority links
 

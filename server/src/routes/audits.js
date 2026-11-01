@@ -56,6 +56,7 @@ import { runSignals } from '../lib/audit/engine.js';
 import { evaluateLlmSignals } from '../lib/audit/llm-signals.js';
 import { evaluateBrandEntity } from '../lib/audit/external-signals.js';
 import { brandFactsFor, generateRecommendations } from '../lib/audit/recommendations.js';
+import { readBrandRules } from '../lib/brand-rules-read.js';
 import { scoreAudit } from '../lib/audit/scorer.js';
 import { signalsByKey, TOTAL_SIGNALS, RUBRIC_VERSION } from '../lib/audit/rubric.js';
 
@@ -227,6 +228,8 @@ async function runAuditJob(auditId, brandId, url, orgId, source = 'user') {
     const recommendations = await generateRecommendations(ctx, {
       results,
       brand: brandFactsFor(ctx.url, brandRow, domainRows),
+      // The brand's rules (00450) shape what's recommended on any page it audits.
+      rules: await readBrandRules(brandId),
       auditId,
     });
 
