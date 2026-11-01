@@ -336,7 +336,7 @@ describe('ExportDialog', () => {
     ];
     expect(format).toBe('html');
     expect(html).toContain('"reviewedBy"');
-    expect(html).toContain('"name":"Dr. Grace Hopper"');
+    expect(html).toMatch(/"name":\\s*"Dr\\. Grace Hopper"/);
     expect(fields.table.rows).toContainEqual([
       'Reviewed by',
       'Dr. Grace Hopper, Clinical Reviewer',
