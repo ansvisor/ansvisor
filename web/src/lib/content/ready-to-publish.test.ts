@@ -9,10 +9,13 @@ import {
   exportPlaceholders,
   fragment,
   pageFields,
+  pageNamesPerson,
   pasteChecks,
+  reviewerJsonLd,
   teamName,
   titlePlaceholders,
   withByline,
+  withReviewerJsonLd,
   withoutLeadingH1,
   withoutPlaceholders,
 } from './ready-to-publish';
@@ -36,6 +39,70 @@ describe('fragment', () => {
     );
     expect(root.ownerDocument).not.toBe(document);
     expect(root.firstElementChild?.tagName).toBe('SCRIPT');
+  });
+});
+
+describe('pageNamesPerson', () => {
+  it('finds a reviewer name in visible page text, ignoring case and whitespace', () => {
+    expect(
+      pageNamesPerson(
+        '<h1>Guide</h1><p>Reviewed by <strong>Dr. Grace Hopper</strong>.</p>',
+        'dr. grace  hopper',
+      ),
+    ).toBe(true);
+  });
+
+  it('does not count names in structured data, attributes or hidden content', () => {
+    expect(
+      pageNamesPerson(
+        '<img alt="Dr. Grace Hopper"><script type="application/ld+json">{"name":"Dr. Grace Hopper"}</script><p hidden>Dr. Grace Hopper</p><p>Welcome.</p>',
+        'Dr. Grace Hopper',
+      ),
+    ).toBe(false);
+  });
+
+  it('reads a block’s end as a word’s end', () => {
+    expect(
+      pageNamesPerson(
+        '<p>Reviewed by Dr. Grace Hopper</p><p>Coffee is ready.</p>',
+        'Dr. Grace Hopper',
+      ),
+    ).toBe(true);
+    expect(pageNamesPerson('<h2>Reviewed by</h2><p>Dr. Grace Hopper</p>', 'Dr. Grace Hopper')).toBe(
+      true,
+    );
+    expect(pageNamesPerson('<p>Dr. Grace<br>Hopper</p>', 'Dr. Grace Hopper')).toBe(true);
+  });
+
+  it('requires the complete name rather than a substring of another word', () => {
+    expect(pageNamesPerson('<p>Annual results are ready.</p>', 'Ann')).toBe(false);
+    expect(pageNamesPerson('<p>Reviewed by Ann.</p>', 'Ann')).toBe(true);
+  });
+});
+
+describe('reviewerJsonLd', () => {
+  const grace = {
+    id: 'r1',
+    name: 'Dr. Grace Hopper',
+    title: 'Clinical Reviewer',
+  } as ContentAuthor;
+
+  it('gives the WebPage.reviewedBy node only once the page names the reviewer', () => {
+    const named = '<h1>Guide</h1><p>Reviewed by Dr. Grace Hopper.</p>';
+    expect(reviewerJsonLd('Guide', named, grace)).toContain('"reviewedBy"');
+    expect(withReviewerJsonLd('Guide', named, grace)).toMatch(
+      /^<h1>Guide<\/h1><p>Reviewed by Dr\. Grace Hopper\.<\/p>\n<script type="application\/ld\+json">/,
+    );
+    expect(reviewerJsonLd('Guide', '<h1>Guide</h1><p>Done.</p>', grace)).toBeNull();
+    expect(withReviewerJsonLd('Guide', '<p>Done.</p>', grace)).toBe('<p>Done.</p>');
+    expect(reviewerJsonLd('Guide', named, null)).toBeNull();
+  });
+
+  it("keeps a reviewer's words from closing the script", () => {
+    const sly = { ...grace, name: 'Eve', title: '</script><img src=x onerror=alert(1)>' };
+    const script = reviewerJsonLd('Guide', '<p>Reviewed by Eve.</p>', sly)!;
+    expect(script.match(/<\/script>/g)).toHaveLength(1);
+    expect(script).not.toContain('<img');
   });
 });
 
@@ -239,6 +306,7 @@ describe('pageFields', () => {
         html,
         sourceUrl: null,
         author: ada,
+        reviewer: { ...ada, name: 'Dr. Grace Hopper' },
         teamByline: 'Acme Team',
       }),
     ).toEqual({
@@ -247,6 +315,7 @@ describe('pageFields', () => {
         'Pour-over coffee takes a dripper, a filter and four minutes. You pour 1.5 litres of hot water over the grounds in slow circles, and the coffee drips through.',
       slug: 'how-to-brew-pour-over-coffee',
       author: 'Ada Lovelace',
+      reviewer: 'Dr. Grace Hopper',
       featuredImage: 'https://cdn.acme.com/pour.jpg',
     });
   });
@@ -258,6 +327,7 @@ describe('pageFields', () => {
         html: '<p>Short.</p>',
         sourceUrl,
         author: null,
+        reviewer: null,
         teamByline: 'Acme Team',
       });
     expect(fields('https://acme.com/blog/pour-over-guide/')).toMatchObject({

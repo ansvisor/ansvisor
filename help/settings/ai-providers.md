@@ -21,6 +21,10 @@ Chat normally runs on your plan's monthly AI limit, and you don't need any key f
 
 Keys are stored encrypted, and nobody can read a saved key back. If the server can no longer read the saved key, Chat stops rather than run on your plan's monthly AI limit: save the key again.
 
+## Agents on your key
+
+Agents run on the key too. Each agent's **Max per run** and **Monthly cap** still apply: Ansvisor measures what a run uses at the providers' list prices, so it is an estimate of your bill. Set a spending limit with your provider too: its bill is the real one.
+
 ## Keys saved before Chat
 
 If your workspace saved a key before Chat was turned on for it, that key keeps running Chat for 30 days, on any plan. **Settings › AI Providers** shows the date it stops. Until then you can replace that key, but you can't add keys for other providers. After that date, Chat runs on your plan's monthly AI limit, and the page shows the key as **Not used on your plan**. You can remove it at any time.
