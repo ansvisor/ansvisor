@@ -711,10 +711,16 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Run a site audit',
       description:
-        'Run a Site Audit (AEO/GEO page score + AI fix recommendations) for a page URL under a brand. WARNING: this consumes one of the org\'s monthly Site Audit credits (the same pool as the dashboard) and runs asynchronously (~30s). It returns immediately with the new audit id and status "running" — then poll get_site_audit with that id until status is "completed" (or "failed") to read the result. Only fire on explicit user intent to audit a specific URL, never as part of exploratory queries.',
+        'Run a Site Audit (AEO/GEO page score + AI fix recommendations) for a page URL under a brand. WARNING: this consumes one of the org\'s monthly Site Audit credits (the same pool as the dashboard) and runs asynchronously (~30s). It returns immediately with the new audit id and status "running" — then poll get_site_audit with that id until status is "completed" (or "failed") to read the result. A page with an audit already running returns that audit (alreadyRunning: true) and uses no credit. A page audited in the last 10 minutes returns status "recently_audited" with that audit\'s id and starts nothing: read it with get_site_audit, or ask the user and pass force: true to audit it again. Only fire on explicit user intent to audit a specific URL, never as part of exploratory queries.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         url: z.string().url().describe('Full URL of the page to audit, including https://.'),
+        force: z
+          .boolean()
+          .optional()
+          .describe(
+            'Audit again a page audited in the last 10 minutes (uses a credit). Only when the user asked to.',
+          ),
       },
       annotations: {
         readOnlyHint: false,
@@ -724,7 +730,9 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       },
     },
     async (args) => {
-      const result = await runSiteAuditFor(auth, args.brand_id, args.url);
+      const result = args.force
+        ? await runSiteAuditFor(auth, args.brand_id, args.url, { force: true })
+        : await runSiteAuditFor(auth, args.brand_id, args.url);
       if (!result) {
         return {
           content: [{ type: 'text', text: 'Brand not found' }],

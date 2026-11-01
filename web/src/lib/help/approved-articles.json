@@ -2641,7 +2641,7 @@
         },
         {
           "heading": "Download a PDF",
-          "text": "**Download PDF** saves the report as a PDF with the same sections as the web view, the executive summary included. Its text stays selectable and sharp at any zoom, and the file is small enough to attach to an email."
+          "text": "**Download PDF** saves the report as a PDF with the same sections as the web view, the executive summary included. Its text stays selectable and sharp at any zoom, and the file is small enough to attach to an email. With white label in use, the report and its PDF carry your agency's logo, color, name and footer instead of Ansvisor's, with a \"Prepared for\" cover."
         }
       ]
     },
@@ -2715,7 +2715,7 @@
         "score changed"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -2735,7 +2735,7 @@
         },
         {
           "heading": "Same page, same score",
-          "text": "The AI keeps its verdict on each of its thirteen signals until the part of the page that signal reads changes, so a page audited again with no changes gets the same score. A page that changed is judged again only on the signals whose part changed.\n\nIf the AI checks can't run, the page keeps the verdicts of its last audit. A page with none, such as one audited for the first time, gets a partial score: the report says the AI checks couldn't run, and the score leaves them out and isn't compared with your other audits."
+          "text": "The AI keeps its verdict on each of its thirteen signals until the part of the page that signal reads changes, so a page audited again with no changes gets the same score. A page that changed is judged again only on the signals whose part changed.\n\nIf the AI checks can't run, the page keeps the verdicts of its last audit. A page with none, such as one audited for the first time, gets a partial score: the report says the AI checks couldn't run, and the score leaves them out and isn't compared with your other audits. A partial audit doesn't use one of your monthly audits."
         },
         {
           "heading": "Signals",
@@ -2756,7 +2756,8 @@
         "run audit",
         "audit a page",
         "auto-audit",
-        "audit settings"
+        "audit settings",
+        "audit again"
       ],
       "synonyms": [
         "page audit",
@@ -2765,7 +2766,7 @@
         "AI readiness check"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -2782,6 +2783,10 @@
         {
           "heading": "Other ways to start an audit",
           "text": "- **Audit selected** on the **Opportunities** tab;\n- **Re-audit** on the pages you select on the **Pages** tab;\n- **Audit page** on a landing page of the **AI Referral Traffic** page, or **Audit pages** for several;\n- the re-run icon at the top of a report, to audit the same page again;\n- auto-audit, which audits your top-priority pages on its own.\n\nAudits started in bulk run a few at a time."
+        },
+        {
+          "heading": "Auditing a page again",
+          "text": "A page has one audit running at a time. Starting it again, from any of these places, opens the audit already running and uses no audit, however the address is written: with or without www, a last slash or a tracking parameter.\n\nWhen a page was audited in the last 10 minutes, Site Audit asks first: **Open it** shows that audit, and **Audit again** starts a new one. Pages started together leave those out and say so, with **Audit again**."
         },
         {
           "heading": "Your monthly audits",

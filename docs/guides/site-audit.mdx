@@ -35,6 +35,8 @@ You can also start audits from:
 
 Audits started in bulk run a few at a time.
 
+A page has one audit running at a time: starting it again, from any of these places and however its address is written (with or without www, a last slash or a tracking parameter), opens the audit already running and uses no audit. When a page was audited in the last 10 minutes, Site Audit asks first: **Open it** shows that audit, and **Audit again** starts a new one. Pages started together leave those out and say so, with **Audit again**.
+
 <Note>
 Each completed audit uses one of your plan's monthly audits. An audit still running already counts; a failed one doesn't. The **Audits this month** card shows what's left. Self-hosted instances have no monthly limit, but they need a Scrape.do key to fetch pages — see [Environment variables](/self-host/env-variables).
 </Note>
@@ -111,7 +113,7 @@ On a product page (one with Product structured data), **Product description open
 
 Most signals are read straight from the page, its robots.txt and its llms.txt. Thirteen, such as **Direct answer to query** and **Case study evidence**, are judged by an AI model that first works out what the page itself is about, so a page is never judged against a topic it isn't trying to cover. **Brand entity in Wikidata** looks your brand up in Wikidata.
 
-The AI keeps its verdict on each of its thirteen signals until the part of the page that signal reads changes, so a page audited again with no changes gets the same score; a page that changed is judged again only on the signals whose part changed. If the AI checks can't run, the page keeps the verdicts of its last audit. A page with none, such as one audited for the first time, gets a partial score: the report says the AI checks couldn't run, and the score leaves them out and isn't compared with your other audits (previous score, change and trend).
+The AI keeps its verdict on each of its thirteen signals until the part of the page that signal reads changes, so a page audited again with no changes gets the same score; a page that changed is judged again only on the signals whose part changed. If the AI checks can't run, the page keeps the verdicts of its last audit. A page with none, such as one audited for the first time, gets a partial score: the report says the AI checks couldn't run, and the score leaves them out and isn't compared with your other audits (previous score, change and trend). A partial audit doesn't use one of your monthly audits.
 
 ### Signals
 
