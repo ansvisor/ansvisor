@@ -30,9 +30,26 @@
  *   → 404 { code: 'not_found' }: the run or the draft isn't there.
  *   → 409, 422, 429, 502 { code }: the send's own refusal (sendContentPages).
  *   v1 takes `kind: 'cms_draft'` only; publishing live comes with PR 9.
+ *
+ * POST /api/internal/chat/go-live/quality-reads
+ *   { orgId, agentRunId, runId, actingUserId, draftId, sites }
+ *   Content Quality's reads of the draft as saved, for the web's go-live gate
+ *   (§6.2, the owner's 2026-11-02 decision): its links (link-check.js, the
+ *   acting person's hourly reads), and with Quality's phase 2 its claims,
+ *   its page read and the kinds of `sites` (the sites the gate's rules
+ *   can't place, among those the draft links). A read the draft has kept
+ *   costs nothing; a new one is the agent run's own step (feature agent,
+ *   within its cap and the month's budget: chat-budget agentRunReserve), not
+ *   the workspace's Quality budget. Each read answers on its own, so one that
+ *   fails leaves the others: { links, claims, page, classes }, each
+ *   { ok: true, value } or { ok: false, code } (run_cap, ai_budget, off,
+ *   failed); the gate holds the page on any it needs that failed.
+ *   → 403 { code } for the run checks (chat_off, permission, role, brand,
+ *     demo_brand); 404 for a run or draft that isn't the workspace's.
  */
 
 import { Router } from 'express';
+import * as cheerio from 'cheerio';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { isCloud } from '../config/plans.js';
@@ -40,7 +57,16 @@ import { brandAccessOf } from '../lib/access.js';
 import { chatAgenticEnabled } from '../lib/chat-flag.js';
 import { DeliveryError, deliveryPage, sendContentPages } from '../lib/content-delivery.js';
 import { isDemoBrand } from '../middleware/demo-brand.js';
+import { ChatBudgetError, agentRunReserve } from '../lib/chat-budget.js';
+import { pageReadContext } from '../lib/content-page-context.js';
+import { qualityPhase } from '../lib/content-quality.js';
+import { readDraftClaims } from '../lib/content-quality-claims.js';
+import { readPage } from '../lib/content-quality-page.js';
+import { MAX_SOURCE_SITES, linkedSites, readSourceClasses } from '../lib/content-source-class.js';
+import { checkLinks, reserveReads } from '../lib/link-check.js';
+import { PlanLimitError } from '../lib/plan-guard.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
+import logger from '../lib/logger.js';
 
 const router = Router();
 
@@ -257,6 +283,133 @@ router.post('/send', async (req, res) => {
     req.log.error({ err }, 'internal go-live send error');
     return res.status(502).json({ success: false, code: 'failed', message: 'Not sent' });
   }
+});
+
+const readsSchema = z.strictObject({
+  orgId: z.guid(),
+  agentRunId: z.guid(),
+  runId: z.guid(),
+  actingUserId: z.guid(),
+  draftId: z.guid(),
+  sites: z.array(z.string().trim().toLowerCase().min(1).max(300)).max(MAX_SOURCE_SITES).default([]),
+});
+
+/** The run a gate reads for: running, as this person, in the workspace; the draft, theirs to read. */
+async function checkReads(body) {
+  if (!chatAgenticEnabled(body.orgId)) throw new Refused('chat_off');
+  const [run, access, draft] = await Promise.all([
+    one(
+      supabaseAdmin
+        .from('chat_agent_runs')
+        .select('id, acting_user_id, status')
+        .eq('id', body.agentRunId)
+        .eq('organization_id', body.orgId),
+    ),
+    brandAccessOf(body.actingUserId),
+    one(
+      supabaseAdmin
+        .from('content_drafts')
+        .select(
+          'id, brand_id, body_html, page_type, kept_sources, archived_at, brands!inner(organization_id)',
+        )
+        .eq('id', body.draftId)
+        .eq('brands.organization_id', body.orgId),
+    ),
+  ]);
+  if (!run) throw new Refused('not_found', { status: 404 });
+  if (run.status !== 'running' || run.acting_user_id !== body.actingUserId) {
+    throw new Refused('permission');
+  }
+  if (access.orgId !== body.orgId || !['admin', 'manager'].includes(access.role)) {
+    throw new Refused('role');
+  }
+  if (!draft || draft.archived_at) throw new Refused('not_found', { status: 404 });
+  if (!access.all && !access.brandIds.has(draft.brand_id)) throw new Refused('brand');
+  if (await isDemoBrand([draft.brand_id])) throw new Refused('demo_brand');
+  return draft;
+}
+
+/** One read's answer: its value, or why it couldn't be read. */
+async function settle(read) {
+  try {
+    return { ok: true, value: await read() };
+  } catch (err) {
+    if (err instanceof ChatBudgetError && err.code === 'run_cap') {
+      return { ok: false, code: 'run_cap' };
+    }
+    if (err instanceof PlanLimitError) return { ok: false, code: 'ai_budget' };
+    logger.warn(
+      { err: { name: err?.name, message: err?.message } },
+      '[go-live] a quality read failed',
+    );
+    return { ok: false, code: 'failed' };
+  }
+}
+
+const OFF = { ok: false, code: 'off' };
+
+router.post('/quality-reads', async (req, res) => {
+  const parsed = readsSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, code: 'invalid', message: 'Invalid request' });
+  }
+  const body = parsed.data;
+  let draft;
+  try {
+    draft = await checkReads(body);
+  } catch (err) {
+    if (err instanceof Refused)
+      return res.status(err.status).json({ success: false, code: err.code });
+    req.log.error({ err }, 'internal go-live reads check error');
+    return res.status(500).json({ success: false, code: 'failed', message: 'Internal error' });
+  }
+
+  const html = draft.body_html ?? '';
+  const $ = cheerio.load(html);
+  const hrefs = $('a[href]')
+    .map((_, el) => $(el).attr('href'))
+    .get();
+  const reserve = agentRunReserve(body.orgId, {
+    runId: body.runId,
+    agentRunId: body.agentRunId,
+  });
+  const phase2 = qualityPhase() >= 2;
+  // Only sites the draft links, and not one whose every link the person kept.
+  const linked = linkedSites(hrefs);
+  const kept = new Set(draft.kept_sources ?? []);
+  const sites = [...new Set(body.sites)].filter(
+    (site) => linked.has(site) && !linked.get(site).every((href) => kept.has(href)),
+  );
+  const common = { orgId: body.orgId, draftId: body.draftId };
+  const [links, claims, page, classes] = await Promise.all([
+    settle(() =>
+      checkLinks(hrefs, {
+        reserve: (wanted) => reserveReads(body.actingUserId, wanted),
+        log: req.log,
+      }).then(({ reads, skipped }) => ({
+        links: [...reads].map(([href, read]) => ({ href, ...read })),
+        skipped,
+      })),
+    ),
+    phase2 ? settle(() => readDraftClaims({ ...common, html, reserve })) : OFF,
+    phase2
+      ? settle(async () =>
+          readPage({
+            ...common,
+            html,
+            pageType: draft.page_type,
+            ...(await pageReadContext(draft.brand_id)),
+            reserve,
+          }),
+        )
+      : OFF,
+    phase2
+      ? sites.length
+        ? settle(() => readSourceClasses({ ...common, sites, reserve }))
+        : { ok: true, value: { classes: [], limited: false } }
+      : OFF,
+  ]);
+  return res.json({ success: true, links, claims, page, classes });
 });
 
 export default router;

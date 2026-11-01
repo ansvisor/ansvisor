@@ -851,3 +851,57 @@ describe('an agent run’s step on purchased AI credits', () => {
     expect(agentRuns[0].usage_share).toBe(0.04);
   });
 });
+
+describe('a Content Quality read for an agent run (AUTONOMOUS-GO-LIVE §6.2)', () => {
+  const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0b';
+
+  beforeEach(() => {
+    agentRuns = [{ id: AGENT_RUN, organization_id: 'o1', max_share: 0.1, usage_share: 0 }];
+  });
+
+  it('holds the read’s set amount as the run’s own step, then charges what it used', async () => {
+    const reserve = budget.agentRunReserve('o1', { runId: RUN, agentRunId: AGENT_RUN });
+    const meter = await reserve({ modelId: MODEL, holdUsd: 0.004 });
+    expect(rpcCalls.at(-1).args).toMatchObject({
+      p_feature: 'agent',
+      p_agent_run_id: AGENT_RUN,
+      p_chat_run_id: RUN,
+      p_cost: 0.004,
+    });
+    await meter.charge({ inputTokens: 1000, outputTokens: 200 });
+    expect(ledger).toEqual([
+      expect.objectContaining({ feature: 'agent', agent_run_id: AGENT_RUN, cost_usd: 0.002 }),
+    ]);
+    // A second call of the same read is held and charged as a step of its own.
+    await meter.charge({ inputTokens: 1000, outputTokens: 0 });
+    expect(ledger).toHaveLength(2);
+    expect(ledger[1]).toMatchObject({ agent_run_id: AGENT_RUN, cost_usd: 0.001 });
+  });
+
+  it('lets a read that made no call go, and keeps one cut off as its hold', async () => {
+    const reserve = budget.agentRunReserve('o1', { runId: RUN, agentRunId: AGENT_RUN });
+    const released = await reserve({ modelId: MODEL, holdUsd: 0.01 });
+    await released.release();
+    await released.release();
+    expect(ledger).toEqual([]);
+    const kept = await reserve({ modelId: MODEL, holdUsd: 0.01 });
+    await kept.keep();
+    await kept.release();
+    expect(ledger).toEqual([expect.objectContaining({ cost_usd: 0.01 })]);
+  });
+
+  it('refuses a read past the run’s cap, as its steps are', async () => {
+    ledger.push({
+      id: 'used',
+      feature: 'agent',
+      cost_usd: 0.499,
+      own_key: false,
+      agent_run_id: AGENT_RUN,
+      used_at: '2026-10-29T10:00:00.000Z',
+    });
+    const reserve = budget.agentRunReserve('o1', { runId: RUN, agentRunId: AGENT_RUN });
+    await expect(reserve({ modelId: MODEL, holdUsd: 0.004 })).rejects.toMatchObject({
+      code: 'run_cap',
+    });
+  });
+});

@@ -60,7 +60,49 @@ vi.mock('../lib/content-delivery.js', async (importOriginal) => ({
   sendContentPages: (...args) => sendContentPages(...args),
 }));
 
+/** Content Quality's reads, for the gate's endpoint. */
+const reads = vi.hoisted(() => ({
+  claims: vi.fn(),
+  page: vi.fn(),
+  classes: vi.fn(),
+  links: vi.fn(),
+  reserve: vi.fn(),
+  phase: { value: 2 },
+}));
+vi.mock('../lib/content-quality.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  qualityPhase: () => reads.phase.value,
+}));
+vi.mock('../lib/content-quality-claims.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readDraftClaims: (...args) => reads.claims(...args),
+}));
+vi.mock('../lib/content-quality-page.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readPage: (...args) => reads.page(...args),
+}));
+vi.mock('../lib/content-source-class.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readSourceClasses: (...args) => reads.classes(...args),
+}));
+vi.mock('../lib/link-check.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  checkLinks: (...args) => reads.links(...args),
+}));
+vi.mock('../lib/content-page-context.js', () => ({
+  pageReadContext: async () => ({ siteType: 'b2b', brandName: 'Acme', facts: ['Founded 2019'] }),
+}));
+vi.mock('../lib/chat-budget.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  agentRunReserve: (...args) => {
+    reads.reserve(...args);
+    return 'the run’s meter';
+  },
+}));
+
 const { default: router } = await import('./internal-chat-go-live.js');
+const { ChatBudgetError } = await import('../lib/chat-budget.js');
+const { PlanLimitError } = await import('../lib/plan-guard.js');
 const { DeliveryError } = await import('../lib/content-delivery.js');
 
 const PAGE = {
@@ -306,5 +348,130 @@ describe('POST /api/internal/chat/go-live/send', () => {
     expect((await send()).status).toBe(502);
     expect(finished().at(-1)).toMatchObject({ p_error: 'The page could not be sent' });
     expect(sendContentPages).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('POST /api/internal/chat/go-live/quality-reads', () => {
+  const HTML =
+    '<p>Read <a href="https://sca.coffee/guide">the SCA</a>, <a href="https://blog.example/a">a blog</a> and <a href="https://kept.example/x">one kept</a>.</p>';
+  const READS = {
+    orgId: ORG,
+    agentRunId: AGENT_RUN,
+    runId: RUN,
+    actingUserId: ACTOR,
+    draftId: DRAFT,
+    sites: ['blog.example', 'kept.example', 'not-linked.example'],
+  };
+  const ask = (body = READS, secret = 'shh') =>
+    fetch(`${baseUrl}/quality-reads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      body: JSON.stringify(body),
+    });
+
+  beforeEach(() => {
+    reads.phase.value = 2;
+    Object.assign(db.tables.content_drafts[0], {
+      body_html: HTML,
+      page_type: 'guide',
+      kept_sources: ['https://kept.example/x'],
+    });
+    reads.links.mockReset().mockResolvedValue({
+      reads: new Map([['https://sca.coffee/guide', { status: 'ok', httpStatus: 200, date: null }]]),
+      skipped: [],
+    });
+    reads.claims.mockReset().mockResolvedValue({ paragraphs: [], pending: 0, limited: false });
+    reads.page.mockReset().mockResolvedValue({ spots: [], proofs: [], checks: null });
+    reads.classes.mockReset().mockResolvedValue({ classes: [], limited: false });
+    reads.reserve.mockReset();
+  });
+
+  it('reads the draft as saved on the run’s own meter, each read on its own', async () => {
+    const res = await ask();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      success: true,
+      links: {
+        ok: true,
+        value: {
+          links: [{ href: 'https://sca.coffee/guide', status: 'ok', httpStatus: 200, date: null }],
+          skipped: [],
+        },
+      },
+      claims: { ok: true, value: { paragraphs: [], pending: 0, limited: false } },
+      page: { ok: true, value: { spots: [], proofs: [], checks: null } },
+      classes: { ok: true, value: { classes: [], limited: false } },
+    });
+    expect(reads.reserve).toHaveBeenCalledWith(ORG, { runId: RUN, agentRunId: AGENT_RUN });
+    expect(reads.links.mock.calls[0][0]).toEqual([
+      'https://sca.coffee/guide',
+      'https://blog.example/a',
+      'https://kept.example/x',
+    ]);
+    const meter = 'the run’s meter';
+    expect(reads.claims).toHaveBeenCalledWith({
+      orgId: ORG,
+      draftId: DRAFT,
+      html: HTML,
+      reserve: meter,
+    });
+    expect(reads.page).toHaveBeenCalledWith({
+      orgId: ORG,
+      draftId: DRAFT,
+      html: HTML,
+      pageType: 'guide',
+      siteType: 'b2b',
+      brandName: 'Acme',
+      facts: ['Founded 2019'],
+      reserve: meter,
+    });
+    // Only a site the draft links, and not one whose every link the person kept.
+    expect(reads.classes).toHaveBeenCalledWith({
+      orgId: ORG,
+      draftId: DRAFT,
+      sites: ['blog.example'],
+      reserve: meter,
+    });
+  });
+
+  it('says which read couldn’t be made, and why, keeping the others', async () => {
+    reads.claims.mockRejectedValue(
+      new ChatBudgetError('run_cap', 429, 'This run reached its limit.'),
+    );
+    reads.page.mockRejectedValue(new PlanLimitError('Budget used up', 429));
+    reads.classes.mockRejectedValue(new Error('provider down'));
+    const body = await (await ask()).json();
+    expect(body.links.ok).toBe(true);
+    expect(body.claims).toEqual({ ok: false, code: 'run_cap' });
+    expect(body.page).toEqual({ ok: false, code: 'ai_budget' });
+    expect(body.classes).toEqual({ ok: false, code: 'failed' });
+  });
+
+  it('reads only the links before Quality’s phase 2', async () => {
+    reads.phase.value = 1;
+    const body = await (await ask()).json();
+    expect(body.links.ok).toBe(true);
+    for (const read of ['claims', 'page', 'classes']) {
+      expect(body[read]).toEqual({ ok: false, code: 'off' });
+    }
+    expect(reads.claims).not.toHaveBeenCalled();
+  });
+
+  it('reads nothing for a run that isn’t this person’s, or a draft they can’t read', async () => {
+    expect((await ask(READS, 'nope')).status).toBe(401);
+    expect((await ask({ ...READS, sites: 'x' })).status).toBe(400);
+    db.tables.chat_agent_runs[0].status = 'done';
+    expect(await (await ask()).json()).toEqual({ success: false, code: 'permission' });
+    db.tables.chat_agent_runs[0].status = 'running';
+    access.value = { ...access.value, role: 'analyst' };
+    expect(await (await ask()).json()).toEqual({ success: false, code: 'role' });
+    access.value = { ...access.value, role: 'admin' };
+    flags.demo = true;
+    expect(await (await ask()).json()).toEqual({ success: false, code: 'demo_brand' });
+    flags.demo = false;
+    db.tables.content_drafts[0].archived_at = new Date().toISOString();
+    expect((await ask()).status).toBe(404);
+    expect(reads.links).not.toHaveBeenCalled();
+    expect(reads.reserve).not.toHaveBeenCalled();
   });
 });

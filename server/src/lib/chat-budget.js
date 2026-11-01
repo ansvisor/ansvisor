@@ -128,7 +128,9 @@ async function agentRunCapUsd(orgId, agentRunId, includedUsd) {
  * budget can't cover the step (the step doesn't start), 402 without an
  * active plan; ChatBudgetError 404 when the run isn't the workspace's, or the
  * step the run's. With `agentRunId` (the chat's agent run), the step is held
- * within that run's cap too: ChatBudgetError run_cap 429 past it.
+ * within that run's cap too: ChatBudgetError run_cap 429 past it. `holdUsd`
+ * holds a set amount instead of the model's worst case, for a call much
+ * smaller than a Chat step (Content Quality's reads).
  */
 export async function reserveChatStep(
   orgId,
@@ -141,11 +143,12 @@ export async function reserveChatStep(
     stepId = null,
     ownKey = false,
     agentRunId = null,
+    holdUsd = null,
   },
 ) {
   assertChatOn(orgId);
   const { plan, budgetUsd, includedUsd, since } = await aiBudgetOf(orgId);
-  const cost = stepWorstCaseUsd(modelId, { inputTokens, maxOutputTokens });
+  const cost = holdUsd ?? stepWorstCaseUsd(modelId, { inputTokens, maxOutputTokens });
   const runCap = agentRunId ? await agentRunCapUsd(orgId, agentRunId, includedUsd) : null;
   const { data, error } = await supabaseAdmin.rpc('reserve_chat_ai_usage', {
     p_organization_id: orgId,
@@ -173,6 +176,50 @@ export async function reserveChatStep(
     throw aiBudgetUsedUp(plan);
   }
   return data;
+}
+
+/**
+ * A meter for Content Quality's reads made for an agent run (the go-live
+ * gate, AUTONOMOUS-GO-LIVE §6.2): the same { charge, release, keep } as
+ * plan-guard's reserveAiBudget, so the reads take it in its place, but
+ * drawn as the run's own steps (feature `agent`, within the run's cap and
+ * the month's budget). `reserve({ modelId, holdUsd })` holds the read;
+ * past the run's cap, ChatBudgetError run_cap; past the budget,
+ * PlanLimitError. A read that calls the model again is held and charged as
+ * a second step.
+ */
+export function agentRunReserve(orgId, { runId, agentRunId }) {
+  return async ({ modelId, holdUsd = null }) => {
+    const hold = () =>
+      reserveChatStep(orgId, { feature: 'agent', modelId, runId, agentRunId, holdUsd });
+    let usageId = await hold();
+    let settled = false;
+    return {
+      // As reserveAiBudget's: a write that fails is logged, never thrown.
+      async charge(usage) {
+        try {
+          if (settled) usageId = await hold();
+          settled = true;
+          await chargeChatStep(orgId, usageId, { modelId, usage });
+        } catch (err) {
+          logger.error({ err, orgId, agentRunId }, '[chat-budget] a read for the run not charged');
+        }
+      },
+      async release() {
+        if (settled) return;
+        settled = true;
+        try {
+          await releaseChatStep(orgId, usageId);
+        } catch (err) {
+          logger.error({ err, orgId, agentRunId }, '[chat-budget] a read’s hold not released');
+        }
+      },
+      // A call sent and then cut off is billed all the same: the hold stays as its cost.
+      async keep() {
+        settled = true;
+      },
+    };
+  };
 }
 
 /**
