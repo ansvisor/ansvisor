@@ -26,6 +26,8 @@ import { createClient } from '@/lib/supabase/server';
 
 export interface ImpactReport {
   rows: ImpactRow[];
+  /** More changes shipped in the month than a read lists: the rows, and the counts, are its first ones. */
+  capped: boolean;
   summary: ImpactSummary;
   /** Null without Google Analytics data for the brand. */
   traffic: ChangedPagesTraffic | null;
@@ -38,7 +40,10 @@ export type ImpactReportResult =
   | { ok: true; report: ImpactReport }
   | { ok: false; failure: 'chat_off' | 'invalid' | 'failed' };
 
-/** Most changes a month lists: far past what a brand ships, and a bound on a runaway read. */
+/**
+ * Most changes a month lists: far past what a brand ships, and a bound on a
+ * runaway read. A month with more says so on the page (capped).
+ */
 const MONTH_MAX = 500;
 /** Most Google Analytics rows read for the changed pages, over two months. */
 const TRAFFIC_MAX = 5000;
@@ -113,7 +118,8 @@ export async function readImpactReport(
         .gte('shipped_at', from)
         .lt('shipped_at', to)
         .order('shipped_at', { ascending: true })
-        .limit(MONTH_MAX),
+        // One more than it lists, to tell a month that has more.
+        .limit(MONTH_MAX + 1),
       supabase
         .from('ship_events')
         .select('id', { count: 'exact', head: true })
@@ -125,7 +131,8 @@ export async function readImpactReport(
       logFailure('read the shipped changes', ships.error);
       return { ok: false, failure: 'failed' };
     }
-    const shipRows = (ships.data ?? []) as unknown as ShipRow[];
+    const read = (ships.data ?? []) as unknown as ShipRow[];
+    const shipRows = read.slice(0, MONTH_MAX);
     const teammates = [
       ...new Set(
         shipRows.map((row) => row.shipped_by).filter((id): id is string => !!id && id !== user.id),
@@ -175,6 +182,7 @@ export async function readImpactReport(
       ok: true,
       report: {
         rows,
+        capped: read.length > MONTH_MAX,
         summary: impactSummary(rows, previous.error ? null : (previous.count ?? 0)),
         traffic: await changedPagesTraffic(supabase, parsed.data.brandId, rows, days),
         generatedAt: new Date().toISOString(),

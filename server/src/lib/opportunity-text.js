@@ -10,8 +10,11 @@
  * New opportunities are cleaned before they're saved, with the run's own
  * clusters, pages and opportunities to resolve each index. Stored ones are
  * cleaned when they're read, with what the row itself records, so old text
- * reads properly without being rewritten.
+ * reads properly without being rewritten. A past year in a stored title or
+ * question reads as this year (current-year.js).
  */
+
+import { refreshYears } from './current-year.js';
 
 /**
  * "prompt [0]", "cluster [1]", "page [P2]" and bare "[P2]" / "[E0]", with the
@@ -144,7 +147,8 @@ export function cleanOpportunityText(text, { competitors = [], ...refs } = {}) {
 }
 
 /**
- * A stored opportunity row with readable title, description and asset titles.
+ * A stored opportunity row with readable title, description and asset titles,
+ * and its titles and question (source_data.promptText) in this year.
  * The lists an index pointed into weren't stored — [P2] numbered the run's
  * candidate pages, not the target pages kept — so nothing is matched by
  * position: a page reads "the page", and a prompt index the prompt a
@@ -160,12 +164,21 @@ export function cleanStoredOpportunity(row, competitors = []) {
     prompt: row.cluster_id ? null : sd.promptText || null,
   };
   const clean = (t) => cleanOpportunityText(t, ctx);
+  const titled = (t) => refreshYears(clean(t));
+  const question = refreshYears(sd.promptText);
+  const changed = Array.isArray(sd.assets) || question !== sd.promptText;
   return {
     ...row,
-    title: clean(row.title),
+    title: titled(row.title),
     description: clean(row.description),
-    source_data: Array.isArray(sd.assets)
-      ? { ...sd, assets: sd.assets.map((a) => ({ ...a, title: clean(a.title) })) }
+    source_data: changed
+      ? {
+          ...sd,
+          ...(question !== sd.promptText ? { promptText: question } : {}),
+          ...(Array.isArray(sd.assets)
+            ? { assets: sd.assets.map((a) => ({ ...a, title: titled(a.title) })) }
+            : {}),
+        }
       : row.source_data,
   };
 }
