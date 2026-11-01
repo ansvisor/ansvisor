@@ -340,6 +340,12 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
             <div className="text-xs text-muted-foreground">
               {audit.signalsEvaluated}/{audit.signalsTotal} {t('signalsEvaluated')}
             </div>
+            {audit.partial && (
+              <p className="flex items-start justify-center gap-1.5 text-xs text-amber-700 sm:justify-start dark:text-amber-400">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {t('partialNote')}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

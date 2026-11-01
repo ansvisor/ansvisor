@@ -2711,7 +2711,8 @@
         "audit results",
         "page score",
         "what failed",
-        "E-E-A-T score"
+        "E-E-A-T score",
+        "score changed"
       ],
       "plan": "all",
       "updated": "2026-10-31",
@@ -2731,6 +2732,10 @@
         {
           "heading": "How the score is worked out",
           "text": "A category's score is the average of its signals, and the total is the weighted average of the categories. A signal that couldn't be evaluated, shown as n/a, is left out, so it never lowers the score.\n\nMost signals are read straight from the page, its robots.txt and its llms.txt. Thirteen, such as **Direct answer to query** and **Case study evidence**, are judged by an AI model that first works out what the page itself is about, so a page is never judged against a topic it isn't trying to cover. **Brand entity in Wikidata** looks your brand up in Wikidata."
+        },
+        {
+          "heading": "Same page, same score",
+          "text": "The AI keeps its verdict on each of its thirteen signals until the part of the page that signal reads changes, so a page audited again with no changes gets the same score. A page that changed is judged again only on the signals whose part changed.\n\nIf the AI checks can't run, the page keeps the verdicts of its last audit. A page with none, such as one audited for the first time, gets a partial score: the report says the AI checks couldn't run, and the score leaves them out and isn't compared with your other audits."
         },
         {
           "heading": "Signals",

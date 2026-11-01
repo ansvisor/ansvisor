@@ -6937,6 +6937,7 @@ export type Database = {
           error: string | null
           final_url: string | null
           id: string
+          partial: boolean
           recommendations: Json
           rubric_version: string | null
           signals_evaluated: number | null
@@ -6953,6 +6954,7 @@ export type Database = {
           error?: string | null
           final_url?: string | null
           id?: string
+          partial?: boolean
           recommendations?: Json
           rubric_version?: string | null
           signals_evaluated?: number | null
@@ -6969,6 +6971,7 @@ export type Database = {
           error?: string | null
           final_url?: string | null
           id?: string
+          partial?: boolean
           recommendations?: Json
           rubric_version?: string | null
           signals_evaluated?: number | null
