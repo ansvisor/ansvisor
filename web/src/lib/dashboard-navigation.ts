@@ -112,20 +112,23 @@ export function navItemHref(item: Pick<NavItem, 'href'>, chatAgentic: boolean): 
 
 /**
  * The badge beside a menu item. Chat has its own: while the demo brand is
- * open, that it comes next week (`chatSoon`, the words to show); else "Set
- * up" while the organization has no provider key for it (cloud only).
- * Every other item keeps its own.
+ * open, that it comes next week (`chatSoon`, the words to show); else that
+ * it needs setting up while the organization has no provider key for it
+ * (`chatSetUp`, the words to show; cloud only), never with the new Chat on
+ * (`chatAgentic`), which runs on the plan's AI limit without a key. Every
+ * other item keeps its own.
  */
 export function dashboardNavBadge(
   item: NavItem,
   {
+    chatAgentic = false,
     chatSoon = null,
-    agentKeyMissing = false,
-  }: { chatSoon?: string | null; agentKeyMissing?: boolean },
+    chatSetUp = null,
+  }: { chatAgentic?: boolean; chatSoon?: string | null; chatSetUp?: string | null },
 ): string | undefined {
   if (item.href === CHAT_HREF) {
     if (chatSoon) return chatSoon;
-    if (agentKeyMissing) return 'Set up';
+    if (chatSetUp && !chatAgentic) return chatSetUp;
   }
   return item.badge;
 }

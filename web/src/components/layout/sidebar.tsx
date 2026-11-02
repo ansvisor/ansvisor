@@ -174,9 +174,11 @@ export function Sidebar() {
   const t = useTranslations('nav');
   const { canUse, requiredPlanFor, isCloud } = useFeatureGate();
   // Probe once per session whether the org has a provider key for Chat.
-  // Returns 'configured' immediately on self-host (no network call).
-  const agentKeyStatus = useAgentKeyStatus(isCloud);
-  const agentKeyMissing = isCloud && agentKeyStatus === 'missing';
+  // Returns 'configured' immediately on self-host and with the new Chat on
+  // (no network call): that one runs on the plan's AI limit.
+  const agentKeyStatus = useAgentKeyStatus(isCloud && !chatAgentic);
+  const agentKeyMissing = isCloud && !chatAgentic && agentKeyStatus === 'missing';
+  const chatSetUp = agentKeyMissing ? t('chatSetUp') : null;
   // On the demo brand, Chat says it comes next week (its page is the preview).
   const { isDemo } = useDemoBrand();
   const tDemo = useTranslations('demo.chat');
@@ -483,8 +485,13 @@ export function Sidebar() {
                     const label = getDashboardNavLabel(item.title, t);
 
                     // Chat's own badge: "Soon (next week)" on the demo brand,
-                    // "Set up" when the org has no provider key for it (cloud only).
-                    const effectiveBadge = dashboardNavBadge(item, { chatSoon, agentKeyMissing });
+                    // "Set up" when the org has no provider key for it (cloud only,
+                    // never with the new Chat on).
+                    const effectiveBadge = dashboardNavBadge(item, {
+                      chatAgentic,
+                      chatSoon,
+                      chatSetUp,
+                    });
 
                     const isLocked =
                       isCloud && item.requiredFeature != null && !canUse(item.requiredFeature);
