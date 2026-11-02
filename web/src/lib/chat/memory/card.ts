@@ -53,7 +53,7 @@ export async function memoryCardForm(
 ): Promise<ChatConfirmForm> {
   const [viewer, brandName] = await Promise.all([
     readMemoryViewer({ userId: ctx.userId, organizationId: ctx.organizationId }),
-    input.brand_id ? brandNameOf(input.brand_id) : Promise.resolve(null),
+    input.brand_id ? brandNameOf(ctx.organizationId, input.brand_id) : Promise.resolve(null),
   ]);
   // Only a line the person sees: never another person's Me line.
   const replaced =
