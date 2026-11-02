@@ -628,6 +628,7 @@ describe('every table without a brand_id', () => {
       'chat_agents',
       'chat_agent_versions',
       'chat_agent_triggers',
+      'chat_agent_go_live',
     ]) {
       expect(childrenReaching, table).toContain(table);
     }
