@@ -6303,9 +6303,10 @@
       "filters": {
         "all": "All",
         "content": "Content",
-        "visibility": "Visibility",
-        "reports": "Reports",
-        "product": "Product Visibility"
+        "visibility": "Brand Visibility",
+        "product": "Product Visibility",
+        "technical": "Technical",
+        "reports": "Reports"
       },
       "empty": "No skills match.",
       "mineEmpty": "No skills of your own yet. Ask Chat to save one, and it shows here.",

@@ -195,6 +195,15 @@ describe('ChatSkills', () => {
 
   it('narrows the list by search and by filter chip', async () => {
     await render();
+    // The owner's names (2026-11-02): Brand Visibility beside Product Visibility, and Technical.
+    expect(all('[data-action="skills.filter"]').map((chip) => chip.textContent)).toEqual([
+      'All',
+      'Content',
+      'Brand Visibility',
+      'Product Visibility',
+      'Technical',
+      'Reports',
+    ]);
     await click(container.querySelector<HTMLElement>('[data-filter="reports"]')!);
     expect(cards()).toEqual(['report']);
     await click(container.querySelector<HTMLElement>('[data-filter="all"]')!);

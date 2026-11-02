@@ -24,11 +24,13 @@ import { parseSkillFile } from './format';
  */
 
 /**
- * The Skills page's filters (mockup #s-skills): Content, Visibility,
- * Reports, Product Visibility. A skill's `metadata.filters` names one or
- * more, space-separated, as the mockup's `SK` does.
+ * The Skills page's filters (mockup #s-skills, as the owner renamed them on
+ * 2026-11-02): Content, Brand Visibility (`visibility`), Product
+ * Visibility, Technical (site audit fixes, schema, feeds, page fields) and
+ * Reports. A skill's `metadata.filters` names one or more, space-separated,
+ * as the mockup's `SK` does.
  */
-export const SKILL_FILTERS = ['content', 'visibility', 'reports', 'product'] as const;
+export const SKILL_FILTERS = ['content', 'visibility', 'product', 'technical', 'reports'] as const;
 export type SkillFilter = (typeof SKILL_FILTERS)[number];
 
 /**
