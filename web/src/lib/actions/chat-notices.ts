@@ -38,7 +38,7 @@ export interface ScheduleNotice {
   kind: 'schedule_failed' | 'schedule_paused' | 'followup_result';
   title: string;
   reason: string;
-  /** Where Open goes: the job's page in Scheduled. */
+  /** Where Open goes: the job's page in Scheduled, or a check's result in its chat. */
   href: `/dashboard/${string}`;
   createdAt: string;
   read: boolean;
@@ -54,19 +54,26 @@ function scheduleNotice(row: {
   created_at: string;
   read_at: string | null;
 }): ScheduleNotice | null {
-  const { title, reason, scheduleId } = row.payload ?? {};
+  const { title, reason, scheduleId, conversationId } = row.payload ?? {};
   if (!SCHEDULE_KINDS.has(row.kind) || typeof title !== 'string' || typeof reason !== 'string') {
     return null;
   }
-  // Open goes to the job's page (Scheduled, W3-03): its runs, Run now, on and off.
-  const job =
-    typeof scheduleId === 'string' && /^[0-9a-f-]{36}$/i.test(scheduleId) ? scheduleId : null;
+  const id = (value: unknown) =>
+    typeof value === 'string' && /^[0-9a-f-]{36}$/i.test(value) ? value : null;
+  // Open goes to the job's page (Scheduled, W3-03): its runs, Run now, on and off; a follow-up
+  // check's result to the chat it was posted in (W3-05).
+  const job = id(scheduleId);
+  const chat = row.kind === 'followup_result' ? id(conversationId) : null;
   return {
     id: row.id,
     kind: row.kind as ScheduleNotice['kind'],
     title: title.slice(0, 120),
     reason: reason.slice(0, 200),
-    href: job ? `/dashboard/chat/scheduled/${job}` : '/dashboard/chat/scheduled',
+    href: chat
+      ? `/dashboard/chat/${chat}`
+      : job
+        ? `/dashboard/chat/scheduled/${job}`
+        : '/dashboard/chat/scheduled',
     createdAt: row.created_at,
     read: row.read_at !== null,
   };
