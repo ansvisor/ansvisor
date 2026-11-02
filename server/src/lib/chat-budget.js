@@ -128,7 +128,9 @@ async function agentRunCapUsd(orgId, agentRunId, includedUsd) {
  * budget can't cover the step (the step doesn't start), 402 without an
  * active plan; ChatBudgetError 404 when the run isn't the workspace's, or the
  * step the run's. With `agentRunId` (the chat's agent run), the step is held
- * within that run's cap too: ChatBudgetError run_cap 429 past it.
+ * within that run's cap too: ChatBudgetError run_cap 429 past it. With
+ * `scheduleId` (the chat's scheduled job, CHAT-12 item 14) the database
+ * checks it is the chat's; the row is named with the chat's job either way.
  */
 export async function reserveChatStep(
   orgId,
@@ -141,6 +143,7 @@ export async function reserveChatStep(
     stepId = null,
     ownKey = false,
     agentRunId = null,
+    scheduleId = null,
   },
 ) {
   assertChatOn(orgId);
@@ -158,6 +161,7 @@ export async function reserveChatStep(
     p_since: since,
     p_budget: budgetUsd,
     ...(agentRunId ? { p_agent_run_id: agentRunId, p_run_cap: runCap } : {}),
+    ...(scheduleId ? { p_schedule_id: scheduleId } : {}),
   });
   if (error) {
     if (error.code === 'P0002') {

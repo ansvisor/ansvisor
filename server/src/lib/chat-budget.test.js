@@ -738,6 +738,17 @@ describe('each agent’s share of the AI limit', () => {
   });
 });
 
+describe('a scheduled job’s step (CHAT-12 item 14)', () => {
+  it('passes the job to the hold, which names the row with the chat’s job; no run cap', async () => {
+    const JOB = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0b';
+    await budget.reserveChatStep('o1', step({ feature: 'schedule', scheduleId: JOB }));
+    expect(rpcCalls.at(-1).args).toMatchObject({ p_feature: 'schedule', p_schedule_id: JOB });
+    expect(rpcCalls.at(-1).args).not.toHaveProperty('p_run_cap');
+    await budget.reserveChatStep('o1', step());
+    expect(rpcCalls.at(-1).args).not.toHaveProperty('p_schedule_id');
+  });
+});
+
 describe('an agent run’s step, within its own cap (CHAT-27 items 21–22)', () => {
   const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0a';
 

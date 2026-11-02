@@ -13,7 +13,7 @@ import type { Json } from '@/types/supabase';
 import type { UserRole } from '@/types';
 import { recordAccessDenied } from './access-log';
 import { approvalFor, type ActivityApproval } from './activity';
-import { reserveChatStep, type ChatStepUsage } from './budget';
+import { meteredAs, reserveChatStep, type ChatStepUsage } from './budget';
 import { buildDenial } from './denial';
 import { KeyFailureError, ProviderDownError, stepFailure, type RunKeyFailure } from './engine-key';
 import {
@@ -168,6 +168,7 @@ import {
   type LibrarySkill,
 } from './skills/library';
 import { MAX_UPLOADS } from './uploads';
+import { answerUnattended, withAssumptions } from './schedule/unattended';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -758,6 +759,12 @@ interface RunContext {
   /** The agent run this chat is (CHAT-21 §H item 36): its steps are held within its cap too. */
   agentRunId: string | null;
   /**
+   * The scheduled job whose run this is (CHAT-12 item 11): its steps are
+   * metered as the job's, and nobody watches it (schedule/unattended.ts).
+   * Null for a person's own message, in the job's chat too.
+   */
+  scheduleId: string | null;
+  /**
    * Whose session the request driving the run carries: a change runs as the
    * signed-in person. When it isn't the actor (an agent run nobody's session
    * is behind), every change asks first (askWithoutSession).
@@ -927,7 +934,7 @@ async function openContext(
     return null;
   }
   const brand = progress.brandId ? await readBrand(progress.brandId, actor.organizationId) : null;
-  const agentRunId = await readAgentRunId(run.conversationId);
+  const { agentRunId, scheduleId } = await readChatOwner(run.conversationId);
   const scope: RunScope = {
     brandId: brand?.id ?? null,
     brandIsDemo: brand ? await readBrandIsDemo(brand.id) : false,
@@ -957,20 +964,28 @@ async function openContext(
     offered: new Map(offered.map((tool) => [tool.name, tool])),
     refused,
     agentRunId,
+    // The job's own run only: a person's message in its chat is theirs.
+    scheduleId: progress.scheduled ? scheduleId : null,
     sessionUserId,
     skills: runSkills(actor.organizationId, progress, history.plan),
   };
 }
 
-/** The agent run a chat is (chat_conversations.agent_run_id), or null for a person's own chat. */
-async function readAgentRunId(conversationId: string): Promise<string | null> {
+/**
+ * The agent run and the scheduled job a chat is (chat_conversations.agent_run_id,
+ * schedule_id), each null for a person's own chat.
+ */
+async function readChatOwner(
+  conversationId: string,
+): Promise<{ agentRunId: string | null; scheduleId: string | null }> {
   const { data, error } = await supabaseAdmin
     .from('chat_conversations')
-    .select('agent_run_id')
+    .select('agent_run_id, schedule_id')
     .eq('id', conversationId)
     .maybeSingle();
   if (error) throw new Error(`Chat could not read the chat: ${error.message}`);
-  return (data as { agent_run_id: string | null } | null)?.agent_run_id ?? null;
+  const row = data as { agent_run_id?: string | null; schedule_id?: string | null } | null;
+  return { agentRunId: row?.agent_run_id ?? null, scheduleId: row?.schedule_id ?? null };
 }
 
 /** A message's words, its text parts joined. */
@@ -1118,8 +1133,8 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
     const reservation = await reserveChatStep({
       organizationId: rc.run.organizationId,
       runId: rc.run.id,
-      // An agent's run is metered as the agent's, within its own cap (CHAT-27 item 21).
-      ...(rc.agentRunId ? { feature: 'agent' as const, agentRunId: rc.agentRunId } : {}),
+      // An agent's run as the agent's, within its cap; a job's as the job's (CHAT-12 item 14).
+      ...meteredAs(rc),
       model: choice.budgetModel,
       inputTokens: estimateInputTokens([HELP_SYSTEM, messages]),
       maxOutputTokens: choice.maxOutputTokens,
@@ -1373,8 +1388,8 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
   const reservation = await reserveChatStep({
     organizationId: rc.run.organizationId,
     runId: rc.run.id,
-    // An agent's run is metered as the agent's, within its own cap (CHAT-27 item 21).
-    ...(rc.agentRunId ? { feature: 'agent' as const, agentRunId: rc.agentRunId } : {}),
+    // An agent's run as the agent's, within its cap; a job's as the job's (CHAT-12 item 14).
+    ...meteredAs(rc),
     model: choice.budgetModel,
     inputTokens: estimateInputTokens([system, messages, toolSchemas(rc, phase)]),
     maxOutputTokens: choice.maxOutputTokens,
@@ -2263,6 +2278,13 @@ async function askQuestion(rc: RunContext, call: PendingCall): Promise<CallOutco
   rc.progress.asks = asked + 1;
   const n = ++rc.progress.steps;
   if (rc.batchAnswer) return answeredByMessage(rc, call, input, options, n, asked + 1);
+  // A scheduled job's run: nobody watches, so the Recommended option is taken (CHAT-12 item 12).
+  if (rc.scheduleId) {
+    const taken = await answerUnattended(rc.run.id, call, input, options, asked + 1, n);
+    (rc.progress.assumptions ??= []).push(taken.assumed);
+    rc.sink.emit('step.finished', { step: clientStep(taken.step) });
+    return result(call, taken.value);
+  }
   const row = await insertStep(rc.run.id, {
     position: n,
     kind: 'ask',
@@ -3528,6 +3550,8 @@ async function finish(rc: RunContext): Promise<void> {
   if (!(await moveRun(rc.run.id, ['running'], 'done', { finished: true }))) return stopNow(rc);
   const generatedAt = new Date().toISOString();
   const workingMs = workedMs(rc);
+  // What a job's run assumed for nobody watching leads its answer (CHAT-12 item 12).
+  rc.progress.text = withAssumptions(rc.progress.text, rc.progress.assumptions);
   await saveAnswer(rc.run.messageId, {
     text: rc.progress.text,
     generatedAt,

@@ -69,6 +69,25 @@ export interface ChatBudgetStep {
    * server holds the step within that run's cap too (CHAT-27 item 21).
    */
   agentRunId?: string | null;
+  /**
+   * The scheduled job the step's chat is (chat_conversations.schedule_id):
+   * its usage row is named with the job (CHAT-12 item 14).
+   */
+  scheduleId?: string | null;
+}
+
+/**
+ * What a run's steps are metered as, by whose chat it is: an agent run's
+ * as the agent's, within its own cap (CHAT-27 item 21); a scheduled job's
+ * as the job's (CHAT-12 item 14); else a person's chat.
+ */
+export function meteredAs(chat: {
+  agentRunId: string | null;
+  scheduleId: string | null;
+}): Pick<ChatBudgetStep, 'feature' | 'agentRunId' | 'scheduleId'> {
+  if (chat.agentRunId) return { feature: 'agent', agentRunId: chat.agentRunId };
+  if (chat.scheduleId) return { feature: 'schedule', scheduleId: chat.scheduleId };
+  return {};
 }
 
 /**
@@ -217,6 +236,7 @@ export async function reserveChatStep(step: ChatBudgetStep): Promise<ChatStepRes
       maxOutputTokens: Math.max(1, Math.ceil(step.maxOutputTokens)),
       ownKey: step.source === 'own',
       ...(step.agentRunId ? { agentRunId: step.agentRunId } : {}),
+      ...(step.scheduleId ? { scheduleId: step.scheduleId } : {}),
     },
     RESERVE_TIMEOUT_MS,
   );
