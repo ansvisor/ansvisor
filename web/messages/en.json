@@ -3620,7 +3620,9 @@
       "connected": "Connected",
       "connect": "Connect {name}",
       "startNeedsPlan": "Starting a run needs a plan",
-      "askNeedsPlan": "Sending a request needs a plan"
+      "askNeedsPlan": "Sending a request needs a plan",
+      "skip": "Skip",
+      "missingOptional": "{name} isn’t connected. I can do everything else without it."
     },
     "approvalCard": {
       "stepOf": "Step {n} of {total}",
@@ -4845,7 +4847,8 @@
         "allChats": "All chats",
         "agents": "Agent Center",
         "files": "Files",
-        "settings": "Settings"
+        "settings": "Settings",
+        "connections": "Connections"
       }
     },
     "allChats": {
@@ -4901,7 +4904,8 @@
         "activity": "Activity",
         "capabilities": "What Chat can do",
         "files": "Files",
-        "settings": "Settings"
+        "settings": "Settings",
+        "connections": "Connections"
       }
     },
     "settings": {
@@ -14272,6 +14276,81 @@
         "name": "Zapier",
         "description": "Start Ansvisor skills from other tools."
       }
+    },
+    "disconnect": {
+      "title": "Disconnect {name} from {brand}?",
+      "cms": "Pages won’t be sent to {name} for this brand until it’s connected again. Pages already sent stay there.",
+      "property": "Ansvisor stops reading {name} for this brand. Other brands keep theirs, and the data already read stays.",
+      "stops": "{count, plural, one {This agent needs it and will pause:} other {These agents need it and will pause:}}",
+      "cancel": "Cancel",
+      "confirm": "Disconnect",
+      "done": "{name} disconnected.",
+      "failed": "Couldn’t disconnect {name}. Try again from Settings."
+    },
+    "card": {
+      "by": "by {name}",
+      "usedBy": "Used by {list}",
+      "wouldUnlock": "Would unlock {list}",
+      "failing": "Its sign-in stopped working. Reconnect it to keep using it.",
+      "soonNote": "Coming soon",
+      "disconnect": "Disconnect",
+      "settings": "Settings"
+    },
+    "page": {
+      "title": "Connections",
+      "subtitle": "What {brand} has connected. Connections are per brand.",
+      "subtitleNoBrand": "Pick a brand to see what it has connected.",
+      "request": "Request a connection",
+      "tabs": {
+        "all": "All",
+        "connected": "Connected",
+        "not_connected": "Not connected"
+      },
+      "all": "All",
+      "search": "Search connections",
+      "noMatch": "No connections match.",
+      "clearFilters": "Clear filters",
+      "loadFailed": "Couldn’t load this brand’s connections.",
+      "retry": "Try again"
+    },
+    "menu": {
+      "label": "Connections",
+      "manage": "Manage",
+      "show": "Show connections",
+      "hide": "Hide connections",
+      "listLabel": "The brand’s connections",
+      "search": "Search connections",
+      "noMatch": "No connection matches.",
+      "failed": "Couldn’t load connections.",
+      "retry": "Try again"
+    },
+    "askAdmin": {
+      "short": "Ask",
+      "button": "Ask your Admin to connect",
+      "asked": "Please connect {name} for this brand.",
+      "rule": "Only Admins connect tools."
+    },
+    "reconnectLabel": "Reconnect {name}",
+    "reconnect": "Reconnect",
+    "connectLabel": "Connect {name}",
+    "connect": "Connect",
+    "status": {
+      "connected": "Connected",
+      "failing": "Sign-in failed",
+      "soon": "Soon",
+      "suggested": "Suggested"
+    },
+    "access": {
+      "read_only": "read-only",
+      "read_write_drafts": "read + write drafts",
+      "sends_pages": "sends pages"
+    },
+    "categories": {
+      "search": "Search & analytics",
+      "cms": "CMS",
+      "ecommerce": "E-commerce",
+      "crm": "CRM & revenue",
+      "team": "Team & data"
     }
   }
 }

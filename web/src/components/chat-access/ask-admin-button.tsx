@@ -34,6 +34,9 @@ export function AskAdminButton({
   toolKey = null,
   size = 'sm',
   variant = 'outline',
+  label,
+  title,
+  className,
   onSent,
 }: {
   asked: string;
@@ -42,6 +45,10 @@ export function AskAdminButton({
   toolKey?: string | null;
   size?: 'sm' | 'default';
   variant?: 'outline' | 'default';
+  /** Shorter words for a tight place (the chat menu's Connections list); its title says it all. */
+  label?: string;
+  title?: string;
+  className?: string;
   onSent?: () => void;
 }) {
   const t = useTranslations('chatAccess.askAdmin');
@@ -80,12 +87,14 @@ export function AskAdminButton({
         type="button"
         size={size}
         variant={variant}
+        title={title}
+        className={className}
         onClick={() => {
           setText(asked);
           setOpen(true);
         }}
       >
-        {t('button')}
+        {label ?? t('button')}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
