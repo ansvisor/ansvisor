@@ -64,6 +64,7 @@ import type { PriorityLevel, PriorityReason } from '@/lib/action-center/priority
 import type { CompetitorFindings } from '@/lib/action-center/competitor-findings';
 import type { WinningFindings } from '@/lib/action-center/winning-findings';
 import { assertWritable } from '@/lib/subscription-guard';
+import { canAccessBrand } from '@/lib/brand-access';
 import { logEvent, touchAction, writeTaskStatus } from '@/lib/action-center/task-status';
 import { readTaskAttachments, type TaskAttachment } from '@/lib/action-center/chat-attachments';
 
@@ -96,6 +97,11 @@ export interface ActionItem {
   taskTotal: number;
   taskCompleted: number;
   signalCount: number;
+  /**
+   * When the nightly pass found it New with no one's event for a month
+   * (00432); null when it isn't stale. Shown only while the action is New.
+   */
+  staleAt?: string | null;
   /** 0–100 (AC-006); null until the server has scored the action. */
   priorityScore: number | null;
   priorityLevel: PriorityLevel | null;
@@ -372,6 +378,22 @@ export async function updateActionStatus(
 }
 
 /**
+ * Still relevant on a stale action (00432): no longer stale, and its month
+ * starts again from this History line, as from anyone's change.
+ */
+export async function keepActionRelevant(brandId: string, actionId: string): Promise<void> {
+  await assertWritable({ brandId });
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('actions')
+    .update({ stale_at: null, updated_at: new Date().toISOString() })
+    .eq('brand_id', brandId)
+    .eq('id', actionId);
+  if (error) throw new Error(error.message);
+  await logEvent(supabase, actionId, 'still_relevant', {});
+}
+
+/**
  * Delete an action from its row menu (admins and managers). The server hides
  * it rather than removing it: dismissed, with deleted_at (00168), so it
  * leaves every list while the nightly generator keeps its rest window.
@@ -394,12 +416,20 @@ export async function deleteAction(actionId: string): Promise<void> {
   }
 }
 
+/**
+ * Assign an action, or clear its assignee. The assignee must be someone who
+ * can see the brand (BRAND-ACCESS §3.1): a teammate it wasn't shared with,
+ * or anyone outside the workspace, is refused before anything is written.
+ */
 export async function assignAction(
   brandId: string,
   actionId: string,
   assigneeId: string | null,
 ): Promise<void> {
   await assertWritable({ brandId });
+  if (assigneeId && !(await canAccessBrand(assigneeId, brandId))) {
+    throw new Error("The assignee can't see this brand");
+  }
   const supabase = await createClient();
   const { error } = await supabase
     .from('actions')

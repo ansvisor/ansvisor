@@ -436,6 +436,50 @@ describe("a technical finding with its checks' evidence", () => {
       'Freshness · Age in days: 412 · Newest date: 2025-08-30',
     ]);
   });
+
+  it('names the language and the reading formula a page was read with', () => {
+    render(
+      <SignalWhereBlock
+        signal={signal({
+          category: 'technical',
+          kind: 'content_gap',
+          currentValue: 1,
+          payload: {
+            entity: 'pages',
+            targets: [
+              {
+                id: '/kapadokya',
+                label: '/kapadokya',
+                issues: [
+                  {
+                    check: 'readability',
+                    label: 'Readability',
+                    evidence: {
+                      language: 'tr',
+                      formula: 'atesman',
+                      readingScore: 18,
+                      wordsPerSentence: 31.5,
+                    },
+                  },
+                  {
+                    check: 'first-person',
+                    label: 'First-person evidence',
+                    evidence: { language: 'en', firstPersonSentences: 0, sentences: 40 },
+                  },
+                ],
+              },
+            ],
+          },
+          where: NO_WHERE,
+        })}
+      />,
+    );
+    const lines = [...container.querySelectorAll('dd li span.block')].map((el) => el.textContent);
+    expect(lines).toEqual([
+      'Readability · Language: Turkish · Formula: Ateşman · Reading score: 18 · Words a sentence: 31.5',
+      'First-person evidence · Language: English · First-person sentences: 0 · Sentences: 40',
+    ]);
+  });
 });
 
 describe('a traffic signal with its referrals and prompts', () => {

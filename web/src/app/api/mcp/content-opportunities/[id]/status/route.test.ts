@@ -17,6 +17,7 @@ vi.mock('@/lib/mcp-auth', () => ({
     organizationId: 'org-1',
     role: 'analyst',
     apiKeyId: 'key-1',
+    brandAccess: 'all',
   })),
 }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));

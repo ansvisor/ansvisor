@@ -37,11 +37,13 @@ const SLOW_AFTER_S = 120;
 /**
  * The run this page waits on, as the server starts it (content-writer.js
  * startWritingRun): a Start on a new page writes it, one on a live page runs
- * as a Fix (its suggestions), and a rewrite rewrites the whole page.
+ * as a Fix (its suggestions), and a rewrite rewrites the whole page. Write
+ * this (customer priorities item 9) builds the brief first, in a run of its
+ * own (briefThenWrite).
  */
 const WRITING_RUNS = {
-  create: ['write'],
-  optimize: ['fix'],
+  create: ['brief', 'write'],
+  optimize: ['brief', 'fix'],
   rewrite: ['rewrite'],
 } as const satisfies Record<DraftMethod | 'rewrite', readonly AgentRunKind[]>;
 
@@ -55,6 +57,8 @@ const DOING = {
   create: ['answerFirst', 'outline', 'rules', 'sources', 'placeholders'],
   optimize: ['missing', 'quoted', 'rules', 'sources', 'placeholders'],
   rewrite: ['rules', 'length', 'kept', 'voice', 'sources', 'placeholders'],
+  // Write this's brief, before the page.
+  brief: ['outline', 'sources'],
 } as const;
 /** Seconds each line stays. */
 const DOING_S = 4;
@@ -225,13 +229,19 @@ export function AgentWriting({
         <div role="status" className="w-full max-w-sm space-y-4">
           <div className="flex items-center gap-3">
             <AgentTile tone="working" count={0} />
-            <p className="text-sm font-medium">{t('agentWriting.title')}</p>
+            <p className="text-sm font-medium">
+              {t(run?.kind === 'brief' ? 'agentWriting.titleBrief' : 'agentWriting.title')}
+            </p>
           </div>
           {run ? (
             <div className="space-y-2 rounded-xl border bg-card px-4 py-3.5">
               <RunSteps run={run} moving />
               <div className="flex items-center gap-3 border-t pt-2.5">
-                <DoingLine mode={mode} run={run} seconds={seconds} />
+                <DoingLine
+                  mode={run.kind === 'brief' ? 'brief' : mode}
+                  run={run}
+                  seconds={seconds}
+                />
                 {seconds !== null && (
                   <p aria-hidden className="shrink-0 text-xs text-muted-foreground tabular-nums">
                     {clock(seconds)}

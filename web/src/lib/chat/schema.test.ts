@@ -6,10 +6,11 @@ import { CHAT_MODES } from './precedence';
 import { WHY_METRICS } from './why/explain';
 
 /**
- * Chat's Wave 1 (00407–00413), Wave 2 (00417–00423) and Wave 3 (00457–00459)
- * tables as the migrations leave them: who reads them, what stays with the
- * server, and the limits the specs set. Read from the SQL, as events.test.ts
- * reads the step kinds: the repository has no database tests.
+ * Chat’s Wave 1 (00407–00413), Wave 2 (00417–00423), Wave 3 (00457–00459)
+ * and Wave 4 (00462–00467) tables as the migrations leave them: who reads
+ * them, what stays with the server, and the limits the specs set. Read from
+ * the SQL, as events.test.ts reads the step kinds: the repository has no
+ * database tests.
  */
 
 const dir = fileURLToPath(new URL('../../../../supabase/migrations', import.meta.url));
@@ -947,6 +948,226 @@ describe('memory (00459)', () => {
     );
     expect(memorySql).toMatch(
       /alter table public\.chat_user_prefs\s+add column if not exists memory_enabled boolean not null default true/,
+    );
+  });
+});
+
+const WAVE_4 = ['00462', '00463', '00464', '00465', '00466', '00467'];
+const wave4 = WAVE_4.map(migration).join('\n');
+
+/** The tables Wave 4 creates. */
+const created4 = [...wave4.matchAll(/create table if not exists public\.(\w+)/g)].map((m) => m[1]);
+
+/** A Wave 4 table's create statement, from its name to its closing parenthesis. */
+function table4(name: string): string {
+  const m = wave4.match(
+    new RegExp(`create table if not exists public\\.${name} \\(([\\s\\S]*?)\\n\\);`),
+  );
+  if (!m) throw new Error(`No table ${name}`);
+  return m[1];
+}
+
+/** A named constraint's check, from `add constraint {name}` to its statement's end. */
+function constraint(text: string, name: string): string {
+  const m = text.match(new RegExp(`add constraint ${name}\\s+check \\(([\\s\\S]*?)\\);`));
+  if (!m) throw new Error(`No constraint ${name}`);
+  return m[1].replace(/\s+/g, ' ').trim();
+}
+
+describe('Wave 4 tables', () => {
+  it('creates the tables the plan lists', () => {
+    expect(created4.sort()).toEqual(['chat_whats_new_reads', 'chat_outbound_emails'].sort());
+  });
+
+  it('lets members read at most, and anon nothing: every write is the server’s', () => {
+    expect(wave4).not.toMatch(/grant (insert|update|delete|all)[^;]*to authenticated/);
+    expect(wave4).not.toMatch(/create policy[^;]*for (insert|update|delete|all)\b/);
+    expect(wave4).not.toMatch(/grant [^;]*to anon/);
+    for (const name of created4) {
+      expect(wave4, name).toMatch(
+        new RegExp(`alter table public\\.${name} enable row level security`),
+      );
+      expect(wave4, name).toMatch(
+        new RegExp(`revoke all on table public\\.${name} from anon, authenticated`),
+      );
+      expect(wave4, name).toMatch(
+        new RegExp(`grant select on table public\\.${name} to authenticated`),
+      );
+      expect(wave4, name).toMatch(
+        new RegExp(`grant all on table public\\.${name} to service_role`),
+      );
+    }
+    const policies = [...wave4.matchAll(/create policy "[^"]+"[^;]*;/g)].map((m) =>
+      m[0].replace(/\s+/g, ' '),
+    );
+    expect(policies).toHaveLength(2);
+    for (const text of policies) expect(text).toContain('for select to authenticated using');
+  });
+});
+
+describe('models and images (00462)', () => {
+  const sql = migration('00462');
+
+  it('keeps what a model takes and its context, still for the server only', () => {
+    expect(sql).toMatch(/add column if not exists supported_parameters text\[\]/);
+    expect(sql).toMatch(/add column if not exists context_length integer/);
+    expect(sql).not.toMatch(/grant [^;]*on table public\.chat_model_prices/);
+  });
+
+  it('counts the images on an image row only', () => {
+    expect(sql).toMatch(
+      /alter table public\.prompt_improve_usage\s+add column if not exists units smallint/,
+    );
+    expect(constraint(sql, 'prompt_improve_usage_units_check')).toBe(
+      "units is null or (units between 1 and 10 and feature = 'image')",
+    );
+  });
+});
+
+describe('a draft’s origin (00463)', () => {
+  const sql = migration('00463');
+
+  it('says where a draft was made, editor by default', () => {
+    expect(sql).toMatch(/add column if not exists origin text not null default 'editor'/);
+    expect(allowed(constraint(sql, 'content_drafts_origin_check'), 'origin')).toEqual([
+      'editor',
+      'chat',
+      'action_center',
+      'agent',
+      'mcp',
+    ]);
+    expect(sql).toMatch(
+      /conversation_id uuid\s+references public\.chat_conversations\(id\) on delete set null/,
+    );
+  });
+
+  it('counts a draft with an action as the Action Center’s, without touching updated_at', () => {
+    expect(sql).toMatch(
+      /disable trigger content_drafts_updated_at;\s*update public\.content_drafts\s+set origin = 'action_center'\s+where action_id is not null/,
+    );
+    expect(sql).toMatch(/enable trigger content_drafts_updated_at;/);
+  });
+
+  it('lets a member say editor or chat, name only their own chat, and change neither', () => {
+    const guard = body(sql, 'guard_content_draft_origin');
+    expect(guard).toContain("new.origin not in ('editor', 'chat')");
+    expect(guard).toContain('c.user_id = auth.uid()');
+    expect(guard).toContain('new.origin is distinct from old.origin');
+    expect(guard).toContain('rolbypassrls');
+    expect(sql).toMatch(
+      /before insert or update of origin, conversation_id on public\.content_drafts/,
+    );
+  });
+});
+
+describe('What’s new reads (00464)', () => {
+  const reads = table4('chat_whats_new_reads');
+  const sql = migration('00464');
+
+  it('keeps one read per person and entry', () => {
+    expect(reads).toMatch(/primary key \(user_id, entry_slug\)/);
+    expect(reads).toMatch(/user_id uuid not null references auth\.users\(id\) on delete cascade/);
+    expect(reads).toMatch(/entry_slug ~ '\^\[a-z0-9\]\+\(-\[a-z0-9\]\+\)\*\$'/);
+  });
+
+  it('shows a person only their own', () => {
+    expect(policy('chat_whats_new_reads: own select', sql)).toContain(
+      'using (user_id = auth.uid())',
+    );
+  });
+});
+
+describe('Library skills (00465)', () => {
+  const sql = migration('00465');
+
+  it('adds library as a source, pinned to its commit like an import', () => {
+    expect(allowed(constraint(sql, 'chat_skills_source_check'), 'source')).toEqual([
+      'user',
+      'import',
+      'library',
+    ]);
+    expect(constraint(sql, 'chat_skills_source_pin_check')).toBe(
+      "source in ('import', 'library') or (source_url is null and commit_sha is null)",
+    );
+    expect(constraint(sql, 'chat_skills_library_check')).toBe(
+      "((source = 'library') = (library_ref is not null)) and (source <> 'library' or commit_sha is not null)",
+    );
+  });
+
+  it('drops 00458’s unnamed pin rule by what it says', () => {
+    expect(sql).toContain("like '%''import''::text%'");
+    expect(sql).toContain("like '%source_url IS NULL%'");
+  });
+
+  it('adds a catalog row once per workspace, and keeps when its source was checked', () => {
+    expect(sql).toMatch(
+      /create unique index if not exists chat_skills_library_ref_uidx\s+on public\.chat_skills \(organization_id, library_ref\)\s+where library_ref is not null/,
+    );
+    expect(sql).toMatch(/add column if not exists update_checked_at timestamptz/);
+  });
+});
+
+describe('agents that call agents (00466)', () => {
+  const sql = migration('00466');
+
+  it('lets a version name up to 5 agents of its workspace, never itself', () => {
+    expect(sql).toMatch(/add column if not exists can_call uuid\[\] not null default '\{\}'/);
+    const check = constraint(sql, 'chat_agent_versions_can_call_check');
+    expect(check).toContain('cardinality(can_call) <= 5');
+    expect(check).toContain('not (agent_id = any (can_call))');
+    expect(body(sql, 'chat_agent_versions_can_call_rules')).toContain(
+      'caller.organization_id = callee.organization_id',
+    );
+  });
+
+  it('starts a run from another agent’s run, one level deep, 3 calls a run at most', () => {
+    expect(allowed(constraint(sql, 'chat_agent_runs_trigger_kind_check'), 'trigger_kind')).toEqual([
+      'schedule',
+      'signal',
+      'kpi',
+      'watch_rule',
+      'manual',
+      'action',
+      'agent',
+    ]);
+    expect(constraint(sql, 'chat_agent_runs_called_by_check')).toBe(
+      "(trigger_kind = 'agent') = (called_by_run_id is not null)",
+    );
+    const rules = body(sql, 'chat_agent_runs_call_rules');
+    expect(rules).toContain('c.called_by_run_id is null');
+    expect(rules).toContain('c.agent_id is distinct from new.agent_id');
+    expect(rules).toContain('pg_advisory_xact_lock');
+    expect(rules).toMatch(/\) >= 3 then/);
+    expect(sql).toMatch(/before insert or update of called_by_run_id on public\.chat_agent_runs/);
+  });
+});
+
+describe('outside e-mails (00467)', () => {
+  const emails = table4('chat_outbound_emails');
+  const sql = migration('00467');
+
+  it('keeps up to 5 outside addresses on a job', () => {
+    expect(sql).toMatch(
+      /alter table public\.chat_schedules\s+add column if not exists external_recipients text\[\] not null default '\{\}'/,
+    );
+    expect(sql).toMatch(/cardinality\(external_recipients\) <= 5/);
+  });
+
+  it('prepares an e-mail that waits for a click, and expires in 7 days', () => {
+    expect(allowed(emails, 'status')).toEqual(['pending', 'sent', 'cancelled', 'expired']);
+    expect(emails).toMatch(/status text not null default 'pending'/);
+    expect(emails).toMatch(
+      /expires_at timestamptz not null default \(now\(\) \+ interval '7 days'\)/,
+    );
+    expect(emails).toMatch(/check \(\(status = 'sent'\) = \(sent_at is not null\)\)/);
+    expect(sql).toMatch(
+      /chat_outbound_emails_run_address_uidx\s+on public\.chat_outbound_emails \(schedule_run_id, to_address\)/,
+    );
+  });
+
+  it('is read as its job is', () => {
+    expect(policy('chat_outbound_emails: schedule select', sql)).toContain(
+      'using (schedule_id in (select s.id from public.chat_schedules s))',
     );
   });
 });

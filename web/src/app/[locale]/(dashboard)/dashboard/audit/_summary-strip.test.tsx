@@ -1,10 +1,15 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { AuditAutoStatus, AuditOverview, AuditQuota } from '@/lib/actions/audits';
 import { AuditSummaryStrip, daysUntil } from './_summary-strip';
+
+// The report's helpers come with its Settings link (00449).
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
+}));
 
 (
   globalThis as typeof globalThis & {
@@ -106,6 +111,22 @@ describe('AuditSummaryStrip', () => {
       'Next auto-audit tomorrow · 25 pages',
     ]);
     expect(container.textContent).toContain('ansvisor.com');
+  });
+
+  it('says how many of the site’s pages are audited once they are read (customer priorities item 11)', () => {
+    act(() => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <AuditSummaryStrip
+            overview={overview()}
+            quota={quota(auto())}
+            now={NOW}
+            coverage={{ pages: 36, audited: 18, never: 18, stale: 0 }}
+          />
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(items()[1]).toBe('18 of 36 pages audited');
   });
 
   it("says within a day while a run's turn has started without it, not today", () => {

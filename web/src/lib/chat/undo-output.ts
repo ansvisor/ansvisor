@@ -109,5 +109,7 @@ const runSiteAudit: UndoRule = {
 export const OUTPUT_UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   build_report: buildReport,
   push_cms_draft: pushCmsDraft,
+  // A page put live (AUTONOMOUS-GO-LIVE PR 9): recorded the same way; Take down is its own click.
+  publish_cms: pushCmsDraft,
   run_site_audit: runSiteAudit,
 };

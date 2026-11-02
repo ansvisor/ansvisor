@@ -476,9 +476,16 @@ const QUOTED_QUESTION = /["“„«»]([^"“”„«»\n]{1,300}\?)["”“»«
  * the brand's, charges the AI usage budget, asks the model, and saves the
  * brief on the draft. Throws with `.status` 404 for a draft outside the
  * brand, 422 with no sources to build from, PlanLimitError once the budget
- * is spent.
+ * is spent. `claimedAt` is the claim Write this holds on the draft while it
+ * builds the brief before the page (content-writer.js): a Stop lets go of it.
  */
-export async function rebuildDraftBrief({ draftId, brandId, sources, rules = [] }) {
+export async function rebuildDraftBrief({
+  draftId,
+  brandId,
+  sources,
+  rules = [],
+  claimedAt = null,
+}) {
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select('id, brand_id, title, page_type, method, source_url')
@@ -554,6 +561,7 @@ export async function rebuildDraftBrief({ draftId, brandId, sources, rules = [] 
   const run = await startRun({
     draftId,
     kind: 'brief',
+    claimedAt,
     counts: {
       sources:
         prompts.length + sources.fanouts.length + sources.pages.length + sources.queries.length,

@@ -223,6 +223,40 @@ describe('shipCmsPublish', () => {
     expect(fresh.tables.ship_events[0].republished_at ?? null).toBeNull();
   });
 
+  it('names the agent, its run and the Chat run of a page an agent published on its own, as automated (00447)', async () => {
+    const tables = world();
+    tables.content_draft_deliveries[0].agent_run_id = 'ar1';
+    tables.chat_agent_go_live_events = [
+      {
+        id: 'e1',
+        agent_run_id: 'ar1',
+        content_draft_id: 'dr1',
+        run_id: 'cr1',
+        agent_id: 'ag1',
+        created_at: '2026-10-20T11:00:00.000Z',
+      },
+    ];
+    tables.chat_agent_runs = [{ id: 'ar1', agent_id: 'ag1' }];
+    const db = useDb(tables);
+    await record(db);
+    expect(db.tables.ship_events[0]).toMatchObject({
+      shipped_by: 'u1',
+      execution_mode: 'automated',
+      run_id: 'cr1',
+      agent_id: 'ag1',
+      agent_run_id: 'ar1',
+    });
+    // A person's own send keeps none, assisted.
+    const own = useDb(world());
+    await record(own);
+    expect(own.tables.ship_events[0]).toMatchObject({
+      execution_mode: 'assisted',
+      run_id: null,
+      agent_id: null,
+      agent_run_id: null,
+    });
+  });
+
   it('passes the republish window to ship_cms_publish, the one place it is set', async () => {
     const db = useDb(world());
     const calls = [];
