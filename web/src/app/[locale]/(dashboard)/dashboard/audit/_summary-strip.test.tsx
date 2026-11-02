@@ -108,6 +108,22 @@ describe('AuditSummaryStrip', () => {
     expect(container.textContent).toContain('ansvisor.com');
   });
 
+  it('says how many of the site’s pages are audited once they are read (customer priorities item 11)', () => {
+    act(() => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <AuditSummaryStrip
+            overview={overview()}
+            quota={quota(auto())}
+            now={NOW}
+            coverage={{ pages: 36, audited: 18, never: 18, stale: 0 }}
+          />
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(items()[1]).toBe('18 of 36 pages audited');
+  });
+
   it("says within a day while a run's turn has started without it, not today", () => {
     // Day 21's turn lasts until day 28, and it hasn't run (turned on after the sweep).
     render(overview(), quota(auto({ runs: runs((day) => day < 21) })));
