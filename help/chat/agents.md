@@ -8,7 +8,7 @@ updated: 2026-11-02
 last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json, web/src/config/dashboard.ts, web/src/lib/chat/agent-rules.ts, web/src/lib/chat/agent-form.ts, web/src/lib/chat/agent-triggers.ts, web/src/lib/chat/agent-driver.ts, web/src/lib/chat/agent-skills.ts, web/src/lib/chat/agent-connections.ts, web/src/lib/chat/agents/catalog.ts, web/src/lib/content/page-types.ts, web/src/lib/menu-access.ts, web/src/lib/chat/agent-go-live.ts, web/src/lib/chat/precedence.ts]
 ---
 An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, or when someone clicks **Run now**. **Agent Center** offers ready-to-use agents and lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses.
