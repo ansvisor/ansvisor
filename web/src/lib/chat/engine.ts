@@ -2251,10 +2251,14 @@ const cardText = (text: string, max: number) => {
  * targets, as they'll be frozen (CHAT-09 item 18). Nothing when it can't be
  * read: the card still shows its target.
  */
-async function cardDetailsOf(tool: ChatTool, input: Record<string, unknown>) {
+async function cardDetailsOf(
+  tool: ChatTool,
+  input: Record<string, unknown>,
+  organizationId: string,
+) {
   if (!tool.cardDetails) return {};
   try {
-    const details = await tool.cardDetails(input as never);
+    const details = await tool.cardDetails(input as never, { organizationId });
     const items = (details.items ?? []).slice(0, 8).map((item) => ({
       title: cardText(item.title, 200),
       ...(item.detail ? { detail: cardText(item.detail, 300) } : {}),
@@ -2316,11 +2320,12 @@ async function cardTarget(
   tool: ChatTool,
   input: Record<string, unknown>,
   brandId: string | null,
+  organizationId: string,
 ) {
   let own: string | null = null;
   if (tool.target) {
     try {
-      own = await tool.target(input as never);
+      own = await tool.target(input as never, { organizationId });
     } catch (err) {
       console.error('[chat/engine] could not name a card’s target:', err);
     }
@@ -2357,7 +2362,7 @@ async function openCard(
 ): Promise<CallOutcome> {
   const n = ++rc.progress.steps;
   const execute = decision.kind === 'click';
-  const target = await cardTarget(rc.brand, tool, input, facts.brandId);
+  const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor.organizationId);
   const row = await insertStep(rc.run.id, {
     position: n,
     kind: execute ? 'execute' : 'write',
@@ -2383,7 +2388,7 @@ async function openCard(
     canDontAskAgain: offerDontAskAgain,
     // A WRITE whose change can't be undone once made (§9) says so on its card.
     ...notes,
-    ...(await cardDetailsOf(tool, input)),
+    ...(await cardDetailsOf(tool, input, rc.actor.organizationId)),
   });
   return {
     kind: 'pause',
@@ -3203,7 +3208,7 @@ async function writeCall(
   approval: Exclude<ActivityApproval, { kind: 'run' }>,
   cardStepId: string | null,
 ): Promise<CallOutcome> {
-  const target = await cardTarget(rc.brand, tool, input, facts.brandId);
+  const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor.organizationId);
   let row;
   if (cardStepId) {
     row = await updateStep(cardStepId, { status: 'running' });
@@ -3248,7 +3253,7 @@ async function writeCall(
       digest,
       canDontAskAgain: false,
       ...cardNotes(tool),
-      ...(await cardDetailsOf(tool, input)),
+      ...(await cardDetailsOf(tool, input, rc.actor.organizationId)),
     });
     return {
       kind: 'pause',
@@ -3740,11 +3745,11 @@ export async function prepareResume(
       sink.emit('confirm.required', {
         n: pending.n,
         action: toolWords(tool, 'name'),
-        target: await cardTarget(brand, tool, input, brand?.id ?? null),
+        target: await cardTarget(brand, tool, input, brand?.id ?? null, actor.organizationId),
         digest: pending.digest,
         canDontAskAgain: pending.offerDontAskAgain,
         ...cardNotes(tool),
-        ...(await cardDetailsOf(tool, input)),
+        ...(await cardDetailsOf(tool, input, actor.organizationId)),
       });
       await sink.flush();
       publishRunEnd(runId);

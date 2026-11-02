@@ -86,14 +86,16 @@ export const MEMORY_TOOLS = [
       return checked.ok ? null : said(checked.refusal);
     },
     run: (_ctx, input) => saveChatMemory(input),
-    target: async (input) => {
+    target: async (input, { organizationId }) => {
       const brandName =
-        input.scope === 'brand' && input.brand_id ? await brandNameOf(input.brand_id) : null;
+        input.scope === 'brand' && input.brand_id
+          ? await brandNameOf(organizationId, input.brand_id)
+          : null;
       return `“${input.text}” · ${scopeWords(input.scope, brandName)}`;
     },
-    cardDetails: async (input) => {
+    cardDetails: async (input, { organizationId }) => {
       if (!input.replaces) return {};
-      const old = await readMemoryLine(null, input.replaces);
+      const old = await readMemoryLine(organizationId, input.replaces);
       return old ? { items: [{ title: input.text, detail: replacesWords(old.text) }] } : {};
     },
     fixture: { input: { scope: 'user', text: 'Write blog posts in US English' } },
@@ -132,9 +134,9 @@ export const MEMORY_TOOLS = [
       return null;
     },
     run: (_ctx, input) => forgetChatMemory(input),
-    target: async (input) => {
-      // Checked first (precheck): a line of the person's workspace.
-      const line = await readMemoryLine(null, input.memory_id);
+    target: async (input, { organizationId }) => {
+      // Checked first (precheck): a line the person sees.
+      const line = await readMemoryLine(organizationId, input.memory_id);
       return line ? `“${line.text}” · ${scopeWords(line.scope, line.brandName)}` : null;
     },
     fixture: { input: { memory_id: FIXTURE_IDS.item } },

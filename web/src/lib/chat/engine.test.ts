@@ -5525,7 +5525,8 @@ describe('memory (W3-11, CHAT-14 items 2, 14–17, 24)', () => {
         kind: 'read',
         status: 'done',
         label: 'Used memory',
-        detail: 'Write in US English · Say Northwind CRM · House style: AP',
+        // Shared chats show steps to every member: the lines stay staff-only.
+        detail: null,
         row_count: 3,
         scope_json: { subject: 'Memory', unit: 'items' },
       }),

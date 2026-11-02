@@ -488,10 +488,10 @@ describe('the Chat tool registry', () => {
         { title: 'Pitch G2 a review', type: 'outreach', where: 'g2.com', done_when: 'Sent' },
       ],
     });
-    expect(send.target!(input)).toBe(
+    expect(send.target!(input, { organizationId: 'org-1' })).toBe(
       '“Win back pricing citations on /pricing” · Recover · 2 tasks',
     );
-    await expect(send.cardDetails!(input)).resolves.toEqual({
+    await expect(send.cardDetails!(input, { organizationId: 'org-1' })).resolves.toEqual({
       items: [
         {
           title: 'Add a FAQ to /pricing',

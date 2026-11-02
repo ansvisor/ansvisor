@@ -2,9 +2,13 @@ import { createTranslator } from 'next-intl';
 import { z } from 'zod';
 import messages from '../../../../messages/en.json';
 import type { TeamRole } from '@/components/providers/role-provider';
-import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import {
+  MEMORY_REQUEST_KIND,
+  MEMORY_REQUEST_TOOL_KEY,
+  sendAccessRequest,
+} from '../access-request-store';
 import type { StepWrite } from '../engine-store';
 import { chatAgenticEnabled } from '../flag';
 import { firstNameOf } from '../home';
@@ -149,6 +153,7 @@ export type MemoryRefusalCode =
   | 'undo_expired'
   | 'read_only'
   | 'request_limit'
+  | 'requester'
   | 'failed';
 
 const REFUSAL_STATUS: Record<MemoryRefusalCode, number> = {
@@ -167,6 +172,7 @@ const REFUSAL_STATUS: Record<MemoryRefusalCode, number> = {
   undo_expired: 409,
   read_only: 402,
   request_limit: 429,
+  requester: 403,
   failed: 500,
 };
 
@@ -456,8 +462,9 @@ export const MEMORY_STEP_TOOL = 'read_memory';
 
 /**
  * The "Used memory" step (CHAT-03, CHAT-14 item 17): a read of its lines,
- * counted in items ("Memory · 3 items"), its detail the lines themselves;
- * the ids for staff only. `subject` is its Data used chip.
+ * counted in items ("Memory · 3 items"). The lines themselves stay in its
+ * debug, for staff only: a step is seen by everyone a chat is shared with,
+ * and a Me line is its person's alone. `subject` is its Data used chip.
  */
 export function memoryStep(lines: readonly MemoryLine[]): {
   subject: string;
@@ -470,11 +477,13 @@ export function memoryStep(lines: readonly MemoryLine[]): {
       kind: 'read',
       status: 'done',
       label: stepT('usedMemory'),
-      detail: lines.map((line) => line.text).join(' · '),
+      detail: null,
       scope: { subject, unit: 'items' },
       rowCount: lines.length,
       tool: MEMORY_STEP_TOOL,
-      debug: { memory: lines.map((line) => ({ id: line.id, scope: line.scope })) },
+      debug: {
+        memory: lines.map((line) => ({ id: line.id, scope: line.scope, text: line.text })),
+      },
     },
   };
 }
@@ -597,12 +606,14 @@ interface CheckedSave {
  * memory may keep, the person may change the scope, a Brand line's brand
  * is theirs, what it replaces is a line of the same scope, and the scope
  * has room. Also what save_memory's card checks first (its precheck). With
- * "Use memory" off Chat saves nothing (item 24); the Memory page still does.
+ * "Use memory" off Chat saves nothing (item 24); the Memory page still does,
+ * and so does an Admin's approval of a Manager's line (`approval`): the
+ * Admin's own switch is about their chats, not the Manager's line.
  */
 export async function checkMemorySave(
   viewer: MemoryViewer,
   raw: unknown,
-  source: 'chat' | 'page' = 'chat',
+  source: 'chat' | 'page' | 'approval' = 'chat',
 ): Promise<{ ok: true; value: CheckedSave } | { ok: false; refusal: MemoryRefusal }> {
   if (!viewer.plan.writable) return memoryRefusal('read_only');
   const parsed = saveMemoryInput.safeParse(raw);
@@ -640,25 +651,26 @@ export async function checkMemorySave(
  * replaces gets the new words, else a new line is added. A Manager's line
  * for the workspace goes to the Admins as a request instead (item 25),
  * which an Admin's approval saves (applyMemoryRequest). `createdBy`: whose
- * line it is, when an Admin approves another's.
+ * line it is, when an Admin approves another's (`approval`).
  */
 export async function saveMemory(
   viewer: MemoryViewer,
   raw: unknown,
   source: 'chat' | 'page',
-  { createdBy = viewer.userId }: { createdBy?: string } = {},
+  { createdBy = viewer.userId, approval = false }: { createdBy?: string; approval?: boolean } = {},
 ): Promise<MemoryResult<SavedMemory>> {
-  const checked = await checkMemorySave(viewer, raw, source);
+  const checked = await checkMemorySave(viewer, raw, approval ? 'approval' : source);
   if (!checked.ok) return checked;
   const { scope, text, key, replaced, right } = checked.value;
 
   if (right === 'request') {
-    const sent = await requestAccess({
+    // The server's own request: the browser's can't carry a drafted line (requestAccess).
+    const sent = await sendAccessRequest(viewer, {
       asked: memoryT('request.asked', { text }),
       ruleKind: 'role',
       ruleDetail: memoryT('request.rule'),
-      toolKey: 'memorySave',
-      draftedChange: { kind: 'save_memory', scope, text },
+      toolKey: MEMORY_REQUEST_TOOL_KEY,
+      draftedChange: { kind: MEMORY_REQUEST_KIND, scope, text },
     });
     if (sent.ok || sent.reason === 'already_today') return { ok: true, value: { requested: true } };
     if (sent.reason === 'too_many' || sent.reason === 'daily_limit') {
@@ -705,20 +717,34 @@ export async function saveMemory(
 /**
  * An Admin's approval of a Manager's request for a Workspace line (item
  * 25, chat_access_requests' drafted change): saved as the Admin, checked
- * again now, in the Manager's name. Null when the change isn't one.
+ * again now, in the Manager's name. Only the memory store's own request
+ * (its tool key) from someone who is still a Manager of the workspace;
+ * null when the request isn't one.
  */
 export async function applyMemoryRequest(
   admin: { userId: string; organizationId: string },
-  requesterId: string,
-  change: unknown,
+  request: { requester_id: string; tool_key: string | null; drafted_change: unknown },
 ): Promise<MemoryResult<SavedMemory> | null> {
-  const drafted = change as { kind?: unknown; scope?: unknown; text?: unknown } | null;
-  if (drafted?.kind !== 'save_memory' || drafted.scope !== 'workspace') return null;
-  if (typeof drafted.text !== 'string') return memoryRefusal('invalid');
-  const viewer = await readMemoryViewer(admin);
+  const drafted = request.drafted_change as {
+    kind?: unknown;
+    scope?: unknown;
+    text?: unknown;
+  } | null;
+  if (request.tool_key !== MEMORY_REQUEST_TOOL_KEY || drafted?.kind !== MEMORY_REQUEST_KIND) {
+    return null;
+  }
+  if (drafted.scope !== 'workspace' || typeof drafted.text !== 'string') {
+    return memoryRefusal('invalid');
+  }
+  const [viewer, requester] = await Promise.all([
+    readMemoryViewer(admin),
+    readMemoryViewer({ userId: request.requester_id, organizationId: admin.organizationId }),
+  ]);
   if (!viewer || viewer.role !== 'admin') return memoryRefusal('role_workspace');
+  if (!requester || requester.role !== 'manager') return memoryRefusal('requester');
   return saveMemory(viewer, { scope: 'workspace', text: drafted.text }, 'chat', {
-    createdBy: requesterId,
+    createdBy: request.requester_id,
+    approval: true,
   });
 }
 
@@ -916,36 +942,33 @@ export async function visibleMemoryLine(
 /** "Replaces: {old}", under a save's card (item 7). */
 export const replacesWords = (text: string) => memoryT('card.replaces', { text });
 
-/** A brand's name, for a card's words; null when there's none. */
-export async function brandNameOf(brandId: string): Promise<string | null> {
+/** A brand of the workspace's name, for a card's words; null when there's none. */
+export async function brandNameOf(organizationId: string, brandId: string): Promise<string | null> {
   const { data, error } = await supabaseAdmin
     .from('brands')
     .select('name')
     .eq('id', brandId)
+    .eq('organization_id', organizationId)
     .maybeSingle();
   if (error) throw new Error(`Could not read the brand: ${error.message}`);
   return (data as { name: string } | null)?.name ?? null;
 }
 
-/**
- * A live line by its id, for a card's words: of the workspace named, or,
- * with null, of whichever (a card's target, after its precheck found it in
- * the person's workspace). Null when there's none.
- */
+/** A live line of the workspace by its id, for a card's words; null when there's none. */
 export async function readMemoryLine(
-  organizationId: string | null,
+  organizationId: string,
   id: string,
 ): Promise<{ id: string; scope: MemoryScope; text: string; brandName: string | null } | null> {
-  let query = supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('chat_memory_items')
     .select('id, scope, text, brand_id')
     .eq('id', id)
-    .is('deleted_at', null);
-  if (organizationId) query = query.eq('organization_id', organizationId);
-  const { data, error } = await query.maybeSingle();
+    .eq('organization_id', organizationId)
+    .is('deleted_at', null)
+    .maybeSingle();
   if (error) throw new Error(`Could not read the memory: ${error.message}`);
   const row = data as { id: string; scope: string; text: string; brand_id: string | null } | null;
   if (!row) return null;
-  const brandName = row.brand_id ? await brandNameOf(row.brand_id) : null;
+  const brandName = row.brand_id ? await brandNameOf(organizationId, row.brand_id) : null;
   return { id: row.id, scope: scopeOf(row), text: row.text, brandName };
 }
