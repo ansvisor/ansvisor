@@ -12,6 +12,7 @@ import { chatAgenticEnabled } from '../flag';
 import { planFactsFromOrgRow, type PlanFacts } from '../plan-facts';
 import { parseTeamRole } from '../precedence';
 import { SHORTCUT_IDS } from '../shortcuts';
+import { RESERVED_SKILL_NAMES } from './reserved-names';
 import { MAX_BYTES, MAX_DESCRIPTION, MAX_NAME, checkSkillFile } from './format';
 import { SKILL_LIBRARY, enabledSkills } from './library';
 
@@ -90,11 +91,8 @@ export function skillPlanLimit(plan: PlanFacts): number | null {
 /** The library's names: a workspace skill never takes one (its /command would be two). */
 const LIBRARY_NAMES: ReadonlySet<string> = new Set(SKILL_LIBRARY.map((skill) => skill.name));
 
-/**
- * The names a workspace skill never takes: the library's, and the / menu's
- * shortcuts' (W2-09), each a hidden library skill under its /command.
- */
-const RESERVED_NAMES: ReadonlySet<string> = new Set([...LIBRARY_NAMES, ...SHORTCUT_IDS]);
+/** The names a workspace skill never takes (reserved-names.ts: the library's and the shortcuts'). */
+const RESERVED_NAMES = RESERVED_SKILL_NAMES;
 
 // ─── Who may do what ────────────────────────────────────────────────────────
 
