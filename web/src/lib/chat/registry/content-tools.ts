@@ -18,6 +18,9 @@ import { draftPage, draftTitle, pageChanges } from './targets';
  * are Admins' and Managers' (DECISIONS T: an Analyst's Chat only creates
  * drafts; the API sends pages for Admins and Managers). Going live in a CMS
  * (publish_cms) has no row: no CMS the app sends to is published from it yet.
+ * The send is the one row an agent an Admin allowed may take on its own
+ * (AUTONOMOUS-GO-LIVE §4 row 1, its goLive): the engine sends it through
+ * the API's internal route as the run's person, after its checks.
  */
 
 const ITEM = FIXTURE_IDS.item;
@@ -79,8 +82,9 @@ export const CONTENT_TOOLS = [
     // It leaves Ansvisor and has no Undo (a CMS item can't be taken back from here; an
     // item updated in Framer or Webflow goes live with the site's next publish): an
     // EXECUTE, so only the person's click sends it, in every mode, Full auto included,
-    // and no Admin "Always" lifts it. In the publishing group: an Admin's "Managers can't
-    // go live" for publishing stops a Manager's send too.
+    // and no Admin "Always" lifts it; only an agent an Admin allowed sends it on its own
+    // (goLive). In the publishing group: an Admin's "Managers can't go live" for
+    // publishing stops a Manager's send too.
     class: 'execute',
     executeGroup: 'publishing',
     area: 'content',
@@ -100,6 +104,7 @@ export const CONTENT_TOOLS = [
       destination: z.enum(CHAT_CMS_TARGETS).describe('The CMS the brand connected.'),
     }),
     run: (_ctx, input) => sendDraftToCms(input.draft_id, input.destination),
+    goLive: (input) => ({ kind: 'cms_draft', draftId: input.draft_id, target: input.destination }),
     target: async (input) => {
       const title = await draftTitle(input.draft_id);
       return [title ? `“${title}”` : null, `→ ${CMS_NAMES[input.destination]}`]

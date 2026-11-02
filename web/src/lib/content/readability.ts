@@ -280,22 +280,26 @@ export function syllablesOf(word: string, language: string): number {
  * English's reading level, as Site Audit's readability signal reads it
  * (server/src/lib/audit/signals/readability.js; rubric.json: 50–70 for
  * general audiences), so a page scores the same in both: full points inside
- * the pass band, half in the warn band, none past it. Keep the two in step.
+ * the pass band, half from 30 up, none under it. Over 70 is half too: a
+ * plain page is never failed for reading easily. Keep the two in step.
  */
-const FLESCH_BAND = { pass: [50, 70], warn: [30, 80] } as const;
+const FLESCH_BAND = { pass: [50, 70], warnFrom: 30 } as const;
 
 /** Points for a Flesch score in its band, as it shows (rounded), and which side of it the score is on. */
 function fleschPoints(score: number, max: number): { points: number; count: number } {
   const shown = Math.round(score);
   const [passFrom, passTo] = FLESCH_BAND.pass;
-  const [warnFrom, warnTo] = FLESCH_BAND.warn;
   // Under the band (-1: harder than most readers want), in it (0), over it (1: simpler).
   const count = shown < passFrom ? -1 : shown > passTo ? 1 : 0;
   if (count === 0) return { points: max, count };
-  return { points: shown >= warnFrom && shown <= warnTo ? max / 2 : 0, count };
+  return { points: shown >= FLESCH_BAND.warnFrom ? max / 2 : 0, count };
 }
 
-/** The formula each language's reading level is read with, and the score that reads as easy. */
+/**
+ * The formula each language's reading level is read with, and the score that
+ * reads as easy; Site Audit reads a page in its language by the same table
+ * (server signals/readability.js FORMULAS). Keep the two in step.
+ */
 const FORMULAS: Record<string, { formula: ReadingFormula; target: number }> = {
   // Read by its band (FLESCH_BAND); the target is the band's start.
   en: { formula: 'flesch', target: FLESCH_BAND.pass[0] },

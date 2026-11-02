@@ -377,6 +377,15 @@ describe('keptPageRead', () => {
 });
 
 describe('readPage', () => {
+  it('holds the call on the meter it is given, for an agent run (AUTONOMOUS-GO-LIVE §6.2)', async () => {
+    const meter = { charge: vi.fn(), release: vi.fn(), keep: vi.fn() };
+    const reserve = vi.fn(async () => meter);
+    await read({ reserve });
+    expect(reserve).toHaveBeenCalledWith({ modelId: expect.any(String), holdUsd: PAGE_HOLD_USD });
+    expect(reserves).toEqual([]);
+    expect(meter.charge).toHaveBeenCalledWith({ inputTokens: 900, outputTokens: 80 });
+  });
+
   it('reads the page in one call on the budget as quality, keeps it by its hash, and maps it to the page', async () => {
     const result = await read();
     expect(generateObject).toHaveBeenCalledTimes(1);
