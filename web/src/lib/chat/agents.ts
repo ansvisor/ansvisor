@@ -1,6 +1,14 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { PLANS } from '@/config/plans';
+import {
+  allowedBrands,
+  brandAccessOf,
+  hasBrandAccess,
+  readAccessProfile,
+  readBrandAccess,
+  type BrandAccess,
+} from '@/lib/brand-access';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
 import { getAiUsageFor } from '@/lib/mcp/account';
 import { DEMO_BRAND } from '@/lib/subscription-guard';
@@ -62,7 +70,6 @@ import { OwnKeyUnreadableError, failingOwnKey, resolveChatModelKey } from './key
 import type { FailingKey, OwnKeyFailure } from './key-health';
 import { planFactsFromOrgRow, type PlanFacts } from './plan-facts';
 import { parseTeamRole, type ChatMode, type ToolDenial } from './precedence';
-import { readBrandAccess } from './precedence-context';
 
 /**
  * Chat's agents (CHAT-21; CHAT-27 §E): the definitions behind Chat ›
@@ -117,12 +124,8 @@ export function agentSettingsOf(row: SettingsRow | null): AgentSettings {
  * fails throws: nothing is decided on missing facts.
  */
 export async function readAgentContext(actor: ChatActor): Promise<AgentContext | null> {
-  const [profile, org, settings, brandAccess] = await Promise.all([
-    supabaseAdmin
-      .from('profiles')
-      .select('role, organization_id')
-      .eq('id', actor.userId)
-      .maybeSingle(),
+  const [profile, org, settings] = await Promise.all([
+    readAccessProfile(actor.userId),
     supabaseAdmin
       .from('organizations')
       .select(ORG_PLAN_COLUMNS)
@@ -135,13 +138,14 @@ export async function readAgentContext(actor: ChatActor): Promise<AgentContext |
       )
       .eq('organization_id', actor.organizationId)
       .maybeSingle(),
-    readBrandAccess(actor.userId, actor.organizationId),
   ]);
-  for (const result of [profile, org, settings]) {
+  for (const result of [org, settings]) {
     if (result.error) throw new Error(`Could not read the agent's facts: ${result.error.message}`);
   }
-  const role = parseTeamRole(profile.data?.role);
-  if (!role || profile.data?.organization_id !== actor.organizationId || !org.data) return null;
+  const role = parseTeamRole(profile?.role);
+  if (!role || profile?.organization_id !== actor.organizationId || !org.data) return null;
+  // The brands they may use now (BRAND-ACCESS): what they see of agents, and where a run goes.
+  const brandAccess = (await brandAccessOf(profile, actor.userId, actor.organizationId)) ?? [];
   return {
     actor,
     viewer: { userId: actor.userId, role, brandAccess },
@@ -492,7 +496,18 @@ function initialsOf(name: string | null | undefined): string | null {
   return letters.join('').toUpperCase();
 }
 
-/** The brands a scope covers among the workspace's: every one for all_brands. */
+/**
+ * A run the person may see: on a brand they can access, or for one whose
+ * brand is gone, with All brands; as chat_agent_runs' policy has it (00424).
+ */
+const runVisible = (run: Pick<RunRow, 'brand_id'>, access: BrandAccess) =>
+  run.brand_id ? hasBrandAccess(access, run.brand_id) : access === 'all';
+
+/**
+ * The brands a scope covers among `brands`: every one for all_brands. Give
+ * it the brands the person may use, so all_brands is all of theirs
+ * (BRAND-ACCESS §5.3).
+ */
 function scopeBrands(scope: AgentScope, brands: readonly Brand[]): Brand[] {
   if (scope.all_brands) return [...brands];
   const ids = new Set(scope.brand_ids ?? []);
@@ -655,13 +670,16 @@ function listItem(
   },
 ): AgentListItem {
   const { row, version } = agent;
+  const access = ctx.viewer.brandAccess;
+  // Only what the person may see: their brands' names, and runs on them (BRAND-ACCESS).
+  const runs = parts.runs.filter((run) => runVisible(run, access));
   const since = parts.now.getTime() - 30 * 86_400_000;
   const outcomes = emptyOutcomes();
-  for (const run of parts.runs) {
+  for (const run of runs) {
     const outcome = AGENT_OUTCOMES.find((o) => o === run.outcome);
     if (outcome && Date.parse(run.queued_at) >= since) outcomes[outcome] += 1;
   }
-  const last = parts.runs[0];
+  const last = runs[0];
   const scope = version?.scope ?? { brand_ids: [] };
   const can = abilitiesOf(ctx, agent);
   return {
@@ -677,7 +695,7 @@ function listItem(
     triggers: parts.triggers.map((t) => triggerView(t, parts.now)),
     scope: {
       allBrands: scope.all_brands === true,
-      brands: scopeBrands(scope, parts.brands).map((b) => b.name),
+      brands: scopeBrands(scope, allowedBrands(access, parts.brands)).map((b) => b.name),
     },
     lastRun: last
       ? { status: last.status, at: last.finished_at ?? last.started_at ?? last.queued_at }
@@ -749,16 +767,19 @@ function runView(
 
 /**
  * Runs as the detail and the Runs tab show them, with their brand, person
- * and chat. A run's chat is given only when the person can open it as the
+ * and chat: the ones on a brand the person may see (runVisible). A run's
+ * chat is given only when the person can open it as the
  * chat page reads chats today (`readChat`): their own, or shared with the
  * team. Anyone else's private chat would open on "This chat isn't
  * available".
  */
 export async function runViews(
   organizationId: string,
-  viewerId: string,
-  runs: RunRow[],
+  viewer: Pick<AgentViewer, 'userId' | 'brandAccess'>,
+  allRuns: RunRow[],
 ): Promise<AgentRunView[]> {
+  const viewerId = viewer.userId;
+  const runs = allRuns.filter((run) => runVisible(run, viewer.brandAccess));
   if (runs.length === 0) return [];
   const [brands, people, chats] = await Promise.all([
     brandsOf(organizationId),
@@ -1015,9 +1036,12 @@ async function detailOf(ctx: AgentContext, agent: LoadedAgent, now: Date): Promi
         }
       : null,
     brands: version
-      ? scopeBrands(version.scope, brands).map((b) => ({ id: b.id, name: b.name }))
+      ? scopeBrands(version.scope, allowedBrands(ctx.viewer.brandAccess, brands)).map((b) => ({
+          id: b.id,
+          name: b.name,
+        }))
       : [],
-    recentRuns: await runViews(org, ctx.actor.userId, runs),
+    recentRuns: await runViews(org, ctx.viewer, runs),
     usagePeriod: usageOf(period, row.id),
     can: abilitiesOf(ctx, agent),
     limits: agentPlanLimits(ctx.plan),
@@ -1032,21 +1056,23 @@ export async function listAgentRuns(
 ): Promise<AgentRunView[] | null> {
   const agent = await visibleAgent(ctx, id);
   if (!agent) return null;
-  return runViews(ctx.actor.organizationId, ctx.actor.userId, await runsOf(agent.row.id, limit));
+  return runViews(ctx.actor.organizationId, ctx.viewer, await runsOf(agent.row.id, limit));
 }
 
 // ─── Checks before a write ───────────────────────────────────────────────────
 
 /**
  * A version's references, checked in the workspace: its brands are the
- * workspace's and none is the demo brand (00380: nothing runs on it), its
- * topics belong to its brands, and the people it tells are members.
+ * workspace's, ones the person saving it may use (BRAND-ACCESS: another is
+ * as not found), and none is the demo brand (00380: nothing runs on it),
+ * its topics belong to its brands, and the people it tells are members.
  */
 async function referencesRefusal(
-  organizationId: string,
+  ctx: AgentContext,
   version: Pick<AgentVersionData, 'scope' | 'notify_user_ids'>,
 ): Promise<Refused | null> {
-  const brands = await brandsOf(organizationId);
+  const organizationId = ctx.actor.organizationId;
+  const brands = allowedBrands(ctx.viewer.brandAccess, await brandsOf(organizationId));
   const scope = version.scope;
   const byId = new Map(brands.map((b) => [b.id, b]));
   for (const id of scope.brand_ids ?? []) {
@@ -1169,12 +1195,17 @@ async function aiLimitReached(ctx: AgentContext): Promise<boolean> {
   }
 }
 
-/** The brands a run of the agent may use now: its scope's, in the workspace, never the demo. */
+/**
+ * The brands a run of the agent may use now: its scope's, in the workspace,
+ * that the person it acts as may use (`access`: all_brands is all of
+ * theirs, BRAND-ACCESS §5.3), never the demo.
+ */
 export async function runnableBrands(
   organizationId: string,
   scope: AgentScope,
+  access: BrandAccess,
 ): Promise<{ id: string; name: string }[]> {
-  return scopeBrands(scope, await brandsOf(organizationId))
+  return scopeBrands(scope, allowedBrands(access, await brandsOf(organizationId)))
     .filter((b) => !b.is_demo)
     .map((b) => ({ id: b.id, name: b.name }));
 }
@@ -1183,8 +1214,9 @@ export async function runnableBrands(
  * Whether the agent may run with these settings now (§D item 21: on
  * Activate, on Resume and before a run): the plan and Settings › Chat allow
  * its mode and engines for the person it acts as, a brand of its scope is
- * there, and the AI limit isn't used up. Its Required connections are
- * checked for the run's brand before the run (agent-driver.ts,
+ * there that they may use (`access`, theirs: the person in `ctx` by
+ * default, the owner on Resume), and the AI limit isn't used up. Its Required
+ * connections are checked for the run's brand before the run (agent-driver.ts,
  * agent-connections.ts), and for each brand of its scope on Resume; its
  * skills (CHAT-13) once their registry exists.
  */
@@ -1193,6 +1225,7 @@ export async function runChecks(
   agent: LoadedAgent,
   actingRole: AgentViewer['role'],
   triggers: readonly AgentTriggerInput[],
+  access: BrandAccess = ctx.viewer.brandAccess,
 ): Promise<Refused | null> {
   const version = agent.version;
   if (!version) return refused('failed');
@@ -1201,7 +1234,7 @@ export async function runChecks(
     enginesDenial(ctx.plan, enginesNamed(version.scope, triggers)),
   ]);
   if (denial) return denial;
-  if ((await runnableBrands(ctx.actor.organizationId, version.scope)).length === 0) {
+  if ((await runnableBrands(ctx.actor.organizationId, version.scope, access)).length === 0) {
     return refused('no_brand');
   }
   // The workspace's own key is marked failing (AGENT-OWN-KEY §5.2 item 4): nothing is queued.
@@ -1335,9 +1368,7 @@ export async function createAgent(
     enginesDenial(ctx.plan, enginesNamed(version.scope, input.triggers)),
   ]);
   if (denial) return denial;
-  const problem =
-    triggersRefusal(input.triggers, now) ??
-    (await referencesRefusal(ctx.actor.organizationId, version));
+  const problem = triggersRefusal(input.triggers, now) ?? (await referencesRefusal(ctx, version));
   if (problem) return problem;
   const org = ctx.actor.organizationId;
   // A name the person didn't type: §O against every agent, the ones they can't see included.
@@ -1456,9 +1487,7 @@ export async function updateAgent(
   if (denial) return denial;
   const problem =
     triggersRefusal(changedTriggers, now) ??
-    (next && (patch.scope || patch.notifyUserIds)
-      ? await referencesRefusal(ctx.actor.organizationId, next)
-      : null);
+    (next && (patch.scope || patch.notifyUserIds) ? await referencesRefusal(ctx, next) : null);
   if (problem) return problem;
   const renamed = patch.name !== undefined && patch.name !== row.name;
   if (renamed) {
@@ -1640,6 +1669,12 @@ export async function changeAgentState(
     // Triggered runs act as the owner (Addendum 2 H): Activate makes the person the owner.
     const ownerRole = action === 'activate' ? ctx.viewer.role : await ownerRoleOf(org, row);
     if (!ownerRole) return refused('owner_role');
+    // Its brands are the owner's too (BRAND-ACCESS §5.3): an Admin resuming someone else's
+    // agent is held to the brands its owner may use.
+    const ownerAccess =
+      action === 'resume' && row.owner_id && row.owner_id !== ctx.actor.userId
+        ? ((await readBrandAccess(row.owner_id, org)) ?? [])
+        : ctx.viewer.brandAccess;
     const limit = agentPlanLimits(ctx.plan).activeAgents;
     if (limit !== null && (await activeCount(org, row.id)) >= limit) {
       return refused('agent_limit', { limit });
@@ -1649,12 +1684,13 @@ export async function changeAgentState(
       agent,
       ownerRole,
       triggerInputs(await triggersOf([row.id])),
+      ownerAccess,
     );
     if (failing) return failing;
     // A brand without a Required connection would pause it again on its next run
     // (agent-driver.ts): Resume refuses, naming both, as Run now does (§H item 42).
     if (action === 'resume' && agent.version) {
-      for (const brand of await runnableBrands(org, agent.version.scope)) {
+      for (const brand of await runnableBrands(org, agent.version.scope, ownerAccess)) {
         const missing = await missingRequiredConnection(agent.version, brand.id);
         if (missing) {
           return refused('connection_missing', {
@@ -1829,7 +1865,7 @@ export async function duplicateAgent(
     enginesDenial(ctx.plan, enginesNamed(agent.version.scope, triggerInputs(sourceTriggers))),
   ]);
   if (denial) return denial;
-  const problem = await referencesRefusal(org, agent.version);
+  const problem = await referencesRefusal(ctx, agent.version);
   if (problem) return problem;
   const { data: names, error: namesError } = await supabaseAdmin
     .from('chat_agents')
