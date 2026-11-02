@@ -157,7 +157,10 @@ const fakes = vi.hoisted(() => ({
   markWorking: vi.fn(async () => ({ cleared: true, resumed: 0 })),
   openPage: vi.fn(),
   explain: vi.fn(),
+  readModelMenu: vi.fn(async () => ({ selected: null })),
 }));
+// The model menu's catalog check (W4-03), without the API server.
+vi.mock('./model-menu', () => ({ readModelMenu: fakes.readModelMenu }));
 // fetch_page as it is, opening pages through a fake of the API's internal route.
 vi.mock('@/lib/mcp/pages', () => ({ openPageFor: fakes.openPage }));
 // explain_change as it is, reading through a fake of its data layer.
@@ -5555,5 +5558,104 @@ describe('brand access (BRAND-ACCESS PR 9)', () => {
     await engine.driveRun(ANALYST, started.runId);
     expect(fakes.readRun).not.toHaveBeenCalled();
     expect(touchedOf(started.conversationId)).toEqual([]);
+  });
+});
+
+describe('the model menu’s pick (W4-02)', () => {
+  it('keeps the model and effort picked on the run, and Auto at Normal in the free trial', async () => {
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Which pages does Perplexity cite?',
+      brandId: BRAND,
+      model: 'anthropic/claude-opus-5.5',
+      effort: 'high',
+    });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    expect(runRow(started.runId)).toMatchObject({
+      model: 'anthropic/claude-opus-5.5',
+      effort: 'high',
+    });
+
+    // No pick: Auto at Normal, as before.
+    const plain = await engine.startChatRun(ADMIN, { message: 'And Gemini?', brandId: BRAND });
+    if (!plain.ok) throw new Error('not started');
+    expect(runRow(plain.runId)).toMatchObject({ model: 'auto', effort: 'normal' });
+
+    // In the free trial the pick is set aside (Wave 4 decision 2 B).
+    db.tables.organizations[0].subscription_status = 'trialing';
+    const trial = await engine.startChatRun(ADMIN, {
+      message: 'And ChatGPT?',
+      brandId: BRAND,
+      model: 'anthropic/claude-opus-5.5',
+      effort: 'max',
+    });
+    if (!trial.ok) throw new Error('not started');
+    expect(runRow(trial.runId)).toMatchObject({ model: 'auto', effort: 'normal' });
+  });
+
+  it('refuses a model the menu doesn’t offer', async () => {
+    const refused = await engine.startChatRun(ADMIN, {
+      message: 'Hi',
+      brandId: BRAND,
+      model: 'openai/gpt-6.1-sol',
+    });
+    expect(refused).toMatchObject({ ok: false, status: 400, code: 'invalid' });
+    expect(db.tables.chat_runs).toHaveLength(0);
+  });
+});
+
+describe('the run’s model (W4-03)', () => {
+  it('runs the model and effort it was started with, checked once against the catalog', async () => {
+    useModels([READY], [text('Perplexity cites the pricing page.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Which pages does Perplexity cite?',
+      brandId: BRAND,
+      model: 'anthropic/claude-opus-5.5',
+      effort: 'max',
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    expect(fakes.resolveModels).toHaveBeenCalledWith(ORG, {
+      model: 'anthropic/claude-opus-5.5',
+      effort: 'max',
+    });
+    expect(fakes.readModelMenu).toHaveBeenCalledExactlyOnceWith({
+      selected: 'anthropic/claude-opus-5.5',
+    });
+    expect(stepsOf(started.runId).map((s) => s.label)).not.toContain('Ran on Auto');
+  });
+
+  it('takes Auto for a model the catalog dropped, and says so in one step', async () => {
+    fakes.readModelMenu.mockResolvedValueOnce({
+      selected: { id: 'anthropic/claude-opus-5.5', removed: true },
+    } as never);
+    useModels([READY], [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Which pages does Perplexity cite?',
+      brandId: BRAND,
+      model: 'anthropic/claude-opus-5.5',
+      effort: 'high',
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    expect(fakes.resolveModels).toHaveBeenCalledWith(ORG, { model: 'auto', effort: 'high' });
+    const dropped = stepsOf(started.runId).filter((s) => s.label === 'Ran on Auto');
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]).toMatchObject({
+      kind: 'check',
+      status: 'done',
+      detail: 'The model this chat used is no longer available',
+    });
+  });
+
+  it('runs an agent’s saved model as the plan allows, Auto in the free trial', async () => {
+    useModels([READY], [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, { message: 'Hi', brandId: BRAND });
+    if (!started.ok) throw new Error('not started');
+    // As agent-driver writes it: the agent's model on the run's row.
+    Object.assign(runRow(started.runId), { model: 'anthropic/claude-haiku-5.5', effort: 'high' });
+    db.tables.organizations[0].subscription_status = 'trialing';
+    await engine.driveRun(ADMIN, started.runId);
+    expect(fakes.resolveModels).toHaveBeenCalledWith(ORG, { model: 'auto', effort: 'normal' });
+    expect(fakes.readModelMenu).not.toHaveBeenCalled();
   });
 });

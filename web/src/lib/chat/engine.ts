@@ -183,6 +183,17 @@ import {
   type LibrarySkill,
 } from './skills/library';
 import { MAX_UPLOADS } from './uploads';
+import {
+  AUTO_CHOICE,
+  AUTO_MODEL,
+  CHAT_EFFORTS,
+  isChatModelChoice,
+  modelChoiceOpen,
+  runChoiceOf,
+  type ChatModelChoice as RunModelChoice,
+} from './models';
+import { readModelMenu } from './model-menu';
+import type { PlanFacts } from './plan-facts';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -394,6 +405,18 @@ export const startRunInput = z.object({
    * item 18): a run of the same chat, read on the server, never trusted.
    */
   fromRunId: z.guid().optional(),
+  /**
+   * The model and effort picked in the composer's model menu (CHAT-16,
+   * W4-02): Auto or an offered model (lib/chat/models.ts). Checked again
+   * against the plan as the run starts (runChoiceOf).
+   */
+  model: z
+    .string()
+    .trim()
+    .max(200)
+    .refine((value) => isChatModelChoice(value))
+    .optional(),
+  effort: z.enum(CHAT_EFFORTS).optional(),
 });
 
 /** What a message was scoped to: its page's chips and its @ references (chat_messages.context_json). */
@@ -696,9 +719,17 @@ export async function startChatRun(
     { conversation_id: conversationId, role: 'assistant', content_md: '', timezone },
     'make the answer',
   );
+  // The model menu's pick, when the plan lets the person choose (W4-02).
+  const choice = runChoiceOf(input, modelChoiceOpen(ctx.plan));
   const runId = await insertRow(
     'chat_runs',
-    { message_id: answerId, conversation_id: conversationId, status: 'queued' },
+    {
+      message_id: answerId,
+      conversation_id: conversationId,
+      status: 'queued',
+      model: choice.model,
+      effort: choice.effort,
+    },
     'make the run',
   );
   const progress: Progress = {
@@ -743,7 +774,15 @@ const STOP_POLL_MS = 1_500;
 const READ_TIMEOUT_MS = 20_000;
 const READ_RETRY_MS = 2_000;
 
-type Progress = RunProgress & { question?: string; scope?: MessageScope };
+type Progress = RunProgress & {
+  question?: string;
+  scope?: MessageScope;
+  /** The picked model was checked against the catalog once (W4-03). */
+  modelChecked?: boolean;
+  /** The catalog dropped the picked model: the run takes Auto, and says so once. */
+  modelDropped?: boolean;
+  modelNoted?: boolean;
+};
 
 interface RunContext {
   actor: ChatActor;
@@ -942,9 +981,11 @@ async function openContext(
     mode: run.mode,
     surface: 'chat',
   });
+  // The menu's pick, checked again against the plan as it is now (W4-03).
+  const choice = ctx ? await runModelChoice(run, progress, ctx.plan) : AUTO_CHOICE;
   let models: ChatModels | null = null;
   try {
-    models = ctx ? await resolveChatModels(actor.organizationId) : null;
+    models = ctx ? await resolveChatModels(actor.organizationId, choice) : null;
   } catch (err) {
     if (!(err instanceof OwnKeyUnreadableError)) throw err;
     // Marked failing where it was found (key.ts); the run stops on it, never on Ansvisor's key.
@@ -968,10 +1009,11 @@ async function openContext(
     brandIsDemo: brand ? await readBrandIsDemo(brand.id) : false,
   };
   const { offered, refused } = engineTools(ctx, scope);
-  const budget = readBudget(run.effort);
+  const budget = readBudget(choice.effort);
   const history = await readHistory(run, budget.historyChars);
   // One model does both on a single-model key: the run writes from the start.
   if (models.phases === 'single') progress.phase = 'write';
+  if (progress.modelDropped && !progress.modelNoted) await modelDroppedStep(run, progress, sink);
   return {
     actor,
     run,
@@ -995,6 +1037,46 @@ async function openContext(
     sessionUserId,
     skills: runSkills(actor.organizationId, progress, history.plan),
   };
+}
+
+/**
+ * The model and effort a run takes (W4-03): what it was started with, as
+ * the plan allows it now (the free trial runs Auto at Normal, runChoiceOf);
+ * a model the catalog no longer lists takes Auto, checked once a run (the
+ * API server's price sync, lib/chat/model-menu.ts). A check that can't be
+ * read keeps the model: the call tells.
+ */
+async function runModelChoice(
+  run: LoadedRun,
+  progress: Progress,
+  plan: PlanFacts,
+): Promise<RunModelChoice> {
+  const choice = runChoiceOf({ model: run.model, effort: run.effort }, modelChoiceOpen(plan));
+  if (choice.model === AUTO_MODEL) return choice;
+  if (progress.modelDropped) return { ...choice, model: AUTO_MODEL };
+  if (progress.modelChecked) return choice;
+  progress.modelChecked = true;
+  const menu = await readModelMenu({ selected: choice.model });
+  if (!menu.selected?.removed) return choice;
+  progress.modelDropped = true;
+  return { ...choice, model: AUTO_MODEL };
+}
+
+/** The one line a run says when its model was dropped: "Ran on Auto" (W4-03). */
+async function modelDroppedStep(
+  run: LoadedRun,
+  progress: Progress,
+  sink: RunEventSink,
+): Promise<void> {
+  progress.modelNoted = true;
+  const row = await insertStep(run.id, {
+    position: ++progress.steps,
+    kind: 'check',
+    status: 'done',
+    label: t('step.modelDropped'),
+    detail: t('step.modelDroppedDetail'),
+  });
+  sink.emit('step.finished', { step: clientStep(row) });
 }
 
 /** The agent run a chat is (chat_conversations.agent_run_id), or null for a person's own chat. */

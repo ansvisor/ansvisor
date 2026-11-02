@@ -18,6 +18,7 @@ import { ANSWER_MAX, composerAnswer, recommendedLabel } from '@/lib/chat/asks';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import { ghostOf } from '@/lib/chat/next-moves';
 import type { ChatEvent, ChatTaskStrip } from '@/lib/chat/events';
+import { AUTO_CHOICE, type ChatModelChoice } from '@/lib/chat/models';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { readSse } from '@/lib/chat/run-hub';
 import {
@@ -219,6 +220,10 @@ export function ChatThreadView({
     thread?.conversationId ?? null,
   );
   const [mode, setMode] = useState<ChatMode>(defaultMode);
+  // The model menu's pick for this chat: its latest run's, Auto at first (W4-02).
+  const [modelChoice, setModelChoice] = useState<ChatModelChoice>(
+    () => thread?.choice ?? AUTO_CHOICE,
+  );
   const [reconnecting, setReconnecting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   // While the view is on screen: what it streams stops once it goes (another
@@ -405,6 +410,8 @@ export function ChatThreadView({
       body: JSON.stringify({
         message,
         mode,
+        model: modelChoice.model,
+        effort: modelChoice.effort,
         conversationId: conversationId ?? undefined,
         brandId: conversationId ? undefined : (brandId ?? undefined),
         // A chat the side panel starts names the page it started on.
@@ -654,6 +661,8 @@ export function ChatThreadView({
           disabled={atCap}
           placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : undefined}
           usage={<ComposerUsageMeter />}
+          modelChoice={modelChoice}
+          onModelChoice={setModelChoice}
           // An answer is its text only: no page chips, @ data or files go with it.
           chips={asking ? undefined : chips}
           onRemoveChip={onRemoveChip}

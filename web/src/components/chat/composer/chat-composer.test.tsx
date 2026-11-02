@@ -265,6 +265,28 @@ describe('ChatComposer', () => {
     await render();
     expect(under()).toContain('Auto · Haiku reads, Sonnet writes');
   });
+
+  it('names the chat’s model and effort on the model button, and opens the model menu (W4-02)', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: false })));
+    vi.stubGlobal('fetch', fetchMock);
+    const onModelChoice = vi.fn();
+    await render({
+      modelChoice: { model: 'anthropic/claude-sonnet-5.5', effort: 'high' },
+      onModelChoice,
+    });
+    const open = button('Model')!;
+    expect(open.textContent).toBe('Sonnet 5.5 · High ▾');
+    await act(async () => open.click());
+    expect(open.getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelector('[data-slot="model-menu"]')).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/chat/models?selected=anthropic%2Fclaude-sonnet-5.5',
+    );
+    vi.unstubAllGlobals();
+
+    await render({ modelChoice: { model: 'auto', effort: 'normal' }, onModelChoice });
+    expect(button('Model')!.textContent).toBe('Auto · Haiku reads, Sonnet writes ▾');
+  });
 });
 
 describe('ChatComposer: a pasted API key (W4-05)', () => {

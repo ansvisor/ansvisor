@@ -10,6 +10,7 @@ import { requestAccess } from '@/lib/actions/chat-access-requests';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import { looksLikeApiKey, withoutApiKeys } from '@/lib/chat/key-paste';
 import type { ChatMode } from '@/lib/chat/precedence';
+import { AUTO_CHOICE, type ChatModelChoice } from '@/lib/chat/models';
 import { MAX_REFERENCES, type ChatReference } from '@/lib/chat/references';
 import {
   CHAT_UPLOAD_TYPES,
@@ -30,6 +31,7 @@ import {
   type Shortcut,
 } from './composer-menus';
 import { ModeSwitch } from './mode-switch';
+import { ModelMenu, useModelLabel } from './model-menu';
 
 /** Where the composer sits (CHAT-02 variants): Chat home, an open chat's dock, the side panel. */
 export type ComposerVariant = 'home' | 'dock' | 'panel';
@@ -168,6 +170,8 @@ export function ChatComposer({
   usage,
   modelLabel,
   onOpenModel,
+  modelChoice,
+  onModelChoice,
   onSaveKey,
   className,
 }: {
@@ -224,6 +228,12 @@ export function ChatComposer({
   modelLabel?: ReactNode;
   onOpenModel?: () => void;
   /**
+   * The chat's model and effort (W4-02): with `onModelChoice`, the model
+   * button opens the model menu, and its pick goes with each message.
+   */
+  modelChoice?: ChatModelChoice;
+  onModelChoice?: (choice: ChatModelChoice) => void;
+  /**
    * Save securely on the pasted-key line: the text goes to the page's own
    * key form, never to Chat. Without it, only Remove shows.
    */
@@ -245,6 +255,8 @@ export function ChatComposer({
   const [found, setFound] = useState<{ query: string; refs: ChatReference[] } | null>(null);
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [fileProblem, setFileProblem] = useState<UploadProblem | null>(null);
+  const [modelOpen, setModelOpen] = useState(false);
+  const chosenLabel = useModelLabel(modelChoice ?? AUTO_CHOICE);
   const picker = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
   // The page's last hand-off taken in: each one once.
@@ -956,7 +968,27 @@ export function ChatComposer({
         <span>{uploading ? t('files.sendWaits') : under}</span>
         <span className="ml-auto flex items-center gap-2.5">
           {usage}
-          {onOpenModel ? (
+          {onModelChoice ? (
+            <span className="relative">
+              <button
+                type="button"
+                data-action="model.openMenu"
+                onClick={() => setModelOpen((on) => !on)}
+                aria-label={t('model')}
+                aria-expanded={modelOpen}
+                className="rounded-[7px] px-1.5 py-0.5 text-foreground hover:bg-muted aria-expanded:bg-muted"
+              >
+                {chosenLabel ?? <ModelAuto />} ▾
+              </button>
+              {modelOpen && (
+                <ModelMenu
+                  choice={modelChoice ?? AUTO_CHOICE}
+                  onChange={onModelChoice}
+                  onClose={() => setModelOpen(false)}
+                />
+              )}
+            </span>
+          ) : onOpenModel ? (
             <button
               type="button"
               data-action="model.openMenu"
