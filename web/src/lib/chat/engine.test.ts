@@ -96,6 +96,20 @@ vi.mock('@/lib/actions/chat-action-center', () => ({
   setTaskReadyForReview: vi.fn(),
   checkChatActionCover: vi.fn(),
 }));
+// Create schedule through the person's session (W3-02): here, as the run's person.
+vi.mock('@/lib/actions/chat-schedules', () => ({
+  createChatSchedule: vi.fn(
+    async (input: never, place: { timezone: string; runId: string | null }) => {
+      const { createSchedule } = await import('./schedule/store');
+      const { ORG, PEOPLE } = await import('./testing/chat-fixtures');
+      return createSchedule({ userId: PEOPLE.admin, organizationId: ORG, ...place }, input);
+    },
+  ),
+}));
+// The schedule card's use line (W3-02): no server to ask in a test.
+vi.mock('./schedule/estimate', () => ({
+  readRunEstimate: vi.fn(async () => ({ kind: 'share', share: 0.02 })),
+}));
 // The test's own EXECUTE row (publish_page) has its words here: the product has no such tool yet.
 vi.mock('../../../messages/en.json', async (importOriginal) => {
   const { default: messages } = await importOriginal<{
@@ -3308,6 +3322,8 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'push_cms_draft',
     'build_report',
     'run_site_audit',
+    // W3-02's scheduled work: Admins and Managers, a card in every mode.
+    'create_schedule',
   ];
   const dismiss = toolCall('w1', 'update_opportunity', {
     opportunity_id: OPPORTUNITY,
@@ -4989,5 +5005,93 @@ describe('the /tasks task strip (W2-11, CHAT-09 §B)', () => {
     expect(ofType(await eventsOf(runId), 'tasks.updated')).toEqual([]);
     logged.mockRestore();
     delete db.failures.chat_task_state;
+  });
+});
+
+describe('the schedule card (W3-02, CHAT-12 items 7–9)', () => {
+  const schedule = (over: Record<string, unknown> = {}) =>
+    toolCall('w1', 'create_schedule', {
+      brand_id: BRAND,
+      title: 'Weekly report',
+      when: 'every Monday at 9',
+      prompt: 'Summarise last week for the team',
+      ...over,
+    });
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    db.tables.chat_schedules = [];
+  });
+
+  it('waits on an editable card even in Full auto, then makes the job as the card was edited', async () => {
+    useModels([READY], [calls(schedule()), text('Scheduled it.')]);
+    const runId = await turn(ADMIN, 'Every Monday at 9, summarise last week', 'full_auto');
+    expect(runRow(runId).status).toBe('waiting');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    const confirm = ofType(events, 'confirm.required')[0].data;
+    expect(confirm.form).toMatchObject({ kind: 'schedule', submit: 'Create schedule' });
+    expect(confirm.form!.fields.find((f) => f.name === 'when')).toMatchObject({
+      value: 'every Monday at 09:00',
+    });
+    expect(stepsOf(runId).at(-1)).toMatchObject({ kind: 'schedule', status: 'waiting' });
+    expect(db.tables.chat_schedules).toEqual([]);
+
+    const prepared = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: { title: 'Tuesday report', when: 'every Tuesday at 10:30', deliver: 'both' },
+    });
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+    await engine.driveRun(ADMIN, runId, prepared.resume);
+    expect(db.tables.chat_schedules).toHaveLength(1);
+    expect(db.tables.chat_schedules[0]).toMatchObject({
+      title: 'Tuesday report',
+      rrule: 'FREQ=WEEKLY;BYDAY=TU;BYHOUR=10;BYMINUTE=30',
+      deliver_to: ['chat', 'email'],
+      created_by: PEOPLE.admin,
+      created_via: 'card',
+      set_by_run_id: runId,
+    });
+    expect(stepsOf(runId).at(-1)).toMatchObject({
+      kind: 'schedule',
+      status: 'done',
+      label: 'Scheduled: Tuesday report',
+      detail: 'Every Tuesday, 10:30 · UTC · Chat + Email',
+    });
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it('keeps the card when an edit doesn’t read, and makes nothing', async () => {
+    useModels([READY], [calls(schedule()), text('Scheduled it.')]);
+    const runId = await turn(ADMIN, 'Every Monday at 9, summarise last week', 'auto');
+    const confirm = ofType(await eventsOf(runId), 'confirm.required')[0].data;
+    const refused = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: { when: 'every hour' },
+    });
+    expect(refused).toMatchObject({
+      ok: false,
+      status: 400,
+      code: 'invalid',
+      message: 'Scheduled jobs run at most once a day.',
+    });
+    expect(runRow(runId).status).toBe('waiting');
+    expect(db.tables.chat_schedules).toEqual([]);
+  });
+
+  it('asks the person, with no card, when the phrase could mean two dates', async () => {
+    const { sonnet } = useModels(
+      [READY],
+      [calls(schedule({ when: 'next Friday' })), text('Which Friday?')],
+    );
+    const runId = await turn(ADMIN, 'Next Friday, check the citations', 'auto');
+    expect(ofType(await eventsOf(runId), 'confirm.required')).toEqual([]);
+    const told = JSON.stringify(sonnet.seen.at(-1)?.prompt ?? []);
+    expect(told).toContain('could mean');
+    expect(db.tables.chat_schedules).toEqual([]);
   });
 });

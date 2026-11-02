@@ -313,3 +313,43 @@ export async function agentUsageShares(orgId, { days = null } = {}) {
     })),
   };
 }
+
+/** How many of the last days a run estimate reads, and how many of their rows. */
+const ESTIMATE_DAYS = 30;
+const ESTIMATE_ROWS = 5000;
+
+/**
+ * About how much of the AI limit one Chat run uses (the schedule card's
+ * "≈ 2% of monthly AI usage per run", CHAT-12 item 7): the workspace's
+ * Chat and scheduled runs over the last 30 days, each run's spend summed,
+ * averaged, over the plan's included budget (credits left out, as agent
+ * shares are). On Ansvisor's key only: own-key rows are the workspace's.
+ * Null with no run to go on. Shares only: no dollars leave the server.
+ * No budget (self-hosted): unlimited.
+ */
+export async function chatRunEstimate(orgId) {
+  assertChatOn(orgId);
+  const { includedUsd } = await aiBudgetOf(orgId, { credits: false });
+  if (includedUsd === null || !(includedUsd > 0)) return { unlimited: true, share: null, runs: 0 };
+  const since = new Date(Date.now() - ESTIMATE_DAYS * 86_400_000).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('prompt_improve_usage')
+    .select('chat_run_id, cost_usd')
+    .eq('organization_id', orgId)
+    .in('feature', ['chat', 'schedule'])
+    .eq('own_key', false)
+    .gte('used_at', since)
+    .not('chat_run_id', 'is', null)
+    .order('used_at', { ascending: false })
+    .limit(ESTIMATE_ROWS);
+  if (error) throw new Error(error.message);
+  const byRun = new Map();
+  for (const row of data ?? []) {
+    byRun.set(row.chat_run_id, (byRun.get(row.chat_run_id) ?? 0) + (Number(row.cost_usd) || 0));
+  }
+  if (byRun.size === 0) return { unlimited: false, share: null, runs: 0 };
+  const average = [...byRun.values()].reduce((sum, usd) => sum + usd, 0) / byRun.size;
+  // numeric(7, 4) as the run rows keep it: to 0.01%.
+  const share = Math.min(999.9999, Math.round((average / includedUsd) * 10_000) / 10_000);
+  return { unlimited: false, share, runs: byRun.size };
+}

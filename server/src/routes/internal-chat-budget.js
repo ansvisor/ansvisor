@@ -29,6 +29,11 @@
  *     each agent's share of the AI limit this period, or over the last
  *     `days` (1–90), for the Agents list and detail (CHAT-27 items 24–30).
  *   → 402 plan_limit: no active plan. 403 chat_off.
+ * GET /api/internal/chat/budget/run-estimate?orgId=
+ *   → 200 { unlimited, share, runs }: about how much of the AI limit one Chat
+ *     run uses, from the last 30 days' runs (null with none), for the
+ *     schedule card (CHAT-12 item 7).
+ *   → 402 plan_limit: no active plan. 403 chat_off.
  *
  * Dollars never leave the server: no answer carries one. Calls with the
  * secret aren't counted by the API's per-IP limiter (isInternalChatBudgetCall
@@ -43,6 +48,7 @@ import {
   ChatBudgetError,
   agentUsageShares,
   chargeChatStep,
+  chatRunEstimate,
   releaseChatStep,
   reserveChatStep,
 } from '../lib/chat-budget.js';
@@ -101,6 +107,8 @@ const sharesSchema = z.strictObject({
   orgId: z.guid(),
   days: z.coerce.number().int().min(1).max(90).optional(),
 });
+
+const estimateSchema = z.strictObject({ orgId: z.guid() });
 
 /** The body as `schema` reads it, or null once a 400 is sent. */
 function parse(schema, req, res) {
@@ -192,6 +200,21 @@ router.get('/agent-shares', async (req, res) => {
     return res.json({ success: true, ...shares });
   } catch (err) {
     return fail(err, req, res, 'agent shares');
+  }
+});
+
+router.get('/run-estimate', async (req, res) => {
+  const query = estimateSchema.safeParse(req.query ?? {});
+  if (!query.success) {
+    return res
+      .status(400)
+      .json({ success: false, error: 'invalid_request', message: 'Invalid request' });
+  }
+  try {
+    const estimate = await chatRunEstimate(query.data.orgId);
+    return res.json({ success: true, ...estimate });
+  } catch (err) {
+    return fail(err, req, res, 'run estimate');
   }
 });
 
