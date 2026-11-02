@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { canAccessBrand } from '@/lib/brand-access';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { createClient } from '@/lib/supabase/server';
 import type { ListDotState } from '@/components/agentic/list-dot';
@@ -6,6 +7,7 @@ import { stopChatRun, type ChatActor } from './engine';
 import { originPageSchema } from './origin';
 import { OPEN_RUN_STATUSES } from './engine-store';
 import { maskIds } from './events';
+import { startTouchedBrands } from './touched-brands';
 import { chatTrayState } from './runs-tray';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
 
@@ -464,22 +466,16 @@ export type UpdateInput = z.infer<typeof updateInput>;
 /**
  * A new, empty chat (the side panel's New chat, CHAT-01 item 23; the full
  * page makes one on the first message instead). Its brand must be the
- * workspace's. Untitled until Chat names it.
+ * workspace's, and one the person may use (BRAND-ACCESS). Untitled until
+ * Chat names it. It keeps the brands it touches from the start (00436).
  */
 export async function createChat(
   reader: Reader,
   actor: ChatActor,
   input: CreateInput,
 ): Promise<ChatListItem | null> {
-  if (input.brandId) {
-    const { data, error } = await supabaseAdmin
-      .from('brands')
-      .select('id')
-      .eq('id', input.brandId)
-      .eq('organization_id', actor.organizationId)
-      .maybeSingle();
-    if (error) throw new Error(`Could not read the brand: ${error.message}`);
-    if (!data) return null;
+  if (input.brandId && !(await canAccessBrand(actor.userId, input.brandId, actor.organizationId))) {
+    return null;
   }
   const { data, error } = await supabaseAdmin
     .from('chat_conversations')
@@ -493,7 +489,9 @@ export async function createChat(
     .select('id')
     .single();
   if (error || !data) throw new Error(`Could not start a chat: ${error?.message ?? 'no row'}`);
-  return readChat(reader, actor, (data as { id: string }).id);
+  const id = (data as { id: string }).id;
+  await startTouchedBrands(id);
+  return readChat(reader, actor, id);
 }
 
 /** The chat as the server reads it (service role), not deleted; null when missing. */

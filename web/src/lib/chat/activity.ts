@@ -19,13 +19,14 @@ import type { ChatTool, ToolClass } from './registry/define-tool';
 /**
  * How a change was approved: `ask` its card's OK, `click` an EXECUTE's
  * click, `auto` it ran without a card (via Always, Full auto or the person's
- * "Don't ask again"), `run` the person's own action, which needs no card
- * (an Undo, §10b).
+ * "Don't ask again", or an EXECUTE an allowed agent took live on its own:
+ * go_live, AUTONOMOUS-GO-LIVE §6.4), `run` the person's own action, which
+ * needs no card (an Undo, §10b).
  */
 export type ActivityApproval =
   | { kind: 'ask' }
   | { kind: 'click' }
-  | { kind: 'auto'; via: 'always' | 'full_auto' | 'dont_ask_again' }
+  | { kind: 'auto'; via: 'always' | 'full_auto' | 'dont_ask_again' | 'go_live' }
   | { kind: 'run' };
 
 /**
@@ -51,6 +52,8 @@ export interface ActivityPlace {
   conversationId: string | null;
   runId: string | null;
   stepId: string | null;
+  /** The agent run the chat is (chat_conversations.agent_run_id); absent for a person's own. */
+  agentRunId?: string | null;
 }
 
 /** One row to write. */
@@ -81,8 +84,20 @@ export interface ActivityEntry {
 /** Writes a change's row, or an Undo's (undoesId), and returns its id. */
 export async function logActivity(entry: ActivityEntry): Promise<string> {
   if (entry.tool.class === 'read') throw new Error('A read is not logged');
-  if (entry.tool.class === 'execute' && (entry.undo || entry.approval.kind !== 'click')) {
+  // An EXECUTE's click, or an agent run's step that went live on its own (00445 checks it too).
+  const onItsOwn =
+    entry.approval.kind === 'auto' && entry.approval.via === 'go_live' && !!entry.agentRunId;
+  if (entry.approval.kind === 'auto' && entry.approval.via === 'go_live' && !onItsOwn) {
+    throw new Error('Only an agent run goes live on its own');
+  }
+  if (
+    entry.tool.class === 'execute' &&
+    (entry.undo || (entry.approval.kind !== 'click' && !onItsOwn))
+  ) {
     throw new Error('An EXECUTE runs on a click and has no Undo');
+  }
+  if (entry.tool.class !== 'execute' && onItsOwn) {
+    throw new Error('Only an EXECUTE goes live on its own');
   }
   const { data, error } = await supabaseAdmin
     .from('chat_activity_log')

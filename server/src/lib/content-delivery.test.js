@@ -555,6 +555,33 @@ describe('sendContentPages to Webflow (phase 2)', () => {
     expect(sent.deliveries[0]).toMatchObject({ status: 'sent', updated: false });
   });
 
+  it('keeps the agent run on a send an agent made on its own, before it goes (00444)', async () => {
+    db.webflow = connection;
+    sendToWebflow.mockResolvedValue({
+      taken: true,
+      externalId: 'item-1',
+      collectionId: 'c1',
+      updated: false,
+      changed: { tables: 0, images: 0 },
+    });
+    await sendContentPages({
+      orgId: 'o1',
+      brandId: 'b1',
+      userId: 'u1',
+      pages: [page()],
+      target: 'webflow',
+      agentRunId: 'ar-1',
+    });
+    const writes = db.updates.filter((u) => u.table === 'content_draft_deliveries');
+    expect(writes[0].update).toEqual({ agent_run_id: 'ar-1' });
+    expect(writes[1].update).toMatchObject({ status: 'sent' });
+
+    // A person's own send names no agent run.
+    db.updates = [];
+    await toWebflow();
+    expect(db.updates.map((u) => u.update)).not.toContainEqual({ agent_run_id: 'ar-1' });
+  });
+
   it('writes a page Webflow didn’t take as failed, with the reason', async () => {
     db.webflow = connection;
     sendToWebflow.mockResolvedValue({

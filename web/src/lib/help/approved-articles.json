@@ -12,7 +12,10 @@
         "export actions",
         "top actions",
         "run agent",
-        "run with chat"
+        "run with chat",
+        "stale actions",
+        "still relevant",
+        "confidence"
       ],
       "synonyms": [
         "recommendations",
@@ -35,15 +38,19 @@
         },
         {
           "heading": "Cards and filters",
-          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter. While Getting started runs, its card shows instead.\n\nBelow them, filter by category, **Priority**, **Status** and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters are kept in the page's address, so a filtered view can be shared. For an online shop, the **From Products** chip lists only the actions sent from Products."
+          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter. While Getting started runs, its card shows instead.\n\nBelow them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters are kept in the page's address, so a filtered view can be shared. For an online shop, the **From Products** chip lists only the actions sent from Products."
         },
         {
           "heading": "Status, dismiss and delete",
           "text": "An action's status is **New**, **In Progress**, **On Hold**, **Completed** or **Dismissed**. The row menu sets In Progress, Completed or Dismiss without opening the action.\n\nDismissing asks why: it doesn't matter to us, it's already done, the data behind it is wrong, or not now. You can also dismiss without saying why. History shows the reason.\n\n**Delete**, for admins and managers only, removes an action for everyone, and it won't come back on its own the next day."
         },
         {
+          "heading": "Stale actions",
+          "text": "An action that has stayed **New** for 30 days, with no one assigning, editing, sending or updating its tasks, is marked **Stale** each night. It isn't closed or dismissed: it shows a **Stale** label next to its status, and the **Status** filter's **Stale** lists them all.\n\nIf it still matters, click **Still relevant** in the open action, or in the row menu. The label goes, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, dismiss it."
+        },
+        {
           "heading": "Inside an action",
-          "text": "Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:\n\n- **Overview**: **Why this priority?**, **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent."
+          "text": "Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:\n\n- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent."
         },
         {
           "heading": "Run an agent on an action",
@@ -732,7 +739,19 @@
         "buyer questions",
         "rival brief",
         "listing gaps",
-        "site audit fixes"
+        "site audit fixes",
+        "business type",
+        "for your role",
+        "for your site type",
+        "agent packs",
+        "e-commerce agents",
+        "b2b agents",
+        "b2c agents",
+        "mobile app agents",
+        "ceo brief",
+        "publish on its own",
+        "go live on its own",
+        "daily limit"
       ],
       "synonyms": [
         "my agents",
@@ -746,10 +765,12 @@
         "what does this agent cost",
         "make an agent",
         "change an agent",
-        "remove an agent"
+        "remove an agent",
+        "publish without a click",
+        "agent sends to cms"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-02",
       "sections": [
         {
           "heading": null,
@@ -761,7 +782,11 @@
         },
         {
           "heading": "Ready-to-use agents",
-          "text": "**Ready to use** shows agents set up for common jobs, such as **Visibility Watch**, **Citation Win-back** and **Weekly Report**. Each card says what the agent does, its skills, what starts it and its mode. Filter them by goal, such as **Visibility** or **Reporting**.\n\nAdmins and Managers click **Use this agent**. **New agent** opens with its skills, triggers, mode and connections filled in, for the brand you have open. Change what you like, then click **Save as draft** or **Turn on**. Nothing turns on by itself.\n\nIf your plan doesn't include an agent's mode, its card says which plan does, and the agent opens on **Auto, ask before changes**. Cards marked **Soon** say what they're waiting for and can't be used yet."
+          "text": "**Ready to use** shows agents set up for common jobs, such as **Visibility Watch**, **Citation Win-back** and **Weekly Report**, and agents made for a kind of site or a team, such as **Product Answer Pages** for e-commerce or **CEO Brief** for founders. Each card says what the agent does, its skills, what starts it and its mode. Filter them by **Goal**, **Business type** and **For your role**.\n\nAdmins and Managers click **Use this agent**. **New agent** opens with its skills, triggers, mode and connections filled in, for the brand you have open. Change what you like, then click **Save as draft** or **Turn on**. Nothing turns on by itself.\n\nIf your plan doesn't include an agent's mode, its card says which plan does, and the agent opens on **Auto, ask before changes**. Cards marked **Soon** say what they're waiting for and can't be used yet."
+        },
+        {
+          "heading": "Agents for your site and your work",
+          "text": "Agents made for the site type of the brand you have open are marked **For your site type**, and agents made for one of your work areas **For your role**. They come first among the agents you can use, and first among the **Soon** ones. A brand's site type is **E-commerce**, **B2B SaaS** or **B2C**, under **Site type** in the brand's settings; until someone sets it, Ansvisor guesses it. Change your work areas in **Settings › Account › Your work areas**. **Mobile app** agents show under **Business type** only: a brand can't be set to Mobile app yet."
         },
         {
           "heading": "What each card shows",
@@ -801,7 +826,11 @@
         },
         {
           "heading": "When a run asks before a change",
-          "text": "A run that starts without you, from a trigger or after waiting for a free slot, asks before every change, whatever its mode. A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**."
+          "text": "A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. A run that starts without you, from a trigger or after waiting for a free slot, asks before most changes, whatever its mode. Some still follow the mode, with the role and access of the person the run acts as: creating and changing Content drafts, reviewing or dismissing content opportunities, dismissing prompt suggestions and **Send to Action Center**. In **Full auto** the run makes them without asking; in **Ask me first** it asks. The run reads the agent's mode again before each change. Every change is in the **Activity** log, with **Undo**. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**."
+        },
+        {
+          "heading": "Let an agent publish on its own",
+          "text": "An Admin can let chosen agents send pages to your CMS as drafts without a click. Two switches must be on: **Agents that publish on their own** in **Settings › Chat**, and **Publish and send on its own** on the agent's **Mode & approvals** step, with the agent in **Full auto**. Managers see the box read-only, with **Ask your Admin**.\n\n**At most a day** sets how many pages it may send on its own in 24 hours, from 1 to 20. A page still waits for your click, and its card says why, when it fails Quality or your approved brand facts, the run read text that tried to instruct it, the page has hidden text or outside links, the page is live already, or the agent reached its limit.\n\nChanging what the agent does turns this off until an Admin turns it on again."
         },
         {
           "heading": "On your own AI key",
@@ -810,6 +839,10 @@
         {
           "heading": "Run an agent from Action Center",
           "text": "Admins and Managers can also start an agent from an open action in Action Center: **Run agent** on the action's row or at the top of the open action lists the agents that work on its brand. The run works on that action alone, acts as the person who clicked, and opens beside the action. Its chat is named after the agent and the action, and **Run history** shows its trigger as **Run agent from an action**.\n\nThe run never adds targets to the action and never closes its tasks. If the action is completed or dismissed, the run stops with **The action was closed**. The action's **History** shows **Agent run started** and **Agent run completed**."
+        },
+        {
+          "heading": "Your key's monthly agent limit",
+          "text": "When your workspace runs on its own AI key, all agents together may spend at most a monthly limit on it: $250 unless an Admin sets another, from $10 to $10,000. It is measured at the providers' list prices, and it can't be turned off. Once agents reach it, each agent pauses when it next runs, with **Key's monthly agent limit reached**, and **Run now** and **Run agent** are refused. They start again by themselves when the month renews, or when an Admin raises the limit in **Settings › AI Providers**. Chats you start yourself don't count toward it."
         },
         {
           "heading": "Read-only roles",
@@ -945,7 +978,21 @@
         "close tasks",
         "attach to task and mark done",
         "attach only",
-        "mark task done"
+        "mark task done",
+        "shortcuts",
+        "slash menu",
+        "/start",
+        "/analyze",
+        "/new-report",
+        "/create",
+        "/optimize",
+        "/opportunities",
+        "/audit",
+        "get started",
+        "create a report",
+        "optimize a page",
+        "find opportunities",
+        "improve with audit"
       ],
       "synonyms": [
         "assistant",
@@ -954,7 +1001,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-02",
       "sections": [
         {
           "heading": null,
@@ -966,7 +1013,7 @@
         },
         {
           "heading": "Ask Chat",
-          "text": "Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nNext to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. Nothing is published or sent without your click, and every change is in the **Activity** log. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read: their box says **Read-only** with a link to what their role can do."
+          "text": "Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nNext to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; their box says **Read-only**, with a link to their role.\n\nOn the demo brand or a read-only workspace, sending or starting from **Home** opens the plan dialog."
         },
         {
           "heading": "Chat beside any page",
@@ -1033,8 +1080,12 @@
           "text": "When Chat finishes an answer, **Next moves** under it suggests up to three things to do next, such as \"Do the same for /features\". Click one to send it as your next message. A change it leads to still asks you first where it should.\n\nWhen the first move carries on with what this answer worked on, the box shows it dim: Tab puts it in, and Enter sends it. Nothing is sent by itself.\n\nAnalysts and Agency partners see only moves that read data. Next moves show under the latest answer, and come back when you open the chat again."
         },
         {
-          "heading": "Shortcuts and your data",
-          "text": "Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message, **/analyze** and **/create**, and under them the skills Chat can use, such as **/report** for the weekly report (see **Skills in Chat**).\n\nType **@**, or click **@**, to point Chat at your data: charts and metrics on the page, tracked prompts, your pages and open Action Center tasks. Use the arrow keys and Enter, or click. Your pick shows as a chip above the text; **×** takes it off."
+          "heading": "Shortcuts",
+          "text": "Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message: **/start** (Get started), **/analyze**, **/new-report** (Reports), **/create**, **/optimize**, **/opportunities** and **/audit** (Improve with audit). A shortcut puts its first words in the box, such as \"Analyze\", for you to finish. Chat then reads only the data that job needs, by default your brand's last 30 days, and says in one line when your plan leaves part of it out. Change the first words and Chat treats the message as your own question. Some **For you now** chips on Chat Home work the same way.\n\nUnder the shortcuts are the skills Chat can use, such as **/report** for the weekly report (see **Skills in Chat**)."
+        },
+        {
+          "heading": "Reference your data",
+          "text": "Type **@**, or click **@**, to point Chat at your data: charts and metrics on the page, tracked prompts, your pages and open Action Center tasks. Use the arrow keys and Enter, or click. Your pick shows as a chip above the text; **×** takes it off."
         },
         {
           "heading": "Attach files",
@@ -1115,7 +1166,7 @@
         "run mode default"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-02",
       "sections": [
         {
           "heading": null,
@@ -1123,7 +1174,7 @@
         },
         {
           "heading": "Default mode",
-          "text": "**Default mode** is how much the agent does on its own when you start a job: **Ask me first**, **Auto, ask before changes** or **Full auto**. New chats start in it. Nothing is published or sent without your click. **Full auto** needs the Growth plan, and your Admin can turn it off for everyone but Admins; when it is locked, point at it to see why. Analysts and Agency partners only read, so they have no default mode."
+          "text": "**Default mode** is how much the agent does on its own when you start a job: **Ask me first**, **Auto, ask before changes** or **Full auto**. New chats start in it. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own. **Full auto** needs the Growth plan, and your Admin can turn it off for everyone but Admins; when it is locked, point at it to see why. Analysts and Agency partners only read, so they have no default mode."
         },
         {
           "heading": "Your focus",
@@ -1304,7 +1355,7 @@
         "templates"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-02",
       "sections": [
         {
           "heading": null,
@@ -1312,15 +1363,15 @@
         },
         {
           "heading": "Use a skill",
-          "text": "Type **/** at the start of an empty box, or click **/**. Under the shortcuts, **Skills** lists each skill by its command and name. Type to filter, such as **/fa** for **/faq**, then press Enter or click. The command goes first in the box: finish your message after it and send.\n\nYou can also type a skill's command yourself, at the start of your message. One answer uses up to three skills. **/report** is the **Weekly report** skill."
+          "text": "Type **/** at the start of an empty box, or click **/**. Under the shortcuts, **Skills** lists each skill by its command and name. Type to filter, such as **/fa** for **/faq**, then press Enter or click. The command goes first in the box: finish your message after it and send.\n\nYou can also type a skill's command yourself, at the start of your message. One answer uses up to three skills, a shortcut's own steps counted. **/report** is the **Weekly report** skill; for any other report, use the **/new-report** shortcut (**Reports**)."
         },
         {
           "heading": "When Chat picks a skill",
-          "text": "Chat also picks a skill by itself when one fits your question. Either way, the steps above the answer show **Used skill:** with the skill's name, and **Ansvisor library** under it.\n\nAnalysts and Agency partners have no **/** menu, but Chat still uses a skill for them when one fits."
+          "text": "Chat also picks a skill by itself when one fits your question. Either way, the steps above the answer show **Used skill:** with the skill's name, and **Ansvisor library** under it. A shortcut shows **Used shortcut:** with its name.\n\nAnalysts and Agency partners have no **/** menu, but Chat still uses a skill for them when one fits."
         },
         {
           "heading": "What a skill can't change",
-          "text": "A skill shapes how Chat works, not what it may do. It gives Chat no new tools, doesn't skip the card a change waits on, and publishes nothing: going live is always your own click. Your role, your plan and your workspace's Chat settings still decide what Chat can change, and a change still asks you first where it should."
+          "text": "A skill shapes how Chat works, not what it may do. It gives Chat no new tools, doesn't skip the card a change waits on, and doesn't publish by itself: only an agent an Admin allows may send pages on its own. Your role, your plan and your workspace's Chat settings still decide what Chat can change, and a change still asks you first where it should."
         },
         {
           "heading": "The Ansvisor skills",
@@ -1747,7 +1798,8 @@
         "mark ready",
         "mark published",
         "history",
-        "export"
+        "export",
+        "site audit estimate"
       ],
       "synonyms": [
         "write an article",
@@ -1756,7 +1808,7 @@
         "finish a page"
       ],
       "plan": "all",
-      "updated": "2026-10-30",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1764,7 +1816,11 @@
         },
         {
           "heading": "The header",
-          "text": "The header shows the title, which you can click to rename the page, and whether your changes are saved. Under them come the page type, the method and status, and a **Rules** chip with how many rules the page meets now; click it to open the rules. On a page that optimizes a live one, a chip counts the cited passages kept.\n\nOn the right are the month's AI usage and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**, and a button to show or hide the side panel."
+          "text": "The header shows the title, which you can click to rename the page, and whether your changes are saved. Under them come the page type, the method and status, and a **Rules** chip with how many rules the page meets now; click it to open the rules. An **Audit** chip estimates the page's Site Audit score; see below. On a page that optimizes a live one, a chip counts the cited passages kept.\n\nOn the right are the month's AI usage and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**, and a button to show or hide the side panel."
+        },
+        {
+          "heading": "Site Audit estimate",
+          "text": "The **Audit** chip, for example **Audit ≈62**, is about where the page would score in Site Audit once published. Click it to see the score by category: Structure, Content, Authority, Trust and E-E-A-T. It's free, and it's read again each time you pause typing.\n\nIt runs Site Audit's checks on the page as it would go out. The checks of your whole site, such as robots.txt, llms.txt and HTTPS, come from your latest Site Audit; with none yet, they're left out.\n\nThe 13 checks AI reads aren't in it at first, so it runs a few points under the full audit. **Estimate AI checks** adds them, using a little of your monthly AI usage. They stay in the score as you keep writing; **Read AI checks again** reads them anew."
         },
         {
           "heading": "Status and runs",
@@ -1804,7 +1860,7 @@
         },
         {
           "heading": "History, Copy HTML and Export",
-          "text": "- **History** keeps earlier versions for 90 days: the live page as imported, the page before agent changes, each Mark ready and publish, each Hand off, and the page before a restore. **Restore** makes a new version, so nothing is lost.\n- **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS.\n- **Export** downloads the page as **Word**, **Excel**, **CSV**, **HTML** or **Markdown**. Excel and CSV hold the page as one row, for a CMS's import. Only the HTML file carries the schema.\n\nWith Quality on, **Export** opens a dialog instead: the same files, and under **Platforms** a copy of the page to paste into Webflow, WordPress, Shopify or Google Docs."
+          "text": "- **History** keeps earlier versions for 90 days: the live page as imported, the page before agent changes, each Mark ready and publish, each Hand off, and the page before a restore. **Restore** makes a new version, so nothing is lost.\n- **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS. An article also gets the Article schema Ansvisor adds, with its author.\n- **Export** downloads the page as **Word**, **Excel**, **CSV**, **HTML** or **Markdown**. Excel and CSV hold the page as one row, for a CMS's import. Only the HTML file carries the schema.\n\nWith Quality on, **Export** opens a dialog instead: the same files, and under **Platforms** a copy of the page to paste into Webflow, WordPress, Shopify or Google Docs."
         },
         {
           "heading": "Add products from your catalog",
@@ -1887,7 +1943,7 @@
         "content suggestions"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1903,7 +1959,7 @@
         },
         {
           "heading": "Quick actions on a row",
-          "text": "Each row's **…** menu has the quick actions:\n\n- **Send to Editor**, or **Open draft** once a draft is being written for it;\n- **Send to Plan**, or **Open in Plan** once it's a priority there, for owned opportunities still open;\n- **Send to Workflow**, for a new opportunity;\n- **Open in new tab**, which opens it as a page of its own;\n- **Dismiss**, for a new one. Undo it from the message that appears.\n\nSend to Plan and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions."
+          "text": "Each row's **…** menu has the quick actions:\n\n- **Write this**, which has the Content Agent brief and write the page in one go for you to review, and **Send to Editor**; **Open draft** takes their place once a draft is being written for it;\n- **Send to Plan**, or **Open in Plan** once it's a priority there, for owned opportunities still open;\n- **Send to Workflow**, for a new opportunity;\n- **Open in new tab**, which opens it as a page of its own;\n- **Dismiss**, for a new one. Undo it from the message that appears.\n\nSend to Plan and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions."
         },
         {
           "heading": "Work on many at once",
@@ -1911,7 +1967,7 @@
         },
         {
           "heading": "Ask for new opportunities",
-          "text": "Admins and managers click **New** to get suggestions now, instead of waiting for the next automatic run. Pick a **Focus**: **Let Ansvisor choose**, a **Topic** or a **Prompt**. You can add your own idea, up to 500 characters, and set **How many**.\n\nOpportunities are written per group of prompts: prompts of one topic that a single page could answer, and that already have tracked answers. Each group gets one opportunity; only **Another angle** adds a second take on it.\n\nTitles leave years out unless the need is about one. A year that has passed in an opportunity's title or question shows as this year; your tracked prompts keep their own words."
+          "text": "Admins and managers click **New** to get suggestions now, instead of waiting for the next automatic run. Pick a **Focus**: **Let Ansvisor choose**, a **Topic** or a **Prompt**. You can add your own idea, up to 500 characters, and set **How many**. New opportunities also follow the brand's rules from **Settings › Content › Brand rules**, such as topics to stay away from.\n\nOpportunities are written per group of prompts: prompts of one topic that a single page could answer, and that already have tracked answers. Each group gets one opportunity; only **Another angle** adds a second take on it.\n\nTitles leave years out unless the need is about one. A year that has passed in an opportunity's title or question shows as this year; your tracked prompts keep their own words."
         },
         {
           "heading": "What each focus picks",
@@ -2000,7 +2056,8 @@
         "rewrite the whole page",
         "agent suggestions",
         "accept suggestions",
-        "rules tab"
+        "rules tab",
+        "brand rules"
       ],
       "synonyms": [
         "writing rules",
@@ -2010,7 +2067,7 @@
         "let the agent fix the page"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -2023,6 +2080,10 @@
         {
           "heading": "Save or reset your rules",
           "text": "Changes to the rules apply to this draft only. **Save as my rules**, for admins and managers, keeps them for your workspace's next drafts of this page type, and **Reset** goes back to the default set. Under **Your text rules**, write a rule in your own words, or use **Paste many** to add several from a style guide."
+        },
+        {
+          "heading": "Brand rules",
+          "text": "Admins and managers keep a brand's rules in **Settings › Content › Brand rules**, one per line, up to 30, such as topics to stay away from. The Content Agent follows them on every page of the brand, before your text rules, and a brand rule wins when they disagree. They change what's written, not the **Rules** count."
         },
         {
           "heading": "Fix open rules with Run Agent",
@@ -2058,7 +2119,8 @@
         "mark as reviewed",
         "dismiss opportunity",
         "send to actions",
-        "new signal detected"
+        "new signal detected",
+        "write this"
       ],
       "synonyms": [
         "opportunity panel",
@@ -2067,7 +2129,7 @@
         "follow an opportunity"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -2083,7 +2145,11 @@
         },
         {
           "heading": "The panel's buttons",
-          "text": "- **Send to Actions** makes the opportunity an action in the Action Center. The button then reads **Open in Actions**.\n- **Generate Brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief Generated**.\n- **Send to Editor** opens **New content** with the opportunity picked: a new page, or the page of yours it names to optimize. Once a draft is being written for it, the button reads **Open draft**. It's offered for owned opportunities that are still open.\n- **Export** downloads the opportunity as CSV, Excel or Word."
+          "text": "- **Send to Actions** makes the opportunity an action in the Action Center. The button then reads **Open in Actions**.\n- **Generate Brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief Generated**.\n- **Send to Editor** opens **New content** with the opportunity picked: a new page, or the page of yours it names to optimize. Once a draft is being written for it, the button reads **Open draft**. It's offered for owned opportunities that are still open.\n- **Write this**, beside it, has the Content Agent brief and write the page in one go. See below.\n- **Export** downloads the opportunity as CSV, Excel or Word."
+        },
+        {
+          "heading": "Write this",
+          "text": "**Write this**, on the panel and in a row's **…** menu, takes an owned opportunity to a page to review in one go. First it says what will happen and about how much of your monthly AI usage it takes. Then:\n\n1. The Content Agent builds a brief from the opportunity's prompts, their fan-outs and the pages AI cites for them.\n2. It writes the page from the brief, by your rules and the page type's. For an opportunity on a page you have, it suggests changes to that page instead.\n3. The editor opens and shows the agent at work. You review the page there, with a free estimate of its Site Audit score; nothing is published.\n\nYou can stop it from the editor. If the brief can't be built, the agent writes from what there is."
         },
         {
           "heading": "The … menu",
@@ -2118,7 +2184,8 @@
         "page author",
         "qualified reviewer",
         "reviewer",
-        "reviewed by"
+        "reviewed by",
+        "trusted sources"
       ],
       "synonyms": [
         "content quality",
@@ -2138,7 +2205,7 @@
         },
         {
           "heading": "The scores",
-          "text": "Quality scores the page from 0 to 100 on **E-E-A-T**, **Trust** and **Readability**: 80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.\n\nAt the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing."
+          "text": "Quality scores the page from 0 to 100 on **E-E-A-T**, **Trust** and **Readability**: 80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.\n\nUnder them, **Site Audit estimate** is about where the page would score in Site Audit, as the header's **Audit** chip shows it. See the Content Editor article.\n\nAt the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing."
         },
         {
           "heading": "Your to-dos and what would raise it",
@@ -2147,6 +2214,10 @@
         {
           "heading": "Hand off",
           "text": "**Hand off** asks the Content Agent to fix the open suggestions in one run, as changes for you to review. Your to-dos stay yours. Each Hand off is kept in the page's History, and it uses your workspace's monthly AI usage.\n\nIn **Settings › Content**, admins and managers can have each brand's new pages handed off on their own when they're first opened in the editor."
+        },
+        {
+          "heading": "Trusted sources",
+          "text": "**Trust** counts links to official and research sites as primary sources. In **Settings › Content**, admins and managers can add the sites a brand trusts besides, such as its industry's association or the docs it cites, one per line, up to 50. Links to them, and to their pages, count as primary sources here and as authority links in Site Audit."
         },
         {
           "heading": "Next step",
@@ -2158,7 +2229,11 @@
         },
         {
           "heading": "Before you publish",
-          "text": "**Mark ready** opens **Before you publish** first. It checks:\n\n- placeholders, alt text and links;\n- the author;\n- the qualified reviewer on pages that advise on health, money or the law;\n- visible dates;\n- the structured data to paste, if your CMS doesn't add it;\n- a warning when Trust is under 60.\n\nCopy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about."
+          "text": "**Mark ready** opens **Before you publish** first. It checks:\n\n- placeholders, alt text and links;\n- the author;\n- the qualified reviewer on pages that advise on health, money or the law;\n- visible dates;\n- the Article schema Ansvisor adds;\n- a warning when Trust is under 60.\n\nCopy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about."
+        },
+        {
+          "heading": "The Article schema",
+          "text": "An article goes to your CMS and to exports with an Article schema that names its author, or your brand when it has none. The page's text doesn't change. If your CMS adds its own, click **Leave it out**; **Add it back** undoes it. A page with an Article schema of its own gets none. WordPress leaves the schema out: add it with your SEO plugin."
         },
         {
           "heading": "Export with Quality on",
@@ -2227,6 +2302,10 @@
         {
           "heading": "What each CMS leaves out",
           "text": "- **Webflow**: Tables become lists; images aren't sent. Reviewer metadata requires a mapped optional Plain Text field; show it in the collection template. Empty meta descriptions use the page's opening words.\n- **WordPress**: Reviewer metadata and structured data aren't sent; the adapter can't map custom metadata or repurpose the post author. Set the meta title and structured data in your SEO plugin. Images keep their addresses; no featured image or category is set.\n- **Framer**: Tables stay tables; images aren't sent. Reviewer metadata requires a mapped optional string field; show it in the page template. Duplicate slugs stop the send.\n- **Wix**: Images, cover images and categories aren't sent. Reviewer metadata is an SEO tag, not visible text; show it in the page template. Resending replaces post text, so add images after the last send.\n\nAdd images in your CMS. The slug may change slightly there: lowercase, without accents, with dots turned into dashes."
+        },
+        {
+          "heading": "The Article schema",
+          "text": "An article goes with the Article schema Ansvisor adds, its author included, unless you left it out in **Before you publish**. WordPress doesn't take it: add it with your SEO plugin."
         }
       ]
     },
@@ -3393,7 +3472,9 @@
         "anthropic",
         "openrouter",
         "test ai key",
-        "key not working"
+        "key not working",
+        "agents on your key",
+        "key limit"
       ],
       "synonyms": [
         "bring your own key",
@@ -3414,7 +3495,11 @@
         },
         {
           "heading": "Agents on your key",
-          "text": "Agents run on the key too. Each agent's **Max per run** and **Monthly cap** still apply: Ansvisor measures what a run uses at the providers' list prices, so it is an estimate of your bill. Set a spending limit with your provider too: its bill is the real one."
+          "text": "Agents run on the key too. Each agent's **Max per run** and **Monthly cap** still apply, and one more limit covers all agents on the key together: **Agents on your key**, under the keys. It starts at $250 a month; an admin can set it from $10 to $10,000, but can't turn it off. Only admins see it, with this month's use next to it. Chat you use yourself doesn't count toward it.\n\nAnsvisor measures what agents use at the providers' list prices, so these numbers are estimates of your bill. At the limit, agents pause, and they can't be run by hand either. They start again by themselves when the month renews or when an admin raises the limit. Set a spending limit with your provider too: its bill is the real one."
+        },
+        {
+          "heading": "When agents near the limit",
+          "text": "Every admin is told when agents have used 80% of the limit on your key, and again when they reach it: at most twice a month. Each time they get a notice at the top of their Chat **Inbox** and an e-mail, unless their Chat settings say Inbox only. **Review limit** or **Raise limit** opens **Settings › AI Providers**. The notices go away when the month renews, or when an admin raises the limit above what agents have used."
         },
         {
           "heading": "Keys saved before Chat",
@@ -3430,7 +3515,7 @@
         },
         {
           "heading": "When your key stops working",
-          "text": "If the key Chat uses stops working, Chat stops on it and the agents that run on it pause. Nothing moves to your plan's monthly AI limit. Once the key works again, after a passing **Test**, a save or an answer from Chat, the paused agents start again by themselves. If you remove the key, they start again on your plan's monthly AI limit."
+          "text": "If the key Chat uses stops working, Chat stops on it and the agents that run on it pause. Nothing moves to your plan's monthly AI limit. Once the key works again, after a passing **Test**, a save or an answer from Chat, the paused agents start again by themselves. If you remove the key, they start again on your plan's monthly AI limit.\n\nEvery admin is told once, with a notice at the top of their Chat **Inbox** and an e-mail. **Fix it** opens **Settings › AI Providers**. If the key still doesn't work 3 days later, they get one reminder. The notice goes away once the key works again, or is replaced or removed."
         }
       ]
     },
@@ -3469,6 +3554,46 @@
         {
           "heading": "When the plan has ended",
           "text": "Your workspace becomes read-only: you can look around, but adding, running and AI need a plan. Choose one from **See plans**."
+        }
+      ]
+    },
+    {
+      "id": "settings/chat-rules",
+      "title": "Set the rules Chat follows",
+      "route": "/dashboard/settings/chat",
+      "keywords": [
+        "chat rules",
+        "tool policy",
+        "full auto",
+        "don't ask again",
+        "managers publish",
+        "agents publish on their own",
+        "go live"
+      ],
+      "synonyms": [
+        "chat permissions",
+        "chat policy",
+        "let agents publish",
+        "autonomous publishing"
+      ],
+      "plan": "growth",
+      "updated": "2026-11-02",
+      "sections": [
+        {
+          "heading": null,
+          "text": "**Settings › Chat** holds the rules Chat follows in your workspace. Everyone can read them; only Admins change them. Each change counts from Chat's next step."
+        },
+        {
+          "heading": "Run modes and tools",
+          "text": "**Full auto** lets people run changes without a card. **Don't ask again** lets each person skip a card for one tool. Both need the Growth plan.\n\nUnder **Tool policy**, set each tool to **Never**, **Ask** or **Always**, within what the tool allows. **Reset to defaults** puts every tool back."
+        },
+        {
+          "heading": "What Managers may take live",
+          "text": "Sending, publishing and other going-live steps always need a person's click. Turn a group off here, and a Manager gets **Ask your Admin** instead."
+        },
+        {
+          "heading": "Agents that publish on their own",
+          "text": "Where your workspace has it, an Admin can let agents publish without a click. Turning it on opens a short dialog: tick that you understand and may decide this, then **Turn on**. Each agent then needs its own permission on its form, runs in **Full auto**, and goes live at most its daily limit. A page that fails Quality or your brand facts still waits for a click. It needs the Growth plan and Content Quality. Turning it off takes effect at once."
         }
       ]
     },
@@ -3778,13 +3903,18 @@
         "audit score",
         "signals",
         "audit categories",
-        "grade"
+        "grade",
+        "readability",
+        "first person"
       ],
       "synonyms": [
         "audit results",
         "page score",
         "what failed",
         "E-E-A-T score",
+        "Flesch",
+        "Ateşman",
+        "reading score",
         "score changed"
       ],
       "plan": "all",
@@ -3812,11 +3942,19 @@
         },
         {
           "heading": "Signals",
-          "text": "The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:\n\n- the **Finding**: what this audit saw on the page, when the check reports it;\n- what the signal measures, and **Why** it matters to AI engines;\n- the **Recommended fix** written for this page, or the general **Fix** for signals without one."
+          "text": "The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:\n\n- the **Finding**: what this audit saw on the page, when the check reports it;\n- what the signal measures, and **Why** it matters to AI engines;\n- the **Recommended fix** written for this page, or the general **Fix** for signals without one. Recommended fixes follow the brand's rules from **Settings › Content › Brand rules**; the score doesn't change."
+        },
+        {
+          "heading": "Readability",
+          "text": "**Readability** reads the page in its own language: the language the page declares, else the one its words are in. English is scored with Flesch Reading Ease: 50 to 70 passes, 30 to 49 and anything over 70 raise a warning, and under 30 fails, so a plain page is never failed for reading easily. Turkish is scored with Ateşman, and German, French and Spanish with their own formulas: their easy score or more passes. Other languages are read by sentence and word length, and Japanese, Chinese and Thai show n/a for now. The Content Editor scores a page the same way.\n\nThe finding shows the score with its formula and language, then its parts: words a sentence, syllables and letters a word, and words a paragraph, with about how many lines a paragraph takes on a phone."
+        },
+        {
+          "heading": "First-person evidence",
+          "text": "**First-person evidence** counts the sentences told as \"I\" or \"we\": in Turkish also by their verb endings, such as \"gezdik\" or \"düşünüyoruz\". Two or more pass and one raises a warning. Quotes and stock phrases such as \"Contact us\" don't count. It's read in English and Turkish; pages in other languages show n/a for now."
         },
         {
           "heading": "Authority links",
-          "text": "**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…) and major news."
+          "text": "**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…), major news, and the sites your brand trusts. Add those in **Settings › Content**; **Edit in Settings** takes you there."
         },
         {
           "heading": "Product pages",
@@ -3834,7 +3972,9 @@
         "audit a page",
         "auto-audit",
         "audit settings",
-        "audit again"
+        "audit again",
+        "bulk audit",
+        "audit all"
       ],
       "synonyms": [
         "page audit",
@@ -3859,7 +3999,11 @@
         },
         {
           "heading": "Other ways to start an audit",
-          "text": "- **Audit selected** on the **Opportunities** tab;\n- **Re-audit** on the pages you select on the **Pages** tab;\n- **Audit page** on a landing page of the **AI Referral Traffic** page, or **Audit pages** for several;\n- the re-run icon at the top of a report, to audit the same page again;\n- auto-audit, which audits your top-priority pages on its own.\n\nAudits started in bulk run a few at a time."
+          "text": "- **Audit selected** on the **Opportunities** tab, or **Audit all** under its **Not audited** filter;\n- **Re-audit** on the pages you select on the **Pages** tab;\n- **Audit page** on a landing page of the **AI Referral Traffic** page, or **Audit pages** for several;\n- the re-run icon at the top of a report, to audit the same page again;\n- auto-audit, which audits your top-priority pages on its own.\n\nAudits started in bulk run a few at a time."
+        },
+        {
+          "heading": "Before a bulk audit",
+          "text": "Audit selected, Audit all and Re-audit ask first. They list the pages and say how many of the month's audits they use.\n\nPages audited in the last 7 days are left out, since a page that hasn't changed scores the same. Untick **Leave out** to include them.\n\nWhen fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month."
         },
         {
           "heading": "Auditing a page again",
@@ -3888,7 +4032,11 @@
         "pages audited",
         "audit opportunities",
         "audited pages",
-        "score over time"
+        "score over time",
+        "first score",
+        "current score",
+        "not audited",
+        "audit coverage"
       ],
       "synonyms": [
         "audit overview",
@@ -3897,7 +4045,7 @@
         "audit priority"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -3905,7 +4053,7 @@
         },
         {
           "heading": "Summary and cards",
-          "text": "A summary line gives your site score, pages audited, lowest category and next auto-audit. The first three cards count only the pages of your primary domain:\n\n- **Site score**: the average score of each page's latest audit, and its change from each page's previous audit.\n- **Pages audited**: pages of your domain with a completed audit, and how many pages of other sites you audited.\n- **Authority · E-E-A-T**: those two category scores averaged over your pages, and the signals that fail or warn on the most pages.\n- **Audits this month**: audits left this billing month, with the share auto-audit keeps for its next runs."
+          "text": "A summary line gives your site score, pages audited, lowest category and next auto-audit. The first three cards count only the pages of your primary domain:\n\n- **Site score**: the average score of each page's latest audit, and its change from each page's previous audit.\n- **Pages audited**: how many of your site's pages, as your sitemap, Google Analytics and AI citations list them, have an audit from the last 90 days, and how many don't. **See the … not audited** opens those in Opportunities.\n- **Authority · E-E-A-T**: those two category scores averaged over your pages, and the signals that fail or warn on the most pages.\n- **Audits this month**: audits left this billing month, with the share auto-audit keeps for its next runs."
         },
         {
           "heading": "Score over time",
@@ -3913,7 +4061,7 @@
         },
         {
           "heading": "Why a page is in Opportunities",
-          "text": "The **Opportunities** tab is an inbox of pages worth auditing next. Each row shows a **Priority** from 0 to 100, the page, **Why** it's listed, its **AI visits** over the last 30 days and its **Last audit**. A page is listed when:\n\n- **No AI traffic**: it ranks high on your site in Google Analytics but gets no visitors from AI engines. **Targeted, not cited** adds that a tracked prompt points at it and no AI answer cites it;\n- a competitor is cited on prompts where you never are, and this is your closest page;\n- it was **Never audited**, or not in the last 90 days.\n\nAI visits need Google Analytics or the tracking snippet."
+          "text": "The **Opportunities** tab is an inbox of pages worth auditing next. Each row shows a **Priority** from 0 to 100, the page, **Why** it's listed, its **AI visits** over the last 30 days and its **Last audit**. A page is listed when:\n\n- **No AI traffic**: it ranks high on your site in Google Analytics but gets no visitors from AI engines. **Targeted, not cited** adds that a tracked prompt points at it and no AI answer cites it;\n- a competitor is cited on prompts where you never are, and this is your closest page;\n- it was **Never audited**, or not in the last 90 days.\n\nAI visits need Google Analytics or the tracking snippet.\n\nChips above the list show one reason at a time: **All**, **Not audited**, **No AI traffic** or **Competitor cited**, each with its count."
         },
         {
           "heading": "Priority and templates",
@@ -3925,7 +4073,7 @@
         },
         {
           "heading": "The Pages tab",
-          "text": "**Pages** lists every page you audited, one row per page, most recent first, with its **Score**, its **Issues** (signals that failed or warned), its **Status** and its **Last audit**. Status is **Good** (70 or more), **Improving** (below 70 but up from the previous audit), **Needs work**, **Running** or **Failed**. **Auto** marks an auto-audit's audit.\n\nClick a row to open its latest report. The arrow beside a page lists its earlier audits, each with **View report** and a delete icon. **Group by template** groups the rows under their template. **Export** downloads the list as CSV or Excel; select pages to **Re-audit** them or export only those."
+          "text": "**Pages** lists every page you audited, one row per page, most recent first, with its **First score**, **Current score**, **Issues** (signals that failed or warned), **Status** and **Last audit**. Once a page has two audits, the change since the first shows beside the current score: green up, red down. Status is **Good** (70 or more), **Improving** (below 70 but up from the previous audit), **Needs work**, **Running** or **Failed**. **Auto** marks an auto-audit's audit.\n\nClick a row to open its latest report. The arrow beside a page lists its earlier audits, each with **View report** and a delete icon. **Group by template** groups the rows under their template. **Export** downloads the list as CSV or Excel, first scores included; select pages to **Re-audit** them or export only those."
         }
       ]
     },
