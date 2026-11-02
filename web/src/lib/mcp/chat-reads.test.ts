@@ -424,6 +424,14 @@ describe('Workspace reads', () => {
     reads.answers.brand_cms_connections = [
       { brand_id: BRAND, provider: 'webflow', status: 'connected', site_name: 'Acme site' },
     ];
+    reads.answers.integration_connections = [
+      {
+        provider: 'google-search-console',
+        status: 'connected',
+        connected_by: null,
+        created_at: null,
+      },
+    ];
     reads.answers.api_keys = [{ name: 'MCP laptop', last_used_at: null }];
     reads.answers.organization_ai_keys = [{ provider: 'anthropic', active: true }];
     const read = await listConnectionsFor(auth());
@@ -445,6 +453,12 @@ describe('Workspace reads', () => {
     expect(read?.brands[0].not_connected).toContain('Google Analytics');
     expect(read?.brands[0].not_connected).not.toContain('HubSpot');
     expect(read?.coming_soon).toContain('HubSpot');
+    // Google disconnected in Settings: the property is kept, but its sign-in is gone.
+    reads.answers.integration_connections = [];
+    expect((await listConnectionsFor(auth()))?.brands[0]).toMatchObject({
+      connected: [{ tool: 'Webflow' }],
+      sign_in_failed: ['Google Search Console'],
+    });
     // Only the person's own keys: the read is by their id, never the workspace's members.
     expect(reads.filters).toContainEqual({ table: 'api_keys', column: 'user_id', value: 'u1' });
     expect(reads.selects.some((s) => s.table === 'profiles')).toBe(false);

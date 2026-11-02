@@ -16,7 +16,8 @@ import { NO_CONNECTION_ROWS, readConnectionRows } from './connection-rows';
  * that takes sent pages (webhook_configs, content_draft.sent); any catalog
  * source is a feed, upload, store or Merchant Center source whose sign-in
  * still works (catalog_sources); Search Console and Analytics are the
- * brand's picked property. Agents saved before connections were kinds name
+ * brand's picked property, and where the workspace's Google sign-ins are
+ * given, only while its sign-in is connected. Agents saved before connections were kinds name
  * a product (`webflow`, `shopify`): it counts as its kind. A connection
  * this can't read (one no integration offers yet) isn't held against a run.
  */
@@ -57,8 +58,21 @@ export interface BrandConnectionRows {
   catalog: { kind: string; last_status: string | null }[];
 }
 
-/** The kinds a brand has connected. */
-export function connectedKinds(rows: BrandConnectionRows): Set<string> {
+/** The Google sign-in each property kind needs (integration_connections.provider). */
+const PROPERTY_SIGN_IN: Record<string, string> = {
+  google_search_console: 'google-search-console',
+  google_analytics: 'google-analytics',
+};
+
+/**
+ * The kinds a brand has connected. Given the workspace's sign-ins, a picked
+ * property counts only while its Google sign-in is connected: Disconnect in
+ * Settings drops the sign-in but leaves the brand's property set.
+ */
+export function connectedKinds(
+  rows: BrandConnectionRows,
+  signIns?: readonly { provider: string; status: string }[],
+): Set<string> {
   const kinds = new Set<string>();
   if (
     rows.cms.some((c) => c.status === 'connected') ||
@@ -69,8 +83,13 @@ export function connectedKinds(rows: BrandConnectionRows): Set<string> {
   if (rows.catalog.some((source) => source.last_status !== 'auth_failed')) {
     kinds.add(CATALOG_CONNECTION);
   }
-  if (rows.brand?.gsc_property) kinds.add('google_search_console');
-  if (rows.brand?.ga_property_id) kinds.add('google_analytics');
+  const signedIn = (kind: string) =>
+    !signIns ||
+    signIns.some((s) => s.provider === PROPERTY_SIGN_IN[kind] && s.status === 'connected');
+  if (rows.brand?.gsc_property && signedIn('google_search_console')) {
+    kinds.add('google_search_console');
+  }
+  if (rows.brand?.ga_property_id && signedIn('google_analytics')) kinds.add('google_analytics');
   return kinds;
 }
 
