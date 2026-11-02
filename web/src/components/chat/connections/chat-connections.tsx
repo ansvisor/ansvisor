@@ -125,7 +125,7 @@ export function ChatConnections() {
             target="_blank"
             rel="noopener noreferrer"
             data-action="integrations.request"
-            className={buttonVariants({ variant: 'outline' })}
+            className={cn(buttonVariants({ variant: 'outline' }))}
           >
             {t('page.request')}
             <ExternalLink aria-hidden />
@@ -333,7 +333,7 @@ function ConnectionCard({
               <Link
                 href={row.settingsHref}
                 data-action="integrations.connect"
-                className={buttonVariants({ size: 'sm' })}
+                className={cn(buttonVariants({ size: 'sm' }))}
               >
                 {t('reconnect')}
               </Link>
@@ -352,7 +352,7 @@ function ConnectionCard({
               <Link
                 href={row.settingsHref}
                 data-action="integrations.settings"
-                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
               >
                 {t('card.settings')}
               </Link>
@@ -363,10 +363,12 @@ function ConnectionCard({
             href={row.settingsHref}
             data-action="integrations.connect"
             aria-label={t('connectLabel', { name })}
-            className={buttonVariants({
-              variant: row.suggested ? 'default' : 'outline',
-              size: 'sm',
-            })}
+            className={cn(
+              buttonVariants({
+                variant: row.suggested ? 'default' : 'outline',
+                size: 'sm',
+              }),
+            )}
           >
             {t('connect')}
           </Link>
