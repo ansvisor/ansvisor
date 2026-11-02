@@ -3850,6 +3850,10 @@
     }
   },
   "chatEngine": {
+    "pageMoves": {
+      "fill": "Fill the {what}",
+      "untitled": "Untitled page"
+    },
     "actionCard": {
       "tasks": "{count, plural, one {# task} other {# tasks}}",
       "doneWhen": "Done when: {text}",
@@ -4227,6 +4231,24 @@
     "openEditorFailed": "Couldn't open that in the Content Editor. Try again."
   },
   "chatDeliverable": {
+    "version": {
+      "line": "Version {n} · {parts} · {characters, number} characters",
+      "questions": "{count, plural, one {# question} other {# questions}}",
+      "sections": "{count, plural, one {# section} other {# sections}}",
+      "whatChanged": "What changed",
+      "shortened": "“{heading}” shortened: {before} → {after} characters",
+      "newQuestion": "New question: “{heading}”",
+      "newSection": "New section: “{heading}”",
+      "placeholders": "{count, plural, one {# placeholder} other {# placeholders}} to fill: {list}",
+      "showAllQuestions": "Show all {count} questions",
+      "showAllSections": "Show all {count} sections",
+      "showLess": "Show less",
+      "undo": "Undo to version {n}",
+      "undoneShort": "Back to version {n}",
+      "undone": "Version {n} is back in the draft.",
+      "undoFailed": "The version before couldn’t be put back. Try again from the editor’s History.",
+      "saved": "Saved to the Library as a draft after each change, so the editor can open it anytime."
+    },
     "types": {
       "document": "Document",
       "table": "Table",

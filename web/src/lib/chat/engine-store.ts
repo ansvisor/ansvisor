@@ -154,6 +154,10 @@ export interface RunProgress {
   whys?: number;
   /** The next moves the model suggested last (CHAT-07 §C), kept once the run ends. */
   nextMoves?: NextMoveInput[];
+  /** The first placeholder the run's last page version leaves to fill (W4-12a), for its next move. */
+  pagePlaceholder?: string | null;
+  /** By the file a page version was filed as: the draft and the History version its Undo puts back (W4-12a). */
+  pageUndos?: Record<string, { draftId: string; versionId: string }>;
   /** The limit a run at paused_cap reached: the month's AI limit, or its agent run's cap. */
   capHit?: 'run' | 'month';
   /** Why a stopped run stopped (its run.stopped reason), for its agent run (CHAT-21 §H). */

@@ -1004,7 +1004,12 @@
         "improve with audit",
         "where pages open",
         "open in content editor",
-        "keep working in chat"
+        "keep working in chat",
+        "page version",
+        "what changed",
+        "placeholder",
+        "undo version",
+        "show all questions"
       ],
       "synonyms": [
         "assistant",
@@ -1070,6 +1075,10 @@
         {
           "heading": "Where a page opens",
           "text": "When Chat writes a page, it asks **Where should we open this page?** **Open in Content Editor** opens the full editor with Brief, Rules and Quality; **Keep working in chat** keeps the page here, and you ask for changes in plain words. Tick **Don't ask again** to keep your choice. Change it anytime in **Settings › Chat › Where pages open**."
+        },
+        {
+          "heading": "Versions of a page in chat",
+          "text": "Each time Chat writes or changes a page, its card shows the version, such as **Version 2 · 7 questions · 905 characters**. **What changed** lists sections Chat made shorter, new questions or sections, and placeholders in [BRACKETS] for you to fill; the first next move offers to fill one. The card previews the first sections; **Show all** opens the rest. **Undo to version 1** puts the version before back, as the editor's History does. Every version is saved to the Library as a draft."
         },
         {
           "heading": "Send or publish a page from Chat",

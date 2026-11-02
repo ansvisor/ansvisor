@@ -46,6 +46,7 @@ import {
 import {
   isChatHref,
   maskIds,
+  type ChatDeliverable,
   type ChatDenialCard,
   type ChatEventPayloads,
   type ChatRunSummary,
@@ -189,6 +190,7 @@ import {
   type LibrarySkill,
   type ShortcutPlaybook,
 } from './skills/library';
+import { placeholderWords } from '@/lib/content/page-version';
 import { MAX_UPLOADS } from './uploads';
 
 /**
@@ -3518,11 +3520,23 @@ async function deliver(
 ): Promise<string | null> {
   const made = tool.deliverable?.(input as never, output);
   if (!made) return null;
+  // A page made or changed in chat: its version card (W4-12a). Read before it is filed,
+  // so it is numbered after the versions this chat filed already.
+  const paged = tool.versionOf
+    ? await tool
+        .versionOf(input as never, output, { conversationId: rc.run.conversationId })
+        .catch((error: unknown) => {
+          console.error('[chat] could not read a page version:', error);
+          return null;
+        })
+    : null;
+  // Files needs a title: a change to an untitled draft whose version couldn't be read has none.
+  const title = paged?.title || made.title || t('pageMoves.untitled');
   const filed = await fileChatOutput({
     organizationId: rc.actor.organizationId,
     createdBy: rc.actor.userId,
     brandId,
-    title: made.title,
+    title,
     type: made.type,
     formats: made.formats,
     body: new TextEncoder().encode(made.body),
@@ -3541,15 +3555,26 @@ async function deliver(
     return { ok: false as const, failure: 'failed' as const };
   });
   const task = filed.ok ? await taskOfDeliverable(rc, filed.id, !!made.contentDraftId) : null;
-  rc.sink.emit('deliverable.created', {
-    title: made.title,
+  const card: ChatDeliverable = {
+    title,
     type: made.type,
     formats: made.formats,
     status: 'draft',
     ...(made.href ? { href: made.href } : {}),
     filed: filed.ok ? 'in_files' : filed.failure,
     ...(task ? { task } : {}),
-  });
+    ...(paged ? { version: paged.version } : {}),
+  };
+  if (paged && paged.version.n > 1) rc.sink.emit('deliverable.updated', card);
+  else rc.sink.emit('deliverable.created', card);
+  if (paged) rc.progress.pagePlaceholder = paged.version.changes.placeholders[0] ?? null;
+  // Which History version the card's Undo puts back: kept on the server, by its file.
+  if (paged?.undoVersionId && filed.ok && made.contentDraftId) {
+    rc.progress.pageUndos = {
+      ...rc.progress.pageUndos,
+      [filed.id]: { draftId: made.contentDraftId, versionId: paged.undoVersionId },
+    };
+  }
   return filed.ok ? filed.id : null;
 }
 
@@ -4019,13 +4044,22 @@ async function checkedFactsStep(rc: RunContext): Promise<void> {
  * error, a pause at the cap or a Stop. A failure here loses the moves only.
  */
 async function offerNextMoves(rc: RunContext): Promise<void> {
-  const moves = rc.progress.nextMoves;
-  if (!moves?.length) return;
+  const moves = rc.progress.nextMoves ?? [];
+  const placeholder = rc.progress.pagePlaceholder;
+  if (moves.length === 0 && !placeholder) return;
   try {
     const ctx = await contextFor(rc);
     if (!ctx) return;
     // A move never names a tool (CHAT-03 item 22), even in words the model made up.
-    const clean = moves.filter((move) => !namesTool(move.label) && !namesTool(move.prompt));
+    let clean = moves.filter((move) => !namesTool(move.label) && !namesTool(move.prompt));
+    // A page version that leaves a placeholder: filling it comes first (CHAT-25 §6, W4-12a).
+    if (placeholder) {
+      const fill = t('pageMoves.fill', { what: placeholderWords(placeholder) });
+      clean = [
+        { label: fill, prompt: fill, kind: 'continue', class: 'write', continues_this_run: true },
+        ...clean.filter((move) => move.kind !== 'continue'),
+      ];
+    }
     const picked = pickNextMoves(clean, { role: ctx.role, writable: ctx.plan.writable });
     if (picked.length === 0) return;
     const { error } = await supabaseAdmin.from('chat_next_moves').insert(
