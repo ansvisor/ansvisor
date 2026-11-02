@@ -78,6 +78,14 @@ export const CHAT_MODELS: readonly OfferedModel[] = [
     label: 'GPT-6.1 Terra',
     tested: false,
   },
+  // OpenAI's smallest and cheapest (owner, 2026-11-03).
+  {
+    id: 'openai/gpt-6-luna',
+    api: 'openai/gpt-6-luna',
+    provider: 'openrouter',
+    label: 'GPT-6 Luna',
+    tested: false,
+  },
   {
     id: 'google/gemini-4-argon',
     api: 'google/gemini-4-argon',
@@ -90,6 +98,14 @@ export const CHAT_MODELS: readonly OfferedModel[] = [
     api: 'google/gemini-3.8-flash',
     provider: 'openrouter',
     label: 'Gemini 3.8 Flash',
+    tested: false,
+  },
+  // Google's smallest and cheapest (owner, 2026-11-03).
+  {
+    id: 'google/gemini-3.5-flash-lite',
+    api: 'google/gemini-3.5-flash-lite',
+    provider: 'openrouter',
+    label: 'Gemini 3.5 Flash Lite',
     tested: false,
   },
   {

@@ -371,8 +371,10 @@ export const EVAL_PRICES: Readonly<Record<string, { input: number; output: numbe
   'anthropic/claude-opus-5.5': { input: 4, output: 20 },
   'openai/gpt-6.1-sol': { input: 2, output: 10 },
   'openai/gpt-6.1-terra': { input: 1, output: 5 },
+  'openai/gpt-6-luna': { input: 0.1, output: 0.5 },
   'google/gemini-4-argon': { input: 2, output: 10 },
   'google/gemini-3.8-flash': { input: 0.825, output: 4.125 },
+  'google/gemini-3.5-flash-lite': { input: 0.3, output: 2.5 },
   // The dearest of the US and EU hosts it runs on (lib/agent/openrouter.ts), not the catalog's
   // cheapest: they ask $0.11–0.45 in, $0.34–1.80 out.
   'deepseek/deepseek-v4.1-flash': { input: 0.45, output: 1.8 },
