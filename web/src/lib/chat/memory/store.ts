@@ -6,6 +6,7 @@ import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { StepWrite } from '../engine-store';
+import { rememberOffer, type RememberFacts } from './offer';
 import { chatAgenticEnabled } from '../flag';
 import { firstNameOf } from '../home';
 import { planFactsFromOrgRow, type PlanFacts } from '../plan-facts';
@@ -477,6 +478,56 @@ export function memoryStep(lines: readonly MemoryLine[]): {
       debug: { memory: lines.map((line) => ({ id: line.id, scope: line.scope })) },
     },
   };
+}
+
+// ─── "Remember this?" (W4-33) ───────────────────────────────────────────────
+
+/** The event a run offers to remember with (events.ts). */
+const REMEMBER_EVENT = 'remember.offered';
+
+/** Whether this conversation offered "Remember this?" already: at most once a conversation. */
+export async function rememberOfferedIn(conversationId: string): Promise<boolean> {
+  const runs = await supabaseAdmin
+    .from('chat_runs')
+    .select('id')
+    .eq('conversation_id', conversationId);
+  if (runs.error) throw new Error(`Could not read the chat's runs: ${runs.error.message}`);
+  const ids = ((runs.data ?? []) as { id: string }[]).map((run) => run.id);
+  if (ids.length === 0) return false;
+  const { count, error } = await supabaseAdmin
+    .from('chat_run_events')
+    .select('run_id', { count: 'exact', head: true })
+    .in('run_id', ids)
+    .eq('type', REMEMBER_EVENT);
+  if (error) throw new Error(`Could not read the chat's offers: ${error.message}`);
+  return (count ?? 0) > 0;
+}
+
+/**
+ * The line to offer under a finished run's answer (CHAT-14 item 9, W4-33;
+ * offer.ts), or null: only while both switches are on and the workspace
+ * isn't read-only, and once a conversation. Never throws: an offer that
+ * can't be decided isn't made.
+ */
+export async function rememberOfferFor(
+  actor: { userId: string; organizationId: string },
+  run: Omit<RememberFacts, 'canSave' | 'offeredBefore'> & { conversationId: string },
+): Promise<string | null> {
+  try {
+    if (!chatAgenticEnabled(actor.organizationId)) return null;
+    // Nothing to offer: no read.
+    if (!rememberOffer({ ...run, canSave: true, offeredBefore: false })) return null;
+    const [viewer, switches, offeredBefore] = await Promise.all([
+      readMemoryViewer(actor),
+      readMemorySwitches(actor.organizationId, actor.userId),
+      rememberOfferedIn(run.conversationId),
+    ]);
+    const canSave = !!viewer?.plan.writable && switches.workspace && switches.personal;
+    return rememberOffer({ ...run, canSave, offeredBefore });
+  } catch (err) {
+    console.error('[chat/memory] could not decide "Remember this?":', err);
+    return null;
+  }
 }
 
 // ─── The list (/api/chat/memory) ────────────────────────────────────────────

@@ -506,6 +506,53 @@ describe('the switches (item 24)', () => {
   });
 });
 
+describe('"Remember this?" (item 9, W4-33)', () => {
+  const CHAT = 'eeeeeeee-0000-4000-8000-000000000001';
+  const run = {
+    conversationId: CHAT,
+    question: 'From now on, write blog posts in US English.',
+    flagged: null,
+    attended: true,
+    handled: false,
+    existing: [],
+  };
+  const actor = { userId: PEOPLE.manager, organizationId: ORG };
+  beforeEach(() => {
+    db.tables.chat_runs = [{ id: 'run-1', conversation_id: CHAT }];
+    db.tables.chat_run_events = [];
+  });
+
+  it('offers the line once a conversation, while memory is on and the workspace writable', async () => {
+    expect(await store.rememberOfferFor(actor, run)).toBe(
+      'From now on, write blog posts in US English',
+    );
+    db.tables.chat_run_events.push({ run_id: 'run-1', type: 'remember.offered', seq: 9 });
+    expect(await store.rememberOfferedIn(CHAT)).toBe(true);
+    expect(await store.rememberOfferFor(actor, run)).toBeNull();
+  });
+
+  it('offers nothing with Use memory off, the workspace switch off, a read-only workspace or Chat off', async () => {
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.manager, memory_enabled: false }];
+    expect(await store.rememberOfferFor(actor, run)).toBeNull();
+    db.tables.chat_user_prefs = [];
+    db.tables.chat_settings = [{ organization_id: ORG, memory_enabled: false }];
+    expect(await store.rememberOfferFor(actor, run)).toBeNull();
+    db.tables.chat_settings = [];
+    db.tables.organizations[0].subscription_status = 'canceled';
+    expect(await store.rememberOfferFor(actor, run)).toBeNull();
+    db.tables.organizations[0].subscription_status = 'active';
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await store.rememberOfferFor(actor, run)).toBeNull();
+  });
+
+  it('offers nothing when it can’t tell, rather than twice', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    db.failures.chat_run_events = { message: 'down' };
+    expect(await store.rememberOfferFor(actor, run)).toBeNull();
+    error.mockRestore();
+  });
+});
+
 describe('the "Used memory" step (item 17)', () => {
   it('is a read counted in items, its lines as its detail and their ids for staff only', () => {
     const step = store.memoryStep([
