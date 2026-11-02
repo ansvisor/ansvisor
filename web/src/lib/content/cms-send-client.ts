@@ -76,6 +76,8 @@ export interface CmsDelivery {
    * the site's next publish.
    */
   live?: boolean;
+  /** Where it went live, for a page published from Chat (AUTONOMOUS-GO-LIVE PR 9). */
+  published_url?: string | null;
 }
 
 export type CmsSendResult =

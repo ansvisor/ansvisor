@@ -154,18 +154,25 @@ const closeOnOpen = (id: string) => () => void closeChatNotice(id);
 function WentLiveRow({ notice }: { notice: Extract<ChatNotice, { kind: 'agent_went_live' }> }) {
   const t = useTranslations('chatShell.inbox.notice');
   const cms = CMS_NAMES[notice.target];
+  // Published live (PR 9): on its site, Open page opens the live page.
+  const site = notice.url ? siteOf(notice.url) : null;
+  const words = site
+    ? t('published', { agent: notice.agent, title: notice.title, site })
+    : t('wentLive', { agent: notice.agent, title: notice.title, cms });
   return (
-    <div data-slot="inbox-notice" data-kind={notice.kind} className={INFO_ROW}>
+    <div
+      data-slot="inbox-notice"
+      data-kind={site ? 'agent_published' : notice.kind}
+      className={INFO_ROW}
+    >
       <Send aria-hidden className="size-2.5 text-foreground/70" />
       <span className="min-w-0 text-[13.5px]">
-        <span
-          className={cn('block truncate', !notice.read && 'font-semibold')}
-          title={t('wentLive', { agent: notice.agent, title: notice.title, cms })}
-        >
-          {t('wentLive', { agent: notice.agent, title: notice.title, cms })}
+        <span className={cn('block truncate', !notice.read && 'font-semibold')} title={words}>
+          {words}
         </span>
         <span className="block truncate text-xs text-muted-foreground">
-          {t('wentLiveDetail')}
+          {/* The headline may be cut on a long title: the site it went live on stays readable. */}
+          {site ? t('publishedDetail', { site }) : t('wentLiveDetail')}
           {notice.chatId && (
             <>
               {' · '}
@@ -184,14 +191,27 @@ function WentLiveRow({ notice }: { notice: Extract<ChatNotice, { kind: 'agent_we
       <span className="text-[11px] whitespace-nowrap text-muted-foreground">
         {dayOf(notice.createdAt)}
       </span>
-      <Link
-        href={`/dashboard/content/editor/${notice.draftId}`}
-        data-action="inbox.openGoLivePage"
-        onClick={closeOnOpen(notice.id)}
-        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-full')}
-      >
-        {t('openPage')}
-      </Link>
+      {notice.url ? (
+        <a
+          href={notice.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          data-action="inbox.openGoLivePage"
+          onClick={closeOnOpen(notice.id)}
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-full')}
+        >
+          {t('openPage')}
+        </a>
+      ) : (
+        <Link
+          href={`/dashboard/content/editor/${notice.draftId}`}
+          data-action="inbox.openGoLivePage"
+          onClick={closeOnOpen(notice.id)}
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-full')}
+        >
+          {t('openPage')}
+        </Link>
+      )}
     </div>
   );
 }
@@ -223,4 +243,13 @@ function GoLiveOffRow({ notice }: { notice: Extract<ChatNotice, { kind: 'agent_g
       </Link>
     </div>
   );
+}
+
+/** The site a live page is on, as its notice names it: its host, without www. */
+function siteOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
 }

@@ -369,6 +369,7 @@ describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
       target: 'webflow' as const,
       draftId: 'draft-1',
       chatId: 'chat-1',
+      url: null,
       createdAt: '2026-11-02T08:00:00Z',
       read: false,
     };
@@ -399,6 +400,30 @@ describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
     expect(notices.read).toHaveBeenCalledExactlyOnceWith([wentLive.id]);
     await act(async () => page.click());
     expect(notices.close).toHaveBeenCalledExactlyOnceWith(wentLive.id);
+  });
+
+  it('tells of a page an agent published live on its own, Open page opening the live page (PR 9)', async () => {
+    const published = {
+      id: '9f0a4e3c-3d4e-4f60-8b12-3456789abcde',
+      kind: 'agent_went_live' as const,
+      agent: 'Publisher',
+      title: 'Pricing FAQ',
+      target: 'wordpress' as const,
+      draftId: 'draft-1',
+      chatId: null,
+      url: 'https://www.acme.example/pricing-faq/',
+      createdAt: '2026-11-02T08:00:00Z',
+      read: true,
+    };
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: true, notices: [published] }} />);
+    const [row] = noticeRows();
+    expect(row.getAttribute('data-kind')).toBe('agent_published');
+    expect(row.textContent).toContain('Publisher published “Pricing FAQ” on acme.example');
+    expect(row.textContent).toContain('Live on acme.example · on its own');
+    const page = row.querySelector<HTMLAnchorElement>('[data-action="inbox.openGoLivePage"]')!;
+    expect(page.getAttribute('href')).toBe('https://www.acme.example/pricing-faq/');
+    expect(page.getAttribute('target')).toBe('_blank');
+    expect(row.querySelector('[data-action="inbox.openGoLiveRun"]')).toBeNull();
   });
 
   it('shows the notice in the Inbox without tabs too, and none that couldn’t be read', async () => {

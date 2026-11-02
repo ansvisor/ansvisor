@@ -45,6 +45,8 @@ export type ChatNotice =
       draftId: string;
       /** The run's chat, for Open run; null when it couldn't be found. */
       chatId: string | null;
+      /** Published live (PR 9): where; null for a CMS draft. */
+      url: string | null;
     })
   | (NoticeBase & {
       kind: 'agent_go_live_off';
@@ -89,7 +91,7 @@ export function noticeOf(row: NoticeRow): ChatNotice | null {
     };
   }
   if (row.kind === 'agent_went_live') {
-    const { agent, title, target, draftId, chatId } = payload;
+    const { agent, title, target, draftId, chatId, kind, url } = payload;
     if (typeof agent !== 'string' || typeof title !== 'string' || typeof draftId !== 'string') {
       return null;
     }
@@ -102,6 +104,7 @@ export function noticeOf(row: NoticeRow): ChatNotice | null {
       target,
       draftId,
       chatId: typeof chatId === 'string' ? chatId : null,
+      url: kind === 'publish' && typeof url === 'string' && /^https?:\/\//.test(url) ? url : null,
     };
   }
   if (row.kind === 'agent_go_live_off') {

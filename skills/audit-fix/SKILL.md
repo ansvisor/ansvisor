@@ -38,6 +38,6 @@ The site audit's findings, ordered by what matters most for AI answers, each tur
 
 ## Don't
 
-- Never publish or change the site: going live is always the person's click.
+- Never change the site, and never publish yourself: the app decides whether a page goes live, and asks the person unless an Admin allowed this agent to go live on its own.
 - Don't fix what the audit didn't find without saying so.
 - Never promise rankings or citations.

@@ -77,9 +77,27 @@ describe('noticeOf', () => {
       target: 'webflow',
       draftId: 'draft-1',
       chatId: 'chat-1',
+      url: null,
       createdAt: '2026-11-01T09:00:00Z',
       read: false,
     });
+    // Published live (PR 9): its address, an http(s) one only.
+    expect(
+      noticeOf(
+        row({
+          kind: 'agent_went_live',
+          payload: { ...payload, kind: 'publish', url: 'https://acme.example/faq' },
+        }),
+      ),
+    ).toMatchObject({ url: 'https://acme.example/faq' });
+    expect(
+      noticeOf(
+        row({
+          kind: 'agent_went_live',
+          payload: { ...payload, kind: 'publish', url: 'javascript:x' },
+        }),
+      ),
+    ).toMatchObject({ url: null });
     expect(
       noticeOf(row({ kind: 'agent_went_live', payload: { ...payload, chatId: null } })),
     ).toMatchObject({ chatId: null });
