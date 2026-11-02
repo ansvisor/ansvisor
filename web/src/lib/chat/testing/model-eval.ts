@@ -28,7 +28,7 @@ export interface EvalRun {
   /** Tool names, ids or id fields found in what the person's screen received. */
   leaked: string[];
   /** The tokens its model steps used, for the report's cost. */
-  tokens: { input: number; output: number };
+  tokens: EvalTokens;
 }
 
 export interface EvalCheck {
@@ -378,9 +378,29 @@ export const EVAL_PRICES: Readonly<Record<string, { input: number; output: numbe
   'deepseek/deepseek-v4.1-flash': { input: 0.45, output: 1.8 },
 };
 
+/**
+ * What a run's model steps used: every input token, the prompt cache's
+ * included (as the budget counts them, ChatStepUsage), and of those the ones
+ * read from and written to the cache.
+ */
+export interface EvalTokens {
+  input: number;
+  output: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+}
+
+/** A cache read's and a cache write's price against an input token's: Anthropic's, the dearest. */
+const CACHE_READ = 0.1;
+const CACHE_WRITE = 1.25;
+
 /** A model's cost for these tokens, in dollars; null without its price. */
-export function evalCost(model: string, tokens: { input: number; output: number }): number | null {
+export function evalCost(model: string, tokens: EvalTokens): number | null {
   const price = EVAL_PRICES[model];
   if (!price) return null;
-  return (tokens.input * price.input + tokens.output * price.output) / 1_000_000;
+  const read = tokens.cacheRead ?? 0;
+  const written = tokens.cacheWrite ?? 0;
+  const input =
+    Math.max(0, tokens.input - read - written) + read * CACHE_READ + written * CACHE_WRITE;
+  return (input * price.input + tokens.output * price.output) / 1_000_000;
 }

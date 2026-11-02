@@ -22,6 +22,7 @@ import {
   type EvalResult,
   type EvalRole,
   type EvalScenario,
+  type EvalTokens,
 } from './testing/model-eval';
 
 /**
@@ -35,8 +36,9 @@ import {
  *
  * CHAT_MODEL_EVAL is `untested` (every model of lib/chat/models.ts not yet
  * tested), `all`, or catalog ids with commas; CHAT_MODEL_EVAL_ONLY keeps
- * the scenarios named; CHAT_MODEL_EVAL_OUT is where the JSON report goes
- * (the system's temp folder by default). A Claude model runs on
+ * the scenarios named; CHAT_MODEL_EVAL_MAX_USD stops starting scenarios
+ * once the run has cost that much; CHAT_MODEL_EVAL_OUT is where the JSON
+ * report goes (the system's temp folder by default). A Claude model runs on
  * ANTHROPIC_API_KEY, any other through OpenRouter on OPENROUTER_API_KEY, as
  * the product calls them (engine-model.ts); each is read from the
  * environment, else from web/.env.local, and never printed. A model without
@@ -103,7 +105,7 @@ const fakes = vi.hoisted(() => ({
   reads: [] as string[],
   changes: [] as string[],
   /** The tokens the run now running used, as its steps were charged. */
-  tokens: { input: 0, output: 0 },
+  tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } as Required<EvalTokens>,
   resolveModels: vi.fn(),
   openPage: vi.fn(),
   explain: vi.fn(async () => ({ found: false })),
@@ -120,9 +122,11 @@ vi.mock('./budget', () => ({
   reserveChatStep: vi.fn(async () => ({
     ok: true,
     budget: {
-      async charge(usage: { inputTokens?: number; outputTokens?: number }) {
+      async charge(usage: import('./budget').ChatStepUsage) {
         fakes.tokens.input += usage.inputTokens ?? 0;
         fakes.tokens.output += usage.outputTokens ?? 0;
+        fakes.tokens.cacheRead += usage.cacheReadTokens ?? 0;
+        fakes.tokens.cacheWrite += usage.cacheWriteTokens ?? 0;
       },
       async release() {},
       keep() {},
@@ -293,7 +297,7 @@ function leaksOf(events: ChatEvent[]): string[] {
 
 /** Runs a scenario's message on the models resolveChatModels gives, and grades what it did. */
 async function runScenario(scenario: EvalScenario): Promise<EvalResult> {
-  fakes.tokens = { input: 0, output: 0 };
+  fakes.tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   fakes.scenario = {
     answerText: scenario.answerText,
     page: scenario.page && {
@@ -409,7 +413,7 @@ describe('the test set’s harness (W4-35), on a scripted model', () => {
     expect(result.checks.filter((c) => !c.ok)).toEqual([]);
     expect(result.passed).toBe(true);
     // Two steps, each charged what it used.
-    expect(result.run.tokens).toEqual({ input: 2000, output: 100 });
+    expect(result.run.tokens).toMatchObject({ input: 2000, output: 100 });
   });
 
   it('fails a model that sends the person to another vendor', async () => {
@@ -522,12 +526,19 @@ describe.skipIf(!ASKED)('the test set on a real model (CHAT_MODEL_EVAL)', () => 
   const only = process.env.CHAT_MODEL_EVAL_ONLY?.split(',').map((id) => id.trim());
   const scenarios = EVAL_SCENARIOS.filter((s) => !only || only.includes(s.id));
   const results: Record<string, EvalResult[]> = {};
+  // CHAT_MODEL_EVAL_MAX_USD: no scenario starts once the run has cost this much.
+  const maxUsd = Number(process.env.CHAT_MODEL_EVAL_MAX_USD) || null;
+  let spentUsd = 0;
 
   afterAll(() => {
     const models = Object.entries(results).map(([model, runs]) => {
-      const tokens = {
-        input: runs.reduce((sum, r) => sum + r.run.tokens.input, 0),
-        output: runs.reduce((sum, r) => sum + r.run.tokens.output, 0),
+      const sum = (field: keyof EvalTokens) =>
+        runs.reduce((total, r) => total + (r.run.tokens[field] ?? 0), 0);
+      const tokens: EvalTokens = {
+        input: sum('input'),
+        output: sum('output'),
+        cacheRead: sum('cacheRead'),
+        cacheWrite: sum('cacheWrite'),
       };
       return {
         model,
@@ -569,10 +580,16 @@ describe.skipIf(!ASKED)('the test set on a real model (CHAT_MODEL_EVAL)', () => 
       for (const scenario of scenarios) {
         it.skipIf(!key)(
           `row ${scenario.row}: ${scenario.id}`,
-          async () => {
+          async ({ skip }) => {
+            if (maxUsd !== null && spentUsd >= maxUsd) skip(`$${spentUsd.toFixed(2)} spent`);
             fakes.resolveModels.mockResolvedValue(realModels(model, key!));
             const result = await runScenario(scenario);
             (results[model.id] ??= []).push(result);
+            const cost = evalCost(model.id, result.run.tokens) ?? 0;
+            spentUsd += cost;
+            console.log(
+              `${model.id} · ${scenario.id}: ${result.passed ? 'passed' : 'failed'}, $${cost.toFixed(3)} ($${spentUsd.toFixed(3)} so far)`,
+            );
             expect(result.checks.filter((c) => c.must && !c.ok)).toEqual([]);
           },
           300_000,

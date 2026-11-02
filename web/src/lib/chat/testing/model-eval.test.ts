@@ -42,6 +42,15 @@ describe('the test set (W4-35)', () => {
     }
     expect(evalCost('openai/gpt-6.1-sol', { input: 1_000_000, output: 100_000 })).toBe(3);
     expect(evalCost('unknown/model', { input: 1, output: 1 })).toBeNull();
+    // A cache read costs a tenth of an input token, a cache write a quarter more.
+    expect(
+      evalCost('anthropic/claude-opus-5.5', {
+        input: 1_000_000,
+        output: 0,
+        cacheRead: 500_000,
+        cacheWrite: 100_000,
+      }),
+    ).toBeCloseTo(0.4 * 4 + 0.05 * 4 + 0.125 * 4);
   });
 
   it('tells Turkish from English', () => {
