@@ -25,9 +25,10 @@
  *   → 200: the hold went (nothing was billed). Safe to repeat.
  * POST /api/internal/chat/budget/fit
  *   { orgId, model, perUnit: { inputTokens, maxOutputTokens }, units, ownKey?, agentRunId? }
- *   → 200 { fits }: how many of the job's `units` like parts (1–100) the AI
- *     budget left covers, each one model step's worst case, before the job
- *     starts (CHAT-04 item 17a); all of them on the workspace's own key.
+ *   → 200 { fits, limit }: how many of the job's `units` like parts (1–100)
+ *     the AI budget left covers, each one model step's worst case, before the
+ *     job starts (CHAT-04 item 17a); all of them on the workspace's own key.
+ *     `limit` is the one that binds: 'run' (the agent run's cap) or 'month'.
  *     Holds nothing. 402 plan_limit, 403 chat_off, 404 not_found (an agent
  *     run that isn't the workspace's).
  * A step a Stop aborted calls neither: its hold stays as its cost.
@@ -211,14 +212,14 @@ router.post('/fit', async (req, res) => {
   const body = parse(fitSchema, req, res);
   if (!body) return undefined;
   try {
-    const { fits } = await fitChatUnits(body.orgId, {
+    const { fits, limit } = await fitChatUnits(body.orgId, {
       modelId: body.model,
       perUnit: body.perUnit,
       units: body.units,
       ownKey: body.ownKey,
       agentRunId: body.agentRunId ?? null,
     });
-    return res.json({ success: true, fits });
+    return res.json({ success: true, fits, limit });
   } catch (err) {
     return fail(err, req, res, 'fit');
   }
