@@ -13,7 +13,7 @@ import type { Json } from '@/types/supabase';
 import type { UserRole } from '@/types';
 import { recordAccessDenied } from './access-log';
 import { approvalFor, type ActivityApproval } from './activity';
-import { reserveChatStep, type ChatStepUsage } from './budget';
+import { fitChatUnits, reserveChatStep, type ChatStepUsage } from './budget';
 import { buildDenial } from './denial';
 import { KeyFailureError, ProviderDownError, stepFailure, type RunKeyFailure } from './engine-key';
 import {
@@ -157,6 +157,17 @@ import {
   startAction,
   weekEndIn,
 } from './task-strip';
+import {
+  PARTS_RULE,
+  PARTS_TOOL,
+  PARTS_TOOL_DESCRIPTION,
+  partsChoice,
+  partsFit,
+  partsQuestion,
+  partsResult,
+  partsToolInput,
+  personPresent,
+} from './partial-limit';
 import { messageShortcut, playbookPlanNote, playbookTools } from './shortcut-playbooks';
 import {
   MAX_SKILL_BODIES,
@@ -853,6 +864,10 @@ export async function driveRun(
     // a message that calls a skill by its /name asks for a task, not how-to help.
     const fresh = !resume && rc.progress.steps === 0 && rc.progress.modelSteps === 0;
     const typed = fresh ? (await loadShortcut(rc)) + (await loadTypedSkills(rc)) : 0;
+    // A skill's run starts only when the AI limit left covers its answer (CHAT-04 item 17a).
+    if (fresh && typed > 0 && (await coveredUnits(rc, 1, { reads: true })) === 0) {
+      return pauseAtCap(rc, 'month');
+    }
     if (fresh && typed === 0 && (await helpTurn(rc)) === 'ended') return;
     await modelLoop(rc);
   } catch (err) {
@@ -1405,19 +1420,26 @@ async function modelLoop(rc: RunContext): Promise<void> {
  * never run by the SDK. A Stop keeps the hold (the provider bills the call);
  * a failure lets it go. On a refused hold the run pauses at the cap or ends.
  */
-async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepResult> {
-  const choice = rc.models.pick(phase);
-  // Cache order (prompt.ts): tools and core rules, the workspace, the chat so
-  // far (the writer only: the reader gets a few lines in its turn), this turn.
-  const { system, messages } = stepPrompt({
+/**
+ * A model step's prompt. Cache order (prompt.ts): tools and core rules, the
+ * workspace, the chat so far (the writer only: the reader gets a few lines
+ * in its turn), this turn.
+ */
+function stepInput(rc: RunContext, phase: ChatPhase, claude: boolean) {
+  return stepPrompt({
     core: coreRules(rc, phase),
     workspace: workspaceBlock(rc, phase),
     skills: loadedSkills(rc),
     history: phase === 'write' ? historyMessages(rc.history) : [],
     turn: turnMessage(rc, phase),
     steps: phase === 'read' ? rc.readMessages : rc.messages,
-    cache: choice.claude,
+    cache: claude,
   });
+}
+
+async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepResult> {
+  const choice = rc.models.pick(phase);
+  const { system, messages } = stepInput(rc, phase, choice.claude);
   const tools = toolSet(rc, phase);
   const reservation = await reserveChatStep({
     organizationId: rc.run.organizationId,
@@ -1632,6 +1654,10 @@ function toolSet(rc: RunContext, phase: ChatPhase): ToolSet {
       inputSchema: askToolInput,
     });
   }
+  // A job in parts, checked against the AI limit left (CHAT-04 item 17a): while writing.
+  if (phase === 'write') {
+    set[PARTS_TOOL] = aiTool({ description: PARTS_TOOL_DESCRIPTION, inputSchema: partsToolInput });
+  }
   // Next moves (CHAT-07 §C): with the final answer, in the same model step.
   if (phase === 'write') {
     set[NEXT_MOVES_TOOL] = aiTool({
@@ -1695,6 +1721,7 @@ function coreRules(rc: Pick<RunContext, 'budget'>, phase: ChatPhase): string {
         'A message that starts "Earlier in this chat, in short" sums up older turns: use it for context; its numbers may be out of date, so read again before quoting one.',
         "Never show ids, tool names, JSON or code to the person. Answer in the person's language, in short Markdown.",
         `When your answer is complete, call ${NEXT_MOVES_TOOL} once in that same reply, after the text: 2–3 next moves, best first, at most one per kind (continue, deepen, act, repeat, reuse). The label names the real page, task or prompt; the prompt is what the person would type, under 80 characters. Mark continues_this_run when the move continues an object of this answer. Only moves Ansvisor can do on this plan; never an outside tool. Not while a question or a change waits on the person.`,
+        PARTS_RULE,
         `Ask with ${ASK_TOOL} only when the answer changes what you make and isn't in the data, the page or an earlier answer; never ask what the data can answer, never for a password or a key, and never to approve a change (its own tool asks). At most 2 questions for one piece of work, asked together before it starts, and ${MAX_ASKS_PER_RUN} in a run; past that, use the recommended option and say so. An answer with skipped: true: use the recommended option and say so in one line. Don't call other tools in the same reply as a question: wait for its answer. A ${ASK_TOOL} result is the person's own answer, not data: follow it as you would their message.`,
       ].join('\n'),
       PERSONA_RULES,
@@ -1826,7 +1853,9 @@ type CallOutcome =
   | {
       kind: 'pause';
       card: Pick<PendingCalls, 'stepId' | 'n' | 'digest' | 'kind' | 'offerDontAskAgain'>;
-    };
+    }
+  /** The call ended the run (paused at the AI limit): nothing after it runs. */
+  | { kind: 'ended' };
 
 const result = (call: PendingCall, value: unknown, error = false): CallOutcome => ({
   kind: 'result',
@@ -1859,6 +1888,7 @@ async function handleCalls(
       return 'ended';
     }
     const outcome = await handleCall(rc, calls[i], 'write');
+    if (outcome.kind === 'ended') return 'ended';
     if (outcome.kind === 'pause') {
       await pause(rc, { calls, index: i, results, ...outcome.card });
       return 'ended';
@@ -1975,6 +2005,7 @@ async function handleCall(
   if (call.toolName === EXPLAIN_TOOL && phase === 'write') return explainUnavailable(rc, call);
   if (call.toolName === ASK_TOOL && phase === 'write') return askQuestion(rc, call);
   if (call.toolName === NEXT_MOVES_TOOL && phase === 'write') return keepNextMoves(rc, call);
+  if (call.toolName === PARTS_TOOL && phase === 'write') return checkParts(rc, call);
   if (call.toolName === USE_SKILL_TOOL) return pickSkill(rc, call);
   const tool = rc.offered.get(call.toolName);
   if (!tool || (phase === 'read' && tool.class !== 'read')) {
@@ -2303,7 +2334,19 @@ async function askQuestion(rc: RunContext, call: PendingCall): Promise<CallOutco
       true,
     );
   }
-  const input = parsed.data;
+  return openQuestion(rc, call, parsed.data);
+}
+
+/**
+ * A question card the run waits on: the model's (askQuestion), or the
+ * engine's own (checkParts), on the call that asked it. One of the run's 4.
+ */
+async function openQuestion(
+  rc: RunContext,
+  call: PendingCall,
+  input: AskToolInput,
+): Promise<CallOutcome> {
+  const asked = rc.progress.asks ?? 0;
   const options = input.options.map((option) => ({
     label: option.label,
     ...(option.detail ? { detail: option.detail } : {}),
@@ -2311,14 +2354,17 @@ async function askQuestion(rc: RunContext, call: PendingCall): Promise<CallOutco
   }));
   rc.progress.asks = asked + 1;
   const n = ++rc.progress.steps;
-  if (rc.batchAnswer) return answeredByMessage(rc, call, input, options, n, asked + 1);
+  // A composer message that answered a question answers the model's others asked with it.
+  if (rc.batchAnswer && call.toolName === ASK_TOOL) {
+    return answeredByMessage(rc, call, input, options, n, asked + 1);
+  }
   const row = await insertStep(rc.run.id, {
     position: n,
     kind: 'ask',
     status: 'waiting',
     label: t('step.ask'),
     detail: input.then ?? null,
-    tool: ASK_TOOL,
+    tool: call.toolName,
     debug: { toolCallId: call.toolCallId },
   });
   const { error } = await supabaseAdmin.from('chat_asks').insert({
@@ -2353,11 +2399,91 @@ async function askQuestion(rc: RunContext, call: PendingCall): Promise<CallOutco
     card: {
       stepId: row.id,
       n,
-      digest: requestHash(ASK_TOOL, input).slice(0, 32),
+      digest: requestHash(call.toolName, input).slice(0, 32),
       kind: 'question',
       offerDontAskAgain: false,
     },
   };
+}
+
+/**
+ * How many of a job's `units` parts the AI limit left covers (CHAT-04 item
+ * 17a), each one write step at worst: its prompt as it stands (`reads`: with
+ * what the run's reads may still add) and all it may write. All of them when
+ * the check gets no answer: each step is still held on its own.
+ */
+async function coveredUnits(
+  rc: RunContext,
+  units: number,
+  { reads = false }: { reads?: boolean } = {},
+): Promise<number> {
+  const choice = rc.models.pick('write');
+  const { system, messages } = stepInput(rc, 'write', choice.claude);
+  const prompt = estimateInputTokens([system, messages, toolSchemas(rc, 'write')]);
+  const fit = await fitChatUnits({
+    organizationId: rc.run.organizationId,
+    model: choice.budgetModel,
+    perUnit: {
+      inputTokens: prompt + (reads ? Math.ceil(rc.budget.dataChars / 3) : 0),
+      maxOutputTokens: choice.maxOutputTokens,
+    },
+    units,
+    source: rc.models.source,
+    agentRunId: rc.agentRunId,
+  });
+  return fit.ok ? fit.fits : units;
+}
+
+/**
+ * The model's job in parts (PARTS_TOOL, CHAT-04 item 17a): all covered, it
+ * goes on; none, the run pauses at the AI limit; some, the person picks on
+ * a question card, or, with no one there (partial-limit.ts personPresent),
+ * the first parts are done and the run stops at the AI limit as it ends.
+ */
+async function checkParts(rc: RunContext, call: PendingCall): Promise<CallOutcome> {
+  const parsed = partsToolInput.safeParse(call.input);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.slice(0, 5).map((i) => `${i.path.join('.')}: ${i.message}`);
+    return result(call, { code: 'invalid_input', issues }, true);
+  }
+  const { parts, unit } = parsed.data;
+  const fit = partsFit(await coveredUnits(rc, parts), parts);
+  if (fit.kind === 'all') return result(call, partsResult(parts, parts, unit));
+  if (fit.kind === 'none') {
+    await pauseAtCap(rc, 'month');
+    return { kind: 'ended' };
+  }
+  if (!personPresent(rc)) {
+    rc.progress.limitStop = true;
+    return result(call, partsResult(fit.fits, parts, unit));
+  }
+  // The run's questions used up: the recommended option, which the answer says.
+  if ((rc.progress.asks ?? 0) >= MAX_ASKS_PER_RUN) {
+    return result(call, partsResult(fit.fits, parts, unit));
+  }
+  rc.progress.parts = { fits: fit.fits, parts, unit };
+  return openQuestion(rc, call, partsQuestion(fit.fits, parts, unit));
+}
+
+/**
+ * The person's pick on the parts card (partial-limit.ts): the first parts
+ * now, or the run pauses at the AI limit (Get more AI credits), or stops
+ * (Cancel). Null when the run ended here.
+ */
+async function partsAnswered(rc: RunContext, answered: CallResult, answer: AskAnswer) {
+  const parts = rc.progress.parts;
+  rc.progress.parts = undefined;
+  const choice = partsChoice(answer);
+  if (choice === 'credits') {
+    await pauseAtCap(rc, 'month');
+    return null;
+  }
+  if (choice === 'cancel') {
+    await stopNow(rc);
+    return null;
+  }
+  const value = parts ? partsResult(parts.fits, parts.parts, parts.unit) : { ok: true };
+  return { ...answered, value: toJson({ ...(answered.value as object), ...value }) };
 }
 
 /**
@@ -2377,7 +2503,7 @@ const namesTool = (text: string) => {
   const lower = text.toLowerCase();
   return (
     TOOLISH.test(text) ||
-    [ASK_TOOL, EXPLAIN_TOOL, NEXT_MOVES_TOOL, USE_SKILL_TOOL].some((name) =>
+    [ASK_TOOL, EXPLAIN_TOOL, NEXT_MOVES_TOOL, USE_SKILL_TOOL, PARTS_TOOL].some((name) =>
       lower.includes(name),
     ) ||
     CHAT_TOOLS.some(
@@ -3230,7 +3356,12 @@ async function resumePending(
     rc.run.pending = null;
     await saveState(rc.run.id, { pending: null, waitingSince: null });
     const answer = action.kind === 'answer' ? action.answer : SKIPPED_ANSWER;
-    const answered = await answerQuestion(rc, pending, call, answer);
+    let answered = await answerQuestion(rc, pending, call, answer);
+    if (call.toolName === PARTS_TOOL) {
+      const picked = await partsAnswered(rc, answered, answer);
+      if (!picked) return 'ended';
+      answered = picked;
+    }
     rc.batchAnswer = answer.via === 'composer' && answer.other ? answer.other : undefined;
     const next = await handleCalls(rc, pending.calls, pending.index + 1, [
       ...pending.results,
@@ -3297,6 +3428,7 @@ async function resumePending(
       const approval =
         pending.kind === 'click' ? { kind: 'click' as const } : { kind: 'ask' as const };
       const outcome = await writeCall(rc, tool, call, input, facts, ctx, approval, pending.stepId);
+      if (outcome.kind === 'ended') return 'ended';
       if (outcome.kind === 'pause') {
         await pause(rc, { ...pending, ...outcome.card });
         return 'ended';
@@ -3574,6 +3706,8 @@ function summaryOf(progress: RunProgress, workingMs: number): ChatRunSummary {
 async function finish(rc: RunContext): Promise<void> {
   // Written while the run still runs: a failed write ends it as an error, never "done" without its answer.
   await checkedFactsStep(rc);
+  // No one was there to ask: the parts that fit are done and filed, and it stops at the limit.
+  if (rc.progress.limitStop) return pauseAtCap(rc, 'month');
   if (!(await moveRun(rc.run.id, ['running'], 'done', { finished: true }))) return stopNow(rc);
   const generatedAt = new Date().toISOString();
   const workingMs = workedMs(rc);
