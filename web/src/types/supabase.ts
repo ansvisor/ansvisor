@@ -4135,6 +4135,7 @@ export type Database = {
       }
       content_draft_deliveries: {
         Row: {
+          agent_run_id: string | null
           batch_id: string | null
           brand_id: string
           created_at: string
@@ -4156,6 +4157,7 @@ export type Database = {
           title: string
         }
         Insert: {
+          agent_run_id?: string | null
           batch_id?: string | null
           brand_id: string
           created_at?: string
@@ -4177,6 +4179,7 @@ export type Database = {
           title: string
         }
         Update: {
+          agent_run_id?: string | null
           batch_id?: string | null
           brand_id?: string
           created_at?: string
@@ -4198,6 +4201,13 @@ export type Database = {
           title?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "content_draft_deliveries_agent_run_id_fkey"
+            columns: ["agent_run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agent_runs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "content_draft_deliveries_brand_id_fkey"
             columns: ["brand_id"]
