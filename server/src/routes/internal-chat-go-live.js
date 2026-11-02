@@ -24,6 +24,8 @@
  *   Then the page goes as a person's Send to CMS does (sendContentPages),
  *   with the agent run kept on the delivery (00444), and the step is
  *   finished: done, or failed with why, which frees its slot. Never retried.
+ *   Done, the agent's owner and Notify people are told (Inbox and e-mail,
+ *   lib/chat-notices/go-live.js, 00446), after the answer is on its way.
  *   → 200 { delivery }: the send's row as the Send dialog reads it.
  *   → 403 { code }: a check failed (chat_off, plan, switch_off, permission,
  *     role, publishing_off, brand, demo_brand, reservation); nothing sent.
@@ -61,6 +63,7 @@ import { DeliveryError, deliveryPage, sendContentPages } from '../lib/content-de
 import { isDemoBrand } from '../middleware/demo-brand.js';
 import { ChatBudgetError, agentRunReserve } from '../lib/chat-budget.js';
 import { readBrandFacts } from '../lib/brand-facts.js';
+import { tellWentLive } from '../lib/chat-notices/go-live.js';
 import { pageReadContext } from '../lib/content-page-context.js';
 import { qualityPhase } from '../lib/content-quality.js';
 import { readDraftClaims } from '../lib/content-quality-claims.js';
@@ -275,7 +278,14 @@ router.post('/send', async (req, res) => {
       externalId: delivery?.external_id ?? null,
       error: done ? null : (delivery?.error ?? 'Not sent'),
     }).catch((err) => req.log.error({ err }, 'internal go-live finish error'));
-    return res.json({ success: true, delivery });
+    res.json({ success: true, delivery });
+    // Who should know it went out on its own: never on the step's way.
+    if (done) {
+      await tellWentLive({ eventId: body.reservationId }).catch((err) =>
+        logger.error({ err, eventId: body.reservationId }, 'internal go-live notice error'),
+      );
+    }
+    return undefined;
   } catch (err) {
     const known = err instanceof DeliveryError;
     await finishStep(body.reservationId, 'failed', {

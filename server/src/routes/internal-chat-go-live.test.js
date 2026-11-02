@@ -97,6 +97,10 @@ vi.mock('../lib/brand-facts.js', () => ({
 vi.mock('../lib/site-trust.js', () => ({
   readSiteTrust: (...args) => reads.siteTrust(...args),
 }));
+const tellWentLive = vi.fn(async () => ({ notices: 1, emails: 1, history: false }));
+vi.mock('../lib/chat-notices/go-live.js', () => ({
+  tellWentLive: (...args) => tellWentLive(...args),
+}));
 vi.mock('../lib/content-page-context.js', () => ({
   pageReadContext: async () => ({ siteType: 'b2b', brandName: 'Acme', facts: ['Founded 2019'] }),
 }));
@@ -141,6 +145,7 @@ let baseUrl;
 
 beforeEach(async () => {
   vi.stubEnv('CRON_SECRET', 'shh');
+  tellWentLive.mockClear();
   flags.chatOn = true;
   flags.demo = false;
   flags.cloud = true;
@@ -237,6 +242,8 @@ describe('POST /api/internal/chat/go-live/send', () => {
         p_error: null,
       }),
     ]);
+    // Who should know is told once the step is done (AUTONOMOUS-GO-LIVE §6.4).
+    await vi.waitFor(() => expect(tellWentLive).toHaveBeenCalledWith({ eventId: STEP }));
   });
 
   it('answers only the web, and refuses a body it can’t read', async () => {
@@ -356,6 +363,15 @@ describe('POST /api/internal/chat/go-live/send', () => {
     expect((await send()).status).toBe(502);
     expect(finished().at(-1)).toMatchObject({ p_error: 'The page could not be sent' });
     expect(sendContentPages).toHaveBeenCalledTimes(3);
+    // Nothing went out: nobody is told it did.
+    expect(tellWentLive).not.toHaveBeenCalled();
+  });
+
+  it('answers the step even when telling people fails', async () => {
+    tellWentLive.mockRejectedValueOnce(new Error('mail down'));
+    const res = await send();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true });
   });
 });
 

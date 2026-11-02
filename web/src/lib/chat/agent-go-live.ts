@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/config/api';
 import { CMS_NAMES } from '@/lib/content/cms-names';
 import type { CmsTarget } from '@/lib/content/cms-send-client';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -186,4 +187,44 @@ export async function readGoLiveLimits(
     if (versions.get(row.agent_id) === row.version) limits.set(row.agent_id, row.daily_limit);
   }
   return limits;
+}
+
+/** How long the server may take to write the notices and send the e-mails. */
+const NOTICE_TIMEOUT_MS = 15_000;
+
+/**
+ * An edit made a new version of an agent that was allowed to go live on its
+ * own for `version`: the Admin who allowed it and its owner are told, in
+ * their Inbox and by e-mail (the server's /api/internal/chat/notices/go-live-off,
+ * 00446), but not `editor`, who made the change and saw the box. Nothing
+ * while the flag is off, or for an agent that wasn't allowed for that
+ * version. Never throws: the agent's page says it either way.
+ */
+export async function tellGoLiveOff(
+  organizationId: string,
+  agentId: string,
+  version: number,
+  editor: string,
+): Promise<boolean> {
+  try {
+    if ((await readGoLiveSwitch(organizationId)) === 'hidden') return false;
+    const [given] = await permissionRows(organizationId, [agentId]);
+    if (given?.version !== version) return false;
+    const secret = process.env.CRON_SECRET;
+    if (!secret) {
+      console.error('[chat/agents] CRON_SECRET must be configured to tell who allowed an agent');
+      return false;
+    }
+    const res = await fetch(`${API_BASE_URL}/api/internal/chat/notices/go-live-off`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orgId: organizationId, agentId, version, editor }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(NOTICE_TIMEOUT_MS),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('[chat/agents] could not tell who allowed an agent it changed:', err);
+    return false;
+  }
 }

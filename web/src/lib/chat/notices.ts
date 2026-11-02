@@ -1,11 +1,14 @@
 import { isKeyFailureClass, type KeyFailureClass } from '@/lib/agent/key-errors';
 import { isAiProvider, type AiProvider } from '@/lib/agent/providers';
+import type { CmsTarget } from '@/lib/content/cms-send-client';
 
 /**
- * A person's notices from the system (00441) as the Inbox shows them: their
- * workspace's own AI key fails (AGENT-OWN-KEY §5.3), or its agents reached
- * 80% or all of their monthly limit on it (§4.2 item 4, PR 10). Pure, for
- * the server action that reads them (lib/actions/chat-notices.ts).
+ * A person's notices from the system (00441, 00446) as the Inbox shows them:
+ * their workspace's own AI key fails (AGENT-OWN-KEY §5.3), or its agents
+ * reached 80% or all of their monthly limit on it (§4.2 item 4, PR 10); an
+ * agent sent a page out on its own, or an edit stopped it from doing so
+ * (AUTONOMOUS-GO-LIVE §6.4, §7.2). Pure, for the server action that reads
+ * them (lib/actions/chat-notices.ts).
  */
 
 interface NoticeBase {
@@ -31,6 +34,23 @@ export type ChatNotice =
       usedUsd: number;
       capUsd: number;
       renewsAt: string | null;
+    })
+  | (NoticeBase & {
+      kind: 'agent_went_live';
+      /** The agent, by its name then. */
+      agent: string;
+      /** The page and where it went (AUTONOMOUS-GO-LIVE §6.4): a CMS draft in v1. */
+      title: string;
+      target: CmsTarget;
+      draftId: string;
+      /** The run's chat, for Open run; null when it couldn't be found. */
+      chatId: string | null;
+    })
+  | (NoticeBase & {
+      kind: 'agent_go_live_off';
+      /** An agent an edit stopped from going live on its own (§7.2). */
+      agent: string;
+      agentId: string;
     });
 
 /** A row as the Inbox reads it: its kind, what the words need, and whether it was read. */
@@ -41,6 +61,10 @@ export interface NoticeRow {
   created_at: string;
   read_at: string | null;
 }
+
+const CMS_TARGETS = ['webflow', 'wordpress', 'framer', 'wix', 'webhook'] as const;
+const isCmsTarget = (value: unknown): value is CmsTarget =>
+  CMS_TARGETS.some((target) => target === value);
 
 /** The notice a row is, or null for one this Inbox can't show (another kind, a broken payload). */
 export function noticeOf(row: NoticeRow): ChatNotice | null {
@@ -64,5 +88,32 @@ export function noticeOf(row: NoticeRow): ChatNotice | null {
       renewsAt: typeof payload.renewsAt === 'string' ? payload.renewsAt : null,
     };
   }
+  if (row.kind === 'agent_went_live') {
+    const { agent, title, target, draftId, chatId } = payload;
+    if (typeof agent !== 'string' || typeof title !== 'string' || typeof draftId !== 'string') {
+      return null;
+    }
+    if (!isCmsTarget(target)) return null;
+    return {
+      ...base,
+      kind: 'agent_went_live',
+      agent,
+      title,
+      target,
+      draftId,
+      chatId: typeof chatId === 'string' ? chatId : null,
+    };
+  }
+  if (row.kind === 'agent_go_live_off') {
+    const { agent, agentId } = payload;
+    if (typeof agent !== 'string' || typeof agentId !== 'string') return null;
+    return { ...base, kind: 'agent_go_live_off', agent, agentId };
+  }
   return null;
 }
+
+/** The kinds a person closes by opening them (AUTONOMOUS-GO-LIVE §6.4): about an agent, not a key. */
+export const OPENED_CLOSES: readonly ChatNotice['kind'][] = [
+  'agent_went_live',
+  'agent_go_live_off',
+];
