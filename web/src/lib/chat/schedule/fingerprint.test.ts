@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import type { Json } from '@/types/supabase';
 import type { RunProgress } from '../engine-store';
 import { readFingerprint, readUnchanged } from './fingerprint';
 
@@ -10,7 +11,7 @@ import { readFingerprint, readUnchanged } from './fingerprint';
  * job stops before writing when they do. The first run always delivers.
  */
 
-const read = (rows: unknown, at = '2026-10-26T08:00:00.000Z') => ({
+const read = (rows: Json, at = '2026-10-26T08:00:00.000Z') => ({
   tool: 'read_citations',
   input: { brand_id: 'b1', date_from: at.slice(0, 10), days: 7 },
   result: { rows, data_as_of: at, generatedAt: at, period: { start: '2026-10-19' } },
@@ -49,7 +50,7 @@ describe('readUnchanged', () => {
     expect(first.fingerprint).toMatch(/^[0-9a-f]{64}$/);
     expect(first.unchanged).toBeUndefined();
 
-    const same = progress({ scheduled: true, changeOnly: { last: first.fingerprint } });
+    const same = progress({ scheduled: true, changeOnly: { last: first.fingerprint ?? null } });
     expect(readUnchanged(same)).toBe(true);
     expect(same.unchanged).toBe(true);
   });
