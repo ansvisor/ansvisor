@@ -1124,7 +1124,7 @@
         "finish a page"
       ],
       "plan": "all",
-      "updated": "2026-10-30",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1172,7 +1172,7 @@
         },
         {
           "heading": "History, Copy HTML and Export",
-          "text": "- **History** keeps earlier versions for 90 days: the live page as imported, the page before agent changes, each Mark ready and publish, each Hand off, and the page before a restore. **Restore** makes a new version, so nothing is lost.\n- **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS.\n- **Export** downloads the page as **Word**, **Excel**, **CSV**, **HTML** or **Markdown**. Excel and CSV hold the page as one row, for a CMS's import. Only the HTML file carries the schema.\n\nWith Quality on, **Export** opens a dialog instead: the same files, and under **Platforms** a copy of the page to paste into Webflow, WordPress, Shopify or Google Docs."
+          "text": "- **History** keeps earlier versions for 90 days: the live page as imported, the page before agent changes, each Mark ready and publish, each Hand off, and the page before a restore. **Restore** makes a new version, so nothing is lost.\n- **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS. An article also gets the Article schema Ansvisor adds, with its author.\n- **Export** downloads the page as **Word**, **Excel**, **CSV**, **HTML** or **Markdown**. Excel and CSV hold the page as one row, for a CMS's import. Only the HTML file carries the schema.\n\nWith Quality on, **Export** opens a dialog instead: the same files, and under **Platforms** a copy of the page to paste into Webflow, WordPress, Shopify or Google Docs."
         },
         {
           "heading": "Add products from your catalog",
@@ -1526,7 +1526,11 @@
         },
         {
           "heading": "Before you publish",
-          "text": "**Mark ready** opens **Before you publish** first. It checks:\n\n- placeholders, alt text and links;\n- the author;\n- the qualified reviewer on pages that advise on health, money or the law;\n- visible dates;\n- the structured data to paste, if your CMS doesn't add it;\n- a warning when Trust is under 60.\n\nCopy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about."
+          "text": "**Mark ready** opens **Before you publish** first. It checks:\n\n- placeholders, alt text and links;\n- the author;\n- the qualified reviewer on pages that advise on health, money or the law;\n- visible dates;\n- the Article schema Ansvisor adds;\n- a warning when Trust is under 60.\n\nCopy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about."
+        },
+        {
+          "heading": "The Article schema",
+          "text": "An article goes to your CMS and to exports with an Article schema that names its author, or your brand when it has none. The page's text doesn't change. If your CMS adds its own, click **Leave it out**; **Add it back** undoes it. A page with an Article schema of its own gets none. WordPress leaves the schema out: add it with your SEO plugin."
         },
         {
           "heading": "Export with Quality on",
@@ -1595,6 +1599,10 @@
         {
           "heading": "What each CMS leaves out",
           "text": "- **Webflow**: Tables become lists; images aren't sent. Reviewer metadata requires a mapped optional Plain Text field; show it in the collection template. Empty meta descriptions use the page's opening words.\n- **WordPress**: Reviewer metadata and structured data aren't sent; the adapter can't map custom metadata or repurpose the post author. Set the meta title and structured data in your SEO plugin. Images keep their addresses; no featured image or category is set.\n- **Framer**: Tables stay tables; images aren't sent. Reviewer metadata requires a mapped optional string field; show it in the page template. Duplicate slugs stop the send.\n- **Wix**: Images, cover images and categories aren't sent. Reviewer metadata is an SEO tag, not visible text; show it in the page template. Resending replaces post text, so add images after the last send.\n\nAdd images in your CMS. The slug may change slightly there: lowercase, without accents, with dots turned into dashes."
+        },
+        {
+          "heading": "The Article schema",
+          "text": "An article goes with the Article schema Ansvisor adds, its author included, unless you left it out in **Before you publish**. WordPress doesn't take it: add it with your SEO plugin."
         }
       ]
     },
