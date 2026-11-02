@@ -2170,6 +2170,7 @@ export type Database = {
           origin: string
           origin_page: string | null
           pinned_at: string | null
+          schedule_id: string | null
           search_tsv: unknown
           shared_at: string | null
           title: string | null
@@ -2189,6 +2190,7 @@ export type Database = {
           origin?: string
           origin_page?: string | null
           pinned_at?: string | null
+          schedule_id?: string | null
           search_tsv?: never
           shared_at?: string | null
           title?: string | null
@@ -2208,6 +2210,7 @@ export type Database = {
           origin?: string
           origin_page?: string | null
           pinned_at?: string | null
+          schedule_id?: string | null
           search_tsv?: never
           shared_at?: string | null
           title?: string | null
@@ -2234,6 +2237,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_conversations_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "chat_schedules"
             referencedColumns: ["id"]
           },
         ]
@@ -2448,6 +2458,69 @@ export type Database = {
           },
           {
             foreignKeyName: "chat_idempotency_keys_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_memory_items: {
+        Row: {
+          brand_id: string | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          edited: boolean
+          id: string
+          organization_id: string
+          scope: string
+          source: string
+          source_ref: string | null
+          text: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          brand_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          edited?: boolean
+          id?: string
+          organization_id: string
+          scope: string
+          source: string
+          source_ref?: string | null
+          text: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          brand_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          edited?: boolean
+          id?: string
+          organization_id?: string
+          scope?: string
+          source?: string
+          source_ref?: string | null
+          text?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_memory_items_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_memory_items_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -2776,13 +2849,251 @@ export type Database = {
           },
         ]
       }
+      chat_schedule_runs: {
+        Row: {
+          attempt: number
+          email_status: string | null
+          ended_at: string | null
+          fingerprint: string | null
+          id: string
+          message_id: string | null
+          parts_done: number
+          parts_total: number
+          reason: string | null
+          resend_message_id: string | null
+          run_id: string | null
+          run_now: boolean
+          schedule_id: string
+          slot_at: string
+          started_at: string
+          status: string
+          usage_share: number
+        }
+        Insert: {
+          attempt?: number
+          email_status?: string | null
+          ended_at?: string | null
+          fingerprint?: string | null
+          id?: string
+          message_id?: string | null
+          parts_done?: number
+          parts_total?: number
+          reason?: string | null
+          resend_message_id?: string | null
+          run_id?: string | null
+          run_now?: boolean
+          schedule_id: string
+          slot_at: string
+          started_at?: string
+          status?: string
+          usage_share?: number
+        }
+        Update: {
+          attempt?: number
+          email_status?: string | null
+          ended_at?: string | null
+          fingerprint?: string | null
+          id?: string
+          message_id?: string | null
+          parts_done?: number
+          parts_total?: number
+          reason?: string | null
+          resend_message_id?: string | null
+          run_id?: string | null
+          run_now?: boolean
+          schedule_id?: string
+          slot_at?: string
+          started_at?: string
+          status?: string
+          usage_share?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_schedule_runs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_schedule_runs_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_schedule_runs_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "chat_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_schedules: {
+        Row: {
+          agent_id: string | null
+          agent_run_id: string | null
+          brand_id: string | null
+          change_only: boolean
+          conversation_id: string | null
+          created_at: string
+          created_by: string | null
+          created_via: string
+          deliver_to: string[]
+          due_at: string | null
+          effort: string
+          enabled: boolean
+          fail_count: number
+          id: string
+          kind: string
+          last_fingerprint: string | null
+          last_run_at: string | null
+          metric: string | null
+          mode: string
+          model: string
+          next_run_at: string | null
+          organization_id: string
+          paused_reason: string | null
+          prompt: string | null
+          recipient_ids: string[]
+          retry_at: string | null
+          rrule: string | null
+          run_mode: string
+          set_by_run_id: string | null
+          skill_name: string | null
+          target_json: Json | null
+          timezone: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id?: string | null
+          agent_run_id?: string | null
+          brand_id?: string | null
+          change_only?: boolean
+          conversation_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_via?: string
+          deliver_to?: string[]
+          due_at?: string | null
+          effort?: string
+          enabled?: boolean
+          fail_count?: number
+          id?: string
+          kind: string
+          last_fingerprint?: string | null
+          last_run_at?: string | null
+          metric?: string | null
+          mode?: string
+          model?: string
+          next_run_at?: string | null
+          organization_id: string
+          paused_reason?: string | null
+          prompt?: string | null
+          recipient_ids?: string[]
+          retry_at?: string | null
+          rrule?: string | null
+          run_mode?: string
+          set_by_run_id?: string | null
+          skill_name?: string | null
+          target_json?: Json | null
+          timezone: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string | null
+          agent_run_id?: string | null
+          brand_id?: string | null
+          change_only?: boolean
+          conversation_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_via?: string
+          deliver_to?: string[]
+          due_at?: string | null
+          effort?: string
+          enabled?: boolean
+          fail_count?: number
+          id?: string
+          kind?: string
+          last_fingerprint?: string | null
+          last_run_at?: string | null
+          metric?: string | null
+          mode?: string
+          model?: string
+          next_run_at?: string | null
+          organization_id?: string
+          paused_reason?: string | null
+          prompt?: string | null
+          recipient_ids?: string[]
+          retry_at?: string | null
+          rrule?: string | null
+          run_mode?: string
+          set_by_run_id?: string | null
+          skill_name?: string | null
+          target_json?: Json | null
+          timezone?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_schedules_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_schedules_agent_run_id_fkey"
+            columns: ["agent_run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agent_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_schedules_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_schedules_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "chat_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_schedules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_schedules_set_by_run_id_fkey"
+            columns: ["set_by_run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_settings: {
         Row: {
           agent_run_share_default: number
           agents_full_auto: boolean
+          disabled_skills: string[]
           dont_ask_again: boolean
           full_auto_for_members: boolean
           manager_execute_off: string[]
+          memory_enabled: boolean
           organization_id: string
           tool_policies: Json
           updated_at: string
@@ -2792,9 +3103,11 @@ export type Database = {
         Insert: {
           agent_run_share_default?: number
           agents_full_auto?: boolean
+          disabled_skills?: string[]
           dont_ask_again?: boolean
           full_auto_for_members?: boolean
           manager_execute_off?: string[]
+          memory_enabled?: boolean
           organization_id: string
           tool_policies?: Json
           updated_at?: string
@@ -2804,9 +3117,11 @@ export type Database = {
         Update: {
           agent_run_share_default?: number
           agents_full_auto?: boolean
+          disabled_skills?: string[]
           dont_ask_again?: boolean
           full_auto_for_members?: boolean
           manager_execute_off?: string[]
+          memory_enabled?: boolean
           organization_id?: string
           tool_policies?: Json
           updated_at?: string
@@ -2818,6 +3133,95 @@ export type Database = {
             foreignKeyName: "chat_settings_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_skills: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          body: string
+          checksum_sha256: string
+          commit_sha: string | null
+          compatibility: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          enabled: boolean
+          id: string
+          license: string | null
+          license_text: string | null
+          name: string
+          organization_id: string
+          removed_json: Json
+          scan_json: Json
+          source: string
+          source_url: string | null
+          status: string
+          title: string
+          update_sha: string | null
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          body: string
+          checksum_sha256: string
+          commit_sha?: string | null
+          compatibility?: string | null
+          created_at?: string
+          created_by?: string | null
+          description: string
+          enabled?: boolean
+          id?: string
+          license?: string | null
+          license_text?: string | null
+          name: string
+          organization_id: string
+          removed_json?: Json
+          scan_json?: Json
+          source?: string
+          source_url?: string | null
+          status?: string
+          title: string
+          update_sha?: string | null
+          updated_at?: string
+          visibility?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          body?: string
+          checksum_sha256?: string
+          commit_sha?: string | null
+          compatibility?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          enabled?: boolean
+          id?: string
+          license?: string | null
+          license_text?: string | null
+          name?: string
+          organization_id?: string
+          removed_json?: Json
+          scan_json?: Json
+          source?: string
+          source_url?: string | null
+          status?: string
+          title?: string
+          update_sha?: string | null
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_skills_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -3183,6 +3587,7 @@ export type Database = {
           focus_prompted_at: string | null
           home_seen_at: string | null
           legacy_imported_at: string | null
+          memory_enabled: boolean
           menu_open: boolean
           model: string | null
           notify_via: string
@@ -3203,6 +3608,7 @@ export type Database = {
           focus_prompted_at?: string | null
           home_seen_at?: string | null
           legacy_imported_at?: string | null
+          memory_enabled?: boolean
           menu_open?: boolean
           model?: string | null
           notify_via?: string
@@ -3223,6 +3629,7 @@ export type Database = {
           focus_prompted_at?: string | null
           home_seen_at?: string | null
           legacy_imported_at?: string | null
+          memory_enabled?: boolean
           menu_open?: boolean
           model?: string | null
           notify_via?: string
