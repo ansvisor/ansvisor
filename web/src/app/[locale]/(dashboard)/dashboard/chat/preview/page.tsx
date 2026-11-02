@@ -3,6 +3,7 @@ import { useTranslations } from 'next-intl';
 import { Sparkles } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
+import { isChatStaff } from '@/lib/chat/staff';
 import {
   AGENT_AVATAR_STATES,
   AgentAvatar,
@@ -170,8 +171,10 @@ function ChatPiecesPreview() {
 
 /**
  * Chat's shared agent pieces and run cards for design sign-off (Chat P0, D1
- * and D2). Only with the new Chat on for this workspace (CHAT_AGENTIC);
- * otherwise the page isn't there. Not linked from the menu.
+ * and D2). Only for Ansvisor staff (STAFF_EMAILS, lib/chat/staff.ts, as
+ * Chat's Debug view), with the new Chat on for their workspace
+ * (CHAT_AGENTIC); for anyone else, a customer's Admin too, the page isn't
+ * there. Not linked from the menu.
  */
 export default async function ChatPiecesPreviewPage() {
   const supabase = await createClient();
@@ -179,6 +182,7 @@ export default async function ChatPiecesPreviewPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) notFound();
+  if (!isChatStaff(user)) notFound();
 
   const { data: profile } = await supabase
     .from('profiles')

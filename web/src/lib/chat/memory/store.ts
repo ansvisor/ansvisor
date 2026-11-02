@@ -2,6 +2,7 @@ import { createTranslator } from 'next-intl';
 import { z } from 'zod';
 import messages from '../../../../messages/en.json';
 import type { TeamRole } from '@/components/providers/role-provider';
+import { readBrandAccess } from '@/lib/brand-access';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import {
@@ -14,7 +15,6 @@ import { rememberOffer, type RememberFacts } from './offer';
 import { chatAgenticEnabled } from '../flag';
 import { firstNameOf } from '../home';
 import { planFactsFromOrgRow, type PlanFacts } from '../plan-facts';
-import { readBrandAccess } from '../precedence-context';
 import { parseTeamRole } from '../precedence';
 import {
   MAX_MEMORY_LINE,
@@ -85,7 +85,8 @@ export async function readMemoryViewer(actor: {
       .select(ORG_PLAN_COLUMNS)
       .eq('id', actor.organizationId)
       .maybeSingle(),
-    readBrandAccess(actor.userId, actor.organizationId),
+    // Not a member reads as no brands (lib/brand-access.ts).
+    readBrandAccess(actor.userId, actor.organizationId).then((access) => access ?? []),
   ]);
   for (const read of [profile, org]) {
     if (read.error) throw new Error(`Could not read the memory's facts: ${read.error.message}`);
@@ -445,7 +446,9 @@ async function readRunMemory(
   const switches = await readMemorySwitches(actor.organizationId, actor.userId);
   if (!switches.workspace || !switches.personal) return NO_MEMORY;
   await syncProfileLine(actor.userId, actor.organizationId);
-  const access = brand ? await readBrandAccess(actor.userId, actor.organizationId) : 'all';
+  const access = brand
+    ? ((await readBrandAccess(actor.userId, actor.organizationId)) ?? [])
+    : 'all';
   const withBrand = brand && (access === 'all' || access.includes(brand.id)) ? brand : null;
   const [me, ofBrand, workspace] = await Promise.all([
     scopeRows(actor.organizationId, { scope: 'user', userId: actor.userId }),

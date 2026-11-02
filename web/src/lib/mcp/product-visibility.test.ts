@@ -12,12 +12,12 @@ import type { ShelfRow } from '@/lib/shopping/shelf';
  * plan with Product Visibility.
  */
 
-const brandInOrg = vi.hoisted(() => vi.fn());
+const brandAllowed = vi.hoisted(() => vi.fn());
 // The plan check and its answer are the other shopping reads' own.
 vi.mock('@/lib/mcp/data', async (importOriginal) => {
   const data = await importOriginal<typeof import('@/lib/mcp/data')>();
   return {
-    brandInOrg,
+    brandAllowed,
     planIncludes: data.planIncludes,
     NOT_IN_PLAN: data.NOT_IN_PLAN,
     SHOPPING_NOT_IN_PLAN: data.SHOPPING_NOT_IN_PLAN,
@@ -86,6 +86,7 @@ const auth: McpAuthContext = {
   email: null,
   organizationId: 'org-1',
   apiKeyId: 'key-1',
+  brandAccess: 'all',
   role: 'admin',
 };
 
@@ -163,7 +164,7 @@ const shelf = (rows: ShelfRow[], catalogProducts: number | null = 2): ShoppingSh
 beforeEach(() => {
   clients.length = 0;
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
-  brandInOrg.mockReset().mockResolvedValue(true);
+  brandAllowed.mockReset().mockResolvedValue(true);
   tables.organizations = [
     { id: 'org-1', plan: 'growth', subscription_status: 'active', plan_overrides: null },
   ];
@@ -188,7 +189,7 @@ afterEach(() => {
 
 describe('who may read it', () => {
   it("answers nothing for another organization's brand, and reads nothing", async () => {
-    brandInOrg.mockResolvedValue(false);
+    brandAllowed.mockResolvedValue(false);
     expect(await getShoppingShelfFor(auth, { brandId: BRAND })).toBeNull();
     expect(await getShoppingReadinessFor(auth, { brandId: BRAND })).toBeNull();
     expect(await getProductAiSaysFor(auth, { brandId: BRAND, productId: PRODUCT })).toBeNull();

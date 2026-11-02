@@ -49,6 +49,7 @@ const auth: McpAuthContext = {
   email: null,
   organizationId: 'org-1',
   apiKeyId: 'key-1',
+  brandAccess: 'all',
   role: 'admin',
 };
 
@@ -607,5 +608,41 @@ describe('overrideMentionSentimentFor', () => {
     });
     rpc.mockResolvedValueOnce({ data: null, error: { code: '57014', message: 'timeout' } });
     await expect(overrideMentionSentimentFor(auth, 'r1', 'neutral')).rejects.toThrow('timeout');
+  });
+});
+
+describe('a Selected-brands key (BRAND-ACCESS)', () => {
+  // Shared with the key's owner: another brand, not b1.
+  const selected: McpAuthContext = { ...auth, role: 'manager', brandAccess: ['b2'] };
+  const params = { brandId: 'b1' };
+
+  it('reads no Mentions function for a brand not shared with its owner', async () => {
+    rpc.mockResolvedValue({ data: overview, error: null });
+    await expect(getMentionsSummaryFor(selected, params)).resolves.toBeNull();
+    await expect(getMentionCompetitorsFor(selected, params)).resolves.toBeNull();
+    await expect(listMentionsFor(selected, params)).resolves.toBeNull();
+    await expect(getMentionsPerceptionFor(selected, params)).resolves.toBeNull();
+    // The functions (00434) run with the service role here, which they don't check.
+    expect(rpc).not.toHaveBeenCalled();
+
+    await expect(
+      getMentionsSummaryFor({ ...selected, brandAccess: ['b1'] }, params),
+    ).resolves.not.toBeNull();
+    expect(rpc).toHaveBeenCalledWith('mentions_overview', expect.anything());
+  });
+
+  it("reads an answer of such a brand as missing, and doesn't correct it", async () => {
+    tables = {
+      prompt_results: {
+        data: { id: 'r1', brand_id: 'b1', brands: { organization_id: 'org-1' } },
+        error: null,
+      },
+    };
+    await expect(getMentionFor(selected, 'r1')).resolves.toBeNull();
+    await expect(overrideMentionSentimentFor(selected, 'r1', 'neutral')).resolves.toEqual({
+      error: 'missing',
+      message: 'Answer not found',
+    });
+    expect(rpc).not.toHaveBeenCalled();
   });
 });

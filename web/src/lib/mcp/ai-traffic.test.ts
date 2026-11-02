@@ -36,6 +36,7 @@ const auth: McpAuthContext = {
   email: null,
   organizationId: 'org-1',
   apiKeyId: 'key-1',
+  brandAccess: 'all',
   role: 'admin',
 };
 const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
