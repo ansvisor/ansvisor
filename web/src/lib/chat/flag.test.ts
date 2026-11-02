@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { chatAgenticEnabled } from './flag';
+import { autoGoLiveEnabled, chatAgenticEnabled } from './flag';
 
 /** The new Chat's switch: CHAT_AGENTIC, narrowed by CHAT_AGENTIC_ORGS. */
 
@@ -59,5 +59,29 @@ describe('chatAgenticEnabled', () => {
     expect(chatAgenticEnabled(ORG_A)).toBe(false);
     vi.stubEnv('CHAT_AGENTIC', 'true');
     expect(chatAgenticEnabled(ORG_A)).toBe(true);
+  });
+});
+
+describe('autoGoLiveEnabled (AUTONOMOUS-GO-LIVE §9)', () => {
+  it('is off unless both CHAT_AGENTIC and CHAT_AUTO_GO_LIVE are on', () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    vi.stubEnv('CHAT_AUTO_GO_LIVE', undefined);
+    expect(autoGoLiveEnabled(ORG_A)).toBe(false);
+    vi.stubEnv('CHAT_AUTO_GO_LIVE', 'true');
+    vi.stubEnv('CHAT_AUTO_GO_LIVE_ORGS', '');
+    expect(autoGoLiveEnabled(ORG_A)).toBe(true);
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(autoGoLiveEnabled(ORG_A)).toBe(false);
+  });
+
+  it('is on only for the listed organizations when CHAT_AUTO_GO_LIVE_ORGS is set', () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    vi.stubEnv('CHAT_AUTO_GO_LIVE', 'true');
+    vi.stubEnv('CHAT_AUTO_GO_LIVE_ORGS', ` ${ORG_A.toUpperCase()} `);
+    expect(autoGoLiveEnabled(ORG_A)).toBe(true);
+    expect(autoGoLiveEnabled(ORG_B)).toBe(false);
+    expect(autoGoLiveEnabled(null)).toBe(false);
   });
 });
