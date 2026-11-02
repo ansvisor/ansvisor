@@ -84,6 +84,40 @@ afterEach(() => {
   container.remove();
 });
 
+describe('a stale action (00432)', () => {
+  const stale: ActionItem = { ...action, status: 'new', staleAt: '2026-10-31T03:00:00.000Z' };
+  const onKeep = vi.fn();
+
+  it('shows Stale beside New, and offers Still relevant in its menu', async () => {
+    render({ actions: [stale], onKeep });
+    expect(container.textContent).toContain('NewStale');
+    const items = await openMenu();
+    expect(items.map((item) => item.textContent)).toEqual([
+      'In Progress',
+      'Completed',
+      'Dismiss',
+      'Still relevant',
+      'Delete',
+    ]);
+    await act(async () => items[3].click());
+    expect(onKeep).toHaveBeenCalledWith(stale);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('is neither once it left New, nor without the stamp', async () => {
+    render({ actions: [{ ...stale, status: 'on_hold' }], onKeep });
+    expect(container.textContent).not.toContain('Stale');
+    expect((await openMenu()).map((item) => item.textContent)).not.toContain('Still relevant');
+  });
+
+  it('keeps nothing on a read-only workspace: the upgrade dialog instead', async () => {
+    render({ actions: [stale], onKeep }, true);
+    await act(async () => (await openMenu())[3].click());
+    expect(onKeep).not.toHaveBeenCalled();
+    expect(openUpgrade).toHaveBeenCalled();
+  });
+});
+
 describe('ActionTable row menu', () => {
   it('offers In Progress, Completed, Dismiss and Delete, the current status off', async () => {
     render();
