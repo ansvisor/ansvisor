@@ -7,7 +7,7 @@ import { isAiProvider, parseProviderSettings, type AiProvider } from '@/lib/agen
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { ownKeyAccess, type OwnKeyAccess } from '@/lib/chat/key';
 import { readProviderKey } from '@/lib/agent/key';
-import { resumeOwnKeyAgents } from '@/lib/chat/key-health';
+import { resolveOwnKeyNotices, resumeOwnKeyAgents } from '@/lib/chat/key-health';
 import {
   keepKeyCheck,
   keyCheckOf,
@@ -303,6 +303,11 @@ export async function PUT(req: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  // A new key ends the old one's failure (00440's trigger clears it), so the
+  // Admins' notices about it close, before this key's own check is kept.
+  await resolveOwnKeyNotices(organizationId, provider).catch((err) =>
+    console.error("[ai-providers] could not close the key's notices:", err),
+  );
 
   // The first key saved is the one Chat uses: decided under the lock, so a
   // switch at the same time can't be overridden.
@@ -416,5 +421,9 @@ export async function DELETE(req: Request) {
       console.error('[ai-providers] could not resume the agents:', err),
     );
   }
+  // A removed key fails no more: the Admins' notices about it close (00441).
+  await resolveOwnKeyNotices(organizationId, provider).catch((err) =>
+    console.error("[ai-providers] could not close the key's notices:", err),
+  );
   return NextResponse.json({ ok: true });
 }
