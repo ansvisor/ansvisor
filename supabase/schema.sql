@@ -58431,3 +58431,584 @@ create policy "chat_memory_items: workspace select"
 
 notify pgrst, 'reload schema';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00462_chat_models_images.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00462: what the model menu needs from the price catalog, and how many
+-- images a spend row paid for
+-- ============================================================================
+-- Chat Wave 4 (CHAT-16 §A, CHAT-15 §E), behind CHAT_AGENTIC. Nothing reads
+-- these yet: the model menu (W4-01) and image metering (W4-07) come next.
+--
+--   * chat_model_prices (00404) gains two catalog fields the daily sync
+--     (server lib/model-prices.js) writes from OpenRouter's public catalog:
+--       - supported_parameters: what the model takes ("tools", "reasoning",
+--         "structured_outputs", …). Chat's engine can't run without tool
+--         calls, so the menu offers only a model that lists "tools". Null
+--         until the next sync lists the model again.
+--       - context_length: its context window in tokens, as the catalog gives
+--         it. Null where the catalog gives none.
+--     The table stays the server's: no member reads it (dollars never reach
+--     a browser).
+--   * prompt_improve_usage.units: how many images a row paid for (an image
+--     request's 1–4 variants, the editor's 2–4). Null on every token row. An
+--     image row is charged at the provider's real cost, with no markup (owner
+--     decision 2026-11-02), on the same budget and the same reservation as
+--     a model step; units only says what the dollars bought.
+
+-- ─── The model catalog ──────────────────────────────────────────────────────
+
+alter table public.chat_model_prices
+  add column if not exists supported_parameters text[] check (
+    supported_parameters is null or cardinality(supported_parameters) <= 64
+  ),
+  add column if not exists context_length integer check (
+    context_length is null or context_length > 0
+  );
+
+comment on column public.chat_model_prices.supported_parameters is
+  'OpenRouter''s supported_parameters as given ("tools", "reasoning", "structured_outputs"…): the model menu offers only a model that lists "tools" (00462). Null until a sync lists the model.';
+comment on column public.chat_model_prices.context_length is
+  'The model''s context window in tokens, from the catalog (00462). Null where it gives none.';
+
+-- ─── Images on a spend row ──────────────────────────────────────────────────
+
+alter table public.prompt_improve_usage
+  add column if not exists units smallint;
+
+alter table public.prompt_improve_usage
+  drop constraint if exists prompt_improve_usage_units_check;
+alter table public.prompt_improve_usage
+  add constraint prompt_improve_usage_units_check
+    check (units is null or (units between 1 and 10 and feature = 'image'));
+
+comment on column public.prompt_improve_usage.units is
+  'How many images an image row paid for (00462; CHAT-15 §E): 1–10. Null on token rows. The row''s cost_usd is the provider''s real cost for them, with no markup.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00463_content_drafts_chat_origin.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00463: where a draft was made, and the chat that made it
+-- ============================================================================
+-- Chat Wave 4 (CHAT-25 §2, CHAT-15 §C), behind CHAT_AGENTIC for the chat
+-- parts. Content › Library's "Made in" column and filter, the editor's
+-- "From chat: {title}" line and Chat's version cards read these; the
+-- writers set them as they make a draft (W4-10).
+--
+--   * content_drafts.origin: editor (made in the Content Editor, the
+--     default), chat (Chat's create_draft), action_center (an Action Center
+--     task), agent (an agent's run) or mcp (an MCP client). Set once, when
+--     the draft is made.
+--   * content_drafts.conversation_id: the chat a draft was made in, or
+--     continued from (chat_conversations, 00400). Null once the chat is
+--     deleted: the draft stays. A member reads it with the draft; whether
+--     they may open the chat is the chat's own policy (00400, 00424).
+--   * A member's own write (the editor, and Chat's create_draft in a run
+--     with the person's session) may say editor or chat, and name only a
+--     chat of their own; neither changes afterwards. The other origins, and
+--     any change, are the server's (service role).
+--   * Drafts made before this: one with an action_id is action_center, the
+--     rest stay editor. Their updated_at isn't touched, so the Library keeps
+--     its order.
+
+alter table public.content_drafts
+  add column if not exists origin text not null default 'editor',
+  add column if not exists conversation_id uuid
+    references public.chat_conversations(id) on delete set null;
+
+alter table public.content_drafts
+  drop constraint if exists content_drafts_origin_check;
+alter table public.content_drafts
+  add constraint content_drafts_origin_check
+    check (origin in ('editor', 'chat', 'action_center', 'agent', 'mcp'));
+
+-- A member's write: editor or chat, a chat of their own, set once. Its own
+-- trigger, beside guard_content_draft_server_columns (00289's), which stays
+-- as it is.
+create or replace function public.guard_content_draft_origin()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  -- A role that bypasses RLS is server-side (service role, migrations).
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.origin not in ('editor', 'chat') then
+      raise exception 'content draft origin is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.conversation_id is not null and not exists (
+      select 1
+      from public.chat_conversations c
+      where c.id = new.conversation_id
+        and c.user_id = auth.uid()
+        and c.deleted_at is null
+    ) then
+      raise exception 'content draft chat is not the person''s'
+        using errcode = '42501';
+    end if;
+  elsif new.origin is distinct from old.origin
+     or (new.conversation_id is distinct from old.conversation_id
+         and new.conversation_id is not null)
+  then
+    raise exception 'content draft origin is managed server-side'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists content_drafts_guard_origin on public.content_drafts;
+create trigger content_drafts_guard_origin
+  before insert or update of origin, conversation_id on public.content_drafts
+  for each row execute function public.guard_content_draft_origin();
+
+-- The drafts an Action Center task made. The updated_at trigger is off for
+-- this one statement (the migration's own transaction), so no draft looks
+-- edited today.
+alter table public.content_drafts disable trigger content_drafts_updated_at;
+update public.content_drafts
+set origin = 'action_center'
+where action_id is not null
+  and origin = 'editor';
+alter table public.content_drafts enable trigger content_drafts_updated_at;
+
+-- A chat's drafts (its version cards, and "From chat" back to it).
+create index if not exists content_drafts_conversation_idx
+  on public.content_drafts (conversation_id)
+  where conversation_id is not null;
+
+comment on column public.content_drafts.origin is
+  'Where the draft was made (00463; CHAT-25): editor (default), chat, action_center, agent or mcp. Content › Library''s "Made in". Drafts from before 00463 with an action_id are action_center.';
+comment on column public.content_drafts.conversation_id is
+  'The chat the draft was made in or continued from (00463; CHAT-25). Null for other drafts, and once the chat is deleted.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00464_chat_whats_new_reads.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00464: which What's new entries a person has read
+-- ============================================================================
+-- What's new (CHAT-11 §E, Wave 4), behind CHAT_AGENTIC. The entries
+-- themselves live in the repository (whats-new/{slug}.md, approved ones in
+-- web lib/chat/whats-new/entries.json, Wave 4 decision 13); this table only
+-- keeps who read which, so Home's New line, the chip's dot and
+-- `?unread=true` leave read entries out.
+--
+--   * chat_whats_new_reads: one row per person and entry, by the entry's
+--     slug, with when it was read: shown in a What's new answer, its Show me
+--     sent, or its link opened (CHAT-11 item 18). Per person, the same in
+--     the side panel and on the full page. Rows go with the person's
+--     account. Home's line also drops an entry 14 days after it was
+--     published (decision 14), which the entry's own date tells: no row.
+--   * A person reads only their own rows; the server writes them.
+
+create table if not exists public.chat_whats_new_reads (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  -- The entry's file name without .md: lowercase words and single hyphens.
+  entry_slug text not null check (
+    char_length(entry_slug) <= 80 and entry_slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'
+  ),
+  read_at timestamptz not null default now(),
+  primary key (user_id, entry_slug)
+);
+
+comment on table public.chat_whats_new_reads is
+  'What''s new (00464; CHAT-11 §E): the entries a person has read, by slug. Their own rows only; the server writes.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_whats_new_reads enable row level security;
+revoke all on table public.chat_whats_new_reads from anon, authenticated;
+grant select on table public.chat_whats_new_reads to authenticated;
+grant all on table public.chat_whats_new_reads to service_role;
+
+drop policy if exists "chat_whats_new_reads: own select" on public.chat_whats_new_reads;
+create policy "chat_whats_new_reads: own select"
+  on public.chat_whats_new_reads
+  for select
+  to authenticated
+  using (user_id = auth.uid());
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00465_chat_skills_library.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00465: workspace skills added from the Library, and the weekly update check
+-- ============================================================================
+-- Chat Wave 4 (CHAT-17, W4-19 and W4-31), behind CHAT_AGENTIC. The Library
+-- ("701 · MIT") is a catalog in the repository (web lib/chat/skills/
+-- marketplace.json); adding one of its skills takes the import path of 00458
+-- (cleanup, scan, MIT, an Admin's approval), from the commit the catalog
+-- pins. The Ansvisor skills in /skills (lib/chat/skills/library.ts) are
+-- another thing and stay out of this table.
+--
+--   * chat_skills.source gains library: a skill added from the Library. Like
+--     an import it carries its license, source URL and pinned commit, and
+--     never updates by itself.
+--   * chat_skills.library_ref: the catalog row it came from, once in the
+--     workspace (the Library card's Added state). Only a Library skill has
+--     one.
+--   * chat_skills.update_checked_at: when the weekly check last looked at an
+--     imported or Library skill's source (W4-31); update_sha (00458) says
+--     what it found.
+
+-- ─── Library as a source ────────────────────────────────────────────────────
+
+alter table public.chat_skills
+  drop constraint if exists chat_skills_source_check;
+alter table public.chat_skills
+  add constraint chat_skills_source_check
+    check (source in ('user', 'import', 'library'));
+
+-- 00458's unnamed rule that only an import has a source URL and a commit:
+-- found by what it says, since PostgreSQL named it, and given a name.
+do $$
+declare
+  v_name text;
+begin
+  for v_name in
+    select c.conname
+    from pg_catalog.pg_constraint c
+    where c.conrelid = 'public.chat_skills'::regclass
+      and c.contype = 'c'
+      and pg_catalog.pg_get_constraintdef(c.oid) like '%''import''::text%'
+      and pg_catalog.pg_get_constraintdef(c.oid) like '%source_url IS NULL%'
+  loop
+    execute format('alter table public.chat_skills drop constraint %I', v_name);
+  end loop;
+end;
+$$;
+
+alter table public.chat_skills
+  drop constraint if exists chat_skills_source_pin_check;
+alter table public.chat_skills
+  add constraint chat_skills_source_pin_check
+    check (source in ('import', 'library') or (source_url is null and commit_sha is null));
+
+-- ─── The catalog row, and the update check ──────────────────────────────────
+
+alter table public.chat_skills
+  add column if not exists library_ref text check (
+    char_length(library_ref) between 1 and 300 and library_ref ~ '^[A-Za-z0-9._/-]+$'
+  ),
+  add column if not exists update_checked_at timestamptz;
+
+-- A Library skill names its catalog row and its pinned commit; nothing else
+-- names a row.
+alter table public.chat_skills
+  drop constraint if exists chat_skills_library_check;
+alter table public.chat_skills
+  add constraint chat_skills_library_check
+    check (
+      ((source = 'library') = (library_ref is not null))
+      and (source <> 'library' or commit_sha is not null)
+    );
+
+-- Added once per workspace.
+create unique index if not exists chat_skills_library_ref_uidx
+  on public.chat_skills (organization_id, library_ref)
+  where library_ref is not null;
+
+-- The weekly check's queue: the pinned skills it looked at longest ago.
+create index if not exists chat_skills_update_checked_idx
+  on public.chat_skills (update_checked_at nulls first)
+  where commit_sha is not null;
+
+comment on column public.chat_skills.source is
+  'user (made in Chat), import (an upload or a pinned GitHub commit, 00458) or library (added from the Library catalog at the commit it pins, 00465).';
+comment on column public.chat_skills.library_ref is
+  'The Library catalog row a library skill came from (00465; marketplace.json''s id), once per workspace. Null for other skills.';
+comment on column public.chat_skills.update_checked_at is
+  'When the weekly update check last read the skill''s source (00465; W4-31). Null until it has.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00466_chat_agent_calls.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00466: an agent that runs another agent (CHAT-27 phase 2)
+-- ============================================================================
+-- Chat Wave 4 (CHAT-27 items 14–18, W4-26 and W4-27), behind CHAT_AGENTIC.
+-- An agent's run may start one of the agents its Can call list names, with
+-- run_agent; the called agent runs as its own agent run, and its summary
+-- comes back to the caller as untrusted data. Nothing writes these yet.
+--
+--   * chat_agent_versions.can_call: the agents this version may run, at most
+--     5, never itself, all of its own workspace (a trigger checks). Empty by
+--     default; Admins and Managers set it, Growth and up (the server checks
+--     roles and plan). A called agent deleted later stays in old versions'
+--     lists: the server offers only agents that are still there.
+--   * chat_agent_runs.trigger_kind gains agent: a run another agent's run
+--     started. called_by_run_id names that run, and only such a run has
+--     one. A run that was itself called can't call further (no chains, so no
+--     cycle), an agent doesn't call itself, and a run calls at most 3 times
+--     (Technical T3): a trigger is the database's backstop to run_agent's
+--     own checks, as 00419's is for subtasks.
+
+-- ─── Can call ───────────────────────────────────────────────────────────────
+
+alter table public.chat_agent_versions
+  add column if not exists can_call uuid[] not null default '{}';
+
+alter table public.chat_agent_versions
+  drop constraint if exists chat_agent_versions_can_call_check;
+alter table public.chat_agent_versions
+  add constraint chat_agent_versions_can_call_check
+    check (
+      cardinality(can_call) <= 5
+      and array_position(can_call, null) is null
+      and public.chat_text_array_distinct(can_call::text[])
+      and not (agent_id = any (can_call))
+    );
+
+-- Every agent it names is of the same workspace.
+create or replace function public.chat_agent_versions_can_call_rules()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if cardinality(new.can_call) = 0 then
+    return new;
+  end if;
+
+  if exists (
+    select 1
+    from unnest(new.can_call) as wanted(id)
+    where not exists (
+      select 1
+      from public.chat_agents callee
+      join public.chat_agents caller on caller.organization_id = callee.organization_id
+      where callee.id = wanted.id
+        and caller.id = new.agent_id
+    )
+  ) then
+    raise exception 'an agent calls only agents of its own workspace'
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_chat_agent_versions_can_call_rules on public.chat_agent_versions;
+create trigger trg_chat_agent_versions_can_call_rules
+  before insert or update of can_call, agent_id on public.chat_agent_versions
+  for each row execute function public.chat_agent_versions_can_call_rules();
+
+comment on column public.chat_agent_versions.can_call is
+  'The agents this version may run with run_agent (00466; CHAT-27 item 14): at most 5, never itself, of its own workspace. Empty by default.';
+
+-- ─── A run another agent started ────────────────────────────────────────────
+
+alter table public.chat_agent_runs
+  drop constraint if exists chat_agent_runs_trigger_kind_check;
+alter table public.chat_agent_runs
+  add constraint chat_agent_runs_trigger_kind_check
+    check (
+      trigger_kind in ('schedule', 'signal', 'kpi', 'watch_rule', 'manual', 'action', 'agent')
+    );
+
+-- The caller's run. As 00419's subtasks, the called run goes with it.
+alter table public.chat_agent_runs
+  add column if not exists called_by_run_id uuid
+    references public.chat_agent_runs(id) on delete cascade;
+
+alter table public.chat_agent_runs
+  drop constraint if exists chat_agent_runs_called_by_check;
+alter table public.chat_agent_runs
+  add constraint chat_agent_runs_called_by_check
+    check ((trigger_kind = 'agent') = (called_by_run_id is not null));
+
+-- A run's calls ("Ran {agent}" lines) and the called run's "Called by".
+create index if not exists chat_agent_runs_called_by_idx
+  on public.chat_agent_runs (called_by_run_id)
+  where called_by_run_id is not null;
+
+-- The caller is a run of the same workspace that wasn't called itself, of
+-- another agent, with fewer than 3 calls so far. Checked when a run names
+-- its caller, not when an agent's deletion clears agent_id later.
+create or replace function public.chat_agent_runs_call_rules()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.called_by_run_id is null then
+    return new;
+  end if;
+
+  if not exists (
+    select 1
+    from public.chat_agent_runs c
+    where c.id = new.called_by_run_id
+      and c.organization_id = new.organization_id
+      and c.called_by_run_id is null
+      and c.agent_id is distinct from new.agent_id
+  ) then
+    raise exception 'an agent run is called by a run of another agent of the workspace, which wasn''t called itself'
+      using errcode = '23514';
+  end if;
+
+  -- Calls of one run at once queue here, so a fourth can't slip past the count.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtext('chat_agent_calls:' || new.called_by_run_id::text)
+  );
+  if (
+    select count(*)
+    from public.chat_agent_runs r
+    where r.called_by_run_id = new.called_by_run_id
+      and r.id <> new.id
+  ) >= 3 then
+    raise exception 'a run calls other agents at most 3 times' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_chat_agent_runs_call_rules on public.chat_agent_runs;
+create trigger trg_chat_agent_runs_call_rules
+  before insert or update of called_by_run_id on public.chat_agent_runs
+  for each row execute function public.chat_agent_runs_call_rules();
+
+comment on column public.chat_agent_runs.called_by_run_id is
+  'The agent run whose run_agent call started this one (00466; trigger_kind agent; CHAT-27 phase 2). One level only, at most 3 a run. Null for every other run.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00467_chat_outbound_emails.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00467: a scheduled job's e-mails to addresses outside the workspace, each
+-- sent only with a click
+-- ============================================================================
+-- Chat Wave 4 (W4-28, Wave 4 decision 16), behind CHAT_AGENTIC. A job still
+-- e-mails the people of its workspace by itself (00457's recipient_ids).
+-- For an outside address it only prepares the e-mail: someone clicks Send
+-- on the Inbox card, every time (an EXECUTE; the go-live permission never
+-- covers it). Nothing reads or writes these yet.
+--
+--   * chat_schedules.external_recipients: up to 5 outside addresses on a
+--     job, lowercase and once each. Only Admins and Managers add them, on
+--     Starter and up (the server checks role and plan).
+--   * chat_outbound_emails: one prepared e-mail per run and address:
+--       - what: the address, the subject, the 3–5 line summary (an outside
+--         reader gets no link that asks them to sign in) and the files to
+--         attach (the report's PDF);
+--       - state: pending, then sent (with when, who clicked, and Resend's
+--         id), cancelled, or expired 7 days after it was prepared. A failed
+--         send stays pending with why, so Send can be tried again.
+--     The workspace's sends a day (50 at most) are counted from its sent
+--     rows.
+--   * Read as the job is (00457): its creator and the Admins, within the
+--     brands they can access. The server writes.
+
+-- ─── Outside addresses on a job ─────────────────────────────────────────────
+
+alter table public.chat_schedules
+  add column if not exists external_recipients text[] not null default '{}' check (
+    cardinality(external_recipients) <= 5
+    and public.chat_text_array_distinct(external_recipients)
+    and octet_length(public.chat_text_array_words(external_recipients)) <= 1300
+    and public.chat_text_array_words(external_recipients)
+      ~ '^([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}( [a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})*)?$'
+  );
+
+comment on column public.chat_schedules.external_recipients is
+  'Up to 5 addresses outside the workspace (00467; W4-28): the job prepares their e-mails (chat_outbound_emails) and someone clicks Send each time. Lowercase, once each.';
+
+-- ─── Prepared e-mails ───────────────────────────────────────────────────────
+
+create table if not exists public.chat_outbound_emails (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  schedule_id uuid not null references public.chat_schedules(id) on delete cascade,
+  -- The run that prepared it. Null once the run's row is gone.
+  schedule_run_id uuid references public.chat_schedule_runs(id) on delete set null,
+  to_address text not null check (
+    char_length(to_address) <= 254
+    and to_address ~ '^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$'
+  ),
+  subject text not null check (char_length(subject) between 1 and 200),
+  -- The answer's first lines (the job e-mail's summary), no sign-in link.
+  summary text not null check (char_length(summary) between 1 and 2000),
+  -- [{path, name, bytes}]: what goes attached (the report's PDF).
+  files jsonb not null default '[]'::jsonb check (
+    jsonb_typeof(files) = 'array'
+    and jsonb_array_length(files) <= 5
+    and octet_length(files::text) <= 8000
+  ),
+  status text not null default 'pending'
+    check (status in ('pending', 'sent', 'cancelled', 'expired')),
+  expires_at timestamptz not null default (now() + interval '7 days'),
+  -- Who clicked Send; Reply-to is theirs.
+  approved_by uuid references auth.users(id) on delete set null,
+  sent_at timestamptz,
+  resend_id text check (char_length(resend_id) between 1 and 200),
+  -- Why the last Send failed, in plain words: never a raw error.
+  send_error text check (char_length(send_error) between 1 and 200),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check ((status = 'sent') = (sent_at is not null)),
+  check (resend_id is null or status = 'sent'),
+  check (send_error is null or status = 'pending'),
+  check (expires_at > created_at)
+);
+
+-- One e-mail per run and address.
+create unique index if not exists chat_outbound_emails_run_address_uidx
+  on public.chat_outbound_emails (schedule_run_id, to_address)
+  where schedule_run_id is not null;
+-- A job's e-mails, newest first (the Inbox cards, the job's history).
+create index if not exists chat_outbound_emails_schedule_created_idx
+  on public.chat_outbound_emails (schedule_id, created_at desc);
+-- The workspace's sends in the last day (the daily limit).
+create index if not exists chat_outbound_emails_organization_sent_idx
+  on public.chat_outbound_emails (organization_id, sent_at)
+  where status = 'sent';
+-- What expires next.
+create index if not exists chat_outbound_emails_pending_expires_idx
+  on public.chat_outbound_emails (expires_at)
+  where status = 'pending';
+create index if not exists chat_outbound_emails_approved_by_idx
+  on public.chat_outbound_emails (approved_by) where approved_by is not null;
+
+drop trigger if exists trg_chat_outbound_emails_updated_at on public.chat_outbound_emails;
+create trigger trg_chat_outbound_emails_updated_at
+  before update on public.chat_outbound_emails
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_outbound_emails is
+  'Chat (00467; W4-28): a scheduled job''s e-mail to an address outside the workspace, prepared by its run and sent only when someone clicks Send (pending → sent, cancelled, or expired after 7 days). Read as the job is; the server writes.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_outbound_emails enable row level security;
+revoke all on table public.chat_outbound_emails from anon, authenticated;
+grant select on table public.chat_outbound_emails to authenticated;
+grant all on table public.chat_outbound_emails to service_role;
+
+-- A job's e-mails follow it (its creator and the Admins, within brand access).
+drop policy if exists "chat_outbound_emails: schedule select" on public.chat_outbound_emails;
+create policy "chat_outbound_emails: schedule select"
+  on public.chat_outbound_emails
+  for select
+  to authenticated
+  using (schedule_id in (select s.id from public.chat_schedules s));
+
+notify pgrst, 'reload schema';
+

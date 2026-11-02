@@ -1974,6 +1974,7 @@ export type Database = {
           agent_id: string | null
           agent_version: number
           brand_id: string | null
+          called_by_run_id: string | null
           evidence_json: Json
           finished_at: string | null
           id: string
@@ -1997,6 +1998,7 @@ export type Database = {
           agent_id?: string | null
           agent_version: number
           brand_id?: string | null
+          called_by_run_id?: string | null
           evidence_json?: Json
           finished_at?: string | null
           id?: string
@@ -2020,6 +2022,7 @@ export type Database = {
           agent_id?: string | null
           agent_version?: number
           brand_id?: string | null
+          called_by_run_id?: string | null
           evidence_json?: Json
           finished_at?: string | null
           id?: string
@@ -2057,6 +2060,13 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_runs_called_by_run_id_fkey"
+            columns: ["called_by_run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agent_runs"
             referencedColumns: ["id"]
           },
           {
@@ -2122,6 +2132,7 @@ export type Database = {
       chat_agent_versions: {
         Row: {
           agent_id: string
+          can_call: string[]
           connections: Json
           created_at: string
           created_by: string | null
@@ -2137,6 +2148,7 @@ export type Database = {
         }
         Insert: {
           agent_id: string
+          can_call?: string[]
           connections?: Json
           created_at?: string
           created_by?: string | null
@@ -2152,6 +2164,7 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          can_call?: string[]
           connections?: Json
           created_at?: string
           created_by?: string | null
@@ -2795,6 +2808,85 @@ export type Database = {
           },
         ]
       }
+      chat_outbound_emails: {
+        Row: {
+          approved_by: string | null
+          created_at: string
+          expires_at: string
+          files: Json
+          id: string
+          organization_id: string
+          resend_id: string | null
+          schedule_id: string
+          schedule_run_id: string | null
+          send_error: string | null
+          sent_at: string | null
+          status: string
+          subject: string
+          summary: string
+          to_address: string
+          updated_at: string
+        }
+        Insert: {
+          approved_by?: string | null
+          created_at?: string
+          expires_at?: string
+          files?: Json
+          id?: string
+          organization_id: string
+          resend_id?: string | null
+          schedule_id: string
+          schedule_run_id?: string | null
+          send_error?: string | null
+          sent_at?: string | null
+          status?: string
+          subject: string
+          summary: string
+          to_address: string
+          updated_at?: string
+        }
+        Update: {
+          approved_by?: string | null
+          created_at?: string
+          expires_at?: string
+          files?: Json
+          id?: string
+          organization_id?: string
+          resend_id?: string | null
+          schedule_id?: string
+          schedule_run_id?: string | null
+          send_error?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          summary?: string
+          to_address?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_outbound_emails_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_outbound_emails_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "chat_schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_outbound_emails_schedule_run_id_fkey"
+            columns: ["schedule_run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_schedule_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_run_events: {
         Row: {
           created_at: string
@@ -3121,6 +3213,7 @@ export type Database = {
           due_at: string | null
           effort: string
           enabled: boolean
+          external_recipients: string[]
           fail_count: number
           id: string
           kind: string
@@ -3157,6 +3250,7 @@ export type Database = {
           due_at?: string | null
           effort?: string
           enabled?: boolean
+          external_recipients?: string[]
           fail_count?: number
           id?: string
           kind: string
@@ -3193,6 +3287,7 @@ export type Database = {
           due_at?: string | null
           effort?: string
           enabled?: boolean
+          external_recipients?: string[]
           fail_count?: number
           id?: string
           kind?: string
@@ -3339,6 +3434,7 @@ export type Database = {
           description: string
           enabled: boolean
           id: string
+          library_ref: string | null
           license: string | null
           license_text: string | null
           name: string
@@ -3349,6 +3445,7 @@ export type Database = {
           source_url: string | null
           status: string
           title: string
+          update_checked_at: string | null
           update_sha: string | null
           updated_at: string
           visibility: string
@@ -3365,6 +3462,7 @@ export type Database = {
           description: string
           enabled?: boolean
           id?: string
+          library_ref?: string | null
           license?: string | null
           license_text?: string | null
           name: string
@@ -3375,6 +3473,7 @@ export type Database = {
           source_url?: string | null
           status?: string
           title: string
+          update_checked_at?: string | null
           update_sha?: string | null
           updated_at?: string
           visibility?: string
@@ -3391,6 +3490,7 @@ export type Database = {
           description?: string
           enabled?: boolean
           id?: string
+          library_ref?: string | null
           license?: string | null
           license_text?: string | null
           name?: string
@@ -3401,6 +3501,7 @@ export type Database = {
           source_url?: string | null
           status?: string
           title?: string
+          update_checked_at?: string | null
           update_sha?: string | null
           updated_at?: string
           visibility?: string
@@ -3832,6 +3933,24 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_whats_new_reads: {
+        Row: {
+          entry_slug: string
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          entry_slug: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          entry_slug?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chat_why_analyses: {
         Row: {
           brand_id: string
@@ -4208,6 +4327,7 @@ export type Database = {
           body_html: string
           brief: Json | null
           brand_id: string
+          conversation_id: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -4216,6 +4336,7 @@ export type Database = {
           meta_description: string | null
           meta_title: string | null
           opportunity_id: string | null
+          origin: string
           page_type: string | null
           page_type_source: string
           prompt_ids: string[]
@@ -4251,6 +4372,7 @@ export type Database = {
           body_html?: string
           brief?: Json | null
           brand_id: string
+          conversation_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -4259,6 +4381,7 @@ export type Database = {
           meta_description?: string | null
           meta_title?: string | null
           opportunity_id?: string | null
+          origin?: string
           page_type?: string | null
           page_type_source?: string
           prompt_ids?: string[]
@@ -4294,6 +4417,7 @@ export type Database = {
           body_html?: string
           brief?: Json | null
           brand_id?: string
+          conversation_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -4302,6 +4426,7 @@ export type Database = {
           meta_description?: string | null
           meta_title?: string | null
           opportunity_id?: string | null
+          origin?: string
           page_type?: string | null
           page_type_source?: string
           prompt_ids?: string[]
@@ -4326,6 +4451,13 @@ export type Database = {
             columns: ["author_id"]
             isOneToOne: false
             referencedRelation: "content_authors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_drafts_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "chat_conversations"
             referencedColumns: ["id"]
           },
           {

@@ -77,6 +77,8 @@ const NOT_BRAND_DATA = {
   chat_uploads:
     "A person's own uploads stay theirs; the others follow their chat (chat_conversations).",
   chat_user_prefs: "A person's own Chat preferences.",
+  chat_whats_new_reads:
+    "A person's own What's new read marks (00464): which product updates they read, no brand's data.",
   cloro_countries: 'The list of countries a prompt can track, the same for everyone.',
   content_authors: "The Account's authors for content (Settings › Authors).",
   content_rule_sets: "The Account's content rules.",
@@ -641,6 +643,7 @@ describe('every table without a brand_id', () => {
       'chat_agent_triggers',
       'chat_agent_go_live',
       'chat_schedule_runs',
+      'chat_outbound_emails',
     ]) {
       expect(childrenReaching, table).toContain(table);
     }
