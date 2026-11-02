@@ -748,13 +748,13 @@ describe('how many parts of a job the budget left covers (CHAT-04 item 17a)', ()
   });
 
   it('counts the parts what is left of the budget holds, holds in flight and credits included', async () => {
-    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 5 });
+    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 5, limit: 'month' });
     // $0.02 left of Starter's $5: two parts, not three.
     spent(4.98);
-    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 2 });
+    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 2, limit: 'month' });
     // A step held in flight counts as spent.
     await budget.reserveChatStep('o1', step());
-    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 1 });
+    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 1, limit: 'month' });
     // Credits bought add to what is left.
     grants.push({
       id: 'g1',
@@ -771,18 +771,21 @@ describe('how many parts of a job the budget left covers (CHAT-04 item 17a)', ()
 
   it('says none fits once a part’s worst case is past what is left', async () => {
     spent(4.995);
-    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 0 });
+    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 0, limit: 'month' });
     spent(1);
-    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 0 });
+    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 0, limit: 'month' });
   });
 
   it('fits every part on the workspace’s own key, and without a budget (self-hosted)', async () => {
     spent(5);
-    expect(await budget.fitChatUnits('o1', job({ ownKey: true }))).toEqual({ fits: 5 });
+    expect(await budget.fitChatUnits('o1', job({ ownKey: true }))).toEqual({
+      fits: 5,
+      limit: 'month',
+    });
     vi.stubEnv('IS_CLOUD', 'false');
     vi.resetModules();
     const selfHosted = await import('./chat-budget.js');
-    expect(await selfHosted.fitChatUnits('o1', job())).toEqual({ fits: 5 });
+    expect(await selfHosted.fitChatUnits('o1', job())).toEqual({ fits: 5, limit: 'month' });
   });
 
   it('keeps an agent run’s chat within its own cap too', async () => {
@@ -791,6 +794,13 @@ describe('how many parts of a job the budget left covers (CHAT-04 item 17a)', ()
     // 1% of $5 is $0.05: seven parts of $0.007, though the month has $5 left.
     expect(await budget.fitChatUnits('o1', job({ units: 10, agentRunId: AGENT_RUN }))).toEqual({
       fits: 7,
+      limit: 'run',
+    });
+    // With less left of the month than of the run's cap, the month binds.
+    spent(4.98);
+    expect(await budget.fitChatUnits('o1', job({ units: 10, agentRunId: AGENT_RUN }))).toEqual({
+      fits: 2,
+      limit: 'month',
     });
     agentRuns[0].organization_id = 'o2';
     await expect(budget.fitChatUnits('o1', job({ agentRunId: AGENT_RUN }))).rejects.toMatchObject({
@@ -800,7 +810,10 @@ describe('how many parts of a job the budget left covers (CHAT-04 item 17a)', ()
   });
 
   it('checks no more than 100 parts, and nothing while Chat is off', async () => {
-    expect(await budget.fitChatUnits('o1', job({ units: 500 }))).toEqual({ fits: 100 });
+    expect(await budget.fitChatUnits('o1', job({ units: 500 }))).toEqual({
+      fits: 100,
+      limit: 'month',
+    });
     vi.stubEnv('CHAT_AGENTIC', 'false');
     await expect(budget.fitChatUnits('o1', job())).rejects.toMatchObject({ code: 'chat_off' });
   });

@@ -200,7 +200,9 @@ async function periodSpentUsd(orgId, since) {
  * included, less the period's spend and holds; for an agent run's chat
  * (`agentRunId`), also what its own cap leaves (CHAT-27 item 21). A count,
  * never dollars: the web asks the person what to do when it is under
- * `units`, and pauses at the cap when it is 0. Every part fits on the
+ * `units`, and pauses at the cap when it is 0. `limit` says which limit
+ * binds: 'run' when the agent run's own cap leaves no more than the month
+ * does, so the web pauses the run at its cap, not the agent at the month's. Every part fits on the
  * workspace's own key (ownKey: the provider bills it), without a budget to
  * hold against (self-hosted), and for a model priced at nothing. Only a
  * check: each step is still held on its own (reserveChatStep).
@@ -212,15 +214,21 @@ export async function fitChatUnits(
   assertChatOn(orgId);
   const count = Math.max(0, Math.min(MAX_FIT_UNITS, Math.floor(units)));
   const unitUsd = stepWorstCaseUsd(modelId, perUnit);
-  if (ownKey || !(unitUsd > 0)) return { fits: count };
+  if (ownKey || !(unitUsd > 0)) return { fits: count, limit: 'month' };
   const { budgetUsd, includedUsd, since } = await aiBudgetOf(orgId);
   let room = Infinity;
   if (budgetUsd !== null) room = budgetUsd - (await periodSpentUsd(orgId, since));
+  let limit = 'month';
   if (agentRunId) {
     const cap = await agentRunCapUsd(orgId, agentRunId, includedUsd);
-    if (cap !== null) room = Math.min(room, cap - (await agentRunSpentUsd(agentRunId)));
+    if (cap !== null) {
+      const runRoom = cap - (await agentRunSpentUsd(agentRunId));
+      // Its own cap binds when it leaves no more than the month, as reserveChatStep's run_cap.
+      if (runRoom <= room) limit = 'run';
+      room = Math.min(room, runRoom);
+    }
   }
-  return { fits: room === Infinity ? count : fitsIn(room, unitUsd, count) };
+  return { fits: room === Infinity ? count : fitsIn(room, unitUsd, count), limit };
 }
 
 /** The parts of `unitUsd` each that `roomUsd` holds, at most `count`; float noise doesn't take one. */

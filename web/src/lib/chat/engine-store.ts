@@ -175,14 +175,15 @@ export interface RunProgress {
   taskAction?: string;
   /**
    * The job in parts the person is asked about (CHAT-04 item 17a): how many
-   * the AI limit left covers, of how many, and what they are.
+   * the AI limit left covers, of how many, and what they are; and which
+   * limit binds, the agent run's own cap or the month's.
    */
-  parts?: { fits: number; parts: number; unit: string };
+  parts?: { fits: number; parts: number; unit: string; limit?: 'run' | 'month' };
   /**
    * No one was there to ask (an agent's or a scheduled run): the parts that
-   * fit are done, and the run stops at the AI limit as it ends.
+   * fit are done, and the run stops at the limit that binds as it ends.
    */
-  limitStop?: boolean;
+  limitStop?: 'run' | 'month';
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {
