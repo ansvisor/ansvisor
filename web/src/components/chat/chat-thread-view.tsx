@@ -44,6 +44,8 @@ import { ProposalDetails } from './run/proposal-details';
 import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
 import { WhyCard } from './run/why-card';
+import { WhatsNewCards } from './run/whats-new-cards';
+import { useHomeDraft } from './home-draft';
 import { NextMoves } from './run/next-moves';
 import { RunAnswer } from './run/run-answer';
 import { StaffDebug } from './run/staff-debug';
@@ -110,6 +112,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         tasks: message.run.tasks ?? null,
         nextMoves: message.run.nextMoves ?? [],
         why: message.run.why ?? [],
+        whatsNew: message.run.whatsNew ?? [],
         text: message.text,
         generatedAt: message.generatedAt,
         dataAsOf: message.dataAsOf,
@@ -237,6 +240,8 @@ export function ChatThreadView({
       : null;
   });
   const brandId = thread?.brandId ?? activeBrandId ?? null;
+  // On Chat Home, what its page put in the box (What's new's Show me).
+  const homeDraft = useHomeDraft();
 
   const last = turns[turns.length - 1];
   const working = !!last?.run && OPEN.includes(last.run.status);
@@ -659,7 +664,7 @@ export function ChatThreadView({
           onRemoveChip={onRemoveChip}
           references={asking ? undefined : pageReferences}
           skills={skills}
-          draft={draft}
+          draft={draft ?? homeDraft}
           onSend={(message, sent) =>
             asking && last
               ? answerQuestion(last, composerAnswer(asking, message), 'composer')
@@ -794,6 +799,7 @@ function Answer({
         </ApprovalCard>
       )}
       {turn.runId && run.why.map((why) => <WhyCard key={why.n} runId={turn.runId!} why={why} />)}
+      <WhatsNewCards entries={run.whatsNew} />
       {turn.runId &&
         run.deliverables.map((deliverable, i) => (
           <DeliverableCard

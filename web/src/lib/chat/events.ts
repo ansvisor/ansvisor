@@ -282,6 +282,21 @@ export interface ChatRunSummary {
   sources: { label: string; count: number }[];
 }
 
+/**
+ * A What's new entry as its card shows it (CHAT-11 item 10): the team's
+ * words as approved, never a price. `slug` is the entry's file name, to mark
+ * it read when Try it is opened: not an id.
+ */
+export interface ChatWhatsNewEntry {
+  slug: string;
+  feature: string;
+  lines: string[];
+  /** Try it: the feature's page, with the brand open now. */
+  href: ChatHref;
+  /** "Growth and Enterprise": the plans that include it, when the person's doesn't. */
+  onPlans?: string;
+}
+
 /** Where a page Chat writes was opened (CHAT-25 §3). */
 export type ChatPageWhere = 'chat' | 'here' | 'editor';
 
@@ -341,6 +356,8 @@ export interface ChatEventPayloads {
   'suggestion.resolved': { count: number };
   /** href: the page's draft, in the editor beside the chat or the Content Editor. */
   'page.opened': { where: ChatPageWhere; href?: ChatHref };
+  /** What's new's cards under the answer (CHAT-11 item 10). */
+  'whats_new.ready': { entries: ChatWhatsNewEntry[] };
 }
 
 export type ChatEventType = keyof ChatEventPayloads;
@@ -373,6 +390,7 @@ const EVENT_TYPES: Record<ChatEventType, true> = {
   'suggestion.created': true,
   'suggestion.resolved': true,
   'page.opened': true,
+  'whats_new.ready': true,
 };
 
 export const CHAT_EVENT_TYPES = Object.keys(EVENT_TYPES) as ChatEventType[];

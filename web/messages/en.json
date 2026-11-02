@@ -4034,6 +4034,13 @@
       "title": "Live answer",
       "note": "Play runs the mockup's answer a step at a time; nothing is read or sent.",
       "play": "Play"
+    },
+    "whatsNew": {
+      "tag": "New",
+      "tryIt": "Try it",
+      "tryItLabel": "Try {feature}",
+      "onPlans": "On {plans}.",
+      "seePlans": "See plans"
     }
   },
   "chatComposer": {
@@ -4515,7 +4522,10 @@
         "publish": "Ready to publish",
         "publishCount": "{count, number}",
         "publishMessage": "Check the {count, plural, one {# ready draft} other {# ready drafts}}, fill their page fields and send them to our CMS as drafts. Going live stays my click.",
-        "more": "More"
+        "more": "More",
+        "whatsNewUnread": "You have updates you haven’t read",
+        "whatsNewMessage": "What’s new in Ansvisor and how can it help me?",
+        "whatsNew": "What’s new"
       },
       "byFocus": {
         "rivalRose": "{rival}’s mention rate rose {points, number} points this week.",
@@ -4636,6 +4646,10 @@
         "whichOnes": "Which ones?",
         "whyMessage": "Why did our {engine} citations drop since {day}?",
         "winMessage": "Which {engine} citations did we win since {day}?"
+      },
+      "whatsNew": {
+        "showMe": "Show me",
+        "showMeMessage": "What’s new: how can {feature} help me?"
       }
     },
     "focus": {

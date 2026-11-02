@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { ChatHome } from '@/components/chat/chat-home';
 import { ChatThreadView } from '@/components/chat/chat-thread-view';
 import { ChatFocusGate } from '@/components/chat/focus-picker';
+import { HomeDraftProvider } from '@/components/chat/home-draft';
 import {
   chatComposerSetup,
   chatFirstName,
@@ -25,8 +26,10 @@ export default async function ChatHomePage() {
   ]);
   return (
     <ChatFocusGate {...focus}>
-      <ChatHome firstName={firstName} />
-      <ChatThreadView thread={null} variant="home" {...setup} />
+      <HomeDraftProvider>
+        <ChatHome firstName={firstName} />
+        <ChatThreadView thread={null} variant="home" {...setup} />
+      </HomeDraftProvider>
     </ChatFocusGate>
   );
 }

@@ -124,7 +124,7 @@ import type { ExplainChangeOutput } from '@/lib/mcp/why';
 import { stepPrompt, todayLine } from './prompt';
 import { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
 import { whyView } from './why/view';
-import { WHATS_NEW_TOOL, whatsNewStepDetail } from './whats-new/run';
+import { WHATS_NEW_TOOL, showWhatsNew, whatsNewStepDetail } from './whats-new/run';
 import {
   batchSize,
   runsWithoutSession,
@@ -3067,6 +3067,12 @@ async function readCall(
   const opened = (page !== null ? read.value : {}) as { title?: unknown };
   // Each run keeps its own analysis, a kept read's too: its Why card is the run's.
   if (tool.name === WHY_TOOL) await keepWhyAnalysis(rc, input, kept ? read.value : output);
+  // What's new's cards, read as they show (CHAT-11 items 10, 18).
+  if (tool.name === WHATS_NEW_TOOL) {
+    await showWhatsNew(read.value, rc.actor.userId, (cards) =>
+      rc.sink.emit('whats_new.ready', cards),
+    );
+  }
   row = await updateStep(
     row.id,
     page !== null
