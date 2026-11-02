@@ -6319,7 +6319,7 @@
       "role_manage": "Only an Admin or the person who made this skill can change it.",
       "role_library": "Only Admins turn Ansvisor skills on or off for the workspace.",
       "read_only": "Your workspace is read-only, so skills can't be changed.",
-      "library_name": "/{name} is an Ansvisor skill. Pick another name.",
+      "library_name": "/{name} is an Ansvisor skill or shortcut. Pick another name.",
       "name_taken": "A skill named /{name} already exists in this workspace. Pick another name.",
       "skill_limit": "Your plan keeps up to {limit, plural, one {# skill} other {# skills}} in My skills. Delete one to save another.",
       "not_approved": "This skill isn't approved yet, so it can't be turned on or shared.",
