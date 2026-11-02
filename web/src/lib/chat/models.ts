@@ -54,12 +54,49 @@ export const CHAT_MODELS: readonly OfferedModel[] = [
     label: 'Sonnet 5.5',
     tested: true,
   },
-  // Not yet: hidden until a real run of the test set passes (owner, 2026-11-02).
+  // Not yet: hidden until a real run of the test set passes (owner, 2026-11-02). The test
+  // set is lib/chat/testing/model-eval.ts, run by model-eval.test.ts (W4-35).
   {
     id: 'anthropic/claude-opus-5.5',
     api: 'claude-opus-5-5',
     provider: 'anthropic',
     label: 'Opus 5.5',
+    tested: false,
+  },
+  // The latest of OpenAI, Google and DeepSeek, through OpenRouter (W4-35).
+  {
+    id: 'openai/gpt-6.1-sol',
+    api: 'openai/gpt-6.1-sol',
+    provider: 'openrouter',
+    label: 'GPT-6.1 Sol',
+    tested: false,
+  },
+  {
+    id: 'openai/gpt-6.1-terra',
+    api: 'openai/gpt-6.1-terra',
+    provider: 'openrouter',
+    label: 'GPT-6.1 Terra',
+    tested: false,
+  },
+  {
+    id: 'google/gemini-4-argon',
+    api: 'google/gemini-4-argon',
+    provider: 'openrouter',
+    label: 'Gemini 4 Argon',
+    tested: false,
+  },
+  {
+    id: 'google/gemini-3.8-flash',
+    api: 'google/gemini-3.8-flash',
+    provider: 'openrouter',
+    label: 'Gemini 3.8 Flash',
+    tested: false,
+  },
+  {
+    id: 'deepseek/deepseek-v4.1-flash',
+    api: 'deepseek/deepseek-v4.1-flash',
+    provider: 'openrouter',
+    label: 'DeepSeek V4.1 Flash',
     tested: false,
   },
 ];
