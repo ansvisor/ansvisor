@@ -858,7 +858,13 @@ describe("the model's tool list on the registry's rows", () => {
 
 describe("save_skill's draft card (W3-08)", () => {
   const tool = () => chatTool('save_skill')!;
-  const ctx = { timezone: 'UTC', organizationId: 'org-1', now: new Date('2026-11-02T10:00:00Z') };
+  const ctx = {
+    timezone: 'UTC',
+    organizationId: 'org-1',
+    // W3-12a's card context carries who it is for too.
+    userId: 'user-1',
+    now: new Date('2026-11-02T10:00:00Z'),
+  };
   const input = {
     name: 'pricing-faq',
     description: 'Writes a pricing FAQ in our tone.',
