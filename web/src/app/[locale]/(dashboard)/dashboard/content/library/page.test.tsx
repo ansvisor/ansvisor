@@ -141,6 +141,8 @@ const row = (over: Partial<ContentDraftListItem>): ContentDraftListItem => ({
   createdAt: '2026-10-18T09:00:00Z',
   updatedAt: '2026-10-20T10:00:00Z',
   archivedAt: null,
+  origin: 'editor',
+  conversation: null,
   ...over,
 });
 
@@ -274,22 +276,25 @@ describe('the Content Library', () => {
       'Feature page',
       'Optimize',
       'AL' + 'You',
+      // Made in (W4-10).
+      'Content Editor',
       'In review',
       'Oct 18',
       'Oct 20',
       '',
     ]);
-    expect(rows[1].slice(0, 5)).toEqual([
+    expect(rows[1].slice(0, 6)).toEqual([
       'Northwind vs HubSpot',
       'Comparison',
       'Create',
       'Content Agent',
+      'Content Editor',
       'In review',
     ]);
     // No title yet; a teammate with no name is named by e-mail.
     expect(rows[2][0]).toBe('Untitled');
     expect(rows[2][3]).toBe('Ggrace@acme.com');
-    expect(rows[2][5]).toBe('Dec 30, 2025');
+    expect(rows[2][6]).toBe('Dec 30, 2025');
     expect([...container.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
       // The box to pick every row listed.
       '',
@@ -297,6 +302,7 @@ describe('the Content Library', () => {
       'Type',
       'Method',
       'By',
+      'Made in',
       'Status',
       'Created',
       'Updated',
@@ -350,7 +356,7 @@ describe('the Content Library', () => {
       ]);
       await renderPage();
       const status = [...container.querySelectorAll('tbody tr')].map(
-        (tr) => tr.querySelectorAll('td')[5].textContent,
+        (tr) => tr.querySelectorAll('td')[6].textContent,
       );
       expect(status).toEqual(['Agent writing…', 'Agent failed', 'Ready']);
       expect(getContentDrafts).toHaveBeenCalledTimes(1);
@@ -358,7 +364,7 @@ describe('the Content Library', () => {
       getContentDrafts.mockResolvedValue([row({ status: 'in_review', author: 'agent' })]);
       await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
       expect(getContentDrafts).toHaveBeenCalledTimes(2);
-      expect(container.querySelector('tbody tr td:nth-child(6)')!.textContent).toBe('In review');
+      expect(container.querySelector('tbody tr td:nth-child(7)')!.textContent).toBe('In review');
       await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
       expect(getContentDrafts).toHaveBeenCalledTimes(2);
     } finally {
@@ -1609,7 +1615,7 @@ describe('the Library’s Shopping path column (00352)', () => {
     const headers = [...container.querySelectorAll('th')].map((th) => th.textContent);
     expect(headers).toContain('Shopping path');
     const cells = [...container.querySelectorAll('tbody tr')].map(
-      (tr) => tr.querySelectorAll('td')[6]?.textContent,
+      (tr) => tr.querySelectorAll('td')[7]?.textContent,
     );
     expect(cells).toEqual(['2 sold out', 'OK', 'None', 'Not checked yet']);
   });
@@ -1637,5 +1643,71 @@ describe('the Library’s Shopping path column (00352)', () => {
       'Shopping path',
     );
     expect(container.querySelectorAll('tbody tr')).toHaveLength(4);
+  });
+});
+
+describe('the Library’s Made in column and filter (00463, W4-10)', () => {
+  const CHAT = 'cccccccc-0000-4000-8000-000000000001';
+  const madeIn = () =>
+    [...container.querySelectorAll<HTMLElement>('[data-slot="made-in"]')].map(
+      (el) => el.textContent,
+    );
+  afterEach(() => {
+    chat.on = false;
+    window.history.replaceState(null, '', '/dashboard/content/library');
+  });
+
+  it('says where each draft was made, with Open chat to a chat the member may open', async () => {
+    chat.on = true;
+    getContentDrafts.mockResolvedValue([
+      row({
+        id: 'd1',
+        title: 'From chat',
+        origin: 'chat',
+        conversation: { id: CHAT, title: 'Pricing FAQ' },
+      }),
+      row({ id: 'd2', title: 'From a task', origin: 'action_center' }),
+      // Another's chat: its title isn't readable, so no link.
+      row({ id: 'd3', title: 'From a teammate’s chat', origin: 'chat', conversation: null }),
+    ]);
+    await renderPage();
+    expect(madeIn()).toEqual(['Chat', 'Action Center', 'Chat']);
+    const links = [...container.querySelectorAll('[data-action="library.openChat"]')];
+    expect(links).toHaveLength(1);
+    expect(links[0].getAttribute('href')).toBe(`/dashboard/chat/${CHAT}`);
+    expect(links[0].textContent).toBe('Open chat');
+    expect(container.querySelector('[aria-label="Made in"]')!.textContent).toContain(
+      'Made in: All',
+    );
+  });
+
+  it('has no Open chat with the new Chat off', async () => {
+    getContentDrafts.mockResolvedValue([
+      row({ origin: 'chat', conversation: { id: CHAT, title: 'Pricing FAQ' } }),
+    ]);
+    await renderPage();
+    expect(madeIn()).toEqual(['Chat']);
+    expect(container.querySelector('[data-action="library.openChat"]')).toBeNull();
+  });
+
+  it('leaves the filter out while every draft was made in the editor', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    expect(madeIn()).toEqual(['Content Editor']);
+    expect(container.querySelector('[aria-label="Made in"]')).toBeNull();
+  });
+
+  it('lists only the drafts made where the URL’s filter says', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?madeIn=chat');
+    getContentDrafts.mockResolvedValue([
+      row({ id: 'd1', title: 'Chat page', origin: 'chat' }),
+      row({ id: 'd2', title: 'Editor page' }),
+    ]);
+    await renderPage();
+    expect(container.textContent).toContain('Chat page');
+    expect(container.textContent).not.toContain('Editor page');
+    expect(container.querySelector('[aria-label="Made in"]')!.textContent).toContain(
+      'Made in: Chat',
+    );
   });
 });

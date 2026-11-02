@@ -136,6 +136,8 @@ export interface GoLiveStep {
 export interface ChatWritePlace {
   conversationId: string | null;
   runId: string | null;
+  /** The agent run the chat is (CHAT-27): its drafts are made by an agent (00463). */
+  agentRunId?: string | null;
   approvalKey: string;
   /** assisted: the person approved it (a card, a click); automated: it ran by itself. */
   executionMode: 'assisted' | 'automated';

@@ -144,6 +144,7 @@ export function LibraryTable({
           <TableHead>{t('columns.type')}</TableHead>
           <TableHead>{t('columns.method')}</TableHead>
           <TableHead>{t('columns.by')}</TableHead>
+          <TableHead>{t('columns.madeIn')}</TableHead>
           <TableHead>{t('columns.status')}</TableHead>
           {shopping && <TableHead>{t('columns.shopping')}</TableHead>}
           <TableHead>{t('columns.created')}</TableHead>
@@ -191,6 +192,9 @@ export function LibraryTable({
               </TableCell>
               <TableCell>
                 <DraftAuthorCell draft={draft} />
+              </TableCell>
+              <TableCell>
+                <MadeInCell draft={draft} chatOn={chatOn} />
               </TableCell>
               <TableCell>
                 {/* The agent works on drafts only: its state says more than "Draft".
@@ -467,6 +471,32 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
 }
 
 /** Who wrote it: the Content Agent, "You", or the member by name. */
+/**
+ * Where the draft was made (00463, W4-10): the Content Editor, Chat, an
+ * Action Center task, an agent or an MCP client. One made in a chat the
+ * member may open has Open chat, with the new Chat on.
+ */
+function MadeInCell({ draft, chatOn }: { draft: ContentDraftListItem; chatOn: boolean }) {
+  const t = useTranslations('contentEditor.library.madeIn');
+  return (
+    <span className="flex flex-col whitespace-nowrap text-xs text-muted-foreground">
+      <span data-slot="made-in" data-origin={draft.origin}>
+        {t(draft.origin)}
+      </span>
+      {chatOn && draft.origin !== 'editor' && draft.conversation && (
+        <Link
+          href={`/dashboard/chat/${draft.conversation.id}`}
+          data-action="library.openChat"
+          title={draft.conversation.title || undefined}
+          className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+        >
+          {t('openChat')}
+        </Link>
+      )}
+    </span>
+  );
+}
+
 function DraftAuthorCell({ draft }: { draft: ContentDraftListItem }) {
   const t = useTranslations('contentEditor.library');
   if (draft.author === 'agent') {

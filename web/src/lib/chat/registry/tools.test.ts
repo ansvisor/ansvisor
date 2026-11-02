@@ -365,6 +365,9 @@ describe('the Chat tool registry', () => {
             source: { kind: 'opportunity', id: item },
             bodyHtml: undefined,
             sourceUrl: undefined,
+            // Made in Chat (00463, W4-10); no chat in this context.
+            origin: 'chat',
+            conversationId: null,
           },
         ],
       ],
@@ -442,6 +445,23 @@ describe('the Chat tool registry', () => {
       'chat/actor/drafts.updateContentDraftFor',
       [person, item, { title: 'Plans', bodyHtml: undefined }],
     ]);
+    // Made in the run's chat; an agent's run's own write is the agent's (00463, W4-10).
+    calls.length = 0;
+    const CHAT = 'cccccccc-0000-4000-8000-000000000001';
+    const inChat = {
+      ...ctx,
+      chat: {
+        conversationId: CHAT,
+        runId: 'run-1',
+        agentRunId: 'agent-run-1',
+        approvalKey: 'k',
+        executionMode: 'automated' as const,
+      },
+    };
+    await create.run(inChat, start);
+    await create.runFor!(inChat, start);
+    expect(calls[0].args[1]).toMatchObject({ origin: 'chat', conversationId: CHAT });
+    expect(calls[1].args[2]).toMatchObject({ origin: 'agent', conversationId: CHAT });
     // A context with no workspace has no one to act for.
     await expect(create.runFor!({ ...ctx, organizationId: null }, start)).rejects.toThrow(
       /workspace/,
