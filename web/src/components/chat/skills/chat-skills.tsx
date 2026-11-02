@@ -596,6 +596,14 @@ function OwnCard({
       <CardTitle title={skill.title} onOpen={onOpen} />
       <p className="line-clamp-3 text-[13px] text-muted-foreground">{skill.description}</p>
       <p className="text-[11.5px] text-muted-foreground">{sourceLine(t, skill)}</p>
+      {/* The weekly check found a new SKILL.md at its source (W4-31). */}
+      {skill.updateAvailable && (
+        <p className="flex items-center gap-1.5 text-[11.5px]" data-slot="update-available">
+          <span className="rounded-full bg-sky-100 px-2 py-0.5 font-medium text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">
+            {t('updateAvailable')}
+          </span>
+        </p>
+      )}
       <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
         {usable && (
           <>
@@ -620,6 +628,15 @@ function OwnCard({
             )}
           >
             {t('review')}
+          </Link>
+        )}
+        {skill.updateAvailable && canReview && (
+          <Link
+            href={`/dashboard/chat/skills/${skill.id}/update`}
+            data-action="skills.reviewUpdate"
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+          >
+            {t('reviewUpdate')}
           </Link>
         )}
         {skill.can.toggle && skill.status === 'approved' && (
