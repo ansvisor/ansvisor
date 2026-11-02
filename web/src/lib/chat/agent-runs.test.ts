@@ -18,6 +18,14 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
 vi.mock('@/lib/mcp/account', () => ({
   getAiUsageFor: vi.fn(async () => ({ active_plan: true, unlimited: false, percent_used: 5 })),
 }));
+const keyCap = vi.hoisted(() => ({
+  reached: null as { reached: boolean; renewsAt: string | null } | null,
+  read: null as { reached: boolean; renewsAt: string | null } | null,
+}));
+vi.mock('./own-key-cap', () => ({
+  ownKeyCapReached: vi.fn(async () => keyCap.reached),
+  readOwnKeyCap: vi.fn(async () => keyCap.read),
+}));
 const ownKey = vi.hoisted(() => ({ failing: null as { class: string; provider: string } | null }));
 vi.mock('./key', () => ({
   resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
@@ -68,8 +76,10 @@ function startNext(args: Record<string, unknown>) {
 }
 
 beforeEach(() => {
-  vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+  keyCap.reached = null;
+  keyCap.read = null;
   ownKey.failing = null;
+  vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   seedWorkspace(db);
   db.unique = { ...db.unique, chat_agents: [['organization_id', 'name']] };
   const iso = () => NOW.toISOString();
@@ -144,6 +154,31 @@ describe('Run now', () => {
     expect(one).toMatchObject({ ok: true, value: { runs: [{ brand: 'Brand A' }] } });
   });
 
+  it("runs a Selected-brands person's agent on their brands only: All brands is all of theirs", async () => {
+    const id = await agentOf(PEOPLE.manager);
+    // An Admin narrows them to Brand A (BRAND-ACCESS): the run checks their access now.
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.brand_scope = 'selected';
+    db.tables.member_brands = [{ user_id: PEOPLE.manager, organization_id: ORG, brand_id: BRAND }];
+    const ctx = await ctxOf(PEOPLE.manager);
+    expect(await runs.runAgentNow(ctx, id, {}, NOW, null)).toMatchObject({
+      ok: true,
+      value: { runs: [{ brand: 'Brand A', status: 'queued' }] },
+    });
+    expect(runRows().map((r) => r.brand_id)).toEqual([BRAND]);
+    // A brand of the scope they don't have is as one that isn't there.
+    expect(await runs.runAgentNow(ctx, id, { brandId: BRAND_2 }, NOW, null)).toMatchObject({
+      ok: false,
+      refusal: { code: 'brand_not_found' },
+    });
+    // With none of its brands left to them, nothing runs.
+    db.tables.member_brands = [];
+    expect(await runs.runAgentNow(await ctxOf(PEOPLE.manager), id, {}, NOW, null)).toMatchObject({
+      ok: false,
+      refusal: { code: 'no_brand' },
+    });
+    expect(runRows()).toHaveLength(1);
+  });
+
   it('refuses before queuing anything when a brand lacks a Required connection, naming both', async () => {
     const id = await agentOf(PEOPLE.manager, { skills: ['publish'] });
     // Brand A sends pages to WordPress; Brand B has no CMS.
@@ -181,6 +216,22 @@ describe('Run now', () => {
         code: 'own_key_failed',
         message:
           'Your OpenAI account is out of credit. An Admin can fix it in Settings › AI Providers, then run the agent again.',
+      },
+    });
+    expect(runRows()).toEqual([]);
+  });
+
+  it('refuses while all agents used the month’s limit on the own key, queuing nothing (429)', async () => {
+    const id = await agentOf(PEOPLE.manager, { skills: ['winback'] });
+    keyCap.reached = { reached: true, renewsAt: '2026-11-20T09:00:00.000Z' };
+    const result = await runs.runAgentNow(await ctxOf(PEOPLE.manager), id, {}, NOW, null);
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: {
+        status: 429,
+        code: 'own_key_cap',
+        message:
+          "Agents have used this month's limit on your own AI key. An Admin can raise it in Settings › AI Providers, or it renews on November 20, 2026.",
       },
     });
     expect(runRows()).toEqual([]);
@@ -420,6 +471,14 @@ describe('Run agent on an action', () => {
     expect(runRows()).toEqual([]);
   });
 
+  it('refuses Run agent while all agents used the month’s limit on the own key, queuing nothing', async () => {
+    const id = await agentOf(PEOPLE.manager, { skills: ['winback'] });
+    keyCap.reached = { reached: true, renewsAt: '2026-11-20T09:00:00.000Z' };
+    const result = await runs.runAgentOnAction(await ctxOf(PEOPLE.manager), id, ACTION, NOW, null);
+    expect(result).toMatchObject({ ok: false, refusal: { status: 429, code: 'own_key_cap' } });
+    expect(runRows()).toEqual([]);
+  });
+
   it('queues one run on the action’s brand, scoped to it, as the person who clicked', async () => {
     const id = await agentOf(PEOPLE.manager, { name: 'Citation win-back' });
     const result = await runs.runAgentOnAction(await ctxOf(PEOPLE.manager), id, ACTION, NOW, null);
@@ -571,7 +630,12 @@ describe('Run agent on an action', () => {
 
   it('refuses Agency partners, as Analysts', async () => {
     const PARTNER = 'aaaaaaaa-0000-4000-8000-000000000005';
-    db.tables.profiles.push({ id: PARTNER, role: 'agency_partner', organization_id: ORG });
+    db.tables.profiles.push({
+      id: PARTNER,
+      role: 'agency_partner',
+      organization_id: ORG,
+      brand_scope: 'all',
+    });
     const id = await agentOf(PEOPLE.manager, { visibility: 'workspace' });
     expect(await runs.runAgentOnAction(await ctxOf(PARTNER), id, ACTION, NOW, null)).toMatchObject({
       ok: false,
