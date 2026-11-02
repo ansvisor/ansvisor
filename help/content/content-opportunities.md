@@ -35,7 +35,7 @@ Above the list, cards count the **Total Opportunities** and the **High Impact** 
 
 Each row's **…** menu has the quick actions:
 
-- **Send to Editor**, or **Open draft** once a draft is being written for it;
+- **Write this**, which has the Content Agent brief and write the page in one go for you to review, and **Send to Editor**; **Open draft** takes their place once a draft is being written for it;
 - **Send to Plan**, or **Open in Plan** once it's a priority there, for owned opportunities still open;
 - **Send to Workflow**, for a new opportunity;
 - **Open in new tab**, which opens it as a page of its own;
