@@ -31,6 +31,7 @@ vi.mock('@/lib/agent/auth', () => ({
     email: 'a@example.com',
     organizationId: 'org-1',
     apiKeyId: 'agent-internal',
+    brandAccess: 'all',
   }),
 }));
 // No key: past the gates, starting a conversation answers missing_ai_key.

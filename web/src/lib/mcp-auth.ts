@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import type { BrandAccess } from '@/lib/brand-access';
+import { brandAccessOf, readAccessProfile, type BrandAccess } from '@/lib/brand-access';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import {
   mcpWriteAccess,
@@ -31,9 +31,9 @@ export interface McpAuthContext {
   role: UserRole | null;
   apiKeyId: string;
   /**
-   * The brands the user may use, when the caller read them already (Chat's
-   * precedence, for each call); absent, a tool reads them itself
-   * (lib/brand-access.ts brandAccessFor).
+   * The brands the user may use, when the caller read them already (an API
+   * key's request, Chat's precedence for each call); absent, a tool reads
+   * them itself (lib/brand-access.ts brandAccessFor).
    */
   brandAccess?: BrandAccess | null;
 }
@@ -47,6 +47,11 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * Accepts only Ansvisor API keys (prefix `ans_`) — not Supabase session JWTs.
  * MCP endpoints are intended to be hit by long-lived external clients, so we
  * intentionally don't fall back to the dashboard's session cookie.
+ *
+ * A key belongs to a person, so it carries their brand access (BRAND-ACCESS
+ * §5.3): All brands, or the ones shared with them, read once per request
+ * for the tools to check. A read that fails answers 503: no tool runs on
+ * access it couldn't read.
  *
  * On Ansvisor Cloud, a write (POST, PUT, PATCH, DELETE) for an organization
  * whose plan isn't active answers 402 subscription_inactive, and on a plan
@@ -77,14 +82,20 @@ export async function authenticateMcpRequest(
     return NextResponse.json({ error: 'Invalid API key' }, { status: 401 });
   }
 
-  // Resolve the owning user + their organization so handlers don't have to.
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('organization_id, role')
-    .eq('id', key.user_id)
-    .maybeSingle();
+  // Resolve the owning user, their organization and the brands they may use, so handlers don't have to.
+  let profile: Awaited<ReturnType<typeof readAccessProfile>>;
+  let brandAccess: BrandAccess | null = null;
+  try {
+    profile = await readAccessProfile(key.user_id);
+    if (profile?.organization_id) {
+      brandAccess = await brandAccessOf(profile, key.user_id, profile.organization_id);
+    }
+  } catch (err) {
+    console.error("[mcp-auth] Could not read the key owner's access:", err);
+    return NextResponse.json({ error: 'Could not read access, try again' }, { status: 503 });
+  }
 
-  const organizationId = (profile?.organization_id as string | null | undefined) ?? null;
+  const organizationId = profile?.organization_id ?? null;
   if (gateWrites && WRITE_METHODS.has(req.method.toUpperCase())) {
     const access = await mcpWriteAccess(organizationId);
     if (access === 'inactive') return subscriptionInactiveResponse();
@@ -108,5 +119,6 @@ export async function authenticateMcpRequest(
     organizationId,
     role: (profile?.role as UserRole | null | undefined) ?? null,
     apiKeyId: key.id,
+    brandAccess,
   };
 }
