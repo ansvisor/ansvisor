@@ -183,7 +183,7 @@ import {
   type LibrarySkill,
 } from './skills/library';
 import { MAX_UPLOADS } from './uploads';
-import { CHAT_EFFORTS, isChatModelChoice, modelChoiceOpen, runChoiceOf } from './models';
+import { CHAT_EFFORTS, isCatalogId, modelChoiceOpen, runChoiceOf } from './models';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -397,14 +397,15 @@ export const startRunInput = z.object({
   fromRunId: z.guid().optional(),
   /**
    * The model and effort picked in the composer's model menu (CHAT-16,
-   * W4-02): Auto or an offered model (lib/chat/models.ts). Checked again
-   * against the plan as the run starts (runChoiceOf).
+   * W4-02): Auto or a model id. Checked again as the run starts
+   * (runChoiceOf): one not offered (not tested, or dropped) and the free
+   * trial run Auto, so a pick kept from before still sends.
    */
   model: z
     .string()
     .trim()
     .max(200)
-    .refine((value) => isChatModelChoice(value))
+    .refine((value) => value === 'auto' || isCatalogId(value))
     .optional(),
   effort: z.enum(CHAT_EFFORTS).optional(),
 });

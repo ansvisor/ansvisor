@@ -5563,12 +5563,12 @@ describe('the model menu’s pick (W4-02)', () => {
     const started = await engine.startChatRun(ADMIN, {
       message: 'Which pages does Perplexity cite?',
       brandId: BRAND,
-      model: 'anthropic/claude-opus-5.5',
+      model: 'anthropic/claude-sonnet-5.5',
       effort: 'high',
     });
     if (!started.ok) throw new Error(`not started: ${started.code}`);
     expect(runRow(started.runId)).toMatchObject({
-      model: 'anthropic/claude-opus-5.5',
+      model: 'anthropic/claude-sonnet-5.5',
       effort: 'high',
     });
 
@@ -5582,18 +5582,31 @@ describe('the model menu’s pick (W4-02)', () => {
     const trial = await engine.startChatRun(ADMIN, {
       message: 'And ChatGPT?',
       brandId: BRAND,
-      model: 'anthropic/claude-opus-5.5',
+      model: 'anthropic/claude-sonnet-5.5',
       effort: 'max',
     });
     if (!trial.ok) throw new Error('not started');
     expect(runRow(trial.runId)).toMatchObject({ model: 'auto', effort: 'normal' });
   });
 
-  it('refuses a model the menu doesn’t offer', async () => {
+  it('runs Auto for a model the menu doesn’t offer: one not tested yet, or another', async () => {
+    for (const model of ['anthropic/claude-opus-5.5', 'openai/gpt-6.1-sol']) {
+      const started = await engine.startChatRun(ADMIN, {
+        message: 'Hi',
+        brandId: BRAND,
+        model,
+        effort: 'high',
+      });
+      if (!started.ok) throw new Error('not started');
+      expect(runRow(started.runId), model).toMatchObject({ model: 'auto', effort: 'high' });
+    }
+  });
+
+  it('refuses a model value that isn’t a model id', async () => {
     const refused = await engine.startChatRun(ADMIN, {
       message: 'Hi',
       brandId: BRAND,
-      model: 'openai/gpt-6.1-sol',
+      model: 'drop table',
     });
     expect(refused).toMatchObject({ ok: false, status: 400, code: 'invalid' });
     expect(db.tables.chat_runs).toHaveLength(0);
