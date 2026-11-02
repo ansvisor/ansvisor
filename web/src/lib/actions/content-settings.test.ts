@@ -76,8 +76,13 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { getContentSettings, setBrandQualityHandoff, setBrandRules, setBrandTrustedSources } =
-  await import('./content-settings');
+const {
+  getBrandRules,
+  getContentSettings,
+  setBrandQualityHandoff,
+  setBrandRules,
+  setBrandTrustedSources,
+} = await import('./content-settings');
 
 const writes = () => calls.filter((c) => c.op !== 'select');
 
@@ -229,5 +234,15 @@ describe('brand rules (00450)', () => {
     await expect(setBrandRules(ACME, [])).resolves.toEqual({ ok: false, reason: 'failed' });
     missingColumn = 'brand_rules';
     await expect(setBrandRules(ACME, [])).resolves.toEqual({ ok: false, reason: 'unavailable' });
+  });
+});
+
+describe('getBrandRules (00450)', () => {
+  it('reads a brand’s rules for the Rules tab, and none when they can’t be read', async () => {
+    answers['brands.select'] = { data: { brand_rules: ['Cite official sources.'] }, error: null };
+    await expect(getBrandRules(ACME)).resolves.toEqual(['Cite official sources.']);
+    missingColumn = 'brand_rules';
+    await expect(getBrandRules(ACME)).resolves.toEqual([]);
+    await expect(getBrandRules('acme')).resolves.toEqual([]);
   });
 });

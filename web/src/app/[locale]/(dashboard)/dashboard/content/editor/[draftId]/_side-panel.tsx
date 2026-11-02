@@ -122,6 +122,7 @@ export function EditorSidePanel({
   bodyHtml,
   pageType,
   rules,
+  brandRules,
   reads,
   tabRequest,
   agentFix,
@@ -170,6 +171,8 @@ export function EditorSidePanel({
   pageType: string | null;
   /** The rules, as the editor checks them (the header's chip shows the same). */
   rules: DraftRulesState;
+  /** The brand's rules from Settings › Content (00450), above the page's own in Rules. */
+  brandRules?: { rules: string[]; brandName: string };
   /** The draft's brief and sources, read once for the editor. */
   reads: DraftReads;
   /**
@@ -542,6 +545,7 @@ export function EditorSidePanel({
                 state={rules}
                 siteType={siteType}
                 draftPageType={isPageType(pageType) ? pageType : null}
+                brandRules={brandRules}
               />
             </div>
           )}
