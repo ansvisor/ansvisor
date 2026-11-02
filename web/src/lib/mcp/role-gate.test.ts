@@ -62,6 +62,7 @@ async function connect(role: UserRole | null) {
     organizationId: 'org-1',
     role,
     apiKeyId: 'key-1',
+    brandAccess: 'all',
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);

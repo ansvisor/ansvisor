@@ -19,9 +19,9 @@ vi.mock('@/lib/actions/content-plan', () => ({
   hidePlanRow: (...args: unknown[]) => hidePlanRow(...args),
   showPlanRow: (...args: unknown[]) => showPlanRow(...args),
 }));
-const listMembers = vi.fn();
+const listBrandMembers = vi.fn();
 vi.mock('@/lib/actions/team', () => ({
-  listMembers: (...args: unknown[]) => listMembers(...args),
+  listBrandMembers: (...args: unknown[]) => listBrandMembers(...args),
 }));
 // Assigning a draft's task is _assign-dialog's; here, which rows open it.
 vi.mock('./_assign-dialog', () => ({
@@ -181,7 +181,7 @@ beforeEach(() => {
   setPlanRowPriority.mockReset().mockResolvedValue(undefined);
   hidePlanRow.mockReset().mockResolvedValue(undefined);
   showPlanRow.mockReset().mockResolvedValue(undefined);
-  listMembers.mockReset().mockResolvedValue([]);
+  listBrandMembers.mockReset().mockResolvedValue([]);
   toast.mockReset();
   toast.error.mockReset();
   role.canManage = true;
@@ -732,7 +732,9 @@ describe('a Plan row’s menu', () => {
     expect(container.querySelectorAll('tbody tr')[2].textContent).toContain('Ada Lovelace');
 
     await clickItem('Coffee subscriptions', 'Assign to…');
-    expect(listMembers).toHaveBeenCalledTimes(1);
+    // The people who can see this brand (BRAND-ACCESS).
+    expect(listBrandMembers).toHaveBeenCalledTimes(1);
+    expect(listBrandMembers).toHaveBeenCalledWith('brand-1');
     expect(dialog.props).toMatchObject({
       open: true,
       preset: {

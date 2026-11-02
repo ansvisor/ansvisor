@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 import type { TeamRole } from '@/components/providers/role-provider';
 import type { Feature, PlanId } from '@/config/plans';
 import type { McpAuthContext } from '@/lib/mcp-auth';
@@ -113,6 +113,20 @@ export interface ToolFlags {
   costCard: boolean;
   /** A READ an Admin may switch off for the workspace (CHAT-20 §9 ¹). */
   adminMayTurnOff: boolean;
+  /**
+   * An EXECUTE an agent an Admin allowed may take live on its own
+   * (AUTONOMOUS-GO-LIVE §4, step 4b): set by its `goLive`, never by hand.
+   */
+  goLiveOnOwn: boolean;
+}
+
+/** What a step that goes live on its own sends (chat_agent_go_live_events, 00443). */
+export interface GoLiveStep {
+  kind: 'cms_draft' | 'publish' | 'webhook';
+  /** The Library draft that goes out: an id of the run's brand. */
+  draftId: string;
+  /** Where to: a CMS the brand connected, or its webhook, never an address from the input. */
+  target: 'webflow' | 'wordpress' | 'framer' | 'wix' | 'webhook';
 }
 
 /**
@@ -192,6 +206,12 @@ interface ToolFields<S extends z.ZodObject> {
   planGate: PlanGate | null;
   /** Where a call's brand comes from; null for a row about no brand. */
   brandOf: BrandOf | null;
+  /**
+   * A row about no brand whose answer names every brand the person can
+   * access (the brand list, the connections): a chat it runs in has touched
+   * each of them (lib/chat/touched-brands.ts, 00436).
+   */
+  namesBrands?: true;
   costClass: CostClass;
   /**
    * The key under `chatTools` in messages/en.json (`name` for Settings, `step`
@@ -211,10 +231,28 @@ interface ToolFields<S extends z.ZodObject> {
    * signal's run, CHAT-12), where `run`'s server action has no one signed in.
    * Its runFor makes the same change as the run's person, with the service
    * role, after checking them as their session would be checked
-   * (lib/chat/actor). Nothing calls it yet: the engine still calls `run`.
+   * (lib/chat/actor). The engine calls it in such a run once the precedence
+   * lets the change go (runLoggedWrite's withoutSession), and `run` otherwise.
    */
   sessionFree?: true;
   runFor?(ctx: ChatToolContext, input: z.output<S>): Promise<unknown>;
+  /**
+   * An EXECUTE an allowed agent may take live on its own (AUTONOMOUS-GO-LIVE
+   * §4): what its step sends, from its input. The engine reserves its slot
+   * and the API sends it as the run's person (PR 4's internal route); `run`
+   * stays the person's click. Its input takes ids and fixed choices only,
+   * so a target comes from the workspace's data, never from text (§6.3 B1).
+   */
+  goLive?(input: z.output<S>): GoLiveStep;
+  /**
+   * A sessionFree row whose runFor writes through the API server as its
+   * person (lib/chat/actor/api.ts): whether that way is open now
+   * (CHAT_ACTING_SECRET set). Closed, the row asks first in a run with no
+   * session, as a row without runFor does. Without it, always open.
+   */
+  runForOpen?(): boolean;
+  /** A sessionFree row's precheck for a run with no session: the same check, as its person. */
+  precheckFor?(ctx: ChatToolContext, input: z.output<S>): Promise<unknown>;
   /**
    * A batch row (CHAT-20 §11b: add_prompts, add_competitors, pausing
    * prompts): the input field holding its items. A run's cap counts the
@@ -310,6 +348,36 @@ export const FIXTURE_IDS = {
 
 const writeRank = (policy: WritePolicy) => WRITE_POLICIES.indexOf(policy);
 
+/** Text a go-live row's field must refuse: a page's address, a mail address, a site. */
+const FREE_TARGETS = ['https://example.com/page', 'someone@example.com', 'example.com'];
+
+/**
+ * Whether an input field can only name something of the workspace's: a
+ * fixed choice (an enum, a literal, a switch), or an id that refuses an
+ * address, a mail address or a site. A list or an object never.
+ */
+function holdsNoFreeTarget(field: z.ZodType): boolean {
+  let inner: z.ZodType = field;
+  while (
+    inner instanceof z.ZodOptional ||
+    inner instanceof z.ZodDefault ||
+    inner instanceof z.ZodNullable
+  ) {
+    inner = inner.unwrap() as z.ZodType;
+  }
+  if (
+    inner instanceof z.ZodEnum ||
+    inner instanceof z.ZodLiteral ||
+    inner instanceof z.ZodBoolean
+  ) {
+    return true;
+  }
+  return (
+    inner.safeParse(FIXTURE_IDS.item).success &&
+    FREE_TARGETS.every((text) => !inner.safeParse(text).success)
+  );
+}
+
 /**
  * A registry row, with the rules every row keeps checked as it is defined:
  * a READ runs (`on`), an EXECUTE is always a click, and a WRITE's default
@@ -321,6 +389,7 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     costCard: false,
     adminMayTurnOff: false,
     ...def.flags,
+    goLiveOnOwn: def.goLive !== undefined,
   };
   if (def.brandOf) {
     const field = 'input' in def.brandOf ? def.brandOf.input : def.brandOf.idField;
@@ -328,15 +397,37 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
       throw new Error(`${def.name}: its brand comes from ${field}, which its input lacks`);
     }
   }
+  if (def.namesBrands && def.brandOf) {
+    throw new Error(`${def.name}: a row about one brand doesn't name every brand`);
+  }
   if (def.batch && !(def.batch.field in def.inputSchema.shape)) {
     throw new Error(`${def.name}: its items are in ${def.batch.field}, which its input lacks`);
   }
   if ((def.sessionFree === true) !== (def.runFor !== undefined)) {
     throw new Error(`${def.name}: a session-free row has its runFor, and only it`);
   }
+  if ((def.runForOpen || def.precheckFor) && !def.sessionFree) {
+    throw new Error(`${def.name}: only a session-free row says when its runFor runs`);
+  }
+  if (def.precheckFor && !def.precheck) {
+    throw new Error(`${def.name}: a precheck for a run without a session has its precheck`);
+  }
   // A read already reads as the person (the MCP functions); an EXECUTE waits for their click.
   if (def.sessionFree && def.class !== 'write') {
     throw new Error(`${def.name}: only a write runs for its person without a session`);
+  }
+  // Going live on its own: an EXECUTE's, whose input can't name an outside target (§6.3 B1).
+  if (def.goLive) {
+    if (def.class !== 'execute')
+      throw new Error(`${def.name}: only an execute goes live on its own`);
+    const free = Object.entries(def.inputSchema.shape).find(
+      ([, field]) => !holdsNoFreeTarget(field as z.ZodType),
+    );
+    if (free) {
+      throw new Error(
+        `${def.name}: a row that goes live on its own takes no free text (${free[0]})`,
+      );
+    }
   }
   const excludeRoles = [...(def.excludeRoles ?? [])];
   if (excludeRoles.length > 0 && (def.minRole !== 'analyst' || excludeRoles.includes('admin'))) {
@@ -379,6 +470,15 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     throw new Error(`${def.name}: an always_card or cost_card write never runs without a card`);
   }
   return { ...def, flags, excludeRoles, executeGroup: null };
+}
+
+/**
+ * Whether a row makes its change in a run with no session behind it now: a
+ * sessionFree row whose runFor's way is open (runForOpen). Any other asks
+ * first in such a run (engine.ts askWithoutSession).
+ */
+export function runsWithoutSession(tool: Pick<ChatTool, 'sessionFree' | 'runForOpen'>): boolean {
+  return tool.sessionFree === true && (tool.runForOpen?.() ?? true);
 }
 
 /** How many items a call carries: its batch's length, or 1 for a row that isn't a batch. */

@@ -213,6 +213,21 @@ export const shoppingPathLimiter = rateLimit({
   },
 });
 
+// A draft's Site Audit estimate (customer priorities item 9): the editor
+// reads it again each time typing pauses, and each reading parses the whole
+// page and runs the audit's checks on it, so a bucket of its own.
+export const auditEstimateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 // A brand's CMS connection (Send to CMS, #1331): each call reaches Webflow
 // through Composio, so a member's are few.
 export const cmsLimiter = rateLimit({

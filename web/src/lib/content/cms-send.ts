@@ -2,6 +2,13 @@ import type { DraftPage } from '@/lib/actions/content-drafts';
 import type { AuthorsRead, ContentAuthor } from '@/lib/content/authors';
 import { publishableHtml } from '@/lib/content/clean-html';
 import {
+  articleSchemaInput,
+  schemaAuthor,
+  withArticleSchema,
+  type AddedArticleSchema,
+} from '@/lib/content/page-schema';
+import { qualityPhase } from '@/lib/content/quality';
+import {
   bylineText,
   exportPlaceholders,
   fragment,
@@ -20,8 +27,9 @@ import {
  * (POST /api/content-drafts/send) and sends to the brand's webhook. The HTML
  * is the page ready to paste (CE-057: publishableHtml, placeholders filled),
  * with the brand's byline line and without its H1, which the CMS's own title
- * field carries; slug and meta are filled from the page and what the person
- * changed wins.
+ * field carries, and an article's Article schema with its author unless the
+ * person left it out (00448); slug and meta are filled from the page and what
+ * the person changed wins.
  */
 
 export interface CmsPage {
@@ -151,6 +159,8 @@ export interface CmsSource {
   teamByline: string;
   /** The byline line the brand puts in the content, or null. */
   byline: string | null;
+  /** The Article schema Ansvisor adds to the page as it goes (00448). */
+  schema: AddedArticleSchema;
 }
 
 /**
@@ -190,6 +200,23 @@ export function cmsSource({
     reviewer,
     teamByline: authors && !confirmed ? teamName(language, brandName) : '',
     byline: inContent && !confirmed ? bylineText(language, author?.name ?? null, brandName) : null,
+    // As Before you publish shows it; Site trust isn't read here, so no pages of theirs.
+    schema: {
+      input: articleSchemaInput({
+        title: page.title,
+        author: schemaAuthor({
+          authorsOn: qualityPhase() >= 1,
+          authorsRead: authors !== null,
+          author,
+          confirmedReal: page.authorConfirmed,
+        }),
+        siteTrust: null,
+        brandName,
+        isNew: page.isNew,
+      }),
+      pageType: page.pageType,
+      leftOut: page.schemaLeftOut,
+    },
   };
 }
 
@@ -275,7 +302,9 @@ export function bulkCmsItems(
   kept: ReadonlyMap<string, Partial<CmsFields>>,
 ): BulkItem[] {
   return sources.map((source) => {
-    const { draftId, title, html } = source;
+    const { draftId, title } = source;
+    // With the Article schema Ansvisor adds, as the editor sends it.
+    const html = withArticleSchema(source.html, source.schema);
     const page = pageFields(source);
     const fields = cmsFields(page, kept.get(draftId) ?? null);
     const problem =

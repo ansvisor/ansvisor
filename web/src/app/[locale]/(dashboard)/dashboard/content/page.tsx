@@ -85,6 +85,7 @@ import { NewContentDialog, type DialogPreset } from '@/components/content/new-co
 import { getOpportunityDrafts } from '@/lib/actions/content-drafts';
 import { getPlanPriorities, setPlanRowPriority } from '@/lib/actions/content-plan';
 import { OpportunityRowMenu } from '@/components/content/opportunity-row-menu';
+import { WriteThisDialog } from '@/components/content/write-this-dialog';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { bulkSendNotes } from '@/lib/content/bulk-send';
@@ -523,6 +524,8 @@ export default function ContentPage() {
   const router = useRouter();
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const [contentPreset, setContentPreset] = useState<DialogPreset | null>(null);
+  // Write this from a row: the brief and the page in one go.
+  const [writeThis, setWriteThis] = useState<ContentOpportunity | null>(null);
   // The drafts being written for the rows on screen, which open instead. A
   // failed read is not "no draft": the rows offer to check again, so Start
   // never writes a second draft for the same opportunity.
@@ -1756,6 +1759,9 @@ export default function ContentPage() {
                             onStart: guard(() => setContentPreset(opportunityStart(opp)), {
                               action: tActions('createContent'),
                             }),
+                            onWriteThis: guard(() => setWriteThis(opp), {
+                              action: tActions('createContent'),
+                            }),
                             onOpenDraft: (draftId) => router.push(contentEditorPath(draftId)),
                           }}
                           // The Plan lists owned work still open; its marks are
@@ -1830,6 +1836,11 @@ export default function ContentPage() {
           preset={contentPreset}
         />
       )}
+      <WriteThisDialog
+        opportunity={writeThis}
+        onOpenChange={(open) => !open && setWriteThis(null)}
+        siteType={siteTypeOf(activeBrand ?? {})}
+      />
       <Sheet
         open={openOpportunityId !== null}
         onOpenChange={(open) => {
