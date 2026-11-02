@@ -155,6 +155,44 @@ export interface ChatConfirm {
   goal?: string;
   /** What it is about, by kind, in the person's words: frozen once it's made. */
   targets?: { kind: 'prompts' | 'pages' | 'competitors' | 'platforms'; values: string[] }[];
+  /**
+   * An editable card (CHAT-12 item 7; W3-02): its fields, as the change
+   * would be made. Its button sends the edited values with the Approve; the
+   * server checks them against the change's own rules before it runs.
+   */
+  form?: ChatConfirmForm;
+}
+
+/** A field of an editable card: its value as the card shows it. */
+export interface ChatFormField {
+  /** Its name in the values the card sends back: never an id. */
+  name: string;
+  kind: 'text' | 'textarea' | 'choice' | 'toggle';
+  label: string;
+  value: string | boolean;
+  /** The longest text it takes. */
+  maxLength?: number;
+  /** A choice's options, in order. */
+  options?: { value: string; label: string }[];
+  /** The line under it: "Every Monday, 09:00 · Europe/Istanbul · Next: Mon 9 Nov, 09:00". */
+  hint?: string;
+  /** A text that can't be left empty. */
+  required?: boolean;
+}
+
+/**
+ * An editable card's form (a schedule's, and later a skill's and a
+ * memory's): its fields, its button ("Create schedule") and the lines under
+ * them ("Runs on Auto · Normal").
+ */
+export interface ChatConfirmForm {
+  /** What it makes: the browser helps with its fields as the person types (a schedule's When). */
+  kind: 'schedule' | 'skill' | 'memory';
+  fields: ChatFormField[];
+  submit: string;
+  notes?: string[];
+  /** The time zone its times are read in (a schedule's). */
+  zone?: string;
 }
 
 /**
