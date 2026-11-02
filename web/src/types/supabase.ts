@@ -256,6 +256,7 @@ export type Database = {
           priority_reason: Json | null
           priority_score: number | null
           priority_updated_at: string | null
+          stale_at: string | null
           status: string
           tasks_generated_at: string | null
           tasks_writing_since: string | null
@@ -285,6 +286,7 @@ export type Database = {
           priority_reason?: Json | null
           priority_score?: number | null
           priority_updated_at?: string | null
+          stale_at?: string | null
           status?: string
           tasks_generated_at?: string | null
           tasks_writing_since?: string | null
@@ -314,6 +316,7 @@ export type Database = {
           priority_reason?: Json | null
           priority_score?: number | null
           priority_updated_at?: string | null
+          stale_at?: string | null
           status?: string
           tasks_generated_at?: string | null
           tasks_writing_since?: string | null
@@ -924,6 +927,7 @@ export type Database = {
       }
       brands: {
         Row: {
+          brand_rules: string[]
           client_logo_path: string | null
           content_byline: boolean
           content_quality_handoff: boolean
@@ -961,9 +965,11 @@ export type Database = {
           snippet_found_at: string | null
           state: string | null
           tracking_code: string
+          trusted_sources: string[]
           updated_at: string
         }
         Insert: {
+          brand_rules?: string[]
           client_logo_path?: string | null
           content_byline?: boolean
           content_quality_handoff?: boolean
@@ -1001,9 +1007,11 @@ export type Database = {
           snippet_found_at?: string | null
           state?: string | null
           tracking_code?: string
+          trusted_sources?: string[]
           updated_at?: string
         }
         Update: {
+          brand_rules?: string[]
           client_logo_path?: string | null
           content_byline?: boolean
           content_quality_handoff?: boolean
@@ -1041,6 +1049,7 @@ export type Database = {
           snippet_found_at?: string | null
           state?: string | null
           tracking_code?: string
+          trusted_sources?: string[]
           updated_at?: string
         }
         Relationships: [
@@ -2334,6 +2343,7 @@ export type Database = {
           search_tsv: unknown
           shared_at: string | null
           title: string | null
+          touched_brand_ids: string[] | null
           updated_at: string
           user_id: string
         }
@@ -2353,6 +2363,7 @@ export type Database = {
           search_tsv?: never
           shared_at?: string | null
           title?: string | null
+          touched_brand_ids?: string[] | null
           updated_at?: string
           user_id: string
         }
@@ -2372,6 +2383,7 @@ export type Database = {
           search_tsv?: never
           shared_at?: string | null
           title?: string | null
+          touched_brand_ids?: string[] | null
           updated_at?: string
           user_id?: string
         }
@@ -2461,6 +2473,7 @@ export type Database = {
           tags: string[]
           timezone: string | null
           title: string
+          touched_brand_ids: string[] | null
           type: string
           updated_at: string
           version: number
@@ -2490,6 +2503,7 @@ export type Database = {
           tags?: string[]
           timezone?: string | null
           title: string
+          touched_brand_ids?: string[] | null
           type: string
           updated_at?: string
           version?: number
@@ -2519,6 +2533,7 @@ export type Database = {
           tags?: string[]
           timezone?: string | null
           title?: string
+          touched_brand_ids?: string[] | null
           type?: string
           updated_at?: string
           version?: number
@@ -3802,6 +3817,7 @@ export type Database = {
           restored_at: string | null
           reviewer_id: string | null
           rules: Json | null
+          schema_left_out: boolean
           source_url: string | null
           score_after: number | null
           score_before: number | null
@@ -3844,6 +3860,7 @@ export type Database = {
           restored_at?: string | null
           reviewer_id?: string | null
           rules?: Json | null
+          schema_left_out?: boolean
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null
@@ -3886,6 +3903,7 @@ export type Database = {
           restored_at?: string | null
           reviewer_id?: string | null
           rules?: Json | null
+          schema_left_out?: boolean
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null
@@ -7607,6 +7625,7 @@ export type Database = {
         Args: { p_brand_id: string; p_user_id?: string }
         Returns: boolean
       }
+      can_see_chat_agent: { Args: { p_agent_id: string }; Returns: boolean }
       chat_agent_usage_shares: {
         Args: { p_budget: number; p_organization_id: string; p_since: string }
         Returns: {
@@ -7624,6 +7643,14 @@ export type Database = {
         Args: { p_run_id: string; p_user_limit: number; p_workspace_limit: number }
         Returns: boolean
       }
+      chat_note_touched_brands: {
+        Args: {
+          p_brand_ids: string[]
+          p_conversation_id: string
+          p_whole_workspace?: boolean
+        }
+        Returns: undefined
+      }
       chat_run_limits: {
         Args: { p_organization_id: string; p_user_id: string }
         Returns: Json
@@ -7631,6 +7658,10 @@ export type Database = {
       chat_start_next_agent_run: {
         Args: { p_organization_id: string; p_workspace_limit: number }
         Returns: string
+      }
+      chat_start_touched_brands: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
       }
       chat_text_array_distinct: {
         Args: { p_values: string[] }
