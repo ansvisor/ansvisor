@@ -877,8 +877,9 @@ export async function driveRun(
     const fresh = !resume && rc.progress.steps === 0 && rc.progress.modelSteps === 0;
     const typed = fresh ? (await loadShortcut(rc)) + (await loadTypedSkills(rc)) : 0;
     // A skill's run starts only when the AI limit left covers its answer (CHAT-04 item 17a).
-    if (fresh && typed > 0 && (await coveredUnits(rc, 1, { reads: true })) === 0) {
-      return pauseAtCap(rc, 'month');
+    if (fresh && typed > 0) {
+      const covered = await coveredUnits(rc, 1, { reads: true });
+      if (covered.fits === 0) return pauseAtCap(rc, covered.limit);
     }
     if (fresh && typed === 0 && (await helpTurn(rc)) === 'ended') return;
     await modelLoop(rc);
@@ -2464,14 +2465,15 @@ async function openQuestion(
 /**
  * How many of a job's `units` parts the AI limit left covers (CHAT-04 item
  * 17a), each one write step at worst: its prompt as it stands (`reads`: with
- * what the run's reads may still add) and all it may write. All of them when
+ * what the run's reads may still add) and all it may write, and which limit
+ * binds: the agent run's own cap ('run') or the month's. All of them when
  * the check gets no answer: each step is still held on its own.
  */
 async function coveredUnits(
   rc: RunContext,
   units: number,
   { reads = false }: { reads?: boolean } = {},
-): Promise<number> {
+): Promise<{ fits: number; limit: 'run' | 'month' }> {
   const choice = rc.models.pick('write');
   const { system, messages } = stepInput(rc, 'write', choice.claude);
   const prompt = estimateInputTokens([system, messages, toolSchemas(rc, 'write')]);
@@ -2486,7 +2488,7 @@ async function coveredUnits(
     source: rc.models.source,
     agentRunId: rc.agentRunId,
   });
-  return fit.ok ? fit.fits : units;
+  return fit.ok ? { fits: fit.fits, limit: fit.limit } : { fits: units, limit: 'month' };
 }
 
 /**
@@ -2502,21 +2504,23 @@ async function checkParts(rc: RunContext, call: PendingCall): Promise<CallOutcom
     return result(call, { code: 'invalid_input', issues }, true);
   }
   const { parts, unit } = parsed.data;
-  const fit = partsFit(await coveredUnits(rc, parts), parts);
+  const covered = await coveredUnits(rc, parts);
+  const fit = partsFit(covered.fits, parts);
   if (fit.kind === 'all') return result(call, partsResult(parts, parts, unit));
+  // At the agent run's own cap ('run'), not the month's, its run ends at its limit.
   if (fit.kind === 'none') {
-    await pauseAtCap(rc, 'month');
+    await pauseAtCap(rc, covered.limit);
     return { kind: 'ended' };
   }
   if (!personPresent(rc)) {
-    rc.progress.limitStop = true;
+    rc.progress.limitStop = covered.limit;
     return result(call, partsResult(fit.fits, parts, unit));
   }
   // The run's questions used up: the recommended option, which the answer says.
   if ((rc.progress.asks ?? 0) >= MAX_ASKS_PER_RUN) {
     return result(call, partsResult(fit.fits, parts, unit));
   }
-  rc.progress.parts = { fits: fit.fits, parts, unit };
+  rc.progress.parts = { fits: fit.fits, parts, unit, limit: covered.limit };
   return openQuestion(rc, call, partsQuestion(fit.fits, parts, unit));
 }
 
@@ -2530,7 +2534,7 @@ async function partsAnswered(rc: RunContext, answered: CallResult, answer: AskAn
   rc.progress.parts = undefined;
   const choice = partsChoice(answer);
   if (choice === 'credits') {
-    await pauseAtCap(rc, 'month');
+    await pauseAtCap(rc, parts?.limit ?? 'month');
     return null;
   }
   if (choice === 'cancel') {
@@ -3765,7 +3769,7 @@ async function finish(rc: RunContext): Promise<void> {
   // one stopped at the limit too.
   rc.progress.text = withAssumptions(rc.progress.text, rc.progress.assumptions);
   // No one was there to ask: the parts that fit are done and filed, and it stops at the limit.
-  if (rc.progress.limitStop) return pauseAtCap(rc, 'month');
+  if (rc.progress.limitStop) return pauseAtCap(rc, rc.progress.limitStop);
   if (!(await moveRun(rc.run.id, ['running'], 'done', { finished: true }))) return stopNow(rc);
   const generatedAt = new Date().toISOString();
   const workingMs = workedMs(rc);
