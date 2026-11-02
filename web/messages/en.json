@@ -3863,7 +3863,8 @@
       "notOpened": "Couldn't open {page}",
       "usedSkill": "Used skill: {title}",
       "skillFromLibrary": "Ansvisor library",
-      "usedShortcut": "Used shortcut: {title}"
+      "usedShortcut": "Used shortcut: {title}",
+      "unchanged": "No change since the last run: the data this job reads is the same, so there is nothing new to send."
     },
     "partial": {
       "question": "Your remaining AI limit covers about {fits} of the {parts} {unit}.",
@@ -4656,7 +4657,10 @@
       "title": "Inbox",
       "notice": {
         "reminder": "{why} Still not working after 3 days.",
-        "fix": "Fix it"
+        "fix": "Fix it",
+        "scheduleFailed": "{title} didn’t run",
+        "schedulePaused": "{title} is paused",
+        "open": "Open"
       },
       "lands": "Results from your agents land here.",
       "landsWithSuggestions": "Results from your agents and daily suggestions land here.",
@@ -6372,6 +6376,16 @@
       "done": "Scheduled: {title}",
       "detail": "{when} · {deliver}",
       "detailReadyBy": "{when} · Starts now · {deliver}"
+    },
+    "notice": {
+      "failed": "Something went wrong, twice.",
+      "paused": {
+        "cap": "The monthly AI limit was reached. It goes on at its next run after the limit resets.",
+        "failed": "It failed 3 times in a row, so it was turned off.",
+        "skill_off": "Its skill /{skill} is off or gone.",
+        "missing_source": "Its brand or what it worked on is gone.",
+        "owner_role": "You can no longer run scheduled jobs, or use its brand."
+      }
     },
     "tool": {
       "ambiguous": "“{phrase}” could mean {options}. Ask the person which one with a question card, these as its options (the first recommended), then schedule again with the phrase they pick: {phrases}.",

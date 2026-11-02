@@ -1,7 +1,7 @@
 ---
 title: Schedule work in Chat
 route: /dashboard/chat
-keywords: [schedule, scheduled job, every monday, recurring report, ready by, create schedule, repeat]
+keywords: [schedule, scheduled job, every monday, recurring report, ready by, create schedule, repeat, no change, didn't run, paused]
 synonyms: [run later, run on repeat, weekly report automatically, remind me, automate a chat]
 plan: all
 updated: 2026-11-02
@@ -38,3 +38,11 @@ When a phrase could mean two dates, such as "next Friday", Chat asks which one y
 The steps above the answer show **Scheduled:** with the job's name, when it runs and where results go. Each run works in the job's own chat, as you, with your access checked again at every run.
 
 Only Admins and Managers can schedule work. Your plan sets how many scheduled jobs can be on at once.
+
+## Results and notices
+
+Each run posts its result in the job's own chat, and the chat shows up in your **Inbox** as a new result. When a job makes several things, such as drafts for three tasks, the job shows how many are ready.
+
+With **Notify only if the answer changed**, a run that reads the same data as the last result stops before writing and says **No change**. Nothing new is sent or saved, and the writing step uses none of your AI limit. The first run always delivers.
+
+If a run fails, Chat tries again 10 minutes later. If that fails too, the top of your **Inbox** says the job didn't run and why. A job that stops by itself, such as at your monthly AI limit or after 3 failed runs in a row, says so there too. The note goes away once the job runs again.

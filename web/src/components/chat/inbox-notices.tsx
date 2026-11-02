@@ -4,7 +4,11 @@ import { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Link } from '@/i18n/navigation';
-import { markChatNoticesRead, type ChatNotice } from '@/lib/actions/chat-notices';
+import {
+  markChatNoticesRead,
+  type ChatNotice,
+  type ScheduleNotice,
+} from '@/lib/actions/chat-notices';
 import { cn } from '@/lib/utils';
 import { INBOX_ROW } from './inbox-suggestions';
 
@@ -26,6 +30,48 @@ export function NoticeRows({ notices }: { notices: ChatNotice[] }) {
 }
 
 function NoticeRow({ notice }: { notice: ChatNotice }) {
+  if (notice.kind !== 'own_key_failed') return <ScheduleNoticeRow notice={notice} />;
+  return <KeyNoticeRow notice={notice} />;
+}
+
+/** A scheduled job's notice (00461): "{Job} didn't run", or "{Job} is paused", why, and Open. */
+function ScheduleNoticeRow({ notice }: { notice: ScheduleNotice }) {
+  const t = useTranslations('chatShell.inbox.notice');
+  return (
+    <div
+      data-slot="inbox-notice"
+      data-kind={notice.kind}
+      className={cn(
+        INBOX_ROW,
+        'cursor-default border-amber-200 bg-amber-50/40 hover:translate-y-0 hover:shadow-[0_1px_2px_rgba(10,10,10,.04)] dark:border-amber-900 dark:bg-amber-950/20',
+      )}
+    >
+      <span aria-hidden className="size-2 rounded-full bg-amber-600 dark:bg-amber-400" />
+      <span className="min-w-0 text-[13.5px]">
+        <span className={cn('block truncate', !notice.read && 'font-semibold')}>
+          {t(notice.kind === 'schedule_failed' ? 'scheduleFailed' : 'schedulePaused', {
+            title: notice.title,
+          })}
+        </span>
+        <span className="block truncate text-xs text-amber-700 dark:text-amber-400">
+          {notice.reason}
+        </span>
+      </span>
+      <span className="text-[11px] whitespace-nowrap text-muted-foreground">
+        {new Date(notice.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+      </span>
+      <Link
+        href={notice.href}
+        data-action="inbox.openSchedule"
+        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-full')}
+      >
+        {t('open')}
+      </Link>
+    </div>
+  );
+}
+
+function KeyNoticeRow({ notice }: { notice: Extract<ChatNotice, { kind: 'own_key_failed' }> }) {
   const t = useTranslations('chatShell.inbox.notice');
   const tOwnKey = useTranslations('chatAgents.ownKey');
   const tProviders = useTranslations('settings.agent_providers');

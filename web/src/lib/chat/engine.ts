@@ -183,6 +183,7 @@ import {
 import { MAX_UPLOADS } from './uploads';
 import { answerUnattended, withAssumptions } from './schedule/unattended';
 import { cardFormOf, cardFormValuesInput, editedInput } from './card-form';
+import { readUnchanged } from './schedule/fingerprint';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -1402,6 +1403,11 @@ async function modelLoop(rc: RunContext): Promise<void> {
 
     if (phase === 'read') {
       if (step.toolCalls.length === 0) {
+        // A change-only job that read what it read last time stops here: No change (CHAT-12 item 20).
+        if (readUnchanged(rc.progress)) {
+          rc.progress.text = t('step.unchanged');
+          return finish(rc);
+        }
         // Read enough: Sonnet writes from what was read.
         rc.progress.phase = 'write';
         continue;

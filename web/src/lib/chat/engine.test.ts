@@ -5401,3 +5401,59 @@ describe('the schedule card (W3-02, CHAT-12 items 7–9)', () => {
     expect(db.tables.chat_schedules).toEqual([]);
   });
 });
+
+describe('"Notify only if the answer changed" (W3-04a, CHAT-12 item 20)', () => {
+  const JOB = '88888888-8888-4888-8888-888888888888';
+  const readStep = () => calls(toolCall('r1', 'read_visibility', { brand_id: BRAND }));
+
+  /** A scheduled run of the job, change-only with `last` when given; its run id. */
+  async function jobRun(last?: string | null) {
+    const started = await engine.startChatRun(ADMIN, { message: 'Weekly check', brandId: BRAND });
+    if (!started.ok) throw new Error('not started');
+    scheduledRun(started, JOB);
+    if (last !== undefined) {
+      const state = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
+      state.progress = { ...(state.progress as object), changeOnly: { last } };
+    }
+    await engine.driveRun(ADMIN, started.runId, undefined, { sessionUserId: null });
+    return started.runId;
+  }
+  const progressOf = (runId: string) =>
+    db.tables.chat_run_state.find((s) => s.run_id === runId)!.progress as {
+      fingerprint?: string;
+      unchanged?: boolean;
+    };
+
+  it('stops before the writing step when the job read what its last delivered run read', async () => {
+    useModels([readStep(), READY], [text('Up 12% this week.')]);
+    const first = await jobRun(null);
+    expect(runRow(first).status).toBe('done');
+    const fingerprint = progressOf(first).fingerprint!;
+    expect(fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    expect(progressOf(first).unchanged).toBeUndefined();
+
+    const { sonnet } = useModels([readStep(), READY], [text('Up 12% this week.')]);
+    const second = await jobRun(fingerprint);
+    expect(runRow(second).status).toBe('done');
+    expect(progressOf(second).unchanged).toBe(true);
+    // No writing step: the writing model is never called, and the answer says why.
+    expect(sonnet.seen).toHaveLength(0);
+    expect(
+      db.tables.chat_messages.find((m) => m.id === runRow(second).message_id)?.content_md,
+    ).toContain('No change since the last run');
+  });
+
+  it('writes as usual when the data changed, or for a job that isn’t change-only', async () => {
+    useModels([readStep(), READY], [text('Up 12%.')]);
+    const first = await jobRun();
+    fakes.readRun.mockResolvedValue({
+      rows: [{ prompt: 'best crm' }],
+      change_pct: 3,
+      data_as_of: DATA_AS_OF,
+    });
+    const { sonnet } = useModels([readStep(), READY], [text('Up 3%.')]);
+    const second = await jobRun(progressOf(first).fingerprint!);
+    expect(progressOf(second).unchanged).toBeUndefined();
+    expect(sonnet.seen.length).toBeGreaterThan(0);
+  });
+});

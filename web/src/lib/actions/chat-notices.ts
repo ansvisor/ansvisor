@@ -15,7 +15,9 @@ import { createClient } from '@/lib/supabase/server';
  */
 
 /** A notice as the Inbox shows it. */
-export interface ChatNotice {
+export type ChatNotice = OwnKeyNotice | ScheduleNotice;
+
+interface OwnKeyNotice {
   id: string;
   kind: 'own_key_failed';
   provider: AiProvider;
@@ -24,6 +26,50 @@ export interface ChatNotice {
   reminder: boolean;
   createdAt: string;
   read: boolean;
+}
+
+/**
+ * A scheduled job's notice (CHAT-12 items 16, 26–27; 00461): a run failed
+ * after its retry, or the job turned itself off, with why in plain words.
+ */
+export interface ScheduleNotice {
+  id: string;
+  kind: 'schedule_failed' | 'schedule_paused';
+  title: string;
+  reason: string;
+  /** Where Open goes: the job's chat, or Chat when it has none yet. */
+  href: `/dashboard/${string}`;
+  createdAt: string;
+  read: boolean;
+}
+
+const SCHEDULE_KINDS = new Set(['schedule_failed', 'schedule_paused']);
+
+/** A scheduled job's notice from its row; null for one that doesn't read. */
+function scheduleNotice(row: {
+  id: string;
+  kind: string;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+  read_at: string | null;
+}): ScheduleNotice | null {
+  const { title, reason, conversationId } = row.payload ?? {};
+  if (!SCHEDULE_KINDS.has(row.kind) || typeof title !== 'string' || typeof reason !== 'string') {
+    return null;
+  }
+  const chat =
+    typeof conversationId === 'string' && /^[0-9a-f-]{36}$/i.test(conversationId)
+      ? conversationId
+      : null;
+  return {
+    id: row.id,
+    kind: row.kind as ScheduleNotice['kind'],
+    title: title.slice(0, 120),
+    reason: reason.slice(0, 200),
+    href: chat ? `/dashboard/chat/${chat}` : '/dashboard/chat',
+    createdAt: row.created_at,
+    read: row.read_at !== null,
+  };
 }
 
 export type ChatNoticesRead = { ok: true; notices: ChatNotice[] } | { ok: false };
@@ -71,6 +117,11 @@ export async function readChatNotices(): Promise<ChatNoticesRead> {
       created_at: string;
       read_at: string | null;
     }[]) {
+      const scheduled = scheduleNotice(row);
+      if (scheduled) {
+        notices.push(scheduled);
+        continue;
+      }
       const { provider, class: cls, reminder } = row.payload ?? {};
       if (row.kind !== 'own_key_failed' || !isAiProvider(provider) || !isKeyFailureClass(cls)) {
         continue;
