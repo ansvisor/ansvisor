@@ -19,6 +19,9 @@ const labels: AuditExportLabels = {
   issues: 'Issues',
   lastAudit: 'Last audit',
   audits: 'Audits',
+  firstScore: 'First score',
+  firstAudit: 'First audit',
+  changeSinceFirst: 'Change since first',
   statuses: {
     good: 'Good',
     improving: 'Improving',
@@ -36,6 +39,8 @@ const page = (over: Partial<AuditedPage> = {}): AuditedPage => ({
   auditId: 'a3',
   score: 0.634,
   previousScore: 0.58,
+  firstScore: 0.5,
+  firstAuditedAt: '2026-09-20T09:00:00+00:00',
   status: 'improving',
   lastAuditedAt: '2026-10-14T23:30:00+00:00',
   trend: [0.58, 0.634],
@@ -50,6 +55,8 @@ const failed = page({
   url: 'https://acme.com/broken,new',
   score: null,
   previousScore: null,
+  firstScore: null,
+  firstAuditedAt: null,
   status: 'failed',
   issues: null,
   runCount: 1,
@@ -59,8 +66,24 @@ describe('auditPagesCsv', () => {
   it('writes a row per page, scores out of 100 with their change, and the UTC day', () => {
     expect(auditPagesCsv([page(), failed], labels).split('\n')).toEqual([
       AUDIT_PAGES_CSV_HEADERS.join(','),
-      'https://acme.com/pricing,63,58,5,Improving,14,2026-10-14,3',
-      '"https://acme.com/broken,new",,,,Failed,,2026-10-14,1',
+      'https://acme.com/pricing,63,58,5,Improving,14,2026-10-14,3,50,2026-09-20,13',
+      '"https://acme.com/broken,new",,,,Failed,,2026-10-14,1,,,',
+    ]);
+  });
+
+  it("keeps today's columns in their places and adds the first score after them", () => {
+    expect(AUDIT_PAGES_CSV_HEADERS).toEqual([
+      'page_url',
+      'score',
+      'previous_score',
+      'change',
+      'status',
+      'issues',
+      'last_audit',
+      'audits',
+      'first_score',
+      'first_audit',
+      'change_since_first',
     ]);
   });
 });
@@ -74,9 +97,45 @@ describe('auditPagesWorkbook', () => {
 
     expect(sheet.sheet).toBe('Pages');
     expect(sheet.data).toEqual([
-      ['Page', 'Score', 'Previous score', 'Change', 'Status', 'Issues', 'Last audit', 'Audits'],
-      ['https://acme.com/pricing', 63, 58, 5, 'Improving', 14, '2026-10-14', 3],
-      ['https://acme.com/broken,new', null, null, null, 'Failed', null, '2026-10-14', 1],
+      [
+        'Page',
+        'Score',
+        'Previous score',
+        'Change',
+        'Status',
+        'Issues',
+        'Last audit',
+        'Audits',
+        'First score',
+        'First audit',
+        'Change since first',
+      ],
+      [
+        'https://acme.com/pricing',
+        63,
+        58,
+        5,
+        'Improving',
+        14,
+        '2026-10-14',
+        3,
+        50,
+        '2026-09-20',
+        13,
+      ],
+      [
+        'https://acme.com/broken,new',
+        null,
+        null,
+        null,
+        'Failed',
+        null,
+        '2026-10-14',
+        1,
+        null,
+        null,
+        null,
+      ],
     ]);
   });
 });

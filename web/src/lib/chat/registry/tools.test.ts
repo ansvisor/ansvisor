@@ -621,6 +621,24 @@ describe('approval policies', () => {
     );
   });
 
+  it('marks the reads about no brand that list every brand the person can access (00436)', () => {
+    // A chat they run in has touched each of those brands (touched-brands.ts).
+    expect(
+      CHAT_TOOLS.filter((tool) => tool.namesBrands)
+        .map((tool) => tool.name)
+        .sort(),
+    ).toEqual(['list_brands', 'list_connections']);
+    expect(() =>
+      defineTool({
+        ...readRow,
+        inputSchema: z.object({ brand_id: z.string() }),
+        brandOf: { input: 'brand_id' },
+        namesBrands: true,
+        fixture: { input: { brand_id: 'x' } },
+      }),
+    ).toThrow(/doesn't name every brand/);
+  });
+
   it('leaves roles out only of a row open to every role, and never an Admin', () => {
     const write = { ...readRow, class: 'write' as const, defaultPolicy: 'ask', maxPolicy: 'ask' };
     expect(
