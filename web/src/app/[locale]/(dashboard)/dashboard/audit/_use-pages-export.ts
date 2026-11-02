@@ -49,6 +49,9 @@ export function usePagesExport(brandId: string | null) {
     issues: t('pages.issues'),
     lastAudit: t('pages.lastAudit'),
     audits: t('export.audits'),
+    firstScore: t('export.firstScore'),
+    firstAudit: t('export.firstAudit'),
+    changeSinceFirst: t('export.changeSinceFirst'),
     statuses: {
       good: t('pages.statuses.good'),
       improving: t('pages.statuses.improving'),

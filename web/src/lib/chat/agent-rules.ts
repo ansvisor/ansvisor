@@ -3,6 +3,7 @@ import type { TeamRole } from '@/components/providers/role-provider';
 import { PLANS, PLAN_ORDER, type PlanId } from '@/config/plans';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import { ACTION_CATEGORIES } from '@/lib/action-center/registry';
+import type { BrandAccess } from '@/lib/brand-access';
 import { KPI_KEYS } from '@/lib/kpis/registry';
 import { ONCE_MAX_AHEAD_MS, scheduleConfigSchema } from './agent-schedule';
 import type { PlanFacts } from './plan-facts';
@@ -30,6 +31,8 @@ export type AgentStatus = (typeof AGENT_STATUSES)[number];
  */
 export const AGENT_PAUSED_REASONS = [
   'cap',
+  // All agents reached the month's limit on the workspace's own key (AGENT-OWN-KEY §4.2).
+  'own_key_cap',
   'connection',
   'skill_off',
   'failures',
@@ -513,7 +516,9 @@ export type AgentAsk =
   | 'monthCap'
   | 'fullAuto'
   | 'engines'
-  | 'runWithChat';
+  | 'runWithChat'
+  /** An agent's permission to publish and send on its own (AUTONOMOUS-GO-LIVE §7.2). */
+  | 'goLive';
 
 /** A refusal: the precedence's denial, and what was asked in words. */
 export interface AgentDenial {
@@ -524,8 +529,8 @@ export interface AgentDenial {
 export interface AgentViewer {
   userId: string;
   role: TeamRole;
-  /** The brands the person may use: all, or the ones shared with them (Agency partners). */
-  brandAccess: 'all' | readonly string[];
+  /** The brands the person may use: all, or the ones shared with them (Selected brands). */
+  brandAccess: BrandAccess;
 }
 
 /** An agent as the rules need it. */
@@ -564,22 +569,24 @@ const forbidden = (role: TeamRole, roles: TeamRole[], asked: AgentAsk): AgentDen
 /**
  * Whether a person sees an agent (§K item 51, CHAT-21 Definition): a
  * workspace agent, every member; a private one, its owner and the Admins.
- * An Agency partner sees only agents whose brands are all shared with them.
+ * Someone with Selected brands sees only agents whose brands are all shared
+ * with them, and their own agent on All brands, which runs on their brands
+ * only (BRAND-ACCESS §5.3: all of the owner's). The database's
+ * can_see_chat_agent (00436) has the same rule.
  */
 export function canSeeAgent(agent: AgentFacts, viewer: AgentViewer): boolean {
   if (viewer.role === 'admin') return true;
   if (agent.visibility === 'private' && agent.ownerId !== viewer.userId) return false;
   if (viewer.brandAccess === 'all') return true;
   const access = viewer.brandAccess;
-  return (
-    !agent.scope.all_brands && (agent.scope.brand_ids ?? []).every((id) => access.includes(id))
-  );
+  if (agent.scope.all_brands) return agent.ownerId === viewer.userId;
+  return (agent.scope.brand_ids ?? []).every((id) => access.includes(id));
 }
 
 /** The acts on an existing agent (create and duplicate make a new one). */
 export type AgentAct = Exclude<
   AgentAsk,
-  'workspace' | 'monthCap' | 'fullAuto' | 'engines' | 'runWithChat'
+  'workspace' | 'monthCap' | 'fullAuto' | 'engines' | 'runWithChat' | 'goLive'
 >;
 
 /** What only an Admin may do to a workspace agent while Settings › Chat keeps them to Admins. */

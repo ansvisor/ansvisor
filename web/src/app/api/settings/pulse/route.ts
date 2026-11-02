@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeRefusal } from '@/lib/subscription-guard';
 import { parseRecipients } from '@/lib/pulse-recipients';
+import { allowedBrands, hasBrandAccess, readBrandAccess } from '@/lib/brand-access';
 
 /**
  * GET / PUT /api/settings/pulse
@@ -11,8 +12,9 @@ import { parseRecipients } from '@/lib/pulse-recipients';
  * Traffic weekly digest (AT-013) goes to the same recipients.
  *
  * Auth model (same bar as the webhook config RLS):
- * - GET: any signed-in org member sees each brand's frequency/recipients.
- * - PUT: admins and managers change them.
+ * - GET: any signed-in org member sees the frequency/recipients of each
+ *   brand they may use (BRAND-ACCESS: All brands, or the ones shared with them).
+ * - PUT: admins and managers change them, on a brand they may use.
  */
 
 const FREQUENCIES = ['daily', 'weekly', 'notable', 'off'] as const;
@@ -48,17 +50,21 @@ export async function GET() {
     );
   }
 
-  const { data: brands, error } = await supabaseAdmin
-    .from('brands')
-    .select('id, name')
-    .eq('organization_id', ctx.profile.organization_id)
-    .eq('is_active', true)
-    .order('created_at', { ascending: true });
+  const [{ data: orgBrands, error }, access] = await Promise.all([
+    supabaseAdmin
+      .from('brands')
+      .select('id, name')
+      .eq('organization_id', ctx.profile.organization_id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true }),
+    readBrandAccess(ctx.user.id, ctx.profile.organization_id),
+  ]);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  const brands = allowedBrands(access, orgBrands ?? []);
 
-  const brandIds = (brands ?? []).map((b) => b.id);
+  const brandIds = brands.map((b) => b.id);
   const { data: settings } = brandIds.length
     ? await supabaseAdmin
         .from('pulse_settings')
@@ -69,7 +75,7 @@ export async function GET() {
   const settingsByBrand = new Map((settings ?? []).map((s) => [s.brand_id, s]));
 
   return NextResponse.json({
-    brands: (brands ?? []).map((brand) => {
+    brands: brands.map((brand) => {
       const s = settingsByBrand.get(brand.id);
       return {
         brandId: brand.id,
@@ -126,13 +132,16 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'trafficDigest must be true or false' }, { status: 400 });
   }
 
-  // The brand must belong to the caller's org.
-  const { data: brand } = await supabaseAdmin
-    .from('brands')
-    .select('id, organization_id')
-    .eq('id', brandId)
-    .single();
-  if (!brand || brand.organization_id !== ctx.profile.organization_id) {
+  // The brand must belong to the caller's org, and be one they may use.
+  const [{ data: brand }, access] = await Promise.all([
+    supabaseAdmin.from('brands').select('id, organization_id').eq('id', brandId).single(),
+    readBrandAccess(ctx.user.id, ctx.profile.organization_id),
+  ]);
+  if (
+    !brand ||
+    brand.organization_id !== ctx.profile.organization_id ||
+    !hasBrandAccess(access, brand.id)
+  ) {
     return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
   }
 

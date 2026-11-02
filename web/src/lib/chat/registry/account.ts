@@ -43,6 +43,7 @@ export const ACCOUNT_READS = [
     minRole: 'analyst',
     planGate: null,
     brandOf: null,
+    namesBrands: true,
     costClass: 'C0',
     labelKey: 'connections',
     route: '/dashboard/settings/integrations',

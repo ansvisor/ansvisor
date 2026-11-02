@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
+import { mayUseBrand } from '@/lib/mcp/data';
 import type { Citation } from '@/types';
 import { pageKey } from '@/lib/content/sources';
 import {
@@ -245,7 +246,7 @@ const siteOf = (domain: string | null | undefined) =>
 /** A cell, with the engines and locations its answers come from. */
 type Cell = WhyCell & { platforms: Set<string>; models: Set<string>; regions: Set<string> };
 
-/** explain_change for the caller's brand; null when it isn't their workspace's. */
+/** explain_change for the caller's brand; null when it isn't their workspace's, or one they may not use. */
 export async function explainChangeFor(
   auth: McpAuthContext,
   params: ExplainChangeParams,
@@ -258,7 +259,7 @@ export async function explainChangeFor(
     .eq('id', params.brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   let periods: ReturnType<typeof whyPeriods>;
   try {
