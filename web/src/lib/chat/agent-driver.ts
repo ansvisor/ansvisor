@@ -181,6 +181,8 @@ function pauseFor(refusal: AgentRefusal): Exclude<AgentPausedReason, 'manual'> |
   if (refusal.code === 'ai_limit') return 'cap';
   // The workspace's own key is marked failing (AGENT-OWN-KEY §5.2 item 4).
   if (refusal.code === 'own_key_failed') return 'own_key';
+  // All agents reached the month's limit on the workspace's own key (AGENT-OWN-KEY §4.2).
+  if (refusal.code === 'own_key_cap') return 'own_key_cap';
   return null;
 }
 

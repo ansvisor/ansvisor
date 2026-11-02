@@ -67,6 +67,8 @@ const NOT_BRAND_DATA = {
   ai_bot_usage: "The Account's AI bot event meter against the plan (D1).",
   api_keys: "A person's own API keys; a key carries its owner's brand access (PR 10).",
   chat_auto_choices: "A person's own Chat tool choices.",
+  chat_notices:
+    "A person's own notes from the system about the workspace's AI key (00441): no brand's data.",
   chat_settings: "The Account's Chat settings (D1).",
   chat_storage_usage: "The Account's Chat storage meter against the plan (D1).",
   chat_uploads:
