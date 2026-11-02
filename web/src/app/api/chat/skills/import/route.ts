@@ -3,7 +3,12 @@ import { writeRefusal } from '@/lib/subscription-guard';
 import { skillRefusalResponse, skillViewerFor } from '@/lib/chat/skills/api';
 import { readGithubSkill } from '@/lib/chat/skills/github';
 import { MAX_UPLOAD, parseSkillImport, parseSkillUpload } from '@/lib/chat/skills/import';
-import { importSkill, skillRefusal, type ImportedSkill } from '@/lib/chat/skills/store';
+import {
+  canImportSkill,
+  importSkill,
+  skillRefusal,
+  type ImportedSkill,
+} from '@/lib/chat/skills/store';
 import { chatActor, runFailure } from '@/lib/chat/run-api';
 
 /**
@@ -32,6 +37,9 @@ export async function POST(req: Request) {
     if (refusal) return refusal;
     const viewer = await skillViewerFor(actor);
     if (viewer instanceof NextResponse) return viewer;
+    // Role and plan first: a refused import never reads the upload or GitHub.
+    const cannot = canImportSkill(viewer);
+    if (cannot) return skillRefusalResponse(cannot.refusal);
 
     const kind = req.headers.get('content-type') ?? '';
     let parsed;

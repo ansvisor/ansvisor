@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { strToU8, zipSync, type Zippable } from 'fflate';
-import { MAX_FILES, parseSkillImport, parseSkillUpload, readZip } from './import';
+import { MAX_FILES, MAX_REMOVED_ITEM, parseSkillImport, parseSkillUpload, readZip } from './import';
 import { skillChecksum } from './skill-file';
 
 /**
@@ -35,6 +35,20 @@ Read the page, then tighten it.
 
 const zip = (files: Zippable) => zipSync(files);
 const md = (text: string) => strToU8(text);
+
+/** Every place `from` sits in `bytes`, rewritten to `to` (as long). */
+function rename(bytes: Uint8Array, from: string, to: string): Uint8Array {
+  const out = bytes.slice();
+  const [a, b] = [md(from), md(to)];
+  for (let at = 0; at + a.length <= out.length; at++) {
+    if (a.every((byte, i) => out[at + i] === byte)) out.set(b, at);
+  }
+  return out;
+}
+const setU16 = (b: Uint8Array, at: number, v: number) =>
+  new DataView(b.buffer).setUint16(at, v, true);
+const setU32 = (b: Uint8Array, at: number, v: number) =>
+  new DataView(b.buffer).setUint32(at, v, true);
 
 describe('readZip', () => {
   it('reads a skill folder’s files, leaving out OS litter and folders', () => {
@@ -81,6 +95,39 @@ describe('readZip', () => {
       refusal: { code: 'nested_archive', detail: { path: 'more.zip' } },
     });
     expect(readZip(md('not a zip'))).toEqual({ ok: false, refusal: { code: 'not_zip' } });
+  });
+
+  it('refuses an archive whose entries fflate would read differently from the directory checked', () => {
+    // Two entries named SKILL.md, the second listed as 2 GB unpacked.
+    const twice = rename(
+      zip({ 'SKILL.md': md(SKILL), 'SKILL.mX': md('x') }),
+      'SKILL.mX',
+      'SKILL.md',
+    );
+    const end = twice.length - 22;
+    const central = new DataView(twice.buffer).getUint32(end + 16, true);
+    const second = central + 46 + 'SKILL.md'.length;
+    const hidden = twice.slice();
+    setU32(hidden, second + 24, 0x7fffffff);
+    // The total count says 1, the count on this disk (fflate's) 2.
+    setU16(hidden, end + 10, 1);
+    expect(readZip(hidden)).toEqual({ ok: false, refusal: { code: 'not_zip' } });
+    // Both counts say 1: the directory holds more than its one entry.
+    setU16(hidden, end + 8, 1);
+    expect(readZip(hidden)).toEqual({ ok: false, refusal: { code: 'not_zip' } });
+    // A name twice, each small: refused as fflate reads the second.
+    expect(readZip(twice)).toEqual({ ok: false, refusal: { code: 'not_zip' } });
+
+    // A ZIP64 locator before the end record: fflate would read its directory instead.
+    const plain = zip({ 'SKILL.md': md(SKILL) });
+    const locator = new Uint8Array(20);
+    setU32(locator, 0, 0x07064b50);
+    const zip64 = new Uint8Array(plain.length + 20);
+    zip64.set(plain.subarray(0, plain.length - 22));
+    zip64.set(locator, plain.length - 22);
+    zip64.set(plain.subarray(plain.length - 22), plain.length - 2);
+    expect(readZip(plain).ok).toBe(true);
+    expect(readZip(zip64)).toEqual({ ok: false, refusal: { code: 'not_zip' } });
   });
 });
 
@@ -160,6 +207,28 @@ Then tighten it.
     ]);
     expect(parsed.value.parts.body).toBe('Read the page.\n\nCurrent branch: \nThen tighten it.');
     expect(parsed.value.status).toBe('pending_review');
+  });
+
+  it('trims a long line of what was removed, and refuses a list too long to keep', () => {
+    const long = `${'a'.repeat(300)}.md`;
+    const one = parseSkillUpload('s.zip', zip({ 'SKILL.md': md(SKILL), [long]: md('x') }));
+    if (!one.ok) throw new Error(JSON.stringify(one.refusal));
+    expect([...one.value.removed[0]]).toHaveLength(MAX_REMOVED_ITEM);
+    expect(one.value.removed[0].endsWith('…')).toBe(true);
+    const crowded: Zippable = { 'SKILL.md': md(SKILL) };
+    for (let i = 0; i < 100; i++) crowded[`${i}-${'b'.repeat(190)}.md`] = md('x');
+    expect(parseSkillUpload('s.zip', zip(crowded))).toMatchObject({
+      ok: false,
+      refusal: { code: 'invalid' },
+    });
+  });
+
+  it('keeps an empty LICENSE file as no text', () => {
+    const parsed = parseSkillUpload('s.zip', zip({ 'SKILL.md': md(SKILL), LICENSE: md('') }));
+    expect(parsed).toMatchObject({
+      ok: true,
+      value: { licenseText: null, parts: { license: 'MIT' } },
+    });
   });
 
   it('refuses a file that isn’t text, no SKILL.md, or more than one', () => {

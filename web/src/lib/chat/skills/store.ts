@@ -877,6 +877,21 @@ export interface ImportedSkill {
 }
 
 /**
+ * Who may import a skill (W3-09): an Admin or a Manager, while the
+ * workspace isn't read-only, on a paid plan or self-hosted (not in the
+ * trial, Wave 3 decision 9). The route asks before it reads the upload or
+ * GitHub, so a refused import costs nothing.
+ */
+export function canImportSkill(
+  viewer: Pick<SkillViewer, 'role' | 'plan'>,
+): { ok: false; refusal: SkillRefusal } | null {
+  if (!canSaveSkills(viewer.role)) return skillRefusal('role');
+  if (!viewer.plan.writable) return skillRefusal('read_only');
+  if (viewer.plan.isTrial) return skillRefusal('import_plan');
+  return null;
+}
+
+/**
  * Keeps an imported skill for review (CHAT-13 items 13–18): an Admin's or
  * a Manager's, while the workspace isn't read-only, on a paid plan or
  * self-hosted (not in the trial, Wave 3 decision 9), under the plan's
@@ -889,11 +904,10 @@ export async function importSkill(
   parsed: ParsedImport,
   source: { url: string | null; commitSha: string | null },
 ): Promise<SkillResult<ImportedSkill>> {
-  if (!canSaveSkills(viewer.role)) return skillRefusal('role');
-  if (!viewer.plan.writable) return skillRefusal('read_only');
-  if (viewer.plan.isTrial) return skillRefusal('import_plan');
+  const cannot = canImportSkill(viewer);
+  if (cannot) return cannot;
   const { parts } = parsed;
-  if (LIBRARY_NAMES.has(parts.name)) return skillRefusal('library_name', { name: parts.name });
+  if (RESERVED_NAMES.has(parts.name)) return skillRefusal('library_name', { name: parts.name });
   const limit = skillPlanLimit(viewer.plan);
   if (limit !== null && (await countSkills(viewer.organizationId)) >= limit) {
     return skillRefusal('skill_limit', { limit });
