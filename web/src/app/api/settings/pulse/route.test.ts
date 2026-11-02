@@ -12,6 +12,13 @@ const state = vi.hoisted(() => ({
   subscriptionStatus: 'active',
   settings: [] as Record<string, unknown>[],
   upserts: [] as Record<string, unknown>[],
+  // The caller's brand access (BRAND-ACCESS): All brands, or the ids shared with them.
+  access: 'all' as 'all' | string[],
+}));
+
+vi.mock('@/lib/brand-access', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/brand-access')>()),
+  readBrandAccess: async () => state.access,
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -53,7 +60,13 @@ vi.mock('@/lib/supabase/admin', () => ({
         };
       }
       // brands: the org's active list, or one brand by id.
-      const list = { data: [{ id: 'b1', name: 'Acme' }], error: null };
+      const list = {
+        data: [
+          { id: 'b1', name: 'Acme' },
+          { id: 'b2', name: 'Globex' },
+        ],
+        error: null,
+      };
       const chain = {
         eq: () => chain,
         order: async () => list,
@@ -79,12 +92,20 @@ beforeEach(() => {
   state.subscriptionStatus = 'active';
   state.settings = [];
   state.upserts = [];
+  state.access = 'all';
 });
 
 describe('GET /api/settings/pulse', () => {
   it('has the weekly digest on for a brand nobody configured, and as saved otherwise', async () => {
     expect((await (await GET()).json()).brands).toEqual([
       { brandId: 'b1', brandName: 'Acme', frequency: 'daily', recipients: [], trafficDigest: true },
+      {
+        brandId: 'b2',
+        brandName: 'Globex',
+        frequency: 'daily',
+        recipients: [],
+        trafficDigest: true,
+      },
     ]);
     state.settings = [
       {
@@ -98,6 +119,21 @@ describe('GET /api/settings/pulse', () => {
       frequency: 'weekly',
       trafficDigest: false,
     });
+  });
+});
+
+describe('/api/settings/pulse with Selected brands (BRAND-ACCESS)', () => {
+  it('lists only the brands shared with the person', async () => {
+    state.access = ['b2'];
+    expect((await (await GET()).json()).brands.map((b: { brandId: string }) => b.brandId)).toEqual([
+      'b2',
+    ]);
+  });
+
+  it("answers a brand that wasn't shared as not found, and saves nothing", async () => {
+    state.access = ['b2'];
+    expect((await put({ brandId: 'b1', frequency: 'off' })).status).toBe(404);
+    expect(state.upserts).toEqual([]);
   });
 });
 

@@ -22,6 +22,8 @@ vi.mock('@/lib/supabase/server', () => ({
         update: record('update'),
         insert: record('insert'),
         eq: () => chain,
+        // logEvent clears a stale mark (00432): `.not('stale_at', 'is', null)`.
+        not: () => chain,
         then: (resolve: (v: unknown) => void) =>
           resolve(
             table === 'actions' && writeError
@@ -46,7 +48,11 @@ vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 
 const { updateActionStatus } = await import('./action-center');
 
-const updates = () => writes.filter((w) => w.table === 'actions' && w.op === 'update');
+// The status writes; logEvent's clearing of a stale mark (00432) is counted apart.
+const isStaleClear = (w: { payload: unknown }) =>
+  Object.keys(w.payload as object).join() === 'stale_at';
+const updates = () =>
+  writes.filter((w) => w.table === 'actions' && w.op === 'update' && !isStaleClear(w));
 const update = () => updates()[0].payload;
 const event = () => writes.find((w) => w.table === 'action_events')!.payload;
 
@@ -78,6 +84,13 @@ describe('updateActionStatus', () => {
     writes.length = 0;
     await updateActionStatus('b1', 'a1', 'dismissed', 'bored' as never);
     expect(update()).toMatchObject({ dismiss_reason: null });
+  });
+
+  it('clears a stale mark with the History line, as any change does (00432)', async () => {
+    await updateActionStatus('b1', 'a1', 'in_progress');
+    expect(
+      writes.filter((w) => w.table === 'actions' && w.op === 'update' && isStaleClear(w)),
+    ).toEqual([{ table: 'actions', op: 'update', payload: { stale_at: null } }]);
   });
 
   it('starts and completes an action on a database without 00366', async () => {

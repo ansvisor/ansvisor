@@ -43,4 +43,4 @@ When the person wants it kept, save it as a new version with `create_draft`, met
 
 - Don't invent new facts or figures to make the page look fresh.
 - Don't change a date on the page unless its content changed.
-- Never publish: going live is always the person's click.
+- Never publish yourself: the app decides whether a page goes live, and asks the person unless an Admin allowed this agent to go live on its own.

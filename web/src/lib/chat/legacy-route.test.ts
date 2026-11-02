@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { chatAgenticForUser, chatPathOfAgentPath } from './legacy-route';
+import { chatAgenticForUser, chatPathOfAgentPath, legacyAgentApiGone } from './legacy-route';
 
 /**
  * Agent Chat's old addresses (CHAT-01 item 2): /dashboard/agent and every
@@ -43,5 +43,25 @@ describe('chatAgenticForUser', () => {
     expect(await chatAgenticForUser(async () => 'org-1')).toBe(true);
     expect(await chatAgenticForUser(async () => 'org-2')).toBe(false);
     expect(await chatAgenticForUser(async () => null)).toBe(false);
+  });
+});
+
+describe('legacyAgentApiGone', () => {
+  it("lets Agent Chat's API answer while the new Chat is off", () => {
+    expect(legacyAgentApiGone('org-1')).toBeNull();
+  });
+  it('answers 404 where the new Chat is on for the workspace', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    const gone = legacyAgentApiGone('org-1');
+    expect(gone?.status).toBe(404);
+    expect(await gone?.json()).toEqual({ error: 'Not found' });
+  });
+  it('follows CHAT_AGENTIC_ORGS when a list narrows it', () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', 'org-1');
+    expect(legacyAgentApiGone('org-1')?.status).toBe(404);
+    expect(legacyAgentApiGone('org-2')).toBeNull();
+    expect(legacyAgentApiGone(null)).toBeNull();
   });
 });

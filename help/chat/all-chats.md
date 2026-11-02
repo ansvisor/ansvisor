@@ -8,7 +8,7 @@ updated: 2026-10-30
 last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json]
 ---
 Chat keeps every chat, so you can find one again by a word in its name or in anything that was said in it. **All chats** lists them all in one place, with your archived chats.
