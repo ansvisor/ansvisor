@@ -266,7 +266,7 @@ const { runFromEvents } = await import('./run-state');
 const { toClientStep } = await import('./steps');
 const { CHAT_TOOLS } = await import('./registry/tools');
 const { readPrecedenceContext } = await import('./precedence-context');
-const { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } = await import('./rules');
+const { ANSWER_NOTE, INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } = await import('./rules');
 const { ASK_TOOL } = await import('./asks');
 const { NEXT_MOVES_TOOL } = await import('./next-moves');
 const {
@@ -1843,6 +1843,51 @@ describe('next moves (CHAT-07 §C)', () => {
     const rebuilt = runFromEvents(events);
     expect(rebuilt.text).toBe('Two pages lost most of it.');
     expect(rebuilt.nextMoves).toHaveLength(2);
+  });
+
+  it('asks once for the answer a reply left out, keeping its next moves', async () => {
+    // GPT-6 Luna and Gemini 3.8 Flash answer "hi" with next moves alone (W4-35).
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(toolCall('m1', NEXT_MOVES_TOOL, { moves: MOVES })),
+        text('Hi. I can check your visibility or draft a page.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'hi');
+    expect(sonnet.seen).toHaveLength(2);
+    // The second step is told so, and can't answer with next moves alone again.
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain(
+      JSON.stringify(ANSWER_NOTE).slice(1, 60),
+    );
+    expect(sonnet.seen[1].tools?.map((tool) => tool.name)).not.toContain(NEXT_MOVES_TOOL);
+    expect(runRow(runId).status).toBe('done');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    expect(runFromEvents(events).text).toBe('Hi. I can check your visibility or draft a page.');
+    expect(ofType(events, 'next_moves')).toHaveLength(1);
+    expect(movesOf(runId)).toHaveLength(2);
+  });
+
+  it('asks for a missing answer once a run, and never after words were written', async () => {
+    const empty = [
+      { type: 'text-start', id: 't' },
+      { type: 'text-end', id: 't' },
+      { type: 'finish', finishReason: { unified: 'stop', raw: 'end_turn' }, usage: usage() },
+    ];
+    const { sonnet } = useModels(
+      [READY, READY],
+      [empty, empty, answerWithMoves('Two pages lost most of it.', MOVES)],
+    );
+    const silent = await turn(ADMIN, 'hi');
+    // Asked once: the run ends after the second empty reply, with no third step.
+    expect(sonnet.seen).toHaveLength(2);
+    expect(runRow(silent).status).toBe('done');
+    // An answer and its moves in one reply: no step after it.
+    const answered = await turn(ADMIN, 'Why did citations fall?');
+    expect(sonnet.seen).toHaveLength(3);
+    expect(runRow(answered).status).toBe('done');
+    expect(movesOf(answered)).toHaveLength(2);
   });
 
   it('gives an Analyst read moves only, so no ghost unless one continues this run', async () => {
