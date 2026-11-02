@@ -7620,7 +7620,8 @@
         "action_center": "Action Center",
         "agent": "Agent",
         "mcp": "MCP",
-        "openChat": "Open chat"
+        "openChat": "Open chat",
+        "in": "in {place}"
       },
       "rowMenu": {
         "label": "Actions for {title}",

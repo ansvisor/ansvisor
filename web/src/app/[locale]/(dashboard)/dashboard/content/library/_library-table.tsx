@@ -144,7 +144,8 @@ export function LibraryTable({
           <TableHead>{t('columns.type')}</TableHead>
           <TableHead>{t('columns.method')}</TableHead>
           <TableHead>{t('columns.by')}</TableHead>
-          <TableHead>{t('columns.madeIn')}</TableHead>
+          {/* Its own column where it fits; under By below xl, so 1024px keeps its columns. */}
+          <TableHead className="hidden xl:table-cell">{t('columns.madeIn')}</TableHead>
           <TableHead>{t('columns.status')}</TableHead>
           {shopping && <TableHead>{t('columns.shopping')}</TableHead>}
           <TableHead>{t('columns.created')}</TableHead>
@@ -192,8 +193,13 @@ export function LibraryTable({
               </TableCell>
               <TableCell>
                 <DraftAuthorCell draft={draft} />
+                {draft.origin !== 'editor' && (
+                  <span className="mt-0.5 block xl:hidden">
+                    <MadeInCell draft={draft} chatOn={chatOn} compact />
+                  </span>
+                )}
               </TableCell>
-              <TableCell>
+              <TableCell className="hidden xl:table-cell">
                 <MadeInCell draft={draft} chatOn={chatOn} />
               </TableCell>
               <TableCell>
@@ -474,14 +480,25 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
 /**
  * Where the draft was made (00463, W4-10): the Content Editor, Chat, an
  * Action Center task, an agent or an MCP client. One made in a chat the
- * member may open has Open chat, with the new Chat on.
+ * member may open has Open chat, with the new Chat on. `compact`: the line
+ * under By below xl, "in Chat · Open chat".
  */
-function MadeInCell({ draft, chatOn }: { draft: ContentDraftListItem; chatOn: boolean }) {
+function MadeInCell({
+  draft,
+  chatOn,
+  compact = false,
+}: {
+  draft: ContentDraftListItem;
+  chatOn: boolean;
+  compact?: boolean;
+}) {
   const t = useTranslations('contentEditor.library.madeIn');
   return (
-    <span className="flex flex-col whitespace-nowrap text-xs text-muted-foreground">
-      <span data-slot="made-in" data-origin={draft.origin}>
-        {t(draft.origin)}
+    <span
+      className={`flex whitespace-nowrap text-xs text-muted-foreground ${compact ? 'items-center gap-1' : 'flex-col'}`}
+    >
+      <span data-slot={compact ? 'made-in-short' : 'made-in'} data-origin={draft.origin}>
+        {compact ? t('in', { place: t(draft.origin) }) : t(draft.origin)}
       </span>
       {chatOn && draft.origin !== 'editor' && draft.conversation && (
         <Link

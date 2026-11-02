@@ -1672,10 +1672,17 @@ describe('the Library’s Made in column and filter (00463, W4-10)', () => {
     ]);
     await renderPage();
     expect(madeIn()).toEqual(['Chat', 'Action Center', 'Chat']);
+    // Below xl, the same on a line under By: only for a draft made outside the editor.
+    expect(
+      [...container.querySelectorAll('[data-slot="made-in-short"]')].map((el) => el.textContent),
+    ).toEqual(['in Chat', 'in Action Center', 'in Chat']);
+    // In its column, and on that line: the one chat the member may open.
     const links = [...container.querySelectorAll('[data-action="library.openChat"]')];
-    expect(links).toHaveLength(1);
-    expect(links[0].getAttribute('href')).toBe(`/dashboard/chat/${CHAT}`);
-    expect(links[0].textContent).toBe('Open chat');
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(link.getAttribute('href')).toBe(`/dashboard/chat/${CHAT}`);
+      expect(link.textContent).toBe('Open chat');
+    }
     expect(container.querySelector('[aria-label="Made in"]')!.textContent).toContain(
       'Made in: All',
     );
@@ -1694,6 +1701,7 @@ describe('the Library’s Made in column and filter (00463, W4-10)', () => {
     getContentDrafts.mockResolvedValue([row({})]);
     await renderPage();
     expect(madeIn()).toEqual(['Content Editor']);
+    expect(container.querySelector('[data-slot="made-in-short"]')).toBeNull();
     expect(container.querySelector('[aria-label="Made in"]')).toBeNull();
   });
 
