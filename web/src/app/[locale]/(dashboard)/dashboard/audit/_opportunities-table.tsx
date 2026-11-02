@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/table';
 import { pct } from '@/components/audit/audit-report';
 import type { AuditOpportunity, ExcludedPage, OpportunityReason } from '@/lib/actions/audits';
+import type { PageToAudit } from './_audit-confirm-dialog';
 import { formatMonthDay, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { InfoTip } from '../insights/_kpi-cards';
@@ -54,6 +55,32 @@ export function opportunityAuditUrls(rows: AuditOpportunity[]): string[] {
   return [
     ...new Set(rows.flatMap((o) => (o.template ? o.template.toAudit : o.url ? [o.url] : []))),
   ];
+}
+
+/**
+ * The pages an audit of the rows starts, each once, with its last audit, as
+ * the confirm before a bulk audit lists them (customer priorities item 11):
+ * a template's pages with no audit yet, else the page.
+ */
+export function opportunityPagesToAudit(rows: AuditOpportunity[]): PageToAudit[] {
+  const seen = new Set<string>();
+  const once = (page: PageToAudit) => !seen.has(page.url) && !!seen.add(page.url);
+  const pathOf = (url: string) => {
+    try {
+      return new URL(url).pathname;
+    } catch {
+      return url;
+    }
+  };
+  return rows
+    .flatMap((o): PageToAudit[] =>
+      o.template
+        ? o.template.toAudit.map((url) => ({ url, path: pathOf(url), lastAuditAt: null }))
+        : o.url
+          ? [{ url: o.url, path: o.path, lastAuditAt: o.lastAudit?.at ?? null }]
+          : [],
+    )
+    .filter(once);
 }
 
 /** Rows shown at first, and added by Show more. */

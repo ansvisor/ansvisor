@@ -62,8 +62,9 @@ export function ExportMenu({
  * The bulk bar of the Pages (SA-003) and Opportunities (SA-004) tables, shown
  * while pages are selected: how many of the month's audits an audit of them
  * would use, the audit button (Re-audit, Audit selected), the table's own
- * actions, Export and Clear. The audit stays off when the selection is over
- * what's left, so a bulk run never goes past the quota.
+ * actions, Export and Clear. The audit asks first (AuditConfirmDialog):
+ * past what's left, the first that fit go and the rest wait, so a bulk run
+ * never goes past the quota; with none left, it stays off.
  */
 export function AuditBulkBar({
   count,
@@ -110,7 +111,12 @@ export function AuditBulkBar({
           // The user's share is used, the runs' isn't (spec §4.4).
           <EmptyPoolMessage quota={quota} />
         ) : (
-          <span className={cn('text-xs', over ? 'text-destructive' : 'text-muted-foreground')}>
+          <span
+            className={cn(
+              'text-xs',
+              over ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
+            )}
+          >
             {remaining === 0
               ? t('noneLeft')
               : over
@@ -124,7 +130,7 @@ export function AuditBulkBar({
           size="sm"
           className="h-7 gap-1.5 text-xs"
           onClick={onAudit}
-          disabled={starting || over || uses === 0}
+          disabled={starting || uses === 0 || (limited && remaining === 0)}
         >
           {starting ? (
             <Loader2 className="h-3 w-3 animate-spin" />
