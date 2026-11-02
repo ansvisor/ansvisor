@@ -40,3 +40,5 @@ Under each saved key, a line says whether it works: **Working · checked …**, 
 ## When your key stops working
 
 If the key Chat uses stops working, Chat stops on it and the agents that run on it pause. Nothing moves to your plan's monthly AI limit. Once the key works again, after a passing **Test**, a save or an answer from Chat, the paused agents start again by themselves. If you remove the key, they start again on your plan's monthly AI limit.
+
+Every admin is told once, with a notice at the top of their Chat **Inbox** and an e-mail. **Fix it** opens **Settings › AI Providers**. If the key still doesn't work 3 days later, they get one reminder. The notice goes away once the key works again, or is replaced or removed.
