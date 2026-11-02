@@ -5,6 +5,7 @@ import { Sparkles } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Link } from '@/i18n/navigation';
 import type { ChatWhatsNewEntry } from '@/lib/chat/events';
+import { cn } from '@/lib/utils';
 
 /** Marks an entry read when its Try it is opened (CHAT-11 item 18); a failure only shows it again. */
 export function markWhatsNewOpened(slug: string) {
@@ -65,7 +66,7 @@ export function WhatsNewCards({ entries }: { entries: readonly ChatWhatsNewEntry
               data-action="whatsNew.tryIt"
               onClick={() => markWhatsNewOpened(entry.slug)}
               aria-label={t('tryItLabel', { feature: entry.feature })}
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
             >
               {t('tryIt')}
             </Link>
