@@ -20,6 +20,7 @@ const db = vi.hoisted(() => ({
     usage_notice_period?: string | null;
     focus?: string[] | null;
     focus_prompted_at?: string | null;
+    page_open?: string | null;
   } | null,
   prefsError: null as { message: string } | null,
   workAreas: [] as string[] | null,
@@ -176,6 +177,7 @@ describe('chatComposerSetup', () => {
       onOwnKey: false,
       keyFailure: null,
       skills: SKILL_MENU,
+      pageOpen: 'ask',
     });
   });
 
@@ -189,6 +191,7 @@ describe('chatComposerSetup', () => {
       onOwnKey: false,
       keyFailure: null,
       skills: SKILL_MENU,
+      pageOpen: 'ask',
     });
   });
 
@@ -207,7 +210,16 @@ describe('chatComposerSetup', () => {
       onOwnKey: false,
       keyFailure: null,
       skills: SKILL_MENU,
+      pageOpen: 'ask',
     });
+  });
+
+  it('reads where pages open, asking when none is saved (W4-11)', async () => {
+    facts.ctx = ctxOf('admin', true, false);
+    db.prefs = { default_mode: 'auto', page_open: 'editor' };
+    expect((await chatComposerSetup()).pageOpen).toBe('editor');
+    db.prefs = { default_mode: 'auto', page_open: 'here' };
+    expect((await chatComposerSetup()).pageOpen).toBe('ask');
   });
 
   it('keeps the usage period whose 80% line the person saw', async () => {
@@ -226,6 +238,7 @@ describe('chatComposerSetup', () => {
       onOwnKey: false,
       keyFailure: null,
       skills: SKILL_MENU,
+      pageOpen: 'ask',
     });
   });
 

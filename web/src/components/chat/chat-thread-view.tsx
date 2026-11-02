@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { useRouter } from '@/i18n/navigation';
+import { saveChatGeneralSettings } from '@/lib/actions/chat-prefs';
+import type { PageOpen } from '@/lib/chat/page-open';
+import { keepPageChoice, pageChoiceMade, pageHrefOf } from '@/lib/chat/page-open';
 import { ApprovalCard } from '@/components/agentic/approval-card';
 import { DenialCard } from '@/components/agentic/denial-card';
 import {
@@ -45,6 +49,7 @@ import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
 import { WhyCard } from './run/why-card';
 import { NextMoves } from './run/next-moves';
+import { OpenPageCard, type OpenPageChoice } from './run/open-page-card';
 import { RunAnswer } from './run/run-answer';
 import { StaffDebug } from './run/staff-debug';
 import { useChatDebug } from './chat-debug';
@@ -181,6 +186,7 @@ export function ChatThreadView({
   onOwnKey = false,
   keyFailure = null,
   skills,
+  pageOpen = 'ask',
 }: {
   thread: ChatThread | null;
   variant: ComposerVariant;
@@ -208,6 +214,8 @@ export function ChatThreadView({
   keyFailure?: FailingKey | null;
   /** The enabled skills, for the / menu (CHAT-13 item 5). */
   skills?: ChatSkillItem[];
+  /** Where a page Chat writes opens (W4-11, Settings › Chat). */
+  pageOpen?: PageOpen;
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
@@ -242,6 +250,55 @@ export function ChatThreadView({
 
   const last = turns[turns.length - 1];
   const working = !!last?.run && OPEN.includes(last.run.status);
+
+  // Where a page Chat writes opens (CHAT-25 §3, W4-11): the card asks under
+  // the latest answer once, in the person's own chat; "Don't ask again" keeps
+  // the choice, and a saved Content Editor opens it as its run ends here.
+  const router = useRouter();
+  const tPage = useTranslations('chatRun.openPage');
+  const [pagePref, setPagePref] = useState<PageOpen>(pageOpen);
+  const [pageAnswered, setPageAnswered] = useState<ReadonlySet<string>>(() => new Set());
+  const [pageSaving, setPageSaving] = useState(false);
+  const ownChat = !thread || thread.mine;
+  const lastPage = last?.run?.status === 'done' ? pageHrefOf(last.run.deliverables) : null;
+  const askPage =
+    !!lastPage && !!last?.runId && pagePref === 'ask' && ownChat && !pageAnswered.has(last.runId);
+  // Answered in this browser before (a reload): read after mount, as storage is the browser's.
+  const lastRunId = last?.runId ?? null;
+  useEffect(() => {
+    if (!lastRunId || !pageChoiceMade(lastRunId)) return;
+    setPageAnswered((was) => new Set(was).add(lastRunId));
+  }, [lastRunId]);
+  const liveRuns = useRef(new Set<string>());
+  useEffect(() => {
+    const runId = last?.runId;
+    if (!runId || !last.run) return;
+    if (OPEN.includes(last.run.status)) {
+      liveRuns.current.add(runId);
+      return;
+    }
+    if (!liveRuns.current.delete(runId)) return;
+    // Ended here, not opened ended: a saved Content Editor opens the page it wrote.
+    const href = last.run.status === 'done' ? pageHrefOf(last.run.deliverables) : null;
+    if (href && pagePref === 'editor' && ownChat) router.push(href);
+  }, [last, pagePref, ownChat, router]);
+
+  async function choosePage(runId: string, href: string, where: OpenPageChoice, remember: boolean) {
+    if (remember) {
+      setPageSaving(true);
+      const saved = await saveChatGeneralSettings({ pageOpen: where }).catch(() => ({ ok: false }));
+      setPageSaving(false);
+      if (saved.ok) {
+        setPagePref(where);
+        toast(tPage('saved'));
+      } else {
+        toast.error(tPage('saveFailed'));
+      }
+    }
+    keepPageChoice(runId, where);
+    setPageAnswered((was) => new Set(was).add(runId));
+    if (where === 'editor') router.push(href);
+  }
   // A question the run waits on: the composer's message answers it (CHAT-07 §A item 8).
   const asking = last?.run?.question ?? null;
   // The latest answer's next moves, once it finished, in the person's own chat (CHAT-07 §C).
@@ -619,6 +676,14 @@ export function ChatThreadView({
                   onRetry={retryOf(index)}
                   onSendToActionCenter={sendToActionCenterOf(index)}
                 />
+                {turn === last && askPage && lastPage && (
+                  <OpenPageCard
+                    saving={pageSaving}
+                    onChoose={(where, remember) =>
+                      void choosePage(turn.runId!, lastPage, where, remember)
+                    }
+                  />
+                )}
                 {turn === last && (
                   <NextMoves
                     moves={nextMoves}
