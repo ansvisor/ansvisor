@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 import type { TeamRole } from '@/components/providers/role-provider';
 import type { Feature, PlanId } from '@/config/plans';
 import type { McpAuthContext } from '@/lib/mcp-auth';
@@ -111,6 +111,20 @@ export interface ToolFlags {
   costCard: boolean;
   /** A READ an Admin may switch off for the workspace (CHAT-20 §9 ¹). */
   adminMayTurnOff: boolean;
+  /**
+   * An EXECUTE an agent an Admin allowed may take live on its own
+   * (AUTONOMOUS-GO-LIVE §4, step 4b): set by its `goLive`, never by hand.
+   */
+  goLiveOnOwn: boolean;
+}
+
+/** What a step that goes live on its own sends (chat_agent_go_live_events, 00443). */
+export interface GoLiveStep {
+  kind: 'cms_draft' | 'publish' | 'webhook';
+  /** The Library draft that goes out: an id of the run's brand. */
+  draftId: string;
+  /** Where to: a CMS the brand connected, or its webhook, never an address from the input. */
+  target: 'webflow' | 'wordpress' | 'framer' | 'wix' | 'webhook';
 }
 
 /**
@@ -214,6 +228,14 @@ interface ToolFields<S extends z.ZodObject> {
   sessionFree?: true;
   runFor?(ctx: ChatToolContext, input: z.output<S>): Promise<unknown>;
   /**
+   * An EXECUTE an allowed agent may take live on its own (AUTONOMOUS-GO-LIVE
+   * §4): what its step sends, from its input. The engine reserves its slot
+   * and the API sends it as the run's person (PR 4's internal route); `run`
+   * stays the person's click. Its input takes ids and fixed choices only,
+   * so a target comes from the workspace's data, never from text (§6.3 B1).
+   */
+  goLive?(input: z.output<S>): GoLiveStep;
+  /**
    * A batch row (CHAT-20 §11b: add_prompts, add_competitors, pausing
    * prompts): the input field holding its items. A run's cap counts the
    * items, not the calls (§14), and a call with more than `askAbove` of them
@@ -308,6 +330,36 @@ export const FIXTURE_IDS = {
 
 const writeRank = (policy: WritePolicy) => WRITE_POLICIES.indexOf(policy);
 
+/** Text a go-live row's field must refuse: a page's address, a mail address, a site. */
+const FREE_TARGETS = ['https://example.com/page', 'someone@example.com', 'example.com'];
+
+/**
+ * Whether an input field can only name something of the workspace's: a
+ * fixed choice (an enum, a literal, a switch), or an id that refuses an
+ * address, a mail address or a site. A list or an object never.
+ */
+function holdsNoFreeTarget(field: z.ZodType): boolean {
+  let inner: z.ZodType = field;
+  while (
+    inner instanceof z.ZodOptional ||
+    inner instanceof z.ZodDefault ||
+    inner instanceof z.ZodNullable
+  ) {
+    inner = inner.unwrap() as z.ZodType;
+  }
+  if (
+    inner instanceof z.ZodEnum ||
+    inner instanceof z.ZodLiteral ||
+    inner instanceof z.ZodBoolean
+  ) {
+    return true;
+  }
+  return (
+    inner.safeParse(FIXTURE_IDS.item).success &&
+    FREE_TARGETS.every((text) => !inner.safeParse(text).success)
+  );
+}
+
 /**
  * A registry row, with the rules every row keeps checked as it is defined:
  * a READ runs (`on`), an EXECUTE is always a click, and a WRITE's default
@@ -319,6 +371,7 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     costCard: false,
     adminMayTurnOff: false,
     ...def.flags,
+    goLiveOnOwn: def.goLive !== undefined,
   };
   if (def.brandOf) {
     const field = 'input' in def.brandOf ? def.brandOf.input : def.brandOf.idField;
@@ -335,6 +388,19 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
   // A read already reads as the person (the MCP functions); an EXECUTE waits for their click.
   if (def.sessionFree && def.class !== 'write') {
     throw new Error(`${def.name}: only a write runs for its person without a session`);
+  }
+  // Going live on its own: an EXECUTE's, whose input can't name an outside target (§6.3 B1).
+  if (def.goLive) {
+    if (def.class !== 'execute')
+      throw new Error(`${def.name}: only an execute goes live on its own`);
+    const free = Object.entries(def.inputSchema.shape).find(
+      ([, field]) => !holdsNoFreeTarget(field as z.ZodType),
+    );
+    if (free) {
+      throw new Error(
+        `${def.name}: a row that goes live on its own takes no free text (${free[0]})`,
+      );
+    }
   }
   const excludeRoles = [...(def.excludeRoles ?? [])];
   if (excludeRoles.length > 0 && (def.minRole !== 'analyst' || excludeRoles.includes('admin'))) {

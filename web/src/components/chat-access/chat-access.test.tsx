@@ -264,7 +264,7 @@ describe('CapabilitiesView', () => {
       class: cls,
       defaultPolicy: cls === 'read' ? 'on' : 'ask_full_auto',
       maxPolicy: cls === 'read' ? 'on' : 'always',
-      flags: { alwaysCard: false, costCard: false, adminMayTurnOff: false },
+      flags: { alwaysCard: false, costCard: false, adminMayTurnOff: false, goLiveOnOwn: false },
       minRole: 'analyst',
       excludeRoles: [],
       planGate: null,

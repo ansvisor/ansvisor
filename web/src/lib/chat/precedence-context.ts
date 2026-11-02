@@ -1,6 +1,7 @@
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-guard';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Database } from '@/types/supabase';
+import { autoGoLiveEnabled } from './flag';
 import { planFactsFromOrgRow } from './plan-facts';
 import {
   ADMIN_POLICIES,
@@ -12,6 +13,7 @@ import {
   type ChatMode,
   type ChatSettings,
   type ChatSurface,
+  type GoLiveAgent,
   type PrecedenceContext,
   type ToolCall,
 } from './precedence';
@@ -40,12 +42,26 @@ export interface PrecedenceRequest {
   surface: ChatSurface;
   /** An injection attempt was found earlier in the run. */
   injectionDetected?: boolean;
+  /**
+   * An agent run (chat_conversations.agent_run_id) and the mode it runs in,
+   * before an injection asks first: what step 4b reads its agent for.
+   */
+  agent?: { runId: string; mode: ChatMode } | null;
 }
 
 type SettingsRow = Pick<
   Database['public']['Tables']['chat_settings']['Row'],
   'tool_policies' | 'full_auto_for_members' | 'dont_ask_again' | 'manager_execute_off'
->;
+> &
+  Partial<
+    Pick<
+      Database['public']['Tables']['chat_settings']['Row'],
+      'agents_full_auto' | 'auto_go_live_groups'
+    >
+  >;
+
+const executeGroups = (groups: readonly string[]): ExecuteGroup[] =>
+  groups.filter((group): group is ExecuteGroup => EXECUTE_GROUPS.some((known) => known === group));
 
 /** A chat_settings row as the precedence reads it; no row, the defaults. Unknown values are dropped. */
 export function parseChatSettings(row: SettingsRow | null): ChatSettings {
@@ -62,9 +78,89 @@ export function parseChatSettings(row: SettingsRow | null): ChatSettings {
     toolPolicies,
     fullAutoForMembers: row.full_auto_for_members,
     dontAskAgain: row.dont_ask_again,
-    managerExecuteOff: row.manager_execute_off.filter((group): group is ExecuteGroup =>
-      EXECUTE_GROUPS.some((known) => known === group),
-    ),
+    managerExecuteOff: executeGroups(row.manager_execute_off),
+    ...(row.auto_go_live_groups
+      ? { autoGoLiveGroups: executeGroups(row.auto_go_live_groups) }
+      : {}),
+    ...(typeof row.agents_full_auto === 'boolean' ? { agentsFullAuto: row.agents_full_auto } : {}),
+  };
+}
+
+/** A table or column of a migration the database doesn't have yet: the web ahead of it. */
+const beforeMigration = (error: { code?: string } | null) =>
+  !!error && ['42P01', 'PGRST205', '42703', 'PGRST204'].includes(error.code ?? '');
+
+/**
+ * Whether an agent's go-live permission still fits its skills (§8): it keeps
+ * the checksums of the agent's Library skills when it was given. Ansvisor's
+ * own skills carry none, and workspace copies of Library skills aren't built
+ * yet (CHAT-17), so today it fits only when it was given with none.
+ */
+function skillsUnchanged(given: unknown): boolean {
+  return (
+    !!given && typeof given === 'object' && !Array.isArray(given) && Object.keys(given).length === 0
+  );
+}
+
+/**
+ * Step 4b's own facts (AUTONOMOUS-GO-LIVE §5.2), read only while
+ * CHAT_AUTO_GO_LIVE is on for the workspace: the groups its Admins let
+ * agents take live on their own, and for an agent run in one of them, its
+ * agent and its permission, valid only for the version the run uses (an
+ * edit made a new one) and its skills as given. A database before 00443 has
+ * none of it: nothing goes live on its own.
+ */
+async function readGoLive(
+  organizationId: string,
+  agentRun: PrecedenceRequest['agent'],
+): Promise<{ groups: ExecuteGroup[]; agent: GoLiveAgent | null }> {
+  const fail = (error: { message: string }) =>
+    new Error(`Could not read Chat's go-live permission: ${error.message}`);
+  const settings = await supabaseAdmin
+    .from('chat_settings')
+    .select('auto_go_live_groups')
+    .eq('organization_id', organizationId)
+    .maybeSingle();
+  if (settings.error && !beforeMigration(settings.error)) throw fail(settings.error);
+  const groups = executeGroups((!settings.error && settings.data?.auto_go_live_groups) || []);
+  if (groups.length === 0 || !agentRun) return { groups, agent: null };
+
+  const run = await supabaseAdmin
+    .from('chat_agent_runs')
+    .select('agent_id, agent_version')
+    .eq('id', agentRun.runId)
+    .eq('organization_id', organizationId)
+    .maybeSingle();
+  if (run.error) throw fail(run.error);
+  const agentId = run.data?.agent_id;
+  if (!agentId) return { groups, agent: null };
+  const [named, permission] = await Promise.all([
+    supabaseAdmin
+      .from('chat_agents')
+      .select('name')
+      .eq('id', agentId)
+      .eq('organization_id', organizationId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('chat_agent_go_live')
+      .select('version, daily_limit, skill_checksums')
+      .eq('agent_id', agentId)
+      .eq('organization_id', organizationId)
+      .maybeSingle(),
+  ]);
+  if (named.error) throw fail(named.error);
+  if (permission.error && !beforeMigration(permission.error)) throw fail(permission.error);
+  const given = permission.error ? null : permission.data;
+  const valid =
+    !!given && given.version === run.data?.agent_version && skillsUnchanged(given.skill_checksums);
+  return {
+    groups,
+    agent: {
+      id: agentId,
+      name: named.data?.name ?? '',
+      fullAuto: agentRun.mode === 'full_auto',
+      goLive: valid ? { dailyLimit: given.daily_limit } : null,
+    },
   };
 }
 
@@ -118,7 +214,9 @@ export async function readPrecedenceContext(
       .maybeSingle(),
     supabaseAdmin
       .from('chat_settings')
-      .select('tool_policies, full_auto_for_members, dont_ask_again, manager_execute_off')
+      .select(
+        'tool_policies, full_auto_for_members, dont_ask_again, manager_execute_off, agents_full_auto',
+      )
       .eq('organization_id', req.organizationId)
       .maybeSingle(),
     supabaseAdmin
@@ -135,11 +233,15 @@ export async function readPrecedenceContext(
   const role = parseTeamRole(profile.data?.role);
   if (!role || profile.data?.organization_id !== req.organizationId || !org.data) return null;
 
+  const parsed = parseChatSettings(settings.data);
+  const goLiveOn = autoGoLiveEnabled(req.organizationId);
+  const goLive = goLiveOn ? await readGoLive(req.organizationId, req.agent ?? null) : null;
   return {
     organizationId: req.organizationId,
     role,
     plan: planFactsFromOrgRow(org.data),
-    settings: parseChatSettings(settings.data),
+    settings: goLive ? { ...parsed, autoGoLiveGroups: goLive.groups } : parsed,
+    ...(goLive ? { autoGoLiveOn: true, agent: goLive.agent } : {}),
     mode: CHAT_MODES.find((mode) => mode === req.mode) ?? 'ask_first',
     surface: CHAT_SURFACES.find((surface) => surface === req.surface) ?? 'mcp',
     autoChoices: new Set((choices.data ?? []).map((row) => row.tool_key)),

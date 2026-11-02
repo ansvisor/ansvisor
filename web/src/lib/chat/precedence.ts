@@ -1,5 +1,7 @@
 import type { TeamRole } from '@/components/providers/role-provider';
 import type { PlanId } from '@/config/plans';
+import type { GateResult } from '@/lib/content/go-live-gate';
+import type { GoLiveTextHold } from './go-live-checks';
 import { planGateLock, type PlanFacts } from './plan-facts';
 import {
   WRITE_POLICIES,
@@ -27,8 +29,9 @@ import {
  *      another workspace's object, or of none).
  *   1. Hard rules: a read-only workspace refuses what changes, goes live or
  *      spends (402); the demo brand's sample data the same; a tool an Admin
- *      set to Never is refused; an EXECUTE is at most a click and an
- *      always_card WRITE at most a card, in every mode.
+ *      set to Never is refused; an EXECUTE is at most a click, except what
+ *      step 4b lifts for an agent an Admin allowed to go live on its own, and
+ *      an always_card WRITE at most a card, in every mode.
  *   2. Plan gates (§7): the tool's own; Full auto, "Don't ask again" and an
  *      Admin's Always are Growth and up, paid (below it they ask, as Ask
  *      does). MCP (§17): not in the trial, reads only on Starter, the rest
@@ -42,6 +45,13 @@ import {
  *   4. The Admin's policy: the tool's level (Ask, Ask with auto in Full
  *      auto, Always), Full auto for people other than Admins (which Always
  *      doesn't need), and the go-live groups switched off for Managers.
+ *  4b. An Admin's go-live permission (AUTONOMOUS-GO-LIVE §5.2), the one
+ *      exception to hard rule 1, last for an EXECUTE every other step let
+ *      through: it only turns a click into a run, never a denial or a card.
+ *      An agent run in Full auto, allowed for its version, on a workspace
+ *      whose Admins let agents take that group live, on Growth and up
+ *      (goLiveCandidate); then the page's guards in order (goLiveHold), and
+ *      any that fails keeps the click, saying why.
  *   5. The run mode: Ask me first shows a card for every WRITE. Auto shows
  *      one too, except for a tool whose policy is Always, which runs in Auto
  *      and Full auto alike. Full auto also runs "Ask (auto allowed in Full
@@ -121,6 +131,13 @@ export interface ChatSettings {
   dontAskAgain: boolean;
   /** The go-live groups Managers can't click through. */
   managerExecuteOff: readonly ExecuteGroup[];
+  /**
+   * The go-live groups an Admin let allowed agents take live on their own
+   * (chat_settings.auto_go_live_groups, 00443); absent or empty: none.
+   */
+  autoGoLiveGroups?: readonly ExecuteGroup[];
+  /** Agents may run in Full auto (chat_settings.agents_full_auto, 00419); absent: not known, so no. */
+  agentsFullAuto?: boolean;
 }
 
 /** A workspace without a chat_settings row. Frozen: every such workspace shares it. */
@@ -148,7 +165,78 @@ export interface PrecedenceContext {
   brandAccess: 'all' | readonly string[];
   /** An injection attempt was found in this run (§16a rule 3). */
   injectionDetected: boolean;
+  /**
+   * An agent run, while going live on its own can apply to it (the flag on
+   * and an Admin's switch on a group): its agent, whether the run is in
+   * Full auto (the agent's mode, before an injection asks first), and its
+   * permission when it is valid for the run's version. Absent or null: a
+   * person's own chat, or nothing to lift.
+   */
+  agent?: GoLiveAgent | null;
+  /** CHAT_AUTO_GO_LIVE (and _ORGS) for this workspace; absent: off. */
+  autoGoLiveOn?: boolean;
 }
+
+/** An agent run as step 4b reads it. */
+export interface GoLiveAgent {
+  id: string;
+  /** Its name, for the words of a click card held at its daily limit. */
+  name: string;
+  /** The run is in Full auto. */
+  fullAuto: boolean;
+  /** Its go-live permission, valid for the run's version and its skills; null: none. */
+  goLive: { dailyLimit: number } | null;
+}
+
+/**
+ * What step 4b's guards read for a call (readGoLiveFacts), only for a
+ * candidate: in their order, each read only once those before it passed. One
+ * missing where it's needed keeps the click (`unchecked`, the closed side).
+ */
+export interface GoLiveFacts {
+  /** The run started from outside text: Run agent on an action, or a tainted next move. */
+  runUntrusted: boolean;
+  /** The page as it will go out: ready, or why it can't be made (Send to CMS' own check). */
+  page?: 'ready' | 'placeholders' | 'fields';
+  /** Its text and links: null when clean (go-live-checks.ts). */
+  text?: { hold: GoLiveTextHold } | { hold: 'foreign_link'; host: string } | { hold: null };
+  /** The page is live already: an update stays a person's click. */
+  liveItem?: boolean;
+  /** Its quality and brand facts (lib/content/go-live-gate.ts). */
+  gate?: GateResult;
+  /**
+   * The agent's go-lives in the last 24 hours, one per page and destination
+   * (reserve_agent_go_live's count); `counted`: this page's own already is,
+   * so it takes no new slot; `nextAt`: when the oldest frees.
+   */
+  usage?: { used: number; counted: boolean; nextAt: string | null };
+}
+
+/** Why an allowed agent's step still waits for a click: the card says it. */
+export type GoLiveHold =
+  | {
+      code:
+        | 'unchecked'
+        | 'injection'
+        | 'untrusted_scope'
+        | 'placeholders'
+        | 'fields'
+        | 'instructions'
+        | 'hidden_text'
+        | 'copied'
+        | 'live_page'
+        | 'quality_off'
+        | 'suggestions'
+        | 'facts_unchecked';
+    }
+  | { code: 'foreign_link'; host: string }
+  | { code: 'quality_unread'; why: string }
+  | { code: 'facts'; page: string; fact: string }
+  | { code: 'qualityLow'; check: 'eeat' | 'trust' | 'readability'; score: number }
+  | { code: 'quality'; score: number }
+  | { code: 'limit'; agent: string; limit: number; nextAt: string | null }
+  /** The engine's: the send went and failed, its slot freed (§5.4 item 4). */
+  | { code: 'failed'; why: string };
 
 /** What a call is about. */
 export interface ToolCall {
@@ -167,6 +255,8 @@ export interface ToolCall {
    * without a card (§9 row 22: "> 5 prompts: Ask").
    */
   overBatch?: boolean;
+  /** Step 4b's facts: read only for a candidate (goLiveCandidate), so other calls pay nothing. */
+  goLive?: GoLiveFacts;
 }
 
 /** Why a call is refused, with what the denial says (denial.ts). Codes as §11a's where it has one. */
@@ -196,12 +286,15 @@ export type AskReason =
   | 'no_session';
 
 export type ToolDecision =
-  /** It runs now: a READ, or a WRITE set to Always, in Full auto, or under the person's tick. */
-  | { kind: 'run'; via: 'read' | 'always' | 'full_auto' | 'dont_ask_again' }
+  /**
+   * It runs now: a READ, or a WRITE set to Always, in Full auto, or under the
+   * person's tick; an EXECUTE only by step 4b (go_live).
+   */
+  | { kind: 'run'; via: 'read' | 'always' | 'full_auto' | 'dont_ask_again' | 'go_live' }
   /** An approval card; offerDontAskAgain: the card may offer the tick (§6). */
   | { kind: 'ask'; reason: AskReason; offerDontAskAgain: boolean }
-  /** An EXECUTE: only the person's click runs it. */
-  | { kind: 'click' }
+  /** An EXECUTE: only the person's click runs it; held: why an allowed agent still waits. */
+  | { kind: 'click'; held?: GoLiveHold }
   | { kind: 'deny'; denial: ToolDenial };
 
 const writeRank = (policy: WritePolicy) => WRITE_POLICIES.indexOf(policy);
@@ -344,10 +437,90 @@ function decide(
     if (ctx.role === 'manager' && group && ctx.settings.managerExecuteOff.includes(group)) {
       return deny({ code: 'execute_off', group });
     }
-    return { kind: 'click' };
+    // 4b. An Admin's go-live permission: the one exception to hard rule 1, lifting a click only.
+    if (listing || !goLiveCandidate(tool, ctx)) return { kind: 'click' };
+    const held = goLiveHold(ctx, call.goLive);
+    return held ? { kind: 'click', held } : { kind: 'run', via: 'go_live' };
   }
 
   return decideWrite(tool, ctx, call, policy as WritePolicy);
+}
+
+/**
+ * Step 4b's conditions (AUTONOMOUS-GO-LIVE §5.2), all of them, for an
+ * EXECUTE the earlier steps leave a click: the flag is on; it's an agent run
+ * in Chat (never MCP, never a person's own chat); an Admin let agents take
+ * the row's group live; the agent is allowed for the run's version; Full
+ * auto is open (Growth and up, paid) and on for agents; the run is in Full
+ * auto; and the row may go out on its own. The engine reads the guards'
+ * facts (call.goLive) only when this holds.
+ */
+export function goLiveCandidate(tool: ChatTool, ctx: PrecedenceContext): boolean {
+  const agent = ctx.agent;
+  const group = tool.executeGroup;
+  return (
+    tool.class === 'execute' &&
+    tool.flags.goLiveOnOwn &&
+    ctx.autoGoLiveOn === true &&
+    ctx.surface === 'chat' &&
+    !!agent &&
+    group !== null &&
+    (ctx.settings.autoGoLiveGroups ?? []).includes(group) &&
+    agent.goLive !== null &&
+    ctx.plan.fullAuto &&
+    ctx.settings.agentsFullAuto === true &&
+    agent.fullAuto
+  );
+}
+
+const UNCHECKED: GoLiveHold = { code: 'unchecked' };
+
+/**
+ * The first of step 4b's guards that holds a candidate's step for a click,
+ * in their order (§5.2), or null to let it go out on its own: injection
+ * and an untrusted start (the run's), the page's own state, its text and
+ * links (go-live-checks.ts), a live page, its quality and brand facts
+ * (the gate), and last the agent's daily limit, so a page that fails a
+ * check doesn't hold a slot. A fact missing where it's needed: `unchecked`.
+ */
+export function goLiveHold(
+  ctx: PrecedenceContext,
+  facts: GoLiveFacts | undefined,
+): GoLiveHold | null {
+  if (ctx.injectionDetected) return { code: 'injection' };
+  if (!facts) return UNCHECKED;
+  if (facts.runUntrusted) return { code: 'untrusted_scope' };
+  if (!facts.page) return UNCHECKED;
+  if (facts.page !== 'ready') return { code: facts.page };
+  if (!facts.text) return UNCHECKED;
+  if (facts.text.hold === 'foreign_link') return { code: 'foreign_link', host: facts.text.host };
+  if (facts.text.hold) return { code: facts.text.hold };
+  if (facts.liveItem === undefined) return UNCHECKED;
+  if (facts.liveItem) return { code: 'live_page' };
+  if (!facts.gate) return UNCHECKED;
+  if (!facts.gate.pass) return gateHold(facts.gate);
+  if (!facts.usage) return UNCHECKED;
+  const limit = ctx.agent?.goLive?.dailyLimit ?? 0;
+  if (!facts.usage.counted && facts.usage.used >= limit) {
+    return { code: 'limit', agent: ctx.agent?.name ?? '', limit, nextAt: facts.usage.nextAt };
+  }
+  return null;
+}
+
+/** The quality gate's refusal, as the click card says it. */
+function gateHold(gate: Extract<GateResult, { pass: false }>): GoLiveHold {
+  switch (gate.hold) {
+    case 'quality_unread':
+      return { code: 'quality_unread', why: gate.why };
+    case 'facts':
+      return { code: 'facts', page: gate.page, fact: gate.fact };
+    case 'qualityLow':
+      return { code: 'qualityLow', check: gate.check, score: gate.score };
+    case 'quality':
+      return { code: 'quality', score: gate.score };
+    default:
+      return { code: gate.hold };
+  }
 }
 
 /** Steps 1 and 2, 4–7 for a WRITE the plan and the role allow. */

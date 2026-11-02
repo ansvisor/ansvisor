@@ -91,7 +91,9 @@ import {
   allowedTools,
   decideOrDeny,
   decideToolCall,
+  goLiveCandidate,
   listingDenial,
+  type GoLiveHold,
   type PrecedenceContext,
   type ToolCall,
   type ToolDecision,
@@ -144,8 +146,10 @@ import {
 } from './tool-cache';
 import { dataBlock, guardData, isUntrustedRead } from './untrusted';
 import { keepShingles, textsOf } from './go-live-checks';
+import { readGoLiveFacts, type GoLivePage } from './go-live-facts';
+import { reserveGoLive } from './go-live-send';
 import { undoRule } from './undo';
-import { runLoggedWrite } from './write';
+import { runLoggedWrite, type WriteRequest } from './write';
 import { fileChatOutput } from './file-output';
 import { originPageSchema } from './origin';
 import { CHAT_REFERENCE_TYPES, MAX_REFERENCES } from './references';
@@ -1829,6 +1833,8 @@ const contextFor = (rc: RunContext) =>
     mode: rc.progress.injection ? 'ask_first' : rc.run.mode,
     surface: 'chat',
     injectionDetected: rc.progress.injection === true,
+    // An agent run's own mode, for going live on its own (step 4b): an injection holds it there.
+    agent: rc.agentRunId ? { runId: rc.agentRunId, mode: rc.run.mode } : null,
   });
 
 /** The read that opens a web page (CHAT-10 §B): its own step, words and rules. */
@@ -1887,7 +1893,8 @@ async function runSites(rc: RunContext): Promise<PageSites> {
 
 /** Keeps the sites a read listed in its structured fields, when the run may open pages. */
 function keepReadSites(rc: RunContext, toolName: string, value: unknown) {
-  if (!rc.offered.has(PAGE_TOOL)) return;
+  // An agent's page may link to them too when it goes live on its own (AUTONOMOUS-GO-LIVE §6.3).
+  if (!rc.offered.has(PAGE_TOOL) && !rc.agentRunId) return;
   const found = sitesFromRead(toolName, value);
   if (found.hosts.length + found.domains.length + found.urls.length === 0) return;
   rc.progress.pageSites = joinSites(rc.progress.pageSites ?? NO_SITES, found);
@@ -1963,7 +1970,17 @@ async function handleCall(
   }
 
   const { ctx, call: facts } = await callFacts(rc, tool, input);
-  const decision = askWithoutSession(rc, tool, decideForEngine(tool, ctx, facts));
+  let decision = askWithoutSession(rc, tool, decideForEngine(tool, ctx, facts));
+  // Step 4b's guards, read for a candidate only, with the page they were read on (its send).
+  let page: GoLivePage | null = null;
+  if (decision.kind === 'click' && ctx && goLiveCandidate(tool, ctx)) {
+    const read = await goLiveFactsOf(rc, tool, input, ctx);
+    if (read) {
+      facts.goLive = read.facts;
+      page = read.page;
+      decision = decideForEngine(tool, ctx, facts);
+    }
+  }
   // A change its own check refuses before its card (Send to Action Center's duplicate): no card.
   if (decision.kind !== 'deny' && tool.class !== 'read') {
     const refused = await precheckOf(rc, tool, input, ctx);
@@ -1974,6 +1991,7 @@ async function handleCall(
       return result(call, await deny(rc, tool, ctx, facts, decision.denial, input), true);
     case 'run': {
       if (tool.class === 'read') return readCall(rc, tool, call, input, ctx, facts.brandId);
+      if (decision.via === 'go_live') return goLiveCall(rc, tool, call, input, facts, ctx, page);
       // A change that runs without a card: Always, Full auto or the person's tick.
       const approval = approvalFor(decision);
       if (!approval || approval.kind === 'run') return result(call, { code: 'failed' }, true);
@@ -1993,10 +2011,153 @@ async function handleCall(
  * and their Approve runs it in their own request.
  */
 function askWithoutSession(rc: RunContext, tool: ChatTool, decision: ToolDecision): ToolDecision {
-  if (decision.kind !== 'run' || tool.class === 'read' || rc.sessionUserId === rc.actor.userId) {
+  // Going live on its own needs no session: the API sends it as the run's person (§5.4).
+  if (
+    decision.kind !== 'run' ||
+    decision.via === 'go_live' ||
+    tool.class === 'read' ||
+    rc.sessionUserId === rc.actor.userId
+  ) {
     return decision;
   }
   return { kind: 'ask', reason: 'no_session', offerDontAskAgain: false };
+}
+
+/**
+ * Step 4b's facts for a candidate (AUTONOMOUS-GO-LIVE §6): read in the
+ * guards' order, on the page as it would go out. Null for a row that can't
+ * go live on its own, or outside an agent run.
+ */
+async function goLiveFactsOf(
+  rc: RunContext,
+  tool: ChatTool,
+  input: Record<string, unknown>,
+  ctx: PrecedenceContext,
+) {
+  if (!rc.agentRunId || !tool.goLive) return null;
+  return readGoLiveFacts({
+    ctx,
+    step: tool.goLive(input as never),
+    actingUserId: rc.actor.userId,
+    runId: rc.run.id,
+    agentRunId: rc.agentRunId,
+    progress: rc.progress,
+    runSites: () => runSites(rc),
+  });
+}
+
+/**
+ * A step an allowed agent takes live on its own (AUTONOMOUS-GO-LIVE §5.4,
+ * §6.1): its slot of the agent's daily limit reserved first, at once, then
+ * the page its guards read sent through the API as the run's person (which
+ * checks it all again), logged as gone live on its own. A limit reached
+ * since the check, or a slot that can't be reserved, keeps its click card,
+ * saying why; so does a send that fails (writeCall).
+ */
+async function goLiveCall(
+  rc: RunContext,
+  tool: ChatTool,
+  call: PendingCall,
+  input: Record<string, unknown>,
+  facts: ToolCall,
+  ctx: PrecedenceContext | null,
+  page: GoLivePage | null,
+): Promise<CallOutcome> {
+  const agent = ctx?.agent;
+  const step = tool.goLive?.(input as never);
+  const held = (hold: GoLiveHold) =>
+    openCard(rc, tool, call, input, facts, { kind: 'click', held: hold });
+  if (!ctx || !agent?.goLive || !step || !page || !rc.agentRunId || !facts.brandId) {
+    return held({ code: 'unchecked' });
+  }
+  let reservationId: string | null;
+  try {
+    reservationId = await reserveGoLive({
+      organizationId: rc.actor.organizationId,
+      agentId: agent.id,
+      runId: rc.run.id,
+      agentRunId: rc.agentRunId,
+      brandId: facts.brandId,
+      toolKey: tool.labelKey,
+      step,
+      dailyLimit: agent.goLive.dailyLimit,
+    });
+  } catch (err) {
+    console.error('[chat/engine] could not reserve a go-live slot:', err);
+    return held({ code: 'unchecked' });
+  }
+  if (!reservationId) {
+    return held({
+      code: 'limit',
+      agent: agent.name,
+      limit: agent.goLive.dailyLimit,
+      nextAt: facts.goLive?.usage?.nextAt ?? null,
+    });
+  }
+  return writeCall(rc, tool, call, input, facts, ctx, { kind: 'auto', via: 'go_live' }, null, {
+    agentId: agent.id,
+    reservationId,
+    page,
+  });
+}
+
+/** A clock time in the run's time zone, for a held card's "at {time}". */
+function heldTime(at: string, timezone: string | undefined): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: validTimezone(timezone),
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(at));
+}
+
+/** Why an allowed agent's step waits for a click, in the card's words (§7.3 chatEngine.held). */
+function heldWords(rc: RunContext, held: GoLiveHold): string {
+  let reason: string;
+  switch (held.code) {
+    case 'foreign_link':
+      reason = t('held.foreign_link', { host: held.host });
+      break;
+    case 'quality_unread':
+      reason = t(
+        held.why === 'run_cap'
+          ? 'held.quality_unread_cap'
+          : held.why === 'ai_budget'
+            ? 'held.quality_unread_budget'
+            : 'held.quality_unread',
+      );
+      break;
+    case 'facts':
+      reason = t('held.facts', { page: held.page, fact: held.fact });
+      break;
+    case 'qualityLow':
+      reason = t('held.qualityLow', { check: t(`held.checks.${held.check}`), score: held.score });
+      break;
+    case 'quality':
+      reason = t('held.quality', { score: held.score });
+      break;
+    case 'limit':
+      reason = held.nextAt
+        ? t('held.limit', {
+            agent: held.agent,
+            limit: held.limit,
+            time: heldTime(held.nextAt, rc.progress.timezone),
+          })
+        : t('held.limitSoon', { agent: held.agent, limit: held.limit });
+      break;
+    case 'failed':
+      reason = t('held.failed', { why: held.why });
+      break;
+    default:
+      reason = t(`held.${held.code}`);
+  }
+  return t('card.held', { reason });
+}
+
+/** A card's notes, with why an allowed agent's step still waits for its click first. */
+function withHeld(rc: RunContext, notes: ReturnType<typeof cardNotes>, held?: GoLiveHold) {
+  if (!held) return notes;
+  return { ...notes, note: [heldWords(rc, held), notes.note].filter(Boolean).join(' ') };
 }
 
 /** A refusal: the out-of-permission answer to the browser, its record, and its words to the model. */
@@ -2212,7 +2373,12 @@ async function openCard(
   rc.sink.emit('step.started', { step: clientStep(row) });
   const digest = cardDigest(tool, input);
   const offerDontAskAgain = decision.kind === 'ask' && decision.offerDontAskAgain;
-  const notes = cardNotes(tool);
+  // Why an allowed agent's step still waits for the click (step 4b's held reason).
+  const notes = withHeld(
+    rc,
+    cardNotes(tool),
+    decision.kind === 'click' ? decision.held : undefined,
+  );
   // Why a change its mode would make by itself asks: no session is behind the run.
   if (decision.kind === 'ask' && decision.reason === 'no_session') {
     notes.note = [t('card.noSession'), notes.note].filter(Boolean).join(' ');
@@ -2949,6 +3115,8 @@ async function writeCall(
   ctx: PrecedenceContext | null,
   approval: Exclude<ActivityApproval, { kind: 'run' }>,
   cardStepId: string | null,
+  /** A step an allowed agent takes live on its own: its slot and page (goLiveCall). */
+  goLive?: WriteRequest['goLive'],
 ): Promise<CallOutcome> {
   const target = await cardTarget(rc.brand, tool, input, facts.brandId);
   let row;
@@ -2980,36 +3148,28 @@ async function writeCall(
     surface: 'chat',
     mode: rc.run.mode,
     approval,
-    place: { conversationId: rc.run.conversationId, runId: rc.run.id, stepId },
-    approvalKey: stepId,
+    place: {
+      conversationId: rc.run.conversationId,
+      runId: rc.run.id,
+      stepId,
+      agentRunId: rc.agentRunId,
+    },
+    // On its own, a key of its own: the person's click on the card it may turn into runs anew.
+    approvalKey: goLive ? `${stepId}:go_live` : stepId,
+    ...(goLive ? { goLive } : {}),
   });
 
   if (outcome.code === 'approval_mismatch') {
-    row = await updateStep(stepId, { status: 'waiting' });
-    rc.sink.emit('step.updated', { step: clientStep(row) });
-    const digest = cardDigest(tool, input);
-    rc.sink.emit('confirm.required', {
-      n: row.position,
-      action: toolWords(tool, 'name'),
-      target,
-      digest,
-      canDontAskAgain: false,
-      ...cardNotes(tool),
-      ...(await cardDetailsOf(tool, input)),
-    });
-    return {
-      kind: 'pause',
-      card: {
-        stepId,
-        n: row.position,
-        digest,
-        kind: tool.class === 'execute' ? 'click' : 'ask',
-        offerDontAskAgain: false,
-      },
-    };
+    return cardAgain(rc, tool, input, target, stepId);
   }
 
   const failed = outcome.code !== 'ok' ? outcome.code : typedFailure(outcome.output);
+  // Gone wrong on its own: never tried again by itself; the step waits for the click, saying why.
+  if (failed && goLive) {
+    const said = outcome.code === 'ok' ? (outcome.output as { message?: unknown } | null) : null;
+    const why = typeof said?.message === 'string' ? maskIds(said.message) : t('goLive.notSent');
+    return cardAgain(rc, tool, input, target, stepId, { code: 'failed', why });
+  }
   if (failed) {
     const said = outcome.code === 'ok' ? saidFailure(outcome.output) : null;
     row = await updateStep(stepId, {
@@ -3057,6 +3217,43 @@ async function writeCall(
     // What it filed, for a change that names a file next (attach_file_to_task).
     ...(fileId ? { file_id: fileId } : {}),
   });
+}
+
+/**
+ * The step's card again, waiting on the person: an approval used for other
+ * arguments (approval_mismatch), or an agent's step that went wrong on its
+ * own, which waits for the click with why.
+ */
+async function cardAgain(
+  rc: RunContext,
+  tool: ChatTool,
+  input: Record<string, unknown>,
+  target: string,
+  stepId: string,
+  held?: GoLiveHold,
+): Promise<CallOutcome> {
+  const row = await updateStep(stepId, { status: 'waiting' });
+  rc.sink.emit('step.updated', { step: clientStep(row) });
+  const digest = cardDigest(tool, input);
+  rc.sink.emit('confirm.required', {
+    n: row.position,
+    action: toolWords(tool, 'name'),
+    target,
+    digest,
+    canDontAskAgain: false,
+    ...withHeld(rc, cardNotes(tool), held),
+    ...(await cardDetailsOf(tool, input)),
+  });
+  return {
+    kind: 'pause',
+    card: {
+      stepId,
+      n: row.position,
+      digest,
+      kind: tool.class === 'execute' ? 'click' : 'ask',
+      offerDontAskAgain: false,
+    },
+  };
 }
 
 /** What a change made, as a card with its Open (its row's resultCard, CHAT-09 item 19). */

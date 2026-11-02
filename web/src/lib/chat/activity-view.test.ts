@@ -19,6 +19,36 @@ describe('approvalLabel', () => {
     expect(label('change', 'auto', 'full_auto')).toBe('full_auto');
     expect(label('undo', 'run')).toBe('run');
   });
+
+  it('says an agent’s step went live on its own, never that Full auto ran it (AUTONOMOUS-GO-LIVE §6.4)', () => {
+    const row = { kind: 'change' as const, approvalKind: 'auto', autoVia: 'go_live' };
+    expect(approvalLabel(row)).toBe('go_live');
+    const csv = activityCsv(
+      [
+        {
+          id: 'a2',
+          at: '2026-11-02T10:00:00Z',
+          userId: 'u1',
+          person: 'Alex Kim',
+          isYou: false,
+          surface: 'chat',
+          toolKey: 'sendToCms',
+          area: 'content',
+          class: 'execute',
+          mode: 'full_auto',
+          denialCode: null,
+          summaryKey: null,
+          summaryParams: {},
+          status: 'done',
+          canUndo: false,
+          undoneAt: null,
+          ...row,
+        },
+      ],
+      () => '',
+    );
+    expect(csv).toContain('Went live on its own');
+  });
 });
 
 describe('activityCsv', () => {

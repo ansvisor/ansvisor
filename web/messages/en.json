@@ -3826,7 +3826,43 @@
       "dailyLimit": "This is one of the {limit} new actions the brand gets today, so Action Center's own new actions wait until tomorrow."
     },
     "card": {
-      "noSession": "This agent ran on its own, so it asks before changing anything."
+      "noSession": "This agent ran on its own, so it asks before changing anything.",
+      "held": "Held for your click: {reason}"
+    },
+    "held": {
+      "unchecked": "The page couldn’t be checked.",
+      "injection": "This run read text that tried to instruct it.",
+      "untrusted_scope": "This run started from outside text.",
+      "placeholders": "The page still has placeholders.",
+      "fields": "The page’s slug or meta needs fixing.",
+      "instructions": "The page has text aimed at AI assistants.",
+      "hidden_text": "The page has hidden text.",
+      "copied": "The page repeats a long passage from a page it read.",
+      "foreign_link": "The page links to {host}, which isn’t your site or one of its sources.",
+      "live_page": "The page is live already: an update stays your click.",
+      "quality_off": "Content Quality is off, so the page can’t be checked.",
+      "quality_unread": "The page’s Quality couldn’t be read in full.",
+      "quality_unread_cap": "The page’s Quality needs AI checks, and this run reached its limit.",
+      "quality_unread_budget": "The page’s Quality needs AI checks, and the month’s AI limit is reached.",
+      "suggestions": "Suggestions on the page are still waiting for review.",
+      "facts": "The page says {page} where your brand facts say {fact}.",
+      "facts_unchecked": "The page states a price, a trial or a founding year, and there are no approved brand facts to check it against.",
+      "qualityLow": "{check} is {score}, under 60.",
+      "quality": "Quality is {score}, under 75.",
+      "limit": "{agent} went live {limit, plural, one {# time} other {# times}} in the last 24 hours. The next one can go on its own at {time}.",
+      "limitSoon": "{agent} went live {limit, plural, one {# time} other {# times}} in the last 24 hours.",
+      "failed": "It didn’t go out: {why}",
+      "checks": {
+        "eeat": "E-E-A-T",
+        "trust": "Trust",
+        "readability": "Readability"
+      }
+    },
+    "goLive": {
+      "notSent": "The page wasn’t sent.",
+      "unreached": "{cms} couldn’t be reached.",
+      "refused": "{cms} refused it: {why}",
+      "rechecked": "Its permission to go live on its own changed while it ran."
     },
     "allTime": "All time",
     "lastDays": "Last {count} days",
@@ -5260,6 +5296,7 @@
         "always": "Auto · policy Always",
         "full_auto": "Auto · Full auto",
         "dont_ask_again": "Auto · “Don't ask again”",
+        "go_live": "Went live on its own",
         "run": "Ran"
       },
       "denials": {

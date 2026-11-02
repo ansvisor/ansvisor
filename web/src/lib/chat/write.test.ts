@@ -489,6 +489,174 @@ describe('what is logged', () => {
   });
 });
 
+describe('going live on its own (AUTONOMOUS-GO-LIVE §5.4)', () => {
+  const AGENT = '12121212-1212-4212-8212-121212121212';
+  const AGENT_RUN = '34343434-3434-4434-8434-343434343434';
+  const RUN = '56565656-5656-4656-8656-565656565656';
+  const SLOT = '78787878-7878-4878-8878-787878787878';
+  const page = {
+    draftId: DRAFT,
+    title: 'Pricing FAQ',
+    slug: 'pricing-faq',
+    metaTitle: 'Pricing FAQ',
+    metaDescription: '',
+    html: '<p>Prices.</p>',
+    author: null,
+    reviewer: null,
+    featuredImage: null,
+  };
+  const sent = vi.fn();
+  const request = (over: Record<string, unknown> = {}) => ({
+    tool: chatTool('push_cms_draft')!,
+    input: INPUTS.push_cms_draft,
+    ctx: toolCtx,
+    organizationId: ORG,
+    userId: PEOPLE.admin,
+    brandId: BRAND,
+    surface: 'chat' as const,
+    mode: 'full_auto' as const,
+    approval: { kind: 'auto' as const, via: 'go_live' as const },
+    place: { conversationId: null, runId: RUN, stepId: null, agentRunId: AGENT_RUN },
+    approvalKey: nextStep(),
+    goLive: { agentId: AGENT, reservationId: SLOT, page },
+    ...over,
+  });
+  beforeEach(() => {
+    vi.stubEnv('CRON_SECRET', 'secret');
+    sent.mockReset();
+    sent.mockImplementation(async () =>
+      Response.json({ success: true, delivery: { id: 'd1', status: 'sent', updated: false } }),
+    );
+    vi.stubGlobal('fetch', sent);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('sends the checked page through the API as the run’s person, logged as gone live on its own', async () => {
+    const first = request();
+    const outcome = await runLoggedWrite(first);
+    expect(outcome).toMatchObject({
+      code: 'ok',
+      output: { ok: true, target: 'webflow', status: 'sent' },
+    });
+    // Never the person's own send: no session is behind the run.
+    expect(sendDraftToCms).not.toHaveBeenCalled();
+    expect(sent).toHaveBeenCalledTimes(1);
+    const [url, init] = sent.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/api\/internal\/chat\/go-live\/send$/);
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer secret');
+    expect(JSON.parse(init.body as string)).toEqual({
+      orgId: ORG,
+      agentRunId: AGENT_RUN,
+      runId: RUN,
+      actingUserId: PEOPLE.admin,
+      draftId: DRAFT,
+      target: 'webflow',
+      kind: 'cms_draft',
+      reservationId: SLOT,
+      page,
+    });
+    expect(db.tables.chat_activity_log).toEqual([
+      expect.objectContaining({
+        class: 'execute',
+        tool_key: 'sendToCms',
+        approval_kind: 'auto',
+        auto_via: 'go_live',
+        agent_id: AGENT,
+        agent_run_id: AGENT_RUN,
+        undo_json: null,
+        undo_until: null,
+      }),
+    ]);
+    // A repeat of the same approval (a reconnect) sends nothing again.
+    expect(await runLoggedWrite({ ...first })).toMatchObject({ code: 'ok', repeated: true });
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(db.tables.chat_activity_log).toHaveLength(1);
+  });
+
+  it('runs an EXECUTE without a click only for an agent run with its slot, and only a row that may', async () => {
+    const refused = [
+      request({ place: { conversationId: null, runId: RUN, stepId: null } }),
+      request({
+        place: { conversationId: null, runId: null, stepId: null, agentRunId: AGENT_RUN },
+      }),
+      request({ goLive: undefined }),
+      // A row that can't go out on its own, and a WRITE: never.
+      request({ tool: { ...chatTool('push_cms_draft')!, goLive: undefined } }),
+      request({ tool: chatTool('update_draft')!, input: INPUTS.update_draft }),
+    ];
+    for (const req of refused) {
+      await expect(runLoggedWrite(req as never)).rejects.toThrow(/on its own|click only/);
+    }
+    // Full auto is not a click either.
+    await expect(
+      runLoggedWrite(request({ approval: { kind: 'auto', via: 'full_auto' } })),
+    ).rejects.toThrow("An EXECUTE runs on the person's click only");
+    expect(sent).not.toHaveBeenCalled();
+    expect(db.tables.chat_activity_log ?? []).toEqual([]);
+  });
+
+  it('logs nothing for a send the API or the CMS refused, and says why', async () => {
+    sent.mockImplementationOnce(async () =>
+      Response.json({ success: false, code: 'switch_off' }, { status: 403 }),
+    );
+    expect(await runLoggedWrite(request())).toMatchObject({
+      code: 'ok',
+      output: { ok: false, reason: 'forbidden_role' },
+    });
+    sent.mockImplementationOnce(async () =>
+      Response.json({
+        success: true,
+        delivery: { id: 'd2', status: 'failed', error: 'Collection is archived' },
+      }),
+    );
+    expect(await runLoggedWrite(request())).toMatchObject({
+      code: 'ok',
+      output: {
+        ok: false,
+        reason: 'failed',
+        message: 'Webflow refused it: Collection is archived',
+      },
+    });
+    expect(db.tables.chat_activity_log ?? []).toEqual([]);
+  });
+
+  it('frees its slot when the API has no secret to be reached with: nothing went', async () => {
+    vi.stubEnv('CRON_SECRET', '');
+    const finished: unknown[] = [];
+    db.rpcs.finish_agent_go_live = (args) => {
+      finished.push(args);
+      return true;
+    };
+    expect(await runLoggedWrite(request())).toMatchObject({
+      output: { ok: false, reason: 'failed' },
+    });
+    expect(sent).not.toHaveBeenCalled();
+    expect(finished).toEqual([expect.objectContaining({ p_id: SLOT, p_status: 'failed' })]);
+  });
+
+  it('keeps go_live in the log to an agent run’s EXECUTE', async () => {
+    const entry = {
+      organizationId: ORG,
+      userId: PEOPLE.admin,
+      brandId: BRAND,
+      place: { conversationId: null, runId: RUN, stepId: null },
+      surface: 'chat' as const,
+      tool: chatTool('push_cms_draft')!,
+      mode: 'full_auto' as const,
+      approval: { kind: 'auto' as const, via: 'go_live' as const },
+      target: { type: 'content_draft', id: DRAFT },
+      summary: { key: 'sendToCms', params: {} },
+      undo: null,
+    };
+    await expect(logActivity(entry)).rejects.toThrow(/agent run/);
+    await expect(
+      logActivity({ ...entry, agentRunId: AGENT_RUN, tool: chatTool('update_draft')! }),
+    ).rejects.toThrow(/Only an EXECUTE/);
+    expect(await logActivity({ ...entry, agentRunId: AGENT_RUN })).toEqual(expect.any(String));
+    expect(approvalFor({ kind: 'run', via: 'go_live' })).toEqual({ kind: 'auto', via: 'go_live' });
+  });
+});
+
 describe('access.denied rows (§4c, §10a)', () => {
   it("records a refusal in the person's log: its reason, no approval, target or Undo", async () => {
     const tool = chatTool('update_opportunity')!;

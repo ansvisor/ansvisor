@@ -13,12 +13,12 @@ const ORG = '11111111-1111-4111-8111-111111111111';
 const OTHER_ORG = '33333333-3333-4333-8333-333333333333';
 const USER = 'user-1';
 
-type Result = { data: unknown; error: { message: string } | null };
+type Result = { data: unknown; error: { message: string; code?: string } | null };
 type Filters = [string, unknown][];
 const db = vi.hoisted(() => ({
   /** A table's rows, or a function of the read's filters for one that answers per id. */
   tables: {} as Record<string, unknown>,
-  errors: {} as Record<string, string>,
+  errors: {} as Record<string, string | { message: string; code: string }>,
   reads: [] as { table: string; filters: [string, unknown][] }[],
 }));
 
@@ -35,7 +35,11 @@ vi.mock('@/lib/supabase/admin', () => ({
       };
       const result = (): Result => ({
         data: rows() ?? null,
-        error: db.errors[table] ? { message: db.errors[table] } : null,
+        error: db.errors[table]
+          ? typeof db.errors[table] === 'string'
+            ? { message: db.errors[table] }
+            : db.errors[table]
+          : null,
       });
       const builder = {
         select: () => builder,
@@ -191,6 +195,121 @@ describe('readPrecedenceContext', () => {
   it('decides nothing on a read that failed', async () => {
     db.errors.chat_settings = 'timeout';
     await expect(readPrecedenceContext(request)).rejects.toThrow(/timeout/);
+  });
+});
+
+describe("step 4b's facts (AUTONOMOUS-GO-LIVE §5.2)", () => {
+  const AGENT_RUN = 'agent-run-1';
+  const agentRun = { runId: AGENT_RUN, mode: 'full_auto' as const };
+  const settingsRow = {
+    tool_policies: {},
+    full_auto_for_members: true,
+    dont_ask_again: true,
+    manager_execute_off: [],
+    agents_full_auto: true,
+    auto_go_live_groups: ['publishing', 'merging'],
+  };
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AUTO_GO_LIVE', 'true');
+    db.tables.profiles = { role: 'admin', organization_id: ORG };
+    db.tables.chat_settings = settingsRow;
+    db.tables.chat_agent_runs = { agent_id: 'agent-1', agent_version: 3 };
+    db.tables.chat_agents = { name: 'Publisher' };
+    db.tables.chat_agent_go_live = { version: 3, daily_limit: 7, skill_checksums: {} };
+  });
+
+  it('reads the switch, Full auto for agents, and the run’s agent with its permission', async () => {
+    const context = await readPrecedenceContext({ ...request, agent: agentRun });
+    expect(context).toMatchObject({
+      autoGoLiveOn: true,
+      settings: { autoGoLiveGroups: ['publishing'], agentsFullAuto: true },
+      agent: { id: 'agent-1', name: 'Publisher', fullAuto: true, goLive: { dailyLimit: 7 } },
+    });
+    const run = db.reads.find((read) => read.table === 'chat_agent_runs');
+    expect(run?.filters).toEqual([
+      ['id', AGENT_RUN],
+      ['organization_id', ORG],
+    ]);
+    const permission = db.reads.find((read) => read.table === 'chat_agent_go_live');
+    expect(permission?.filters).toEqual([
+      ['agent_id', 'agent-1'],
+      ['organization_id', ORG],
+    ]);
+    // The run's own mode, before an injection asks first: not Full auto, no lift.
+    const auto = await readPrecedenceContext({ ...request, agent: { ...agentRun, mode: 'auto' } });
+    expect(auto?.agent?.fullAuto).toBe(false);
+  });
+
+  it('gives no permission for another version, or for skills changed since it was given', async () => {
+    db.tables.chat_agent_go_live = { version: 2, daily_limit: 7, skill_checksums: {} };
+    expect(
+      (await readPrecedenceContext({ ...request, agent: agentRun }))?.agent?.goLive,
+    ).toBeNull();
+    db.tables.chat_agent_go_live = {
+      version: 3,
+      daily_limit: 7,
+      skill_checksums: { 'seo-brief': 'abc' },
+    };
+    expect(
+      (await readPrecedenceContext({ ...request, agent: agentRun }))?.agent?.goLive,
+    ).toBeNull();
+    db.tables.chat_agent_go_live = null;
+    expect(
+      (await readPrecedenceContext({ ...request, agent: agentRun }))?.agent?.goLive,
+    ).toBeNull();
+  });
+
+  it('reads nothing of it while the flag is off, the switch is off or it’s a person’s own chat', async () => {
+    vi.stubEnv('CHAT_AUTO_GO_LIVE', 'false');
+    const off = await readPrecedenceContext({ ...request, agent: agentRun });
+    expect(off).not.toHaveProperty('autoGoLiveOn');
+    expect(off).not.toHaveProperty('agent');
+    // Only the one settings read: the switch's own is made while the flag is on.
+    expect(db.reads.filter((read) => read.table === 'chat_settings')).toHaveLength(1);
+    vi.stubEnv('CHAT_AUTO_GO_LIVE', 'true');
+    const own = await readPrecedenceContext(request);
+    expect(own).toMatchObject({ autoGoLiveOn: true, agent: null });
+    db.tables.chat_settings = { ...settingsRow, auto_go_live_groups: [] };
+    expect(await readPrecedenceContext({ ...request, agent: agentRun })).toMatchObject({
+      agent: null,
+      settings: { autoGoLiveGroups: [] },
+    });
+    expect(db.reads.filter((read) => read.table.startsWith('chat_agent'))).toEqual([]);
+  });
+
+  it('decides on none of it before 00443, and on nothing at all when a read fails', async () => {
+    db.errors.chat_agent_go_live = {
+      code: '42P01',
+      message: 'relation "chat_agent_go_live" does not exist',
+    };
+    expect(await readPrecedenceContext({ ...request, agent: agentRun })).toMatchObject({
+      agent: { id: 'agent-1', goLive: null },
+    });
+    db.errors.chat_agent_go_live = 'timeout';
+    await expect(readPrecedenceContext({ ...request, agent: agentRun })).rejects.toThrow(
+      /go-live permission: timeout/,
+    );
+    db.errors = {};
+    db.tables.chat_agent_runs = null;
+    expect(await readPrecedenceContext({ ...request, agent: agentRun })).toMatchObject({
+      agent: null,
+    });
+  });
+
+  it('parses the go-live columns, dropping groups it does not know', () => {
+    expect(parseChatSettings(settingsRow)).toMatchObject({
+      autoGoLiveGroups: ['publishing'],
+      agentsFullAuto: true,
+    });
+    const parsed = parseChatSettings({
+      tool_policies: {},
+      full_auto_for_members: true,
+      dont_ask_again: true,
+      manager_execute_off: [],
+    });
+    expect(parsed).not.toHaveProperty('autoGoLiveGroups');
+    expect(parsed).not.toHaveProperty('agentsFullAuto');
   });
 });
 
