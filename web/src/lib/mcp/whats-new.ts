@@ -10,14 +10,14 @@ import { MAX_SHOWN, readWhatsNew } from '@/lib/chat/whats-new/reads';
  */
 export async function getWhatsNewFor(
   auth: McpAuthContext,
-  params: { feature?: string; olderThan?: string; limit?: number },
+  params: { feature?: string; shown?: readonly string[]; limit?: number },
 ) {
   if (!auth.organizationId) return null;
   const read = await readWhatsNew({
     userId: auth.userId,
     organizationId: auth.organizationId,
     feature: params.feature,
-    olderThan: params.olderThan,
+    shown: params.shown,
     limit: Math.min(params.limit ?? MAX_SHOWN, MAX_SHOWN),
   });
   return {
