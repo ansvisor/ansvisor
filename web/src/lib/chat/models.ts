@@ -1,11 +1,15 @@
 /**
  * The models Chat's model menu offers (CHAT-16 §A, W4-01): Auto, and the
  * models that passed Chat's tests on its rules (structured answers, the
- * guardrails, no made-up numbers). At launch that is Claude's three (Wave 4
- * decision 1 B); another model joins only once it passes the persona and
- * permission test set (W1-22). Each has its id in OpenRouter's catalog, which
- * the API server prices and labels by (lib/model-menu.js), and its id in its
- * provider's own API. Shared by the browser and the server: no keys here.
+ * guardrails, no made-up numbers) in a real run (Wave 4 decision 1 B; owner,
+ * 2026-11-02). Each model Chat may run is listed with `tested`: only a tested
+ * one is offered in the menu, asked of the price catalog, or run by the
+ * engine; a chat or an agent that picked one not tested runs Auto. At launch
+ * that is Haiku 5.5 and Sonnet 5.5, which Auto runs already; Opus 5.5 waits
+ * for its run of the persona and permission test set (W1-22). Each has its id
+ * in OpenRouter's catalog, which the API server prices and labels by
+ * (lib/model-menu.js), and its id in its provider's own API. Shared by the
+ * browser and the server: no keys here.
  */
 
 /** What a run's `model` is when the person picked nothing: Haiku reads, Sonnet writes. */
@@ -27,28 +31,41 @@ export interface OfferedModel {
   provider: OfferedModelProvider;
   /** Its name on the composer's model button, a product name ("Sonnet 5.5"). */
   label: string;
+  /**
+   * It passed Chat's test set in a real run: only then is it offered and run.
+   * Set to true in the same pull request that records its passing run.
+   */
+  tested: boolean;
 }
 
-export const OFFERED_MODELS: readonly OfferedModel[] = [
+/** Every model Chat may run once it is tested, tested or not. */
+export const CHAT_MODELS: readonly OfferedModel[] = [
   {
     id: 'anthropic/claude-haiku-5.5',
     api: 'claude-haiku-5-5',
     provider: 'anthropic',
     label: 'Haiku 5.5',
+    tested: true,
   },
   {
     id: 'anthropic/claude-sonnet-5.5',
     api: 'claude-sonnet-5-5',
     provider: 'anthropic',
     label: 'Sonnet 5.5',
+    tested: true,
   },
+  // Not yet: hidden until a real run of the test set passes (owner, 2026-11-02).
   {
     id: 'anthropic/claude-opus-5.5',
     api: 'claude-opus-5-5',
     provider: 'anthropic',
     label: 'Opus 5.5',
+    tested: false,
   },
 ];
+
+/** The models the menu offers, the catalog is asked for and the engine runs: the tested ones. */
+export const OFFERED_MODELS: readonly OfferedModel[] = CHAT_MODELS.filter((model) => model.tested);
 
 /** How hard a run works (CHAT-16 item 12): Normal, High, Max; higher uses the limit faster. */
 export const CHAT_EFFORTS = ['normal', 'high', 'max'] as const;
@@ -65,7 +82,7 @@ export const AUTO_CHOICE: ChatModelChoice = { model: AUTO_MODEL, effort: 'normal
 /**
  * Whether the person may pick a model and effort (Wave 4 decision 2 B):
  * from Starter up. The free trial runs Auto at Normal only: its AI limit is
- * small, and one long Opus run at Max could use it up. Self-hosted: open.
+ * small, and one long run at Max on a costly model could use it up. Self-hosted: open.
  */
 export function modelChoiceOpen(plan: { selfHosted: boolean; isTrial: boolean }): boolean {
   return plan.selfHosted || !plan.isTrial;
@@ -87,7 +104,7 @@ export function runChoiceOf(
   return { model, effort };
 }
 
-/** An offered model by its catalog id; null for Auto or one not offered. */
+/** An offered (tested) model by its catalog id; null for Auto, one not tested, or one not listed. */
 export function offeredModel(id: string | null | undefined): OfferedModel | null {
   return OFFERED_MODELS.find((model) => model.id === id) ?? null;
 }

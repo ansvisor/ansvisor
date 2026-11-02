@@ -1,7 +1,7 @@
 ---
 title: Pick the model and effort Chat uses
 route: /dashboard/chat
-keywords: [model, choose model, pick model, model menu, auto, haiku, sonnet, opus, effort, normal effort, high effort, max effort, multiplier, 2.3x, uses your limit faster, own api key, your key]
+keywords: [model, choose model, pick model, model menu, auto, haiku, sonnet, effort, normal effort, high effort, max effort, multiplier, 2.3x, uses your limit faster, own api key, your key]
 synonyms: [ai model, llm, which model, switch model, thinking effort]
 plan: starter
 updated: 2026-11-02

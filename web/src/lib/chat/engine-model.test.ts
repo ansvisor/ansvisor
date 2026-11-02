@@ -83,13 +83,13 @@ describe('the run models', () => {
   });
 
   it('run a Claude model picked in the menu for both phases, priced by its catalog id (W4-03)', () => {
-    const opus = OFFERED_MODELS.find((m) => m.id === 'anthropic/claude-opus-5.5')!;
-    const models = pickedClaudeModels('k', 'ansvisor', opus);
+    const sonnet = OFFERED_MODELS.find((m) => m.id === 'anthropic/claude-sonnet-5.5')!;
+    const models = pickedClaudeModels('k', 'ansvisor', sonnet);
     expect(models.phases).toBe('auto');
-    expect(models.model).toBe('anthropic/claude-opus-5.5');
+    expect(models.model).toBe('anthropic/claude-sonnet-5.5');
     for (const phase of ['read', 'write'] as const) {
-      expect(modelId(models.pick(phase))).toBe('claude-opus-5-5');
-      expect(models.pick(phase).budgetModel).toBe('anthropic/claude-opus-5.5');
+      expect(modelId(models.pick(phase))).toBe('claude-sonnet-5-5');
+      expect(models.pick(phase).budgetModel).toBe('anthropic/claude-sonnet-5.5');
       expect(models.pick(phase).claude).toBe(true);
     }
     expect(models.pick('read').maxOutputTokens).toBe(8_000);
@@ -122,12 +122,22 @@ describe('the run models', () => {
       config: { provider: 'anthropic', apiKey: 'k', settings: {} },
     };
     key.resolve.mockResolvedValueOnce(anthropic);
+    const sonnet = await resolveChatModels('org', {
+      model: 'anthropic/claude-sonnet-5.5',
+      effort: 'max',
+    });
+    expect(sonnet?.model).toBe('anthropic/claude-sonnet-5.5');
+    expect(modelId(sonnet!.pick('read'))).toBe('claude-sonnet-5-5');
+    expect(sonnet?.pick('write').providerOptions).toMatchObject({ anthropic: { effort: 'max' } });
+
+    // Not tested yet (Opus 5.5): Auto, the effort kept.
+    key.resolve.mockResolvedValueOnce(anthropic);
     const opus = await resolveChatModels('org', {
       model: 'anthropic/claude-opus-5.5',
       effort: 'max',
     });
-    expect(opus?.model).toBe('anthropic/claude-opus-5.5');
-    expect(modelId(opus!.pick('read'))).toBe('claude-opus-5-5');
+    expect(opus?.model).toBe('auto');
+    expect(modelId(opus!.pick('write'))).toBe('claude-sonnet-5-5');
     expect(opus?.pick('write').providerOptions).toMatchObject({ anthropic: { effort: 'max' } });
 
     key.resolve.mockResolvedValueOnce(anthropic);
@@ -143,7 +153,7 @@ describe('the run models', () => {
       config: { provider: 'openai', apiKey: 'k', settings: {} },
     });
     const own = await resolveChatModels('org', {
-      model: 'anthropic/claude-opus-5.5',
+      model: 'anthropic/claude-sonnet-5.5',
       effort: 'high',
     });
     expect(own?.phases).toBe('single');
@@ -156,6 +166,7 @@ describe('the run models', () => {
       api: 'x-ai/grok-4.7',
       provider: 'openrouter' as const,
       label: 'Grok 4.7',
+      tested: true,
     };
     const models = openRouterModels('or-key', picked, 'high');
     expect(models).toMatchObject({
