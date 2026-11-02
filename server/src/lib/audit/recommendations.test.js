@@ -140,16 +140,48 @@ describe('generateRecommendations', () => {
     expect(prompt).toContain('- Domains: ansvisor.com');
   });
 
-  it('tells the model which side of 50–70 a page reads, to rewrite it that way', async () => {
+  it("gives the model the brand's rules on any page it audits, and none without (00450)", async () => {
     modelReturns([]);
     await generateRecommendations(ctx, {
-      results: [{ key: 'readability', status: 'fail', evidence: { fleschReadingEase: 86 } }],
+      results,
+      brand: null,
+      rules: ['No topics comparing us with a named competitor.'],
+    });
+    const { system, prompt } = generateObject.mock.calls[0][0];
+    expect(system).toContain('When BRAND RULES are given, every recommendation');
+    expect(prompt).toContain(
+      "BRAND RULES (the brand's own; follow every one):\n- No topics comparing us with a named competitor.",
+    );
+    modelReturns([]);
+    await generateRecommendations(ctx, { results, brand });
+    expect(generateObject.mock.calls[1][0].prompt).not.toContain('BRAND RULES');
+  });
+
+  it('tells the model the page’s reading score and its aim, to rewrite it that way', async () => {
+    modelReturns([]);
+    await generateRecommendations(ctx, {
+      results: [
+        {
+          key: 'readability',
+          status: 'warn',
+          evidence: { language: 'en', formula: 'flesch', readingScore: 86 },
+        },
+        {
+          key: 'readability',
+          status: 'warn',
+          evidence: { language: 'tr', formula: 'atesman', readingScore: 42 },
+        },
+      ],
       brand,
     });
     const { system, prompt } = generateObject.mock.calls[0][0];
-    expect(prompt).toContain('- readability [fail, impact: standard]');
-    expect(prompt).toContain('| finding: Flesch Reading Ease 86');
-    expect(system).toContain('fuller sentences with the detail readers expect when it is over 70');
+    expect(prompt).toContain('- readability [warn, impact: standard]');
+    expect(prompt).toContain('| finding: Flesch Reading Ease 86 (language en; aim for 50–70)');
+    expect(prompt).toContain('| finding: Ateşman 42 (language tr; aim for 50 or more)');
+    expect(system).toContain(
+      'fuller sentences with the detail readers expect when a Flesch score is over 70',
+    );
+    expect(system).toContain("in the page's language");
   });
 
   it('sends no brand data for another site, and the brand name there is unknown', async () => {

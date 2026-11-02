@@ -100,7 +100,8 @@ afterEach(() => vi.unstubAllEnvs());
 const KINDS = { 'coffee-blog.example': 'weak', 'roaster.example': 'primary' };
 const asked = () => generateObject.mock.calls.map(([call]) => call.prompt);
 
-const read = (sites) => readSourceClasses({ orgId: 'o1', draftId: 'd1', sites });
+const read = (sites, reserve = null) =>
+  readSourceClasses({ orgId: 'o1', draftId: 'd1', sites, reserve });
 
 describe('siteOf and linkedSites', () => {
   it('names a link’s site as the citations do, each once', () => {
@@ -184,6 +185,18 @@ describe('readSourceClasses', () => {
       required: ['kind'],
       additionalProperties: false,
     });
+  });
+
+  it('holds each call on the meter it is given, for an agent run (AUTONOMOUS-GO-LIVE §6.2)', async () => {
+    const meter = { charge: vi.fn(), release: vi.fn(), keep: vi.fn() };
+    const reserve = vi.fn(async () => meter);
+    await read(['coffee-blog.example', 'roaster.example'], reserve);
+    expect(reserve).toHaveBeenCalledTimes(2);
+    expect(reserve).toHaveBeenCalledWith({
+      modelId: expect.any(String),
+      holdUsd: SOURCE_CLASS_HOLD_USD,
+    });
+    expect(reserves).toEqual([]);
   });
 
   it('reads each site not kept in its own call, keeps them, and holds the budget as quality for each', async () => {

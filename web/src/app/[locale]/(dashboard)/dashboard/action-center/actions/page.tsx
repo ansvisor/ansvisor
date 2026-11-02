@@ -27,6 +27,7 @@ import {
   deleteAction,
   getActions,
   getActionsAffected,
+  keepActionRelevant,
   updateActionStatus,
   type ActionItem,
 } from '@/lib/actions/action-center';
@@ -59,6 +60,7 @@ import {
   PRIORITY_LEVELS,
   comparePriority,
   highestPriorityLevel,
+  isStale,
   topActionIds,
   type PriorityLevel,
 } from '@/lib/action-center/priority';
@@ -98,6 +100,10 @@ import { exportFileName } from '@/lib/white-label/export-name';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const isOpen = (action: ActionItem) => OPEN_ACTION_STATUSES.includes(action.status);
+
+/** The Status filter: a status, or Stale (New with no one on it for a month, 00432). */
+type StatusChoice = ActionStatus | 'all' | 'stale';
+const STATUS_CHOICES: StatusChoice[] = ['all', ...ACTION_STATUSES, 'stale'];
 
 /**
  * What each summary card counts, one predicate per card.
@@ -217,7 +223,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
   // "From Products" (ECOM-013): only what Product Visibility sent, beside the category.
   const [fromProducts, setFromProducts] = useState(false);
   const [priority, setPriority] = useState<PriorityLevel | 'all'>('all');
-  const [status, setStatus] = useState<ActionStatus | 'all'>('all');
+  const [status, setStatus] = useState<StatusChoice>('all');
   const [assignee, setAssignee] = useState<string>('all');
   const [sort, setSort] = useState<ActionSort>('priority');
   const [search, setSearch] = useState('');
@@ -255,7 +261,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
     setPriority(
       readUrlChoice<PriorityLevel | 'all'>('priority', ['all', ...PRIORITY_LEVELS], 'all'),
     );
-    setStatus(readUrlChoice<ActionStatus | 'all'>('status', ['all', ...ACTION_STATUSES], 'all'));
+    setStatus(readUrlChoice<StatusChoice>('status', STATUS_CHOICES, 'all'));
     setAssignee(readUrlParam('assignee') || 'all');
     setSort(readUrlChoice<ActionSort>('sort', ACTION_SORTS, 'priority'));
     setSearch(readUrlParam('q'));
@@ -452,6 +458,8 @@ function ActionsContent({ brand }: { brand: Brand }) {
       () => updateActionStatus(brand.id, action.id, next, reason),
       t('rowMenu.statusChanged', { status: t(`status.${next}`) }),
     );
+  const keepAction = (action: ActionItem) =>
+    void runRowChange(action, () => keepActionRelevant(brand.id, action.id), t('stale.kept'));
   const removeAction = (action: ActionItem) => {
     if (selectedId === action.id) selectAction(null);
     void runRowChange(action, () => deleteAction(action.id), t('rowMenu.deleted'));
@@ -475,7 +483,8 @@ function ActionsContent({ brand }: { brand: Brand }) {
         return false;
       if (fromProducts && !FROM_PRODUCTS_KINDS.includes(action.kind)) return false;
       if (priority !== 'all' && action.priorityLevel !== priority) return false;
-      if (status !== 'all' && action.status !== status) return false;
+      if (status === 'stale' ? !isStale(action) : status !== 'all' && action.status !== status)
+        return false;
       if (assignee !== 'all') {
         if (assignee === 'unassigned' ? action.assignee !== null : action.assignee?.id !== assignee)
           return false;
@@ -951,8 +960,11 @@ function ActionsContent({ brand }: { brand: Brand }) {
           <FilterSelect
             label={t('filters.status')}
             value={status}
-            onChange={(v) => setStatus(v as ActionStatus | 'all')}
-            options={ACTION_STATUSES.map((v) => ({ value: v, label: t(`status.${v}`) }))}
+            onChange={(v) => setStatus(v as StatusChoice)}
+            options={[...ACTION_STATUSES, 'stale' as const].map((v) => ({
+              value: v,
+              label: t(`status.${v}`),
+            }))}
             allLabel={t('filters.all')}
           />
           <FilterSelect
@@ -1015,6 +1027,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           actions={visible}
           onSelect={(action) => selectAction(action.id)}
           onStatusChange={changeStatus}
+          onKeep={keepAction}
           onDelete={removeAction}
           canDelete={canManage}
           busyIds={busyIds}

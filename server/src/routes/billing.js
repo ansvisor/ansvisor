@@ -6,7 +6,8 @@
  *                                     e-mailed to CANCEL_FEEDBACK_EMAILS, with
  *                                     replies going to the customer
  * GET  /api/billing/ai-usage        — this period's AI usage (getAiUsage), for
- *                                     the Billing page's meter
+ *                                     the Billing page's meter, with what
+ *                                     Write this typically takes
  * GET  /api/billing/ai-usage/draft/:draftId
  *                                   — a Content Editor page's share of it
  *                                     (getDraftAiUsage), for the editor meter
@@ -16,6 +17,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
+import { aiEstimateCosts } from '../lib/ai-estimates.js';
 import { deliverEmail } from '../lib/email.js';
 import { PlanLimitError, getAiUsage, getDraftAiUsage, getOrgIdForUser } from '../lib/plan-guard.js';
 import {
@@ -45,7 +47,9 @@ router.get('/ai-usage', async (req, res) => {
         features: [],
       });
     }
-    return res.json(await getAiUsage(orgId));
+    // With what Write this and a draft's AI checks typically take, for the
+    // pages that say so (customer priorities item 9).
+    return res.json(await getAiUsage(orgId, { estimates: aiEstimateCosts() }));
   } catch (error) {
     // No active plan (a new workspace, past due, canceled): no allowance to meter.
     if (error instanceof PlanLimitError) {
