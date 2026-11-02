@@ -3292,6 +3292,8 @@ const SAID_FAILURES: Record<string, string> = {
   live_item: 'live_item',
   // An Admin turned publishing off for Managers since the card was decided (push_cms_draft).
   execute_off: 'execute_off',
+  // The CMS didn't put the page live: it stays a draft there, with the CMS's words (publish_cms).
+  publish_refused: 'failed',
   // A run with no session, writing through the API server as its person (lib/chat/actor/api.ts):
   // Chat off for the workspace, or the server took no one to act as.
   chat_off: 'chat_off',

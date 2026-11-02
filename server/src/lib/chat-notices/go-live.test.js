@@ -143,6 +143,7 @@ describe('tellWentLive', () => {
         kind: 'cms_draft',
         draftId: 'draft-1',
         chatId: 'chat-1',
+        url: null,
       },
     });
     // Inbox only for notify-1; the owner gets the e-mail.
@@ -222,6 +223,31 @@ describe('tellWentLive', () => {
         chatId: null,
       }).html,
     ).not.toContain('/dashboard/chat/');
+  });
+});
+
+describe('tellWentLive for a page published live (PR 9)', () => {
+  it('says where it went live, links the live page, and writes agent_published to the action', async () => {
+    Object.assign(db.tables.chat_agent_go_live_events[0], {
+      kind: 'publish',
+      published_url: 'https://www.acme.example/blog/pricing-faq',
+    });
+    db.tables.content_drafts[0].action_id = 'action-1';
+    await tellWentLive({ eventId: EVENT });
+    expect(db.tables.chat_notices[0].payload).toMatchObject({
+      kind: 'publish',
+      url: 'https://www.acme.example/blog/pricing-faq',
+    });
+    const mail = deliverEmail.mock.calls[0][0];
+    expect(mail.subject).toBe('Publisher published “Pricing FAQ” on acme.example');
+    expect(mail.html).toContain('href="https://www.acme.example/blog/pricing-faq"');
+    expect(mail.html).toContain('Open the live page');
+    expect(db.tables.action_events).toEqual([
+      expect.objectContaining({
+        event: 'agent_published',
+        data: expect.objectContaining({ to: 'acme.example', title: 'Pricing FAQ' }),
+      }),
+    ]);
   });
 });
 

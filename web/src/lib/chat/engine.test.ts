@@ -3284,6 +3284,7 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     // W2-07's content rows: Admins and Managers only.
     'update_draft',
     'push_cms_draft',
+    'publish_cms',
     'build_report',
     'run_site_audit',
   ];

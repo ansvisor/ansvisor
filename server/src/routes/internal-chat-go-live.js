@@ -31,7 +31,9 @@
  *     role, publishing_off, brand, demo_brand, reservation); nothing sent.
  *   → 404 { code: 'not_found' }: the run or the draft isn't there.
  *   → 409, 422, 429, 502 { code }: the send's own refusal (sendContentPages).
- *   v1 takes `kind: 'cms_draft'` only; publishing live comes with PR 9.
+ *   `kind: 'publish'` (PR 9) puts a new page live in Webflow, WordPress or
+ *   Wix (lib/cms-publish.js): live already → 409 live_item, Framer → 409
+ *   framer_site_publish, a publish the CMS refused → 502 publish_refused.
  *
  * POST /api/internal/chat/go-live/quality-reads
  *   { orgId, agentRunId, runId, actingUserId, draftId, sites }
@@ -60,6 +62,7 @@ import { isCloud } from '../config/plans.js';
 import { brandAccessOf } from '../lib/access.js';
 import { chatAgenticEnabled } from '../lib/chat-flag.js';
 import { DeliveryError, deliveryPage, sendContentPages } from '../lib/content-delivery.js';
+import { publishContentPage } from '../lib/cms-publish.js';
 import { isDemoBrand } from '../middleware/demo-brand.js';
 import { ChatBudgetError, agentRunReserve } from '../lib/chat-budget.js';
 import { readBrandFacts } from '../lib/brand-facts.js';
@@ -99,7 +102,7 @@ const sendSchema = z.strictObject({
   actingUserId: z.guid(),
   draftId: z.guid(),
   target: z.enum(['webflow', 'wordpress', 'framer', 'wix']),
-  kind: z.enum(['cms_draft']),
+  kind: z.enum(['cms_draft', 'publish']),
   reservationId: z.guid(),
   page: deliveryPage,
 });
@@ -224,12 +227,16 @@ function reservationFits(step, body, agentId) {
 }
 
 /** How the step ended; a failed one frees its slot. Only a reserved step changes. */
-async function finishStep(id, status, { deliveryId = null, externalId = null, error = null }) {
+async function finishStep(
+  id,
+  status,
+  { deliveryId = null, externalId = null, publishedUrl = null, error = null },
+) {
   const { error: rpcError } = await supabaseAdmin.rpc('finish_agent_go_live', {
     p_id: id,
     p_status: status,
     p_delivery_id: deliveryId,
-    p_published_url: null,
+    p_published_url: publishedUrl,
     p_external_id: externalId,
     p_error: error,
   });
@@ -263,19 +270,23 @@ router.post('/send', async (req, res) => {
   }
 
   try {
-    const sent = await sendContentPages({
+    const step = {
       orgId: body.orgId,
       brandId,
       userId: body.actingUserId,
-      pages: [body.page],
       target: body.target,
       agentRunId: body.agentRunId,
-    });
-    const delivery = sent.deliveries[0] ?? null;
+    };
+    // A CMS draft is a send; a publish writes the checked page into it, then puts it live.
+    const delivery =
+      body.kind === 'publish'
+        ? (await publishContentPage({ ...step, page: body.page })).delivery
+        : ((await sendContentPages({ ...step, pages: [body.page] })).deliveries[0] ?? null);
     const done = delivery && delivery.status !== 'failed';
     await finishStep(body.reservationId, done ? 'done' : 'failed', {
       deliveryId: delivery?.id ?? null,
       externalId: delivery?.external_id ?? null,
+      publishedUrl: delivery?.published_url ?? null,
       error: done ? null : (delivery?.error ?? 'Not sent'),
     }).catch((err) => req.log.error({ err }, 'internal go-live finish error'));
     res.json({ success: true, delivery });

@@ -105,11 +105,17 @@ These show Chat's work, not the task's Action Center status. Once the run ends, 
 After the tasks, Chat helps with your open **Getting started** steps. It never marks a step done or skips one.
 ## Drafts, reports and audits
 
-Admins and Managers can also ask Chat to change a draft in the Library, send a draft to your connected CMS, make a report, or start Site Audit on pages. Analysts can ask Chat to save new drafts only.
+Admins and Managers can also ask Chat to change a draft in the Library, send a draft to your connected CMS, publish a new page on your site, make a report, or start Site Audit on pages. Analysts can ask Chat to save new drafts only.
 
 A draft Chat changes keeps the page before in **History**; **Undo** puts it back for 30 days. A report Chat makes can be undone for 30 days too.
 
-A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft: publishing stays yours, in the CMS. A live page, or a send to your webhook, goes from the Content Editor. Sending always waits for your click, even in **Full auto**, and has no Undo. If an Admin turned publishing off for Managers, Managers can't send from Chat. Starting an audit always asks first and says how many of the month's audits it uses. Audits have no Undo.
+Starting an audit always asks first and says how many of the month's audits it uses. Audits have no Undo.
+
+## Send or publish a page from Chat
+
+A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft. Chat can also publish a new page live through Webflow, WordPress or Wix; Framer publishes the whole site, so you publish there. A live page, or a send to your webhook, goes from the Content Editor.
+
+Sending and publishing wait for your click, even in **Full auto**, unless an Admin let an agent go live on its own, and have no Undo. If an Admin turned publishing off for Managers, Managers can't send or publish from Chat.
 
 ## Open a web page
 

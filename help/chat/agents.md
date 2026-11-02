@@ -124,15 +124,15 @@ Changing what the agent does turns this off until an Admin turns it on again.
 
 ## Let an agent publish on its own
 
-An Admin can let chosen agents send pages to your CMS as drafts without a click. Two switches must be on: **Agents that publish on their own** in **Settings › Chat**, and **Publish and send on its own** on the agent's **Mode & approvals** step, with the agent in **Full auto**. Managers see the box read-only, with **Ask your Admin**.
+An Admin can let chosen agents publish new pages on Webflow, WordPress and Wix, and send drafts to your CMS, without a click. Two switches must be on: **Agents that publish on their own** in **Settings › Chat**, and **Publish and send on its own** on the agent's **Mode & approvals** step, with the agent in **Full auto**. Managers see it read-only.
 
-**At most a day** sets how many pages it may send on its own in 24 hours, from 1 to 20. A page still waits for your click, and its card says why, when it fails Quality or your approved brand facts, the run read text that tried to instruct it, the page has hidden text or outside links, the page is live already, or the agent reached its limit.
+**At most a day** sets how many pages it may send or publish on its own in 24 hours, from 1 to 20. A page still waits for your click, and its card says why, when it fails Quality or your approved brand facts, the run read text that tried to instruct it, the page has hidden text or outside links, the page is live already, or the agent reached its limit.
 
 Changing what the agent does turns this off until an Admin turns it on again.
 
 ## When an agent sends a page on its own
 
-Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and the CMS it went to, with **Open page** and **Open run**. The notice leaves Needs you once you open it. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.
+Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and where it went, with **Open page** (the live page, once published) and **Open run**. The notice leaves Needs you once you open it. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.
 
 When an edit turns it off, the Admin who allowed it and the agent's owner get a notice with **Open agent**, unless they made the edit themselves.
 

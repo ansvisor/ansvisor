@@ -1,7 +1,7 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { API_BASE_URL } from '@/config/api';
-import type { SendDraftToCmsResult } from '@/lib/actions/cms-send';
+import type { PublishDraftToCmsResult, SendDraftToCmsResult } from '@/lib/actions/cms-send';
 import type { CmsDelivery } from '@/lib/content/cms-send-client';
 import { CMS_NAMES, type ChatCmsTarget } from '@/lib/content/cms-names';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -79,13 +79,16 @@ const NOT_CONNECTED = /^(no_|webhook_not_subscribed$)|_not_configured$|_not_read
 /**
  * Sends the page through the API's internal route (CRON_SECRET), answered as
  * the person's own send (sendDraftToCms) is, so the run reads it the same.
- * Never throws. Only `cms_draft` in v1 (§16 PR 5).
+ * Never throws. A CMS draft (PR 5), or a new page published live (PR 9);
+ * a webhook send comes with PR 11.
  */
-export async function sendOnItsOwn(send: GoLiveSend): Promise<SendDraftToCmsResult> {
+export async function sendOnItsOwn(
+  send: GoLiveSend,
+): Promise<SendDraftToCmsResult | PublishDraftToCmsResult> {
   const target = send.step.target as ChatCmsTarget;
   const cms = CMS_NAMES[target] ?? send.step.target;
   const secret = process.env.CRON_SECRET;
-  if (!secret || send.step.kind !== 'cms_draft' || send.step.target === 'webhook') {
+  if (!secret || send.step.kind === 'webhook' || send.step.target === 'webhook') {
     await releaseGoLive(send.reservationId, 'not sent: no internal route for it');
     return { ok: false, reason: 'failed', message: t('notSent') };
   }
@@ -122,10 +125,14 @@ export async function sendOnItsOwn(send: GoLiveSend): Promise<SendDraftToCmsResu
     const why = body.message || t('notSent');
     // The API's own check again (§5.4): the permission, the plan, the role or the slot changed.
     if (res.status === 403) return { ok: false, reason: 'forbidden_role', message: t('rechecked') };
+    // The CMS refused the publish itself (PR 9), not its key: said before the refusals below.
+    if (code === 'publish_refused') return { ok: false, reason: 'publish_refused', message: why };
     if (NOT_CONNECTED.test(code)) {
       return { ok: false, reason: 'not_connected', message: t('refused', { cms, why }) };
     }
     if (code === 'daily_limit') return { ok: false, reason: 'quota_exceeded', message: why };
+    // A page live already stays the editor's; the CMS didn't publish it (it stays a draft there).
+    if (code === 'live_item') return { ok: false, reason: 'live_item', message: why };
     if (code === 'in_progress') return { ok: false, reason: 'conflict', message: why };
     if (res.status === 404) return { ok: false, reason: 'not_found', message: why };
     if (res.status === 400 || res.status === 422)
@@ -136,6 +143,13 @@ export async function sendOnItsOwn(send: GoLiveSend): Promise<SendDraftToCmsResu
   if (!delivery || delivery.status === 'failed') {
     const why = delivery?.error || t('notSent');
     return { ok: false, reason: 'failed', message: t('refused', { cms, why }) };
+  }
+  if (send.step.kind === 'publish') {
+    return {
+      ok: true,
+      target: target as Exclude<ChatCmsTarget, 'framer'>,
+      url: delivery.published_url ?? null,
+    };
   }
   return {
     ok: true,

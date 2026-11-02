@@ -114,22 +114,51 @@ function frame(title, lines, buttons, footer) {
 </div>`;
 }
 
+/** The site a live page is on, for the words: its host, without www. */
+export function siteOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
 /**
- * The e-mail for a page an agent sent on its own (§6.4's words).
- * @param {{ agent: string, title: string, target: string, brand: string, draftId: string, chatId: string|null }} input
+ * The e-mail for a page an agent sent or published on its own (§6.4's words).
+ * @param {{ agent: string, title: string, target: string, brand: string, draftId: string,
+ *   chatId: string|null, kind?: string, url?: string|null }} input
  */
-export function renderWentLiveEmail({ agent, title, target, brand, draftId, chatId }) {
+export function renderWentLiveEmail({
+  agent,
+  title,
+  target,
+  brand,
+  draftId,
+  chatId,
+  kind = 'cms_draft',
+  url = null,
+}) {
   const cms = CMS_NAMES[target] ?? target;
   const origin = appOrigin();
-  const subject = `${agent} sent “${title}” to ${cms} as a draft`;
+  const site = kind === 'publish' && url ? siteOf(url) : null;
+  const subject = site
+    ? `${agent} published “${title}” on ${site}`
+    : `${agent} sent “${title}” to ${cms} as a draft`;
   const html = frame(
     escapeHtml(subject),
+    site
+      ? [
+          `${escapeHtml(agent)} published the ${escapeHtml(brand)} page “${escapeHtml(title)}” on ${escapeHtml(site)} through ${escapeHtml(cms)}, without a click. An Admin allowed this agent to publish and send on its own.`,
+          'It passed Quality and your brand facts first. It is live now: check it, and take it down in your CMS if it shouldn’t be.',
+        ]
+      : [
+          `${escapeHtml(agent)} sent the ${escapeHtml(brand)} page “${escapeHtml(title)}” to ${escapeHtml(cms)} as a draft, without a click. An Admin allowed this agent to publish and send on its own.`,
+          `It passed Quality and your brand facts first. Nothing is live yet: the page waits in ${escapeHtml(cms)} as a draft.`,
+        ],
     [
-      `${escapeHtml(agent)} sent the ${escapeHtml(brand)} page “${escapeHtml(title)}” to ${escapeHtml(cms)} as a draft, without a click. An Admin allowed this agent to publish and send on its own.`,
-      `It passed Quality and your brand facts first. Nothing is live yet: the page waits in ${escapeHtml(cms)} as a draft.`,
-    ],
-    [
-      `<a href="${escapeHtml(`${origin}/dashboard/content/editor/${draftId}`)}" style="${BUTTON}">Open the page</a>`,
+      site
+        ? `<a href="${escapeHtml(url)}" style="${BUTTON}">Open the live page</a>`
+        : `<a href="${escapeHtml(`${origin}/dashboard/content/editor/${draftId}`)}" style="${BUTTON}">Open the page</a>`,
       ...(chatId
         ? [
             `<a href="${escapeHtml(`${origin}/dashboard/chat/${chatId}`)}" style="${LINK_BUTTON}">Open the run</a>`,
@@ -171,7 +200,7 @@ export async function tellWentLive({ eventId }) {
     supabaseAdmin
       .from('chat_agent_go_live_events')
       .select(
-        'id, organization_id, agent_id, agent_run_id, brand_id, content_draft_id, target, kind, status',
+        'id, organization_id, agent_id, agent_run_id, brand_id, content_draft_id, target, kind, status, published_url',
       )
       .eq('id', eventId),
   );
@@ -236,8 +265,11 @@ export async function tellWentLive({ eventId }) {
       kind: event.kind,
       draftId: event.content_draft_id,
       chatId: convo?.id ?? null,
+      url: event.published_url ?? null,
     },
     email: renderWentLiveEmail({
+      kind: event.kind,
+      url: event.published_url ?? null,
       agent: agent.name,
       title,
       target: event.target,
@@ -247,27 +279,29 @@ export async function tellWentLive({ eventId }) {
     }),
   });
 
-  // The action the page works on: its History says the agent sent it (once per step).
+  // The action the page works on: its History says the agent sent or published it (once per step).
   let history = false;
+  const site = event.kind === 'publish' && event.published_url ? siteOf(event.published_url) : null;
+  const historyEvent = site ? 'agent_published' : 'agent_went_live';
   if (draft.action_id) {
     const { data: earlier, error } = await supabaseAdmin
       .from('action_events')
       .select('id')
       .eq('action_id', draft.action_id)
-      .eq('event', 'agent_went_live')
+      .eq('event', historyEvent)
       .eq('data->>event_id', event.id)
       .limit(1);
     if (error) throw new Error(error.message);
     if ((earlier ?? []).length === 0) {
       const { error: insertError } = await supabaseAdmin.from('action_events').insert({
         action_id: draft.action_id,
-        event: 'agent_went_live',
+        event: historyEvent,
         data: {
           source: 'chat',
           event_id: event.id,
           agent: agent.name,
           title,
-          to: CMS_NAMES[event.target] ?? event.target,
+          to: site ?? CMS_NAMES[event.target] ?? event.target,
         },
         actor_id: run?.acting_user_id ?? null,
       });

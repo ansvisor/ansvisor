@@ -1786,6 +1786,7 @@
           "agent_run_completed": "{to, select, done {Agent run completed} failed {Agent run failed} stopped {Agent run stopped} skipped {Agent run skipped} other {Agent run ended}}{named, select, yes { · {agent}} other {}}{reason, select, action_closed { · action closed} other {}}",
           "chat_started": "Chat started on this action",
           "agent_went_live": "{named, select, yes {{agent}} other {An agent}} sent “{title}” to {to} on its own",
+          "agent_published": "{named, select, yes {{agent}} other {An agent}} published “{title}” on {to}, on its own",
           "still_relevant": "Kept as still relevant: no longer stale"
         },
         "eventParts": {
@@ -3509,6 +3510,7 @@
     },
     "reviseDraft": { "name": "Change drafts in Content", "step": "Changed draft in Content" },
     "sendToCms": { "name": "Send drafts to your CMS", "step": "Sent draft to your CMS" },
+    "publishToCms": { "name": "Publish pages on your site", "step": "Published page on your site" },
     "makeReport": { "name": "Make reports", "step": "Made report" },
     "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
     "webPage": { "name": "Open web pages", "step": "Open page" },
@@ -4719,7 +4721,9 @@
         "raiseLimit": "Raise limit",
         "fix": "Fix it",
         "wentLive": "{agent} sent “{title}” to {cms} as a draft",
+        "published": "{agent} published “{title}” on {site}",
         "wentLiveDetail": "On its own, after Quality and your brand facts",
+        "publishedDetail": "Live on {site} · on its own, after Quality and your brand facts",
         "openPage": "Open page",
         "openRun": "Open run",
         "goLiveOff": "{agent} no longer publishes on its own",
@@ -5480,6 +5484,7 @@
       "reviseDraft": "Changed the draft “{title}”",
       "reviseDraftUndo": "Put the draft “{title}” back as it was",
       "sendToCms": "Sent the draft “{title}” to {cms}",
+      "publishToCms": "Published the page “{title}” through {cms}",
       "makeReport": "Made the report “{title}”",
       "makeReportUndo": "Removed the report “{title}” from Reports",
       "startAudit": "Started Site Audit on {pages}",
@@ -6110,7 +6115,7 @@
       "goLive": {
         "label": "Publish and send on its own",
         "note": "Goes live without a click, at most {limit, plural, one {# time} other {# times}} a day. Each page must pass Quality and your brand facts first. Only Admins change this.",
-        "covers": "Sends pages to your CMS as drafts: Webflow, WordPress, Framer or Wix.",
+        "covers": "Publishes new pages to Webflow, WordPress and Wix · sends drafts to your CMS, Framer included.",
         "limit": "At most a day",
         "limitRange": "{min} to {max}",
         "limitError": "Pick a number from {min} to {max}.",
@@ -6285,7 +6290,7 @@
       },
       "ready-to-publish": {
         "name": "Ready to Publish",
-        "description": "Runs a quality pass on a draft, fills its page fields and sends a CMS draft. It goes out on its own only if an Admin allows it."
+        "description": "Runs a quality pass on a draft, fills its page fields, sends a CMS draft and publishes it. It goes live on its own only if an Admin allows it."
       },
       "task-finisher": {
         "name": "Task Finisher",

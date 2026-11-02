@@ -149,6 +149,7 @@ const INPUTS: Record<string, unknown> = {
   set_task_ready_for_review: { brand_id: BRAND, task_id: '99999999-9999-4999-8999-999999999999' },
   update_draft: { draft_id: DRAFT, title: 'Pricing FAQ for teams' },
   push_cms_draft: { draft_id: DRAFT, destination: 'webflow' },
+  publish_cms: { draft_id: DRAFT, destination: 'webflow' },
   build_report: {
     brand_id: BRAND,
     template: 'weekly_visibility',
@@ -158,7 +159,7 @@ const INPUTS: Record<string, unknown> = {
   run_site_audit: { brand_id: BRAND, urls: ['https://acme.example/pricing'] },
 };
 /** The rows that change or send a Library draft find one. */
-const NEEDS_DRAFT = new Set(['update_draft', 'push_cms_draft']);
+const NEEDS_DRAFT = new Set(['update_draft', 'push_cms_draft', 'publish_cms']);
 const toolCtx = {} as never;
 let step = 0;
 const nextStep = () => `step-${++step}`;
@@ -725,6 +726,53 @@ describe('going live on its own (AUTONOMOUS-GO-LIVE §5.4)', () => {
     expect(db.tables.chat_activity_log ?? []).toEqual([]);
   });
 
+  it('publishes a new page through the same route, and answers where it went live (PR 9)', async () => {
+    sent.mockImplementationOnce(async () =>
+      Response.json({
+        success: true,
+        delivery: {
+          id: 'd3',
+          status: 'published',
+          published_url: 'https://acme.example/blog/pricing-faq',
+        },
+      }),
+    );
+    const outcome = await runLoggedWrite(
+      request({ tool: chatTool('publish_cms')!, input: INPUTS.publish_cms }),
+    );
+    expect(outcome).toMatchObject({
+      code: 'ok',
+      output: { ok: true, target: 'webflow', url: 'https://acme.example/blog/pricing-faq' },
+    });
+    const body = JSON.parse((sent.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body).toMatchObject({ kind: 'publish', target: 'webflow', draftId: DRAFT });
+    expect(db.tables.chat_activity_log).toEqual([
+      expect.objectContaining({ tool_key: 'publishToCms', auto_via: 'go_live' }),
+    ]);
+    // A page live already: said as it is, nothing logged.
+    sent.mockImplementationOnce(async () =>
+      Response.json(
+        { success: false, code: 'live_item', message: 'Live already.' },
+        { status: 409 },
+      ),
+    );
+    expect(
+      await runLoggedWrite(request({ tool: chatTool('publish_cms')!, input: INPUTS.publish_cms })),
+    ).toMatchObject({ output: { ok: false, reason: 'live_item' } });
+    // The CMS refused the publish itself: its words, never "not connected".
+    sent.mockImplementationOnce(async () =>
+      Response.json(
+        { success: false, code: 'publish_refused', message: 'Wix didn’t publish it.' },
+        { status: 502 },
+      ),
+    );
+    expect(
+      await runLoggedWrite(request({ tool: chatTool('publish_cms')!, input: INPUTS.publish_cms })),
+    ).toMatchObject({
+      output: { ok: false, reason: 'publish_refused', message: 'Wix didn’t publish it.' },
+    });
+  });
+
   it('frees its slot when the API has no secret to be reached with: nothing went', async () => {
     vi.stubEnv('CRON_SECRET', '');
     const finished: unknown[] = [];
@@ -1223,10 +1271,18 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
     expect(tool.description).not.toMatch(/webhook\)/);
   });
 
-  it('has no row that goes live in a CMS: its one EXECUTE sends a draft, and publishing stays the person’s', () => {
+  it('publishes a new page live only as an EXECUTE, never in Framer nor to a webhook (AUTONOMOUS-GO-LIVE PR 9)', () => {
     expect(CHAT_TOOLS.filter((tool) => tool.class === 'execute').map((tool) => tool.name)).toEqual([
       'push_cms_draft',
+      'publish_cms',
     ]);
-    expect(chatTool('publish_cms')).toBeUndefined();
+    const publish = chatTool('publish_cms')!;
+    expect(publish.executeGroup).toBe('publishing');
+    for (const destination of ['webflow', 'wordpress', 'wix']) {
+      expect(publish.inputSchema.safeParse({ draft_id: DRAFT, destination }).success).toBe(true);
+    }
+    for (const destination of ['framer', 'webhook']) {
+      expect(publish.inputSchema.safeParse({ draft_id: DRAFT, destination }).success).toBe(false);
+    }
   });
 });
