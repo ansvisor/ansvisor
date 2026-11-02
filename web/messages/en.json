@@ -5435,7 +5435,9 @@
       "agentDuplicated": "Copied the agent “{from}” as “{name}”",
       "agentTakenOver": "Took over the agent “{name}”",
       "agentRunQueued": "Asked the agent “{name}” to run for {brand}",
-      "agentRunOnAction": "Asked the agent “{name}” to run on the action AC-{action}"
+      "agentRunOnAction": "Asked the agent “{name}” to run on the action AC-{action}",
+      "agentGoLiveOn": "Let the agent “{name}” publish and send on its own, up to {limit} a day",
+      "agentGoLiveOff": "Stopped the agent “{name}” publishing and sending on its own"
     },
     "undo": {
       "ok": "Undone.",
@@ -5466,7 +5468,8 @@
       "monthCap": "Set an agent's monthly AI cap",
       "fullAuto": "Run an agent in Full auto",
       "engines": "Use these engines in an agent",
-      "runWithChat": "Run Chat on an Action Center action"
+      "runWithChat": "Run Chat on an Action Center action",
+      "goLive": "Let an agent publish and send on its own"
     },
     "refusal": {
       "invalid": "Some of this agent's settings aren't valid. Check them and try again.",
@@ -5490,7 +5493,9 @@
       "queue_full": "{count, plural, one {# run already waits} other {# runs already wait}} for this agent on this brand. Try again once one has started.",
       "connection_missing": "This agent needs {name}, and {brand} doesn’t have it connected. Connect it for that brand, then run the agent again.",
       "own_key_failed": "{why} An Admin can fix it in Settings › AI Providers, then run the agent again.",
-      "failed": "Something went wrong with this agent. Try again."
+      "failed": "Something went wrong with this agent. Try again.",
+      "go_live_off": "An Admin hasn’t allowed agents to publish on their own in Settings › Chat.",
+      "go_live_mode": "This agent isn’t in Full auto. Pick Full auto first."
     },
     "ownKey": {
       "why": {
@@ -6039,6 +6044,23 @@
         "run_share": "Enter a whole number from 1 to 50.",
         "month_share": "Enter a whole number from 1 to 100.",
         "workspace_admins_only": "Only Admins can share agents with the workspace here."
+      },
+      "goLive": {
+        "label": "Publish and send on its own",
+        "note": "Goes live without a click, at most {limit, plural, one {# time} other {# times}} a day. Each page must pass Quality and your brand facts first. Only Admins change this.",
+        "covers": "Sends pages to your CMS as drafts: Webflow, WordPress, Framer or Wix.",
+        "limit": "At most a day",
+        "limitRange": "{min} to {max}",
+        "limitError": "Pick a number from {min} to {max}.",
+        "needFullAuto": "Pick Full auto first",
+        "offInSettings": "An Admin hasn’t allowed agents to publish on their own in Settings › Chat",
+        "locked": "Needs {plan} · you’re on {current}",
+        "readOnly": "An Admin decides whether this agent may publish on its own",
+        "ask": "Let this agent publish and send on its own",
+        "onBy": "On · allowed by {name} on {date}",
+        "onByFormer": "On · allowed by a former member on {date}",
+        "resetByChange": "Off since the agent changed. An Admin can turn it on again.",
+        "approval": "On its own · up to {limit} a day"
       }
     },
     "deniedTitle": "I can't do this for you",
@@ -6191,7 +6213,7 @@
       },
       "ready-to-publish": {
         "name": "Ready to Publish",
-        "description": "Runs a quality pass on a draft, fills its page fields and sends a CMS draft. Going live stays your click."
+        "description": "Runs a quality pass on a draft, fills its page fields and sends a CMS draft. It goes out on its own only if an Admin allows it."
       },
       "task-finisher": {
         "name": "Task Finisher",
@@ -6329,7 +6351,24 @@
       "notFound": "This agent isn't available. It may have been deleted, or it isn't shared with you.",
       "backToAgents": "Back to Agent Center",
       "loadFailed": "Couldn't load this agent.",
-      "retry": "Retry"
+      "retry": "Retry",
+      "goLive": {
+        "badge": "Publishes on its own · {limit} a day",
+        "title": "Publishing on its own",
+        "status": "Status",
+        "statusOn": "On · up to {limit} a day",
+        "statusOff": "Off in Settings › Chat",
+        "statusChanged": "Off since the agent changed. An Admin can turn it on again.",
+        "statusNone": "Off",
+        "allowedBy": "Allowed by",
+        "allowedByValue": "{name} · {date}",
+        "formerMember": "A former member",
+        "recent": "Last 24 hours",
+        "recentNone": "Nothing went live on its own yet.",
+        "recentItem": "“{title}” → {target}",
+        "untitled": "Untitled page",
+        "takenDown": "Taken down"
+      }
     }
   },
   "audit": {
