@@ -26,9 +26,9 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
-const gate = vi.hoisted(() => ({ openUpgrade: vi.fn() }));
+const gate = vi.hoisted(() => ({ openUpgrade: vi.fn(), isLocked: false }));
 vi.mock('@/components/providers/upgrade-gate', () => ({
-  useUpgradeGate: () => ({ openUpgrade: gate.openUpgrade, isLocked: false }),
+  useUpgradeGate: () => ({ openUpgrade: gate.openUpgrade, isLocked: gate.isLocked }),
 }));
 const BRAND = 'bbbbbbbb-0000-4000-8000-000000000001';
 vi.mock('@/stores/use-brand-store', () => ({
@@ -154,6 +154,7 @@ beforeEach(() => {
   fetchMock.mockClear();
   nav.push.mockReset();
   for (const fn of [toast, toast.error, toast.success, gate.openUpgrade]) fn.mockReset();
+  gate.isLocked = false;
   vi.stubGlobal('fetch', fetchMock);
 });
 afterEach(() => {
@@ -195,6 +196,15 @@ describe('ChatSkills', () => {
 
   it('narrows the list by search and by filter chip', async () => {
     await render();
+    // The owner's names (2026-11-02): Brand Visibility beside Product Visibility, and Technical.
+    expect(all('[data-action="skills.filter"]').map((chip) => chip.textContent)).toEqual([
+      'All',
+      'Content',
+      'Brand Visibility',
+      'Product Visibility',
+      'Technical',
+      'Reports',
+    ]);
     await click(container.querySelector<HTMLElement>('[data-filter="reports"]')!);
     expect(cards()).toEqual(['report']);
     await click(container.querySelector<HTMLElement>('[data-filter="all"]')!);
@@ -230,6 +240,14 @@ describe('ChatSkills', () => {
     expect(inCard('report', 'skills.createAgent')!.getAttribute('href')).toBe(
       '/dashboard/agents/new?skill=report',
     );
+  });
+
+  it('starts no run while the workspace is read-only or the demo brand is open: the plan opens', async () => {
+    gate.isLocked = true;
+    await render();
+    await click(inCard('winback', 'skills.run')!);
+    expect(gate.openUpgrade).toHaveBeenCalled();
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/chat/runs')).toBe(false);
   });
 
   it('opens the plan when the workspace is read-only, and says why a run didn’t start', async () => {

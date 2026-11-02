@@ -101,7 +101,7 @@ export function ChatSkills() {
   const t = useTranslations('chatSkills.page');
   const router = useRouter();
   const brandId = useBrandStore((s) => s.activeBrandId);
-  const { openUpgrade } = useUpgradeGate();
+  const { isLocked, openUpgrade } = useUpgradeGate();
   const [list, setList] = useState<SkillList | null | 'failed'>(null);
   const [connected, setConnected] = useState<{ brandId: string; kinds: Set<string> } | null>(null);
   const [tab, setTab] = useState<Tab>('ansvisor');
@@ -141,6 +141,11 @@ export function ChatSkills() {
 
   async function run(name: string) {
     if (starting) return;
+    // A read-only workspace, or the demo brand, starts no run: the upgrade dialog opens.
+    if (isLocked) {
+      openUpgrade();
+      return;
+    }
     setStarting(name);
     const started = await startChatRun(`/${name}`, brandId ?? null);
     if (!started.ok) {

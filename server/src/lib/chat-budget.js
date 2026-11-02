@@ -128,7 +128,9 @@ async function agentRunCapUsd(orgId, agentRunId, includedUsd) {
  * budget can't cover the step (the step doesn't start), 402 without an
  * active plan; ChatBudgetError 404 when the run isn't the workspace's, or the
  * step the run's. With `agentRunId` (the chat's agent run), the step is held
- * within that run's cap too: ChatBudgetError run_cap 429 past it.
+ * within that run's cap too: ChatBudgetError run_cap 429 past it. With
+ * `scheduleId` (the chat's scheduled job, CHAT-12 item 14) the database
+ * checks it is the chat's; the row is named with the chat's job either way.
  */
 export async function reserveChatStep(
   orgId,
@@ -141,6 +143,7 @@ export async function reserveChatStep(
     stepId = null,
     ownKey = false,
     agentRunId = null,
+    scheduleId = null,
   },
 ) {
   assertChatOn(orgId);
@@ -158,6 +161,7 @@ export async function reserveChatStep(
     p_since: since,
     p_budget: budgetUsd,
     ...(agentRunId ? { p_agent_run_id: agentRunId, p_run_cap: runCap } : {}),
+    ...(scheduleId ? { p_schedule_id: scheduleId } : {}),
   });
   if (error) {
     if (error.code === 'P0002') {
@@ -174,6 +178,58 @@ export async function reserveChatStep(
   }
   return data;
 }
+
+/** The most like parts one check sizes (fitChatUnits): a batch past it is checked as this many. */
+export const MAX_FIT_UNITS = 100;
+
+/**
+ * What the period's Chat and other AI calls spent so far, holds in flight
+ * included and own-key steps left out (ai_usage_by_feature, 00405): the sum
+ * reserve_chat_ai_usage checks a hold against.
+ */
+async function periodSpentUsd(orgId, since) {
+  const { data, error } = await supabaseAdmin.rpc('ai_usage_by_feature', {
+    p_organization_id: orgId,
+    p_since: since,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []).reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
+}
+
+/**
+ * How many of `units` like parts of one job (drafts, tasks, pages) the AI
+ * budget left covers, each sized as one model step's worst case (`perUnit`:
+ * its prompt and its max output, stepWorstCaseUsd), before the job starts
+ * (CHAT-04 item 17a). What is left is the budget, purchased credits
+ * included, less the period's spend and holds; for an agent run's chat
+ * (`agentRunId`), also what its own cap leaves (CHAT-27 item 21). A count,
+ * never dollars: the web asks the person what to do when it is under
+ * `units`, and pauses at the cap when it is 0. Every part fits on the
+ * workspace's own key (ownKey: the provider bills it), without a budget to
+ * hold against (self-hosted), and for a model priced at nothing. Only a
+ * check: each step is still held on its own (reserveChatStep).
+ */
+export async function fitChatUnits(
+  orgId,
+  { modelId, perUnit, units, ownKey = false, agentRunId = null },
+) {
+  assertChatOn(orgId);
+  const count = Math.max(0, Math.min(MAX_FIT_UNITS, Math.floor(units)));
+  const unitUsd = stepWorstCaseUsd(modelId, perUnit);
+  if (ownKey || !(unitUsd > 0)) return { fits: count };
+  const { budgetUsd, includedUsd, since } = await aiBudgetOf(orgId);
+  let room = Infinity;
+  if (budgetUsd !== null) room = budgetUsd - (await periodSpentUsd(orgId, since));
+  if (agentRunId) {
+    const cap = await agentRunCapUsd(orgId, agentRunId, includedUsd);
+    if (cap !== null) room = Math.min(room, cap - (await agentRunSpentUsd(agentRunId)));
+  }
+  return { fits: room === Infinity ? count : fitsIn(room, unitUsd, count) };
+}
+
+/** The parts of `unitUsd` each that `roomUsd` holds, at most `count`; float noise doesn't take one. */
+const fitsIn = (roomUsd, unitUsd, count) =>
+  Math.max(0, Math.min(count, Math.floor(roomUsd / unitUsd + 1e-9)));
 
 /**
  * Keeps an agent run's use (chat_agent_runs.usage_share, CHAT-27 items

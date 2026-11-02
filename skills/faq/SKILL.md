@@ -4,7 +4,7 @@ description: "An FAQ block from the top fan-outs and your brand facts, with FAQP
 license: MIT
 metadata:
   title: "FAQ from fan-outs"
-  filters: "content visibility"
+  filters: "content visibility technical"
 ---
 
 # FAQ from fan-outs

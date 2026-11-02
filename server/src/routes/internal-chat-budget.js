@@ -5,8 +5,12 @@
  * checked the person against.
  *
  * POST /api/internal/chat/budget/reserve
- *   { orgId, runId, stepId?, feature?, model, inputTokens, maxOutputTokens, ownKey?, agentRunId? }
- *   → 201 { usageId }: the step's row, its worst case held (on Ansvisor's key).
+ *   { orgId, runId, stepId?, feature?, model, inputTokens, maxOutputTokens, ownKey?, agentRunId?,
+ *     scheduleId? }
+ *   → 201 { usageId }: the step's row, its worst case held (on Ansvisor's key),
+ *     named with the chat's agent run and scheduled job (reserve_chat_ai_usage
+ *     finds both from the run's chat, and refuses a scheduleId or an
+ *     agentRunId that isn't the chat's).
  *   → 429 ai_limit { trial }: the budget can't cover the step; it doesn't start.
  *   → 429 run_cap: the chat's agent run (agentRunId) can't take the step
  *     within its own cap (CHAT-27 item 21); it doesn't start.
@@ -19,6 +23,13 @@
  *     writes priced at their own rates. 404 when it is gone.
  * POST /api/internal/chat/budget/release { orgId, usageId }
  *   → 200: the hold went (nothing was billed). Safe to repeat.
+ * POST /api/internal/chat/budget/fit
+ *   { orgId, model, perUnit: { inputTokens, maxOutputTokens }, units, ownKey?, agentRunId? }
+ *   → 200 { fits }: how many of the job's `units` like parts (1–100) the AI
+ *     budget left covers, each one model step's worst case, before the job
+ *     starts (CHAT-04 item 17a); all of them on the workspace's own key.
+ *     Holds nothing. 402 plan_limit, 403 chat_off, 404 not_found (an agent
+ *     run that isn't the workspace's).
  * A step a Stop aborted calls neither: its hold stays as its cost.
  * GET /api/internal/chat/budget/agent-shares?orgId=&days=
  *   → 200 { unlimited, since, shares: [{ agentId, share, ownKeyShare, runs }] }:
@@ -37,8 +48,10 @@ import { z } from 'zod';
 import {
   CHAT_BUDGET_FEATURES,
   ChatBudgetError,
+  MAX_FIT_UNITS,
   agentUsageShares,
   chargeChatStep,
+  fitChatUnits,
   releaseChatStep,
   reserveChatStep,
 } from '../lib/chat-budget.js';
@@ -72,6 +85,8 @@ const reserveSchema = z.strictObject({
   ownKey: z.boolean().default(false),
   // The chat's agent run: the step is held within its cap too (CHAT-27 item 21).
   agentRunId: z.guid().nullish(),
+  // The chat's scheduled job (CHAT-12 item 14): its row is named with the job.
+  scheduleId: z.guid().nullish(),
 });
 
 const chargeSchema = z.strictObject({
@@ -90,6 +105,16 @@ const chargeSchema = z.strictObject({
 });
 
 const releaseSchema = z.strictObject({ orgId: z.guid(), usageId: z.guid() });
+
+const fitSchema = z.strictObject({
+  orgId: z.guid(),
+  model,
+  // One part's model step: its prompt and the most it may write.
+  perUnit: z.strictObject({ inputTokens: tokens, maxOutputTokens: tokens.min(1) }),
+  units: z.number().int().min(1).max(MAX_FIT_UNITS),
+  ownKey: z.boolean().default(false),
+  agentRunId: z.guid().nullish(),
+});
 
 const sharesSchema = z.strictObject({
   orgId: z.guid(),
@@ -140,6 +165,7 @@ router.post('/reserve', async (req, res) => {
       stepId: body.stepId ?? null,
       ownKey: body.ownKey,
       agentRunId: body.agentRunId ?? null,
+      scheduleId: body.scheduleId ?? null,
     });
     return res.status(201).json({ success: true, usageId });
   } catch (err) {
@@ -170,6 +196,23 @@ router.post('/release', async (req, res) => {
     return res.json({ success: true });
   } catch (err) {
     return fail(err, req, res, 'release');
+  }
+});
+
+router.post('/fit', async (req, res) => {
+  const body = parse(fitSchema, req, res);
+  if (!body) return undefined;
+  try {
+    const { fits } = await fitChatUnits(body.orgId, {
+      modelId: body.model,
+      perUnit: body.perUnit,
+      units: body.units,
+      ownKey: body.ownKey,
+      agentRunId: body.agentRunId ?? null,
+    });
+    return res.json({ success: true, fits });
+  } catch (err) {
+    return fail(err, req, res, 'fit');
   }
 });
 
