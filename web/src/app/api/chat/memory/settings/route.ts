@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { writeRefusal } from '@/lib/subscription-guard';
 import {
   invalidMemoryResponse,
   memoryRefusalResponse,
@@ -14,6 +13,8 @@ import { chatActor, runFailure } from '@/lib/chat/run-api';
  * Turns memory on or off (CHAT-14 item 24): `personal` is the person's own
  * "Use memory" (every role); `workspace` the workspace's switch, an
  * Admin's, which hides Memory for everyone. Answers with both switches.
+ * "Use memory" stays open while the workspace is read-only (the person's
+ * own data, KVKK/GDPR); the store answers 402 for the workspace's switch.
  * Refusals as values (`{ ok: false, failure, code, error }`, #1777): 400,
  * 401, 402 a read-only workspace, 403 the workspace's switch for a
  * non-Admin, 404 Chat off.
@@ -22,8 +23,6 @@ export async function PATCH(req: Request) {
   try {
     const actor = await chatActor();
     if (actor instanceof NextResponse) return actor;
-    const refusal = await writeRefusal();
-    if (refusal) return refusal;
     const body = memorySwitchesPatch.safeParse(await req.json().catch(() => null));
     if (!body.success) return invalidMemoryResponse();
     const viewer = await memoryViewerFor(actor);

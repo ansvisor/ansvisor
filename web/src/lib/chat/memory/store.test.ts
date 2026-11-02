@@ -417,6 +417,43 @@ describe('editing, deleting and Undo (items 22–23)', () => {
   });
 });
 
+describe('a read-only workspace (KVKK/GDPR, owner decision 2026-11-02)', () => {
+  beforeEach(() => {
+    db.tables.organizations[0].subscription_status = 'canceled';
+  });
+
+  it('still lets a person delete their own Me line, bring it back, and turn Use memory off', async () => {
+    const mine = seedLine();
+    const me = await viewer(PEOPLE.manager);
+    const at = new Date('2026-11-02T12:00:00.000Z');
+    expect(await store.deleteMemory(me, mine.id, at)).toMatchObject({ ok: true });
+    expect(
+      await store.restoreMemory(me, mine.id, new Date('2026-11-02T12:00:05.000Z')),
+    ).toMatchObject({ ok: true });
+    expect(await store.setMemorySwitches(me, { personal: false })).toEqual({
+      ok: true,
+      value: { workspace: true, personal: false },
+    });
+    const list = await store.listMemory(me, null);
+    expect(list.items.user[0].can).toEqual({ edit: false, remove: true });
+  });
+
+  it('keeps adding, editing, Brand and Workspace lines and the workspace switch closed', async () => {
+    const mine = seedLine();
+    const ofBrand = seedLine({ scope: 'brand', user_id: null, brand_id: BRAND });
+    const admin = await viewer(PEOPLE.admin);
+    const me = await viewer(PEOPLE.manager);
+    const readOnly = { ok: false, refusal: { code: 'read_only', status: 402 } };
+    expect(await store.updateMemory(me, mine.id, 'Call me Ada')).toMatchObject(readOnly);
+    expect(await store.deleteMemory(me, ofBrand.id)).toMatchObject(readOnly);
+    expect(
+      await store.saveMemory(me, { scope: 'user', text: 'Write in US English' }, 'page'),
+    ).toMatchObject(readOnly);
+    expect(await store.setMemorySwitches(admin, { workspace: false })).toMatchObject(readOnly);
+    expect(items().filter((row) => row.deleted_at)).toEqual([]);
+  });
+});
+
 describe('the Memory page’s list (items 21, 24, 25)', () => {
   it('lists each scope with what the person may do and how full it is', async () => {
     seedLine({ text: 'Write in US English' });
