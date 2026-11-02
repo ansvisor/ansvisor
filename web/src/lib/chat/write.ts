@@ -2,7 +2,7 @@ import type { Json } from '@/types/supabase';
 import { logActivity, type ActivityApproval, type ActivityPlace } from './activity';
 import { idempotencyKey, requestHash, sweepExpiredKeys, withIdempotencyKey } from './idempotency';
 import type { ChatMode, ChatSurface } from './precedence';
-import type { ChatTool, ChatToolContext } from './registry/define-tool';
+import { runsWithoutSession, type ChatTool, type ChatToolContext } from './registry/define-tool';
 import { undoRule, type WriteRecord } from './undo';
 
 /**
@@ -70,6 +70,10 @@ const refused = (output: unknown): boolean =>
   !Array.isArray(output) &&
   (output as { ok?: unknown }).ok === false;
 
+/** A run with no session whose write the API server took as no one (lib/chat/actor/api.ts). */
+const wayRefused = (output: unknown): boolean =>
+  refused(output) && (output as { reason?: unknown }).reason === 'acting_refused';
+
 /**
  * Never throws for a failure on the way (the engine and server actions call
  * it): `failed`. Only a call against the rules (a read, an EXECUTE without
@@ -82,7 +86,7 @@ export async function runLoggedWrite(req: WriteRequest): Promise<WriteOutcome> {
   if (tool.class === 'execute' && req.approval.kind !== 'click') {
     throw new Error("An EXECUTE runs on the person's click only");
   }
-  if (req.withoutSession && !tool.runFor) {
+  if (req.withoutSession && !runsWithoutSession(tool)) {
     throw new Error(`${tool.name} runs only with its person's session`);
   }
   try {
@@ -130,6 +134,9 @@ async function run(req: WriteRequest): Promise<WriteOutcome> {
       }
       return { result: toJson(output), activityId };
     },
+    // The API server took no one to act as (acting_refused): nothing changed, and the
+    // approval is its person's to give again on its card, with the same key.
+    { keep: (result) => !wayRefused(result) },
   );
 
   if (outcome.kind === 'mismatch') return { code: 'approval_mismatch' };

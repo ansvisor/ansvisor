@@ -122,7 +122,12 @@ import type { ExplainChangeOutput } from '@/lib/mcp/why';
 import { stepPrompt, todayLine } from './prompt';
 import { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
 import { whyView } from './why/view';
-import { batchSize, type ChatTool, type ChatToolContext } from './registry/define-tool';
+import {
+  batchSize,
+  runsWithoutSession,
+  type ChatTool,
+  type ChatToolContext,
+} from './registry/define-tool';
 import { CHAT_TOOLS, chatTool, chatToolByKey } from './registry/tools';
 import { abortDriver, publishRunEnd, registerDriver, unregisterDriver } from './run-hub';
 import {
@@ -2111,12 +2116,18 @@ async function handleCall(
  * own, or in another person's request): its tool acts as the signed-in
  * person, so what would run by itself (Full auto, Always, a tick) asks
  * first, with no "Don't ask again". The card waits in the owner's Inbox,
- * and their Approve runs it in their own request. A sessionFree row keeps
- * the precedence's decision, read for the run's person as any call's is
- * (role, plan, policy, mode): it runs as them through its runFor (writeCall).
+ * and their Approve runs it in their own request. A sessionFree row whose
+ * way is open (runsWithoutSession) keeps the precedence's decision, read for
+ * the run's person as any call's is (role, plan, policy, mode): it runs as
+ * them through its runFor (writeCall).
  */
 function askWithoutSession(rc: RunContext, tool: ChatTool, decision: ToolDecision): ToolDecision {
-  if (decision.kind !== 'run' || tool.class === 'read' || !withoutSession(rc) || tool.sessionFree) {
+  if (
+    decision.kind !== 'run' ||
+    tool.class === 'read' ||
+    !withoutSession(rc) ||
+    runsWithoutSession(tool)
+  ) {
     return decision;
   }
   return { kind: 'ask', reason: 'no_session', offerDontAskAgain: false };
@@ -2170,7 +2181,8 @@ async function deny(
  * A WRITE's own check before its card (its row's `precheck`, CHAT-20 §12):
  * the refusal the model is told, in its §11a code and words, with what it
  * says beside them (the action that covers a finding). Null to go on, and
- * when the check itself fails: the change checks again.
+ * when the check itself fails: the change checks again. In a run with no
+ * session, only the row's precheckFor checks, as the run's person.
  */
 async function precheckOf(
   rc: RunContext,
@@ -2178,9 +2190,16 @@ async function precheckOf(
   input: Record<string, unknown>,
   ctx: PrecedenceContext | null,
 ): Promise<Record<string, unknown> | null> {
-  if (!tool.precheck) return null;
+  // With no session behind the run, the row's own check as its person, while its way is open;
+  // else none: a request's session there isn't the person's (the change checks again).
+  const which = withoutSession(rc)
+    ? runsWithoutSession(tool)
+      ? ('precheckFor' as const)
+      : null
+    : ('precheck' as const);
+  if (!which || !tool[which]) return null;
   try {
-    const out = await tool.precheck(
+    const out = await tool[which]!(
       toolContext(rc, ctx?.role ?? rc.role, ctx?.brandAccess),
       input as never,
     );
@@ -3045,6 +3064,9 @@ function typedFailure(output: unknown): string | null {
   return typeof record.reason === 'string' ? record.reason : 'failed';
 }
 
+/** A run with no session whose write the API server took as no one: it asks instead (writeCall). */
+const ACTING_REFUSED = 'acting_refused';
+
 /** The refusals an action says in its own words, as CHAT-20 §11a's codes. */
 const SAID_FAILURES: Record<string, string> = {
   quota_exceeded: 'quota_exceeded',
@@ -3059,6 +3081,10 @@ const SAID_FAILURES: Record<string, string> = {
   live_item: 'live_item',
   // An Admin turned publishing off for Managers since the card was decided (push_cms_draft).
   execute_off: 'execute_off',
+  // A run with no session, writing through the API server as its person (lib/chat/actor/api.ts):
+  // Chat off for the workspace, or the server took no one to act as.
+  chat_off: 'chat_off',
+  acting_refused: 'acting_refused',
 };
 
 /**
@@ -3126,17 +3152,27 @@ async function writeCall(
     withoutSession: withoutSession(rc),
   });
 
-  if (outcome.code === 'approval_mismatch') {
-    row = await updateStep(stepId, { status: 'waiting' });
+  // The API server took no one to act as for a run with no session (lib/chat/actor/api.ts):
+  // nothing changed, so it asks its person, as a change with no way of its own does.
+  const wayRefused =
+    outcome.code === 'ok' && typedFailure(outcome.output) === ACTING_REFUSED && !cardStepId;
+  if (outcome.code === 'approval_mismatch' || wayRefused) {
+    row = await updateStep(stepId, {
+      status: 'waiting',
+      // Its card's Approve is the person's: not a change made by itself (History's mode).
+      ...(wayRefused ? { debug: { input, toolCallId: call.toolCallId } } : {}),
+    });
     rc.sink.emit('step.updated', { step: clientStep(row) });
     const digest = cardDigest(tool, input);
+    const notes = cardNotes(tool);
+    if (wayRefused) notes.note = [t('card.noSession'), notes.note].filter(Boolean).join(' ');
     rc.sink.emit('confirm.required', {
       n: row.position,
       action: toolWords(tool, 'name'),
       target,
       digest,
       canDontAskAgain: false,
-      ...cardNotes(tool),
+      ...notes,
       ...(await cardDetailsOf(tool, input)),
     });
     return {
