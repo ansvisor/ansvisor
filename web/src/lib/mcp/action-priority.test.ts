@@ -116,7 +116,15 @@ describe('listActionsFor', () => {
   it('gives each action its priority, or null before it is scored', async () => {
     const rows = await listActionsFor(auth, { brandId: 'brand-1' });
     expect(rows?.map((r) => r.priority)).toEqual([
-      { score: 94, level: 'critical', reason: { change: 'lost', demand: 'high' } },
+      {
+        score: 94,
+        level: 'critical',
+        reason: { change: 'lost', demand: 'high' },
+        // A reason from before the factors were kept has no confidence.
+        confidence: null,
+        confidence_note: null,
+        confidence_score: null,
+      },
       null,
     ]);
     // Highest priority first, unscored ones last, as the app lists them.
@@ -143,6 +151,29 @@ describe('listActionsFor', () => {
       subject: { entity: 'prompts', count: 12 },
       days: 2,
     });
+  });
+
+  it('says how sure the score is as a level and why, keeping the raw factor, and which are stale', async () => {
+    actionRows = [
+      {
+        ...ACTIONS[0],
+        priority_reason: { kinds: 1, sources: 1, factors: { confidence: 0.3 } },
+        stale_at: '2026-10-31T03:00:00Z',
+      },
+      { ...ACTIONS[1], status: 'on_hold', stale_at: '2026-10-31T03:00:00Z' },
+    ];
+    const rows = await listActionsFor(auth, { brandId: 'brand-1' });
+    expect(rows?.[0].priority).toMatchObject({
+      confidence: 'low',
+      confidence_note: 'one kind of finding from one source',
+      confidence_score: 0.3,
+      reason: { factors: { confidence: 0.3 } },
+    });
+    expect(rows?.map((r) => [r.stale, r.stale_at])).toEqual([
+      [true, '2026-10-31T03:00:00Z'],
+      // Only a New action is stale.
+      [false, null],
+    ]);
   });
 
   it('lists the most recently updated first when asked', async () => {
@@ -289,6 +320,9 @@ describe('getActionFor', () => {
       score: 94,
       level: 'critical',
       reason: { change: 'lost', demand: 'high' },
+      confidence: null,
+      confidence_note: null,
+      confidence_score: null,
     });
   });
 });

@@ -20,9 +20,11 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 import { resolveModel } from '../ai-provider.js';
 import { signalsByKey } from './rubric.js';
+import { readingFinding } from './signals/readability.js';
 import { withRetry } from '../retry.js';
 import { logger } from '../logger.js';
 import { onBrandDomain } from './host.js';
+import { brandRulesSection } from '../brand-rules.js';
 import {
   MAX_COPY_CHARS,
   MAX_INPUT_PLACEHOLDERS,
@@ -110,13 +112,15 @@ When the fix is content the user can paste, put the ready-to-use text in "draft"
 - faq-schema → 3–5 Q&A pairs in "draft" AND a valid FAQPage JSON-LD block in "code"
 - definitions → the key terms defined inline
 - outbound-authority-links / citation-density → specific authoritative sources to cite
-- readability → a rewrite of one representative paragraph toward Flesch 50–70: shorter sentences and plainer words when the page's score is under 50, fuller sentences with the detail readers expect when it is over 70
+- readability → a rewrite of one representative paragraph, in the page's language, toward the score the finding aims for (its formula is the language's: Flesch for English, Ateşman for Turkish…): shorter sentences and plainer words when the page's score is under it, fuller sentences with the detail readers expect when a Flesch score is over 70
 - length → which specific sections to expand or trim (draft can be null)
 - product-description-opening → a new opening for the product description, at most 40 words, that starts with the product type and names at least two key attributes from the page (a measure, a material, a fit or a use)
 
 Put markup (JSON-LD, HTML) only in "code", never in "draft". Code has no length limit; a value only the brand knows is a placeholder there too, e.g. "price": "[your price]".
 
 When suggesting sources to cite (outbound-authority-links, citation-density, statistic-density), prefer the most recent, currently-authoritative references and do not present older material as if it were current. Never invent URLs or fabricate statistics/dates — only suggest sources you are confident exist.
+
+When BRAND RULES are given, every recommendation, draft and code follows them: a recommendation a rule forbids is left out, never written against it.
 
 Set "draft" and "code" to null when they don't apply. Prioritize by impact. Only return items you can make genuinely specific and useful.`;
 
@@ -149,6 +153,15 @@ export function brandFactsFor(url, brandRow, domainRows) {
   const domains = (domainRows ?? []).map((d) => d.domain).filter(Boolean);
   if (!onBrandDomain(url, domains)) return null;
   return { name: brandRow?.name ?? null, description: brandRow?.description ?? null, domains };
+}
+
+/**
+ * The brand's rules (Settings › Content, 00450), on any page it audits: they
+ * shape the recommendations, not the score.
+ */
+function rulesBlock(rules) {
+  const section = brandRulesSection(rules, "BRAND RULES (the brand's own; follow every one):");
+  return section ? `\n${section}\n` : '';
 }
 
 function brandBlock(brand) {
@@ -199,7 +212,10 @@ async function rewriteTooLong(model, items) {
  *   `brand` only when the page is on one of the brand's domains.
  * @returns {Promise<Array<{ signalKey: string, label: string, category: string|null, priority: string, recommendation: string, draft: string|null, code: string|null }>>}
  */
-export async function generateRecommendations(ctx, { results, brand = null, auditId } = {}) {
+export async function generateRecommendations(
+  ctx,
+  { results, brand = null, rules = [], auditId } = {},
+) {
   const failing = (results || []).filter(
     (r) => RECOMMENDABLE_SIGNALS.has(r.key) && (r.status === 'fail' || r.status === 'warn'),
   );
@@ -210,12 +226,12 @@ export async function generateRecommendations(ctx, { results, brand = null, audi
   const issues = failing
     .map((r) => {
       const s = signalsByKey[r.key] ?? {};
-      // Readability's score: which way to rewrite depends on its side of 50–70.
-      const flesch = r.evidence?.fleschReadingEase;
+      // Readability's score and its aim: which way to rewrite depends on its side of it.
+      const reading = r.key === 'readability' ? readingFinding(r.evidence) : null;
       const finding = r.evidence?.reason
         ? ` | finding: ${r.evidence.reason}`
-        : typeof flesch === 'number'
-          ? ` | finding: Flesch Reading Ease ${flesch}`
+        : reading
+          ? ` | finding: ${reading}`
           : '';
       return `- ${r.key} [${r.status}, impact: ${s.impactTier ?? 'standard'}]: ${s.what ?? ''}${finding}`;
     })
@@ -245,7 +261,7 @@ export async function generateRecommendations(ctx, { results, brand = null, audi
 PAGE URL: ${ctx.url}
 
 Improve THIS page for its own topic/intent (infer it from the content below). Never introduce subject matter the page isn't already about.
-${brandBlock(brand)}
+${brandBlock(brand)}${rulesBlock(rules)}
 FAILING SIGNALS TO FIX:
 ${issues}
 

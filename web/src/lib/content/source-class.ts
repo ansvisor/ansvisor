@@ -1,4 +1,5 @@
 import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
+import { isTrustedHost } from './trusted-sources';
 
 /**
  * What kind of source a page's link is (Quality spec CE-046, Trust §2.2):
@@ -94,16 +95,25 @@ export function sourceClass(
     brandDomains,
     competitorDomains,
     pageType,
-  }: { brandDomains: string[]; competitorDomains: string[]; pageType: string | null },
+    trustedDomains = [],
+  }: {
+    brandDomains: string[];
+    competitorDomains: string[];
+    pageType: string | null;
+    /** The sites the brand trusts (Settings › Content, 00449): primary, they and their pages. */
+    trustedDomains?: readonly string[];
+  },
 ): SourceClass | null {
   const host = normalizeDomain(url);
   if (!host) return null;
-  if (onList(host, SECONDARY_DOMAINS)) return 'secondary';
-  if (onList(host, WEAK_DOMAINS)) return 'weak';
   const kind = classifyDomain(host, {
     brandDomains: brandDomains.map(normalizeDomain).filter(Boolean),
     competitorDomains: competitorDomains.map(normalizeDomain).filter(Boolean),
   });
+  // The brand's own word on a site wins, but for its own pages.
+  if (kind !== 'you' && isTrustedHost(host, trustedDomains)) return 'primary';
+  if (onList(host, SECONDARY_DOMAINS)) return 'secondary';
+  if (onList(host, WEAK_DOMAINS)) return 'weak';
   switch (kind) {
     case 'you':
       return 'own';
