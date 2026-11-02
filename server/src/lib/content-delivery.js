@@ -88,7 +88,7 @@ export class DeliveryError extends Error {
    *   'webflow_refused'|'webflow_not_ready'|'wordpress_not_configured'|'no_wordpress'|
    *   'wordpress_refused'|'framer_not_configured'|'no_framer'|'framer_refused'|
    *   'framer_not_ready'|'wix_not_configured'|'no_wix'|'wix_refused'|'in_progress'|
-   *   'not_found'|'daily_limit'} code
+   *   'not_found'|'daily_limit'|'framer_site_publish'|'live_item'|'publish_refused'} code
    */
   constructor(code, message, status) {
     super(message);
@@ -371,6 +371,17 @@ const NATIVE = {
   framer: { label: 'Framer', connect: framerFor, send: sendToFramer },
   wix: { label: 'Wix', connect: wixFor, send: sendToWix },
 };
+
+/**
+ * The brand's connection to a CMS a page goes to itself, as a send reads it
+ * (lib/cms-publish.js publishes on it). DeliveryError when it isn't set up,
+ * connected or working.
+ */
+export function cmsConnectionFor(brandId, target) {
+  const native = NATIVE[target];
+  if (!native) throw new DeliveryError('not_found', 'This CMS isn’t one a page is sent to.', 404);
+  return native.connect(brandId);
+}
 
 async function brandFor(brandId) {
   const [{ data: brand }, { data: domains }] = await Promise.all([

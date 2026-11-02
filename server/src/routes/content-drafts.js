@@ -6,7 +6,13 @@ import { handOffDraft, handOffInput } from '../lib/content-handoff.js';
 import { qualityPhase } from '../lib/content-quality.js';
 import { briefRules, rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
 import { NoShoppingPath, buildShoppingPath } from '../lib/shopping-path.js';
-import { DeliveryError, sendContentPages, sendInput } from '../lib/content-delivery.js';
+import {
+  DeliveryError,
+  deliveryPage,
+  sendContentPages,
+  sendInput,
+} from '../lib/content-delivery.js';
+import { publishContentPage } from '../lib/cms-publish.js';
 import { checkFramerPublished } from '../lib/cms/framer-status.js';
 import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
 import { checkWordPressPublished } from '../lib/cms/wordpress-status.js';
@@ -79,6 +85,77 @@ router.post('/send', async (req, res) => {
     }
     req.log.error({ err }, 'content draft send error');
     return res.status(502).json({ error: 'The pages could not be sent', code: 'failed' });
+  }
+});
+
+const publishCmsInput = z.object({
+  brandId: z.guid(),
+  target: z.enum(['webflow', 'wordpress', 'wix', 'framer']),
+  page: deliveryPage,
+});
+
+/** Managers can't take the brand's pages live while an Admin turned publishing off for them. */
+async function assertPublisher(userId, orgId) {
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single();
+  if (profile?.role !== 'manager') return;
+  const { data: settings, error } = await supabaseAdmin
+    .from('chat_settings')
+    .select('manager_execute_off')
+    .eq('organization_id', orgId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if ((settings?.manager_execute_off ?? []).includes('publishing')) {
+    const err = new Error('An Admin turned publishing off for Managers.');
+    err.status = 403;
+    err.code = 'execute_off';
+    throw err;
+  }
+}
+
+/**
+ * POST /api/content-drafts/publish-cms
+ * Body: { brandId, target: 'webflow' | 'wordpress' | 'wix', page }. A person's
+ * Publish (AUTONOMOUS-GO-LIVE PR 9, Chat's publish_cms): the page is written
+ * into its CMS draft as Send to CMS writes it, then put live there, and its
+ * send marked published at its address (lib/cms-publish.js). Admins and
+ * Managers, a Manager only while publishing is on for Managers. New pages
+ * only (409 live_item); Framer publishes the whole site (409
+ * framer_site_publish); the CMS refused the publish (502 publish_refused,
+ * the page left as a draft there). Answers { delivery, url }.
+ */
+router.post('/publish-cms', async (req, res) => {
+  const parsed = publishCmsInput.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  }
+  const { brandId, page, target } = parsed.data;
+  try {
+    const { orgId } = await assertBrandAccess(brandId, req.user.id);
+    await assertSender(req.user.id);
+    await assertPublisher(req.user.id, orgId);
+    const published = await publishContentPage({
+      orgId,
+      brandId,
+      userId: req.user.id,
+      page,
+      target,
+    });
+    return res.json({ delivery: published.delivery, url: published.url ?? null });
+  } catch (err) {
+    if (err instanceof DeliveryError) {
+      return res.status(err.status).json({ error: err.message, code: err.code });
+    }
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error({ err }, 'content draft publish error');
+    return res.status(502).json({ error: 'The page could not be published', code: 'failed' });
   }
 });
 
