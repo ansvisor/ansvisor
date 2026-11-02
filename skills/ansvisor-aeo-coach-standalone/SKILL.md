@@ -136,7 +136,7 @@ mirrors the MCP tool of the same purpose and returns the same data.
 | `GET /visibility-trend` | `brand_id`, `granularity` (`day`/`week`), dates, `model`, `region`, `topic_id` | buckets over time, with an average competitor score |
 | `GET /competitor-comparison` | `brand_id`, dates, `model`, `region`, `topic_id` | per-entry `visibility_rate_pct`, mentions, citations, share of voice, split per model and platform |
 | `GET /citations` | `brand_id`, dates, `model`, `region`, `topic_id`, `limit`, `source_filter` (`all`/`owned`/`competitor`/`external`) | source-type breakdown, top domains and URLs |
-| `GET /ai-traffic` | `brand_id`, dates | AI-referred visits per platform, landing pages, countries |
+| `GET /ai-traffic` | `brand_id`, dates | AI-referred visits per platform, landing pages, countries, and `tracking`: `not_detected` (the tracking snippet isn't seen on the brand's site, so 0 visits means nothing is measured yet: say so and point to installing it on the AI Traffic page), `installed_quiet` (installed, no AI visit in the last 7 days) or `active` |
 
 **Mentions & sentiment**
 
@@ -178,7 +178,7 @@ text. They read the stored answers; no LLM is called.
 | `GET /site-audits/quota` | — | `{ used, limit, remaining }` (`-1` = unlimited) |
 | `GET /site-audits` | `brand_id` | recent audits |
 | `GET /site-audits/{id}` | — | one audit: scores, signals, fixes |
-| `POST /site-audits` *(write, uses a credit)* | `{ brand_id, url }` | a `running` audit; poll `GET /site-audits/{id}` (~30s) |
+| `POST /site-audits` *(write, uses a credit)* | `{ brand_id, url, force? }` | a `running` audit; poll `GET /site-audits/{id}` (~30s). A page with an audit already running returns that audit (`alreadyRunning: true`) and uses no credit. A page audited in the last 10 minutes answers 200 with `status: "recently_audited"` and that audit's `id`, starting nothing: read it, or ask the user and send `force: true` to audit it again (uses a credit) |
 
 **Shopping**
 
@@ -550,6 +550,9 @@ When the user asks how AI describes the brand, why sentiment moved
   give its range and say so.
 - **Don't claim a citation count is good or bad in isolation.** It
   only matters relative to mentions (see scoring reference).
+- **Don't read 0 AI visits as no AI traffic.** When `GET /ai-traffic`
+  says `tracking: "not_detected"`, nothing is measured yet: say the
+  tracking snippet isn't installed instead.
 - **Don't call a write endpoint to "check" something.** Read
   endpoints exist for every write; use them.
 - **Don't log or repeat the API key.** If a code block needs to show
