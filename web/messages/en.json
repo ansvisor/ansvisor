@@ -3752,6 +3752,7 @@
           "runSteps": "Run steps",
           "approval": "Approval card",
           "question": "Question card",
+          "openPage": "Where should we open this page? (W4-11)",
           "execute": "Click card (EXECUTE)",
           "result": "Result card",
           "denial": "Out-of-permission answer",
@@ -3759,6 +3760,7 @@
           "tray": "Runs tray"
         },
         "states": {
+          "openPage": "After Chat writes a page · none Recommended; Open here comes with W4-15",
           "planAuto": "Auto, ask before changes",
           "planFullAuto": "Full auto, a tool not connected",
           "planReadOnly": "Analyst: read-only",
