@@ -583,7 +583,10 @@ const reading = new Map();
  * the day are made (PAGE_READS_PER_DAY, or its Quality calls left for
  * them), `paused` when the workspace's AI budget is spent.
  *
- * @param {{ orgId: string, draftId: string, html: string, siteType: string, pageType?: string|null, brandName?: string, facts?: string[], now?: number }} input
+ * `reserve`, when given, holds the model call in place of the workspace's
+ * Quality budget (chat-budget agentRunReserve: an agent run's own steps).
+ *
+ * @param {{ orgId: string, draftId: string, html: string, siteType: string, pageType?: string|null, brandName?: string, facts?: string[], now?: number, reserve?: Function|null }} input
  */
 export async function readPage({
   orgId,
@@ -594,6 +597,7 @@ export async function readPage({
   brandName = '',
   facts = [],
   now = Date.now(),
+  reserve = null,
 }) {
   const outline = pageOutline(html);
   const empty = {
@@ -655,6 +659,7 @@ export async function readPage({
         facts,
         day,
         now,
+        reserve,
       }).finally(() => reading.delete(draftId));
       under = { hash, row };
       reading.set(draftId, under);
@@ -687,14 +692,17 @@ async function readOnce({
   facts,
   day,
   now,
+  reserve = null,
 }) {
   const modelId = sourceClassModelId();
-  const budget = await reserveAiBudget(orgId, {
-    feature: 'quality',
-    modelId,
-    draftId,
-    holdUsd: PAGE_HOLD_USD,
-  });
+  const budget = reserve
+    ? await reserve({ modelId, holdUsd: PAGE_HOLD_USD })
+    : await reserveAiBudget(orgId, {
+        feature: 'quality',
+        modelId,
+        draftId,
+        holdUsd: PAGE_HOLD_USD,
+      });
   let read = { spots: [], proofs: [], regulated: null, checks: null };
   let missed = false;
   try {
