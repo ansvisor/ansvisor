@@ -439,11 +439,6 @@
       "failed": "Couldn't prepare the demo. Check your connection and try again.",
       "retry": "Try again",
       "close": "Close"
-    },
-    "chat": {
-      "soon": "Soon (next week)",
-      "note": "Chat arrives next week. This is a preview of it.",
-      "frameTitle": "Chat preview"
     }
   },
   "firstRun": {
