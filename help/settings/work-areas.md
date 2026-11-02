@@ -8,7 +8,7 @@ updated: 2026-11-01
 last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/menu-access.mdx]
 ---
 Each person can say what they work on or lead. Their left menu then keeps only those areas' sections. Pick one or more; picking none keeps every section. **Settings** is always on the menu, with your API keys and MCP.

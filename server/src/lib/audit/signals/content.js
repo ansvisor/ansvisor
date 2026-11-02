@@ -10,40 +10,42 @@
  */
 
 import { jsonLd, typesOf } from './helpers.js';
-import { fleschBand, fleschReadingEase, readingBlocks } from './readability.js';
+import { UNSPACED, pageProse, readingBand, readingEvidence, readingLevel } from './readability.js';
 import { OPENING, checkDescriptionOpening } from '../product-description.js';
-import { extractPageContent } from '../../page-content.js';
-
-/** Past this, after its scripts and styles, a page isn't read: its content takes too long to find. */
-const MAX_READ_HTML = 2_000_000;
-/** What holds no text: most of a page's bytes. */
-const NO_TEXT = /<(script|style|svg|noscript|template)\b[\s\S]*?<\/\1\s*>/gi;
 
 /**
- * Flesch Reading Ease of the page's main content, as the Content Editor
- * imports the page and its Quality reads it (signals/readability.js), so a
- * page scores the same in both. A page whose content can't be found, or has
- * too few words, gets none: its menus and footer aren't its text.
+ * The reading level of the page's main content in its language, as the
+ * Content Editor imports the page and its Quality reads it
+ * (signals/readability.js), so a page scores the same in both: Ateşman for
+ * Turkish, Flesch for English…, with its parts as evidence. A page whose
+ * content can't be found, or has too few words, gets none: its menus and
+ * footer aren't its text. One with no <html lang> is read in the language
+ * its words are in, English when they don't say.
  */
 export const readability = {
   key: 'readability',
   evaluate(ctx) {
-    const html = (ctx.html ?? '').replace(NO_TEXT, ' ');
-    if (html.length > MAX_READ_HTML) {
+    const { blocks, language, tooLarge } = pageProse(ctx);
+    if (tooLarge) {
       return { status: 'na', score: null, evidence: { reason: 'page too large to read' } };
     }
-    let content = '';
-    try {
-      content = extractPageContent(html, ctx.url).html;
-    } catch {
-      // No content found: no score below.
+    const lang = language ?? 'en';
+    if (UNSPACED.has(lang)) {
+      return {
+        status: 'na',
+        score: null,
+        evidence: {
+          reason: 'words and sentences are not counted in this language yet',
+          language: lang,
+        },
+      };
     }
-    const flesch = fleschReadingEase(readingBlocks(content));
-    if (flesch === null) {
+    const level = readingLevel(blocks, lang);
+    if (level === null) {
       return { status: 'na', score: null, evidence: { reason: 'not enough text' } };
     }
-    const { status, score } = fleschBand(flesch);
-    return { status, score, evidence: { fleschReadingEase: Math.round(flesch) } };
+    const { status, score } = readingBand(level);
+    return { status, score, evidence: readingEvidence(level) };
   },
 };
 

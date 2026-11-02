@@ -30,6 +30,8 @@ const page = (over: Partial<AuditedPage> = {}): AuditedPage => ({
   auditId: 'a3',
   score: 0.63,
   previousScore: 0.58,
+  firstScore: 0.58,
+  firstAuditedAt: at(1),
   status: 'improving',
   lastAuditedAt: at(14),
   trend: [0.5, 0.58, 0.63],
@@ -129,6 +131,8 @@ describe('AuditPagesTable', () => {
         path: '/blog',
         auditId: 'b1',
         score: 0.74,
+        firstScore: 0.74,
+        firstAuditedAt: at(2),
         status: 'good',
         issues: 7,
         lastAuditedAt: at(2),
@@ -137,12 +141,57 @@ describe('AuditPagesTable', () => {
     ]);
 
     expect(container.querySelector('[data-slot=card-title]')?.textContent).toBe('Pages');
+    expect([...container.querySelectorAll('th')].map((th) => th.textContent)).toEqual([
+      '',
+      '',
+      'Page',
+      'First score',
+      'Current score',
+      'Issues',
+      'Status',
+      'Last audit',
+    ]);
+    // Audited once, a page shows no change: its first score is its current one.
     expect(rows().map(cells)).toEqual([
-      ['', '', '/pricing', '63', '14', 'Improving', 'Oct 14, 2026'],
-      ['', '', '/blog', '74', '7', 'Good', 'Oct 2, 2026'],
+      [
+        '',
+        '',
+        '/pricing',
+        '58',
+        '63+5 since the first audit on Oct 1, 2026',
+        '14',
+        'Improving',
+        'Oct 14, 2026',
+      ],
+      ['', '', '/blog', '74', '74', '7', 'Good', 'Oct 2, 2026'],
     ]);
     // The score alone: no trend line next to it.
     expect(container.querySelectorAll('tbody svg[role=img]')).toHaveLength(0);
+  });
+
+  it('colours the change since the first audit: up green, down red, unchanged "0"', () => {
+    render([
+      page(),
+      page({ key: 'acme.com/a', path: '/a', score: 0.52, firstScore: 0.58 }),
+      page({ key: 'acme.com/b', path: '/b', score: 0.58, firstScore: 0.58 }),
+      page({ key: 'acme.com/c', path: '/c', score: null, firstScore: null, firstAuditedAt: null }),
+    ]);
+    const change = (row: Element) => row.querySelectorAll('td')[4].querySelector('span');
+    const [up, down, same, none] = rows().map(change);
+    expect(up?.firstChild?.textContent).toBe('+5');
+    expect(up?.className).toContain('text-emerald-600');
+    expect(down?.firstChild?.textContent).toBe('−6');
+    expect(down?.className).toContain('text-red-600');
+    expect(same?.firstChild?.textContent).toBe('0');
+    expect(same?.className).toContain('text-muted-foreground');
+    expect(up?.getAttribute('title')).toBe('Change since the first audit on Oct 1, 2026');
+    // Never audited to the end: no first score, no change.
+    expect(none).toBeNull();
+    expect(cells(rows()[3]).slice(3, 5)).toEqual(['—', '—']);
+    // The first score says when it was.
+    expect(rows()[0].querySelectorAll('td')[3].getAttribute('title')).toBe(
+      'First audited Oct 1, 2026',
+    );
   });
 
   it("tags a page whose last audit was an auto-audit run's", () => {
@@ -215,6 +264,8 @@ describe('AuditPagesTable', () => {
         path: '/broken',
         score: null,
         previousScore: null,
+        firstScore: null,
+        firstAuditedAt: null,
         status: 'failed',
         issues: null,
         trend: [],
@@ -223,8 +274,17 @@ describe('AuditPagesTable', () => {
     ]);
 
     expect(rows().map(cells)).toEqual([
-      ['', '', '/broken', '—', '—', 'Failed', 'Oct 14, 2026'],
-      ['', '', '/pricing', '63', '14', 'Running', 'Oct 14, 2026'],
+      ['', '', '/broken', '—', '—', '—', 'Failed', 'Oct 14, 2026'],
+      [
+        '',
+        '',
+        '/pricing',
+        '58',
+        '63+5 since the first audit on Oct 1, 2026',
+        '14',
+        'Running',
+        'Oct 14, 2026',
+      ],
     ]);
     expect(rows()[1].querySelector('.animate-spin')).not.toBeNull();
   });

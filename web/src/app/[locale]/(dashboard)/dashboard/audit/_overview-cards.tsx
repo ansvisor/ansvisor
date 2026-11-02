@@ -6,7 +6,7 @@ import { CalendarDays, FileText, Gauge, ShieldCheck } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { pct } from '@/components/audit/audit-report';
-import type { AuditOverview, AuditQuota } from '@/lib/actions/audits';
+import type { AuditOverview, AuditQuota, SiteCoverage } from '@/lib/actions/audits';
 import { formatNumber } from '@/lib/format';
 import { isNoPlan } from '@/lib/billing/no-plan';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -84,18 +84,28 @@ const GRID = 'grid grid-cols-1 gap-3 sm:grid-cols-2 min-[75rem]:grid-cols-4';
  * The Site Audit hub's KPI cards (SA-018), as in the v2 mockup: site score,
  * pages audited, Authority · E-E-A-T with its biggest gaps, and this month's
  * audits. The numbers cover the latest audit of each page on the primary
- * domain.
+ * domain; once the inbox has read the site's pages, Pages audited says how
+ * many of them have a current audit, and opens the ones that don't
+ * (customer priorities item 11).
  */
 export function AuditOverviewCards({
   overview,
   quota,
   now,
+  coverage = null,
+  staleDays = 90,
+  onShowNotAudited,
   onOpenSettings,
 }: {
   overview: AuditOverview | null;
   quota: AuditQuota | null;
   /** For the runs' states (done, skipped, next). */
   now: Date;
+  /** The site's coverage, from the inbox; null until it is read. */
+  coverage?: SiteCoverage | null;
+  staleDays?: number;
+  /** Opens Opportunities on its Not audited pages. */
+  onShowNotAudited?: () => void;
   /** Opens the Site Audit settings, from How it works. */
   onOpenSettings?: () => void;
 }) {
@@ -172,17 +182,47 @@ export function AuditOverviewCards({
           delta={upIsGood(overview.siteScoreChange)}
           sub={t('siteScoreSub')}
         />
-        <MetricCard
-          label={t('pagesAudited')}
-          tooltip={t('pagesAuditedTip', { domain })}
-          icon={FileText}
-          value={formatNumber(overview.pages)}
-          sub={
-            overview.otherPages > 0
-              ? t('pagesSubOther', { count: overview.otherPages })
-              : t('pagesSub', { domain })
-          }
-        />
+        {coverage && coverage.pages > 0 ? (
+          <MetricCard
+            label={t('pagesAudited')}
+            tooltip={t('coverageTip', { days: staleDays })}
+            icon={FileText}
+            value={formatNumber(coverage.audited)}
+            unit={t('coverageOf', { count: coverage.pages })}
+            sub={t('coverageSub', {
+              never: coverage.never,
+              stale: coverage.stale,
+              days: staleDays,
+            })}
+            footer={
+              coverage.never + coverage.stale > 0 && onShowNotAudited ? (
+                <div className="flex h-6 items-end">
+                  <button
+                    type="button"
+                    onClick={onShowNotAudited}
+                    className="text-xs font-medium text-foreground underline-offset-2 hover:underline"
+                  >
+                    {t('seeNotAudited', { count: coverage.never + coverage.stale })}
+                  </button>
+                </div>
+              ) : (
+                <div className="h-6" aria-hidden />
+              )
+            }
+          />
+        ) : (
+          <MetricCard
+            label={t('pagesAudited')}
+            tooltip={t('pagesAuditedTip', { domain })}
+            icon={FileText}
+            value={formatNumber(overview.pages)}
+            sub={
+              overview.otherPages > 0
+                ? t('pagesSubOther', { count: overview.otherPages })
+                : t('pagesSub', { domain })
+            }
+          />
+        )}
         <MetricCard
           label={t('authority')}
           tooltip={t('authorityTip')}
