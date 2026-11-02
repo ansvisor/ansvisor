@@ -104,6 +104,44 @@ describe('connectionRecords', () => {
     });
   });
 
+  it('fails Search Console and Analytics whose property is set but whose sign-in is gone', () => {
+    const rows = {
+      ...NO_CONNECTION_ROWS,
+      brand: { gsc_property: 'sc-domain:acme.com', ga_property_id: '123456' },
+    };
+    const agents = [{ name: 'Traffic', needs: [{ kind: 'google_analytics', required: true }] }];
+    // Disconnected in Settings: no sign-in row left, the property kept.
+    for (const signIns of [undefined, []]) {
+      const records = connectionRecords({ rows, agents, signIns });
+      expect(byKey(records, 'google_search_console')).toMatchObject({
+        status: 'failing',
+        account: 'sc-domain:acme.com',
+        suggested: false,
+      });
+      expect(byKey(records, 'google_analytics')).toMatchObject({
+        status: 'failing',
+        account: '123456',
+        // The agent needing it would stop on Disconnect too.
+        stops: ['Traffic'],
+      });
+    }
+    // A sign-in for one tool doesn't connect the other.
+    const one = connectionRecords({
+      rows,
+      signIns: [
+        { provider: 'google-analytics', status: 'connected', connected_by: null, created_at: null },
+        {
+          provider: 'google-search-console',
+          status: 'error',
+          connected_by: null,
+          created_at: null,
+        },
+      ],
+    });
+    expect(byKey(one, 'google_analytics')?.status).toBe('connected');
+    expect(byKey(one, 'google_search_console')?.status).toBe('failing');
+  });
+
   it('reads a CMS site, a failing sign-in, a webhook that takes pages and the catalog’s sources', () => {
     const records = connectionRecords({
       rows: {
@@ -209,7 +247,17 @@ describe('connectionRecords', () => {
     ]);
     const connected = connectionRecords({
       rows: { ...NO_CONNECTION_ROWS, brand: { gsc_property: 'sc', ga_property_id: 'ga' } },
+      signIns: [
+        {
+          provider: 'google-search-console',
+          status: 'connected',
+          connected_by: null,
+          created_at: null,
+        },
+        { provider: 'google-analytics', status: 'connected', connected_by: null, created_at: null },
+      ],
     });
+    expect(byKey(connected, 'google_analytics')?.status).toBe('connected');
     expect(connected.some((r) => r.suggested)).toBe(false);
   });
 

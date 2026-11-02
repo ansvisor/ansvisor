@@ -21,16 +21,17 @@ import { NO_CONNECTION_ROWS, readConnectionRows, type ConnectionRows } from './c
  *
  * Connections are per brand, as the app keeps them (Brand-level access;
  * owner decision 15): the list is for one brand. A tool is connected,
- * failing (its sign-in was refused), not connected, or Soon: a tool no
+ * failing (its sign-in was refused, or is gone while the brand keeps the
+ * property), not connected, or Soon: a tool no
  * integration offers yet, listed so people see what is coming, with
  * nothing to click (as Agent Center's Soon cards). Merchant Center is
  * listed only where this deployment offers it, or once a brand has it.
  *
  * Connecting stays where it is today, in Settings › Integrations (or the
  * Content page for a webhook): a card's Connect and Settings open it.
- * Nothing here holds a key, token or id: a record names the tool, the
- * account as the person named it (a site, a property, a store), who
- * connected it and when.
+ * Nothing here holds a key or token, nor a person's id: a record names the
+ * tool, the account as the person picked it (a site, a store, a Search
+ * Console property, an Analytics property id), who connected it and when.
  */
 
 /** The groups the Connections page filters by. */
@@ -147,12 +148,12 @@ const PAGE_SENT_EVENT = 'content_draft.sent';
 
 export type ConnectionStatus = 'connected' | 'failing' | 'not_connected' | 'soon';
 
-/** One tool for one brand, as the menu, the page and Chat see it: no id, key or token. */
+/** One tool for one brand, as the menu, the page and Chat see it: no key, token or person's id. */
 export interface ConnectionRecord {
   key: string;
   category: ConnectionCategory;
   status: ConnectionStatus;
-  /** The account as the person named it: "Acme site", "sc-domain:acme.com", "acme.shop +1". */
+  /** The account as the person picked it: "Acme site", "sc-domain:acme.com", an Analytics property id, "acme.shop +1". */
   account: string | null;
   /** Who connected it, by name, and when (ISO); null when the app doesn't keep it. */
   connectedBy: string | null;
@@ -245,8 +246,9 @@ function stateOf(t: ConnectionTool, input: RecordInput): ToolState {
     const property =
       t.key === 'google_search_console' ? rows.brand?.gsc_property : rows.brand?.ga_property_id;
     if (!property) return NOT_CONNECTED;
+    // Disconnect in Settings drops the sign-in but leaves the property: without one it fails.
     return {
-      status: 'connected',
+      status: signIn?.status === 'connected' ? 'connected' : 'failing',
       account: property,
       connectedById: signIn?.connected_by ?? null,
       connectedAt: signIn?.created_at ?? null,
@@ -311,7 +313,7 @@ export function connectionRecords(input: RecordInput): ConnectionRecord[] {
       input.merchantCenterOffered === true ||
       states.get(t.key)?.status !== 'not_connected',
   );
-  const kinds = connectedKinds(input.rows);
+  const kinds = connectedKinds(input.rows, input.signIns ?? []);
   // Kinds the brand's agents ask for that it lacks; a kind of one tool only can be suggested.
   const toolsOfKind = (kind: string) => listed.filter((t) => t.kind === kind);
   const wanted = [
