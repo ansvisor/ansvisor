@@ -85,3 +85,24 @@ describe('/api/agent/conversations', () => {
     expect(res.status).toBe(403);
   });
 });
+
+// With the new Chat on for the workspace (CHAT_AGENTIC), Agent Chat's API is
+// gone: its chats are the new Chat's now.
+describe('/api/agent/conversations with the new Chat on', () => {
+  it('answers 404 to the list and to a new conversation', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    const list = await GET();
+    expect(list.status).toBe(404);
+    expect(await list.json()).toEqual({ error: 'Not found' });
+    const res = await start();
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Not found' });
+  });
+
+  it('answers as before where CHAT_AGENTIC_ORGS leaves the workspace out', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', 'org-2');
+    expect((await GET()).status).toBe(200);
+    expect((await start()).status).toBe(402);
+  });
+});
