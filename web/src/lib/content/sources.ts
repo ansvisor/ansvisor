@@ -42,6 +42,8 @@ export interface DraftSourcesData {
   gscQueries: { query: string; clicks: number; impressions: number }[];
   brandDomains: string[];
   competitorDomains: string[];
+  /** The sites the brand trusts (00449), read with the draft's brand; none before it. */
+  trustedDomains?: string[];
 }
 
 /** A person's choice on one source: left out, or added by hand. */

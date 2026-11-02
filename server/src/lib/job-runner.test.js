@@ -29,6 +29,8 @@ vi.mock('./pulse/engine.js', () => ({ generatePulseForBrand: vi.fn() }));
 vi.mock('./signals/pass.js', () => ({ runFirstSignalPass: vi.fn(), runSignalPass: vi.fn() }));
 const sendFirstResultsEmail = vi.hoisted(() => vi.fn());
 vi.mock('./first-results-email.js', () => ({ sendFirstResultsEmail }));
+const emitToBrand = vi.hoisted(() => vi.fn());
+vi.mock('./socket-rooms.js', () => ({ emitToBrand }));
 vi.mock('./logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -290,6 +292,62 @@ describe('the e-mail after a brand’s first run', () => {
     runTrackingJob('subset');
     await flush();
     expect(sendFirstResultsEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe('the event when a job finishes', () => {
+  beforeEach(() => {
+    emitToBrand.mockReset().mockResolvedValue(1);
+    vi.mocked(runFirstSignalPass).mockResolvedValue({});
+    vi.mocked(runSignalPass).mockResolvedValue({});
+    vi.mocked(generatePulseForBrand).mockResolvedValue({});
+  });
+
+  /** A Socket.IO server whose broadcast to every client must stay unused. */
+  const fakeIo = () => ({ emit: vi.fn(), to: vi.fn() });
+
+  it('goes to the people who may reach the tracked brand, not to every client', async () => {
+    processTrackingJob.mockResolvedValue({ resultCount: 12, stamped: false });
+    const io = fakeIo();
+    runTrackingJob('tracked', io);
+    await flush();
+
+    expect(emitToBrand).toHaveBeenCalledWith(io, 'brand-tracked', 'tracking:complete', {
+      brandId: 'brand-tracked',
+      resultCount: 12,
+      immediate: false,
+    });
+    expect(io.emit).not.toHaveBeenCalled();
+  });
+
+  it('goes to the content job’s brand the same way', async () => {
+    processContentJob.mockResolvedValue({ generated: 3 });
+    const io = fakeIo();
+    runContentJob('written', io);
+    await flush();
+
+    expect(emitToBrand).toHaveBeenCalledWith(io, 'brand-written', 'content:generated', {
+      brandId: 'brand-written',
+      generated: 3,
+    });
+    expect(io.emit).not.toHaveBeenCalled();
+  });
+
+  it('leaves the finished job as it is when the event can’t be sent', async () => {
+    emitToBrand.mockRejectedValue(new Error('brands read failed'));
+    processTrackingJob.mockResolvedValue({ resultCount: 5, stamped: false });
+    runTrackingJob('quiet', fakeIo());
+    await flush();
+
+    expect(manager.completeJob).toHaveBeenCalledWith('quiet', { resultCount: 5, stamped: false });
+    expect(manager.failJob).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing without a server', async () => {
+    processTrackingJob.mockResolvedValue({ resultCount: 1, stamped: false });
+    runTrackingJob('no-io');
+    await flush();
+    expect(emitToBrand).not.toHaveBeenCalled();
   });
 });
 

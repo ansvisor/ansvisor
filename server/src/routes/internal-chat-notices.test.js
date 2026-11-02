@@ -13,6 +13,10 @@ const notifyOwnKeyFailure = vi.fn();
 vi.mock('../lib/chat-notices/own-key.js', () => ({
   notifyOwnKeyFailure: (...args) => notifyOwnKeyFailure(...args),
 }));
+const tellGoLiveOff = vi.fn();
+vi.mock('../lib/chat-notices/go-live.js', () => ({
+  tellGoLiveOff: (...args) => tellGoLiveOff(...args),
+}));
 vi.mock('../lib/logger.js', () => ({ default: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 
 const { default: router } = await import('./internal-chat-notices.js');
@@ -73,5 +77,44 @@ describe('POST /api/internal/chat/notices/own-key', () => {
     expect(notifyOwnKeyFailure).not.toHaveBeenCalled();
     notifyOwnKeyFailure.mockRejectedValueOnce(new Error('down'));
     expect((await post({ orgId: ORG, provider: 'openai', since: SINCE })).status).toBe(500);
+  });
+});
+
+describe('POST /api/internal/chat/notices/go-live-off', () => {
+  const AGENT = '33333333-3333-4333-8333-333333333333';
+  const EDITOR = '44444444-4444-4444-8444-444444444444';
+  const post = (body, auth = 'Bearer shh') =>
+    fetch(`${baseUrl}/go-live-off`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: auth },
+      body: JSON.stringify(body),
+    });
+
+  it('tells who allowed an agent an edit stopped, for the version allowed, but not the editor', async () => {
+    tellGoLiveOff.mockReset().mockResolvedValue({ notices: 1, emails: 1 });
+    const res = await post({ orgId: ORG, agentId: AGENT, version: 3, editor: EDITOR });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, notices: 1, emails: 1 });
+    expect(tellGoLiveOff).toHaveBeenCalledWith({
+      orgId: ORG,
+      agentId: AGENT,
+      version: 3,
+      editor: EDITOR,
+    });
+  });
+
+  it('answers only the web, refuses a body it can’t read, and says when it failed', async () => {
+    tellGoLiveOff.mockReset().mockResolvedValue({ notices: 0, emails: 0 });
+    expect((await post({ orgId: ORG, agentId: AGENT, version: 3 }, 'Bearer no')).status).toBe(401);
+    for (const body of [
+      { orgId: ORG, agentId: AGENT },
+      { orgId: ORG, agentId: 'x', version: 1 },
+      { orgId: ORG, agentId: AGENT, version: 0 },
+    ]) {
+      expect((await post(body)).status).toBe(400);
+    }
+    expect(tellGoLiveOff).not.toHaveBeenCalled();
+    tellGoLiveOff.mockRejectedValueOnce(new Error('db down'));
+    expect((await post({ orgId: ORG, agentId: AGENT, version: 3 })).status).toBe(500);
   });
 });

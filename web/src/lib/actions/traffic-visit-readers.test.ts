@@ -173,7 +173,8 @@ describe('readers of the snippet count visits, not pageviews', () => {
   });
 
   it('the MCP and API traffic tool', async () => {
-    const auth = { organizationId: 'org-1' } as McpAuthContext;
+    // A key's owner with All brands, as every key carries its owner's access (BRAND-ACCESS).
+    const auth = { organizationId: 'org-1', brandAccess: 'all' } as McpAuthContext;
     const result = await getAiTrafficFor(auth, { brandId: 'b1' });
     expect(result?.total_visits).toBe(2);
     expect(result?.top_pages).toEqual([

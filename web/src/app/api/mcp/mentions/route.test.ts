@@ -10,6 +10,7 @@ vi.mock('@/lib/mcp-auth', () => ({
     email: null,
     organizationId: 'org-1',
     apiKeyId: 'key-1',
+    brandAccess: 'all',
   })),
 }));
 // The real filters and checks; only the database read is replaced.

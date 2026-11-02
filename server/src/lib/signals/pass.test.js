@@ -26,6 +26,10 @@ const sweepActionTasks = vi.fn();
 vi.mock('../action-center/task-writer/index.js', () => ({
   sweepActionTasks: (...a) => sweepActionTasks(...a),
 }));
+const sweepStaleActions = vi.fn();
+vi.mock('../action-center/stale.js', () => ({
+  sweepStaleActions: (...a) => sweepStaleActions(...a),
+}));
 
 import { runFirstSignalPass, runSignalCatchUp, runSignalPass } from './pass.js';
 
@@ -66,6 +70,8 @@ function mockDb({ runs = [], passes = [] } = {}) {
 }
 
 beforeEach(() => {
+  sweepStaleActions.mockReset();
+  sweepStaleActions.mockResolvedValue({ marked: 1, cleared: 0 });
   from.mockReset();
   recordSignalsForBrand.mockReset();
   generateActionsForBrand.mockReset();
@@ -153,6 +159,30 @@ describe('runSignalPass', () => {
     await runSignalPass(BRAND, { now: NOW });
 
     expect(writes[0].row).toMatchObject({ outcome: 'skipped', detail: { actions: null } });
+  });
+
+  // 00432: an action left New with no one on it for a month is marked stale.
+  it('marks stale actions on a recorded night and a skipped one, and logs it', async () => {
+    let writes = mockDb({ runs: [{ completed_at: RUN_AT }] });
+    recordSignalsForBrand.mockResolvedValue({ inserted: 0 });
+    generateActionsForBrand.mockResolvedValue({ created: 0 });
+    await runSignalPass(BRAND, { now: NOW });
+    expect(sweepStaleActions).toHaveBeenCalledWith(BRAND, { now: NOW });
+    expect(writes[0].row.detail.stale).toEqual({ marked: 1, cleared: 0 });
+
+    writes = mockDb({ runs: [{ completed_at: RUN_AT }] });
+    recordSignalsForBrand.mockResolvedValue({ skipped: 'no_fresh_results' });
+    await runSignalPass(BRAND, { now: NOW });
+    expect(sweepStaleActions).toHaveBeenCalledTimes(2);
+  });
+
+  it('logs the pass even when marking stale actions fails', async () => {
+    const writes = mockDb({ runs: [{ completed_at: RUN_AT }] });
+    recordSignalsForBrand.mockResolvedValue({ inserted: 0 });
+    generateActionsForBrand.mockResolvedValue({ created: 0 });
+    sweepStaleActions.mockRejectedValue(new Error('timeout'));
+    await runSignalPass(BRAND, { now: NOW });
+    expect(writes[0].row).toMatchObject({ outcome: 'recorded', detail: { stale: null } });
   });
 
   it('leaves the scores to the generator on a recorded night', async () => {
