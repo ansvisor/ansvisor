@@ -2808,6 +2808,50 @@ export type Database = {
           },
         ]
       }
+      chat_notices: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          id: string
+          kind: string
+          organization_id: string
+          payload: Json
+          read_at: string | null
+          resolved_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          id?: string
+          kind: string
+          organization_id: string
+          payload?: Json
+          read_at?: string | null
+          resolved_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          id?: string
+          kind?: string
+          organization_id?: string
+          payload?: Json
+          read_at?: string | null
+          resolved_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_notices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_outbound_emails: {
         Row: {
           approved_by: string | null
@@ -3370,6 +3414,7 @@ export type Database = {
           manager_execute_off: string[]
           memory_enabled: boolean
           organization_id: string
+          own_key_agent_month_usd: number
           tool_policies: Json
           updated_at: string
           updated_by: string | null
@@ -3388,6 +3433,7 @@ export type Database = {
           manager_execute_off?: string[]
           memory_enabled?: boolean
           organization_id: string
+          own_key_agent_month_usd?: number
           tool_policies?: Json
           updated_at?: string
           updated_by?: string | null
@@ -3406,6 +3452,7 @@ export type Database = {
           manager_execute_off?: string[]
           memory_enabled?: boolean
           organization_id?: string
+          own_key_agent_month_usd?: number
           tool_policies?: Json
           updated_at?: string
           updated_by?: string | null
