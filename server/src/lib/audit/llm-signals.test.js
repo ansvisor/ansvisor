@@ -111,6 +111,22 @@ describe('evaluateLlmSignals', () => {
     expect(first.results.map((r) => r.key)).toEqual(LLM_SIGNAL_KEYS);
   });
 
+  it('reports each call’s tokens to a caller that charges them, and nothing for kept verdicts (item 9)', async () => {
+    generateObject.mockImplementation(async ({ schema }) => ({
+      object: Object.fromEntries(
+        Object.keys(schema.shape).map((k) => [k, { status: 'pass', score: 1, reason: 'ok' }]),
+      ),
+      usage: { inputTokens: 2000, outputTokens: 400 },
+    }));
+    const onUsage = vi.fn();
+    await evaluateLlmSignals(page(), { onUsage });
+    expect(onUsage).toHaveBeenCalledTimes(2);
+    expect(onUsage).toHaveBeenCalledWith({ inputTokens: 2000, outputTokens: 400 });
+    onUsage.mockClear();
+    await evaluateLlmSignals(page(), { onUsage });
+    expect(onUsage).not.toHaveBeenCalled();
+  });
+
   it('gives an unchanged page the same verdicts and score five times, with no new AI call', async () => {
     const first = await evaluateLlmSignals(page());
     expect(generateObject).toHaveBeenCalledTimes(2);

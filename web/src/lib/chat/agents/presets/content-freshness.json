@@ -3,7 +3,9 @@
   "goal": "content",
   "businessTypes": [],
   "industries": [],
-  "roles": [],
+  "roles": [
+    "content"
+  ],
   "skills": [
     "refresh"
   ],

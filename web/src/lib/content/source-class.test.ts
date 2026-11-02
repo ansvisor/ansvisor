@@ -43,6 +43,19 @@ describe('sourceClass', () => {
     }
   });
 
+  it('reads a site the brand trusts, and its pages, as primary, but not its own pages (00449)', () => {
+    const trusting = {
+      ...ctx,
+      trustedDomains: ['some-coffee-blog.example', 'medium.com', 'acme.example'],
+    };
+    expect(sourceClass('https://some-coffee-blog.example/post', trusting)).toBe('primary');
+    expect(sourceClass('https://docs.some-coffee-blog.example/', trusting)).toBe('primary');
+    // The brand's word wins over the shared lists…
+    expect(sourceClass('https://medium.com/@someone/post', trusting)).toBe('primary');
+    // …but its own pages stay its own.
+    expect(sourceClass('https://acme.example/about', trusting)).toBe('own');
+  });
+
   it('leaves out an address the rules can’t place', () => {
     expect(sourceClass('https://some-coffee-blog.example/post', ctx)).toBeNull();
     expect(sourceClass('not a link', { ...ctx, pageType: null })).toBeNull();

@@ -3,15 +3,17 @@
  * with the figures its weights were derived from.
  */
 
+import { AI_ADOPTION_RATE } from '@/lib/volume-estimate';
+
 /**
- * The share of Google searches that show an AI Overview (Semrush / Pew
- * estimates) when the weights were set: what AI Overviews' weight in the
- * chart rests on. Not the AI adoption rate the volumes are estimated with
- * (AI_ADOPTION_RATE in lib/volume-estimate.ts), which sizes the total and
- * is the rate the chart's caption says; the caption gives no AI Overviews
- * share, so the two figures don't read as contradicting each other.
+ * The share of Google searches that show an AI Overview: the AI adoption
+ * rate the volumes are estimated with (AI_ADOPTION_RATE in
+ * lib/volume-estimate.ts, 45%: AI Overviews appear on roughly 43–48% of
+ * Google searches). One figure for both, so the chart's split rests on the
+ * rate its caption gives the total. Was 35% (Semrush / Pew) until the rate
+ * moved to 45%.
  */
-export const AIO_SEARCH_SHARE = 0.35;
+export const AIO_SEARCH_SHARE = AI_ADOPTION_RATE;
 
 /** Google searches a day (ExplodingTopics, Feb 2026). */
 const GOOGLE_DAILY_SEARCHES = 16.4e9;
@@ -19,11 +21,16 @@ const GOOGLE_DAILY_SEARCHES = 16.4e9;
 /**
  * The other answer engines' AI-answered queries a day, together: ChatGPT
  * ~2.5B, the other chatbots ~1.13B and Google AI Mode, as the weights below
- * were set (AI Overviews at 60.2%).
+ * were set (AI Overviews at 35% of Google searches, 60.2% of the queries).
+ * They stay as they are: a higher AI Overviews coverage adds AI Overviews
+ * queries, not ChatGPT's.
  */
 const OTHER_ENGINES_DAILY = 3.795e9;
 
-/** AI Overviews' share of all AI-answered queries: ~5.74B of ~9.5B a day. */
+/**
+ * AI Overviews' share of all AI-answered queries: 45% × 16.4B = ~7.38B of
+ * ~11.2B a day, ~66% (at 35% it was ~5.74B of ~9.5B, 60.2%).
+ */
 const AIO_SHARE = (() => {
   const aio = GOOGLE_DAILY_SEARCHES * AIO_SEARCH_SHARE;
   return aio / (aio + OTHER_ENGINES_DAILY);
@@ -31,11 +38,12 @@ const AIO_SHARE = (() => {
 
 /**
  * Estimated share of AI-answered search queries across major answer engines.
+ * The total the chart splits doesn't depend on it; only how it is divided.
  *
  * Derivation (all daily volume figures, early 2026):
  *   • Google Search:            ~16.4B searches/day  (ExplodingTopics, Feb 2026)
- *   • AI Overview coverage:     AIO_SEARCH_SHARE of Google searches (~35%)
- *     → AI Overview volume:     ~5.74B/day
+ *   • AI Overview coverage:     AIO_SEARCH_SHARE of Google searches (45%)
+ *     → AI Overview volume:     ~7.38B/day
  *   • Google AI Mode:           ~100M MAU / ~1B monthly queries (Alphabet Q2 2025
  *     disclosures, 2026 industry estimates), still below Gemini app scale
  *   • ChatGPT:                  ~2.5B prompts/day  (Ahrefs, Jul 2025)
@@ -45,7 +53,8 @@ const AIO_SHARE = (() => {
  *
  * AI Overviews' share comes from AIO_SEARCH_SHARE; the other engines split
  * the rest by their weights (shares of all AI-answered queries at the 35%
- * coverage they were set with).
+ * coverage they were set with, so each keeps its queries a day: ChatGPT
+ * 27% of ~9.5B then, ~23% of ~11.2B now).
  *
  * Unlike raw chatbot-only market-share charts, this distribution reflects the
  * "any query that gets an AI-generated answer" universe — which is the

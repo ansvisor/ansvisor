@@ -517,7 +517,7 @@ function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited:
               {emailSent ? t('team_inviteLinkEmailSent') : t('team_inviteLinkNoEmail')}
             </p>
             <div className="flex items-center gap-2">
-              <Input readOnly value={inviteLink} className="flex-1 text-xs" />
+              <Input readOnly value={inviteLink} className="ph-no-capture flex-1 text-xs" />
               <Button variant="outline" size="sm" onClick={copyLink}>
                 <Copy className="h-4 w-4" />
               </Button>

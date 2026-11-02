@@ -1,76 +1,24 @@
 'use server';
 
 import { z } from 'zod';
-import { isKeyFailureClass, type KeyFailureClass } from '@/lib/agent/key-errors';
-import { isAiProvider, type AiProvider } from '@/lib/agent/providers';
+import { OPENED_CLOSES, noticeOf, type ChatNotice, type NoticeRow } from '@/lib/chat/notices';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { createClient } from '@/lib/supabase/server';
 
 /**
  * The person's own notices from the system (00441), for the top of their
- * Inbox's Needs you: their workspace's own AI key fails (AGENT-OWN-KEY §5.3).
- * Only Admins get them; the server writes them. Read with the person's
- * session (RLS: their own rows), open ones only: a key that works again
- * resolves its notice.
+ * Inbox's Needs you: their workspace's own AI key fails (AGENT-OWN-KEY §5.3),
+ * or its agents reached 80% or all of their monthly limit on it (§4.2 item
+ * 4, PR 10), for Admins; an agent went live on its own, or an edit stopped
+ * it (AUTONOMOUS-GO-LIVE §6.4, 00446), for its owner and the people it
+ * notifies; a scheduled job's run failed or the job paused (00461), for its
+ * owner. The server writes them. Read with the person's session (RLS:
+ * their own rows, about brands they reach), open ones only: a key that works
+ * again, a period that renews or a limit raised resolves its notice; one
+ * about an agent closes once the person opens it.
  */
 
-/** A notice as the Inbox shows it. */
-export type ChatNotice = OwnKeyNotice | ScheduleNotice;
-
-interface OwnKeyNotice {
-  id: string;
-  kind: 'own_key_failed';
-  provider: AiProvider;
-  class: KeyFailureClass;
-  /** The 3-day reminder of a key still failing. */
-  reminder: boolean;
-  createdAt: string;
-  read: boolean;
-}
-
-/**
- * A scheduled job's notice (CHAT-12 items 16, 26–27; 00461): a run failed
- * after its retry, or the job turned itself off, with why in plain words.
- */
-export interface ScheduleNotice {
-  id: string;
-  kind: 'schedule_failed' | 'schedule_paused';
-  title: string;
-  reason: string;
-  /** Where Open goes: the job's chat, or Chat when it has none yet. */
-  href: `/dashboard/${string}`;
-  createdAt: string;
-  read: boolean;
-}
-
-const SCHEDULE_KINDS = new Set(['schedule_failed', 'schedule_paused']);
-
-/** A scheduled job's notice from its row; null for one that doesn't read. */
-function scheduleNotice(row: {
-  id: string;
-  kind: string;
-  payload: Record<string, unknown> | null;
-  created_at: string;
-  read_at: string | null;
-}): ScheduleNotice | null {
-  const { title, reason, conversationId } = row.payload ?? {};
-  if (!SCHEDULE_KINDS.has(row.kind) || typeof title !== 'string' || typeof reason !== 'string') {
-    return null;
-  }
-  const chat =
-    typeof conversationId === 'string' && /^[0-9a-f-]{36}$/i.test(conversationId)
-      ? conversationId
-      : null;
-  return {
-    id: row.id,
-    kind: row.kind as ScheduleNotice['kind'],
-    title: title.slice(0, 120),
-    reason: reason.slice(0, 200),
-    href: chat ? `/dashboard/chat/${chat}` : '/dashboard/chat',
-    createdAt: row.created_at,
-    read: row.read_at !== null,
-  };
-}
+export type { ChatNotice, ScheduleNotice } from '@/lib/chat/notices';
 
 export type ChatNoticesRead = { ok: true; notices: ChatNotice[] } | { ok: false };
 
@@ -109,33 +57,9 @@ export async function readChatNotices(): Promise<ChatNoticesRead> {
       console.error('[chat/notices] could not read the notices:', error.message);
       return { ok: false };
     }
-    const notices: ChatNotice[] = [];
-    for (const row of (data ?? []) as {
-      id: string;
-      kind: string;
-      payload: { provider?: unknown; class?: unknown; reminder?: unknown } | null;
-      created_at: string;
-      read_at: string | null;
-    }[]) {
-      const scheduled = scheduleNotice(row);
-      if (scheduled) {
-        notices.push(scheduled);
-        continue;
-      }
-      const { provider, class: cls, reminder } = row.payload ?? {};
-      if (row.kind !== 'own_key_failed' || !isAiProvider(provider) || !isKeyFailureClass(cls)) {
-        continue;
-      }
-      notices.push({
-        id: row.id,
-        kind: 'own_key_failed',
-        provider,
-        class: cls,
-        reminder: reminder === true,
-        createdAt: row.created_at,
-        read: row.read_at !== null,
-      });
-    }
+    const notices = ((data ?? []) as NoticeRow[])
+      .map(noticeOf)
+      .filter((notice): notice is ChatNotice => notice !== null);
     return { ok: true, notices };
   } catch (err) {
     console.error('[chat/notices] could not read the notices:', err);
@@ -144,6 +68,35 @@ export async function readChatNotices(): Promise<ChatNoticesRead> {
 }
 
 const idsSchema = z.array(z.uuid()).min(1).max(NOTICES_MAX);
+
+/**
+ * A notice about an agent the person opened (Open page, Open run, Open
+ * agent): it leaves Needs you (resolved_at). Their own row only, and only
+ * one that opening closes; a key's stays until the key works. Open while
+ * the workspace is read-only, as reading. Never throws.
+ */
+export async function closeChatNotice(id: string): Promise<boolean> {
+  if (!z.uuid().safeParse(id).success) return false;
+  try {
+    const me = await signedIn();
+    if (!me) return false;
+    const { error } = await me.client
+      .from('chat_notices')
+      .update({ resolved_at: new Date().toISOString() })
+      .eq('user_id', me.userId)
+      .eq('id', id)
+      .in('kind', [...OPENED_CLOSES])
+      .is('resolved_at', null);
+    if (error) {
+      console.error('[chat/notices] could not close a notice:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[chat/notices] could not close a notice:', err);
+    return false;
+  }
+}
 
 /**
  * The notices on screen are read (read_at). Open while the workspace is
