@@ -106,6 +106,49 @@ describe('pickWhatsNew', () => {
     expect(pick.items.map((i) => i.slug)).toEqual(['newest', 'upgrade']);
   });
 
+  it('pages through entries of one day and a read/unread mix, each once, until none are left', () => {
+    const sameDay = [
+      day('2026-10-31', 'a'),
+      day('2026-10-31', 'b'),
+      day('2026-10-31', 'c'),
+      day('2026-10-31', 'd'),
+      day('2026-10-31', 'e'),
+      day('2026-10-20', 'f'),
+      day('2026-10-01', 'g'),
+    ];
+    // An unread entry ranks before newer read ones: paging must still reach them.
+    const read = new Set(['a', 'b', 'c']);
+    const shown: string[] = [];
+    const pages: string[][] = [];
+    for (let more = true; more; ) {
+      const pick = pickWhatsNew({ entries: sameDay, plan: starter, read, now, shown });
+      pages.push(pick.items.map((i) => i.slug));
+      shown.push(...pick.items.map((i) => i.feature));
+      more = pick.more;
+      expect(pages.length).toBeLessThan(5);
+    }
+    expect(pages).toEqual([['d', 'e', 'f'], ['g', 'a', 'b'], ['c']]);
+    // With everything shown, nothing is left and older_updates goes false.
+    expect(pickWhatsNew({ entries: sameDay, plan: starter, read, now, shown })).toMatchObject({
+      items: [],
+      more: false,
+    });
+  });
+
+  it('says more only for entries the filters leave', () => {
+    const pick = pickWhatsNew({
+      entries: ENTRIES,
+      plan: starter,
+      read: new Set(['newest']),
+      now,
+      unreadOnly: true,
+      days: HOME_LINE_DAYS,
+      limit: 1,
+    });
+    expect(pick.items.map((i) => i.slug)).toEqual(['upgrade']);
+    expect(pick.more).toBe(false);
+  });
+
   it('gives Home the newest unread entry of the last 14 days, and no line once it is read', () => {
     const home = (read: string[]) =>
       pickWhatsNew({
@@ -141,16 +184,16 @@ describe('pickWhatsNew', () => {
     ).toBe(false);
   });
 
-  it('reads the older ones before a day, and shows a Growth workspace its own', () => {
-    expect(
-      pickWhatsNew({
-        entries: ENTRIES,
-        plan: starter,
-        read: new Set(),
-        now,
-        olderThan: '2026-11-03',
-      }).items.map((i) => i.slug),
-    ).toEqual(['older', 'months-ago']);
+  it('reads the ones not shown yet, by feature or slug, and shows a Growth workspace its own', () => {
+    const next = pickWhatsNew({
+      entries: ENTRIES,
+      plan: starter,
+      read: new Set(),
+      now,
+      shown: ['Newest', ' upgrade '],
+    });
+    expect(next.items.map((i) => i.slug)).toEqual(['older', 'months-ago']);
+    expect(next.more).toBe(false);
     const growth = pickWhatsNew({
       entries: ENTRIES,
       plan: { planId: 'growth', selfHosted: false },
