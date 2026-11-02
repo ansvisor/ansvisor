@@ -62,7 +62,9 @@ const MCP_COACH_SKILLS = ['ansvisor-aeo-coach', 'ansvisor-aeo-coach-standalone']
  *     "Checks every draft against your approved brand facts.": Chat reads
  *     no site, and only approved facts count;
  *   - publish: "a Webflow draft" is "a CMS draft": the draft goes to the
- *     brand's own CMS, whichever it is.
+ *     brand's own CMS, whichever it is; and "Going live is always your
+ *     click." is "Goes live on its own only if an Admin allows it."
+ *     (AUTONOMOUS-GO-LIVE §14).
  * The other four the mockup's `SK` doesn't describe (beat, refresh,
  * answerfirst, translate) take the agentic plan's §4 line. CHAT-24 §5's
  * seven for the focus areas (W2-23) take the mockup's "New for you" line
@@ -101,7 +103,8 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
   },
   publish: {
     title: 'Ready to publish',
-    description: 'Checks, page fields and a CMS draft. Going live is always your click.',
+    description:
+      'Checks, page fields and a CMS draft. Goes live on its own only if an Admin allows it.',
   },
   shopping: {
     title: 'AI shopping readiness',

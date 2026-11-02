@@ -8,7 +8,7 @@ updated: 2026-10-30
 last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/src/components/settings/add-ons-card.tsx, web/src/components/ai-usage/get-more.tsx, web/src/lib/actions/add-ons.ts]
 ---
 **Add-ons** in **Settings › Billing** sell extra AI credits and storage for when your plan's monthly limits run out. Packs are paid with Stripe and added to your plan only after the payment goes through, and each one shows on your invoice.

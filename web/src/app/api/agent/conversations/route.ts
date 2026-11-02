@@ -4,18 +4,21 @@ import { resolveAgentAuth } from '@/lib/agent/auth';
 import { getPlan, hasFeature, type PlanId } from '@/config/plans';
 import { isAgentKeyConfigured } from '@/lib/agent/key';
 import { subscriptionActiveFor, subscriptionInactiveResponse } from '@/lib/mcp/subscription-gate';
+import { legacyAgentApiGone } from '@/lib/chat/legacy-route';
 
 /**
  * GET /api/agent/conversations
  *
  * List the calling user's conversations, newest first. Powers the agent
- * page's sidebar.
+ * page's sidebar. With the new Chat on for the org, 404 (legacyAgentApiGone).
  */
 export async function GET() {
   const auth = await resolveAgentAuth();
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const gone = legacyAgentApiGone(auth.organizationId);
+  if (gone) return gone;
 
   const { data, error } = await supabaseAdmin
     .from('agent_conversations')
@@ -42,7 +45,8 @@ export async function GET() {
  * here too so a non-Growth user clicking "+ New chat" gets the 403
  * immediately rather than after typing a message. Likewise a read-only
  * workspace (Cloud, plan not active) gets 402 subscription_inactive here, as
- * the chat does; reading and deleting conversations stay open.
+ * the chat does; reading and deleting conversations stay open. With the new
+ * Chat on for the org, 404 (legacyAgentApiGone).
  */
 export async function POST(req: Request) {
   const auth = await resolveAgentAuth();
@@ -50,6 +54,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const organizationId: string = auth.organizationId;
+  const gone = legacyAgentApiGone(organizationId);
+  if (gone) return gone;
   if (!(await subscriptionActiveFor(organizationId))) return subscriptionInactiveResponse();
 
   const { data: org } = await supabaseAdmin
