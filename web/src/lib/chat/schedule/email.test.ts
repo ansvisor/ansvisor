@@ -24,7 +24,9 @@ const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const email = await import('./email');
 
-const fetchMock = vi.fn(async () => ({ ok: true, status: 200 }));
+const fetchMock = vi.fn<
+  (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number }>
+>(async () => ({ ok: true, status: 200 }));
 const sent = () =>
   fetchMock.mock.calls.map(([, init]) => JSON.parse((init as RequestInit).body as string));
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
