@@ -8,7 +8,13 @@ import { AGENT_PROVIDER_OPTIONS, buildAgentModel, type AgentModelConfig } from '
 import type { ActiveKeyRead } from '@/lib/agent/key';
 import type { AiProvider } from '@/lib/agent/providers';
 import { autoModels } from './engine-model';
-import { markKeyChecked, markKeyFailing, markKeyWorking, resumeOwnKeyAgents } from './key-health';
+import {
+  markKeyChecked,
+  markKeyFailing,
+  markKeyWorking,
+  resolveOwnKeyNotices,
+  resumeOwnKeyAgents,
+} from './key-health';
 
 /**
  * Settings › AI Providers' Test (AGENT-OWN-KEY §5.2 item 7): one tiny call on
@@ -99,5 +105,10 @@ export async function keepKeyCheck(
     return 0;
   }
   await markKeyWorking(organizationId, provider, now, { resume: false });
+  // Its notices close whether or not a failure was still marked: a key saved
+  // again has none (00440's trigger cleared it), and its notices stayed open.
+  await resolveOwnKeyNotices(organizationId, provider, now).catch((err) =>
+    console.error("[chat/key] could not close the AI key's notices:", err),
+  );
   return active ? resumeOwnKeyAgents(organizationId, now) : 0;
 }

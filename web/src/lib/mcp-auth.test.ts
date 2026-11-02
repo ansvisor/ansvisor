@@ -9,6 +9,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let status: string | null;
 let plan: string;
+/** The key owner's profile, and the brands shared with them (member_brands) and the demo brand. */
+let profile: Record<string, unknown> | null;
+let profileError: { code: string; message: string } | null;
+let lists: Record<string, Record<string, unknown>[]>;
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
     from: (table: string) => {
@@ -16,14 +20,18 @@ vi.mock('@/lib/supabase/admin', () => ({
         table === 'api_keys'
           ? { id: 'key-1', user_id: 'user-1', revoked_at: null }
           : table === 'profiles'
-            ? { organization_id: 'org-1', role: 'analyst' }
+            ? profile
             : { plan, subscription_status: status };
       const query = {
         select: () => query,
         eq: () => query,
         update: () => query,
-        then: (resolve: (value: unknown) => void) => resolve({ data: null }),
-        maybeSingle: async () => ({ data: row, error: null }),
+        then: (resolve: (value: unknown) => void) =>
+          resolve({ data: lists[table] ?? null, error: null }),
+        maybeSingle: async () =>
+          table === 'profiles' && profileError
+            ? { data: null, error: profileError }
+            : { data: row, error: null },
       };
       return query;
     },
@@ -43,6 +51,9 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   status = 'canceled';
   plan = 'growth';
+  profile = { organization_id: 'org-1', role: 'analyst', brand_scope: 'all' };
+  profileError = null;
+  lists = {};
 });
 
 afterEach(() => {
@@ -112,5 +123,37 @@ describe('authenticateMcpRequest per plan (DECISIONS S, 2026-10-30)', () => {
     plan = 'starter';
     const res = (await authenticateMcpRequest(request('POST'))) as Response;
     expect(await res.json()).toMatchObject({ code: 'subscription_inactive' });
+  });
+});
+
+describe("authenticateMcpRequest carries the key owner's brand access (BRAND-ACCESS)", () => {
+  it('gives All brands to everyone who has them, as everyone starts', async () => {
+    expect(await authenticateMcpRequest(request('GET'))).toMatchObject({ brandAccess: 'all' });
+    // An Admin always has All brands, whatever the scope says.
+    profile = { organization_id: 'org-1', role: 'admin', brand_scope: 'selected' };
+    expect(await authenticateMcpRequest(request('GET'))).toMatchObject({ brandAccess: 'all' });
+  });
+
+  it('gives a Selected-brands person the brands shared with them, and the demo brand', async () => {
+    profile = { organization_id: 'org-1', role: 'manager', brand_scope: 'selected' };
+    lists = { member_brands: [{ brand_id: 'b2' }], brands: [{ id: 'demo' }] };
+    expect(await authenticateMcpRequest(request('GET'))).toMatchObject({
+      brandAccess: ['b2', 'demo'],
+    });
+  });
+
+  it('reaches no brand without a workspace', async () => {
+    profile = { organization_id: null, role: null, brand_scope: 'all' };
+    expect(await authenticateMcpRequest(request('GET'))).toMatchObject({
+      organizationId: null,
+      brandAccess: null,
+    });
+  });
+
+  it('answers 503 when the access can’t be read, so no tool runs on a guess', async () => {
+    profileError = { code: '57014', message: 'timeout' };
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = (await authenticateMcpRequest(request('GET'))) as Response;
+    expect(res.status).toBe(503);
   });
 });

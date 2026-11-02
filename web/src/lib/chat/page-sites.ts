@@ -231,6 +231,30 @@ export function siteRules(sites: PageSites): { hosts: string[]; domains: string[
   };
 }
 
+/** Exact pages from addresses (a draft's Sources), as the list keeps them. */
+export function sitesOfPages(addresses: (string | null | undefined)[]): PageSites {
+  const urls = addresses.flatMap((address) => {
+    const key = typeof address === 'string' && address.trim() ? keyOf(address) : null;
+    return key ? [key] : [];
+  });
+  return { hosts: [], domains: [], urls };
+}
+
+/**
+ * Whether a link goes to a site on the list (AUTONOMOUS-GO-LIVE §6.3 item 4):
+ * an exact page (its #part aside), the brand's domains with their
+ * subdomains, or a listed host at any path. Not an http(s) address: false.
+ */
+export function linksToSites(url: string, sites: PageSites): boolean {
+  const u = parsed(url);
+  if (!u) return false;
+  const key = pageKey(u);
+  const withoutHash = key.slice(0, key.length - u.hash.length);
+  if (sites.urls.includes(key) || sites.urls.includes(withoutHash)) return true;
+  const host = bareHost(u.hostname);
+  return isSite(host) && (onDomain(host, sites.domains) || sites.hosts.includes(host));
+}
+
 /** Where the run stands: it read outside text (tainted), or a page aimed words at AI (injected). */
 export interface RunTrust {
   tainted: boolean;

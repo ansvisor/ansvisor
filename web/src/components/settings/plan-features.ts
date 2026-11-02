@@ -35,8 +35,9 @@ export function usePlanCardsChatMetered(): boolean {
  * the answer engines it tracks, content briefs and site audits a month,
  * AI usage as a multiple of Starter's, then what the plan adds. Billing's
  * cards and the plan dialog show the same list. With the new Chat on
- * (chatMetered), AI usage's hint says Chat and agents draw on it, and own
- * keys are Enterprise's (ownKeyAllowed).
+ * (chatMetered), AI usage's hint says Chat and agents draw on it, own keys
+ * are Enterprise's (ownKeyAllowed), and the plan's Chat points (Full auto
+ * from Growth up) come before what else it adds.
  */
 export function usePlanFeatures(): (planId: PlanId) => PlanFeature[] {
   const tCards = useTranslations('settings.planCards');
@@ -66,6 +67,9 @@ export function usePlanFeatures(): (planId: PlanId) => PlanFeature[] {
             },
           ]
         : []),
+      ...(chatMetered ? (tCards.raw(`${planId}.extrasChat`) as string[]) : []).map((text) => ({
+        text,
+      })),
       ...(tCards.raw(`${planId}.extras`) as string[]).map((text) => ({ text })),
     ];
   };

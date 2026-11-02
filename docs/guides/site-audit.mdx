@@ -27,8 +27,10 @@ You can audit any URL: your own pages, or a competitor's page to see what it doe
 
 You can also start audits from:
 
-- the **Opportunities** tab, with **Audit selected** (see [Opportunities](#opportunities));
+- the **Opportunities** tab, with **Audit selected**, or **Audit all** under its **Not audited** filter (see [Opportunities](#opportunities));
 - the **Pages** tab, with **Re-audit** on the pages you select;
+
+A bulk audit asks first: it lists the pages, says how many of the month's audits it uses, and leaves out pages audited in the last 7 days unless you include them. With fewer audits left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait.
 - the **AI Referral Traffic** page, with **Audit page** on a landing page;
 - auto-audit, which audits your top-priority pages on its own (see [Auto-audit and settings](#auto-audit-and-settings));
 - the [MCP server](/guides/mcp-server#site-audit), with `run_site_audit`.
@@ -50,7 +52,7 @@ A one-line summary at the top gives your site score, the number of pages audited
 | Card | What it shows |
 |---|---|
 | **Site score** | The average score of each page's latest audit, and its change from each page's previous audit |
-| **Pages audited** | Pages of your domain with a completed audit, and how many pages of other sites you audited |
+| **Pages audited** | How many of your site's pages (from your sitemap, Google Analytics and AI citations) have an audit from the last 90 days, how many don't, and a link to those in Opportunities. Before your site's pages are read, your domain's audited pages |
 | **Authority · E-E-A-T** | The two category scores averaged over your pages, and the signals that fail or warn on the most pages |
 | **Audits this month** | Audits left this billing month, with the share auto-audit keeps for its runs still to come |
 
@@ -63,6 +65,8 @@ The **Opportunities** tab is an inbox of the pages worth auditing next. Each row
 - **No AI traffic** — a page that ranks high on your site in Google Analytics (for example **Top 5% by revenue**) but gets no visitors from AI engines. **Targeted, not cited** adds that a tracked prompt points at the page and no AI answer cites it;
 - a competitor is cited on prompts where you never are, and this is your closest page (for example **Acme cited on 3 prompts**);
 - **Never audited**, or **Audited 120 days ago** — pages of your site with no audit in the last 90 days.
+
+Chips above the list show one reason at a time: **All**, **Not audited**, **No AI traffic** and **Competitor cited**, each with its count.
 
 The priority multiplies the page's value to the business, the size of the opportunity and how easy it is to fix (how close its last score is to passing). Hover the number to see the three parts.
 

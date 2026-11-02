@@ -92,6 +92,28 @@ describe('OpportunityRowMenu', () => {
     expect(handlers.start).toHaveBeenCalled();
   });
 
+  it('offers Write this first, saying what it does, where Start is offered (customer priorities item 9)', async () => {
+    const writeThis = vi.fn();
+    let items = await open(props({ editor: { ...props().editor, onWriteThis: writeThis } }));
+    expect(labels(items).slice(0, 2)).toEqual([
+      'Write thisBrief and draft in one go',
+      'Send to Editor',
+    ]);
+    await act(async () => items[0].click());
+    expect(writeThis).toHaveBeenCalled();
+    expect(handlers.start).not.toHaveBeenCalled();
+
+    // A draft being written opens instead of either.
+    act(() => root.unmount());
+    root = createRoot(container);
+    document.querySelectorAll('[role="menu"]').forEach((m) => m.remove());
+    items = await open(
+      props({ editor: { ...props().editor, onWriteThis: writeThis, draftId: 'd7' } }),
+    );
+    expect(labels(items)[0]).toBe('Open draft');
+    expect(labels(items)).not.toContain('Send to Editor');
+  });
+
   it('opens what is already there: the draft, and the Plan', async () => {
     const items = await open(
       props({

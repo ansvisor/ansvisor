@@ -29,7 +29,7 @@ import {
   writesAgents,
 } from '@/lib/chat/agent-view';
 import { cn } from '@/lib/utils';
-import { AgentDenial, FormulaChips, StatusLine, liveRunOf } from './agent-parts';
+import { AgentDenial, FormulaChips, GoLiveBadge, StatusLine, liveRunOf } from './agent-parts';
 import { readAgents } from './agent-requests';
 import { AgentsKeyBanner } from '@/components/chat/own-key-notice';
 import { useAgentWords, type AgentWords } from './agent-words';
@@ -168,6 +168,9 @@ function AgentCard({
       </div>
 
       <FormulaChips agent={agent} words={words} />
+      {agent.goLiveLimit !== undefined && (
+        <GoLiveBadge limit={agent.goLiveLimit} className="w-fit" />
+      )}
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
         {cell(tList('cells.trigger'), value(words.triggersShort(agent.triggers)), 'trigger')}

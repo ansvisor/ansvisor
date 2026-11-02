@@ -13,6 +13,7 @@ const {
   readPostState,
   revokePassword,
   siteAddress,
+  publishPost,
   updatePost,
 } = await import('./wordpress.js');
 
@@ -334,5 +335,25 @@ describe('readPostState and answersAsWordPress (the published check)', () => {
     expect(await answersAsWordPress(checked.site, signIn, { request: checked.request })).toBe(
       false,
     );
+  });
+});
+
+describe('publishPost (AUTONOMOUS-GO-LIVE PR 9)', () => {
+  it('sets the post live, nothing else, and answers its link', async () => {
+    const { site, request } = await start({
+      'POST /wp-json/wp/v2/posts/7': () => ({
+        json: { id: 7, status: 'publish', link: 'https://blog.acme.example/cold-brew/' },
+      }),
+    });
+    expect(await publishPost(site, signIn, '7', { request })).toEqual({
+      id: 7,
+      status: 'publish',
+      link: 'https://blog.acme.example/cold-brew/',
+    });
+    expect(api.calls[0]).toMatchObject({ method: 'POST', body: { status: 'publish' } });
+    expect(api.calls[0].headers.authorization).toBe(BASIC);
+    await expect(publishPost(site, signIn, 'x', { request })).rejects.toMatchObject({
+      code: 'not_found',
+    });
   });
 });

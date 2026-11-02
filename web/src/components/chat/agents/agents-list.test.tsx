@@ -195,6 +195,19 @@ describe('AgentsList (Agent Center › Your agents)', () => {
     expect(cell(second, 'lastRun')).toBe('Last run—');
   });
 
+  it('badges an agent that publishes and sends on its own, with its daily limit (AUTONOMOUS-GO-LIVE §7.2)', async () => {
+    page = listResult([
+      listItem({ goLiveLimit: 5 }),
+      listItem({ id: 'aaaaaaaa-0000-4000-8000-000000000002' }),
+    ]);
+    await render();
+    const [allowed, other] = cards();
+    expect(allowed.querySelector('[data-slot="agent-go-live-badge"]')?.textContent).toBe(
+      'Publishes on its own · 5 a day',
+    );
+    expect(other.querySelector('[data-slot="agent-go-live-badge"]')).toBeNull();
+  });
+
   it('shows AI use · 30 days as a share with a thin bar, its runs on hover, and never dollars', async () => {
     await render();
     const [first, second] = cards();

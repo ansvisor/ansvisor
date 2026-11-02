@@ -20,7 +20,6 @@ import {
   navItemHref,
   shouldShowDashboardNavItem,
 } from '@/lib/dashboard-navigation';
-import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useSidebarStore } from '@/stores/use-sidebar-store';
 import { useChatRailStore } from '@/stores/use-chat-rail-store';
@@ -174,13 +173,11 @@ export function Sidebar() {
   const t = useTranslations('nav');
   const { canUse, requiredPlanFor, isCloud } = useFeatureGate();
   // Probe once per session whether the org has a provider key for Chat.
-  // Returns 'configured' immediately on self-host (no network call).
-  const agentKeyStatus = useAgentKeyStatus(isCloud);
-  const agentKeyMissing = isCloud && agentKeyStatus === 'missing';
-  // On the demo brand, Chat says it comes next week (its page is the preview).
-  const { isDemo } = useDemoBrand();
-  const tDemo = useTranslations('demo.chat');
-  const chatSoon = isDemo ? tDemo('soon') : null;
+  // Returns 'configured' immediately on self-host and with the new Chat on
+  // (no network call): that one runs on the plan's AI limit.
+  const agentKeyStatus = useAgentKeyStatus(isCloud && !chatAgentic);
+  const agentKeyMissing = isCloud && !chatAgentic && agentKeyStatus === 'missing';
+  const chatSetUp = agentKeyMissing ? t('chatSetUp') : null;
   // Brand-scoped gates follow the active brand, not the org. Selecting the
   // derived brand keeps this reactive: switching brands via BrandSwitcher or
   // toggling the flag in Brand Settings flips the gate without a route change.
@@ -482,9 +479,9 @@ export function Sidebar() {
                         : pathname.startsWith(href);
                     const label = getDashboardNavLabel(item.title, t);
 
-                    // Chat's own badge: "Soon (next week)" on the demo brand,
-                    // "Set up" when the org has no provider key for it (cloud only).
-                    const effectiveBadge = dashboardNavBadge(item, { chatSoon, agentKeyMissing });
+                    // Chat's own badge: "Set up" when the org has no provider key for
+                    // it (cloud only, never with the new Chat on).
+                    const effectiveBadge = dashboardNavBadge(item, { chatAgentic, chatSetUp });
 
                     const isLocked =
                       isCloud && item.requiredFeature != null && !canUse(item.requiredFeature);
