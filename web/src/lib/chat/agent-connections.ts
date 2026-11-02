@@ -1,7 +1,7 @@
 import messages from '../../../messages/en.json';
-import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { AgentConnection } from './agent-rules';
 import { CATALOG_CONNECTION, CMS_CONNECTION, skillConnections } from './agent-skills';
+import { NO_CONNECTION_ROWS, readConnectionRows } from './connection-rows';
 
 /**
  * Whether a brand has the connections an agent asks for (CHAT-21 §D item
@@ -108,32 +108,10 @@ export function connectionGaps(
   return gaps;
 }
 
-/** The kinds a brand has connected now. Server only. */
+/** The kinds a brand has connected now, from the one read of connections (connection-rows.ts). Server only. */
 export async function readBrandConnections(brandId: string): Promise<Set<string>> {
-  const [brand, cms, webhooks, catalog] = await Promise.all([
-    supabaseAdmin
-      .from('brands')
-      .select('gsc_property, ga_property_id')
-      .eq('id', brandId)
-      .maybeSingle(),
-    supabaseAdmin.from('brand_cms_connections').select('provider, status').eq('brand_id', brandId),
-    supabaseAdmin
-      .from('webhook_configs')
-      .select('events')
-      .eq('brand_id', brandId)
-      .eq('is_active', true),
-    supabaseAdmin.from('catalog_sources').select('kind, last_status').eq('brand_id', brandId),
-  ]);
-  for (const read of [brand, cms, webhooks, catalog]) {
-    if (read.error)
-      throw new Error(`Could not read the brand's connections: ${read.error.message}`);
-  }
-  return connectedKinds({
-    brand: (brand.data as BrandConnectionRows['brand']) ?? null,
-    cms: (cms.data ?? []) as BrandConnectionRows['cms'],
-    webhooks: (webhooks.data ?? []) as BrandConnectionRows['webhooks'],
-    catalog: (catalog.data ?? []) as BrandConnectionRows['catalog'],
-  });
+  const rows = await readConnectionRows([brandId]);
+  return connectedKinds(rows.get(brandId) ?? NO_CONNECTION_ROWS);
 }
 
 /**
