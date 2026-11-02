@@ -4,8 +4,8 @@ route: /dashboard/chat
 keywords: [skills, skill, slash menu, ansvisor skills, used skill, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps]
 synonyms: [slash commands, playbooks, how-tos, templates]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-02
+last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -27,7 +27,7 @@ Analysts and Agency partners have no **/** menu, but Chat still uses a skill for
 
 ## What a skill can't change
 
-A skill shapes how Chat works, not what it may do. It gives Chat no new tools, doesn't skip the card a change waits on, and publishes nothing: going live is always your own click. Your role, your plan and your workspace's Chat settings still decide what Chat can change, and a change still asks you first where it should.
+A skill shapes how Chat works, not what it may do. It gives Chat no new tools, doesn't skip the card a change waits on, and doesn't publish by itself: only an agent an Admin allows may send pages on its own. Your role, your plan and your workspace's Chat settings still decide what Chat can change, and a change still asks you first where it should.
 
 ## The Ansvisor skills
 

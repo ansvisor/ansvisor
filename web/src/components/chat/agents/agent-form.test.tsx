@@ -787,3 +787,203 @@ describe('AgentForm: edit', () => {
     expect(one('[data-slot="agent-form-read-only"]')!.textContent).not.toContain('Ask your Admin');
   });
 });
+
+describe('AgentForm: publish and send on its own (AUTONOMOUS-GO-LIVE §7.2)', () => {
+  const ADMIN: AgentFormSetup = {
+    ...SETUP,
+    role: 'admin',
+    fullAuto: 'open',
+    planName: 'Growth',
+    goLive: 'on',
+  };
+  const box = () => one('[data-slot="agent-go-live"]');
+  const boxSwitch = () => one('[data-action="agentNew.goLive"]') as HTMLButtonElement | null;
+  const status = () => one('[data-slot="agent-go-live-status"]')?.textContent ?? null;
+  async function again(setup: AgentFormSetup, agent: AgentDetail | null = null) {
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render(setup, agent);
+  }
+  /** Pick /winback and open Mode & approvals. */
+  async function toModeStep() {
+    await click(one('[data-skill="winback"]')!);
+    await next();
+    await next();
+    expect(step()).toBe('2');
+  }
+  const allowedAgent = () =>
+    detail({
+      can: { ...ADMIN_CAN },
+      mode: 'full_auto',
+      settings: { ...detail().settings!, mode: 'full_auto' },
+      goLive: {
+        switch: 'on',
+        permission: {
+          on: true,
+          changed: false,
+          version: 2,
+          dailyLimit: 5,
+          by: 'Alex Kim',
+          at: '2026-11-01T10:00:00.000Z',
+        },
+        recent: [],
+      },
+    });
+
+  it('keeps the box out while going live on its own is off for the workspace (the flag)', async () => {
+    await render({ ...ADMIN, goLive: 'hidden' });
+    await toModeStep();
+    expect(box()).toBeNull();
+    await again({ ...ADMIN, goLive: undefined });
+    await toModeStep();
+    expect(box()).toBeNull();
+  });
+
+  it('says why it can’t be ticked: the plan, the switch in Settings › Chat, or a mode other than Full auto', async () => {
+    await render({ ...ADMIN, fullAuto: 'plan', planName: 'Starter' });
+    await toModeStep();
+    expect(status()).toBe('Needs Growth · you’re on Starter');
+    expect(boxSwitch()!.disabled).toBe(true);
+
+    await again({ ...ADMIN, goLive: 'off' });
+    await toModeStep();
+    expect(status()).toBe(
+      'An Admin hasn’t allowed agents to publish on their own in Settings › Chat',
+    );
+    expect(boxSwitch()!.disabled).toBe(true);
+
+    await again(ADMIN);
+    await toModeStep();
+    expect(status()).toBe('Pick Full auto first');
+    expect(boxSwitch()!.disabled).toBe(true);
+    await click(one('[data-mode="full_auto"]')!);
+    expect(status()).toBeNull();
+    expect(boxSwitch()!.disabled).toBe(false);
+    expect(boxSwitch()!.getAttribute('aria-checked')).toBe('false');
+    expect(one('[data-approval="publish"]')!.textContent).toContain('Needs your click');
+  });
+
+  it('gives it once the agent is saved, with its limit, and says so in the Approvals table and summary', async () => {
+    answer = (url, init) => {
+      if (url === '/api/chat/agents' && init?.method === 'POST') return created(init);
+      if (url === `/api/chat/agents/${NEW_ID}/go-live` && init?.method === 'PUT') {
+        return Response.json({ ok: true, goLive: null });
+      }
+      return Response.json({ ok: false, failure: 'failed' }, { status: 500 });
+    };
+    await render(ADMIN);
+    await toModeStep();
+    await click(one('[data-mode="full_auto"]')!);
+    await click(boxSwitch()!);
+    expect(boxSwitch()!.getAttribute('aria-checked')).toBe('true');
+    expect(box()!.textContent).toContain('at most 5 times a day');
+    expect(one('[data-approval="publish"]')!.textContent).toBe(
+      'Publish, push, sendEXECUTEOn its own · up to 5 a day',
+    );
+    await type(one('[data-field="goLiveLimit"]')!, '7');
+    expect(summary('publishing')).toBe('On its own · up to 7 a day');
+    await next();
+    await click(action('agentNew.saveDraft')[0]);
+    // Its own request, after the save made the version it is for.
+    expect(calls()).toEqual(['POST /api/chat/agents', `PUT /api/chat/agents/${NEW_ID}/go-live`]);
+    expect(bodyOf(0)).toMatchObject({ mode: 'full_auto' });
+    expect(bodyOf(0)).not.toHaveProperty('goLive');
+    expect(bodyOf(1)).toEqual({ dailyLimit: 7 });
+    expect(nav.push).toHaveBeenCalledWith(`/dashboard/agents/${NEW_ID}`);
+  });
+
+  it('stops a save on its step while the limit isn’t 1 to 20', async () => {
+    await render(ADMIN);
+    await toModeStep();
+    await click(one('[data-mode="full_auto"]')!);
+    await click(boxSwitch()!);
+    await type(one('[data-field="goLiveLimit"]')!, '25');
+    await next();
+    await click(action('agentNew.saveDraft')[0]);
+    expect(calls()).toEqual([]);
+    expect(step()).toBe('2');
+    expect(box()!.textContent).toContain('Pick a number from 1 to 20.');
+    expect(one('[data-field="goLiveLimit"]')!.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('shows the server’s refusal on Mode & approvals, the draft kept', async () => {
+    answer = (url, init) => {
+      if (url === '/api/chat/agents' && init?.method === 'POST') return created(init);
+      return Response.json(
+        {
+          ok: false,
+          failure: 'failed',
+          code: 'go_live_off',
+          error: 'An Admin hasn’t allowed agents to publish on their own in Settings › Chat.',
+        },
+        { status: 409 },
+      );
+    };
+    await render(ADMIN);
+    await toModeStep();
+    await click(one('[data-mode="full_auto"]')!);
+    await click(boxSwitch()!);
+    await next();
+    await click(action('agentNew.saveDraft')[0]);
+    expect(step()).toBe('2');
+    expect(one('[data-slot="agent-form-alert"]')!.textContent).toBe(
+      'Saved as a draft. It isn’t on yet.An Admin hasn’t allowed agents to publish on their own in Settings › Chat.',
+    );
+    expect(nav.push).not.toHaveBeenCalled();
+  });
+
+  it('opens ticked for an agent allowed now, takes it away when unticked, and leaves it while the switch is off', async () => {
+    answer = (url, init) =>
+      url === `/api/chat/agents/${AGENT_ID}/go-live` && init?.method === 'DELETE'
+        ? Response.json({ ok: true, goLive: { switch: 'on', permission: null, recent: [] } })
+        : Response.json({ ok: false, failure: 'failed' }, { status: 500 });
+    await render(ADMIN, allowedAgent());
+    await click(one('[data-step-button="2"]')!);
+    expect(boxSwitch()!.getAttribute('aria-checked')).toBe('true');
+    expect(status()).toBe('On · allowed by Alex Kim on Nov 1, 2026');
+    await click(boxSwitch()!);
+    await click(one('[data-step-button="3"]')!);
+    await click(action('agentNew.save')[0]);
+    // Nothing else changed: no PATCH, only the permission taken away.
+    expect(calls()).toEqual([`DELETE /api/chat/agents/${AGENT_ID}/go-live`]);
+    expect(nav.push).toHaveBeenCalledWith(`/dashboard/agents/${AGENT_ID}`);
+
+    // The switch off in Settings › Chat: the box is kept as it is, inert.
+    fetchMock.mockClear();
+    await again({ ...ADMIN, goLive: 'off' }, allowedAgent());
+    await click(one('[data-step-button="2"]')!);
+    expect(boxSwitch()!.disabled).toBe(true);
+    await click(one('[data-step-button="3"]')!);
+    await click(action('agentNew.save')[0]);
+    expect(calls()).toEqual([]);
+    expect(toast).toHaveBeenLastCalledWith('Nothing changed');
+  });
+
+  it('says an edit turned it off, and gives it again for the new version when ticked', async () => {
+    const changed = allowedAgent();
+    changed.goLive!.permission = { ...changed.goLive!.permission!, on: false, changed: true };
+    answer = (url, init) =>
+      url === `/api/chat/agents/${AGENT_ID}/go-live` && init?.method === 'PUT'
+        ? Response.json({ ok: true, goLive: null })
+        : Response.json({ ok: false, failure: 'failed' }, { status: 500 });
+    await render(ADMIN, changed);
+    await click(one('[data-step-button="2"]')!);
+    expect(boxSwitch()!.getAttribute('aria-checked')).toBe('false');
+    expect(status()).toBe('Off since the agent changed. An Admin can turn it on again.');
+    await click(boxSwitch()!);
+    await click(one('[data-step-button="3"]')!);
+    await click(action('agentNew.save')[0]);
+    expect(calls()).toEqual([`PUT /api/chat/agents/${AGENT_ID}/go-live`]);
+    expect(bodyOf(0)).toEqual({ dailyLimit: 5 });
+  });
+
+  it('shows a Manager the box read-only, with Ask your Admin', async () => {
+    await render({ ...ADMIN, role: 'manager' });
+    await toModeStep();
+    await click(one('[data-mode="full_auto"]')!);
+    expect(status()).toBe('An Admin decides whether this agent may publish on its own');
+    expect(boxSwitch()!.disabled).toBe(true);
+    expect(box()!.textContent).toContain('Ask your Admin');
+    expect(one('[data-field="goLiveLimit"]')).toBeNull();
+  });
+});
