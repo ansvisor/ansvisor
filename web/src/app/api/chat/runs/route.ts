@@ -9,7 +9,10 @@ export const maxDuration = 300;
  * POST /api/chat/runs
  *
  * A new message to Chat (CHAT-00: one run, one answer): `{ message,
- * conversationId?, brandId?, mode?, timezone? }`. Keeps the message, starts
+ * conversationId?, brandId?, mode?, timezone?, shortcutId? }`. A shortcut
+ * (CHAT-08, W2-09) counts only while the message is still its own, and is
+ * kept on the message (chat_messages.shortcut_id): the run then loads its
+ * playbook and reads only its data plan. Keeps the message, starts
  * the run (or queues it while every slot is busy, CHAT-20 §14) and answers
  * with its events as Server-Sent Events, until the run waits on the person or
  * ends; the run goes on if the browser leaves. The chat and the run come in

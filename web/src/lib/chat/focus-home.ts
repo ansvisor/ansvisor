@@ -1,4 +1,5 @@
 import type { FocusArea } from './focus';
+import type { ShortcutId } from './shortcuts';
 
 /**
  * Chat Home by the person's focus (CHAT-24 §4; mockup DEPTS): each area's
@@ -22,7 +23,11 @@ export const FOCUS_SHORTCUTS = {
 } as const satisfies Record<FocusArea, readonly string[]>;
 export type FocusShortcut = (typeof FOCUS_SHORTCUTS)[FocusArea][number];
 
-/** The Ansvisor skill a shortcut asks with, where it has one (skills/). */
+/**
+ * The Ansvisor skill a shortcut asks with, where it has one (skills/): its
+ * message starts with the skill's /name, so the skill loads. The focus
+ * areas' seven skills (W2-23) take their chips' jobs too (W2-09).
+ */
 export const SHORTCUT_SKILL: Partial<Record<FocusShortcut, string>> = {
   tasks: 'tasks',
   winBack: 'winback',
@@ -30,6 +35,35 @@ export const SHORTCUT_SKILL: Partial<Record<FocusShortcut, string>> = {
   qualityPass: 'quality',
   weeklyReport: 'report',
   factCheck: 'wrongclaim',
+  auditFixes: 'audit-fix',
+  buyerQuestions: 'questions',
+  howAiCompares: 'features',
+  unmetNeeds: 'gaps',
+  listingGaps: 'listings',
+  marketSnapshot: 'markets',
+};
+
+/**
+ * The shortcut playbook (CHAT-08, lib/chat/shortcuts.ts) a chip without a
+ * skill runs with (W2-09): its message goes with the shortcut's id, so the
+ * run reads that shortcut's data plan. The server takes the id only with
+ * the chip's own words (shortcut-playbooks.ts). Chips whose job is no
+ * shortcut's (a board summary, a product digest) go as plain questions.
+ */
+export const SHORTCUT_PLAYBOOK: Partial<Record<FocusShortcut, ShortcutId>> = {
+  whatChanged: 'analyze',
+  competitorMoves: 'analyze',
+  promptsLost: 'analyze',
+  platformShare: 'analyze',
+  promptsConvert: 'analyze',
+  landingPages: 'analyze',
+  howAiDescribes: 'analyze',
+  sentimentByPlatform: 'analyze',
+  storySources: 'analyze',
+  citedForRivals: 'opportunities',
+  writeNext: 'opportunities',
+  publisherSites: 'opportunities',
+  trafficReport: 'new-report',
 };
 
 /** Each area's starter questions (mockup DEPTS `st`). */
