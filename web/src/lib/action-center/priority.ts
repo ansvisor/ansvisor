@@ -41,6 +41,69 @@ export interface PriorityReason {
    * its score. Null with no history, or from a scorer before it.
    */
   pastSuccess?: { improved: number; results: number; points: number } | null;
+  /** How sure the score is of what it rests on; null from a scorer before it was kept. */
+  confidence?: PriorityConfidence | null;
+}
+
+export type ConfidenceLevel = 'low' | 'medium' | 'high';
+
+/**
+ * The score's confidence factor as the server weighs it (priority.js
+ * `confidenceOf`): 0.3 for one kind of finding from one source, 0.2 more for
+ * each further kind and each further source; an action a person sent carries
+ * its own. Read as a level and why, never as the bare number.
+ */
+export interface PriorityConfidence {
+  level: ConfidenceLevel;
+  /** The 0–1 factor the score used. */
+  score: number;
+  /** Kinds of finding and data sources behind it; none for an action a person sent. */
+  kinds: number;
+  sources: number;
+}
+
+/** A 0–1 confidence's level: High from 0.7, Medium from 0.5, else Low. */
+export function confidenceLevelOf(score: number): ConfidenceLevel {
+  return score >= 0.7 ? 'high' : score >= 0.5 ? 'medium' : 'low';
+}
+
+function confidenceOf(r: Record<string, unknown>): PriorityConfidence | null {
+  const factors = (r.factors && typeof r.factors === 'object' ? r.factors : {}) as Record<
+    string,
+    unknown
+  >;
+  const score = factors.confidence;
+  if (typeof score !== 'number' || !Number.isFinite(score)) return null;
+  const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  return {
+    level: confidenceLevelOf(score),
+    score,
+    kinds: count(r.kinds),
+    sources: count(r.sources),
+  };
+}
+
+/**
+ * Why the confidence is what it is, in English, for the MCP server: "one kind
+ * of finding from one source".
+ */
+export function confidenceNote(confidence: PriorityConfidence): string {
+  const count = (n: number, one: string, many: string) => (n === 1 ? `one ${one}` : `${n} ${many}`);
+  if (confidence.kinds === 0) {
+    return 'rated from what the action was sent with, not from detected findings';
+  }
+  const kinds = count(confidence.kinds, 'kind of finding', 'kinds of finding');
+  return confidence.sources > 0
+    ? `${kinds} from ${count(confidence.sources, 'source', 'sources')}`
+    : kinds;
+}
+
+/** Days New with no one's event before an action is stale: the server's staleAfterDays (config/action-engine.js). */
+export const STALE_AFTER_DAYS = 30;
+
+/** Stale (00432): New for a month with no one's event. Only a New action reads as stale. */
+export function isStale(action: { status: string; staleAt?: string | null }): boolean {
+  return action.status === 'new' && Boolean(action.staleAt);
 }
 
 /** How many actions the Top Actions card names (spec: at most five). */
@@ -102,6 +165,7 @@ export function parsePriorityReason(
     days: daysSince(num(r.days), scoredAt, now),
     sources: num(r.sources) ?? 0,
     pastSuccess: pastSuccessOf(r.pastSuccess),
+    confidence: confidenceOf(r),
   };
 }
 
@@ -235,4 +299,15 @@ export function priorityReasonText(reason: PriorityReason, t: Translator): strin
     });
   }
   return t('reason.sentence.end', { text });
+}
+
+/** "Low confidence — one kind of finding from one source." */
+export function priorityConfidenceText(confidence: PriorityConfidence, t: Translator): string {
+  return t('reason.confidence.line', {
+    level: t(`reason.confidence.${confidence.level}`),
+    why:
+      confidence.kinds > 0
+        ? t('reason.confidence.found', { kinds: confidence.kinds, sources: confidence.sources })
+        : t('reason.confidence.sent'),
+  });
 }

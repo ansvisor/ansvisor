@@ -9,6 +9,9 @@ import {
   setTaskReadyForReview,
   type ChatActionProposal,
 } from '@/lib/actions/chat-action-center';
+import { actorOf } from '@/lib/chat/actor/access';
+import { checkChatActionCoverFor, createChatActionFor } from '@/lib/chat/actor/action-center';
+import { actingOpen } from '@/lib/chat/actor/api';
 import { contentUuid } from '@/lib/mcp/content-schemas';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { FIXTURE_IDS, defineTool, type ChatToolContext, type ToolResultCard } from './define-tool';
@@ -23,7 +26,9 @@ import { PLATFORM_LABELS } from '@/config/platform-labels';
  * here marks a task done, in any mode or with any admin setting (item 15).
  * Each calls lib/actions/chat-action-center.ts as the signed-in member,
  * Admins and Managers (the role model of 2026-10-29), with the run's place
- * for History's source, chat, run and execution.mode (§10a).
+ * for History's source, chat, run and execution.mode (§10a). Send to Action
+ * Center also runs for a run with no session, as its person, through the
+ * API server (lib/chat/actor/action-center.ts), while that way is open.
  */
 
 const BRAND = FIXTURE_IDS.brand;
@@ -198,6 +203,18 @@ const ok = (output: unknown): Record<string, unknown> | null =>
 /** The run's place, for History: none outside a run. */
 const placeOf = (ctx: ChatToolContext) => ctx.chat;
 
+/**
+ * The duplicate check's answer to a Send to Action Center call: the action
+ * that covers it, or null to go on. Create anyway goes on to its card only
+ * where the entities differ.
+ */
+function coverRefusal(
+  found: Awaited<ReturnType<typeof checkChatActionCover>>,
+  createAnyway: boolean,
+) {
+  return found.ok || (createAnyway && found.can_create_anyway) ? null : found;
+}
+
 export const ACTION_CENTER_TOOLS = [
   defineTool({
     name: 'create_action',
@@ -216,18 +233,33 @@ export const ACTION_CENTER_TOOLS = [
     mcpTool: null,
     specRow: '43',
     inputSchema: proposalInput,
-    precheck: async (_ctx, input) => {
-      const found = await checkChatActionCover(
-        input.brand_id,
-        proposalOf(input).entities,
-        input.category,
-      );
-      // Create anyway goes on to its card only where the entities differ.
-      if (found.ok || (input.create_anyway && found.can_create_anyway)) return null;
-      return found;
-    },
+    precheck: async (_ctx, input) =>
+      coverRefusal(
+        await checkChatActionCover(input.brand_id, proposalOf(input).entities, input.category),
+        input.create_anyway,
+      ),
     run: (ctx, input) =>
       createChatAction(input.brand_id, proposalOf(input), placeOf(ctx), input.create_anyway),
+    sessionFree: true,
+    precheckFor: async (ctx, input) =>
+      coverRefusal(
+        await checkChatActionCoverFor(
+          actorOf(ctx),
+          input.brand_id,
+          proposalOf(input).entities,
+          input.category,
+        ),
+        input.create_anyway,
+      ),
+    runFor: (ctx, input) =>
+      createChatActionFor(
+        actorOf(ctx),
+        input.brand_id,
+        proposalOf(input),
+        placeOf(ctx),
+        input.create_anyway,
+      ),
+    runForOpen: actingOpen,
     target: (input) =>
       [`“${input.title}”`, categoryT(input.category), cardT('tasks', { count: input.tasks.length })]
         .filter(Boolean)

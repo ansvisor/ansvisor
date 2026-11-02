@@ -51738,6 +51738,37 @@ create index if not exists site_audits_brand_page_idx
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00432_action_stale_at.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00432: stale actions
+-- ============================================================================
+-- An action could stay New for months: only candidates went stale (when
+-- nothing detected them any more), so a list held months-old actions side by
+-- side with last night's, all reading the same. The nightly pass now marks an
+-- action that is still New and that no one has touched (assigned, edited, a
+-- task moved, sent) for 30 days as stale, here; it stays New, and is neither
+-- closed nor dismissed. Still relevant clears it and starts the clock again,
+-- and so does anyone's change to the action, or its leaving New.
+--
+-- A column, not a status: a stale action is still New to everything that
+-- reads its status (the open list, the nightly rescoring, the dedup index),
+-- so actions_status_check stays as it is.
+
+alter table public.actions
+  add column if not exists stale_at timestamptz;
+
+comment on column public.actions.stale_at is
+  'When the nightly pass found the action New with no one''s event for 30 days (00432); null when it is not stale. Cleared by Still relevant, by anyone''s change, and when it leaves New.';
+
+-- The Stale filter, and the nightly pass's clearing of actions no longer stale.
+create index if not exists actions_brand_stale_idx
+  on public.actions (brand_id)
+  where stale_at is not null;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00433_brand_tracking_snippet_check.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -56671,6 +56702,350 @@ comment on function public.approve_action_task_review(uuid, text, jsonb, uuid) i
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00436_chat_touched_brands.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00436: brand access — the brands a chat touched, and who sees an agent
+-- ============================================================================
+-- BRAND-ACCESS PR 9 (Chat). 00424 let a Selected-brands person read a chat or
+-- a file only about a brand they can access: one with no brand (about the
+-- whole workspace) may hold any brand's data, since each call in it picks its
+-- own brand, so only admins and All-brands people read someone else's. A
+-- chat about one brand can read another brand's data too. This migration
+-- keeps which brands a chat touched, and lets a Selected-brands person read
+-- someone else's chat, or a file, only when every one of them is theirs. It
+-- also takes Chat's agents, whose brands live in their version's scope, the
+-- last of Chat's tables that didn't look at the brand.
+--
+-- Nothing changes yet: everyone has All brands until the Team screen narrows
+-- someone, and for All-brands people every rule below passes the same rows
+-- as before.
+--
+--   * chat_conversations.touched_brand_ids: the brands the chat's calls read
+--     or changed, kept by the web (lib/chat/touched-brands.ts) before each
+--     call runs. Null is "not known": every chat from before this migration,
+--     one Chat didn't start itself (an old Agent chat copied in), and one
+--     whose calls listed every brand of the workspace. A chat Chat starts
+--     (a person's, an agent run's) begins with its own brand, or none
+--     (chat_start_touched_brands), and only while nothing is in it. A
+--     deleted brand's chat keeps the brand's id here after its brand_id goes
+--     (on delete set null).
+--   * chat_files.touched_brand_ids: a file filed from a chat keeps the
+--     chat's set as it was then, and its own brand (the insert trigger). A
+--     file made outside a chat (a task's, an editor's, a schedule's) holds
+--     its own brand's data: its brand, or not known without one; the files
+--     there are now get the same.
+--   * The shared chats', agent runs' chats' and files' policies: admins and
+--     All-brands people read what they read before. Someone with Selected
+--     brands reads a row about one of their brands only when every brand it
+--     touched is theirs too, and a row with no brand on the same terms. Not
+--     known reads as touching every brand: the chats from before this
+--     migration stay hidden from them. The author's own chats are as 00424
+--     left them.
+--   * chat_note_touched_brands and chat_start_touched_brands: the server's
+--     only (service role).
+--   * can_see_chat_agent(agent): who sees an agent, as the web's canSeeAgent
+--     (agent-rules.ts): an admin every one; others a workspace agent, or
+--     their own; and with Selected brands, only an agent whose brands are
+--     all theirs, or their own agent on All brands, which runs on their
+--     brands only. Its versions, triggers and runs follow it, as before.
+--
+-- A web deployed before this migration notes nothing (the functions aren't
+-- there) and reads as 00424 does.
+
+-- ── touched_brand_ids ───────────────────────────────────────────────────────
+
+alter table public.chat_conversations
+  add column if not exists touched_brand_ids uuid[];
+
+comment on column public.chat_conversations.touched_brand_ids is
+  'Brand access (00436): the brands the chat''s calls read or changed, kept by the server before each call. Null: not known (from before 00436, not started by Chat, or a call that listed every brand). A shared chat with no brand is read by people who can access every one.';
+
+alter table public.chat_files
+  add column if not exists touched_brand_ids uuid[];
+
+comment on column public.chat_files.touched_brand_ids is
+  'Brand access (00436): the brands of the chat it was filed from, as they were then, and its own brand. Null: not known. A file with no brand is read by people who can access every one.';
+
+-- A new chat Chat starts keeps its brands from here: its own brand, or none.
+-- Only while nothing is in it: what is already there was never noted.
+create or replace function public.chat_start_touched_brands(p_conversation_id uuid)
+returns void
+language sql
+set search_path = ''
+as $$
+  update public.chat_conversations c
+  set touched_brand_ids = case
+    when c.brand_id is null then '{}'::uuid[]
+    else array[c.brand_id]
+  end
+  where c.id = p_conversation_id
+    and c.touched_brand_ids is null
+    and not exists (
+      select 1 from public.chat_messages m where m.conversation_id = c.id
+    );
+$$;
+
+revoke all on function public.chat_start_touched_brands(uuid) from public, anon, authenticated;
+grant execute on function public.chat_start_touched_brands(uuid) to service_role;
+
+comment on function public.chat_start_touched_brands(uuid) is
+  'Brand access (00436): starts keeping a new chat''s brands (its own, or none), while nothing is in it. The server''s only.';
+
+-- The brands a call touches, added to its chat's; the whole workspace makes
+-- the set not known (null) for good. A chat not known stays so.
+create or replace function public.chat_note_touched_brands(
+  p_conversation_id uuid,
+  p_brand_ids uuid[],
+  p_whole_workspace boolean default false
+)
+returns void
+language sql
+set search_path = ''
+as $$
+  update public.chat_conversations c
+  set touched_brand_ids = case
+    when p_whole_workspace then null
+    else array(
+      select distinct t.id
+      from unnest(c.touched_brand_ids || coalesce(p_brand_ids, '{}'::uuid[])) as t(id)
+      where t.id is not null
+      order by t.id
+    )
+  end
+  where c.id = p_conversation_id
+    and c.touched_brand_ids is not null
+    and (
+      p_whole_workspace
+      or not (coalesce(p_brand_ids, '{}'::uuid[]) <@ c.touched_brand_ids)
+    );
+$$;
+
+revoke all on function public.chat_note_touched_brands(uuid, uuid[], boolean)
+  from public, anon, authenticated;
+grant execute on function public.chat_note_touched_brands(uuid, uuid[], boolean) to service_role;
+
+comment on function public.chat_note_touched_brands(uuid, uuid[], boolean) is
+  'Brand access (00436): adds the brands a call touches to its chat''s touched_brand_ids; the whole workspace sets it to null (not known). The server''s only, before the call runs.';
+
+-- A file takes its chat's set as it is when filed, and its own brand; one
+-- made outside a chat, its own brand (not known without one).
+create or replace function public.chat_files_touched_brands()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.conversation_id is not null then
+    select c.touched_brand_ids into new.touched_brand_ids
+    from public.chat_conversations c
+    where c.id = new.conversation_id;
+  elsif new.brand_id is not null then
+    new.touched_brand_ids := array[new.brand_id];
+  else
+    new.touched_brand_ids := null;
+  end if;
+  if new.touched_brand_ids is not null
+    and new.brand_id is not null
+    and not (new.brand_id = any (new.touched_brand_ids)) then
+    new.touched_brand_ids := new.touched_brand_ids || new.brand_id;
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.chat_files_touched_brands() from public, anon, authenticated;
+
+drop trigger if exists chat_files_touched_brands on public.chat_files;
+create trigger chat_files_touched_brands
+  before insert on public.chat_files
+  for each row execute function public.chat_files_touched_brands();
+
+-- The files there are that no chat made (origin task, editor, schedule) hold
+-- their own brand's data. A chat's file stays not known: its chat's brands
+-- were never kept.
+update public.chat_files f
+set touched_brand_ids = array[f.brand_id]
+where f.touched_brand_ids is null
+  and f.brand_id is not null
+  and f.conversation_id is null
+  and f.origin <> 'chat';
+
+-- ── chat_conversations, chat_files ──────────────────────────────────────────
+-- Admins and All-brands people as before (00424). Someone with Selected
+-- brands: a row of one of their brands whose touched brands are all theirs,
+-- or a row with no brand on the same terms. `<@ array(select …)` runs the
+-- access rule once per query; null (not known) is never contained.
+
+drop policy if exists "chat_conversations: shared select" on public.chat_conversations;
+create policy "chat_conversations: shared select"
+  on public.chat_conversations
+  for select
+  to authenticated
+  using (
+    shared_at is not null
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (
+      (
+        brand_id in (select public.user_brand_ids())
+        and (
+          (select public.user_has_all_brands())
+          or touched_brand_ids <@ array(select public.user_brand_ids())
+        )
+      )
+      or (brand_id is null and (select public.user_has_all_brands()))
+      or (brand_id is null and touched_brand_ids <@ array(select public.user_brand_ids()))
+    )
+  );
+
+-- An agent run's chat: whoever reads the run (00419, 00424), on the same terms.
+drop policy if exists "chat_conversations: agent run select" on public.chat_conversations;
+create policy "chat_conversations: agent run select"
+  on public.chat_conversations
+  for select
+  to authenticated
+  using (
+    agent_run_id in (select r.id from public.chat_agent_runs r)
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (
+      (
+        brand_id in (select public.user_brand_ids())
+        and (
+          (select public.user_has_all_brands())
+          or touched_brand_ids <@ array(select public.user_brand_ids())
+        )
+      )
+      or (brand_id is null and (select public.user_has_all_brands()))
+    )
+  );
+
+drop policy if exists "chat_files: member select" on public.chat_files;
+create policy "chat_files: member select"
+  on public.chat_files
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (
+      (
+        brand_id in (select public.user_brand_ids())
+        and (
+          (select public.user_has_all_brands())
+          or touched_brand_ids <@ array(select public.user_brand_ids())
+        )
+      )
+      or (brand_id is null and (select public.user_has_all_brands()))
+      or (brand_id is null and touched_brand_ids <@ array(select public.user_brand_ids()))
+    )
+  );
+
+-- ── chat_agents (chat_agent_versions, _triggers and _runs follow) ───────────
+
+-- Whether the caller sees the agent: as 00419's policy (their organization's,
+-- and they are an admin, it is a workspace agent, or it is theirs), and with
+-- Selected brands, every brand of its current version's scope is theirs, or
+-- it is their own agent on All brands. Bypasses RLS (security definer), so
+-- the agents' own policy can call it.
+create or replace function public.can_see_chat_agent(p_agent_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.chat_agents a
+    join public.profiles p
+      on p.id = auth.uid() and p.organization_id = a.organization_id
+    left join public.chat_agent_versions v
+      on v.agent_id = a.id and v.version = a.version
+    where a.id = p_agent_id
+      and (p.role = 'admin' or a.visibility = 'workspace' or a.owner_id = p.id)
+      and (
+        p.role = 'admin'
+        or p.brand_scope = 'all'
+        or case
+          when coalesce(v.scope ->> 'all_brands', '') = 'true' then a.owner_id = p.id
+          else not exists (
+            select 1
+            from jsonb_array_elements_text(
+              case
+                when jsonb_typeof(v.scope -> 'brand_ids') = 'array' then v.scope -> 'brand_ids'
+                else '[]'::jsonb
+              end
+            ) as s(brand_id)
+            where s.brand_id not in (select u::text from public.user_brand_ids() as u)
+          )
+        end
+      )
+  );
+$$;
+
+revoke all on function public.can_see_chat_agent(uuid) from public, anon;
+grant execute on function public.can_see_chat_agent(uuid) to authenticated, service_role;
+
+comment on function public.can_see_chat_agent(uuid) is
+  'Brand access (00436): whether the caller sees the Chat agent, as the web''s canSeeAgent: an admin, a workspace agent or their own, and with Selected brands only one whose brands are all theirs, or their own on All brands. Backs chat_agents'' policy; its versions, triggers and runs follow it.';
+
+-- The organization first, so the function runs only on the caller's own agents.
+drop policy if exists "chat_agents: member select" on public.chat_agents;
+create policy "chat_agents: member select"
+  on public.chat_agents
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and public.can_see_chat_agent(id)
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00437_org_other_members_guard.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00437: organization_has_other_members answers only its trigger and the server
+-- ============================================================================
+-- 00228 added it for the profile guard: a person may set their first
+-- organization only while nobody else belongs to it. It reads every
+-- organization's members (security definer), and signed-in people can execute
+-- it because the guard runs as them. So anyone signed in could also call it
+-- directly and ask "does this organization have other members?" about any
+-- organization.
+--
+-- It now answers only inside a trigger (the guard, which passes the updated
+-- row's own organization and id) or for the service role; a direct call from
+-- a signed-in person gets false. Execute stays with authenticated so the guard
+-- keeps working. Same definition as 00228 otherwise.
+
+create or replace function public.organization_has_other_members(p_org uuid, p_except uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.profiles p
+    where p.organization_id = p_org and p.id <> p_except
+  )
+  and (pg_catalog.pg_trigger_depth() > 0 or (select auth.role()) = 'service_role');
+$$;
+revoke all on function public.organization_has_other_members(uuid, uuid) from public, anon;
+grant execute on function public.organization_has_other_members(uuid, uuid) to authenticated, service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00440_own_key_health.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -56774,6 +57149,349 @@ alter table public.chat_agent_runs
   add constraint chat_agent_runs_stop_reason_check check (
     stop_reason in ('user', 'no_answer', 'run_cap', 'action_closed', 'brand_gone', 'own_key')
   );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00443_chat_agent_go_live.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00443: agents that publish and send on their own — the permission and its
+-- ledger
+-- ============================================================================
+-- AUTONOMOUS-GO-LIVE §10.1 (owner decision 2026-11-01). An agent in Full auto
+-- may take a going-live step (a CMS draft, a new page published, a webhook)
+-- without a person's click only when an Admin allowed it twice: for the
+-- workspace in Settings › Chat, and for that agent on its form. Each such
+-- step takes a slot of the agent's daily limit first. Nothing reads these
+-- yet: the precedence's exception comes with a later PR, behind
+-- CHAT_AUTO_GO_LIVE.
+--
+--   * chat_settings gains the workspace switch: auto_go_live_groups, the
+--     go-live groups an Admin allowed agents to take live on their own (v1
+--     writes ['publishing']), and who turned it on, when, under which
+--     version of the responsibility text. A group can't be on without when.
+--   * chat_agent_go_live: one row per allowed agent, for the agent version it
+--     was given on (a new version drops it), with its daily limit (1–20, 5
+--     unless set) and the checksums of its Library skills then. Members read
+--     it as they read the agent; the server writes it, for an Admin.
+--   * chat_agent_go_live_events: each going-live step an agent took on its
+--     own: its slot (reserved), then done or failed, and later taken_down.
+--     A brand table: read by whoever can access the brand.
+--   * reserve_agent_go_live / finish_agent_go_live (service role): a slot
+--     under a lock per agent, counting the last 24 hours' reserved, done and
+--     taken-down steps once per (draft, target); a failed step frees it.
+
+-- ─── The workspace switch ───────────────────────────────────────────────────
+
+alter table public.chat_settings
+  add column if not exists auto_go_live_groups text[] not null default '{}' check (
+    auto_go_live_groups <@ array['publishing', 'email_outreach', 'code_prs', 'feeds']::text[]
+    and public.chat_text_array_distinct(auto_go_live_groups)
+  ),
+  add column if not exists auto_go_live_by uuid references auth.users(id) on delete set null,
+  add column if not exists auto_go_live_at timestamptz,
+  add column if not exists auto_go_live_terms smallint check (auto_go_live_terms >= 1);
+
+alter table public.chat_settings
+  drop constraint if exists chat_settings_auto_go_live_when_check;
+alter table public.chat_settings
+  add constraint chat_settings_auto_go_live_when_check
+  check (cardinality(auto_go_live_groups) = 0 or auto_go_live_at is not null);
+
+comment on column public.chat_settings.auto_go_live_groups is
+  'The go-live groups an Admin allowed agents to take live on their own (00443): publishing, email_outreach, code_prs, feeds. Each agent needs its own permission too (chat_agent_go_live).';
+comment on column public.chat_settings.auto_go_live_terms is
+  'The version of the responsibility text the Admin accepted when turning agents'' going live on.';
+
+-- ─── An agent's permission ──────────────────────────────────────────────────
+
+create table if not exists public.chat_agent_go_live (
+  agent_id uuid primary key references public.chat_agents(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  -- The agent version it was given on: a run of another version has none.
+  version integer not null check (version >= 1),
+  daily_limit smallint not null default 5 check (daily_limit between 1 and 20),
+  -- The agent's Library skills' checksums when it was given (skill key → hash).
+  skill_checksums jsonb not null default '{}'::jsonb check (
+    jsonb_typeof(skill_checksums) = 'object' and octet_length(skill_checksums::text) <= 4096
+  ),
+  granted_by uuid references auth.users(id) on delete set null,
+  granted_at timestamptz not null default now()
+);
+
+create index if not exists chat_agent_go_live_organization_idx
+  on public.chat_agent_go_live (organization_id);
+
+comment on table public.chat_agent_go_live is
+  'Chat (00443): an agent an Admin allowed to publish and send on its own, for the version it was given on, with its daily limit. Read as the agent is; the server writes it.';
+
+alter table public.chat_agent_go_live enable row level security;
+
+revoke all on table public.chat_agent_go_live from anon, authenticated;
+grant select on table public.chat_agent_go_live to authenticated;
+grant all on table public.chat_agent_go_live to service_role;
+
+-- Whoever reads the agent reads its permission (chat_agents' own rule).
+drop policy if exists "chat_agent_go_live: agent select" on public.chat_agent_go_live;
+create policy "chat_agent_go_live: agent select"
+  on public.chat_agent_go_live
+  for select
+  to authenticated
+  using (agent_id in (select a.id from public.chat_agents a));
+
+-- ─── What agents took live on their own ─────────────────────────────────────
+
+create table if not exists public.chat_agent_go_live_events (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  agent_id uuid references public.chat_agents(id) on delete set null,
+  agent_run_id uuid references public.chat_agent_runs(id) on delete set null,
+  run_id uuid references public.chat_runs(id) on delete set null,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  content_draft_id uuid references public.content_drafts(id) on delete set null,
+  delivery_id uuid references public.content_draft_deliveries(id) on delete set null,
+  tool_key text not null check (tool_key ~ '^[a-z][A-Za-z0-9]{1,63}$'),
+  kind text not null check (kind in ('cms_draft', 'publish', 'webhook')),
+  target text not null check (target in ('webflow', 'wordpress', 'framer', 'wix', 'webhook')),
+  status text not null default 'reserved'
+    check (status in ('reserved', 'done', 'failed', 'taken_down')),
+  published_url text check (char_length(published_url) <= 2048),
+  external_id text check (char_length(external_id) <= 500),
+  error text check (char_length(error) <= 500),
+  created_at timestamptz not null default now(),
+  finished_at timestamptz,
+  taken_down_at timestamptz,
+  taken_down_by uuid references auth.users(id) on delete set null
+);
+
+-- The daily limit's count, and an agent page's last go-lives.
+create index if not exists chat_agent_go_live_events_agent_idx
+  on public.chat_agent_go_live_events (agent_id, created_at desc);
+create index if not exists chat_agent_go_live_events_brand_idx
+  on public.chat_agent_go_live_events (brand_id, created_at desc);
+create index if not exists chat_agent_go_live_events_draft_idx
+  on public.chat_agent_go_live_events (content_draft_id)
+  where content_draft_id is not null;
+
+comment on table public.chat_agent_go_live_events is
+  'Chat (00443): each going-live step an agent took on its own (a CMS draft, a page published, a webhook), its slot of the daily limit, and its Take down. Read by whoever can access the brand; the server writes.';
+
+alter table public.chat_agent_go_live_events enable row level security;
+
+revoke all on table public.chat_agent_go_live_events from anon, authenticated;
+grant select on table public.chat_agent_go_live_events to authenticated;
+grant all on table public.chat_agent_go_live_events to service_role;
+
+drop policy if exists "chat_agent_go_live_events: brand select" on public.chat_agent_go_live_events;
+create policy "chat_agent_go_live_events: brand select"
+  on public.chat_agent_go_live_events
+  for select
+  to authenticated
+  using (
+    brand_id in (select public.user_brand_ids())
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+-- ─── A slot of the daily limit ──────────────────────────────────────────────
+
+-- The step's slot, or null when the agent's last 24 hours are full. Under a
+-- lock per agent, so steps at once can't both take the last slot. Each
+-- (draft, target) counts once: one already counted in the window returns its
+-- row, with no second slot.
+create or replace function public.reserve_agent_go_live(
+  p_organization_id uuid,
+  p_agent_id uuid,
+  p_run_id uuid,
+  p_agent_run_id uuid,
+  p_brand_id uuid,
+  p_content_draft_id uuid,
+  p_tool_key text,
+  p_kind text,
+  p_target text,
+  p_limit integer
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_id uuid;
+  v_used integer;
+begin
+  if p_limit is null or p_limit < 1 or p_limit > 20 then
+    raise exception 'reserve_agent_go_live: the limit must be 1 to 20';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext('agent_go_live:' || p_agent_id::text));
+
+  select e.id
+    into v_id
+    from public.chat_agent_go_live_events e
+   where e.agent_id = p_agent_id
+     and e.content_draft_id is not distinct from p_content_draft_id
+     and e.target = p_target
+     and e.status in ('reserved', 'done', 'taken_down')
+     and e.created_at > now() - interval '24 hours'
+   order by e.created_at desc
+   limit 1;
+  if v_id is not null then
+    return v_id;
+  end if;
+
+  select count(*)
+    into v_used
+    from (
+      select distinct e.content_draft_id, e.target
+        from public.chat_agent_go_live_events e
+       where e.agent_id = p_agent_id
+         and e.status in ('reserved', 'done', 'taken_down')
+         and e.created_at > now() - interval '24 hours'
+    ) counted;
+  if v_used >= p_limit then
+    return null;
+  end if;
+
+  insert into public.chat_agent_go_live_events (
+    organization_id, agent_id, run_id, agent_run_id, brand_id,
+    content_draft_id, tool_key, kind, target
+  )
+  values (
+    p_organization_id, p_agent_id, p_run_id, p_agent_run_id, p_brand_id,
+    p_content_draft_id, p_tool_key, p_kind, p_target
+  )
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+-- How a reserved step ended: done (with what went live) or failed, which
+-- frees its slot. False when the row isn't reserved any more.
+create or replace function public.finish_agent_go_live(
+  p_id uuid,
+  p_status text,
+  p_delivery_id uuid default null,
+  p_published_url text default null,
+  p_external_id text default null,
+  p_error text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if p_status is null or p_status not in ('done', 'failed') then
+    raise exception 'finish_agent_go_live: the status must be done or failed';
+  end if;
+  update public.chat_agent_go_live_events
+     set status = p_status,
+         finished_at = now(),
+         delivery_id = coalesce(p_delivery_id, delivery_id),
+         published_url = coalesce(left(p_published_url, 2048), published_url),
+         external_id = coalesce(left(p_external_id, 500), external_id),
+         error = left(p_error, 500)
+   where id = p_id
+     and status = 'reserved';
+  return found;
+end;
+$$;
+
+revoke all on function public.reserve_agent_go_live(uuid, uuid, uuid, uuid, uuid, uuid, text, text, text, integer)
+  from public, anon, authenticated;
+grant execute on function public.reserve_agent_go_live(uuid, uuid, uuid, uuid, uuid, uuid, text, text, text, integer)
+  to service_role;
+revoke all on function public.finish_agent_go_live(uuid, text, uuid, text, text, text)
+  from public, anon, authenticated;
+grant execute on function public.finish_agent_go_live(uuid, text, uuid, text, text, text)
+  to service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00448_content_drafts_schema_left_out.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00448: The page's Article schema, left out by the person
+-- ============================================================================
+-- Customer priorities item 7 (owner decision A, 2026-11-01): an article
+-- page goes to the CMS and to exports with its Article JSON-LD, the author
+-- in it (the draft's author as a Person, else the brand as the
+-- Organization). Ansvisor adds it by itself; the page's text doesn't
+-- change. A CMS that writes its own Article schema would give the page two,
+-- so the person can leave Ansvisor's out, draft by draft, in Before you
+-- publish, and add it back there.
+--
+--   * schema_left_out: true while the person left it out; the default adds it.
+
+alter table public.content_drafts
+  add column if not exists schema_left_out boolean not null default false;
+
+comment on column public.content_drafts.schema_left_out is
+  'Customer priorities item 7 (00448): true when the person left out the Article JSON-LD Ansvisor adds to the page it sends to a CMS and exports; false adds it.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00449_brands_trusted_sources.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00449: The sites a brand trusts as sources
+-- ============================================================================
+-- Customer priorities item 6 (owner decision, 2026-11-01): Site Audit's
+-- "Outbound authority links" counts a shared list of official, research and
+-- news sites. A brand adds the sites it trusts besides, such as its
+-- industry's association or the docs it cites, in Settings › Content:
+--
+--   * Site Audit counts a link to one of them, or one of its pages, as an
+--     authority link;
+--   * the Content Editor's Trust reads it as a primary source.
+--
+-- trusted_sources: hosts as the app saves them (lower case, no scheme, no
+-- www.), at most 50. Admins and managers change them, as the brand's other
+-- settings (brands: admin/manager update).
+
+alter table public.brands
+  add column if not exists trusted_sources text[] not null default '{}'
+    check (cardinality(trusted_sources) <= 50);
+
+comment on column public.brands.trusted_sources is
+  'Customer priorities item 6 (00449): sites the brand trusts as sources (hosts, at most 50); Site Audit counts links to them as authority links and the Content Editor''s Trust as primary sources.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00450_brands_brand_rules.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00450: A brand's rules, in its own words
+-- ============================================================================
+-- Customer priorities item 8 (owner decision, 2026-11-01): one list of
+-- rules per brand, such as "no topics comparing us with a named competitor"
+-- or "cite official sources for health claims", set in Settings › Content
+-- and read by the server where it writes for the brand:
+--
+--   * Site Audit's AI recommendations;
+--   * new content opportunities;
+--   * the Content Agent (writer, agent, rewrite), before the person's own
+--     rules, which it outranks.
+--
+-- The rules shape what's suggested and written; scores don't change.
+--
+-- brand_rules: at most 30 rules of at most 300 characters each, as the app
+-- saves them (trimmed, each once). Admins and managers change them, as the
+-- brand's other settings (brands: admin/manager update).
+
+alter table public.brands
+  add column if not exists brand_rules text[] not null default '{}'
+    check (
+      cardinality(brand_rules) <= 30
+      and char_length(array_to_string(brand_rules, '')) <= 9000
+    );
+
+comment on column public.brands.brand_rules is
+  'Customer priorities item 8 (00450): the brand''s rules in its own words (at most 30, 300 characters each), read by Site Audit''s AI recommendations, the opportunity generator and the Content Agent.';
 
 notify pgrst, 'reload schema';
 

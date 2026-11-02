@@ -256,6 +256,7 @@ export type Database = {
           priority_reason: Json | null
           priority_score: number | null
           priority_updated_at: string | null
+          stale_at: string | null
           status: string
           tasks_generated_at: string | null
           tasks_writing_since: string | null
@@ -285,6 +286,7 @@ export type Database = {
           priority_reason?: Json | null
           priority_score?: number | null
           priority_updated_at?: string | null
+          stale_at?: string | null
           status?: string
           tasks_generated_at?: string | null
           tasks_writing_since?: string | null
@@ -314,6 +316,7 @@ export type Database = {
           priority_reason?: Json | null
           priority_score?: number | null
           priority_updated_at?: string | null
+          stale_at?: string | null
           status?: string
           tasks_generated_at?: string | null
           tasks_writing_since?: string | null
@@ -924,6 +927,7 @@ export type Database = {
       }
       brands: {
         Row: {
+          brand_rules: string[]
           client_logo_path: string | null
           content_byline: boolean
           content_quality_handoff: boolean
@@ -961,9 +965,11 @@ export type Database = {
           snippet_found_at: string | null
           state: string | null
           tracking_code: string
+          trusted_sources: string[]
           updated_at: string
         }
         Insert: {
+          brand_rules?: string[]
           client_logo_path?: string | null
           content_byline?: boolean
           content_quality_handoff?: boolean
@@ -1001,9 +1007,11 @@ export type Database = {
           snippet_found_at?: string | null
           state?: string | null
           tracking_code?: string
+          trusted_sources?: string[]
           updated_at?: string
         }
         Update: {
+          brand_rules?: string[]
           client_logo_path?: string | null
           content_byline?: boolean
           content_quality_handoff?: boolean
@@ -1041,6 +1049,7 @@ export type Database = {
           snippet_found_at?: string | null
           state?: string | null
           tracking_code?: string
+          trusted_sources?: string[]
           updated_at?: string
         }
         Relationships: [
@@ -1797,6 +1806,167 @@ export type Database = {
           },
         ]
       }
+      chat_agent_go_live: {
+        Row: {
+          agent_id: string
+          daily_limit: number
+          granted_at: string
+          granted_by: string | null
+          organization_id: string
+          skill_checksums: Json
+          version: number
+        }
+        Insert: {
+          agent_id: string
+          daily_limit?: number
+          granted_at?: string
+          granted_by?: string | null
+          organization_id: string
+          skill_checksums?: Json
+          version: number
+        }
+        Update: {
+          agent_id?: string
+          daily_limit?: number
+          granted_at?: string
+          granted_by?: string | null
+          organization_id?: string
+          skill_checksums?: Json
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_agent_go_live_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: true
+            referencedRelation: "chat_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_go_live_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_agent_go_live_events: {
+        Row: {
+          agent_id: string | null
+          agent_run_id: string | null
+          brand_id: string
+          content_draft_id: string | null
+          created_at: string
+          delivery_id: string | null
+          error: string | null
+          external_id: string | null
+          finished_at: string | null
+          id: string
+          kind: string
+          organization_id: string
+          published_url: string | null
+          run_id: string | null
+          status: string
+          taken_down_at: string | null
+          taken_down_by: string | null
+          target: string
+          tool_key: string
+        }
+        Insert: {
+          agent_id?: string | null
+          agent_run_id?: string | null
+          brand_id: string
+          content_draft_id?: string | null
+          created_at?: string
+          delivery_id?: string | null
+          error?: string | null
+          external_id?: string | null
+          finished_at?: string | null
+          id?: string
+          kind: string
+          organization_id: string
+          published_url?: string | null
+          run_id?: string | null
+          status?: string
+          taken_down_at?: string | null
+          taken_down_by?: string | null
+          target: string
+          tool_key: string
+        }
+        Update: {
+          agent_id?: string | null
+          agent_run_id?: string | null
+          brand_id?: string
+          content_draft_id?: string | null
+          created_at?: string
+          delivery_id?: string | null
+          error?: string | null
+          external_id?: string | null
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          organization_id?: string
+          published_url?: string | null
+          run_id?: string | null
+          status?: string
+          taken_down_at?: string | null
+          taken_down_by?: string | null
+          target?: string
+          tool_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_agent_go_live_events_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_go_live_events_agent_run_id_fkey"
+            columns: ["agent_run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agent_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_go_live_events_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_go_live_events_content_draft_id_fkey"
+            columns: ["content_draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_go_live_events_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "content_draft_deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_go_live_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_go_live_events_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_agent_runs: {
         Row: {
           acting_user_id: string | null
@@ -2173,6 +2343,7 @@ export type Database = {
           search_tsv: unknown
           shared_at: string | null
           title: string | null
+          touched_brand_ids: string[] | null
           updated_at: string
           user_id: string
         }
@@ -2192,6 +2363,7 @@ export type Database = {
           search_tsv?: never
           shared_at?: string | null
           title?: string | null
+          touched_brand_ids?: string[] | null
           updated_at?: string
           user_id: string
         }
@@ -2211,6 +2383,7 @@ export type Database = {
           search_tsv?: never
           shared_at?: string | null
           title?: string | null
+          touched_brand_ids?: string[] | null
           updated_at?: string
           user_id?: string
         }
@@ -2300,6 +2473,7 @@ export type Database = {
           tags: string[]
           timezone: string | null
           title: string
+          touched_brand_ids: string[] | null
           type: string
           updated_at: string
           version: number
@@ -2329,6 +2503,7 @@ export type Database = {
           tags?: string[]
           timezone?: string | null
           title: string
+          touched_brand_ids?: string[] | null
           type: string
           updated_at?: string
           version?: number
@@ -2358,6 +2533,7 @@ export type Database = {
           tags?: string[]
           timezone?: string | null
           title?: string
+          touched_brand_ids?: string[] | null
           type?: string
           updated_at?: string
           version?: number
@@ -2780,6 +2956,10 @@ export type Database = {
         Row: {
           agent_run_share_default: number
           agents_full_auto: boolean
+          auto_go_live_at: string | null
+          auto_go_live_by: string | null
+          auto_go_live_groups: string[]
+          auto_go_live_terms: number | null
           dont_ask_again: boolean
           full_auto_for_members: boolean
           manager_execute_off: string[]
@@ -2792,6 +2972,10 @@ export type Database = {
         Insert: {
           agent_run_share_default?: number
           agents_full_auto?: boolean
+          auto_go_live_at?: string | null
+          auto_go_live_by?: string | null
+          auto_go_live_groups?: string[]
+          auto_go_live_terms?: number | null
           dont_ask_again?: boolean
           full_auto_for_members?: boolean
           manager_execute_off?: string[]
@@ -2804,6 +2988,10 @@ export type Database = {
         Update: {
           agent_run_share_default?: number
           agents_full_auto?: boolean
+          auto_go_live_at?: string | null
+          auto_go_live_by?: string | null
+          auto_go_live_groups?: string[]
+          auto_go_live_terms?: number | null
           dont_ask_again?: boolean
           full_auto_for_members?: boolean
           manager_execute_off?: string[]
@@ -3629,6 +3817,7 @@ export type Database = {
           restored_at: string | null
           reviewer_id: string | null
           rules: Json | null
+          schema_left_out: boolean
           source_url: string | null
           score_after: number | null
           score_before: number | null
@@ -3671,6 +3860,7 @@ export type Database = {
           restored_at?: string | null
           reviewer_id?: string | null
           rules?: Json | null
+          schema_left_out?: boolean
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null
@@ -3713,6 +3903,7 @@ export type Database = {
           restored_at?: string | null
           reviewer_id?: string | null
           rules?: Json | null
+          schema_left_out?: boolean
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null
@@ -7434,6 +7625,7 @@ export type Database = {
         Args: { p_brand_id: string; p_user_id?: string }
         Returns: boolean
       }
+      can_see_chat_agent: { Args: { p_agent_id: string }; Returns: boolean }
       chat_agent_usage_shares: {
         Args: { p_budget: number; p_organization_id: string; p_since: string }
         Returns: {
@@ -7451,6 +7643,14 @@ export type Database = {
         Args: { p_run_id: string; p_user_limit: number; p_workspace_limit: number }
         Returns: boolean
       }
+      chat_note_touched_brands: {
+        Args: {
+          p_brand_ids: string[]
+          p_conversation_id: string
+          p_whole_workspace?: boolean
+        }
+        Returns: undefined
+      }
       chat_run_limits: {
         Args: { p_organization_id: string; p_user_id: string }
         Returns: Json
@@ -7458,6 +7658,10 @@ export type Database = {
       chat_start_next_agent_run: {
         Args: { p_organization_id: string; p_workspace_limit: number }
         Returns: string
+      }
+      chat_start_touched_brands: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
       }
       chat_text_array_distinct: {
         Args: { p_values: string[] }
@@ -7827,6 +8031,17 @@ export type Database = {
           prompts_in_common: number
           title: string | null
         }[]
+      }
+      finish_agent_go_live: {
+        Args: {
+          p_delivery_id?: string
+          p_error?: string
+          p_external_id?: string
+          p_id: string
+          p_published_url?: string
+          p_status: string
+        }
+        Returns: boolean
       }
       ga_page_ai_visibility: {
         Args: { p_brand_id: string; p_since: string }
@@ -8361,6 +8576,21 @@ export type Database = {
           topic_name: string
           visible_runs: number
         }[]
+      }
+      reserve_agent_go_live: {
+        Args: {
+          p_agent_id: string
+          p_agent_run_id: string
+          p_brand_id: string
+          p_content_draft_id: string
+          p_kind: string
+          p_limit: number
+          p_organization_id: string
+          p_run_id: string
+          p_target: string
+          p_tool_key: string
+        }
+        Returns: string
       }
       seed_kpi_presets: {
         Args: { p_brand_id: string; p_kpis: Json }

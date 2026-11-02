@@ -126,7 +126,8 @@ export function createFakeSupabase(): FakeSupabase {
       await tick();
       fake.log.push([name, 'rpc']);
       const fn = fake.rpcs[name];
-      if (!fn) return { data: null, error: { message: `No function ${name}` } };
+      // As PostgREST answers a function it doesn't know (a migration not applied yet).
+      if (!fn) return { data: null, error: { code: 'PGRST202', message: `No function ${name}` } };
       return { data: await fn(args), error: null };
     },
     from(table) {
