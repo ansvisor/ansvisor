@@ -5,7 +5,7 @@ route: /dashboard/chat/inbox
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-10-31
-approved: false
+approved: true
 ---
 With many pages and prompts, it is hard to know where to start each day.
 Every morning Chat picks one suggestion for you and your brand, with the data behind it.

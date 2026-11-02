@@ -5,7 +5,7 @@ route: /dashboard/chat
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-11-01
-approved: false
+approved: true
 ---
 A content lead and a founder need different things from the same data.
 Pick your focus once and Chat Home shows your shortcuts, starter questions and new skills.

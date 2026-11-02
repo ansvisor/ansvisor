@@ -5,7 +5,7 @@ route: /dashboard/chat
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-10-31
-approved: false
+approved: true
 ---
 A drop in visibility rarely says why it happened.
 Chat compares two periods of your tracking and shows how much each cause explains.

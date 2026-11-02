@@ -5,7 +5,7 @@ route: /dashboard/chat
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-10-31
-approved: false
+approved: true
 ---
 Action Center tells you what to do, but the work still took hours.
 Chat drafts the work for the tasks due this week and attaches it to each task.

@@ -5,7 +5,7 @@ route: /dashboard/chat
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-11-03
-approved: false
+approved: true
 ---
 Finding an answer about your AI visibility meant opening page after page.
 Chat reads your data, shows each step it takes and asks before it changes anything.

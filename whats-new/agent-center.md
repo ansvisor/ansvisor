@@ -5,7 +5,7 @@ route: /dashboard/agents
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-10-31
-approved: false
+approved: true
 ---
 Weekly checks and fixes took the same hours every week.
 An agent runs a skill on a schedule or when Action Center finds a signal, within its share of your AI limit.
