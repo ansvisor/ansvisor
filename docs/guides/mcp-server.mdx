@@ -261,7 +261,7 @@ The same reads are available over REST with the same `ans_` key: `GET /api/mcp/w
 | `get_visibility_trend` | Visibility over time (day or week buckets) with mentions, citations, and competitor scores for trend questions. | |
 | `get_competitor_comparison` | Competitor benchmark and share of voice for a window, comparable visibility rates and per-model/platform splits. | |
 | `list_citations` | URLs and domains AI engines cite alongside a brand, by source type, with top domains/URLs and usage stats. | |
-| `get_ai_traffic` | AI-referral traffic (visits by engine, landing pages, countries) for an optional date range. | |
+| `get_ai_traffic` | AI-referral traffic (visits by engine, landing pages, countries) for an optional date range. `tracking` says whether the tracking snippet is installed: `not_detected` (not seen on the brand's site, so 0 visits means nothing is measured yet), `installed_quiet` (installed, no AI visit in the last 7 days) or `active`. | |
 | `get_prompt_performance` | Per-prompt performance (visibility, mentions, citations, appearances) over a date range for ranking prompts. | |
 
 ### Saved reports
@@ -334,7 +334,7 @@ The MCP never sends a page to a CMS: Ansvisor's own **Send to CMS** stays in the
 | `create_content_draft` | Write a new draft as the agent (`create`, or `optimize` a page on the brand's domains); it goes to the Library's In review. | **yes** |
 | `add_content_source` | Add a prompt, a cited page or a Search Console query to the draft's sources. | **yes** |
 | `suggest_content_changes` | Leave up to 20 suggestions (replace or insert, each with a reason) for a person to accept or reject. Refused on a published draft, while open suggestions wait, or while the Content Agent writes it. | **yes** |
-| `get_content_draft_package` | A draft as a page ready for a CMS, exactly as **Send to CMS** would send it: title, slug, meta title and description, the HTML ready to paste (as **Copy HTML** gives it, with the byline line and no H1; HTML blocks are passed as written, scripts and iframes included, as Copy HTML and Send to CMS pass them), its JSON-LD, the author and the featured image. Ansvisor doesn't send it: put it on your CMS with your assistant's own CMS connector, then call `mark_content_draft_published`. A page that can't go yet says why. | |
+| `get_content_draft_package` | A draft as a page ready for a CMS, exactly as **Send to CMS** would send it: title, slug, meta title and description, the HTML ready to paste (as **Copy HTML** gives it, with the byline line and no H1; HTML blocks are passed as written, scripts and iframes included, as Copy HTML and Send to CMS pass them), its JSON-LD, the author, the qualified reviewer (`reviewer`: name and credential, null when none; once the page's text names them, the JSON-LD carries a WebPage with them as `reviewedBy`) and the featured image. Ansvisor doesn't send it: put it on your CMS with your assistant's own CMS connector, then call `mark_content_draft_published`. A page that can't go yet says why. | |
 | `mark_content_draft_published` | Mark a draft Published at the address it went live at, as the editor's **Mark published** does, once your own CMS connector has put it there. Ansvisor then measures that address, and a linked action's Publish task completes once every page it names is live. | **yes** |
 | `set_content_draft_ready` | Set a draft ready, as the editor's Mark ready does, without its Before you publish check; a linked action's writing task completes once every page it names has a ready draft. A draft in review waits for a person. | **yes** |
 
@@ -344,7 +344,7 @@ The MCP never sends a page to a CMS: Ansvisor's own **Send to CMS** stays in the
 | --- | --- | --- |
 | `get_site_audit_quota` | Monthly Site Audit allowance (`used`, `running`, `limit`, `remaining`) before starting a run. Audits still running are already taken out of `remaining`. | |
 | `list_site_audits` | Recent audits for a brand (id, url, status, score) to find a past run without the id. | |
-| `run_site_audit` | Start an AEO/GEO page audit for a URL (consumes a monthly credit; poll `get_site_audit` for results). | **yes** |
+| `run_site_audit` | Start an AEO/GEO page audit for a URL (consumes a monthly credit; poll `get_site_audit` for results). A page with an audit already running returns that audit (`alreadyRunning: true`) and uses no credit. A page audited in the last 10 minutes returns status `recently_audited` with that audit's id and starts nothing; pass `force: true` to audit it again (uses a credit). Over REST: `POST /api/mcp/site-audits` with `{ "brand_id": "…", "url": "…", "force": true }`, which answers 202 for a started or running audit and 200 for a recent one. | **yes** |
 | `get_site_audit` | Fetch one audit by id — status, scores, signals, and fix recommendations (read-only). | |
 
 ### Shopping

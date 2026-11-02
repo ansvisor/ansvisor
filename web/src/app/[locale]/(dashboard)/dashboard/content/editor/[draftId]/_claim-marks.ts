@@ -27,47 +27,9 @@ export const claimMarksKey = new PluginKey<ClaimState>('claimMarks');
 const CLAIM =
   'underline decoration-wavy decoration-red-500 underline-offset-4 dark:decoration-red-400';
 
-const squeeze = (text: string) => text.replace(/\s+/g, '');
+import { textRanges } from '@/lib/content/doc-text';
 
-/**
- * Where a text is in the page, as document positions: each place it is in
- * a paragraph that holds it whole and, with `block`, is part of that Trust
- * block (its text, as trustBlocks reads it). Headings and code aren't
- * Trust's. Spaces don't count: Trust's text has one at each tag's edge
- * ("( report)", "40 %") and at a line break, where the page may have none.
- * Its words may run across marks (a bold word, a link), not across blocks.
- */
-export function textRanges(
-  doc: PmNode,
-  text: string,
-  block?: string,
-): { from: number; to: number }[] {
-  const needle = squeeze(text);
-  if (!needle) return [];
-  const within = block === undefined ? null : squeeze(block);
-  const ranges: { from: number; to: number }[] = [];
-  doc.descendants((node, pos) => {
-    if (!node.isTextblock) return true;
-    if (node.type.name === 'heading' || node.type.spec.code) return false;
-    // The paragraph's words without their spaces, each at its position.
-    let words = '';
-    const at: number[] = [];
-    node.forEach((child, offset) => {
-      const own = child.isText ? (child.text ?? '') : '';
-      for (let i = 0; i < own.length; i++) {
-        if (/\s/.test(own[i])) continue;
-        words += own[i];
-        at.push(pos + 1 + offset + i);
-      }
-    });
-    if (!words || (within !== null && !within.includes(words))) return false;
-    for (let i = words.indexOf(needle); i !== -1; i = words.indexOf(needle, i + 1)) {
-      ranges.push({ from: at[i], to: at[i + needle.length - 1] + 1 });
-    }
-    return false;
-  });
-  return ranges;
-}
+export { textRanges };
 
 const CELLS = new Set(['tableCell', 'tableHeader']);
 const HOLDERS = new Set(['listItem', 'taskItem', 'blockquote']);

@@ -68,6 +68,8 @@ import type { ChatActor } from './engine';
 import type { ChatDenialCard } from './events';
 import { OwnKeyUnreadableError, failingOwnKey, resolveChatModelKey } from './key';
 import type { FailingKey, OwnKeyFailure } from './key-health';
+import { readAgentGoLive, readGoLiveLimits, type AgentGoLiveDetail } from './agent-go-live';
+import { ownKeyCapReached } from './own-key-cap';
 import { planFactsFromOrgRow, type PlanFacts } from './plan-facts';
 import { parseTeamRole, type ChatMode, type ToolDenial } from './precedence';
 
@@ -174,12 +176,16 @@ export type AgentRefusalCode =
   | 'agent_limit'
   | 'no_brand'
   | 'ai_limit'
+  | 'own_key_cap'
   | 'owner_role'
   | 'action_not_found'
   | 'action_closed'
   | 'queue_full'
   | 'connection_missing'
   | 'own_key_failed'
+  /** Going live on its own: the workspace's switch is off, or the agent isn't in Full auto. */
+  | 'go_live_off'
+  | 'go_live_mode'
   | 'failed';
 
 export type AgentRefusal =
@@ -205,7 +211,7 @@ export type AgentRefusal =
     };
 
 export type AgentResult<T> = { ok: true; value: T } | { ok: false; refusal: AgentRefusal };
-type Refused = { ok: false; refusal: AgentRefusal };
+export type Refused = { ok: false; refusal: AgentRefusal };
 
 const refusalT = createTranslator({ locale: 'en', messages, namespace: 'chatAgents.refusal' });
 const ownKeyT = createTranslator({ locale: 'en', messages, namespace: 'chatAgents.ownKey' });
@@ -229,12 +235,15 @@ const REFUSAL_STATUS: Record<AgentRefusalCode, number> = {
   agent_limit: 403,
   no_brand: 409,
   ai_limit: 429,
+  own_key_cap: 429,
   owner_role: 409,
   action_not_found: 404,
   action_closed: 409,
   queue_full: 409,
   connection_missing: 409,
   own_key_failed: 409,
+  go_live_off: 409,
+  go_live_mode: 409,
   failed: 500,
 };
 
@@ -571,6 +580,11 @@ export interface AgentListItem {
   updatedAt: string;
   /** The row's buttons the person may use now (§B item 7), as the detail's `can` decides them. */
   can: Pick<AgentAbilities, 'run' | 'pause' | 'resume'>;
+  /**
+   * It publishes and sends on its own, at most this many a day
+   * (AUTONOMOUS-GO-LIVE §7.2): its card's badge. Absent when it doesn't.
+   */
+  goLiveLimit?: number;
 }
 
 export interface AgentListResult {
@@ -641,6 +655,12 @@ export interface AgentDetail extends AgentListItem {
   can: AgentAbilities;
   /** The plan's agent limits (§M). */
   limits: AgentPlanLimits;
+  /**
+   * Its permission to publish and send on its own, the workspace's switch
+   * and its last day's go-lives (agent-go-live.ts); absent while
+   * CHAT_AUTO_GO_LIVE is off.
+   */
+  goLive?: AgentGoLiveDetail;
 }
 
 function triggerView(row: TriggerRow, now: Date): AgentTriggerView {
@@ -927,18 +947,25 @@ export async function listAgents(
   ]);
   if (runs.error) throw new Error(`Could not read the agents' runs: ${runs.error.message}`);
   const runRows = (runs.data ?? []) as RunRow[];
+  // The cards' "Publishes on its own" badge (AUTONOMOUS-GO-LIVE §7.2).
+  const goLive = await readGoLiveLimits(
+    org,
+    shown.map((agent) => ({ id: agent.row.id, version: agent.row.version })),
+  );
 
   return {
-    agents: shown.map((agent) =>
-      listItem(ctx, agent, {
+    agents: shown.map((agent) => {
+      const item = listItem(ctx, agent, {
         triggers: triggers.filter((t) => t.agent_id === agent.row.id),
         runs: runRows.filter((r) => r.agent_id === agent.row.id),
         brands,
         owners,
         usage: usageOf(shares, agent.row.id),
         now,
-      }),
-    ),
+      });
+      const limit = goLive.get(agent.row.id);
+      return limit === undefined ? item : { ...item, goLiveLimit: limit };
+    }),
     counts,
     keyFailure: key ? { class: key.class, provider: key.provider } : null,
     active: visible.filter((a) => a.row.status === 'active').length,
@@ -1001,13 +1028,14 @@ export async function readAgent(
 async function detailOf(ctx: AgentContext, agent: LoadedAgent, now: Date): Promise<AgentDetail> {
   const org = ctx.actor.organizationId;
   const { row, version } = agent;
-  const [triggers, runs, brands, owners, period, days30] = await Promise.all([
+  const [triggers, runs, brands, owners, period, days30, goLive] = await Promise.all([
     triggersOf([row.id]),
     runsOf(row.id, RECENT_RUNS),
     brandsOf(org),
     namesOf(org, row.owner_id ? [row.owner_id] : []),
     readAgentShares(org, 'period'),
     readAgentShares(org, 'days30'),
+    readAgentGoLive(org, row.id, row.version, now),
   ]);
   const item = listItem(ctx, agent, {
     triggers,
@@ -1045,6 +1073,7 @@ async function detailOf(ctx: AgentContext, agent: LoadedAgent, now: Date): Promi
     usagePeriod: usageOf(period, row.id),
     can: abilitiesOf(ctx, agent),
     limits: agentPlanLimits(ctx.plan),
+    ...(goLive ? { goLive } : {}),
   };
 }
 
@@ -1241,7 +1270,22 @@ export async function runChecks(
   const key = await failingOwnKey(ctx.actor.organizationId);
   if (key) return refused('own_key_failed', { why: ownKeyWhy(key) });
   if (await aiLimitReached(ctx)) return refused('ai_limit');
+  // All agents reached the month's limit on the workspace's own key (AGENT-OWN-KEY §4.2).
+  const keyCap = await ownKeyCapReached(ctx.actor.organizationId);
+  if (keyCap) return refused('own_key_cap', { date: renewsOn(keyCap.renewsAt) });
   return null;
+}
+
+/** When the AI period renews, as the refusal says it: "November 20, 2026". */
+function renewsOn(at: string | null): string {
+  const date = at ? new Date(at) : null;
+  if (!date || Number.isNaN(date.getTime())) return 'the next period';
+  return date.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 /** Why the workspace's own key fails, in words, by its provider's name. */
@@ -1281,7 +1325,9 @@ type AgentSummaryKey =
   | 'agentDuplicated'
   | 'agentTakenOver'
   | 'agentRunQueued'
-  | 'agentRunOnAction';
+  | 'agentRunOnAction'
+  | 'agentGoLiveOn'
+  | 'agentGoLiveOff';
 
 /**
  * Logs a person's change to an agent (CHAT-21: created, changed, state,

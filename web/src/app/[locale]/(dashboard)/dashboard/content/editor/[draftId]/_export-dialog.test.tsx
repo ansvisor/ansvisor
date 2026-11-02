@@ -351,6 +351,21 @@ describe('ExportDialog', () => {
     expect(fields.head.reviewer).toBe('Dr. Grace Hopper, Clinical Reviewer');
   });
 
+  it('keeps the Article schema the page came with beside the reviewer’s node (00448)', async () => {
+    const reviewer = { ...ada, id: 'r1', name: 'Dr. Grace Hopper' } as ContentAuthor;
+    const article =
+      '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Pour-over"}</script>';
+    await render({
+      html: `<h1>Pour-over</h1><p>Reviewed by Dr. Grace Hopper.</p>\n${article}`,
+      reviewer,
+      initialDestination: 'html',
+    });
+    await act(async () => button('Download HTML')!.click());
+    const html = draftExportBlob.mock.calls[0][2] as string;
+    expect(html).toContain('"@type":"Article"');
+    expect(html.indexOf('"@type":"Article"')).toBeLessThan(html.indexOf('"reviewedBy"'));
+  });
+
   it('leaves WebPage.reviewedBy out while the page doesn’t name the reviewer', async () => {
     const reviewer = { ...ada, id: 'r1', name: 'Dr. Grace Hopper' } as ContentAuthor;
     await render({ html: '<h1>Pour-over</h1><p>Done.</p>', reviewer, initialDestination: 'html' });
