@@ -22,6 +22,7 @@ import { processContentJob } from '../workers/content-worker.js';
 import { generatePulseForBrand } from './pulse/engine.js';
 import { runFirstSignalPass, runSignalPass } from './signals/pass.js';
 import { sendFirstResultsEmail } from './first-results-email.js';
+import { emitToBrand } from './socket-rooms.js';
 import logger from './logger.js';
 
 // Concurrency counters (the default of 2 per queue is inherited from the Bull
@@ -98,6 +99,18 @@ async function skipStopped(jobId, brandId) {
 }
 
 /**
+ * Tell the people who may reach the brand that its job finished (lib/
+ * socket-rooms.js), never every connected client. Not awaited: the job is
+ * already done, and a failed read only costs the live refresh.
+ */
+function notifyBrand(io, brandId, event, payload) {
+  if (!io) return;
+  emitToBrand(io, brandId, event, payload).catch((err) => {
+    logger.error({ err, brandId, event }, 'could not send a job event to its brand');
+  });
+}
+
+/**
  * Run a tracking job. Call without await (fire-and-forget).
  * Handles concurrency gating, retry, and Socket.IO emit. `priority` is for
  * the first run after a payment (see PRIORITY_EXTRA_SLOTS).
@@ -153,13 +166,11 @@ async function attemptTrackingJob(jobId, io, priority = false) {
     const { lateStamp, ...stored } = result;
     await completeJob(jobId, stored);
 
-    if (io) {
-      io.emit('tracking:complete', {
-        brandId,
-        resultCount: result.resultCount,
-        immediate: !!immediate,
-      });
-    }
+    notifyBrand(io, brandId, 'tracking:complete', {
+      brandId,
+      resultCount: result.resultCount,
+      immediate: !!immediate,
+    });
 
     const fullRun = !promptId && !promptIds?.length;
 
@@ -300,12 +311,10 @@ async function attemptContentJob(jobId, io) {
 
     await completeJob(jobId, result);
 
-    if (io) {
-      io.emit('content:generated', {
-        brandId,
-        generated: result.generated,
-      });
-    }
+    notifyBrand(io, brandId, 'content:generated', {
+      brandId,
+      generated: result.generated,
+    });
   } catch (err) {
     if (abortController.signal.aborted) {
       logger.info({ jobId }, 'content job was cancelled');

@@ -1,11 +1,11 @@
 ---
 title: Site Audit scores, opportunities and pages
 route: /dashboard/audit
-keywords: [site score, pages audited, audit opportunities, audited pages, score over time]
+keywords: [site score, pages audited, audit opportunities, audited pages, score over time, first score, current score, not audited, audit coverage]
 synonyms: [audit overview, audit history, which pages to audit, audit priority]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -18,7 +18,7 @@ The **Site Audit** page sums up your audits: a summary line, four cards and a ch
 A summary line gives your site score, pages audited, lowest category and next auto-audit. The first three cards count only the pages of your primary domain:
 
 - **Site score**: the average score of each page's latest audit, and its change from each page's previous audit.
-- **Pages audited**: pages of your domain with a completed audit, and how many pages of other sites you audited.
+- **Pages audited**: how many of your site's pages, as your sitemap, Google Analytics and AI citations list them, have an audit from the last 90 days, and how many don't. **See the … not audited** opens those in Opportunities.
 - **Authority · E-E-A-T**: those two category scores averaged over your pages, and the signals that fail or warn on the most pages.
 - **Audits this month**: audits left this billing month, with the share auto-audit keeps for its next runs.
 
@@ -38,6 +38,8 @@ The **Opportunities** tab is an inbox of pages worth auditing next. Each row sho
 
 AI visits need Google Analytics or the tracking snippet.
 
+Chips above the list show one reason at a time: **All**, **Not audited**, **No AI traffic** or **Competitor cited**, each with its count.
+
 ## Priority and templates
 
 The priority multiplies the page's value to the business, the size of the opportunity and how easy it is to fix, meaning how close its last score is to passing. Hover the number to see the three parts.
@@ -52,6 +54,6 @@ Pins and exclusions hold for the whole brand, so only admins and managers see **
 
 ## The Pages tab
 
-**Pages** lists every page you audited, one row per page, most recent first, with its **Score**, its **Issues** (signals that failed or warned), its **Status** and its **Last audit**. Status is **Good** (70 or more), **Improving** (below 70 but up from the previous audit), **Needs work**, **Running** or **Failed**. **Auto** marks an auto-audit's audit.
+**Pages** lists every page you audited, one row per page, most recent first, with its **First score**, **Current score**, **Issues** (signals that failed or warned), **Status** and **Last audit**. Once a page has two audits, the change since the first shows beside the current score: green up, red down. Status is **Good** (70 or more), **Improving** (below 70 but up from the previous audit), **Needs work**, **Running** or **Failed**. **Auto** marks an auto-audit's audit.
 
-Click a row to open its latest report. The arrow beside a page lists its earlier audits, each with **View report** and a delete icon. **Group by template** groups the rows under their template. **Export** downloads the list as CSV or Excel; select pages to **Re-audit** them or export only those.
+Click a row to open its latest report. The arrow beside a page lists its earlier audits, each with **View report** and a delete icon. **Group by template** groups the rows under their template. **Export** downloads the list as CSV or Excel, first scores included; select pages to **Re-audit** them or export only those.

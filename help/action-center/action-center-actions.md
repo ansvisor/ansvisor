@@ -1,7 +1,7 @@
 ---
 title: Work with Action Center actions
 route: /dashboard/action-center/actions
-keywords: [actions, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat]
+keywords: [actions, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence]
 synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action]
 plan: all
 updated: 2026-10-31
@@ -31,7 +31,7 @@ The cards at the top count and filter the list, all but **Highest Priority**. Cl
 - **In Progress**: actions someone is working on.
 - **Highest Priority**: the highest level among open actions; it doesn't filter. While Getting started runs, its card shows instead.
 
-Below them, filter by category, **Priority**, **Status** and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters are kept in the page's address, so a filtered view can be shared. For an online shop, the **From Products** chip lists only the actions sent from Products.
+Below them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters are kept in the page's address, so a filtered view can be shared. For an online shop, the **From Products** chip lists only the actions sent from Products.
 
 ## Status, dismiss and delete
 
@@ -41,11 +41,17 @@ Dismissing asks why: it doesn't matter to us, it's already done, the data behind
 
 **Delete**, for admins and managers only, removes an action for everyone, and it won't come back on its own the next day.
 
+## Stale actions
+
+An action that has stayed **New** for 30 days, with no one assigning, editing, sending or updating its tasks, is marked **Stale** each night. It isn't closed or dismissed: it shows a **Stale** label next to its status, and the **Status** filter's **Stale** lists them all.
+
+If it still matters, click **Still relevant** in the open action, or in the row menu. The label goes, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, dismiss it.
+
 ## Inside an action
 
 Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:
 
-- **Overview**: **Why this priority?**, **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.
+- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.
 - **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.
 - **Tasks**: the work, step by step.
 - **Signals**: the evidence. Click one to open it on the Signals tab.
