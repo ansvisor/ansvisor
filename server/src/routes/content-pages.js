@@ -7,8 +7,8 @@ import { onBrandDomain } from '../lib/audit/host.js';
 import { MAX_SOURCE_SITES, linkedSites, readSourceClasses } from '../lib/content-source-class.js';
 import { qualityPhase } from '../lib/content-quality.js';
 import { readDraftClaims } from '../lib/content-quality-claims.js';
+import { pageReadContext } from '../lib/content-page-context.js';
 import { readPage } from '../lib/content-quality-page.js';
-import { siteTypeOf } from '../lib/content-page-types.js';
 import { checkLinks, reserveReads } from '../lib/link-check.js';
 import { MAX_CONTENT_LENGTH, extractPageContent } from '../lib/page-content.js';
 import { PageFetchError, fetchPage } from '../lib/safe-fetch.js';
@@ -283,39 +283,13 @@ router.post('/page-read', pageReadLimiter, async (req, res) => {
     if (error) throw error;
     if (!draft) return res.status(404).json({ error: 'Draft not found', code: 'not_found' });
     const { orgId } = await assertBrandAccess(draft.brand_id, req.user.id);
-    const [brandRes, factsRes] = await Promise.all([
-      supabaseAdmin
-        .from('brands')
-        .select('name, site_type, industry, shopping_mode_enabled')
-        .eq('id', draft.brand_id)
-        .single(),
-      supabaseAdmin
-        .from('brand_facts')
-        .select('quote')
-        .eq('brand_id', draft.brand_id)
-        .eq('kind', 'claim')
-        .eq('status', 'approved')
-        .is('gone_at', null)
-        // One order for ties (a run's facts share their time): the page's read is kept by them.
-        .order('first_seen_at')
-        .order('id')
-        .limit(10),
-    ]);
-    if (brandRes.error) throw brandRes.error;
-    if (factsRes.error) throw factsRes.error;
-    const brand = brandRes.data;
+    const context = await pageReadContext(draft.brand_id);
     const result = await readPage({
       orgId,
       draftId: parsed.data.draftId,
       html: draft.body_html ?? '',
-      siteType: siteTypeOf({
-        siteType: brand.site_type,
-        industry: brand.industry,
-        shoppingModeEnabled: brand.shopping_mode_enabled,
-      }),
       pageType: draft.page_type,
-      brandName: brand.name,
-      facts: (factsRes.data ?? []).map((f) => f.quote),
+      ...context,
     });
     return res.json(result);
   } catch (err) {

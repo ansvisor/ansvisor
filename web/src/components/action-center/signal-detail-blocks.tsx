@@ -20,6 +20,7 @@ import {
   type SignalFigure,
   type WhereValue,
 } from '@/lib/signals/detail';
+import { languageName } from '@/lib/audit/reading-evidence';
 import { cn } from '@/lib/utils';
 import { ActionStatusBadge } from './action-table';
 
@@ -68,6 +69,17 @@ const EVIDENCE_KEYS = [
   'label',
   'description',
   'note',
+  // Readability's and first person's, in the page's language (signals/readability.js, eeat.js).
+  'language',
+  'formula',
+  'readingScore',
+  'wordsPerSentence',
+  'syllablesPerWord',
+  'lettersPerWord',
+  'wordsPerParagraph',
+  'mobileLinesPerParagraph',
+  'firstPersonSentences',
+  'sentences',
 ] as const;
 const HIDDEN_EVIDENCE = new Set(['model', 'blocked', 'blockedBots']);
 
@@ -79,9 +91,15 @@ const HIDDEN_EVIDENCE = new Set(['model', 'blocked', 'blockedBots']);
 function describeEvidence(
   evidence: Record<string, unknown>,
   t: ReturnType<typeof useTranslations>,
+  tFormula: ReturnType<typeof useTranslations<'contentEditor.editor.quality.formulas'>>,
 ): string {
   const show = (key: string, value: unknown): string | null => {
     if (value === null || value === undefined || value === '') return null;
+    // A language by its name, a reading formula as the editor names it.
+    if (key === 'language' && typeof value === 'string') return languageName(value);
+    if (key === 'formula' && typeof value === 'string' && tFormula.has(value)) {
+      return tFormula(value as Parameters<typeof tFormula>[0]);
+    }
     if (Array.isArray(value)) {
       const items = value.filter((v) => typeof v === 'string' || typeof v === 'number');
       if (items.length === 0) return null;
@@ -108,6 +126,7 @@ function describeEvidence(
 
 function WhereValueView({ value }: { value: WhereValue }) {
   const t = useTranslations('actionCenter.signalsPage');
+  const tFormula = useTranslations('contentEditor.editor.quality.formulas');
   // A competitor's page events read as the Competitors page's timeline says them.
   const tTimeline = useTranslations('competitors.timeline');
   const format = useFormatter();
@@ -324,7 +343,7 @@ function WhereValueView({ value }: { value: WhereValue }) {
             <li key={page}>
               <span className="break-all">{page}</span>
               {issues.map((issue) => {
-                const found = describeEvidence(issue.evidence, t);
+                const found = describeEvidence(issue.evidence, t, tFormula);
                 return (
                   <span key={issue.check} className="block text-xs text-muted-foreground">
                     <span className="font-medium text-foreground">{issue.label}</span>

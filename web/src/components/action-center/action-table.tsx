@@ -7,6 +7,7 @@ import {
   BarChart3,
   Check,
   CirclePlay,
+  Clock,
   MessageSquare,
   MoreHorizontal,
   MousePointerClick,
@@ -16,6 +17,7 @@ import {
   ShieldCheck,
   Layers,
   Quote,
+  RotateCcw,
   Sparkles,
   Target,
   X,
@@ -63,7 +65,7 @@ import {
   assigneeLabel,
   labelInitials,
 } from '@/lib/action-center/display';
-import type { PriorityLevel } from '@/lib/action-center/priority';
+import { STALE_AFTER_DAYS, isStale, type PriorityLevel } from '@/lib/action-center/priority';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -126,6 +128,24 @@ export function ActionStatusBadge({ status }: { status: ActionStatus }) {
     <Badge variant="outline" className={ACTION_STATUS_BADGE[status]}>
       <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
       {t(`status.${status}`)}
+    </Badge>
+  );
+}
+
+/**
+ * Stale (00432): New for a month with no one on it. Amber, as On Hold: it
+ * waits on someone.
+ */
+export function StalePill() {
+  const t = useTranslations('actionCenter.actionsPage');
+  return (
+    <Badge
+      variant="outline"
+      className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+      title={t('stale.hint', { days: STALE_AFTER_DAYS })}
+    >
+      <Clock aria-hidden="true" className="h-3 w-3" />
+      {t('stale.pill')}
     </Badge>
   );
 }
@@ -208,9 +228,9 @@ const MENU_STATUSES = [
 ] as const;
 
 /**
- * An action's row menu: set it In Progress, Completed or Dismissed, or
- * delete it, without opening the drawer. The status it already has is off;
- * Delete asks first, and is off for members who can't delete.
+ * An action's row menu: set it In Progress, Completed or Dismissed, keep a
+ * stale one, or delete it, without opening the drawer. The status it already
+ * has is off; Delete asks first, and is off for members who can't delete.
  */
 function ActionMenu({
   action,
@@ -218,6 +238,7 @@ function ActionMenu({
   canDelete,
   disabled,
   onStatusChange,
+  onKeep,
   onDelete,
 }: {
   action: ActionItem;
@@ -229,6 +250,7 @@ function ActionMenu({
     status: ActionStatus,
     reason?: ActionDismissReason | null,
   ) => void;
+  onKeep?: (action: ActionItem) => void;
   onDelete: (action: ActionItem) => void;
 }) {
   const t = useTranslations('actionCenter.actionsPage');
@@ -269,6 +291,14 @@ function ActionMenu({
               {t(`rowMenu.${status}`)}
             </DropdownMenuItem>
           ))}
+          {onKeep && isStale(action) && (
+            <DropdownMenuItem
+              onClick={guard(() => onKeep(action), { action: tActions('changeActionStatus') })}
+            >
+              <RotateCcw className="h-4 w-4" />
+              {t('rowMenu.stillRelevant')}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             variant="destructive"
@@ -303,6 +333,7 @@ export function ActionTable({
   actions,
   onSelect,
   onStatusChange,
+  onKeep,
   onDelete,
   canDelete = false,
   busyIds,
@@ -315,6 +346,8 @@ export function ActionTable({
     status: ActionStatus,
     reason?: ActionDismissReason | null,
   ) => void;
+  /** Still relevant on a stale action's row menu. */
+  onKeep?: (action: ActionItem) => void;
   onDelete?: (action: ActionItem) => void;
   canDelete?: boolean;
   /** Actions with a change in flight: their menu waits. */
@@ -392,7 +425,10 @@ export function ActionTable({
                   <PriorityBadge score={action.priorityScore} level={action.priorityLevel} />
                 </TableCell>
                 <TableCell>
-                  <ActionStatusBadge status={action.status} />
+                  <div className="flex flex-wrap items-center gap-1">
+                    <ActionStatusBadge status={action.status} />
+                    {isStale(action) && <StalePill />}
+                  </div>
                   {action.taskTotal > 0 && (
                     <div className="mt-1.5 w-24">
                       <p className="text-[10px] text-muted-foreground">
@@ -437,6 +473,7 @@ export function ActionTable({
                       canDelete={canDelete}
                       disabled={busyIds?.has(action.id) ?? false}
                       onStatusChange={onStatusChange}
+                      onKeep={onKeep}
                       onDelete={onDelete}
                     />
                   </TableCell>
