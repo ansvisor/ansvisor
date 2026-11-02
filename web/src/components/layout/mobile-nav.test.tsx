@@ -16,10 +16,20 @@ vi.mock('@/i18n/navigation', () => ({
     </a>
   ),
 }));
+const gate = vi.hoisted(() => ({ isCloud: false }));
 vi.mock('@/hooks/use-feature-gate', () => ({
-  useFeatureGate: () => ({ canUse: () => true, requiredPlanFor: () => null, isCloud: false }),
+  useFeatureGate: () => ({
+    canUse: () => true,
+    requiredPlanFor: () => null,
+    isCloud: gate.isCloud,
+  }),
 }));
-vi.mock('@/hooks/use-agent-key-status', () => ({ useAgentKeyStatus: () => 'configured' }));
+// The org's provider key for Chat: there, unless a test says otherwise.
+const agentKey = vi.hoisted(() => ({ status: 'configured' as 'configured' | 'missing' }));
+const useAgentKeyStatus = vi.hoisted(() =>
+  vi.fn((probe: boolean) => (probe ? agentKey.status : 'configured')),
+);
+vi.mock('@/hooks/use-agent-key-status', () => ({ useAgentKeyStatus }));
 vi.mock('@/components/layout/brand-switcher', () => ({ BrandSwitcher: () => null }));
 vi.mock('@/components/layout/user-profile-nav-item', () => ({ UserProfileNavItem: () => null }));
 vi.mock('@/components/layout/theme-toggle', () => ({ ThemeToggle: () => null }));
@@ -75,6 +85,9 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  gate.isCloud = false;
+  agentKey.status = 'configured';
+  useAgentKeyStatus.mockClear();
   useBrandStore.setState({ activeBrandId: 'brand-1', brands: [] });
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -136,5 +149,21 @@ describe('MobileNav', () => {
     await open(['agents'], true);
     expect(link('/dashboard/chat')).not.toBeNull();
     expect(link('/dashboard/agents')).toBeNull();
+  });
+
+  it('says Chat needs setting up without a key, with the new Chat off', async () => {
+    gate.isCloud = true;
+    agentKey.status = 'missing';
+    await open([]);
+    expect(useAgentKeyStatus).toHaveBeenCalledWith(true);
+    expect(link('/dashboard/agent')?.textContent).toBe('ChatSet up');
+  });
+
+  it('gives Chat no Set up badge with the new Chat on, and never asks for the key', async () => {
+    gate.isCloud = true;
+    agentKey.status = 'missing';
+    await open([], true);
+    expect(link('/dashboard/chat')?.textContent).toBe('Chat');
+    expect(useAgentKeyStatus).not.toHaveBeenCalledWith(true);
   });
 });

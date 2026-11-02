@@ -273,14 +273,21 @@ describe('dashboardNavBadge', () => {
   const actionCenter = items.find((item) => item.title === 'Action Center')!;
 
   it("says Chat comes next week on the demo brand, before it's set up", () => {
-    expect(dashboardNavBadge(chat, { chatSoon: 'Soon (next week)', agentKeyMissing: true })).toBe(
+    expect(dashboardNavBadge(chat, { chatSoon: 'Soon (next week)', chatSetUp: 'Set up' })).toBe(
       'Soon (next week)',
     );
   });
 
-  it('asks to set Chat up without a provider key, else shows its own', () => {
-    expect(dashboardNavBadge(chat, { agentKeyMissing: true })).toBe('Set up');
+  it('asks to set Chat up without a provider key, in words from en.json, else shows its own', () => {
+    expect(messages.nav.chatSetUp).toBe('Set up');
+    expect(dashboardNavBadge(chat, { chatSetUp: messages.nav.chatSetUp })).toBe('Set up');
     expect(dashboardNavBadge(chat, {})).toBe(chat.badge);
+  });
+
+  // The new Chat (CHAT_AGENTIC) runs on the plan's AI limit without a key:
+  // there is nothing to set up.
+  it('never asks to set Chat up with the new Chat on', () => {
+    expect(dashboardNavBadge(chat, { chatAgentic: true, chatSetUp: 'Set up' })).toBe(chat.badge);
   });
 
   it("keeps every other item's own badge", () => {
