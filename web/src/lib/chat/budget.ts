@@ -312,16 +312,20 @@ export interface ChatFitJob {
  * (CHAT-04 item 17a): a count, never dollars (the server works it out,
  * server/src/lib/chat-budget.js fitChatUnits). Every part fits on the
  * workspace's own key, which isn't checked, and while the new Chat is off.
+ * `limit` says which limit binds: the agent run's own cap ('run') or the
+ * month's AI limit.
  * Holds nothing: each step is still held on its own. Never throws: an API
  * that doesn't answer, or refuses, comes back as `ok: false`, and the job
  * goes on with each step held as before.
  */
 export async function fitChatUnits(
   job: ChatFitJob,
-): Promise<{ ok: true; fits: number } | { ok: false; refusal: ChatBudgetRefusal }> {
+): Promise<
+  { ok: true; fits: number; limit: 'run' | 'month' } | { ok: false; refusal: ChatBudgetRefusal }
+> {
   const units = Math.max(1, Math.min(MAX_FIT_UNITS, Math.floor(job.units)));
   if (job.source === 'own' || !chatAgenticEnabled(job.organizationId)) {
-    return { ok: true, fits: units };
+    return { ok: true, fits: units, limit: 'month' };
   }
   const res = await post(
     'fit',
@@ -339,7 +343,9 @@ export async function fitChatUnits(
   );
   const fits = res?.body?.fits;
   if (res?.status === 200 && typeof fits === 'number' && Number.isInteger(fits) && fits >= 0) {
-    return { ok: true, fits: Math.min(fits, units) };
+    // The agent run's own cap, when it is the limit that binds; else the month's.
+    const limit = res.body?.limit === 'run' ? 'run' : 'month';
+    return { ok: true, fits: Math.min(fits, units), limit };
   }
   const code = res?.body?.error;
   return {
