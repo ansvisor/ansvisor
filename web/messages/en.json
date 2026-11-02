@@ -324,6 +324,7 @@
       "changeRoles": "Changing roles needs a plan",
       "saveAiKeys": "Saving an AI key needs a plan",
       "switchAiProvider": "Switching Chat's AI provider needs a plan",
+      "saveAiKeyLimit": "Saving the agents' limit on your key needs a plan",
       "testAiKey": "Testing an AI key needs a plan",
       "addCatalogSources": "Adding catalog sources needs a plan",
       "syncCatalog": "Syncing the catalog needs a plan",
@@ -4630,6 +4631,18 @@
     },
     "inbox": {
       "title": "Inbox",
+      "notice": {
+        "reminder": "{why} Still not working after 3 days.",
+        "limit80": "Agents have used 80% of their monthly limit on your key",
+        "limit100": "Agents reached their monthly limit on your key · they're paused",
+        "limitUsed": "About {used} of {cap} this month, estimated · renews {date}",
+        "limitUsedNoDate": "About {used} of {cap} this month, estimated",
+        "limitPaused": "They start again on {date}, or when you raise the limit.",
+        "limitPausedNoDate": "They start again when the month renews, or when you raise the limit.",
+        "reviewLimit": "Review limit",
+        "raiseLimit": "Raise limit",
+        "fix": "Fix it"
+      },
       "lands": "Results from your agents land here.",
       "landsWithSuggestions": "Results from your agents and daily suggestions land here.",
       "nothingNeedsYou": "Nothing needs you.",
@@ -5415,6 +5428,7 @@
       "agent_limit": "Your plan keeps up to {limit, plural, one {# agent} other {# agents}} on at once. Pause or archive one to turn this one on.",
       "no_brand": "None of this agent's brands is left. Pick a brand in its scope.",
       "ai_limit": "This month's AI limit is used up, so the agent can't start. It can run again once the limit resets.",
+      "own_key_cap": "Agents have used this month's limit on your own AI key. An Admin can raise it in Settings › AI Providers, or it renews on {date}.",
       "owner_role": "This agent's owner can't run agents any more. An Admin can take it over.",
       "action_not_found": "This action isn't available.",
       "action_closed": "This action is closed. Reopen it in Action Center to run an agent on it.",
@@ -5442,6 +5456,7 @@
       "archived": "Archived"
     },
     "pausedReason": {
+      "own_key_cap": "Key's monthly agent limit reached",
       "cap": "AI limit reached",
       "connection": "A required connection is off",
       "skill_off": "A skill is off",
@@ -5892,7 +5907,7 @@
           "writing": "For drafts and rewrites",
           "picked": "Kept from this agent’s settings"
         },
-        "ownKey": "Runs on your {provider} key, which {provider} bills. Max per run and Monthly cap still apply.",
+        "ownKey": "Runs on your {provider} key, which {provider} bills. Max per run and the key's monthly limit still apply.",
         "limit": "Uses your monthly AI limit"
       },
       "agent": {
@@ -12979,6 +12994,22 @@
     "agent_removeKey": "Remove key",
     "agent_adminOnly": "Admin-only setting",
     "agent_adminOnlyHint": "Only org admins can add, replace, or remove AI provider keys. Ask an admin if you need one changed.",
+    "ownKeyGuard": {
+      "title": "Agents on your key",
+      "description": "One limit for all agents on your own AI key, from {min} to {max} a month.",
+      "label": "Most all agents may spend on your key a month",
+      "save": "Save",
+      "saved": "Limit saved",
+      "note": "An estimate at the providers' list prices. Agents pause when they reach it and start again when the month renews, or when you raise it. Set a limit with your provider too: its bill is the real one.",
+      "range": "Set a limit from {min} to {max}.",
+      "month": "This month: about <b>{used}</b> of {cap} · renews {date}",
+      "monthNoDate": "This month: about <b>{used}</b> of {cap}",
+      "estimated": "Estimated",
+      "progress": "This month's agent use of the limit",
+      "unreadable": "This month's use couldn't be read just now. Reload the page in a minute.",
+      "unavailable": "This limit can't be changed yet. Try again after the next update.",
+      "failed": "The limit couldn't be saved. Try again."
+    },
     "agent_providers": {
       "anthropic": {
         "name": "Anthropic",

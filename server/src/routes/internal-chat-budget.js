@@ -25,8 +25,15 @@
  *     each agent's share of the AI limit this period, or over the last
  *     `days` (1–90), for the Agents list and detail (CHAT-27 items 24–30).
  *   → 402 plan_limit: no active plan. 403 chat_off.
+ * GET /api/internal/chat/budget/own-key?orgId=
+ *   → 200 { reached, usedUsd, capUsd, since, renewsAt }: the key guard
+ *     (AGENT-OWN-KEY §4.2): what all agents spent on the workspace's own key
+ *     this AI period against the Admin's monthly limit. 403 chat_off.
+ *     Each read also warns the Admins at 80% and at the limit, once each
+ *     a period (lib/chat-notices/own-key-limit.js), off the answer's path.
  *
- * Dollars never leave the server: no answer carries one. Calls with the
+ * Dollars leave the server only in the own-key answer, for the Admins'
+ * settings card (AGENT-OWN-KEY §11 Q1): the agent checks read `reached`. Calls with the
  * secret aren't counted by the API's per-IP limiter (isInternalChatBudgetCall
  * in middleware/rate-limiter.js): each step makes two, from the web's few
  * shared addresses.
@@ -39,9 +46,11 @@ import {
   ChatBudgetError,
   agentUsageShares,
   chargeChatStep,
+  ownKeyAgentSpend,
   releaseChatStep,
   reserveChatStep,
 } from '../lib/chat-budget.js';
+import { warnOwnKeyLimit } from '../lib/chat-notices/own-key-limit.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
 
@@ -95,6 +104,8 @@ const sharesSchema = z.strictObject({
   orgId: z.guid(),
   days: z.coerce.number().int().min(1).max(90).optional(),
 });
+
+const ownKeySchema = z.strictObject({ orgId: z.guid() });
 
 /** The body as `schema` reads it, or null once a 400 is sent. */
 function parse(schema, req, res) {
@@ -185,6 +196,24 @@ router.get('/agent-shares', async (req, res) => {
     return res.json({ success: true, ...shares });
   } catch (err) {
     return fail(err, req, res, 'agent shares');
+  }
+});
+
+router.get('/own-key', async (req, res) => {
+  const query = ownKeySchema.safeParse(req.query ?? {});
+  if (!query.success) {
+    return res
+      .status(400)
+      .json({ success: false, error: 'invalid_request', message: 'Invalid request' });
+  }
+  try {
+    const spend = await ownKeyAgentSpend(query.data.orgId);
+    warnOwnKeyLimit(query.data.orgId, spend).catch((err) =>
+      req.log.error({ err }, 'own key limit warning failed'),
+    );
+    return res.json({ success: true, ...spend });
+  } catch (err) {
+    return fail(err, req, res, 'own key spend');
   }
 });
 

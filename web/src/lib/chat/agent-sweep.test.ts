@@ -22,8 +22,18 @@ const fakes = vi.hoisted(() => ({
   chatSweep: vi.fn(),
   endHeld: vi.fn(),
   onOwnKey: vi.fn(async () => false),
+  notify: vi.fn(async () => true),
 }));
+vi.mock('./key-notice', () => ({ notifyOwnKeyFailure: fakes.notify }));
 vi.mock('@/lib/mcp/account', () => ({ getAiUsageFor: fakes.usage }));
+const keyCap = vi.hoisted(() => ({
+  reached: null as { reached: boolean; renewsAt: string | null } | null,
+  read: null as { reached: boolean; renewsAt: string | null } | null,
+}));
+vi.mock('./own-key-cap', () => ({
+  ownKeyCapReached: vi.fn(async () => keyCap.reached),
+  readOwnKeyCap: vi.fn(async () => keyCap.read),
+}));
 vi.mock('./key', () => ({
   resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
   failingOwnKey: vi.fn(async () => null),
@@ -40,7 +50,7 @@ vi.mock('./engine', () => ({
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { sweepAgents, STALE_QUEUE_MS } = await import('./agent-sweep');
+const { sweepAgents, OWN_KEY_REMINDER_MS, STALE_QUEUE_MS } = await import('./agent-sweep');
 
 const NOW = new Date('2026-11-02T12:00:00.000Z');
 const AGENT = 'abababab-0000-4000-8000-000000000001';
@@ -129,6 +139,8 @@ const agent = (id: string, over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
+  keyCap.reached = null;
+  keyCap.read = null;
   vi.clearAllMocks();
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('CHAT_AGENTIC', 'true');
@@ -150,6 +162,7 @@ beforeEach(() => {
   db.tables.chat_runs = [];
   db.tables.chat_run_state = [];
   db.tables.ship_events = [];
+  db.tables.organization_ai_keys = [];
   db.rpcs = { chat_start_next_agent_run: startNext };
 });
 
@@ -195,6 +208,37 @@ describe('the agents’ sweep', () => {
     expect((await sweepAgents(NOW, driver)).pausedForFailures).toBe(1);
     expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'failures' });
     expect(agentRow(OTHER_AGENT).status).toBe('active');
+  });
+
+  it('resumes agents paused at the own key’s monthly limit once there is room again (AGENT-OWN-KEY §4.2)', async () => {
+    fakes.onOwnKey.mockResolvedValue(true);
+    db.tables.chat_agents = [
+      agent(AGENT, { status: 'paused', paused_reason: 'own_key_cap' }),
+      agent(OTHER_AGENT, { status: 'paused', paused_reason: 'manual' }),
+    ];
+    // Still reached, or not read: they wait.
+    keyCap.read = { reached: true, renewsAt: '2026-11-20T09:00:00.000Z' };
+    expect((await sweepAgents(NOW, driver)).resumed).toBe(0);
+    keyCap.read = null;
+    expect((await sweepAgents(NOW, driver)).resumed).toBe(0);
+    expect(agentRow().status).toBe('paused');
+
+    // The period renewed, or an Admin raised the limit.
+    keyCap.read = { reached: false, renewsAt: '2026-12-20T09:00:00.000Z' };
+    expect((await sweepAgents(NOW, driver)).resumed).toBe(1);
+    expect(agentRow()).toMatchObject({
+      status: 'active',
+      paused_reason: null,
+      activated_at: NOW.toISOString(),
+    });
+    expect(agentRow(OTHER_AGENT).status).toBe('paused');
+
+    // Chat no longer runs on the key: it resumes on the AI limit, unread.
+    Object.assign(agentRow(), { status: 'paused', paused_reason: 'own_key_cap' });
+    fakes.onOwnKey.mockResolvedValue(false);
+    keyCap.read = null;
+    expect((await sweepAgents(NOW, driver)).resumed).toBe(1);
+    expect(agentRow().status).toBe('active');
   });
 
   it('resumes an agent paused for the AI limit once there is room, and stops its triggered runs held there', async () => {
@@ -259,6 +303,40 @@ describe('the agents’ sweep', () => {
     fakes.onOwnKey.mockResolvedValue(false);
     expect((await sweepAgents(NOW, driver)).resumed).toBe(1);
     expect(agentRow().status).toBe('active');
+  });
+
+  it('reminds the Admins once of an own key still failing 3 days in (AGENT-OWN-KEY §5.3)', async () => {
+    const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
+    const due = ago(OWN_KEY_REMINDER_MS + 60_000);
+    db.tables.organization_ai_keys = [
+      // Told as it began: its reminder is due.
+      { organization_id: ORG, provider: 'openai', failing_since: due, notified_at: due },
+      // Not 3 days yet.
+      {
+        organization_id: ORG,
+        provider: 'anthropic',
+        failing_since: ago(OWN_KEY_REMINDER_MS - 60_000),
+        notified_at: null,
+      },
+      // Reminded already.
+      {
+        organization_id: ORG,
+        provider: 'google',
+        failing_since: ago(OWN_KEY_REMINDER_MS + 120_000),
+        notified_at: ago(30_000),
+      },
+      // Works.
+      { organization_id: ORG, provider: 'azure', failing_since: null, notified_at: null },
+    ];
+    expect((await sweepAgents(NOW, driver)).reminded).toBe(1);
+    expect(fakes.notify).toHaveBeenCalledTimes(1);
+    expect(fakes.notify).toHaveBeenCalledWith(ORG, 'openai', due, { reminder: true });
+
+    // Chat off for the workspace: no one is reminded.
+    fakes.notify.mockClear();
+    vi.stubEnv('CHAT_AGENTIC_ORGS', 'ffffffff-0000-4000-8000-000000000000');
+    expect((await sweepAgents(NOW, driver)).reminded).toBe(0);
+    expect(fakes.notify).not.toHaveBeenCalled();
   });
 
   it('keeps an agent paused while its own monthly cap is used', async () => {

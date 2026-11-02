@@ -18,6 +18,14 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
 vi.mock('@/lib/mcp/account', () => ({
   getAiUsageFor: vi.fn(async () => ({ active_plan: true, unlimited: false, percent_used: 5 })),
 }));
+const keyCap = vi.hoisted(() => ({
+  reached: null as { reached: boolean; renewsAt: string | null } | null,
+  read: null as { reached: boolean; renewsAt: string | null } | null,
+}));
+vi.mock('./own-key-cap', () => ({
+  ownKeyCapReached: vi.fn(async () => keyCap.reached),
+  readOwnKeyCap: vi.fn(async () => keyCap.read),
+}));
 const ownKey = vi.hoisted(() => ({ failing: null as { class: string; provider: string } | null }));
 vi.mock('./key', () => ({
   resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
@@ -68,8 +76,10 @@ function startNext(args: Record<string, unknown>) {
 }
 
 beforeEach(() => {
-  vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+  keyCap.reached = null;
+  keyCap.read = null;
   ownKey.failing = null;
+  vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   seedWorkspace(db);
   db.unique = { ...db.unique, chat_agents: [['organization_id', 'name']] };
   const iso = () => NOW.toISOString();
@@ -181,6 +191,22 @@ describe('Run now', () => {
         code: 'own_key_failed',
         message:
           'Your OpenAI account is out of credit. An Admin can fix it in Settings › AI Providers, then run the agent again.',
+      },
+    });
+    expect(runRows()).toEqual([]);
+  });
+
+  it('refuses while all agents used the month’s limit on the own key, queuing nothing (429)', async () => {
+    const id = await agentOf(PEOPLE.manager, { skills: ['winback'] });
+    keyCap.reached = { reached: true, renewsAt: '2026-11-20T09:00:00.000Z' };
+    const result = await runs.runAgentNow(await ctxOf(PEOPLE.manager), id, {}, NOW, null);
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: {
+        status: 429,
+        code: 'own_key_cap',
+        message:
+          "Agents have used this month's limit on your own AI key. An Admin can raise it in Settings › AI Providers, or it renews on November 20, 2026.",
       },
     });
     expect(runRows()).toEqual([]);
@@ -417,6 +443,14 @@ describe('Run agent on an action', () => {
     ownKey.failing = { class: 'invalid', provider: 'anthropic' };
     const result = await runs.runAgentOnAction(await ctxOf(PEOPLE.manager), id, ACTION, NOW, null);
     expect(result).toMatchObject({ ok: false, refusal: { status: 409, code: 'own_key_failed' } });
+    expect(runRows()).toEqual([]);
+  });
+
+  it('refuses Run agent while all agents used the month’s limit on the own key, queuing nothing', async () => {
+    const id = await agentOf(PEOPLE.manager, { skills: ['winback'] });
+    keyCap.reached = { reached: true, renewsAt: '2026-11-20T09:00:00.000Z' };
+    const result = await runs.runAgentOnAction(await ctxOf(PEOPLE.manager), id, ACTION, NOW, null);
+    expect(result).toMatchObject({ ok: false, refusal: { status: 429, code: 'own_key_cap' } });
     expect(runRows()).toEqual([]);
   });
 

@@ -16,6 +16,7 @@ import { readAgentShares } from './agent-shares';
 import { nextScheduleFire } from './agent-schedule';
 import { pauseAgentForSystem, runnableBrands } from './agents';
 import { chatAgenticEnabled } from './flag';
+import { ownKeyCapReached } from './own-key-cap';
 import { planFactsFromOrgRow, type OrgPlanRow, type PlanFacts } from './plan-facts';
 
 /**
@@ -263,6 +264,19 @@ async function enabledTriggers(
     });
     return parsed.success ? [{ ...row, input: parsed.data }] : [];
   });
+}
+
+/**
+ * Whether all agents reached the month's limit on the workspace's own key
+ * (AGENT-OWN-KEY §4.2): the firing agent pauses (own_key_cap) and its runs
+ * aren't queued; it starts again by itself once the period renews or an
+ * Admin raises the limit (the sweep). A guard that can't be read lets it
+ * fire: each run stays within its own cap.
+ */
+async function keyCapUsed(agent: FiringAgent): Promise<boolean> {
+  if (!(await ownKeyCapReached(agent.organizationId))) return false;
+  await pauseAgentForSystem(agent.organizationId, agent.id, 'own_key_cap');
+  return true;
 }
 
 /**
@@ -619,7 +633,7 @@ async function fireSchedule(
   if ((claimed ?? []).length === 0) return false;
   counts.fired += 1;
 
-  if (await monthCapUsed(agent)) return false;
+  if ((await keyCapUsed(agent)) || (await monthCapUsed(agent))) return false;
   const config = trigger.input.config;
   const fire: AgentFire = {
     kind: 'schedule',
@@ -779,7 +793,7 @@ export async function fireSignals(
       const brands = await runnableBrands(agent.organizationId, agent.data.scope);
       if (!brands.some((b) => b.id === brandRow.id)) continue;
       counts.fired += 1;
-      if (await monthCapUsed(agent)) continue;
+      if ((await keyCapUsed(agent)) || (await monthCapUsed(agent))) continue;
       const fires: AgentFire[] = matched.slice(0, MAX_FIRES).map((signal) => ({
         kind: 'signal',
         ref: signal.id,

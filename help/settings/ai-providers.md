@@ -1,7 +1,7 @@
 ---
 title: Use your own AI keys
 route: /dashboard/settings/ai-providers
-keywords: [ai providers, own key, api key, openai, anthropic, openrouter, test ai key, key not working]
+keywords: [ai providers, own key, api key, openai, anthropic, openrouter, test ai key, key not working, agents on your key, key limit]
 synonyms: [bring your own key, byok, my own openai key, connect my ai account]
 plan: enterprise
 updated: 2026-11-01
@@ -23,7 +23,13 @@ Keys are stored encrypted, and nobody can read a saved key back. If the server c
 
 ## Agents on your key
 
-Agents run on the key too. Each agent's **Max per run** and **Monthly cap** still apply: Ansvisor measures what a run uses at the providers' list prices, so it is an estimate of your bill. Set a spending limit with your provider too: its bill is the real one.
+Agents run on the key too. Each agent's **Max per run** and **Monthly cap** still apply, and one more limit covers all agents on the key together: **Agents on your key**, under the keys. It starts at $250 a month; an admin can set it from $10 to $10,000, but can't turn it off. Only admins see it, with this month's use next to it. Chat you use yourself doesn't count toward it.
+
+Ansvisor measures what agents use at the providers' list prices, so these numbers are estimates of your bill. At the limit, agents pause, and they can't be run by hand either. They start again by themselves when the month renews or when an admin raises the limit. Set a spending limit with your provider too: its bill is the real one.
+
+## When agents near the limit
+
+Every admin is told when agents have used 80% of the limit on your key, and again when they reach it: at most twice a month. Each time they get a notice at the top of their Chat **Inbox** and an e-mail, unless their Chat settings say Inbox only. **Review limit** or **Raise limit** opens **Settings › AI Providers**. The notices go away when the month renews, or when an admin raises the limit above what agents have used.
 
 ## Keys saved before Chat
 
@@ -40,3 +46,5 @@ Under each saved key, a line says whether it works: **Working · checked …**, 
 ## When your key stops working
 
 If the key Chat uses stops working, Chat stops on it and the agents that run on it pause. Nothing moves to your plan's monthly AI limit. Once the key works again, after a passing **Test**, a save or an answer from Chat, the paused agents start again by themselves. If you remove the key, they start again on your plan's monthly AI limit.
+
+Every admin is told once, with a notice at the top of their Chat **Inbox** and an e-mail. **Fix it** opens **Settings › AI Providers**. If the key still doesn't work 3 days later, they get one reminder. The notice goes away once the key works again, or is replaced or removed.
