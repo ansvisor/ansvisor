@@ -12,7 +12,10 @@
         "export actions",
         "top actions",
         "run agent",
-        "run with chat"
+        "run with chat",
+        "stale actions",
+        "still relevant",
+        "confidence"
       ],
       "synonyms": [
         "recommendations",
@@ -35,15 +38,19 @@
         },
         {
           "heading": "Cards and filters",
-          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter. While Getting started runs, its card shows instead.\n\nBelow them, filter by category, **Priority**, **Status** and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters are kept in the page's address, so a filtered view can be shared. For an online shop, the **From Products** chip lists only the actions sent from Products."
+          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter. While Getting started runs, its card shows instead.\n\nBelow them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters are kept in the page's address, so a filtered view can be shared. For an online shop, the **From Products** chip lists only the actions sent from Products."
         },
         {
           "heading": "Status, dismiss and delete",
           "text": "An action's status is **New**, **In Progress**, **On Hold**, **Completed** or **Dismissed**. The row menu sets In Progress, Completed or Dismiss without opening the action.\n\nDismissing asks why: it doesn't matter to us, it's already done, the data behind it is wrong, or not now. You can also dismiss without saying why. History shows the reason.\n\n**Delete**, for admins and managers only, removes an action for everyone, and it won't come back on its own the next day."
         },
         {
+          "heading": "Stale actions",
+          "text": "An action that has stayed **New** for 30 days, with no one assigning, editing, sending or updating its tasks, is marked **Stale** each night. It isn't closed or dismissed: it shows a **Stale** label next to its status, and the **Status** filter's **Stale** lists them all.\n\nIf it still matters, click **Still relevant** in the open action, or in the row menu. The label goes, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, dismiss it."
+        },
+        {
           "heading": "Inside an action",
-          "text": "Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:\n\n- **Overview**: **Why this priority?**, **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent."
+          "text": "Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:\n\n- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent."
         },
         {
           "heading": "Run an agent on an action",
@@ -1124,7 +1131,7 @@
         "finish a page"
       ],
       "plan": "all",
-      "updated": "2026-10-30",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1172,7 +1179,7 @@
         },
         {
           "heading": "History, Copy HTML and Export",
-          "text": "- **History** keeps earlier versions for 90 days: the live page as imported, the page before agent changes, each Mark ready and publish, each Hand off, and the page before a restore. **Restore** makes a new version, so nothing is lost.\n- **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS.\n- **Export** downloads the page as **Word**, **Excel**, **CSV**, **HTML** or **Markdown**. Excel and CSV hold the page as one row, for a CMS's import. Only the HTML file carries the schema.\n\nWith Quality on, **Export** opens a dialog instead: the same files, and under **Platforms** a copy of the page to paste into Webflow, WordPress, Shopify or Google Docs."
+          "text": "- **History** keeps earlier versions for 90 days: the live page as imported, the page before agent changes, each Mark ready and publish, each Hand off, and the page before a restore. **Restore** makes a new version, so nothing is lost.\n- **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS. An article also gets the Article schema Ansvisor adds, with its author.\n- **Export** downloads the page as **Word**, **Excel**, **CSV**, **HTML** or **Markdown**. Excel and CSV hold the page as one row, for a CMS's import. Only the HTML file carries the schema.\n\nWith Quality on, **Export** opens a dialog instead: the same files, and under **Platforms** a copy of the page to paste into Webflow, WordPress, Shopify or Google Docs."
         },
         {
           "heading": "Add products from your catalog",
@@ -1526,7 +1533,11 @@
         },
         {
           "heading": "Before you publish",
-          "text": "**Mark ready** opens **Before you publish** first. It checks:\n\n- placeholders, alt text and links;\n- the author;\n- the qualified reviewer on pages that advise on health, money or the law;\n- visible dates;\n- the structured data to paste, if your CMS doesn't add it;\n- a warning when Trust is under 60.\n\nCopy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about."
+          "text": "**Mark ready** opens **Before you publish** first. It checks:\n\n- placeholders, alt text and links;\n- the author;\n- the qualified reviewer on pages that advise on health, money or the law;\n- visible dates;\n- the Article schema Ansvisor adds;\n- a warning when Trust is under 60.\n\nCopy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about."
+        },
+        {
+          "heading": "The Article schema",
+          "text": "An article goes to your CMS and to exports with an Article schema that names its author, or your brand when it has none. The page's text doesn't change. If your CMS adds its own, click **Leave it out**; **Add it back** undoes it. A page with an Article schema of its own gets none. WordPress leaves the schema out: add it with your SEO plugin."
         },
         {
           "heading": "Export with Quality on",
@@ -1595,6 +1606,10 @@
         {
           "heading": "What each CMS leaves out",
           "text": "- **Webflow**: Tables become lists; images aren't sent. Reviewer metadata requires a mapped optional Plain Text field; show it in the collection template. Empty meta descriptions use the page's opening words.\n- **WordPress**: Reviewer metadata and structured data aren't sent; the adapter can't map custom metadata or repurpose the post author. Set the meta title and structured data in your SEO plugin. Images keep their addresses; no featured image or category is set.\n- **Framer**: Tables stay tables; images aren't sent. Reviewer metadata requires a mapped optional string field; show it in the page template. Duplicate slugs stop the send.\n- **Wix**: Images, cover images and categories aren't sent. Reviewer metadata is an SEO tag, not visible text; show it in the page template. Resending replaces post text, so add images after the last send.\n\nAdd images in your CMS. The slug may change slightly there: lowercase, without accents, with dots turned into dashes."
+        },
+        {
+          "heading": "The Article schema",
+          "text": "An article goes with the Article schema Ansvisor adds, its author included, unless you left it out in **Before you publish**. WordPress doesn't take it: add it with your SEO plugin."
         }
       ]
     },
@@ -2707,13 +2722,18 @@
         "audit score",
         "signals",
         "audit categories",
-        "grade"
+        "grade",
+        "readability",
+        "first person"
       ],
       "synonyms": [
         "audit results",
         "page score",
         "what failed",
         "E-E-A-T score",
+        "Flesch",
+        "Ateşman",
+        "reading score",
         "score changed"
       ],
       "plan": "all",
@@ -2742,6 +2762,14 @@
         {
           "heading": "Signals",
           "text": "The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:\n\n- the **Finding**: what this audit saw on the page, when the check reports it;\n- what the signal measures, and **Why** it matters to AI engines;\n- the **Recommended fix** written for this page, or the general **Fix** for signals without one."
+        },
+        {
+          "heading": "Readability",
+          "text": "**Readability** reads the page in its own language: the language the page declares, else the one its words are in. English is scored with Flesch Reading Ease: 50 to 70 passes, 30 to 49 and anything over 70 raise a warning, and under 30 fails, so a plain page is never failed for reading easily. Turkish is scored with Ateşman, and German, French and Spanish with their own formulas: their easy score or more passes. Other languages are read by sentence and word length, and Japanese, Chinese and Thai show n/a for now. The Content Editor scores a page the same way.\n\nThe finding shows the score with its formula and language, then its parts: words a sentence, syllables and letters a word, and words a paragraph, with about how many lines a paragraph takes on a phone."
+        },
+        {
+          "heading": "First-person evidence",
+          "text": "**First-person evidence** counts the sentences told as \"I\" or \"we\": in Turkish also by their verb endings, such as \"gezdik\" or \"düşünüyoruz\". Two or more pass and one raises a warning. Quotes and stock phrases such as \"Contact us\" don't count. It's read in English and Turkish; pages in other languages show n/a for now."
         },
         {
           "heading": "Authority links",
@@ -2824,6 +2852,8 @@
         "audit opportunities",
         "audited pages",
         "score over time",
+        "first score",
+        "current score",
         "not audited",
         "audit coverage"
       ],
@@ -2862,7 +2892,7 @@
         },
         {
           "heading": "The Pages tab",
-          "text": "**Pages** lists every page you audited, one row per page, most recent first, with its **Score**, its **Issues** (signals that failed or warned), its **Status** and its **Last audit**. Status is **Good** (70 or more), **Improving** (below 70 but up from the previous audit), **Needs work**, **Running** or **Failed**. **Auto** marks an auto-audit's audit.\n\nClick a row to open its latest report. The arrow beside a page lists its earlier audits, each with **View report** and a delete icon. **Group by template** groups the rows under their template. **Export** downloads the list as CSV or Excel; select pages to **Re-audit** them or export only those."
+          "text": "**Pages** lists every page you audited, one row per page, most recent first, with its **First score**, **Current score**, **Issues** (signals that failed or warned), **Status** and **Last audit**. Once a page has two audits, the change since the first shows beside the current score: green up, red down. Status is **Good** (70 or more), **Improving** (below 70 but up from the previous audit), **Needs work**, **Running** or **Failed**. **Auto** marks an auto-audit's audit.\n\nClick a row to open its latest report. The arrow beside a page lists its earlier audits, each with **View report** and a delete icon. **Group by template** groups the rows under their template. **Export** downloads the list as CSV or Excel, first scores included; select pages to **Re-audit** them or export only those."
         }
       ]
     },

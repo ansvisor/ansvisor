@@ -290,6 +290,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   updatedAt: '2026-10-20T10:00:00Z',
   archivedAt: null,
   qualityHandoff: false,
+  schemaLeftOut: false,
   ...over,
 });
 
@@ -6066,9 +6067,16 @@ describe('the side panel', () => {
       // The CMS keeps its own author.
       expect(sendPagesToCms).toHaveBeenCalledWith(
         'b1',
-        [expect.objectContaining({ draftId: 'd1', author: null, html: '<p>Teams trust it.</p>' })],
+        [expect.objectContaining({ draftId: 'd1', author: null })],
         'webhook',
       );
+      // The page goes with the Article schema Ansvisor adds, naming no author (00448).
+      const [, [sent]] = sendPagesToCms.mock.calls.at(-1)!;
+      const [body, script] = sent.html.split('\n<script type="application/ld+json">');
+      expect(body).toBe('<p>Teams trust it.</p>');
+      const schema = JSON.parse(script.replace('</script>', ''));
+      expect(schema['@type']).toBe('Article');
+      expect(schema).not.toHaveProperty('author');
     });
 
     it('says in the header where the page went, once sent', async () => {

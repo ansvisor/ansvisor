@@ -38,6 +38,7 @@ import {
   cleanupStalePendingTasks,
 } from './lib/job-manager.js';
 import { runTrackingJob, recoverWaitingJobs } from './lib/job-runner.js';
+import { joinPersonRoom } from './lib/socket-rooms.js';
 import { listDailyTrackingBrands } from './lib/tracking-brands.js';
 import { rebuildQueuedInsightsRollups, sweepInsightsRollups } from './lib/insights-rollups.js';
 import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/citations-rollups.js';
@@ -165,6 +166,9 @@ io.use((socket, next) => Middleware.decodeTokenForSocket(socket, next));
 
 io.on('connection', (socket) => {
   logger.debug({ socketId: socket.id, userId: socket.user?.id }, 'socket connected');
+  // Its person's room only: job events go to the people who may reach the
+  // brand (lib/socket-rooms.js), never to every client.
+  joinPersonRoom(socket);
 
   socket.on('disconnect', () => {
     logger.debug({ socketId: socket.id }, 'socket disconnected');

@@ -3,7 +3,10 @@
   "goal": "technical",
   "businessTypes": [],
   "industries": [],
-  "roles": [],
+  "roles": [
+    "aeo",
+    "developers"
+  ],
   "skills": [],
   "triggers": [],
   "mode": "ask_first",

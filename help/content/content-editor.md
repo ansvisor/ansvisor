@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export]
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
-updated: 2026-10-30
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -81,7 +81,7 @@ When a draft optimizes a live page brought in by its URL, the passages AI answer
 ## History, Copy HTML and Export
 
 - **History** keeps earlier versions for 90 days: the live page as imported, the page before agent changes, each Mark ready and publish, each Hand off, and the page before a restore. **Restore** makes a new version, so nothing is lost.
-- **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS.
+- **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS. An article also gets the Article schema Ansvisor adds, with its author.
 - **Export** downloads the page as **Word**, **Excel**, **CSV**, **HTML** or **Markdown**. Excel and CSV hold the page as one row, for a CMS's import. Only the HTML file carries the schema.
 
 With Quality on, **Export** opens a dialog instead: the same files, and under **Platforms** a copy of the page to paste into Webflow, WordPress, Shopify or Google Docs.
