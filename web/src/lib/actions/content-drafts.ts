@@ -23,6 +23,7 @@ import {
   type LibraryTab,
   type PageImportError,
   type PageType,
+  missingSchemaLeftOut,
   PAGE_IMPORT_ERRORS,
 } from '@/lib/content/drafts';
 import { escapeHtml } from '@/lib/content/attachments';
@@ -32,7 +33,8 @@ import { MAX_TITLE_LENGTH, type SaveDraftResult } from '@/lib/content/editor';
 import { BRAND_SITE, brandSiteType, followRestoredPageType } from '@/lib/content/draft-page-type';
 import { detectPageType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
-import { pageKey, type CatalogMatch } from '@/lib/content/feed-match';
+import type { CatalogMatch } from '@/lib/content/feed-match';
+import { catalogMatchFor } from '@/lib/content/catalog-match';
 import type { LinkCheck } from '@/lib/content/quality-checks';
 import { CLAIM_KINDS, type ClaimBlock } from '@/lib/content/claims';
 import {
@@ -272,16 +274,27 @@ const keptSource = z
   .regex(/^https?:\/\//i);
 
 /** One draft for the editor (CE-004), or null when it isn't the member's to read. */
+/** The draft as the editor reads it; before 00448, without schema_left_out. */
+const DRAFT_COLUMNS_BEFORE_00448 =
+  `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, published_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no)` as const;
+const DRAFT_COLUMNS = `${DRAFT_COLUMNS_BEFORE_00448}, schema_left_out` as const;
+
 export async function getContentDraft(id: string): Promise<ContentDraft | null> {
   if (!draftId.safeParse(id).success) return null;
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const read = await supabase
     .from('content_drafts')
-    .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, published_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no)`,
-    )
+    .select(DRAFT_COLUMNS)
     .eq('id', id)
     .maybeSingle();
+  // The web ahead of 00448: the draft without it, as not left out.
+  const { data, error } = missingSchemaLeftOut(read.error)
+    ? await supabase
+        .from('content_drafts')
+        .select(DRAFT_COLUMNS_BEFORE_00448)
+        .eq('id', id)
+        .maybeSingle()
+    : read;
   if (error) throw new Error(error.message);
   if (!data) return null;
   return {
@@ -312,6 +325,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     updatedAt: data.updated_at,
     archivedAt: data.archived_at,
     qualityHandoff: data.quality_handoff === true,
+    schemaLeftOut: 'schema_left_out' in data && data.schema_left_out === true,
   };
 }
 
@@ -332,6 +346,12 @@ export interface DraftPage {
   authorConfirmed: boolean;
   /** The language the draft's own Language rule names, or null: the brand's. */
   language: string | null;
+  /** Its page type, for the Article schema it goes out with (00448). */
+  pageType: string | null;
+  /** A new page (method create): its schema gives the published date too. */
+  isNew: boolean;
+  /** The person left out the Article schema Ansvisor adds (00448). */
+  schemaLeftOut: boolean;
 }
 
 /**
@@ -361,11 +381,21 @@ export async function getContentDraftPages(
   const parsed = z.array(z.guid()).max(DRAFT_PAGES_PER_CALL).safeParse(ids);
   if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const columns =
+    'id, title, body_html, source_url, author_id, reviewer_id, author_real_at, rules, page_type, method';
+  const read = await supabase
     .from('content_drafts')
-    .select('id, title, body_html, source_url, author_id, reviewer_id, author_real_at, rules')
+    .select(`${columns}, schema_left_out` as const)
     .eq('brand_id', brandId)
     .in('id', parsed.data);
+  // The web ahead of 00448: the pages without it, as not left out.
+  const { data, error } = missingSchemaLeftOut(read.error)
+    ? await supabase
+        .from('content_drafts')
+        .select(columns)
+        .eq('brand_id', brandId)
+        .in('id', parsed.data)
+    : read;
   if (error) throw new Error(error.message);
   const byId = new Map<string, DraftPage>(
     (data ?? []).map((row) => [
@@ -379,6 +409,9 @@ export async function getContentDraftPages(
         reviewerId: row.reviewer_id ?? null,
         authorConfirmed: row.author_real_at !== null,
         language: draftLanguage(row.rules),
+        pageType: row.page_type,
+        isNew: row.method === 'create',
+        schemaLeftOut: 'schema_left_out' in row && row.schema_left_out === true,
       },
     ]),
   );
@@ -1283,6 +1316,34 @@ export async function confirmDraftAuthor(
 }
 
 /**
+ * Leaves out, or adds back, the Article schema Ansvisor adds to the page it
+ * sends to a CMS and exports (customer priorities item 7, 00448): for a CMS
+ * that writes its own. Never throws; false when it couldn't be saved.
+ */
+export async function setDraftSchemaLeftOut(id: string, leftOut: boolean): Promise<boolean> {
+  if (!draftId.safeParse(id).success || typeof leftOut !== 'boolean') return false;
+  try {
+    await assertWritable();
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('content_drafts')
+      .update({ schema_left_out: leftOut })
+      .eq('id', id)
+      .select('id')
+      .maybeSingle();
+    // Not saved, the web ahead of 00448 too (missingSchemaLeftOut): the editor puts it back.
+    if (error || !data) {
+      if (error) console.error('[content-drafts] could not keep the schema choice:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[content-drafts] could not keep the schema choice:', err);
+    return false;
+  }
+}
+
+/**
  * Keeps a weak source or a competitor's on the page (Quality CE-046): the
  * person trusts it, so it no longer lowers Trust. Returns the draft's kept
  * sources after; 'full' when the page keeps 50 already.
@@ -1831,16 +1892,23 @@ export async function getDraftSources(
 ): Promise<{ data: DraftSourcesData; choices: DraftSourceChoice[] } | null> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
-  const [sourcesRes, choicesRes] = await Promise.all([
+  const [sourcesRes, choicesRes, trustedRes] = await Promise.all([
     supabase.rpc('content_draft_sources', { p_draft_id: id, p_days: SOURCES_DAYS }),
     supabase.from('content_draft_sources').select('kind, ref, included, added').eq('draft_id', id),
+    // The sites the draft's brand trusts (00449). A database before it, or a
+    // read that fails, trusts none: Trust reads the page as before.
+    supabase.from('content_drafts').select('brands(trusted_sources)').eq('id', id).maybeSingle(),
   ]);
   if (sourcesRes.error) throw new Error(sourcesRes.error.message);
   if (choicesRes.error) throw new Error(choicesRes.error.message);
   if (!sourcesRes.data) return null;
   const kinds: readonly string[] = DRAFT_SOURCE_KINDS;
+  const trusted = trustedRes.error ? null : trustedRes.data?.brands?.trusted_sources;
   return {
-    data: sourcesRes.data as unknown as DraftSourcesData,
+    data: {
+      ...(sourcesRes.data as unknown as DraftSourcesData),
+      trustedDomains: Array.isArray(trusted) ? trusted : [],
+    },
     choices: (choicesRes.data ?? [])
       .filter((row) => kinds.includes(row.kind))
       .map((row) => ({
@@ -2633,27 +2701,6 @@ export async function confirmDraftItem(
   return 'ok';
 }
 
-/** A product's name as the page's title gives it: one line, up to the catalog's length. */
-const catalogTitle = z.string().trim().min(1).max(1000);
-/** A page's path as an address encodes it and as it reads, in its own case ("/%C3%9Cber", "/Über"). */
-function pathForms(url: string): string[] {
-  try {
-    const path = new URL(url.trim()).pathname.replace(/\/+$/, '');
-    if (path.length <= 1) return [];
-    let decoded = path;
-    try {
-      decoded = decodeURIComponent(path);
-    } catch {
-      // Not encoded as UTF-8: looked up as it is.
-    }
-    return [...new Set([decoded, path])];
-  } catch {
-    return [];
-  }
-}
-/** Escape `\`, `%` and `_`: a path or a title matched as written. */
-const likeText = (value: string) => value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-
 /**
  * The draft's product in the brand's catalog (00278; Quality CE-053): by
  * the page's URL (an optimize draft's), else by its title, when one product
@@ -2663,121 +2710,7 @@ const likeText = (value: string) => value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 export async function getCatalogMatch(id: string, title: string): Promise<CatalogMatch | null> {
   if (!draftId.safeParse(id).success) return null;
   try {
-    const supabase = await createClient();
-    const { data: draft, error: draftError } = await supabase
-      .from('content_drafts')
-      .select('brand_id, source_url')
-      .eq('id', id)
-      .maybeSingle();
-    if (draftError) throw new Error(draftError.message);
-    if (!draft) return null;
-    const brand = draft.brand_id;
-    const { data: one, error: oneError } = await supabase
-      .from('catalog_products')
-      .select('id')
-      .eq('brand_id', brand)
-      .is('removed_at', null)
-      .limit(1);
-    if (oneError) throw new Error(oneError.message);
-    if (!one?.length) return { connected: false, product: null };
-
-    let productId: string | null = null;
-    let via: 'url' | 'name' = 'url';
-    const key = pageKey(draft.source_url);
-    const forms = key ? pathForms(draft.source_url!) : [];
-    // PostgREST reads "*" in a pattern as a wildcard: such a path or title isn't looked up.
-    if (key && forms.length && !forms.some((form) => form.includes('*'))) {
-      // The brand's live products (their index), narrowed by the path as
-      // written and as an address encodes it, in its own case, then compared
-      // whole: a feed's URL may carry a query ("?variant=…") or another
-      // form of the host.
-      const byUrl = async (table: 'catalog_products' | 'catalog_variants') => {
-        const ids = new Set<string>();
-        for (const form of forms) {
-          const read =
-            table === 'catalog_products'
-              ? await supabase
-                  .from('catalog_products')
-                  .select('id, url')
-                  .eq('brand_id', brand)
-                  .is('removed_at', null)
-                  .ilike('url', `%${likeText(form)}%`)
-                  .limit(100)
-              : await supabase
-                  .from('catalog_variants')
-                  .select('product_id, url')
-                  .eq('brand_id', brand)
-                  .is('removed_at', null)
-                  .ilike('url', `%${likeText(form)}%`)
-                  .limit(100);
-          if (read.error) throw new Error(read.error.message);
-          for (const row of read.data ?? []) {
-            if (pageKey(row.url) !== key) continue;
-            ids.add('product_id' in row ? row.product_id : row.id);
-          }
-        }
-        return ids;
-      };
-      // A product's URL is its first item's link: a variant with its own
-      // page ("boot-blue" grouped under "boot-red") is found by its own.
-      let ids = await byUrl('catalog_products');
-      if (ids.size === 0) ids = await byUrl('catalog_variants');
-      if (ids.size === 1) productId = [...ids][0];
-    }
-    const name = catalogTitle.safeParse(title);
-    if (!productId && name.success && !name.data.includes('*')) {
-      const { data, error } = await supabase
-        .from('catalog_products')
-        .select('id')
-        .eq('brand_id', brand)
-        .is('removed_at', null)
-        .ilike('title', likeText(name.data))
-        .limit(2);
-      if (error) throw new Error(error.message);
-      // Two products by one name: whose page this is isn't sure.
-      if (data?.length === 1) {
-        productId = data[0].id;
-        via = 'name';
-      }
-    }
-    if (!productId) return { connected: true, product: null };
-
-    const [product, variants] = await Promise.all([
-      supabase
-        .from('catalog_products')
-        .select('title, url')
-        .eq('id', productId)
-        .is('removed_at', null)
-        .maybeSingle(),
-      // By price, so a range's low end is among them however many there are.
-      supabase
-        .from('catalog_variants')
-        .select('price, sale_price, currency, availability, gtin')
-        .eq('product_id', productId)
-        .is('removed_at', null)
-        .order('price', { ascending: true })
-        .limit(200),
-    ]);
-    if (product.error) throw new Error(product.error.message);
-    if (variants.error) throw new Error(variants.error.message);
-    if (!product.data) return { connected: true, product: null };
-    const amount = (value: number | string | null) =>
-      value === null || !Number.isFinite(Number(value)) ? null : Number(value);
-    return {
-      connected: true,
-      product: {
-        title: product.data.title,
-        url: product.data.url,
-        via,
-        variants: (variants.data ?? []).map((v) => ({
-          price: amount(v.price),
-          salePrice: amount(v.sale_price),
-          currency: v.currency,
-          availability: v.availability,
-          gtin: v.gtin,
-        })),
-      },
-    };
+    return await catalogMatchFor(await createClient(), id, title);
   } catch (err) {
     console.error('Failed to read the catalog:', err);
     return null;

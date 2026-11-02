@@ -10,6 +10,7 @@ import {
 } from './events';
 import type { RunKeyFailure } from './engine-key';
 import type { ChatPhase } from './engine-model';
+import type { UntrustedShingles } from './go-live-checks';
 import type { NextMoveInput } from './next-moves';
 import type { PageSites } from './page-sites';
 import type { ChatMode } from './precedence';
@@ -132,6 +133,12 @@ export interface RunProgress {
    */
   injection?: boolean;
   /**
+   * An agent run's untrusted reads, as hashed 12-word runs (go-live-checks.ts
+   * keepShingles, 32 KB at most): a page the agent wants to take live on its
+   * own must not copy 30 words in a row of them (AUTONOMOUS-GO-LIVE §6.3).
+   */
+  untrustedShingles?: UntrustedShingles;
+  /**
    * The answer's fact check (CHAT-05 item 11): figures checked against the
    * run's data, and the ones taken out (a placeholder in their place).
    */
@@ -164,6 +171,11 @@ export interface RunProgress {
   scopeUntrusted?: boolean;
   /** The skills loaded for this run, by name, in order (CHAT-13 item 4: at most 3). */
   skills?: string[];
+  /**
+   * The shortcut the message started (CHAT-08, W2-09; chat_messages.shortcut_id):
+   * its playbook loads first, and the run reads only its data plan.
+   */
+  shortcut?: string;
   /** The run put Action Center tasks in its chat's task strip (CHAT-09 §B): it shows it as it ends. */
   taskStrip?: boolean;
   /** The action a /tasks run opened last (get_action): what it files next is for its task. */

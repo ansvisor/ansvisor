@@ -76,6 +76,7 @@ import { isNoPlan } from '@/lib/billing/no-plan';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { OpportunityActions } from '@/components/content/opportunity-actions';
 import { NewContentDialog, type DialogPreset } from '@/components/content/new-content-dialog';
+import { WriteThisDialog } from '@/components/content/write-this-dialog';
 import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
 import { toast } from 'sonner';
 import { suggestedDate } from '@/lib/suggested-date';
@@ -182,6 +183,8 @@ export function OpportunityDetail({
   );
   // Send to Editor: Start for this opportunity, over the panel.
   const [contentPreset, setContentPreset] = useState<DialogPreset | null>(null);
+  // Write this: the brief and the page in one go, over the panel.
+  const [writeThisOpen, setWriteThisOpen] = useState(false);
   // The draft being written for it, opened instead of starting another. A
   // failed read is not "no draft": it offers to check again.
   const [draft, setDraft] = useState<{
@@ -599,6 +602,9 @@ export function OpportunityDetail({
             onStart: guard(() => setContentPreset(opportunityStart(opportunity)), {
               action: tActions('createContent'),
             }),
+            onWriteThis: guard(() => setWriteThisOpen(true), {
+              action: tActions('createContent'),
+            }),
             onOpenDraft: (draftId) => router.push(contentEditorPath(draftId)),
           }}
           plan={
@@ -992,6 +998,12 @@ export function OpportunityDetail({
         brandId={opportunity.brandId}
         siteType={siteTypeOf(opportunityBrand ?? {})}
         preset={contentPreset}
+      />
+      <WriteThisDialog
+        // With a brief generated here meanwhile: its suggested title names the page.
+        opportunity={writeThisOpen ? { ...opportunity, brief: brief ?? opportunity.brief } : null}
+        onOpenChange={setWriteThisOpen}
+        siteType={siteTypeOf(opportunityBrand ?? {})}
       />
     </div>
   );

@@ -54,6 +54,8 @@ export const SKIPPED = {
     "A chat's reads kept for reuse within it (00410): the server's, from a person's own chat, never sample data.",
   chat_files:
     "Files Chat filed from a person's runs and saved answers (00411): made by their own Chat work, not sample data, and Chat's precedence refuses changes on a demo brand.",
+  chat_agent_go_live_events:
+    'What agents published or sent on their own (00443): no agent runs for a demo brand, and nothing is ever published or sent for one.',
   chat_agent_runs:
     "An agent's runs (00419): no trigger fires for a demo brand, and Chat's precedence refuses every change an agent would make on one.",
   chat_why_analyses:
@@ -63,6 +65,10 @@ export const SKIPPED = {
   chat_suggestions: 'Daily suggestions sent (00422): CHAT-26 sends none for a demo brand.',
   chat_suggestion_feeds:
     "A person's daily suggestions switch for a brand (00422): off for a demo brand (CHAT-26 §6).",
+  chat_schedules:
+    "Chat's scheduled jobs (00457): a person's own, made with a click on a confirm card, and Chat's precedence refuses every change on a demo brand.",
+  chat_memory_items:
+    "What Chat remembers (00459): saved only with a person's click, never sample data, and Chat's precedence refuses saving on a demo brand.",
   gsc_shopping_page_stats:
     "Search Console's shopping results by page (00377): the sync that reads them never runs for a demo brand, and with the brand's gsc_shopping_synced_at left empty, Readiness shows that item as not read yet and leaves it out of the score.",
   member_brands:

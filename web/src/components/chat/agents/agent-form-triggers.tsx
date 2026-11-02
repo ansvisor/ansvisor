@@ -132,11 +132,16 @@ export function FormSwitch({
   label,
   action,
   onChange,
+  disabled = false,
+  describedBy,
 }: {
   checked: boolean;
   label: string;
   action: string;
   onChange: (next: boolean) => void;
+  /** It can't be changed now; its reason is the line `describedBy` names. */
+  disabled?: boolean;
+  describedBy?: string;
 }) {
   return (
     <button
@@ -144,10 +149,12 @@ export function FormSwitch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      aria-describedby={describedBy}
       data-action={action}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        'relative h-[18px] w-[30px] shrink-0 rounded-full outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 motion-reduce:transition-none',
+        'relative h-[18px] w-[30px] shrink-0 rounded-full outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none',
         checked ? 'bg-foreground' : 'bg-muted-foreground/40',
       )}
     >

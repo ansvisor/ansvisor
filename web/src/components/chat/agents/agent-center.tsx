@@ -29,12 +29,15 @@ import { ReadyAgents } from './ready-agents';
 export function AgentCenter({
   initialTab = 'ready',
   locks = {},
+  workAreas = [],
   now: nowProp,
   timeZone,
 }: {
   initialTab?: AgentCenterTab;
   /** Ready presets whose mode the workspace's plan or Settings › Chat keeps closed. */
   locks?: Record<string, PresetLock>;
+  /** The person's work areas: Ready to use puts the agents made for them first. */
+  workAreas?: readonly string[];
   now?: Date;
   timeZone?: string;
 }) {
@@ -154,7 +157,7 @@ export function AgentCenter({
         data-slot="agent-center-ready"
         hidden={tab !== 'ready'}
       >
-        <ReadyAgents locks={locks} writer={writer} words={words} />
+        <ReadyAgents locks={locks} writer={writer} words={words} workAreas={workAreas} />
       </div>
       <div
         role="tabpanel"

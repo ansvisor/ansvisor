@@ -15,8 +15,12 @@ vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('./testing/fake-supabase')).createFakeSupabase(),
 }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
-const fakes = vi.hoisted(() => ({ shares: vi.fn() }));
+const fakes = vi.hoisted(() => ({
+  shares: vi.fn(),
+  keyCap: vi.fn(async (): Promise<{ reached: boolean; renewsAt: string | null } | null> => null),
+}));
 vi.mock('./agent-shares', () => ({ readAgentShares: fakes.shares }));
+vi.mock('./own-key-cap', () => ({ ownKeyCapReached: fakes.keyCap }));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
@@ -123,6 +127,7 @@ function seedTrigger(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fakes.keyCap.mockReset().mockResolvedValue(null);
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
@@ -254,6 +259,31 @@ describe('firing schedules', () => {
     expect(runs()).toHaveLength(2);
   });
 
+  it('queues on the brands its owner may use: All brands is all of theirs (BRAND-ACCESS)', async () => {
+    seedAgent({}, { brand_ids: undefined, all_brands: true });
+    seedTrigger('schedule', WEEKLY_ISTANBUL);
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.brand_scope = 'selected';
+    db.tables.member_brands = [{ user_id: PEOPLE.manager, organization_id: ORG, brand_id: BRAND }];
+    const counts = await triggers.fireDueSchedules(AT, driver);
+    expect(counts).toMatchObject({ fired: 1, queued: 1 });
+    expect(runs().map((r) => r.brand_id)).toEqual([BRAND]);
+    expect(db.tables.chat_agents[0].status).toBe('active');
+  });
+
+  it('pauses an agent whose owner may use none of its brands, as for brands gone', async () => {
+    seedAgent({}, { brand_ids: [BRAND, BRAND_2] });
+    seedTrigger('schedule', WEEKLY_ISTANBUL);
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.brand_scope = 'selected';
+    db.tables.member_brands = [];
+    const counts = await triggers.fireDueSchedules(AT, driver);
+    expect(counts).toMatchObject({ queued: 0 });
+    expect(runs()).toEqual([]);
+    expect(db.tables.chat_agents[0]).toMatchObject({
+      status: 'paused',
+      paused_reason: 'brand_gone',
+    });
+  });
+
   it('fires a slot once when two crons find it due together', async () => {
     seedTrigger('schedule', WEEKLY_ISTANBUL);
     const [a, b] = await Promise.all([
@@ -341,6 +371,19 @@ describe('firing schedules', () => {
     await triggers.fireDueSchedules(AT, driver);
     expect(runs()).toEqual([]);
     expect(db.tables.chat_agents[0]).toMatchObject({ status: 'paused', paused_reason: 'cap' });
+  });
+
+  it('pauses an agent once all agents used the month’s limit on the own key, queuing nothing', async () => {
+    seedAgent();
+    seedTrigger('schedule', WEEKLY_ISTANBUL);
+    fakes.keyCap.mockResolvedValue({ reached: true, renewsAt: '2026-11-20T09:00:00.000Z' });
+    await triggers.fireDueSchedules(AT, driver);
+    expect(runs()).toEqual([]);
+    expect(db.tables.chat_agents[0]).toMatchObject({
+      status: 'paused',
+      paused_reason: 'own_key_cap',
+    });
+    expect(fakes.keyCap).toHaveBeenCalledWith(ORG);
   });
 });
 
@@ -432,6 +475,25 @@ describe('signals', () => {
     expect(db.tables.chat_agent_triggers[0]).toMatchObject({
       last_fired_at: T0.toISOString(),
       cooldown_until: new Date(T0.getTime() + triggers.COOLDOWN_MS).toISOString(),
+    });
+  });
+
+  it('fires nothing on a brand its owner may no longer use, and pauses with none left (BRAND-ACCESS)', async () => {
+    seedAgent({}, { brand_ids: [BRAND, BRAND_2] });
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.brand_scope = 'selected';
+    // Brand B is still theirs: a signal on Brand A fires nothing, and the agent stays on.
+    db.tables.member_brands = [
+      { user_id: PEOPLE.manager, organization_id: ORG, brand_id: BRAND_2 },
+    ];
+    expect((await fire(1, T0)).fired).toBe(0);
+    expect(db.tables.chat_agents[0].status).toBe('active');
+    // None of them left: it pauses.
+    db.tables.member_brands = [];
+    expect((await fire(2, T0)).fired).toBe(0);
+    expect(runs()).toEqual([]);
+    expect(db.tables.chat_agents[0]).toMatchObject({
+      status: 'paused',
+      paused_reason: 'brand_gone',
     });
   });
 

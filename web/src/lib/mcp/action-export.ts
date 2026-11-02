@@ -2,6 +2,7 @@ import { createFormatter, createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
+import { mayUseBrand } from '@/lib/mcp/data';
 import type { ActionDetail } from '@/lib/actions/action-center';
 import type { ContentOpportunity, OpportunityBasket } from '@/types';
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type SignalRow } from '@/lib/signals/map';
@@ -191,7 +192,7 @@ export async function exportActionFor(
     .is('deleted_at', null)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (!row) return null;
+  if (!row || !(await mayUseBrand(auth, row.brand_id as string))) return null;
   const brandId = row.brand_id as string;
   const opportunityId = sentFromOpportunityId({
     kind: row.kind as string,

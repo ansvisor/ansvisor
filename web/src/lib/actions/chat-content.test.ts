@@ -80,6 +80,20 @@ beforeEach(() => {
                 author: null,
                 teamByline: '',
                 byline: null,
+                reviewer: null,
+                // Not an article: no Article schema (00448).
+                schema: {
+                  input: {
+                    title: draft.title,
+                    author: null,
+                    authorUrl: null,
+                    brandName: 'Acme',
+                    brandUrl: null,
+                    isNew: false,
+                  },
+                  pageType: null,
+                  leftOut: false,
+                },
               },
             ],
           ]
