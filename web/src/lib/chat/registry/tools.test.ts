@@ -139,6 +139,7 @@ const ctx = {
   email: null,
   organizationId: 'org-1',
   apiKeyId: 'agent-internal',
+  brandAccess: 'all' as const,
   role: 'admin' as const,
 };
 const labels = (messages as Record<string, unknown>).chatTools as Record<string, unknown>;

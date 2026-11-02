@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { resolveAgentAuth } from '@/lib/agent/auth';
+import { legacyAgentApiGone } from '@/lib/chat/legacy-route';
 
 /**
  * GET /api/agent/conversations/[id]
@@ -8,13 +9,16 @@ import { resolveAgentAuth } from '@/lib/agent/auth';
  * Return one conversation plus its ordered messages so the chat panel can
  * hydrate when the user opens a thread from the sidebar (or refreshes).
  * Ownership-check before the messages select — wrong-org or someone
- * else's conversation returns 404 to avoid id-probing.
+ * else's conversation returns 404 to avoid id-probing. So does every one
+ * with the new Chat on for the org (legacyAgentApiGone).
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await resolveAgentAuth();
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const gone = legacyAgentApiGone(auth.organizationId);
+  if (gone) return gone;
 
   const { id } = await params;
 
@@ -46,12 +50,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
  *
  * Drop a conversation (cascades to its messages). Ownership-check first.
  * Open while the workspace is read-only: deleting a conversation starts no cost.
+ * With the new Chat on for the org, 404 (legacyAgentApiGone).
  */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await resolveAgentAuth();
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const gone = legacyAgentApiGone(auth.organizationId);
+  if (gone) return gone;
 
   const { id } = await params;
 
