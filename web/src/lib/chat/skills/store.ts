@@ -13,7 +13,7 @@ import { parseTeamRole } from '../precedence';
 import { MAX_BYTES, MAX_DESCRIPTION, MAX_NAME, checkSkillFile } from './format';
 import type { GithubRefusalCode } from './github';
 import type { ImportRefusalCode, ParsedImport } from './import';
-import { SKILL_LIBRARY, enabledSkills } from './library';
+import { SKILL_LIBRARY, enabledSkills, type SkillFilter } from './library';
 import { MAX_TITLE, skillChecksum, skillFileText, type SkillParts } from './skill-file';
 
 /**
@@ -502,6 +502,8 @@ export interface LibrarySkillView {
   name: string;
   title: string;
   description: string;
+  /** The Skills page's filter chips it shows under (W3-07). */
+  filters: SkillFilter[];
   /** Off when the workspace turned it off. */
   enabled: boolean;
 }
@@ -595,6 +597,7 @@ export async function listSkills(viewer: SkillViewer): Promise<SkillList> {
       name: skill.name,
       title: skill.title,
       description: skill.description,
+      filters: [...skill.filters],
       enabled: !disabled.has(skill.name),
     })),
     skills: ((rows.data ?? []) as ListRow[])

@@ -387,6 +387,14 @@ export function ChatMenuView({
             {agentsNew && <NewPill className="ml-auto" />}
           </MenuItem>
           <MenuItem
+            href="/dashboard/chat/skills"
+            action="chatMenu.openSkills"
+            active={pathname === '/dashboard/chat/skills'}
+            onNavigate={onNavigate}
+          >
+            {t('skills')}
+          </MenuItem>
+          <MenuItem
             href="/dashboard/chat/settings"
             action="chatMenu.openSettings"
             active={pathname === '/dashboard/chat/settings'}
