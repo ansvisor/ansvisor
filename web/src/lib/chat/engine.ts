@@ -3089,6 +3089,11 @@ const SAID_FAILURES: Record<string, string> = {
   execute_off: 'execute_off',
   // The CMS didn't put the page live: it stays a draft there, with the CMS's words (publish_cms).
   publish_refused: 'failed',
+  // A page taken down (unpublish_cms): not live through Ansvisor, Framer's or a webhook's, or
+  // the CMS said no, with its words.
+  not_live: 'not_found',
+  unavailable: 'failed',
+  refused: 'failed',
 };
 
 /**

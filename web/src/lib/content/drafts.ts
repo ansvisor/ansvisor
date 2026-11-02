@@ -313,7 +313,8 @@ export type SendFilter = (typeof SEND_FILTERS)[number];
 
 /**
  * The drafts whose last send is as picked, read from each draft's last send
- * (readCmsStatuses: one left queued past its half hour reads as failed).
+ * (readCmsStatuses: one left queued past its half hour reads as failed). A
+ * page taken down (AUTONOMOUS-GO-LIVE PR 10) is a draft in its CMS again: Sent.
  */
 export function draftsLastSent(
   drafts: ContentDraftListItem[],
@@ -322,7 +323,10 @@ export function draftsLastSent(
 ): ContentDraftListItem[] {
   if (filter === 'all') return drafts;
   if (filter === 'never') return drafts.filter((d) => !sends.has(d.id));
-  return drafts.filter((d) => sends.get(d.id)?.status === filter);
+  return drafts.filter((d) => {
+    const status = sends.get(d.id)?.status;
+    return status === filter || (filter === 'sent' && status === 'taken_down');
+  });
 }
 
 export function draftsInTab(drafts: ContentDraftListItem[], tab: LibraryTab) {

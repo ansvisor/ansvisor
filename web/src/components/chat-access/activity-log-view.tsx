@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { ArrowUpRight, Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
+import { TakeDownDialog } from '@/components/content/take-down-dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -39,6 +40,7 @@ interface Page {
  */
 export function ActivityLogView({ areas }: { areas: ToolArea[] }) {
   const t = useTranslations('chatAccess.activity');
+  const tTakeDown = useTranslations('contentEditor.takeDown');
   const tAreas = useTranslations('chatAccess.capabilities.areaNames');
   const tSummary = useTranslations('chatActivity.summary');
   const tTools = useTranslations('chatTools');
@@ -51,6 +53,9 @@ export function ActivityLogView({ areas }: { areas: ToolArea[] }) {
   const [exporting, setExporting] = useState(false);
   // Where to undo by hand a change that changed since, by row.
   const [conflicts, setConflicts] = useState<Record<string, string | null>>({});
+  // Take down open on a row's page (PR 10), and the rows whose page went down here.
+  const [takingDown, setTakingDown] = useState<ActivityRow | null>(null);
+  const [takenDown, setTakenDown] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     let live = true;
@@ -304,6 +309,19 @@ export function ActivityLogView({ areas }: { areas: ToolArea[] }) {
                         >
                           {t('undo')}
                         </Button>
+                      ) : row.takeDown && takenDown.has(row.id) ? (
+                        <span className="text-muted-foreground">{tTakeDown('doneShort')}</span>
+                      ) : row.takeDown ? (
+                        // A page it published, still live: no Undo, but Take down (§6.4).
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                          data-action="activity.takeDown"
+                          onClick={() => setTakingDown(row)}
+                        >
+                          {tTakeDown('action')}
+                        </Button>
                       ) : row.kind === 'change' && row.status !== 'done' ? (
                         <span className="text-muted-foreground">
                           {t(`status.${row.status}`)}
@@ -328,6 +346,13 @@ export function ActivityLogView({ areas }: { areas: ToolArea[] }) {
               })}
             </TableBody>
           </Table>
+          {takingDown?.takeDown && (
+            <TakeDownDialog
+              page={takingDown.takeDown}
+              onClose={() => setTakingDown(null)}
+              onDone={() => setTakenDown((done) => new Set(done).add(takingDown.id))}
+            />
+          )}
         </div>
       )}
 
