@@ -42,7 +42,9 @@ import {
  * ANTHROPIC_API_KEY, any other through OpenRouter on OPENROUTER_API_KEY, as
  * the product calls them (engine-model.ts); each is read from the
  * environment, else from web/.env.local, and never printed. A model without
- * its key is skipped.
+ * its key is skipped. A shell that sets ANTHROPIC_BASE_URL for another tool
+ * (Claude Code does) sends the Anthropic SDK there: run with
+ * `env -u ANTHROPIC_BASE_URL`.
  */
 
 vi.mock('@/lib/supabase/admin', async () => ({
