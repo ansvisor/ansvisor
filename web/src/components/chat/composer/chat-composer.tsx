@@ -30,6 +30,7 @@ import {
   type Shortcut,
 } from './composer-menus';
 import { ModeSwitch } from './mode-switch';
+import { VoiceButton } from './voice-button';
 
 /** Where the composer sits (CHAT-02 variants): Chat home, an open chat's dock, the side panel. */
 export type ComposerVariant = 'home' | 'dock' | 'panel';
@@ -137,6 +138,9 @@ const refKey = (ref: ChatReference) => `ref:${ref.type}:${ref.id}`;
  *
  * A `draft` from the page (W1-08) puts its question in the box, or attaches
  * its object as an @ chip, and the cursor goes to the end.
+ *
+ * The microphone (W4-04) puts what is said into the box, in the browser's
+ * language, and never sends it; it shows only where the browser can listen.
  *
  * Text that holds an API key is never sent (W4-05): a line under the box
  * says so, Send waits, and Remove takes the key out. Save securely shows
@@ -470,6 +474,17 @@ export function ChatComposer({
       if (!el) return;
       el.focus();
       el.setSelectionRange(next.length, next.length);
+    });
+  }
+
+  /** Words heard by the microphone (W4-04): after the text, never sent by themselves. */
+  function addSpoken(spoken: string) {
+    setText((before) => (before.trim() ? `${before.trimEnd()} ${spoken}` : spoken));
+    requestAnimationFrame(() => {
+      const el = box.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
     });
   }
 
@@ -850,6 +865,7 @@ export function ChatComposer({
           >
             @
           </button>
+          <VoiceButton onText={addSpoken} disabled={disabled} />
           {readOnly ? (
             <Link
               data-action="access.see"
