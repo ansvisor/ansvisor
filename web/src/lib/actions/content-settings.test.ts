@@ -76,7 +76,7 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { getContentSettings, setBrandQualityHandoff, setBrandTrustedSources } =
+const { getContentSettings, setBrandQualityHandoff, setBrandRules, setBrandTrustedSources } =
   await import('./content-settings');
 
 const writes = () => calls.filter((c) => c.op !== 'select');
@@ -96,9 +96,12 @@ beforeEach(() => {
 describe('getContentSettings', () => {
   it("reads the organization's brands with their hand-off, and whether the member may change it", async () => {
     await expect(getContentSettings()).resolves.toEqual({
-      brands: [{ id: ACME, name: 'Acme', qualityHandoff: true, trustedSources: [] }],
+      brands: [
+        { id: ACME, name: 'Acme', qualityHandoff: true, trustedSources: [], brandRules: [] },
+      ],
       canManage: true,
       trustedSourcesOn: true,
+      brandRulesOn: true,
     });
     expect(calls.find((c) => c.table === 'brands')!.filters).toEqual([['organization_id', ORG]]);
     answers['profiles.select'] = { data: { organization_id: ORG, role: 'analyst' }, error: null };
@@ -179,5 +182,52 @@ describe('trusted sources (00449)', () => {
       ok: false,
       reason: 'unavailable',
     });
+  });
+});
+
+describe('brand rules (00450)', () => {
+  it('reads each brand’s; before 00450 none, with trusted sources still read', async () => {
+    answers['brands.select'] = {
+      data: [
+        {
+          id: ACME,
+          name: 'Acme',
+          content_quality_handoff: false,
+          trusted_sources: ['sca.coffee'],
+          brand_rules: ['No topics comparing us with a named competitor.'],
+        },
+      ],
+      error: null,
+    };
+    await expect(getContentSettings()).resolves.toMatchObject({
+      brands: [{ brandRules: ['No topics comparing us with a named competitor.'] }],
+      brandRulesOn: true,
+    });
+    missingColumn = 'brand_rules';
+    await expect(getContentSettings()).resolves.toMatchObject({
+      brands: [{ trustedSources: ['sca.coffee'], brandRules: [] }],
+      trustedSourcesOn: true,
+      brandRulesOn: false,
+    });
+  });
+
+  it('saves rules as typed lines are saved, and says why not, never throwing', async () => {
+    answers['brands.update'] = { data: [{ brand_rules: ['Cite official sources.'] }], error: null };
+    await expect(setBrandRules(ACME, ['Cite official sources.'])).resolves.toEqual({
+      ok: true,
+      rules: ['Cite official sources.'],
+    });
+    expect(writes().at(-1)).toMatchObject({ row: { brand_rules: ['Cite official sources.'] } });
+    for (const bad of [
+      [' padded '],
+      ['x'.repeat(301)],
+      Array.from({ length: 31 }, (_, i) => `r${i}`),
+    ]) {
+      await expect(setBrandRules(ACME, bad)).resolves.toEqual({ ok: false, reason: 'invalid' });
+    }
+    answers['brands.update'] = { data: [], error: null };
+    await expect(setBrandRules(ACME, [])).resolves.toEqual({ ok: false, reason: 'failed' });
+    missingColumn = 'brand_rules';
+    await expect(setBrandRules(ACME, [])).resolves.toEqual({ ok: false, reason: 'unavailable' });
   });
 });

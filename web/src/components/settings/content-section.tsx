@@ -12,13 +12,15 @@ import {
   type ContentSettings,
 } from '@/lib/actions/content-settings';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { BrandRulesCard } from './brand-rules-card';
 import { TrustedSourcesCard } from './trusted-sources-card';
 
 /**
  * Settings › Content (Quality spec §5, CE-051): per brand, Hand off quality
  * fixes automatically — its new and optimized pages get the Content Agent's
- * quality fixes, left for review — and its Trusted sources (00449). Admins
- * and managers change them; anyone else sees them.
+ * quality fixes, left for review — its Trusted sources (00449) and its
+ * Brand rules (00450). Admins and managers change them; anyone else sees
+ * them.
  */
 export function ContentSection() {
   const t = useTranslations('settings.content');
@@ -137,6 +139,22 @@ export function ContentSection() {
                   ...prev,
                   brands: prev.brands.map((b) =>
                     b.id === brandId ? { ...b, trustedSources: sources } : b,
+                  ),
+                },
+            )
+          }
+        />
+      )}
+      {read && read.brandRulesOn && read.brands.length > 0 && (
+        <BrandRulesCard
+          read={read}
+          onSaved={(brandId, rules) =>
+            setRead(
+              (prev) =>
+                prev && {
+                  ...prev,
+                  brands: prev.brands.map((b) =>
+                    b.id === brandId ? { ...b, brandRules: rules } : b,
                   ),
                 },
             )

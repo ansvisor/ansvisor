@@ -927,6 +927,7 @@ export type Database = {
       }
       brands: {
         Row: {
+          brand_rules: string[]
           client_logo_path: string | null
           content_byline: boolean
           content_quality_handoff: boolean
@@ -968,6 +969,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brand_rules?: string[]
           client_logo_path?: string | null
           content_byline?: boolean
           content_quality_handoff?: boolean
@@ -1009,6 +1011,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brand_rules?: string[]
           client_logo_path?: string | null
           content_byline?: boolean
           content_quality_handoff?: boolean
