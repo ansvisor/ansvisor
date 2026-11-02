@@ -8,7 +8,7 @@ updated: 2026-11-01
 last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json]
 ---
 Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Every chat is saved, so you can come back to it later and pick up where you left off.

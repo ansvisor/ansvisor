@@ -8,7 +8,7 @@ updated: 2026-10-31
 last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json, skills/README.md]
 ---
 Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-one Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Ready to publish**, **Weekly report**, **Buyer questions** and **Rival brief**.

@@ -8,7 +8,7 @@ updated: 2026-10-31
 last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/reports.mdx]
 ---
 **White label** in Settings is your agency's kit: your logo, main color, company name and a footer line, for what you send your clients instead of Ansvisor's look. Each brand can also have its client's logo, for the cover of that brand's reports.
