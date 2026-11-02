@@ -1,7 +1,7 @@
 ---
 title: Memory in Chat
-route: /dashboard/chat
-keywords: [memory, remember, forget, used memory, saved notes, call me, remember that, forget that]
+route: /dashboard/chat/memory
+keywords: [memory, remember, forget, used memory, saved notes, call me, remember that, forget that, use memory, memory page]
 synonyms: [preferences, saved preferences, house style, what chat remembers, notes]
 plan: all
 updated: 2026-11-02
@@ -32,6 +32,18 @@ Your first name from your profile becomes a **Call me** note, so Chat greets you
 Each chat uses your **Me** notes, the notes of the chat's brand and the **Workspace** notes. When notes disagree, your message wins, then **Me**, then the brand's, then the workspace's. When memory was used, the steps above the answer show **Used memory**, and **Data used** shows **Memory** with how many notes.
 
 A note shapes how Chat does what you ask, such as the tone or the format. It never starts a change by itself and can't change Chat's rules, your role or what needs your approval. A change that only a note names still waits for your click, Full auto too.
+
+## The Memory page
+
+Open it from the **⋯** menu at the top of a chat, under **Memory**. The tabs **Me**, **Brand: {your brand}** and **Workspace** show how many notes each holds; the Brand tab follows the brand picked in the brand switcher. Each note shows its **Source** (**Profile**, **Saved from chat** or **Memory page**) and when it was last changed.
+
+Click the pencil to change a note's words, then **Save**. Click the bin to delete it at once; **Undo** brings it back for 10 seconds. Where your role only reads a tab, both stay off.
+
+The Brand tab also lists the brand's own rules from **Settings › Content**, read-only: change them there. They don't count toward the tab's limit.
+
+## Turn memory off
+
+**Use memory**, at the top right of the Memory page, is your own switch: off, Chat doesn't use your notes or save new ones. An Admin can turn memory off for the whole workspace under **Settings › Chat**; then no one's notes are used, and only Admins see the Memory page's notes.
 
 ## What memory doesn't keep
 

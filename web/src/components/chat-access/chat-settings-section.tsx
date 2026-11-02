@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { ClassBadge } from './class-badge';
 import { YourPlanCard } from './plan-card';
 import { AskAdminButton } from './ask-admin-button';
+import { MemorySwitchRow } from './memory-switch-row';
 
 const PRECEDENCE = ['hard', 'plan', 'role', 'policy', 'mode', 'dontAsk'] as const;
 
@@ -216,6 +217,7 @@ export function ChatSettingsSection() {
               <span className="text-xs font-medium">{t(`switches.${key}Value`)}</span>
             </li>
           ))}
+          <MemorySwitchRow />
         </ul>
       </section>
 
