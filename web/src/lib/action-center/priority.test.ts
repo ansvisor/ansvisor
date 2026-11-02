@@ -4,8 +4,12 @@ import messages from '../../../messages/en.json';
 import type { ActionItem } from '@/lib/actions/action-center';
 import {
   comparePriority,
+  confidenceLevelOf,
+  confidenceNote,
   highestPriorityLevel,
+  isStale,
   parsePriorityReason,
+  priorityConfidenceText,
   priorityLevelOf,
   priorityReasonText,
   storedPriorityLevel,
@@ -42,6 +46,7 @@ const reason = (over: Partial<PriorityReason> = {}): PriorityReason => ({
   sources: 1,
   realDemand: null,
   pastSuccess: null,
+  confidence: null,
   ...over,
 });
 
@@ -95,6 +100,52 @@ describe('parsePriorityReason', () => {
       demand: null,
     });
     expect(parsePriorityReason(null)).toBeNull();
+  });
+});
+
+describe('confidence', () => {
+  it('reads the factor as a level and says why, never the bare number', () => {
+    const one = parsePriorityReason({ kinds: 1, sources: 1, factors: { confidence: 0.3 } });
+    expect(one?.confidence).toEqual({ level: 'low', score: 0.3, kinds: 1, sources: 1 });
+    expect(priorityConfidenceText(one!.confidence!, t)).toBe(
+      'Low confidence — one kind of finding from one source.',
+    );
+    expect(confidenceNote(one!.confidence!)).toBe('one kind of finding from one source');
+
+    const two = parsePriorityReason({ kinds: 2, sources: 3, factors: { confidence: 0.9 } });
+    expect(priorityConfidenceText(two!.confidence!, t)).toBe(
+      'High confidence — 2 kinds of finding from 3 sources.',
+    );
+    expect(confidenceNote(two!.confidence!)).toBe('2 kinds of finding from 3 sources');
+  });
+
+  it('says when a person sent it, and is none from an older scorer', () => {
+    const sent = parsePriorityReason({ kinds: 0, sources: 0, factors: { confidence: 0.6 } });
+    expect(sent?.confidence?.level).toBe('medium');
+    expect(priorityConfidenceText(sent!.confidence!, t)).toBe(
+      'Medium confidence — rated from what it was sent with, not from detected findings.',
+    );
+    expect(parsePriorityReason({ factors: { impact: 1 } })?.confidence).toBeNull();
+  });
+
+  it('is High from 0.7 and Medium from 0.5', () => {
+    expect([0.3, 0.45, 0.5, 0.65, 0.7, 1].map(confidenceLevelOf)).toEqual([
+      'low',
+      'low',
+      'medium',
+      'medium',
+      'high',
+      'high',
+    ]);
+  });
+});
+
+describe('isStale', () => {
+  it('is a New action with the nightly stamp, never another status', () => {
+    expect(isStale({ status: 'new', staleAt: '2026-10-31T03:00:00Z' })).toBe(true);
+    expect(isStale({ status: 'new', staleAt: null })).toBe(false);
+    expect(isStale({ status: 'new' })).toBe(false);
+    expect(isStale({ status: 'in_progress', staleAt: '2026-10-31T03:00:00Z' })).toBe(false);
   });
 });
 

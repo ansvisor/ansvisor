@@ -35,6 +35,19 @@ export type SendDraftToCmsResult =
       message: string;
     };
 
+/** Where a page is published live from Chat (AUTONOMOUS-GO-LIVE PR 9): Framer publishes whole sites. */
+export type PublishCmsTarget = Exclude<ChatCmsTarget, 'framer'>;
+
+export type PublishDraftToCmsResult =
+  | {
+      ok: true;
+      target: PublishCmsTarget;
+      /** Its live address; null when the CMS put it live but its address wasn't read yet. */
+      url: string | null;
+    }
+  | Extract<SendDraftToCmsResult, { ok: false }>
+  | { ok: false; reason: 'publish_refused'; message: string };
+
 /** Why a page can't go as it is, in words (the editor's Send dialog says where to fix it). */
 const PROBLEM_WORDS: Record<BulkProblem, string> = {
   noTitle: 'The page needs a title before it can be sent.',
@@ -84,7 +97,7 @@ export async function sendDraftToCms(
 ): Promise<SendDraftToCmsResult> {
   try {
     await assertWritable();
-    return await sendOne(draftId, target);
+    return (await sendOne(draftId, target)) as SendDraftToCmsResult;
   } catch (err) {
     console.error('Failed to send the page to the CMS:', err);
     return { ok: false, reason: 'failed', message: 'The page couldn’t be sent. Try again.' };
@@ -122,7 +135,41 @@ async function sendAccess(
   return settings?.manager_execute_off.includes('publishing') ? 'execute_off' : 'ok';
 }
 
-async function sendOne(draftId: string, target: ChatCmsTarget): Promise<SendDraftToCmsResult> {
+/**
+ * Publish one new Library page live in the brand's CMS (AUTONOMOUS-GO-LIVE
+ * PR 9, Chat's publish_cms): an EXECUTE in the publishing group, checked as
+ * Send to CMS is (Admins and Managers, not Managers while publishing is off
+ * for them, not a page live already). The page is made ready as Send to CMS
+ * makes it and goes through the API's publish (POST
+ * /api/content-drafts/publish-cms), which writes it into its CMS draft and
+ * puts it live there: Webflow, WordPress or Wix. Errors come back as values.
+ */
+export async function publishDraftToCms(
+  draftId: string,
+  target: PublishCmsTarget,
+): Promise<PublishDraftToCmsResult> {
+  try {
+    await assertWritable();
+    return (await sendOne(draftId, target, true)) as PublishDraftToCmsResult;
+  } catch (err) {
+    console.error('Failed to publish the page:', err);
+    return { ok: false, reason: 'failed', message: 'The page couldn’t be published. Try again.' };
+  }
+}
+
+async function sendOne(
+  draftId: string,
+  target: ChatCmsTarget,
+  publish = false,
+): Promise<SendDraftToCmsResult | PublishDraftToCmsResult> {
+  if (publish && target === 'framer') {
+    return {
+      ok: false,
+      reason: 'invalid',
+      message:
+        'Framer publishes the whole site at once: send the draft, then publish it in Framer.',
+    };
+  }
   if (!CHAT_CMS_TARGETS.includes(target)) {
     return {
       ok: false,
@@ -172,7 +219,9 @@ async function sendOne(draftId: string, target: ChatCmsTarget): Promise<SendDraf
     return {
       ok: false,
       reason: 'live_item',
-      message: 'This page is live; send it from the Content Editor.',
+      message: publish
+        ? 'This page is live already; change it from the Content Editor.'
+        : 'This page is live; send it from the Content Editor.',
     };
   }
   const brand = (Array.isArray(draft.brands) ? draft.brands[0] : draft.brands) as {
@@ -216,13 +265,17 @@ async function sendOne(draftId: string, target: ChatCmsTarget): Promise<SendDraf
     return { ok: false, reason: 'failed', message: 'Your session ended. Sign in again.' };
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}/api/content-drafts/send`, {
+    res = await fetch(`${API_BASE_URL}/api/content-drafts/${publish ? 'publish-cms' : 'send'}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ brandId: draft.brand_id, pages: [item.page], target }),
+      body: JSON.stringify(
+        publish
+          ? { brandId: draft.brand_id, page: item.page, target }
+          : { brandId: draft.brand_id, pages: [item.page], target },
+      ),
     });
   } catch (err) {
     console.error('Failed to send the page to the CMS:', err);
@@ -232,20 +285,36 @@ async function sendOne(draftId: string, target: ChatCmsTarget): Promise<SendDraf
     code?: string;
     error?: string;
     deliveries?: CmsDelivery[];
+    delivery?: CmsDelivery | null;
+    url?: string | null;
   };
   if (!res.ok) {
     const code = body.code ?? '';
     const message = body.error || 'The page couldn’t be sent.';
+    // The CMS refused the publish itself (PR 9): said before the key's refusals below.
+    if (code === 'publish_refused') return { ok: false, reason: 'publish_refused', message };
     // The CMS refused its connection's key: it is connected again in Settings › Integrations.
     if (NOT_CONNECTED.has(code) || code.endsWith('_refused')) {
       return { ok: false, reason: 'not_connected', message };
     }
     if (code === 'daily_limit') return { ok: false, reason: 'quota_exceeded', message };
     if (code === 'in_progress') return { ok: false, reason: 'conflict', message };
+    if (code === 'live_item') return { ok: false, reason: 'live_item', message };
+    if (code === 'execute_off') return { ok: false, reason: 'execute_off', message };
     if (res.status === 403) return { ok: false, reason: 'forbidden_role', message };
     if (res.status === 404) return { ok: false, reason: 'not_found', message };
     if (res.status === 400 || res.status === 422) return { ok: false, reason: 'invalid', message };
     return { ok: false, reason: 'failed', message };
+  }
+  if (publish) {
+    if (body.delivery?.status === 'failed') {
+      return {
+        ok: false,
+        reason: 'failed',
+        message: body.delivery.error || 'The CMS refused the page.',
+      };
+    }
+    return { ok: true, target: target as PublishCmsTarget, url: body.url ?? null };
   }
   const [delivery] = body.deliveries ?? [];
   if (delivery?.status === 'failed') {

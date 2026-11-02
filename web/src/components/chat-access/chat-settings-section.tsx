@@ -21,6 +21,7 @@ import {
   removeAutoChoice,
   resetToolPolicies,
   setChatSwitch,
+  setAutoGoLive,
   setManagerExecute,
   setToolPolicy,
   type ChatSettingsView,
@@ -28,48 +29,17 @@ import {
   type SettingsResult,
 } from '@/lib/actions/chat-settings';
 import { fullAutoBehaviour } from '@/lib/chat/access';
+import { GO_LIVE_TERMS } from '@/lib/chat/go-live';
 import { EXECUTE_GROUPS, type ToolArea } from '@/lib/chat/registry/define-tool';
 import type { AdminPolicy } from '@/lib/chat/precedence';
 import { cn } from '@/lib/utils';
 import { ClassBadge } from './class-badge';
 import { YourPlanCard } from './plan-card';
 import { AskAdminButton } from './ask-admin-button';
+import { GoLiveSection } from './go-live-section';
+import { SettingsSwitch as Switch } from './settings-switch';
 
 const PRECEDENCE = ['hard', 'plan', 'role', 'policy', 'mode', 'dontAsk'] as const;
-
-function Switch({
-  checked,
-  label,
-  disabled,
-  onChange,
-}: {
-  checked: boolean;
-  label: string;
-  disabled: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-        checked ? 'bg-primary' : 'bg-muted',
-      )}
-    >
-      <span
-        className={cn(
-          'pointer-events-none block h-3.5 w-3.5 rounded-full bg-background shadow-lg transition-transform',
-          checked ? 'translate-x-4' : 'translate-x-0.5',
-        )}
-      />
-    </button>
-  );
-}
 
 /**
  * Settings › Chat (CHAT-20 §5, §8b; mockup #g-policy): the rules Chat
@@ -213,7 +183,11 @@ export function ChatSettingsSection() {
                   {t(`switches.${key}Note`)}
                 </span>
               </span>
-              <span className="text-xs font-medium">{t(`switches.${key}Value`)}</span>
+              <span className="text-xs font-medium">
+                {key === 'untrusted' && view.goLive
+                  ? t('switches.untrustedValueGoLive')
+                  : t(`switches.${key}Value`)}
+              </span>
             </li>
           ))}
         </ul>
@@ -233,7 +207,9 @@ export function ChatSettingsSection() {
               <span>
                 <span className="font-medium">{t(`precedence.steps.${step}.name`)}</span>
                 <span className="block text-xs text-muted-foreground">
-                  {t(`precedence.steps.${step}.detail`)}
+                  {step === 'hard' && view.goLive
+                    ? t('precedence.steps.hard.detailGoLive')
+                    : t(`precedence.steps.${step}.detail`)}
                 </span>
               </span>
             </li>
@@ -311,7 +287,9 @@ export function ChatSettingsSection() {
       <section className="space-y-2">
         <div className="space-y-0.5">
           <h3 className="text-sm font-semibold">{t('execute.title')}</h3>
-          <p className="text-xs text-muted-foreground">{t('execute.note')}</p>
+          <p className="text-xs text-muted-foreground">
+            {t(view.goLive ? 'execute.noteGoLive' : 'execute.note')}
+          </p>
         </div>
         <ul className="divide-y rounded-xl border">
           {EXECUTE_GROUPS.map((group) => {
@@ -336,6 +314,21 @@ export function ChatSettingsSection() {
           })}
         </ul>
       </section>
+
+      {view.goLive && (
+        <GoLiveSection
+          view={view.goLive}
+          isAdmin={isAdmin}
+          lockedOn={fullAutoOpen ? null : current}
+          saving={saving}
+          onChange={(on) =>
+            change(
+              () => setAutoGoLive(on, GO_LIVE_TERMS),
+              t(on ? 'goLive.turnedOn' : 'goLive.turnedOff'),
+            )
+          }
+        />
+      )}
 
       <section className="space-y-2">
         <div className="space-y-0.5">

@@ -519,6 +519,10 @@ describe('the server’s refusals', () => {
     expect(refusalPlace('plan_locked', 'fullAuto')).toEqual({ step: 2, field: 'mode' });
     expect(refusalPlace('plan_locked', 'engines')).toEqual({ step: 1, field: 'engines' });
     expect(refusalPlace('policy_never', 'workspace')).toEqual({ step: 3, field: 'visibility' });
+    // The go-live box on Mode & approvals (AUTONOMOUS-GO-LIVE §7.2).
+    expect(refusalPlace('go_live_off', null)).toEqual({ step: 2, field: 'form' });
+    expect(refusalPlace('go_live_mode', null)).toEqual({ step: 2, field: 'form' });
+    expect(refusalPlace('forbidden_role', 'goLive')).toEqual({ step: 2, field: 'form' });
     expect(refusalPlace('forbidden_role', 'monthCap')).toEqual({ step: 3, field: 'maxMonth' });
     expect(refusalPlace('agent_limit', null)).toEqual({ step: 3, field: 'form' });
     expect(refusalPlace('version_conflict', null)).toEqual({ step: 3, field: 'form' });

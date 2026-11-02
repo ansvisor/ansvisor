@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { PlanId } from '@/config/plans';
 import { ACTION_CATEGORIES } from '@/lib/action-center/registry';
 import { KPI_KEYS } from '@/lib/kpis/registry';
+import type { WorkAreaId } from '@/lib/menu-access';
 import { RRULE_DAYS } from '../agent-schedule';
 import { CHAT_MODES } from '../precedence';
 import type { PlanGate } from '../registry/define-tool';
@@ -22,7 +23,10 @@ import catalog from './catalog.json';
  *
  * A `soon` preset is shown, never used: it says what it waits for
  * (`needs`). No renamed copies (AGENTS plan §8): two presets never share a
- * primary skill and the same triggers. Pure.
+ * primary skill and the same triggers, and a pack's agent does a job the
+ * core agents don't. The packs (§8.1 by business type, §8.3 by role) are
+ * presets with `businessTypes` or `roles`; a §8.3 helper that is a core
+ * agent is that core preset with the role, not a new one. Pure.
  */
 
 /** What a preset is for: the gallery's first filter (Agent Center › Ready to use). */
@@ -39,8 +43,13 @@ export const PRESET_GOALS = [
 ] as const;
 export type PresetGoal = (typeof PRESET_GOALS)[number];
 
-/** Site types (AGENTS plan §8.1): a pack's presets carry theirs. */
-export const PRESET_BUSINESS_TYPES = ['ecommerce', 'mobile_app', 'b2b', 'b2c'] as const;
+/**
+ * Business types (AGENTS plan §8.1): a pack's presets carry theirs. The
+ * brand's site types (SITE_TYPES, brands.site_type, 00205) by their keys,
+ * and Mobile app, which a brand's settings don't offer yet: its agents show
+ * under the filter, never as "For your site type".
+ */
+export const PRESET_BUSINESS_TYPES = ['ecommerce', 'app', 'b2b', 'b2c'] as const;
 
 /** Industries (AGENTS plan §8.2). */
 export const PRESET_INDUSTRIES = [
@@ -58,19 +67,23 @@ export const PRESET_INDUSTRIES = [
   'travel_hospitality',
 ] as const;
 
-/** The teams a role helper is for (AGENTS plan §8.3). */
+/**
+ * The teams a role helper is for (AGENTS plan §8.3), by the work areas a
+ * person picks (Settings › Menu access, 00374; WORK_AREAS), in their order.
+ * E-commerce teams have the e-commerce pack, by business type; Agencies
+ * have no work area yet.
+ */
 export const PRESET_ROLES = [
-  'seo_aeo',
+  'leaders',
+  'aeo',
   'content',
-  'pr_brand',
-  'founders',
+  'brand',
   'growth',
   'product',
-  'business_development',
-  'ecommerce',
+  'bizdev',
   'developers',
-  'agencies',
-] as const;
+  'analytics',
+] as const satisfies readonly WorkAreaId[];
 
 /** What a `soon` preset waits for: chatAgents.ready.needs.{key}. */
 export const PRESET_NEEDS = [
@@ -87,13 +100,24 @@ export const PRESET_NEEDS = [
   'jira_linear',
   'brand_access',
   'ads_data',
+  'catalog_read',
+  'seasonal_skill',
+  'app_store_data',
+  'review_sites',
+  'local_listings',
+  'content_plan_skill',
+  'traffic_skill',
 ] as const;
 
 /** The gallery's filters, in order; one shows only once a preset carries one of its values. */
 export const PRESET_FILTERS = ['goal', 'businessType', 'industry', 'role'] as const;
 export type PresetFilter = (typeof PRESET_FILTERS)[number];
 
-/** The catalog's order (AGENTS plan §0.2): the launch set, then what comes next. */
+/**
+ * The catalog's order (AGENTS plan §0.2): the launch set, then what comes
+ * next, then the business-type packs (§8.1: e-commerce, mobile app, B2B,
+ * B2C) and the role helpers (§8.3), each in the plan's order.
+ */
 export const PRESET_ORDER = [
   'visibility-watch',
   'citation-winback',
@@ -115,6 +139,25 @@ export const PRESET_ORDER = [
   'ticket-loop',
   'agency-reporter',
   'ai-ads-watch',
+  'product-answer-pages',
+  'shopping-feed-advisor',
+  'seasonal-prompt-planner',
+  'app-store-listing',
+  'app-alternatives-watch',
+  'feature-question-coverage',
+  'alternatives-comparison-pages',
+  'review-site-presence',
+  'integration-questions',
+  'reviews-ugc-watch',
+  'local-store-locator',
+  'social-proof-pages',
+  'content-plan-builder',
+  'narrative-sentiment-watch',
+  'source-outreach-list',
+  'ceo-brief',
+  'ai-traffic-signups',
+  'unmet-needs-miner',
+  'market-source-finder',
 ] as const;
 
 const PRESET_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -268,10 +311,35 @@ export function presetFilterOptions(
   }).filter((option) => option.values.length > 0);
 }
 
-/** The presets a set of picked filter values keeps (all of them for none), ready ones first. */
+/** What Ready to use knows of the person: the brand on screen's site type and their work areas. */
+export interface PresetViewer {
+  siteType: string | null;
+  workAreas: readonly string[];
+}
+
+const NO_VIEWER: PresetViewer = { siteType: null, workAreas: [] };
+
+/** Why a preset is the person's: made for the brand's site type, else for one of their work areas. */
+export type PresetFit = 'siteType' | 'role';
+
+export function presetFit(
+  preset: Pick<AgentPreset, 'businessTypes' | 'roles'>,
+  viewer: PresetViewer,
+): PresetFit | null {
+  const types: readonly string[] = preset.businessTypes;
+  if (viewer.siteType && types.includes(viewer.siteType)) return 'siteType';
+  if (preset.roles.some((role) => viewer.workAreas.includes(role))) return 'role';
+  return null;
+}
+
+/**
+ * The presets a set of picked filter values keeps (all of them for none):
+ * ready ones first, and in each, the ones that fit the person first.
+ */
 export function filterPresets(
   presets: readonly AgentPreset[],
   picked: Partial<Record<PresetFilter, string | null>>,
+  viewer: PresetViewer = NO_VIEWER,
 ): AgentPreset[] {
   const kept = presets.filter((preset) =>
     PRESET_FILTERS.every((filter) => {
@@ -279,8 +347,9 @@ export function filterPresets(
       return !value || presetValues(preset, filter).includes(value);
     }),
   );
-  return [
-    ...kept.filter((preset) => preset.status === 'ready'),
-    ...kept.filter((preset) => preset.status === 'soon'),
-  ];
+  const fits = (preset: AgentPreset) => presetFit(preset, viewer) !== null;
+  return (['ready', 'soon'] as const).flatMap((status) => {
+    const same = kept.filter((preset) => preset.status === status);
+    return [...same.filter(fits), ...same.filter((preset) => !fits(preset))];
+  });
 }

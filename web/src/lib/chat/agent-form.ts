@@ -63,6 +63,12 @@ export interface AgentFormSetup {
   takenNames: string[];
   /** The provider whose key Chat runs on (`anthropic`), or null: the monthly AI limit pays. */
   ownKeyProvider: string | null;
+  /**
+   * The workspace's switch for agents that publish and send on their own
+   * (AUTONOMOUS-GO-LIVE §7.1): the form's box shows unless it's hidden
+   * (CHAT_AUTO_GO_LIVE off). Absent: hidden.
+   */
+  goLive?: 'hidden' | 'off' | 'on';
 }
 
 /** How often a Schedule fires, as its token offers it (mockup: Monday, Weekday, 1st of the month). */
@@ -815,10 +821,16 @@ export function refusalPlace(
     case 'no_brand':
     case 'demo_brand':
       return { step: 1, field: 'brands' };
+    // The box under the Approvals table (AUTONOMOUS-GO-LIVE §7.2).
+    case 'go_live_off':
+    case 'go_live_mode':
+      return { step: 2, field: 'form' };
   }
   switch (asked) {
     case 'fullAuto':
       return { step: 2, field: 'mode' };
+    case 'goLive':
+      return { step: 2, field: 'form' };
     case 'engines':
       return { step: 1, field: 'engines' };
     case 'workspace':

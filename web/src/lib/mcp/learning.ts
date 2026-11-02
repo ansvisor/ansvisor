@@ -8,7 +8,7 @@ import {
   type ScorecardRow,
 } from '@/lib/action-center/scorecard';
 import type { ActionDismissReason } from '@/lib/action-center/registry';
-import { brandInOrg } from './data';
+import { brandAllowed } from './data';
 
 /**
  * What worked at a brand, by kind of action (learning B3), for the MCP tool
@@ -68,7 +68,7 @@ export async function getActionScorecardFor(
   auth: McpAuthContext,
   params: { brandId: string; since?: string },
 ): Promise<McpScorecardRow[] | null> {
-  if (!(await brandInOrg(auth, params.brandId))) return null;
+  if (!(await brandAllowed(auth, params.brandId))) return null;
   const { data, error } = await supabaseAdmin.rpc('action_scorecard', {
     p_brand_id: params.brandId,
     p_since: params.since ? new Date(params.since).toISOString() : null,
