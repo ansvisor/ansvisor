@@ -60,6 +60,11 @@ const mocks = vi.hoisted(() => ({
   getTrafficGoogleTotals: vi.fn(),
   readMemberEmails: vi.fn(),
   readPrecedenceContext: vi.fn(),
+  brandAccessFor: vi.fn(),
+}));
+vi.mock('@/lib/brand-access', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/brand-access')>()),
+  brandAccessFor: mocks.brandAccessFor,
 }));
 vi.mock('./data', () => ({
   brandInOrg: mocks.brandInOrg,
@@ -102,6 +107,7 @@ beforeEach(() => {
   reads.org = { plan: 'starter', subscription_status: 'active', plan_overrides: null };
   for (const fn of Object.values(mocks)) fn.mockReset();
   mocks.brandInOrg.mockResolvedValue(true);
+  mocks.brandAccessFor.mockResolvedValue('all');
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -431,6 +437,20 @@ describe('Workspace reads', () => {
     expect(reads.selects.some((s) => s.table === 'profiles')).toBe(false);
     const columns = reads.selects.map((s) => s.columns).join(',');
     expect(columns).not.toMatch(/key_hash|key_encrypted|key_last4|prefix|composio|credential/);
+  });
+
+  it("list a Selected-brands person's brands only (BRAND-ACCESS)", async () => {
+    reads.answers.brands = [
+      { id: BRAND, name: 'Acme', gsc_property: 'sc', ga_property_id: null },
+      { id: 'brand-2', name: 'Hidden', gsc_property: 'sc', ga_property_id: 'ga' },
+    ];
+    mocks.brandAccessFor.mockResolvedValue([BRAND]);
+    const read = await listConnectionsFor(auth());
+    expect(mocks.brandAccessFor).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u1', organizationId: ORG }),
+    );
+    expect(read?.google).toEqual([{ brand: 'Acme', search_console: true, analytics: false }]);
+    expect(JSON.stringify(read)).not.toContain('Hidden');
   });
 
   it("give Chat's rules as the precedence reads them", async () => {

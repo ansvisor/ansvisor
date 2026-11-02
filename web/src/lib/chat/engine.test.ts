@@ -16,9 +16,11 @@ import {
   TOPIC,
   SUGGESTION,
   fakeCreateDraft,
+  fakeUpdateOpportunity,
   seedDraft,
   seedWorkspace,
 } from './testing/chat-fixtures';
+import { copiedFrom, type UntrustedShingles } from './go-live-checks';
 
 /**
  * Chat's engine (C3), with a scripted model and an in-memory database: a turn
@@ -36,6 +38,22 @@ vi.mock('@/lib/supabase/admin', async () => ({
 vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: vi.fn(),
   updateContentDraft: vi.fn(),
+}));
+// The drafts' writes for a run with no session (runFor): what the engine hands them is tested here,
+// their checks in actor/drafts.test.ts.
+vi.mock('@/lib/chat/actor/drafts', () => ({
+  createContentDraftFor: vi.fn(),
+  updateContentDraftFor: vi.fn(),
+}));
+// The writes through the API server as the run's person (runFor, precheckFor): their requests are
+// tested in actor/api-writes.test.ts and actor/action-center.test.ts.
+vi.mock('@/lib/chat/actor/api-writes', () => ({
+  updateOpportunityStatusFor: vi.fn(),
+  dismissSuggestionFor: vi.fn(),
+}));
+vi.mock('@/lib/chat/actor/action-center', () => ({
+  createChatActionFor: vi.fn(),
+  checkChatActionCoverFor: vi.fn(),
 }));
 vi.mock('@/lib/actions/cms-send', () => ({ sendDraftToCms: vi.fn() }));
 vi.mock('@/lib/actions/reports', () => ({ createReport: vi.fn() }));
@@ -224,6 +242,10 @@ vi.mock('./registry/tools', async (importOriginal) => {
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
+const { createContentDraftFor, updateContentDraftFor } = await import('@/lib/chat/actor/drafts');
+const { updateOpportunityStatusFor } = await import('@/lib/chat/actor/api-writes');
+const { checkChatActionCoverFor, createChatActionFor } =
+  await import('@/lib/chat/actor/action-center');
 const { requestAccess } = await import('@/lib/actions/chat-access-requests');
 const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/prompt');
 const { sendDraftToCms } = await import('@/lib/actions/cms-send');
@@ -436,6 +458,9 @@ beforeEach(() => {
   });
   fakes.publishRun.mockResolvedValue({ published: true });
   vi.mocked(createContentDraft).mockImplementation(fakeCreateDraft(db) as never);
+  vi.mocked(createContentDraftFor).mockImplementation((_actor, brandId, start) =>
+    fakeCreateDraft(db)(brandId, start),
+  );
   vi.mocked(requestAccess).mockResolvedValue({ ok: true, id: 'request-1' });
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -2962,6 +2987,31 @@ describe('the AI budget', () => {
       expect(step).not.toHaveProperty('feature');
     }
   });
+
+  it('keeps an agent run’s untrusted reads as hashed word runs, never a person’s chat’s (AUTONOMOUS-GO-LIVE §6.3)', async () => {
+    budgetHolds();
+    const answer = Array.from({ length: 40 }, (_, i) => `w${i}`).join(' ');
+    fakes.readRun.mockResolvedValue({ answers: [{ answer }] });
+    const readSteps = () => [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY];
+    useModels(readSteps(), [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'What do AI answers say about us?',
+      brandId: BRAND,
+    });
+    if (!started.ok) throw new Error('not started');
+    db.tables.chat_conversations.find((c) => c.id === started.conversationId)!.agent_run_id =
+      '77777777-7777-4777-8777-777777777777';
+    await engine.driveRun(ADMIN, started.runId);
+    const state = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
+    const kept = (state.progress as { untrustedShingles?: UntrustedShingles }).untrustedShingles;
+    expect(kept?.full).toBe(false);
+    expect(copiedFrom(answer, kept)).toBe(true);
+
+    useModels(readSteps(), [text('Done.')]);
+    const own = await turn(ADMIN, 'What do AI answers say about us?');
+    const ownState = db.tables.chat_run_state.find((s) => s.run_id === own)!;
+    expect(ownState.progress).not.toHaveProperty('untrustedShingles');
+  });
 });
 
 describe('the own AI key (AGENT-OWN-KEY §5.2)', () => {
@@ -3235,7 +3285,12 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
   const publish = toolCall('e1', 'publish_page', { brand_id: BRAND, title: 'Pricing FAQ' });
 
   beforeEach(() => {
-    db.tables.profiles.push({ id: AGENCY, role: 'agency_partner', organization_id: ORG });
+    db.tables.profiles.push({
+      id: AGENCY,
+      role: 'agency_partner',
+      organization_id: ORG,
+      brand_scope: 'all',
+    });
   });
 
   /** A workspace's Chat settings row (00401), as an Admin set it. */
@@ -3389,6 +3444,429 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
       cards: [expect.objectContaining({ canDontAskAgain: false, note: NOTE })],
     });
     expect(updateOpportunityStatus).toHaveBeenCalledTimes(4);
+  });
+
+  describe('a change that runs for its person with no session (sessionFree)', () => {
+    const NOTE = 'This agent ran on its own, so it asks before changing anything.';
+    const draft = toolCall('w1', 'create_draft', {
+      brand_id: BRAND,
+      title: 'Pricing FAQ',
+      page_type: 'docs_faq',
+      source: { kind: 'opportunity', id: OPPORTUNITY },
+    });
+    const change = toolCall('w1', 'update_draft', { draft_id: DRAFT, title: 'Pricing for teams' });
+
+    /** `actor`'s turn driven in a request with `session`'s session (null: none, the minute tick). */
+    async function driven(actor: ChatActor, mode: Mode, session: string | null, write: Step[]) {
+      const { sonnet } = models([READY], write);
+      const started = await engine.startChatRun(actor, { message: 'Do it', brandId: BRAND, mode });
+      if (!started.ok) throw new Error(`not started: ${started.code}`);
+      await engine.driveRun(actor, started.runId, undefined, { sessionUserId: session });
+      const events = await eventsOf(started.runId);
+      expectClean(events);
+      return {
+        runId: started.runId,
+        status: runRow(started.runId).status,
+        cards: ofType(events, 'confirm.required').map((e) => e.data),
+        denials: ofType(events, 'access.denied').map((e) => e.data),
+        offered: sonnet.seen[0]?.tools?.map((t) => t.name) ?? [],
+      };
+    }
+
+    it('makes a draft in Full auto with no card, as the run’s person, logged with its Undo', async () => {
+      const run = await driven(ADMIN, 'full_auto', null, [calls(draft), text('Saved.')]);
+      expect(run).toMatchObject({ status: 'done', cards: [], denials: [] });
+      // Its own write for the run's person, never the session's server action.
+      expect(createContentDraft).not.toHaveBeenCalled();
+      expect(createContentDraftFor).toHaveBeenCalledTimes(1);
+      expect(createContentDraftFor).toHaveBeenCalledWith(
+        { userId: PEOPLE.admin, organizationId: ORG },
+        BRAND,
+        expect.objectContaining({ method: 'create', title: 'Pricing FAQ', typePicked: false }),
+      );
+      const made = db.tables.content_drafts.filter((r) => r.title === 'Pricing FAQ');
+      expect(made).toHaveLength(1);
+      expect(stepsOf(run.runId)[0]).toMatchObject({
+        status: 'done',
+        label: 'Saved draft in Content',
+      });
+
+      // In the Activity log as the run's person's, made by itself, with its Undo.
+      const logged = db.tables.chat_activity_log.filter((r) => r.kind === 'change');
+      expect(logged).toEqual([
+        expect.objectContaining({
+          user_id: PEOPLE.admin,
+          brand_id: BRAND,
+          tool_key: 'saveDraft',
+          approval_kind: 'auto',
+          mode: 'full_auto',
+          run_id: run.runId,
+          target_id: made[0].id,
+        }),
+      ]);
+      expect(logged[0].undo_json).not.toBeNull();
+      const { undoChange } = await import('./undo');
+      const undone = await undoChange({
+        activityId: logged[0].id as string,
+        userId: PEOPLE.admin,
+        organizationId: ORG,
+        surface: 'chat',
+      });
+      expect(undone.code).toBe('ok');
+      const draftNow = db.tables.content_drafts.find((r) => r.id === made[0].id);
+      expect(draftNow?.archived_at).not.toBeNull();
+    });
+
+    it('still asks where the precedence asks: Ask me first, and a row whose way is closed', async () => {
+      // Ask me first: the card, as in the person's own run, not the no-session note.
+      const asked = await driven(ADMIN, 'ask_first', null, [calls(draft), text('Saved.')]);
+      expect(asked).toMatchObject({ status: 'waiting', denials: [] });
+      expect(asked.cards).toHaveLength(1);
+      expect(asked.cards[0].note ?? '').not.toContain(NOTE);
+      expect(createContentDraftFor).not.toHaveBeenCalled();
+      // The owner's Approve, in their own request, runs it with their session.
+      expect((await approve(ADMIN, asked.runId)).ok).toBe(true);
+      expect(createContentDraft).toHaveBeenCalledTimes(1);
+      expect(createContentDraftFor).not.toHaveBeenCalled();
+      expect(runRow(asked.runId).status).toBe('done');
+
+      // A row whose write for a run without a session goes through the API server, with that way
+      // closed (no CHAT_ACTING_SECRET here): its card, saying why.
+      const dismiss = toolCall('w1', 'update_opportunity', {
+        opportunity_id: OPPORTUNITY,
+        status: 'dismissed',
+        reason: 'not_relevant',
+      });
+      const held = await driven(ADMIN, 'full_auto', null, [calls(dismiss), text('Done.')]);
+      expect(held).toMatchObject({
+        status: 'waiting',
+        cards: [expect.objectContaining({ canDontAskAgain: false, note: NOTE })],
+      });
+      expect(updateOpportunityStatus).not.toHaveBeenCalled();
+      expect(updateOpportunityStatusFor).not.toHaveBeenCalled();
+    });
+
+    describe('through the API server as the run’s person (CHAT_ACTING_SECRET)', () => {
+      const dismiss = toolCall('w1', 'update_opportunity', {
+        opportunity_id: OPPORTUNITY,
+        status: 'dismissed',
+        reason: 'not_relevant',
+      });
+      const person = { userId: PEOPLE.admin, organizationId: ORG };
+      const send = toolCall('w1', 'create_action', {
+        brand_id: BRAND,
+        title: 'Win back pricing citations on /pricing',
+        category: 'recover',
+        why: 'Google AI Overviews stopped citing /pricing.',
+        pages: ['/pricing'],
+        tasks: [
+          {
+            title: 'Add a pricing FAQ block to /pricing',
+            type: 'on_page',
+            url: '/pricing',
+            done_when: 'The FAQ block is live',
+          },
+        ],
+      });
+      beforeEach(() => {
+        vi.stubEnv('CHAT_ACTING_SECRET', 'k'.repeat(64));
+        vi.mocked(updateOpportunityStatusFor).mockImplementation(
+          (_actor, id, status, reason) => fakeUpdateOpportunity(db)(id, status, reason) as never,
+        );
+      });
+
+      it('makes the change in Full auto with no card, as the run’s person, logged with its Undo', async () => {
+        const run = await driven(ADMIN, 'full_auto', null, [calls(dismiss), text('Done.')]);
+        expect(run).toMatchObject({ status: 'done', cards: [], denials: [] });
+        expect(updateOpportunityStatus).not.toHaveBeenCalled();
+        expect(updateOpportunityStatusFor).toHaveBeenCalledWith(
+          person,
+          OPPORTUNITY,
+          'dismissed',
+          'not_relevant',
+        );
+        expect(db.tables.chat_activity_log).toEqual([
+          expect.objectContaining({
+            kind: 'change',
+            user_id: PEOPLE.admin,
+            tool_key: 'opportunityStatus',
+            approval_kind: 'auto',
+          }),
+        ]);
+        expect(db.tables.chat_activity_log[0].undo_json).not.toBeNull();
+
+        // Ask me first still asks, and the owner's Approve runs it with their own session.
+        const asked = await driven(ADMIN, 'ask_first', null, [calls(dismiss), text('Done.')]);
+        expect(asked).toMatchObject({ status: 'waiting' });
+        expect(asked.cards).toHaveLength(1);
+        expect((await approve(ADMIN, asked.runId)).ok).toBe(true);
+        expect(updateOpportunityStatus).toHaveBeenCalledTimes(1);
+        expect(updateOpportunityStatusFor).toHaveBeenCalledTimes(1);
+      });
+
+      it('says a refusal of the way in the person’s words, and logs nothing', async () => {
+        const message = 'Chat is off for this workspace, so this agent couldn’t make this change.';
+        vi.mocked(updateOpportunityStatusFor).mockResolvedValue({
+          ok: false,
+          reason: 'chat_off',
+          message,
+        });
+        const { sonnet } = models([READY], [calls(dismiss), text('It couldn’t.')]);
+        const started = await engine.startChatRun(ADMIN, {
+          message: 'Do it',
+          brandId: BRAND,
+          mode: 'full_auto',
+        });
+        if (!started.ok) throw new Error(started.code);
+        await engine.driveRun(ADMIN, started.runId, undefined, { sessionUserId: null });
+        expect(stepsOf(started.runId)[0]).toMatchObject({ status: 'error', detail: message });
+        expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('chat_off');
+        expect(db.tables.chat_activity_log).toEqual([]);
+      });
+
+      it('asks its person when the server takes no one to act as (acting_refused)', async () => {
+        const NOTE = 'This agent ran on its own, so it asks before changing anything.';
+        vi.mocked(updateOpportunityStatusFor).mockResolvedValue({
+          ok: false,
+          reason: 'acting_refused',
+          message: 'This agent couldn’t make this change on its own, so nothing changed.',
+        });
+        const held = await driven(ADMIN, 'full_auto', null, [calls(dismiss), text('Done.')]);
+        expect(held).toMatchObject({
+          status: 'waiting',
+          cards: [expect.objectContaining({ canDontAskAgain: false, note: NOTE })],
+        });
+        // Nothing changed or logged; its step waits as a card, no longer a change made by itself.
+        expect(db.tables.chat_activity_log).toEqual([]);
+        expect(stepsOf(held.runId)[0]).toMatchObject({ status: 'waiting' });
+        expect(stepsOf(held.runId)[0].debug_json).not.toHaveProperty('auto');
+        // The owner's Approve makes it with their own session, on the same approval.
+        expect((await approve(ADMIN, held.runId)).ok).toBe(true);
+        expect(updateOpportunityStatus).toHaveBeenCalledTimes(1);
+        expect(updateOpportunityStatusFor).toHaveBeenCalledTimes(1);
+        expect(runRow(held.runId).status).toBe('done');
+        expect(db.tables.chat_activity_log).toEqual([
+          expect.objectContaining({ kind: 'change', approval_kind: 'ask' }),
+        ]);
+      });
+
+      it('checks Send to Action Center’s duplicate as the run’s person, then sends it as them', async () => {
+        vi.mocked(checkChatActionCoverFor).mockResolvedValue({ ok: true });
+        vi.mocked(createChatActionFor).mockResolvedValue({
+          ok: true,
+          action_id: '88888888-8888-4888-8888-888888888888',
+          action_no: 1271,
+          created: true,
+          href: '/dashboard/action-center/actions/88888888-8888-4888-8888-888888888888',
+        });
+        const run = await driven(ADMIN, 'full_auto', null, [calls(send), text('Sent.')]);
+        expect(run).toMatchObject({ status: 'done', cards: [], denials: [] });
+        expect(checkChatActionCover).not.toHaveBeenCalled();
+        expect(createChatAction).not.toHaveBeenCalled();
+        expect(vi.mocked(checkChatActionCoverFor).mock.calls[0][0]).toEqual(person);
+        const [actor, brand, , place] = vi.mocked(createChatActionFor).mock.calls[0];
+        expect([actor, brand]).toEqual([person, BRAND]);
+        expect(place).toMatchObject({ runId: run.runId, executionMode: 'automated' });
+
+        // A duplicate found first: no card and nothing sent, in a run with no session too.
+        vi.mocked(checkChatActionCoverFor).mockResolvedValue({
+          ok: false,
+          reason: 'duplicate',
+          message: 'AC-1258 already covers this.',
+          action_id: '99999999-9999-4999-8999-999999999999',
+          action_no: 1258,
+          can_create_anyway: false,
+        });
+        const covered = await driven(ADMIN, 'auto', null, [calls(send), text('Covered.')]);
+        expect(covered).toMatchObject({ status: 'done', cards: [] });
+        expect(createChatActionFor).toHaveBeenCalledTimes(1);
+      });
+
+      it('checks and sends with the session in the person’s own request, never as the run’s person', async () => {
+        vi.mocked(checkChatActionCover).mockResolvedValue({ ok: true });
+        vi.mocked(createChatAction).mockResolvedValue({
+          ok: true,
+          action_id: '88888888-8888-4888-8888-888888888888',
+          action_no: 1271,
+          created: true,
+          href: '/dashboard/action-center/actions/88888888-8888-4888-8888-888888888888',
+        });
+        const run = await driven(ADMIN, 'full_auto', PEOPLE.admin, [calls(send), text('Sent.')]);
+        expect(run).toMatchObject({ status: 'done', cards: [] });
+        expect(checkChatActionCover).toHaveBeenCalledTimes(1);
+        expect(createChatAction).toHaveBeenCalledTimes(1);
+        expect(checkChatActionCoverFor).not.toHaveBeenCalled();
+        expect(createChatActionFor).not.toHaveBeenCalled();
+      });
+
+      it('checks nothing before the card while the way is closed: no one else’s session either', async () => {
+        vi.stubEnv('CHAT_ACTING_SECRET', '');
+        const run = await driven(ADMIN, 'full_auto', null, [calls(send), text('Asked.')]);
+        expect(run).toMatchObject({ status: 'waiting' });
+        expect(run.cards).toHaveLength(1);
+        expect(checkChatActionCover).not.toHaveBeenCalled();
+        expect(checkChatActionCoverFor).not.toHaveBeenCalled();
+        expect(createChatActionFor).not.toHaveBeenCalled();
+      });
+    });
+
+    it('decides as for the run’s person: a role that may not change drafts is refused', async () => {
+      seedDraft(db);
+      // A Manager's run offers the change; they are made an Analyst before the model calls it.
+      const demoted: Step = () => {
+        db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.role = 'analyst';
+        return simulateReadableStream({
+          chunks: [{ type: 'stream-start', warnings: [] }, ...calls(change)],
+        }) as ReadableStream;
+      };
+      const run = await driven(as('manager'), 'full_auto', null, [demoted, text('I can’t.')]);
+      expect(run).toMatchObject({
+        status: 'done',
+        cards: [],
+        denials: [expect.objectContaining({ rule: expect.objectContaining({ kind: 'role' }) })],
+      });
+      expect(updateContentDraftFor).not.toHaveBeenCalled();
+      expect(db.tables.chat_activity_log).toEqual([
+        expect.objectContaining({
+          kind: 'access.denied',
+          user_id: PEOPLE.manager,
+          tool_key: 'reviseDraft',
+          denial_code: 'forbidden_role',
+        }),
+      ]);
+
+      // An Analyst's run never gets the Manager's write, with or without a session.
+      const { sonnet } = models([READY], [text('Hi.')]);
+      const started = await engine.startChatRun(ANALYST, {
+        message: 'What can you change?',
+        brandId: BRAND,
+        mode: 'full_auto',
+      });
+      if (!started.ok) throw new Error(started.code);
+      await engine.driveRun(ANALYST, started.runId, undefined, { sessionUserId: null });
+      expect(sonnet.seen[0].tools?.map((t) => t.name)).not.toContain('update_draft');
+    });
+
+    it('keeps the Admin’s policy and Full auto for members: Never refuses, Ask and members ask', async () => {
+      // An Admin switched it off: not offered, and the call turned away, nothing made.
+      settings({ tool_policies: { saveDraft: 'never' } });
+      const never = await driven(ADMIN, 'full_auto', null, [calls(draft), text('I can’t.')]);
+      expect(never).toMatchObject({ status: 'done', cards: [] });
+      expect(never.offered).not.toContain('create_draft');
+      // Ask, in every mode: its card, Full auto too.
+      settings({ tool_policies: { saveDraft: 'ask' } });
+      const asked = await driven(ADMIN, 'full_auto', null, [calls(draft), text('Saved.')]);
+      expect(asked).toMatchObject({ status: 'waiting', denials: [] });
+      expect(asked.cards).toHaveLength(1);
+      // "Full auto for members" off: an Analyst's Full auto asks; an Admin's still runs.
+      settings({ full_auto_for_members: false });
+      const member = await driven(ANALYST, 'full_auto', null, [calls(draft), text('Saved.')]);
+      expect(member).toMatchObject({ status: 'waiting', denials: [] });
+      expect(member.cards).toHaveLength(1);
+      expect(createContentDraftFor).not.toHaveBeenCalled();
+      const admin = await driven(ADMIN, 'full_auto', null, [calls(draft), text('Saved.')]);
+      expect(admin).toMatchObject({ status: 'done', cards: [] });
+      expect(createContentDraftFor).toHaveBeenCalledTimes(1);
+      expect(createContentDraft).not.toHaveBeenCalled();
+    });
+
+    describe('in an agent run, the mode now (the agent’s, and Full auto for agents)', () => {
+      const AGENT = 'abababab-0000-4000-8000-000000000001';
+      const AGENT_RUN = 'abababab-0000-4000-8000-000000000002';
+
+      /** The agent behind the run: its current version's mode, and the Admin's switch for agents. */
+      function agent(mode: Mode, agentsFullAuto = true) {
+        db.tables.chat_agent_runs = [{ id: AGENT_RUN, organization_id: ORG, agent_id: AGENT }];
+        db.tables.chat_agents = [{ id: AGENT, organization_id: ORG, version: 2 }];
+        db.tables.chat_agent_versions = [
+          { agent_id: AGENT, version: 1, mode: 'full_auto' },
+          { agent_id: AGENT, version: 2, mode },
+        ];
+        settings({ agents_full_auto: agentsFullAuto });
+      }
+
+      /** An agent run that started in Full auto, its writer calling `call` after `meanwhile`. */
+      async function agentRun(meanwhile: () => void = () => {}) {
+        const writer: Step = () => {
+          meanwhile();
+          return simulateReadableStream({
+            chunks: [{ type: 'stream-start', warnings: [] }, ...calls(draft)],
+          }) as ReadableStream;
+        };
+        models([READY], [writer, text('Done.')]);
+        const started = await engine.startChatRun(ADMIN, {
+          message: 'Do it',
+          brandId: BRAND,
+          mode: 'full_auto',
+        });
+        if (!started.ok) throw new Error(started.code);
+        const run = runRow(started.runId);
+        const chat = db.tables.chat_conversations.find((c) => c.id === run.conversation_id)!;
+        chat.agent_run_id = AGENT_RUN;
+        await engine.driveRun(ADMIN, started.runId, undefined, { sessionUserId: null });
+        const events = await eventsOf(started.runId);
+        return {
+          status: runRow(started.runId).status,
+          cards: ofType(events, 'confirm.required').map((e) => e.data),
+        };
+      }
+
+      it('makes the change while the agent and the Admin still allow Full auto', async () => {
+        agent('full_auto');
+        expect(await agentRun()).toMatchObject({ status: 'done', cards: [] });
+        expect(createContentDraftFor).toHaveBeenCalledTimes(1);
+      });
+
+      it('asks once an Admin turned Full auto off for agents, read at the change', async () => {
+        agent('full_auto');
+        const run = await agentRun(() => {
+          db.tables.chat_settings[0].agents_full_auto = false;
+        });
+        expect(run.status).toBe('waiting');
+        expect(run.cards).toHaveLength(1);
+        expect(createContentDraftFor).not.toHaveBeenCalled();
+      });
+
+      it('asks once the agent was set to Ask me first, read at the change', async () => {
+        agent('full_auto');
+        const run = await agentRun(() => {
+          db.tables.chat_agents[0].version = 3;
+          db.tables.chat_agent_versions.push({ agent_id: AGENT, version: 3, mode: 'ask_first' });
+        });
+        expect(run.status).toBe('waiting');
+        expect(run.cards).toHaveLength(1);
+        expect(createContentDraftFor).not.toHaveBeenCalled();
+      });
+
+      it('asks when the agent can’t be read, and leaves a person’s own chat to its mode', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        agent('full_auto');
+        db.failures.chat_agent_versions = { message: 'down' };
+        expect(await agentRun()).toMatchObject({ status: 'waiting' });
+        expect(createContentDraftFor).not.toHaveBeenCalled();
+        vi.mocked(console.error).mockRestore();
+        db.failures = {};
+        // Not an agent run: Full auto for agents is about agents only.
+        agent('ask_first', false);
+        const own = await driven(ADMIN, 'full_auto', PEOPLE.admin, [calls(draft), text('Saved.')]);
+        expect(own).toMatchObject({ status: 'done', cards: [] });
+        expect(createContentDraft).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('leaves the person’s own Run now as it was: their session makes the change', async () => {
+      const run = await driven(ADMIN, 'full_auto', PEOPLE.admin, [calls(draft), text('Saved.')]);
+      expect(run).toMatchObject({ status: 'done', cards: [], denials: [] });
+      expect(createContentDraft).toHaveBeenCalledTimes(1);
+      expect(createContentDraftFor).not.toHaveBeenCalled();
+      // Another person's session behind it counts as none: the run's person's own write.
+      await driven(ADMIN, 'full_auto', PEOPLE.manager, [calls(draft), text('Saved.')]);
+      expect(createContentDraft).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(createContentDraftFor).mock.calls[0][0]).toEqual({
+        userId: PEOPLE.admin,
+        organizationId: ORG,
+      });
+    });
   });
 
   it('keeps Full auto to Growth and up, paid: Starter and the trial get the card', async () => {
@@ -4907,5 +5385,175 @@ describe('the /tasks task strip (W2-11, CHAT-09 §B)', () => {
     expect(ofType(await eventsOf(runId), 'tasks.updated')).toEqual([]);
     logged.mockRestore();
     delete db.failures.chat_task_state;
+  });
+});
+
+describe('brand access (BRAND-ACCESS PR 9)', () => {
+  const SECOND = '77777777-7777-4777-8777-777777777777';
+  const touchedOf = (chatId: string) =>
+    db.tables.chat_conversations.find((c) => c.id === chatId)?.touched_brand_ids;
+  /** An Admin narrows the Analyst to these brands (00388). */
+  const narrow = (...brandIds: string[]) => {
+    db.tables.profiles.find((p) => p.id === PEOPLE.analyst)!.brand_scope = 'selected';
+    db.tables.member_brands = brandIds.map((brand_id) => ({
+      user_id: PEOPLE.analyst,
+      organization_id: ORG,
+      brand_id,
+    }));
+  };
+
+  beforeEach(() => {
+    db.tables.brands.push({ id: SECOND, organization_id: ORG, name: 'Contoso' });
+    // 00436's functions, on the fake's chats.
+    db.rpcs.chat_start_touched_brands = ({ p_conversation_id }) => {
+      const chat = db.tables.chat_conversations.find((c) => c.id === p_conversation_id);
+      const empty = !db.tables.chat_messages.some((m) => m.conversation_id === p_conversation_id);
+      if (chat && (chat.touched_brand_ids ?? null) === null && empty) {
+        chat.touched_brand_ids = chat.brand_id ? [chat.brand_id] : [];
+      }
+    };
+    db.rpcs.chat_note_touched_brands = ({ p_conversation_id, p_brand_ids, p_whole_workspace }) => {
+      const chat = db.tables.chat_conversations.find((c) => c.id === p_conversation_id);
+      if (!chat || (chat.touched_brand_ids ?? null) === null) return;
+      chat.touched_brand_ids = p_whole_workspace
+        ? null
+        : [...new Set([...(chat.touched_brand_ids as string[]), ...(p_brand_ids as string[])])];
+    };
+  });
+
+  it('keeps the brands a chat with no brand touched, each noted before its call reads', async () => {
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: SECOND })), READY],
+      [text('Contoso is up.')],
+    );
+    const started = await engine.startChatRun(ADMIN, { message: 'How is Contoso?', mode: 'auto' });
+    if (!started.ok) throw new Error('not started');
+    // Started before its message went in: no brand, nothing touched yet.
+    expect(touchedOf(started.conversationId)).toEqual([]);
+    const atRead: unknown[] = [];
+    fakes.readRun.mockImplementationOnce(async () => {
+      atRead.push(touchedOf(started.conversationId));
+      return { rows: [{ prompt: 'best crm' }], change_pct: 12, data_as_of: DATA_AS_OF };
+    });
+    await engine.driveRun(ADMIN, started.runId);
+    // Noted before the read ran.
+    expect(atRead).toEqual([[SECOND]]);
+    expect(touchedOf(started.conversationId)).toEqual([SECOND]);
+  });
+
+  it("notes nothing again for the chat's own brand, and hands the read the access it read", async () => {
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Fine.')],
+    );
+    const runId = await turn(ADMIN, 'How is Northwind?');
+    expect(touchedOf(runRow(runId).conversation_id as string)).toEqual([BRAND]);
+    expect(db.log.filter(([name]) => name === 'chat_note_touched_brands')).toEqual([]);
+    // The precedence read the person's brands for this call: the read takes them, not again.
+    expect(fakes.readRun).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: PEOPLE.admin, brandAccess: 'all' }),
+      expect.anything(),
+    );
+  });
+
+  it('notes the brands of what a message references, before the message goes in', async () => {
+    const PROMPT_ID = '88888888-8888-4888-8888-888888888888';
+    db.tables.prompts = [{ id: PROMPT_ID, prompt_sets: { brand_id: SECOND } }];
+    const atInsert: unknown[] = [];
+    const original = db.from.bind(db);
+    const from = vi.spyOn(db, 'from').mockImplementation((table: string) => {
+      if (table === 'chat_messages' && atInsert.length === 0) {
+        atInsert.push(touchedOf(db.tables.chat_conversations.at(-1)?.id as string));
+      }
+      return original(table);
+    });
+    useModels([READY], [text('Noted.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'About this prompt',
+      mode: 'auto',
+      references: [{ type: 'prompt', id: PROMPT_ID, label: 'best crm' }],
+    });
+    from.mockRestore();
+    if (!started.ok) throw new Error('not started');
+    expect(atInsert).toEqual([[SECOND]]);
+    expect(touchedOf(started.conversationId)).toEqual([SECOND]);
+    // A chart of a page that names no brand can't be told: the whole workspace, not known.
+    useModels([READY], [text('Noted.')]);
+    const other = await engine.startChatRun(ADMIN, {
+      message: 'This chart',
+      mode: 'auto',
+      references: [{ type: 'chart', id: 'visibility-trend', label: 'Visibility trend' }],
+    });
+    if (!other.ok) throw new Error('not started');
+    expect(touchedOf(other.conversationId)).toBeNull();
+  });
+
+  it("starts a brand's chat from its brand, and keeps every brand its calls named", async () => {
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: SECOND })), READY],
+      [text('Both read.')],
+    );
+    const runId = await turn(ADMIN, 'Compare with Contoso');
+    const chat = runRow(runId).conversation_id as string;
+    expect(touchedOf(chat)).toEqual([BRAND, SECOND]);
+  });
+
+  it('reads nothing when the note fails: a shared chat would show it to anyone', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: SECOND })), READY],
+      [text('Could not read.')],
+    );
+    const original = db.rpc.bind(db);
+    const rpc = vi
+      .spyOn(db, 'rpc')
+      .mockImplementation(async (name, args) =>
+        name === 'chat_note_touched_brands'
+          ? { data: null, error: { code: '57014', message: 'timeout' } }
+          : original(name, args),
+      );
+    await turn(ADMIN, 'How is Contoso?');
+    expect(fakes.readRun).not.toHaveBeenCalled();
+    rpc.mockRestore();
+    logged.mockRestore();
+  });
+
+  it("doesn't start a chat on a brand the person may not use, nor go on with one they lost", async () => {
+    useModels([READY], [text('Fine.')]);
+    const before = await engine.startChatRun(ANALYST, { message: 'Hi', brandId: BRAND });
+    if (!before.ok) throw new Error('not started');
+    await engine.driveRun(ANALYST, before.runId);
+
+    narrow(SECOND);
+    expect(
+      await engine.startChatRun(ANALYST, { message: 'Hi', brandId: BRAND, mode: 'auto' }),
+    ).toMatchObject({ ok: false, status: 404, code: 'not_found' });
+    // Their own chat about it is hidden, and kept (§9 Q4).
+    expect(
+      await engine.startChatRun(ANALYST, {
+        message: 'And now?',
+        conversationId: before.conversationId,
+      }),
+    ).toMatchObject({ ok: false, status: 404, code: 'not_found' });
+    expect(db.tables.chat_conversations.find((c) => c.id === before.conversationId)).toBeTruthy();
+
+    // A brand shared with them works as before.
+    useModels([READY], [text('Contoso is fine.')]);
+    expect(
+      await engine.startChatRun(ANALYST, { message: 'Hi', brandId: SECOND, mode: 'auto' }),
+    ).toMatchObject({ ok: true });
+  });
+
+  it("refuses a call on a brand that wasn't shared, as a brand not found, and notes nothing", async () => {
+    narrow(SECOND);
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('No access.')],
+    );
+    const started = await engine.startChatRun(ANALYST, { message: 'And Northwind?', mode: 'auto' });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ANALYST, started.runId);
+    expect(fakes.readRun).not.toHaveBeenCalled();
+    expect(touchedOf(started.conversationId)).toEqual([]);
   });
 });

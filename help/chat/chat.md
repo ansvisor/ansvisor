@@ -4,8 +4,8 @@ route: /dashboard/chat
 keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, for you now, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-02
+last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -25,7 +25,7 @@ Chat opens on **Home**: a greeting by name at your time of day, then a link to y
 
 Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.
 
-Next to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. Nothing is published or sent without your click, and every change is in the **Activity** log. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.
+Next to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is in the **Activity** log. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.
 
 Analysts and Agency partners only read: their box says **Read-only** with a link to what their role can do.
 

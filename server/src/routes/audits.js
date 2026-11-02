@@ -45,6 +45,7 @@ import {
   excludePatternMatcher,
   normalizeExcludePattern,
   opportunityKey,
+  siteCoverage,
 } from '../lib/audit/opportunities.js';
 import { AUTO_AUDIT } from '../lib/audit/auto-audit.js';
 import { rankOpportunities } from '../lib/audit/priority.js';
@@ -58,6 +59,7 @@ import { evaluateLlmSignals, LLM_SIGNAL_KEYS } from '../lib/audit/llm-signals.js
 import { lastPageVerdicts } from '../lib/audit/llm-verdicts.js';
 import { evaluateBrandEntity } from '../lib/audit/external-signals.js';
 import { brandFactsFor, generateRecommendations } from '../lib/audit/recommendations.js';
+import { readBrandRules } from '../lib/brand-rules-read.js';
 import { scoreAudit } from '../lib/audit/scorer.js';
 import { signalsByKey, TOTAL_SIGNALS, RUBRIC_VERSION } from '../lib/audit/rubric.js';
 
@@ -158,6 +160,25 @@ async function countIssues(auditIds) {
   return counts;
 }
 
+/**
+ * The brand as an audit run reads it: its name and description, and the
+ * sites it trusts (00449). A database without that column yet (the API
+ * deployed ahead of its migration) reads none trusted.
+ */
+async function readAuditBrand(brandId) {
+  const read = await supabaseAdmin
+    .from('brands')
+    .select('name, description, trusted_sources')
+    .eq('id', brandId)
+    .single();
+  const missing =
+    (read.error?.code === '42703' || read.error?.code === 'PGRST204') &&
+    (read.error.message ?? '').includes('trusted_sources');
+  return missing
+    ? supabaseAdmin.from('brands').select('name, description').eq('id', brandId).single()
+    : read;
+}
+
 /** site_audits/site_audit_usage.source for a run's audits; a user's are the column default. */
 const sourceColumn = (source) => (source === 'auto' ? { source } : {});
 
@@ -174,11 +195,13 @@ async function runAuditJob(auditId, brandId, url, orgId, source = 'user') {
     // page's own target topic from its content, so an arbitrary URL (a
     // competitor blog, any page) is never judged against this brand's topics.
     const [{ data: brandRow }, { data: domainRows }] = await Promise.all([
-      supabaseAdmin.from('brands').select('name, description').eq('id', brandId).single(),
+      readAuditBrand(brandId),
       supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brandId),
     ]);
 
     const ctx = await buildAuditContext(url);
+    // The sites the brand trusts count as authority links (00449).
+    ctx.trustedSources = brandRow?.trusted_sources ?? [];
 
     // Deterministic engine, the LLM pass, and the Wikidata lookup run
     // concurrently. The latter two degrade to 'na' internally on failure; a
@@ -212,6 +235,8 @@ async function runAuditJob(auditId, brandId, url, orgId, source = 'user') {
     const recommendations = await generateRecommendations(ctx, {
       results,
       brand: brandFactsFor(ctx.url, brandRow, domainRows),
+      // The brand's rules (00450) shape what's recommended on any page it audits.
+      rules: await readBrandRules(brandId),
       auditId,
     });
 
@@ -683,8 +708,8 @@ router.get('/trend', async (req, res) => {
 
 // GET /api/audits/pages?brandId=…&limit=50&offset=0 — one row per audited
 // page (repeat audits of a URL share it), most recently audited first, with
-// its latest score, the previous one, a status, its trend, its open issues
-// and its runs. `total` is the number of pages, for paging.
+// its latest score, the previous one, its first one, a status, its trend, its
+// open issues and its runs. `total` is the number of pages, for paging.
 // Registered before /:id so "pages" isn't matched as an audit id.
 router.get('/pages', async (req, res) => {
   const userId = req.user?.id;
@@ -953,6 +978,14 @@ export async function readOpportunityInbox(brandId) {
     excludePatterns,
     staleDays: ENGINE_THRESHOLDS.detection.auditMaxAgeDays,
   });
+  // How much of the site has a current audit, by the same rules (item 11).
+  const coverage = siteCoverage({
+    sitePages: sitePages.data ?? [],
+    auditPages,
+    prefs: prefs.data ?? [],
+    excludePatterns,
+    staleDays: ENGINE_THRESHOLDS.detection.auditMaxAgeDays,
+  });
   // Templates whose pages share gaps are rows too (SA-007, the mockup's
   // "/blog/* · 38 pages"), with their pages' AI visits added up.
   const shared = templates.filter((t) => t.sharedGaps.length > 0);
@@ -995,13 +1028,15 @@ export async function readOpportunityInbox(brandId) {
       new Set(shared.map((t) => t.template)),
     ),
     excluded,
+    coverage,
   };
 }
 
 // GET /api/audits/opportunities?brandId=… — the Opportunities inbox (SA-004):
 // the brand's pages worth auditing, each with why (Google Analytics pages
 // without AI traffic, pages never audited or audited long ago), pinned pages
-// first, plus the excluded pages to put back.
+// first, plus the excluded pages to put back, and how much of the site has a
+// current audit (coverage, item 11).
 // Registered before /:id so "opportunities" isn't matched as an audit id.
 router.get('/opportunities', async (req, res) => {
   const userId = req.user?.id;
@@ -1012,11 +1047,12 @@ router.get('/opportunities', async (req, res) => {
 
   try {
     await assertBrandAccess(brandId, userId);
-    const { opportunities, excluded } = await readOpportunityInbox(brandId);
+    const { opportunities, excluded, coverage } = await readOpportunityInbox(brandId);
     return res.json({
       success: true,
       opportunities,
       excluded,
+      coverage,
       staleDays: ENGINE_THRESHOLDS.detection.auditMaxAgeDays,
     });
   } catch (err) {
