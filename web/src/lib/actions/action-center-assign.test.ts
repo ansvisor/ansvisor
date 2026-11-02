@@ -20,6 +20,7 @@ vi.mock('@/lib/supabase/server', () => ({
         update: record('update'),
         insert: record('insert'),
         eq: () => chain,
+        not: () => chain,
         then: (resolve: (v: unknown) => void) => resolve({ data: null, error: null }),
       });
       return chain;
