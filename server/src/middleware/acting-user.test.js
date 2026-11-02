@@ -319,6 +319,17 @@ describe('the internal secret with a member to act for', () => {
     );
   });
 
+  it('reads a percent-encoded row id in the path as the route does', async () => {
+    const encoded = `%${OPP.charCodeAt(0).toString(16)}${OPP.slice(1)}`;
+    const call = { method: 'PATCH', path: `/content/${encoded}/status`, body: {} };
+    expectPassedAs(await run(call), MANAGER);
+    db.tables.content_opportunities[0].brand_id = OTHER_BRAND;
+    expectRefused(await run(call), 403, 'not_in_workspace');
+    // Not valid percent-encoding: refused, as Express refuses it.
+    const bad = { method: 'PATCH', path: '/content/%E0%A4%A/status', body: {} };
+    expectRefused(await run(bad), 400, 'invalid');
+  });
+
   it('answers 400 for more ids than a request may name', async () => {
     const ids = Array.from(
       { length: MAX_IDS + 1 },
