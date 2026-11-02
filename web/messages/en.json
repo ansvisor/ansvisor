@@ -3488,7 +3488,8 @@
     "webPage": { "name": "Open web pages", "step": "Open page" },
     "whyChange": { "name": "Explain why a number changed", "step": "Read why it changed" },
     "agents": { "name": "Create and run agents", "step": "Changed an agent" },
-    "scheduleJob": { "name": "Schedule work", "step": "Scheduled" }
+    "scheduleJob": { "name": "Schedule work", "step": "Scheduled" },
+    "followUpCheck": { "name": "Set follow-up checks", "step": "Set follow-up check" }
   },
   "agentic": {
     "avatar": {
@@ -4660,6 +4661,7 @@
         "fix": "Fix it",
         "scheduleFailed": "{title} didn’t run",
         "schedulePaused": "{title} is paused",
+        "followUpResult": "{title} · result",
         "open": "Open"
       },
       "lands": "Results from your agents land here.",
@@ -5388,6 +5390,8 @@
       "makeReportUndo": "Removed the report “{title}” from Reports",
       "startAudit": "Started Site Audit on {pages}",
       "scheduleJob": "Scheduled “{title}” · {when}",
+      "followUpCheck": "Set the follow-up check “{title}” for {date}",
+      "followUpCheckUndo": "Cancelled the follow-up check “{title}”",
       "scheduleJobUndo": "Deleted the schedule “{title}” (its past results stay)",
       "accessDenied": "Not allowed: {tool}",
       "agentCreated": "Created the agent “{name}”",
@@ -6296,6 +6300,30 @@
       "backToAgents": "Back to Agent Center",
       "loadFailed": "Couldn't load this agent.",
       "retry": "Retry"
+    }
+  },
+  "chatFollowUps": {
+    "card": {
+      "title": "Check",
+      "when": "Check in",
+      "day": "{day, plural, one {# day} other {# days}}",
+      "submit": "Set check",
+      "notNow": "Not now",
+      "noCost": "Scheduled tracking data · no extra cost",
+      "goesTo": "The result comes to this chat and your Inbox"
+    },
+    "step": {
+      "done": "Follow-up check set: {title}",
+      "detail": "{date} · Scheduled tracking data · no extra cost"
+    },
+    "job": {
+      "prompt": "Follow-up check: {title}",
+      "agentTitle": "Follow-up check: {title}"
+    },
+    "tool": {
+      "noTarget": "A follow-up check reads a page, an Action Center action or tracked prompts: name one.",
+      "role": "Only Admins and Managers can set follow-up checks.",
+      "notFound": "That page, action or prompt isn’t one of this brand’s, or the person can’t use the brand."
     }
   },
   "chatSchedules": {

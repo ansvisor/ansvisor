@@ -600,9 +600,25 @@ describe('keeping the agent run in step with its Chat run', () => {
   it('marks a run that shipped something Pending, and one that shipped nothing without an outcome', async () => {
     const shipped = queueRun();
     chatOf(shipped, 'done');
-    db.tables.ship_events.push({ id: 's1', agent_run_id: shipped });
+    db.tables.ship_events.push({
+      id: 's1',
+      agent_run_id: shipped,
+      brand_id: BRAND,
+      title: 'Refreshed /pricing',
+      shipped_at: NOW.toISOString(),
+    });
+    db.tables.chat_schedules = [];
     await driver.settleAgentRun(shipped, { now: NOW });
     expect(runRow(shipped).outcome).toBe('pending');
+    // Its follow-up check, its version's follow-up days on, as the person it acted as (W3-05).
+    expect(db.tables.chat_schedules).toEqual([
+      expect.objectContaining({
+        kind: 'followup_check',
+        agent_run_id: shipped,
+        created_via: 'full_auto',
+        target_json: { ship_event_ids: ['s1'] },
+      }),
+    ]);
 
     const nothing = queueRun({ brand_id: null });
     chatOf(nothing, 'done');

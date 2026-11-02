@@ -722,3 +722,20 @@ describe('delivering a run (W3-04a)', () => {
     ]);
   });
 });
+
+describe('follow-up checks (W3-05)', () => {
+  it('leaves follow-up checks to the server’s evaluator: never a Chat run, even when due', async () => {
+    seedJob({
+      kind: 'followup_check',
+      rrule: null,
+      due_at: SLOT,
+      metric: 'visibility',
+      target_json: { url: 'https://acme.example/pricing' },
+    });
+    const counts = await worker.fireDueJobs(NOW, driver);
+    expect(counts.due).toBe(0);
+    expect(runsOf()).toEqual([]);
+    expect(db.tables.chat_conversations).toEqual([]);
+    expect(jobRow().next_run_at).toBe(SLOT);
+  });
+});

@@ -96,6 +96,19 @@ vi.mock('@/lib/actions/chat-action-center', () => ({
   setTaskReadyForReview: vi.fn(),
   checkChatActionCover: vi.fn(),
 }));
+// Set check through the person's session (W3-05): here, as the run's person.
+vi.mock('@/lib/actions/chat-follow-ups', () => ({
+  setChatFollowUp: vi.fn(
+    async (
+      input: never,
+      place: { timezone: string; runId: string | null; via: 'card' | 'full_auto' },
+    ) => {
+      const { createFollowUpCheck } = await import('./schedule/followup');
+      const { ORG, PEOPLE } = await import('./testing/chat-fixtures');
+      return createFollowUpCheck({ userId: PEOPLE.admin, organizationId: ORG, ...place }, input);
+    },
+  ),
+}));
 // Create schedule through the person's session (W3-02): here, as the run's person.
 vi.mock('@/lib/actions/chat-schedules', () => ({
   createChatSchedule: vi.fn(
@@ -3497,6 +3510,8 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'run_site_audit',
     // W3-02's scheduled work: Admins and Managers, a card in every mode.
     'create_schedule',
+    // W3-05's follow-up checks: Admins and Managers, by themselves in Full auto.
+    'set_follow_up_check',
   ];
   const dismiss = toolCall('w1', 'update_opportunity', {
     opportunity_id: OPPORTUNITY,
@@ -5455,5 +5470,73 @@ describe('"Notify only if the answer changed" (W3-04a, CHAT-12 item 20)', () => 
     const second = await jobRun(progressOf(first).fingerprint!);
     expect(progressOf(second).unchanged).toBeUndefined();
     expect(sonnet.seen.length).toBeGreaterThan(0);
+  });
+});
+
+describe('follow-up checks (W3-05, CHAT-20 §13)', () => {
+  const setCheck = () =>
+    toolCall('w1', 'set_follow_up_check', {
+      brand_id: BRAND,
+      title: 'Citations check for /pricing',
+      days: 14,
+      target: { url: 'https://acme.example/pricing' },
+      metric: 'citations',
+    });
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    db.tables.chat_schedules = [];
+  });
+
+  it('asks with one click in Auto: Set check or Not now, and nothing before it', async () => {
+    useModels([READY], [calls(setCheck()), text('Set.')]);
+    const runId = await turn(ADMIN, 'Refresh done. Check it in two weeks', 'auto');
+    expect(runRow(runId).status).toBe('waiting');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    const confirm = ofType(events, 'confirm.required')[0].data;
+    expect(confirm.form).toMatchObject({
+      kind: 'followup',
+      submit: 'Set check',
+      cancel: 'Not now',
+    });
+    expect(confirm.form!.notes).toContain('Scheduled tracking data · no extra cost');
+    expect(db.tables.chat_schedules).toEqual([]);
+
+    const prepared = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: { title: 'Citations check for /pricing', days: '30' },
+    });
+    if (!prepared.ok) throw new Error(prepared.code);
+    await engine.driveRun(ADMIN, runId, prepared.resume);
+    expect(db.tables.chat_schedules).toEqual([
+      expect.objectContaining({
+        kind: 'followup_check',
+        created_via: 'card',
+        set_by_run_id: runId,
+      }),
+    ]);
+    expect(stepsOf(runId).at(-1)).toMatchObject({
+      kind: 'schedule',
+      status: 'done',
+      label: 'Follow-up check set: Citations check for /pricing',
+    });
+  });
+
+  it('sets it by itself in Full auto, logged with its Undo', async () => {
+    useModels([READY], [calls(setCheck()), text('Set a check.')]);
+    const runId = await turn(ADMIN, 'Refresh done. Check it in two weeks', 'full_auto');
+    expect(runRow(runId).status).toBe('done');
+    expect(ofType(await eventsOf(runId), 'confirm.required')).toEqual([]);
+    expect(db.tables.chat_schedules).toEqual([
+      expect.objectContaining({ kind: 'followup_check', created_via: 'full_auto' }),
+    ]);
+    expect(db.tables.chat_activity_log.at(-1)).toMatchObject({
+      tool_key: 'followUpCheck',
+      approval_kind: 'auto',
+      auto_via: 'full_auto',
+    });
   });
 });

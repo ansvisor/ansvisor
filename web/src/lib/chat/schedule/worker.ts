@@ -312,10 +312,12 @@ interface DueRun {
 async function readDueRuns(now: Date): Promise<DueRun[]> {
   const at = now.toISOString();
   const [byNext, byRetry] = await Promise.all([
+    // Follow-up checks aren't Chat runs: the server's evaluator reads them (W3-05).
     supabaseAdmin
       .from('chat_schedules')
       .select(JOB_COLUMNS)
       .eq('enabled', true)
+      .neq('kind', 'followup_check')
       .lte('next_run_at', at)
       .order('next_run_at', { ascending: true })
       .limit(TICK_ROWS),
@@ -323,6 +325,7 @@ async function readDueRuns(now: Date): Promise<DueRun[]> {
       .from('chat_schedules')
       .select(JOB_COLUMNS)
       .eq('enabled', true)
+      .neq('kind', 'followup_check')
       .lte('retry_at', at)
       .order('retry_at', { ascending: true })
       .limit(TICK_ROWS),

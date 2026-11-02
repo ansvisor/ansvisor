@@ -45,6 +45,7 @@ import {
 import { OPEN_RUN_STATUSES, loadRun, type LoadedRun } from './engine-store';
 import { chatAgenticEnabled } from './flag';
 import { openHeadlessRun } from './headless-run';
+import { openAgentFollowUps } from './schedule/followup';
 
 /**
  * The agent run driver (CHAT-21 §H, CHAT-27 §E; W2-16): runs a started
@@ -608,6 +609,8 @@ async function markShipped(agentRunId: string) {
     .update({ outcome: 'pending' })
     .eq('id', agentRunId)
     .is('outcome', null);
+  // Its follow-up check, its version's follow-up days on (W3-05, schedule/followup.ts).
+  await openAgentFollowUps(agentRunId);
 }
 
 /**

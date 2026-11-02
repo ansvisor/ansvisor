@@ -34,7 +34,8 @@ interface OwnKeyNotice {
  */
 export interface ScheduleNotice {
   id: string;
-  kind: 'schedule_failed' | 'schedule_paused';
+  /** followup_result: a follow-up check's result (W3-05), its outcome in `reason`. */
+  kind: 'schedule_failed' | 'schedule_paused' | 'followup_result';
   title: string;
   reason: string;
   /** Where Open goes: the job's chat, or Chat when it has none yet. */
@@ -43,7 +44,7 @@ export interface ScheduleNotice {
   read: boolean;
 }
 
-const SCHEDULE_KINDS = new Set(['schedule_failed', 'schedule_paused']);
+const SCHEDULE_KINDS = new Set(['schedule_failed', 'schedule_paused', 'followup_result']);
 
 /** A scheduled job's notice from its row; null for one that doesn't read. */
 function scheduleNotice(row: {

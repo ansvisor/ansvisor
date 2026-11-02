@@ -37,23 +37,42 @@ function NoticeRow({ notice }: { notice: ChatNotice }) {
 /** A scheduled job's notice (00461): "{Job} didn't run", or "{Job} is paused", why, and Open. */
 function ScheduleNoticeRow({ notice }: { notice: ScheduleNotice }) {
   const t = useTranslations('chatShell.inbox.notice');
+  // A follow-up check's result is news, not a problem: no amber.
+  const result = notice.kind === 'followup_result';
   return (
     <div
       data-slot="inbox-notice"
       data-kind={notice.kind}
       className={cn(
         INBOX_ROW,
-        'cursor-default border-amber-200 bg-amber-50/40 hover:translate-y-0 hover:shadow-[0_1px_2px_rgba(10,10,10,.04)] dark:border-amber-900 dark:bg-amber-950/20',
+        'cursor-default hover:translate-y-0 hover:shadow-[0_1px_2px_rgba(10,10,10,.04)]',
+        !result && 'border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/20',
       )}
     >
-      <span aria-hidden className="size-2 rounded-full bg-amber-600 dark:bg-amber-400" />
+      <span
+        aria-hidden
+        className={cn(
+          'size-2 rounded-full',
+          result ? 'bg-foreground/60' : 'bg-amber-600 dark:bg-amber-400',
+        )}
+      />
       <span className="min-w-0 text-[13.5px]">
         <span className={cn('block truncate', !notice.read && 'font-semibold')}>
-          {t(notice.kind === 'schedule_failed' ? 'scheduleFailed' : 'schedulePaused', {
-            title: notice.title,
-          })}
+          {t(
+            notice.kind === 'schedule_failed'
+              ? 'scheduleFailed'
+              : notice.kind === 'followup_result'
+                ? 'followUpResult'
+                : 'schedulePaused',
+            { title: notice.title },
+          )}
         </span>
-        <span className="block truncate text-xs text-amber-700 dark:text-amber-400">
+        <span
+          className={cn(
+            'block truncate text-xs',
+            result ? 'text-muted-foreground' : 'text-amber-700 dark:text-amber-400',
+          )}
+        >
           {notice.reason}
         </span>
       </span>
