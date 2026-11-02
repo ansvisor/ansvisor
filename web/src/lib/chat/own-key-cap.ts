@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '@/config/api';
 import { chatRunsOnOwnKey } from './key';
+import type { OwnKeyGuard } from './own-key-guard';
 
 /**
  * The key guard (AGENT-OWN-KEY §4.2): the most all agents may spend on the
@@ -63,6 +64,49 @@ export async function readOwnKeyCap(
     console.error('[chat/agents] the key guard got no answer:', (err as Error)?.name ?? err);
     return null;
   }
+}
+
+/**
+ * The guard with this period's spend, for the Admins' card (PR 9): always
+ * read fresh, and only by the settings route, which checks the caller is an
+ * Admin. Null when the server didn't answer.
+ */
+export async function readOwnKeyGuard(organizationId: string): Promise<OwnKeyGuard | null> {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    console.error('[chat/agents] CRON_SECRET must be configured for the key guard');
+    return null;
+  }
+  const query = new URLSearchParams({ orgId: organizationId });
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/internal/chat/budget/own-key?${query}`, {
+      headers: { Authorization: `Bearer ${secret}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(OWN_KEY_CAP_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => null)) as {
+      capUsd?: unknown;
+      usedUsd?: unknown;
+      renewsAt?: unknown;
+    } | null;
+    const capUsd = Number(body?.capUsd);
+    const usedUsd = Number(body?.usedUsd);
+    if (!Number.isFinite(capUsd) || !Number.isFinite(usedUsd)) return null;
+    return {
+      capUsd,
+      usedUsd,
+      renewsAt: typeof body?.renewsAt === 'string' ? body.renewsAt : null,
+    };
+  } catch (err) {
+    console.error('[chat/agents] the key guard got no answer:', (err as Error)?.name ?? err);
+    return null;
+  }
+}
+
+/** A guard changed on this server: its next read is fresh. */
+export function forgetOwnKeyCap(organizationId: string): void {
+  cache.delete(organizationId);
 }
 
 /**
