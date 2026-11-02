@@ -3968,7 +3968,8 @@ async function offerRemember(rc: RunContext): Promise<void> {
     conversationId: rc.run.conversationId,
     // A next move a tainted run wrote is the model's words, not the person's.
     question: rc.progress.fromTaintedMove ? '' : (rc.progress.question ?? ''),
-    flagged: rc.progress.remember ?? null,
+    // After a read of outside text the model's line may be that text's: only the person's words count.
+    flagged: rc.progress.tainted ? null : (rc.progress.remember ?? null),
     attended: !rc.agentRunId && !rc.scheduleId,
     handled:
       (rc.progress.writes.save_memory ?? 0) + (rc.progress.writes.forget_memory ?? 0) > 0 ||
