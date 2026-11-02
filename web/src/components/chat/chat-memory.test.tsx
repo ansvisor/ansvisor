@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import type { MemoryItemView, MemoryList } from '@/lib/chat/memory/store';
 
 /**
@@ -75,11 +76,16 @@ const fetchMock = vi.fn(async (url: string, init?: RequestInit) => answer(url, i
 async function settle() {
   await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 }
-async function render() {
+const openUpgrade = vi.fn();
+async function render({ isLocked = false } = {}) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <ChatMemory />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <ChatMemory />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -216,6 +222,29 @@ describe('Memory', () => {
     expect(container.querySelector('[data-slot="memory-personal-off"]')?.textContent).toBe(
       "Use memory is off, so Chat doesn't use your notes or save new ones.",
     );
+  });
+
+  it('lets a read-only workspace’s person delete their own Me line and turn Use memory off (KVKK/GDPR)', async () => {
+    list = listOf({
+      items: {
+        ...listOf().items,
+        user: [item('m2', { can: { edit: false, remove: true } })],
+        brand: [item('b1', { scope: 'brand', can: { edit: false, remove: false } })],
+      },
+    });
+    openUpgrade.mockClear();
+    await render({ isLocked: true });
+    const [row] = rows();
+    expect((row.querySelector('[data-action="memory.edit"]') as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    await click(row.querySelector<HTMLElement>('[data-action="memory.delete"]')!);
+    expect(
+      fetchMock.mock.calls.some(([u, i]) => u === '/api/chat/memory/m2' && i?.method === 'DELETE'),
+    ).toBe(true);
+    await click(container.querySelector<HTMLElement>('[data-action="memory.useMemory"]')!);
+    expect(fetchMock.mock.calls.some(([u]) => u === '/api/chat/memory/settings')).toBe(true);
+    expect(openUpgrade).not.toHaveBeenCalled();
   });
 
   it('hides the notes from all but Admins while the workspace switch is off', async () => {

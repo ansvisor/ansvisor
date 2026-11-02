@@ -43,7 +43,7 @@ The Brand tab also lists the brand's own rules from **Settings › Content**, re
 
 ## Turn memory off
 
-**Use memory**, at the top right of the Memory page, is your own switch: off, Chat doesn't use your notes or save new ones. An Admin can turn memory off for the whole workspace under **Settings › Chat**; then no one's notes are used, and only Admins see the Memory page's notes.
+**Use memory**, at the top right of the Memory page, is your own switch: off, Chat doesn't use your notes or save new ones. Even when your workspace is read-only, you can still turn it off and delete your own **Me** notes. An Admin can turn memory off for the whole workspace under **Settings › Chat**; then no one's notes are used, and only Admins see the Memory page's notes.
 
 ## What memory doesn't keep
 

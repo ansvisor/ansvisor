@@ -73,26 +73,27 @@ export function ChatMemory() {
 
   const list = load.status === 'ready' ? load.list : null;
 
-  /** Turns the person's own "Use memory" (item 24): shown at once, put back when it isn't kept. */
-  const setPersonal = guard(
-    async (next: boolean) => {
-      if (!list) return;
-      setLoad({
-        status: 'ready',
-        list: { ...list, switches: { ...list.switches, personal: next } },
-      });
-      const res = await fetch('/api/chat/memory/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personal: next }),
-      }).catch(() => null);
-      if (!res?.ok) {
-        toast.error(await refusalOf(res, t('failed')));
-        read();
-      }
-    },
-    { action: tActions('changeChatSettings') },
-  );
+  /**
+   * Turns the person's own "Use memory" (item 24): shown at once, put back
+   * when it isn't kept. Open on a read-only workspace too: the person's own
+   * data (KVKK/GDPR).
+   */
+  const setPersonal = async (next: boolean) => {
+    if (!list) return;
+    setLoad({
+      status: 'ready',
+      list: { ...list, switches: { ...list.switches, personal: next } },
+    });
+    const res = await fetch('/api/chat/memory/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ personal: next }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      toast.error(await refusalOf(res, t('failed')));
+      read();
+    }
+  };
 
   const save = guard(
     async () => {
@@ -131,38 +132,41 @@ export function ChatMemory() {
   );
 
   /** Deletes at once (item 23): the row goes, and Undo brings it back for 10 seconds. */
-  const remove = guard(
-    async (item: MemoryItemView) => {
-      if (busy) return;
-      setBusy(true);
-      const res = await fetch(`/api/chat/memory/${item.id}`, { method: 'DELETE' }).catch(
-        () => null,
-      );
-      setBusy(false);
-      if (!res?.ok) {
-        toast.error(await refusalOf(res, t('failed')));
-        return;
-      }
-      if (list) {
-        setLoad({
-          status: 'ready',
-          list: {
-            ...list,
-            items: {
-              ...list.items,
-              [item.scope]: list.items[item.scope].filter((i) => i.id !== item.id),
-            },
-            used: { ...list.used, [item.scope]: list.used[item.scope] - item.text.length },
+  const removeNow = async (item: MemoryItemView) => {
+    if (busy) return;
+    setBusy(true);
+    const res = await fetch(`/api/chat/memory/${item.id}`, { method: 'DELETE' }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) {
+      toast.error(await refusalOf(res, t('failed')));
+      return;
+    }
+    if (list) {
+      setLoad({
+        status: 'ready',
+        list: {
+          ...list,
+          items: {
+            ...list.items,
+            [item.scope]: list.items[item.scope].filter((i) => i.id !== item.id),
           },
-        });
-      }
-      toast(t('deleted'), {
-        duration: MEMORY_UNDO_MS,
-        action: { label: t('undo'), onClick: () => void restore(item) },
+          used: { ...list.used, [item.scope]: list.used[item.scope] - item.text.length },
+        },
       });
-    },
-    { action: tActions('changeChatSettings') },
-  );
+    }
+    toast(t('deleted'), {
+      duration: MEMORY_UNDO_MS,
+      action: { label: t('undo'), onClick: () => void restore(item) },
+    });
+  };
+  /**
+   * A person's own Me line is deleted on a read-only workspace too (their
+   * personal data, KVKK/GDPR); a Brand or Workspace line waits for a plan.
+   */
+  const remove = (item: MemoryItemView) =>
+    item.scope === 'user'
+      ? removeNow(item)
+      : guard(removeNow, { action: tActions('changeChatSettings') })(item);
 
   const tabLabel = (scope: MemoryScope) =>
     scope === 'brand'
