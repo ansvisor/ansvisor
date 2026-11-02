@@ -5,7 +5,7 @@ import { classifyLinks, jsonLd, countPhrases } from './signals/helpers.js';
 import { jsonLdPresence, h1Quality } from './signals/structure.js';
 import { https, metaDescription } from './signals/trust.js';
 import { length, readability } from './signals/content.js';
-import { fleschReadingEase, readingBlocks } from './signals/readability.js';
+import { readingBlocks, readingLevel } from './signals/readability.js';
 import { withRetry } from '../retry.js';
 
 /** Build a minimal audit context from an HTML string (no network). */
@@ -77,13 +77,26 @@ const FIXTURE = `<h1>How to brew pour-over coffee at home</h1>
 const frame = (main, links = 3) =>
   `<!doctype html><html><body><nav><ul>${'<li><a href="/x">Menu link</a></li>'.repeat(links)}</ul></nav><main><article>${main}</article></main><footer><ul>${'<li><a href="/y">Footer link</a></li>'.repeat(links)}</ul></footer></body></html>`;
 
+/** The fixture's reading level, as the editor reads it: its formula and score, then its parts. */
+const FIXTURE_READ = {
+  language: 'en',
+  formula: 'flesch',
+  readingScore: 82,
+  wordsPerSentence: 10.2,
+  syllablesPerWord: 1.4,
+  lettersPerWord: 4.4,
+  wordsPerParagraph: 34,
+  mobileLinesPerParagraph: 5,
+};
+
 describe('readability (as the editor reads it)', () => {
   it('scores the page the editor’s test reads, as the editor does', () => {
-    expect(Math.round(fleschReadingEase(readingBlocks(FIXTURE)))).toBe(82);
+    expect(Math.round(readingLevel(readingBlocks(FIXTURE), 'en').score)).toBe(82);
+    // Over 70 reads simpler than most readers want: a warning, never a fail.
     expect(readability.evaluate(ctxFromHtml(frame(FIXTURE)))).toEqual({
-      status: 'fail',
-      score: 0,
-      evidence: { fleschReadingEase: 82 },
+      status: 'warn',
+      score: 0.5,
+      evidence: FIXTURE_READ,
     });
   });
 
@@ -98,19 +111,38 @@ describe('readability (as the editor reads it)', () => {
 
   it('reads a page builder’s div text as the editor’s import does', () => {
     const divs = FIXTURE.replace(/<(\/?)p>/g, '<$1div>');
-    expect(readability.evaluate(ctxFromHtml(frame(divs))).evidence).toEqual({
-      fleschReadingEase: 82,
+    expect(readability.evaluate(ctxFromHtml(frame(divs))).evidence).toMatchObject({
+      readingScore: 82,
     });
   });
 
   it('reads no page past 2 MB once its scripts and styles are gone', () => {
     const big = frame(`${FIXTURE}<script>${'x'.repeat(3_000_000)}</script>`);
-    expect(readability.evaluate(ctxFromHtml(big)).evidence).toEqual({ fleschReadingEase: 82 });
+    expect(readability.evaluate(ctxFromHtml(big)).evidence).toEqual(FIXTURE_READ);
     const huge = frame(`${FIXTURE}<div>${'word '.repeat(450_000)}</div>`);
     expect(readability.evaluate(ctxFromHtml(huge))).toEqual({
       status: 'na',
       score: null,
       evidence: { reason: 'page too large to read' },
+    });
+  });
+
+  it('reads a page in its language: Ateşman for Turkish', () => {
+    const tr =
+      '<html lang="tr"><body><main><article><h1>Kapadokya gezimiz</h1>' +
+      "<p>Geçen bahar Kapadokya'yı üç günde gezdik. Yolculuğu iki ay önceden planladık. Uçak biletlerini erken aldık ve küçük bir taş otelde kaldık. İlk sabah erkenden kalktık. Balonları izlemek için tepeye çıktık. Gökyüzü yüzlerce renkli balonla doldu. O an çok mutlu olduk.</p>" +
+      '</article></main></body></html>';
+    expect(readability.evaluate(ctxFromHtml(tr))).toMatchObject({
+      status: 'pass',
+      evidence: { language: 'tr', formula: 'atesman' },
+    });
+  });
+
+  it('gives no score in a language written without spaces between words', () => {
+    const ja = `<html lang="ja"><body><main><article><p>${'小さなチームは、今月、成約できる商談を見て、売上を予測します。'.repeat(10)}</p></article></main></body></html>`;
+    expect(readability.evaluate(ctxFromHtml(ja))).toMatchObject({
+      status: 'na',
+      evidence: { language: 'ja' },
     });
   });
 });
