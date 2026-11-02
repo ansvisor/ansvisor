@@ -1,11 +1,11 @@
 ---
 title: Open an opportunity and act on it
 route: /dashboard/content
-keywords: [opportunity details, source data, why this score, another angle, mark as reviewed, dismiss opportunity, send to actions, new signal detected]
+keywords: [opportunity details, source data, why this score, another angle, mark as reviewed, dismiss opportunity, send to actions, new signal detected, write this]
 synonyms: [opportunity panel, opportunity page, act on an opportunity, follow an opportunity]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -35,7 +35,18 @@ An opportunity built for a group of prompts also shows:
 - **Send to Actions** makes the opportunity an action in the Action Center. The button then reads **Open in Actions**.
 - **Generate Brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief Generated**.
 - **Send to Editor** opens **New content** with the opportunity picked: a new page, or the page of yours it names to optimize. Once a draft is being written for it, the button reads **Open draft**. It's offered for owned opportunities that are still open.
+- **Write this**, beside it, has the Content Agent brief and write the page in one go. See below.
 - **Export** downloads the opportunity as CSV, Excel or Word.
+
+## Write this
+
+**Write this**, on the panel and in a row's **…** menu, takes an owned opportunity to a page to review in one go. First it says what will happen and about how much of your monthly AI usage it takes. Then:
+
+1. The Content Agent builds a brief from the opportunity's prompts, their fan-outs and the pages AI cites for them.
+2. It writes the page from the brief, by your rules and the page type's. For an opportunity on a page you have, it suggests changes to that page instead.
+3. The editor opens and shows the agent at work. You review the page there; nothing is published.
+
+You can stop it from the editor. If the brief can't be built, the agent writes from what there is.
 
 ## The … menu
 

@@ -643,8 +643,11 @@ const tenths = (n) => Math.round(n * 10) / 10;
  * `chatMetered`: Chat draws on the budget too (CHAT_AGENTIC on for the
  * workspace); off, it runs on the workspace's own key only, as the page says.
  * Steps on a workspace's own key never count (ai_usage_by_feature, 00405).
+ * `estimates` (ai-estimates.js aiEstimateCosts) are typical costs in USD of
+ * work a page asks about before it runs: each comes back as its share of the
+ * budget, to a tenth (Write this, customer priorities item 9).
  */
-export async function getAiUsage(orgId) {
+export async function getAiUsage(orgId, { estimates = {} } = {}) {
   const plan = await resolveOrgPlanByOrgId(orgId);
   const periodStart = await quotaPeriodStart(orgId);
   const base = {
@@ -668,6 +671,10 @@ export async function getAiUsage(orgId) {
   const spent = [...spentOn.values()].reduce((a, b) => a + b, 0);
   const scale = budget > 0 && spent > budget ? budget / spent : 1;
   const percentOf = (usd) => (budget > 0 ? tenths((usd * scale * 100) / budget) : 0);
+  const shares = Object.entries(estimates).map(([key, usd]) => [
+    key,
+    budget > 0 ? tenths((usd * 100) / budget) : 0,
+  ]);
   const features = Object.entries(AI_USAGE_FEATURES)
     .map(([feature, from]) => [feature, from.reduce((usd, f) => usd + (spentOn.get(f) ?? 0), 0)])
     .filter(([, usd]) => usd > 0)
@@ -684,6 +691,7 @@ export async function getAiUsage(orgId) {
     percentUsed:
       budget <= 0 || spent >= budget ? 100 : Math.min(99.9, tenths((spent * 100) / budget)),
     features,
+    ...(shares.length ? { estimates: Object.fromEntries(shares) } : {}),
   };
 }
 
