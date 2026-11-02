@@ -54,16 +54,39 @@ export function activeScheduleLimit(plan: PlanFacts): number | null {
   return plan.planId === 'growth' ? SCHEDULE_LIMITS.growth : SCHEDULE_LIMITS.starter;
 }
 
-/** The workspace's jobs that are on, follow-up checks left out (they don't count). */
-export async function countActiveSchedules(organizationId: string): Promise<number> {
-  const { count, error } = await supabaseAdmin
+/**
+ * The workspace's live jobs: on, with a run or a retry still to come. A
+ * one-time job that has run stays on with nothing due, and doesn't count;
+ * follow-up checks don't either.
+ */
+const liveSchedules = (organizationId: string, options?: { count: 'exact'; head: true }) =>
+  supabaseAdmin
     .from('chat_schedules')
-    .select('id', { count: 'exact', head: true })
+    .select('id', options)
     .eq('organization_id', organizationId)
     .eq('enabled', true)
-    .neq('kind', 'followup_check');
+    .neq('kind', 'followup_check')
+    .or('next_run_at.not.is.null,retry_at.not.is.null');
+
+/** How many of the workspace's jobs are live (above): what the plan's limit counts. */
+export async function countActiveSchedules(organizationId: string): Promise<number> {
+  const { count, error } = await liveSchedules(organizationId, { count: 'exact', head: true });
   if (error) throw new Error(`Could not count the scheduled jobs: ${error.message}`);
   return count ?? 0;
+}
+
+/**
+ * Whether a job just made fits the plan's limit: among the first `limit`
+ * live jobs, oldest first. Two made at once both see each other, and the
+ * later one is over.
+ */
+async function withinLimit(organizationId: string, id: string, limit: number): Promise<boolean> {
+  const { data, error } = await liveSchedules(organizationId)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(limit);
+  if (error) throw new Error(`Could not count the scheduled jobs: ${error.message}`);
+  return ((data ?? []) as { id: string }[]).some((row) => row.id === id);
 }
 
 /** Where a job's results go (CHAT-12 item 7): the card's Deliver to. */
@@ -152,7 +175,9 @@ export async function checkNewSchedule(
   maker: ScheduleMaker,
   input: NewSchedule,
   now: Date,
-): Promise<{ ok: true; when: ScheduleWhen; plan: PlanFacts } | ScheduleRefusal> {
+): Promise<
+  { ok: true; when: ScheduleWhen; plan: PlanFacts; limit: number | null } | ScheduleRefusal
+> {
   const zone = zoneOf(maker.timezone);
   const reading = readWhen(input.when, { now, timeZone: zone });
   if (!reading.ok) return whenRefusal(input.when, reading, zone, now);
@@ -176,7 +201,7 @@ export async function checkNewSchedule(
     const count = await countActiveSchedules(maker.organizationId);
     if (count >= limit) return refuse('quota_exceeded', t('tool.limit', { limit, count }));
   }
-  return { ok: true, when: reading.when, plan: ctx.plan };
+  return { ok: true, when: reading.when, plan: ctx.plan, limit };
 }
 
 /** A job once made, for the model and the step. */
@@ -242,15 +267,25 @@ export async function createSchedule(
       created_via: 'card',
       set_by_run_id: maker.runId ?? null,
       enabled: true,
+      // Its place in the plan's limit when two are made at once (withinLimit).
+      created_at: now.toISOString(),
     })
     .select('id')
     .single();
   if (error || !data) {
     throw new Error(`Could not make the scheduled job: ${error?.message ?? 'no row'}`);
   }
+  const id = (data as { id: string }).id;
+  // Counted again with it in: another made at the same time may have taken the last room.
+  if (checked.limit !== null && !(await withinLimit(maker.organizationId, id, checked.limit))) {
+    const { error: undone } = await supabaseAdmin.from('chat_schedules').delete().eq('id', id);
+    if (undone) throw new Error(`Could not undo the scheduled job: ${undone.message}`);
+    const count = await countActiveSchedules(maker.organizationId);
+    return refuse('quota_exceeded', t('tool.limit', { limit: checked.limit, count }));
+  }
   return {
     ok: true,
-    schedule_id: (data as { id: string }).id,
+    schedule_id: id,
     title: input.title.trim(),
     when: whenWords(when, zone, now, whenT, { withZone: true }),
     next_run_at: next,
