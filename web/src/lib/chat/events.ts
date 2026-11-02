@@ -174,8 +174,11 @@ export interface ChatFormField {
   value: string | boolean;
   /** The longest text it takes. */
   maxLength?: number;
-  /** A choice's options, in order. */
-  options?: { value: string; label: string }[];
+  /**
+   * A choice's options, in order; `disabled`: shown, but not the person's to
+   * pick (a memory's scope their role doesn't change, W3-12a).
+   */
+  options?: { value: string; label: string; disabled?: boolean }[];
   /** The line under it: "Every Monday, 09:00 · Europe/Istanbul · Next: Mon 9 Nov, 09:00". */
   hint?: string;
   /** A text that can't be left empty. */

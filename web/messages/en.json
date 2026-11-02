@@ -6361,7 +6361,14 @@
       "workspace": "Workspace"
     },
     "card": {
-      "replaces": "Replaces: {text}"
+      "text": "Memory",
+      "scope": "Save to",
+      "save": "Save",
+      "replaces": "Replaces: “{text}”",
+      "replaceHint": "Untick to keep both.",
+      "managerHint": "A Workspace note goes to your Admins to approve first.",
+      "counter": "{count} of {max} characters",
+      "sent": "Sent to your Admins"
     }
   },
   "chatSchedules": {

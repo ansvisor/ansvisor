@@ -106,6 +106,26 @@ vi.mock('@/lib/actions/chat-schedules', () => ({
     },
   ),
 }));
+// Remember and Forget through the person's session (W3-12a): here, as the run's person.
+vi.mock('@/lib/actions/chat-memory', () => ({
+  saveChatMemory: vi.fn(async (input: Record<string, string>) => {
+    const store = await import('./memory/store');
+    const { ORG, PEOPLE } = await import('./testing/chat-fixtures');
+    const viewer = await store.readMemoryViewer({ userId: PEOPLE.admin, organizationId: ORG });
+    const saved = await store.saveMemory(
+      viewer!,
+      {
+        scope: input.scope,
+        text: input.text,
+        brandId: input.brand_id ?? null,
+        replaces: input.replaces ?? null,
+      },
+      'chat',
+    );
+    return saved.ok ? saved.value : store.saidRefusal(saved.refusal);
+  }),
+  forgetChatMemory: vi.fn(),
+}));
 // The schedule card's use line (W3-02): no server to ask in a test.
 vi.mock('./schedule/estimate', () => ({
   readRunEstimate: vi.fn(async () => ({ kind: 'share', share: 0.02 })),
@@ -5597,6 +5617,71 @@ describe('memory (W3-11, CHAT-14 items 2, 14–17, 24)', () => {
       target: '“Write in US English” · Me',
       canDontAskAgain: false,
     });
+    expect(db.tables.chat_memory_items).toEqual([]);
+  });
+
+  it('saves the Remember card as it was edited, and names the scope under its step (W3-12a)', async () => {
+    seedLine({ text: 'Write in UK English' });
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'save_memory', {
+            scope: 'user',
+            text: 'Write in US English',
+            brand_id: BRAND,
+            replaces: 'dddddddd-0000-4000-8000-' + String(lines).padStart(12, '0'),
+          }),
+        ),
+        text('Saved.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Remember that we write in US English now');
+    const confirm = ofType(await eventsOf(runId), 'confirm.required')[0].data;
+    expect(confirm.form).toMatchObject({ kind: 'memory', submit: 'Save' });
+    expect(confirm.form!.fields.map((f) => f.name)).toEqual(['text', 'scope', 'replace']);
+    expect(db.tables.chat_memory_items).toHaveLength(1);
+
+    const prepared = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: { text: 'Blog posts use US English', scope: 'brand', replace: true },
+    });
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+    await engine.driveRun(ADMIN, runId, prepared.resume);
+    expect(db.tables.chat_memory_items.map((row) => [row.scope, row.text])).toEqual([
+      ['user', 'Write in UK English'],
+      ['brand', 'Blog posts use US English'],
+    ]);
+    expect(stepsOf(runId).find((s) => s.kind === 'write')).toMatchObject({
+      status: 'done',
+      label: 'Saved to memory',
+      detail: 'Brand: Northwind',
+    });
+  });
+
+  it('keeps the Remember card open when its edit is one memory can’t keep', async () => {
+    useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'save_memory', { scope: 'user', text: 'Write in US English' })),
+        text('Ok.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Remember that we write in US English');
+    const confirm = ofType(await eventsOf(runId), 'confirm.required')[0].data;
+    const refused = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: { text: 'Email me at a@b.example', scope: 'user' },
+    });
+    expect(refused).toMatchObject({
+      ok: false,
+      status: 400,
+      message: "I can't save that. Memory doesn't keep secrets or personal details.",
+    });
+    expect(runRow(runId).status).toBe('waiting');
     expect(db.tables.chat_memory_items).toEqual([]);
   });
 
