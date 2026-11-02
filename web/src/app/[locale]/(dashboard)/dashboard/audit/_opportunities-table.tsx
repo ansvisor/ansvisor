@@ -168,7 +168,8 @@ function ExcludedList({
 /**
  * The Opportunities inbox (SA-004): the brand's pages worth auditing, each
  * with why, pinned pages first. Pages not being audited can be selected for
- * the bulk bar (`toolbar`): Audit selected, Pin, Exclude. Without
+ * the bulk bar (`toolbar`): Audit selected, Pin, Exclude; `filters` sit
+ * above it. Without
  * `onRestore` (a member who can't change them), excluded pages list without
  * Restore.
  */
@@ -179,6 +180,7 @@ export function OpportunitiesTable({
   selected,
   onSelect,
   onRestore,
+  filters,
   toolbar,
 }: {
   opportunities: AuditOpportunity[];
@@ -187,6 +189,8 @@ export function OpportunitiesTable({
   selected: Set<string>;
   onSelect: (keys: string[], on: boolean) => void;
   onRestore?: (urls: string[]) => void;
+  /** Above the list, over the bulk bar: its filters (customer priorities item 11). */
+  filters?: ReactNode;
   toolbar?: ReactNode;
 }) {
   const t = useTranslations('audit.opportunities');
@@ -204,6 +208,7 @@ export function OpportunitiesTable({
           </p>
         ) : (
           <>
+            {filters}
             {toolbar}
             <Table>
               <TableHeader>

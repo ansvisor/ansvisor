@@ -51,22 +51,39 @@ vi.mock('./_bulk-bar', () => ({
   AuditBulkBar: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   ExportMenu: () => null,
 }));
-vi.mock('./_overview-cards', () => ({ AuditOverviewCards: () => null }));
+// The cards: what the page hands Pages audited (customer priorities item 11).
+const cards = vi.hoisted(() => ({
+  props: null as null | { coverage?: unknown; onShowNotAudited?: () => void },
+}));
+vi.mock('./_overview-cards', () => ({
+  AuditOverviewCards: (props: { coverage?: unknown; onShowNotAudited?: () => void }) => {
+    cards.props = props;
+    return null;
+  },
+}));
 // The inbox: what the page hands it, and its bulk bar.
 const inbox = vi.hoisted(() => ({
   props: null as null | {
+    opportunities: { path: string }[];
     onSelect: (keys: string[], on: boolean) => void;
     onRestore?: (urls: string[]) => void;
   },
 }));
 vi.mock('./_opportunities-table', () => ({
   OpportunitiesTable: (props: {
+    opportunities: { path: string }[];
     onSelect: (keys: string[], on: boolean) => void;
     onRestore?: (urls: string[]) => void;
+    filters?: ReactNode;
     toolbar?: ReactNode;
   }) => {
     inbox.props = props;
-    return <div>{props.toolbar}</div>;
+    return (
+      <div>
+        {props.filters}
+        {props.toolbar}
+      </div>
+    );
   },
   opportunityAuditUrls: () => [],
 }));
@@ -245,6 +262,52 @@ describe('SiteAuditPage Opportunities', () => {
   };
   const named = (name: string) =>
     [...container.querySelectorAll('button')].find((b) => b.textContent === name);
+
+  it('opens the pages without a current audit from Pages audited, filtered (customer priorities item 11)', async () => {
+    const coverage = { pages: 2, audited: 1, never: 1, stale: 0 };
+    const notAudited = {
+      ...page,
+      key: 'acme.com/new',
+      url: 'https://acme.com/new',
+      path: '/new',
+      reasons: [{ type: 'never_audited' }],
+    };
+    audits.getAuditHub.mockResolvedValue({
+      pages: { pages: [], total: 1, primaryHost: 'acme.com' },
+      quota: { used: 0, limit: 10, remaining: 10 },
+      trend: null,
+      overview: {
+        primaryHost: 'acme.com',
+        pages: 1,
+        otherPages: 0,
+        siteScore: 0.6,
+        siteScoreChange: null,
+        authority: null,
+        eeat: null,
+        lowestCategory: null,
+        gaps: [],
+      },
+    });
+    audits.getAuditHubExtras.mockResolvedValue({
+      opportunities: { opportunities: [page, notAudited], excluded: [], staleDays: 90, coverage },
+      latestRun: null,
+    });
+    // jsdom scrolls nothing; the list is scrolled to.
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    await render(false);
+    expect(cards.props!.coverage).toEqual(coverage);
+    expect(inbox.props!.opportunities.map((o) => o.path)).toEqual(['/pricing', '/new']);
+    await act(async () => cards.props!.onShowNotAudited!());
+    expect(inbox.props!.opportunities.map((o) => o.path)).toEqual(['/new']);
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(container.querySelector('[role=radio][aria-checked=true]')!.textContent).toBe(
+      'Not audited1',
+    );
+    // All again, from its chip.
+    await act(async () => (container.querySelector('[role=radio]') as HTMLElement).click());
+    expect(inbox.props!.opportunities).toHaveLength(2);
+  });
 
   it('lets admins and managers pin, exclude and restore pages', async () => {
     await selectPage();
