@@ -1,11 +1,13 @@
 'use server';
 
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { assertWritable } from '@/lib/subscription-guard';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
-import { z } from 'zod';
 import { readPrecedenceContext } from '@/lib/chat/precedence-context';
+import { newSchedule, scheduleInputSchema } from '@/lib/chat/schedule/input';
+import { contentUuid } from '@/lib/mcp/content-schemas';
 import {
   deleteSchedule,
   setScheduleOn,
@@ -61,19 +63,45 @@ async function member(): Promise<{ userId: string; organizationId: string } | nu
   return { userId: user.id, organizationId };
 }
 
+/** Where the card was: the run's clock and the run. */
+const placeSchema = z.object({
+  timezone: z.string().max(100),
+  runId: contentUuid.nullable(),
+});
+
 /**
  * Makes a scheduled job from its card's click: the job as the card had it,
  * read on the person's clock (`timezone`, the run's), named with the run
- * whose card made it.
+ * whose card made it. Read again with the create_schedule tool's schema: a
+ * server action can be called with anything.
  */
 export async function createChatSchedule(
   input: NewSchedule,
   place: { timezone: string; runId: string | null },
 ): Promise<MadeSchedule | ScheduleRefusal> {
-  await assertWritable({ brandId: input.brandId });
+  const raw = (input && typeof input === 'object' ? input : {}) as Partial<NewSchedule>;
+  const parsed = scheduleInputSchema.safeParse({
+    brand_id: raw.brandId ?? undefined,
+    title: raw.title,
+    when: raw.when,
+    prompt: raw.prompt,
+    skill: raw.skill,
+    deliver_to: raw.deliver,
+    change_only: raw.changeOnly,
+  });
+  const where = placeSchema.safeParse(place);
+  if (!parsed.success || !where.success) {
+    return {
+      ok: false,
+      reason: 'invalid',
+      message: (parsed.error ?? where.error)?.issues[0]?.message ?? 'Invalid input.',
+    };
+  }
+  const job = newSchedule(parsed.data);
+  await assertWritable({ brandId: job.brandId });
   const who = await member();
   if (!who) return { ok: false, reason: 'forbidden_role', message: 'Chat is off.' };
-  return createSchedule({ ...who, timezone: place.timezone, runId: place.runId }, input);
+  return createSchedule({ ...who, ...where.data }, job);
 }
 
 /** The reader the Scheduled page reads and changes as: role, plan and brands, read now. */
