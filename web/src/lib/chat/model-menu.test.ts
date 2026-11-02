@@ -1,6 +1,13 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AUTO_MODEL, OFFERED_MODELS, isCatalogId, isChatModelChoice, offeredModel } from './models';
+import {
+  AUTO_MODEL,
+  CHAT_MODELS,
+  OFFERED_MODELS,
+  isCatalogId,
+  isChatModelChoice,
+  offeredModel,
+} from './models';
 import { readModelMenu } from './model-menu';
 
 /** The model menu for the browser (W4-01): labels from the API server, no price, a fallback. */
@@ -32,14 +39,17 @@ const answer = (body: unknown, status = 200) =>
   fetchMock.mockResolvedValue(new Response(JSON.stringify(body), { status }));
 
 describe('the offered models', () => {
-  it('are Claude’s three at launch, each with its catalog and API id', () => {
+  it('are the tested ones only: Haiku and Sonnet 5.5 at launch, Opus 5.5 hidden until tested', () => {
     expect(OFFERED_MODELS.map((m) => [m.id, m.api])).toEqual([
       ['anthropic/claude-haiku-5.5', 'claude-haiku-5-5'],
       ['anthropic/claude-sonnet-5.5', 'claude-sonnet-5-5'],
-      ['anthropic/claude-opus-5.5', 'claude-opus-5-5'],
     ]);
+    expect(CHAT_MODELS.find((m) => m.id === 'anthropic/claude-opus-5.5')?.tested).toBe(false);
+    expect(OFFERED_MODELS.every((m) => m.tested)).toBe(true);
     expect(isChatModelChoice(AUTO_MODEL)).toBe(true);
-    expect(isChatModelChoice('anthropic/claude-opus-5.5')).toBe(true);
+    expect(isChatModelChoice('anthropic/claude-sonnet-5.5')).toBe(true);
+    expect(isChatModelChoice('anthropic/claude-opus-5.5')).toBe(false);
+    expect(offeredModel('anthropic/claude-opus-5.5')).toBeNull();
     expect(isChatModelChoice('openai/gpt-6.1-sol')).toBe(false);
     expect(isChatModelChoice(undefined)).toBe(false);
     expect(offeredModel('auto')).toBeNull();
@@ -49,7 +59,7 @@ describe('the offered models', () => {
 });
 
 describe('readModelMenu', () => {
-  it('asks the API server for the offered models with its secret, and adds Your key', async () => {
+  it('asks the API server for the tested models only, with its secret, and adds Your key', async () => {
     answer({
       success: true,
       models: [
@@ -64,14 +74,15 @@ describe('readModelMenu', () => {
     const menu = await readModelMenu({ ownKeyProvider: 'anthropic' });
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain(
-      '/api/internal/chat/models?ids=anthropic%2Fclaude-haiku-5.5%2Canthropic%2Fclaude-sonnet-5.5%2Canthropic%2Fclaude-opus-5.5',
+      '/api/internal/chat/models?ids=anthropic%2Fclaude-haiku-5.5%2Canthropic%2Fclaude-sonnet-5.5',
     );
+    expect(String(url)).not.toContain('opus');
     expect(init.headers).toEqual({ Authorization: 'Bearer shh' });
     expect(menu.auto).toEqual({ id: 'auto', multiplier: '1x', tone: 'normal' });
+    // A model not tested stays out, even when the server answers for it.
     expect(menu.models.map((m) => [m.id, m.multiplier, m.tone, m.yourKey])).toEqual([
       ['anthropic/claude-haiku-5.5', '0.1x', 'low', true],
       ['anthropic/claude-sonnet-5.5', '2.3x', 'normal', true],
-      ['anthropic/claude-opus-5.5', '4.7x', 'high', true],
     ]);
     expect(menu.catalogCount).toBe(312);
     expect(menu.updatedAt).toBe('2026-11-02T05:17:00.000Z');
@@ -81,25 +92,30 @@ describe('readModelMenu', () => {
   it('leaves out a model the catalog dropped, and says when the chat’s model was dropped', async () => {
     answer({
       models: [serverModel('anthropic/claude-haiku-5.5', '0.1x', 'low')],
-      selected: { ...serverModel('anthropic/claude-opus-5.5', '4.7x', 'high'), removed: true },
+      selected: { ...serverModel('anthropic/claude-sonnet-5.5', '2.3x', 'normal'), removed: true },
       catalogCount: 300,
       updatedAt: null,
     });
-    const menu = await readModelMenu({ selected: 'anthropic/claude-opus-5.5' });
-    expect(String(fetchMock.mock.calls[0][0])).toContain('selected=anthropic%2Fclaude-opus-5.5');
+    const menu = await readModelMenu({ selected: 'anthropic/claude-sonnet-5.5' });
+    expect(String(fetchMock.mock.calls[0][0])).toContain('selected=anthropic%2Fclaude-sonnet-5.5');
     expect(menu.models.map((m) => m.id)).toEqual(['anthropic/claude-haiku-5.5']);
     expect(menu.models[0].yourKey).toBe(false);
-    expect(menu.selected).toEqual({ id: 'anthropic/claude-opus-5.5', removed: true });
+    expect(menu.selected).toEqual({ id: 'anthropic/claude-sonnet-5.5', removed: true });
   });
 
-  it('counts a model no longer offered as removed, and Auto as no selection', async () => {
+  it('counts a model no longer offered, or not tested yet, as removed, and Auto as no selection', async () => {
     answer({ models: [], catalogCount: 0, updatedAt: null });
+    // A chat that picked Opus 5.5 before it was hidden: it runs Auto now.
+    expect((await readModelMenu({ selected: 'anthropic/claude-opus-5.5' })).selected).toEqual({
+      id: 'anthropic/claude-opus-5.5',
+      removed: true,
+    });
     expect((await readModelMenu({ selected: 'openai/gpt-6.1-sol' })).selected).toEqual({
       id: 'openai/gpt-6.1-sol',
       removed: true,
     });
     expect((await readModelMenu({ selected: 'auto' })).selected).toBeNull();
-    expect(String(fetchMock.mock.calls[1][0])).not.toContain('selected=');
+    expect(String(fetchMock.mock.calls[2][0])).not.toContain('selected=');
   });
 
   it('still lists the offered models, unlabelled, when the API server doesn’t answer', async () => {
@@ -109,10 +125,10 @@ describe('readModelMenu', () => {
       OFFERED_MODELS.map((m) => [m.id, null, null]),
     );
     answer({}, 502);
-    expect((await readModelMenu()).models).toHaveLength(3);
+    expect((await readModelMenu()).models).toHaveLength(2);
     vi.stubEnv('CRON_SECRET', '');
     fetchMock.mockReset();
-    expect((await readModelMenu()).models).toHaveLength(3);
+    expect((await readModelMenu()).models).toHaveLength(2);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
