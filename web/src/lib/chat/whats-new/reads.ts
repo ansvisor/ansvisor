@@ -59,8 +59,11 @@ export interface PickOptions {
   days?: number;
   /** The entry the person named ("What's new: how can {feature} help me?"): first. */
   feature?: string;
-  /** Only entries from before this day (YYYY-MM-DD): the older ones. */
-  olderThan?: string;
+  /**
+   * Entries already shown, by feature or slug: left out, so "Show older
+   * updates" reads the next ones in the same order until none are left.
+   */
+  shown?: readonly string[];
   limit?: number;
   entries?: readonly WhatsNewEntry[];
 }
@@ -79,11 +82,13 @@ export function pickWhatsNew(options: PickOptions): WhatsNewPick {
     (entry) => !read.has(entry.slug) && daysSince(entry, now) <= UNREAD_DAYS,
   );
   const named = options.feature?.trim() ?? '';
+  const seen = new Set((options.shown ?? []).map((name) => name.trim().toLowerCase()));
   const candidates = shown.filter(
     (entry) =>
       (!options.unreadOnly || !read.has(entry.slug)) &&
       (options.days === undefined || daysSince(entry, now) <= options.days) &&
-      (!options.olderThan || entry.published < options.olderThan),
+      !seen.has(entry.slug) &&
+      !seen.has(entry.feature.toLowerCase()),
   );
   const rank = (entry: WhatsNewEntry) =>
     (named && matchesFeature(entry, named) ? 0 : 2) + (read.has(entry.slug) ? 1 : 0);
@@ -102,8 +107,7 @@ export function pickWhatsNew(options: PickOptions): WhatsNewPick {
       read: read.has(entry.slug),
     }),
   );
-  const taken = new Set(items.map((item) => item.slug));
-  return { items, hasUnread, more: shown.some((entry) => !taken.has(entry.slug)) };
+  return { items, hasUnread, more: ordered.length > items.length };
 }
 
 /** The slugs a person has read. A read that fails counts nothing read: the worst is a line shown again. */

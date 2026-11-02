@@ -59,7 +59,7 @@ describe('getWhatsNewFor', () => {
       userId: 'u1',
       organizationId: 'org-1',
       feature: 'Agent Center',
-      olderThan: undefined,
+      shown: undefined,
       limit: 3,
     });
     expect(read).toMatchObject({

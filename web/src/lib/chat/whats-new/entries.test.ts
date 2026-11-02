@@ -85,6 +85,13 @@ describe('entries.json', () => {
     expect(files.flatMap((file) => entryProblems(file, pageExists))).toEqual([]);
     const slugs = files.map((file) => file.slug);
     expect(new Set(slugs).size).toBe(slugs.length);
+    // Chat pages "Show older updates" by the features already shown.
+    const features = files.map((file) =>
+      String(file.meta.feature ?? '')
+        .trim()
+        .toLowerCase(),
+    );
+    expect(new Set(features).size).toBe(features.length);
   });
 });
 
