@@ -88,7 +88,7 @@ export class DeliveryError extends Error {
    *   'webflow_refused'|'webflow_not_ready'|'wordpress_not_configured'|'no_wordpress'|
    *   'wordpress_refused'|'framer_not_configured'|'no_framer'|'framer_refused'|
    *   'framer_not_ready'|'wix_not_configured'|'no_wix'|'wix_refused'|'in_progress'|
-   *   'not_found'|'daily_limit'} code
+   *   'not_found'|'daily_limit'|'framer_site_publish'|'live_item'|'publish_refused'} code
    */
   constructor(code, message, status) {
     super(message);
@@ -372,6 +372,17 @@ const NATIVE = {
   wix: { label: 'Wix', connect: wixFor, send: sendToWix },
 };
 
+/**
+ * The brand's connection to a CMS a page goes to itself, as a send reads it
+ * (lib/cms-publish.js publishes on it). DeliveryError when it isn't set up,
+ * connected or working.
+ */
+export function cmsConnectionFor(brandId, target) {
+  const native = NATIVE[target];
+  if (!native) throw new DeliveryError('not_found', 'This CMS isn’t one a page is sent to.', 404);
+  return native.connect(brandId);
+}
+
 async function brandFor(brandId) {
   const [{ data: brand }, { data: domains }] = await Promise.all([
     supabaseAdmin
@@ -585,6 +596,9 @@ async function myRuleSets(orgId, siteType, drafts) {
  * them. One page is sent before this returns; more go on in the background,
  * so a CMS isn't sent 25 posts at once.
  *
+ * `agentRunId`: the agent run that sends on its own (00444), kept on each
+ * delivery; `userId` is then the person the run acts as.
+ *
  * @returns {Promise<{ batchId: string|null, deliveries: object[], skipped: number }>}
  *   deliveries: the sent one (one page) or the queued ones (more); skipped:
  *   pages past the day's cap
@@ -595,6 +609,7 @@ export async function sendContentPages({
   userId,
   pages: asked,
   target = 'webhook',
+  agentRunId = null,
 }) {
   // A page named twice goes once.
   const byId = new Map(asked.map((p) => [p.draftId, p]));
@@ -645,6 +660,20 @@ export async function sendContentPages({
       `This workspace has sent ${DAILY_DELIVERIES} pages in the last 24 hours. Try again later.`,
       429,
     );
+  }
+  if (agentRunId) {
+    // Before it goes: the Library and the ship event read who sent it from the row.
+    // Not kept, it still goes: its go-live step names the delivery too.
+    const { error: agentError } = await supabaseAdmin
+      .from('content_draft_deliveries')
+      .update({ agent_run_id: agentRunId })
+      .in(
+        'id',
+        rows.map((row) => row.id),
+      );
+    if (agentError) {
+      logger.warn({ err: agentError }, '[content-delivery] agent run not kept on the send');
+    }
   }
 
   // The reserved pages, in the order they go; their slug and meta stay on the draft.

@@ -133,6 +133,7 @@ export const DEMO_GUARDED = [
   // Content Editor (content-drafts.js): the draft's brand is in the body;
   // the draft itself is checked too.
   guard('POST /content-drafts/send', brandIn('body')),
+  guard('POST /content-drafts/publish-cms', brandIn('body')),
   guard('POST /content-drafts/:draftId/publish', rowIn('content_drafts', 'path', 'draftId')),
   guard('POST /content-drafts/webflow-status', brandIn('body')),
   guard('POST /content-drafts/wordpress-status', brandIn('body')),
@@ -229,6 +230,10 @@ export const DEMO_GUARDED = [
 
 /** The write routes left open on a demo brand, and why. */
 export const DEMO_OPEN = [
+  open(
+    'POST /content-drafts/:draftId/audit-estimate',
+    "Site Audit's estimate of a draft: its page checks are free and write nothing; its AI checks, which spend, refuse the demo brand in the route itself, so its sample drafts still get an estimate.",
+  ),
   open(
     'POST /billing/cancel-feedback',
     "The organization's own: why its plan is cancelled. Names no brand.",
@@ -355,6 +360,9 @@ export const MAX_IDS = 500;
 /** A request that names more than MAX_IDS ids. */
 export class TooManyIds extends Error {}
 
+/** A path param that isn't valid percent-encoding: Express refuses it with 400 too. */
+export class BadPathParam extends Error {}
+
 /** Brands remembered at most; the oldest goes first. */
 export const MAX_CACHED_BRANDS = 10_000;
 
@@ -429,7 +437,17 @@ export async function isDemoBrandRow(table, ids) {
 }
 
 function valueAt(req, match, { where, key }) {
-  if (where === 'path') return match.groups?.[key];
+  if (where === 'path') {
+    const raw = match.groups?.[key];
+    if (raw === undefined) return raw;
+    // Express hands the route its params decoded (%34a0… is 4a0…): read the
+    // id the route will act on, not the raw text.
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      throw new BadPathParam();
+    }
+  }
   if (where === 'body') return req.body?.[key];
   return req.query?.[key];
 }
@@ -470,6 +488,9 @@ export async function refuseDemoBrandWrites(req, res, next) {
       return res
         .status(400)
         .json({ success: false, error: 'invalid', message: `At most ${MAX_IDS} ids at once` });
+    }
+    if (err instanceof BadPathParam) {
+      return res.status(400).json({ success: false, error: 'invalid', message: 'Invalid path' });
     }
     (req.log ?? logger).error({ err }, 'demo brand check failed');
     return res.status(500).json({ message: 'Internal Error' });

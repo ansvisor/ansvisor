@@ -73,6 +73,9 @@ vi.mock('@/lib/chat/agent-runs', () => ({
     },
   })),
 }));
+vi.mock('@/lib/chat/agent-go-live-permission', () => ({
+  setAgentGoLive: vi.fn(async () => ({ ok: true, detail: null })),
+}));
 vi.mock('@/lib/chat/agent-action', () => ({
   compatibleAgents: vi.fn(async () => ({
     ok: true,
@@ -95,9 +98,11 @@ const takeOver = await import('./[id]/take-over/route');
 const run = await import('./[id]/run/route');
 const runsRoute = await import('./[id]/runs/route');
 const compatible = await import('./compatible/route');
+const goLive = await import('./[id]/go-live/route');
 const lib = await import('@/lib/chat/agents');
 const { runAgentNow, runAgentOnAction } = await import('@/lib/chat/agent-runs');
 const { compatibleAgents } = await import('@/lib/chat/agent-action');
+const { setAgentGoLive } = await import('@/lib/chat/agent-go-live-permission');
 
 const url = (path = '') => `https://app.example.com/api/chat/agents${path}`;
 const params = (id = AGENT) => ({ params: Promise.resolve({ id }) });
@@ -376,5 +381,73 @@ describe('/api/chat/agents/compatible (W2-17)', () => {
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ ok: false, code: 'forbidden_role' });
     expect(compatibleAgents).not.toHaveBeenCalled();
+  });
+});
+
+describe('/api/chat/agents/{id}/go-live (AUTONOMOUS-GO-LIVE §7.2)', () => {
+  const put = (body: unknown) => ({ method: 'PUT', body: JSON.stringify(body) });
+
+  it('gives a daily limit of 1 to 20, takes it away, and refuses anything else as a value', async () => {
+    const given = await goLive.PUT(
+      new Request(url(`/${AGENT}/go-live`), put({ dailyLimit: 7 })),
+      params(),
+    );
+    expect(await given.json()).toEqual({ ok: true, goLive: null });
+    expect(setAgentGoLive).toHaveBeenLastCalledWith(CTX, AGENT, 7);
+    const taken = await goLive.DELETE(
+      new Request(url(`/${AGENT}/go-live`), { method: 'DELETE' }),
+      params(),
+    );
+    expect(taken.status).toBe(200);
+    expect(setAgentGoLive).toHaveBeenLastCalledWith(CTX, AGENT, null);
+    vi.mocked(setAgentGoLive).mockClear();
+    for (const body of [
+      { dailyLimit: 0 },
+      { dailyLimit: 21 },
+      { dailyLimit: 2.5 },
+      {},
+      { dailyLimit: 5, version: 3 },
+    ]) {
+      const bad = await goLive.PUT(new Request(url(`/${AGENT}/go-live`), put(body)), params());
+      expect(bad.status, JSON.stringify(body)).toBe(400);
+    }
+    expect(
+      (await goLive.PUT(new Request(url('/x/go-live'), put({ dailyLimit: 5 })), params('x')))
+        .status,
+    ).toBe(404);
+    expect(setAgentGoLive).not.toHaveBeenCalled();
+  });
+
+  it('checks the plan first, and answers a refusal with its parts', async () => {
+    state.readOnly = true;
+    expect(
+      (await goLive.PUT(new Request(url(`/${AGENT}/go-live`), put({ dailyLimit: 5 })), params()))
+        .status,
+    ).toBe(402);
+    expect(setAgentGoLive).not.toHaveBeenCalled();
+    state.readOnly = false;
+    vi.mocked(setAgentGoLive).mockResolvedValueOnce(lib.refused('go_live_off'));
+    const res = await goLive.PUT(
+      new Request(url(`/${AGENT}/go-live`), put({ dailyLimit: 5 })),
+      params(),
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      code: 'go_live_off',
+      error: 'An Admin hasn’t allowed agents to publish on their own in Settings › Chat.',
+    });
+  });
+
+  it('reads it for whoever may see the agent, and 404 otherwise', async () => {
+    expect((await goLive.GET(new Request(url(`/${AGENT}/go-live`)), params())).status).toBe(404);
+    vi.mocked(lib.readAgent).mockResolvedValueOnce({
+      goLive: { switch: 'on', permission: null, recent: [] },
+    } as never);
+    const res = await goLive.GET(new Request(url(`/${AGENT}/go-live`)), params());
+    expect(await res.json()).toEqual({
+      ok: true,
+      goLive: { switch: 'on', permission: null, recent: [] },
+    });
   });
 });

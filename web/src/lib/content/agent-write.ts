@@ -40,6 +40,8 @@ export interface AgentWriteRequest {
   locked: string[];
   /** How many rules the editor counts ("met of total"): the run's "Reading N rules" says the same. */
   counted?: number;
+  /** Write this (customer priorities item 9): the brief built from the sources first, in the same run. */
+  buildBrief?: boolean;
 }
 
 /** The server's limit on rules (content-writer.js writeDraftInput). */

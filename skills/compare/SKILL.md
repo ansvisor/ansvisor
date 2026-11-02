@@ -44,4 +44,4 @@ The page as HTML, and under it the list of facts the person must check before it
 - Don't disparage the competitor or claim what you can't source.
 - No tracking numbers, share of voice or rankings on the page: it is public content.
 - Don't invent prices, plan limits or feature lists, for either side.
-- Never publish: going live is always the person's click.
+- Never publish yourself: the app decides whether a page goes live, and asks the person unless an Admin allowed this agent to go live on its own.

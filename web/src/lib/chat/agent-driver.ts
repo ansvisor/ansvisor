@@ -185,6 +185,8 @@ function pauseFor(refusal: AgentRefusal): Exclude<AgentPausedReason, 'manual'> |
   if (refusal.code === 'own_key_failed') return 'own_key';
   // A skill it runs was turned off, rejected, deleted or changed (CHAT-13).
   if (refusal.code === 'skill_off') return 'skill_off';
+  // All agents reached the month's limit on the workspace's own key (AGENT-OWN-KEY §4.2).
+  if (refusal.code === 'own_key_cap') return 'own_key_cap';
   return null;
 }
 
@@ -402,7 +404,9 @@ export async function openAgentRun(
   if (await agentMonthCapReached(organizationId, agent.row.id, agent.row.max_month_share)) {
     return endBeforeStart(run, 'stopped', { pause: 'cap', now });
   }
-  const brand = (await runnableBrands(organizationId, version.scope)).find(
+  // The run's brand, as the person it acts as may use it now (BRAND-ACCESS §5.3): one taken
+  // from them since it was queued is gone for this run, as a deleted one is.
+  const brand = (await runnableBrands(organizationId, version.scope, ctx.viewer.brandAccess)).find(
     (b) => b.id === run.brand_id,
   );
   if (!brand) return endBeforeStart(run, 'stopped', { stopReason: 'brand_gone', now });

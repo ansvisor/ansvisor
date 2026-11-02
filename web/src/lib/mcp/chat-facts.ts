@@ -10,7 +10,7 @@ import { planFactsFromOrgRow, type PlanFacts } from '@/lib/chat/plan-facts';
  * (`data_as_of`, §15a). Server only.
  */
 
-/** Runs a dbClient() loader with the service role: only after brandInOrg. */
+/** Runs a dbClient() loader with the service role: only after brandAllowed. */
 export const asService = <T>(read: () => Promise<T>) =>
   withDbClient(supabaseAdmin as unknown as Awaited<ReturnType<typeof dbClient>>, read);
 

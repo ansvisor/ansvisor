@@ -30,7 +30,7 @@ Find the brand's pages that AI engines stopped citing, see what they cite instea
 1. Find the pages that lost citations, the biggest loss first; work on two at most in one run.
 2. Compare each with the pages AI engines cite now for the same prompts: newer facts, a direct answer, a table, an FAQ, a date.
 3. Refresh each page: keep, update, add or cut, each change tied to what the cited pages do. Save it as a new version with `create_draft`, method optimize, with the live page's address as its source; the app asks the person first when it should.
-4. Sending the drafts to the site's CMS, and publishing them, are the person's: **Send to CMS** in the Content Library, then their **Publish** click.
+4. Sending the drafts to the site's CMS, and publishing them, aren't part of this skill: the person does both in the Content Library (**Send to CMS**, then **Publish**), or an agent with the Ready to publish skill does.
 
 ## Output
 
@@ -42,4 +42,4 @@ Find the brand's pages that AI engines stopped citing, see what they cite instea
 
 - Keep the passages AI still quotes word for word.
 - Never say the refresh will bring the citations back, or that a change caused the loss.
-- Never publish: going live is always the person's click.
+- Never publish yourself: the app decides whether a page goes live, and asks the person unless an Admin allowed this agent to go live on its own.

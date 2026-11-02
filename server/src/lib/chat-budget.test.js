@@ -26,6 +26,8 @@ let ledger;
 let grants;
 // chat_agent_runs: an agent run's cap and its use (00419).
 let agentRuns;
+// chat_settings: the key guard an Admin set (00442); none reads as $250.
+let chatSettings;
 let rpcCalls;
 let runs;
 let nextId;
@@ -89,6 +91,20 @@ function aiUsageByFeature(args) {
   return { data: [...by].map(([feature, cost_usd]) => ({ feature, cost_usd })), error: null };
 }
 
+/** 00442's chat_own_key_agent_spend, on the ledger: the agents' own-key steps since p_since. */
+function ownKeyAgentSpend(args) {
+  const sum = ledger
+    .filter(
+      (r) =>
+        r.organization_id === args.p_organization_id &&
+        r.own_key &&
+        ['agent', 'schedule'].includes(r.feature) &&
+        r.used_at >= args.p_since,
+    )
+    .reduce((total, r) => total + r.cost_usd, 0);
+  return { data: sum, error: null };
+}
+
 /** 00243's reserve_ai_usage (00405: own-key rows left out), on the ledger. */
 function reserveAiUsage(args) {
   const spent = ledger
@@ -112,6 +128,7 @@ const tables = () => ({
   prompt_improve_usage: ledger,
   ai_credit_grants: grants,
   chat_agent_runs: agentRuns,
+  chat_settings: chatSettings,
 });
 
 /** What PostgREST's filters do, on a row's value: numbers by value, times as ISO strings. */
@@ -201,6 +218,7 @@ beforeEach(async () => {
   ledger = [];
   grants = [];
   agentRuns = [];
+  chatSettings = [];
   rpcCalls = [];
   runs = new Set([RUN]);
   nextId = 1;
@@ -215,6 +233,7 @@ beforeEach(async () => {
         if (fn === 'reserve_ai_usage') return reserveAiUsage(args);
         if (fn === 'ai_usage_by_feature') return aiUsageByFeature(args);
         if (fn === 'chat_agent_usage_shares') return { data: agentShareRows, error: null };
+        if (fn === 'chat_own_key_agent_spend') return ownKeyAgentSpend(args);
         return { data: null, error: { message: `no ${fn}` } };
       },
     },
@@ -830,6 +849,65 @@ describe('how many parts of a job the budget left covers (CHAT-04 item 17a)', ()
   });
 });
 
+describe('the key guard: all agents on the workspace’s own key (AGENT-OWN-KEY §4.2)', () => {
+  /** A step already charged this period. */
+  const row = (over) =>
+    ledger.push({
+      id: `r${nextId++}`,
+      organization_id: 'o1',
+      feature: 'agent',
+      cost_usd: 10,
+      own_key: true,
+      used_at: '2026-10-25T00:00:00.000Z',
+      ...over,
+    });
+
+  it('counts only the agents’ own-key steps this period, against $250 until an Admin sets it', async () => {
+    row({ cost_usd: 100 });
+    row({ feature: 'schedule', cost_usd: 60.004 });
+    // Interactive Chat, the AI budget, last period and another workspace: not the guard's.
+    row({ feature: 'chat', cost_usd: 500 });
+    row({ own_key: false, cost_usd: 1000 });
+    row({ used_at: '2026-10-19T00:00:00.000Z', cost_usd: 999 });
+    row({ organization_id: 'o2', cost_usd: 999 });
+
+    expect(await budget.ownKeyAgentSpend('o1')).toEqual({
+      reached: false,
+      usedUsd: 160,
+      capUsd: 250,
+      since: '2026-10-20T09:00:00.000Z',
+      renewsAt: '2026-11-20T09:00:00.000Z',
+    });
+    expect(rpcCalls.at(-1)).toEqual({
+      fn: 'chat_own_key_agent_spend',
+      args: { p_organization_id: 'o1', p_since: '2026-10-20T09:00:00.000Z' },
+    });
+
+    // An Admin's lower limit is reached at it.
+    chatSettings.push({ organization_id: 'o1', own_key_agent_month_usd: '160.00' });
+    expect(await budget.ownKeyAgentSpend('o1')).toMatchObject({ reached: true, capUsd: 160 });
+  });
+
+  it('counts a step on a model the catalog doesn’t know at the fallback price', async () => {
+    const id = await budget.reserveChatStep(
+      'o1',
+      step({ modelId: 'someone/new-model', feature: 'agent', ownKey: true }),
+    );
+    await budget.chargeChatStep('o1', id, {
+      modelId: 'someone/new-model',
+      usage: { inputTokens: 1_000_000, outputTokens: 0 },
+    });
+    // $5 per million input tokens (improve-cost FALLBACK_PRICE).
+    expect((await budget.ownKeyAgentSpend('o1')).usedUsd).toBe(5);
+  });
+
+  it('reads nothing while Chat is off', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    await expect(budget.ownKeyAgentSpend('o1')).rejects.toMatchObject({ code: 'chat_off' });
+    expect(rpcCalls).toEqual([]);
+  });
+});
+
 describe('an agent run’s step, within its own cap (CHAT-27 items 21–22)', () => {
   const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0a';
 
@@ -941,5 +1019,59 @@ describe('an agent run’s step on purchased AI credits', () => {
     expect(parts.find((r) => r.grant_id === 'g1')).toMatchObject({ agent_run_id: AGENT_RUN });
     // Its use is the whole step over the plan's $5: 4%.
     expect(agentRuns[0].usage_share).toBe(0.04);
+  });
+});
+
+describe('a Content Quality read for an agent run (AUTONOMOUS-GO-LIVE §6.2)', () => {
+  const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0b';
+
+  beforeEach(() => {
+    agentRuns = [{ id: AGENT_RUN, organization_id: 'o1', max_share: 0.1, usage_share: 0 }];
+  });
+
+  it('holds the read’s set amount as the run’s own step, then charges what it used', async () => {
+    const reserve = budget.agentRunReserve('o1', { runId: RUN, agentRunId: AGENT_RUN });
+    const meter = await reserve({ modelId: MODEL, holdUsd: 0.004 });
+    expect(rpcCalls.at(-1).args).toMatchObject({
+      p_feature: 'agent',
+      p_agent_run_id: AGENT_RUN,
+      p_chat_run_id: RUN,
+      p_cost: 0.004,
+    });
+    await meter.charge({ inputTokens: 1000, outputTokens: 200 });
+    expect(ledger).toEqual([
+      expect.objectContaining({ feature: 'agent', agent_run_id: AGENT_RUN, cost_usd: 0.002 }),
+    ]);
+    // A second call of the same read is held and charged as a step of its own.
+    await meter.charge({ inputTokens: 1000, outputTokens: 0 });
+    expect(ledger).toHaveLength(2);
+    expect(ledger[1]).toMatchObject({ agent_run_id: AGENT_RUN, cost_usd: 0.001 });
+  });
+
+  it('lets a read that made no call go, and keeps one cut off as its hold', async () => {
+    const reserve = budget.agentRunReserve('o1', { runId: RUN, agentRunId: AGENT_RUN });
+    const released = await reserve({ modelId: MODEL, holdUsd: 0.01 });
+    await released.release();
+    await released.release();
+    expect(ledger).toEqual([]);
+    const kept = await reserve({ modelId: MODEL, holdUsd: 0.01 });
+    await kept.keep();
+    await kept.release();
+    expect(ledger).toEqual([expect.objectContaining({ cost_usd: 0.01 })]);
+  });
+
+  it('refuses a read past the run’s cap, as its steps are', async () => {
+    ledger.push({
+      id: 'used',
+      feature: 'agent',
+      cost_usd: 0.499,
+      own_key: false,
+      agent_run_id: AGENT_RUN,
+      used_at: '2026-10-29T10:00:00.000Z',
+    });
+    const reserve = budget.agentRunReserve('o1', { runId: RUN, agentRunId: AGENT_RUN });
+    await expect(reserve({ modelId: MODEL, holdUsd: 0.004 })).rejects.toMatchObject({
+      code: 'run_cap',
+    });
   });
 });
