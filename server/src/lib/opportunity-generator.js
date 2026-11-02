@@ -51,6 +51,8 @@ import {
   candidatePages,
 } from './page-matching.js';
 import { SITE_TYPE_NAMES, sitePageTypeLines, siteTypeOf } from './content-page-types.js';
+import { brandRulesSection } from './brand-rules.js';
+import { readBrandRules } from './brand-rules-read.js';
 
 /** Existing opportunities shown to the model for the cross-topic check. */
 const EXISTING_SHOWN = 60;
@@ -84,7 +86,8 @@ Rules:
 - Earned assets (third_party_article, backlink) live on other sites: set their channel to "earned", decision to "create" and pageIndexes to empty.
 - Write for the brand's marketing team: do not use the words "cluster" or "prompt" in titles or descriptions.
 - Titles and descriptions follow the year rule given with the clusters: a year in them goes stale on New Year's Day.
-- Refer to clusters and existing opportunities only through clusterIndex and sameAs. Never mention a bracketed index in a title or description.`;
+- Refer to clusters and existing opportunities only through clusterIndex and sameAs. Never mention a bracketed index in a title or description.
+- When BRAND RULES are given, every opportunity follows them: shape it to fit a rule, and when no opportunity for a cluster can, write the closest one that does, never one against a rule.`;
 
 /** @param {string[]} types - what an asset can be on the brand's site (assetTypes) */
 function buildSchema(count, types) {
@@ -317,6 +320,11 @@ export async function generateContentOpportunities(
     .eq('id', brandId)
     .single();
   if (!brand) return { generated: 0, merged: 0 };
+  // The brand's rules (00450): they shape the opportunities, not their scores.
+  const brandRules = brandRulesSection(
+    await readBrandRules(brandId),
+    "BRAND RULES (the brand's own; follow every one):",
+  );
 
   const clusters = await loadClusters(brandId);
   if (!clusters.length) return { generated: 0, merged: 0 };
@@ -543,7 +551,7 @@ ${pages.map(pageLine).join('\n') || 'none found'}`;
 Industry: ${brand.industry || 'Not specified'}
 Domain: ${(domainsRes.data || []).map((d) => d.domain).join(', ') || 'N/A'}
 Site type: ${SITE_TYPE_NAMES[siteType]}
-
+${brandRules ? `\n${brandRules}\n` : ''}
 Content types for the brand's site (owned assets):
 ${sitePageTypeLines(siteType)}
 

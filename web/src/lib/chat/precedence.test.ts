@@ -13,12 +13,15 @@ import {
   decideOrDeny,
   decideToolCall,
   effectivePolicy,
+  goLiveCandidate,
+  listingDenial,
   parseTeamRole,
   policyChoiceLock,
   policyChoices,
   roleAllowed,
   type AdminPolicy,
   type ChatSettings,
+  type GoLiveFacts,
   type PrecedenceContext,
   type ToolCall,
   type ToolDecision,
@@ -1316,5 +1319,214 @@ describe('chatDefaultModeOf', () => {
   it('starts a saved Full auto as Auto once the plan no longer opens it', () => {
     expect(chatDefaultModeOf('full_auto', true)).toBe('full_auto');
     expect(chatDefaultModeOf('full_auto', false)).toBe('auto');
+  });
+});
+
+describe("an Admin's go-live permission (AUTONOMOUS-GO-LIVE §5.2, step 4b)", () => {
+  // A row an allowed agent may take live on its own: ids and fixed choices only (§6.3 B1).
+  const sendOwn = row('sendOwn', {
+    class: 'execute',
+    minRole: 'manager',
+    executeGroup: 'publishing',
+    inputSchema: z.object({ brand_id: z.guid() }),
+    fixture: { input: { brand_id: BRAND_A } },
+    goLive: () => ({ kind: 'cms_draft', draftId: BRAND_A, target: 'webflow' }),
+  });
+  const AGENT = { id: 'agent-1', name: 'Publisher', fullAuto: true, goLive: { dailyLimit: 5 } };
+  const allowed = (over: Partial<PrecedenceContext> & { planKey?: PlanKey } = {}) =>
+    ctx({
+      role: 'admin',
+      mode: 'full_auto',
+      autoGoLiveOn: true,
+      agent: AGENT,
+      settings: settings({ autoGoLiveGroups: ['publishing'], agentsFullAuto: true }),
+      ...over,
+    });
+  const PASSED: GoLiveFacts = {
+    runUntrusted: false,
+    page: 'ready',
+    text: { hold: null },
+    liveItem: false,
+    gate: { pass: true, scores: { eeat: 80, trust: 82, readability: 78, average: 80 } },
+    usage: { used: 0, counted: false, nextAt: null },
+  };
+  const NEXT = '2026-11-02T15:00:00.000Z';
+  const decided = (facts: GoLiveFacts | undefined, over = {}) =>
+    decideToolCall(sendOwn, allowed(over), call({ goLive: facts }));
+
+  it('lifts the click only when every condition and guard holds', () => {
+    expect(goLiveCandidate(sendOwn, allowed())).toBe(true);
+    expect(decided(PASSED)).toEqual({ kind: 'run', via: 'go_live' });
+    // Self-hosted passes the plan gate (§9): the operator's flag and the Admin decide.
+    expect(decided(PASSED, { planKey: 'selfHosted' })).toEqual({ kind: 'run', via: 'go_live' });
+    // A Manager the run acts as, with publishing on for Managers.
+    expect(decided(PASSED, { role: 'manager' })).toEqual({ kind: 'run', via: 'go_live' });
+  });
+
+  it('keeps a plain click when any condition fails: no held reason, no facts read', () => {
+    const failing: [string, Partial<PrecedenceContext> & { planKey?: PlanKey }][] = [
+      ['the flag is off', { autoGoLiveOn: false }],
+      ['the flag is unknown', { autoGoLiveOn: undefined }],
+      ['MCP', { surface: 'mcp' }],
+      ["a person's own chat (no agent)", { agent: null }],
+      ['no switch on for any group', { settings: settings({ agentsFullAuto: true }) }],
+      [
+        'the switch is on for another group',
+        { settings: settings({ autoGoLiveGroups: ['code_prs'], agentsFullAuto: true }) },
+      ],
+      ['no permission for the run’s version', { agent: { ...AGENT, goLive: null } }],
+      ['Starter', { planKey: 'starter' }],
+      ['the trial', { planKey: 'trial' }],
+      [
+        'Full auto off for agents',
+        { settings: settings({ autoGoLiveGroups: ['publishing'], agentsFullAuto: false }) },
+      ],
+      [
+        'Full auto for agents unknown',
+        { settings: settings({ autoGoLiveGroups: ['publishing'] }) },
+      ],
+      ['the run is not in Full auto', { agent: { ...AGENT, fullAuto: false } }],
+    ];
+    for (const [why, over] of failing) {
+      expect(goLiveCandidate(sendOwn, allowed(over)), why).toBe(false);
+      expect(decided(PASSED, over), why).toEqual(CLICK);
+    }
+    // A row that can't go out on its own: a click, whatever the rest says.
+    expect(goLiveCandidate(ROWS.publish, allowed())).toBe(false);
+    expect(decideToolCall(ROWS.publish, allowed(), call({ goLive: PASSED }))).toEqual(CLICK);
+  });
+
+  it('holds the click with the first guard that fails, in their order', () => {
+    const held = (facts: GoLiveFacts | undefined, over = {}) => {
+      const decision = decided(facts, over);
+      return decision.kind === 'click' ? decision.held : decision;
+    };
+    // Part A, the run.
+    expect(held(PASSED, { injectionDetected: true })).toEqual({ code: 'injection' });
+    expect(held(undefined, { injectionDetected: true })).toEqual({ code: 'injection' });
+    expect(held({ ...PASSED, runUntrusted: true })).toEqual({ code: 'untrusted_scope' });
+    // Part B, the page as it goes out, its text and links.
+    expect(held({ ...PASSED, page: 'placeholders' })).toEqual({ code: 'placeholders' });
+    expect(held({ ...PASSED, page: 'fields' })).toEqual({ code: 'fields' });
+    for (const hold of ['instructions', 'hidden_text', 'copied'] as const) {
+      expect(held({ ...PASSED, text: { hold } })).toEqual({ code: hold });
+    }
+    expect(held({ ...PASSED, text: { hold: 'foreign_link', host: 'rival.example' } })).toEqual({
+      code: 'foreign_link',
+      host: 'rival.example',
+    });
+    expect(held({ ...PASSED, liveItem: true })).toEqual({ code: 'live_page' });
+    // The quality gate, with what the card names.
+    for (const hold of ['quality_off', 'placeholders', 'fields', 'suggestions'] as const) {
+      expect(held({ ...PASSED, gate: { pass: false, hold } })).toEqual({ code: hold });
+    }
+    expect(held({ ...PASSED, gate: { pass: false, hold: 'facts_unchecked' } })).toEqual({
+      code: 'facts_unchecked',
+    });
+    expect(
+      held({ ...PASSED, gate: { pass: false, hold: 'facts', page: '$49', fact: '$59' } }),
+    ).toEqual({ code: 'facts', page: '$49', fact: '$59' });
+    expect(
+      held({ ...PASSED, gate: { pass: false, hold: 'qualityLow', check: 'trust', score: 52 } }),
+    ).toEqual({ code: 'qualityLow', check: 'trust', score: 52 });
+    expect(held({ ...PASSED, gate: { pass: false, hold: 'quality', score: 71 } })).toEqual({
+      code: 'quality',
+      score: 71,
+    });
+    expect(
+      held({
+        ...PASSED,
+        gate: { pass: false, hold: 'quality_unread', read: 'claims', why: 'run_cap' },
+      }),
+    ).toEqual({ code: 'quality_unread', why: 'run_cap' });
+    // The daily limit, last: the agent's name, its limit and when the next slot frees.
+    expect(held({ ...PASSED, usage: { used: 5, counted: false, nextAt: NEXT } })).toEqual({
+      code: 'limit',
+      agent: 'Publisher',
+      limit: 5,
+      nextAt: NEXT,
+    });
+    // A page and destination counted already keep their slot: no new one is needed.
+    expect(decided({ ...PASSED, usage: { used: 5, counted: true, nextAt: NEXT } })).toEqual({
+      kind: 'run',
+      via: 'go_live',
+    });
+    expect(held({ ...PASSED, usage: { used: 4, counted: false, nextAt: NEXT } })).toEqual({
+      kind: 'run',
+      via: 'go_live',
+    });
+
+    // The earliest wins when several fail.
+    const worst: GoLiveFacts = {
+      runUntrusted: true,
+      page: 'ready',
+      text: { hold: 'instructions' },
+      liveItem: true,
+      gate: { pass: false, hold: 'quality', score: 40 },
+      usage: { used: 9, counted: false, nextAt: NEXT },
+    };
+    expect(held(worst)).toEqual({ code: 'untrusted_scope' });
+    expect(held({ ...worst, runUntrusted: false })).toEqual({ code: 'instructions' });
+    expect(held({ ...worst, runUntrusted: false, text: { hold: null } })).toEqual({
+      code: 'live_page',
+    });
+    expect(held({ ...worst, runUntrusted: false, text: { hold: null }, liveItem: false })).toEqual({
+      code: 'quality',
+      score: 40,
+    });
+  });
+
+  it('holds on the closed side when a fact it needs is missing', () => {
+    const unchecked = { kind: 'click', held: { code: 'unchecked' } };
+    expect(decided(undefined)).toEqual(unchecked);
+    expect(decided({ runUntrusted: false })).toEqual(unchecked);
+    expect(decided({ ...PASSED, text: undefined })).toEqual(unchecked);
+    expect(decided({ ...PASSED, liveItem: undefined })).toEqual(unchecked);
+    expect(decided({ ...PASSED, gate: undefined })).toEqual(unchecked);
+    expect(decided({ ...PASSED, usage: undefined })).toEqual(unchecked);
+  });
+
+  it('decides every earlier step first: a denial or a deny-free click is never lifted', () => {
+    // A Manager while publishing is off for Managers: refused, not held.
+    const off = settings({
+      autoGoLiveGroups: ['publishing'],
+      agentsFullAuto: true,
+      managerExecuteOff: ['publishing'],
+    });
+    expect(decided(PASSED, { role: 'manager', settings: off })).toEqual(
+      deny({ code: 'execute_off', group: 'publishing' }),
+    );
+    // Read-only, the demo brand, an Admin's Never, an Analyst: refused before 4b.
+    expect(decided(PASSED, { planKey: 'readOnly' })).toEqual(
+      deny({ code: 'subscription_inactive' }),
+    );
+    expect(decideToolCall(sendOwn, allowed(), call({ brandIsDemo: true, goLive: PASSED }))).toEqual(
+      deny({ code: 'demo_brand' }),
+    );
+    const never = settings({
+      autoGoLiveGroups: ['publishing'],
+      agentsFullAuto: true,
+      toolPolicies: { sendOwn: 'never' },
+    });
+    expect(decided(PASSED, { settings: never })).toEqual(deny({ code: 'policy_never' }));
+    expect(decided(PASSED, { role: 'analyst' })).toMatchObject({
+      kind: 'deny',
+      denial: { code: 'forbidden_role' },
+    });
+  });
+
+  it('changes nothing else: Settings offers only Never, the list keeps the row, WRITE taint stands', () => {
+    expect(policyChoices(sendOwn)).toEqual(['never']);
+    expect(sendOwn.flags.goLiveOnOwn).toBe(true);
+    expect(ROWS.publish.flags.goLiveOnOwn).toBe(false);
+    const scope = { brandId: BRAND_A, brandIsDemo: false };
+    expect(allowedTools([sendOwn], allowed(), scope)).toEqual([sendOwn]);
+    expect(listingDenial(sendOwn, allowed(), scope)).toBeNull();
+    // A WRITE in the same agent run: a card when untrusted content chose it, as before.
+    expect(decideToolCall(ROWS.draft, allowed(), call({ tainted: true }))).toEqual(ask('tainted'));
+    expect(decideToolCall(ROWS.draft, allowed(), call())).toEqual({
+      kind: 'run',
+      via: 'full_auto',
+    });
   });
 });

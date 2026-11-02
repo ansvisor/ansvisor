@@ -14,7 +14,7 @@ import {
   type PromptLocationCell,
 } from '@/lib/prompt-location-matrix';
 import { isValidLocation, regionLabel } from '@/lib/region';
-import { brandInOrg } from './data';
+import { brandAllowed } from './data';
 
 /**
  * The Tracked Prompts Locations view (PROMPT-015b) for the MCP tool
@@ -129,7 +129,7 @@ export async function getPromptLocationsFor(
     offset?: number;
   },
 ): Promise<McpPromptLocations | null> {
-  if (!(await brandInOrg(auth, params.brandId))) return null;
+  if (!(await brandAllowed(auth, params.brandId))) return null;
 
   // Every prompt, a page at a time: PostgREST answers 1,000 rows at most.
   const rows: Record<string, unknown>[] = [];

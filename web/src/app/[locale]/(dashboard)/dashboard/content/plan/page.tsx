@@ -15,7 +15,7 @@ import {
   setPlanRowPriority,
   showPlanRow,
 } from '@/lib/actions/content-plan';
-import { listMembers, type TeamMember } from '@/lib/actions/team';
+import { listBrandMembers, type TeamMember } from '@/lib/actions/team';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useRouter } from '@/i18n/navigation';
@@ -114,7 +114,9 @@ export default function ContentPlanPage() {
   // period still filter.
   const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
-  const [members, setMembers] = useState<TeamMember[]>([]);
+  // The people who can see the brand, read for it: another brand's aren't offered.
+  const [team, setTeam] = useState<{ brandId: string; members: TeamMember[] } | null>(null);
+  const members = team && team.brandId === activeBrandId ? team.members : [];
   const [assigning, setAssigning] = useState<PlanRow | null>(null);
   const [showHidden, setShowHidden] = useState(false);
   // Another brand starts unfiltered: its cards and types are its own.
@@ -207,11 +209,12 @@ export default function ContentPlanPage() {
     setStarting(true);
   };
 
-  // The team, for assigning: read once, when first needed.
+  // The team, for assigning: read once per brand, when first needed.
   const loadMembers = () => {
-    if (members.length > 0) return;
-    listMembers()
-      .then(setMembers)
+    if (!activeBrandId || members.length > 0) return;
+    const brandId = activeBrandId;
+    listBrandMembers(brandId)
+      .then((list) => setTeam({ brandId, members: list }))
       .catch((err) => console.error('Failed to load the team:', err));
   };
 
