@@ -181,6 +181,29 @@ describe('the plan cards', () => {
     );
   });
 
+  it('lists Chat and Agent Center once the new Chat is on, Full auto from Growth up', async () => {
+    await render('starter', { chatAgentic: true });
+    const { Starter, Growth } = cards();
+    expect(Starter.slice(6)).toEqual(['1x AI usage', 'Chat and Agent Center', 'MCP & API access']);
+    expect(Growth.slice(6)).toEqual([
+      '5x AI usage',
+      'Chat and Agent Center',
+      'Full auto, with agents that publish on their own',
+      'Multi-region tracking',
+      'White-label reports & exports',
+      'Looker Studio',
+    ]);
+    const custom = container.textContent;
+    expect(custom).toContain('Custom AI usage, from 10xChat and Agent Center');
+    expect(custom).toContain('Full auto, with agents that publish on their own');
+  });
+
+  it('leaves Chat off the cards while the new Chat is off', async () => {
+    await render('starter');
+    expect(container.textContent).not.toContain('Chat and Agent Center');
+    expect(container.textContent).not.toContain('Full auto');
+  });
+
   it('says Chat and agents draw on AI usage once the new Chat is on, own keys on Enterprise only', async () => {
     const hint = (text: string) =>
       [...container.querySelectorAll('li span')]
