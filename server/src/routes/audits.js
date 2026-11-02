@@ -45,6 +45,7 @@ import {
   excludePatternMatcher,
   normalizeExcludePattern,
   opportunityKey,
+  siteCoverage,
 } from '../lib/audit/opportunities.js';
 import { AUTO_AUDIT } from '../lib/audit/auto-audit.js';
 import { rankOpportunities } from '../lib/audit/priority.js';
@@ -683,8 +684,8 @@ router.get('/trend', async (req, res) => {
 
 // GET /api/audits/pages?brandId=…&limit=50&offset=0 — one row per audited
 // page (repeat audits of a URL share it), most recently audited first, with
-// its latest score, the previous one, a status, its trend, its open issues
-// and its runs. `total` is the number of pages, for paging.
+// its latest score, the previous one, its first one, a status, its trend, its
+// open issues and its runs. `total` is the number of pages, for paging.
 // Registered before /:id so "pages" isn't matched as an audit id.
 router.get('/pages', async (req, res) => {
   const userId = req.user?.id;
@@ -953,6 +954,14 @@ export async function readOpportunityInbox(brandId) {
     excludePatterns,
     staleDays: ENGINE_THRESHOLDS.detection.auditMaxAgeDays,
   });
+  // How much of the site has a current audit, by the same rules (item 11).
+  const coverage = siteCoverage({
+    sitePages: sitePages.data ?? [],
+    auditPages,
+    prefs: prefs.data ?? [],
+    excludePatterns,
+    staleDays: ENGINE_THRESHOLDS.detection.auditMaxAgeDays,
+  });
   // Templates whose pages share gaps are rows too (SA-007, the mockup's
   // "/blog/* · 38 pages"), with their pages' AI visits added up.
   const shared = templates.filter((t) => t.sharedGaps.length > 0);
@@ -995,13 +1004,15 @@ export async function readOpportunityInbox(brandId) {
       new Set(shared.map((t) => t.template)),
     ),
     excluded,
+    coverage,
   };
 }
 
 // GET /api/audits/opportunities?brandId=… — the Opportunities inbox (SA-004):
 // the brand's pages worth auditing, each with why (Google Analytics pages
 // without AI traffic, pages never audited or audited long ago), pinned pages
-// first, plus the excluded pages to put back.
+// first, plus the excluded pages to put back, and how much of the site has a
+// current audit (coverage, item 11).
 // Registered before /:id so "opportunities" isn't matched as an audit id.
 router.get('/opportunities', async (req, res) => {
   const userId = req.user?.id;
@@ -1012,11 +1023,12 @@ router.get('/opportunities', async (req, res) => {
 
   try {
     await assertBrandAccess(brandId, userId);
-    const { opportunities, excluded } = await readOpportunityInbox(brandId);
+    const { opportunities, excluded, coverage } = await readOpportunityInbox(brandId);
     return res.json({
       success: true,
       opportunities,
       excluded,
+      coverage,
       staleDays: ENGINE_THRESHOLDS.detection.auditMaxAgeDays,
     });
   } catch (err) {

@@ -190,6 +190,12 @@ interface ToolFields<S extends z.ZodObject> {
   planGate: PlanGate | null;
   /** Where a call's brand comes from; null for a row about no brand. */
   brandOf: BrandOf | null;
+  /**
+   * A row about no brand whose answer names every brand the person can
+   * access (the brand list, the connections): a chat it runs in has touched
+   * each of them (lib/chat/touched-brands.ts, 00436).
+   */
+  namesBrands?: true;
   costClass: CostClass;
   /**
    * The key under `chatTools` in messages/en.json (`name` for Settings, `step`
@@ -209,7 +215,8 @@ interface ToolFields<S extends z.ZodObject> {
    * signal's run, CHAT-12), where `run`'s server action has no one signed in.
    * Its runFor makes the same change as the run's person, with the service
    * role, after checking them as their session would be checked
-   * (lib/chat/actor). Nothing calls it yet: the engine still calls `run`.
+   * (lib/chat/actor). The engine calls it in such a run once the precedence
+   * lets the change go (runLoggedWrite's withoutSession), and `run` otherwise.
    */
   sessionFree?: true;
   runFor?(ctx: ChatToolContext, input: z.output<S>): Promise<unknown>;
@@ -325,6 +332,9 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     if (!(field in def.inputSchema.shape)) {
       throw new Error(`${def.name}: its brand comes from ${field}, which its input lacks`);
     }
+  }
+  if (def.namesBrands && def.brandOf) {
+    throw new Error(`${def.name}: a row about one brand doesn't name every brand`);
   }
   if (def.batch && !(def.batch.field in def.inputSchema.shape)) {
     throw new Error(`${def.name}: its items are in ${def.batch.field}, which its input lacks`);

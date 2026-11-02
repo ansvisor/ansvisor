@@ -4,7 +4,8 @@ import { toCsv } from '@/lib/csv';
 
 /**
  * Site Audit's Pages export (SA-003): a row per audited page, as CSV or Excel,
- * for all pages or the selected ones.
+ * for all pages or the selected ones. The first score, when it ran and the
+ * change since come last, so the columns before keep their places.
  */
 
 export interface AuditExportLabels {
@@ -17,6 +18,9 @@ export interface AuditExportLabels {
   issues: string;
   lastAudit: string;
   audits: string;
+  firstScore: string;
+  firstAudit: string;
+  changeSinceFirst: string;
   statuses: Record<AuditedPageStatus, string>;
 }
 
@@ -29,13 +33,19 @@ export const AUDIT_PAGES_CSV_HEADERS = [
   'issues',
   'last_audit',
   'audits',
+  'first_score',
+  'first_audit',
+  'change_since_first',
 ];
 
 const points = (score: number | null) => (score === null ? null : Math.round(score * 100));
+/** The UTC day, which a spreadsheet sorts and reads in any locale. */
+const day = (at: string) => new Date(at).toISOString().slice(0, 10);
 
 function exportRow(page: AuditedPage, labels: AuditExportLabels) {
   const score = points(page.score);
   const previous = points(page.previousScore);
+  const first = points(page.firstScore);
   return {
     page_url: page.url,
     score,
@@ -43,9 +53,11 @@ function exportRow(page: AuditedPage, labels: AuditExportLabels) {
     change: score !== null && previous !== null ? score - previous : null,
     status: labels.statuses[page.status],
     issues: page.issues,
-    // The UTC day, which a spreadsheet sorts and reads in any locale.
-    last_audit: new Date(page.lastAuditedAt).toISOString().slice(0, 10),
+    last_audit: day(page.lastAuditedAt),
     audits: page.runCount,
+    first_score: first,
+    first_audit: page.firstAuditedAt ? day(page.firstAuditedAt) : null,
+    change_since_first: score !== null && first !== null ? score - first : null,
   };
 }
 
@@ -74,6 +86,9 @@ export function auditPagesWorkbook(pages: AuditedPage[], labels: AuditExportLabe
         { width: 8 },
         { width: 12 },
         { width: 8 },
+        { width: 12 },
+        { width: 12 },
+        { width: 18 },
       ],
       data: [
         [
@@ -85,6 +100,9 @@ export function auditPagesWorkbook(pages: AuditedPage[], labels: AuditExportLabe
           labels.issues,
           labels.lastAudit,
           labels.audits,
+          labels.firstScore,
+          labels.firstAudit,
+          labels.changeSinceFirst,
         ].map(bold),
         ...pages.map((page) => Object.values(exportRow(page, labels))),
       ],
