@@ -6273,6 +6273,10 @@
     }
   },
   "chatSkills": {
+    "review": {
+      "asked": "Review the imported skill /{name}",
+      "rule": "Approving an imported skill is for Admins."
+    },
     "refusal": {
       "invalid": "This skill isn't valid: {problems}.",
       "not_found": "This skill isn't available.",
@@ -6286,7 +6290,26 @@
       "not_approved": "This skill isn't approved yet, so it can't be turned on or shared.",
       "checksum": "This skill changed since it was approved, so it stays off. Save it again to use it.",
       "request_limit": "You have too many requests waiting for your Admins. Try again once they answer.",
-      "failed": "Something went wrong with this skill. Try again."
+      "failed": "Something went wrong with this skill. Try again.",
+      "too_large": "The file is over 5 MB, or unpacks to more than 5 MB.",
+      "not_zip": "This file isn't a .zip that can be read. Upload a .zip of the skill's folder, or its SKILL.md.",
+      "too_many_files": "The skill holds more than {max} files.",
+      "unsafe_path": "The .zip has a path that leaves its folder ({path}), so nothing was imported.",
+      "symlink": "The skill links to another file ({path}), so nothing was imported.",
+      "nested_archive": "The .zip holds another archive ({path}), so nothing was imported.",
+      "binary_file": "{path} isn't a text file. A skill holds instructions only.",
+      "no_skill_file": "There's no SKILL.md in it. A skill is a folder with a SKILL.md.",
+      "several_skills": "It holds more than one SKILL.md. Import one skill at a time.",
+      "license": "This skill's license isn't one Ansvisor accepts: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause or ISC.",
+      "import_plan": "Importing skills starts with the Starter plan.",
+      "github_url": "Use a github.com link to a public repository, or to a folder or a SKILL.md in it.",
+      "github_not_found": "That GitHub repository or folder couldn't be found. Only public repositories can be imported.",
+      "github_busy": "GitHub is busy right now. Try again in a few minutes.",
+      "github_failed": "GitHub couldn't be reached. Try again.",
+      "github_redirect": "GitHub sent the request somewhere else, so nothing was imported.",
+      "role_review": "Only Admins approve or reject skills.",
+      "not_pending": "This skill was reviewed already.",
+      "blocked": "This skill holds something a skill may never hold, so it can't be approved."
     },
     "share": {
       "asked": "Share the skill /{name} with the workspace",
