@@ -25,6 +25,7 @@ const store = await import('./store');
 const { offAgentSkill } = await import('../agent-skills');
 const { planFactsFromOrgRow } = await import('../plan-facts');
 const { SKILL_LIBRARY } = await import('./library');
+const { SHORTCUT_IDS } = await import('../shortcuts');
 
 const AGENCY = 'aaaaaaaa-0000-4000-8000-000000000005';
 
@@ -180,13 +181,19 @@ describe('saveSkill (CHAT-13 item 12)', () => {
     expect(skills()).toEqual([]);
   });
 
-  it("never takes an Ansvisor skill's name, nor one the workspace has", async () => {
+  it("never takes an Ansvisor skill's or a shortcut's name, nor one the workspace has", async () => {
     const as = await viewer(PEOPLE.manager);
     const library = await store.saveSkill(as, { ...valid, name: 'faq' });
     expect(library).toMatchObject({ ok: false, refusal: { code: 'library_name', status: 409 } });
     expect(!library.ok && library.refusal.message).toBe(
-      '/faq is an Ansvisor skill. Pick another name.',
+      '/faq is an Ansvisor skill or shortcut. Pick another name.',
     );
+    // The / menu's shortcuts (W2-09) keep their /commands.
+    for (const name of SHORTCUT_IDS) {
+      const shortcut = await store.saveSkill(as, { ...valid, name });
+      expect(shortcut, name).toMatchObject({ ok: false, refusal: { code: 'library_name' } });
+    }
+    expect(skills()).toEqual([]);
     await store.saveSkill(as, valid);
     const again = await store.saveSkill(await viewer(PEOPLE.admin), valid);
     expect(again).toMatchObject({ ok: false, refusal: { code: 'name_taken', status: 409 } });
@@ -227,8 +234,9 @@ describe('enabledSkillsFor and the / menu (CHAT-13 items 3, 5)', () => {
     seedSkill({ name: 'turned-off', enabled: false });
     seedSkill({ name: 'waiting', status: 'pending_review', enabled: false, source: 'import' });
     seedSkill({ name: 'elsewhere', organization_id: OTHER_ORG, visibility: 'workspace' });
-    // A name the library took after the skill was saved: the library's wins.
+    // A name the library or a shortcut took after the skill was saved: theirs wins.
     seedSkill({ name: 'quality', visibility: 'workspace' });
+    seedSkill({ name: 'analyze', visibility: 'workspace' });
 
     const enabled = await store.enabledSkillsFor(ORG, PEOPLE.manager);
     const library = SKILL_LIBRARY.filter((s) => !['faq', 'report'].includes(s.name));
@@ -260,6 +268,7 @@ describe('enabledSkillsFor and the / menu (CHAT-13 items 3, 5)', () => {
     const menu = await store.skillMenuFor(ORG, PEOPLE.manager);
     expect(menu).toContainEqual({ name: 'my-brief', title: mine.title });
     expect(menu).not.toContainEqual(expect.objectContaining({ name: 'faq' }));
+    expect(menu).not.toContainEqual(expect.objectContaining({ name: 'analyze' }));
     expect(menu.every((item) => Object.keys(item).join() === 'name,title')).toBe(true);
   });
 

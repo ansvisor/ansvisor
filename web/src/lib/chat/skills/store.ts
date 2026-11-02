@@ -11,6 +11,7 @@ import type { ChatSkillItem } from '../composer-setup';
 import { chatAgenticEnabled } from '../flag';
 import { planFactsFromOrgRow, type PlanFacts } from '../plan-facts';
 import { parseTeamRole } from '../precedence';
+import { SHORTCUT_IDS } from '../shortcuts';
 import { MAX_BYTES, MAX_DESCRIPTION, MAX_NAME, checkSkillFile } from './format';
 import { SKILL_LIBRARY, enabledSkills } from './library';
 
@@ -88,6 +89,12 @@ export function skillPlanLimit(plan: PlanFacts): number | null {
 
 /** The library's names: a workspace skill never takes one (its /command would be two). */
 const LIBRARY_NAMES: ReadonlySet<string> = new Set(SKILL_LIBRARY.map((skill) => skill.name));
+
+/**
+ * The names a workspace skill never takes: the library's, and the / menu's
+ * shortcuts' (W2-09), each a hidden library skill under its /command.
+ */
+const RESERVED_NAMES: ReadonlySet<string> = new Set([...LIBRARY_NAMES, ...SHORTCUT_IDS]);
 
 // ─── Who may do what ────────────────────────────────────────────────────────
 
@@ -335,8 +342,8 @@ export async function enabledSkillsFor(
   ]);
   if (own.error) throw new Error(`Could not read the workspace's skills: ${own.error.message}`);
   const disabled = new Set(off);
-  // A name the library took after the skill was saved: the library's wins.
-  const names = new Set(library.map((skill) => skill.name));
+  // A name the library or a shortcut took after the skill was saved: theirs wins.
+  const names = new Set([...library.map((skill) => skill.name), ...SHORTCUT_IDS]);
   return [
     ...library
       .filter((skill) => !disabled.has(skill.name))
@@ -670,7 +677,7 @@ export async function saveSkill(
   if (check.problems.length > 0) {
     return skillRefusal('invalid', { problems: check.problems.join('; ') });
   }
-  if (LIBRARY_NAMES.has(parts.name)) return skillRefusal('library_name', { name: parts.name });
+  if (RESERVED_NAMES.has(parts.name)) return skillRefusal('library_name', { name: parts.name });
   const limit = skillPlanLimit(viewer.plan);
   if (limit !== null && (await countSkills(viewer.organizationId)) >= limit) {
     return skillRefusal('skill_limit', { limit });

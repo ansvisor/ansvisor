@@ -27,7 +27,7 @@ Analysts and Agency partners have no **/** menu, but Chat still uses a skill for
 
 ## Save your own skill
 
-Admins and Managers can ask Chat to keep steps they repeat as a skill of their own, for example: "Save this as a skill called /pricing-brief: open with the answer, then three short sections." Chat shows the skill's name, what it does and its steps on a card, and saves it when you approve, or by itself in Full auto. The skill is private to you and joins your **/** menu right away. It can't take the name of an Ansvisor skill, and your plan sets how many skills your workspace keeps.
+Admins and Managers can ask Chat to keep steps they repeat as a skill of their own, for example: "Save this as a skill called /pricing-brief: open with the answer, then three short sections." Chat shows the skill's name, what it does and its steps on a card, and saves it when you approve, or by itself in Full auto. The skill is private to you and joins your **/** menu right away. It can't take the name of an Ansvisor skill or a shortcut, such as **/analyze**, and your plan sets how many skills your workspace keeps.
 
 ## What a skill can't change
 
