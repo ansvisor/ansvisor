@@ -29,6 +29,8 @@
  *   → 200 { reached, usedUsd, capUsd, since, renewsAt }: the key guard
  *     (AGENT-OWN-KEY §4.2): what all agents spent on the workspace's own key
  *     this AI period against the Admin's monthly limit. 403 chat_off.
+ *     Each read also warns the Admins at 80% and at the limit, once each
+ *     a period (lib/chat-notices/own-key-limit.js), off the answer's path.
  *
  * Dollars leave the server only in the own-key answer, for the Admins'
  * settings card (AGENT-OWN-KEY §11 Q1): the agent checks read `reached`. Calls with the
@@ -48,6 +50,7 @@ import {
   releaseChatStep,
   reserveChatStep,
 } from '../lib/chat-budget.js';
+import { warnOwnKeyLimit } from '../lib/chat-notices/own-key-limit.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
 
@@ -204,7 +207,11 @@ router.get('/own-key', async (req, res) => {
       .json({ success: false, error: 'invalid_request', message: 'Invalid request' });
   }
   try {
-    return res.json({ success: true, ...(await ownKeyAgentSpend(query.data.orgId)) });
+    const spend = await ownKeyAgentSpend(query.data.orgId);
+    warnOwnKeyLimit(query.data.orgId, spend).catch((err) =>
+      req.log.error({ err }, 'own key limit warning failed'),
+    );
+    return res.json({ success: true, ...spend });
   } catch (err) {
     return fail(err, req, res, 'own key spend');
   }

@@ -1,30 +1,20 @@
 'use server';
 
 import { z } from 'zod';
-import { isKeyFailureClass, type KeyFailureClass } from '@/lib/agent/key-errors';
-import { isAiProvider, type AiProvider } from '@/lib/agent/providers';
+import { noticeOf, type ChatNotice, type NoticeRow } from '@/lib/chat/notices';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { createClient } from '@/lib/supabase/server';
 
 /**
  * The person's own notices from the system (00441), for the top of their
- * Inbox's Needs you: their workspace's own AI key fails (AGENT-OWN-KEY §5.3).
- * Only Admins get them; the server writes them. Read with the person's
- * session (RLS: their own rows), open ones only: a key that works again
- * resolves its notice.
+ * Inbox's Needs you: their workspace's own AI key fails (AGENT-OWN-KEY §5.3),
+ * or its agents reached 80% or all of their monthly limit on it (§4.2 item
+ * 4, PR 10). Only Admins get them; the server writes them. Read with the
+ * person's session (RLS: their own rows), open ones only: a key that works
+ * again, a period that renews or a limit raised resolves its notice.
  */
 
-/** A notice as the Inbox shows it. */
-export interface ChatNotice {
-  id: string;
-  kind: 'own_key_failed';
-  provider: AiProvider;
-  class: KeyFailureClass;
-  /** The 3-day reminder of a key still failing. */
-  reminder: boolean;
-  createdAt: string;
-  read: boolean;
-}
+export type { ChatNotice } from '@/lib/chat/notices';
 
 export type ChatNoticesRead = { ok: true; notices: ChatNotice[] } | { ok: false };
 
@@ -63,28 +53,9 @@ export async function readChatNotices(): Promise<ChatNoticesRead> {
       console.error('[chat/notices] could not read the notices:', error.message);
       return { ok: false };
     }
-    const notices: ChatNotice[] = [];
-    for (const row of (data ?? []) as {
-      id: string;
-      kind: string;
-      payload: { provider?: unknown; class?: unknown; reminder?: unknown } | null;
-      created_at: string;
-      read_at: string | null;
-    }[]) {
-      const { provider, class: cls, reminder } = row.payload ?? {};
-      if (row.kind !== 'own_key_failed' || !isAiProvider(provider) || !isKeyFailureClass(cls)) {
-        continue;
-      }
-      notices.push({
-        id: row.id,
-        kind: 'own_key_failed',
-        provider,
-        class: cls,
-        reminder: reminder === true,
-        createdAt: row.created_at,
-        read: row.read_at !== null,
-      });
-    }
+    const notices = ((data ?? []) as NoticeRow[])
+      .map(noticeOf)
+      .filter((notice): notice is ChatNotice => notice !== null);
     return { ok: true, notices };
   } catch (err) {
     console.error('[chat/notices] could not read the notices:', err);
