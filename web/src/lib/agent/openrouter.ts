@@ -19,14 +19,19 @@ export interface OpenRouterRouting {
 
 /**
  * OpenRouter providers that host DeepSeek's open models in the US or the
- * EU (DeepInfra, Together, Fireworks, Parasail: US; Nebius: EU). Checked
- * against the model's endpoints before a DeepSeek model is offered (W4-35).
+ * EU, by slug: DeepInfra, Together, Fireworks, Parasail, Crusoe, Azure (US)
+ * and Nebius (Netherlands). Checked on 2026-11-03 against OpenRouter's
+ * providers list (headquarters, datacenters) and the endpoints of
+ * deepseek-v4.1-flash (5 of these) and deepseek-v4-pro (3). Providers based
+ * in China, or of unknown base, are left out.
  */
 export const DEEPSEEK_US_EU_PROVIDERS = [
   'deepinfra',
   'together',
   'fireworks',
   'parasail',
+  'crusoe',
+  'azure',
   'nebius',
 ];
 
