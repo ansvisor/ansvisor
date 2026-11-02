@@ -895,6 +895,8 @@ export function DraftEditor({
   // person kept.
   const sourcesOn = qualityPhase() >= 2;
   const competitorDomains = reads.sources?.data?.competitorDomains;
+  // The sites the brand trusts (Settings › Content, 00449): primary sources.
+  const trustedDomains = reads.sources?.data?.trustedDomains;
   // Phase 2 (CE-047): the page's prices, trial and founding year against the
   // brand's approved facts, read from its own site.
   const factsState = useBrandFacts(draft.brandId, sourcesOn);
@@ -912,9 +914,10 @@ export function DraftEditor({
             competitorDomains: competitorDomains ?? [],
             pageType,
             kept: new Set(keptSources),
+            trustedDomains: trustedDomains ?? [],
           })
         : [],
-    [sourcesOn, brandDomains, pageBlocks, competitorDomains, pageType, keptSources],
+    [sourcesOn, brandDomains, pageBlocks, competitorDomains, pageType, keptSources, trustedDomains],
   );
   const {
     kinds: aiKinds,
@@ -1068,6 +1071,7 @@ export function DraftEditor({
         linkChecks,
         brandDomains: brandDomains ?? null,
         competitorDomains: competitorDomains ?? null,
+        trustedDomains: trustedDomains ?? null,
         siteTrust,
         siteTrustRead,
         brandFacts,
@@ -1104,6 +1108,7 @@ export function DraftEditor({
       linkChecks,
       brandDomains,
       competitorDomains,
+      trustedDomains,
       siteTrust,
       siteTrustRead,
       brandFacts,

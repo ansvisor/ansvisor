@@ -964,6 +964,7 @@ export type Database = {
           snippet_found_at: string | null
           state: string | null
           tracking_code: string
+          trusted_sources: string[]
           updated_at: string
         }
         Insert: {
@@ -1004,6 +1005,7 @@ export type Database = {
           snippet_found_at?: string | null
           state?: string | null
           tracking_code?: string
+          trusted_sources?: string[]
           updated_at?: string
         }
         Update: {
@@ -1044,6 +1046,7 @@ export type Database = {
           snippet_found_at?: string | null
           state?: string | null
           tracking_code?: string
+          trusted_sources?: string[]
           updated_at?: string
         }
         Relationships: [
