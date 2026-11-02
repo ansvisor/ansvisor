@@ -56981,6 +56981,40 @@ create policy "chat_agents: member select"
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00437_org_other_members_guard.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00437: organization_has_other_members answers only its trigger and the server
+-- ============================================================================
+-- 00228 added it for the profile guard: a person may set their first
+-- organization only while nobody else belongs to it. It reads every
+-- organization's members (security definer), and signed-in people can execute
+-- it because the guard runs as them. So anyone signed in could also call it
+-- directly and ask "does this organization have other members?" about any
+-- organization.
+--
+-- It now answers only inside a trigger (the guard, which passes the updated
+-- row's own organization and id) or for the service role; a direct call from
+-- a signed-in person gets false. Execute stays with authenticated so the guard
+-- keeps working. Same definition as 00228 otherwise.
+
+create or replace function public.organization_has_other_members(p_org uuid, p_except uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.profiles p
+    where p.organization_id = p_org and p.id <> p_except
+  )
+  and (pg_catalog.pg_trigger_depth() > 0 or (select auth.role()) = 'service_role');
+$$;
+revoke all on function public.organization_has_other_members(uuid, uuid) from public, anon;
+grant execute on function public.organization_has_other_members(uuid, uuid) to authenticated, service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00440_own_key_health.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -57084,6 +57118,30 @@ alter table public.chat_agent_runs
   add constraint chat_agent_runs_stop_reason_check check (
     stop_reason in ('user', 'no_answer', 'run_cap', 'action_closed', 'brand_gone', 'own_key')
   );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00448_content_drafts_schema_left_out.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00448: The page's Article schema, left out by the person
+-- ============================================================================
+-- Customer priorities item 7 (owner decision A, 2026-11-01): an article
+-- page goes to the CMS and to exports with its Article JSON-LD, the author
+-- in it (the draft's author as a Person, else the brand as the
+-- Organization). Ansvisor adds it by itself; the page's text doesn't
+-- change. A CMS that writes its own Article schema would give the page two,
+-- so the person can leave Ansvisor's out, draft by draft, in Before you
+-- publish, and add it back there.
+--
+--   * schema_left_out: true while the person left it out; the default adds it.
+
+alter table public.content_drafts
+  add column if not exists schema_left_out boolean not null default false;
+
+comment on column public.content_drafts.schema_left_out is
+  'Customer priorities item 7 (00448): true when the person left out the Article JSON-LD Ansvisor adds to the page it sends to a CMS and exports; false adds it.';
 
 notify pgrst, 'reload schema';
 

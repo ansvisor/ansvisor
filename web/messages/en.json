@@ -259,6 +259,7 @@
       "setAuthor": "Setting the author needs a plan",
       "setReviewer": "Setting the reviewer needs a plan",
       "confirmDetails": "Confirming page details needs a plan",
+      "leaveOutSchema": "Changing the page's schema needs a plan",
       "keepSources": "Keeping sources needs a plan",
       "addSources": "Adding sources needs a plan",
       "changeSources": "Changing sources needs a plan",
@@ -915,7 +916,17 @@
             "qid": "Wikidata ID",
             "label": "Wikidata label",
             "description": "Wikidata description",
-            "note": "Note"
+            "note": "Note",
+            "language": "Language",
+            "formula": "Formula",
+            "readingScore": "Reading score",
+            "wordsPerSentence": "Words a sentence",
+            "syllablesPerWord": "Syllables a word",
+            "lettersPerWord": "Letters a word",
+            "wordsPerParagraph": "Words a paragraph",
+            "mobileLinesPerParagraph": "Lines a paragraph on a phone",
+            "firstPersonSentences": "First-person sentences",
+            "sentences": "Sentences"
           }
         },
         "mentions": {
@@ -2091,7 +2102,6 @@
           "coalesced": "Three runs already wait for {agent} on this brand · this one joins the last",
           "chatStarted": "Chat is working on AC-{no}",
           "chatQueued": "Chat is queued for AC-{no}. It starts when a run slot frees up.",
-          "openRun": "Open run",
           "didntStart": "{reason, select, action_closed {The action was closed, so the run didn’t start.} brand_gone {The action’s brand is no longer in the agent’s scope, so the run didn’t start.} other {The run didn’t start. The agent’s Runs tab says why.}}",
           "failed": "Couldn’t start the run. Try again."
         }
@@ -6035,7 +6045,7 @@
         "goal": "Goal",
         "businessType": "Business type",
         "industry": "Industry",
-        "role": "Role"
+        "role": "For your role"
       },
       "all": "All",
       "goals": {
@@ -6051,7 +6061,7 @@
       },
       "businessTypes": {
         "ecommerce": "E-commerce",
-        "mobile_app": "Mobile app",
+        "app": "Mobile app",
         "b2b": "B2B",
         "b2c": "B2C"
       },
@@ -6070,16 +6080,15 @@
         "travel_hospitality": "Travel and hospitality"
       },
       "roles": {
-        "seo_aeo": "SEO and AEO",
+        "leaders": "Founders & leaders",
+        "aeo": "AEO/GEO & Audit",
         "content": "Content",
-        "pr_brand": "PR and brand",
-        "founders": "Founders",
+        "brand": "Brand & PR",
         "growth": "Growth",
-        "product": "Product",
-        "business_development": "Business development",
-        "ecommerce": "E-commerce",
+        "product": "Product Development",
+        "bizdev": "Business Development",
         "developers": "Developers",
-        "agencies": "Agencies"
+        "analytics": "Analytics"
       },
       "use": "Use this agent",
       "useLabel": "Use this agent: {name}",
@@ -6098,10 +6107,21 @@
         "hubspot": "HubSpot",
         "jira_linear": "Jira or Linear",
         "brand_access": "access by brand",
-        "ads_data": "ads read from AI answers"
+        "ads_data": "ads read from AI answers",
+        "catalog_read": "a skill that reads your product catalog",
+        "seasonal_skill": "a seasonal demand skill",
+        "app_store_data": "App Store and Google Play data",
+        "review_sites": "review site data",
+        "local_listings": "local listings data",
+        "content_plan_skill": "a content plan skill",
+        "traffic_skill": "an AI traffic skill"
       },
       "policyLock": "Your Admin turned Full auto off",
-      "fallbackTip": "Use this agent opens it on Auto, ask before changes"
+      "fallbackTip": "Use this agent opens it on Auto, ask before changes",
+      "fit": {
+        "siteType": "For your site type",
+        "role": "For your role"
+      }
     },
     "presets": {
       "visibility-watch": {
@@ -6183,6 +6203,82 @@
       "ai-ads-watch": {
         "name": "AI Ads Watch",
         "description": "Shows who advertises inside AI answers on your prompts, and where."
+      },
+      "product-answer-pages": {
+        "name": "Product Answer Pages",
+        "description": "Finds the “best X for Y” questions buyers ask AI and drafts answer-first product copy and comparison tables."
+      },
+      "shopping-feed-advisor": {
+        "name": "Shopping Feed Advisor",
+        "description": "Finds the product attributes your feed lacks for AI shopping and prepares the fixes for your feed."
+      },
+      "seasonal-prompt-planner": {
+        "name": "Seasonal Prompt Planner",
+        "description": "Before peaks such as Black Friday or back-to-school, proposes the prompts to track and the pages to prepare."
+      },
+      "app-store-listing": {
+        "name": "App Store Listing for AI",
+        "description": "Checks the app store pages AI cites for “best app for…” questions and drafts changes to your listing."
+      },
+      "app-alternatives-watch": {
+        "name": "App Alternatives Watch",
+        "description": "Finds where AI lists rival apps instead of yours, and the store pages behind it."
+      },
+      "feature-question-coverage": {
+        "name": "Feature-question Coverage",
+        "description": "Finds the features AI credits to rivals but not to you, and drafts help answers to “can it do…” questions."
+      },
+      "alternatives-comparison-pages": {
+        "name": "Alternatives & Comparison Pages",
+        "description": "Drafts “X vs Y” and alternatives pages, then checks them against how AI compares you, feature by feature."
+      },
+      "review-site-presence": {
+        "name": "Review-site Presence",
+        "description": "Checks the review sites AI cites in your category, how they show you, and the profile tasks to do. It never posts."
+      },
+      "integration-questions": {
+        "name": "Integration Questions",
+        "description": "Finds the “does it work with…” questions buyers ask AI and drafts answers for your docs and integration pages."
+      },
+      "reviews-ugc-watch": {
+        "name": "Reviews & UGC Watch",
+        "description": "Watches the review sites and communities AI cites about you and plans what to answer. It never posts."
+      },
+      "local-store-locator": {
+        "name": "Local & Store Locator",
+        "description": "Checks the local listings and store pages AI uses for “near me” questions."
+      },
+      "social-proof-pages": {
+        "name": "Social-proof Pages",
+        "description": "Drafts the FAQ answers AI quotes on returns, shipping and guarantees, checked against your brand facts."
+      },
+      "content-plan-builder": {
+        "name": "Content Plan Builder",
+        "description": "Each week, turns content opportunities into a plan and a brief for each page."
+      },
+      "narrative-sentiment-watch": {
+        "name": "Narrative & Sentiment Watch",
+        "description": "How AI describes your brand on each engine, in its own words, and the wrong claims to fix."
+      },
+      "source-outreach-list": {
+        "name": "Source Outreach List",
+        "description": "Lists the publications and directories AI cites for your topics, whether each lists you, and the next step. It never sends."
+      },
+      "ceo-brief": {
+        "name": "CEO Brief",
+        "description": "Each Monday, one page for leaders: whether AI recommends you more, what moved, and where to win next."
+      },
+      "ai-traffic-signups": {
+        "name": "AI Traffic → Signups",
+        "description": "Shows the prompts and pages that bring AI visitors who sign up."
+      },
+      "unmet-needs-miner": {
+        "name": "Unmet Needs Miner",
+        "description": "Finds what buyers ask AI about your category that no brand answers well yet."
+      },
+      "market-source-finder": {
+        "name": "Market & Source Finder",
+        "description": "Shows the markets where AI sends buyers to rivals, and the sources it trusts there."
       }
     },
     "detail": {
@@ -6272,6 +6368,11 @@
       "title": "Pages",
       "page": "Page",
       "score": "Score",
+      "firstScore": "First score",
+      "currentScore": "Current score",
+      "firstAuditedOn": "First audited {date}",
+      "sinceFirst": "since the first audit on {date}",
+      "sinceFirstTip": "Change since the first audit on {date}",
       "issues": "Issues",
       "status": "Status",
       "lastAudit": "Last audit",
@@ -6464,6 +6565,9 @@
       "previousScore": "Previous score",
       "change": "Change",
       "audits": "Audits",
+      "firstScore": "First score",
+      "firstAudit": "First audit",
+      "changeSinceFirst": "Change since first",
       "failed": "Couldn't export the pages"
     },
     "loadMore": "Load more",
@@ -6587,6 +6691,15 @@
       }
     },
     "finding": "Finding",
+    "evidence": {
+      "reading": "Reading score {score, number} ({formula}, {language})",
+      "readingNoFormula": "No reading-score formula for {language} yet: read by sentence and word length",
+      "sentences": "Sentences: {words, number} words on average",
+      "words": "Words: {syllables, number} syllables and {letters, number} letters on average",
+      "wordsLetters": "Words: {letters, number} letters on average",
+      "paragraphs": "Paragraphs: {words, number} words on average, about {lines, plural, one {# line} other {# lines}} each on a phone",
+      "firstPerson": "{count, plural, one {# sentence} other {# sentences}} of {total, number} told in the first person ({language})"
+    },
     "why": "Why",
     "recommendedFix": "Recommended fix",
     "fix": "Fix",
@@ -8910,6 +9023,9 @@
           "unknown": "The authors couldn't be read here, so the code below leaves the author out. Set the page's author in your CMS.",
           "none": "No author yet",
           "noneDetail": "The page goes out as {byline}, with the brand's Organization schema. A real author raises E-E-A-T.",
+          "noneSchemaDetail": "The page goes out as {byline}: its Article schema names {brand} as the author. A real author raises E-E-A-T.",
+          "inSchema": "Author: {name}",
+          "inSchemaDetail": "{name} is named in the page's Article schema. Set them as the author in your CMS too, so its template shows the byline.",
           "confirmed": "Author named on your site",
           "confirmedDetail": "You confirmed the page's author is a real person your site names. Check your CMS sets them as the author.",
           "brand": "Your brand's byline",
@@ -8931,10 +9047,20 @@
           "detail": "Most CMSs (WordPress, Webflow, Shopify) add these for you. Check your page."
         },
         "schema": {
-          "title": "Article schema with datePublished and dateModified",
-          "detail": "Often added by your CMS. If not, paste the code below into the page.",
-          "titleLive": "Article schema with dateModified",
-          "detailLive": "Often added by your CMS. If not, paste the code below into the page. It gives only the updated date: your page keeps the published date it has.",
+          "added": "Article schema with the author",
+          "addedNoAuthor": "Article schema",
+          "addedPill": "Added",
+          "addedDetail": "Ansvisor adds it to the page it sends to your CMS and to exports, with {author} as the author. The page's text doesn't change. WordPress leaves it out: add it with your SEO plugin.",
+          "addedDetailNoAuthor": "Ansvisor adds it to the page it sends to your CMS and to exports, without an author: your CMS names the one your site shows. The page's text doesn't change. WordPress leaves it out: add it with your SEO plugin.",
+          "leaveOut": "Leave it out",
+          "leaveOutFailed": "Couldn't save that. Try again.",
+          "leftOut": "Article schema left out",
+          "leftOutDetail": "You left Ansvisor's Article schema out of this page, for a CMS that adds its own. If yours doesn't, paste the code below into the page.",
+          "addBack": "Add it back",
+          "own": "Article schema on the page",
+          "ownDetail": "Your page already has an Article schema, so Ansvisor leaves its own out.",
+          "codeAdded": "The code Ansvisor adds to the page",
+          "showAdded": "Show the code Ansvisor adds",
           "product": "Product schema with its price",
           "productDetail": "Price read from the page: {price}. Check it's the product's. Often added by your shop's theme; if not, paste the code below into the page. Availability, SKU and reviews come from a product feed, once one is connected.",
           "itemList": "ItemList schema with {count, plural, one {# product} other {# products}}",
