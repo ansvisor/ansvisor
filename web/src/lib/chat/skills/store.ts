@@ -11,6 +11,7 @@ import type { ChatSkillItem } from '../composer-setup';
 import { chatAgenticEnabled } from '../flag';
 import { planFactsFromOrgRow, type PlanFacts } from '../plan-facts';
 import { parseTeamRole } from '../precedence';
+import { SHORTCUT_IDS } from '../shortcuts';
 import { MAX_BYTES, MAX_DESCRIPTION, MAX_NAME, checkSkillFile } from './format';
 import { SKILL_LIBRARY, enabledSkills, type SkillFilter } from './library';
 
@@ -72,7 +73,7 @@ export interface EnabledSkill {
 /** The longest title (00458). */
 export const MAX_TITLE = 120;
 
-/** The plan's My skills limit (Wave 3 decision 9): the workspace's own skills, whatever their state. */
+/** The plan's My skills limit (Wave 3 decision 9): the workspace's own skills, but for rejected ones. */
 const SKILL_LIMITS = { trial: 3, starter: 10, growth: 50, enterprise: 200 } as const;
 
 /**
@@ -88,6 +89,12 @@ export function skillPlanLimit(plan: PlanFacts): number | null {
 
 /** The library's names: a workspace skill never takes one (its /command would be two). */
 const LIBRARY_NAMES: ReadonlySet<string> = new Set(SKILL_LIBRARY.map((skill) => skill.name));
+
+/**
+ * The names a workspace skill never takes: the library's, and the / menu's
+ * shortcuts' (W2-09), each a hidden library skill under its /command.
+ */
+const RESERVED_NAMES: ReadonlySet<string> = new Set([...LIBRARY_NAMES, ...SHORTCUT_IDS]);
 
 // ─── Who may do what ────────────────────────────────────────────────────────
 
@@ -335,8 +342,8 @@ export async function enabledSkillsFor(
   ]);
   if (own.error) throw new Error(`Could not read the workspace's skills: ${own.error.message}`);
   const disabled = new Set(off);
-  // A name the library took after the skill was saved: the library's wins.
-  const names = new Set(library.map((skill) => skill.name));
+  // A name the library or a shortcut took after the skill was saved: theirs wins.
+  const names = new Set([...library.map((skill) => skill.name), ...SHORTCUT_IDS]);
   return [
     ...library
       .filter((skill) => !disabled.has(skill.name))
@@ -561,12 +568,16 @@ function viewOf(viewer: SkillViewer, row: ListRow): WorkspaceSkillView {
   };
 }
 
-/** The workspace's own skills, all of them: what the plan's limit counts. */
+/**
+ * The workspace's own skills but for rejected ones (an import an Admin
+ * turned down): what the plan's limit counts.
+ */
 async function countSkills(organizationId: string): Promise<number> {
   const { count, error } = await supabaseAdmin
     .from('chat_skills')
     .select('id', { count: 'exact', head: true })
-    .eq('organization_id', organizationId);
+    .eq('organization_id', organizationId)
+    .neq('status', 'rejected');
   if (error) throw new Error(`Could not count the workspace's skills: ${error.message}`);
   return count ?? 0;
 }
@@ -673,7 +684,7 @@ export async function saveSkill(
   if (check.problems.length > 0) {
     return skillRefusal('invalid', { problems: check.problems.join('; ') });
   }
-  if (LIBRARY_NAMES.has(parts.name)) return skillRefusal('library_name', { name: parts.name });
+  if (RESERVED_NAMES.has(parts.name)) return skillRefusal('library_name', { name: parts.name });
   const limit = skillPlanLimit(viewer.plan);
   if (limit !== null && (await countSkills(viewer.organizationId)) >= limit) {
     return skillRefusal('skill_limit', { limit });

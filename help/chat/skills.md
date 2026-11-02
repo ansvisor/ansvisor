@@ -17,7 +17,7 @@ Skills teach Chat how to do a task the way Ansvisor recommends: what to read, th
 
 Type **/** at the start of an empty box, or click **/**. Under the shortcuts, **Skills** lists each skill by its command and name. Type to filter, such as **/fa** for **/faq**, then press Enter or click. The command goes first in the box: finish your message after it and send.
 
-You can also type a skill's command yourself, at the start of your message. One answer uses up to three skills. **/report** is the **Weekly report** skill.
+You can also type a skill's command yourself, at the start of your message. One answer uses up to three skills, a shortcut's own steps counted. **/report** is the **Weekly report** skill; for any other report, use the **/new-report** shortcut (**Reports**).
 
 ## The Skills page
 
@@ -29,13 +29,13 @@ Admins turn a skill on or off for the whole workspace, and you turn your own sav
 
 ## When Chat picks a skill
 
-Chat also picks a skill by itself when one fits your question. Either way, the steps above the answer show **Used skill:** with the skill's name, and where it comes from under it: **Ansvisor library**, or **You** for a skill you saved.
+Chat also picks a skill by itself when one fits your question. Either way, the steps above the answer show **Used skill:** with the skill's name, and where it comes from under it: **Ansvisor library**, or **You** for a skill you saved. A shortcut shows **Used shortcut:** with its name.
 
 Analysts and Agency partners have no **/** menu, but Chat still uses a skill for them when one fits.
 
 ## Save your own skill
 
-Admins and Managers can ask Chat to keep steps they repeat as a skill of their own, for example: "Save this as a skill called /pricing-brief: open with the answer, then three short sections." Chat shows the skill's name, what it does and its steps on a card, and saves it when you approve, or by itself in Full auto. The skill is private to you and joins your **/** menu right away. It can't take the name of an Ansvisor skill, and your plan sets how many skills your workspace keeps.
+Admins and Managers can ask Chat to keep steps they repeat as a skill of their own, for example: "Save this as a skill called /pricing-brief: open with the answer, then three short sections." Chat shows the skill's name, what it does and its steps on a card, and saves it when you approve, or by itself in Full auto. The skill is private to you and joins your **/** menu right away. It can't take the name of an Ansvisor skill or a shortcut, such as **/analyze**, and your plan sets how many skills your workspace keeps.
 
 ## What a skill can't change
 

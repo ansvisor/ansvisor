@@ -23,6 +23,7 @@ import {
 } from '@/lib/chat/focus-home';
 import { dayPartOf, endOfWeek } from '@/lib/chat/home';
 import { formatNumber } from '@/lib/format';
+import type { ShortcutId } from '@/lib/chat/shortcuts';
 import type { SinceMove, SinceYouLeft } from '@/lib/chat/since';
 import { platformName } from '@/lib/signals/names';
 import { cn } from '@/lib/utils';
@@ -50,8 +51,11 @@ export interface ChatHomeViewProps {
   readyDrafts: number | null;
   /** The person may change things: the jobs that write show, and More. */
   canChange: boolean;
-  /** Asks Chat in a new chat: the "For you now" chips, and Since you left's Why? and Which ones?. */
-  onAsk: (message: string) => void;
+  /**
+   * Asks Chat in a new chat: the "For you now" chips (a shortcut's with its
+   * id, W2-09), and Since you left's Why? and Which ones?.
+   */
+  onAsk: (message: string, shortcutId?: ShortcutId) => void;
   starting: boolean;
   /** "Since you left": null until read, or with nothing to show. */
   since?: SinceYouLeft | null;
@@ -481,10 +485,10 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
 
   useHomeSeen();
 
-  async function startChat(message: string) {
+  async function startChat(message: string, shortcutId?: ShortcutId) {
     if (starting) return;
     setStarting(true);
-    const started = await startChatRun(message, brandId ?? null);
+    const started = await startChatRun(message, brandId ?? null, { shortcutId });
     if (!started.ok) {
       setStarting(false);
       if (started.code === 'subscription_inactive') openUpgrade();
@@ -507,7 +511,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
       lostPages={mine ? mine.lostPages : null}
       readyDrafts={mine ? mine.readyDrafts : null}
       canChange={canManage}
-      onAsk={(message) => void startChat(message)}
+      onAsk={(message, shortcutId) => void startChat(message, shortcutId)}
       starting={starting}
       since={since && since.brandId === brandId ? since.since : null}
       focus={focusCtx ? { areas: focusCtx.focus, onEdit: focusCtx.edit } : null}

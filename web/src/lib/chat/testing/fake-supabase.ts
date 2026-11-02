@@ -52,6 +52,8 @@ interface Builder extends PromiseLike<Result> {
   gt(column: string, value: unknown): Builder;
   /** At or after: an ISO time, or a number. */
   gte(column: string, value: unknown): Builder;
+  /** At or before: an ISO time, or a number; a null cell never passes. */
+  lte(column: string, value: unknown): Builder;
   /**
    * PostgREST's `or`: a row passes any of the comma-separated `column.op.value`
    * terms (eq, neq, is null, lt a date — as saveContentDraft's agent check) or
@@ -297,6 +299,14 @@ export function createFakeSupabase(): FakeSupabase {
         gte(column, value) {
           const at = (v: unknown) => (typeof v === 'string' ? Date.parse(v) : (v as number));
           filters.push((row) => row[column] !== null && at(row[column]) >= at(value));
+          return builder;
+        },
+        lte(column, value) {
+          const at = (v: unknown) => (typeof v === 'string' ? Date.parse(v) : (v as number));
+          filters.push(
+            (row) =>
+              row[column] !== null && row[column] !== undefined && at(row[column]) <= at(value),
+          );
           return builder;
         },
         or(filter) {

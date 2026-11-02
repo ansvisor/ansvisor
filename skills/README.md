@@ -53,10 +53,28 @@ start a message with its `/name`.
 | [`rivals`](./rivals) | Rival brief |
 | [`audit-fix`](./audit-fix) | Site audit fixes |
 
+### Shortcut playbooks
+
+Chat's `/` menu shortcuts each have a playbook here too: a `SKILL.md` marked
+`metadata.hidden: "true"`, named after its command. Chat never lists them as
+skills; it loads one only for a message sent with its shortcut, and that
+answer reads only the tools in the playbook's `metadata.reads`.
+
+| Playbook | Shortcut |
+| --- | --- |
+| [`start`](./start) | Get started |
+| [`analyze`](./analyze) | Analyze |
+| [`new-report`](./new-report) | Reports |
+| [`create`](./create) | Create content |
+| [`optimize`](./optimize) | Optimize content |
+| [`opportunities`](./opportunities) | Find opportunities |
+| [`audit`](./audit) | Improve with audit |
+
 CI checks every one of them (`web/src/lib/chat/skills/library.test.ts`):
 the front matter (`name` matches the folder, `description` up to 1,024
 characters, `metadata.title` and `metadata.filters`, `license: MIT`), a body
-of at most 500 lines, the tool names Chat has, and a scan that refuses email
+of at most 500 lines, the tool names Chat has (for a playbook, `metadata.reads`
+names read tools only, and its title is its shortcut's), and a scan that refuses email
 addresses, prices, tracking parameters, hidden characters, base64 blobs,
 secrets and text that tries to override Chat's rules. A skill shapes how
 Chat does a task; it never changes what Chat may do, skips an approval or
@@ -145,8 +163,8 @@ you ask for that specific change.
 ## Contributing
 
 Every folder under `skills/` other than the two AEO coach flavours is one of
-Chat's Ansvisor skills, and CI checks it as one. So there are two kinds of
-contribution:
+Chat's Ansvisor skills or shortcut playbooks, and CI checks it as one. So
+there are two kinds of contribution:
 
 **A skill for Chat.** Ansvisor's own skills are the twenty-one listed above.
 Adding one (or changing one) means, in the same PR:
