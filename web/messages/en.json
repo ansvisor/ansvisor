@@ -3516,7 +3516,11 @@
     "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
     "webPage": { "name": "Open web pages", "step": "Open page" },
     "whyChange": { "name": "Explain why a number changed", "step": "Read why it changed" },
-    "agents": { "name": "Create and run agents", "step": "Changed an agent" }
+    "agents": { "name": "Create and run agents", "step": "Changed an agent" },
+    "whatsNew": {
+      "name": "Read What’s new",
+      "step": "Read What’s new"
+    }
   },
   "agentic": {
     "avatar": {
@@ -3969,6 +3973,9 @@
       "approvalMismatch": "This changed after you approved it. Approve again?",
       "notFound": "This chat isn't there any more.",
       "attachments": "A file you attached isn't ready or isn't yours any more. Attach it again and send."
+    },
+    "whatsNew": {
+      "step": "{count, plural, =0 {Nothing new for your plan} one {# update for your plan} other {# updates for your plan}}"
     }
   },
   "chatRun": {
