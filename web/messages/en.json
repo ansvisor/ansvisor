@@ -3874,6 +3874,10 @@
       "skillImported": "Imported",
       "usedShortcut": "Used shortcut: {title}"
     },
+    "saveSteps": {
+      "label": "Save these steps as a skill",
+      "prompt": "Save these steps as a skill"
+    },
     "partial": {
       "question": "Your remaining AI limit covers about {fits} of the {parts} {unit}.",
       "doFirst": "Do the first {fits} now",

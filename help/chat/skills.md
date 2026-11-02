@@ -1,7 +1,7 @@
 ---
 title: Skills in Chat
 route: /dashboard/chat
-keywords: [skills, skill, create a skill, skill draft, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, review a skill, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps]
+keywords: [skills, skill, create a skill, skill draft, save these steps as a skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, review a skill, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps]
 synonyms: [slash commands, playbooks, how-tos, templates]
 plan: all
 updated: 2026-11-02
@@ -35,9 +35,11 @@ Analysts and Agency partners have no **/** menu, but Chat still uses a skill for
 
 ## Save your own skill
 
-Admins and Managers can ask Chat to keep steps they repeat as a skill of their own. Start with "Create a skill that…", or pick **New skill** › **Create in Chat** on the **Skills** page. Chat asks at most two questions, then shows a draft: the skill's name, title, what it does and its steps, each one editable. Nothing is kept until you click **Save skill**, in every mode, Full auto too.
+Admins and Managers can keep steps they repeat as a skill of their own. Start with "Create a skill that…", or pick **New skill** › **Create in Chat** on the **Skills** page. Chat asks at most two questions, then shows a draft you can edit: the skill's name, title, what it does and its steps. Nothing is kept until you click **Save skill**, in every mode, Full auto too.
 
-The skill is private to you and joins your **/** menu right away. It can't take the name of an Ansvisor skill or a shortcut, such as **/analyze**, and the card says so before you save. Your plan sets how many skills your workspace keeps.
+After an answer that did a few things, click **Save these steps as a skill** under it. Chat drafts the skill from those steps, keeping their date range and platforms, without numbers or your brand's details.
+
+The skill is private to you and joins your **/** menu right away. It can't take the name of an Ansvisor skill or a shortcut, such as **/analyze**. Your plan sets how many skills your workspace keeps.
 
 ## Import a skill
 
