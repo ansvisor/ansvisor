@@ -47,7 +47,8 @@ router.get('/ai-usage', async (req, res) => {
         features: [],
       });
     }
-    // With what Write this typically takes, for its dialog (customer priorities item 9).
+    // With what Write this and a draft's AI checks typically take, for the
+    // pages that say so (customer priorities item 9).
     return res.json(await getAiUsage(orgId, { estimates: aiEstimateCosts() }));
   } catch (error) {
     // No active plan (a new workspace, past due, canceled): no allowance to meter.

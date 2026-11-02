@@ -116,7 +116,9 @@ describe('WriteThisDialog', () => {
       "From the opportunity's 4 prompts, their fan-outs and the pages AI cites for them.",
     );
     expect(text).toContain('The Content Agent writes the page from the brief');
-    expect(text).toContain('The editor opens as it writes. Nothing is published.');
+    expect(text).toContain(
+      'The editor opens as it writes, with a free estimate of its Site Audit score. Nothing is published.',
+    );
     expect(text).toContain('Uses about 3% of your monthly AI usage · 41.2% used so far');
   });
 
