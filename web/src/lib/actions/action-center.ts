@@ -64,6 +64,7 @@ import type { PriorityLevel, PriorityReason } from '@/lib/action-center/priority
 import type { CompetitorFindings } from '@/lib/action-center/competitor-findings';
 import type { WinningFindings } from '@/lib/action-center/winning-findings';
 import { assertWritable } from '@/lib/subscription-guard';
+import { canAccessBrand } from '@/lib/brand-access';
 import { logEvent, touchAction, writeTaskStatus } from '@/lib/action-center/task-status';
 import { readTaskAttachments, type TaskAttachment } from '@/lib/action-center/chat-attachments';
 
@@ -394,12 +395,20 @@ export async function deleteAction(actionId: string): Promise<void> {
   }
 }
 
+/**
+ * Assign an action, or clear its assignee. The assignee must be someone who
+ * can see the brand (BRAND-ACCESS §3.1): a teammate it wasn't shared with,
+ * or anyone outside the workspace, is refused before anything is written.
+ */
 export async function assignAction(
   brandId: string,
   actionId: string,
   assigneeId: string | null,
 ): Promise<void> {
   await assertWritable({ brandId });
+  if (assigneeId && !(await canAccessBrand(assigneeId, brandId))) {
+    throw new Error("The assignee can't see this brand");
+  }
   const supabase = await createClient();
   const { error } = await supabase
     .from('actions')

@@ -30,7 +30,7 @@ import {
   updateActionStatus,
   type ActionItem,
 } from '@/lib/actions/action-center';
-import { listMembers, type TeamMember } from '@/lib/actions/team';
+import { listBrandMembers, type TeamMember } from '@/lib/actions/team';
 import {
   getGettingStarted,
   skipGettingStarted,
@@ -406,10 +406,11 @@ function ActionsContent({ brand }: { brand: Brand }) {
 
   useEffect(() => {
     void load();
-    listMembers()
+    // The people who can see this brand: the drawer assigns only them.
+    listBrandMembers(brand.id)
       .then(setMembers)
       .catch(() => setMembers([]));
-  }, [load]);
+  }, [load, brand.id]);
 
   // An assignee from the URL who is no longer on the team falls back to all.
   useEffect(() => {

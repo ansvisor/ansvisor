@@ -121,7 +121,7 @@ vi.mock('@/hooks/use-first-run', () => ({
     return () => firstRun.finished.delete(listener);
   },
 }));
-vi.mock('@/lib/actions/team', () => ({ listMembers: vi.fn(async () => []) }));
+vi.mock('@/lib/actions/team', () => ({ listBrandMembers: vi.fn(async () => []) }));
 vi.mock('@/lib/download', () => ({ saveBlob }));
 vi.mock('sonner', () => ({ toast }));
 vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
