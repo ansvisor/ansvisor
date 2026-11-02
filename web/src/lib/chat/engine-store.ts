@@ -174,10 +174,25 @@ export interface RunProgress {
   scopeUntrusted?: boolean;
   /** The skills loaded for this run, by name, in order (CHAT-13 item 4: at most 3). */
   skills?: string[];
+  /**
+   * The shortcut the message started (CHAT-08, W2-09; chat_messages.shortcut_id):
+   * its playbook loads first, and the run reads only its data plan.
+   */
+  shortcut?: string;
   /** The run put Action Center tasks in its chat's task strip (CHAT-09 §B): it shows it as it ends. */
   taskStrip?: boolean;
   /** The action a /tasks run opened last (get_action): what it files next is for its task. */
   taskAction?: string;
+  /**
+   * The job in parts the person is asked about (CHAT-04 item 17a): how many
+   * the AI limit left covers, of how many, and what they are.
+   */
+  parts?: { fits: number; parts: number; unit: string };
+  /**
+   * No one was there to ask (an agent's or a scheduled run): the parts that
+   * fit are done, and the run stops at the AI limit as it ends.
+   */
+  limitStop?: boolean;
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {
