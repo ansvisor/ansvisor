@@ -198,5 +198,140 @@
       ],
       "body": "# Site audit fixes\n\nThe site audit's findings, ordered by what matters most for AI answers, each turned into a fix ready to apply.\n\n## When to use\n\n- \"Fix our site audit\", \"What should we fix first for AI?\", \"Site audit fixes.\"\n- To rewrite one page so AI quotes it, the Answer-first rewrite skill fits better.\n\n## What to read\n\n1. `get_site_audit_summary`: the latest audit, its date and its scores.\n2. `list_site_audit_issues`: the findings, with the pages each one affects.\n3. `fetch_page` for the pages behind the top findings: what is on them now.\n4. `list_drafts` and `get_draft`: drafts already open for those pages.\n\n## Steps\n\n1. Start from the latest audit. When there is none, or it is old, offer `run_site_audit`; the app asks the person first.\n2. Order the findings by what matters for AI answers: whether AI crawlers can reach the pages, then missing direct answers, structured data, titles and descriptions, then the rest.\n3. For each of the top findings: why it matters for AI answers, and the fix, ready to apply: the corrected markup, text or setting.\n4. When the person wants a page change kept, save it as a draft with `create_draft`; the app asks them first when it should.\n5. Settings outside the page, such as the robots file or the CMS, are the person's to change: write the change for them.\n\n## Output\n\n1. A table: Finding, Pages, Why it matters for AI, Fix, Effort.\n2. The fixes, ready to paste.\n\n## Don't\n\n- Never publish or change the site: going live is always the person's click.\n- Don't fix what the audit didn't find without saying so.\n- Never promise rankings or citations."
     }
+  ],
+  "playbooks": [
+    {
+      "name": "start",
+      "title": "Get started",
+      "description": "Answers setup questions and walks through the open Getting started steps, with a link to each page.",
+      "filters": [],
+      "body": "# Get started\n\nThe playbook of the /start shortcut (\"Help me get started. What should I set up first?\"): what to set up next in Ansvisor, from where the brand stands today.\n\n## Data plan\n\nRead only these, for the chat's brand:\n\n1. `get_onboarding_progress`: the Getting started steps, done and open, in stage order.\n2. `list_competitors`, `list_topics` and `list_prompts`: how many competitors, topics and prompts the brand has.\n3. `list_connections`: whether Google Search Console and Analytics are connected for the brand.\n4. `get_plan_facts`, only when an open step depends on what the plan includes.\n5. `list_brands` only when no brand is selected, and `open_page` to link each step's page.\n\n## Questions\n\n- When the workspace has two brands or more and none is selected, ask which brand to set up first.\n- Nothing else: the progress answers the rest.\n\n## Steps\n\n1. Say where the brand stands in one line: how many steps are done, out of how many.\n2. List the open steps in stage order, five at most. For each: what it needs, why it matters for AI answers, and its page, linked with `open_page`.\n3. For anything the person connects themselves (Search Console, Analytics, the AI Traffic snippet), give the short steps they take.\n4. When every step is done, say so and point to the brand's first results instead.\n\n## Output\n\nText: the one-line status, then the open steps as a numbered list.\n\n## Next moves\n\nThe next open steps, such as \"Add 3 competitors\" or \"Connect Google Search Console\".\n\n## Don't\n\n- Never mark a Getting started step done or skip one: it completes through its own check.\n- Add competitors, topics or prompts only with the tools that do it, and the app asks the person first.",
+      "reads": [
+        "get_onboarding_progress",
+        "list_competitors",
+        "list_topics",
+        "list_prompts",
+        "list_connections",
+        "get_plan_facts",
+        "list_brands",
+        "open_page"
+      ]
+    },
+    {
+      "name": "analyze",
+      "title": "Analyze",
+      "description": "Explains what changed and why, and whether it beats the normal week-to-week swing.",
+      "filters": [],
+      "body": "# Analyze\n\nThe playbook of the /analyze shortcut (\"Analyze …\"): what changed in the brand's AI visibility, why, and whether it is more than normal swing.\n\n## Data plan\n\nRead one to three of these, the ones the request is about, for the chat's brand:\n\n1. Visibility: `get_overview_summary`, or `get_visibility_summary` and `get_visibility_trend`.\n2. Prompts: `get_prompt_performance` and `list_prompts`.\n3. Mentions: `get_mentions_summary`, and `get_mentions_perception` for how AI describes the brand.\n4. Competitors: `get_competitor_comparison`.\n5. Citations: `list_citations`.\n6. AI traffic: `get_ai_traffic_summary`, and `get_gsc_summary` or `get_ga_summary` when connected.\n7. Why one number moved: `explain_change`.\n\nUse `list_brands` only when no brand is selected, and `open_page` to link the page that shows the numbers.\n\nScope: the page's date range when the message came with one, else the last 30 days against the 30 before, on every platform the plan tracks. Give dates only for the period before, or a period the person names.\n\n## Questions\n\n- Ask for the period or the competitor only when the request names neither and the answer would change with it. Otherwise use the default scope and say so.\n\n## Steps\n\n1. Read the period and the one before it, for the sources the request is about.\n2. Lead with the change: the metric, both values, and whether it is within normal swing.\n3. Then why: the prompts, platforms, pages and competitors that moved most, with their numbers.\n4. Say what moved together and when; never that one change caused another.\n\n## Output\n\nText, with a table when it compares more than three rows: Metric or prompt, This period, Before, Change.\n\n## Next moves\n\nTwo or three, such as \"Send to Action Center\" for a finding worth acting on, or refreshing a page that lost citations.\n\n## Don't\n\n- Never present a cut list as complete, or a change within normal swing as a trend.\n- Never report a platform the plan doesn't track.",
+      "reads": [
+        "get_overview_summary",
+        "get_visibility_summary",
+        "get_visibility_trend",
+        "get_prompt_performance",
+        "list_prompts",
+        "get_mentions_summary",
+        "get_mentions_perception",
+        "get_competitor_comparison",
+        "list_citations",
+        "get_ai_traffic_summary",
+        "get_gsc_summary",
+        "get_ga_summary",
+        "explain_change",
+        "list_brands",
+        "open_page"
+      ]
+    },
+    {
+      "name": "new-report",
+      "title": "Reports",
+      "description": "Builds a one-off report on the brand and keeps it in Reports, to open, share or download.",
+      "filters": [],
+      "body": "# Reports\n\nThe playbook of the /new-report shortcut (\"Create a report on …\"): a one-off report on the brand, kept in the Reports module. The Weekly report skill is /report; this is any other report the person asks for.\n\n## Data plan\n\nRead only what the report needs, for the chat's brand:\n\n1. `get_overview_summary`, or `get_visibility_summary` and `get_visibility_trend`: visibility and its trend.\n2. `get_competitor_comparison`: share of voice against the brand's competitors.\n3. `get_mentions_summary`: mentions and sentiment.\n4. `list_citations`: the pages and domains AI cites.\n5. `get_ai_traffic_summary`, when the report is about AI traffic.\n6. `get_reports`: the reports already made, so the new one doesn't repeat one from the same period.\n\nUse `list_brands` only when no brand is selected, and `open_page` to link Reports.\n\nScope: the period the person names, else the last 30 days, with the brand's competitors and every platform the plan tracks.\n\n## Questions\n\n- When the request gives neither, ask who the report is for and which period, together in one question.\n\n## Steps\n\n1. Pick the report's template from what it is about: weekly_visibility for visibility, its trend and share of voice; executive_summary for leadership; competitor_benchmark for competitors; citation_sources for cited sources.\n2. Make it with `build_report` over the period; the app asks the person first when it should.\n3. Sum up its three most important findings in the answer, with their numbers.\n4. When no template fits (an AI traffic report, say), write the report in the answer instead, in short sections with a table, so the person keeps it with **Save to Files** or downloads it.\n\n## Output\n\nThe report in Reports, and three findings in the answer. Without a template: the report itself, in the answer.\n\n## Next moves\n\nTwo or three, such as opening the report in Reports, or the same report for the period before.\n\n## Don't\n\n- Chat doesn't email or schedule the report: the person shares or downloads it from Reports.\n- Keep it truthful: report drops as plainly as gains, and never claim one change caused another.",
+      "reads": [
+        "get_overview_summary",
+        "get_visibility_summary",
+        "get_visibility_trend",
+        "get_competitor_comparison",
+        "get_mentions_summary",
+        "list_citations",
+        "get_ai_traffic_summary",
+        "get_reports",
+        "list_brands",
+        "open_page"
+      ]
+    },
+    {
+      "name": "create",
+      "title": "Create content",
+      "description": "Writes briefs, articles, FAQ blocks, comparison pages and social posts from what AI engines ask and cite.",
+      "filters": [],
+      "body": "# Create content\n\nThe playbook of the /create shortcut (\"Create content for …\"): a piece of content written to be cited by AI engines, from the brand's prompts, fan-outs and the pages AI cites now.\n\n## Data plan\n\nRead only these, for the chat's brand and the topic or page the person names:\n\n1. `list_prompts`, `get_prompt_performance` and `list_topics`: the prompts the piece should win, and how the brand does on them.\n2. `get_fanouts` and `get_prompt_insights`: what the engines search for behind those prompts, and which matter most.\n3. `list_citations`: the pages AI cites for them now.\n4. `fetch_page` for one or two of those cited pages, and for the brand's own page when the piece updates it.\n5. `list_content_opportunities`, when the person names no topic.\n6. `list_drafts` and `get_draft`: a draft already open for the same page.\n\nUse `list_brands` only when no brand is selected, and `open_page` to link the Content Library.\n\nScope: the last 30 days, every platform the plan tracks.\n\n## Questions\n\n- Ask the format (brief, article, FAQ block, comparison page or social post), the target page and the length only when the request doesn't say and the answer changes what you write. Two questions at most, together.\n\n## Steps\n\n1. Pick the questions the piece must answer: the prompts and fan-outs with the most demand.\n2. See what the cited pages answer, and what they leave out.\n3. Write the piece answer-first: a direct answer under each heading, then detail. For an FAQ or a comparison page, add the structured data as a code block.\n4. When the person wants it kept, save it as a draft with `create_draft`; the app asks them first when it should.\n\n## Output\n\nThe piece as a document, with its structured data as code when it has some.\n\n## Next moves\n\nTwo or three, such as opening it in the Content Editor, or an FAQ block for the same prompts.\n\n## Don't\n\n- Public content: no tracking numbers unless the person asks, no weak or made-up statistics, and use [placeholders] for facts, quotes and figures the person must give.\n- Never publish: going live is always the person's click.",
+      "reads": [
+        "list_prompts",
+        "get_prompt_performance",
+        "list_topics",
+        "get_fanouts",
+        "get_prompt_insights",
+        "list_citations",
+        "list_content_opportunities",
+        "fetch_page",
+        "list_drafts",
+        "get_draft",
+        "list_brands",
+        "open_page"
+      ]
+    },
+    {
+      "name": "optimize",
+      "title": "Optimize content",
+      "description": "Scores a page or draft against the pages AI cites and lists the changes that would get it cited.",
+      "filters": [],
+      "body": "# Optimize content\n\nThe playbook of the /optimize shortcut (\"Optimize this page: …\"): how one page or draft compares with what AI cites for its prompts, and the changes that would close the gap.\n\n## Data plan\n\nRead only these, for the page or draft the person names:\n\n1. `fetch_page` for the page, or `get_draft` for a draft (`list_drafts` to find it by name).\n2. `list_prompts` and `get_prompt_performance`: the tracked prompts the page should win.\n3. `list_citations` for those prompts over the last 30 days, and `fetch_page` for the one or two pages AI cites most.\n4. `get_fanouts`: what the engines search for behind those prompts.\n5. `get_site_audit_summary` and `list_site_audit_issues`: the page's latest Site Audit result, when it has one.\n\nUse `list_brands` only when no brand is selected, and `open_page` to link the Content Editor.\n\n## Questions\n\n- When no tracked prompt fits the page, ask which prompts it should win, with two to four of the closest as options.\n\n## Steps\n\n1. Score the page against the cited pages: does it answer the prompts directly, cover the fan-outs, carry structured data, and pass its audit checks?\n2. List the changes, most impact first: what to change, where, and why AI would cite it after.\n3. Write the changed passages, ready to paste, and the structured data as code.\n4. When the person wants a draft changed, use `update_draft`; for a live page, save the new version with `create_draft`. The app asks them first when it should.\n\n## Output\n\nA change list: Change, Where, Why it helps AI answers, then the rewritten passages.\n\n## Next moves\n\nTwo or three, such as opening the page in the Content Editor, or generating its schema.\n\n## Don't\n\n- Never publish or change the live site: going live is always the person's click.\n- Never promise rankings or citations.",
+      "reads": [
+        "fetch_page",
+        "get_draft",
+        "list_drafts",
+        "list_citations",
+        "list_prompts",
+        "get_prompt_performance",
+        "get_fanouts",
+        "get_site_audit_summary",
+        "list_site_audit_issues",
+        "list_brands",
+        "open_page"
+      ]
+    },
+    {
+      "name": "opportunities",
+      "title": "Find opportunities",
+      "description": "Finds content gaps, prompts worth tracking, and the off-site sources AI cites instead of the brand.",
+      "filters": [],
+      "body": "# Find opportunities\n\nThe playbook of the /opportunities shortcut (\"Find content opportunities for …\"): where the brand could be cited and isn't yet, on its own site and off it.\n\n## Data plan\n\nRead only these, for the chat's brand and the topic the person names:\n\n1. `list_content_opportunities`: the prompts where the brand loses visibility, and the page that would win them.\n2. `list_citations`: the domains and pages AI cites, and which of them cite competitors but not the brand.\n3. `get_competitor_comparison`: who wins the prompts the brand loses.\n4. `get_fanouts`: searches the engines run that no tracked prompt covers.\n5. `list_prompt_suggestions` and `get_prompt_insights`: prompts worth tracking, with their demand.\n6. `get_gsc_summary`, when Search Console is connected.\n\nUse `list_brands` only when no brand is selected, and `open_page` to link Content Opportunities.\n\nScope: the last 30 days, every platform the plan tracks.\n\n## Questions\n\n- When the request doesn't say, ask whether to look at the brand's own site, off-site sources, or both.\n\n## Steps\n\n1. On the site: the opportunities with the highest score, each with the page to write or update.\n2. Off the site: the domains AI cites for competitors and not for the brand (Reddit, directories, publishers), with what each would need.\n3. Prompts to track: the fan-outs and suggestions with the most demand that aren't tracked yet.\n\n## Output\n\nA table: Opportunity, Where (site or off-site), Why (the prompts and engines), Next step.\n\n## Next moves\n\nTwo or three, such as \"Create content for #1\" or \"Track these prompts\".\n\n## Don't\n\n- Never add prompts without the tool that does it, and the app asks the person first.\n- Never promise rankings or citations.",
+      "reads": [
+        "list_content_opportunities",
+        "list_citations",
+        "get_competitor_comparison",
+        "get_fanouts",
+        "list_prompt_suggestions",
+        "get_prompt_insights",
+        "get_gsc_summary",
+        "list_brands",
+        "open_page"
+      ]
+    },
+    {
+      "name": "audit",
+      "title": "Improve with audit",
+      "description": "Reads the latest Site Audit result or runs one, then turns its issues into fixes and code.",
+      "filters": [],
+      "body": "# Improve with audit\n\nThe playbook of the /audit shortcut (\"Run an audit on …\"): a page's Site Audit issues, turned into fixes ready to apply.\n\n## Data plan\n\nRead only these, for the page or site the person names:\n\n1. `get_site_audit_summary`: the brand's recent audits, to find the page's latest.\n2. `list_site_audit_issues`: that audit's checks, passed and failed.\n3. `fetch_page` for the page, to write fixes against what is on it now.\n\nUse `list_brands` only when no brand is selected, and `open_page` to link Site Audit.\n\n## Questions\n\n- None about the audit itself. Reading an existing result uses nothing.\n\n## Steps\n\n1. When the page has an audit from the last 30 days, use it. Otherwise start one with `run_site_audit` on that one page; the app shows the person what it uses of the month's audits first.\n2. Audit the whole site only when the person says so; that card shows its cost too.\n3. Order the failed checks by what matters for AI answers: whether AI crawlers can reach the page, then direct answers, structured data, titles and descriptions, then the rest.\n4. For each: why it matters, and the fix, ready to apply: the corrected markup, text or setting as code.\n\n## Output\n\nA table of the issues (Issue, Why it matters for AI, Fix, Effort), then the fixes as code.\n\n## Next moves\n\nTwo or three, such as \"Send fixes to Action Center\" or checking again after the fix.\n\n## Don't\n\n- Never change the site or publish: the fixes are the person's to apply.\n- Don't fix what the audit didn't find without saying so.",
+      "reads": [
+        "get_site_audit_summary",
+        "list_site_audit_issues",
+        "fetch_page",
+        "list_brands",
+        "open_page"
+      ]
+    }
   ]
 }

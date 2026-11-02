@@ -157,15 +157,18 @@ import {
   startAction,
   weekEndIn,
 } from './task-strip';
+import { messageShortcut, playbookPlanNote, playbookTools } from './shortcut-playbooks';
 import {
   MAX_SKILL_BODIES,
   USE_SKILL_TOOL,
   availableSkillsBlock,
   enabledSkills,
   loadedSkillsBlock,
+  shortcutPlaybook,
   skillsForPrompt,
   typedSkills,
   type LibrarySkill,
+  type ShortcutPlaybook,
 } from './skills/library';
 import { MAX_UPLOADS } from './uploads';
 
@@ -379,6 +382,12 @@ export const startRunInput = z.object({
    * item 18): a run of the same chat, read on the server, never trusted.
    */
   fromRunId: z.guid().optional(),
+  /**
+   * The shortcut the message was sent with (CHAT-08 item 4, W2-09): kept
+   * only while the message is still that shortcut's (messageShortcut). One
+   * that isn't never refuses the message.
+   */
+  shortcutId: z.string().trim().max(40).optional().catch(undefined),
 });
 
 /** What a message was scoped to: its page's chips and its @ references (chat_messages.context_json). */
@@ -644,6 +653,11 @@ export async function startChatRun(
   );
   // A move a tainted run wrote is marked on its row, so a later turn takes no site from it either.
   const context = earlier.fromTaintedMove ? { ...scope, fromTaintedMove: true } : scope;
+  // Its shortcut's data plan only while it is still that shortcut's message, and not a move a
+  // model wrote after reading outside text, whatever came with it.
+  const shortcut = earlier.fromTaintedMove
+    ? null
+    : messageShortcut(input.shortcutId, input.message);
   // One after the other, so the question comes before its answer.
   const questionId = await insertRow(
     'chat_messages',
@@ -652,6 +666,7 @@ export async function startChatRun(
       role: 'user',
       content_md: input.message,
       context_json: context as unknown as Json | null,
+      ...(shortcut ? { shortcut_id: shortcut } : {}),
     },
     'keep the message',
   );
@@ -677,6 +692,7 @@ export async function startChatRun(
     ...newProgress(timezone, brandId, 'read'),
     question: input.message,
     ...(scope ? { scope } : {}),
+    ...(shortcut ? { shortcut } : {}),
     ...(earlier.fromTaintedMove || earlier.afterInjection || fromRun || options.tainted
       ? { tainted: true }
       : {}),
@@ -745,9 +761,16 @@ interface RunContext {
   refused: { tool: ChatTool; denial: ToolDenial }[];
   /**
    * The skills the person may use (CHAT-13 items 3–4): every enabled one,
-   * and the ones the prompt lists. None while the new Chat is off.
+   * and the ones the prompt lists. None while the new Chat is off. With the
+   * message's shortcut (W2-09), its playbook, and the line on what the plan
+   * leaves out of its data plan, if anything.
    */
-  skills: { enabled: readonly LibrarySkill[]; listed: readonly LibrarySkill[] };
+  skills: {
+    enabled: readonly LibrarySkill[];
+    listed: readonly LibrarySkill[];
+    playbook: ShortcutPlaybook | null;
+    planNote: string | null;
+  };
   /** The calls of the model step being handled: questions asked together count as one batch. */
   stepCalls?: PendingCall[];
   /**
@@ -829,7 +852,7 @@ export async function driveRun(
     // A how-to question is answered from Help before any data is read (CHAT-19 §5);
     // a message that calls a skill by its /name asks for a task, not how-to help.
     const fresh = !resume && rc.progress.steps === 0 && rc.progress.modelSteps === 0;
-    const typed = fresh ? await loadTypedSkills(rc) : 0;
+    const typed = fresh ? (await loadShortcut(rc)) + (await loadTypedSkills(rc)) : 0;
     if (fresh && typed === 0 && (await helpTurn(rc)) === 'ended') return;
     await modelLoop(rc);
   } catch (err) {
@@ -932,7 +955,11 @@ async function openContext(
     brandId: brand?.id ?? null,
     brandIsDemo: brand ? await readBrandIsDemo(brand.id) : false,
   };
-  const { offered, refused } = engineTools(ctx, scope);
+  const tools = engineTools(ctx, scope);
+  // A shortcut's run reads only its data plan (W2-09).
+  const playbook = shortcutPlaybook(actor.organizationId, progress.shortcut);
+  const offered = playbook ? playbookTools(tools.offered, playbook) : tools.offered;
+  const { refused } = tools;
   const budget = readBudget(run.effort);
   const history = await readHistory(run, budget.historyChars);
   // One model does both on a single-model key: the run writes from the start.
@@ -958,7 +985,11 @@ async function openContext(
     refused,
     agentRunId,
     sessionUserId,
-    skills: runSkills(actor.organizationId, progress, history.plan),
+    skills: {
+      ...runSkills(actor.organizationId, progress, history.plan),
+      playbook,
+      planNote: playbook ? playbookPlanNote(playbook, refused, ctx.plan.planName) : null,
+    },
   };
 }
 
@@ -992,7 +1023,7 @@ function runSkills(
   organizationId: string,
   progress: Progress,
   history: HistoryPlan,
-): RunContext['skills'] {
+): Pick<RunContext['skills'], 'enabled' | 'listed'> {
   const enabled = enabledSkills(organizationId);
   if (enabled.length === 0) return { enabled, listed: [] };
   const question = progress.question ?? '';
@@ -1223,14 +1254,14 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
 async function loadSkill(
   rc: RunContext,
   skill: LibrarySkill,
-  via: 'typed' | 'model',
+  via: 'typed' | 'model' | 'shortcut',
 ): Promise<void> {
   rc.progress.skills = [...(rc.progress.skills ?? []), skill.name];
   const row = await insertStep(rc.run.id, {
     position: ++rc.progress.steps,
     kind: 'skill',
     status: 'done',
-    label: t('step.usedSkill', { title: skill.title }),
+    label: t(via === 'shortcut' ? 'step.usedShortcut' : 'step.usedSkill', { title: skill.title }),
     detail: t('step.skillFromLibrary'),
     tool: USE_SKILL_TOOL,
     debug: { skill: skill.name, via },
@@ -1239,15 +1270,26 @@ async function loadSkill(
 }
 
 /**
- * The skills the message calls by /name, loaded before the first step: 3 at most. Their count.
- * None when the run starts tainted: its message is a next move a run wrote after reading
- * outside text (fromTaintedMove), so its /name is that model's, not the person's (§16a).
+ * The message's shortcut playbook (CHAT-08 item 8, W2-09), loaded first, as
+ * a skill: one of the run's 3 bodies. Its count.
+ */
+async function loadShortcut(rc: RunContext): Promise<number> {
+  if (!rc.skills.playbook) return 0;
+  await loadSkill(rc, rc.skills.playbook, 'shortcut');
+  return 1;
+}
+
+/**
+ * The skills the message calls by /name, loaded before the first step: 3 at most, a
+ * shortcut's playbook counted. Their count. None when the run starts tainted: its message
+ * is a next move a run wrote after reading outside text (fromTaintedMove), so its /name is
+ * that model's, not the person's (§16a).
  */
 async function loadTypedSkills(rc: RunContext): Promise<number> {
   if (rc.progress.tainted) return 0;
   const typed = typedSkills(rc.progress.question ?? '', rc.skills.enabled).slice(
     0,
-    MAX_SKILL_BODIES,
+    MAX_SKILL_BODIES - (rc.progress.skills?.length ?? 0),
   );
   for (const skill of typed) await loadSkill(rc, skill, 'typed');
   return typed.length;
@@ -1286,12 +1328,19 @@ async function pickSkill(rc: RunContext, call: PendingCall): Promise<CallOutcome
   return result(call, { ok: true, note: 'Its text is below the rules from your next step.' });
 }
 
-/** The loaded skills' block for a step's prompt (prompt.ts 2b), or none. */
+/**
+ * The loaded skills' block for a step's prompt (prompt.ts 2b), or none: a
+ * shortcut's playbook among them, with what the plan leaves out of its data.
+ */
 function loadedSkills(rc: RunContext): string | undefined {
+  const { enabled, playbook, planNote } = rc.skills;
+  const loadable = playbook ? [playbook, ...enabled] : enabled;
   const loaded = (rc.progress.skills ?? []).flatMap((name) =>
-    rc.skills.enabled.filter((skill) => skill.name === name),
+    loadable.filter((skill) => skill.name === name),
   );
-  return loaded.length > 0 ? loadedSkillsBlock(loaded) : undefined;
+  if (loaded.length === 0) return undefined;
+  const block = loadedSkillsBlock(loaded);
+  return planNote && playbook && loaded.includes(playbook) ? `${block}\n\n${planNote}` : block;
 }
 
 // ─── The model loop ─────────────────────────────────────────────────────────
