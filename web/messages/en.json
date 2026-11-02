@@ -4394,6 +4394,8 @@
       "settings": "Settings",
       "usageTip": "AI usage this month",
       "files": "Files",
+      "scheduled": "Scheduled",
+      "scheduledLabel": "Scheduled, {count, plural, one {# job} other {# jobs}} on",
       "agents": "Agent Center"
     },
     "actions": {
@@ -4797,6 +4799,7 @@
       "pages": {
         "allChats": "All chats",
         "agents": "Agent Center",
+        "scheduled": "Scheduled",
         "files": "Files",
         "settings": "Settings"
       }
@@ -4854,6 +4857,7 @@
         "activity": "Activity",
         "capabilities": "What Chat can do",
         "files": "Files",
+        "scheduled": "Scheduled",
         "settings": "Settings"
       }
     },
@@ -6424,6 +6428,116 @@
       "limit": "The workspace’s plan keeps up to {limit} scheduled jobs on at once, and {count} are on. Tell the person to turn one off in Scheduled, or to upgrade.",
       "skill": "There is no skill /{skill} on in this workspace. Schedule it with a prompt instead, or with a skill from the / menu.",
       "role": "Only Admins and Managers can schedule work."
+    },
+    "page": {
+      "title": "Scheduled",
+      "subtitle": "Work Chat does on a date or on repeat.",
+      "new": "New schedule",
+      "newPrompt": "Every Monday at 9:00, ",
+      "limit": "{active} of {limit} jobs on",
+      "columns": {
+        "job": "Job",
+        "when": "When",
+        "lastRun": "Last run",
+        "deliver": "Result goes to",
+        "mode": "Mode"
+      },
+      "skillLine": "/{skill}",
+      "brandAll": "All brands",
+      "by": "by {name}",
+      "followUp": "Follow-up check",
+      "setByRun": "Set by a Full auto run for you",
+      "setByYou": "Set by you",
+      "next": "Next: {date}",
+      "due": "Due {date}",
+      "paused": "Paused",
+      "pausedWhy": {
+        "manual": "Off",
+        "cap": "Paused · AI limit reached",
+        "failed": "Off after 3 failed runs",
+        "skill_off": "Paused · its skill is off",
+        "missing_source": "Paused · its brand is gone",
+        "owner_role": "Paused · its creator can't run it"
+      },
+      "notRun": "Not run yet",
+      "status": {
+        "running": "Working",
+        "needs_you": "Needs you",
+        "paused_cap": "Paused · AI limit reached",
+        "done": "Done",
+        "unchanged": "No change",
+        "failed": "Failed",
+        "skipped": "Skipped"
+      },
+      "parts": "{done} of {total} ready",
+      "emailed": "emailed",
+      "deliverTo": {
+        "chat": "Inbox · Chat",
+        "email": "Email",
+        "both": "Email · Inbox"
+      },
+      "mode": {
+        "ask_first": "Ask me first",
+        "auto": "Auto, ask before changes",
+        "full_auto": "Full auto"
+      },
+      "toggle": "{title} on",
+      "openLast": "Open last",
+      "runNow": "Run now",
+      "takeOver": "Take over",
+      "cancel": "Cancel",
+      "open": "Open",
+      "agent": "Agent: {name}",
+      "agentNote": "Edit its schedule in Agent Center",
+      "agentEdit": "Edit",
+      "empty": "No scheduled work yet. Ask Chat, such as “Every Monday at 9:00, summarise last week”, or click New schedule.",
+      "loadFailed": "Couldn’t load your scheduled work.",
+      "retry": "Retry",
+      "running": "Running now · the result shows up in your Inbox",
+      "busy": "Every run slot is busy. Try again in a minute.",
+      "deleted": "Schedule deleted. Past results stay in Files.",
+      "takenOver": "It’s yours now, and on again.",
+      "saved": "Saved",
+      "detail": {
+        "back": "Scheduled",
+        "edit": "Edit",
+        "title": "Job",
+        "prompt": "What Chat does each run",
+        "skill": "Runs the skill /{skill}",
+        "when": "When",
+        "nextRuns": "Next runs",
+        "deliver": "Deliver to",
+        "changeOnly": "Notify only if the answer changed",
+        "changeOnlyHint": "Recurring jobs only. The first run always delivers.",
+        "model": "Runs on Auto · Normal",
+        "save": "Save",
+        "delete": "Delete",
+        "deleteTitle": "Delete this schedule?",
+        "deleteBody": "Past results stay in Files.",
+        "deleteConfirm": "Delete",
+        "history": "Run history",
+        "historyNote": "The last 20 runs. Use is a share of your monthly AI limit.",
+        "historyEmpty": "No runs yet.",
+        "columns": {
+          "date": "Date",
+          "status": "Status",
+          "result": "Result",
+          "usage": "AI use"
+        },
+        "runNowTag": "Run now",
+        "openChat": "Open in Chat",
+        "readOnly": "Only its creator can change this job."
+      },
+      "errors": {
+        "not_found": "This job is gone.",
+        "forbidden": "Only its creator or an Admin can do that.",
+        "owner": "Its creator can’t run it any more. An Admin can take it over.",
+        "passed": "Its time has passed. Edit when it runs first.",
+        "limit": "Your plan’s scheduled jobs are all on. Turn one off first, or upgrade.",
+        "when": "That time doesn’t work.",
+        "prompt": "Say what Chat does each run.",
+        "failed": "That didn’t work. Try again."
+      }
     }
   },
   "audit": {

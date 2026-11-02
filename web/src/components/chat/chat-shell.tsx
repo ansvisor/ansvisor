@@ -57,7 +57,10 @@ const SUGGESTION_PATH = /^\/dashboard\/chat\/inbox\/[0-9a-f-]{36}$/i;
 /** The page a detail sits under, linked in its breadcrumb before the name the detail sets. */
 const DETAIL_PARENTS = {
   inbox: '/dashboard/chat/inbox?tab=suggestions',
+  scheduled: '/dashboard/chat/scheduled',
 } as const;
+/** A scheduled job's page: "Chat › Scheduled › {job}" (W3-03). */
+const SCHEDULE_PATH = /^\/dashboard\/chat\/scheduled\/[0-9a-f-]{36}$/i;
 
 /**
  * Where the palette opens while the menu is shown: under its Search chats
@@ -81,6 +84,7 @@ const SUB_PAGES: Record<string, string> = {
   '/dashboard/chat/activity': 'activity',
   '/dashboard/chat/capabilities': 'capabilities',
   '/dashboard/chat/files': 'files',
+  '/dashboard/chat/scheduled': 'scheduled',
 };
 /** Chat's own pages the header names (mockup: Settings, right under Home). */
 const TITLED_PAGES: Record<string, string> = { '/dashboard/chat/settings': 'settings' };
@@ -247,7 +251,11 @@ function ChatShellFrame({
       ? `/dashboard/chat/${lastChat}`
       : '/dashboard/chat';
   const suggestionPage = SUGGESTION_PATH.test(pathname);
-  const detailOf: keyof typeof DETAIL_PARENTS | undefined = suggestionPage ? 'inbox' : undefined;
+  const detailOf: keyof typeof DETAIL_PARENTS | undefined = suggestionPage
+    ? 'inbox'
+    : SCHEDULE_PATH.test(pathname)
+      ? 'scheduled'
+      : undefined;
   const subPage = SUB_PAGES[pathname] ?? detailOf;
   const titled = TITLED_PAGES[pathname];
   const current = chatId ? chats.find((chat) => chat.id === chatId) : undefined;

@@ -90,6 +90,7 @@ export const CHAT_SEARCH_PAGES: ChatSearchPage[] = [
   { key: 'allChats', href: '/dashboard/chat/all', glyph: '☰' },
   // Agent Center, its own page under Chat on the app's menu.
   { key: 'agents', href: '/dashboard/agents', glyph: '✦' },
+  { key: 'scheduled', href: '/dashboard/chat/scheduled', glyph: '⏲' },
   { key: 'files', href: '/dashboard/chat/files', glyph: '▤' },
   { key: 'settings', href: '/dashboard/chat/settings', glyph: '⚙' },
 ];
