@@ -63,7 +63,12 @@ async function tavilyResearch(modelString, prompt) {
     const data = await res.json();
     const results = Array.isArray(data?.results) ? data.results : [];
     if (!results.length) throw new Error('Tavily returned no results');
-    return await synthesize(modelString, prompt, results.map((r) => [r.title, r.url, r.content || '']), results.length);
+    return await synthesize(
+      modelString,
+      prompt,
+      results.map((r) => [r.title, r.url, r.content || '']),
+      results.length,
+    );
   } catch (err) {
     logger.warn({ err: err?.message }, 'tavily research failed; falling back');
     return null;
@@ -145,7 +150,9 @@ async function scrapedoResearch(modelString, prompt) {
  * results into the research answer the caller asked for.
  */
 async function synthesize(modelString, prompt, rows, sources) {
-  const context = rows.map(([title, link, snippet]) => `[${title}](${link})\n${snippet}`).join('\n\n');
+  const context = rows
+    .map(([title, link, snippet]) => `[${title}](${link})\n${snippet}`)
+    .join('\n\n');
   const { text } = await generateText({
     model: resolveModel(modelString),
     prompt: `${prompt}\n\nUse these web research results:\n${context}`,
