@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
 import { ownChatKeyProvider, ownKeyAccess, type OwnKeyAccess } from '@/lib/chat/key';
-import { readModelMenu, type ChatModelMenu } from '@/lib/chat/model-menu';
+import { readModelMenu, readProviderChoices, type ChatModelMenu } from '@/lib/chat/model-menu';
 import { AUTO_MODEL, isCatalogId, modelChoiceOpen } from '@/lib/chat/models';
 import { planFactsFromOrgRow } from '@/lib/chat/plan-facts';
 import { chatActor, runFailure } from '@/lib/chat/run-api';
@@ -24,7 +24,8 @@ export interface ChatModelAccess {
  * Chat's model menu (CHAT-16 §A–B, W4-01, W4-02): Auto, the offered models
  * with their multiplier labels and tones, "Your key" on the own key's models,
  * the chat's model (`selected`, flagged once the catalog dropped it), the
- * catalog's size and its last sync; and what the person may do: pick a model
+ * catalog's size and its last sync, without the models of a provider an
+ * Admin turned off (W4-34); and what the person may do: pick a model
  * (not in the free trial), their plan, and their own keys' state. Never a
  * price. Not there (404) while the new Chat is off for the workspace.
  *
@@ -37,7 +38,7 @@ export async function GET(req: Request) {
     const asked = new URL(req.url).searchParams.get('selected');
     // A model no longer offered is asked for too: the menu says the chat runs Auto now.
     const selected = asked === AUTO_MODEL || isCatalogId(asked) ? asked : null;
-    const [org, ownKeyProvider, ownKeys] = await Promise.all([
+    const [org, ownKeyProvider, ownKeys, providers] = await Promise.all([
       supabaseAdmin
         .from('organizations')
         .select(ORG_PLAN_COLUMNS)
@@ -45,10 +46,12 @@ export async function GET(req: Request) {
         .maybeSingle(),
       ownChatKeyProvider(actor.organizationId).catch(() => null),
       ownKeyAccess(actor.organizationId).catch((): OwnKeyAccess => ({ state: 'locked' })),
+      // A provider the Admin turned off has no model in the menu (W4-34).
+      readProviderChoices(actor.organizationId).catch(() => ({})),
     ]);
     if (org.error) throw new Error(org.error.message);
     const plan = planFactsFromOrgRow(org.data);
-    const menu: ChatModelMenu = await readModelMenu({ selected, ownKeyProvider });
+    const menu: ChatModelMenu = await readModelMenu({ selected, ownKeyProvider, providers });
     const access: ChatModelAccess = {
       choiceOpen: modelChoiceOpen(plan),
       planName: plan.selfHosted ? null : plan.planName,

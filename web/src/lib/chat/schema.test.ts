@@ -1171,3 +1171,15 @@ describe('outside e-mails (00467)', () => {
     );
   });
 });
+
+describe('model providers (00469)', () => {
+  const sql = migration('00469');
+
+  it('keeps an Admin’s choices by provider on the workspace’s Chat settings, defaults in the web', () => {
+    expect(sql).toMatch(
+      /alter table public\.chat_settings\s+add column if not exists model_providers jsonb not null default '\{\}'::jsonb/,
+    );
+    expect(sql).toContain("jsonb_typeof(model_providers) = 'object'");
+    expect(sql).not.toMatch(/create policy|grant /);
+  });
+});

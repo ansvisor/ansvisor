@@ -3369,6 +3369,7 @@ export type Database = {
           full_auto_for_members: boolean
           manager_execute_off: string[]
           memory_enabled: boolean
+          model_providers: Json
           organization_id: string
           tool_policies: Json
           updated_at: string
@@ -3387,6 +3388,7 @@ export type Database = {
           full_auto_for_members?: boolean
           manager_execute_off?: string[]
           memory_enabled?: boolean
+          model_providers?: Json
           organization_id: string
           tool_policies?: Json
           updated_at?: string
@@ -3405,6 +3407,7 @@ export type Database = {
           full_auto_for_members?: boolean
           manager_execute_off?: string[]
           memory_enabled?: boolean
+          model_providers?: Json
           organization_id?: string
           tool_policies?: Json
           updated_at?: string

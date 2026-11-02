@@ -3515,7 +3515,8 @@
     "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
     "webPage": { "name": "Open web pages", "step": "Open page" },
     "whyChange": { "name": "Explain why a number changed", "step": "Read why it changed" },
-    "agents": { "name": "Create and run agents", "step": "Changed an agent" }
+    "agents": { "name": "Create and run agents", "step": "Changed an agent" },
+    "modelProviders": { "name": "Choose model providers", "step": "Changed the model providers" }
   },
   "agentic": {
     "avatar": {
@@ -3891,6 +3892,7 @@
       "notOpened": "Couldn't open {page}",
       "modelDropped": "Ran on Auto",
       "modelDroppedDetail": "The model this chat used is no longer available",
+      "modelProviderOffDetail": "Your Admin turned off this model's provider",
       "usedSkill": "Used skill: {title}",
       "skillFromLibrary": "Ansvisor library"
     },
@@ -5281,6 +5283,14 @@
           "auto_always": "Auto in every mode"
         }
       },
+      "providers": {
+        "title": "Model providers",
+        "note": "The companies whose models Chat may use. A provider that is off has no model in the model menu, and agents and scheduled runs use Auto instead. Calls through OpenRouter go only to providers that don't keep or train on your data.",
+        "lockedNote": "Always on: Auto runs on Anthropic's models.",
+        "deepseekNote": "Off by default. When on, its models run only on providers hosted in the US or the EU.",
+        "turnedOn": "{provider} models turned on",
+        "turnedOff": "{provider} models turned off"
+      },
       "execute": {
         "title": "What Managers may take live",
         "note": "EXECUTE always needs a click, whoever runs it. Off, a Manager gets Ask your Admin instead.",
@@ -5511,7 +5521,9 @@
       "agentDuplicated": "Copied the agent “{from}” as “{name}”",
       "agentTakenOver": "Took over the agent “{name}”",
       "agentRunQueued": "Asked the agent “{name}” to run for {brand}",
-      "agentRunOnAction": "Asked the agent “{name}” to run on the action AC-{action}"
+      "agentRunOnAction": "Asked the agent “{name}” to run on the action AC-{action}",
+      "modelProviderOn": "Turned on {provider} models in Chat",
+      "modelProviderOff": "Turned off {provider} models in Chat"
     },
     "undo": {
       "ok": "Undone.",

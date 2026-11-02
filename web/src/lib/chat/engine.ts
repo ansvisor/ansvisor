@@ -192,7 +192,8 @@ import {
   runChoiceOf,
   type ChatModelChoice as RunModelChoice,
 } from './models';
-import { readModelMenu } from './model-menu';
+import { readModelMenu, readProviderChoices } from './model-menu';
+import { modelProviderOn } from './model-providers';
 import type { PlanFacts } from './plan-facts';
 
 /**
@@ -787,8 +788,11 @@ type Progress = RunProgress & {
   scope?: MessageScope;
   /** The picked model was checked against the catalog once (W4-03). */
   modelChecked?: boolean;
-  /** The catalog dropped the picked model: the run takes Auto, and says so once. */
-  modelDropped?: boolean;
+  /**
+   * The picked model can't run: the catalog dropped it, or an Admin turned
+   * its provider off (W4-34). The run takes Auto, and says so once.
+   */
+  modelDropped?: boolean | 'catalog' | 'provider';
   modelNoted?: boolean;
   /** An Admin chose "Use Ansvisor's limit" after the own key failed (W4-06). */
   ansvisorKey?: boolean;
@@ -1070,9 +1074,15 @@ async function runModelChoice(
   if (progress.modelDropped) return { ...choice, model: AUTO_MODEL };
   if (progress.modelChecked) return choice;
   progress.modelChecked = true;
+  // A provider the Admin turned off (W4-34): for a chat, an agent and a scheduled run alike.
+  const providers = await readProviderChoices(run.organizationId).catch(() => ({}));
+  if (!modelProviderOn(providers, choice.model)) {
+    progress.modelDropped = 'provider';
+    return { ...choice, model: AUTO_MODEL };
+  }
   const menu = await readModelMenu({ selected: choice.model });
   if (!menu.selected?.removed) return choice;
-  progress.modelDropped = true;
+  progress.modelDropped = 'catalog';
   return { ...choice, model: AUTO_MODEL };
 }
 
@@ -1088,7 +1098,10 @@ async function modelDroppedStep(
     kind: 'check',
     status: 'done',
     label: t('step.modelDropped'),
-    detail: t('step.modelDroppedDetail'),
+    detail:
+      progress.modelDropped === 'provider'
+        ? t('step.modelProviderOffDetail')
+        : t('step.modelDroppedDetail'),
   });
   sink.emit('step.finished', { step: clientStep(row) });
 }

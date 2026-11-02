@@ -158,9 +158,20 @@ const fakes = vi.hoisted(() => ({
   openPage: vi.fn(),
   explain: vi.fn(),
   readModelMenu: vi.fn(async () => ({ selected: null })),
+  readProviderChoices: vi.fn(async () => ({})),
+  providerOn: vi.fn(),
 }));
-// The model menu's catalog check (W4-03), without the API server.
-vi.mock('./model-menu', () => ({ readModelMenu: fakes.readModelMenu }));
+// The model menu's catalog check (W4-03) and the workspace's providers (W4-34), without a server.
+vi.mock('./model-menu', () => ({
+  readModelMenu: fakes.readModelMenu,
+  readProviderChoices: fakes.readProviderChoices,
+}));
+// The providers' rule as it is, unless a test turns one off (W4-34).
+vi.mock('./model-providers', async (importOriginal) => {
+  const real = await importOriginal<typeof import('./model-providers')>();
+  fakes.providerOn.mockImplementation(real.modelProviderOn);
+  return { ...real, modelProviderOn: fakes.providerOn };
+});
 // fetch_page as it is, opening pages through a fake of the API's internal route.
 vi.mock('@/lib/mcp/pages', () => ({ openPageFor: fakes.openPage }));
 // explain_change as it is, reading through a fake of its data layer.
@@ -5727,5 +5738,33 @@ describe('"Use Ansvisor’s limit" (W4-06)', () => {
       { model: 'auto', effort: 'normal' },
       { ansvisorOnly: false },
     );
+  });
+});
+
+describe('model providers (W4-34)', () => {
+  it('runs Auto for a model whose provider the Admin turned off, and says why in one step', async () => {
+    fakes.readProviderChoices.mockResolvedValueOnce({ openai: false });
+    fakes.providerOn.mockReturnValueOnce(false);
+    useModels([READY], [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Which pages does Perplexity cite?',
+      brandId: BRAND,
+      model: 'anthropic/claude-sonnet-5.5',
+      effort: 'high',
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    expect(fakes.readProviderChoices).toHaveBeenCalledWith(ORG);
+    expect(fakes.providerOn).toHaveBeenCalledWith({ openai: false }, 'anthropic/claude-sonnet-5.5');
+    expect(fakes.resolveModels).toHaveBeenCalledWith(
+      ORG,
+      { model: 'auto', effort: 'high' },
+      { ansvisorOnly: false },
+    );
+    // No catalog check once the provider is off.
+    expect(fakes.readModelMenu).not.toHaveBeenCalled();
+    const dropped = stepsOf(started.runId).filter((s) => s.label === 'Ran on Auto');
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]).toMatchObject({ detail: "Your Admin turned off this model's provider" });
   });
 });

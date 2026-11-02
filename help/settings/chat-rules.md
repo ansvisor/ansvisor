@@ -1,7 +1,7 @@
 ---
 title: Set the rules Chat follows
 route: /dashboard/settings/chat
-keywords: [chat rules, tool policy, full auto, don't ask again, managers publish, agents publish on their own, go live]
+keywords: [chat rules, tool policy, full auto, don't ask again, managers publish, agents publish on their own, go live, model providers, turn off openai, turn off google, deepseek, data collection]
 synonyms: [chat permissions, chat policy, let agents publish, autonomous publishing]
 plan: growth
 updated: 2026-11-02
@@ -18,6 +18,12 @@ sources: [web/messages/en.json]
 **Full auto** lets people run changes without a card. **Don't ask again** lets each person skip a card for one tool. Both need the Growth plan.
 
 Under **Tool policy**, set each tool to **Never**, **Ask** or **Always**, within what the tool allows. **Reset to defaults** puts every tool back.
+
+## Model providers
+
+**Model providers** lists the companies whose models Chat may use: Anthropic, OpenAI, Google and DeepSeek. Admins turn each on or off. A provider that is off has no model in the model menu, and agents and scheduled runs that picked one of its models run on Auto instead; the answer says so. Each change goes in the Activity log.
+
+Anthropic is always on, because Auto runs on its models. DeepSeek is off until an Admin turns it on, and its models then run only on providers hosted in the US or the EU. Calls through OpenRouter go only to providers that don't keep or train on your data.
 
 ## What Managers may take live
 

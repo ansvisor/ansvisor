@@ -14,6 +14,7 @@ const actions = vi.hoisted(() => ({
   setChatSwitch: vi.fn(),
   setManagerExecute: vi.fn(),
   setAutoGoLive: vi.fn(),
+  setModelProvider: vi.fn(),
   removeAutoChoice: vi.fn(),
 }));
 vi.mock('@/lib/actions/chat-settings', () => actions);
@@ -88,6 +89,12 @@ const view = (over: Partial<ChatSettingsView> = {}): ChatSettingsView => ({
   rows,
   autoChoices: ['saveDraft'],
   goLive: null,
+  modelProviders: [
+    { id: 'anthropic', name: 'Anthropic', on: true, locked: true },
+    { id: 'openai', name: 'OpenAI', on: true, locked: false },
+    { id: 'google', name: 'Google', on: true, locked: false },
+    { id: 'deepseek', name: 'DeepSeek', on: false, locked: false },
+  ],
   ...over,
 });
 
@@ -254,5 +261,31 @@ describe('agents that publish on their own (AUTONOMOUS-GO-LIVE §7.1)', () => {
     });
     await render();
     expect(goLiveSwitch()).toBeNull();
+  });
+});
+
+describe('model providers (W4-34)', () => {
+  const providers = () => container.querySelector('[data-slot="model-providers"]')!;
+
+  it('lets an Admin turn a provider on or off, Anthropic locked on, with what DeepSeek does', async () => {
+    actions.getChatSettingsView.mockResolvedValue({ ok: true, view: view() });
+    actions.setModelProvider.mockResolvedValue({ ok: true });
+    await render();
+    expect(providers().textContent).toContain('Model providers');
+    expect(providers().textContent).toContain("Always on: Auto runs on Anthropic's models.");
+    expect(providers().textContent).toContain('hosted in the US or the EU');
+    expect(providers().querySelector('[role="switch"][aria-label="Anthropic"]')).toBeNull();
+    const deepseek = providers().querySelector('[role="switch"][aria-label="DeepSeek"]')!;
+    expect(deepseek.getAttribute('aria-checked')).toBe('false');
+    await act(async () => (deepseek as HTMLButtonElement).click());
+    expect(actions.setModelProvider).toHaveBeenCalledWith('deepseek', true);
+    expect(toast.success).toHaveBeenCalledWith('DeepSeek models turned on');
+  });
+
+  it('reads on and off for anyone else', async () => {
+    actions.getChatSettingsView.mockResolvedValue({ ok: true, view: view({ role: 'manager' }) });
+    await render();
+    expect(providers().querySelector('[role="switch"]')).toBeNull();
+    expect(providers().querySelector('[data-provider="deepseek"]')?.textContent).toContain('Off');
   });
 });
