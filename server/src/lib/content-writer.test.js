@@ -109,6 +109,12 @@ vi.mock('./content-links.js', async (importOriginal) => ({
   ...(await importOriginal()),
   readLinkTargets: (...args) => readLinkTargets(...args),
 }));
+// Write this's brief (customer priorities item 9): the editor's Build brief, as its own run.
+const rebuildDraftBrief = vi.hoisted(() => vi.fn());
+vi.mock('./content-brief.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  rebuildDraftBrief: (...args) => rebuildDraftBrief(...args),
+}));
 const hasOpenSuggestions = vi.hoisted(() => vi.fn());
 vi.mock('./content-agent.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -206,6 +212,7 @@ beforeEach(() => {
   reserveAiBudget.mockReset().mockImplementation(realGuard.reserveAiBudget);
   generateText.mockReset().mockImplementation(notFound);
   hasOpenSuggestions.mockReset().mockResolvedValue(false);
+  rebuildDraftBrief.mockReset();
   fixUnderWay.mockReset().mockResolvedValue(false);
   stopIfStopped.mockReset().mockResolvedValue(undefined);
   // The model as a server without an Anthropic key picks it, whatever the shell has.
@@ -617,6 +624,87 @@ const budget = { charge: vi.fn(), release: vi.fn() };
 beforeEach(() => {
   budget.charge.mockReset();
   budget.release.mockReset();
+});
+
+describe('Write this: the brief, then the page from it (customer priorities item 9)', () => {
+  const built = {
+    goal: 'Show the pour-over ratio',
+    audience: 'Home brewers',
+    outline: [{ heading: 'The ratio', keyPoints: ['15:250'], fanout: 'pour over ratio' }],
+    keywords: ['pour over ratio'],
+  };
+  const withKeywords = () =>
+    input({
+      buildBrief: true,
+      rules: [
+        { key: 'faq', name: 'FAQ with 5 questions', detail: 'aim: 5' },
+        { key: 'keywords', name: 'Keywords', detail: 'pour over' },
+      ],
+    });
+
+  it('builds the brief first, holding the claim, and writes the page from it', async () => {
+    rebuildDraftBrief.mockResolvedValue(built);
+    await expect(
+      startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: withKeywords() }),
+    ).resolves.toEqual({ started: true });
+    await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+    const claim = draftUpdates()[0];
+    expect(claim).toMatchObject({ agent_state: 'writing', agent_run: 'write' });
+    // From the sources the page is written from; the keywords written anew, as Build brief does.
+    expect(rebuildDraftBrief).toHaveBeenCalledWith({
+      draftId: DRAFT,
+      brandId: BRAND,
+      sources: withKeywords().sources,
+      rules: [{ key: 'faq', name: 'FAQ with 5 questions', detail: 'aim: 5' }],
+      claimedAt: claim.agent_state_at,
+    });
+    // The page's own run after it, with the same claim.
+    expect(
+      writes.find((w) => w.table === 'content_agent_runs' && w.kind === 'insert').value,
+    ).toMatchObject({ kind: 'write', claimed_at: claim.agent_state_at });
+    expect(generateObject.mock.calls[0][0].prompt).toContain('Goal: Show the pour-over ratio');
+    expect(draftUpdates()[1]).toMatchObject({ status: 'in_review', agent_state: null });
+  });
+
+  it('keeps a brief the draft has, and writes from it', async () => {
+    rows.content_drafts = draftRow({ brief: built });
+    await startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: withKeywords() });
+    await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+    expect(rebuildDraftBrief).not.toHaveBeenCalled();
+    expect(generateObject.mock.calls[0][0].prompt).toContain('Goal: Show the pour-over ratio');
+  });
+
+  it('writes the page from what there is when the brief can’t be built', async () => {
+    rebuildDraftBrief.mockRejectedValue(
+      Object.assign(new Error('No prompts, fan-outs or queries to build from'), {
+        status: 422,
+        code: 'no_sources',
+      }),
+    );
+    await startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: withKeywords() });
+    await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+    expect(generateObject.mock.calls[0][0].prompt).toContain('No brief: plan the sections');
+    expect(draftUpdates()[1]).toMatchObject({ status: 'in_review', agent_state: null });
+  });
+
+  it('writes nothing once the brief is stopped, lets go of the draft and of its hold', async () => {
+    const { RunStoppedError } = await import('./content-runs.js');
+    rebuildDraftBrief.mockRejectedValue(new RunStoppedError());
+    const release = vi.fn();
+    reserveAiBudget.mockResolvedValue({ charge: vi.fn(), release });
+    await startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: withKeywords() });
+    await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+    expect(draftUpdates()[1]).toEqual({ agent_state: null, agent_state_at: expect.any(String) });
+    expect(generateObject).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalled();
+    expect(writes.some((w) => w.table === 'content_agent_runs' && w.kind === 'insert')).toBe(false);
+  });
+
+  it('builds no brief for a rewrite, nor without being asked', async () => {
+    await startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() });
+    await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+    expect(rebuildDraftBrief).not.toHaveBeenCalled();
+  });
 });
 
 describe('runDraftWriting on a new page', () => {

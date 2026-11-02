@@ -12,7 +12,10 @@
         "export actions",
         "top actions",
         "run agent",
-        "run with chat"
+        "run with chat",
+        "stale actions",
+        "still relevant",
+        "confidence"
       ],
       "synonyms": [
         "recommendations",
@@ -35,15 +38,19 @@
         },
         {
           "heading": "Cards and filters",
-          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter. While Getting started runs, its card shows instead.\n\nBelow them, filter by category, **Priority**, **Status** and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters are kept in the page's address, so a filtered view can be shared. For an online shop, the **From Products** chip lists only the actions sent from Products."
+          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter. While Getting started runs, its card shows instead.\n\nBelow them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters are kept in the page's address, so a filtered view can be shared. For an online shop, the **From Products** chip lists only the actions sent from Products."
         },
         {
           "heading": "Status, dismiss and delete",
           "text": "An action's status is **New**, **In Progress**, **On Hold**, **Completed** or **Dismissed**. The row menu sets In Progress, Completed or Dismiss without opening the action.\n\nDismissing asks why: it doesn't matter to us, it's already done, the data behind it is wrong, or not now. You can also dismiss without saying why. History shows the reason.\n\n**Delete**, for admins and managers only, removes an action for everyone, and it won't come back on its own the next day."
         },
         {
+          "heading": "Stale actions",
+          "text": "An action that has stayed **New** for 30 days, with no one assigning, editing, sending or updating its tasks, is marked **Stale** each night. It isn't closed or dismissed: it shows a **Stale** label next to its status, and the **Status** filter's **Stale** lists them all.\n\nIf it still matters, click **Still relevant** in the open action, or in the row menu. The label goes, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, dismiss it."
+        },
+        {
           "heading": "Inside an action",
-          "text": "Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:\n\n- **Overview**: **Why this priority?**, **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent."
+          "text": "Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:\n\n- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent."
         },
         {
           "heading": "Run an agent on an action",
@@ -1115,7 +1122,8 @@
         "mark ready",
         "mark published",
         "history",
-        "export"
+        "export",
+        "site audit estimate"
       ],
       "synonyms": [
         "write an article",
@@ -1124,7 +1132,7 @@
         "finish a page"
       ],
       "plan": "all",
-      "updated": "2026-10-30",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1132,7 +1140,11 @@
         },
         {
           "heading": "The header",
-          "text": "The header shows the title, which you can click to rename the page, and whether your changes are saved. Under them come the page type, the method and status, and a **Rules** chip with how many rules the page meets now; click it to open the rules. On a page that optimizes a live one, a chip counts the cited passages kept.\n\nOn the right are the month's AI usage and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**, and a button to show or hide the side panel."
+          "text": "The header shows the title, which you can click to rename the page, and whether your changes are saved. Under them come the page type, the method and status, and a **Rules** chip with how many rules the page meets now; click it to open the rules. An **Audit** chip estimates the page's Site Audit score; see below. On a page that optimizes a live one, a chip counts the cited passages kept.\n\nOn the right are the month's AI usage and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**, and a button to show or hide the side panel."
+        },
+        {
+          "heading": "Site Audit estimate",
+          "text": "The **Audit** chip, for example **Audit ≈62**, is about where the page would score in Site Audit once published. Click it to see the score by category: Structure, Content, Authority, Trust and E-E-A-T. It's free, and it's read again each time you pause typing.\n\nIt runs Site Audit's checks on the page as it would go out. The checks of your whole site, such as robots.txt, llms.txt and HTTPS, come from your latest Site Audit; with none yet, they're left out.\n\nThe 13 checks AI reads aren't in it at first, so it runs a few points under the full audit. **Estimate AI checks** adds them, using a little of your monthly AI usage. They stay in the score as you keep writing; **Read AI checks again** reads them anew."
         },
         {
           "heading": "Status and runs",
@@ -1172,7 +1184,7 @@
         },
         {
           "heading": "History, Copy HTML and Export",
-          "text": "- **History** keeps earlier versions for 90 days: the live page as imported, the page before agent changes, each Mark ready and publish, each Hand off, and the page before a restore. **Restore** makes a new version, so nothing is lost.\n- **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS.\n- **Export** downloads the page as **Word**, **Excel**, **CSV**, **HTML** or **Markdown**. Excel and CSV hold the page as one row, for a CMS's import. Only the HTML file carries the schema.\n\nWith Quality on, **Export** opens a dialog instead: the same files, and under **Platforms** a copy of the page to paste into Webflow, WordPress, Shopify or Google Docs."
+          "text": "- **History** keeps earlier versions for 90 days: the live page as imported, the page before agent changes, each Mark ready and publish, each Hand off, and the page before a restore. **Restore** makes a new version, so nothing is lost.\n- **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS. An article also gets the Article schema Ansvisor adds, with its author.\n- **Export** downloads the page as **Word**, **Excel**, **CSV**, **HTML** or **Markdown**. Excel and CSV hold the page as one row, for a CMS's import. Only the HTML file carries the schema.\n\nWith Quality on, **Export** opens a dialog instead: the same files, and under **Platforms** a copy of the page to paste into Webflow, WordPress, Shopify or Google Docs."
         },
         {
           "heading": "Add products from your catalog",
@@ -1271,7 +1283,7 @@
         },
         {
           "heading": "Quick actions on a row",
-          "text": "Each row's **…** menu has the quick actions:\n\n- **Send to Editor**, or **Open draft** once a draft is being written for it;\n- **Send to Plan**, or **Open in Plan** once it's a priority there, for owned opportunities still open;\n- **Send to Workflow**, for a new opportunity;\n- **Open in new tab**, which opens it as a page of its own;\n- **Dismiss**, for a new one. Undo it from the message that appears.\n\nSend to Plan and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions."
+          "text": "Each row's **…** menu has the quick actions:\n\n- **Write this**, which has the Content Agent brief and write the page in one go for you to review, and **Send to Editor**; **Open draft** takes their place once a draft is being written for it;\n- **Send to Plan**, or **Open in Plan** once it's a priority there, for owned opportunities still open;\n- **Send to Workflow**, for a new opportunity;\n- **Open in new tab**, which opens it as a page of its own;\n- **Dismiss**, for a new one. Undo it from the message that appears.\n\nSend to Plan and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions."
         },
         {
           "heading": "Work on many at once",
@@ -1431,7 +1443,8 @@
         "mark as reviewed",
         "dismiss opportunity",
         "send to actions",
-        "new signal detected"
+        "new signal detected",
+        "write this"
       ],
       "synonyms": [
         "opportunity panel",
@@ -1440,7 +1453,7 @@
         "follow an opportunity"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -1456,7 +1469,11 @@
         },
         {
           "heading": "The panel's buttons",
-          "text": "- **Send to Actions** makes the opportunity an action in the Action Center. The button then reads **Open in Actions**.\n- **Generate Brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief Generated**.\n- **Send to Editor** opens **New content** with the opportunity picked: a new page, or the page of yours it names to optimize. Once a draft is being written for it, the button reads **Open draft**. It's offered for owned opportunities that are still open.\n- **Export** downloads the opportunity as CSV, Excel or Word."
+          "text": "- **Send to Actions** makes the opportunity an action in the Action Center. The button then reads **Open in Actions**.\n- **Generate Brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief Generated**.\n- **Send to Editor** opens **New content** with the opportunity picked: a new page, or the page of yours it names to optimize. Once a draft is being written for it, the button reads **Open draft**. It's offered for owned opportunities that are still open.\n- **Write this**, beside it, has the Content Agent brief and write the page in one go. See below.\n- **Export** downloads the opportunity as CSV, Excel or Word."
+        },
+        {
+          "heading": "Write this",
+          "text": "**Write this**, on the panel and in a row's **…** menu, takes an owned opportunity to a page to review in one go. First it says what will happen and about how much of your monthly AI usage it takes. Then:\n\n1. The Content Agent builds a brief from the opportunity's prompts, their fan-outs and the pages AI cites for them.\n2. It writes the page from the brief, by your rules and the page type's. For an opportunity on a page you have, it suggests changes to that page instead.\n3. The editor opens and shows the agent at work. You review the page there, with a free estimate of its Site Audit score; nothing is published.\n\nYou can stop it from the editor. If the brief can't be built, the agent writes from what there is."
         },
         {
           "heading": "The … menu",
@@ -1512,7 +1529,7 @@
         },
         {
           "heading": "The scores",
-          "text": "Quality scores the page from 0 to 100 on **E-E-A-T**, **Trust** and **Readability**: 80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.\n\nAt the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing."
+          "text": "Quality scores the page from 0 to 100 on **E-E-A-T**, **Trust** and **Readability**: 80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.\n\nUnder them, **Site Audit estimate** is about where the page would score in Site Audit, as the header's **Audit** chip shows it. See the Content Editor article.\n\nAt the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing."
         },
         {
           "heading": "Your to-dos and what would raise it",
@@ -1536,7 +1553,11 @@
         },
         {
           "heading": "Before you publish",
-          "text": "**Mark ready** opens **Before you publish** first. It checks:\n\n- placeholders, alt text and links;\n- the author;\n- the qualified reviewer on pages that advise on health, money or the law;\n- visible dates;\n- the structured data to paste, if your CMS doesn't add it;\n- a warning when Trust is under 60.\n\nCopy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about."
+          "text": "**Mark ready** opens **Before you publish** first. It checks:\n\n- placeholders, alt text and links;\n- the author;\n- the qualified reviewer on pages that advise on health, money or the law;\n- visible dates;\n- the Article schema Ansvisor adds;\n- a warning when Trust is under 60.\n\nCopy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about."
+        },
+        {
+          "heading": "The Article schema",
+          "text": "An article goes to your CMS and to exports with an Article schema that names its author, or your brand when it has none. The page's text doesn't change. If your CMS adds its own, click **Leave it out**; **Add it back** undoes it. A page with an Article schema of its own gets none. WordPress leaves the schema out: add it with your SEO plugin."
         },
         {
           "heading": "Export with Quality on",
@@ -1605,6 +1626,10 @@
         {
           "heading": "What each CMS leaves out",
           "text": "- **Webflow**: Tables become lists; images aren't sent. Reviewer metadata requires a mapped optional Plain Text field; show it in the collection template. Empty meta descriptions use the page's opening words.\n- **WordPress**: Reviewer metadata and structured data aren't sent; the adapter can't map custom metadata or repurpose the post author. Set the meta title and structured data in your SEO plugin. Images keep their addresses; no featured image or category is set.\n- **Framer**: Tables stay tables; images aren't sent. Reviewer metadata requires a mapped optional string field; show it in the page template. Duplicate slugs stop the send.\n- **Wix**: Images, cover images and categories aren't sent. Reviewer metadata is an SEO tag, not visible text; show it in the page template. Resending replaces post text, so add images after the last send.\n\nAdd images in your CMS. The slug may change slightly there: lowercase, without accents, with dots turned into dashes."
+        },
+        {
+          "heading": "The Article schema",
+          "text": "An article goes with the Article schema Ansvisor adds, its author included, unless you left it out in **Before you publish**. WordPress doesn't take it: add it with your SEO plugin."
         }
       ]
     },
@@ -2717,13 +2742,18 @@
         "audit score",
         "signals",
         "audit categories",
-        "grade"
+        "grade",
+        "readability",
+        "first person"
       ],
       "synonyms": [
         "audit results",
         "page score",
         "what failed",
         "E-E-A-T score",
+        "Flesch",
+        "Ateşman",
+        "reading score",
         "score changed"
       ],
       "plan": "all",
@@ -2754,6 +2784,14 @@
           "text": "The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:\n\n- the **Finding**: what this audit saw on the page, when the check reports it;\n- what the signal measures, and **Why** it matters to AI engines;\n- the **Recommended fix** written for this page, or the general **Fix** for signals without one. Recommended fixes follow the brand's rules from **Settings › Content › Brand rules**; the score doesn't change."
         },
         {
+          "heading": "Readability",
+          "text": "**Readability** reads the page in its own language: the language the page declares, else the one its words are in. English is scored with Flesch Reading Ease: 50 to 70 passes, 30 to 49 and anything over 70 raise a warning, and under 30 fails, so a plain page is never failed for reading easily. Turkish is scored with Ateşman, and German, French and Spanish with their own formulas: their easy score or more passes. Other languages are read by sentence and word length, and Japanese, Chinese and Thai show n/a for now. The Content Editor scores a page the same way.\n\nThe finding shows the score with its formula and language, then its parts: words a sentence, syllables and letters a word, and words a paragraph, with about how many lines a paragraph takes on a phone."
+        },
+        {
+          "heading": "First-person evidence",
+          "text": "**First-person evidence** counts the sentences told as \"I\" or \"we\": in Turkish also by their verb endings, such as \"gezdik\" or \"düşünüyoruz\". Two or more pass and one raises a warning. Quotes and stock phrases such as \"Contact us\" don't count. It's read in English and Turkish; pages in other languages show n/a for now."
+        },
+        {
           "heading": "Authority links",
           "text": "**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…), major news, and the sites your brand trusts. Add those in **Settings › Content**; **Edit in Settings** takes you there."
         },
@@ -2773,7 +2811,9 @@
         "audit a page",
         "auto-audit",
         "audit settings",
-        "audit again"
+        "audit again",
+        "bulk audit",
+        "audit all"
       ],
       "synonyms": [
         "page audit",
@@ -2798,7 +2838,11 @@
         },
         {
           "heading": "Other ways to start an audit",
-          "text": "- **Audit selected** on the **Opportunities** tab;\n- **Re-audit** on the pages you select on the **Pages** tab;\n- **Audit page** on a landing page of the **AI Referral Traffic** page, or **Audit pages** for several;\n- the re-run icon at the top of a report, to audit the same page again;\n- auto-audit, which audits your top-priority pages on its own.\n\nAudits started in bulk run a few at a time."
+          "text": "- **Audit selected** on the **Opportunities** tab, or **Audit all** under its **Not audited** filter;\n- **Re-audit** on the pages you select on the **Pages** tab;\n- **Audit page** on a landing page of the **AI Referral Traffic** page, or **Audit pages** for several;\n- the re-run icon at the top of a report, to audit the same page again;\n- auto-audit, which audits your top-priority pages on its own.\n\nAudits started in bulk run a few at a time."
+        },
+        {
+          "heading": "Before a bulk audit",
+          "text": "Audit selected, Audit all and Re-audit ask first. They list the pages and say how many of the month's audits they use.\n\nPages audited in the last 7 days are left out, since a page that hasn't changed scores the same. Untick **Leave out** to include them.\n\nWhen fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month."
         },
         {
           "heading": "Auditing a page again",
@@ -2827,7 +2871,11 @@
         "pages audited",
         "audit opportunities",
         "audited pages",
-        "score over time"
+        "score over time",
+        "first score",
+        "current score",
+        "not audited",
+        "audit coverage"
       ],
       "synonyms": [
         "audit overview",
@@ -2836,7 +2884,7 @@
         "audit priority"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -2844,7 +2892,7 @@
         },
         {
           "heading": "Summary and cards",
-          "text": "A summary line gives your site score, pages audited, lowest category and next auto-audit. The first three cards count only the pages of your primary domain:\n\n- **Site score**: the average score of each page's latest audit, and its change from each page's previous audit.\n- **Pages audited**: pages of your domain with a completed audit, and how many pages of other sites you audited.\n- **Authority · E-E-A-T**: those two category scores averaged over your pages, and the signals that fail or warn on the most pages.\n- **Audits this month**: audits left this billing month, with the share auto-audit keeps for its next runs."
+          "text": "A summary line gives your site score, pages audited, lowest category and next auto-audit. The first three cards count only the pages of your primary domain:\n\n- **Site score**: the average score of each page's latest audit, and its change from each page's previous audit.\n- **Pages audited**: how many of your site's pages, as your sitemap, Google Analytics and AI citations list them, have an audit from the last 90 days, and how many don't. **See the … not audited** opens those in Opportunities.\n- **Authority · E-E-A-T**: those two category scores averaged over your pages, and the signals that fail or warn on the most pages.\n- **Audits this month**: audits left this billing month, with the share auto-audit keeps for its next runs."
         },
         {
           "heading": "Score over time",
@@ -2852,7 +2900,7 @@
         },
         {
           "heading": "Why a page is in Opportunities",
-          "text": "The **Opportunities** tab is an inbox of pages worth auditing next. Each row shows a **Priority** from 0 to 100, the page, **Why** it's listed, its **AI visits** over the last 30 days and its **Last audit**. A page is listed when:\n\n- **No AI traffic**: it ranks high on your site in Google Analytics but gets no visitors from AI engines. **Targeted, not cited** adds that a tracked prompt points at it and no AI answer cites it;\n- a competitor is cited on prompts where you never are, and this is your closest page;\n- it was **Never audited**, or not in the last 90 days.\n\nAI visits need Google Analytics or the tracking snippet."
+          "text": "The **Opportunities** tab is an inbox of pages worth auditing next. Each row shows a **Priority** from 0 to 100, the page, **Why** it's listed, its **AI visits** over the last 30 days and its **Last audit**. A page is listed when:\n\n- **No AI traffic**: it ranks high on your site in Google Analytics but gets no visitors from AI engines. **Targeted, not cited** adds that a tracked prompt points at it and no AI answer cites it;\n- a competitor is cited on prompts where you never are, and this is your closest page;\n- it was **Never audited**, or not in the last 90 days.\n\nAI visits need Google Analytics or the tracking snippet.\n\nChips above the list show one reason at a time: **All**, **Not audited**, **No AI traffic** or **Competitor cited**, each with its count."
         },
         {
           "heading": "Priority and templates",
@@ -2864,7 +2912,7 @@
         },
         {
           "heading": "The Pages tab",
-          "text": "**Pages** lists every page you audited, one row per page, most recent first, with its **Score**, its **Issues** (signals that failed or warned), its **Status** and its **Last audit**. Status is **Good** (70 or more), **Improving** (below 70 but up from the previous audit), **Needs work**, **Running** or **Failed**. **Auto** marks an auto-audit's audit.\n\nClick a row to open its latest report. The arrow beside a page lists its earlier audits, each with **View report** and a delete icon. **Group by template** groups the rows under their template. **Export** downloads the list as CSV or Excel; select pages to **Re-audit** them or export only those."
+          "text": "**Pages** lists every page you audited, one row per page, most recent first, with its **First score**, **Current score**, **Issues** (signals that failed or warned), **Status** and **Last audit**. Once a page has two audits, the change since the first shows beside the current score: green up, red down. Status is **Good** (70 or more), **Improving** (below 70 but up from the previous audit), **Needs work**, **Running** or **Failed**. **Auto** marks an auto-audit's audit.\n\nClick a row to open its latest report. The arrow beside a page lists its earlier audits, each with **View report** and a delete icon. **Group by template** groups the rows under their template. **Export** downloads the list as CSV or Excel, first scores included; select pages to **Re-audit** them or export only those."
         }
       ]
     },
