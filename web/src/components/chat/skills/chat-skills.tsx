@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Bot, Search } from 'lucide-react';
+import { Bot, ChevronDown, Search } from 'lucide-react';
 import { FormSwitch } from '@/components/chat/agents/agent-form-triggers';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,12 @@ import {
   DialogFooter,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -23,6 +29,7 @@ import { composeHref } from '@/lib/chat/compose-param';
 import { SKILL_FILTERS, type SkillFilter } from '@/lib/chat/skills/library';
 import type { LibrarySkillView, SkillList, WorkspaceSkillView } from '@/lib/chat/skills/store';
 import { startChatRun } from '@/lib/chat/start-chat';
+import { ImportSkillDialog, type ImportMode } from './import-skill-dialog';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 
@@ -102,6 +109,7 @@ export function ChatSkills() {
   const [query, setQuery] = useState('');
   const [starting, setStarting] = useState<string | null>(null);
   const [open, setOpen] = useState<WorkspaceSkillView | LibrarySkillView | null>(null);
+  const [importing, setImporting] = useState<ImportMode | null>(null);
 
   // Each change reads the list again; only the newest read lands.
   const [version, setVersion] = useState(0);
@@ -199,6 +207,32 @@ export function ChatSkills() {
           >
             {t('agents')}
           </Link>
+          {/* New skill (W3-09): an upload or a GitHub link, for an Admin's review. */}
+          {list && list !== 'failed' && list.can.save && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                data-action="skills.newSkill"
+                className={cn(buttonVariants(), 'gap-1')}
+              >
+                {t('newSkill')}
+                <ChevronDown aria-hidden className="size-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuItem
+                  data-action="skills.upload"
+                  onClick={() => setImporting('upload')}
+                >
+                  {t('upload')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  data-action="skills.github"
+                  onClick={() => setImporting('github')}
+                >
+                  {t('github')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
@@ -321,6 +355,7 @@ export function ChatSkills() {
                 <OwnCard
                   key={skill.id}
                   skill={skill}
+                  canReview={skill.mine || list.can.manageLibrary}
                   starting={starting === skill.name}
                   onRun={() => void run(skill.name)}
                   onSchedule={() => schedule(skill.name)}
@@ -333,6 +368,17 @@ export function ChatSkills() {
         </>
       )}
 
+      {importing && (
+        <ImportSkillDialog
+          mode={importing}
+          onClose={() => setImporting(null)}
+          // Kept for review: its review opens, where an Admin decides.
+          onImported={(skill) => {
+            setImporting(null);
+            router.push(`/dashboard/chat/skills/${skill.id}`);
+          }}
+        />
+      )}
       {open && (
         <SkillDetails
           skill={open}
@@ -498,6 +544,7 @@ function LibraryCard({
 
 function OwnCard({
   skill,
+  canReview,
   starting,
   onRun,
   onSchedule,
@@ -505,6 +552,8 @@ function OwnCard({
   onOpen,
 }: {
   skill: WorkspaceSkillView;
+  /** An Admin, or its creator: an import's review opens from its card. */
+  canReview: boolean;
   starting: boolean;
   onRun: () => void;
   onSchedule: () => void;
@@ -552,6 +601,21 @@ function OwnCard({
               {t('schedule')}
             </Button>
           </>
+        )}
+        {/* An import's review: the cleaned file, the scan and its source (W3-09). */}
+        {skill.source === 'import' && skill.status !== 'approved' && canReview && (
+          <Link
+            href={`/dashboard/chat/skills/${skill.id}`}
+            data-action="skills.review"
+            className={cn(
+              buttonVariants({
+                variant: skill.status === 'pending_review' ? 'default' : 'outline',
+                size: 'sm',
+              }),
+            )}
+          >
+            {t('review')}
+          </Link>
         )}
         {skill.can.toggle && skill.status === 'approved' && (
           <span className="ml-auto">

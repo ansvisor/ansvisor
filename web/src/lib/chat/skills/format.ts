@@ -200,7 +200,7 @@ export function checkSkillFile(folder: string, text: string): SkillCheck {
 // ─── The scan (item 16, and what a published skill never holds, item 20) ────
 
 /** Zero-width, bidi controls and tag characters: text a reader can't see. */
-const HIDDEN = /[\u200B-\u200D\u2060\uFEFF\u202A-\u202E\u2066-\u2069]|\uDB40[\uDC00-\uDC7F]/;
+export const HIDDEN = /[\u200B-\u200D\u2060\uFEFF\u202A-\u202E\u2066-\u2069]|\uDB40[\uDC00-\uDC7F]/;
 const BASE64 = /[A-Za-z0-9+/]{100,}={0,2}/;
 const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9-]+(\.[A-Z0-9-]+)*\.[A-Z]{2,}/i;
 /** A figure with a currency: a price ("$49", "49 €", "₺1.200"). */

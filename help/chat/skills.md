@@ -1,7 +1,7 @@
 ---
 title: Skills in Chat
 route: /dashboard/chat
-keywords: [skills, skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps]
+keywords: [skills, skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, review a skill, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps]
 synonyms: [slash commands, playbooks, how-tos, templates]
 plan: all
 updated: 2026-11-02
@@ -36,6 +36,12 @@ Analysts and Agency partners have no **/** menu, but Chat still uses a skill for
 ## Save your own skill
 
 Admins and Managers can ask Chat to keep steps they repeat as a skill of their own, for example: "Save this as a skill called /pricing-brief: open with the answer, then three short sections." Chat shows the skill's name, what it does and its steps on a card, and saves it when you approve, or by itself in Full auto. The skill is private to you and joins your **/** menu right away. It can't take the name of an Ansvisor skill, and your plan sets how many skills your workspace keeps.
+
+## Import a skill
+
+Admins and Managers on a paid plan can bring in a skill from outside. On the **Skills** page, click **New skill**, then **Upload a SKILL.md or .zip** (up to 5 MB), or **Import from GitHub** and paste a public github.com link. Only the skill's instructions come in: scripts, commands and allowed tools are removed, and nothing runs. A GitHub skill is read at today's commit and never updates by itself. Only MIT, Apache-2.0, BSD and ISC licenses are accepted.
+
+An imported skill stays off until an Admin reviews it. **Review** shows the cleaned file with any hidden characters marked, what the safety scan found, what was removed and where it came from. The Admin approves or rejects it; a skill the scan blocks can't be approved. A Manager's import asks the Admins to review it.
 
 ## What a skill can't change
 
