@@ -16,6 +16,7 @@ vi.mock('@/lib/mcp-auth', () => ({
     email: 'ada@acme.example',
     organizationId: 'org-1',
     apiKeyId: 'key-1',
+    brandAccess: 'all',
   })),
 }));
 vi.mock('@/lib/mcp/account', () => ({ getAiUsageFor, getMeFor }));
