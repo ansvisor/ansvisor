@@ -497,7 +497,7 @@ export async function openAgentRun(
       message_id: answerId,
       conversation_id: conversationId,
       status: 'running',
-      // The agent's model preference and effort (CHAT-16): the engine picks Auto's models today.
+      // The agent's model and effort (CHAT-16): the engine runs them as the plan allows (W4-03).
       model: version.model,
       effort: version.effort,
       started_at: now.toISOString(),

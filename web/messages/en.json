@@ -3889,6 +3889,8 @@
       "askStopped": "Question skipped",
       "opened": "Opened {page}",
       "notOpened": "Couldn't open {page}",
+      "modelDropped": "Ran on Auto",
+      "modelDroppedDetail": "The model this chat used is no longer available",
       "usedSkill": "Used skill: {title}",
       "skillFromLibrary": "Ansvisor library"
     },
