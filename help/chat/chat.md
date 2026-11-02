@@ -29,6 +29,8 @@ Next to the arrow, pick how much Chat does on its own: **Ask me first** asks bef
 
 Analysts and Agency partners only read: their box says **Read-only** with a link to what their role can do.
 
+On the demo brand or a read-only workspace, sending, or starting anything from **Home**, opens the plan dialog instead.
+
 ## Chat beside any page
 
 On most pages **Ask Chat** sits at the top right, next to the AI usage meter. Click it, or press **Ctrl J** (**⌘J** on a Mac), to open Chat in a panel on the right without leaving the page. Press it again, or click **✕**, to close the panel: the page stays exactly as you left it.
