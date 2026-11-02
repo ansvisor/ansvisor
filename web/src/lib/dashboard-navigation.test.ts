@@ -272,12 +272,6 @@ describe('dashboardNavBadge', () => {
   const chat = items.find((item) => item.title === 'Chat')!;
   const actionCenter = items.find((item) => item.title === 'Action Center')!;
 
-  it("says Chat comes next week on the demo brand, before it's set up", () => {
-    expect(dashboardNavBadge(chat, { chatSoon: 'Soon (next week)', chatSetUp: 'Set up' })).toBe(
-      'Soon (next week)',
-    );
-  });
-
   it('asks to set Chat up without a provider key, in words from en.json, else shows its own', () => {
     expect(messages.nav.chatSetUp).toBe('Set up');
     expect(dashboardNavBadge(chat, { chatSetUp: messages.nav.chatSetUp })).toBe('Set up');
@@ -291,10 +285,16 @@ describe('dashboardNavBadge', () => {
   });
 
   it("keeps every other item's own badge", () => {
-    expect(
-      dashboardNavBadge({ ...actionCenter, badge: 'Beta' }, { chatSoon: 'Soon (next week)' }),
-    ).toBe('Beta');
-    expect(dashboardNavBadge(actionCenter, { chatSoon: 'Soon (next week)' })).toBeUndefined();
+    expect(dashboardNavBadge({ ...actionCenter, badge: 'Beta' }, { chatSetUp: 'Set up' })).toBe(
+      'Beta',
+    );
+    expect(dashboardNavBadge(actionCenter, { chatSetUp: 'Set up' })).toBeUndefined();
+  });
+
+  // The demo brand's Chat is the real one, locked as the rest of the demo:
+  // it no longer says it comes next week.
+  it('has no words left for a Chat that comes next week', () => {
+    expect('chat' in messages.demo).toBe(false);
   });
 
   it('marks nothing in the menu as New', () => {

@@ -104,6 +104,7 @@ const { useSidebarStore } = await import('@/stores/use-sidebar-store');
 const { useChatRailStore } = await import('@/stores/use-chat-rail-store');
 const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
 const { useBrandStore } = await import('@/stores/use-brand-store');
+const { DemoBrandContext } = await import('@/components/providers/demo-brand-provider');
 
 /** The dashboard sidebar, expanded (it opens collapsed). */
 
@@ -341,6 +342,39 @@ describe('Sidebar', () => {
       await render(true);
       expect(chatLink('/dashboard/chat')?.textContent).toBe('Chat');
       expect(useAgentKeyStatus).not.toHaveBeenCalledWith(true);
+    });
+  });
+
+  // The demo brand's Chat is the real one, locked as the rest of the demo:
+  // its menu item is the one any brand has, with the new Chat off (the old
+  // Agent Chat's page, Set up without a key) or on (/dashboard/chat).
+  describe('Chat on the demo brand', () => {
+    const render = (chatOn: boolean) =>
+      act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+            <DemoBrandContext.Provider
+              value={{ isDemo: true, demoBrand: null, offer: 'trial', neverSubscribed: true }}
+            >
+              <ChatAgenticProvider enabled={chatOn}>
+                <Sidebar />
+              </ChatAgenticProvider>
+            </DemoBrandContext.Provider>
+          </NextIntlClientProvider>,
+        );
+      });
+    const chatLink = (href: string) => container.querySelector<HTMLElement>(`a[href="${href}"]`);
+
+    it('is the same item as on any brand, with the new Chat off or on', async () => {
+      await render(false);
+      expect(chatLink('/dashboard/agent')?.textContent).toBe('Chat');
+      gate.isCloud = true;
+      agentKey.status = 'missing';
+      await render(false);
+      expect(chatLink('/dashboard/agent')?.textContent).toBe('ChatSet up');
+      await render(true);
+      expect(chatLink('/dashboard/chat')?.textContent).toBe('Chat');
+      expect(container.textContent).not.toContain('Soon');
     });
   });
 

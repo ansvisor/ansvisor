@@ -72,6 +72,7 @@ const { MobileNav } = await import('./mobile-nav');
 const { MenuAccessProvider } = await import('@/components/providers/menu-access-provider');
 const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
 const { useBrandStore } = await import('@/stores/use-brand-store');
+const { DemoBrandContext } = await import('@/components/providers/demo-brand-provider');
 
 /**
  * The mobile menu leaves the viewer's hidden sections off, the active brand's
@@ -99,15 +100,19 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-async function open(hidden: string[], chatOn = false) {
+async function open(hidden: string[], chatOn = false, isDemo = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <MenuAccessProvider hidden={hidden} canManageMenus={false}>
-          <ChatAgenticProvider enabled={chatOn}>
-            <MobileNav />
-          </ChatAgenticProvider>
-        </MenuAccessProvider>
+        <DemoBrandContext.Provider
+          value={{ isDemo, demoBrand: null, offer: 'trial', neverSubscribed: true }}
+        >
+          <MenuAccessProvider hidden={hidden} canManageMenus={false}>
+            <ChatAgenticProvider enabled={chatOn}>
+              <MobileNav />
+            </ChatAgenticProvider>
+          </MenuAccessProvider>
+        </DemoBrandContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -165,5 +170,15 @@ describe('MobileNav', () => {
     await open([], true);
     expect(link('/dashboard/chat')?.textContent).toBe('Chat');
     expect(useAgentKeyStatus).not.toHaveBeenCalledWith(true);
+  });
+
+  // The demo brand's Chat is the real one, locked as the rest of the demo.
+  it.each([
+    [false, '/dashboard/agent'],
+    [true, '/dashboard/chat'],
+  ])('gives the demo brand the Chat item any brand has (new Chat %s)', async (chatOn, href) => {
+    await open([], chatOn, true);
+    expect(link(href)?.textContent).toBe('Chat');
+    expect(document.body.textContent).not.toContain('Soon');
   });
 });

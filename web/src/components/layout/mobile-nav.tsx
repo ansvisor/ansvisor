@@ -13,7 +13,6 @@ import {
   navItemHref,
   shouldShowDashboardNavItem,
 } from '@/lib/dashboard-navigation';
-import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
@@ -42,10 +41,6 @@ export function MobileNav() {
   const agentKeyStatus = useAgentKeyStatus(isCloud && !chatAgentic);
   const agentKeyMissing = isCloud && !chatAgentic && agentKeyStatus === 'missing';
   const chatSetUp = agentKeyMissing ? t('chatSetUp') : null;
-  // On the demo brand, Chat says it comes next week (its page is the preview).
-  const { isDemo } = useDemoBrand();
-  const tDemo = useTranslations('demo.chat');
-  const chatSoon = isDemo ? tDemo('soon') : null;
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
   const brandPrefs = { shoppingModeEnabled: !!activeBrand?.shoppingModeEnabled };
@@ -125,14 +120,9 @@ export function MobileNav() {
                     : pathname.startsWith(href);
                 const label = getDashboardNavLabel(item.title, t);
 
-                // Chat's own badge: "Soon (next week)" on the demo brand,
-                // "Set up" when the org has no provider key for it (cloud only,
-                // never with the new Chat on).
-                const effectiveBadge = dashboardNavBadge(item, {
-                  chatAgentic,
-                  chatSoon,
-                  chatSetUp,
-                });
+                // Chat's own badge: "Set up" when the org has no provider key for
+                // it (cloud only, never with the new Chat on).
+                const effectiveBadge = dashboardNavBadge(item, { chatAgentic, chatSetUp });
 
                 const isLocked =
                   isCloud && item.requiredFeature != null && !canUse(item.requiredFeature);
