@@ -19,6 +19,7 @@ import {
   seedDraft,
   seedWorkspace,
 } from './testing/chat-fixtures';
+import { copiedFrom, type UntrustedShingles } from './go-live-checks';
 
 /**
  * Chat's engine (C3), with a scripted model and an in-memory database: a turn
@@ -2961,6 +2962,31 @@ describe('the AI budget', () => {
       expect(step).not.toHaveProperty('agentRunId');
       expect(step).not.toHaveProperty('feature');
     }
+  });
+
+  it('keeps an agent run’s untrusted reads as hashed word runs, never a person’s chat’s (AUTONOMOUS-GO-LIVE §6.3)', async () => {
+    budgetHolds();
+    const answer = Array.from({ length: 40 }, (_, i) => `w${i}`).join(' ');
+    fakes.readRun.mockResolvedValue({ answers: [{ answer }] });
+    const readSteps = () => [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY];
+    useModels(readSteps(), [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'What do AI answers say about us?',
+      brandId: BRAND,
+    });
+    if (!started.ok) throw new Error('not started');
+    db.tables.chat_conversations.find((c) => c.id === started.conversationId)!.agent_run_id =
+      '77777777-7777-4777-8777-777777777777';
+    await engine.driveRun(ADMIN, started.runId);
+    const state = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
+    const kept = (state.progress as { untrustedShingles?: UntrustedShingles }).untrustedShingles;
+    expect(kept?.full).toBe(false);
+    expect(copiedFrom(answer, kept)).toBe(true);
+
+    useModels(readSteps(), [text('Done.')]);
+    const own = await turn(ADMIN, 'What do AI answers say about us?');
+    const ownState = db.tables.chat_run_state.find((s) => s.run_id === own)!;
+    expect(ownState.progress).not.toHaveProperty('untrustedShingles');
   });
 });
 

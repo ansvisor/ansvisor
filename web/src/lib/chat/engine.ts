@@ -143,6 +143,7 @@ import {
   type CachedRead,
 } from './tool-cache';
 import { dataBlock, guardData, isUntrustedRead } from './untrusted';
+import { keepShingles, textsOf } from './go-live-checks';
 import { undoRule } from './undo';
 import { runLoggedWrite } from './write';
 import { fileChatOutput } from './file-output';
@@ -2702,6 +2703,13 @@ async function readCall(
   // Outside text (§16a): the run is tainted, kept or not.
   if (untrusted) rc.progress.tainted = true;
   if (read.injection) rc.progress.injection = true;
+  // An agent's page may not copy it whole to go live on its own (AUTONOMOUS-GO-LIVE §6.3).
+  if (untrusted && rc.agentRunId) {
+    rc.progress.untrustedShingles = keepShingles(
+      rc.progress.untrustedShingles,
+      textsOf(read.value),
+    );
+  }
   const rows = read.rows ?? undefined;
   const asOf = read.dataAsOf;
   const room = Math.min(rc.budget.resultChars, rc.budget.dataChars - rc.progress.dataChars);
