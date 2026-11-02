@@ -9,6 +9,7 @@ import { READ_TOOLS } from './read-tools';
 import { MEMORY_TOOLS } from './memory-tools';
 import { REPORT_TOOLS } from './report-tools';
 import { SKILL_TOOLS } from './skill-tools';
+import { SCHEDULE_TOOLS } from './schedule-tools';
 import { TOPIC_TOOLS } from './topic-tools';
 import { WHY_TOOLS } from './why-tools';
 import { WRITE_TOOLS } from './write-tools';
@@ -36,6 +37,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...AUDIT_TOOLS,
   ...SKILL_TOOLS,
   ...MEMORY_TOOLS,
+  ...SCHEDULE_TOOLS,
 ];
 
 /** The row of a tool, by its internal name; undefined for a name with no row. */

@@ -96,6 +96,9 @@ vi.mock('@/lib/actions/audits', () => ({
 vi.mock('@/lib/actions/prompt-suggestions', () => ({
   dismissSuggestion: tracked.track('actions/prompt-suggestions.dismissSuggestion'),
 }));
+vi.mock('@/lib/actions/chat-schedules', () => ({
+  createChatSchedule: tracked.track('actions/chat-schedules.createChatSchedule'),
+}));
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: tracked.track('actions/chat-access-requests.requestAccess'),
 }));
@@ -600,6 +603,8 @@ describe('approval policies', () => {
       // Memory (W3-11, CHAT-14 item 25): every role has its Me; the store checks the scope.
       save_memory: ['admin', 'manager', 'analyst', 'agency_partner'],
       forget_memory: ['admin', 'manager', 'analyst', 'agency_partner'],
+      // Scheduled work (CHAT-20 §4: Admins and Managers create schedules).
+      create_schedule: ['admin', 'manager'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);

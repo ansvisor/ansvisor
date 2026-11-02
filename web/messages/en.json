@@ -3490,7 +3490,8 @@
     "agents": { "name": "Create and run agents", "step": "Changed an agent" },
     "newSkill": { "name": "Save skills", "step": "Saved skill" },
     "memorySave": { "name": "Save to memory", "step": "Saved to memory" },
-    "memoryForget": { "name": "Remove from memory", "step": "Removed from memory" }
+    "memoryForget": { "name": "Remove from memory", "step": "Removed from memory" },
+    "scheduleJob": { "name": "Schedule work", "step": "Scheduled" }
   },
   "agentic": {
     "avatar": {
@@ -3618,6 +3619,9 @@
       "sources": "Sources",
       "approveNeedsPlan": "Approving changes needs a plan",
       "clickNeedsPlan": "Going live needs a plan"
+    },
+    "formCard": {
+      "cancel": "Cancel"
     },
     "questionCard": {
       "counter": "{at} of {of}",
@@ -3917,6 +3921,7 @@
       "answered": "This question was already answered.",
       "answerInvalid": "That answer doesn't fit this question. Pick one of its options, or write up to 500 characters.",
       "approvalMismatch": "This changed after you approved it. Approve again?",
+      "formInvalid": "Some of these values don’t work. Check them and try again.",
       "notFound": "This chat isn't there any more.",
       "attachments": "A file you attached isn't ready or isn't yours any more. Attach it again and send."
     }
@@ -5345,7 +5350,8 @@
         "navigation": "Navigation",
         "web": "Web",
         "skills": "Skills",
-        "memory": "Memory"
+        "memory": "Memory",
+        "scheduling": "Scheduling"
       }
     }
   },
@@ -5385,6 +5391,8 @@
       "makeReport": "Made the report “{title}”",
       "makeReportUndo": "Removed the report “{title}” from Reports",
       "startAudit": "Started Site Audit on {pages}",
+      "scheduleJob": "Scheduled “{title}” · {when}",
+      "scheduleJobUndo": "Deleted the schedule “{title}” (its past results stay)",
       "accessDenied": "Not allowed: {tool}",
       "agentCreated": "Created the agent “{name}”",
       "agentUpdated": "Changed the agent “{name}”",
@@ -6380,6 +6388,70 @@
         "stopped": "It was stopped.",
         "noAnswer": "No answer in 7 days."
       }
+    },
+    "when": {
+      "daily": "Every day, {time}",
+      "weekdays": "Every weekday, {time}",
+      "weekly": "Every {days}, {time}",
+      "monthly": "{day, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} of every month, {time}",
+      "monthlyLast": "Last day of every month, {time}",
+      "once": "Once, {date}",
+      "readyBy": "Due {date}",
+      "zone": "{when} · {zone}",
+      "dateTime": "{date}, {time}",
+      "next": "Next: {date}",
+      "and": "and",
+      "or": "or",
+      "day": {
+        "MO": "Monday",
+        "TU": "Tuesday",
+        "WE": "Wednesday",
+        "TH": "Thursday",
+        "FR": "Friday",
+        "SA": "Saturday",
+        "SU": "Sunday"
+      },
+      "problem": {
+        "ambiguous": "That could be {options}. Say which one.",
+        "past": "That time has passed. Pick a later one.",
+        "too_far": "That’s more than a year away. Pick a sooner date.",
+        "too_often": "Scheduled jobs run at most once a day.",
+        "unreadable": "Say a day and time, like “every Monday at 9:00” or “tomorrow at 3pm”."
+      }
+    },
+    "card": {
+      "title": "Job",
+      "prompt": "What Chat does each run",
+      "when": "When",
+      "deliver": "Deliver to",
+      "changeOnly": "Notify only if the answer changed",
+      "changeOnlyHint": "Recurring jobs only. The first run always delivers.",
+      "submit": "Create schedule",
+      "model": "Runs on Auto · Normal",
+      "usage": "≈ {share} of monthly AI usage per run",
+      "usageUnknown": "Each run uses your monthly AI limit, like a chat",
+      "ownKey": "Runs on your workspace’s own AI key",
+      "emailTo": "Email goes to you"
+    },
+    "deliver": {
+      "chat": "Chat",
+      "email": "Email",
+      "both": "Chat + Email"
+    },
+    "step": {
+      "done": "Scheduled: {title}",
+      "detail": "{when} · {deliver}",
+      "detailReadyBy": "{when} · Starts now · {deliver}"
+    },
+    "tool": {
+      "ambiguous": "“{phrase}” could mean {options}. Ask the person which one with a question card, these as its options (the first recommended), then schedule again with the phrase they pick: {phrases}.",
+      "past": "“{phrase}” has passed in the person’s time zone ({zone}). Ask for a later time.",
+      "too_far": "“{phrase}” is more than a year away. Ask for a sooner date.",
+      "too_often": "A scheduled job runs at most once a day. Ask the person for a daily or less frequent time.",
+      "unreadable": "“{phrase}” isn’t a date or a repeat Chat can schedule. Ask the person for a day and time, such as “every Monday at 9:00” or “tomorrow at 3pm”.",
+      "limit": "The workspace’s plan keeps up to {limit} scheduled jobs on at once, and {count} are on. Tell the person to turn one off in Scheduled, or to upgrade.",
+      "skill": "There is no skill /{skill} on in this workspace. Schedule it with a prompt instead, or with a skill from the / menu.",
+      "role": "Only Admins and Managers can schedule work."
     }
   },
   "audit": {
