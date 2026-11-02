@@ -1,7 +1,7 @@
 ---
 title: Pick the model and effort Chat uses
 route: /dashboard/chat
-keywords: [model, choose model, pick model, model menu, auto, haiku, sonnet, opus, effort, normal effort, high effort, max effort, multiplier, 2.3x, uses your limit faster, own api key, your key]
+keywords: [model, choose model, pick model, model menu, auto, haiku, sonnet, opus, effort, normal effort, high effort, max effort, multiplier, 2.3x, uses your limit faster, own api key, your key, your api keys, add api key, use for, images key, use ansvisor's limit]
 synonyms: [ai model, llm, which model, switch model, thinking effort]
 plan: starter
 updated: 2026-11-02
@@ -32,6 +32,20 @@ In the free trial, Chat runs on Auto at Normal effort, and the other models are 
 ## When a model is no longer offered
 
 If the model a chat used is no longer available, the menu says so and Chat answers on Auto instead.
+
+## Your API keys
+
+On Enterprise, Admins click **Included in your plan** in the model menu to open **Your API keys**. It lists the keys saved in **Settings › AI Providers**, each with its last four characters, and marks the one **Auto** runs on.
+
+- **Use for** sets what each key is for: **Chat**, **Images**, or both. An Anthropic key is for Chat only, because Anthropic has no image models.
+- **Test** checks a key with its provider.
+- **Add API key** opens a short form: pick the provider, paste the key, choose what it is for, and click **Test & save**. The key goes straight to Settings, never into the chat, and is tested before it is kept.
+
+A model you pick runs on its provider's key first, then on your OpenRouter key, then on your plan's AI limit. Typing a message such as "use my OpenAI key" opens the same form instead of sending it.
+
+## When your key stops working
+
+If a key stops working during an answer, Chat stops and says why. Admins can open **AI Providers** to update the key, or click **Use Ansvisor's limit** to ask again on your plan's AI limit. Chat never switches to the limit by itself.
 
 ## Your own API key, usage and plan
 

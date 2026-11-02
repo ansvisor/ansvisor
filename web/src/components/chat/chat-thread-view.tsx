@@ -233,7 +233,7 @@ export function ChatThreadView({
   const lostWords = useRef(t('connectionLost'));
   const tSent = useTranslations('chatRun.actionSent');
   const sentWords = useRef({ created: tSent('toastCreated'), added: tSent('toastAdded') });
-  const { canManage } = useUserRole();
+  const { canManage, canAdmin } = useUserRole();
   // The run under way when the page opened, which it picks up again.
   const [resumable] = useState(() => {
     const open = turns[turns.length - 1];
@@ -377,6 +377,8 @@ export function ChatThreadView({
     route = pageRoute,
     /** The run whose answer it acts on (Send to Action Center): the server reads its taint. */
     fromRunId?: string,
+    /** "Use Ansvisor's limit" after the own key failed (W4-06): an Admin's click. */
+    keySource?: 'ansvisor',
   ): Promise<boolean> {
     if (isLocked) {
       openUpgrade();
@@ -423,6 +425,7 @@ export function ChatThreadView({
         ...(sent.context.length > 0 ? { context: { route, chips: sent.context } } : {}),
         ...(sent.references.length > 0 ? { references: sent.references } : {}),
         ...(fromRunId ? { fromRunId } : {}),
+        ...(keySource ? { keySource } : {}),
       }),
     }).catch(() => null);
     if (!res?.ok || !res.body) {
@@ -555,6 +558,29 @@ export function ChatThreadView({
   }
 
   /**
+   * "Use Ansvisor's limit" on the latest answer that stopped because the
+   * workspace's own key failed (W4-06): its question goes again on
+   * Ansvisor's key and the AI limit. An Admin's click only, never by itself,
+   * and not once the limit is used up.
+   */
+  function ansvisorRetryOf(index: number): (() => void) | undefined {
+    const question = questionOf(turns, index);
+    const resend = question?.resend;
+    if (!question || !resend || index !== turns.length - 1 || !canAdmin) return undefined;
+    if (!turns[index].run?.keyFailed || (thread && !thread.mine) || working || atCap) {
+      return undefined;
+    }
+    return () =>
+      void send(
+        question.text,
+        { context: resend.context, references: resend.references, attachments: [] },
+        resend.route,
+        undefined,
+        'ansvisor',
+      );
+  }
+
+  /**
    * Send to Action Center on the latest answer (CHAT-09 item 18): Chat
    * proposes the finding as an action, on its card. Admins and Managers, in
    * their own chat, while nothing else runs.
@@ -611,6 +637,7 @@ export function ChatThreadView({
                     )
                   }
                   onRetry={retryOf(index)}
+                  onUseAnsvisorLimit={ansvisorRetryOf(index)}
                   onSendToActionCenter={sendToActionCenterOf(index)}
                 />
                 {turn === last && (
@@ -663,6 +690,7 @@ export function ChatThreadView({
           usage={<ComposerUsageMeter />}
           modelChoice={modelChoice}
           onModelChoice={setModelChoice}
+          keyForm
           // An answer is its text only: no page chips, @ data or files go with it.
           chips={asking ? undefined : chips}
           onRemoveChip={onRemoveChip}
@@ -714,6 +742,7 @@ function Answer({
   canChangeTasks,
   onTasks,
   onRetry,
+  onUseAnsvisorLimit,
   onSendToActionCenter,
 }: {
   turn: Turn;
@@ -729,6 +758,8 @@ function Answer({
   onTasks: (strip: ChatTaskStrip) => void;
   /** Sends its question again; none while another run works, or on a teammate's chat. */
   onRetry?: () => void;
+  /** Sends it again on Ansvisor's key after the own key failed (W4-06): Admins. */
+  onUseAnsvisorLimit?: () => void;
   /** Send to Action Center (CHAT-09 item 18): the latest answer, for Admins and Managers. */
   onSendToActionCenter?: () => void;
 }) {
@@ -832,6 +863,7 @@ function Answer({
       timezone={turn.timezone}
       reconnecting={reconnecting}
       onRetry={onRetry}
+      onUseAnsvisorLimit={onUseAnsvisorLimit}
       cards={cards}
       footer={
         turn.runId && run.text.trim() ? (

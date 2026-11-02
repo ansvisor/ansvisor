@@ -70,3 +70,14 @@ export function bodyHasApiKey(body: unknown, field: string): boolean {
   const value = (body as Record<string, unknown>)[field];
   return typeof value === 'string' && looksLikeApiKey(value);
 }
+
+/**
+ * A message that asks to use or add the person's own API key ("use my
+ * OpenAI key", "add our Anthropic API key"): the composer opens the Add API
+ * key form for it (W4-06), so the key never goes through Chat.
+ */
+export function asksToAddKey(text: string): boolean {
+  return /\b(use|add|connect|save|set up|plug in)\b[^.?!\n]{0,30}\b(my|our)\b[^.?!\n]{0,30}\b(api[ -]?)?key\b/i.test(
+    text,
+  );
+}

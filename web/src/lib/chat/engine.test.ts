@@ -5614,10 +5614,11 @@ describe('the run’s model (W4-03)', () => {
     });
     if (!started.ok) throw new Error('not started');
     await engine.driveRun(ADMIN, started.runId);
-    expect(fakes.resolveModels).toHaveBeenCalledWith(ORG, {
-      model: 'anthropic/claude-opus-5.5',
-      effort: 'max',
-    });
+    expect(fakes.resolveModels).toHaveBeenCalledWith(
+      ORG,
+      { model: 'anthropic/claude-opus-5.5', effort: 'max' },
+      { ansvisorOnly: false },
+    );
     expect(fakes.readModelMenu).toHaveBeenCalledExactlyOnceWith({
       selected: 'anthropic/claude-opus-5.5',
     });
@@ -5637,7 +5638,11 @@ describe('the run’s model (W4-03)', () => {
     });
     if (!started.ok) throw new Error('not started');
     await engine.driveRun(ADMIN, started.runId);
-    expect(fakes.resolveModels).toHaveBeenCalledWith(ORG, { model: 'auto', effort: 'high' });
+    expect(fakes.resolveModels).toHaveBeenCalledWith(
+      ORG,
+      { model: 'auto', effort: 'high' },
+      { ansvisorOnly: false },
+    );
     const dropped = stepsOf(started.runId).filter((s) => s.label === 'Ran on Auto');
     expect(dropped).toHaveLength(1);
     expect(dropped[0]).toMatchObject({
@@ -5655,7 +5660,43 @@ describe('the run’s model (W4-03)', () => {
     Object.assign(runRow(started.runId), { model: 'anthropic/claude-haiku-5.5', effort: 'high' });
     db.tables.organizations[0].subscription_status = 'trialing';
     await engine.driveRun(ADMIN, started.runId);
-    expect(fakes.resolveModels).toHaveBeenCalledWith(ORG, { model: 'auto', effort: 'normal' });
+    expect(fakes.resolveModels).toHaveBeenCalledWith(
+      ORG,
+      { model: 'auto', effort: 'normal' },
+      { ansvisorOnly: false },
+    );
     expect(fakes.readModelMenu).not.toHaveBeenCalled();
+  });
+});
+
+describe('"Use Ansvisor’s limit" (W4-06)', () => {
+  it('runs on Ansvisor’s key when an Admin asks, and never for anyone else', async () => {
+    useModels([READY], [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Which pages does Perplexity cite?',
+      brandId: BRAND,
+      keySource: 'ansvisor',
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    expect(fakes.resolveModels).toHaveBeenLastCalledWith(
+      ORG,
+      { model: 'auto', effort: 'normal' },
+      { ansvisorOnly: true },
+    );
+
+    useModels([READY], [text('Done.')]);
+    const asked = await engine.startChatRun(ANALYST, {
+      message: 'Why did citations fall?',
+      brandId: BRAND,
+      keySource: 'ansvisor',
+    });
+    if (!asked.ok) throw new Error('not started');
+    await engine.driveRun(ANALYST, asked.runId);
+    expect(fakes.resolveModels).toHaveBeenLastCalledWith(
+      ORG,
+      { model: 'auto', effort: 'normal' },
+      { ansvisorOnly: false },
+    );
   });
 });

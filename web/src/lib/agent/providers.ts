@@ -7,11 +7,37 @@
 export const AI_PROVIDERS = ['anthropic', 'openai', 'google', 'azure', 'openrouter'] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 
-/** What a provider keeps besides the key: Azure's endpoint and deployment, a model. */
+/**
+ * What a saved key is for (W4-06, CHAT-16): Chat's answers, and image
+ * generation. Missing: Chat only, as every key saved before was. Anthropic
+ * has no image models, so its key is for Chat only.
+ */
+export const KEY_USES = ['chat', 'images'] as const;
+export type KeyUse = (typeof KEY_USES)[number];
+
+/** What a provider keeps besides the key: Azure's endpoint and deployment, a model, its uses. */
 export interface AiProviderSettings {
   endpoint?: string;
   deployment?: string;
   model?: string;
+  useFor?: KeyUse[];
+}
+
+/** Whether a provider can make images with its key. */
+export const makesImages = (provider: AiProvider) => provider !== 'anthropic';
+
+/** What a saved key is used for: its settings' list, Chat when none was set. */
+export function keyUsesOf(provider: AiProvider, settings: AiProviderSettings | null | undefined) {
+  const set = Array.isArray(settings?.useFor) ? settings.useFor : (['chat'] as KeyUse[]);
+  return KEY_USES.filter((use) => set.includes(use) && (use !== 'images' || makesImages(provider)));
+}
+
+/** A request body's uses for a provider's key; null when it names none or one it can't have. */
+export function parseKeyUses(provider: AiProvider, raw: unknown): KeyUse[] | null {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > KEY_USES.length) return null;
+  if (!raw.every((use) => (KEY_USES as readonly unknown[]).includes(use))) return null;
+  if (raw.includes('images') && !makesImages(provider)) return null;
+  return KEY_USES.filter((use) => raw.includes(use));
 }
 
 /** The model Chat uses when the settings name none (Azure uses its deployment). */
@@ -46,7 +72,7 @@ export function azureEndpoint(value: string): string | null {
   return AZURE_HOSTS.some((host) => url.hostname.endsWith(host)) ? url.origin : null;
 }
 
-export type SettingsError = 'endpoint' | 'deployment' | 'model';
+export type SettingsError = 'endpoint' | 'deployment' | 'model' | 'useFor';
 
 /**
  * The settings a provider keeps, read from a request body: only its own
@@ -58,24 +84,31 @@ export function parseProviderSettings(
 ): { settings: AiProviderSettings } | { error: SettingsError } {
   const input = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const text = (key: string) => (typeof input[key] === 'string' ? input[key].trim() : '');
+  // What the key is for (W4-06), kept beside its other settings when given.
+  let uses: { useFor?: KeyUse[] } = {};
+  if (input.useFor !== undefined) {
+    const useFor = parseKeyUses(provider, input.useFor);
+    if (!useFor) return { error: 'useFor' };
+    uses = { useFor };
+  }
 
   if (provider === 'azure') {
     const endpoint = azureEndpoint(text('endpoint'));
     if (!endpoint) return { error: 'endpoint' };
     const deployment = text('deployment');
     if (!DEPLOYMENT.test(deployment)) return { error: 'deployment' };
-    return { settings: { endpoint, deployment } };
+    return { settings: { endpoint, deployment, ...uses } };
   }
 
   const model = text('model');
   // OpenRouter has no default: its ids name the model's maker.
   if (provider === 'openrouter' && !model.includes('/')) return { error: 'model' };
-  if (!model) return { settings: {} };
+  if (!model) return { settings: { ...uses } };
   // Some SDKs put the id in the URL's path (Gemini): no `..`, and a `/` only
   // where OpenRouter's ids need one.
   if (!MODEL_ID.test(model) || model.includes('..')) return { error: 'model' };
   if (provider !== 'openrouter' && model.includes('/')) return { error: 'model' };
-  return { settings: { model } };
+  return { settings: { model, ...uses } };
 }
 
 /** The model Chat calls for a provider and its settings. */
