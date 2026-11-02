@@ -13,6 +13,7 @@ const fakes = vi.hoisted(() => ({
   failing: vi.fn(async () => ({ started: true, since: null })),
   working: vi.fn(async () => ({ cleared: false, resumed: 0 })),
   resume: vi.fn(async () => 2),
+  resolve: vi.fn(async () => {}),
 }));
 vi.mock('ai', async (importOriginal) => ({
   ...(await importOriginal<typeof import('ai')>()),
@@ -23,6 +24,7 @@ vi.mock('./key-health', () => ({
   markKeyFailing: fakes.failing,
   markKeyWorking: fakes.working,
   resumeOwnKeyAgents: fakes.resume,
+  resolveOwnKeyNotices: fakes.resolve,
 }));
 // The engine's model choice reads keys with the admin client: not here.
 vi.mock('./key', () => ({ resolveChatModelKey: vi.fn() }));
@@ -99,6 +101,8 @@ describe('keepKeyCheck', () => {
     expect(fakes.checked).toHaveBeenCalledWith('org', 'openai', NOW);
     expect(fakes.working).toHaveBeenCalledWith('org', 'openai', NOW, { resume: false });
     expect(fakes.resume).toHaveBeenCalledWith('org', NOW);
+    // Nothing was marked failing (a key saved again): its notices close all the same.
+    expect(fakes.resolve).toHaveBeenCalledWith('org', 'openai', NOW);
 
     fakes.resume.mockClear();
     expect(
@@ -107,11 +111,19 @@ describe('keepKeyCheck', () => {
     expect(fakes.resume).not.toHaveBeenCalled();
   });
 
+  it('still resumes the agents when the notices can’t be closed', async () => {
+    fakes.resolve.mockRejectedValueOnce(new Error('db down'));
+    expect(
+      await keepKeyCheck('org', 'openai', { outcome: 'working' }, { active: true, now: NOW }),
+    ).toBe(2);
+  });
+
   it('marks a failing key, and keeps nothing when the provider didn’t answer', async () => {
     const failing = { outcome: 'failing' as const, class: 'no_credit' as const, status: 429 };
     await keepKeyCheck('org', 'openai', failing, { active: true, now: NOW });
     expect(fakes.failing).toHaveBeenCalledWith('org', 'openai', failing, NOW);
     expect(fakes.resume).not.toHaveBeenCalled();
+    expect(fakes.resolve).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     expect(await keepKeyCheck('org', 'openai', { outcome: 'unknown' }, { active: true })).toBe(0);

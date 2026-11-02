@@ -49,6 +49,8 @@ let root: Root;
 const fetchMock = vi.fn();
 let saved: unknown[];
 let access: unknown;
+/** The key guard, sent to Admins where Chat runs on own keys; absent otherwise. */
+let guard: unknown;
 const openUpgrade = vi.fn();
 
 const json = (body: unknown, status = 200) =>
@@ -76,8 +78,11 @@ beforeEach(() => {
     },
   ];
   access = undefined;
+  guard = undefined;
   fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
-    !init?.method ? json({ configured: true, providers: saved, access }) : json({ ok: true }),
+    !init?.method
+      ? json({ configured: true, providers: saved, access, guard })
+      : json({ ok: true }),
   );
   vi.stubGlobal('fetch', fetchMock);
   container = document.createElement('div');
@@ -238,6 +243,20 @@ describe('AiProvidersSection', () => {
       }
     }
     expect(row('openai').querySelector('button[aria-label="Remove key: OpenAI"]')).toBeTruthy();
+  });
+
+  it('shows the key guard under the keys only when the route sends it', async () => {
+    access = { state: 'plan' };
+    await render();
+    expect(container.querySelector('[data-slot="own-key-guard"]')).toBeNull();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    guard = { capUsd: 250, usedUsd: 12, renewsAt: null };
+    await render();
+    const card = container.querySelector('[data-slot="own-key-guard"]') as HTMLElement;
+    expect(card.textContent).toContain('Agents on your key');
+    expect(card.textContent).toContain('This month: about $12 of $250');
   });
 
   it('keeps a saved key until its date: replaced or switched to, no other provider added', async () => {

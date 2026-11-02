@@ -2546,6 +2546,50 @@ export type Database = {
           },
         ]
       }
+      chat_notices: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          id: string
+          kind: string
+          organization_id: string
+          payload: Json
+          read_at: string | null
+          resolved_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          id?: string
+          kind: string
+          organization_id: string
+          payload?: Json
+          read_at?: string | null
+          resolved_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          id?: string
+          kind?: string
+          organization_id?: string
+          payload?: Json
+          read_at?: string | null
+          resolved_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_notices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_run_events: {
         Row: {
           created_at: string
@@ -2784,6 +2828,7 @@ export type Database = {
           full_auto_for_members: boolean
           manager_execute_off: string[]
           organization_id: string
+          own_key_agent_month_usd: number
           tool_policies: Json
           updated_at: string
           updated_by: string | null
@@ -2796,6 +2841,7 @@ export type Database = {
           full_auto_for_members?: boolean
           manager_execute_off?: string[]
           organization_id: string
+          own_key_agent_month_usd?: number
           tool_policies?: Json
           updated_at?: string
           updated_by?: string | null
@@ -2808,6 +2854,7 @@ export type Database = {
           full_auto_for_members?: boolean
           manager_execute_off?: string[]
           organization_id?: string
+          own_key_agent_month_usd?: number
           tool_policies?: Json
           updated_at?: string
           updated_by?: string | null

@@ -30,6 +30,8 @@ export type AgentStatus = (typeof AGENT_STATUSES)[number];
  */
 export const AGENT_PAUSED_REASONS = [
   'cap',
+  // All agents reached the month's limit on the workspace's own key (AGENT-OWN-KEY §4.2).
+  'own_key_cap',
   'connection',
   'skill_off',
   'failures',

@@ -1,3 +1,4 @@
+import { isAiProvider } from '@/lib/agent/providers';
 import { getAiUsageFor } from '@/lib/mcp/account';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { FAILURES_TO_PAUSE, settleAgentRun, startNextAgentRuns } from './agent-driver';
@@ -9,6 +10,8 @@ import { endHeldRun, sweepChatRuns } from './engine';
 import { chatAgenticEnabled } from './flag';
 import { chatRunsOnOwnKey } from './key';
 import { ownKeyFailure, resumeOwnKeyAgents } from './key-health';
+import { notifyOwnKeyFailure } from './key-notice';
+import { readOwnKeyCap } from './own-key-cap';
 
 /**
  * The agents' sweep (CHAT-21 §G, §H, §M; W2-16), on the server's minute
@@ -46,6 +49,8 @@ export interface AgentSweep {
   pausedForFailures: number;
   resumed: number;
   started: number;
+  /** Own keys whose Admins got the 3-day reminder. */
+  reminded: number;
   /** The parts that failed; the others ran. */
   failed: string[];
 }
@@ -140,6 +145,43 @@ async function resumeOwnKeyPausedAgents(now: Date): Promise<number> {
   return resumed;
 }
 
+/** How long an own key fails before its Admins get the one reminder (00441). */
+export const OWN_KEY_REMINDER_MS = 3 * 24 * 60 * 60_000;
+
+/**
+ * Own keys still failing 3 days into their episode: the workspace's Admins
+ * get the one reminder (AGENT-OWN-KEY §5.3). The server takes it once per
+ * episode, so a sweep that asks again changes nothing; a key already
+ * reminded isn't asked for. The number of keys whose reminder went out.
+ */
+async function remindFailingOwnKeys(now: Date): Promise<number> {
+  const due = new Date(now.getTime() - OWN_KEY_REMINDER_MS).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('organization_ai_keys')
+    .select('organization_id, provider, failing_since, notified_at')
+    .not('failing_since', 'is', null)
+    .lt('failing_since', due)
+    .limit(SWEEP_ROWS);
+  if (error) throw new Error(`Could not read the failing keys: ${error.message}`);
+  let reminded = 0;
+  for (const key of (data ?? []) as {
+    organization_id: string;
+    provider: string;
+    failing_since: string;
+    notified_at: string | null;
+  }[]) {
+    if (!chatAgenticEnabled(key.organization_id) || !isAiProvider(key.provider)) continue;
+    // Told 3 days or more into the episode: the reminder went out.
+    const remindAt = Date.parse(key.failing_since) + OWN_KEY_REMINDER_MS;
+    if (key.notified_at && Date.parse(key.notified_at) >= remindAt) continue;
+    const told = await notifyOwnKeyFailure(key.organization_id, key.provider, key.failing_since, {
+      reminder: true,
+    });
+    if (told) reminded += 1;
+  }
+  return reminded;
+}
+
 /** A resumed agent's triggered runs held at the limit stop: the next trigger runs instead. */
 async function stopHeldTriggeredRuns(agentId: string, now: Date): Promise<void> {
   const { data, error } = await supabaseAdmin
@@ -175,6 +217,43 @@ async function stopHeldTriggeredRuns(agentId: string, now: Date): Promise<void> 
   }
 }
 
+/**
+ * Agents paused because all agents reached the month's limit on the
+ * workspace's own key (own_key_cap, AGENT-OWN-KEY §4.2) start again once
+ * there is room: the period renewed, or an Admin raised the limit; also
+ * once Chat no longer runs on the key. Each workspace's guard is read fresh;
+ * one that can't be read waits for the next sweep.
+ */
+async function resumeKeyCapPausedAgents(now: Date): Promise<number> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_agents')
+    .select('id, organization_id')
+    .eq('status', 'paused')
+    .eq('paused_reason', 'own_key_cap')
+    .limit(SWEEP_ROWS);
+  if (error) throw new Error(`Could not read the paused agents: ${error.message}`);
+  const rows = (data ?? []) as { id: string; organization_id: string }[];
+  let resumed = 0;
+  for (const orgId of new Set(rows.map((r) => r.organization_id))) {
+    if (
+      (await chatRunsOnOwnKey(orgId)) &&
+      (await readOwnKeyCap(orgId, { fresh: true }))?.reached !== false
+    ) {
+      continue;
+    }
+    const { data: moved, error: moveError } = await supabaseAdmin
+      .from('chat_agents')
+      .update({ status: 'active', paused_reason: null, activated_at: now.toISOString() })
+      .eq('organization_id', orgId)
+      .eq('status', 'paused')
+      .eq('paused_reason', 'own_key_cap')
+      .select('id');
+    if (moveError) throw new Error(`Could not resume the agents: ${moveError.message}`);
+    resumed += (moved ?? []).length;
+  }
+  return resumed;
+}
+
 /** One sweep (above); answers what each part did, for the cron's log. */
 export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Promise<AgentSweep> {
   const counts: AgentSweep = {
@@ -185,6 +264,7 @@ export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Pro
     pausedForFailures: 0,
     resumed: 0,
     started: 0,
+    reminded: 0,
     failed: [],
   };
   // Each part on its own: one that fails is named in `failed`, and the rest still run.
@@ -260,6 +340,10 @@ export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Pro
     counts.resumed += await resumeOwnKeyPausedAgents(now);
   });
 
+  await part('ownKeyReminder', async () => {
+    counts.reminded = await remindFailingOwnKeys(now);
+  });
+
   // The workspaces' waiting runs start here, in this request of their own (not chained).
   await part('start', async () => {
     const { data: queued, error } = await supabaseAdmin
@@ -278,6 +362,11 @@ export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Pro
         console.error('[chat/agents] could not start a workspace’s runs:', err);
       }
     }
+  });
+
+  // After the start: an agent resumed here runs on its next fire.
+  await part('keyCap', async () => {
+    counts.resumed += await resumeKeyCapPausedAgents(now);
   });
   return counts;
 }
