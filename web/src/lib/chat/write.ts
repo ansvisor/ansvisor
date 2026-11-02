@@ -4,7 +4,7 @@ import type { GoLivePage } from './go-live-facts';
 import { sendOnItsOwn, type GoLiveSend } from './go-live-send';
 import { idempotencyKey, requestHash, sweepExpiredKeys, withIdempotencyKey } from './idempotency';
 import type { ChatMode, ChatSurface } from './precedence';
-import type { ChatTool, ChatToolContext } from './registry/define-tool';
+import { runsWithoutSession, type ChatTool, type ChatToolContext } from './registry/define-tool';
 import { undoRule, type WriteRecord } from './undo';
 
 /**
@@ -46,6 +46,12 @@ export interface WriteRequest {
    * guards were checked on, which the API sends as the run's person.
    */
   goLive?: { agentId: string; reservationId: string; page: GoLivePage };
+  /**
+   * No session of the person is behind the call (an agent run on its own):
+   * a sessionFree row's runFor makes the change, as `ctx`'s person, instead
+   * of `run`, whose server action reads the session.
+   */
+  withoutSession?: boolean;
 }
 
 export type WriteOutcome =
@@ -71,6 +77,10 @@ const refused = (output: unknown): boolean =>
   typeof output === 'object' &&
   !Array.isArray(output) &&
   (output as { ok?: unknown }).ok === false;
+
+/** A run with no session whose write the API server took as no one (lib/chat/actor/api.ts). */
+const wayRefused = (output: unknown): boolean =>
+  refused(output) && (output as { reason?: unknown }).reason === 'acting_refused';
 
 /**
  * Whether a call goes live on its own: an agent run's EXECUTE whose row may
@@ -105,8 +115,8 @@ function sendOf(req: WriteRequest): GoLiveSend | null {
 /**
  * Never throws for a failure on the way (the engine and server actions call
  * it): `failed`. Only a call against the rules (a read, an EXECUTE without
- * its click, outside an agent run allowed to go live on its own) throws,
- * before anything runs.
+ * its click, outside an agent run allowed to go live on its own; a change
+ * without a session whose row needs one) throws, before anything runs.
  */
 export async function runLoggedWrite(req: WriteRequest): Promise<WriteOutcome> {
   const { tool } = req;
@@ -117,6 +127,10 @@ export async function runLoggedWrite(req: WriteRequest): Promise<WriteOutcome> {
   }
   if (tool.class === 'execute' && req.approval.kind !== 'click' && !onItsOwn) {
     throw new Error("An EXECUTE runs on the person's click only");
+  }
+  // Going live on its own needs no session: the API sends it as the run's person (§5.4).
+  if (req.withoutSession && !onItsOwn && !runsWithoutSession(tool)) {
+    throw new Error(`${tool.name} runs only with its person's session`);
   }
   try {
     return await run(req);
@@ -138,23 +152,24 @@ async function run(req: WriteRequest): Promise<WriteOutcome> {
     },
     async () => {
       const before = rule ? await rule.before(req.input) : null;
+      // Where it runs, for a row that records it on what it changes (Action History, §10a).
+      const ctx: ChatToolContext = {
+        ...req.ctx,
+        chat: {
+          conversationId: req.place.conversationId,
+          runId: req.place.runId,
+          approvalKey: req.approvalKey,
+          executionMode: req.approval.kind === 'auto' ? 'automated' : 'assisted',
+        },
+      };
       // On its own, the API sends the page its guards were checked on, as the run's person;
-      // else the row's own action, where it runs (Action History, §10a).
+      // no session: the row's own write for the run's person (runLoggedWrite checked it has one).
       const send = sendOf(req);
       const output = send
         ? await sendOnItsOwn(send)
-        : await tool.run(
-            {
-              ...req.ctx,
-              chat: {
-                conversationId: req.place.conversationId,
-                runId: req.place.runId,
-                approvalKey: req.approvalKey,
-                executionMode: req.approval.kind === 'auto' ? 'automated' : 'assisted',
-              },
-            },
-            req.input as never,
-          );
+        : req.withoutSession
+          ? await tool.runFor!(ctx, req.input as never)
+          : await tool.run(ctx, req.input as never);
       // The change is made: whatever happens to its log row, it isn't made again.
       let activityId: string | null = null;
       if (!refused(output)) {
@@ -166,6 +181,9 @@ async function run(req: WriteRequest): Promise<WriteOutcome> {
       }
       return { result: toJson(output), activityId };
     },
+    // The API server took no one to act as (acting_refused): nothing changed, and the
+    // approval is its person's to give again on its card, with the same key.
+    { keep: (result) => !wayRefused(result) },
   );
 
   if (outcome.kind === 'mismatch') return { code: 'approval_mismatch' };

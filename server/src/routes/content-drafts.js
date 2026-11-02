@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { assertBrandAccess } from '../lib/access.js';
+import { DEMO_BRAND, isDemoBrand } from '../middleware/demo-brand.js';
 import { fixDraftRules, fixRulesInput } from '../lib/content-agent.js';
 import { handOffDraft, handOffInput } from '../lib/content-handoff.js';
 import { qualityPhase } from '../lib/content-quality.js';
@@ -12,11 +13,19 @@ import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
 import { checkWordPressPublished } from '../lib/cms/wordpress-status.js';
 import { checkWixPublished } from '../lib/cms/wix-status.js';
 import { liveAddress, publishDraft } from '../lib/content-published.js';
-import { cmsStatusLimiter, shoppingPathLimiter } from '../middleware/rate-limiter.js';
+import {
+  auditEstimateLimiter,
+  cmsStatusLimiter,
+  shoppingPathLimiter,
+} from '../middleware/rate-limiter.js';
+import { auditContextOf } from '../lib/audit/context.js';
+import { draftEstimate, readSiteSignals } from '../lib/audit/draft-estimate.js';
+import { runSignals } from '../lib/audit/engine.js';
+import { LLM_SIGNAL_KEYS, auditLlmModel, evaluateLlmSignals } from '../lib/audit/llm-signals.js';
 import { stopDraftRun } from '../lib/content-runs.js';
 import { startDraftWriting, writeDraftInput } from '../lib/content-writer.js';
 import supabaseAdmin from '../config/supabase.js';
-import { PlanLimitError } from '../lib/plan-guard.js';
+import { PlanLimitError, reserveAiBudget } from '../lib/plan-guard.js';
 
 /**
  * Content Editor drafts: Rebuild outline in the editor's Brief tab writes
@@ -501,6 +510,109 @@ router.post('/:draftId/rewrite', async (req, res) => {
   }
 });
 
+/** The longest page an estimate reads: a whole page with its head, well past the longest draft. */
+const MAX_ESTIMATE_HTML = 1_000_000;
+/** What the AI checks' hold on the budget is, before the call: a page's text and 13 verdicts. */
+const ESTIMATE_AI_HOLD_USD = 0.01;
+
+const aiVerdict = z.object({
+  key: z.enum(LLM_SIGNAL_KEYS),
+  status: z.enum(['pass', 'warn', 'fail', 'na']),
+  score: z.number().min(0).max(1).nullable(),
+});
+const estimateBody = z.object({
+  brandId: z.guid(),
+  /** The page as it goes out: the editor's document, with its head (draftHtmlDocument). */
+  html: z.string().max(MAX_ESTIMATE_HTML),
+  /** Run the AI checks too, on the workspace's AI usage. */
+  ai: z.boolean().optional(),
+  /** The AI checks' verdicts from an earlier reading, kept in the score. */
+  verdicts: z.array(aiVerdict).max(LLM_SIGNAL_KEYS.length).optional(),
+});
+
+/**
+ * POST /api/content-drafts/:draftId/audit-estimate
+ * Body: { brandId, html, ai?, verdicts? }
+ * Site Audit's estimate of the draft (customer priorities item 9,
+ * draft-estimate.js): { score, categories, checks: { page, site, ai } }, and
+ * with `ai` the AI checks' `verdicts`, to send back with later readings.
+ * The page's checks are free; the AI checks are Quality's AI usage (429
+ * ai_budget once it is spent, 402 without an active plan; 402 demo_brand on
+ * the demo brand, whose free checks still run).
+ */
+router.post('/:draftId/audit-estimate', auditEstimateLimiter, async (req, res) => {
+  const draftId = z.guid().safeParse(req.params.draftId);
+  const parsed = estimateBody.safeParse(req.body ?? {});
+  if (!draftId.success || !parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  }
+  const { brandId, html, ai = false, verdicts = [] } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const [draftRes, domainRes, brandRes] = await Promise.all([
+      supabaseAdmin
+        .from('content_drafts')
+        .select('brand_id, source_url')
+        .eq('id', draftId.data)
+        .maybeSingle(),
+      supabaseAdmin.from('brand_domains').select('domain, is_primary').eq('brand_id', brandId),
+      supabaseAdmin.from('brands').select('organization_id').eq('id', brandId).maybeSingle(),
+    ]);
+    for (const r of [draftRes, domainRes, brandRes]) if (r.error) throw r.error;
+    if (!draftRes.data || draftRes.data.brand_id !== brandId) {
+      return res.status(404).json({ error: 'Draft not found', code: 'not_found' });
+    }
+    // Where the page goes: a live page's own address, else the brand's site,
+    // so its links to the site read as internal ones.
+    const primary = (domainRes.data ?? []).find((d) => d.is_primary) ?? domainRes.data?.[0];
+    const host = primary?.domain.replace(/^https?:\/\//, '').split('/')[0];
+    const ctx = auditContextOf({
+      url: draftRes.data.source_url || `https://${host || 'example.com'}/`,
+      statusCode: 200,
+      html,
+      robotsTxt: null,
+      llmsTxt: null,
+    });
+    const [page, site] = await Promise.all([runSignals(ctx), readSiteSignals(brandId)]);
+    let read = verdicts;
+    if (ai) {
+      // The free checks run on the demo brand's sample drafts; the AI checks spend, so not there.
+      if (await isDemoBrand([brandId])) return res.status(402).json(DEMO_BRAND);
+      const budget = await reserveAiBudget(brandRes.data?.organization_id, {
+        feature: 'quality',
+        modelId: auditLlmModel(),
+        draftId: draftId.data,
+        holdUsd: ESTIMATE_AI_HOLD_USD,
+      });
+      try {
+        const { results } = await evaluateLlmSignals(ctx, {
+          onUsage: (usage) => budget.charge(usage),
+        });
+        read = results.map(({ key, status, score }) => ({ key, status, score }));
+      } finally {
+        await budget.release();
+      }
+    }
+    return res.json({
+      ...draftEstimate({ page, site, ai: read }),
+      ...(ai ? { verdicts: read } : {}),
+    });
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      // 402: no active subscription, not a spent budget.
+      const code = err.statusCode === 402 ? 'no_subscription' : 'ai_budget';
+      return res.status(err.statusCode).json({ error: err.message, code });
+    }
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error({ err }, 'content draft audit estimate error');
+    return res.status(502).json({ error: 'The estimate could not be read', code: 'failed' });
+  }
+});
+
 const stopBody = z.object({ brandId: z.guid(), runId: z.guid().optional() });
 
 /**
@@ -531,9 +643,10 @@ router.post('/:draftId/stop', async (req, res) => {
     const stopped = await stopDraftRun(draftId.data, runId ?? null);
     // A run in the background lets go of the draft once it sees the stop;
     // one no server holds any more never would. The editor opens at once.
-    // Only the claim a stopped run holds: a Stop on Fix open rules or the
+    // Only the claim a stopped run holds: a Stop on Fix open rules or Build
     // brief (which hold none) leaves a Start or Rewrite on the same draft its
-    // claim. A live page's Start runs as a Fix, and holds its own.
+    // claim. A live page's Start runs as a Fix, and holds its own; Write
+    // this's brief holds the claim its page is written under.
     for (const { claimed_at: claimedAt } of stopped) {
       if (!claimedAt) continue;
       const { error: letGoError } = await supabaseAdmin

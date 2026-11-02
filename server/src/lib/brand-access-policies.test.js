@@ -15,11 +15,14 @@ import { brandScopedTables } from './demo/coverage.js';
  *     branch of each client policy condition ties the row's own brand_id to
  *     brands (by the brand's id) or to the access rule. A row with no brand
  *     passes only for admins and All-brands people (`brand_id is null and
- *     (select public.user_has_all_brands())`), except on the person's own
- *     rows listed below;
+ *     (select public.user_has_all_brands())`), or for people who can access
+ *     every brand it touched (`brand_id is null and touched_brand_ids <@
+ *     array(select public.user_brand_ids())`, 00436), except on the person's
+ *     own rows listed below;
  *   * a table without a brand_id passes when each branch reaches, by the row
  *     it names, a table that passes (a draft, a chat, a change that went
- *     live…), or calls content_draft_member(); otherwise it is on the list
+ *     live…), or calls content_draft_member() or can_see_chat_agent() (an
+ *     agent's brands are in its version's scope, 00436); otherwise it is on the list
  *     below of Account-level tables, with why, or on the list of tables a
  *     later PR takes, which must be empty before anyone can be narrowed.
  *   * a subquery with union, intersect or except doesn't count, nor an
@@ -67,6 +70,8 @@ const NOT_BRAND_DATA = {
   ai_bot_usage: "The Account's AI bot event meter against the plan (D1).",
   api_keys: "A person's own API keys; a key carries its owner's brand access (PR 10).",
   chat_auto_choices: "A person's own Chat tool choices.",
+  chat_notices:
+    "A person's own notes from the system about the workspace's AI key (00441): no brand's data.",
   chat_settings: "The Account's Chat settings (D1).",
   chat_storage_usage: "The Account's Chat storage meter against the plan (D1).",
   chat_uploads:
@@ -88,18 +93,11 @@ const NOT_BRAND_DATA = {
 /**
  * Tables without a brand_id that hold a brand's data but don't reach it yet,
  * and the BRAND-ACCESS PR that takes them:
- *   * chat_agents (and its versions, triggers and go-live permission): an
- *     agent names its brands in its version's scope (jsonb); who sees which
- *     agent is Chat's rule (agent-rules canSeeAgent), PR 9.
  *   * integration_connections: the Account's Google connection, which lists
  *     every brand's properties; per brand in PR 14.
  * Nobody can be narrowed while this list has a table (the last test below).
  */
 const DEFERRED = {
-  chat_agents: 'PR 9',
-  chat_agent_go_live: 'PR 9',
-  chat_agent_triggers: 'PR 9',
-  chat_agent_versions: 'PR 9',
   integration_connections: 'PR 14',
 };
 
@@ -126,7 +124,7 @@ const SERVER_ROLES = new Set(['service_role', 'postgres', 'supabase_admin']);
 
 /** Functions that apply brand access, which anon may not run. */
 const ACCESS_CALL =
-  /\b(?:public\.)?(?:can_access_brand|user_brand_ids|user_has_all_brands|content_draft_member)\s*\(/i;
+  /\b(?:public\.)?(?:can_access_brand|user_brand_ids|user_has_all_brands|content_draft_member|can_see_chat_agent)\s*\(/i;
 
 /** Rows from more than one query: what they bind to can't be read from the first. */
 const SET_OPERATION = /\b(?:union|intersect|except)\b/i;
@@ -163,8 +161,21 @@ const noBrand = (table) => new RegExp(String.raw`^(?:${table}\.)?brand_id is nul
 /** `(select public.user_has_all_brands())`: with no brand, admins and All-brands people. */
 const ALL_BRANDS = /^(?:select )?(?:public\.)?user_has_all_brands\(\)$/i;
 
+/**
+ * `touched_brand_ids <@ array(select public.user_brand_ids())`: with no brand,
+ * people who can access every brand it touched (00436).
+ */
+const TOUCHED = (table) =>
+  new RegExp(
+    String.raw`^(?:${table}\.)?touched_brand_ids <@ array ?\( ?select (?:public\.)?user_brand_ids\(\) ?\)$`,
+    'i',
+  );
+
 /** content_draft_member(draft): the draft's brand, by can_access_brand (00390). */
 const DRAFT_MEMBER = /^(?:public\.)?content_draft_member\( ?\w+ ?\)$/i;
+
+/** can_see_chat_agent(agent): its version's scope's brands, by user_brand_ids (00436). */
+const AGENT_MEMBER = /^(?:public\.)?can_see_chat_agent\( ?(?:chat_agents\.)?id ?\)$/i;
 
 /** `<column> in (select <a>.id from <table> <a> …)`: the row of `table` the column names. */
 const PARENT_ROW =
@@ -394,7 +405,8 @@ function split(expr, word) {
  * Whether every row the condition lets in passes `rule`: each top-level OR
  * branch has a conjunct `rule.binds` accepts, a parenthesized conjunct that
  * is bound itself, or `brand_id is null` together with user_has_all_brands()
- * (alone, on the person's own rows: `rule.ownRows`). A conjunct with a set
+ * or with every touched brand the person's (`rule.touched`), or alone on the
+ * person's own rows (`rule.ownRows`). A conjunct with a set
  * operation never binds. String literals are left out first, so their words
  * don't count.
  */
@@ -406,7 +418,7 @@ function bound(condition, rule) {
   if (
     rule.noBrand &&
     parts.some(([, inner]) => rule.noBrand.test(inner)) &&
-    (rule.ownRows || parts.some(([, inner]) => ALL_BRANDS.test(inner)))
+    (rule.ownRows || parts.some(([, inner]) => ALL_BRANDS.test(inner) || rule.touched?.test(inner)))
   ) {
     return true;
   }
@@ -431,6 +443,7 @@ const brandRule = (table) => {
   return (policy) => ({
     binds: (part) => bindings.some((binding) => binding.test(part)),
     noBrand: noBrand(table),
+    touched: TOUCHED(table),
     ownRows: `${table}: ${policy}` in OWN_ROWS_WITHOUT_BRAND,
   });
 };
@@ -454,7 +467,7 @@ const children = [...policies.keys()].filter(
 const reached = new Set(reaching);
 const childRule = () => ({
   binds: (part) => {
-    if (DRAFT_MEMBER.test(part)) return true;
+    if (DRAFT_MEMBER.test(part) || AGENT_MEMBER.test(part)) return true;
     const m = part.match(PARENT_ROW);
     return !!m && (!m[1] || m[1] === m[3]) && reached.has(m[2].toLowerCase());
   },
@@ -614,6 +627,10 @@ describe('every table without a brand_id', () => {
       'impact_measurements',
       'impact_control_sets',
       'agent_messages',
+      'chat_agents',
+      'chat_agent_versions',
+      'chat_agent_triggers',
+      'chat_agent_go_live',
     ]) {
       expect(childrenReaching, table).toContain(table);
     }
@@ -635,8 +652,7 @@ describe('every table without a brand_id', () => {
 
   it('leaves no table deferred once someone can be narrowed to Selected brands (PR 12)', () => {
     // Writing member_brands or brand_scope turns the feature on: before that,
-    // PR 9 (Chat agents) and PR 14 (Google per brand) take their tables, and
-    // this list is empty.
+    // PR 14 (Google per brand) takes its table, and this list is empty.
     const narrowing = narrowingCode();
     if (narrowing.length > 0) {
       expect(Object.keys(DEFERRED), `narrowed by ${narrowing.join(', ')}`).toEqual([]);

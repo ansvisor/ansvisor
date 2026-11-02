@@ -18,6 +18,8 @@ import {
   itemListJsonLd,
   MIN_LISTED,
   productJsonLd,
+  type AddedArticleSchema,
+  type ArticleSchemaPlan,
   type ListedProduct,
   type PageOfferRead,
   jsonLdScript,
@@ -48,7 +50,11 @@ type RowState = 'ok' | 'missing' | 'check';
 type Row = {
   state: RowState;
   title: string;
+  /** A word beside the title: the schema Ansvisor adds is "Added". */
+  pill?: string;
   detail: string;
+  /** The Article schema's Leave it out, or Add it back once left out (00448). */
+  schema?: 'leaveOut' | 'addBack';
   /** Ready to paste's Fill now, while a placeholder is open. */
   fill?: boolean;
   /** The disclosure's Add line (CE-050): the line it puts under the H1. */
@@ -69,8 +75,11 @@ export interface ReadyToPaste {
  * ready and on Export (§7b, CE-057): a warning only when Trust is under 60
  * (nothing else blocks), what the CMS does for the page (its author, dates
  * and schema), Ready to paste (no placeholders, images with alt text, links
- * that work), and for an article the JSON-LD to paste when the CMS doesn't
- * write one, from the page's facts only. Mark ready anyway is logged with
+ * that work), and for an article the Article JSON-LD with its author that
+ * Ansvisor adds to the page it sends and exports (customer priorities item
+ * 7, 00448), from the page's facts only: the person can leave it out for a
+ * CMS that writes its own, and a page with an Article schema of its own
+ * gets none. Mark ready anyway is logged with
  * the Trust the page had; on Export it goes on to Export, and on Send to CMS
  * to the Send dialog (#1331). Rendered only while open.
  *
@@ -96,9 +105,11 @@ export function BeforePublish({
   onClose,
   quality,
   title,
-  isNew,
   pageType,
   image,
+  articleSchema,
+  ownArticleSchema = false,
+  onSchemaLeftOut,
   linksPending,
   onMarkReady,
   onFixFirst,
@@ -151,11 +162,15 @@ export function BeforePublish({
   onClose: () => void;
   quality: QualityRead;
   title: string;
-  /** A new page; an optimized one is already live, with its published date. */
-  isNew: boolean;
   pageType: string | null;
   /** The page's own image (firstImage). */
   image: string | null;
+  /** The Article schema Ansvisor adds to an article page as it goes out (00448). */
+  articleSchema: AddedArticleSchema;
+  /** The page has an Article schema of its own: Ansvisor adds none. */
+  ownArticleSchema?: boolean;
+  /** Leave it out (true) or Add it back (false), kept on the draft. */
+  onSchemaLeftOut?: (leftOut: boolean) => void;
   /** The page's links whose read may still come: Trust may change. */
   linksPending: number;
   /** Marks it ready: with the warning's facts when past it. */
@@ -177,7 +192,7 @@ export function BeforePublish({
   const markRef = useRef<HTMLButtonElement>(null);
   // Fix first and Fill now move on to the page: focus isn't sent back to the button.
   const fixing = useRef(false);
-  const { author, brandName, siteTrust } = quality;
+  const { author, brandName } = quality;
   // E-E-A-T is read with the authors: until then, who the page is by isn't known.
   const authorsRead = quality.eeat !== null;
   const trust = quality.trust?.score ?? null;
@@ -194,6 +209,19 @@ export function BeforePublish({
         .sort((a, b) => b.gain - a.gain)
     : [];
   const article = !product && !category && isArticlePage(pageType);
+  // What Ansvisor does with the page's Article schema (articleSchemaPlan's, from the dialog's facts).
+  const schemaPlan: ArticleSchemaPlan = !article
+    ? 'none'
+    : ownArticleSchema
+      ? 'own'
+      : articleSchema.leftOut
+        ? 'leftOut'
+        : 'added';
+  // Who the added schema names: the page's author, else the brand.
+  const schemaBy =
+    articleSchema.input.author === undefined
+      ? null
+      : (articleSchema.input.author?.name ?? brandName);
   // Product needs its name and price: without either, no code to paste.
   const productName = pageName(title);
   const offer = product?.offer && !('several' in product.offer) ? product.offer : null;
@@ -219,23 +247,10 @@ export function BeforePublish({
     ? productLd
     : itemListLd
       ? itemListLd
-      : article
-        ? jsonLdScript(
-            articleJsonLd({
-              title,
-              // An author only confirmed (00271) isn't named here: left out, as unknown.
-              author:
-                authorsRead && !(!author && quality.authorConfirmed?.real) ? author : undefined,
-              authorUrl:
-                (author &&
-                  siteTrust?.checks.authorPages.authors.find((a) => a.name === author.name)?.url) ||
-                null,
-              brandName,
-              brandUrl: siteTrust?.checks.organizationSchema.url ?? null,
-              image,
-              isNew,
-              today: localDate(new Date()),
-            }),
+      : article && schemaPlan !== 'own'
+        ? // The code Ansvisor adds, or, left out, the code to paste.
+          jsonLdScript(
+            articleJsonLd({ ...articleSchema.input, image, today: localDate(new Date()) }),
           )
         : null;
   // A qualified reviewer is a WebPage.reviewedBy, never Article.author: the
@@ -281,13 +296,24 @@ export function BeforePublish({
     !authorsRead
       ? { state: 'check', title: t('author.ok'), detail: t('author.unknown') }
       : author
-        ? {
-            state: 'check',
-            title: contentByline ? t('author.inContentTitle') : t('author.ok'),
-            detail: contentByline
-              ? t('author.inContent', { line: contentByline })
-              : t('author.okDetail', { name: author.name }),
-          }
+        ? contentByline
+          ? {
+              state: 'check',
+              title: t('author.inContentTitle'),
+              detail: t('author.inContent', { line: contentByline }),
+            }
+          : schemaPlan === 'added'
+            ? // Named in the Article schema Ansvisor adds (00448).
+              {
+                state: 'ok',
+                title: t('author.inSchema', { name: author.name }),
+                detail: t('author.inSchemaDetail', { name: author.name }),
+              }
+            : {
+                state: 'check',
+                title: t('author.ok'),
+                detail: t('author.okDetail', { name: author.name }),
+              }
         : quality.authorConfirmed?.real
           ? // The person confirmed the author their site names (00271).
             { state: 'check', title: t('author.confirmed'), detail: t('author.confirmedDetail') }
@@ -301,7 +327,10 @@ export function BeforePublish({
             : {
                 state: 'missing',
                 title: t('author.none'),
-                detail: t('author.noneDetail', { byline: quality.team }),
+                detail:
+                  schemaPlan === 'added'
+                    ? t('author.noneSchemaDetail', { byline: quality.team, brand: brandName })
+                    : t('author.noneDetail', { byline: quality.team }),
               },
     ...(reviewerRow ? [reviewerRow] : []),
     ...(product
@@ -368,13 +397,24 @@ export function BeforePublish({
         : article
           ? [
               { state: 'check' as const, title: t('dates.title'), detail: t('dates.detail') },
-              isNew
-                ? { state: 'check' as const, title: t('schema.title'), detail: t('schema.detail') }
-                : {
-                    state: 'check' as const,
-                    title: t('schema.titleLive'),
-                    detail: t('schema.detailLive'),
-                  },
+              schemaPlan === 'own'
+                ? { state: 'ok' as const, title: t('schema.own'), detail: t('schema.ownDetail') }
+                : schemaPlan === 'leftOut'
+                  ? {
+                      state: 'check' as const,
+                      title: t('schema.leftOut'),
+                      detail: t('schema.leftOutDetail'),
+                      schema: 'addBack' as const,
+                    }
+                  : {
+                      state: 'ok' as const,
+                      title: schemaBy ? t('schema.added') : t('schema.addedNoAuthor'),
+                      pill: t('schema.addedPill'),
+                      detail: schemaBy
+                        ? t('schema.addedDetail', { author: schemaBy })
+                        : t('schema.addedDetailNoAuthor'),
+                      schema: 'leaveOut' as const,
+                    },
             ]
           : [
               {
@@ -529,6 +569,11 @@ export function BeforePublish({
               <div className="min-w-0 flex-1">
                 <p className="font-medium">
                   {row.title}
+                  {row.pill && (
+                    <span className="ml-1.5 inline-flex rounded-full bg-emerald-50 px-1.5 py-px align-[1px] text-[11px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                      {row.pill}
+                    </span>
+                  )}
                   <span className="sr-only">
                     {' · '}
                     {t(`states.${row.state}`)}
@@ -549,6 +594,17 @@ export function BeforePublish({
                   }}
                 >
                   {t('paste.fill')}
+                </Button>
+              )}
+              {row.schema && onSchemaLeftOut && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  data-action={row.schema === 'leaveOut' ? 'schema.leaveOut' : 'schema.addBack'}
+                  onClick={() => onSchemaLeftOut(row.schema === 'leaveOut')}
+                >
+                  {t(row.schema === 'leaveOut' ? 'schema.leaveOut' : 'schema.addBack')}
                 </Button>
               )}
               {row.add && (
@@ -584,8 +640,11 @@ export function BeforePublish({
                   aria-hidden
                   className={cn('h-3.5 w-3.5 transition-transform', !codeShown && '-rotate-90')}
                 />
-                {t('showCode')}
+                {t(schemaPlan === 'added' ? 'schema.showAdded' : 'showCode')}
               </button>
+            )}
+            {codeShown && schemaPlan === 'added' && mode !== 'send' && (
+              <p className="text-xs font-medium text-muted-foreground">{t('schema.codeAdded')}</p>
             )}
             {codeShown && (
               <pre

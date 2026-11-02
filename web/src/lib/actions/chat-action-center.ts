@@ -1,9 +1,20 @@
 'use server';
 
 import { randomUUID } from 'node:crypto';
-import { createTranslator } from 'next-intl';
-import messages from '../../../messages/en.json';
 import { API_BASE_URL } from '@/config/api';
+import {
+  FAILED,
+  FORBIDDEN,
+  NOT_FOUND,
+  actionHref,
+  coverRequest,
+  coverResult,
+  placeIn,
+  sendRequest,
+  sendResult,
+  type ActionApiAnswer,
+  type Where,
+} from '@/lib/action-center/chat-send';
 import { isManager } from '@/lib/session-role';
 import { assertWritable } from '@/lib/subscription-guard';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -25,7 +36,9 @@ import type { ChatWritePlace } from '@/lib/chat/registry/define-tool';
  *
  * Admins and Managers only, checked here as the server checks its own
  * route. Errors come back as values ({ ok: false, reason, message }, #427):
- * the engine says them in the person's words (§11a).
+ * the engine says them in the person's words (§11a). Send to Action Center's
+ * requests and answers are lib/action-center/chat-send.ts's, shared with a
+ * run's send for its person with no session (lib/chat/actor).
  */
 
 /** Where the engine ran the change, as Chat's own rows record it; none outside a run. */
@@ -98,51 +111,9 @@ export type CreateChatActionResult =
   | ChatActionDuplicate
   | ChatActionFailure;
 
-const cardT = createTranslator({ locale: 'en', messages, namespace: 'chatEngine.actionCard' });
-
-/** The server's count of the day's new actions, when it says they are reached. */
-function dailyLimitOf(body: Record<string, unknown>) {
-  const limit = (body.dailyLimit ?? null) as { limit?: unknown; reached?: unknown } | null;
-  if (!limit || limit.reached !== true) return {};
-  return {
-    daily_limit_reached: true as const,
-    daily_limit_note: cardT('dailyLimit', { limit: Number(limit.limit) || 5 }),
-  };
-}
-
-const FORBIDDEN: ChatActionFailure = {
-  ok: false,
-  reason: 'forbidden_role',
-  message: 'Only an admin or a manager can change Action Center from Chat.',
-};
-const NOT_FOUND = (what: string): ChatActionFailure => ({
-  ok: false,
-  reason: 'not_found',
-  message: `I couldn't find that ${what}.`,
-});
-const FAILED = (what: string): ChatActionFailure => ({
-  ok: false,
-  reason: 'failed',
-  message: `${what} Try again.`,
-});
-
-/** The action's page with its drawer open: the redirect at actions/[id]. */
-const actionHref = (id: string) => `/dashboard/action-center/actions/${id}` as const;
-
 /** How the change was approved, for History's execution.mode (§10a): as the server read it. */
 const executionOf = (where: Where | null) =>
   where?.executionMode ? { mode: where.executionMode } : null;
-
-/** Where a change was made, as the server read it: never as a caller said it. */
-interface Where {
-  conversationId: string;
-  brandId: string | null;
-  runId: string;
-  /** The run step it runs on: one per approval, its idempotency key. None for a card's click. */
-  approvalKey: string | null;
-  /** None for the person's own click on a card: no change Chat made. */
-  executionMode: 'assisted' | 'automated' | null;
-}
 
 /**
  * A click on a deliverable's card in the person's own chat (W2-12's Attach
@@ -202,53 +173,12 @@ async function cardPlaceOf(
   };
 }
 
-/**
- * The chat, run and step a change runs on, read on the server (a server
- * action can be called with anything): the person's own chat, a run of it,
- * and the step of that run running this very tool now. How it was approved
- * comes from the step: one the engine ran without a card is marked so
- * (engine.ts writeCall), any other waited on the person's card. Null when
- * any of it doesn't hold: nothing of it is recorded then.
- */
-async function placeOf(
+/** The chat, run and step a change runs on (placeIn), in the person's own chat. */
+const placeOf = (
   supabase: Awaited<ReturnType<typeof createClient>>,
   place: Place,
   tool: string,
-): Promise<Where | null> {
-  if (!place?.conversationId || !place.runId || !place.approvalKey) return null;
-  const chat = await ownChat(supabase, place.conversationId);
-  if (!chat) return null;
-  const { data: step, error: stepError } = await supabaseAdmin
-    .from('chat_run_steps')
-    .select('id, run_id, status, tool, debug_json, chat_runs!inner(conversation_id)')
-    .eq('id', place.approvalKey)
-    .eq('run_id', place.runId)
-    .maybeSingle();
-  if (stepError) throw new Error(stepError.message);
-  const row = step as {
-    id: string;
-    run_id: string;
-    status: string;
-    tool: string | null;
-    debug_json: { auto?: unknown } | null;
-    chat_runs: { conversation_id: string } | null;
-  } | null;
-  if (
-    !row ||
-    row.status !== 'running' ||
-    row.tool !== tool ||
-    row.chat_runs?.conversation_id !== chat.id
-  ) {
-    return null;
-  }
-  return {
-    conversationId: chat.id,
-    brandId: chat.brandId,
-    runId: row.run_id,
-    approvalKey: row.id,
-    executionMode: row.debug_json?.auto === true ? 'automated' : 'assisted',
-  };
-}
+): Promise<Where | null> => placeIn((id) => ownChat(supabase, id), place, tool);
 
 /** The signed-in person's session token, for the API. */
 async function sessionToken(): Promise<string | null> {
@@ -259,44 +189,7 @@ async function sessionToken(): Promise<string | null> {
   return session?.access_token ?? null;
 }
 
-/** The API's refusal, in Chat's codes. */
-function apiRefusal(status: number, body: Record<string, unknown>): ChatActionFailure {
-  const details = typeof body.details === 'string' ? body.details : null;
-  if (status === 403 && body.code === 'forbidden') return FORBIDDEN;
-  // Another workspace's brand, or one outside the person's brand access.
-  if (status === 403 && (body.code === 'not_in_workspace' || body.code === 'no_brand_access')) {
-    return {
-      ok: false,
-      reason: 'not_found',
-      message: details ?? "This brand isn't one you can work on.",
-    };
-  }
-  if (status === 404) return NOT_FOUND('brand');
-  // The action this approval made was cancelled since.
-  if (status === 409 && body.code === 'conflict') {
-    return { ok: false, reason: 'conflict', message: details ?? 'This changed since.' };
-  }
-  if (status === 400) {
-    return { ok: false, reason: 'invalid', message: details ?? 'This proposal is incomplete.' };
-  }
-  return FAILED("The Action Center didn't answer.");
-}
-
-/** A 409 duplicate's body, as the model reads it. */
-function duplicateOf(body: Record<string, unknown>): ChatActionDuplicate {
-  const action = (body.action ?? {}) as { id?: string; no?: number };
-  const no = Number(action.no);
-  return {
-    ok: false,
-    reason: 'duplicate',
-    message: `AC-${no} already covers this.`,
-    action_id: String(action.id ?? ''),
-    action_no: no,
-    can_create_anyway: body.canCreateAnyway === true,
-  };
-}
-
-async function postApi(path: string, body: unknown) {
+async function postApi(path: string, body: unknown): Promise<ActionApiAnswer> {
   const token = await sessionToken();
   if (!token) return null;
   const res = await fetch(`${API_BASE_URL}/api/action-center${path}`, {
@@ -321,15 +214,8 @@ export async function checkChatActionCover(
 ): Promise<{ ok: true } | ChatActionDuplicate> {
   try {
     await assertWritable({ brandId });
-    const res = await postApi('/chat-actions/check', { brandId, entities, category });
-    const first = (res?.ok ? (res.body.covering as unknown[] | undefined) : null)?.[0] as
-      | { actionId: string; actionNo: number; covers: 'all' | 'some' }
-      | undefined;
-    if (!first) return { ok: true };
-    return duplicateOf({
-      action: { id: first.actionId, no: first.actionNo },
-      canCreateAnyway: first.covers === 'some',
-    });
+    const { path, body } = coverRequest(brandId, entities, category);
+    return coverResult(await postApi(path, body));
   } catch (err) {
     console.error('[chat/action-center] could not check for a covering action:', err);
     return { ok: true };
@@ -353,28 +239,9 @@ export async function createChatAction(
     const supabase = await createClient();
     if (!(await isManager(supabase))) return FORBIDDEN;
     const where = await placeOf(supabase, place, 'create_action');
-    const res = await postApi('/chat-actions', {
-      brandId,
-      proposal,
-      conversationId: where?.conversationId ?? null,
-      runId: where?.runId ?? null,
-      executionMode: where?.executionMode ?? null,
-      // One per approval (the run step): a retry finds what it made (§11c).
-      idempotencyKey: `chat:${where?.approvalKey ?? randomUUID()}`,
-      createAnyway,
-    });
-    if (!res) return FAILED('Your session ended.');
-    if (res.status === 409 && res.body.code === 'duplicate') return duplicateOf(res.body);
-    if (!res.ok) return apiRefusal(res.status, res.body);
-    const actionId = String(res.body.actionId);
-    return {
-      ok: true,
-      action_id: actionId,
-      action_no: Number(res.body.actionNo),
-      created: res.body.created === true,
-      href: actionHref(actionId),
-      ...dailyLimitOf(res.body),
-    };
+    const key = `chat:${where?.approvalKey ?? randomUUID()}`;
+    const { path, body } = sendRequest(brandId, proposal, where, key, createAnyway);
+    return sendResult(await postApi(path, body));
   } catch (err) {
     console.error('[chat/action-center] could not send to Action Center:', err);
     return FAILED("The action couldn't be sent.");

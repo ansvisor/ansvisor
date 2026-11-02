@@ -23,6 +23,7 @@ import {
   type LibraryTab,
   type PageImportError,
   type PageType,
+  missingSchemaLeftOut,
   PAGE_IMPORT_ERRORS,
 } from '@/lib/content/drafts';
 import { escapeHtml } from '@/lib/content/attachments';
@@ -273,16 +274,27 @@ const keptSource = z
   .regex(/^https?:\/\//i);
 
 /** One draft for the editor (CE-004), or null when it isn't the member's to read. */
+/** The draft as the editor reads it; before 00448, without schema_left_out. */
+const DRAFT_COLUMNS_BEFORE_00448 =
+  `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, published_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no)` as const;
+const DRAFT_COLUMNS = `${DRAFT_COLUMNS_BEFORE_00448}, schema_left_out` as const;
+
 export async function getContentDraft(id: string): Promise<ContentDraft | null> {
   if (!draftId.safeParse(id).success) return null;
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const read = await supabase
     .from('content_drafts')
-    .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, published_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no)`,
-    )
+    .select(DRAFT_COLUMNS)
     .eq('id', id)
     .maybeSingle();
+  // The web ahead of 00448: the draft without it, as not left out.
+  const { data, error } = missingSchemaLeftOut(read.error)
+    ? await supabase
+        .from('content_drafts')
+        .select(DRAFT_COLUMNS_BEFORE_00448)
+        .eq('id', id)
+        .maybeSingle()
+    : read;
   if (error) throw new Error(error.message);
   if (!data) return null;
   return {
@@ -313,6 +325,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     updatedAt: data.updated_at,
     archivedAt: data.archived_at,
     qualityHandoff: data.quality_handoff === true,
+    schemaLeftOut: 'schema_left_out' in data && data.schema_left_out === true,
   };
 }
 
@@ -333,6 +346,12 @@ export interface DraftPage {
   authorConfirmed: boolean;
   /** The language the draft's own Language rule names, or null: the brand's. */
   language: string | null;
+  /** Its page type, for the Article schema it goes out with (00448). */
+  pageType: string | null;
+  /** A new page (method create): its schema gives the published date too. */
+  isNew: boolean;
+  /** The person left out the Article schema Ansvisor adds (00448). */
+  schemaLeftOut: boolean;
 }
 
 /**
@@ -362,11 +381,21 @@ export async function getContentDraftPages(
   const parsed = z.array(z.guid()).max(DRAFT_PAGES_PER_CALL).safeParse(ids);
   if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const columns =
+    'id, title, body_html, source_url, author_id, reviewer_id, author_real_at, rules, page_type, method';
+  const read = await supabase
     .from('content_drafts')
-    .select('id, title, body_html, source_url, author_id, reviewer_id, author_real_at, rules')
+    .select(`${columns}, schema_left_out` as const)
     .eq('brand_id', brandId)
     .in('id', parsed.data);
+  // The web ahead of 00448: the pages without it, as not left out.
+  const { data, error } = missingSchemaLeftOut(read.error)
+    ? await supabase
+        .from('content_drafts')
+        .select(columns)
+        .eq('brand_id', brandId)
+        .in('id', parsed.data)
+    : read;
   if (error) throw new Error(error.message);
   const byId = new Map<string, DraftPage>(
     (data ?? []).map((row) => [
@@ -380,6 +409,9 @@ export async function getContentDraftPages(
         reviewerId: row.reviewer_id ?? null,
         authorConfirmed: row.author_real_at !== null,
         language: draftLanguage(row.rules),
+        pageType: row.page_type,
+        isNew: row.method === 'create',
+        schemaLeftOut: 'schema_left_out' in row && row.schema_left_out === true,
       },
     ]),
   );
@@ -1284,6 +1316,34 @@ export async function confirmDraftAuthor(
 }
 
 /**
+ * Leaves out, or adds back, the Article schema Ansvisor adds to the page it
+ * sends to a CMS and exports (customer priorities item 7, 00448): for a CMS
+ * that writes its own. Never throws; false when it couldn't be saved.
+ */
+export async function setDraftSchemaLeftOut(id: string, leftOut: boolean): Promise<boolean> {
+  if (!draftId.safeParse(id).success || typeof leftOut !== 'boolean') return false;
+  try {
+    await assertWritable();
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('content_drafts')
+      .update({ schema_left_out: leftOut })
+      .eq('id', id)
+      .select('id')
+      .maybeSingle();
+    // Not saved, the web ahead of 00448 too (missingSchemaLeftOut): the editor puts it back.
+    if (error || !data) {
+      if (error) console.error('[content-drafts] could not keep the schema choice:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[content-drafts] could not keep the schema choice:', err);
+    return false;
+  }
+}
+
+/**
  * Keeps a weak source or a competitor's on the page (Quality CE-046): the
  * person trusts it, so it no longer lowers Trust. Returns the draft's kept
  * sources after; 'full' when the page keeps 50 already.
@@ -1832,16 +1892,23 @@ export async function getDraftSources(
 ): Promise<{ data: DraftSourcesData; choices: DraftSourceChoice[] } | null> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
-  const [sourcesRes, choicesRes] = await Promise.all([
+  const [sourcesRes, choicesRes, trustedRes] = await Promise.all([
     supabase.rpc('content_draft_sources', { p_draft_id: id, p_days: SOURCES_DAYS }),
     supabase.from('content_draft_sources').select('kind, ref, included, added').eq('draft_id', id),
+    // The sites the draft's brand trusts (00449). A database before it, or a
+    // read that fails, trusts none: Trust reads the page as before.
+    supabase.from('content_drafts').select('brands(trusted_sources)').eq('id', id).maybeSingle(),
   ]);
   if (sourcesRes.error) throw new Error(sourcesRes.error.message);
   if (choicesRes.error) throw new Error(choicesRes.error.message);
   if (!sourcesRes.data) return null;
   const kinds: readonly string[] = DRAFT_SOURCE_KINDS;
+  const trusted = trustedRes.error ? null : trustedRes.data?.brands?.trusted_sources;
   return {
-    data: sourcesRes.data as unknown as DraftSourcesData,
+    data: {
+      ...(sourcesRes.data as unknown as DraftSourcesData),
+      trustedDomains: Array.isArray(trusted) ? trusted : [],
+    },
     choices: (choicesRes.data ?? [])
       .filter((row) => kinds.includes(row.kind))
       .map((row) => ({

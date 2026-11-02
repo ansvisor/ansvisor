@@ -57,6 +57,7 @@ import {
   setContentDraftAuthor,
   setContentDraftReviewer,
   confirmDraftAuthor,
+  setDraftSchemaLeftOut,
   keepDraftSource,
   confirmDraftItem,
   confirmOwnImage,
@@ -67,6 +68,7 @@ import {
   startAgentWriting,
   startPageRewrite,
 } from '@/lib/actions/content-drafts';
+import { getBrandRules } from '@/lib/actions/content-settings';
 import { getSiteTrust } from '@/lib/actions/audits';
 import { getContentAuthors } from '@/lib/actions/content-authors';
 import { readAgentRun, stopAgentRun } from '@/lib/content/agent-runs-client';
@@ -110,11 +112,16 @@ import {
 } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import {
+  articleSchemaInput,
   firstImage,
+  hasArticleSchema,
   isArticlePage,
   pageName,
   listedProducts,
   MIN_LISTED,
+  schemaAuthor,
+  withArticleSchema,
+  type AddedArticleSchema,
 } from '@/lib/content/page-schema';
 import { PLACEHOLDER, pagePlaceholders } from '@/lib/content/placeholders';
 import { HANDOFF_KEYS, handOffItems } from '@/lib/content/hand-off';
@@ -125,11 +132,13 @@ import {
   exportPlaceholders,
   pasteChecks,
   reviewerJsonLd,
+  pageFields,
   teamName,
   titlePlaceholders,
   withByline,
   withReviewerJsonLd,
 } from '@/lib/content/ready-to-publish';
+import { estimateDocument } from '@/lib/content/audit-estimate';
 import { detectPageType, isSiteType, type SiteType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
 import { inputsGiven } from '@/lib/content/draft-inputs';
@@ -250,6 +259,7 @@ import {
   writeThirdStep,
 } from './_next-step';
 import { qualitySuggestions, useTodoCopy, type HandOff, type QualityRead } from './_quality-tab';
+import { AuditEstimateCard, AuditEstimateChip, useAuditEstimate } from './_audit-estimate';
 import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusDetail, type AgentFix, type PageRewrite } from './_rules-tab';
@@ -793,6 +803,15 @@ export function DraftEditor({
   const brandName =
     authorsRead?.brands.find((b) => b.id === draft.brandId)?.name ?? storeBrandName ?? '';
   const pageAuthor = authorsRead?.authors.find((a) => a.id === authorId) ?? null;
+  // The brand's rules (Settings › Content, 00450), read once: Rules shows them above the page's own.
+  const [brandRules, setBrandRules] = useState<string[]>([]);
+  useEffect(() => {
+    let live = true;
+    void getBrandRules(draft.brandId).then((rules) => live && setBrandRules(rules));
+    return () => {
+      live = false;
+    };
+  }, [draft.brandId]);
   const pageBlocks = useMemo(() => (qualityOn ? trustBlocks(pageHtml) : []), [qualityOn, pageHtml]);
   // Brief › Your input (CE-048), with Quality's second phase: what the page
   // uses of it counts once it is read.
@@ -845,11 +864,43 @@ export function DraftEditor({
       live = false;
     };
   }, [qualityOn, draft.brandId]);
+  // The Article schema an article page goes out with (customer priorities
+  // item 7, 00448): to the CMS and in exports, the author in it, unless the
+  // person left it out for a CMS that writes its own. Saved behind, put back
+  // if the save fails.
+  const [schemaLeftOut, setSchemaLeftOut] = useState(draft.schemaLeftOut);
+  const addedSchema: AddedArticleSchema = {
+    input: articleSchemaInput({
+      title,
+      author: schemaAuthor({
+        authorsOn: qualityOn,
+        authorsRead: authorsRead !== null,
+        author: pageAuthor,
+        confirmedReal: authorConfirmed.real,
+      }),
+      siteTrust,
+      brandName,
+      isNew: draft.method === 'create',
+    }),
+    pageType,
+    leftOut: schemaLeftOut,
+  };
+  const leaveOutSchema = (leftOut: boolean) => {
+    if (lockedFor('leaveOutSchema')) return;
+    setSchemaLeftOut(leftOut);
+    void setDraftSchemaLeftOut(draft.id, leftOut).then((saved) => {
+      if (saved) return;
+      setSchemaLeftOut(!leftOut);
+      toast.error(t('beforePublish.schema.leaveOutFailed'));
+    });
+  };
   // Phase 2 (CE-046): what kind of source each link is, competitors' pages
   // by the brand's competitors (read with the sources), less the ones the
   // person kept.
   const sourcesOn = qualityPhase() >= 2;
   const competitorDomains = reads.sources?.data?.competitorDomains;
+  // The sites the brand trusts (Settings › Content, 00449): primary sources.
+  const trustedDomains = reads.sources?.data?.trustedDomains;
   // Phase 2 (CE-047): the page's prices, trial and founding year against the
   // brand's approved facts, read from its own site.
   const factsState = useBrandFacts(draft.brandId, sourcesOn);
@@ -867,9 +918,10 @@ export function DraftEditor({
             competitorDomains: competitorDomains ?? [],
             pageType,
             kept: new Set(keptSources),
+            trustedDomains: trustedDomains ?? [],
           })
         : [],
-    [sourcesOn, brandDomains, pageBlocks, competitorDomains, pageType, keptSources],
+    [sourcesOn, brandDomains, pageBlocks, competitorDomains, pageType, keptSources, trustedDomains],
   );
   const {
     kinds: aiKinds,
@@ -1023,6 +1075,7 @@ export function DraftEditor({
         linkChecks,
         brandDomains: brandDomains ?? null,
         competitorDomains: competitorDomains ?? null,
+        trustedDomains: trustedDomains ?? null,
         siteTrust,
         siteTrustRead,
         brandFacts,
@@ -1059,6 +1112,7 @@ export function DraftEditor({
       linkChecks,
       brandDomains,
       competitorDomains,
+      trustedDomains,
       siteTrust,
       siteTrustRead,
       brandFacts,
@@ -2790,6 +2844,30 @@ export function DraftEditor({
   // an author the person confirmed their site names: the CMS keeps its own.
   const teamByline =
     authorsRead && (pageAuthor || !authorConfirmed.real) ? teamName(language, brandName) : '';
+  // Site Audit's estimate (customer priorities item 9): the page as Export's
+  // HTML file has it, read again once typing pauses, whatever Quality's phase.
+  const estimateDoc = useMemo(() => {
+    const html = publishableHtml(pageHtml);
+    const fields = pageFields({
+      title,
+      html,
+      sourceUrl: draft.sourceUrl,
+      author: pageAuthor,
+      reviewer: pageReviewer,
+      teamByline,
+    });
+    return estimateDocument({
+      title,
+      html: withReviewerJsonLd(
+        title,
+        contentByline ? withByline(html, contentByline) : html,
+        pageReviewer,
+      ),
+      metaDescription: fields.metaDescription,
+      author: fields.author,
+    });
+  }, [pageHtml, title, draft.sourceUrl, pageAuthor, pageReviewer, teamByline, contentByline]);
+  const auditEstimate = useAuditEstimate(draft.id, draft.brandId, estimateDoc);
   // Export (CE-057), once Quality is live: where it goes, its checks and fields.
   // The page as it was when Export opened: what it shows stays still while open.
   const [exportOpen, setExportOpen] = useState<{
@@ -2797,7 +2875,7 @@ export function DraftEditor({
     destination?: ExportDestination;
   } | null>(null);
   const openExport = (destination?: ExportDestination) =>
-    setExportOpen({ html: pageToPublish(), destination });
+    setExportOpen({ html: withArticleSchema(pageToPublish(), addedSchema), destination });
   // Its checks, read again only as the link reads land, not on every render.
   const exportChecks = useMemo(
     () => (exportOpen ? pasteChecks(exportOpen.html, linkChecks) : null),
@@ -2805,7 +2883,7 @@ export function DraftEditor({
   );
   const copyPageHtml = () => {
     if (!editor) return;
-    const html = pageToPublish();
+    const html = withArticleSchema(pageToPublish(), addedSchema);
     // No copy carries a placeholder: Export says so, and offers to leave them out.
     if (quality && exportPlaceholders(html) > 0) {
       setExportOpen({ html, destination: 'html' });
@@ -2825,8 +2903,9 @@ export function DraftEditor({
   /** Export: the page as Copy HTML gives it, as a Word, Excel, CSV, HTML or Markdown file. */
   const exportPage = async (format: DraftExportFormat) => {
     if (!editor) return;
-    const html = publishableHtml(
-      htmlSource !== null ? htmlFromSource(htmlSource) : editor.getHTML(),
+    const html = withArticleSchema(
+      publishableHtml(htmlSource !== null ? htmlFromSource(htmlSource) : editor.getHTML()),
+      addedSchema,
     );
     const name = title.trim() || t('untitled');
     try {
@@ -3047,7 +3126,7 @@ export function DraftEditor({
       toast.error(t('send.unsaved'));
       return;
     }
-    setSendOpen({ html: pageToPublish() });
+    setSendOpen({ html: withArticleSchema(pageToPublish(), addedSchema) });
   };
   /**
    * Mark published (CE-013), once the page is saved: the server keeps it in
@@ -3923,6 +4002,7 @@ export function DraftEditor({
               </span>
             </button>
           )}
+          <AuditEstimateChip state={auditEstimate} />
           {citedCount > 0 && (
             <span
               title={t('cited.chipHint')}
@@ -4144,6 +4224,7 @@ export function DraftEditor({
             bodyHtml={pageHtml}
             pageType={pageType}
             rules={rulesShown}
+            brandRules={{ rules: brandRules, brandName }}
             reads={reads}
             tabRequest={tabRequest}
             agentFix={agentFix}
@@ -4172,6 +4253,7 @@ export function DraftEditor({
             onConfirmIntro={() => void confirmIntro()}
             onChangeType={() => setTypeMenuOpen(true)}
             handOff={handOffCard}
+            auditEstimate={<AuditEstimateCard state={auditEstimate} />}
             yourInput={inputsRead.status === 'off' ? null : inputsRead}
             onAddInput={addInput}
             onConfirmAuthor={confirmAuthor}
@@ -4304,9 +4386,11 @@ export function DraftEditor({
           reviewerRequired={regulated !== null}
           reviewerLd={reviewerLd}
           title={title}
-          isNew={draft.method === 'create'}
           pageType={pageType}
           image={firstImage(pageHtml)}
+          articleSchema={addedSchema}
+          ownArticleSchema={hasArticleSchema(publishOpen.html)}
+          onSchemaLeftOut={leaveOutSchema}
           linksPending={linksPending}
           // Not while the HTML view holds the page: its source is what goes out.
           disclosureLine={htmlSource === null ? disclosureLine : null}
