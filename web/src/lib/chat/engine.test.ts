@@ -5566,12 +5566,12 @@ describe('the model menu’s pick (W4-02)', () => {
     const started = await engine.startChatRun(ADMIN, {
       message: 'Which pages does Perplexity cite?',
       brandId: BRAND,
-      model: 'anthropic/claude-opus-5.5',
+      model: 'anthropic/claude-sonnet-5.5',
       effort: 'high',
     });
     if (!started.ok) throw new Error(`not started: ${started.code}`);
     expect(runRow(started.runId)).toMatchObject({
-      model: 'anthropic/claude-opus-5.5',
+      model: 'anthropic/claude-sonnet-5.5',
       effort: 'high',
     });
 
@@ -5585,18 +5585,31 @@ describe('the model menu’s pick (W4-02)', () => {
     const trial = await engine.startChatRun(ADMIN, {
       message: 'And ChatGPT?',
       brandId: BRAND,
-      model: 'anthropic/claude-opus-5.5',
+      model: 'anthropic/claude-sonnet-5.5',
       effort: 'max',
     });
     if (!trial.ok) throw new Error('not started');
     expect(runRow(trial.runId)).toMatchObject({ model: 'auto', effort: 'normal' });
   });
 
-  it('refuses a model the menu doesn’t offer', async () => {
+  it('runs Auto for a model the menu doesn’t offer: one not tested yet, or another', async () => {
+    for (const model of ['anthropic/claude-opus-5.5', 'openai/gpt-6.1-sol']) {
+      const started = await engine.startChatRun(ADMIN, {
+        message: 'Hi',
+        brandId: BRAND,
+        model,
+        effort: 'high',
+      });
+      if (!started.ok) throw new Error('not started');
+      expect(runRow(started.runId), model).toMatchObject({ model: 'auto', effort: 'high' });
+    }
+  });
+
+  it('refuses a model value that isn’t a model id', async () => {
     const refused = await engine.startChatRun(ADMIN, {
       message: 'Hi',
       brandId: BRAND,
-      model: 'openai/gpt-6.1-sol',
+      model: 'drop table',
     });
     expect(refused).toMatchObject({ ok: false, status: 400, code: 'invalid' });
     expect(db.tables.chat_runs).toHaveLength(0);
@@ -5609,31 +5622,31 @@ describe('the run’s model (W4-03)', () => {
     const started = await engine.startChatRun(ADMIN, {
       message: 'Which pages does Perplexity cite?',
       brandId: BRAND,
-      model: 'anthropic/claude-opus-5.5',
+      model: 'anthropic/claude-sonnet-5.5',
       effort: 'max',
     });
     if (!started.ok) throw new Error('not started');
     await engine.driveRun(ADMIN, started.runId);
     expect(fakes.resolveModels).toHaveBeenCalledWith(
       ORG,
-      { model: 'anthropic/claude-opus-5.5', effort: 'max' },
+      { model: 'anthropic/claude-sonnet-5.5', effort: 'max' },
       { ansvisorOnly: false },
     );
     expect(fakes.readModelMenu).toHaveBeenCalledExactlyOnceWith({
-      selected: 'anthropic/claude-opus-5.5',
+      selected: 'anthropic/claude-sonnet-5.5',
     });
     expect(stepsOf(started.runId).map((s) => s.label)).not.toContain('Ran on Auto');
   });
 
   it('takes Auto for a model the catalog dropped, and says so in one step', async () => {
     fakes.readModelMenu.mockResolvedValueOnce({
-      selected: { id: 'anthropic/claude-opus-5.5', removed: true },
+      selected: { id: 'anthropic/claude-sonnet-5.5', removed: true },
     } as never);
     useModels([READY], [text('Done.')]);
     const started = await engine.startChatRun(ADMIN, {
       message: 'Which pages does Perplexity cite?',
       brandId: BRAND,
-      model: 'anthropic/claude-opus-5.5',
+      model: 'anthropic/claude-sonnet-5.5',
       effort: 'high',
     });
     if (!started.ok) throw new Error('not started');
@@ -5650,6 +5663,22 @@ describe('the run’s model (W4-03)', () => {
       status: 'done',
       detail: 'The model this chat used is no longer available',
     });
+  });
+
+  it('runs Auto for a saved pick not tested yet (Opus 5.5), with no catalog check', async () => {
+    useModels([READY], [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, { message: 'Hi', brandId: BRAND });
+    if (!started.ok) throw new Error('not started');
+    // An agent saved on Opus 5.5 before it was hidden.
+    Object.assign(runRow(started.runId), { model: 'anthropic/claude-opus-5.5', effort: 'max' });
+    await engine.driveRun(ADMIN, started.runId);
+    expect(fakes.resolveModels).toHaveBeenCalledWith(
+      ORG,
+      { model: 'auto', effort: 'max' },
+      { ansvisorOnly: false },
+    );
+    expect(fakes.readModelMenu).not.toHaveBeenCalled();
+    expect(stepsOf(started.runId).map((s) => s.label)).not.toContain('Ran on Auto');
   });
 
   it('runs an agent’s saved model as the plan allows, Auto in the free trial', async () => {
