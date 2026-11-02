@@ -154,6 +154,44 @@ describe('createSchedule', () => {
       ok: true,
     });
   });
+
+  it('leaves a one-time job that has run out of the count: nothing is due on it', async () => {
+    db.tables.organizations[0] = {
+      ...db.tables.organizations[0],
+      plan: 'starter',
+      subscription_status: 'trialing',
+    };
+    expect(
+      await store.createSchedule(maker(), job({ when: 'tomorrow at 3pm', changeOnly: false }), NOW),
+    ).toMatchObject({ ok: true });
+    expect(await store.countActiveSchedules(ORG)).toBe(1);
+    // The worker ran it: still on, its next run cleared.
+    jobs()[0].next_run_at = null;
+    expect(await store.countActiveSchedules(ORG)).toBe(0);
+    // One waiting on its retry still counts.
+    jobs()[0].retry_at = '2026-10-17T12:00:00.000Z';
+    expect(await store.countActiveSchedules(ORG)).toBe(1);
+    jobs()[0].retry_at = null;
+    expect(await store.createSchedule(maker(), job(), NOW)).toMatchObject({ ok: true });
+  });
+
+  it('makes one of two made at once when one place is left, and undoes the other', async () => {
+    db.tables.organizations[0] = {
+      ...db.tables.organizations[0],
+      plan: 'starter',
+      subscription_status: 'trialing',
+    };
+    const made = await Promise.all([
+      store.createSchedule(maker(), job(), NOW),
+      store.createSchedule(maker(), job({ title: 'Another' }), NOW),
+    ]);
+    expect(made.filter((m) => m.ok)).toHaveLength(1);
+    expect(made.filter((m) => !m.ok)).toEqual([
+      expect.objectContaining({ ok: false, reason: 'quota_exceeded' }),
+    ]);
+    expect(jobs()).toHaveLength(1);
+    expect(jobs()[0].id).toBe((made.find((m) => m.ok) as { schedule_id: string }).schedule_id);
+  });
 });
 
 describe('activeScheduleLimit', () => {

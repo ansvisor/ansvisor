@@ -329,8 +329,13 @@ export function createFakeSupabase(): FakeSupabase {
             parts.push(text.slice(start));
             return parts;
           };
-          // One `column.op.value` term: eq, neq, is null, lt a date.
-          const term = (condition: string) => {
+          // One `column.op.value` term: eq, neq, is null, lt a date; `column.not.op.value` negated.
+          const term = (condition: string): ((row: Row) => boolean) => {
+            const negated = /^([^.]+)\.not\.(.*)$/.exec(condition);
+            if (negated) {
+              const inner = term(`${negated[1]}.${negated[2]}`);
+              return (row) => !inner(row);
+            }
             const [column, op, ...rest] = condition.split('.');
             const raw = rest.join('.').replace(/^"|"$/g, '');
             const value = raw === 'null' ? null : raw;
