@@ -6630,7 +6630,7 @@
       "title": "Memory",
       "subtitle": "What Chat remembers between chats.",
       "useMemory": "Use memory",
-      "useMemoryNote": "Off: Chat doesn't use your notes or save new ones.",
+      "useMemoryNote": "When off, Chat doesn't use your notes or save new ones.",
       "tabs": {
         "user": "Me",
         "brand": "Brand: {brand}",
@@ -6678,7 +6678,7 @@
       "personalOff": "Use memory is off, so Chat doesn't use your notes or save new ones.",
       "addNote": "Say “remember that…” in any chat to add one.",
       "switchLabel": "Memory",
-      "switchNote": "Chat remembers short notes between chats for each person, brand and the workspace. Off: no one's notes are used, and Memory is hidden."
+      "switchNote": "Chat remembers short notes between chats for each person, brand and the workspace. When off, no one's notes are used, and Memory is hidden."
     }
   },
   "chatSchedules": {

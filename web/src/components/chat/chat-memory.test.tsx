@@ -127,6 +127,10 @@ describe('Memory', () => {
     );
     expect(container.querySelector('h1')?.textContent).toBe('Memory');
     expect(container.textContent).toContain('What Chat remembers between chats.');
+    // Said the same way whether it is on or off (smoke test 2026-11-02).
+    expect(container.textContent).toContain(
+      "Use memoryWhen off, Chat doesn't use your notes or save new ones.",
+    );
     expect(all('[role="tab"]').map((el) => el.textContent)).toEqual([
       'Me2',
       'Brand: Northwind2',
