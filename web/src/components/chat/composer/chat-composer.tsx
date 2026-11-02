@@ -249,6 +249,8 @@ export function ChatComposer({
   const [found, setFound] = useState<{ query: string; refs: ChatReference[] } | null>(null);
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [fileProblem, setFileProblem] = useState<UploadProblem | null>(null);
+  // The microphone wasn't allowed (W4-04): one line under the box.
+  const [micDenied, setMicDenied] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
   // The page's last hand-off taken in: each one once.
@@ -865,7 +867,7 @@ export function ChatComposer({
           >
             @
           </button>
-          <VoiceButton onText={addSpoken} disabled={disabled} />
+          <VoiceButton onText={addSpoken} onDeniedChange={setMicDenied} disabled={disabled} />
           {readOnly ? (
             <Link
               data-action="access.see"
@@ -948,6 +950,11 @@ export function ChatComposer({
               {t('keyPaste.save')}
             </button>
           )}
+        </p>
+      )}
+      {micDenied && (
+        <p role="alert" className="mt-1.5 px-0.5 text-xs text-red-700 dark:text-red-400">
+          {t('voice.denied')}
         </p>
       )}
       {(fileProblem || failedFiles) && (

@@ -53,10 +53,13 @@ const DENIED = new Set(['not-allowed', 'service-not-allowed']);
  */
 export function VoiceButton({
   onText,
+  onDeniedChange,
   disabled = false,
 }: {
   /** The words heard, to add to the box. */
   onText: (text: string) => void;
+  /** The microphone wasn't allowed (true), or a new try starts (false): the composer says so under the box. */
+  onDeniedChange?: (denied: boolean) => void;
   disabled?: boolean;
 }) {
   const t = useTranslations('chatComposer.voice');
@@ -67,7 +70,6 @@ export function VoiceButton({
     () => false,
   );
   const [listening, setListening] = useState(false);
-  const [denied, setDenied] = useState(false);
   const recognition = useRef<SpeechRecognitionLike | null>(null);
 
   // Stops listening when the composer goes.
@@ -93,14 +95,14 @@ export function VoiceButton({
       if (text) onText(text);
     };
     rec.onerror = (event) => {
-      if (DENIED.has(event.error)) setDenied(true);
+      if (DENIED.has(event.error)) onDeniedChange?.(true);
     };
     rec.onend = () => {
       setListening(false);
       recognition.current = null;
     };
     recognition.current = rec;
-    setDenied(false);
+    onDeniedChange?.(false);
     try {
       rec.start();
       setListening(true);
@@ -111,35 +113,28 @@ export function VoiceButton({
   }
 
   return (
-    <>
-      <button
-        type="button"
-        data-action="composer.voice"
-        aria-label={listening ? t('stop') : t('start')}
-        title={listening ? t('stop') : t('start')}
-        aria-pressed={listening}
-        disabled={disabled}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => (listening ? recognition.current?.stop() : start())}
-        className={cn(
-          'flex h-7 min-w-7 items-center justify-center gap-1.5 rounded-lg px-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50',
-          listening && 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300',
-        )}
-      >
-        {listening ? (
-          <>
-            <i aria-hidden className="block size-2 animate-pulse rounded-full bg-red-600" />
-            <span className="text-xs">{t('listening')}</span>
-          </>
-        ) : (
-          <Mic className="size-4" aria-hidden />
-        )}
-      </button>
-      {denied && (
-        <span role="alert" className="text-xs text-red-700 dark:text-red-400">
-          {t('denied')}
-        </span>
+    <button
+      type="button"
+      data-action="composer.voice"
+      aria-label={listening ? t('stop') : t('start')}
+      title={listening ? t('stop') : t('start')}
+      aria-pressed={listening}
+      disabled={disabled}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => (listening ? recognition.current?.stop() : start())}
+      className={cn(
+        'flex h-7 min-w-7 items-center justify-center gap-1.5 rounded-lg px-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50',
+        listening && 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300',
       )}
-    </>
+    >
+      {listening ? (
+        <>
+          <i aria-hidden className="block size-2 animate-pulse rounded-full bg-red-600" />
+          <span className="text-xs">{t('listening')}</span>
+        </>
+      ) : (
+        <Mic className="size-4" aria-hidden />
+      )}
+    </button>
   );
 }
