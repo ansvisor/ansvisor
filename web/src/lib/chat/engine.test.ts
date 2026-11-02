@@ -5370,6 +5370,61 @@ describe('the schedule card (W3-02, CHAT-12 items 7–9)', () => {
     expect(runRow(runId).status).toBe('done');
   });
 
+  /** Asks for the weekly job from a browser in `browserZone` (models set); the run's id and its card. */
+  async function cardFrom(browserZone: string) {
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Every Monday at 9, summarise last week',
+      brandId: BRAND,
+      mode: 'auto',
+      timezone: browserZone,
+    });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    await engine.driveRun(ADMIN, started.runId);
+    const confirm = ofType(await eventsOf(started.runId), 'confirm.required')[0].data;
+    return { runId: started.runId, confirm };
+  }
+
+  async function approve(runId: string, confirm: { n: number; digest: string }) {
+    const prepared = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: {},
+    });
+    if (!prepared.ok) throw new Error('not approved');
+    await engine.driveRun(ADMIN, runId, prepared.resume);
+  }
+
+  it('reads the card and makes the job in the browser’s zone while the person picked none (Automatic)', async () => {
+    useModels([READY], [calls(schedule()), text('Scheduled it.')]);
+    const { runId, confirm } = await cardFrom('America/New_York');
+    expect(confirm.form).toMatchObject({ zone: 'America/New_York' });
+    await approve(runId, confirm);
+    expect(db.tables.chat_schedules[0]).toMatchObject({ timezone: 'America/New_York' });
+    expect(stepsOf(runId).at(-1)).toMatchObject({
+      detail: 'Every Monday, 09:00 · America/New_York · Chat',
+    });
+  });
+
+  it('takes the person’s own zone from Settings › Account over the browser’s (00468)', async () => {
+    db.tables.profiles.find((p) => p.id === PEOPLE.admin)!.time_zone = 'Europe/Istanbul';
+    useModels([READY], [calls(schedule()), text('Scheduled it.')]);
+    const { runId, confirm } = await cardFrom('America/New_York');
+    // The When line's zone, the job's and the answer's times: all the person's pick.
+    expect(confirm.form).toMatchObject({ zone: 'Europe/Istanbul' });
+    const answer = db.tables.chat_messages.find(
+      (m) => m.role === 'assistant' && m.conversation_id === runRow(runId).conversation_id,
+    )!;
+    expect(answer.timezone).toBe('Europe/Istanbul');
+    await approve(runId, confirm);
+    expect(db.tables.chat_schedules[0]).toMatchObject({
+      timezone: 'Europe/Istanbul',
+      rrule: 'FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0',
+    });
+    expect(stepsOf(runId).at(-1)).toMatchObject({
+      detail: 'Every Monday, 09:00 · Europe/Istanbul · Chat',
+    });
+  });
+
   it('keeps the card when an edit doesn’t read, and makes nothing', async () => {
     useModels([READY], [calls(schedule()), text('Scheduled it.')]);
     const runId = await turn(ADMIN, 'Every Monday at 9, summarise last week', 'auto');

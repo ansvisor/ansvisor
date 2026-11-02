@@ -1,6 +1,7 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { isTimeZone } from '@/lib/time-zone';
 import type { PlanFacts } from '../plan-facts';
 import { closeJobNotices } from './deliver';
 import {
@@ -33,7 +34,15 @@ const whenT = createTranslator({
 export type ManageResult = { ok: true } | { ok: false; reason: string; message: string };
 
 /** Why a change was refused (chatSchedules.page.errors). */
-type Refusal = 'not_found' | 'forbidden' | 'owner' | 'passed' | 'limit' | 'when' | 'prompt';
+type Refusal =
+  | 'not_found'
+  | 'forbidden'
+  | 'owner'
+  | 'passed'
+  | 'limit'
+  | 'when'
+  | 'prompt'
+  | 'zone';
 
 const refused = (reason: Refusal, message: string = t(reason)): ManageResult => ({
   ok: false,
@@ -183,11 +192,15 @@ export interface ScheduleEdits {
   when: string;
   deliver: DeliverChoice;
   changeOnly: boolean;
+  /** The job's own time zone, changed on its page; left out, it keeps the one it has. */
+  timezone?: string;
 }
 
 /**
  * Saves its creator's edits, with no confirm card (item 23): When read on
- * the job's own clock, its next run from now when it is on.
+ * the job's own clock (the zone the page sets, else the one it has), its
+ * next run from now when it is on. The person's Settings › Account zone
+ * never moves a job: only this does.
  */
 export async function updateSchedule(
   reader: ScheduleReader,
@@ -200,9 +213,11 @@ export async function updateSchedule(
   if (job.created_by !== reader.userId || job.kind === 'followup_check') {
     return refused('forbidden');
   }
-  const reading = readWhen(edits.when, { now, timeZone: job.timezone });
+  if (edits.timezone !== undefined && !isTimeZone(edits.timezone)) return refused('zone');
+  const zone = edits.timezone ?? job.timezone;
+  const reading = readWhen(edits.when, { now, timeZone: zone });
   if (!reading.ok) {
-    return refused('when', whenHint(edits.when, job.timezone, now, whenT).hint);
+    return refused('when', whenHint(edits.when, zone, now, whenT).hint);
   }
   const { data: current, error: readError } = await supabaseAdmin
     .from('chat_schedules')
@@ -216,7 +231,7 @@ export async function updateSchedule(
   }
   const when = reading.when;
   const recurring = when.kind === 'recurring';
-  const next = firstRunOf(when, job.timezone, now);
+  const next = firstRunOf(when, zone, now);
   const { error } = await supabaseAdmin
     .from('chat_schedules')
     .update({
@@ -226,6 +241,7 @@ export async function updateSchedule(
       run_mode: when.kind === 'once' ? when.runMode : 'run_at',
       due_at: when.kind === 'once' ? when.dueAt : null,
       rrule: recurring ? when.rrule : null,
+      timezone: zone,
       deliver_to: deliverToOf(edits.deliver),
       change_only: recurring && edits.changeOnly,
       ...(job.enabled ? { next_run_at: next, retry_at: null } : {}),

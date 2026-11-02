@@ -6166,6 +6166,7 @@ export type Database = {
           onboarding_completed: boolean | null
           organization_id: string | null
           role: Database["public"]["Enums"]["user_role"]
+          time_zone: string | null
           updated_at: string
           work_areas: string[]
           work_areas_asked_at: string | null
@@ -6182,6 +6183,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           organization_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          time_zone?: string | null
           updated_at?: string
           work_areas?: string[]
           work_areas_asked_at?: string | null
@@ -6198,6 +6200,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           organization_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          time_zone?: string | null
           updated_at?: string
           work_areas?: string[]
           work_areas_asked_at?: string | null

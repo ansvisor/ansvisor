@@ -96,7 +96,11 @@ export interface NewSchedule {
 export interface ScheduleMaker {
   userId: string;
   organizationId: string;
-  /** The person's time zone: the run's (their browser's). */
+  /**
+   * The person's time zone: the run's, as its card showed it (their pick in
+   * Settings › Account, else their browser's: effectiveTimeZone). The job
+   * keeps it; a later change of the setting moves no job.
+   */
   timezone: string;
   /** The Chat run whose card made it. */
   runId?: string | null;

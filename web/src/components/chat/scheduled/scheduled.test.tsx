@@ -11,7 +11,8 @@ import type { ScheduleListItem } from '@/lib/chat/schedule/views';
  * items 21–24): each row's job, When on its own clock with its next run or
  * why it is off, its last run, where its result goes and its mode, the
  * switch and its one action; a job's page reads When as it is typed with
- * its next 3 runs, saves its edits and lists its runs' use as a share.
+ * its next 3 runs, on the job's own time zone, which it changes (00468),
+ * saves its edits and lists its runs' use as a share.
  */
 
 vi.mock('@/i18n/navigation', () => ({
@@ -33,6 +34,40 @@ const actions = vi.hoisted(() => ({
   updateChatSchedule: vi.fn(async () => ({ ok: true })),
 }));
 vi.mock('@/lib/actions/chat-schedules', () => actions);
+// The time zone picker as a native select: Base UI's popup doesn't open in jsdom.
+vi.mock('@/components/ui/combobox', () => ({
+  Combobox: ({
+    items,
+    value,
+    disabled,
+    onValueChange,
+  }: {
+    items: { value: string; label: string }[];
+    value: { value: string } | null;
+    disabled?: boolean;
+    onValueChange: (item: { value: string; label: string } | null) => void;
+  }) => (
+    <select
+      data-combobox
+      value={value?.value ?? ''}
+      disabled={disabled}
+      onChange={(e) => onValueChange(items.find((i) => i.value === e.target.value) ?? null)}
+    >
+      {items.map((i) => (
+        <option key={i.value} value={i.value}>
+          {i.label}
+        </option>
+      ))}
+    </select>
+  ),
+  ComboboxCollection: () => null,
+  ComboboxContent: () => null,
+  ComboboxEmpty: () => null,
+  ComboboxInput: () => null,
+  ComboboxItem: () => null,
+  ComboboxList: () => null,
+  ComboboxTrigger: () => null,
+}));
 
 const { ScheduledList } = await import('./scheduled-list');
 const { ScheduleDetail } = await import('./schedule-detail');
@@ -262,6 +297,7 @@ describe('ScheduleDetail', () => {
       when: 'every weekday at 7',
       deliver: 'both',
       changeOnly: false,
+      timezone: 'Europe/Istanbul',
     });
     // Its runs: status, run now, and use as a share, never dollars.
     const rows = $$('[data-slot="schedule-run"]');
@@ -273,10 +309,36 @@ describe('ScheduleDetail', () => {
     expect(container.textContent).not.toContain('$');
   });
 
+  it('shows the job’s own time zone, and reads When on the one picked before Save sends it', async () => {
+    await render(<ScheduleDetail initial={{ job: JOB, runs: RUNS }} now={NOW} />);
+    const zone = $('[data-combobox]') as HTMLSelectElement;
+    expect(zone.value).toBe('Europe/Istanbul');
+    expect(container.textContent).toContain('This job’s own clock.');
+    // No Automatic here: a job always runs on a zone of its own.
+    expect([...zone.options].some((o) => o.textContent?.startsWith('Automatic'))).toBe(false);
+    await act(async () => {
+      zone.value = 'America/New_York';
+      zone.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(container.textContent).toContain('Every Monday, 08:00 · America/New_York');
+    // It's 04:00 on Monday in New York: today's 08:00 there (13:00 UTC) comes first now.
+    expect($$('[data-slot="schedule-next-runs"] li').map((li) => li.textContent)).toEqual([
+      'Mon 2 Nov, 08:00',
+      'Mon 9 Nov, 08:00',
+      'Mon 16 Nov, 08:00',
+    ]);
+    await click($('[data-action="schedule.save"]'));
+    expect(actions.updateChatSchedule).toHaveBeenCalledWith(
+      JOB.id,
+      expect.objectContaining({ when: 'every Monday at 08:00', timezone: 'America/New_York' }),
+    );
+  });
+
   it('lets an Admin switch or delete a teammate’s job, not edit it', async () => {
     const theirs = { ...JOB, mine: false, canEdit: false, chatHref: null };
     await render(<ScheduleDetail initial={{ job: theirs, runs: [] }} now={NOW} />);
     expect(container.textContent).toContain('Only its creator can change this job.');
+    expect(($('[data-combobox]') as HTMLSelectElement).disabled).toBe(true);
     expect($('[data-action="schedule.save"]')).toBeNull();
     expect($('[data-action="schedule.runNow"]')).toBeNull();
     await click($('[data-action="schedule.delete"]'));

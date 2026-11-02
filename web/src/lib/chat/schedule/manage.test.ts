@@ -317,4 +317,57 @@ describe('the page’s changes', () => {
       ),
     ).toMatchObject({ ok: false, reason: 'forbidden' });
   });
+
+  it('keeps the job’s own zone, whatever the creator’s Settings › Account zone (00468)', async () => {
+    job('a');
+    // The creator picked Tokyo since: the job still reads on Istanbul's clock.
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.time_zone = 'Asia/Tokyo';
+    const edits = {
+      title: 'Job a',
+      prompt: 'Summarise last week',
+      when: 'every Monday at 09:00',
+      deliver: 'chat' as const,
+      changeOnly: false,
+    };
+    expect(await manage.updateSchedule(as('manager'), 'a', edits, NOW)).toEqual({ ok: true });
+    expect(row('a')).toMatchObject({
+      timezone: 'Europe/Istanbul',
+      // 09:00 in Istanbul passed today (06:00 UTC): next Monday.
+      next_run_at: '2026-11-09T06:00:00.000Z',
+    });
+  });
+
+  it('moves the job to the zone its page picks, and makes its next run again on that clock', async () => {
+    job('a');
+    const edits = {
+      title: 'Job a',
+      prompt: 'Summarise last week',
+      when: 'every Monday at 09:00',
+      deliver: 'chat' as const,
+      changeOnly: false,
+    };
+    expect(
+      await manage.updateSchedule(
+        as('manager'),
+        'a',
+        { ...edits, timezone: 'America/New_York' },
+        NOW,
+      ),
+    ).toEqual({ ok: true });
+    expect(row('a')).toMatchObject({
+      timezone: 'America/New_York',
+      rrule: 'FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0',
+      // 04:00 on Monday in New York: today's 09:00 there (14:00 UTC) is still to come.
+      next_run_at: '2026-11-02T14:00:00.000Z',
+    });
+    // Off, it keeps its zone and When, and no next run until it is on again.
+    job('b', { enabled: false, next_run_at: null });
+    await manage.updateSchedule(as('manager'), 'b', { ...edits, timezone: 'Asia/Tokyo' }, NOW);
+    expect(row('b')).toMatchObject({ timezone: 'Asia/Tokyo', next_run_at: null });
+    // A zone nobody knows is refused, and nothing changes.
+    expect(
+      await manage.updateSchedule(as('manager'), 'a', { ...edits, timezone: 'Mars/Olympus' }, NOW),
+    ).toEqual({ ok: false, reason: 'zone', message: 'Pick a time zone from the list.' });
+    expect(row('a').timezone).toBe('America/New_York');
+  });
 });

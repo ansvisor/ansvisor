@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { ListDot } from '@/components/agentic/list-dot';
 import { FormSwitch } from '@/components/chat/agents/agent-form-triggers';
+import { TimeZonePicker } from '@/components/settings/time-zone-picker';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,12 +36,14 @@ import { runDotOf, useScheduleWords } from './schedule-words';
 /**
  * A scheduled job's page (CHAT-12 items 23–24; W3-03): its title, what Chat
  * does each run, When as free text (read on the job's own clock as it is
- * typed, with its next 3 runs), Deliver to and "Notify only if the answer
- * changed"; Save (no confirm card: the page is its creator's own), Run now
- * and Delete ("Past results stay in Files"). Its last 20 runs below: date,
- * status, the result in its chat, and its use as a share of the monthly AI
- * limit — never dollars. Only its creator edits it; an Admin switches or
- * deletes it.
+ * typed, with its next 3 runs), the job's own time zone (the person's
+ * Settings › Account zone never moves it; changed here, When reads on the
+ * new clock and Save makes its next run again), Deliver to and "Notify
+ * only if the answer changed"; Save (no confirm card: the page is its
+ * creator's own), Run now and Delete ("Past results stay in Files"). Its
+ * last 20 runs below: date, status, the result in its chat, and its use as
+ * a share of the monthly AI limit — never dollars. Only its creator edits
+ * it; an Admin switches or deletes it.
  */
 export function ScheduleDetail({
   initial,
@@ -63,6 +66,7 @@ export function ScheduleDetail({
   const [title, setTitle] = useState(job.title);
   const [prompt, setPrompt] = useState(job.prompt ?? '');
   const [when, setWhen] = useState(job.when ? whenPhrase(job.when, job.timezone) : '');
+  const [zone, setZone] = useState(job.timezone);
   const [deliver, setDeliver] = useState<DeliverChoice>(job.deliver);
   const [changeOnly, setChangeOnly] = useState(job.changeOnly);
   const [busy, setBusy] = useState(false);
@@ -71,15 +75,9 @@ export function ScheduleDetail({
   // "Chat › Scheduled › {job}" in the shell's header.
   useChatCrumb(job.title);
 
-  const reading = useMemo(
-    () => readWhen(when, { now, timeZone: job.timezone }),
-    [when, now, job.timezone],
-  );
-  const hint = useMemo(
-    () => whenHint(when, job.timezone, now, tWhen),
-    [when, job.timezone, now, tWhen],
-  );
-  const upcoming = reading.ok ? nextRuns(reading.when, job.timezone, now, 3) : [];
+  const reading = useMemo(() => readWhen(when, { now, timeZone: zone }), [when, now, zone]);
+  const hint = useMemo(() => whenHint(when, zone, now, tWhen), [when, zone, now, tWhen]);
+  const upcoming = reading.ok ? nextRuns(reading.when, zone, now, 3) : [];
   const recurring = reading.ok && reading.when.kind === 'recurring';
   const editable = job.canEdit;
   const blocked = !title.trim() || !reading.ok || (!prompt.trim() && !job.skill);
@@ -104,7 +102,8 @@ export function ScheduleDetail({
 
   const save = guard(async () => {
     const ok = await act(
-      () => updateChatSchedule(job.id, { title, prompt, when, deliver, changeOnly }),
+      () =>
+        updateChatSchedule(job.id, { title, prompt, when, deliver, changeOnly, timezone: zone }),
       t('saved'),
     );
     if (ok) await reload();
@@ -198,6 +197,18 @@ export function ScheduleDetail({
               className="text-[13px]"
             />
           </Field>
+          <Field id="schedule-zone" label={tDetail('timeZone')} hint={tDetail('timeZoneHint')}>
+            <TimeZonePicker
+              id="schedule-zone"
+              value={zone}
+              onChange={(next) => next && setZone(next)}
+              searchPlaceholder={tDetail('timeZoneSearch')}
+              emptyText={tDetail('timeZoneEmpty')}
+              disabled={!editable || busy}
+              now={now}
+              action="schedule.timeZone"
+            />
+          </Field>
           {upcoming.length > 0 && (
             <div className="grid gap-1">
               <span className="text-xs font-medium text-muted-foreground">
@@ -212,7 +223,7 @@ export function ScheduleDetail({
                     key={at}
                     className="rounded-full border bg-muted/40 px-2.5 py-0.5 text-[12px] tabular-nums"
                   >
-                    {words.date(at, job.timezone)}
+                    {words.date(at, zone)}
                   </li>
                 ))}
               </ul>

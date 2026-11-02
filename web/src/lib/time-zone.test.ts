@@ -9,12 +9,16 @@ import { describe, expect, test } from 'vitest';
 import {
   dayIn,
   dayRangeBounds,
+  effectiveTimeZone,
   endOfDayIn,
   isCalendarDay,
   isTimeZone,
   nextDay,
   startOfDayIn,
+  timeZoneNames,
   zonedInstant,
+  zoneMatches,
+  zoneOffset,
 } from './time-zone';
 
 describe('dayIn', () => {
@@ -79,6 +83,54 @@ describe('isTimeZone', () => {
     expect(isTimeZone('Mars/Olympus')).toBe(false);
     expect(isTimeZone('')).toBe(false);
     expect(isTimeZone(42)).toBe(false);
+  });
+});
+
+describe('effectiveTimeZone (Settings › Account, 00468)', () => {
+  test('takes the browser’s zone while the person picked none (Automatic)', () => {
+    expect(effectiveTimeZone(null, 'Europe/Istanbul')).toBe('Europe/Istanbul');
+    expect(effectiveTimeZone(undefined, 'America/New_York')).toBe('America/New_York');
+  });
+
+  test('takes the person’s pick over the browser’s zone', () => {
+    expect(effectiveTimeZone('Asia/Tokyo', 'Europe/Istanbul')).toBe('Asia/Tokyo');
+    expect(effectiveTimeZone('Asia/Tokyo', null)).toBe('Asia/Tokyo');
+  });
+
+  test('passes over a zone this runtime doesn’t know, down to UTC', () => {
+    expect(effectiveTimeZone('Mars/Olympus', 'Europe/Istanbul')).toBe('Europe/Istanbul');
+    expect(effectiveTimeZone('', 'Mars/Olympus')).toBe('UTC');
+    expect(effectiveTimeZone(null, null)).toBe('UTC');
+  });
+});
+
+describe('the zone picker’s list', () => {
+  test('lists real zones A to Z, UTC among them', () => {
+    const names = timeZoneNames();
+    expect(names).toContain('UTC');
+    expect(names).toContain('Europe/Istanbul');
+    expect(names.every(isTimeZone)).toBe(true);
+    expect([...names].sort((a, b) => a.localeCompare(b))).toEqual(names);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  test('says each zone’s offset at an instant', () => {
+    const winter = new Date('2026-01-15T12:00:00.000Z');
+    const summer = new Date('2026-07-15T12:00:00.000Z');
+    expect(zoneOffset('Europe/Istanbul', winter)).toBe('GMT+3');
+    expect(zoneOffset('America/New_York', winter)).toBe('GMT-5');
+    expect(zoneOffset('America/New_York', summer)).toBe('GMT-4');
+    expect(zoneOffset('UTC', winter)).toBe('GMT');
+    expect(zoneOffset('Mars/Olympus', winter)).toBe('');
+  });
+
+  test('finds a zone by its words or its offset, any case', () => {
+    expect(zoneMatches('America/New_York', 'new york')).toBe(true);
+    expect(zoneMatches('America/New_York', 'New_York')).toBe(true);
+    expect(zoneMatches('Europe/Istanbul', 'ISTAN')).toBe(true);
+    expect(zoneMatches('Europe/Istanbul', 'gmt+3', 'GMT+3')).toBe(true);
+    expect(zoneMatches('Europe/Istanbul', 'tokyo', 'GMT+3')).toBe(false);
+    expect(zoneMatches('Europe/Istanbul', '  ')).toBe(true);
   });
 });
 
