@@ -29,8 +29,13 @@ const {
   entityIdFor,
   executeWebflowTool,
   forgetWebflowAccounts,
+  getActiveConnection,
   isWebflowConfigured,
+  listGaProperties,
+  listGscSites,
   proxyRequest,
+  queryGscSearchAnalytics,
+  runGaReport,
 } = await import('./composio.js');
 
 beforeEach(() => {
@@ -99,6 +104,83 @@ describe('Webflow on Composio', () => {
 describe('the workspace entity', () => {
   it('is one per organization: org_ and its id (#577)', () => {
     expect(entityIdFor('org-9')).toBe('org_org-9');
+  });
+});
+
+/**
+ * Several sign-ins may share one entity (BRAND-ACCESS PR 14): an entity
+ * holds more than one connected account of an auth config when they are
+ * linked with allowMultiple, as Webflow's are. A Google call therefore names
+ * the connected account the brand uses; with only the entity, Composio would
+ * pick one itself.
+ */
+describe('Google calls on a named connected account', () => {
+  const connection = { entityId: 'org_org-1', accountId: 'ca_2' };
+
+  beforeEach(() => {
+    vi.stubEnv('COMPOSIO_GSC_AUTH_CONFIG_ID', 'ac_gsc');
+  });
+
+  it('runs Search Console and Analytics tools on that account', async () => {
+    sdk.execute.mockResolvedValue({ successful: true, data: { siteEntry: [], rows: [] } });
+    await listGscSites(connection);
+    await queryGscSearchAnalytics(connection, { site_url: 'sc-domain:acme.com' });
+    await runGaReport(connection, '123', { limit: 10 });
+    for (const [, body] of sdk.execute.mock.calls) {
+      expect(body).toMatchObject({ userId: 'org_org-1', connectedAccountId: 'ca_2' });
+    }
+    expect(sdk.execute.mock.calls[2][1].arguments).toEqual({
+      property: 'properties/123',
+      limit: 10,
+    });
+  });
+
+  it('reads the property streams on the same account', async () => {
+    sdk.execute
+      .mockResolvedValueOnce({
+        successful: true,
+        data: {
+          accountSummaries: [
+            {
+              displayName: 'Acme',
+              propertySummaries: [{ property: 'properties/9', displayName: 'Web' }],
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        successful: true,
+        data: { dataStreams: [{ webStreamData: { defaultUri: 'https://acme.com' } }] },
+      });
+    expect(await listGaProperties(connection)).toEqual([
+      { propertyId: '9', displayName: 'Web', accountName: 'Acme', siteUrls: ['https://acme.com'] },
+    ]);
+    expect(sdk.execute).toHaveBeenCalledTimes(2);
+    for (const [, body] of sdk.execute.mock.calls) {
+      expect(body).toMatchObject({ userId: 'org_org-1', connectedAccountId: 'ca_2' });
+    }
+  });
+
+  it('runs on the entity alone when no account is known, as before', async () => {
+    sdk.execute.mockResolvedValue({ successful: true, data: { siteEntry: [] } });
+    await listGscSites({ entityId: 'org_org-1', accountId: null });
+    expect(sdk.execute.mock.calls[0][1]).not.toHaveProperty('connectedAccountId');
+    expect(sdk.execute.mock.calls[0][1].userId).toBe('org_org-1');
+  });
+
+  it('finds the named account among the entity’s active ones, or none', async () => {
+    sdk.list.mockResolvedValue({ items: [{ id: 'ca_1' }, { id: 'ca_2' }] });
+    expect(await getActiveConnection('google-search-console', 'org_org-1', 'ca_2')).toEqual({
+      id: 'ca_2',
+    });
+    expect(sdk.list).toHaveBeenCalledWith({
+      authConfigIds: ['ac_gsc'],
+      userIds: ['org_org-1'],
+      statuses: ['ACTIVE'],
+    });
+    expect(await getActiveConnection('google-search-console', 'org_org-1', 'ca_9')).toBeNull();
+    // Without one, the first, as the Account's own card reads it.
+    expect(await getActiveConnection('google-search-console', 'org_org-1')).toEqual({ id: 'ca_1' });
   });
 });
 

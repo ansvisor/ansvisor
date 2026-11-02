@@ -12,6 +12,7 @@ import {
   listGscSites,
   listGaProperties,
 } from '../lib/composio.js';
+import { brandConnection, composioTarget } from '../lib/brand-integrations.js';
 import { runGscSync } from '../lib/gsc-sync.js';
 import { runGaSync } from '../lib/ga-sync.js';
 import { detectPageOpportunitiesInWindow } from '../lib/page-opportunities.js';
@@ -251,27 +252,58 @@ router.delete('/:provider', async (req, res) => {
 // property is a numeric id), and the query-stats sync has no Analytics
 // equivalent yet, so these stay on explicit paths rather than under :provider.
 
+const propertiesQuery = z.object({ brandId: z.guid().optional() });
+
 /**
- * GET /api/integrations/google-search-console/properties
- * Properties visible to the org's connected account (#642). Member-readable —
- * the mapping UI is shown to the whole org; writes stay role-gated elsewhere.
- * The list is the whole organization's, whichever brand asks, so it needs All
- * brands (BRAND-ACCESS §5.2) until each brand has its own connection (PR 14).
+ * The Google sign-in a property list is read from, or null when it isn't
+ * connected (409). Member-readable: the mapping UI is shown to everyone who
+ * may see it; writes stay role-gated elsewhere.
+ *   * `?brandId=`: the sign-in that brand uses (BRAND-ACCESS PR 14, 00470),
+ *     for anyone who can access the brand. Every brand uses the Account's
+ *     Google connection until the Brand settings cards (PR 15) let one use
+ *     another. The demo brand is everyone's sample data: it lists none.
+ *   * Without one: the Account's own connection, as Settings › Integrations
+ *     reads it today. That list serves every brand, so it needs All brands
+ *     (BRAND-ACCESS §5.2).
+ */
+async function propertiesConnection(req, provider, brandId) {
+  if (brandId) {
+    const { brand } = await assertBrandAccess(brandId, req.user.id);
+    if (brand.is_demo) return null;
+    const connection = await brandConnection(brand.id, provider);
+    if (!connection?.connected || !connection.entityId) return null;
+    const active = await getActiveConnection(
+      provider,
+      connection.entityId,
+      connection.composioAccountId,
+    );
+    return active ? composioTarget(connection) : null;
+  }
+
+  await assertAllBrands(req.user.id);
+  const profile = await getProfile(req.user.id);
+  const entityId = entityIdFor(profile.organization_id);
+  const active = await getActiveConnection(provider, entityId);
+  return active ? { entityId, accountId: active.id } : null;
+}
+
+/**
+ * GET /api/integrations/google-search-console/properties[?brandId=…]
+ * Properties visible to the connected Google account (#642): the brand's, or
+ * the Account's (propertiesConnection).
  */
 router.get('/google-search-console/properties', async (req, res) => {
+  const parsed = propertiesQuery.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid request' });
   try {
     if (!isComposioConfigured(GSC)) return notConfigured(res, GSC);
-    await assertAllBrands(req.user.id);
 
-    const profile = await getProfile(req.user.id);
-    const entityId = entityIdFor(profile.organization_id);
-
-    const active = await getActiveConnection(GSC, entityId);
-    if (!active) {
+    const connection = await propertiesConnection(req, GSC, parsed.data.brandId);
+    if (!connection) {
       return res.status(409).json({ error: 'Google Search Console is not connected.' });
     }
 
-    const properties = await listGscSites(entityId);
+    const properties = await listGscSites(connection);
     return res.json({ properties });
   } catch (err) {
     req.log.error({ err }, 'integrations properties error');
@@ -332,24 +364,22 @@ router.post('/google-search-console/sync', async (req, res) => {
 });
 
 /**
- * GET /api/integrations/google-analytics/properties
- * GA4 properties visible to the org's connected account (#694). Member-
- * readable, like the Search Console listing above, and with All brands only.
+ * GET /api/integrations/google-analytics/properties[?brandId=…]
+ * GA4 properties visible to the connected Google account (#694): the
+ * brand's, or the Account's, as the Search Console listing above.
  */
 router.get('/google-analytics/properties', async (req, res) => {
+  const parsed = propertiesQuery.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid request' });
   try {
     if (!isComposioConfigured(GA)) return notConfigured(res, GA);
-    await assertAllBrands(req.user.id);
 
-    const profile = await getProfile(req.user.id);
-    const entityId = entityIdFor(profile.organization_id);
-
-    const active = await getActiveConnection(GA, entityId);
-    if (!active) {
+    const connection = await propertiesConnection(req, GA, parsed.data.brandId);
+    if (!connection) {
       return res.status(409).json({ error: 'Google Analytics is not connected.' });
     }
 
-    const properties = await listGaProperties(entityId);
+    const properties = await listGaProperties(connection);
     return res.json({ properties });
   } catch (err) {
     req.log.error({ err }, 'integrations GA properties error');

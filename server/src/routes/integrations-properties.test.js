@@ -3,16 +3,19 @@ import express from 'express';
 
 /**
  * The connected Google account's properties and syncs (BRAND-ACCESS spec
- * §5.2): the list is the whole organization's whichever brand asks, so it
- * needs All brands until each brand has its own connection (PR 14); a sync
- * of one brand needs that brand, of every brand All brands. Everyone has All
- * brands until someone is narrowed, so nothing changes for them.
+ * §5.2, PR 14): a brand's list is read from the Google sign-in that brand
+ * uses, for anyone who can access it; the Account's own list serves every
+ * brand, so it needs All brands. A sync of one brand needs that brand, of
+ * every brand All brands. Everyone has All brands until someone is narrowed,
+ * and every brand uses the Account's connection, so nothing changes for them.
  */
 
 const BRAND = '22222222-2222-2222-2222-222222222222';
 
 const brandAccess = vi.fn();
 const allBrands = vi.fn();
+const brandConnection = vi.fn();
+const getActiveConnection = vi.fn();
 const listGscSites = vi.fn(async () => [{ siteUrl: 'https://acme.example/' }]);
 const listGaProperties = vi.fn(async () => [{ propertyId: '123', displayName: 'Acme' }]);
 const runGscSync = vi.fn(async () => ({ synced: 1 }));
@@ -36,10 +39,14 @@ vi.mock('../lib/composio.js', () => ({
   isKnownProvider: () => true,
   isComposioConfigured: () => true,
   initiateConnection: vi.fn(),
-  getActiveConnection: async () => ({ id: 'acct-1' }),
+  getActiveConnection: (...args) => getActiveConnection(...args),
   deleteConnection: vi.fn(),
   listGscSites: (...args) => listGscSites(...args),
   listGaProperties: (...args) => listGaProperties(...args),
+}));
+vi.mock('../lib/brand-integrations.js', () => ({
+  brandConnection: (...args) => brandConnection(...args),
+  composioTarget: (c) => ({ entityId: c.entityId, accountId: c.composioAccountId }),
 }));
 vi.mock('../lib/ga-sync.js', () => ({ runGaSync: (...args) => runGaSync(...args) }));
 vi.mock('../lib/gsc-sync.js', () => ({ runGscSync: (...args) => runGscSync(...args) }));
@@ -73,7 +80,16 @@ afterAll(() => new Promise((resolve) => server.close(resolve)));
 
 beforeEach(() => {
   role = 'analyst';
-  brandAccess.mockReset().mockResolvedValue({ brand: { id: BRAND }, orgId: 'org-1' });
+  brandAccess
+    .mockReset()
+    .mockResolvedValue({ brand: { id: BRAND, is_demo: false }, orgId: 'org-1' });
+  brandConnection.mockReset().mockResolvedValue({
+    brandId: BRAND,
+    entityId: 'org_org-1',
+    composioAccountId: 'acct-1',
+    connected: true,
+  });
+  getActiveConnection.mockReset().mockResolvedValue({ id: 'acct-1' });
   allBrands.mockReset().mockResolvedValue({ orgId: 'org-1' });
   listGscSites.mockClear();
   listGaProperties.mockClear();
@@ -90,33 +106,75 @@ describe.each([
   ['google-search-console', () => listGscSites],
   ['google-analytics', () => listGaProperties],
 ])('GET /api/integrations/%s/properties', (provider, list) => {
-  it('lists them for someone with All brands, as before', async () => {
+  it("lists the Account's for someone with All brands, as before", async () => {
     const res = await fetch(`${baseUrl}/${provider}/properties`);
     expect(res.status).toBe(200);
     expect((await res.json()).properties).toHaveLength(1);
     expect(allBrands).toHaveBeenCalledWith('u1');
     expect(brandAccess).not.toHaveBeenCalled();
+    expect(getActiveConnection).toHaveBeenCalledWith(provider, 'org_org-1');
+    expect(list()).toHaveBeenCalledWith({ entityId: 'org_org-1', accountId: 'acct-1' });
   });
 
-  it('needs All brands even when a brand is named, whose list it would not be', async () => {
-    // The demo brand is everyone's: naming it must not open the whole list.
+  it("refuses the Account's list to Selected brands, with the code, and reads nothing", async () => {
+    allBrands.mockRejectedValue(refused);
+    const res = await fetch(`${baseUrl}/${provider}/properties`);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      error: "You don't have access to this brand",
+      code: 'no_brand_access',
+    });
+    expect(list()).not.toHaveBeenCalled();
+  });
+
+  it('lists a brand’s from the sign-in it uses, for anyone who can access the brand', async () => {
     const res = await fetch(`${baseUrl}/${provider}/properties?brandId=${BRAND}`);
     expect(res.status).toBe(200);
-    expect(allBrands).toHaveBeenCalledWith('u1');
-    expect(brandAccess).not.toHaveBeenCalled();
+    expect((await res.json()).properties).toHaveLength(1);
+    expect(brandAccess).toHaveBeenCalledWith(BRAND, 'u1');
+    expect(allBrands).not.toHaveBeenCalled();
+    expect(brandConnection).toHaveBeenCalledWith(BRAND, provider);
+    // The brand's own connected account, by name: an entity may hold several.
+    expect(getActiveConnection).toHaveBeenCalledWith(provider, 'org_org-1', 'acct-1');
+    expect(list()).toHaveBeenCalledWith({ entityId: 'org_org-1', accountId: 'acct-1' });
   });
 
-  it('refuses Selected brands, with the code, and reads nothing', async () => {
-    allBrands.mockRejectedValue(refused);
-    for (const path of ['properties', `properties?brandId=${BRAND}`]) {
-      const res = await fetch(`${baseUrl}/${provider}/${path}`);
-      expect(res.status).toBe(403);
-      expect(await res.json()).toEqual({
-        error: "You don't have access to this brand",
-        code: 'no_brand_access',
-      });
-    }
+  it('refuses a brand the caller can’t access, with the code, and reads nothing', async () => {
+    brandAccess.mockRejectedValue(refused);
+    const res = await fetch(`${baseUrl}/${provider}/properties?brandId=${BRAND}`);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      error: "You don't have access to this brand",
+      code: 'no_brand_access',
+    });
+    expect(brandConnection).not.toHaveBeenCalled();
     expect(list()).not.toHaveBeenCalled();
+  });
+
+  it('lists nothing for the demo brand, everyone’s sample data', async () => {
+    brandAccess.mockResolvedValue({ brand: { id: BRAND, is_demo: true }, orgId: 'org-1' });
+    const res = await fetch(`${baseUrl}/${provider}/properties?brandId=${BRAND}`);
+    expect(res.status).toBe(409);
+    expect(brandConnection).not.toHaveBeenCalled();
+    expect(list()).not.toHaveBeenCalled();
+  });
+
+  it('says not connected when the brand uses no live sign-in', async () => {
+    for (const connection of [null, { connected: false, entityId: 'org_org-1' }]) {
+      brandConnection.mockResolvedValueOnce(connection);
+      const res = await fetch(`${baseUrl}/${provider}/properties?brandId=${BRAND}`);
+      expect(res.status).toBe(409);
+    }
+    getActiveConnection.mockResolvedValueOnce(null);
+    const gone = await fetch(`${baseUrl}/${provider}/properties?brandId=${BRAND}`);
+    expect(gone.status).toBe(409);
+    expect(list()).not.toHaveBeenCalled();
+  });
+
+  it('refuses a brand id that is no id', async () => {
+    const res = await fetch(`${baseUrl}/${provider}/properties?brandId=nope`);
+    expect(res.status).toBe(400);
+    expect(brandAccess).not.toHaveBeenCalled();
   });
 });
 

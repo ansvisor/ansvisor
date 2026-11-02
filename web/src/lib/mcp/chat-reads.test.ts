@@ -327,16 +327,17 @@ describe('Overview, KPIs and Getting started', () => {
 });
 
 describe('Google reads', () => {
+  // The Google sign-in the brand uses (00470): the Account's, for every brand.
   const connected = [
-    { provider: 'google-search-console', status: 'connected' },
-    { provider: 'google-analytics', status: 'connected' },
+    { provider: 'google-search-console', account: { id: 'a1', label: null, status: 'connected' } },
+    { provider: 'google-analytics', account: { id: 'a2', label: null, status: 'connected' } },
   ];
 
   it('say a source is not connected: no connection, or no property picked', async () => {
     reads.answers.brands = { gsc_property: null, ga_property_id: '123' };
-    reads.answers.integration_connections = [
-      { provider: 'google-search-console', status: 'connected' },
-      { provider: 'google-analytics', status: 'expired' },
+    reads.answers.brand_integrations = [
+      { provider: 'google-search-console', account: { status: 'connected' } },
+      { provider: 'google-analytics', account: { status: 'disconnected' } },
     ];
     expect(await getGscSummaryFor(auth(), { brandId: BRAND })).toEqual({
       connected: false,
@@ -346,11 +347,25 @@ describe('Google reads', () => {
     });
     expect(await getGaSummaryFor(auth(), { brandId: BRAND })).toMatchObject({ connected: false });
     expect(mocks.getTrafficGoogleTotals).not.toHaveBeenCalled();
+    // The brand's own sign-ins, not the Account's row.
+    expect(reads.filters).toContainEqual({
+      table: 'brand_integrations',
+      column: 'brand_id',
+      value: BRAND,
+    });
+    expect(reads.selects.some((read) => read.table === 'integration_connections')).toBe(false);
+  });
+
+  it('say a source is not connected when the brand uses no Google sign-in', async () => {
+    reads.answers.brands = { gsc_property: 'sc-domain:x', ga_property_id: '123' };
+    reads.answers.brand_integrations = [];
+    expect(await getGscSummaryFor(auth(), { brandId: BRAND })).toMatchObject({ connected: false });
+    expect(await getGaSummaryFor(auth(), { brandId: BRAND })).toMatchObject({ connected: false });
   });
 
   it("reads Search Console's latest reported days for a short range, as the page does", async () => {
     reads.answers.brands = { gsc_property: 'sc-domain:x', ga_property_id: '123' };
-    reads.answers.integration_connections = connected;
+    reads.answers.brand_integrations = connected;
     reads.answers.gsc_query_stats = { date: '2026-10-27' };
     mocks.getTrafficGoogleTotals.mockResolvedValue({
       ga: null,
@@ -374,7 +389,7 @@ describe('Google reads', () => {
 
   it("reads Analytics' sessions to the last day it reported", async () => {
     reads.answers.brands = { gsc_property: null, ga_property_id: '123' };
-    reads.answers.integration_connections = connected;
+    reads.answers.brand_integrations = connected;
     reads.answers.ga_ai_traffic_stats = { date: '2026-10-28' };
     mocks.getTrafficGoogleTotals.mockResolvedValue({
       gsc: null,
