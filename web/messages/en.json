@@ -1760,7 +1760,8 @@
           "outcome_measured": "{day, plural, =0 {} other {Day #{final, select, yes {, final} other {}} · }}{outcome, select, improved {Result: metrics improved after this action closed} mixed {Result: mixed after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}",
           "agent_run_started": "Agent run started{named, select, yes { · {agent}} other {}}",
           "agent_run_completed": "{to, select, done {Agent run completed} failed {Agent run failed} stopped {Agent run stopped} skipped {Agent run skipped} other {Agent run ended}}{named, select, yes { · {agent}} other {}}{reason, select, action_closed { · action closed} other {}}",
-          "chat_started": "Chat started on this action"
+          "chat_started": "Chat started on this action",
+          "agent_went_live": "{named, select, yes {{agent}} other {An agent}} sent “{title}” to {to} on its own"
         },
         "eventParts": {
           "note": "Note: {note}",
@@ -4677,7 +4678,14 @@
         "limitPausedNoDate": "They start again when the month renews, or when you raise the limit.",
         "reviewLimit": "Review limit",
         "raiseLimit": "Raise limit",
-        "fix": "Fix it"
+        "fix": "Fix it",
+        "wentLive": "{agent} sent “{title}” to {cms} as a draft",
+        "wentLiveDetail": "On its own, after Quality and your brand facts",
+        "openPage": "Open page",
+        "openRun": "Open run",
+        "goLiveOff": "{agent} no longer publishes on its own",
+        "goLiveOffDetail": "It changed. Turn it on again if you still want it.",
+        "openAgent": "Open agent"
       },
       "lands": "Results from your agents land here.",
       "landsWithSuggestions": "Results from your agents and daily suggestions land here.",
@@ -7440,6 +7448,8 @@
         "published": "Published {when}",
         "openLive": "Published {when}: open the live page in a new tab",
         "answered": "The webhook answered {status}.",
+        "onItsOwn": "Sent by {agent} · on its own",
+        "onItsOwnUnnamed": "Sent by an agent · on its own",
         "webflow": {
           "queued": "Sending to Webflow since {when}",
           "sent": "In Webflow as a draft item since {when}",

@@ -65,5 +65,14 @@ export async function setAgentGoLive(
   );
   if (error) throw new Error(`Could not give the go-live permission: ${error.message}`);
   await logAgentChange(ctx, row, 'agentGoLiveOn', { params: { limit: String(dailyLimit) } });
+  // Allowed again: the notices that it no longer was are over (00446).
+  const { error: closeError } = await supabaseAdmin
+    .from('chat_notices')
+    .update({ resolved_at: new Date().toISOString() })
+    .eq('organization_id', org)
+    .eq('kind', 'agent_go_live_off')
+    .eq('payload->>agentId', row.id)
+    .is('resolved_at', null);
+  if (closeError) console.error('[chat/agents] could not close the go-live notices:', closeError);
   return { ok: true, detail: await readAgentGoLive(org, row.id, row.version) };
 }

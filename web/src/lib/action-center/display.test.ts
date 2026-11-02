@@ -492,6 +492,26 @@ describe('actionEventText', () => {
     expect(actionEventText(event('chat_started', { source: 'chat' }), tPage, t)).toBe(
       'Chat started on this action',
     );
+    // A page the agent sent out on its own (AUTONOMOUS-GO-LIVE §6.4).
+    expect(
+      actionEventText(
+        event('agent_went_live', {
+          source: 'chat',
+          agent: 'Publisher',
+          title: 'Pricing FAQ',
+          to: 'Webflow',
+        }),
+        tPage,
+        t,
+      ),
+    ).toBe('Publisher sent “Pricing FAQ” to Webflow on its own');
+    expect(
+      actionEventText(
+        event('agent_went_live', { agent: null, title: 'Pricing FAQ', to: 'Wix' }),
+        tPage,
+        t,
+      ),
+    ).toBe('An agent sent “Pricing FAQ” to Wix on its own');
     // A deleted agent's lines end without a name, and without an empty separator.
     expect(actionEventText(event('agent_run_started', { agent: null }), tPage, t)).toBe(
       'Agent run started',

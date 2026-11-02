@@ -60,7 +60,12 @@ import type { ChatActor } from './engine';
 import type { ChatDenialCard } from './events';
 import { OwnKeyUnreadableError, failingOwnKey, resolveChatModelKey } from './key';
 import type { FailingKey, OwnKeyFailure } from './key-health';
-import { readAgentGoLive, readGoLiveLimits, type AgentGoLiveDetail } from './agent-go-live';
+import {
+  readAgentGoLive,
+  readGoLiveLimits,
+  tellGoLiveOff,
+  type AgentGoLiveDetail,
+} from './agent-go-live';
 import { ownKeyCapReached } from './own-key-cap';
 import { planFactsFromOrgRow, type PlanFacts } from './plan-facts';
 import { parseTeamRole, type ChatMode, type ToolDenial } from './precedence';
@@ -1568,6 +1573,8 @@ export async function updateAgent(
   if (updated !== row || triggersChanged) {
     await logAgentChange(ctx, updated, 'agentUpdated');
   }
+  // A new version of an agent allowed to go live on its own: it no longer is, and they're told.
+  if (next) await tellGoLiveOff(ctx.actor.organizationId, row.id, row.version, ctx.actor.userId);
   return { ok: true, value: await detailOf(ctx, { row: updated, version: result }, now) };
 }
 

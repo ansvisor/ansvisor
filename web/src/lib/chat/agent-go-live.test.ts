@@ -258,6 +258,74 @@ describe('giving and taking an agent’s permission', () => {
   });
 });
 
+describe('telling who allowed it when an edit stops it (AUTONOMOUS-GO-LIVE §7.2, 00446)', () => {
+  const sent = vi.fn();
+  beforeEach(() => {
+    vi.stubEnv('CRON_SECRET', 'shh');
+    sent.mockReset().mockResolvedValue(new Response('{}'));
+    vi.stubGlobal('fetch', sent);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+  const edit = async (patch: Record<string, unknown>, id: string) => {
+    const edited = await agents.updateAgent(
+      await ctxOf(PEOPLE.admin),
+      id,
+      updateAgentInput.parse(patch),
+      NOW,
+    );
+    if (!edited.ok) throw new Error(JSON.stringify(edited.refusal));
+    return edited.value;
+  };
+
+  it('asks the server to tell them once, for the version it was allowed on, and not the editor', async () => {
+    const agent = await create();
+    await setAgentGoLive(await ctxOf(PEOPLE.admin), agent.id, 5);
+    // A name makes no new version: it stays allowed, and nobody is told.
+    await edit({ name: 'Publisher' }, agent.id);
+    expect(sent).not.toHaveBeenCalled();
+    await edit({ instructions: 'Keep the tone plain.' }, agent.id);
+    expect(sent).toHaveBeenCalledTimes(1);
+    const [url, init] = sent.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/api\/internal\/chat\/notices\/go-live-off$/);
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer shh');
+    expect(JSON.parse(init.body as string)).toEqual({
+      orgId: ORG,
+      agentId: agent.id,
+      version: 1,
+      editor: PEOPLE.admin,
+    });
+    // Its next edit: it wasn't allowed on version 2, so nobody is told again.
+    await edit({ instructions: 'Keep the tone warm.' }, agent.id);
+    expect(sent).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes those notices when an Admin allows it again', async () => {
+    const agent = await create();
+    db.tables.chat_notices = [
+      {
+        id: 'n1',
+        organization_id: ORG,
+        user_id: PEOPLE.manager,
+        kind: 'agent_go_live_off',
+        payload: { agent: 'Ready to publish', agentId: agent.id },
+        resolved_at: null,
+      },
+      {
+        id: 'n2',
+        organization_id: ORG,
+        user_id: PEOPLE.manager,
+        kind: 'agent_go_live_off',
+        payload: { agent: 'Other', agentId: 'agent-x' },
+        resolved_at: null,
+      },
+    ];
+    await setAgentGoLive(await ctxOf(PEOPLE.admin), agent.id, 5);
+    const [mine, other] = rows('chat_notices');
+    expect(mine.resolved_at).toEqual(expect.any(String));
+    expect(other.resolved_at).toBeNull();
+  });
+});
+
 describe('the agent’s page', () => {
   it('lists the pages it took live in the last 24 hours, newest first, and names a former member', async () => {
     const agent = await create();

@@ -1,7 +1,7 @@
 'use server';
 
 import { z } from 'zod';
-import { noticeOf, type ChatNotice, type NoticeRow } from '@/lib/chat/notices';
+import { OPENED_CLOSES, noticeOf, type ChatNotice, type NoticeRow } from '@/lib/chat/notices';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { createClient } from '@/lib/supabase/server';
 
@@ -9,9 +9,12 @@ import { createClient } from '@/lib/supabase/server';
  * The person's own notices from the system (00441), for the top of their
  * Inbox's Needs you: their workspace's own AI key fails (AGENT-OWN-KEY §5.3),
  * or its agents reached 80% or all of their monthly limit on it (§4.2 item
- * 4, PR 10). Only Admins get them; the server writes them. Read with the
- * person's session (RLS: their own rows), open ones only: a key that works
- * again, a period that renews or a limit raised resolves its notice.
+ * 4, PR 10), for Admins; an agent went live on its own, or an edit stopped
+ * it (AUTONOMOUS-GO-LIVE §6.4, 00446), for its owner and the people it
+ * notifies. The server writes them. Read with the person's session (RLS:
+ * their own rows, about brands they reach), open ones only: a key that works
+ * again, a period that renews or a limit raised resolves its notice; one
+ * about an agent closes once the person opens it.
  */
 
 export type { ChatNotice } from '@/lib/chat/notices';
@@ -64,6 +67,35 @@ export async function readChatNotices(): Promise<ChatNoticesRead> {
 }
 
 const idsSchema = z.array(z.uuid()).min(1).max(NOTICES_MAX);
+
+/**
+ * A notice about an agent the person opened (Open page, Open run, Open
+ * agent): it leaves Needs you (resolved_at). Their own row only, and only
+ * one that opening closes; a key's stays until the key works. Open while
+ * the workspace is read-only, as reading. Never throws.
+ */
+export async function closeChatNotice(id: string): Promise<boolean> {
+  if (!z.uuid().safeParse(id).success) return false;
+  try {
+    const me = await signedIn();
+    if (!me) return false;
+    const { error } = await me.client
+      .from('chat_notices')
+      .update({ resolved_at: new Date().toISOString() })
+      .eq('user_id', me.userId)
+      .eq('id', id)
+      .in('kind', [...OPENED_CLOSES])
+      .is('resolved_at', null);
+    if (error) {
+      console.error('[chat/notices] could not close a notice:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[chat/notices] could not close a notice:', err);
+    return false;
+  }
+}
 
 /**
  * The notices on screen are read (read_at). Open while the workspace is
