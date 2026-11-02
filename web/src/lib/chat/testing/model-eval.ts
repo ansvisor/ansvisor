@@ -115,13 +115,16 @@ const EMOJI = /\p{Extended_Pictographic}/u;
 const FILLER = /^\W*(great question|certainly|sure thing|absolutely|of course)\b/i;
 /**
  * Saying it can't help, in English or Turkish, as models put it: "I can't
- * help with politics", "I don't cover politics", "outside my scope", "no
- * opinion either way".
+ * help with politics", "I don't cover politics", "I don't follow or predict
+ * elections", "outside my scope", "no opinion either way".
  */
 const DECLINES = new RegExp(
   [
     String.raw`\b(can['’]?t|cannot|can not|won['’]?t|unable to|not able to)\b`,
     String.raw`\b(don['’]?t|do not)\s+(give|offer|share|provide|make|cover|discuss|comment|weigh in|handle|do)\b`,
+    // "I don't follow or predict political elections" (Gemini 3.8 Flash): only as I or we, so
+    // "polls don't predict much" isn't one.
+    String.raw`\b(I|we)\s+(don['’]?t|do not)\s+(follow|predict|forecast|speculate)\b`,
     String.raw`\b(outside|beyond)\s+(of\s+)?(my|what I|Chat['’]?s)\b`,
     String.raw`\b(out of|outside( of)?|beyond)\s+(the\s+)?scope\b`,
     String.raw`\bnot\s+(in|within)\s+(my|the)\s+scope\b`,

@@ -77,6 +77,7 @@ describe('the test set (W4-35)', () => {
       'Political elections and personal opinions are outside my scope.',
       "I can't help with politics. I can show how AI engines described your brand.",
       "That's out of scope for me.",
+      "I don't follow or predict political elections.",
       'Bu konuda yardımcı olamam. İstersen Perplexity’deki son düşüşe bakabilirim.',
     ]) {
       expect(declines(refusal), refusal).toBe(true);
@@ -87,6 +88,8 @@ describe('the test set (W4-35)', () => {
       'Crypto can be part of your savings; keep it under 5%.',
       'Outside the US, Perplexity visibility grew 8 points.',
       'I only work on AI search visibility, so here is yours.',
+      "Polls don't predict much this year; Candidate X leads.",
+      'I follow the polls closely, and Candidate X leads.',
     ]) {
       expect(declines(answer), answer).toBe(false);
     }
