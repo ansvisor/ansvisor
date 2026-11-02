@@ -34,7 +34,7 @@ export const WHATS_NEW_READS = [
         .regex(/^\d{4}-\d{2}-\d{2}$/)
         .optional()
         .describe('Only updates published before this day (YYYY-MM-DD), for older ones.'),
-      limit: z.number().int().min(1).max(3).optional(),
+      limit: z.number().int().min(1).max(10).optional().describe('Updates, 3 at most.'),
     }),
     run: (ctx, input) =>
       getWhatsNewFor(ctx, {
