@@ -442,7 +442,11 @@ beforeEach(() => {
   seed();
   budgetHolds();
   // The AI limit left covers every part of a job, unless a test says otherwise.
-  fakes.fit.mockImplementation(async ({ units }: { units: number }) => ({ ok: true, fits: units }));
+  fakes.fit.mockImplementation(async ({ units }: { units: number }) => ({
+    ok: true,
+    fits: units,
+    limit: 'month',
+  }));
   fakes.readRun.mockResolvedValue({
     rows: [{ prompt: 'best crm' }, { prompt: 'crm for teams' }, { prompt: 'crm pricing' }],
     change_pct: 12,
@@ -3061,10 +3065,11 @@ describe('the AI budget', () => {
 describe('a request bigger than the AI limit left (W2-03, CHAT-04 item 17a)', () => {
   const parts = (n: number, unit = 'drafts') =>
     calls(toolCall('p1', PARTS_TOOL, { parts: n, unit }));
-  const fitsOnly = (fits: number) =>
+  const fitsOnly = (fits: number, limit: 'run' | 'month' = 'month') =>
     fakes.fit.mockImplementation(async ({ units }: { units: number }) => ({
       ok: true,
       fits: Math.min(fits, units),
+      limit,
     }));
   const lastResult = (options: CallOptions) => JSON.stringify(options.prompt.at(-1));
   /** Answers the parts card and drives on. */
@@ -3195,6 +3200,67 @@ describe('a request bigger than the AI limit left (W2-03, CHAT-04 item 17a)', ()
     ).toMatchObject({
       content_md: 'Two drafts; three are left.',
     });
+  });
+
+  /** An agent run's chat with no one there, driven to its end. */
+  async function agentRun() {
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Write ten drafts',
+      brandId: BRAND,
+    });
+    if (!started.ok) throw new Error('not started');
+    const convo = db.tables.chat_conversations.find((c) => c.id === started.conversationId)!;
+    convo.agent_run_id = '77777777-7777-4777-8777-777777777777';
+    await engine.driveRun(ADMIN, started.runId, undefined, { sessionUserId: null });
+    const state = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
+    return {
+      runId: started.runId,
+      capHit: (state.progress as { capHit?: string }).capHit,
+      paused: ofType(await eventsOf(started.runId), 'run.paused_cap')[0]?.data,
+    };
+  }
+
+  it('stops at the agent run’s own cap, not the month’s, when its cap is what binds', async () => {
+    // A 1% cap covers 7 of the 10 drafts, though the month has more left.
+    fitsOnly(7, 'run');
+    const { sonnet } = useModels([READY], [parts(10), text('Seven drafts; three are left.')]);
+    const some = await agentRun();
+    expect(lastResult(sonnet.seen[1])).toContain('"do_now":7');
+    expect(runRow(some.runId).status).toBe('paused_cap');
+    expect(some.paused).toMatchObject({ limit: 'run' });
+    expect(some.capHit).toBe('run');
+
+    // None fits under the run's cap: it pauses at the run's limit, with no more model steps.
+    fitsOnly(0, 'run');
+    const none = useModels([READY], [parts(10)]);
+    const ended = await agentRun();
+    expect(none.sonnet.seen).toHaveLength(1);
+    expect(ended.paused).toMatchObject({ limit: 'run' });
+    expect(ended.capHit).toBe('run');
+  });
+
+  it('pauses at the agent run’s cap on Get more AI credits when its cap is what binds', async () => {
+    fitsOnly(2, 'run');
+    const { sonnet } = useModels([READY], [parts(5)]);
+    const runId = await turn(ADMIN, 'Write five drafts');
+    await pick(runId, { selected: [1] });
+    expect(runRow(runId).status).toBe('paused_cap');
+    expect(ofType(await eventsOf(runId), 'run.paused_cap')[0].data).toMatchObject({
+      limit: 'run',
+    });
+    expect(sonnet.seen).toHaveLength(1);
+  });
+
+  it('pauses a skill’s run at the agent run’s cap when that is what covers none of it', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    fitsOnly(0, 'run');
+    const { sonnet } = useModels([READY], [text('never')]);
+    const runId = await turn(ADMIN, '/faq Write an FAQ for our pricing page');
+    expect(sonnet.seen).toHaveLength(0);
+    expect(runRow(runId).status).toBe('paused_cap');
+    const state = db.tables.chat_run_state.find((s) => s.run_id === runId)!;
+    expect((state.progress as { capHit?: string }).capHit).toBe('run');
   });
 
   it('checks a skill’s run as it starts: one it can’t answer pauses before anything is read', async () => {

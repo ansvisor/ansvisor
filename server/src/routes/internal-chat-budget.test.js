@@ -54,7 +54,7 @@ beforeEach(async () => {
   chargeChatStep.mockReset().mockResolvedValue(undefined);
   releaseChatStep.mockReset().mockResolvedValue(undefined);
   agentUsageShares.mockReset().mockResolvedValue({ unlimited: false, since: null, shares: [] });
-  fitChatUnits.mockReset().mockResolvedValue({ fits: 3 });
+  fitChatUnits.mockReset().mockResolvedValue({ fits: 3, limit: 'run' });
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -331,7 +331,7 @@ describe('POST /api/internal/chat/budget/fit (CHAT-04 item 17a)', () => {
   it('answers how many of the parts fit, a count and never a dollar', async () => {
     const res = await post('fit', fitBody({ ownKey: true, agentRunId: AGENT_RUN }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ success: true, fits: 3 });
+    expect(await res.json()).toEqual({ success: true, fits: 3, limit: 'run' });
     expect(fitChatUnits).toHaveBeenCalledWith(ORG, {
       modelId: 'anthropic/claude-sonnet-5.5',
       perUnit: { inputTokens: 12000, maxOutputTokens: 16000 },
