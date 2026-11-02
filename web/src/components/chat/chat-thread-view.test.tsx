@@ -149,7 +149,21 @@ async function enter() {
   await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 }
 
+// A localStorage that works on every Node (CI's Node 20 has jsdom's, newer ones may
+// not), emptied before each test: a page choice one test keeps can't hide another's card.
+const store = new Map<string, string>();
+Object.defineProperty(window, 'localStorage', {
+  configurable: true,
+  value: {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => void store.set(key, value),
+    removeItem: (key: string) => void store.delete(key),
+    clear: () => store.clear(),
+  },
+});
+
 beforeEach(() => {
+  store.clear();
   aiUsage.usage = null;
   aiUsage.refresh.mockClear();
   calls = [];
