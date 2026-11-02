@@ -40,18 +40,19 @@ async function distillQuery(modelString, prompt) {
 /**
  * Research via Tavily when `TAVILY_API_KEY` is set. Provider search tools are
  * quota-gated on free keys — Google Search grounding 429s the whole suggestion
- * flow — so a SERP provider carries the search instead: one cheap plain-model
- * call distills the research prompt into a short query, the provider fetches
- * results, and a plain-model call synthesizes them. Any failure returns null
+ * flow — so a SERP provider carries the search instead: the research call
+ * distills the prompt into a short query once for the whole chain, the provider
+ * fetches results, and a plain-model call synthesizes them. Any failure returns null
  * so the caller falls back to the next provider or no-search research.
  * @param {string} modelString - "provider/model"
+ * @param {string} prompt
+ * @param {string} query - the search query, distilled once by webResearch()
  * @returns {Promise<{ text: string, searched: boolean, sources: number } | null>}
  */
-async function tavilyResearch(modelString, prompt) {
+async function tavilyResearch(modelString, prompt, query) {
   const key = process.env.TAVILY_API_KEY;
   if (!key) return null;
   try {
-    const query = await distillQuery(modelString, prompt);
     if (!query) throw new Error('empty search query');
     const res = await fetch('https://api.tavily.com/search', {
       method: 'POST',
@@ -82,11 +83,10 @@ async function tavilyResearch(modelString, prompt) {
  * credit-capped per month, so failures here must stay quiet and fall through
  * rather than surface.
  */
-async function cloroResearch(modelString, prompt) {
+async function cloroResearch(modelString, prompt, query) {
   const key = process.env.CLORO_API_KEY;
   if (!key) return null;
   try {
-    const query = await distillQuery(modelString, prompt);
     if (!query) throw new Error('empty search query');
     const res = await fetch('https://api.cloro.dev/v1/monitor/google', {
       method: 'POST',
@@ -116,11 +116,10 @@ async function cloroResearch(modelString, prompt) {
  * best kept late in the chain. Any failure returns null so the caller falls
  * through.
  */
-async function scrapedoResearch(modelString, prompt) {
+async function scrapedoResearch(modelString, prompt, query) {
   const key = process.env.SCRAPEDO_API_KEY;
   if (!key) return null;
   try {
-    const query = await distillQuery(modelString, prompt);
     if (!query) throw new Error('empty search query');
     const url =
       `https://api.scrape.do/plugin/google/search?token=${encodeURIComponent(key)}` +
@@ -169,14 +168,18 @@ const SERP_PROVIDERS = [
 
 /**
  * The providers that will actually run, in order: `WEB_RESEARCH_PROVIDERS`
- * (comma-separated, default `tavily,cloro,scrapedo`) names them and their
- * order; unknown names are ignored and a provider without its API key is
- * skipped, so an install that holds only a Tavily key behaves exactly as it
- * did before this chain existed.
- * @returns {Array<{ name: string, keyEnv: string, search: (modelString: string, prompt: string) => Promise<{ text: string, searched: boolean, sources: number } | null> }>}
+ * (comma-separated, default `tavily`) names them and their
+ * order, so Cloro and Scrape.do are opt-in
+ * (`WEB_RESEARCH_PROVIDERS=tavily,cloro,scrapedo`): an install that already
+ * holds a Cloro or Scrape.do key for tracking or Site Audit should not start
+ * spending those credits on suggestion research it never signed up for.
+ * Unknown names are ignored and a provider without its API key is skipped, so
+ * an install that holds only a Tavily key behaves exactly as it did before
+ * this chain existed.
+ * @returns {Array<{ name: string, keyEnv: string, search: (modelString: string, prompt: string, query: string) => Promise<{ text: string, searched: boolean, sources: number } | null> }>}
  */
 export function serpProviderOrder() {
-  const requested = (process.env.WEB_RESEARCH_PROVIDERS || 'tavily,cloro,scrapedo')
+  const requested = (process.env.WEB_RESEARCH_PROVIDERS || 'tavily')
     .split(',')
     .map((name) => name.trim().toLowerCase())
     .filter(Boolean);
@@ -187,7 +190,9 @@ export function serpProviderOrder() {
 /**
  * The research phase of the suggestion routes: one generateText call, with web
  * search attached when available — the SERP providers in `WEB_RESEARCH_PROVIDERS`
- * order (Tavily, Cloro, Scrape.do by default), then the provider's own tool.
+ * order (Tavily by default; Cloro and Scrape.do opt-in), then the provider's own
+ * tool. The search query is distilled once for the whole chain, not once per
+ * provider, so a quota wall on that call cannot repeat itself down the line.
  * Returns the text plus how many sources the answer drew on, so callers can
  * log it — a research step that silently stops searching shows up as
  * `sources: 0` instead of as suggestions that are quietly worse.
@@ -200,9 +205,20 @@ export function serpProviderOrder() {
  * @returns {Promise<{ text: string, searched: boolean, sources: number }>}
  */
 export async function webResearch(modelString, prompt) {
-  for (const provider of serpProviderOrder()) {
-    const result = await provider.search(modelString, prompt);
-    if (result) return result;
+  const providers = serpProviderOrder();
+  let query = '';
+  if (providers.length) {
+    try {
+      query = await distillQuery(modelString, prompt);
+    } catch (err) {
+      logger.warn({ err: err?.message }, 'query distillation failed; skipping the SERP chain');
+    }
+  }
+  if (query) {
+    for (const provider of providers) {
+      const result = await provider.search(modelString, prompt, query);
+      if (result) return result;
+    }
   }
 
   const tools = webSearchTools(modelString);

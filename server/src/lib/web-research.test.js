@@ -85,6 +85,7 @@ describe('webResearch', () => {
   it('falls through to Cloro when Tavily comes up empty', async () => {
     vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
     vi.stubEnv('CLORO_API_KEY', 'cloro_test');
+    vi.stubEnv('WEB_RESEARCH_PROVIDERS', 'tavily,cloro');
     state.generateText.mockImplementation(({ prompt }) =>
       Promise.resolve(
         prompt.includes('Use these web research results')
@@ -107,6 +108,7 @@ describe('webResearch', () => {
     vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
     vi.stubEnv('CLORO_API_KEY', 'cloro_test');
     vi.stubEnv('SCRAPEDO_API_KEY', 'sd_test');
+    vi.stubEnv('WEB_RESEARCH_PROVIDERS', 'tavily,cloro,scrapedo');
     state.generateText.mockImplementation(({ prompt }) =>
       Promise.resolve(
         prompt.includes('Use these web research results')
@@ -154,6 +156,44 @@ describe('webResearch', () => {
     vi.stubEnv('WEB_RESEARCH_PROVIDERS', 'tavily,cloro,scrapedo');
 
     expect(serpProviderOrder().map((p) => p.name)).toEqual(['tavily', 'scrapedo']);
+  });
+
+  it('defaults to Tavily alone even when every key is set', () => {
+    vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
+    vi.stubEnv('CLORO_API_KEY', 'cloro_test');
+    vi.stubEnv('SCRAPEDO_API_KEY', 'sd_test');
+
+    expect(serpProviderOrder().map((p) => p.name)).toEqual(['tavily']);
+  });
+
+  it('distills the query once for the whole chain', async () => {
+    vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
+    vi.stubEnv('CLORO_API_KEY', 'cloro_test');
+    vi.stubEnv('WEB_RESEARCH_PROVIDERS', 'tavily,cloro');
+    state.generateText
+      .mockResolvedValueOnce({ text: 'one shared query' })
+      .mockResolvedValueOnce({ text: 'the cloro synthesis' });
+    state.fetch
+      .mockRejectedValueOnce(new Error('tavily down'))
+      .mockResolvedValueOnce({ ok: true, json: async () => CLORO_RESULTS });
+
+    const result = await webResearch('google/gemini-3-flash', 'research this');
+
+    expect(result).toEqual({ text: 'the cloro synthesis', searched: true, sources: 2 });
+    expect(state.generateText).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(state.fetch.mock.calls[1][1].body).query).toBe('one shared query');
+  });
+
+  it('skips the chain and falls back when query distillation fails', async () => {
+    vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
+    state.generateText
+      .mockRejectedValueOnce(new Error('429 quota exceeded'))
+      .mockResolvedValueOnce({ text: 'grounded answer', sources: [{}, {}] });
+
+    const result = await webResearch('google/gemini-3-flash', 'research this');
+
+    expect(result).toEqual({ text: 'grounded answer', searched: true, sources: 2 });
+    expect(state.fetch).not.toHaveBeenCalled();
   });
 
   it('gives the Tavily search a timeout', async () => {
