@@ -1,7 +1,7 @@
 ---
 title: Check a page's Quality in the Content Editor
 route: /dashboard/content/editor
-keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author, qualified reviewer, reviewer, reviewed by]
+keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author, qualified reviewer, reviewer, reviewed by, trusted sources]
 synonyms: [content quality, quality check, page score, eeat score, ready to publish checklist, content reviewer, regulated page review]
 plan: all
 updated: 2026-11-01
@@ -17,6 +17,8 @@ Quality scores a Content Editor page and lists what would raise it. It's turned 
 
 Quality scores the page from 0 to 100 on **E-E-A-T**, **Trust** and **Readability**: 80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.
 
+Under them, **Site Audit estimate** is about where the page would score in Site Audit, as the header's **Audit** chip shows it. See the Content Editor article.
+
 At the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing.
 
 ## Your to-dos and what would raise it
@@ -29,6 +31,10 @@ At the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your 
 **Hand off** asks the Content Agent to fix the open suggestions in one run, as changes for you to review. Your to-dos stay yours. Each Hand off is kept in the page's History, and it uses your workspace's monthly AI usage.
 
 In **Settings › Content**, admins and managers can have each brand's new pages handed off on their own when they're first opened in the editor.
+
+## Trusted sources
+
+**Trust** counts links to official and research sites as primary sources. In **Settings › Content**, admins and managers can add the sites a brand trusts besides, such as its industry's association or the docs it cites, one per line, up to 50. Links to them, and to their pages, count as primary sources here and as authority links in Site Audit.
 
 ## Next step
 
@@ -48,10 +54,14 @@ The header shows the page's author, picked from **Settings › Authors**, or you
 - the author;
 - the qualified reviewer on pages that advise on health, money or the law;
 - visible dates;
-- the structured data to paste, if your CMS doesn't add it;
+- the Article schema Ansvisor adds;
 - a warning when Trust is under 60.
 
 Copy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about.
+
+## The Article schema
+
+An article goes to your CMS and to exports with an Article schema that names its author, or your brand when it has none. The page's text doesn't change. If your CMS adds its own, click **Leave it out**; **Add it back** undoes it. A page with an Article schema of its own gets none. WordPress leaves the schema out: add it with your SEO plugin.
 
 ## Export with Quality on
 

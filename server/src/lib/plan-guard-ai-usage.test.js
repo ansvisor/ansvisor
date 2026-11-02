@@ -208,6 +208,16 @@ describe('getAiUsage', () => {
     await expect(guard.getAiUsage('o1')).rejects.toMatchObject({ statusCode: 402 });
   });
 
+  it('says what work a page asks about takes, as shares of the budget, never past it', async () => {
+    // Starter's $5, more than half of it spent: an estimate stays a share of the budget.
+    spend = [{ feature: 'content', cost_usd: '3' }];
+    const usage = await guard.getAiUsage('o1', { estimates: { writeThis: 0.17, tiny: 0.001 } });
+    expect(usage.estimates).toEqual({ writeThis: 3.4, tiny: 0 });
+    expect(usage.percentUsed).toBe(60);
+    // None asked: none answered.
+    expect(await guard.getAiUsage('o1')).not.toHaveProperty('estimates');
+  });
+
   it('shows no meter for an unlimited budget', async () => {
     delete process.env.IS_CLOUD;
     vi.resetModules();
