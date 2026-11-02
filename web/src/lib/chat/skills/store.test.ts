@@ -200,11 +200,13 @@ describe('saveSkill (CHAT-13 item 12)', () => {
     expect(skills()).toHaveLength(1);
   });
 
-  it("stops at the plan's limit with a clear refusal, counting every skill of the workspace", async () => {
+  it("stops at the plan's limit with a clear refusal, counting the workspace's skills but rejected ones", async () => {
     db.tables.organizations[0].subscription_status = 'trialing';
     seedSkill({ created_by: PEOPLE.admin });
     seedSkill({ status: 'pending_review', enabled: false, source: 'import' });
     seedSkill({ organization_id: OTHER_ORG });
+    // An import an Admin turned down takes no place.
+    seedSkill({ status: 'rejected', enabled: false, source: 'import' });
     const as = await viewer(PEOPLE.manager);
     expect(await store.saveSkill(as, valid)).toMatchObject({ ok: true });
     const over = await store.saveSkill(as, { ...valid, name: 'one-more' });

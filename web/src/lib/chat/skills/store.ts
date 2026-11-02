@@ -73,7 +73,7 @@ export interface EnabledSkill {
 /** The longest title (00458). */
 export const MAX_TITLE = 120;
 
-/** The plan's My skills limit (Wave 3 decision 9): the workspace's own skills, whatever their state. */
+/** The plan's My skills limit (Wave 3 decision 9): the workspace's own skills, but for rejected ones. */
 const SKILL_LIMITS = { trial: 3, starter: 10, growth: 50, enterprise: 200 } as const;
 
 /**
@@ -566,12 +566,16 @@ function viewOf(viewer: SkillViewer, row: ListRow): WorkspaceSkillView {
   };
 }
 
-/** The workspace's own skills, all of them: what the plan's limit counts. */
+/**
+ * The workspace's own skills but for rejected ones (an import an Admin
+ * turned down): what the plan's limit counts.
+ */
 async function countSkills(organizationId: string): Promise<number> {
   const { count, error } = await supabaseAdmin
     .from('chat_skills')
     .select('id', { count: 'exact', head: true })
-    .eq('organization_id', organizationId);
+    .eq('organization_id', organizationId)
+    .neq('status', 'rejected');
   if (error) throw new Error(`Could not count the workspace's skills: ${error.message}`);
   return count ?? 0;
 }
