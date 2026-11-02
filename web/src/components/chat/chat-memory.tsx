@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { ArrowUpRight, Pencil, Trash2 } from 'lucide-react';
@@ -54,20 +54,22 @@ export function ChatMemory() {
   const [tab, setTab] = useState<MemoryScope>('user');
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const asked = useRef(0);
-
-  const read = useCallback(async () => {
-    const ask = ++asked.current;
-    const query = brandId ? `?brand_id=${encodeURIComponent(brandId)}` : '';
-    const res = await fetch(`/api/chat/memory${query}`).catch(() => null);
-    const body = res?.ok ? ((await res.json().catch(() => null)) as MemoryList | null) : null;
-    if (ask !== asked.current) return;
-    setLoad(body ? { status: 'ready', list: body } : { status: 'error' });
-  }, [brandId]);
+  // Read again after a change: the list for the brand in the switcher, the last read wins.
+  const [version, setVersion] = useState(0);
+  const read = useCallback(() => setVersion((n) => n + 1), []);
 
   useEffect(() => {
-    void read();
-  }, [read]);
+    let live = true;
+    const query = brandId ? `?brand_id=${encodeURIComponent(brandId)}` : '';
+    void (async () => {
+      const res = await fetch(`/api/chat/memory${query}`).catch(() => null);
+      const body = res?.ok ? ((await res.json().catch(() => null)) as MemoryList | null) : null;
+      if (live) setLoad(body ? { status: 'ready', list: body } : { status: 'error' });
+    })();
+    return () => {
+      live = false;
+    };
+  }, [brandId, version]);
 
   const list = load.status === 'ready' ? load.list : null;
 
@@ -86,7 +88,7 @@ export function ChatMemory() {
       }).catch(() => null);
       if (!res?.ok) {
         toast.error(await refusalOf(res, t('failed')));
-        void read();
+        read();
       }
     },
     { action: tActions('changeChatSettings') },
@@ -108,7 +110,7 @@ export function ChatMemory() {
       }
       setEditing(null);
       toast.success(t('saved'));
-      void read();
+      read();
     },
     { action: tActions('changeChatSettings') },
   );
@@ -123,7 +125,7 @@ export function ChatMemory() {
         return;
       }
       toast(t('restored'));
-      void read();
+      read();
     },
     [read, t],
   );
