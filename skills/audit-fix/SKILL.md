@@ -4,7 +4,7 @@ description: "Turns site audit findings into fixes you approve."
 license: MIT
 metadata:
   title: "Site audit fixes"
-  filters: "content"
+  filters: "content technical"
 ---
 
 # Site audit fixes

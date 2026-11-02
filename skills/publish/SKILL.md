@@ -4,7 +4,7 @@ description: "Checks, page fields and a CMS draft. Going live is always your cli
 license: MIT
 metadata:
   title: "Ready to publish"
-  filters: "content"
+  filters: "content technical"
 ---
 
 # Ready to publish

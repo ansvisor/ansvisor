@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { createTranslator } from 'next-intl';
 import { z } from 'zod';
 import messages from '../../../../messages/en.json';
@@ -14,7 +13,10 @@ import { parseTeamRole } from '../precedence';
 import { SHORTCUT_IDS } from '../shortcuts';
 import { RESERVED_SKILL_NAMES } from './reserved-names';
 import { MAX_BYTES, MAX_DESCRIPTION, MAX_NAME, checkSkillFile } from './format';
-import { SKILL_LIBRARY, enabledSkills } from './library';
+import type { GithubRefusalCode } from './github';
+import type { ImportRefusalCode, ParsedImport } from './import';
+import { SKILL_LIBRARY, enabledSkills, type SkillFilter } from './library';
+import { MAX_TITLE, skillChecksum, skillFileText, type SkillParts } from './skill-file';
 
 /**
  * A workspace's own skills (CHAT-13 items 10, 12, 18–19; Chat Wave 3
@@ -72,7 +74,7 @@ export interface EnabledSkill {
 }
 
 /** The longest title (00458). */
-export const MAX_TITLE = 120;
+export { MAX_TITLE } from './skill-file';
 
 /** The plan's My skills limit (Wave 3 decision 9): the workspace's own skills, but for rejected ones. */
 const SKILL_LIMITS = { trial: 3, starter: 10, growth: 50, enterprise: 200 } as const;
@@ -157,32 +159,8 @@ export function shareWay(
 
 // ─── The file and its checksum ──────────────────────────────────────────────
 
-/** A skill's parts, as a row keeps them. */
-export interface SkillParts {
-  name: string;
-  title: string;
-  description: string;
-  body: string;
-  license?: string | null;
-  compatibility?: string | null;
-}
-
-/**
- * A skill's SKILL.md as it is stored (CHAT-13 items 1, 19): the front
- * matter from its columns, values quoted, then its body. What it is
- * checked as when it is saved, and what its checksum is of.
- */
-export function skillFileText(skill: SkillParts): string {
-  const lines = ['---', `name: ${skill.name}`, `description: ${JSON.stringify(skill.description)}`];
-  if (skill.license) lines.push(`license: ${JSON.stringify(skill.license)}`);
-  if (skill.compatibility) lines.push(`compatibility: ${JSON.stringify(skill.compatibility)}`);
-  lines.push('metadata:', `  title: ${JSON.stringify(skill.title)}`, '---', skill.body);
-  return lines.join('\n');
-}
-
-/** The SHA-256 of a skill's file as stored (chat_skills.checksum_sha256). */
-export const skillChecksum = (skill: SkillParts) =>
-  createHash('sha256').update(skillFileText(skill)).digest('hex');
+// In skill-file.ts, which imports (import.ts) read too without the database.
+export { skillChecksum, skillFileText, type SkillParts } from './skill-file';
 
 /** Whether a row still holds the file it was approved as (item 19). */
 const matchesChecksum = (row: SkillParts & { checksum_sha256: string }) =>
@@ -203,7 +181,14 @@ export type SkillRefusalCode =
   | 'not_approved'
   | 'checksum'
   | 'request_limit'
-  | 'failed';
+  | 'failed'
+  // Imports and their review (W3-09).
+  | ImportRefusalCode
+  | GithubRefusalCode
+  | 'import_plan'
+  | 'role_review'
+  | 'not_pending'
+  | 'blocked';
 
 const REFUSAL_STATUS: Record<SkillRefusalCode, number> = {
   invalid: 400,
@@ -219,6 +204,25 @@ const REFUSAL_STATUS: Record<SkillRefusalCode, number> = {
   checksum: 409,
   request_limit: 429,
   failed: 500,
+  too_large: 413,
+  not_zip: 400,
+  too_many_files: 400,
+  unsafe_path: 400,
+  symlink: 400,
+  nested_archive: 400,
+  binary_file: 400,
+  no_skill_file: 400,
+  several_skills: 400,
+  license: 400,
+  github_url: 400,
+  github_not_found: 400,
+  github_busy: 429,
+  github_failed: 502,
+  github_redirect: 400,
+  import_plan: 403,
+  role_review: 403,
+  not_pending: 409,
+  blocked: 409,
 };
 
 export interface SkillRefusal {
@@ -503,6 +507,8 @@ export interface LibrarySkillView {
   name: string;
   title: string;
   description: string;
+  /** The Skills page's filter chips it shows under (W3-07). */
+  filters: SkillFilter[];
   /** Off when the workspace turned it off. */
   enabled: boolean;
 }
@@ -600,6 +606,7 @@ export async function listSkills(viewer: SkillViewer): Promise<SkillList> {
       name: skill.name,
       title: skill.title,
       description: skill.description,
+      filters: [...skill.filters],
       enabled: !disabled.has(skill.name),
     })),
     skills: ((rows.data ?? []) as ListRow[])
@@ -849,4 +856,242 @@ export async function shareSkill(
     return skillRefusal('request_limit');
   }
   return skillRefusal('failed');
+}
+
+// ─── Imports and their review (W3-09) ───────────────────────────────────────
+
+export interface ImportedSkill {
+  id: string;
+  name: string;
+  title: string;
+  /** pending_review, or blocked: an Admin sees it, and can't approve it. */
+  status: 'pending_review' | 'blocked';
+  /** What was removed, and what the scan found. */
+  removed: string[];
+  warnings: string[];
+  blocks: string[];
+  /** A Manager's import: their Admins were asked to review it. */
+  requested: boolean;
+}
+
+/**
+ * Keeps an imported skill for review (CHAT-13 items 13–18): an Admin's or
+ * a Manager's, while the workspace isn't read-only, on a paid plan or
+ * self-hosted (not in the trial, Wave 3 decision 9), under the plan's
+ * limit, never with an Ansvisor skill's name. It waits off and private,
+ * `pending_review` (or `blocked`); a Manager's asks the Admins to review it
+ * (chat_access_requests, through their own session).
+ */
+export async function importSkill(
+  viewer: SkillViewer,
+  parsed: ParsedImport,
+  source: { url: string | null; commitSha: string | null },
+): Promise<SkillResult<ImportedSkill>> {
+  if (!canSaveSkills(viewer.role)) return skillRefusal('role');
+  if (!viewer.plan.writable) return skillRefusal('read_only');
+  if (viewer.plan.isTrial) return skillRefusal('import_plan');
+  const { parts } = parsed;
+  if (LIBRARY_NAMES.has(parts.name)) return skillRefusal('library_name', { name: parts.name });
+  const limit = skillPlanLimit(viewer.plan);
+  if (limit !== null && (await countSkills(viewer.organizationId)) >= limit) {
+    return skillRefusal('skill_limit', { limit });
+  }
+  const { data, error } = await supabaseAdmin
+    .from('chat_skills')
+    .insert({
+      organization_id: viewer.organizationId,
+      name: parts.name,
+      title: parts.title,
+      description: parts.description,
+      body: parts.body,
+      compatibility: parts.compatibility ?? null,
+      license: parts.license,
+      license_text: parsed.licenseText,
+      source: 'import',
+      source_url: source.url,
+      commit_sha: source.url ? source.commitSha : null,
+      checksum_sha256: parsed.checksum,
+      scan_json: parsed.scan,
+      removed_json: parsed.removed,
+      status: parsed.status,
+      visibility: 'private',
+      enabled: false,
+      created_by: viewer.userId,
+    })
+    .select('id, name, title')
+    .single();
+  if (error?.code === '23505') return skillRefusal('name_taken', { name: parts.name });
+  if (error || !data) throw new Error(`Could not keep the skill: ${error?.message ?? 'no row'}`);
+  const kept = data as { id: string; name: string; title: string };
+
+  let requested = false;
+  if (viewer.role !== 'admin' && parsed.status === 'pending_review') {
+    const sent = await requestAccess({
+      asked: skillsT('review.asked', { name: kept.name }),
+      ruleKind: 'role',
+      ruleDetail: skillsT('review.rule'),
+      draftedChange: { kind: 'review_skill', skill_id: kept.id, name: kept.name },
+    });
+    if (sent.ok || sent.reason === 'already_today') requested = true;
+    else console.error('[chat/skills] could not ask for a review:', sent.reason);
+  }
+  return {
+    ok: true,
+    value: {
+      id: kept.id,
+      name: kept.name,
+      title: kept.title,
+      status: parsed.status,
+      removed: parsed.removed,
+      warnings: parsed.scan.warns,
+      blocks: parsed.scan.blocks,
+      requested,
+    },
+  };
+}
+
+const REVIEW_COLUMNS =
+  'id, name, title, description, body, license, license_text, compatibility, checksum_sha256, source, source_url, commit_sha, scan_json, removed_json, status, visibility, enabled, created_by, created_at, approved_by, approved_at';
+
+type ReviewRow = BodyRow & {
+  license_text: string | null;
+  source: string;
+  source_url: string | null;
+  commit_sha: string | null;
+  scan_json: unknown;
+  removed_json: unknown;
+  created_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+};
+
+/** What the review shows (item 17): the cleaned file and everything about where it came from. */
+export interface SkillReview {
+  id: string;
+  name: string;
+  title: string;
+  description: string;
+  /** The cleaned body, plain text: nothing in it runs. */
+  body: string;
+  compatibility: string | null;
+  license: string | null;
+  licenseText: string | null;
+  source: 'user' | 'import';
+  sourceUrl: string | null;
+  commitSha: string | null;
+  status: SkillStatus;
+  scan: { blocks: string[]; warns: string[] };
+  removed: string[];
+  mine: boolean;
+  createdAt: string;
+  approvedAt: string | null;
+  /** An Admin decides a skill waiting for review; a blocked one can only be rejected. */
+  can: { approve: boolean; reject: boolean };
+}
+
+const stringsOf = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+
+/** The review of a skill: an Admin's, or its creator's. */
+export async function readSkillReview(
+  viewer: SkillViewer,
+  id: string,
+): Promise<SkillResult<SkillReview>> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_skills')
+    .select(REVIEW_COLUMNS)
+    .eq('id', id)
+    .eq('organization_id', viewer.organizationId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the skill: ${error.message}`);
+  const row = data as ReviewRow | null;
+  if (!row || (viewer.role !== 'admin' && row.created_by !== viewer.userId)) {
+    return skillRefusal('not_found');
+  }
+  const scan = (row.scan_json ?? {}) as { blocks?: unknown; warns?: unknown };
+  const deciding = viewer.role === 'admin' && viewer.plan.writable;
+  return {
+    ok: true,
+    value: {
+      id: row.id,
+      name: row.name,
+      title: row.title,
+      description: row.description,
+      body: row.body,
+      compatibility: row.compatibility ?? null,
+      license: row.license ?? null,
+      licenseText: row.license_text,
+      source: row.source === 'import' ? 'import' : 'user',
+      sourceUrl: row.source_url,
+      commitSha: row.commit_sha,
+      status: row.status as SkillStatus,
+      scan: { blocks: stringsOf(scan.blocks), warns: stringsOf(scan.warns) },
+      removed: stringsOf(row.removed_json),
+      mine: row.created_by === viewer.userId,
+      createdAt: row.created_at,
+      approvedAt: row.approved_at,
+      can: {
+        approve: deciding && row.status === 'pending_review',
+        reject: deciding && (row.status === 'pending_review' || row.status === 'blocked'),
+      },
+    },
+  };
+}
+
+export type ReviewDecision = 'approve' | 'reject';
+
+/**
+ * An Admin's review (item 18): approved, a skill waiting for review is on
+ * for its creator (private until it is shared) while it still matches the
+ * checksum it was kept with; rejected, it stays off. A blocked skill is
+ * only rejected. The requests to review it are answered.
+ */
+export async function reviewSkill(
+  viewer: SkillViewer,
+  id: string,
+  decision: ReviewDecision,
+  now = new Date(),
+): Promise<SkillResult<{ id: string; status: 'approved' | 'rejected' }>> {
+  if (viewer.role !== 'admin') return skillRefusal('role_review');
+  if (!viewer.plan.writable) return skillRefusal('read_only');
+  const row = await readSkill(viewer, id);
+  if (!row) return skillRefusal('not_found');
+  if (decision === 'approve') {
+    if (row.status === 'blocked') return skillRefusal('blocked');
+    if (row.status !== 'pending_review') return skillRefusal('not_pending');
+    if (!matchesChecksum(row)) return skillRefusal('checksum');
+  } else if (row.status !== 'pending_review' && row.status !== 'blocked') {
+    return skillRefusal('not_pending');
+  }
+  const status = decision === 'approve' ? 'approved' : 'rejected';
+  const at = now.toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('chat_skills')
+    .update(
+      decision === 'approve'
+        ? { status, enabled: true, approved_by: viewer.userId, approved_at: at }
+        : { status, enabled: false },
+    )
+    .eq('id', row.id)
+    .eq('organization_id', viewer.organizationId)
+    .eq('status', row.status)
+    .select('id');
+  if (error) throw new Error(`Could not review the skill: ${error.message}`);
+  // Reviewed meanwhile by another Admin.
+  if (!data?.length) return skillRefusal('not_pending');
+  const { error: requestsError } = await supabaseAdmin
+    .from('chat_access_requests')
+    .update({
+      status: decision === 'approve' ? 'approved' : 'rejected',
+      decided_by: viewer.userId,
+      decided_at: at,
+    })
+    .eq('organization_id', viewer.organizationId)
+    .eq('status', 'pending')
+    .eq('drafted_change->>skill_id', row.id)
+    .eq('drafted_change->>kind', 'review_skill');
+  if (requestsError) {
+    console.error('[chat/skills] could not answer the review requests:', requestsError.message);
+  }
+  return { ok: true, value: { id: row.id, status } };
 }
