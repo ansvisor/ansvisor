@@ -156,6 +156,7 @@ function legacy(r: QualityReads) {
         pageType,
         kept: new Set(r.keptSources),
         ai: r.aiKinds,
+        trustedDomains: r.trustedDomains ?? [],
       }
     : null;
   const shipping = shippingRead;

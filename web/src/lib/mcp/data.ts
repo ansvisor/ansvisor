@@ -1,6 +1,7 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { allowedBrands, brandAccessFor, hasBrandAccess } from '@/lib/brand-access';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import type { Citation } from '@/types';
 import {
@@ -44,6 +45,11 @@ import {
 } from '@/lib/action-center/task-details';
 import { controlNetOf } from '@/lib/action-center/history';
 import {
+  confidenceNote,
+  parsePriorityReason,
+  type ConfidenceLevel,
+} from '@/lib/action-center/priority';
+import {
   dismissReasonOf,
   missingDismissReason,
   type ActionDismissReason,
@@ -78,22 +84,26 @@ export interface BrandRow {
 }
 
 /**
- * The organization's brands, newest first. The demo brand is one of them,
+ * The organization's brands the person may use (BRAND-ACCESS: all, or the
+ * ones shared with them), newest first. The demo brand is one of them,
  * marked is_demo, unless the organization hid it (once a plan was bought, or
  * from the brand menu).
  */
 export async function listBrandsFor(auth: McpAuthContext): Promise<BrandRow[]> {
   if (!auth.organizationId) return [];
 
-  const { data, error } = await supabaseAdmin
-    .from('brands')
-    .select('id, name, slug, industry, region, created_at, is_demo')
-    .eq('organization_id', auth.organizationId)
-    .or('is_demo.eq.false,demo_hidden_at.is.null')
-    .order('created_at', { ascending: false });
+  const [{ data, error }, access] = await Promise.all([
+    supabaseAdmin
+      .from('brands')
+      .select('id, name, slug, industry, region, created_at, is_demo')
+      .eq('organization_id', auth.organizationId)
+      .or('is_demo.eq.false,demo_hidden_at.is.null')
+      .order('created_at', { ascending: false }),
+    brandAccessFor(auth),
+  ]);
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as BrandRow[];
+  return allowedBrands(access, (data ?? []) as BrandRow[]);
 }
 
 export interface VisibilitySummaryParams {
@@ -162,7 +172,7 @@ export async function getVisibilitySummaryFor(
     .eq('id', params.brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   // Build a shared model list once — used by both the raw query and the RPCs.
   const p_models = params.model
@@ -378,7 +388,7 @@ export async function listTopicsFor(
     .eq('id', brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const { data: topics, error: tErr } = await supabaseAdmin
     .from('topics')
@@ -450,7 +460,7 @@ export async function listTopicSuggestionsFor(
     .eq('id', brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const { data, error } = await supabaseAdmin
     .from('topic_suggestions')
@@ -483,12 +493,12 @@ export async function dismissTopicSuggestionFor(
 
   const { data: ownership } = await supabaseAdmin
     .from('topic_suggestions')
-    .select('id, status, brands!inner(organization_id)')
+    .select('id, brand_id, status, brands!inner(organization_id)')
     .eq('id', suggestionId)
     .eq('brands.organization_id', auth.organizationId)
     .eq('status', 'new')
     .maybeSingle();
-  if (!ownership) return null;
+  if (!ownership || !(await mayUseBrand(auth, ownership.brand_id))) return null;
 
   const { data, error } = await supabaseAdmin
     .from('topic_suggestions')
@@ -530,7 +540,7 @@ export async function acceptTopicSuggestionFor(
     .eq('brands.organization_id', auth.organizationId)
     .eq('status', 'new')
     .maybeSingle();
-  if (!suggestion) return null;
+  if (!suggestion || !(await mayUseBrand(auth, suggestion.brand_id))) return null;
 
   const { data: topic, error: topicErr } = await supabaseAdmin
     .from('topics')
@@ -589,7 +599,7 @@ export async function listPromptSuggestionsFor(
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
   if (brandError) throw new Error(brandError.message);
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const { data, error } = await supabaseAdmin
     .from('prompt_suggestions')
@@ -624,13 +634,13 @@ export async function dismissPromptSuggestionFor(
 
   const { data: owned, error: lookupError } = await supabaseAdmin
     .from('prompt_suggestions')
-    .select('id, brands!inner(organization_id)')
+    .select('id, brand_id, brands!inner(organization_id)')
     .eq('id', suggestionId)
     .eq('brands.organization_id', auth.organizationId)
     .eq('status', 'new')
     .maybeSingle();
   if (lookupError) throw new Error(lookupError.message);
-  if (!owned) return null;
+  if (!owned || !(await mayUseBrand(auth, owned.brand_id))) return null;
 
   const { data, error } = await supabaseAdmin
     .from('prompt_suggestions')
@@ -696,7 +706,7 @@ export async function acceptPromptSuggestionFor(
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
   if (brandError) throw new Error(brandError.message);
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   if (!(await brandHasTopics(supabaseAdmin, brand.id))) {
     return { error: MCP_NO_TOPICS_MESSAGE, code: NO_TOPICS };
@@ -863,7 +873,7 @@ export async function listPromptsFor(
     .eq('id', params.brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const limit = Math.min(
     Math.max(params.limit ?? PROMPT_LIST_DEFAULT_LIMIT, 1),
@@ -958,7 +968,7 @@ export async function listContentOpportunitiesFor(
     .eq('id', params.brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
 
@@ -1066,11 +1076,11 @@ export async function generateBriefFor(
   // outbound call, so no LLM cost or data leak for an attacker probing ids.
   const { data: ownership } = await supabaseAdmin
     .from('content_opportunities')
-    .select('id, brands!inner(organization_id)')
+    .select('id, brand_id, brands!inner(organization_id)')
     .eq('id', opportunityId)
     .eq('brands.organization_id', auth.organizationId)
     .maybeSingle();
-  if (!ownership) return null;
+  if (!ownership || !(await mayUseBrand(auth, ownership.brand_id))) return null;
   // No brief (an LLM call) on the demo brand, nor for a read-only workspace, whoever asks.
   // Only Ansvisor Cloud has demo brands: self-hosted reads nothing for it.
   if (
@@ -1159,7 +1169,7 @@ export async function listSiteAuditsFor(
     .eq('id', brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const { data, error } = await supabaseAdmin
     .from('site_audits')
@@ -1227,7 +1237,7 @@ export async function getPromptUsageFor(
   auth: McpAuthContext,
   brandId: string,
 ): Promise<PromptUsageSummary | null> {
-  if (!auth.organizationId || !(await brandInOrg(auth, brandId))) return null;
+  if (!auth.organizationId || !(await brandAllowed(auth, brandId))) return null;
 
   const [{ data: org, error: orgError }, row] = await Promise.all([
     supabaseAdmin
@@ -1271,7 +1281,7 @@ export async function runSiteAuditFor(
     .eq('id', brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
   // No audit (quota and crawling) on the demo brand, nor for a read-only workspace, whoever asks.
   await assertNotDemoBrand(auth.organizationId, brandId);
   await assertSubscriptionActive(auth.organizationId);
@@ -1374,7 +1384,7 @@ export async function getSiteAuditFor(
     .eq('id', auditId)
     .eq('brands.organization_id', auth.organizationId)
     .maybeSingle();
-  if (!audit) return null;
+  if (!audit || !(await mayUseBrand(auth, audit.brand_id))) return null;
 
   const { data: signalRows } = await supabaseAdmin
     .from('audit_signal_results')
@@ -1438,14 +1448,14 @@ export async function getContentOpportunityFor(
   const { data, error } = await supabaseAdmin
     .from('content_opportunities')
     .select(
-      'id, title, description, type, impact, opportunity_score, status, prompt_id, created_at, updated_at, source_data, brief, prompts(text), brands!inner(organization_id)',
+      'id, brand_id, title, description, type, impact, opportunity_score, status, prompt_id, created_at, updated_at, source_data, brief, prompts(text), brands!inner(organization_id)',
     )
     .eq('id', opportunityId)
     .eq('brands.organization_id', auth.organizationId)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  if (!data) return null;
+  if (!data || !(await mayUseBrand(auth, data.brand_id))) return null;
 
   const r = data as unknown as {
     id: string;
@@ -1523,11 +1533,11 @@ export async function updateOpportunityStatusFor(
   // A wrong-org id misses here and we return null *before* any update.
   const { data: ownership } = await supabaseAdmin
     .from('content_opportunities')
-    .select('id, status, brands!inner(organization_id)')
+    .select('id, brand_id, status, brands!inner(organization_id)')
     .eq('id', opportunityId)
     .eq('brands.organization_id', auth.organizationId)
     .maybeSingle();
-  if (!ownership) return null;
+  if (!ownership || !(await mayUseBrand(auth, ownership.brand_id))) return null;
   if (status === 'dismissed' || ownership.status === 'dismissed') requireManager(auth);
 
   const updatedAt = new Date().toISOString();
@@ -1672,7 +1682,7 @@ export async function getCompetitorComparisonFor(
     .eq('id', params.brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const p_models = params.model
     ? params.model
@@ -1915,7 +1925,7 @@ export async function listCitationsFor(
     .eq('id', params.brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   // Brand + competitor domains feed `classifyDomain` so a URL hosted on the
   // user's own domain comes back as `'you'`, competitor URLs as `'competitor'`.
@@ -2214,7 +2224,7 @@ export async function getVisibilityTrendFor(
     .eq('id', params.brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const p_models = params.model
     ? params.model
@@ -2332,7 +2342,7 @@ export async function getAiTrafficFor(
     .eq('id', params.brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   // Visits, not pageviews: a row whose visit_of is null starts one (00172),
   // as the AI Traffic page counts them. The total by count, which no row cap
@@ -2473,7 +2483,7 @@ export async function getPromptVolumesFor(
     .eq('id', params.brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const limit = Math.min(
     Math.max(params.limit ?? PROMPT_VOLUMES_DEFAULT_LIMIT, 1),
@@ -2630,7 +2640,7 @@ export async function listShoppingCards(
     .eq('id', params.brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
   if (!(await planIncludes(auth.organizationId, 'shopping_analytics'))) return NOT_IN_PLAN;
 
   const finalLimit = Math.min(Math.max(params.limit ?? 50, 1), 200);
@@ -2715,7 +2725,7 @@ export async function getProductVisibility(
     .eq('id', params.brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
   if (!(await planIncludes(auth.organizationId, 'shopping_analytics'))) return NOT_IN_PLAN;
 
   const { data: cards, error } = await supabaseAdmin
@@ -2855,7 +2865,7 @@ export async function getPromptPerformanceFor(
     .eq('id', params.brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const p_models = params.model
     ? params.model
@@ -2964,15 +2974,38 @@ const UNCOUNTED_TASK_STATUSES = ['skipped', 'failed'];
 const MCP_SIGNAL_COLUMNS =
   'id, category, kind, impact, status, source, detected_at, last_detected_at, resolved_at, previous_value, current_value, change_value, payload, kpi_keys, action_id';
 
-export async function brandInOrg(auth: McpAuthContext, brandId: string): Promise<boolean> {
+/**
+ * Whether the person a key or a call acts for may use a brand now
+ * (BRAND-ACCESS §5.3): one of their organization's that their access
+ * reaches (All brands, the brands shared with them, the demo brand). An API
+ * key carries its owner's access, since keys belong to people. A brand they
+ * may not use answers as another organization's does: not found.
+ */
+export async function brandAllowed(auth: McpAuthContext, brandId: string): Promise<boolean> {
   if (!auth.organizationId) return false;
-  const { data } = await supabaseAdmin
-    .from('brands')
-    .select('id')
-    .eq('id', brandId)
-    .eq('organization_id', auth.organizationId)
-    .maybeSingle();
-  return Boolean(data);
+  const [{ data }, access] = await Promise.all([
+    supabaseAdmin
+      .from('brands')
+      .select('id')
+      .eq('id', brandId)
+      .eq('organization_id', auth.organizationId)
+      .maybeSingle(),
+    brandAccessFor(auth),
+  ]);
+  return Boolean(data) && hasBrandAccess(access, brandId);
+}
+
+/**
+ * Whether the person's access reaches a brand already found in their
+ * organization: a brand read by id and organization, or the brand of a row
+ * read through `brands!inner(organization_id)`. All brands reach every one.
+ */
+export async function mayUseBrand(
+  auth: McpAuthContext,
+  brandId: string | null | undefined,
+): Promise<boolean> {
+  const access = await brandAccessFor(auth);
+  return access === 'all' || (Boolean(brandId) && hasBrandAccess(access, brandId as string));
 }
 
 async function assigneeNames(ids: (string | null)[]): Promise<Map<string, string | null>> {
@@ -2998,6 +3031,9 @@ export interface ActionListRow {
   due_date: string | null;
   task_progress: { completed: number; total: number };
   priority: ActionPriorityForMcp | null;
+  /** New for 30 days or more with no one's event (00432); never set on another status. */
+  stale: boolean;
+  stale_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -3012,6 +3048,15 @@ export interface ActionPriorityForMcp {
   score: number;
   level: string | null;
   reason: Record<string, unknown> | null;
+  /**
+   * How sure the score is of what it rests on, as a level (`reason.factors.
+   * confidence` is the raw factor), and why: "one kind of finding from one
+   * source". Null from a scorer before it was kept.
+   */
+  confidence: ConfidenceLevel | null;
+  confidence_note: string | null;
+  /** The raw 0–1 factor, as `reason.factors.confidence`. */
+  confidence_score: number | null;
 }
 
 function priorityFor(row: {
@@ -3020,6 +3065,7 @@ function priorityFor(row: {
   priority_reason?: unknown;
 }): ActionPriorityForMcp | null {
   if (row.priority_score === null || row.priority_score === undefined) return null;
+  const confidence = parsePriorityReason(row.priority_reason)?.confidence ?? null;
   return {
     score: Number(row.priority_score),
     level: row.priority_level ?? null,
@@ -3027,7 +3073,16 @@ function priorityFor(row: {
       row.priority_reason && typeof row.priority_reason === 'object'
         ? (row.priority_reason as Record<string, unknown>)
         : null,
+    confidence: confidence?.level ?? null,
+    confidence_note: confidence ? confidenceNote(confidence) : null,
+    confidence_score: confidence?.score ?? null,
   };
+}
+
+/** Stale (00432) only while New: the stamp waits for the nightly pass to clear it. */
+function staleFor(row: { status?: string | null; stale_at?: string | null }) {
+  const stale = row.status === 'new' && Boolean(row.stale_at);
+  return { stale, stale_at: stale ? (row.stale_at ?? null) : null };
 }
 
 export interface ListActionsParams {
@@ -3046,13 +3101,13 @@ export async function listActionsFor(
   auth: McpAuthContext,
   params: ListActionsParams,
 ): Promise<ActionListRow[] | null> {
-  if (!(await brandInOrg(auth, params.brandId))) return null;
+  if (!(await brandAllowed(auth, params.brandId))) return null;
 
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
   let query = supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, target_entity:payload->>targetEntity, target_count:payload->targetCount',
+      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, stale_at, target_entity:payload->>targetEntity, target_count:payload->targetCount',
     )
     .eq('brand_id', params.brandId)
     // A deleted action (00168) is gone for everyone but the nightly generator.
@@ -3121,6 +3176,7 @@ export async function listActionsFor(
         ),
       ),
     }),
+    ...staleFor(r),
     created_at: r.created_at,
     updated_at: r.updated_at,
   }));
@@ -3144,6 +3200,9 @@ export interface ActionDetailForMcp {
   assignee: { id: string; full_name: string | null } | null;
   due_date: string | null;
   priority: ActionPriorityForMcp | null;
+  /** As on list_actions. */
+  stale: boolean;
+  stale_at: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -3229,7 +3288,7 @@ interface ActionDetailRow {
 }
 
 const ACTION_DETAIL_COLUMNS =
-  'id, action_no, brand_id, category, kind, impact, status, outcome, validation, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, brands!inner(organization_id)';
+  'id, action_no, brand_id, category, kind, impact, status, outcome, validation, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, stale_at, brands!inner(organization_id)';
 
 export async function getActionFor(
   auth: McpAuthContext,
@@ -3251,7 +3310,7 @@ export async function getActionFor(
   if (missingDismissReason(error)) ({ data, error } = await read(ACTION_DETAIL_COLUMNS));
   if (error) throw new Error(error.message);
   const action = data as unknown as ActionDetailRow | null;
-  if (!action) return null;
+  if (!action || !(await mayUseBrand(auth, action.brand_id))) return null;
 
   const [tasksRes, signalsRes, eventsRes, names, entityCounts] = await Promise.all([
     supabaseAdmin
@@ -3308,6 +3367,7 @@ export async function getActionFor(
       ...action,
       priority_reason: currentPriorityReason(action.priority_reason, payload),
     }),
+    ...staleFor(action),
     created_at: action.created_at,
     updated_at: action.updated_at,
     completed_at: action.completed_at ?? null,
@@ -3409,7 +3469,7 @@ export async function listSignalsFor(
   auth: McpAuthContext,
   params: ListSignalsParams,
 ): Promise<Record<string, unknown>[] | null> {
-  if (!(await brandInOrg(auth, params.brandId))) return null;
+  if (!(await brandAllowed(auth, params.brandId))) return null;
 
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
   let query = supabaseAdmin
@@ -3527,7 +3587,7 @@ export async function listActionHistoryFor(
   auth: McpAuthContext,
   params: { brandId: string; limit?: number },
 ): Promise<ActionHistoryRow[] | null> {
-  if (!(await brandInOrg(auth, params.brandId))) return null;
+  if (!(await brandAllowed(auth, params.brandId))) return null;
 
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
   const read = (columns: string) =>
@@ -3618,6 +3678,8 @@ export async function updateTaskStatusFor(
     .is('actions.deleted_at', null)
     .maybeSingle();
   if (!owned) return null;
+  const ownedAction = Array.isArray(owned.actions) ? (owned.actions[0] ?? null) : owned.actions;
+  if (!(await mayUseBrand(auth, ownedAction?.brand_id))) return null;
 
   const updatedAt = new Date().toISOString();
   const { data, error } = await supabaseAdmin
@@ -3704,11 +3766,15 @@ export async function createImproveActionFor(
 
   const { data: ownership } = await supabaseAdmin
     .from('prompts')
-    .select('id, prompt_sets!inner(brands!inner(organization_id))')
+    .select('id, prompt_sets!inner(brand_id, brands!inner(organization_id))')
     .eq('id', input.promptId)
     .eq('prompt_sets.brands.organization_id', auth.organizationId)
     .maybeSingle();
   if (!ownership) return null;
+  const promptSet = Array.isArray(ownership.prompt_sets)
+    ? (ownership.prompt_sets[0] ?? null)
+    : ownership.prompt_sets;
+  if (!(await mayUseBrand(auth, promptSet?.brand_id))) return null;
   // No Improve action (an LLM call) on the demo brand, nor for a read-only workspace, whoever asks.
   // Only Ansvisor Cloud has demo brands: self-hosted reads nothing for it.
   if (
@@ -3784,7 +3850,7 @@ export async function listCompetitorsFor(
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
   if (brandError) throw new Error(brandError.message);
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const { data, error } = await supabaseAdmin
     .from('competitors')
@@ -3829,7 +3895,7 @@ export async function listReportsFor(
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
   if (brandError) throw new Error(brandError.message);
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const limit = Number.isFinite(requestedLimit)
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
@@ -3879,7 +3945,7 @@ export async function getReportFor(
     .eq('brands.organization_id', auth.organizationId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (!data) return null;
+  if (!data || !(await mayUseBrand(auth, data.brand_id as string))) return null;
 
   return {
     id: data.id as string,

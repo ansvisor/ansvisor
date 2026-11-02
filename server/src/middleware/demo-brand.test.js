@@ -261,6 +261,34 @@ describe('refuseDemoBrandWrites', () => {
   it('matches paths as Express does: any case, with or without a trailing slash', async () => {
     expectRefused(await run({ path: '/Tracking/Check/', body: { brandId: DEMO } }), 'case');
   });
+
+  it('reads a percent-encoded id in the path as Express hands it to the route', async () => {
+    // %30 is "0": the route acts on the demo brand's id.
+    const encoded = (id) => `%30${id.slice(1)}`;
+    expectRefused(
+      await run({ path: `/prompts/suggestions/${encoded(DEMO)}/refresh` }),
+      'brand in the path',
+    );
+    expectRefused(
+      await run({ path: `/content-drafts/${encoded(DEMO_DRAFT)}/publish` }),
+      'row in the path',
+    );
+    expectPassed(
+      await run({ path: `/content-drafts/${encoded(REAL_DRAFT)}/publish` }),
+      'a real brand’s row',
+    );
+  });
+
+  it('refuses a path param that isn’t valid percent-encoding, as Express does', async () => {
+    const { res, next } = await run({ path: '/prompts/suggestions/%E0%A4%A/refresh' });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      success: false,
+      error: 'invalid',
+      message: 'Invalid path',
+    });
+  });
 });
 
 describe('isDemoBrand', () => {

@@ -54,6 +54,8 @@ export interface QualityReads {
   /** The brand's own domains as the sources read them; null until read. */
   brandDomains: string[] | null;
   competitorDomains: string[] | null;
+  /** The sites the brand trusts (Settings › Content, 00449): primary sources. */
+  trustedDomains?: string[] | null;
   /** The site's trust (Site Audit), and whether its read landed (or failed). */
   siteTrust: SiteTrust | null;
   siteTrustRead: boolean;
@@ -225,6 +227,7 @@ export function qualityState(reads: QualityReads) {
         pageType,
         kept: new Set(reads.keptSources),
         ai: reads.aiKinds,
+        trustedDomains: reads.trustedDomains ?? [],
       }
     : null;
   const trustScore =

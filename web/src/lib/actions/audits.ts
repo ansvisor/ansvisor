@@ -174,6 +174,9 @@ export interface AuditedPage {
   auditId: string;
   score: number | null;
   previousScore: number | null;
+  /** The first completed audit's score and when it ran: progress since then. */
+  firstScore: number | null;
+  firstAuditedAt: string | null;
   status: AuditedPageStatus;
   lastAuditedAt: string;
   /** Whether the audit the row opens was an auto-audit run's (SA-006) or a user's. */
@@ -601,11 +604,25 @@ export interface ExcludedPage {
   title: string | null;
 }
 
+/**
+ * How much of the brand's site has a current audit (customer priorities
+ * item 11): the site pages the inbox weighs, audited within staleDays, never
+ * audited, or longer ago. `never` and `stale` are the inbox's Not audited rows.
+ */
+export interface SiteCoverage {
+  pages: number;
+  audited: number;
+  never: number;
+  stale: number;
+}
+
 export interface AuditOpportunities {
   opportunities: AuditOpportunity[];
   excluded: ExcludedPage[];
   /** An audit older than this many days no longer counts. */
   staleDays: number;
+  /** Null from an API older than the web. */
+  coverage: SiteCoverage | null;
 }
 
 export async function getAuditOpportunities(brandId: string): Promise<AuditOpportunities> {
@@ -626,6 +643,7 @@ export async function getAuditOpportunities(brandId: string): Promise<AuditOppor
     opportunities: data.opportunities ?? [],
     excluded: data.excluded ?? [],
     staleDays: data.staleDays ?? 90,
+    coverage: data.coverage ?? null,
   };
 }
 
