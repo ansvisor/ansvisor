@@ -53,6 +53,10 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: ME } } }) } }),
 }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { from: (t: string) => from(t) } }));
+const applyMemoryRequest = vi.fn();
+vi.mock('@/lib/chat/memory/store', () => ({
+  applyMemoryRequest: (...args: unknown[]) => applyMemoryRequest(...args),
+}));
 vi.mock('@/lib/member-emails', () => ({
   readMemberAuth: async (ids: string[]) =>
     new Map(ids.map((id) => [id, { email: `${id.slice(0, 4)}@x.example`, lastSignInAt: null }])),
@@ -229,6 +233,25 @@ describe('withdrawAccessRequest and decideAccessRequest', () => {
     );
     answers['chat_access_requests.update'] = { data: [], error: null };
     expect(await decideAccessRequest(REQUEST, 'rejected')).toBe(false);
+  });
+
+  it("saves an approved Workspace memory line in its requester's name, and nothing on a rejection", async () => {
+    role = 'admin';
+    applyMemoryRequest.mockReset().mockResolvedValue({ ok: true, value: { saved: true } });
+    const change = { kind: 'save_memory', scope: 'workspace', text: 'House style: AP' };
+    answers['chat_access_requests.update'] = {
+      data: [{ id: REQUEST, requester_id: OTHER, drafted_change: change }],
+      error: null,
+    };
+    expect(await decideAccessRequest(REQUEST, 'approved')).toBe(true);
+    expect(applyMemoryRequest).toHaveBeenCalledWith(
+      { userId: ME, organizationId: ORG, role: 'admin' },
+      OTHER,
+      change,
+    );
+    applyMemoryRequest.mockClear();
+    expect(await decideAccessRequest(REQUEST, 'rejected')).toBe(true);
+    expect(applyMemoryRequest).not.toHaveBeenCalled();
   });
 
   it('refuses anyone but an Admin a decision', async () => {

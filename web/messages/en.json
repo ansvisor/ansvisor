@@ -3488,7 +3488,9 @@
     "webPage": { "name": "Open web pages", "step": "Open page" },
     "whyChange": { "name": "Explain why a number changed", "step": "Read why it changed" },
     "agents": { "name": "Create and run agents", "step": "Changed an agent" },
-    "newSkill": { "name": "Save skills", "step": "Saved skill" }
+    "newSkill": { "name": "Save skills", "step": "Saved skill" },
+    "memorySave": { "name": "Save to memory", "step": "Saved to memory" },
+    "memoryForget": { "name": "Remove from memory", "step": "Removed from memory" }
   },
   "agentic": {
     "avatar": {
@@ -3563,6 +3565,7 @@
       "stepsSources": "{steps, plural, one {# step} other {# steps}} · {sources, plural, one {# source} other {# sources}}",
       "stepsClock": "{steps, plural, one {# step} other {# steps}} · {clock}",
       "rows": "{count, plural, one {# row} other {# rows}}",
+      "items": "{count, plural, one {# item} other {# items}}",
       "seconds": "{s}s",
       "minutes": "{m}m {s}s",
       "now": "Step {n}: {label}",
@@ -3863,7 +3866,9 @@
       "skillFromYou": "You",
       "skillFromWorkspace": "Your workspace",
       "skillFromRepo": "{owner} on GitHub",
-      "skillImported": "Imported"
+      "skillImported": "Imported",
+      "usedMemory": "Used memory",
+      "memorySubject": "Memory"
     },
     "pageRefused": {
       "no_access": "No workspace to open pages for",
@@ -5320,7 +5325,8 @@
         "reports": "Reports",
         "navigation": "Navigation",
         "web": "Web",
-        "skills": "Skills"
+        "skills": "Skills",
+        "memory": "Memory"
       }
     }
   },
@@ -5374,7 +5380,11 @@
       "agentRunQueued": "Asked the agent “{name}” to run for {brand}",
       "agentRunOnAction": "Asked the agent “{name}” to run on the action AC-{action}",
       "newSkill": "Saved the skill {name}",
-      "newSkillUndo": "Deleted the skill {name}"
+      "newSkillUndo": "Deleted the skill {name}",
+      "memorySave": "Saved “{text}” to {scope} memory",
+      "memorySaveUndo": "Took “{text}” back out of {scope} memory",
+      "memoryForget": "Removed “{text}” from {scope} memory",
+      "memoryForgetUndo": "Brought “{text}” back to {scope} memory"
     },
     "undo": {
       "ok": "Undone.",
@@ -6291,6 +6301,40 @@
     "share": {
       "asked": "Share the skill /{name} with the workspace",
       "rule": "Sharing a skill with the workspace is for Admins."
+    }
+  },
+  "chatMemory": {
+    "refusal": {
+      "invalid": "There's nothing to remember in that. Say it as one short line.",
+      "too_long": "A memory is at most {line} characters. Shorten it first.",
+      "blocked": "I can't save that. Memory doesn't keep secrets or personal details.",
+      "rules": "I can't save that. Memory can't change Chat's rules, permissions or tools.",
+      "full": "Memory is full. Delete or shorten an item first.",
+      "off": "Memory is off. Turn it on in Memory.",
+      "workspace_off": "Memory is off for this workspace. An Admin can turn it on in Settings › Chat.",
+      "role_brand": "Only Admins and Managers change Brand memory. You can save it to Me instead.",
+      "role_workspace": "Only Admins change Workspace memory. You can save it to Me instead.",
+      "role_switch": "Only Admins turn memory on or off for the workspace.",
+      "no_brand": "Brand memory belongs to one brand. Pick the brand first.",
+      "not_found": "This memory isn't there any more.",
+      "undo_expired": "It's too late to undo this.",
+      "read_only": "Your workspace is read-only, so memory can't be changed.",
+      "request_limit": "You have too many requests waiting for your Admins. Try again once they answer.",
+      "failed": "Something went wrong with memory. Try again."
+    },
+    "request": {
+      "asked": "Add to Workspace memory: “{text}”",
+      "rule": "Workspace memory is for Admins.",
+      "sent": "Sent to your Admins. It goes into Workspace memory once one of them approves."
+    },
+    "scope": {
+      "user": "Me",
+      "brand": "Brand",
+      "brandNamed": "Brand: {brand}",
+      "workspace": "Workspace"
+    },
+    "card": {
+      "replaces": "Replaces: {text}"
     }
   },
   "audit": {

@@ -88,7 +88,9 @@ export type ToolArea =
   /** Opening a page on the web (CHAT-10 §B). */
   | 'web'
   /** The workspace's own skills (CHAT-13). */
-  | 'skills';
+  | 'skills'
+  /** What Chat remembers between chats (CHAT-14). */
+  | 'memory';
 
 /**
  * What the plan decides about a call (CHAT-20 §7), null when nothing. The

@@ -102,6 +102,10 @@ vi.mock('@/lib/actions/chat-access-requests', () => ({
 vi.mock('@/lib/actions/chat-skills', () => ({
   saveChatSkill: tracked.track('actions/chat-skills.saveChatSkill'),
 }));
+vi.mock('@/lib/actions/chat-memory', () => ({
+  saveChatMemory: tracked.track('actions/chat-memory.saveChatMemory'),
+  forgetChatMemory: tracked.track('actions/chat-memory.forgetChatMemory'),
+}));
 vi.mock('@/lib/actions/prompt', () => ({
   addTopicPrompts: tracked.track('actions/prompt.addTopicPrompts'),
   pauseBrandPrompts: tracked.track('actions/prompt.pauseBrandPrompts'),
@@ -593,6 +597,9 @@ describe('approval policies', () => {
       run_site_audit: ['admin', 'manager'],
       // A skill of one's own (W3-06, CHAT-13 v2): Admins and Managers save skills.
       save_skill: ['admin', 'manager'],
+      // Memory (W3-11, CHAT-14 item 25): every role has its Me; the store checks the scope.
+      save_memory: ['admin', 'manager', 'analyst', 'agency_partner'],
+      forget_memory: ['admin', 'manager', 'analyst', 'agency_partner'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);
@@ -615,20 +622,25 @@ describe('approval policies', () => {
   });
 
   it('says where every row that takes a brand or an object finds its brand', () => {
-    const problems = CHAT_TOOLS.flatMap((tool) => {
-      const fields = Object.keys(tool.inputSchema.shape);
-      const ids = fields.filter((field) => field === 'id' || field.endsWith('_id'));
-      const brandOf = tool.brandOf;
-      if (fields.includes('brand_id')) {
-        return brandOf && 'input' in brandOf ? [] : [`${tool.name}: takes brand_id`];
-      }
-      if (ids.length > 0) {
-        return brandOf && 'lookup' in brandOf && ids.includes(brandOf.idField)
-          ? []
-          : [`${tool.name}: takes ${ids.join(', ')}, so its brand is looked up`];
-      }
-      return brandOf === null ? [] : [`${tool.name}: names no brand or object`];
-    });
+    // Memory's lines (W3-11): a Me or Workspace line has no brand, so the store checks a
+    // Brand line's brand itself (memory/store.ts), never the precedence's brand rule.
+    const OWN_BRAND_CHECK = new Set(['save_memory', 'forget_memory']);
+    const problems = CHAT_TOOLS.filter((tool) => !OWN_BRAND_CHECK.has(tool.name)).flatMap(
+      (tool) => {
+        const fields = Object.keys(tool.inputSchema.shape);
+        const ids = fields.filter((field) => field === 'id' || field.endsWith('_id'));
+        const brandOf = tool.brandOf;
+        if (fields.includes('brand_id')) {
+          return brandOf && 'input' in brandOf ? [] : [`${tool.name}: takes brand_id`];
+        }
+        if (ids.length > 0) {
+          return brandOf && 'lookup' in brandOf && ids.includes(brandOf.idField)
+            ? []
+            : [`${tool.name}: takes ${ids.join(', ')}, so its brand is looked up`];
+        }
+        return brandOf === null ? [] : [`${tool.name}: names no brand or object`];
+      },
+    );
     expect(problems).toEqual([]);
     for (const tool of CHAT_TOOLS) {
       if (tool.brandOf && 'lookup' in tool.brandOf) {
@@ -818,13 +830,21 @@ describe("the model's tool list on the registry's rows", () => {
   const withoutShopping = reads.filter((name) => name !== 'get_shopping_visibility');
 
   it('gives every role the reads its plan opens, and Analysts and Agency partners daily work only', () => {
+    // Memory (W3-11): everyone keeps their own Me.
+    const memory = ['save_memory', 'forget_memory'];
     expect(list('analyst', starter)).toEqual([
       ...withoutShopping,
       'create_draft',
       'dismiss_prompt_suggestion',
       'request_access',
+      ...memory,
     ]);
-    expect(list('agency_partner', growth)).toEqual([...reads, 'create_draft', 'request_access']);
+    expect(list('agency_partner', growth)).toEqual([
+      ...reads,
+      'create_draft',
+      'request_access',
+      ...memory,
+    ]);
     expect(list('manager', starter)).toEqual([...withoutShopping, ...writes]);
     expect(list('admin', growth)).toEqual([...reads, ...writes]);
     expect(list('analyst', facts(null, false))).toEqual([
@@ -832,6 +852,7 @@ describe("the model's tool list on the registry's rows", () => {
       'create_draft',
       'dismiss_prompt_suggestion',
       'request_access',
+      ...memory,
     ]);
   });
 
@@ -847,6 +868,8 @@ describe("the model's tool list on the registry's rows", () => {
       ...reads,
       'create_draft',
       'request_access',
+      'save_memory',
+      'forget_memory',
     ]);
   });
 });

@@ -172,6 +172,8 @@ import {
   type EnabledSkill,
 } from './skills/store';
 import { MAX_UPLOADS } from './uploads';
+import { memoryChoseTarget } from './memory/rules';
+import { memoryStep, runMemory, type RunMemory } from './memory/store';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -719,7 +721,12 @@ const STOP_POLL_MS = 1_500;
 const READ_TIMEOUT_MS = 20_000;
 const READ_RETRY_MS = 2_000;
 
-type Progress = RunProgress & { question?: string; scope?: MessageScope };
+type Progress = RunProgress & {
+  question?: string;
+  scope?: MessageScope;
+  /** The lines its "Used memory" step listed, once it has one (CHAT-14 item 17). */
+  memoryItems?: number;
+};
 
 interface RunContext {
   actor: ChatActor;
@@ -768,6 +775,8 @@ interface RunContext {
    * is behind), every change asks first (askWithoutSession).
    */
   sessionUserId: string | null;
+  /** What the person's memory gives this run (CHAT-14, memory/store.ts): its lines and block. */
+  memory: RunMemory;
 }
 
 const workedMs = (rc: Pick<RunContext, 'run' | 'segmentStart'>) =>
@@ -964,6 +973,7 @@ async function openContext(
     agentRunId,
     sessionUserId,
     skills: await runSkills(actor, progress, history.plan),
+    memory: await runMemory(actor, brand),
   };
 }
 
@@ -1220,6 +1230,22 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
   return 'ended';
 }
 
+// ─── Memory ─────────────────────────────────────────────────────────────────
+
+/**
+ * "Used memory" (CHAT-14 item 17): once a run, when its first model step
+ * carries saved notes, a step listing them, and "Memory · n items" under
+ * Data used (memory/store.ts memoryStep).
+ */
+async function noteMemory(rc: RunContext): Promise<void> {
+  if (rc.memory.lines.length === 0 || rc.progress.memoryItems !== undefined) return;
+  const step = memoryStep(rc.memory.lines);
+  rc.progress.memoryItems = rc.memory.lines.length;
+  rc.progress.sources[step.subject] = rc.memory.lines.length;
+  const row = await insertStep(rc.run.id, { position: ++rc.progress.steps, ...step.write });
+  rc.sink.emit('step.finished', { step: clientStep(row) });
+}
+
 // ─── Skills ─────────────────────────────────────────────────────────────────
 
 /**
@@ -1381,6 +1407,7 @@ async function modelLoop(rc: RunContext): Promise<void> {
  */
 async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepResult> {
   const choice = rc.models.pick(phase);
+  await noteMemory(rc);
   // Cache order (prompt.ts): tools and core rules, the workspace, the chat so
   // far (the writer only: the reader gets a few lines in its turn), this turn.
   const { system, messages } = stepPrompt({
@@ -1683,7 +1710,7 @@ function coreRules(rc: Pick<RunContext, 'budget'>, phase: ChatPhase): string {
  * not between turns.
  */
 function workspaceBlock(
-  rc: Pick<RunContext, 'role' | 'planName' | 'brand' | 'refused' | 'offered' | 'skills'>,
+  rc: Pick<RunContext, 'role' | 'planName' | 'brand' | 'refused' | 'offered' | 'skills' | 'memory'>,
   phase: ChatPhase,
 ): string {
   const lines = [
@@ -1715,6 +1742,8 @@ function workspaceBlock(
   }
   // Names and descriptions only (CHAT-13 item 3): a body loads when it is used.
   if (rc.skills.listed.length > 0) lines.push(availableSkillsBlock(rc.skills.listed));
+  // Saved notes, as data (CHAT-14 item 14): after the skills list, cached with the block.
+  if (rc.memory.block) lines.push(rc.memory.block);
   return lines.join('\n\n');
 }
 
@@ -1933,7 +1962,9 @@ async function callFacts(rc: RunContext, tool: ChatTool, input: Record<string, u
         ctx,
         tool,
         input,
-        rc.progress.tainted === true,
+        // A target only memory named is data's choice, not the person's (CHAT-20 §16a).
+        rc.progress.tainted === true ||
+          (tool.area !== 'memory' && memoryChoseTarget(rc.memory.lines, input, personWords(rc))),
         rc.progress.writes[tool.name] ?? 0,
       )
     : { brandId: null, brandIsDemo: false, tainted: false };

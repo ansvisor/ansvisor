@@ -175,7 +175,10 @@ export async function withdrawAccessRequest(id: string): Promise<boolean> {
 
 /**
  * An Admin approves or dismisses a pending request of their workspace. The
- * first Admin to act decides it: false when another already had.
+ * first Admin to act decides it: false when another already had. An
+ * approved request for a Workspace memory line saves it (CHAT-14 item 25),
+ * checked again as the Admin; a line memory can't keep now is logged and
+ * left unsaved.
  */
 export async function decideAccessRequest(
   id: string,
@@ -192,9 +195,25 @@ export async function decideAccessRequest(
     .eq('id', id)
     .eq('organization_id', who.organizationId)
     .eq('status', 'pending')
-    .select('id');
+    .select('id, requester_id, drafted_change');
   if (error) throw new Error(error.message);
-  return (data ?? []).length > 0;
+  const decided = (data ?? []) as { requester_id: string; drafted_change: unknown }[];
+  if (decision === 'approved' && decided.length > 0) {
+    // Loaded here: the memory store sends its own requests through this file.
+    const { applyMemoryRequest } = await import('@/lib/chat/memory/store');
+    const applied = await applyMemoryRequest(
+      who,
+      decided[0].requester_id,
+      decided[0].drafted_change,
+    );
+    if (applied && !applied.ok) {
+      console.error(
+        '[chat/access-requests] an approved memory line was not saved:',
+        applied.refusal.code,
+      );
+    }
+  }
+  return decided.length > 0;
 }
 
 /** Why a read gave nothing: Chat is off for the person, or the database didn't answer. */
