@@ -427,6 +427,8 @@ describe('coverage of the write routes', () => {
       'cloro-callback.js',
       // Chat's budget holds (CRON_SECRET, called by the web's engine): keyed by run, no brand.
       'internal-chat-budget.js',
+      // An agent's go-live step (CRON_SECRET, called by the web's engine): refuses a demo brand itself.
+      'internal-chat-go-live.js',
       // Chat's page reads (CRON_SECRET, called by the web's engine): a public URL, no brand.
       'internal-chat-pages.js',
       // The first run after a payment (CRON_SECRET): refuses a demo brand itself.

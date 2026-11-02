@@ -56,6 +56,7 @@ export type ApprovalLabel =
   | 'always'
   | 'full_auto'
   | 'dont_ask_again'
+  | 'go_live'
   | 'run';
 
 export function approvalLabel(
@@ -65,7 +66,10 @@ export function approvalLabel(
   if (row.approvalKind === 'ask') return 'card';
   if (row.approvalKind === 'click') return 'click';
   if (row.approvalKind === 'auto') {
-    return row.autoVia === 'always' || row.autoVia === 'dont_ask_again' ? row.autoVia : 'full_auto';
+    // An agent's step that went live on its own (AUTONOMOUS-GO-LIVE §6.4), never Full auto's.
+    return row.autoVia === 'always' || row.autoVia === 'dont_ask_again' || row.autoVia === 'go_live'
+      ? row.autoVia
+      : 'full_auto';
   }
   return 'run';
 }

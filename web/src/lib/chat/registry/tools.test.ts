@@ -675,6 +675,59 @@ describe('approval policies', () => {
     ).toThrow(/only a write/);
   });
 
+  it('lets only an execute go live on its own, and only one whose input names no outside target (AUTONOMOUS-GO-LIVE §6.3)', () => {
+    const goLive = () => ({ kind: 'cms_draft' as const, draftId: 'd', target: 'webflow' as const });
+    const execute = {
+      ...readRow,
+      name: 'publish_test',
+      class: 'execute' as const,
+      executeGroup: 'publishing' as const,
+    };
+    // Ids and fixed choices only: a draft, the CMS the brand connected, a switch.
+    const own = defineTool({
+      ...execute,
+      inputSchema: z.object({
+        draft_id: z.string().regex(/^[0-9a-f-]{36}$/),
+        guid: z.guid().optional(),
+        destination: z.enum(['webflow', 'wordpress']),
+        live: z.boolean().default(false),
+      }),
+      fixture: { input: { draft_id: FIXTURE_IDS.item, destination: 'webflow' } },
+      goLive,
+    });
+    expect(own.flags.goLiveOnOwn).toBe(true);
+    // A field that takes an address, a mail address, a site, free text or a list of them.
+    for (const field of [
+      z.string(),
+      z.string().url(),
+      z.email(),
+      z.string().max(300).optional(),
+      z.array(z.guid()),
+      z.object({ url: z.string() }),
+    ]) {
+      expect(() =>
+        defineTool({
+          ...execute,
+          inputSchema: z.object({ draft_id: z.guid(), to: field }),
+          goLive,
+        } as never),
+      ).toThrow(/takes no free text \(to\)/);
+    }
+    // Never a read or a write, which aren't clicks to lift.
+    expect(() => defineTool({ ...readRow, goLive })).toThrow(/only an execute/);
+    expect(() =>
+      defineTool({ ...readRow, class: 'write', defaultPolicy: 'ask', maxPolicy: 'ask', goLive }),
+    ).toThrow(/only an execute/);
+    // The registry: Send to CMS may, every other row may not.
+    const onItsOwn = CHAT_TOOLS.filter((tool) => tool.flags.goLiveOnOwn).map((tool) => tool.name);
+    expect(onItsOwn).toEqual(['push_cms_draft']);
+    expect(chatTool('push_cms_draft')?.goLive?.({ draft_id: 'd', destination: 'wix' })).toEqual({
+      kind: 'cms_draft',
+      draftId: 'd',
+      target: 'wix',
+    });
+  });
+
   it("refuses a write's policy past what its flags allow", () => {
     const write = { ...readRow, class: 'write' as const };
     expect(() =>
@@ -692,7 +745,7 @@ describe('approval policies', () => {
     expect(
       defineTool({ ...write, defaultPolicy: 'ask', maxPolicy: 'ask', flags: { alwaysCard: true } })
         .flags,
-    ).toEqual({ alwaysCard: true, costCard: false, adminMayTurnOff: false });
+    ).toEqual({ alwaysCard: true, costCard: false, adminMayTurnOff: false, goLiveOnOwn: false });
     expect(() => defineTool({ ...write, defaultPolicy: 'on', maxPolicy: 'on' } as never)).toThrow(
       /asked/,
     );
@@ -751,7 +804,7 @@ describe('registryCatalog', () => {
       class: 'read',
       defaultPolicy: 'on',
       planGate: { feature: 'prompt_volumes' },
-      flags: { alwaysCard: false, costCard: false, adminMayTurnOff: false },
+      flags: { alwaysCard: false, costCard: false, adminMayTurnOff: false, goLiveOnOwn: false },
     });
     expect(entry.planGate).not.toBe(row.planGate);
     expect(entry.flags).not.toBe(row.flags);

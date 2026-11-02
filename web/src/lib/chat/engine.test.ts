@@ -19,6 +19,8 @@ import {
   seedDraft,
   seedWorkspace,
 } from './testing/chat-fixtures';
+import { copiedFrom, type UntrustedShingles } from './go-live-checks';
+import type { GoLiveFacts } from './precedence';
 
 /**
  * Chat's engine (C3), with a scripted model and an in-memory database: a turn
@@ -139,7 +141,10 @@ const fakes = vi.hoisted(() => ({
   markWorking: vi.fn(async () => ({ cleared: true, resumed: 0 })),
   openPage: vi.fn(),
   explain: vi.fn(),
+  goLiveFacts: vi.fn(),
 }));
+// Step 4b's guards' facts, as their reads would give them (go-live-facts.test.ts reads them).
+vi.mock('./go-live-facts', () => ({ readGoLiveFacts: fakes.goLiveFacts }));
 // fetch_page as it is, opening pages through a fake of the API's internal route.
 vi.mock('@/lib/mcp/pages', () => ({ openPageFor: fakes.openPage }));
 // explain_change as it is, reading through a fake of its data layer.
@@ -2962,6 +2967,31 @@ describe('the AI budget', () => {
       expect(step).not.toHaveProperty('feature');
     }
   });
+
+  it('keeps an agent run’s untrusted reads as hashed word runs, never a person’s chat’s (AUTONOMOUS-GO-LIVE §6.3)', async () => {
+    budgetHolds();
+    const answer = Array.from({ length: 40 }, (_, i) => `w${i}`).join(' ');
+    fakes.readRun.mockResolvedValue({ answers: [{ answer }] });
+    const readSteps = () => [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY];
+    useModels(readSteps(), [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'What do AI answers say about us?',
+      brandId: BRAND,
+    });
+    if (!started.ok) throw new Error('not started');
+    db.tables.chat_conversations.find((c) => c.id === started.conversationId)!.agent_run_id =
+      '77777777-7777-4777-8777-777777777777';
+    await engine.driveRun(ADMIN, started.runId);
+    const state = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
+    const kept = (state.progress as { untrustedShingles?: UntrustedShingles }).untrustedShingles;
+    expect(kept?.full).toBe(false);
+    expect(copiedFrom(answer, kept)).toBe(true);
+
+    useModels(readSteps(), [text('Done.')]);
+    const own = await turn(ADMIN, 'What do AI answers say about us?');
+    const ownState = db.tables.chat_run_state.find((s) => s.run_id === own)!;
+    expect(ownState.progress).not.toHaveProperty('untrustedShingles');
+  });
 });
 
 describe('the own AI key (AGENT-OWN-KEY §5.2)', () => {
@@ -4907,5 +4937,250 @@ describe('the /tasks task strip (W2-11, CHAT-09 §B)', () => {
     expect(ofType(await eventsOf(runId), 'tasks.updated')).toEqual([]);
     logged.mockRestore();
     delete db.failures.chat_task_state;
+  });
+});
+
+describe('going live on its own (AUTONOMOUS-GO-LIVE §5.4)', () => {
+  const AGENT = 'abababab-abab-4bab-8bab-abababababab';
+  const AGENT_RUN = 'cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd';
+  const SLOT = 'efefefef-efef-4fef-8fef-efefefefefef';
+  const send = toolCall('g1', 'push_cms_draft', { draft_id: DRAFT, destination: 'webflow' });
+  const PAGE = {
+    draftId: DRAFT,
+    title: 'Pricing FAQ',
+    slug: 'pricing-faq',
+    metaTitle: 'Pricing FAQ',
+    metaDescription: '',
+    html: '<p>Fair prices.</p>',
+    author: null,
+    reviewer: null,
+    featuredImage: null,
+  };
+  const PASSED: GoLiveFacts = {
+    runUntrusted: false,
+    page: 'ready',
+    text: { hold: null },
+    liveItem: false,
+    gate: { pass: true, scores: { eeat: 81, trust: 80, readability: 79, average: 80 } },
+    usage: { used: 1, counted: false, nextAt: '2026-11-02T15:30:00.000Z' },
+  };
+  const reserved: Record<string, unknown>[] = [];
+  const sent = vi.fn();
+  // The scripted models under a name React's hooks rule leaves alone: no hook, called in a helper.
+  const models = useModels;
+
+  beforeEach(() => {
+    seedDraft(db);
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AUTO_GO_LIVE', 'true');
+    vi.stubEnv('CRON_SECRET', 'secret');
+    db.tables.chat_settings = [
+      {
+        organization_id: ORG,
+        tool_policies: {},
+        full_auto_for_members: true,
+        dont_ask_again: true,
+        manager_execute_off: [],
+        agents_full_auto: true,
+        auto_go_live_groups: ['publishing'],
+      },
+    ];
+    db.tables.chat_agent_runs = [
+      { id: AGENT_RUN, organization_id: ORG, agent_id: AGENT, agent_version: 2 },
+    ];
+    db.tables.chat_agents = [{ id: AGENT, organization_id: ORG, name: 'Publisher' }];
+    db.tables.chat_agent_go_live = [
+      { agent_id: AGENT, organization_id: ORG, version: 2, daily_limit: 5, skill_checksums: {} },
+    ];
+    reserved.length = 0;
+    db.rpcs.reserve_agent_go_live = (args) => {
+      reserved.push(args);
+      return SLOT;
+    };
+    fakes.goLiveFacts.mockResolvedValue({ facts: PASSED, page: PAGE });
+    vi.mocked(sendDraftToCms).mockResolvedValue({
+      ok: true,
+      target: 'webflow',
+      status: 'sent',
+      updated: false,
+      live: false,
+    });
+    sent.mockReset();
+    sent.mockImplementation(async () =>
+      Response.json({ success: true, delivery: { id: 'd1', status: 'sent', updated: false } }),
+    );
+    vi.stubGlobal('fetch', sent);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  /**
+   * A turn of the agent run (or, `own`, the Admin's own chat) in Full auto
+   * that sends the draft, driven as the minute tick drives it: no session.
+   */
+  async function agentTurn({ own = false, before }: { own?: boolean; before?: () => void } = {}) {
+    models([READY], [calls(send), text('Sent.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Send the FAQ to Webflow',
+      brandId: BRAND,
+      mode: 'full_auto',
+    });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    if (!own) {
+      db.tables.chat_conversations.find((c) => c.id === started.conversationId)!.agent_run_id =
+        AGENT_RUN;
+    }
+    before?.();
+    await engine.driveRun(ADMIN, started.runId, undefined, {
+      sessionUserId: own ? PEOPLE.admin : null,
+    });
+    const events = await eventsOf(started.runId);
+    expectClean(events);
+    return {
+      runId: started.runId,
+      cards: ofType(events, 'confirm.required').map((e) => e.data),
+    };
+  }
+
+  it('sends an allowed agent’s draft on its own: its slot, the API as its person, Activity', async () => {
+    const { runId, cards } = await agentTurn();
+    expect(cards).toEqual([]);
+    expect(runRow(runId).status).toBe('done');
+    expect(fakes.goLiveFacts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        step: { kind: 'cms_draft', draftId: DRAFT, target: 'webflow' },
+        actingUserId: PEOPLE.admin,
+        runId,
+        agentRunId: AGENT_RUN,
+      }),
+    );
+    expect(reserved).toEqual([
+      {
+        p_organization_id: ORG,
+        p_agent_id: AGENT,
+        p_run_id: runId,
+        p_agent_run_id: AGENT_RUN,
+        p_brand_id: BRAND,
+        p_content_draft_id: DRAFT,
+        p_tool_key: 'sendToCms',
+        p_kind: 'cms_draft',
+        p_target: 'webflow',
+        p_limit: 5,
+      },
+    ]);
+    // The page its guards read goes out, through the API, as the run's person.
+    expect(sendDraftToCms).not.toHaveBeenCalled();
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(
+      JSON.parse((sent.mock.calls[0] as [string, RequestInit])[1].body as string),
+    ).toMatchObject({ reservationId: SLOT, agentRunId: AGENT_RUN, runId, page: PAGE });
+    expect(stepsOf(runId)[0]).toMatchObject({ kind: 'execute', status: 'done' });
+    expect(db.tables.chat_activity_log).toEqual([
+      expect.objectContaining({
+        class: 'execute',
+        approval_kind: 'auto',
+        auto_via: 'go_live',
+        agent_id: AGENT,
+        agent_run_id: AGENT_RUN,
+        run_id: runId,
+      }),
+    ]);
+  });
+
+  it('keeps the click card, saying why, when a guard holds the page; the click sends it', async () => {
+    fakes.goLiveFacts.mockResolvedValue({
+      facts: { ...PASSED, gate: { pass: false, hold: 'quality', score: 70 } },
+      page: PAGE,
+    });
+    const { runId, cards } = await agentTurn();
+    expect(cards).toEqual([
+      expect.objectContaining({
+        canDontAskAgain: false,
+        note: expect.stringMatching(/^Held for your click: Quality is 70, under 75\./),
+      }),
+    ]);
+    expect(runRow(runId).status).toBe('waiting');
+    expect(reserved).toEqual([]);
+    expect(sent).not.toHaveBeenCalled();
+    // The owner's click, in their own request: the person's own send, logged as a click.
+    expect((await approve(ADMIN, runId)).ok).toBe(true);
+    expect(sendDraftToCms).toHaveBeenCalledTimes(1);
+    expect(sent).not.toHaveBeenCalled();
+    expect(db.tables.chat_activity_log).toEqual([
+      expect.objectContaining({ approval_kind: 'click', auto_via: null }),
+    ]);
+  });
+
+  it('holds the step at the agent’s daily limit, with when the next one can go', async () => {
+    db.rpcs.reserve_agent_go_live = (args) => {
+      reserved.push(args);
+      return null;
+    };
+    const { runId, cards } = await agentTurn();
+    expect(cards[0].note).toMatch(
+      /^Held for your click: Publisher went live 5 times in the last 24 hours\. The next one can go on its own at \w{3} 3:30 PM\./,
+    );
+    expect(runRow(runId).status).toBe('waiting');
+    expect(sent).not.toHaveBeenCalled();
+  });
+
+  it('turns a send that failed into its click card, never trying it again by itself', async () => {
+    sent.mockImplementation(async () =>
+      Response.json({
+        success: true,
+        delivery: { id: 'd1', status: 'failed', error: 'Collection is archived' },
+      }),
+    );
+    const { runId, cards } = await agentTurn();
+    expect(cards).toEqual([
+      expect.objectContaining({
+        note: expect.stringMatching(
+          /^Held for your click: It didn’t go out: Webflow refused it: Collection is archived/,
+        ),
+      }),
+    ]);
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(stepsOf(runId)[0]).toMatchObject({ kind: 'execute', status: 'waiting' });
+    expect(db.tables.chat_activity_log ?? []).toEqual([]);
+    // The click runs the person's own send anew, not the failure kept for the try on its own.
+    expect((await approve(ADMIN, runId)).ok).toBe(true);
+    expect(sendDraftToCms).toHaveBeenCalledTimes(1);
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(stepsOf(runId)[0]).toMatchObject({ status: 'done' });
+    expect(db.tables.chat_activity_log).toEqual([
+      expect.objectContaining({ approval_kind: 'click' }),
+    ]);
+  });
+
+  it('holds every go-live of a run that met an injection', async () => {
+    const { runId, cards } = await agentTurn({
+      before: () => {
+        const state = db.tables.chat_run_state.at(-1)!;
+        state.progress = { ...(state.progress as object), injection: true };
+      },
+    });
+    expect(cards[0].note).toMatch(
+      /^Held for your click: This run read text that tried to instruct it\./,
+    );
+    expect(runRow(runId).status).toBe('waiting');
+    expect(reserved).toEqual([]);
+    expect(sent).not.toHaveBeenCalled();
+  });
+
+  it('reads the facts for a candidate only: a person’s own chat, the flag off, another version', async () => {
+    const plain = async (setup: () => void, own = false) => {
+      setup();
+      const { cards } = await agentTurn({ own });
+      expect(cards).toHaveLength(1);
+      expect(cards[0].note ?? '').not.toMatch(/Held for your click/);
+    };
+    await plain(() => {}, true);
+    await plain(() => vi.stubEnv('CHAT_AUTO_GO_LIVE', 'false'));
+    vi.stubEnv('CHAT_AUTO_GO_LIVE', 'true');
+    await plain(() => {
+      db.tables.chat_agent_go_live[0].version = 1;
+    });
+    expect(fakes.goLiveFacts).not.toHaveBeenCalled();
+    expect(reserved).toEqual([]);
+    expect(sent).not.toHaveBeenCalled();
   });
 });

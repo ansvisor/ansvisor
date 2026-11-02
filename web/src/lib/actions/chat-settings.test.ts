@@ -17,14 +17,21 @@ let calls: Call[] = [];
 let writeError: { message: string } | null = null;
 let ctx: PrecedenceContext | null = null;
 let ctxThrows = false;
+/** The workspace's go-live columns (00443), and the error reading them (before it). */
+let goLiveRow: Record<string, unknown> | null = null;
+let goLiveError: { code: string; message: string } | null = null;
 
 function from(table: string) {
   const call: Call = { table, op: 'select', filters: [] };
   calls.push(call);
   const answer = () =>
     table === 'profiles'
-      ? { data: { organization_id: ORG }, error: null }
-      : { data: null, error: call.op === 'select' ? null : writeError };
+      ? { data: { organization_id: ORG, full_name: 'Ada Admin' }, error: null }
+      : table === 'organizations'
+        ? { data: { name: 'Acme' }, error: null }
+        : table === 'chat_settings' && call.op === 'select'
+          ? { data: goLiveRow, error: goLiveError }
+          : { data: null, error: call.op === 'select' ? null : writeError };
   const chain: Record<string, unknown> = {
     select: () => chain,
     upsert: (row: unknown, opts: unknown) =>
@@ -43,7 +50,14 @@ function from(table: string) {
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: ME } } }) } }),
 }));
-vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { from: (t: string) => from(t) } }));
+vi.mock('@/lib/supabase/admin', () => ({
+  supabaseAdmin: {
+    from: (t: string) => from(t),
+    auth: {
+      admin: { getUserById: async () => ({ data: { user: { email: 'ada@acme.test' } } }) },
+    },
+  },
+}));
 vi.mock('@/lib/chat/precedence-context', () => ({
   readPrecedenceContext: async () => {
     if (ctxThrows) throw new Error('db down');
@@ -55,6 +69,7 @@ const {
   getChatSettingsView,
   removeAutoChoice,
   resetToolPolicies,
+  setAutoGoLive,
   setChatSwitch,
   setManagerExecute,
   setToolPolicy,
@@ -88,6 +103,8 @@ beforeEach(() => {
   writeError = null;
   ctxThrows = false;
   ctx = context('growth');
+  goLiveRow = null;
+  goLiveError = null;
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -210,5 +227,98 @@ describe('the switches and the ticks', () => {
       ['eq', 'tool_key', 'saveDraft'],
     ]);
     expect(await removeAutoChoice('Bad Key')).toEqual({ ok: false, failure: 'invalid' });
+  });
+});
+
+describe('agents that publish on their own (AUTONOMOUS-GO-LIVE §7.1)', () => {
+  const MISSING = {
+    code: '42703',
+    message: 'column chat_settings.auto_go_live_groups does not exist',
+  };
+  const goLive = async () => {
+    const result = await getChatSettingsView();
+    if (!result.ok) throw new Error(result.failure);
+    return result.view.goLive;
+  };
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AUTO_GO_LIVE', 'true');
+    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '1');
+  });
+
+  it('shows the switch, and who turned it on when, only with its flag on', async () => {
+    expect(await goLive()).toEqual({
+      on: false,
+      since: null,
+      byName: null,
+      qualityOff: false,
+      workspace: 'Acme',
+    });
+    goLiveRow = {
+      auto_go_live_groups: ['publishing'],
+      auto_go_live_at: '2026-11-01T09:00:00Z',
+      auto_go_live_by: ME,
+    };
+    expect(await goLive()).toMatchObject({
+      on: true,
+      since: '2026-11-01T09:00:00Z',
+      byName: 'Ada Admin',
+    });
+
+    vi.stubEnv('CHAT_AUTO_GO_LIVE', 'false');
+    expect(await goLive()).toBeNull();
+  });
+
+  it('hides it before 00443, and says when Content Quality is off', async () => {
+    goLiveError = MISSING;
+    expect(await goLive()).toBeNull();
+    goLiveError = null;
+    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '0');
+    expect(await goLive()).toMatchObject({ qualityOff: true });
+  });
+
+  it('turns it on for an Admin with the accepted terms, keeping who and when', async () => {
+    expect(await setAutoGoLive(true, 1)).toEqual({ ok: true });
+    const row = upsert()!.row as Record<string, unknown>;
+    expect(row).toMatchObject({
+      organization_id: ORG,
+      auto_go_live_groups: ['publishing'],
+      auto_go_live_by: ME,
+      auto_go_live_terms: 1,
+      updated_by: ME,
+    });
+    expect(Date.parse(row.auto_go_live_at as string)).not.toBeNaN();
+    // Nothing else of the settings is written.
+    expect(row).not.toHaveProperty('tool_policies');
+  });
+
+  it('turns it off with no terms, keeping who turned it on last', async () => {
+    expect(await setAutoGoLive(false, 0)).toEqual({ ok: true });
+    expect(upsert()!.row).toEqual({
+      organization_id: ORG,
+      auto_go_live_groups: [],
+      updated_by: ME,
+    });
+  });
+
+  it('refuses everyone but an Admin, below Growth, with Quality off, or other terms', async () => {
+    ctx = context('growth', 'manager');
+    expect(await setAutoGoLive(true, 1)).toEqual({ ok: false, failure: 'forbidden' });
+    ctx = context('starter');
+    expect(await setAutoGoLive(true, 1)).toEqual({ ok: false, failure: 'locked' });
+    ctx = context('growth');
+    expect(await setAutoGoLive(true, 2)).toEqual({ ok: false, failure: 'invalid' });
+    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '0');
+    expect(await setAutoGoLive(true, 1)).toEqual({ ok: false, failure: 'quality_off' });
+    vi.stubEnv('CHAT_AUTO_GO_LIVE', 'false');
+    expect(await setAutoGoLive(false, 0)).toEqual({ ok: false, failure: 'unavailable' });
+    expect(upsert()).toBeUndefined();
+  });
+
+  it('says unavailable before 00443, and never throws', async () => {
+    writeError = MISSING;
+    expect(await setAutoGoLive(true, 1)).toEqual({ ok: false, failure: 'unavailable' });
+    writeError = { message: 'boom' } as typeof MISSING;
+    expect(await setAutoGoLive(true, 1)).toEqual({ ok: false, failure: 'failed' });
   });
 });
