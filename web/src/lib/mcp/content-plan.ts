@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
+import { mayUseBrand } from '@/lib/mcp/data';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { siteTypeOf } from '@/lib/content/page-types';
 import {
@@ -96,7 +97,7 @@ function mcpPlanRow(row: PlanRow): McpPlanRow {
 /**
  * The brand's Content plan over `days` (7, 30 or 90), its rows ranked as the
  * page shows them: the first 50 of a card, or of every row without one.
- * Null for a brand outside the key's organization.
+ * Null for a brand outside the key's organization, or one its owner may not use.
  */
 export async function getContentPlanFor(
   auth: McpAuthContext,
@@ -110,7 +111,7 @@ export async function getContentPlanFor(
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (!brand) return null;
+  if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const read = await readContentPlan(
     supabaseAdmin,

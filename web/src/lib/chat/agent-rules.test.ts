@@ -292,6 +292,25 @@ describe('who sees and changes an agent', () => {
     ).toBe(false);
   });
 
+  it('shows a Selected-brands person their own agent on All brands, which runs on theirs only', () => {
+    const narrowed = { ...viewer('manager'), brandAccess: [BRAND] };
+    const allBrands = { scope: { all_brands: true as const } };
+    expect(canSeeAgent(agent(allBrands), narrowed)).toBe(true);
+    // Someone else's on All brands covers brands they don't have: hidden, as before.
+    expect(
+      canSeeAgent(agent({ ...allBrands, ownerId: OTHER, visibility: 'workspace' }), narrowed),
+    ).toBe(false);
+    // Their own on a brand taken from them since: hidden until it comes back (§9 Q4).
+    expect(canSeeAgent(agent({ scope: { brand_ids: [OTHER] } }), narrowed)).toBe(false);
+    // With All brands, nothing changes.
+    expect(
+      canSeeAgent(
+        agent({ ...allBrands, ownerId: OTHER, visibility: 'workspace' }),
+        viewer('analyst'),
+      ),
+    ).toBe(true);
+  });
+
   it('lets Analysts and Agency partners read only, with the roles who can', () => {
     for (const role of ['analyst', 'agency_partner'] as const) {
       for (const act of ['create', 'edit', 'run', 'pause', 'duplicate'] as const) {

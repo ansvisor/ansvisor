@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DraftPage } from '@/lib/actions/content-drafts';
 import type { AuthorsRead, ContentAuthor } from './authors';
 import {
@@ -221,13 +221,19 @@ describe('cmsSource', () => {
     reviewerId: 'r1',
     authorConfirmed: false,
     language: null,
+    pageType: 'guide',
+    isNew: true,
+    schemaLeftOut: false,
   };
-  const ada = { id: 'a1', name: 'Ada Lovelace' } as ContentAuthor;
+  const ada = { id: 'a1', name: 'Ada Lovelace', sameAs: [] } as unknown as ContentAuthor;
   const reviewer = {
     id: 'r1',
     name: 'Dr. Grace Hopper',
     title: 'Clinical Reviewer',
   } as ContentAuthor;
+  // The authors are read once Quality is live (its phase 1), as readCmsSources reads them.
+  beforeEach(() => vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '1'));
+  afterEach(() => vi.unstubAllEnvs());
   const authors = (bylineInContent: boolean): AuthorsRead => ({
     authors: [ada, reviewer],
     brands: [{ id: 'b1', name: 'Acme', bylineInContent }],
@@ -253,7 +259,38 @@ describe('cmsSource', () => {
       reviewer,
       teamByline: 'Acme Team',
       byline: null,
+      schema: {
+        input: {
+          title: 'Pour-over',
+          author: ada,
+          authorUrl: null,
+          brandName: 'Acme',
+          brandUrl: null,
+          isNew: true,
+        },
+        pageType: 'guide',
+        leftOut: false,
+      },
     });
+  });
+
+  it("gives the Article schema's author as Before you publish does (00448)", () => {
+    const by = (over: Partial<Parameters<typeof cmsSource>[0]>) => source(over).schema.input.author;
+    // No author picked: the brand.
+    expect(by({ page: { ...stored, authorId: null } })).toBeNull();
+    // The author the site names (00271): left out.
+    expect(by({ page: { ...stored, authorId: null, authorConfirmed: true } })).toBeUndefined();
+    // Quality on, its authors not read: not known, left out.
+    expect(by({ authors: null })).toBeUndefined();
+    // Quality off: none are read, the page goes out under the brand.
+    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '0');
+    expect(by({ authors: null })).toBeNull();
+    expect(source({ page: { ...stored, schemaLeftOut: true, isNew: false } }).schema).toMatchObject(
+      {
+        leftOut: true,
+        input: { isNew: false },
+      },
+    );
   });
 
   it('adds the byline line in the page’s language, else the brand’s', () => {
@@ -297,6 +334,20 @@ describe('cmsSource', () => {
 });
 
 describe('bulkCmsItems', () => {
+  const schema = (over: Partial<CmsSource['schema']> = {}): CmsSource['schema'] => ({
+    input: {
+      title: 'Pour-over',
+      author: null,
+      authorUrl: null,
+      brandName: 'Acme',
+      brandUrl: null,
+      isNew: true,
+    },
+    // A page that isn't an article: no Article schema.
+    pageType: 'product_page',
+    leftOut: false,
+    ...over,
+  });
   const source = (over: Partial<CmsSource>): CmsSource => ({
     draftId: 'd1',
     title: 'Pour-over',
@@ -306,7 +357,29 @@ describe('bulkCmsItems', () => {
     reviewer: null,
     teamByline: 'Acme Team',
     byline: null,
+    schema: schema(),
     ...over,
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("sends an article with its Article schema at the end, unless it's left out (00448)", () => {
+    vi.useFakeTimers({ now: new Date(2026, 10, 1, 12), toFake: ['Date'] });
+    const [article, leftOut] = bulkCmsItems(
+      [
+        source({ schema: schema({ pageType: 'guide' }) }),
+        source({ draftId: 'd2', schema: schema({ pageType: 'guide', leftOut: true }) }),
+      ],
+      new Map(),
+    );
+    const [body, script] = article.page!.html.split('\n<script type="application/ld+json">');
+    expect(body).toBe('<p>Brew it slowly.</p>');
+    expect(JSON.parse(script.replace('</script>', ''))).toMatchObject({
+      '@type': 'Article',
+      headline: 'Pour-over',
+      author: { '@type': 'Organization', name: 'Acme' },
+      datePublished: '2026-11-01',
+    });
+    expect(leftOut.page!.html).toBe('<p>Brew it slowly.</p>');
   });
 
   it('includes the reviewer as a WebPage schema node in bulk sends', () => {
@@ -324,6 +397,28 @@ describe('bulkCmsItems', () => {
     // A page that doesn't name them goes without the node, as the editor's does.
     const [unnamed] = bulkCmsItems([source({ reviewer })], new Map());
     expect(unnamed.page?.html).not.toContain('reviewedBy');
+  });
+
+  it('sends an article with both its Article schema and its reviewer’s WebPage node', () => {
+    vi.useFakeTimers({ now: new Date(2026, 10, 1, 12), toFake: ['Date'] });
+    const reviewer = {
+      id: 'r1',
+      name: 'Dr. Grace Hopper',
+      title: 'Clinical Reviewer',
+    } as ContentAuthor;
+    const named = '<h1>Pour-over</h1>\n<p>Reviewed by Dr. Grace Hopper.</p>';
+    const [item] = bulkCmsItems(
+      [source({ reviewer, html: named, schema: schema({ pageType: 'guide' }) })],
+      new Map(),
+    );
+    const nodes = item
+      .page!.html.split('<script type="application/ld+json">')
+      .slice(1)
+      .map((part) => JSON.parse(part.slice(0, part.indexOf('</script>'))));
+    expect(nodes).toEqual([
+      expect.objectContaining({ '@type': 'Article', headline: 'Pour-over' }),
+      expect.objectContaining({ '@type': 'WebPage', reviewedBy: expect.anything() }),
+    ]);
   });
 
   it('gives each page as the Send dialog would send it, or why it can’t go', () => {

@@ -19,6 +19,8 @@ const migrations = files.map((file) => readFileSync(new URL(file, dir), 'utf8'))
 /** Tables people can write that belong to no brand, and why they need no trigger. */
 const NOT_A_BRAND_ROW = {
   api_keys: "The organization's API keys.",
+  chat_notices:
+    "A person's own notes from the system about the workspace's AI key (00441): no brand's data.",
   brands:
     "The brands themselves: their policies refuse a demo brand's insert, update and delete (00380).",
   chat_auto_choices:
