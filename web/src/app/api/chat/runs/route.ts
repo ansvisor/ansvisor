@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { startChatRun } from '@/lib/chat/engine';
-import { chatActor, engineFailureResponse, runFailure, streamRun } from '@/lib/chat/run-api';
+import { bodyHasApiKey } from '@/lib/chat/key-paste';
+import {
+  apiKeyRefusal,
+  chatActor,
+  engineFailureResponse,
+  runFailure,
+  streamRun,
+} from '@/lib/chat/run-api';
 
 /** A run works up to the function's limit; it waits for a slot within it. */
 export const maxDuration = 300;
@@ -16,15 +23,18 @@ export const maxDuration = 300;
  * the `x-chat-conversation` and `x-chat-run` headers, never in an event.
  *
  * Refusals as values (`{ ok: false, failure, code, error }`): 400 a bad
- * body, 401 no session, 402 a read-only workspace (the server's
- * subscription_inactive body), 404 Chat off for the workspace (CHAT_AGENTIC)
- * or a chat that isn't the person's, 429 past the message limits.
+ * body, or `api_key` for a message that holds an API key (W4-05: never
+ * kept, sent to a model or logged), 401 no session, 402 a read-only
+ * workspace (the server's subscription_inactive body), 404 Chat off for the
+ * workspace (CHAT_AGENTIC) or a chat that isn't the person's, 429 past the
+ * message limits.
  */
 export async function POST(req: Request) {
   try {
     const actor = await chatActor();
     if (actor instanceof NextResponse) return actor;
     const body = await req.json().catch(() => null);
+    if (bodyHasApiKey(body, 'message')) return apiKeyRefusal();
     const started = await startChatRun(actor, body);
     if (!started.ok) return engineFailureResponse(started);
     return streamRun(req, actor, started.runId, {
