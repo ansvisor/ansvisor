@@ -2091,7 +2091,6 @@
           "coalesced": "Three runs already wait for {agent} on this brand · this one joins the last",
           "chatStarted": "Chat is working on AC-{no}",
           "chatQueued": "Chat is queued for AC-{no}. It starts when a run slot frees up.",
-          "openRun": "Open run",
           "didntStart": "{reason, select, action_closed {The action was closed, so the run didn’t start.} brand_gone {The action’s brand is no longer in the agent’s scope, so the run didn’t start.} other {The run didn’t start. The agent’s Runs tab says why.}}",
           "failed": "Couldn’t start the run. Try again."
         }
