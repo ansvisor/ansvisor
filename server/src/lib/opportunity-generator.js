@@ -28,7 +28,13 @@ import {
 } from './opportunity-limits.js';
 import { loadClusterOpportunities, loadOpportunityBaskets } from './open-opportunities.js';
 import { basket, duplicateThreshold, findDuplicate, storedBasket } from './opportunity-dedup.js';
-import { candidateOf, findSameQuestion, mergeOpportunity } from './opportunity-same-question.js';
+import {
+  candidateOf,
+  clustersOf,
+  findSameQuestion,
+  isOpen,
+  mergeOpportunity,
+} from './opportunity-same-question.js';
 import { loadClusters } from './prompt-clusters.js';
 import { cleanOpportunityText } from './opportunity-text.js';
 import { yearRule } from './current-year.js';
@@ -236,22 +242,38 @@ async function skipDuplicates(brandId, open, { rows, clusterById, basketRows, co
  * clusters taken in leave `open` and become covered; returns which
  * opportunity each went to.
  *
+ * A cluster an open opportunity already holds (its cluster or a related one)
+ * joined it before and isn't merged again. An opportunity with no cluster of
+ * its own, as Send to Content and a task make, doesn't make its clusters
+ * covered (loadClusterOpportunities reads only rows with one), so the same
+ * cluster comes back every night; merging it again would add its times
+ * searched again (N, 2N, 3N…).
+ *
  * @returns {Promise<Map<string, string>>} cluster id → opportunity id
  */
-async function mergeSameQuestion(
+export async function mergeSameQuestion(
   open,
   rows,
   { clusterById, basketRows, covered, topicName, source },
 ) {
   const into = new Map();
+  let merged = 0;
   for (const cand of [...open]) {
     const c = clusterById.get(cand.id);
     const question = cand.metrics.representative;
-    const target = findSameQuestion(
-      { question: question?.text, promptId: question?.id, clusterIds: [c.id] },
-      rows,
-    );
+    const holder = rows.find((row) => isOpen(row) && clustersOf(row).includes(c.id));
+    const target =
+      holder ??
+      findSameQuestion(
+        { question: question?.text, promptId: question?.id, clusterIds: [c.id] },
+        rows,
+      );
     if (!target) continue;
+    into.set(c.id, target.id);
+    covered.add(c.id);
+    open.splice(open.indexOf(cand), 1);
+    // Already in it: its AI searches count once.
+    if (holder) continue;
     const update = mergeOpportunity(
       target,
       {
@@ -274,11 +296,9 @@ async function mergeSameQuestion(
     if (error) throw new Error(error.message);
     // A later cluster in this run may land on the same one.
     Object.assign(target, update);
-    into.set(c.id, target.id);
-    covered.add(c.id);
-    open.splice(open.indexOf(cand), 1);
+    merged += 1;
   }
-  if (into.size) logger.info({ merged: into.size }, '[opportunities] same question merged');
+  if (merged) logger.info({ merged }, '[opportunities] same question merged');
   return into;
 }
 
