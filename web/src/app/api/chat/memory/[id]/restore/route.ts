@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { writeRefusal } from '@/lib/subscription-guard';
 import {
   memoryIdOf,
   memoryRefusalResponse,
@@ -15,6 +14,8 @@ import { chatActor, runFailure } from '@/lib/chat/run-api';
  *
  * Undo (CHAT-14 item 23): brings a line deleted in the last 10 seconds
  * back. After that the minute tick deleted it for good: 409 undo_expired.
+ * A read-only workspace's person may still bring back their own Me line
+ * (the store answers 402 for the rest), as they may delete it.
  * Refusals as values (`{ ok: false, failure, code, error }`, #1777): 401,
  * 402, 403, 404 a line they can't see, 409 too late or the scope full.
  */
@@ -22,8 +23,6 @@ export async function POST(_req: Request, { params }: MemoryParams) {
   try {
     const actor = await chatActor();
     if (actor instanceof NextResponse) return actor;
-    const refusal = await writeRefusal();
-    if (refusal) return refusal;
     const id = memoryIdOf((await params).id);
     if (!id) return missingMemoryResponse();
     const viewer = await memoryViewerFor(actor);

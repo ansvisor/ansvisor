@@ -536,14 +536,15 @@ export async function listMemory(
     : [[], [], []];
   const view = (row: ItemRow): MemoryItemView => {
     const scope = scopeOf(row);
-    const may = writable && rights[scope] === 'edit';
+    const may = rights[scope] === 'edit';
     return {
       id: row.id,
       scope,
       text: row.text,
       source: sourceOf(row),
       updatedAt: row.updated_at,
-      can: { edit: may, remove: may },
+      // A person's own Me line can be deleted while the workspace is read-only.
+      can: { edit: may && writable, remove: may && (writable || scope === 'user') },
     };
   };
   return {
@@ -742,15 +743,22 @@ export async function applyMemoryRequest(
 
 // ─── Changing and deleting ──────────────────────────────────────────────────
 
-/** A line the person may change: one they see, in a scope they edit, while memory is on for them. */
+/**
+ * A line the person may change: one they see, in a scope they edit, while
+ * memory is on for them and the workspace isn't read-only. `ownWhileReadOnly`:
+ * their own Me line may still be deleted (and brought back) while it is,
+ * their right over their personal data (KVKK/GDPR; owner decision
+ * 2026-11-02); adding, editing and Brand or Workspace lines stay closed.
+ */
 async function lineToChange(
   viewer: MemoryViewer,
   id: string,
-  options: { deleted?: boolean } = {},
+  options: { deleted?: boolean; ownWhileReadOnly?: boolean } = {},
 ): Promise<{ ok: true; row: ItemRow } | { ok: false; refusal: MemoryRefusal }> {
-  if (!viewer.plan.writable) return memoryRefusal('read_only');
+  if (!viewer.plan.writable && !options.ownWhileReadOnly) return memoryRefusal('read_only');
   const row = await readVisible(viewer, id, options);
   if (!row) return memoryRefusal('not_found');
+  if (!viewer.plan.writable && scopeOf(row) !== 'user') return memoryRefusal('read_only');
   if (memoryRight(viewer.role, scopeOf(row)) !== 'edit') return roleRefusal(scopeOf(row));
   if (viewer.role !== 'admin') {
     const switches = await readMemorySwitches(viewer.organizationId, viewer.userId);
@@ -796,7 +804,7 @@ export async function deleteMemory(
   id: string,
   now = new Date(),
 ): Promise<MemoryResult<{ id: string; scope: MemoryScope; text: string; undoUntil: string }>> {
-  const found = await lineToChange(viewer, id);
+  const found = await lineToChange(viewer, id, { ownWhileReadOnly: true });
   if (!found.ok) return found;
   const { error } = await supabaseAdmin
     .from('chat_memory_items')
@@ -825,7 +833,7 @@ export async function restoreMemory(
   id: string,
   now = new Date(),
 ): Promise<MemoryResult<{ id: string }>> {
-  const found = await lineToChange(viewer, id, { deleted: true });
+  const found = await lineToChange(viewer, id, { deleted: true, ownWhileReadOnly: true });
   if (!found.ok) return found;
   const deletedAt = Date.parse(found.row.deleted_at ?? '');
   if (!(now.getTime() - deletedAt <= MEMORY_UNDO_MS + UNDO_GRACE_MS)) {
@@ -872,13 +880,15 @@ export const memorySwitchesPatch = z
 
 /**
  * Turns memory on or off (item 24): "Use memory" for the person, the
- * workspace's switch for everyone (an Admin's, Settings › Chat).
+ * workspace's switch for everyone (an Admin's, Settings › Chat). A
+ * read-only workspace keeps "Use memory" open (the person's own data,
+ * KVKK/GDPR); the workspace's switch waits for a plan.
  */
 export async function setMemorySwitches(
   viewer: MemoryViewer,
   patch: z.infer<typeof memorySwitchesPatch>,
 ): Promise<MemoryResult<MemorySwitches>> {
-  if (!viewer.plan.writable) return memoryRefusal('read_only');
+  if (!viewer.plan.writable && patch.workspace !== undefined) return memoryRefusal('read_only');
   if (patch.workspace !== undefined && viewer.role !== 'admin') return memoryRefusal('role_switch');
   if (patch.workspace !== undefined) {
     const { error } = await supabaseAdmin.from('chat_settings').upsert(

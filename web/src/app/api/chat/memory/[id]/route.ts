@@ -27,6 +27,9 @@ const textBody = z.strictObject({ text: z.string().max(2_000) });
  * /api/chat/memory/{id}/restore brings it back until then.
  *
  * Who: Me its person; Brand an Admin or a Manager; Workspace an Admin.
+ * While the workspace is read-only a person may still delete their own Me
+ * line (their personal data, KVKK/GDPR): the store answers 402 for the
+ * rest, so DELETE doesn't check the plan first; PATCH does.
  * Refusals as values (`{ ok: false, failure, code, error }`, #1777): 400,
  * 401, 402 a read-only workspace, 403 a scope they only read, 404 a line
  * they can't see, 409 memory off or full.
@@ -56,8 +59,6 @@ export async function DELETE(_req: Request, { params }: MemoryParams) {
   try {
     const actor = await chatActor();
     if (actor instanceof NextResponse) return actor;
-    const refusal = await writeRefusal();
-    if (refusal) return refusal;
     const id = memoryIdOf((await params).id);
     if (!id) return missingMemoryResponse();
     const viewer = await memoryViewerFor(actor);

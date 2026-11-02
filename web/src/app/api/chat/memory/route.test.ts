@@ -176,6 +176,30 @@ describe('PATCH and DELETE /api/chat/memory/{id}, and Undo', () => {
   });
 });
 
+describe('a read-only workspace (KVKK/GDPR)', () => {
+  it("still deletes the person's own Me line and turns Use memory off; the rest answers 402", async () => {
+    state.readOnly = true;
+    db.tables.organizations[0].subscription_status = 'canceled';
+    db.tables.chat_memory_items.push({
+      ...db.tables.chat_memory_items[0],
+      id: 'dddddddd-0000-4000-8000-000000000002',
+      scope: 'workspace',
+      user_id: null,
+    });
+    expect((await one.DELETE(request('DELETE'), params())).status).toBe(200);
+    expect((await restore.POST(request('POST'), params())).status).toBe(200);
+    expect(
+      (await one.DELETE(request('DELETE'), params('dddddddd-0000-4000-8000-000000000002'))).status,
+    ).toBe(402);
+    expect((await one.PATCH(request('PATCH', { text: 'x' }), params())).status).toBe(402);
+    expect(
+      await (await settings.PATCH(request('PATCH', { personal: false }))).json(),
+    ).toMatchObject({ ok: true, switches: { personal: false } });
+    as(PEOPLE.admin);
+    expect((await settings.PATCH(request('PATCH', { workspace: false }))).status).toBe(402);
+  });
+});
+
 describe('PATCH /api/chat/memory/settings', () => {
   it("turns the person's Use memory, and only an Admin the workspace's", async () => {
     const mine = await settings.PATCH(request('PATCH', { personal: false }));
