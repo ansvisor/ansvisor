@@ -183,6 +183,7 @@ import {
   type LibrarySkill,
 } from './skills/library';
 import { MAX_UPLOADS } from './uploads';
+import { CHAT_EFFORTS, isChatModelChoice, modelChoiceOpen, runChoiceOf } from './models';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -394,6 +395,18 @@ export const startRunInput = z.object({
    * item 18): a run of the same chat, read on the server, never trusted.
    */
   fromRunId: z.guid().optional(),
+  /**
+   * The model and effort picked in the composer's model menu (CHAT-16,
+   * W4-02): Auto or an offered model (lib/chat/models.ts). Checked again
+   * against the plan as the run starts (runChoiceOf).
+   */
+  model: z
+    .string()
+    .trim()
+    .max(200)
+    .refine((value) => isChatModelChoice(value))
+    .optional(),
+  effort: z.enum(CHAT_EFFORTS).optional(),
 });
 
 /** What a message was scoped to: its page's chips and its @ references (chat_messages.context_json). */
@@ -696,9 +709,17 @@ export async function startChatRun(
     { conversation_id: conversationId, role: 'assistant', content_md: '', timezone },
     'make the answer',
   );
+  // The model menu's pick, when the plan lets the person choose (W4-02).
+  const choice = runChoiceOf(input, modelChoiceOpen(ctx.plan));
   const runId = await insertRow(
     'chat_runs',
-    { message_id: answerId, conversation_id: conversationId, status: 'queued' },
+    {
+      message_id: answerId,
+      conversation_id: conversationId,
+      status: 'queued',
+      model: choice.model,
+      effort: choice.effort,
+    },
     'make the run',
   );
   const progress: Progress = {

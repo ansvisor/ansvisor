@@ -5557,3 +5557,45 @@ describe('brand access (BRAND-ACCESS PR 9)', () => {
     expect(touchedOf(started.conversationId)).toEqual([]);
   });
 });
+
+describe('the model menu’s pick (W4-02)', () => {
+  it('keeps the model and effort picked on the run, and Auto at Normal in the free trial', async () => {
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Which pages does Perplexity cite?',
+      brandId: BRAND,
+      model: 'anthropic/claude-opus-5.5',
+      effort: 'high',
+    });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    expect(runRow(started.runId)).toMatchObject({
+      model: 'anthropic/claude-opus-5.5',
+      effort: 'high',
+    });
+
+    // No pick: Auto at Normal, as before.
+    const plain = await engine.startChatRun(ADMIN, { message: 'And Gemini?', brandId: BRAND });
+    if (!plain.ok) throw new Error('not started');
+    expect(runRow(plain.runId)).toMatchObject({ model: 'auto', effort: 'normal' });
+
+    // In the free trial the pick is set aside (Wave 4 decision 2 B).
+    db.tables.organizations[0].subscription_status = 'trialing';
+    const trial = await engine.startChatRun(ADMIN, {
+      message: 'And ChatGPT?',
+      brandId: BRAND,
+      model: 'anthropic/claude-opus-5.5',
+      effort: 'max',
+    });
+    if (!trial.ok) throw new Error('not started');
+    expect(runRow(trial.runId)).toMatchObject({ model: 'auto', effort: 'normal' });
+  });
+
+  it('refuses a model the menu doesn’t offer', async () => {
+    const refused = await engine.startChatRun(ADMIN, {
+      message: 'Hi',
+      brandId: BRAND,
+      model: 'openai/gpt-6.1-sol',
+    });
+    expect(refused).toMatchObject({ ok: false, status: 400, code: 'invalid' });
+    expect(db.tables.chat_runs).toHaveLength(0);
+  });
+});
