@@ -161,12 +161,16 @@ import {
   MAX_SKILL_BODIES,
   USE_SKILL_TOOL,
   availableSkillsBlock,
-  enabledSkills,
   loadedSkillsBlock,
   skillsForPrompt,
   typedSkills,
-  type LibrarySkill,
 } from './skills/library';
+import {
+  enabledSkillsFor,
+  loadSkillBodies,
+  skillSourceWords,
+  type EnabledSkill,
+} from './skills/store';
 import { MAX_UPLOADS } from './uploads';
 
 /**
@@ -744,10 +748,11 @@ interface RunContext {
   offered: Map<string, ChatTool>;
   refused: { tool: ChatTool; denial: ToolDenial }[];
   /**
-   * The skills the person may use (CHAT-13 items 3–4): every enabled one,
-   * and the ones the prompt lists. None while the new Chat is off.
+   * The skills the person may use (CHAT-13 items 3–4): every enabled one
+   * (the library's and the workspace's, skills/store.ts), and the ones the
+   * prompt lists. None while the new Chat is off.
    */
-  skills: { enabled: readonly LibrarySkill[]; listed: readonly LibrarySkill[] };
+  skills: { enabled: readonly EnabledSkill[]; listed: readonly EnabledSkill[] };
   /** The calls of the model step being handled: questions asked together count as one batch. */
   stepCalls?: PendingCall[];
   /**
@@ -958,7 +963,7 @@ async function openContext(
     refused,
     agentRunId,
     sessionUserId,
-    skills: runSkills(actor.organizationId, progress, history.plan),
+    skills: await runSkills(actor, progress, history.plan),
   };
 }
 
@@ -987,14 +992,16 @@ const messageText = (message: ModelMessage) =>
  * lists. Past 20 enabled, the list keeps the ones this message calls by
  * /name, then the ones used in this chat (called in its recent turns, or
  * loaded in this run), then the best match to the question and the page.
+ * A workspace skill this run loaded before has its body read again (W3-06).
  */
-function runSkills(
-  organizationId: string,
+async function runSkills(
+  actor: ChatActor,
   progress: Progress,
   history: HistoryPlan,
-): RunContext['skills'] {
-  const enabled = enabledSkills(organizationId);
+): Promise<RunContext['skills']> {
+  const enabled = await enabledSkillsFor(actor.organizationId, actor.userId);
   if (enabled.length === 0) return { enabled, listed: [] };
+  await loadSkillBodies(actor, enabled, progress.skills ?? []);
   const question = progress.question ?? '';
   const names = (text: string) => typedSkills(text, enabled).map((skill) => skill.name);
   const earlier = history.recent
@@ -1218,24 +1225,31 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
 /**
  * A skill's body for the rest of the run (CHAT-13 item 4): its step, "Used
  * skill: {title}" with where it comes from under it, and its name kept, so
- * every later step gets its text (loadedSkills).
+ * every later step gets its text (loadedSkills). A workspace skill's body is
+ * read from its row now: false when it can't be (off since, or changed).
+ * An imported skill was written outside the workspace (CHAT-20 §16a): from
+ * it on the run is tainted, so a change shows its card even in Full auto.
  */
 async function loadSkill(
   rc: RunContext,
-  skill: LibrarySkill,
+  skill: EnabledSkill,
   via: 'typed' | 'model',
-): Promise<void> {
+): Promise<boolean> {
+  await loadSkillBodies(rc.actor, [skill], [skill.name]);
+  if (skill.body === null) return false;
   rc.progress.skills = [...(rc.progress.skills ?? []), skill.name];
+  if (skill.source === 'import') rc.progress.tainted = true;
   const row = await insertStep(rc.run.id, {
     position: ++rc.progress.steps,
     kind: 'skill',
     status: 'done',
     label: t('step.usedSkill', { title: skill.title }),
-    detail: t('step.skillFromLibrary'),
+    detail: skillSourceWords(skill, rc.actor.userId),
     tool: USE_SKILL_TOOL,
     debug: { skill: skill.name, via },
   });
   rc.sink.emit('step.finished', { step: clientStep(row) });
+  return true;
 }
 
 /**
@@ -1249,8 +1263,9 @@ async function loadTypedSkills(rc: RunContext): Promise<number> {
     0,
     MAX_SKILL_BODIES,
   );
-  for (const skill of typed) await loadSkill(rc, skill, 'typed');
-  return typed.length;
+  let loaded = 0;
+  for (const skill of typed) if (await loadSkill(rc, skill, 'typed')) loaded += 1;
+  return loaded;
 }
 
 /**
@@ -1282,14 +1297,22 @@ async function pickSkill(rc: RunContext, call: PendingCall): Promise<CallOutcome
       true,
     );
   }
-  await loadSkill(rc, skill, 'model');
+  if (!(await loadSkill(rc, skill, 'model'))) {
+    return result(
+      call,
+      { code: 'not_available', message: 'This skill is off now: go on without it.' },
+      true,
+    );
+  }
   return result(call, { ok: true, note: 'Its text is below the rules from your next step.' });
 }
 
 /** The loaded skills' block for a step's prompt (prompt.ts 2b), or none. */
 function loadedSkills(rc: RunContext): string | undefined {
   const loaded = (rc.progress.skills ?? []).flatMap((name) =>
-    rc.skills.enabled.filter((skill) => skill.name === name),
+    rc.skills.enabled.flatMap((skill) =>
+      skill.name === name && skill.body !== null ? [{ ...skill, body: skill.body }] : [],
+    ),
   );
   return loaded.length > 0 ? loadedSkillsBlock(loaded) : undefined;
 }

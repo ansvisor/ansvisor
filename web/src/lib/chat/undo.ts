@@ -14,6 +14,7 @@ import type { ChatTool } from './registry/define-tool';
 import { chatToolByKey } from './registry/tools';
 import { DAY_MS, asObject, check, textOf, type Snapshot } from './undo-parts';
 import { OUTPUT_UNDO_RULES } from './undo-output';
+import { SKILL_UNDO_RULES } from './undo-skills';
 import { SETUP_UNDO_RULES } from './undo-setup';
 import { ACTION_CENTER_UNDO_RULES } from './undo-action-center';
 
@@ -443,6 +444,7 @@ export const UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   ...SETUP_UNDO_RULES,
   ...ACTION_CENTER_UNDO_RULES,
   ...OUTPUT_UNDO_RULES,
+  ...SKILL_UNDO_RULES,
 };
 
 /**

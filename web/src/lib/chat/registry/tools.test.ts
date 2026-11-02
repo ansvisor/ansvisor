@@ -99,6 +99,9 @@ vi.mock('@/lib/actions/prompt-suggestions', () => ({
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: tracked.track('actions/chat-access-requests.requestAccess'),
 }));
+vi.mock('@/lib/actions/chat-skills', () => ({
+  saveChatSkill: tracked.track('actions/chat-skills.saveChatSkill'),
+}));
 vi.mock('@/lib/actions/prompt', () => ({
   addTopicPrompts: tracked.track('actions/prompt.addTopicPrompts'),
   pauseBrandPrompts: tracked.track('actions/prompt.pauseBrandPrompts'),
@@ -321,6 +324,11 @@ describe('the Chat tool registry', () => {
       date_to: '2026-10-31',
     });
     await run('run_site_audit', { brand_id: brand, urls: [' https://acme.example/a '] });
+    await run('save_skill', {
+      name: 'pricing-faq',
+      description: ' Writes a pricing FAQ. ',
+      instructions: 'Read the pricing page.',
+    });
 
     expect(calls.map((call) => [call.from, call.args])).toEqual([
       ['actions/prompt-suggestions.dismissSuggestion', [item]],
@@ -385,6 +393,16 @@ describe('the Chat tool registry', () => {
         [brand, { dateFrom: '2026-10-01', dateTo: '2026-10-31', template: 'competitor_benchmark' }],
       ],
       ['actions/audits.startSiteAudits', [brand, ['https://acme.example/a']]],
+      [
+        'actions/chat-skills.saveChatSkill',
+        [
+          {
+            name: 'pricing-faq',
+            description: 'Writes a pricing FAQ.',
+            instructions: 'Read the pricing page.',
+          },
+        ],
+      ],
     ]);
   });
 
@@ -573,6 +591,8 @@ describe('approval policies', () => {
       push_cms_draft: ['admin', 'manager'],
       build_report: ['admin', 'manager'],
       run_site_audit: ['admin', 'manager'],
+      // A skill of one's own (W3-06, CHAT-13 v2): Admins and Managers save skills.
+      save_skill: ['admin', 'manager'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);

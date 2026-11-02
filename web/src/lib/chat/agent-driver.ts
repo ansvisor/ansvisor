@@ -181,6 +181,8 @@ function pauseFor(refusal: AgentRefusal): Exclude<AgentPausedReason, 'manual'> |
   if (refusal.code === 'ai_limit') return 'cap';
   // The workspace's own key is marked failing (AGENT-OWN-KEY §5.2 item 4).
   if (refusal.code === 'own_key_failed') return 'own_key';
+  // A skill it runs was turned off, rejected, deleted or changed (CHAT-13).
+  if (refusal.code === 'skill_off') return 'skill_off';
   return null;
 }
 

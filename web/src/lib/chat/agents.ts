@@ -9,6 +9,7 @@ import type { Json } from '@/types/supabase';
 import { recordAccessDenied } from './access-log';
 import { logActivity, summaryValue } from './activity';
 import { connectionName, missingRequiredConnection } from './agent-connections';
+import { offAgentSkill } from './agent-skills';
 import {
   AGENT_PAUSED_REASONS,
   AGENT_STATUSES,
@@ -63,6 +64,7 @@ import type { FailingKey, OwnKeyFailure } from './key-health';
 import { planFactsFromOrgRow, type PlanFacts } from './plan-facts';
 import { parseTeamRole, type ChatMode, type ToolDenial } from './precedence';
 import { readBrandAccess } from './precedence-context';
+import { agentSkillStates } from './skills/store';
 
 /**
  * Chat's agents (CHAT-21; CHAT-27 §E): the definitions behind Chat ›
@@ -176,6 +178,7 @@ export type AgentRefusalCode =
   | 'queue_full'
   | 'connection_missing'
   | 'own_key_failed'
+  | 'skill_off'
   | 'failed';
 
 export type AgentRefusal =
@@ -231,6 +234,7 @@ const REFUSAL_STATUS: Record<AgentRefusalCode, number> = {
   queue_full: 409,
   connection_missing: 409,
   own_key_failed: 409,
+  skill_off: 409,
   failed: 500,
 };
 
@@ -1183,16 +1187,19 @@ export async function runnableBrands(
  * Whether the agent may run with these settings now (§D item 21: on
  * Activate, on Resume and before a run): the plan and Settings › Chat allow
  * its mode and engines for the person it acts as, a brand of its scope is
- * there, and the AI limit isn't used up. Its Required connections are
+ * there, its skills are on for the person it acts as (CHAT-13: else
+ * skill_off), and the AI limit isn't used up. Its Required connections are
  * checked for the run's brand before the run (agent-driver.ts,
- * agent-connections.ts), and for each brand of its scope on Resume; its
- * skills (CHAT-13) once their registry exists.
+ * agent-connections.ts), and for each brand of its scope on Resume.
+ * `actingUserId`: whose skills it runs, the person checking unless said
+ * (Resume: its owner, whom its triggered runs act as).
  */
 export async function runChecks(
   ctx: AgentContext,
   agent: LoadedAgent,
   actingRole: AgentViewer['role'],
   triggers: readonly AgentTriggerInput[],
+  actingUserId: string = ctx.actor.userId,
 ): Promise<Refused | null> {
   const version = agent.version;
   if (!version) return refused('failed');
@@ -1204,6 +1211,12 @@ export async function runChecks(
   if ((await runnableBrands(ctx.actor.organizationId, version.scope)).length === 0) {
     return refused('no_brand');
   }
+  // A skill turned off, not approved, gone or changed since (CHAT-13 items 10, 19).
+  const offSkill = offAgentSkill(
+    version.skill_ids,
+    await agentSkillStates(ctx.actor.organizationId, actingUserId, version.skill_ids),
+  );
+  if (offSkill) return refused('skill_off', { skill: offSkill });
   // The workspace's own key is marked failing (AGENT-OWN-KEY §5.2 item 4): nothing is queued.
   const key = await failingOwnKey(ctx.actor.organizationId);
   if (key) return refused('own_key_failed', { why: ownKeyWhy(key) });
@@ -1649,6 +1662,7 @@ export async function changeAgentState(
       agent,
       ownerRole,
       triggerInputs(await triggersOf([row.id])),
+      action === 'activate' ? ctx.actor.userId : (row.owner_id ?? ctx.actor.userId),
     );
     if (failing) return failing;
     // A brand without a Required connection would pause it again on its next run
