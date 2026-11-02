@@ -131,6 +131,15 @@ import {
   type ChatToolContext,
 } from './registry/define-tool';
 import { CHAT_TOOLS, chatTool, chatToolByKey } from './registry/tools';
+import {
+  callAsTextAt,
+  fenceOpen,
+  maskToolNames,
+  saysInstructionsIgnored,
+  toolNamesOf,
+  wordHold,
+  type ToolNames,
+} from './answer-guards';
 import { abortDriver, publishRunEnd, registerDriver, unregisterDriver } from './run-hub';
 import {
   MAX_MODEL_STEPS,
@@ -231,6 +240,28 @@ function toolWords(tool: Pick<ChatTool, 'labelKey'>, which: 'name' | 'step'): st
   return Object.hasOwn(messages.chatTools, tool.labelKey)
     ? toolT(`${tool.labelKey}.${which}` as never)
     : t('step.unknown');
+}
+
+let shownNames: ToolNames | null = null;
+
+/**
+ * The tool names an answer may not show (answer-guards.ts): each registry
+ * row's as its Settings name, the engine's own with no words (they go).
+ */
+function answerToolNames(): ToolNames {
+  shownNames ??= toolNamesOf([
+    ...CHAT_TOOLS.map(
+      (tool) =>
+        [
+          tool.name,
+          Object.hasOwn(messages.chatTools, tool.labelKey) ? toolWords(tool, 'name') : null,
+        ] as const,
+    ),
+    ...[EXPLAIN_TOOL, ASK_TOOL, NEXT_MOVES_TOOL, USE_SKILL_TOOL].map(
+      (name) => [name, null] as const,
+    ),
+  ]);
+  return shownNames;
 }
 
 // ─── Who, and what can go wrong ─────────────────────────────────────────────
@@ -1814,6 +1845,8 @@ function runFigures(rc: RunContext): KnownFigures {
 class TextOut {
   private pending = '';
   private timer: ReturnType<typeof setTimeout> | null = null;
+  /** The reply wrote a tool call out as text: the rest of its text goes (answer-guards.ts). */
+  private cutOff = false;
 
   constructor(
     private readonly rc: RunContext,
@@ -1821,6 +1854,7 @@ class TextOut {
   ) {}
 
   push(delta: string) {
+    if (this.cutOff) return;
     this.pending += delta;
     if (this.pending.length >= 160) this.emit(false);
     else this.timer ??= setTimeout(() => this.emit(false), 60);
@@ -1833,15 +1867,28 @@ class TextOut {
   private emit(all: boolean) {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    const call = callAsTextAt(this.pending);
+    if (call !== null) {
+      this.pending = this.pending.slice(0, call);
+      this.cutOff = true;
+    }
     let cut = this.pending.length;
-    if (!all) {
+    if (!all && !this.cutOff) {
       const id = /[0-9a-fA-F-]+$/.exec(this.pending);
       if (id) cut = id.index;
+      // The last word may still grow into a tool's name, a code fence or a call written out.
+      const word = wordHold(this.pending);
+      if (word !== null) cut = Math.min(cut, word);
       const figure = figureHold(this.pending);
       if (figure !== null) cut = Math.min(cut, figure);
       cut = Math.max(cut, this.pending.length - HOLD_MAX);
     }
-    const checked = checkFigures(maskIds(this.pending.slice(0, cut)), this.known, {
+    const shown = maskToolNames(maskIds(this.pending.slice(0, cut)), answerToolNames(), {
+      inFence: fenceOpen(this.rc.progress.text),
+      atSpace: /\s$/.test(this.rc.progress.text),
+      keep: this.rc.progress.question ?? '',
+    });
+    const checked = checkFigures(shown, this.known, {
       before: this.rc.progress.text.slice(-80),
       after: this.pending.slice(cut),
     });
@@ -3957,6 +4004,13 @@ function summaryOf(progress: RunProgress, workingMs: number): ChatRunSummary {
 
 /** The answer is written: kept with when it was made and the newest data it read (CHAT-20 §15a). */
 async function finish(rc: RunContext): Promise<void> {
+  // The data held instructions for AI assistants and the answer doesn't say they weren't
+  // followed: the app says so, in one line at the end (CHAT-05 item 12), whatever the model.
+  if (rc.progress.injection && !saysInstructionsIgnored(rc.progress.text)) {
+    const notice = `${rc.progress.text.trim() ? '\n\n' : ''}${t('answer.injectionNotice')}`;
+    rc.progress.text += notice;
+    rc.sink.emit('text.delta', { text: notice });
+  }
   // Written while the run still runs: a failed write ends it as an error, never "done" without its answer.
   await checkedFactsStep(rc);
   if (!(await moveRun(rc.run.id, ['running'], 'done', { finished: true }))) return stopNow(rc);
