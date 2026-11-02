@@ -13270,16 +13270,22 @@
       "SSO / SAML and custom feature requests",
       "Your own AI keys: OpenAI, Anthropic, Google, Azure or OpenRouter"
     ],
+    "customPlanPointsChat": [
+      "Chat and Agent Center",
+      "Full auto, with agents that publish on their own"
+    ],
     "planCards": {
       "starter": {
         "tagline": "For small teams getting started with AI visibility monitoring and optimization.",
         "engines": "ChatGPT & Microsoft Copilot tracking",
-        "extras": ["MCP & API access"]
+        "extras": ["MCP & API access"],
+        "extrasChat": ["Chat and Agent Center"]
       },
       "growth": {
         "tagline": "For growing teams that want to monitor AI visibility and optimize content for AI search.",
         "engines": "ChatGPT, Perplexity, Gemini, Microsoft Copilot, Google AI Mode and Google AI Overviews tracking",
-        "extras": ["Multi-region tracking", "White-label reports & exports", "Looker Studio"]
+        "extras": ["Multi-region tracking", "White-label reports & exports", "Looker Studio"],
+        "extrasChat": ["Chat and Agent Center", "Full auto, with agents that publish on their own"]
       },
       "brands": "{count, plural, one {# brand} other {# brands}}",
       "unlimitedBrands": "Unlimited brands",
