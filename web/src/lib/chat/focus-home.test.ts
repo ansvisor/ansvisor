@@ -11,9 +11,12 @@ import {
   focusStarters,
   inTurn,
   NO_FILL,
+  SHORTCUT_PLAYBOOK,
+  SHORTCUT_SKILL,
   skillsByFocus,
   starterWords,
 } from './focus-home';
+import { SHORTCUT_IDS } from './shortcuts';
 import library from './skills/library.json';
 
 /**
@@ -162,6 +165,30 @@ describe('the words', () => {
         expect(byFocus.starters[filled], filled).toBeTruthy();
         expect(byFocus.starters[general], general).toBeTruthy();
       }
+    }
+  });
+});
+
+describe("what a shortcut's chip runs with (W2-09)", () => {
+  const shortcuts = new Set<string>(FOCUS_AREAS.flatMap((area) => [...FOCUS_SHORTCUTS[area]]));
+  const skills = new Set(library.skills.map((skill) => skill.name));
+
+  it("asks with a skill by its /name, the skill's own, in the library", () => {
+    for (const [shortcut, skill] of Object.entries(SHORTCUT_SKILL)) {
+      expect(shortcuts.has(shortcut), shortcut).toBe(true);
+      expect(skills.has(skill), skill).toBe(true);
+      // The three jobs keep their own words (For you now).
+      if (['tasks', 'winBack', 'publish'].includes(shortcut)) continue;
+      expect(byFocus.shortcuts[`${shortcut}Message`], shortcut).toMatch(new RegExp(`^/${skill} `));
+    }
+  });
+
+  it('runs a shortcut playbook only where the chip has no skill, in words that call none', () => {
+    for (const [shortcut, playbook] of Object.entries(SHORTCUT_PLAYBOOK)) {
+      expect(shortcuts.has(shortcut), shortcut).toBe(true);
+      expect(SHORTCUT_IDS, shortcut).toContain(playbook);
+      expect(shortcut in SHORTCUT_SKILL, shortcut).toBe(false);
+      expect(byFocus.shortcuts[`${shortcut}Message`], shortcut).not.toMatch(/^\//);
     }
   });
 });
