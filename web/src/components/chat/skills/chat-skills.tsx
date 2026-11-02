@@ -212,7 +212,7 @@ export function ChatSkills() {
           >
             {t('agents')}
           </Link>
-          {/* New skill (W3-09): an upload or a GitHub link, for an Admin's review. */}
+          {/* New skill: made in Chat (W3-08), or an upload or a GitHub link for an Admin's review (W3-09). */}
           {list && list !== 'failed' && list.can.save && (
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -223,6 +223,12 @@ export function ChatSkills() {
                 <ChevronDown aria-hidden className="size-3.5" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuItem
+                  data-action="skills.create"
+                  onClick={() => router.push(composeHref(t('createText')))}
+                >
+                  {t('create')}
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   data-action="skills.upload"
                   onClick={() => setImporting('upload')}

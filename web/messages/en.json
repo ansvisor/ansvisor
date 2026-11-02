@@ -3728,6 +3728,7 @@
           "plan": "Plan card",
           "runSteps": "Run steps",
           "approval": "Approval card",
+          "skillDraft": "Skill draft card (W3-08)",
           "question": "Question card",
           "execute": "Click card (EXECUTE)",
           "result": "Result card",
@@ -3769,7 +3770,10 @@
           "failedRun": "The run failed",
           "trayRuns": "With runs (click to open)",
           "trayEmpty": "No runs",
-          "trayLive": "Live: your runs and this brand’s"
+          "trayLive": "Live: your runs and this brand’s",
+          "skillDraft": "Skill draft · each field editable, Save skill in every mode",
+          "skillDraftReserved": "Skill draft · a /name it can’t keep: the card says why",
+          "skillSaved": "Skill saved: the card's done line"
         }
       }
     }
@@ -6420,6 +6424,8 @@
         "deleted": "Deleted /{name}."
       },
       "newSkill": "New skill",
+      "create": "Create in Chat",
+      "createText": "Create a skill that ",
       "upload": "Upload a SKILL.md or .zip",
       "github": "Import from GitHub",
       "review": "Review"

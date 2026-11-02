@@ -1,3 +1,4 @@
+import type { ChatConfirmForm } from '@/lib/chat/events';
 import type { ChatStep } from '@/lib/chat/events';
 import type { TrayResponse } from '@/lib/chat/runs-tray';
 import type { PlanStep } from '@/components/agentic/plan-card';
@@ -394,5 +395,45 @@ export const TRAY: TrayResponse = {
       finishedAt: '2026-10-26T04:31:00Z',
       href: '/dashboard/shopping',
     },
+  ],
+};
+
+/** A skill's draft card (W3-08): save_skill's form, as the registry gives it. */
+export const SKILL_DRAFT: ChatConfirmForm = {
+  kind: 'skill',
+  submit: 'Save skill',
+  fields: [
+    {
+      name: 'name',
+      kind: 'text',
+      label: 'Name',
+      value: 'pricing-brief',
+      maxLength: 64,
+      required: true,
+      hint: 'Its /command: lowercase letters, digits and single hyphens.',
+    },
+    { name: 'title', kind: 'text', label: 'Title', value: 'Pricing brief', maxLength: 120 },
+    {
+      name: 'description',
+      kind: 'textarea',
+      label: 'What it does and when to use it',
+      value:
+        'Writes a pricing brief that opens with the answer. Use it for plan and pricing pages.',
+      maxLength: 1024,
+      required: true,
+    },
+    {
+      name: 'instructions',
+      kind: 'textarea',
+      label: 'Steps',
+      value:
+        '1. Open with the answer in two sentences.\n2. Then three short sections: plans, limits, what changed.\n3. Keep figures as [placeholders] for the person to fill.',
+      maxLength: 51200,
+      required: true,
+    },
+  ],
+  notes: [
+    'Private to you until an Admin shares it.',
+    'It shapes how Chat works: it adds no tool and skips no card.',
   ],
 };

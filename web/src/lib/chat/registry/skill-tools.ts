@@ -9,9 +9,7 @@ import { defineTool, type CardFormValues } from './define-tool';
 
 const t = createTranslator({ locale: 'en', messages, namespace: 'chatSkills.card' });
 
-const textOf = (value: unknown, fallback: string) =>
-  typeof value === 'string' ? value : fallback;
-
+const textOf = (value: unknown, fallback: string) => (typeof value === 'string' ? value : fallback);
 
 /**
  * Chat's skill WRITE row (CHAT-20 §9 row 75, CHAT-13 item 12): saving a
@@ -31,7 +29,7 @@ export const SKILL_TOOLS = [
     class: 'write',
     area: 'skills',
     description:
-      "Save how-to instructions the person asked to keep as a skill of their own: a /name, what it does and when to use it, and its steps. It stays private to them until an Admin shares it, and it only shapes how Chat works: it adds no tool and skips no card. Only when the person asks to save or create a skill. When they ask to create one (\"Create a skill that…\"), ask at most two short questions, only if what it should do is unclear, then call this with a draft: the person edits it on its card before anything is kept. Leave out numbers, customer data and this chat's facts.",
+      'Save how-to instructions the person asked to keep as a skill of their own: a /name, what it does and when to use it, and its steps. It stays private to them until an Admin shares it, and it only shapes how Chat works: it adds no tool and skips no card. Only when the person asks to save or create a skill. When they ask to create one ("Create a skill that…"), ask at most two short questions, only if what it should do is unclear, then call this with a draft: the person edits it on its card before anything is kept. Leave out numbers, customer data and this chat\'s facts.',
     // The skill's draft card (W3-08), in every mode: nothing is kept before Save.
     defaultPolicy: 'ask',
     maxPolicy: 'ask',
