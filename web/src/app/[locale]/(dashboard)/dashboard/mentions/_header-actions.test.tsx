@@ -16,6 +16,10 @@ import { useMentionsExport } from './_use-mentions-export';
 
 const getMentionsOverview = vi.fn();
 const exportMentions = vi.fn();
+// No white label kit: downloads keep Ansvisor's names (export-name.test.ts has a kit's).
+vi.mock('@/lib/actions/white-label', () => ({
+  getExportBranding: async () => ({ ok: true, branding: null }),
+}));
 vi.mock('@/lib/actions/mentions', () => ({
   getMentionsOverview: (...args: unknown[]) => getMentionsOverview(...args),
   exportMentions: (...args: unknown[]) => exportMentions(...args),

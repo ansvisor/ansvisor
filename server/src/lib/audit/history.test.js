@@ -76,6 +76,14 @@ describe('buildTrendPoints', () => {
     expect(buildTrendPoints([row('a', 'https://example.com/', 'x')], null)).toEqual([]);
     expect(buildTrendPoints(null, 'example.com')).toEqual([]);
   });
+
+  it('leaves out a partial audit: its score is never compared', () => {
+    const newestFirst = [
+      { ...row('b', 'https://example.com/', '2026-03-02T00:00:00Z', '0.9'), partial: true },
+      row('a', 'https://example.com/', '2026-03-01T00:00:00Z'),
+    ];
+    expect(buildTrendPoints(newestFirst, 'example.com').map((p) => p.id)).toEqual(['a']);
+  });
 });
 
 describe('pageKey', () => {
@@ -129,7 +137,7 @@ describe('buildAuditPages', () => {
     created_at,
   });
 
-  it('gives each page one row with its latest score, the previous one and its runs', () => {
+  it('gives each page one row with its latest score, the previous one, the first and its runs', () => {
     const pages = buildAuditPages([
       row('a3', 'https://acme.com/pricing/', '2026-10-14T09:00:00Z', '0.63'),
       row('b1', 'https://acme.com/blog', '2026-10-12T09:00:00Z', '0.74'),
@@ -145,13 +153,37 @@ describe('buildAuditPages', () => {
       auditId: 'a3',
       score: 0.63,
       previousScore: 0.58,
+      firstScore: 0.5,
+      firstAuditedAt: '2026-09-20T09:00:00Z',
       status: 'improving',
       lastAuditedAt: '2026-10-14T09:00:00Z',
       trend: [0.5, 0.58, 0.63],
       runCount: 3,
     });
     expect(pages[0].runs.map((r) => r.id)).toEqual(['a3', 'a2', 'a1']);
-    expect(pages[1]).toMatchObject({ score: 0.74, previousScore: null, status: 'good' });
+    // Audited once: its first score is its current one.
+    expect(pages[1]).toMatchObject({
+      score: 0.74,
+      previousScore: null,
+      firstScore: 0.74,
+      firstAuditedAt: '2026-10-12T09:00:00Z',
+      status: 'good',
+    });
+  });
+
+  it('takes the first score from the oldest completed audit, not a failed or unscored one', () => {
+    const [page] = buildAuditPages([
+      row('a4', 'https://acme.com/pricing', '2026-10-20T09:00:00Z', '0.7'),
+      row('a3', 'https://acme.com/pricing', '2026-10-10T09:00:00Z', '0.6'),
+      row('a2', 'https://acme.com/pricing', '2026-10-01T09:00:00Z', null),
+      row('a1', 'https://acme.com/pricing', '2026-09-20T09:00:00Z', null, 'failed'),
+    ]);
+    expect(page).toMatchObject({ firstScore: 0.6, firstAuditedAt: '2026-10-10T09:00:00Z' });
+
+    const [never] = buildAuditPages([
+      row('b1', 'https://acme.com/blog', '2026-10-01T09:00:00Z', null, 'failed'),
+    ]);
+    expect(never).toMatchObject({ score: null, firstScore: null, firstAuditedAt: null });
   });
 
   it("says whether the audit a row opens was an auto-audit run's", () => {
@@ -229,6 +261,50 @@ describe('buildAuditPages', () => {
     expect(cutShort.runs[0]).toMatchObject({ id: 'a2', status: 'failed' });
   });
 
+  it('keeps the last complete score after a partial audit, which is never compared', () => {
+    const partial = (r) => ({ ...r, partial: true });
+    const [page] = buildAuditPages([
+      partial(row('a3', 'https://acme.com/pricing', '2026-10-15T09:00:00Z', '0.72')),
+      row('a2', 'https://acme.com/pricing', '2026-10-14T09:00:00Z', '0.63'),
+      row('a1', 'https://acme.com/pricing', '2026-10-01T09:00:00Z', '0.58'),
+    ]);
+    expect(page).toMatchObject({
+      auditId: 'a2',
+      score: 0.63,
+      previousScore: 0.58,
+      status: 'improving',
+      trend: [0.58, 0.63],
+      runCount: 3,
+    });
+    expect(page.runs[0]).toMatchObject({ id: 'a3', partial: true });
+
+    // A page with only partial audits shows the latest, with nothing to compare.
+    const [only] = buildAuditPages([
+      partial(row('b2', 'https://acme.com/blog', '2026-10-15T09:00:00Z', '0.65')),
+      partial(row('b1', 'https://acme.com/blog', '2026-10-14T09:00:00Z', '0.55')),
+    ]);
+    expect(only).toMatchObject({
+      auditId: 'b2',
+      score: 0.65,
+      previousScore: null,
+      firstScore: null,
+      firstAuditedAt: null,
+      status: 'needs_work',
+      trend: [],
+    });
+  });
+
+  it('skips partial runs for the first score too', () => {
+    const partial = (r) => ({ ...r, partial: true });
+    const [page] = buildAuditPages([
+      row('a3', 'https://acme.com/pricing', '2026-10-20T09:00:00Z', '0.7'),
+      row('a2', 'https://acme.com/pricing', '2026-10-10T09:00:00Z', '0.6'),
+      // The page's oldest run was partial: never its first score.
+      partial(row('a1', 'https://acme.com/pricing', '2026-10-01T09:00:00Z', '0.4')),
+    ]);
+    expect(page).toMatchObject({ firstScore: 0.6, firstAuditedAt: '2026-10-10T09:00:00Z' });
+  });
+
   it('draws the trend from the newest completed scores, oldest first', () => {
     const rows = Array.from({ length: PAGE_TREND_POINTS + 3 }, (_, i) =>
       row(
@@ -297,6 +373,16 @@ describe('findPreviousCompletedAudit', () => {
     ];
 
     expect(findPreviousCompletedAudit(rows, 'current')).toBeNull();
+  });
+
+  it('never compares a partial audit, as the current one or the previous', () => {
+    const rows = [
+      { ...row('current', 'https://acme.com/', '2026-10-10T09:00:00Z', '0.7'), partial: false },
+      { ...row('partial', 'https://acme.com/', '2026-10-09T09:00:00Z', '0.9'), partial: true },
+      row('previous', 'https://acme.com/', '2026-10-08T09:00:00Z', '0.6'),
+    ];
+    expect(findPreviousCompletedAudit(rows, 'current')?.auditId).toBe('previous');
+    expect(findPreviousCompletedAudit(rows, 'partial')).toBeNull();
   });
 
   it('returns null when the current audit is missing, unfinished, or has no score', () => {

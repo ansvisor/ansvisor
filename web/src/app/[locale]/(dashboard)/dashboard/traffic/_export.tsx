@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatNumber } from '@/lib/format';
+import { exportFileName } from '@/lib/white-label/export-name';
 import type { TrafficDateWindow } from '@/lib/actions/traffic';
 import { TRAFFIC_EXPORT_MAX_ROWS, type TrafficExportSection } from '@/lib/traffic-export';
 
@@ -76,7 +77,8 @@ export function useTrafficExport({
       const link = document.createElement('a');
       link.href = url;
       link.download =
-        attachmentName(res.headers.get('Content-Disposition')) ?? `ansvisor-ai-traffic.${format}`;
+        attachmentName(res.headers.get('Content-Disposition')) ??
+        (await exportFileName(`ai-traffic.${format}`, '-'));
       link.click();
       URL.revokeObjectURL(url);
     } catch {

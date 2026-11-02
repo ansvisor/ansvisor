@@ -28,7 +28,7 @@ vi.mock('@/lib/agent/key-encryption', () => ({
   decryptApiKey: (envelope: string) => (envelope === 'bad' ? null : `plain(${envelope})`),
 }));
 
-const { isAgentKeyConfigured, resolveAgentModelConfig } = await import('./key');
+const { isAgentKeyConfigured, readActiveKey, resolveAgentModelConfig } = await import('./key');
 
 beforeEach(() => {
   row = null;
@@ -72,6 +72,22 @@ describe('resolveAgentModelConfig', () => {
       settings: {},
     });
     expect(eqs).toHaveLength(0);
+  });
+});
+
+describe('readActiveKey', () => {
+  it('tells a key that can’t be decrypted from none saved', async () => {
+    expect(await readActiveKey('org1')).toEqual({ state: 'none' });
+    row = { provider: 'azure', key_encrypted: 'bad', settings: {} };
+    expect(await readActiveKey('org1')).toEqual({ state: 'unreadable', provider: 'azure' });
+    row = { provider: 'google', key_encrypted: 'env1', settings: null };
+    expect(await readActiveKey('org1')).toEqual({
+      state: 'ready',
+      config: { provider: 'google', apiKey: 'plain(env1)', settings: {} },
+    });
+    // A provider the app doesn't know is no key at all.
+    row = { provider: 'other', key_encrypted: 'env1', settings: {} };
+    expect(await readActiveKey('org1')).toEqual({ state: 'none' });
   });
 });
 

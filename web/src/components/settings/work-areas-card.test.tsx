@@ -82,10 +82,19 @@ describe('menuWithWorkAreas', () => {
   });
 
   it('leaves Agent Center out of the sections while the new Chat is off', () => {
-    expect(menuWithWorkAreas(menu(), ['aeo']).hidden).toContain('agents');
-    expect(menuWithWorkAreas(menu(), ['aeo'], menuSectionsFor(false)).hidden).not.toContain(
-      'agents',
-    );
+    const hiddenByAdmin = menu({ hiddenByAdmin: ['agents'] });
+    expect(menuWithWorkAreas(hiddenByAdmin, ['analytics']).hidden).toContain('agents');
+    expect(
+      menuWithWorkAreas(hiddenByAdmin, ['analytics'], menuSectionsFor(false)).hidden,
+    ).not.toContain('agents');
+  });
+
+  it('keeps Agent Center, without Chat, for AEO/GEO & Audit, Developers and Analytics', () => {
+    for (const area of ['aeo', 'developers', 'analytics'] as const) {
+      const { hidden } = menuWithWorkAreas(menu(), [area]);
+      expect(hidden, area).toContain('agent');
+      expect(hidden, area).not.toContain('agents');
+    }
   });
 });
 
@@ -132,9 +141,14 @@ describe('WorkAreasCard', () => {
     expect(container.textContent).toContain('13 of 13 sections');
     expect(section('agents').textContent).toBe('Agent Center');
     expect(section('agent').nextElementSibling).toBe(section('agents'));
-    // An area without Chat leaves both off.
+    // AEO/GEO & Audit keeps Agent Center without Chat, as Analytics does.
     await act(async () => chip('AEO/GEO & Audit').click());
-    expect(section('agents').textContent).toContain('Not in your work areas');
+    expect(section('agents').textContent).not.toContain('Not in your work areas');
+    expect(section('agent').textContent).toContain('Not in your work areas');
+    await act(async () => chip('AEO/GEO & Audit').click());
+    await act(async () => chip('Analytics').click());
+    expect(section('agents').textContent).not.toContain('Not in your work areas');
+    expect(section('agent').textContent).toContain('Not in your work areas');
 
     act(() => root.unmount());
     root = createRoot(container);

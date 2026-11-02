@@ -8,6 +8,10 @@
  * Inter is embedded from /public/fonts so Turkish characters (ş, ğ, ı…) in
  * brand names and prompt texts render correctly — the built-in Helvetica
  * only covers WinAnsi.
+ *
+ * With a white label kit in use (00429) it is the agency's: its logo and
+ * "Prepared for" the brand with the client's logo on top, its color, its
+ * footer line and its name as the author. Without one, Ansvisor's as before.
  */
 
 import {
@@ -21,9 +25,11 @@ import {
   Path,
   Polyline,
   Line,
+  Image,
 } from '@react-pdf/renderer';
 import type { Report, ReportPromptPerf } from '@/lib/actions/reports';
 import { formatDate } from '@/lib/format';
+import { reportLook, type ReportBranding } from '@/lib/white-label/kit';
 
 Font.register({
   family: 'Inter',
@@ -35,7 +41,6 @@ Font.register({
 // Word-splitting hyphenation looks broken in tables; wrap whole words only.
 Font.registerHyphenationCallback((word) => [word]);
 
-const INDIGO = '#6366f1';
 const SLATE = '#94a3b8';
 const TEXT = '#111827';
 const MUTED = '#6b7280';
@@ -54,7 +59,16 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 16, fontWeight: 700 },
   subtitle: { fontSize: 9, color: MUTED, marginTop: 4 },
-  rule: { height: 2, backgroundColor: INDIGO, marginTop: 10, marginBottom: 16 },
+  rule: { height: 2, marginTop: 10, marginBottom: 16 },
+  coverRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  coverLogo: { height: 28, maxWidth: 160, objectFit: 'contain' },
+  coverCompany: { fontSize: 11, fontWeight: 700 },
+  preparedFor: { fontSize: 10, marginTop: 4 },
   section: { marginBottom: 16 },
   sectionTitle: { fontSize: 11, fontWeight: 700, marginBottom: 6 },
   paragraph: { fontSize: 9, lineHeight: 1.5, color: TEXT },
@@ -90,7 +104,7 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
     overflow: 'hidden',
   },
-  barFill: { height: 5, backgroundColor: INDIGO, borderRadius: 2.5 },
+  barFill: { height: 5, borderRadius: 2.5 },
   barValue: { width: 40, fontSize: 8, textAlign: 'right' },
   tableHeader: {
     flexDirection: 'row',
@@ -141,10 +155,12 @@ function TrendSvg({
   data,
   width,
   height,
+  color,
 }: {
   data: { date: string; score: number; competitors: number | null }[];
   width: number;
   height: number;
+  color: string;
 }) {
   const scores = data.flatMap((d) => [d.score, ...(d.competitors !== null ? [d.competitors] : [])]);
   const yMax = Math.max(...scores, 1) * 1.25;
@@ -173,8 +189,8 @@ function TrendSvg({
           strokeWidth={0.5}
         />
       ))}
-      <Path d={areaPath} fill={INDIGO} fillOpacity={0.12} />
-      <Polyline points={brandPoints} fill="none" stroke={INDIGO} strokeWidth={1.5} />
+      <Path d={areaPath} fill={color} fillOpacity={0.12} />
+      <Polyline points={brandPoints} fill="none" stroke={color} strokeWidth={1.5} />
       {hasCompetitors && (
         <Polyline
           points={compPoints}
@@ -189,12 +205,27 @@ function TrendSvg({
   );
 }
 
-function HBar({ label, pct, value }: { label: string; pct: number; value: string }) {
+function HBar({
+  label,
+  pct,
+  value,
+  color,
+}: {
+  label: string;
+  pct: number;
+  value: string;
+  color: string;
+}) {
   return (
     <View style={styles.barRow}>
       <Text style={styles.barLabel}>{label}</Text>
       <View style={styles.barTrack}>
-        <View style={[styles.barFill, { width: `${Math.min(Math.max(pct, 0), 100)}%` }]} />
+        <View
+          style={[
+            styles.barFill,
+            { width: `${Math.min(Math.max(pct, 0), 100)}%`, backgroundColor: color },
+          ]}
+        />
       </View>
       <Text style={styles.barValue}>{value}</Text>
     </View>
@@ -229,8 +260,16 @@ function PromptTable({ title, prompts }: { title: string; prompts: ReportPromptP
   );
 }
 
-export function ReportPdfDocument({ report }: { report: Report }) {
+export function ReportPdfDocument({
+  report,
+  branding = null,
+}: {
+  report: Report;
+  /** The kit in use, its logos as PNG or JPEG; null for Ansvisor's look. */
+  branding?: ReportBranding | null;
+}) {
   const { payload } = report;
+  const look = reportLook(branding);
   // Every metric field is optional — templates only gather their own
   // sections, so each block below guards on its payload field.
   const maxSov = Math.max(...(payload.shareOfVoice?.byPlatform.map((p) => p.sov) ?? []), 1);
@@ -309,15 +348,36 @@ export function ReportPdfDocument({ report }: { report: Report }) {
   );
 
   return (
-    <Document title={report.title} author="Ansvisor" creator="Ansvisor">
+    <Document title={report.title} author={look.author} creator={look.author}>
       <Page size="A4" style={styles.page}>
+        {/* The kit's cover: the agency, and the client it is prepared for. */}
+        {branding && (
+          <View style={styles.coverRow}>
+            {branding.logo ? (
+              // eslint-disable-next-line jsx-a11y/alt-text -- a PDF image has no alt text
+              <Image src={branding.logo} style={styles.coverLogo} />
+            ) : (
+              <Text style={styles.coverCompany}>{branding.companyName ?? ''}</Text>
+            )}
+            {branding.clientLogo && (
+              // eslint-disable-next-line jsx-a11y/alt-text -- a PDF image has no alt text
+              <Image src={branding.clientLogo} style={styles.coverLogo} />
+            )}
+          </View>
+        )}
+
         {/* Header */}
         <Text style={styles.title}>{report.title}</Text>
+        {branding && (
+          <Text style={[styles.preparedFor, { color: look.textAccent }]}>
+            Prepared for {payload.brandName}
+          </Text>
+        )}
         <Text style={styles.subtitle}>
           {payload.brandName} · {formatDate(report.dateFrom)} — {formatDate(report.dateTo)} ·
           Generated on {formatDate(report.createdAt)}
         </Text>
-        <View style={styles.rule} />
+        <View style={[styles.rule, { backgroundColor: look.accent }]} />
 
         {/* Executive summary */}
         <View style={styles.section}>
@@ -350,14 +410,14 @@ export function ReportPdfDocument({ report }: { report: Report }) {
         {trend.length > 1 && (
           <View style={styles.section} wrap={false}>
             <Text style={styles.sectionTitle}>Visibility Trend</Text>
-            <TrendSvg data={trend} width={515} height={110} />
+            <TrendSvg data={trend} width={515} height={110} color={look.accent} />
             <View style={styles.axisLabelRow}>
               <Text style={styles.axisLabel}>{trend[0].date}</Text>
               <Text style={styles.axisLabel}>{trend[trend.length - 1].date}</Text>
             </View>
             <View style={styles.legendRow}>
               <View style={styles.legendItem}>
-                <View style={[styles.legendSwatch, { backgroundColor: INDIGO }]} />
+                <View style={[styles.legendSwatch, { backgroundColor: look.accent }]} />
                 <Text style={styles.legendText}>Your Brand</Text>
               </View>
               {hasCompetitorTrend && (
@@ -382,6 +442,7 @@ export function ReportPdfDocument({ report }: { report: Report }) {
                 label={p.provider}
                 pct={(p.sov / maxSov) * 100}
                 value={`${p.sov}%`}
+                color={look.accent}
               />
             ))}
           </View>
@@ -412,7 +473,7 @@ export function ReportPdfDocument({ report }: { report: Report }) {
                   style={[
                     styles.cell,
                     { flex: 1, paddingRight: 8 },
-                    c.isOwnBrand ? { fontWeight: 700, color: INDIGO } : {},
+                    c.isOwnBrand ? { fontWeight: 700, color: look.textAccent } : {},
                   ]}
                 >
                   {c.name}
@@ -701,7 +762,8 @@ export function ReportPdfDocument({ report }: { report: Report }) {
 
         {/* Footer */}
         <View style={styles.footer} fixed>
-          <Text style={styles.footerText}>Generated with Ansvisor · www.ansvisor.com</Text>
+          {/* Ansvisor's line, the kit's own, or none. */}
+          <Text style={styles.footerText}>{look.footer ?? ''}</Text>
           <Text
             style={styles.footerText}
             render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}

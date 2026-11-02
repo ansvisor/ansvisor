@@ -60,7 +60,10 @@ const MCP_COACH_SKILLS = ['ansvisor-aeo-coach', 'ansvisor-aeo-coach-standalone']
  *   - publish: "a Webflow draft" is "a CMS draft": the draft goes to the
  *     brand's own CMS, whichever it is.
  * The other four the mockup's `SK` doesn't describe (beat, refresh,
- * answerfirst, translate) take the agentic plan's §4 line.
+ * answerfirst, translate) take the agentic plan's §4 line. CHAT-24 §5's
+ * seven for the focus areas (W2-23) take the mockup's "New for you" line
+ * where it has one, and their table's otherwise; its /compare is
+ * `features` (`compare` was taken) and its /factcheck is `wrongclaim`.
  */
 const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = {
   winback: {
@@ -121,6 +124,34 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     title: 'Translate a page',
     description: "Translates a page into the user's markets, keeps rules and sources.",
   },
+  questions: {
+    title: 'Buyer questions',
+    description: 'Groups new buyer questions by topic, with volume and who AI recommends.',
+  },
+  features: {
+    title: 'How AI compares us',
+    description: 'How AI describes you against each competitor, feature by feature, with quotes.',
+  },
+  gaps: {
+    title: 'No clear leader',
+    description: 'Finds prompts and segments where no brand leads yet, and suggests what to do.',
+  },
+  markets: {
+    title: 'Who AI recommends by market',
+    description: 'Shows who AI recommends in each market and language you track.',
+  },
+  listings: {
+    title: 'Listing gaps',
+    description: 'Lists the sources AI cites in a market and whether they list you.',
+  },
+  rivals: {
+    title: 'Rival brief',
+    description: 'A one-page brief on one competitor across all AI platforms.',
+  },
+  'audit-fix': {
+    title: 'Site audit fixes',
+    description: 'Turns site audit findings into fixes you approve.',
+  },
 };
 const LIBRARY_NAMES = Object.keys(ANSVISOR_SKILLS);
 
@@ -156,7 +187,7 @@ const files = folders.map((folder) => ({
 }));
 
 describe('the skills in /skills', () => {
-  it("are Ansvisor's fourteen, with the mockup's titles and descriptions", () => {
+  it("are Ansvisor's twenty-one, with the mockup's titles and descriptions", () => {
     expect([...folders].sort()).toEqual([...LIBRARY_NAMES].sort());
     const shown = Object.fromEntries(
       files.map(({ folder, text }) => {

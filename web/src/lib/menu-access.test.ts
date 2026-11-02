@@ -123,7 +123,8 @@ describe('hiddenMenuSections', () => {
 });
 
 // Agent Center (/dashboard/agents), right under Chat and only with the new
-// Chat on: the same rule as Chat for roles and work areas.
+// Chat on: the same rule as Chat for roles, and in every work area: right
+// after Chat where Chat is, else right after Action Center.
 describe('Agent Center', () => {
   const chatOff = menuSectionsFor(false);
 
@@ -137,10 +138,27 @@ describe('Agent Center', () => {
     for (const area of WORK_AREAS) {
       const sections = area.sections as readonly string[];
       const chat = sections.indexOf('agent');
-      expect(sections.indexOf('agents')).toBe(chat < 0 ? -1 : chat + 1);
+      if (chat >= 0) expect(sections.indexOf('agents'), area.id).toBe(chat + 1);
     }
     expect(hidden({ workAreas: ['content'] })).not.toContain('agents');
-    expect(hidden({ workAreas: ['aeo'] })).toEqual(expect.arrayContaining(['agent', 'agents']));
+  });
+
+  it('is in AEO/GEO & Audit, Developers and Analytics without Chat, after Action Center', () => {
+    const alone = WORK_AREAS.filter((area) => {
+      const sections = area.sections as readonly string[];
+      return sections.includes('agents') && !sections.includes('agent');
+    });
+    expect(alone.map((area) => area.id)).toEqual(['aeo', 'developers', 'analytics']);
+    for (const area of alone)
+      expect(area.sections.slice(0, 2)).toEqual([ALWAYS_ON_SECTION, 'agents']);
+    for (const workAreas of [['aeo'], ['developers'], ['analytics']]) {
+      expect(hidden({ workAreas })).toContain('agent');
+      expect(hidden({ workAreas })).not.toContain('agents');
+    }
+    // So every work area keeps it.
+    expect(
+      WORK_AREAS.every((area) => (area.sections as readonly string[]).includes('agents')),
+    ).toBe(true);
   });
 
   it('is on every role’s menu until someone hides it, as Chat is', () => {
@@ -150,10 +168,10 @@ describe('Agent Center', () => {
   });
 
   it('is off every count and list while the new Chat is off', () => {
-    expect([...hiddenMenuSections({ ...analyst, workAreas: ['aeo'] }, chatOff)]).not.toContain(
-      'agents',
-    );
-    expect(hiddenWithWorkAreas(['agents'], ['aeo'], chatOff)).not.toContain('agents');
+    expect([
+      ...hiddenMenuSections({ ...analyst, workAreas: ['analytics'] }, chatOff),
+    ]).not.toContain('agents');
+    expect(hiddenWithWorkAreas(['agents'], ['analytics'], chatOff)).not.toContain('agents');
     const profile = {
       role: 'analyst' as const,
       work_areas: [],

@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { markFocusPrompted, saveChatFocus, skipChatFocus } from '@/lib/actions/chat-prefs';
@@ -61,12 +69,25 @@ export function FocusPicker({
 }) {
   const t = useTranslations('chatShell.focus');
   const [picks, setPicks] = useState<FocusArea[]>(() => [...initial]);
+  const heading = useRef<HTMLHeadingElement>(null);
   const toggle = (area: FocusArea) =>
     setPicks((was) => (was.includes(area) ? was.filter((a) => a !== area) : [...was, area]));
+
+  // It opens in Home's place: keyboard and screen-reader users start at its question.
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
+
   return (
     <div className="@container mx-auto w-full max-w-[720px] px-5 pb-6">
       <div className="mt-[34px] text-center">
-        <h1 className="text-2xl font-bold tracking-[-.6px]">{t('title')}</h1>
+        <h1
+          ref={heading}
+          tabIndex={-1}
+          className="text-2xl font-bold tracking-[-.6px] outline-none"
+        >
+          {t('title')}
+        </h1>
         <p className="mt-1.5 text-muted-foreground">{t('intro')}</p>
       </div>
       <div
@@ -167,7 +188,8 @@ export function FocusPill({ areas, onEdit }: { areas: readonly FocusArea[]; onEd
  * the pill opens it; Home otherwise. Under the picker Home stays laid out
  * but unseen and out of reach (not display: none), so the composer sizes
  * itself and a draft survives. A pick that isn't kept stays in the picker
- * and says so.
+ * and says so. Closed, it hands focus back: to the pill that opened it, or
+ * to the composer after the first opening.
  */
 export function ChatFocusGate({
   focus: saved,
@@ -188,6 +210,21 @@ export function ChatFocusGate({
     ask ? { picks: prefill, source: 'first_open' } : null,
   );
   const [busy, setBusy] = useState(false);
+  const home = useRef<HTMLDivElement>(null);
+  // Where the picker that just closed opened from, for focus to land; null otherwise.
+  const closed = useRef<FocusSource | null>(null);
+
+  useEffect(() => {
+    if (picking || !closed.current) return;
+    const from = closed.current;
+    closed.current = null;
+    const pill = home.current?.querySelector<HTMLElement>('[data-action="dept.change"]');
+    const composer = home.current?.querySelector<HTMLTextAreaElement>(
+      '[data-action="composer.input"]',
+    );
+    // A composer that can't be typed in (read-only) leaves it on the pill.
+    (from === 'first_open' && composer && !composer.disabled ? composer : pill)?.focus();
+  }, [picking]);
 
   useEffect(() => {
     if (!ask) return;
@@ -211,6 +248,7 @@ export function ChatFocusGate({
     }
     track('chat_focus_saved', { areas: picks, count: picks.length, source: picking.source });
     setFocus(picks);
+    closed.current = picking.source;
     setPicking(null);
     toast(t('saved', { label: label(picks) }));
   };
@@ -219,6 +257,7 @@ export function ChatFocusGate({
     // From Home's pill the person is changing a focus they have: leaving
     // keeps it as it was. Only the first, unasked opening keeps "no focus".
     if (picking?.source === 'home_pill') {
+      closed.current = 'home_pill';
       setPicking(null);
       return;
     }
@@ -231,6 +270,7 @@ export function ChatFocusGate({
     }
     track('chat_focus_skipped');
     setFocus([]);
+    closed.current = 'first_open';
     setPicking(null);
     toast(t('skipped'));
   };
@@ -247,6 +287,7 @@ export function ChatFocusGate({
         />
       )}
       <div
+        ref={home}
         data-slot="focus-home"
         className={picking ? 'invisible h-0 overflow-hidden' : 'contents'}
       >

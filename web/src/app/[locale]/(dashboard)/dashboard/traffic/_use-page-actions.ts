@@ -6,6 +6,7 @@ import { useFailureToast } from '@/hooks/use-failure-toast';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
+import { useRecentAudit } from '@/components/audit/use-recent-audit';
 import { getAuditQuota, runAuditsBulk, type AuditQuota } from '@/lib/actions/audits';
 import { isNoPlan } from '@/lib/billing/no-plan';
 import { generateOpportunitiesOnDemand, getGenerationJobStatus } from '@/lib/actions/content';
@@ -34,6 +35,7 @@ export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
   const t = useTranslations('traffic.pageList.actions');
   const failureToast = useFailureToast();
   const router = useRouter();
+  const { saySkipped } = useRecentAudit();
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   const [sending, setSending] = useState(false);
@@ -94,31 +96,48 @@ export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
   );
 
   const auditMany = useCallback(
-    async (urls: string[]): Promise<boolean> => {
-      if (urls.length === 0) return false;
-      setAuditing(true);
-      const toastId = toast.loading(t('auditing'));
-      try {
-        const { started } = await runAuditsBulk(brandId, urls.slice(0, PAGE_ACTION_MAX));
-        toast.success(t('auditsStarted', { count: started }), {
-          id: toastId,
-          description: t('auditsStartedDescription'),
-          duration: 10_000,
-          action: { label: t('openAudit'), onClick: () => router.push('/dashboard/audit') },
-        });
-        return true;
-      } catch (err) {
-        toast.error(t('auditsFailed'), {
-          id: toastId,
-          description: err instanceof Error ? err.message : undefined,
-        });
-        return false;
-      } finally {
-        setAuditing(false);
-        loadQuota();
-      }
+    (urls: string[]): Promise<boolean> => {
+      const start = async (pages: string[], force: boolean): Promise<boolean> => {
+        if (pages.length === 0) return false;
+        setAuditing(true);
+        const toastId = toast.loading(t('auditing'));
+        try {
+          const chunk = pages.slice(0, PAGE_ACTION_MAX);
+          const { started, recent } = force
+            ? await runAuditsBulk(brandId, chunk, { force: true })
+            : await runAuditsBulk(brandId, chunk);
+          if (started > 0) {
+            toast.success(t('auditsStarted', { count: started }), {
+              id: toastId,
+              description: t('auditsStartedDescription'),
+              duration: 10_000,
+              action: { label: t('openAudit'), onClick: () => router.push('/dashboard/audit') },
+            });
+          } else {
+            toast.dismiss(toastId);
+          }
+          // Pages audited minutes ago aren't started: said so, with Audit again.
+          saySkipped(recent, () => {
+            void start(
+              recent.flatMap((r) => (r.url ? [r.url] : [])),
+              true,
+            );
+          });
+          return true;
+        } catch (err) {
+          toast.error(t('auditsFailed'), {
+            id: toastId,
+            description: err instanceof Error ? err.message : undefined,
+          });
+          return false;
+        } finally {
+          setAuditing(false);
+          loadQuota();
+        }
+      };
+      return start(urls, false);
     },
-    [brandId, loadQuota, router, t],
+    [brandId, loadQuota, router, saySkipped, t],
   );
 
   /**

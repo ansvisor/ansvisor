@@ -13,6 +13,10 @@ const setContentDraftStatus = vi.fn();
 const archiveContentDraft = vi.fn();
 const deleteContentDraft = vi.fn();
 const getContentDraftPages = vi.fn();
+// No white label kit: downloads keep Ansvisor's names (export-name.test.ts has a kit's).
+vi.mock('@/lib/actions/white-label', () => ({
+  getExportBranding: async () => ({ ok: true, branding: null }),
+}));
 vi.mock('@/lib/actions/content-drafts', () => ({
   getContentDraftPages: (...args: unknown[]) => getContentDraftPages(...args),
   // A list stands for a brand under the cap: its tabs count its rows.
@@ -501,6 +505,9 @@ describe('Send to CMS from a Library row (#1331)', () => {
           reviewerId: null,
           authorConfirmed: false,
           language: null,
+          pageType: null,
+          isNew: false,
+          schemaLeftOut: false,
         },
       ],
       rest: [],
@@ -933,6 +940,9 @@ describe('Send to CMS from a Library row (#1331)', () => {
             authorId: null,
             authorConfirmed: false,
             language: null,
+            pageType: null,
+            isNew: false,
+            schemaLeftOut: false,
           },
         ],
         rest: [],

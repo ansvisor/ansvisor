@@ -62,6 +62,7 @@ import { SITE_TYPES, guessSiteType, isSiteType, type SiteType } from '@/lib/cont
 import { qualityPhase } from '@/lib/content/quality';
 import { BrandFactsTab } from './_brand-facts-tab';
 import { ConversionsCard } from './_conversions-card';
+import { ClientLogoCard } from './_client-logo-card';
 import { trackingSnippetTag } from '@/lib/conversion-tracking';
 
 interface PageProps {
@@ -119,6 +120,7 @@ export default function BrandSettingsPage({ params, searchParams }: PageProps) {
 
         <TabsContent value="general" className="space-y-6">
           <GeneralTab brand={brand} onUpdate={(updated) => updateBrandStore(brand.id, updated)} />
+          <ClientLogoCard brand={brand} />
           <ShoppingModeCard
             brand={brand}
             onUpdate={(updated) => updateBrandStore(brand.id, updated)}

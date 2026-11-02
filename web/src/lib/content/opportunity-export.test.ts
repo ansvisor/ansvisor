@@ -102,6 +102,20 @@ describe('opportunityDocx', () => {
   });
 });
 
+describe('opportunityDocx with a white label kit', () => {
+  it('names the kit’s company as the author', async () => {
+    const blob = await opportunityDocx(doc, 'Acme Agency');
+    const bytes = await new Promise<Uint8Array>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+      reader.readAsArrayBuffer(blob);
+    });
+    expect(strFromU8(unzipSync(bytes)['docProps/core.xml'])).toContain(
+      '<dc:creator>Acme Agency</dc:creator>',
+    );
+  });
+});
+
 describe('opportunityExportFileName', () => {
   it('names the file after the opportunity', () => {
     expect(opportunityExportFileName(doc, 'docx')).toBe(
@@ -109,6 +123,15 @@ describe('opportunityExportFileName', () => {
     );
     expect(opportunityExportFileName({ ...doc, title: '—' }, 'csv')).toBe(
       'ansvisor_opportunity_export.csv',
+    );
+  });
+
+  it('starts with a white label kit’s word instead, or none', () => {
+    expect(opportunityExportFileName({ ...doc, title: 'Beans' }, 'xlsx', 'acme-agency')).toBe(
+      'acme-agency_opportunity_beans.xlsx',
+    );
+    expect(opportunityExportFileName({ ...doc, title: 'Beans' }, 'csv', null)).toBe(
+      'opportunity_beans.csv',
     );
   });
 });

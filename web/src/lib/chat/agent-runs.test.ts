@@ -18,7 +18,11 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
 vi.mock('@/lib/mcp/account', () => ({
   getAiUsageFor: vi.fn(async () => ({ active_plan: true, unlimited: false, percent_used: 5 })),
 }));
-vi.mock('./key', () => ({ resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })) }));
+const ownKey = vi.hoisted(() => ({ failing: null as { class: string; provider: string } | null }));
+vi.mock('./key', () => ({
+  resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
+  failingOwnKey: vi.fn(async () => ownKey.failing),
+}));
 vi.mock('./agent-shares', () => ({ readAgentShares: vi.fn(async () => null) }));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
@@ -65,6 +69,7 @@ function startNext(args: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+  ownKey.failing = null;
   seedWorkspace(db);
   db.unique = { ...db.unique, chat_agents: [['organization_id', 'name']] };
   const iso = () => NOW.toISOString();
@@ -139,6 +144,31 @@ describe('Run now', () => {
     expect(one).toMatchObject({ ok: true, value: { runs: [{ brand: 'Brand A' }] } });
   });
 
+  it("runs a Selected-brands person's agent on their brands only: All brands is all of theirs", async () => {
+    const id = await agentOf(PEOPLE.manager);
+    // An Admin narrows them to Brand A (BRAND-ACCESS): the run checks their access now.
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.brand_scope = 'selected';
+    db.tables.member_brands = [{ user_id: PEOPLE.manager, organization_id: ORG, brand_id: BRAND }];
+    const ctx = await ctxOf(PEOPLE.manager);
+    expect(await runs.runAgentNow(ctx, id, {}, NOW, null)).toMatchObject({
+      ok: true,
+      value: { runs: [{ brand: 'Brand A', status: 'queued' }] },
+    });
+    expect(runRows().map((r) => r.brand_id)).toEqual([BRAND]);
+    // A brand of the scope they don't have is as one that isn't there.
+    expect(await runs.runAgentNow(ctx, id, { brandId: BRAND_2 }, NOW, null)).toMatchObject({
+      ok: false,
+      refusal: { code: 'brand_not_found' },
+    });
+    // With none of its brands left to them, nothing runs.
+    db.tables.member_brands = [];
+    expect(await runs.runAgentNow(await ctxOf(PEOPLE.manager), id, {}, NOW, null)).toMatchObject({
+      ok: false,
+      refusal: { code: 'no_brand' },
+    });
+    expect(runRows()).toHaveLength(1);
+  });
+
   it('refuses before queuing anything when a brand lacks a Required connection, naming both', async () => {
     const id = await agentOf(PEOPLE.manager, { skills: ['publish'] });
     // Brand A sends pages to WordPress; Brand B has no CMS.
@@ -165,13 +195,34 @@ describe('Run now', () => {
     });
   });
 
+  it('refuses while the workspace’s own key fails, queuing nothing on any brand (409)', async () => {
+    const id = await agentOf(PEOPLE.manager, { skills: ['winback'] });
+    ownKey.failing = { class: 'no_credit', provider: 'openai' };
+    const result = await runs.runAgentNow(await ctxOf(PEOPLE.manager), id, {}, NOW, null);
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: {
+        status: 409,
+        code: 'own_key_failed',
+        message:
+          'Your OpenAI account is out of credit. An Admin can fix it in Settings › AI Providers, then run the agent again.',
+      },
+    });
+    expect(runRows()).toEqual([]);
+  });
+
   it('starts it in a free slot when a driver can take it, with the plan’s runs at once', async () => {
     const id = await agentOf(PEOPLE.manager, { scope: { brand_ids: [BRAND] } });
     const driver = vi.fn(async () => {});
     const result = await runs.runAgentNow(await ctxOf(PEOPLE.manager), id, {}, NOW, driver);
     expect(result).toMatchObject({ ok: true, value: { runs: [{ status: 'running' }] } });
     const started = runRows()[0];
-    expect(driver).toHaveBeenCalledWith({ id: started.id, organizationId: ORG });
+    // Started in the person's own request: their session goes with it.
+    expect(driver).toHaveBeenCalledWith({
+      id: started.id,
+      organizationId: ORG,
+      sessionUserId: PEOPLE.manager,
+    });
     // Growth: 5 agent runs at once.
     expect(db.log.filter(([name]) => name === 'chat_start_next_agent_run').length).toBeGreaterThan(
       0,
@@ -386,6 +437,14 @@ describe('Run agent on an action', () => {
     expect(runRows()).toEqual([]);
   });
 
+  it('refuses Run agent while the workspace’s own key fails, queuing nothing', async () => {
+    const id = await agentOf(PEOPLE.manager, { skills: ['winback'] });
+    ownKey.failing = { class: 'invalid', provider: 'anthropic' };
+    const result = await runs.runAgentOnAction(await ctxOf(PEOPLE.manager), id, ACTION, NOW, null);
+    expect(result).toMatchObject({ ok: false, refusal: { status: 409, code: 'own_key_failed' } });
+    expect(runRows()).toEqual([]);
+  });
+
   it('queues one run on the action’s brand, scoped to it, as the person who clicked', async () => {
     const id = await agentOf(PEOPLE.manager, { name: 'Citation win-back' });
     const result = await runs.runAgentOnAction(await ctxOf(PEOPLE.manager), id, ACTION, NOW, null);
@@ -537,7 +596,12 @@ describe('Run agent on an action', () => {
 
   it('refuses Agency partners, as Analysts', async () => {
     const PARTNER = 'aaaaaaaa-0000-4000-8000-000000000005';
-    db.tables.profiles.push({ id: PARTNER, role: 'agency_partner', organization_id: ORG });
+    db.tables.profiles.push({
+      id: PARTNER,
+      role: 'agency_partner',
+      organization_id: ORG,
+      brand_scope: 'all',
+    });
     const id = await agentOf(PEOPLE.manager, { visibility: 'workspace' });
     expect(await runs.runAgentOnAction(await ctxOf(PARTNER), id, ACTION, NOW, null)).toMatchObject({
       ok: false,
@@ -566,6 +630,7 @@ describe('Run agent on an action', () => {
       ok: true,
       value: { run: { status: 'running', chatId: 'chat-1' } },
     });
+    expect(driver).toHaveBeenCalledWith(expect.objectContaining({ sessionUserId: PEOPLE.manager }));
   });
 
   it('refuses a closed action, an agent that doesn’t cover its brand, and Analysts', async () => {

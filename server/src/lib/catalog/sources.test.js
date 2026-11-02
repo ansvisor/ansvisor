@@ -254,6 +254,77 @@ describe('syncSource for a store (00282)', () => {
     expect(outcome).toEqual({ status: 'failed', error: 'The store took too long to answer.' });
   });
 
+  it("gives a store's order read its own deadline, not what the catalog read left", async () => {
+    await saveCredentials(STORE_ID, { apiKey: KEY }, { db: fake.db });
+    const slowCall = async (_address, opts) => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      if (opts.signal.aborted) throw new ConnectorHttpError('timeout', 'GET x was stopped');
+      return { status: 200, headers: {}, data: null };
+    };
+    const acme = {
+      ...connector(async (_source, ctx) => {
+        await ctx.request('https://shop.example/api/products');
+        return { items: [item], errors: [], format: 'acme_store' };
+      }),
+      syncOrders: vi.fn(async (_source, ctx) => {
+        await ctx.request('https://shop.example/api/orders');
+        return { orders: [], skipped: 0, truncated: false };
+      }),
+    };
+    // Each read alone fits the deadline; the two together don't.
+    const outcome = await syncSource(store, {
+      db: fake.db,
+      now: NOW,
+      request: vi.fn(slowCall),
+      readMs: 60,
+      connectors: { acme_store: acme },
+    });
+    expect(outcome.status).toBe('ok');
+    expect(acme.syncOrders).toHaveBeenCalledTimes(1);
+    expect(outcome.counts.orders).not.toHaveProperty('failed');
+    expect(outcome.counts.orders).toMatchObject({ items: 0, truncated: false });
+    expect(row().last_orders_synced_at).toBe(NOW.toISOString());
+  });
+
+  it("records an order read that ran out of time, and keeps the catalog's outcome", async () => {
+    await saveCredentials(STORE_ID, { apiKey: KEY }, { db: fake.db });
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const request = vi.fn(async (address, opts) => {
+      if (!address.endsWith('/orders')) return { status: 200, headers: {}, data: null };
+      return new Promise((_resolve, reject) => {
+        opts.signal.addEventListener('abort', () =>
+          reject(new ConnectorHttpError('timeout', 'GET x was stopped')),
+        );
+      });
+    });
+    const acme = {
+      ...connector(async () => ({ items: [item], errors: [], format: 'acme_store' })),
+      syncOrders: vi.fn(async (_source, ctx) => {
+        await ctx.request('https://shop.example/api/orders');
+        return { orders: [], skipped: 0, truncated: false };
+      }),
+    };
+    const outcome = await syncSource(store, {
+      db: fake.db,
+      now: NOW,
+      request,
+      readMs: 20,
+      connectors: { acme_store: acme },
+    });
+    const orders = {
+      failed: true,
+      timedOut: true,
+      error: 'The store took too long to answer.',
+    };
+    expect(outcome).toMatchObject({ status: 'ok', counts: { items: 1, orders } });
+    expect(row()).toMatchObject({ last_status: 'ok', last_counts: { orders } });
+    expect(row().last_orders_synced_at ?? null).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      { err: { name: 'ConnectorHttpError', code: 'timeout' }, sourceId: STORE_ID },
+      expect.stringContaining('order sync failed'),
+    );
+  });
+
   it("doesn't read a source twice at once", async () => {
     await saveCredentials(STORE_ID, { apiKey: KEY }, { db: fake.db });
     let release;

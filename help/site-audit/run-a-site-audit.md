@@ -1,11 +1,11 @@
 ---
 title: Run a site audit
 route: /dashboard/audit
-keywords: [site audit, run audit, audit a page, auto-audit, audit settings]
+keywords: [site audit, run audit, audit a page, auto-audit, audit settings, audit again, bulk audit, audit all]
 synonyms: [page audit, check my page, scan a page, AI readiness check]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -25,13 +25,27 @@ The report opens right away and follows the audit through its stages: **Fetching
 
 ## Other ways to start an audit
 
-- **Audit selected** on the **Opportunities** tab;
+- **Audit selected** on the **Opportunities** tab, or **Audit all** under its **Not audited** filter;
 - **Re-audit** on the pages you select on the **Pages** tab;
 - **Audit page** on a landing page of the **AI Referral Traffic** page, or **Audit pages** for several;
 - the re-run icon at the top of a report, to audit the same page again;
 - auto-audit, which audits your top-priority pages on its own.
 
 Audits started in bulk run a few at a time.
+
+## Before a bulk audit
+
+Audit selected, Audit all and Re-audit ask first. They list the pages and say how many of the month's audits they use.
+
+Pages audited in the last 7 days are left out, since a page that hasn't changed scores the same. Untick **Leave out** to include them.
+
+When fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month.
+
+## Auditing a page again
+
+A page has one audit running at a time. Starting it again, from any of these places, opens the audit already running and uses no audit, however the address is written: with or without www, a last slash or a tracking parameter.
+
+When a page was audited in the last 10 minutes, Site Audit asks first: **Open it** shows that audit, and **Audit again** starts a new one. Pages started together leave those out and say so, with **Audit again**.
 
 ## Your monthly audits
 

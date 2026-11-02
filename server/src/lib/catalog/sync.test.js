@@ -145,6 +145,29 @@ describe('syncCatalog', () => {
     expect(other.products.added).toBe(2);
   });
 
+  it('links one product to multiple catalog categories without persisting parser-only fields', async () => {
+    const [item] = feed();
+    const multiCategoryItem = {
+      ...item,
+      itemGroupId: 'MULTI-1',
+      id: 'MULTI-1-42',
+      productType: 'Accessories',
+      productTypes: ['Accessories', 'Footwear > Boots'],
+    };
+
+    await syncCatalog(BRAND, 'multi_category', [multiCategoryItem], { db: fake.db });
+
+    expect(
+      fake
+        .rows('catalog_categories')
+        .map((row) => row.name)
+        .sort(),
+    ).toEqual(['Accessories', 'Footwear > Boots']);
+    expect(fake.rows('catalog_product_categories')).toHaveLength(2);
+    expect(fake.rows('catalog_products')[0]).toMatchObject({ product_type: 'Accessories' });
+    expect(fake.rows('catalog_products')[0]).not.toHaveProperty('product_types');
+  });
+
   it("leaves out an address that isn't http(s), and clips long values", async () => {
     const [item] = feed();
     await syncCatalog(

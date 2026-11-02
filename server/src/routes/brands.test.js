@@ -26,6 +26,7 @@ vi.mock('../config/supabase.js', () => ({
 vi.mock('../lib/access.js', () => ({ assertBrandAccess: vi.fn(async () => ({ orgId: 'o1' })) }));
 const deleteBrand = vi.fn(async () => {});
 vi.mock('../lib/brand-delete.js', () => ({ deleteBrand: (...a) => deleteBrand(...a) }));
+vi.mock('../lib/tracking-snippet-check.js', () => ({ checkTrackingSnippet: vi.fn() }));
 
 const { default: router } = await import('./brands.js');
 

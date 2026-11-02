@@ -80,7 +80,13 @@ function render(
           sources={{
             loaded,
             catalog,
-            google: { snippetLastVisitAt: null, ga: off, gsc: off },
+            google: {
+              snippetLastVisitAt: null,
+              snippetFoundAt: null,
+              snippetCheckedAt: null,
+              ga: off,
+              gsc: off,
+            },
             merchantCenterOffered,
             reload: () => {},
           }}

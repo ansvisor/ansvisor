@@ -31,17 +31,20 @@ export async function GET(req: Request) {
 }
 
 /**
- * POST /api/mcp/site-audits  { brand_id, url }
+ * POST /api/mcp/site-audits  { brand_id, url, force? }
  *
  * Parallel REST surface for the `run_site_audit` MCP tool — same data-layer
  * function, same ownership guarantee. Charges the monthly Site Audit quota and
- * returns the new audit id + "running" status (poll GET /api/mcp/site-audits/[id]).
+ * returns the new audit id + "running" status (poll GET /api/mcp/site-audits/[id]),
+ * or the page's audit already running. A page audited in the last minutes
+ * answers 200 with status "recently_audited" and that audit's id, unless
+ * `force`.
  */
 export async function POST(req: Request) {
   const auth = await authenticateMcpRequest(req);
   if (auth instanceof NextResponse) return auth;
 
-  let body: { brand_id?: string; url?: string };
+  let body: { brand_id?: string; url?: string; force?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -55,11 +58,14 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await runSiteAuditFor(auth, brandId, url);
+    const result = await runSiteAuditFor(auth, brandId, url, { force: body.force === true });
     if (!result) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
-    return NextResponse.json(result, { status: 202 });
+    // Audited in the last minutes: nothing started, the recent audit said back.
+    return NextResponse.json(result, {
+      status: result.status === 'recently_audited' ? 200 : 202,
+    });
   } catch (err) {
     return failedCallResponse(err);
   }

@@ -83,6 +83,10 @@ const {
   firstRun: { run: null as FirstRun | null, finished: new Set<(brandId: string) => void>() },
 }));
 
+// No white label kit: downloads keep Ansvisor's names (export-name.test.ts has a kit's).
+vi.mock('@/lib/actions/white-label', () => ({
+  getExportBranding: async () => ({ ok: true, branding: null }),
+}));
 vi.mock('next-intl', () => ({
   // Chat's "How do I finish …" names its action: the test reads which one.
   useTranslations: () => (key: string, values?: { title?: string }) =>
@@ -200,6 +204,24 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+});
+
+describe('the Stale filter (00432)', () => {
+  it('lists only New actions no one has worked on for a month, from the URL', async () => {
+    window.history.replaceState(null, '', '/?status=stale');
+    const stale: ActionItem = { ...action, id: 'a2', staleAt: '2026-10-31T03:00:00Z' };
+    const leftNew: ActionItem = {
+      ...action,
+      id: 'a3',
+      status: 'on_hold',
+      staleAt: '2026-10-31T03:00:00Z',
+    };
+    getActions.mockResolvedValue([action, stale, leftNew]);
+    getActionsAffected.mockResolvedValue({});
+    await render();
+    await act(async () => exportButton().click());
+    expect(getActionsAffected).toHaveBeenLastCalledWith('brand-id', ['a2']);
+  });
 });
 
 describe('the From Products chip (ECOM-013)', () => {

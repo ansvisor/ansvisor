@@ -9,6 +9,7 @@ import { expandDateToEndOfDay, utcDay } from '@/lib/dates';
 import { isHourlyWindow, listUtcHours, utcHourKey } from '@/lib/traffic-buckets';
 import { CONVERSIONS_FALLBACK_DAYS, widensToLast30Days } from '@/lib/traffic-conversions';
 import { getSuggestionSourceStates, type SourceState } from '@/lib/actions/integrations';
+import { readSnippet } from '@/lib/traffic-snippet';
 import { isPlatformSurface, type PlatformSurface } from '@/lib/traffic-platforms';
 import { NO_TOPICS } from '@/lib/topics-required';
 
@@ -91,30 +92,30 @@ export interface TrafficTrendPoint {
 export interface TrafficSources {
   /** The snippet's newest visit, or null when it has never sent one. */
   snippetLastVisitAt: string | null;
+  /** When the home page check last found the snippet (00433); null when it didn't, or none ran. */
+  snippetFoundAt: string | null;
+  /** When the home page was last checked for the snippet; null when never. */
+  snippetCheckedAt: string | null;
   ga: SourceState;
   gsc: SourceState;
 }
 
 /**
  * The tracking snippet, Google Analytics and Google Search Console as the
- * strip shows them, in one call: the snippet's last visit beside each
- * Google source's connection, the brand's property and its last sync.
+ * strip shows them, in one call: the snippet's last visit and its home
+ * page check beside each Google source's connection, the brand's property
+ * and its last sync.
  */
 export async function getTrafficSources(brandId: string): Promise<TrafficSources> {
   const supabase = await createClient();
-  const [states, lastVisit] = await Promise.all([
+  const [states, snippet] = await Promise.all([
     getSuggestionSourceStates(brandId),
-    supabase
-      .from('ai_traffic_logs')
-      .select('created_at')
-      .eq('brand_id', brandId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+    readSnippet(supabase, brandId),
   ]);
-  if (lastVisit.error) throw new Error(lastVisit.error.message);
   return {
-    snippetLastVisitAt: (lastVisit.data?.created_at as string | undefined) ?? null,
+    snippetLastVisitAt: snippet.lastVisitAt,
+    snippetFoundAt: snippet.foundAt,
+    snippetCheckedAt: snippet.checkedAt,
     ga: states.ga,
     gsc: states.gsc,
   };

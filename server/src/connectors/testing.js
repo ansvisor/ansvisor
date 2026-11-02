@@ -123,7 +123,7 @@ export async function runSync(
     account: null,
     ...source,
   };
-  fake.rows('catalog_sources').push({ ...row, last_synced_at: null });
+  fake.rows('catalog_sources').push({ last_orders_synced_at: null, ...row, last_synced_at: null });
   // The brand's workspace, whose sign-in a `signIn` connector reads with.
   fake.rows('brands').push({ id: row.brand_id, organization_id: 'org-1' });
   if (credentials) await saveCredentials(row.id, credentials, { db: fake.db });

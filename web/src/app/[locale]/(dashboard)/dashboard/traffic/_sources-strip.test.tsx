@@ -31,6 +31,8 @@ const { SourcesStrip } = await import('./_sources-strip');
   true;
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+/** A snippet never seen: no visit, no home page check found it. */
+const NO_SNIPPET = { snippetLastVisitAt: null, snippetFoundAt: null, snippetCheckedAt: null };
 const source = (over: Partial<SourceState> = {}): SourceState => ({
   configured: true,
   connected: true,
@@ -57,7 +59,10 @@ afterEach(() => {
   container.remove();
 });
 
-function render(sources: TrafficSources | null, { canConnect = true } = {}) {
+function render(
+  sources: TrafficSources | null,
+  { canConnect = true, snippetChecking = false } = {},
+) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -65,6 +70,7 @@ function render(sources: TrafficSources | null, { canConnect = true } = {}) {
           brandId="b1"
           sources={sources}
           domain="acme-coffee.example.com"
+          snippetChecking={snippetChecking}
           hasTrackingCode
           canConnect={canConnect}
           onShowCode={onShowCode}
@@ -87,6 +93,8 @@ describe('SourcesStrip', () => {
   it('shows each connected source with its property and last sync', () => {
     render({
       snippetLastVisitAt: hoursAgo(1),
+      snippetFoundAt: null,
+      snippetCheckedAt: null,
       ga: source({ property: '123456789' }),
       gsc: source({ property: 'sc-domain:acme-coffee.example.com', lastDataAt: hoursAgo(5) }),
     });
@@ -112,6 +120,8 @@ describe('SourcesStrip', () => {
   it('names a URL-prefix Search Console property by its host', () => {
     render({
       snippetLastVisitAt: hoursAgo(1),
+      snippetFoundAt: null,
+      snippetCheckedAt: null,
       ga: source(),
       gsc: source({ property: 'https://blog.acme-coffee.example.com/' }),
     });
@@ -121,11 +131,17 @@ describe('SourcesStrip', () => {
   it('says how long the first sync takes, and what a missing source unlocks', () => {
     render({
       snippetLastVisitAt: null,
+      snippetFoundAt: null,
+      snippetCheckedAt: null,
       ga: source({ lastDataAt: null }),
       gsc: source({ connected: false, mapped: false }),
     });
     expect(cards().slice(0, 3)).toEqual([
-      { title: 'Tracking snippet', line: 'Not detected', button: 'Install' },
+      {
+        title: 'Tracking snippet',
+        line: 'Not detected on acme-coffee.example.com',
+        button: 'Install',
+      },
       { title: 'Google Analytics', line: 'Syncing · first data in ~15 min', button: 'Manage' },
       {
         title: 'Google Search Console',
@@ -138,6 +154,8 @@ describe('SourcesStrip', () => {
   it('connects from the strip, and opens the snippet code from its button', () => {
     render({
       snippetLastVisitAt: hoursAgo(1),
+      snippetFoundAt: null,
+      snippetCheckedAt: null,
       ga: source({ connected: false, mapped: false }),
       gsc: source(),
     });
@@ -151,7 +169,7 @@ describe('SourcesStrip', () => {
 
   it("keeps Connect off for members who can't connect", () => {
     render(
-      { snippetLastVisitAt: null, ga: source({ connected: false }), gsc: source() },
+      { ...NO_SNIPPET, ga: source({ connected: false }), gsc: source() },
       { canConnect: false },
     );
     const connectButton = [...container.querySelectorAll('button')].find(
@@ -166,6 +184,8 @@ describe('SourcesStrip', () => {
   it('asks for a property, or says the server has no Google keys', () => {
     render({
       snippetLastVisitAt: null,
+      snippetFoundAt: null,
+      snippetCheckedAt: null,
       ga: source({ mapped: false, lastDataAt: null }),
       gsc: source({ configured: false, connected: false, mapped: false, lastDataAt: null }),
     });
@@ -177,5 +197,37 @@ describe('SourcesStrip', () => {
       },
       { title: 'Google Search Console', line: 'Not set up on this server', button: null },
     ]);
+  });
+
+  it('says installed and quiet when the home page check found it, or it sent a visit before', () => {
+    for (const snippet of [
+      { snippetLastVisitAt: null, snippetFoundAt: hoursAgo(3), snippetCheckedAt: hoursAgo(3) },
+      { snippetLastVisitAt: hoursAgo(24 * 30), snippetFoundAt: null, snippetCheckedAt: null },
+    ]) {
+      render({ ...snippet, ga: source(), gsc: source() });
+      expect(cards()[0]).toEqual({
+        title: 'Tracking snippet',
+        line: 'Installed · no AI visits in the last 7 days',
+        button: 'Code',
+      });
+    }
+  });
+
+  it("says Checking while the page's first check runs, and only while the snippet isn't seen", () => {
+    render({ ...NO_SNIPPET, ga: source(), gsc: source() }, { snippetChecking: true });
+    expect(cards()[0]).toEqual({
+      title: 'Tracking snippet',
+      line: 'Checking your home page…',
+      button: 'Install',
+    });
+
+    render({ ...NO_SNIPPET, ga: source(), gsc: source() });
+    expect(cards()[0].line).toBe('Not detected on acme-coffee.example.com');
+
+    render(
+      { ...NO_SNIPPET, snippetLastVisitAt: hoursAgo(2), ga: source(), gsc: source() },
+      { snippetChecking: true },
+    );
+    expect(cards()[0].line).toContain('Active');
   });
 });

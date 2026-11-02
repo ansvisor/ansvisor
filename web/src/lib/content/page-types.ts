@@ -6,14 +6,15 @@ import { jsonLdScripts } from './html-allowlist';
  * Page types by kind of site, and a page's type found from the page itself
  * (Content Editor CE-023, spec §4). A B2B SaaS site writes feature,
  * comparison and pricing pages; a shop, product and category pages; a B2C
- * site, destination and help pages. Every kind also writes the formats
+ * site, destination and help pages; a mobile app's site (00456), feature,
+ * pricing and help pages. Every kind also writes the formats
  * www.ansvisor.com offers that fit it: how-to guides, comparisons,
  * definitions, best-of lists and FAQs; alternatives, collections and sizing
  * guides where they apply. The brand's site type is set in its settings
  * (brands.site_type, 00205), guessed until someone does.
  */
 
-export const SITE_TYPES = ['b2b', 'ecommerce', 'b2c'] as const;
+export const SITE_TYPES = ['b2b', 'ecommerce', 'b2c', 'app'] as const;
 export type SiteType = (typeof SITE_TYPES)[number];
 
 export function isSiteType(value: unknown): value is SiteType {
@@ -60,6 +61,17 @@ export const SITE_PAGE_TYPES: Record<SiteType, readonly PageType[]> = {
     'help_faq',
     'blog_post',
   ],
+  app: [
+    'feature_page',
+    'comparison',
+    'alternatives',
+    'best_of',
+    'guide',
+    'definition',
+    'pricing',
+    'help_faq',
+    'blog_post',
+  ],
 };
 
 /**
@@ -100,17 +112,27 @@ export function siteTypeOf(brand: BrandSite): SiteType {
 /** What a sign means on each kind of site; a site it leaves out skips the sign. */
 type BySite = Partial<Record<SiteType, PageType>>;
 
-const ANY_SITE = (type: PageType): BySite => ({ b2b: type, ecommerce: type, b2c: type });
+const ANY_SITE = (type: PageType): BySite => ({ b2b: type, ecommerce: type, b2c: type, app: type });
 const COMPARISON = ANY_SITE('comparison');
 const BEST_OF = ANY_SITE('best_of');
 const DEFINITION = ANY_SITE('definition');
 /** A B2C site has no alternatives page: an "X alternatives" page compares. */
-const ALTERNATIVES: BySite = { b2b: 'alternatives', ecommerce: 'alternatives', b2c: 'comparison' };
-const FAQ: BySite = { b2b: 'docs_faq', ecommerce: 'help_faq', b2c: 'help_faq' };
-const POLICY: BySite = { b2b: 'docs_faq', ecommerce: 'policy', b2c: 'help_faq' };
+const ALTERNATIVES: BySite = {
+  b2b: 'alternatives',
+  ecommerce: 'alternatives',
+  b2c: 'comparison',
+  app: 'alternatives',
+};
+const FAQ: BySite = { b2b: 'docs_faq', ecommerce: 'help_faq', b2c: 'help_faq', app: 'help_faq' };
+const POLICY: BySite = { b2b: 'docs_faq', ecommerce: 'policy', b2c: 'help_faq', app: 'help_faq' };
 const GUIDE = ANY_SITE('guide');
 /** How to choose: a shop's buying guide, elsewhere a how-to guide. */
-const BUYING_GUIDE: BySite = { b2b: 'guide', ecommerce: 'buying_guide', b2c: 'guide' };
+const BUYING_GUIDE: BySite = {
+  b2b: 'guide',
+  ecommerce: 'buying_guide',
+  b2c: 'guide',
+  app: 'guide',
+};
 const SIZING: BySite = { ecommerce: 'sizing_guide' };
 const COLLECTION: BySite = { ecommerce: 'collection_page' };
 
@@ -137,7 +159,7 @@ const BLOG_SECTION =
  * test __fixtures__/category-paths.json.
  */
 const PATH_SIGNS: [RegExp, BySite][] = [
-  [/\/(pricing|plans|plans-and-pricing)(\/|$)/, { b2b: 'pricing' }],
+  [/\/(pricing|plans|plans-and-pricing)(\/|$)/, { b2b: 'pricing', app: 'pricing' }],
   // A size guide, also at the end of a slug: /collections/hiking-boots-size-guide.
   [/(^|[/-])(size-?(guides?|charts?)|sizing-guides?|fit-guides?)([/-]|$)|\/sizing([/-]|$)/, SIZING],
   [/(^|[/-])alternatives?([/-]|$)/, ALTERNATIVES],
@@ -156,7 +178,7 @@ const PATH_SIGNS: [RegExp, BySite][] = [
   [/\/(integrations?|apps|marketplace|connectors?)\//, { b2b: 'integration' }],
   [/\/(buying-guides?|buyers?-guides?|how-to-choose)([/-]|$)/, BUYING_GUIDE],
   [/\/(the-)?(best(?!-(practices?|time|ways?|sellers?)([/-]|$))|top-?\d+)([/-]|$)/, BEST_OF],
-  [/\/(features?|capabilities|platform)(\/|$)/, { b2b: 'feature_page' }],
+  [/\/(features?|capabilities|platform)(\/|$)/, { b2b: 'feature_page', app: 'feature_page' }],
   [
     /\/(solutions?|industries|industry|use-cases?|teams)(\/|$)|\/for-[a-z]/,
     { b2b: 'solution_page' },
@@ -192,7 +214,10 @@ const SCHEMA_SIGNS: [readonly string[], BySite][] = [
     ['Product', 'ProductGroup', 'IndividualProduct'],
     { b2b: 'feature_page', ecommerce: 'product_page' },
   ],
-  [['SoftwareApplication', 'WebApplication', 'MobileApplication'], { b2b: 'feature_page' }],
+  [
+    ['SoftwareApplication', 'WebApplication', 'MobileApplication'],
+    { b2b: 'feature_page', app: 'feature_page' },
+  ],
   [['TouristTrip'], { b2c: 'itinerary' }],
   [
     [
@@ -220,7 +245,7 @@ const TITLE_SIGNS: [RegExp, BySite][] = [
   [/\bsize (guide|chart)s?\b|\bsizing\b|\bfit guide\b/i, SIZING],
   [/\balternatives?\b/i, ALTERNATIVES],
   [/\b(vs\.?|versus)\s/i, COMPARISON],
-  [/\bpricing\b/i, { b2b: 'pricing' }],
+  [/\bpricing\b/i, { b2b: 'pricing', app: 'pricing' }],
   [/\bpolic(y|ies)\b/i, POLICY],
   // "Shipping FAQ" is a policy page, as /pages/shipping-faq is: the policy
   // words before FAQ, in the paths' order.

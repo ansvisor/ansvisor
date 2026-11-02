@@ -71,6 +71,7 @@ import { cn } from '@/lib/utils';
 import { toCsv } from '@/lib/csv';
 import { formatRelative } from '@/lib/format-relative';
 import { formatNumber } from '@/lib/format';
+import { exportFileName } from '@/lib/white-label/export-name';
 import { compareNullsLast, type SortDir } from './prompt-sort';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -465,7 +466,7 @@ export function TopicsTab({
 
   const canExport = !loading && topics.length > 0;
 
-  const handleExportCsv = useCallback(() => {
+  const handleExportCsv = useCallback(async () => {
     if (!canExport) return;
 
     const rows = topics.map((t) => ({
@@ -491,7 +492,7 @@ export function TopicsTab({
     const slug = activeBrand?.slug ?? 'brand';
 
     link.href = url;
-    link.download = `ansvisor_${slug}_topics_${rangePreset}_${date}.csv`;
+    link.download = await exportFileName(`${slug}_topics_${rangePreset}_${date}.csv`);
     link.click();
 
     URL.revokeObjectURL(url);

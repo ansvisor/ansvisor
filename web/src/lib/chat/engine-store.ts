@@ -8,7 +8,9 @@ import {
   type ChatEventPayloads,
   type ChatEventType,
 } from './events';
+import type { RunKeyFailure } from './engine-key';
 import type { ChatPhase } from './engine-model';
+import type { UntrustedShingles } from './go-live-checks';
 import type { NextMoveInput } from './next-moves';
 import type { PageSites } from './page-sites';
 import type { ChatMode } from './precedence';
@@ -131,6 +133,12 @@ export interface RunProgress {
    */
   injection?: boolean;
   /**
+   * An agent run's untrusted reads, as hashed 12-word runs (go-live-checks.ts
+   * keepShingles, 32 KB at most): a page the agent wants to take live on its
+   * own must not copy 30 words in a row of them (AUTONOMOUS-GO-LIVE §6.3).
+   */
+  untrustedShingles?: UntrustedShingles;
+  /**
    * The answer's fact check (CHAT-05 item 11): figures checked against the
    * run's data, and the ones taken out (a placeholder in their place).
    */
@@ -150,6 +158,11 @@ export interface RunProgress {
   capHit?: 'run' | 'month';
   /** Why a stopped run stopped (its run.stopped reason), for its agent run (CHAT-21 §H). */
   stoppedFor?: ChatStopReason;
+  /**
+   * The run ended on the workspace's own key failing (AGENT-OWN-KEY §5.2):
+   * its agent run is stopped `own_key`, and a triggered agent pauses.
+   */
+  keyFailure?: RunKeyFailure;
   /**
    * Its scope holds text from outside the workspace's own numbers (an Action
    * Center action's title and tasks, CHAT-21 §F): the models read it as

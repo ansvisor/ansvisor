@@ -82,6 +82,8 @@ describe('assetTypes', () => {
     expect(assetTypes('b2b')).toContain('feature_page');
     expect(assetTypes('b2b')).not.toContain('product_page');
     expect(assetTypes('b2c').slice(-2)).toEqual(['third_party_article', 'backlink']);
+    expect(assetTypes('app')).toContain('feature_page');
+    expect(assetTypes('app')).not.toContain('product_page');
   });
 });
 

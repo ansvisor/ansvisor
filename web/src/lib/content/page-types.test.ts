@@ -14,6 +14,8 @@ describe('site types', () => {
     expect(SITE_PAGE_TYPES.b2b).toContain('feature_page');
     expect(SITE_PAGE_TYPES.ecommerce).toContain('product_page');
     expect(SITE_PAGE_TYPES.b2c).toContain('destination_page');
+    expect(SITE_PAGE_TYPES.app).toEqual(expect.arrayContaining(['feature_page', 'pricing']));
+    expect(SITE_PAGE_TYPES.app).not.toContain('destination_page');
     for (const site of SITE_TYPES) {
       for (const type of SITE_PAGE_TYPES[site]) expect(PAGE_TYPES).toContain(type);
     }
@@ -33,6 +35,7 @@ describe('site types', () => {
 
   it('keeps the site type the brand chose over the guess', () => {
     expect(siteTypeOf({ siteType: 'b2c', industry: 'B2B Software (SaaS)' })).toBe('b2c');
+    expect(siteTypeOf({ siteType: 'app', shoppingModeEnabled: true })).toBe('app');
     expect(siteTypeOf({ siteType: null, industry: 'E-commerce & Retail' })).toBe('ecommerce');
     expect(siteTypeOf({ siteType: 'nonsense', industry: 'Technology' })).toBe('b2b');
   });
@@ -107,6 +110,22 @@ describe('detectPageType from the URL', () => {
     expect(detectPageType({ url }, 'b2c')).toBe(type);
   });
 
+  it.each([
+    ['/features/streaks', 'feature_page'],
+    ['/pricing', 'pricing'],
+    ['/habitly-vs-streaks', 'comparison'],
+    ['/streaks-alternatives', 'alternatives'],
+    ['/best-habit-tracker-apps', 'best_of'],
+    ['/help/restore-purchases', 'help_faq'],
+    ['/privacy', 'help_faq'],
+    ['/guides/morning-routine', 'guide'],
+    ['/blog/habit-stacking', 'blog_post'],
+    ['/destinations/lisbon', null],
+    ['/solutions/teams', null],
+  ])('Mobile app: %s → %s', (url, type) => {
+    expect(detectPageType({ url }, 'app')).toBe(type);
+  });
+
   it('gives a sign the site’s own type, or skips it when the site writes no such page', () => {
     expect(detectPageType({ url: '/vs/hubspot' }, 'b2b')).toBe('comparison');
     expect(detectPageType({ url: '/vs/hubspot' }, 'ecommerce')).toBe('comparison');
@@ -151,6 +170,9 @@ describe('detectPageType from the page', () => {
     expect(detectPageType({ html: product }, 'ecommerce')).toBe('product_page');
     expect(detectPageType({ html: jsonLd({ '@type': ['BlogPosting'] }) }, 'b2b')).toBe('blog_post');
     expect(detectPageType({ html: jsonLd({ '@type': 'FAQPage' }) }, 'b2c')).toBe('help_faq');
+    expect(detectPageType({ html: jsonLd({ '@type': 'MobileApplication' }) }, 'app')).toBe(
+      'feature_page',
+    );
     expect(
       detectPageType(
         { html: jsonLd({ '@type': 'WebPage', mainEntity: { '@type': 'TouristDestination' } }) },

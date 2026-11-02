@@ -43,6 +43,8 @@ export async function auditRecheck(action) {
     .select('id, url, final_url, total_score')
     .eq('brand_id', action.brand_id)
     .eq('status', 'completed')
+    // A partial audit's AI-judged checks read n/a, which isn't the fix taking.
+    .eq('partial', false)
     .gt('completed_at', action.completed_at)
     .order('completed_at', { ascending: false })
     .limit(500);

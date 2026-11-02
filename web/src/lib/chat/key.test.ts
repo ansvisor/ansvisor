@@ -44,11 +44,21 @@ vi.mock('@/lib/supabase/admin', () => ({
 }));
 
 vi.mock('@/lib/agent/key-encryption', () => ({
-  decryptApiKey: (envelope: string) => `plain(${envelope})`,
+  decryptApiKey: (envelope: string) => (envelope === 'bad' ? null : `plain(${envelope})`),
 }));
 
-const { chatRunsOnOwnKey, ownKeyAllowed, ownKeyAccess, resolveChatModelKey } =
-  await import('./key');
+const markKeyFailing = vi.fn(async () => ({ started: true, since: null }));
+vi.mock('./key-health', () => ({
+  markKeyFailing: (...args: unknown[]) => markKeyFailing(...(args as [])),
+}));
+
+const {
+  OwnKeyUnreadableError,
+  chatRunsOnOwnKey,
+  ownKeyAllowed,
+  ownKeyAccess,
+  resolveChatModelKey,
+} = await import('./key');
 
 const CUSTOMER = {
   provider: 'openai',
@@ -162,6 +172,25 @@ describe('resolveChatModelKey, Chat on', () => {
 
     org = orgOn('growth', true, new Date(Date.now() - 1000).toISOString());
     expect(await resolveChatModelKey(ORG)).toEqual(ANSVISOR);
+  });
+
+  it('stops on an own key that can’t be read, marked failing, never Ansvisor’s key in its place', async () => {
+    org = orgOn('enterprise');
+    ownKey = { ...CUSTOMER, key_encrypted: 'bad' };
+    markKeyFailing.mockClear();
+    const thrown = await resolveChatModelKey(ORG).catch((err: unknown) => err);
+    expect(thrown).toBeInstanceOf(OwnKeyUnreadableError);
+    expect((thrown as InstanceType<typeof OwnKeyUnreadableError>).provider).toBe('openai');
+    expect(markKeyFailing).toHaveBeenCalledWith(ORG, 'openai', {
+      class: 'unreadable',
+      status: null,
+    });
+    // chatRunsOnOwnKey agrees: the workspace runs on its own key, not the AI limit.
+    expect(await chatRunsOnOwnKey(ORG)).toBe(true);
+
+    // A mark that fails still stops Chat.
+    markKeyFailing.mockRejectedValueOnce(new Error('down'));
+    await expect(resolveChatModelKey(ORG)).rejects.toBeInstanceOf(OwnKeyUnreadableError);
   });
 
   it('falls back to Ansvisor’s key when an Enterprise workspace has none', async () => {

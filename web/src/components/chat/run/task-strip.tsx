@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button';
@@ -65,12 +65,34 @@ export function TaskStripRows({ tasks }: { tasks: readonly ChatTaskRow[] }) {
  * "Action Center tasks · 4 due", how many are ready ("1 of 3 ready",
  * CHAT-01 item 7) with its bar, the tasks, and once the run ended the line
  * of #s-done: the person closes the tasks in Action Center, Chat never does.
+ * Screen readers hear what changes, once: the rows whose status moved, then
+ * how many are ready when that moved. A reload or the strip's first tasks
+ * say nothing; the rows are read as they are.
  */
 export function TaskStrip({ strip, ended }: { strip: ChatTaskStrip; ended: boolean }) {
   const t = useTranslations('chatRun.tasks');
   const titleId = useId();
+  const [seen, setSeen] = useState(strip);
+  const [news, setNews] = useState('');
+  // Adjust-state-during-render pattern: say what changed since the strip last drew.
+  if (seen !== strip) {
+    setSeen(strip);
+    if (seen.total > 0) {
+      const was = new Map(seen.tasks.map((task) => [task.at, task.status]));
+      const said = strip.tasks
+        .filter((task) => was.get(task.at) !== task.status)
+        .map((task) =>
+          t('changed', { title: task.title || t('untitled'), status: t(`status.${task.status}`) }),
+        );
+      if (strip.ready !== seen.ready || strip.total !== seen.total) {
+        said.push(t('ready', { ready: strip.ready, total: strip.total }));
+      }
+      if (said.length) setNews(said.join('. '));
+    }
+  }
   if (strip.total === 0) return null;
   const share = Math.round((strip.ready / strip.total) * 100);
+  const ready = t('ready', { ready: strip.ready, total: strip.total });
   return (
     <section
       data-slot="task-strip"
@@ -88,6 +110,7 @@ export function TaskStrip({ strip, ended }: { strip: ChatTaskStrip; ended: boole
             aria-valuemin={0}
             aria-valuemax={strip.total}
             aria-valuenow={strip.ready}
+            aria-valuetext={ready}
             className="h-1.5 w-[120px] overflow-hidden rounded-full bg-muted"
           >
             <span
@@ -96,10 +119,13 @@ export function TaskStrip({ strip, ended }: { strip: ChatTaskStrip; ended: boole
             />
           </div>
           <span className="rounded-full border px-2 py-0.5 text-[11px] whitespace-nowrap tabular-nums">
-            {t('ready', { ready: strip.ready, total: strip.total })}
+            {ready}
           </span>
         </div>
       </div>
+      <p aria-live="polite" data-slot="task-strip-news" className="sr-only">
+        {news}
+      </p>
       <TaskStripRows tasks={strip.tasks} />
       {ended && (
         <div className="flex flex-wrap items-center gap-2 border-t px-3.5 py-2.5">

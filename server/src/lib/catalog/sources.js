@@ -12,6 +12,7 @@ import { CredentialsKeyError, readCredentials } from './credentials.js';
 import { saveItemIssues } from './issues.js';
 import { signInRequest as workspaceSignIn, workspaceEntity } from './sign-in.js';
 import { syncCatalog } from './sync.js';
+import { syncCatalogOrders } from './orders.js';
 
 /**
  * A brand's catalog sources (#1263, 00279, 00282) synced into its catalog: a
@@ -318,6 +319,63 @@ export async function syncSource(source, { afterSync = queueShoppingCheck, ...op
   return outcome;
 }
 
+/** A store's HTTP client whose every call stops at one deadline, `ms` from now. */
+function withDeadline(request, ms) {
+  const deadline = AbortSignal.timeout(ms);
+  return (address, opts = {}) =>
+    request(address, {
+      ...opts,
+      signal: opts.signal ? AbortSignal.any([opts.signal, deadline]) : deadline,
+    });
+}
+
+/**
+ * A store's changed orders (#1275), after its catalog was written. The cursor
+ * (`last_orders_synced_at`) moves only past orders saved: to the sync's start
+ * once the read is complete, or to the last change read when the connector
+ * stopped at its page cap, so a store with more orders catches up over the
+ * next runs instead of reading the same first pages again. A failure here
+ * leaves the cursor where it was and the catalog's outcome as it is, and is
+ * kept in plain words in the source's order counts: the orders are tried
+ * again by the next sync. The orders' read has its own deadline (readMs).
+ */
+async function syncStoreOrders(source, connector, { request, credentials, db, now, at }) {
+  const since = source.last_orders_synced_at ?? null;
+  try {
+    const result = await connector.syncOrders(source, { request, credentials, since });
+    const counts = await syncCatalogOrders(source.brand_id, sourceKey(source.id), result.orders, {
+      db,
+      now,
+    });
+    const cursor = Date.parse(result.truncated ? (result.cursor ?? '') : at);
+    const previous = since ? Date.parse(since) : NaN;
+    if (Number.isFinite(cursor) && !(cursor <= previous)) {
+      const { error } = await db
+        .from('catalog_sources')
+        .update({ last_orders_synced_at: new Date(cursor).toISOString() })
+        .eq('id', source.id);
+      if (error) throw new Error(`catalog_sources order cursor write: ${error.message}`);
+    }
+    return {
+      ...counts,
+      skippedFromApi: Number.isInteger(result.skipped) ? result.skipped : 0,
+      truncated: !!result.truncated,
+    };
+  } catch (err) {
+    logger.warn(
+      { err: { name: err?.name, code: err?.code }, sourceId: source.id },
+      '[catalog] order sync failed; the next sync tries again',
+    );
+    // Kept with the catalog's counts, so a read that keeps failing (one that
+    // runs out of time, say) shows why. Plain words only, no store text.
+    const error =
+      err instanceof ConnectorHttpError
+        ? failureOf(err).error
+        : "The orders couldn't be synced. The next sync tries again.";
+    return { failed: true, ...(err?.code === 'timeout' ? { timedOut: true } : {}), error };
+  }
+}
+
 async function syncOnce(
   source,
   {
@@ -336,6 +394,7 @@ async function syncOnce(
   let outcome;
   let credentials = null;
   let connector = null;
+  let storeRequest = null;
   try {
     let parsed;
     if (text !== undefined) {
@@ -360,14 +419,9 @@ async function syncOnce(
       } else if (isStore(connector)) {
         credentials = await readCredentials(source.id, { db });
         // Every call the read makes stops at its deadline.
-        const deadline = AbortSignal.timeout(readMs);
-        const bounded = (address, opts = {}) =>
-          request(address, {
-            ...opts,
-            signal: opts.signal ? AbortSignal.any([opts.signal, deadline]) : deadline,
-          });
+        storeRequest = withDeadline(request, readMs);
         if (!credentials) outcome = NO_SIGN_IN;
-        else parsed = await connector.readCatalog(source, { request: bounded, credentials });
+        else parsed = await connector.readCatalog(source, { request: storeRequest, credentials });
       } else {
         parsed = await connector.readCatalog(source, { fetch, request });
       }
@@ -391,6 +445,24 @@ async function syncOnce(
       if (Number.isInteger(parsed.repeated)) outcome.counts.repeated = parsed.repeated;
       if (Array.isArray(parsed.issues)) {
         outcome.counts.issues = await saveItemIssues(source, parsed.issues, { db, now });
+      }
+
+      // Store connectors with order support share one idempotent persistence path.
+      if (
+        isStore(connector) &&
+        credentials &&
+        storeRequest &&
+        typeof connector.syncOrders === 'function'
+      ) {
+        outcome.counts.orders = await syncStoreOrders(source, connector, {
+          // The orders get their own deadline: a large catalog's read can't
+          // spend the time they need.
+          request: withDeadline(request, readMs),
+          credentials,
+          db,
+          now,
+          at,
+        });
       }
     }
   } catch (err) {
@@ -436,7 +508,7 @@ export async function sweepCatalogSources({
   const { data, error } = await db
     .from('catalog_sources')
     .select(
-      'id, brand_id, kind, format, url, account, last_synced_at, brands!inner(is_demo, organizations!inner(subscription_status))',
+      'id, brand_id, kind, format, url, account, last_synced_at, last_orders_synced_at, brands!inner(is_demo, organizations!inner(subscription_status))',
     )
     // A demo brand's catalog (00380) is sample data: its sources are never read.
     .eq('brands.is_demo', false)

@@ -50,8 +50,8 @@ export function agentStateOf(
 }
 
 /**
- * The page types a draft can be, across brand types (B2B, e-commerce, B2C;
- * SITE_PAGE_TYPES says which). Stored as these keys (content_drafts.page_type);
+ * The page types a draft can be, across brand types (B2B, e-commerce, B2C,
+ * mobile app; SITE_PAGE_TYPES says which). Stored as these keys (content_drafts.page_type);
  * named in en.json under contentEditor.pageTypes.
  */
 export const PAGE_TYPES = [
@@ -202,6 +202,25 @@ export interface ContentDraft {
    * new and optimized pages when the draft was made. Its run is once a draft.
    */
   qualityHandoff: boolean;
+  /**
+   * The person left out the Article schema Ansvisor adds to the page it
+   * sends and exports (00448): their CMS writes its own.
+   */
+  schemaLeftOut: boolean;
+}
+
+/**
+ * A database without 00448 has no content_drafts.schema_left_out (42703 on
+ * a read, PGRST204 on a write): the web deployed ahead of its migration.
+ * Drafts are read without it, as not left out, and the choice isn't saved.
+ */
+export function missingSchemaLeftOut(
+  error: { code?: string; message?: string } | null | undefined,
+): boolean {
+  return (
+    (error?.code === '42703' || error?.code === 'PGRST204') &&
+    (error.message ?? '').includes('schema_left_out')
+  );
 }
 
 /**

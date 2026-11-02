@@ -16,7 +16,12 @@ vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('./testing/fake-supabase')).createFakeSupabase(),
 }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
-const usage = vi.hoisted(() => ({ percent: 10, own: false, shares: null as unknown }));
+const usage = vi.hoisted(() => ({
+  percent: 10,
+  own: false,
+  shares: null as unknown,
+  keyFailing: null as { class: string; provider: string } | null,
+}));
 vi.mock('@/lib/mcp/account', () => ({
   getAiUsageFor: vi.fn(async () => ({
     active_plan: true,
@@ -26,6 +31,7 @@ vi.mock('@/lib/mcp/account', () => ({
 }));
 vi.mock('./key', () => ({
   resolveChatModelKey: vi.fn(async () => ({ source: usage.own ? 'own' : 'ansvisor' })),
+  failingOwnKey: vi.fn(async () => usage.keyFailing ?? null),
 }));
 vi.mock('./agent-shares', () => ({ readAgentShares: vi.fn(async () => usage.shares) }));
 
@@ -73,6 +79,7 @@ beforeEach(() => {
   usage.percent = 10;
   usage.own = false;
   usage.shares = null;
+  usage.keyFailing = null;
   db.unique = {
     ...db.unique,
     chat_agents: [['organization_id', 'name']],
@@ -591,6 +598,35 @@ describe('changing an agent', () => {
 });
 
 describe('states', () => {
+  it('refuses Activate and Resume while the workspace’s own key fails, and lets them once it works', async () => {
+    const { id } = await create(PEOPLE.manager, { visibility: 'workspace' });
+    const admin = await ctxOf(PEOPLE.admin);
+    usage.own = true;
+    usage.keyFailing = { class: 'invalid', provider: 'anthropic' };
+    expect(await agents.changeAgentState(admin, id, 'activate', NOW)).toMatchObject({
+      ok: false,
+      refusal: {
+        status: 409,
+        code: 'own_key_failed',
+        message:
+          'Anthropic turned down your workspace’s key. An Admin can fix it in Settings › AI Providers, then run the agent again.',
+      },
+    });
+    expect(agentRow(id).status).toBe('draft');
+
+    usage.keyFailing = null;
+    expect((await agents.changeAgentState(admin, id, 'activate', NOW)).ok).toBe(true);
+    // Paused for the key, it stays paused while the key fails.
+    db.tables.chat_agents.find((a) => a.id === id)!.status = 'paused';
+    db.tables.chat_agents.find((a) => a.id === id)!.paused_reason = 'own_key';
+    usage.keyFailing = { class: 'no_credit', provider: 'openai' };
+    expect(await agents.changeAgentState(admin, id, 'resume')).toMatchObject({
+      ok: false,
+      refusal: { code: 'own_key_failed' },
+    });
+    expect(agentRow(id)).toMatchObject({ status: 'paused', paused_reason: 'own_key' });
+  });
+
   it('activates a draft (the person becomes its owner), pauses, resumes, archives, restores and deletes', async () => {
     const { id } = await create(PEOPLE.manager, { visibility: 'workspace' });
     const admin = await ctxOf(PEOPLE.admin);
@@ -902,7 +938,19 @@ describe('reading', () => {
     const list = await agents.listAgents(manager, { view: 'mine' }, NOW);
     expect(list.agents.map((a) => a.name)).toEqual(['Mine private']);
     expect(list.counts).toEqual({ mine: 1, workspace: 1, paused: 1, archived: 0 });
-    expect(list).toMatchObject({ active: 0, activeInWorkspace: 0, activeLimit: 25 });
+    expect(list).toMatchObject({
+      active: 0,
+      activeInWorkspace: 0,
+      activeLimit: 25,
+      keyFailure: null,
+    });
+    // The own key failing: the banner's class and provider, no dates.
+    usage.keyFailing = { class: 'model', provider: 'azure' };
+    expect((await agents.listAgents(manager, { view: 'mine' }, NOW)).keyFailure).toEqual({
+      class: 'model',
+      provider: 'azure',
+    });
+    usage.keyFailing = null;
     const workspace = await agents.listAgents(manager, { view: 'workspace' }, NOW);
     expect(workspace.agents.map((a) => [a.name, a.mine])).toEqual([['Shared', false]]);
 
@@ -1160,5 +1208,122 @@ describe('reading', () => {
       'cccccccc-0000-4000-8000-000000000022',
       null,
     ]);
+  });
+});
+
+describe('brand access (Selected brands)', () => {
+  /** An Admin narrows the person to these brands (BRAND-ACCESS, 00388). */
+  const narrow = (userId: string, ...brandIds: string[]) => {
+    db.tables.profiles.find((p) => p.id === userId)!.brand_scope = 'selected';
+    db.tables.member_brands = brandIds.map((brand_id) => ({
+      user_id: userId,
+      organization_id: ORG,
+      brand_id,
+    }));
+  };
+
+  it('changes nothing while everyone has All brands', async () => {
+    const ctx = await ctxOf(PEOPLE.manager);
+    expect(ctx.viewer.brandAccess).toBe('all');
+    expect(
+      (await agents.runnableBrands(ORG, { all_brands: true }, ctx.viewer.brandAccess)).map(
+        (b) => b.name,
+      ),
+    ).toEqual(['Brand A', 'Brand B']);
+  });
+
+  it('reads All brands as all of theirs, and refuses a brand not shared as one not found', async () => {
+    narrow(PEOPLE.manager, BRAND);
+    const ctx = await ctxOf(PEOPLE.manager);
+    // The demo brand is everyone's to read; nothing runs on it.
+    expect(ctx.viewer.brandAccess).toEqual([BRAND, DEMO]);
+    expect(
+      (await agents.runnableBrands(ORG, { all_brands: true }, ctx.viewer.brandAccess)).map(
+        (b) => b.name,
+      ),
+    ).toEqual(['Brand A']);
+    expect(
+      await agents.createAgent(ctx, input({ scope: { brand_ids: [BRAND_2] } }), NOW),
+    ).toMatchObject({ ok: false, refusal: { code: 'brand_not_found' } });
+    // Their own agent on All brands is theirs to see, naming their brands only (Brand B never).
+    const own = await create(PEOPLE.manager, { scope: { all_brands: true } });
+    const detail = await agents.readAgent(await ctxOf(PEOPLE.manager), own.id, NOW);
+    expect(detail?.brands.map((b) => b.name)).toEqual(['Brand A', 'Demo']);
+    expect(detail?.scope).toEqual({ allBrands: true, brands: ['Brand A', 'Demo'] });
+  });
+
+  it("holds an Admin's Resume to the brands its owner may use, connections included", async () => {
+    const agent = await create(PEOPLE.manager, {
+      scope: { all_brands: true },
+      skills: ['publish'],
+    });
+    // Brand A sends pages to WordPress; Brand B has no CMS.
+    db.tables.brand_cms_connections = [
+      { brand_id: BRAND, provider: 'wordpress', status: 'connected' },
+    ];
+    const manager = await ctxOf(PEOPLE.manager);
+    expect(await agents.changeAgentState(manager, agent.id, 'activate', NOW)).toMatchObject({
+      ok: true,
+    });
+    expect(await agents.changeAgentState(manager, agent.id, 'pause', NOW)).toMatchObject({
+      ok: true,
+    });
+    const admin = await ctxOf(PEOPLE.admin);
+    // Its runs act as the Manager, who has All brands: Brand B would lack the CMS.
+    expect(await agents.changeAgentState(admin, agent.id, 'resume', NOW)).toMatchObject({
+      ok: false,
+      refusal: { code: 'connection_missing' },
+    });
+    // Narrowed to Brand A, the owner's brands all have it: the Admin's own don't count.
+    narrow(PEOPLE.manager, BRAND);
+    expect(await agents.changeAgentState(admin, agent.id, 'resume', NOW)).toMatchObject({
+      ok: true,
+    });
+    expect(await agents.changeAgentState(admin, agent.id, 'pause', NOW)).toMatchObject({
+      ok: true,
+    });
+    // None of its brands left to the owner: nothing to run on.
+    narrow(PEOPLE.manager);
+    expect(await agents.changeAgentState(admin, agent.id, 'resume', NOW)).toMatchObject({
+      ok: false,
+      refusal: { code: 'no_brand' },
+    });
+  });
+
+  it('hides the agents, runs and brand names they may not see', async () => {
+    const shared = await create(PEOPLE.otherManager, {
+      name: 'On both',
+      visibility: 'workspace',
+      scope: { brand_ids: [BRAND, BRAND_2] },
+    });
+    const mine = await create(PEOPLE.manager, { visibility: 'workspace' });
+    const run = (n: number, brandId: string | null) => ({
+      id: `dddddddd-0000-4000-8000-00000000003${n}`,
+      organization_id: ORG,
+      agent_id: mine.id,
+      agent_version: 1,
+      brand_id: brandId,
+      trigger_kind: 'manual',
+      acting_user_id: PEOPLE.manager,
+      status: 'done',
+      max_share: 0.1,
+      usage_share: 0.01,
+      queued_at: `2026-10-28T0${n}:00:00.000Z`,
+    });
+    // Runs from before they were narrowed: on Brand B, and on a brand since deleted.
+    db.tables.chat_agent_runs.push(run(1, BRAND), run(2, BRAND_2), run(3, null));
+    expect(await agents.listAgentRuns(await ctxOf(PEOPLE.manager), mine.id, 50)).toHaveLength(3);
+
+    narrow(PEOPLE.manager, BRAND);
+    const ctx = await ctxOf(PEOPLE.manager);
+    const list = await agents.listAgents(ctx, { view: 'workspace' }, NOW);
+    expect(list.agents.map((a) => a.id)).not.toContain(shared.id);
+    expect(await agents.readAgent(ctx, shared.id, NOW)).toBeNull();
+    const runsSeen = await agents.listAgentRuns(ctx, mine.id, 50);
+    expect(runsSeen?.map((r) => r.brand)).toEqual(['Brand A']);
+    // An Admin still sees all of it.
+    const admin = await ctxOf(PEOPLE.admin);
+    expect(await agents.readAgent(admin, shared.id, NOW)).not.toBeNull();
+    expect(await agents.listAgentRuns(admin, mine.id, 50)).toHaveLength(3);
   });
 });

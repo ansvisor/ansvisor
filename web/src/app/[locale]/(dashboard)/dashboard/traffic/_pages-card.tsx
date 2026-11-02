@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { FileSearch, Lightbulb, ListPlus, Loader2, MoreHorizontal, Send } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
+import { useRecentAudit } from '@/components/audit/use-recent-audit';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -199,6 +200,7 @@ export function PagesCard({
   const t = useTranslations('traffic.pageList');
   const tReason = useTranslations('traffic.pageOpportunities');
   const router = useRouter();
+  const { askOne } = useRecentAudit();
   const [tab, setTab] = useState<TrafficPagesTab>('noAiTraffic');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [auditing, setAuditing] = useState<string | null>(null);
@@ -259,13 +261,22 @@ export function PagesCard({
     setLimit(PAGE_SIZE);
   };
 
-  const auditPage = async (page: string) => {
+  const auditPage = async (page: string, force = false) => {
     if (!domain) return;
     setAuditing(page);
     try {
       // A running audit opens on its own page, which follows it to the end.
-      const started = await runAudit(brandId, pageUrl(domain, page));
-      router.push(`/dashboard/audit/${started.id}`);
+      // A page audited minutes ago asks first: Open it or Audit again.
+      const url = pageUrl(domain, page);
+      const started = force
+        ? await runAudit(brandId, url, { force: true })
+        : await runAudit(brandId, url);
+      if (started.recent) {
+        setAuditing(null);
+        askOne(started.recent, () => void auditPage(page, true));
+        return;
+      }
+      router.push(`/dashboard/audit/${started.audit.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('auditFailed'));
       setAuditing(null);

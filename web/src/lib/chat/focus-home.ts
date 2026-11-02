@@ -158,6 +158,38 @@ export function focusGreeting(
   return null;
 }
 
+/**
+ * The new skills "New for you" offers for each area (CHAT-24 §4f, §5;
+ * mockup NEWS): its seven, and Fix wrong claims about us for Brand (the
+ * mockup's /factcheck). Only what Chat has: the mockup's agents and
+ * integrations join once they exist.
+ */
+export const FOCUS_NEW: Record<FocusArea, readonly string[]> = {
+  lead: [],
+  comp: ['rivals'],
+  growth: [],
+  seo: ['audit-fix'],
+  content: [],
+  brand: ['wrongclaim'],
+  pd: ['questions', 'features', 'gaps'],
+  bd: ['listings', 'markets', 'gaps'],
+};
+
+/** A new skill for the picked areas, with the area it came from. */
+export interface NewPick {
+  area: FocusArea;
+  skill: string;
+}
+
+/** "New for you": four at most, every picked area in turn; none when nothing matches. */
+export function focusNews(focus: readonly FocusArea[], max = 4): NewPick[] {
+  return inTurn(
+    focus.map((area) => FOCUS_NEW[area].map((skill) => ({ area, skill }))),
+    max,
+    (pick) => pick.skill,
+  );
+}
+
 /** The skills each area brings first in the / menu (CHAT-24 §1). */
 export const FOCUS_SKILLS: Record<FocusArea, readonly string[]> = {
   lead: ['report'],
@@ -170,13 +202,16 @@ export const FOCUS_SKILLS: Record<FocusArea, readonly string[]> = {
   bd: [],
 };
 
-/** The skills with the picked areas' first, in the order picked; the rest as they were. */
+/**
+ * The skills with the picked areas' first, in the order picked, each area's
+ * new skills (CHAT-24 §5) after its own; the rest as they were.
+ */
 export function skillsByFocus<T extends { name: string }>(
   skills: readonly T[],
   focus: readonly FocusArea[],
 ): T[] {
   const first = inTurn(
-    focus.map((area) => FOCUS_SKILLS[area]),
+    focus.map((area) => [...FOCUS_SKILLS[area], ...FOCUS_NEW[area]]),
     Infinity,
   );
   const rank = (skill: T) => {

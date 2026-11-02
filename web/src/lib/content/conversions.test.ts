@@ -27,6 +27,10 @@ describe('conversionCards', () => {
       'revenue',
       'newsletter',
     ]);
+    expect(conversionCards(read(), 'app')).toEqual([
+      { key: 'signup', value: 0 },
+      { key: 'newsletter', value: 0 },
+    ]);
   });
 
   it('reads a shop’s units from its orders, and gives each goal its site leaves out a card of its own', () => {

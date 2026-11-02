@@ -19,7 +19,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { auditContextOf } from '../audit/context.js';
 import { runSignals } from '../audit/engine.js';
-import { LLM_SIGNAL_KEYS } from '../audit/llm-signals.js';
+import { DEFAULT_MODEL as AUDIT_MODEL, LLM_SIGNAL_KEYS } from '../audit/llm-signals.js';
 import { opportunityKey } from '../audit/opportunities.js';
 import { RECOMMENDABLE_SIGNALS } from '../audit/recommendations.js';
 import { RUBRIC_VERSION, TOTAL_SIGNALS, signalsByKey } from '../audit/rubric.js';
@@ -56,9 +56,6 @@ export const AUDIT_ROUNDS = [
 /** Seconds between two audits of a round, and how long one takes. */
 const AUDIT_GAP_MS = 40_000;
 const AUDIT_TAKES_MS = 25_000;
-
-/** llm-signals.js's default model, which the stored verdicts name. */
-const AUDIT_MODEL = 'google/gemini-3-flash-preview';
 
 /** When the page inventory and the brand facts were last read. */
 const PAGES_READ_DAYS_AGO = 6;
@@ -316,8 +313,8 @@ function recommendationFor(key, page, result) {
         product ? productDescription(product).split('. ')[0].replace(/\.?$/, '.') : null,
       );
     case 'readability': {
-      const flesch = result?.evidence?.fleschReadingEase;
-      return typeof flesch === 'number' && flesch > 70
+      const { formula, readingScore } = result?.evidence ?? {};
+      return formula === 'flesch' && typeof readingScore === 'number' && readingScore > 70
         ? write('Add the detail readers expect: fuller sentences on taste, origin and brewing.')
         : write('Shorten the longest sentences; aim for a Flesch score between 50 and 70.');
     }

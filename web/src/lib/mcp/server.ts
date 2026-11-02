@@ -711,10 +711,16 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Run a site audit',
       description:
-        'Run a Site Audit (AEO/GEO page score + AI fix recommendations) for a page URL under a brand. WARNING: this consumes one of the org\'s monthly Site Audit credits (the same pool as the dashboard) and runs asynchronously (~30s). It returns immediately with the new audit id and status "running" — then poll get_site_audit with that id until status is "completed" (or "failed") to read the result. Only fire on explicit user intent to audit a specific URL, never as part of exploratory queries.',
+        'Run a Site Audit (AEO/GEO page score + AI fix recommendations) for a page URL under a brand. WARNING: this consumes one of the org\'s monthly Site Audit credits (the same pool as the dashboard) and runs asynchronously (~30s). It returns immediately with the new audit id and status "running" — then poll get_site_audit with that id until status is "completed" (or "failed") to read the result. A page with an audit already running returns that audit (alreadyRunning: true) and uses no credit. A page audited in the last 10 minutes returns status "recently_audited" with that audit\'s id and starts nothing: read it with get_site_audit, or ask the user and pass force: true to audit it again. Only fire on explicit user intent to audit a specific URL, never as part of exploratory queries.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         url: z.string().url().describe('Full URL of the page to audit, including https://.'),
+        force: z
+          .boolean()
+          .optional()
+          .describe(
+            'Audit again a page audited in the last 10 minutes (uses a credit). Only when the user asked to.',
+          ),
       },
       annotations: {
         readOnlyHint: false,
@@ -724,7 +730,9 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       },
     },
     async (args) => {
-      const result = await runSiteAuditFor(auth, args.brand_id, args.url);
+      const result = args.force
+        ? await runSiteAuditFor(auth, args.brand_id, args.url, { force: true })
+        : await runSiteAuditFor(auth, args.brand_id, args.url);
       if (!result) {
         return {
           content: [{ type: 'text', text: 'Brand not found' }],
@@ -1055,7 +1063,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'AI traffic',
       description:
-        'Get AI-referral traffic analytics for a brand over an optional date range. Returns total visits, platform breakdown (visits per AI engine), top landing pages, and country segmentation. Use this to answer questions about traffic referred by ChatGPT, Claude, Perplexity, Gemini, Copilot, etc.',
+        "Get AI-referral traffic analytics for a brand over an optional date range. Returns total visits, platform breakdown (visits per AI engine), top landing pages, and country segmentation. Use this to answer questions about traffic referred by ChatGPT, Claude, Perplexity, Gemini, Copilot, etc. `tracking` says whether the tracking snippet is installed: 'not_detected' (not seen on the brand's site, so 0 visits means nothing is measured yet: say so and point to installing it on the AI Traffic page), 'installed_quiet' (installed, no AI visit in the last 7 days) or 'active'.",
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         date_from: z
@@ -1283,7 +1291,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Action Center actions',
       description:
-        'List the Action Center actions for a brand: what the product thinks should be done about its AI visibility. Each action was consolidated from one or more detected signals and carries a task plan. Returns category, kind, impact, priority (a 0–100 score, its level — critical, high, medium or low — and the facts it rests on; null until scored), status, outcome, assignee, due date and task progress, highest priority first (unscored last), or most recently updated first with sort "updated". `kind` is an opaque definition id (e.g. "close_competitor_gap"); the action payload with the specifics is on get_action. Use this to see open work ("what should we do next?") or to check what is in progress.',
+        'List the Action Center actions for a brand: what the product thinks should be done about its AI visibility. Each action was consolidated from one or more detected signals and carries a task plan. Returns category, kind, impact, priority (a 0–100 score, its level — critical, high, medium or low — the facts it rests on, and `confidence`: low, medium or high with `confidence_note` saying why, the raw factor in `confidence_score`; null until scored), status, `stale` (New for 30 days or more with no one working on it, since `stale_at`: not closed, ask whether it still matters), outcome, assignee, due date and task progress, highest priority first (unscored last), or most recently updated first with sort "updated". `kind` is an opaque definition id (e.g. "close_competitor_gap"); the action payload with the specifics is on get_action. Use this to see open work ("what should we do next?") or to check what is in progress.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         status: z
@@ -1335,7 +1343,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Action',
       description:
-        'Get one Action Center action in full: its outcome, its change net of the control (`net_of_control`: per metric, its move minus that of the brand\u2019s prompts it didn\u2019t touch; null when not netted) and why it was dismissed (`dismiss_reason`), its priority (score, level and the facts it rests on), its payload (the prompts, pages, competitors or numbers it is about), the signals that triggered it, its task list and its event trail. Each task carries `mode` (who carries it out: system, agent, human or human_or_agent) and `permission` (read, write or execute). Read both before proposing to act on a task — anything beyond read needs a human to approve it in the dashboard. A task is described by `title` when someone wrote one, otherwise by `task_key` with `title_params`. `details` says what the task carries beyond that, or null: `url` (the exact page), `where` (the page, prompt, platform, domain or competitor), `why` (the evidence), `change` (`before`, null when it adds text, and `after`), `how` (the steps), `done_when` (the check that closes it), `check` (how it is checked: auto, the page fetched again; rerun, the prompts run again; manual, a person confirms), `type` (content, on_page, technical, outreach, pr or product), `effort` and `role`; a task sent from the Improve tab also carries `body`, `platform`, `platform_label` and `sources`; `sent_to_content` (the opportunity it became) and `sent_to_webhook` say where it was sent. With `format` "markdown" or "csv" it returns the action as the dashboard\'s Copy Data and Export CSV write it instead (everything its tabs show, labelled in English, dates in UTC): Markdown to paste into a doc, ticket or another agent, CSV with a row per affected item, task and signal.',
+        'Get one Action Center action in full: its outcome, its change net of the control (`net_of_control`: per metric, its move minus that of the brand\u2019s prompts it didn\u2019t touch; null when not netted) and why it was dismissed (`dismiss_reason`), its priority (score, level, the facts it rests on and its confidence, as on list_actions), whether it is `stale` (as on list_actions), its payload (the prompts, pages, competitors or numbers it is about), the signals that triggered it, its task list and its event trail. Each task carries `mode` (who carries it out: system, agent, human or human_or_agent) and `permission` (read, write or execute). Read both before proposing to act on a task — anything beyond read needs a human to approve it in the dashboard. A task is described by `title` when someone wrote one, otherwise by `task_key` with `title_params`. `details` says what the task carries beyond that, or null: `url` (the exact page), `where` (the page, prompt, platform, domain or competitor), `why` (the evidence), `change` (`before`, null when it adds text, and `after`), `how` (the steps), `done_when` (the check that closes it), `check` (how it is checked: auto, the page fetched again; rerun, the prompts run again; manual, a person confirms), `type` (content, on_page, technical, outreach, pr or product), `effort` and `role`; a task sent from the Improve tab also carries `body`, `platform`, `platform_label` and `sources`; `sent_to_content` (the opportunity it became) and `sent_to_webhook` say where it was sent. With `format` "markdown" or "csv" it returns the action as the dashboard\'s Copy Data and Export CSV write it instead (everything its tabs show, labelled in English, dates in UTC): Markdown to paste into a doc, ticket or another agent, CSV with a row per affected item, task and signal.',
       inputSchema: {
         action_id: relaxedUuid.describe('Action UUID, from list_actions or list_action_history.'),
         format: z

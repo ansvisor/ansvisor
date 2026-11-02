@@ -496,6 +496,7 @@ import {
 } from '@/lib/tracking-job-store';
 import { etaParts, minutesLeft, withSample, type ProgressSample } from '@/lib/tracking-eta';
 import { toCsv } from '@/lib/csv';
+import { exportFileName } from '@/lib/white-label/export-name';
 import { RunLine } from './_run-line';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
@@ -1118,7 +1119,7 @@ export default function InsightsPage() {
       const slug = brand.slug ?? 'brand';
 
       link.href = url;
-      link.download = `ansvisor_${slug}_insights_${date}.csv`;
+      link.download = await exportFileName(`${slug}_insights_${date}.csv`);
       link.click();
 
       URL.revokeObjectURL(url);

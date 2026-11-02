@@ -9,6 +9,7 @@ import express from 'express';
 let role;
 const assertBrandAccess = vi.fn();
 const applySiteTypeDetection = vi.fn();
+const checkTrackingSnippet = vi.fn();
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -22,6 +23,9 @@ vi.mock('../lib/brand-delete.js', () => ({ deleteBrand: vi.fn() }));
 vi.mock('../lib/site-type-detect.js', () => ({
   applySiteTypeDetection: (...a) => applySiteTypeDetection(...a),
 }));
+vi.mock('../lib/tracking-snippet-check.js', () => ({
+  checkTrackingSnippet: (...a) => checkTrackingSnippet(...a),
+}));
 
 const { default: router } = await import('./brands.js');
 
@@ -31,10 +35,11 @@ beforeEach(async () => {
   role = 'admin';
   assertBrandAccess.mockReset().mockResolvedValue(undefined);
   applySiteTypeDetection.mockReset();
+  checkTrackingSnippet.mockReset().mockResolvedValue({ status: 'not_found' });
   const app = express();
   app.use((req, _res, next) => {
     req.user = { id: 'u1' };
-    req.log = { error: vi.fn(), info: vi.fn() };
+    req.log = { error: vi.fn(), info: vi.fn(), warn: vi.fn() };
     next();
   });
   app.use('/api/brands', router);
@@ -71,6 +76,16 @@ describe('POST /api/brands/:id/detect-site-type', () => {
     }
     expect(assertBrandAccess).toHaveBeenCalledWith('b1', 'u1');
     expect(applySiteTypeDetection).toHaveBeenCalledWith('b1');
+    // Setup's first read looks for the tracking snippet too (00433).
+    expect(checkTrackingSnippet).toHaveBeenCalledWith('b1');
+  });
+
+  it('answers the same when the snippet check at setup fails', async () => {
+    checkTrackingSnippet.mockRejectedValue(new Error('db down'));
+    applySiteTypeDetection.mockResolvedValue({ skipped: 'manual' });
+    const res = await detect();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ siteType: null, skipped: 'manual' });
   });
 
   it('refuses the roles that may not change a brand', async () => {

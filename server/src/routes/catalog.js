@@ -103,7 +103,8 @@ const outcomeBody = (outcome) => ({
   counts: outcome.counts ?? null,
 });
 
-const SOURCE_COLUMNS = 'id, brand_id, kind, format, url, account, label, last_synced_at';
+const SOURCE_COLUMNS =
+  'id, brand_id, kind, format, url, account, label, last_synced_at, last_orders_synced_at';
 /** The kinds members add themselves; every other kind is a store's. */
 const OWN_KINDS = ['feed_url', 'upload'];
 

@@ -75,6 +75,8 @@ describe('auditRecheck', () => {
     const audits = reads.find((r) => r.table === 'site_audits').filters;
     expect(audits).toContainEqual(['gt', 'completed_at', '2026-10-01T00:00:00Z']);
     expect(audits).toContainEqual(['eq', 'status', 'completed']);
+    // A partial audit's AI-judged checks read n/a: it never says the fix took.
+    expect(audits).toContainEqual(['eq', 'partial', false]);
   });
 
   it('reads validity’s warn as still failing, and a check with no result as not passing', async () => {

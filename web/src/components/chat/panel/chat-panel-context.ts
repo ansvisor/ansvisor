@@ -1,5 +1,6 @@
 'use client';
 
+import type { FailingKey } from '@/lib/chat/key-health';
 import { createContext, useContext, useEffect } from 'react';
 import type { ChatPageContext } from '@/lib/chat/page-context';
 import type { PanelSize } from '@/lib/chat/panel';
@@ -27,6 +28,8 @@ export interface ChatPanelSetup {
   fullAutoOffByAdmin: boolean;
   /** Chat runs on the workspace's own key: a used-up allowance doesn't pause it. */
   onOwnKey: boolean;
+  /** That own key is marked failing: the composer says so (AGENT-OWN-KEY §5.2 item 5). */
+  keyFailure: FailingKey | null;
   /** The AI usage period whose 80% line the person already saw (CHAT-04 item 16). */
   usageNoticeSeen: string | null;
   /** The / menu's Skills group (CHAT-13 item 5). */

@@ -37,6 +37,10 @@ const confirmOwnImage = vi.fn();
 const getBrandFacts = vi.fn();
 const checkDraftLinks = vi.fn();
 const getSiteTrust = vi.fn();
+// No white label kit: downloads keep Ansvisor's names (export-name.test.ts has a kit's).
+vi.mock('@/lib/actions/white-label', () => ({
+  getExportBranding: async () => ({ ok: true, branding: null }),
+}));
 vi.mock('@/lib/actions/audits', () => ({
   getSiteTrust: (...args: unknown[]) => getSiteTrust(...args),
 }));
@@ -67,6 +71,12 @@ vi.mock('@/lib/content/agent-runs-client', () => ({
   readAgentRun: (...args: unknown[]) => readAgentRun(...args),
   stopAgentRun: (...args: unknown[]) => stopAgentRun(...args),
   readAutoHandOff: (...args: unknown[]) => readAutoHandOff(...args),
+}));
+// Site Audit's estimate (customer priorities item 9): none read, unless a test says.
+const readAuditEstimate = vi.fn();
+vi.mock('@/lib/content/audit-estimate', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readAuditEstimate: (...args: unknown[]) => readAuditEstimate(...args),
 }));
 const getDraftBrief = vi.fn();
 const rebuildDraftBrief = vi.fn();
@@ -286,6 +296,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   updatedAt: '2026-10-20T10:00:00Z',
   archivedAt: null,
   qualityHandoff: false,
+  schemaLeftOut: false,
   ...over,
 });
 
@@ -391,6 +402,7 @@ beforeEach(() => {
   getContentResults.mockReset().mockResolvedValue(null);
   getDraftSources.mockReset().mockResolvedValue(null);
   readAgentRun.mockReset().mockResolvedValue(null);
+  readAuditEstimate.mockReset().mockResolvedValue({ error: 'failed' });
   stopAgentRun.mockReset().mockResolvedValue({ stopped: true });
   getDraftBrief.mockReset().mockResolvedValue({ brief: null });
   rebuildDraftBrief.mockReset();
@@ -476,6 +488,28 @@ describe('the content editor', () => {
     // The HTML block is named, not only an icon.
     expect(button('Add an HTML block')!.textContent).toBe('Add HTML');
     expect(container.querySelector('.ProseMirror h1')!.textContent).toBe('Pipeline forecasting');
+  });
+
+  it('shows Site Audit’s estimate in the header, read from the page as it goes out (customer priorities item 9)', async () => {
+    readAuditEstimate.mockResolvedValue({
+      estimate: {
+        score: 62,
+        categories: { structure: 78, content: 55, authority: 40, trust: 72, eeat: 48 },
+        checks: { page: 18, site: 13, ai: 0 },
+      },
+    });
+    getContentDraft.mockResolvedValue(draft());
+    await renderPage();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 1_100)));
+
+    const [, tags] = container.querySelector('header')!.children;
+    expect(tags.textContent).toContain('Audit ≈62');
+    const [draftId, brandId, doc] = readAuditEstimate.mock.calls.at(-1)!;
+    expect([draftId, brandId]).toEqual(['d1', 'b1']);
+    // The whole page, its head too, as Export's HTML file has it.
+    expect(doc).toMatch(/^<!doctype html>/);
+    expect(doc).toContain('<title>Pipeline forecasting</title>');
+    expect(doc).toContain('<h1>Pipeline forecasting</h1>');
   });
 
   it('remembers the draft for Content › Editor, per brand', async () => {
@@ -636,10 +670,11 @@ describe('the content editor', () => {
         await renderPage();
         expect(getMyRuleSets).toHaveBeenCalledTimes(1);
         const items = await openTypes();
-        expect(items.slice(0, 4).map((item) => item.textContent)).toEqual([
+        expect(items.slice(0, 5).map((item) => item.textContent)).toEqual([
           'B2B SaaS',
           'E-commerce',
           'B2C',
+          'Mobile app',
           'Feature page',
         ]);
         // No site type picked yet: the one shown is guessed.
@@ -655,7 +690,7 @@ describe('the content editor', () => {
         expect(getMyRuleSets).toHaveBeenCalledTimes(2);
         // A shop's page types now, the type picked kept on the list.
         const types = (await openTypes()).map((item) => item.textContent);
-        expect(types.slice(3, 5)).toEqual(['Product page', 'Category page']);
+        expect(types.slice(4, 6)).toEqual(['Product page', 'Category page']);
         expect(types.at(-1)).toBe('Feature page');
 
         // Kept as it was when it can't be saved.
@@ -665,7 +700,7 @@ describe('the content editor', () => {
           document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')[2].click(),
         );
         expect(toast.error).toHaveBeenCalledWith("Couldn't change the site type. Try again.");
-        expect((await openTypes())[3].textContent).toBe('Product page');
+        expect((await openTypes())[4].textContent).toBe('Product page');
       });
 
       it('saves a detected page type again for the new site type', async () => {
@@ -1038,6 +1073,39 @@ describe('the content editor', () => {
       ]);
       await act(async () => button('Stop')!.click());
       expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1', 'r2');
+    });
+
+    it('shows Write this building the brief first, and stops it (customer priorities item 9)', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          status: 'draft',
+          method: 'create',
+          agentState: 'writing',
+          agentRun: 'write',
+          agentSince: new Date().toISOString(),
+        }),
+      );
+      readAgentRun.mockResolvedValue({
+        id: 'r5',
+        kind: 'brief',
+        steps: [
+          { key: 'gather_sources', count: 12 },
+          { key: 'write_outline', count: null },
+          { key: 'match_fanouts', count: null },
+        ],
+        step: 1,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        stoppedAt: null,
+        outcome: null,
+      });
+      await renderPage();
+      await act(async () => {});
+      const status = container.querySelector('[role="status"]')!;
+      expect(status.textContent).toContain("Content Agent is building this page's brief");
+      expect(status.querySelector('[aria-current="step"]')).not.toBeNull();
+      await act(async () => button('Stop')!.click());
+      expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1', 'r5');
     });
 
     it('shows only the run the page waits on: a rewrite’s on a new page, never another kind’s', async () => {
@@ -6061,9 +6129,16 @@ describe('the side panel', () => {
       // The CMS keeps its own author.
       expect(sendPagesToCms).toHaveBeenCalledWith(
         'b1',
-        [expect.objectContaining({ draftId: 'd1', author: null, html: '<p>Teams trust it.</p>' })],
+        [expect.objectContaining({ draftId: 'd1', author: null })],
         'webhook',
       );
+      // The page goes with the Article schema Ansvisor adds, naming no author (00448).
+      const [, [sent]] = sendPagesToCms.mock.calls.at(-1)!;
+      const [body, script] = sent.html.split('\n<script type="application/ld+json">');
+      expect(body).toBe('<p>Teams trust it.</p>');
+      const schema = JSON.parse(script.replace('</script>', ''));
+      expect(schema['@type']).toBe('Article');
+      expect(schema).not.toHaveProperty('author');
     });
 
     it('says in the header where the page went, once sent', async () => {

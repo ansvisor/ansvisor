@@ -36,6 +36,7 @@ const CASCADES = {
     ['catalog_images', 'product_id'],
     ['catalog_product_categories', 'product_id'],
   ],
+  catalog_orders: [['catalog_order_items', 'order_id']],
 };
 
 /**
@@ -53,6 +54,7 @@ export function fakeDb({ maxRows = Infinity } = {}) {
   const writes = [];
   const uniqueKey = (table, row) => {
     if (table === 'catalog_categories') return `${row.brand_id}|${row.name}`;
+    if (table === 'catalog_order_items') return `${row.order_id}|${row.external_line_id}`;
     if (table === 'catalog_source_credentials') return row.source_id;
     if (table === 'catalog_category_pages') return `${row.brand_id}|${row.category}`;
     if (table === 'cloro_countries') return `${row.model}|${row.country}`;

@@ -18,14 +18,14 @@ describe('assetKind', () => {
       older.map((type) => [type, SITE_TYPES.map((site) => assetKind(type, site))]),
     );
     expect(read).toEqual({
-      blog_post: ['blog_post', 'blog_post', 'blog_post'],
-      pillar_guide: ['guide', 'buying_guide', 'guide'],
-      landing_page: ['solution_page', 'collection_page', 'destination_page'],
-      comparison_page: ['comparison', 'comparison', 'comparison'],
-      glossary_page: ['definition', 'definition', 'definition'],
-      faq_page: ['docs_faq', 'help_faq', 'help_faq'],
-      product_page: ['feature_page', 'product_page', 'guide'],
-      category_page: ['solution_page', 'category_page', 'guide'],
+      blog_post: ['blog_post', 'blog_post', 'blog_post', 'blog_post'],
+      pillar_guide: ['guide', 'buying_guide', 'guide', 'guide'],
+      landing_page: ['solution_page', 'collection_page', 'destination_page', 'feature_page'],
+      comparison_page: ['comparison', 'comparison', 'comparison', 'comparison'],
+      glossary_page: ['definition', 'definition', 'definition', 'definition'],
+      faq_page: ['docs_faq', 'help_faq', 'help_faq', 'help_faq'],
+      product_page: ['feature_page', 'product_page', 'guide', 'feature_page'],
+      category_page: ['solution_page', 'category_page', 'guide', 'guide'],
     });
     // Each one a type that site writes.
     for (const type of older) {

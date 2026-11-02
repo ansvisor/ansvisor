@@ -30,6 +30,10 @@ export const SKIPPED = {
     "Drafts sent to a webhook or a CMS: a demo brand never sends anything out (its drafts are the Content module's).",
   catalog_images:
     'Product images: the demo shows none, so no page of it ever loads an image from outside.',
+  catalog_orders:
+    'A demo brand has no connected merchant store; real orders and refund totals are private purchase history, not feed catalog sample data.',
+  catalog_order_items:
+    'The demo catalog is built from a public product feed and has no order history; order line items must not imply a merchant’s real purchases.',
   catalog_item_issues:
     "Merchant Center's item issues: the demo's catalog comes from a product feed, and Merchant Center shows as Soon in the demo.",
 
@@ -50,6 +54,8 @@ export const SKIPPED = {
     "A chat's reads kept for reuse within it (00410): the server's, from a person's own chat, never sample data.",
   chat_files:
     "Files Chat filed from a person's runs and saved answers (00411): made by their own Chat work, not sample data, and Chat's precedence refuses changes on a demo brand.",
+  chat_agent_go_live_events:
+    'What agents published or sent on their own (00443): no agent runs for a demo brand, and nothing is ever published or sent for one.',
   chat_agent_runs:
     "An agent's runs (00419): no trigger fires for a demo brand, and Chat's precedence refuses every change an agent would make on one.",
   chat_why_analyses:

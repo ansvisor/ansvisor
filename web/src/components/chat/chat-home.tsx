@@ -13,6 +13,7 @@ import { track } from '@/lib/analytics';
 import type { FocusArea } from '@/lib/chat/focus';
 import {
   focusGreeting,
+  focusNews,
   focusStarters,
   NO_FILL,
   starterWords,
@@ -60,6 +61,60 @@ export interface ChatHomeViewProps {
    * (CHAT-24 §4); null until read, so no question shows in the wrong words.
    */
   words?: { fill: FocusFill; rivalMove: RivalMove | null } | null;
+}
+
+/**
+ * "New for you" (CHAT-24 §4f, mockup `.nfy`): up to four new skills for the
+ * picked areas, in turn, hidden when none matches. One starts a new chat
+ * with the skill, which asks what it needs before it changes anything.
+ */
+function NewForYou({
+  areas,
+  starting,
+  onAsk,
+}: {
+  areas: readonly FocusArea[];
+  starting: boolean;
+  onAsk: (message: string) => void;
+}) {
+  const t = useTranslations('chatShell.home.byFocus.newForYou');
+  const titleId = useId();
+  const picks = focusNews(areas);
+  if (picks.length === 0) return null;
+  return (
+    <div className="@container mb-4">
+      <div
+        id={titleId}
+        className="mx-0.5 mb-1 text-[11px] tracking-[.4px] text-muted-foreground uppercase"
+      >
+        {t('title')}
+      </div>
+      <div role="group" aria-labelledby={titleId} className="grid gap-2 @lg:grid-cols-2">
+        {picks.map((pick) => (
+          <button
+            key={pick.skill}
+            type="button"
+            data-action="dept.openNew"
+            data-skill={pick.skill}
+            disabled={starting}
+            onClick={() => {
+              track('chat_focus_new_clicked', { area: pick.area, skill: pick.skill });
+              onAsk(`/${pick.skill}`);
+            }}
+            className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-xl border bg-card px-3 py-2.5 text-left outline-none hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+          >
+            <span className="rounded-md border px-1.5 py-px text-[10.5px] tracking-[.05em] text-muted-foreground uppercase">
+              {t('skill')}
+            </span>
+            <b className="text-[13px] font-semibold">/{pick.skill}</b>
+            <span className="col-span-full text-[12.5px] leading-[1.4] text-muted-foreground">
+              {t(`skills.${pick.skill}`)}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -297,6 +352,7 @@ export function ChatHomeView({
       {areas.length > 0 && words && (
         <StartWithQuestion areas={areas} fill={words.fill} starting={starting} onAsk={onAsk} />
       )}
+      <NewForYou areas={areas} starting={starting} onAsk={onAsk} />
     </div>
   );
 }

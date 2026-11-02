@@ -3,6 +3,8 @@ import { Output, streamText, tool as aiTool, type ModelMessage, type ToolSet } f
 import { z } from 'zod';
 import messages from '../../../messages/en.json';
 import { PLANS } from '@/config/plans';
+import type { AiProvider } from '@/lib/agent/providers';
+import { hasBrandAccess } from '@/lib/brand-access';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { searchHelp } from '@/lib/help/search';
 import { platformName } from '@/lib/signals/names';
@@ -14,6 +16,7 @@ import { recordAccessDenied } from './access-log';
 import { approvalFor, type ActivityApproval } from './activity';
 import { reserveChatStep, type ChatStepUsage } from './budget';
 import { buildDenial } from './denial';
+import { KeyFailureError, ProviderDownError, stepFailure, type RunKeyFailure } from './engine-key';
 import {
   estimateInputTokens,
   resolveChatModels,
@@ -44,6 +47,7 @@ import {
   isChatHref,
   maskIds,
   type ChatDenialCard,
+  type ChatEventPayloads,
   type ChatRunSummary,
   type ChatStepScope,
 } from './events';
@@ -81,12 +85,15 @@ import {
   validMoves,
 } from './next-moves';
 import { requestHash } from './idempotency';
+import { OwnKeyUnreadableError } from './key';
+import { markKeyFailing, markKeyWorking } from './key-health';
 import {
   CHAT_MODES,
   allowedTools,
   decideOrDeny,
   decideToolCall,
   listingDenial,
+  type ChatMode,
   type PrecedenceContext,
   type ToolCall,
   type ToolDecision,
@@ -104,11 +111,23 @@ import {
   type PageSites,
 } from './page-sites';
 import { readBrandIsDemo, readPrecedenceContext, readToolCall } from './precedence-context';
+import {
+  noteTouchedBrands,
+  referenceTouches,
+  startTouchedBrands,
+  touchedByCall,
+  type TouchedBrands,
+} from './touched-brands';
 import type { ExplainChangeOutput } from '@/lib/mcp/why';
 import { stepPrompt, todayLine } from './prompt';
 import { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
 import { whyView } from './why/view';
-import { batchSize, type ChatTool, type ChatToolContext } from './registry/define-tool';
+import {
+  batchSize,
+  runsWithoutSession,
+  type ChatTool,
+  type ChatToolContext,
+} from './registry/define-tool';
 import { CHAT_TOOLS, chatTool, chatToolByKey } from './registry/tools';
 import { abortDriver, publishRunEnd, registerDriver, unregisterDriver } from './run-hub';
 import {
@@ -138,6 +157,7 @@ import {
   type CachedRead,
 } from './tool-cache';
 import { dataBlock, guardData, isUntrustedRead } from './untrusted';
+import { keepShingles, textsOf } from './go-live-checks';
 import { undoRule } from './undo';
 import { runLoggedWrite } from './write';
 import { fileChatOutput } from './file-output';
@@ -191,6 +211,7 @@ import { MAX_UPLOADS } from './uploads';
 
 const t = createTranslator({ locale: 'en', messages, namespace: 'chatEngine' });
 const toolT = createTranslator({ locale: 'en', messages, namespace: 'chatTools' });
+const settingsT = createTranslator({ locale: 'en', messages, namespace: 'settings' });
 
 /** What a row's card says under it, when it has words for that (chatTools.{key}.note). */
 function toolNote(tool: Pick<ChatTool, 'labelKey'>): string | null {
@@ -601,6 +622,10 @@ export async function startChatRun(
     if (error) throw new Error(`Chat could not read the chat: ${error.message}`);
     if (!data) return failure(404, 'not_found', t('error.notFound'));
     brandId = (data as { brand_id: string | null }).brand_id;
+    // A chat about a brand the person can no longer use is hidden, and kept (BRAND-ACCESS §9 Q4).
+    if (brandId && !hasBrandAccess(ctx.brandAccess, brandId)) {
+      return failure(404, 'not_found', t('error.notFound'));
+    }
     earlier = await readEarlierRuns(conversationId, input.message);
     fromRun = input.fromRunId ? await fromTaintedRun(conversationId, input.fromRunId) : false;
   } else {
@@ -612,7 +637,10 @@ export async function startChatRun(
         .eq('organization_id', actor.organizationId)
         .maybeSingle();
       if (error) throw new Error(`Chat could not read the brand: ${error.message}`);
-      if (!data) return failure(404, 'not_found', t('error.notFound'));
+      // A brand of the workspace the person can't use is as one that isn't there.
+      if (!data || !hasBrandAccess(ctx.brandAccess, input.brandId)) {
+        return failure(404, 'not_found', t('error.notFound'));
+      }
       brandId = input.brandId;
     }
     conversationId = await insertRow(
@@ -628,6 +656,12 @@ export async function startChatRun(
       },
       'start a chat',
     );
+    // A new chat keeps the brands it touches from here on (00436), before anything is in it.
+    await startTouchedBrands(conversationId);
+  }
+  // What the message references with @ goes in with it: its brands are noted first.
+  if (!(await noteTouchedBrands(conversationId, await referenceTouches(input)))) {
+    throw new Error("Chat could not note the brands of the message's references");
   }
 
   const timezone = validTimezone(input.timezone);
@@ -751,7 +785,20 @@ interface RunContext {
   batchAnswer?: string;
   /** The agent run this chat is (CHAT-21 §H item 36): its steps are held within its cap too. */
   agentRunId: string | null;
+  /** The brands this request noted on the chat already (touched-brands.ts); '*': the workspace. */
+  touchedNoted?: Set<string>;
+  /**
+   * Whose session the request driving the run carries: a change runs as the
+   * signed-in person. When it isn't the actor (an agent run nobody's session
+   * is behind), a change asks first (askWithoutSession), unless its row runs
+   * for its person without one (sessionFree: its runFor makes it).
+   */
+  sessionUserId: string | null;
 }
+
+/** No session of the run's person is behind it: an agent run on its own, or in another's request. */
+const withoutSession = (rc: Pick<RunContext, 'actor' | 'sessionUserId'>) =>
+  rc.sessionUserId !== rc.actor.userId;
 
 const workedMs = (rc: Pick<RunContext, 'run' | 'segmentStart'>) =>
   rc.run.workingMs + (Date.now() - rc.segmentStart);
@@ -761,12 +808,15 @@ const workedMs = (rc: Pick<RunContext, 'run' | 'segmentStart'>) =>
  * tool calls and its events. Picks up a waiting one with `resume`. Never
  * throws: what fails ends the run in error, in words, with what was done
  * kept. Meant to run in the request's background (after()), so a browser
- * that goes away doesn't stop it (CHAT-03 item 21).
+ * that goes away doesn't stop it (CHAT-03 item 21). `sessionUserId`: whose
+ * session the request carries, left out in the actor's own request (the run
+ * routes); null for none (an agent run the minute tick or a signal started).
  */
 export async function driveRun(
   actor: ChatActor,
   runId: string,
   resume?: ResumeAction,
+  { sessionUserId = actor.userId }: { sessionUserId?: string | null } = {},
 ): Promise<void> {
   const controller = registerDriver(runId);
   const segmentStart = Date.now();
@@ -804,6 +854,7 @@ export async function driveRun(
       sink,
       controller.signal,
       segmentStart,
+      sessionUserId,
     );
     if (!rc) return;
     if (resume && run.pending) {
@@ -819,7 +870,7 @@ export async function driveRun(
   } catch (err) {
     console.error('[chat/engine] a run failed:', err);
     const ended = rc
-      ? failRun(rc)
+      ? endForFailure(rc, err)
       : loaded && sink
         ? endInError(
             loaded,
@@ -881,6 +932,7 @@ async function openContext(
   sink: RunEventSink,
   signal: AbortSignal,
   segmentStart: number,
+  sessionUserId: string | null,
 ): Promise<RunContext | null> {
   const progress = run.progress as Progress;
   const base = { run, segmentStart };
@@ -890,7 +942,21 @@ async function openContext(
     mode: run.mode,
     surface: 'chat',
   });
-  const models = ctx ? await resolveChatModels(actor.organizationId) : null;
+  let models: ChatModels | null = null;
+  try {
+    models = ctx ? await resolveChatModels(actor.organizationId) : null;
+  } catch (err) {
+    if (!(err instanceof OwnKeyUnreadableError)) throw err;
+    // Marked failing where it was found (key.ts); the run stops on it, never on Ansvisor's key.
+    const failure = {
+      class: 'unreadable' as const,
+      provider: err.provider,
+      status: null,
+      model: null,
+    };
+    await endOnKey(run, sink, workedMs(base), failure, progress, { marked: true });
+    return null;
+  }
   if (!ctx || !models) {
     await endInError(run, sink, workedMs(base), ctx ? t('error.noKey') : t('error.notFound'));
     return null;
@@ -926,6 +992,7 @@ async function openContext(
     offered: new Map(offered.map((tool) => [tool.name, tool])),
     refused,
     agentRunId,
+    sessionUserId,
     skills: runSkills(actor.organizationId, progress, history.plan),
   };
 }
@@ -1122,6 +1189,7 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
         return 'ended';
       }
       await budget.charge(stepUsage(await result.usage), Date.now() - called);
+      await keyAnswered(rc);
       rc.progress.modelSteps += 1;
     } catch (err) {
       out.close();
@@ -1131,8 +1199,11 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
         return 'ended';
       }
       await budget.release();
+      const failure = stepFailure(rc.models, choice.budgetModel, err);
+      // The own key failed: Chat's answer would run on the same key, so the run stops here.
+      if (failure instanceof KeyFailureError) throw failure;
       // Words already shown: the run ends in error (driveRun), what's shown kept.
-      if (rc.progress.text) throw err;
+      if (rc.progress.text) throw failure ?? err;
       console.error('[chat/engine] a Help answer failed; Chat answers as usual:', err);
       await endStep({
         status: 'error',
@@ -1383,6 +1454,7 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
     }
     const [usage, response] = await Promise.all([result.usage, result.response]);
     await budget.charge(stepUsage(usage), Date.now() - called);
+    await keyAnswered(rc);
     const responseMessages = response.messages as ModelMessage[];
     return { kind: 'ok', toolCalls, responseMessages, answered: answeredIds(responseMessages) };
   } catch (err) {
@@ -1393,13 +1465,16 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
       return { kind: 'ended' };
     }
     await budget.release();
+    const failure = stepFailure(rc.models, choice.budgetModel, err);
+    // The own key failed: the writing model runs on the same key, a second sure failure.
+    if (failure instanceof KeyFailureError) throw failure;
     if (phase === 'read') {
       // The reading model failed: the writing one reads for itself rather than losing the run.
       console.error('[chat/engine] a reading step failed; the writing model reads:', err);
       rc.progress.phase = 'write';
       return { kind: 'ok', toolCalls: [], responseMessages: [], answered: new Set() };
     }
-    throw err;
+    throw failure ?? err;
   } finally {
     await budget.release();
   }
@@ -1780,15 +1855,74 @@ async function handleCalls(
   return 'continue';
 }
 
-/** What a call's precedence context is read with: an injection found in the run asks first (§16a rule 3). */
-const contextFor = (rc: RunContext) =>
+/**
+ * What a call's precedence context is read with: an injection found in the
+ * run asks first (§16a rule 3). `mode`: the run's mode now, for a change
+ * (agentModeNow); the mode it started in otherwise.
+ */
+const contextFor = (rc: RunContext, mode: ChatMode = rc.run.mode) =>
   readPrecedenceContext({
     userId: rc.actor.userId,
     organizationId: rc.actor.organizationId,
-    mode: rc.progress.injection ? 'ask_first' : rc.run.mode,
+    mode: rc.progress.injection ? 'ask_first' : mode,
     surface: 'chat',
     injectionDetected: rc.progress.injection === true,
   });
+
+const MODE_RANK: Record<ChatMode, number> = { ask_first: 0, auto: 1, full_auto: 2 };
+
+/**
+ * An agent run's mode for a change, read fresh for each one (a run a
+ * trigger started goes on for minutes with no one watching): the mode it
+ * started in, or the agent's own mode now when it was set lower since, and
+ * Ask me first once an Admin turned Full auto off for agents (Settings ›
+ * Chat) under a run that started in it. What can't be read asks first. A
+ * person's own chat keeps its mode: they change it themselves.
+ */
+async function agentModeNow(rc: RunContext): Promise<ChatMode> {
+  const started = rc.run.mode;
+  if (!rc.agentRunId || started === 'ask_first') return started;
+  try {
+    const [run, settings] = await Promise.all([
+      supabaseAdmin
+        .from('chat_agent_runs')
+        .select('agent_id')
+        .eq('id', rc.agentRunId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('chat_settings')
+        .select('agents_full_auto')
+        .eq('organization_id', rc.actor.organizationId)
+        .maybeSingle(),
+    ]);
+    if (run.error) throw new Error(run.error.message);
+    if (settings.error) throw new Error(settings.error.message);
+    if (started === 'full_auto' && settings.data?.agents_full_auto === false) return 'ask_first';
+    const agentId = (run.data as { agent_id: string | null } | null)?.agent_id;
+    if (!agentId) return 'ask_first';
+    const { data: agent, error: agentError } = await supabaseAdmin
+      .from('chat_agents')
+      .select('version')
+      .eq('id', agentId)
+      .eq('organization_id', rc.actor.organizationId)
+      .maybeSingle();
+    if (agentError) throw new Error(agentError.message);
+    if (!agent) return 'ask_first';
+    const { data: version, error: versionError } = await supabaseAdmin
+      .from('chat_agent_versions')
+      .select('mode')
+      .eq('agent_id', agentId)
+      .eq('version', (agent as { version: number }).version)
+      .maybeSingle();
+    if (versionError) throw new Error(versionError.message);
+    const now = CHAT_MODES.find((mode) => mode === (version as { mode?: string } | null)?.mode);
+    if (!now) return 'ask_first';
+    return MODE_RANK[now] < MODE_RANK[started] ? now : started;
+  } catch (err) {
+    console.error("[chat/engine] could not read an agent's mode now:", err);
+    return 'ask_first';
+  }
+}
 
 /** The read that opens a web page (CHAT-10 §B): its own step, words and rules. */
 const PAGE_TOOL = 'fetch_page';
@@ -1864,7 +1998,8 @@ function readRefusal(output: unknown): { code: string; message: string } | null 
 }
 
 async function callFacts(rc: RunContext, tool: ChatTool, input: Record<string, unknown>) {
-  const ctx = await contextFor(rc);
+  // A change is decided in the mode the run has now; a read runs in any.
+  const ctx = await contextFor(rc, tool.class === 'read' ? rc.run.mode : await agentModeNow(rc));
   const call: ToolCall = ctx
     ? await readToolCall(
         ctx,
@@ -1876,6 +2011,33 @@ async function callFacts(rc: RunContext, tool: ChatTool, input: Record<string, u
     : { brandId: null, brandIsDemo: false, tainted: false };
   return { ctx, call };
 }
+
+/**
+ * Notes the brands a call touches on its chat (touched-brands.ts), once a
+ * run: false when the note failed, and the call must not run.
+ */
+async function noteCallBrands(
+  rc: RunContext,
+  tool: ChatTool,
+  brandId: string | null,
+  ctx: PrecedenceContext | null,
+): Promise<boolean> {
+  const touched = touchedByCall(tool, brandId, ctx?.brandAccess ?? null);
+  // The chat's own brand is in its set from its start (startTouchedBrands).
+  const noted = (rc.touchedNoted ??= new Set(rc.brand ? [rc.brand.id] : []));
+  const fresh: TouchedBrands =
+    touched === 'workspace'
+      ? noted.has(WHOLE_WORKSPACE)
+        ? []
+        : 'workspace'
+      : touched.filter((id) => !noted.has(id));
+  if (!(await noteTouchedBrands(rc.run.conversationId, fresh))) return false;
+  for (const id of fresh === 'workspace' ? [WHOLE_WORKSPACE] : fresh) noted.add(id);
+  return true;
+}
+
+/** touchedNoted's key for the whole workspace. */
+const WHOLE_WORKSPACE = '*';
 
 /** One call, decided on facts read for it now (CHAT-20 §4 "Role change mid-run"). */
 async function handleCall(
@@ -1922,7 +2084,12 @@ async function handleCall(
   }
 
   const { ctx, call: facts } = await callFacts(rc, tool, input);
-  const decision = decideForEngine(tool, ctx, facts);
+  const decision = askWithoutSession(rc, tool, decideForEngine(tool, ctx, facts));
+  // What it may read or change is noted on the chat first (BRAND-ACCESS §10, 00436): a shared
+  // chat with no brand then shows only to people who can use every brand it touched.
+  if (decision.kind !== 'deny' && !(await noteCallBrands(rc, tool, facts.brandId, ctx))) {
+    return result(call, { code: 'failed' }, true);
+  }
   // A change its own check refuses before its card (Send to Action Center's duplicate): no card.
   if (decision.kind !== 'deny' && tool.class !== 'read') {
     const refused = await precheckOf(rc, tool, input, ctx);
@@ -1942,6 +2109,28 @@ async function handleCall(
     case 'click':
       return openCard(rc, tool, call, input, facts, decision);
   }
+}
+
+/**
+ * A change in a run no session is behind (an agent's that started on its
+ * own, or in another person's request): its tool acts as the signed-in
+ * person, so what would run by itself (Full auto, Always, a tick) asks
+ * first, with no "Don't ask again". The card waits in the owner's Inbox,
+ * and their Approve runs it in their own request. A sessionFree row whose
+ * way is open (runsWithoutSession) keeps the precedence's decision, read for
+ * the run's person as any call's is (role, plan, policy, mode): it runs as
+ * them through its runFor (writeCall).
+ */
+function askWithoutSession(rc: RunContext, tool: ChatTool, decision: ToolDecision): ToolDecision {
+  if (
+    decision.kind !== 'run' ||
+    tool.class === 'read' ||
+    !withoutSession(rc) ||
+    runsWithoutSession(tool)
+  ) {
+    return decision;
+  }
+  return { kind: 'ask', reason: 'no_session', offerDontAskAgain: false };
 }
 
 /** A refusal: the out-of-permission answer to the browser, its record, and its words to the model. */
@@ -1992,7 +2181,8 @@ async function deny(
  * A WRITE's own check before its card (its row's `precheck`, CHAT-20 §12):
  * the refusal the model is told, in its §11a code and words, with what it
  * says beside them (the action that covers a finding). Null to go on, and
- * when the check itself fails: the change checks again.
+ * when the check itself fails: the change checks again. In a run with no
+ * session, only the row's precheckFor checks, as the run's person.
  */
 async function precheckOf(
   rc: RunContext,
@@ -2000,9 +2190,19 @@ async function precheckOf(
   input: Record<string, unknown>,
   ctx: PrecedenceContext | null,
 ): Promise<Record<string, unknown> | null> {
-  if (!tool.precheck) return null;
+  // With no session behind the run, the row's own check as its person, while its way is open;
+  // else none: a request's session there isn't the person's (the change checks again).
+  const which = withoutSession(rc)
+    ? runsWithoutSession(tool)
+      ? ('precheckFor' as const)
+      : null
+    : ('precheck' as const);
+  if (!which || !tool[which]) return null;
   try {
-    const out = await tool.precheck(toolContext(rc, ctx?.role ?? rc.role), input as never);
+    const out = await tool[which]!(
+      toolContext(rc, ctx?.role ?? rc.role, ctx?.brandAccess),
+      input as never,
+    );
     const said = saidFailure(out);
     return said ? { ...said, ...besideRefusal(out) } : null;
   } catch (err) {
@@ -2157,6 +2357,11 @@ async function openCard(
   rc.sink.emit('step.started', { step: clientStep(row) });
   const digest = cardDigest(tool, input);
   const offerDontAskAgain = decision.kind === 'ask' && decision.offerDontAskAgain;
+  const notes = cardNotes(tool);
+  // Why a change its mode would make by itself asks: no session is behind the run.
+  if (decision.kind === 'ask' && decision.reason === 'no_session') {
+    notes.note = [t('card.noSession'), notes.note].filter(Boolean).join(' ');
+  }
   rc.sink.emit('confirm.required', {
     n,
     action: toolWords(tool, 'name'),
@@ -2164,7 +2369,7 @@ async function openCard(
     digest,
     canDontAskAgain: offerDontAskAgain,
     // A WRITE whose change can't be undone once made (§9) says so on its card.
-    ...cardNotes(tool),
+    ...notes,
     ...(await cardDetailsOf(tool, input)),
   });
   return {
@@ -2439,6 +2644,7 @@ async function runRead(
   input: Record<string, unknown>,
   role: PrecedenceContext['role'],
   pageSites?: ChatToolContext['pageSites'],
+  brandAccess?: PrecedenceContext['brandAccess'],
 ): Promise<{ ok: true; value: unknown } | { ok: false; timedOut: boolean; error: string }> {
   let last: { timedOut: boolean; error: string } = { timedOut: false, error: '' };
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -2448,7 +2654,9 @@ async function runRead(
     try {
       const value = await Promise.race([
         tool.run(
-          pageSites ? { ...toolContext(rc, role), pageSites } : toolContext(rc, role),
+          pageSites
+            ? { ...toolContext(rc, role, brandAccess), pageSites }
+            : toolContext(rc, role, brandAccess),
           input as never,
         ),
         new Promise<never>((_, reject) => {
@@ -2473,14 +2681,23 @@ async function runRead(
 
 class ReadTimeout extends Error {}
 
-/** Who a tool acts as: the signed-in person, with their live role (lib/agent/auth.ts's shape). */
-function toolContext(rc: RunContext, role: PrecedenceContext['role']): McpAuthContext {
+/**
+ * Who a tool acts as: the signed-in person, with their live role (lib/agent/auth.ts's
+ * shape), and the brands they may use as this call's precedence read them, so a read
+ * that lists brands doesn't read them again.
+ */
+function toolContext(
+  rc: RunContext,
+  role: PrecedenceContext['role'],
+  brandAccess?: PrecedenceContext['brandAccess'],
+): McpAuthContext {
   return {
     userId: rc.actor.userId,
     email: rc.actor.email,
     organizationId: rc.actor.organizationId,
     role: role as UserRole,
     apiKeyId: 'agent-internal',
+    ...(brandAccess !== undefined ? { brandAccess } : {}),
   };
 }
 
@@ -2582,7 +2799,7 @@ async function readCall(
   if (kept) {
     read = kept;
   } else {
-    const outcome = await runRead(rc, tool, input, rc.role, pageSites);
+    const outcome = await runRead(rc, tool, input, rc.role, pageSites, ctx?.brandAccess);
     // A page that couldn't be opened says why ({ ok: false, code, message }).
     const refusal = outcome.ok ? readRefusal(outcome.value) : null;
     if (!outcome.ok || refusal) {
@@ -2643,6 +2860,13 @@ async function readCall(
   // Outside text (§16a): the run is tainted, kept or not.
   if (untrusted) rc.progress.tainted = true;
   if (read.injection) rc.progress.injection = true;
+  // An agent's page may not copy it whole to go live on its own (AUTONOMOUS-GO-LIVE §6.3).
+  if (untrusted && rc.agentRunId) {
+    rc.progress.untrustedShingles = keepShingles(
+      rc.progress.untrustedShingles,
+      textsOf(read.value),
+    );
+  }
   const rows = read.rows ?? undefined;
   const asOf = read.dataAsOf;
   const room = Math.min(rc.budget.resultChars, rc.budget.dataChars - rc.progress.dataChars);
@@ -2840,6 +3064,9 @@ function typedFailure(output: unknown): string | null {
   return typeof record.reason === 'string' ? record.reason : 'failed';
 }
 
+/** A run with no session whose write the API server took as no one: it asks instead (writeCall). */
+const ACTING_REFUSED = 'acting_refused';
+
 /** The refusals an action says in its own words, as CHAT-20 §11a's codes. */
 const SAID_FAILURES: Record<string, string> = {
   quota_exceeded: 'quota_exceeded',
@@ -2854,6 +3081,10 @@ const SAID_FAILURES: Record<string, string> = {
   live_item: 'live_item',
   // An Admin turned publishing off for Managers since the card was decided (push_cms_draft).
   execute_off: 'execute_off',
+  // A run with no session, writing through the API server as its person (lib/chat/actor/api.ts):
+  // Chat off for the workspace, or the server took no one to act as.
+  chat_off: 'chat_off',
+  acting_refused: 'acting_refused',
 };
 
 /**
@@ -2871,7 +3102,8 @@ function saidFailure(output: unknown): { code: string; message: string } | null 
 /**
  * A change: run once under its approval (runLoggedWrite logs it, with Undo),
  * on its own step, or on the card's step once approved. An approval used for
- * other arguments (approval_mismatch) shows the card again.
+ * other arguments (approval_mismatch) shows the card again. With no session
+ * of the run's person behind it, its row's runFor makes it, as them.
  */
 async function writeCall(
   rc: RunContext,
@@ -2906,7 +3138,7 @@ async function writeCall(
   const outcome = await runLoggedWrite({
     tool,
     input,
-    ctx: toolContext(rc, ctx?.role ?? rc.role),
+    ctx: toolContext(rc, ctx?.role ?? rc.role, ctx?.brandAccess),
     organizationId: rc.actor.organizationId,
     userId: rc.actor.userId,
     brandId: facts.brandId,
@@ -2915,19 +3147,32 @@ async function writeCall(
     approval,
     place: { conversationId: rc.run.conversationId, runId: rc.run.id, stepId },
     approvalKey: stepId,
+    // No session behind the run: only a sessionFree row's change runs then (askWithoutSession);
+    // a card's Approve runs in its person's own request.
+    withoutSession: withoutSession(rc),
   });
 
-  if (outcome.code === 'approval_mismatch') {
-    row = await updateStep(stepId, { status: 'waiting' });
+  // The API server took no one to act as for a run with no session (lib/chat/actor/api.ts):
+  // nothing changed, so it asks its person, as a change with no way of its own does.
+  const wayRefused =
+    outcome.code === 'ok' && typedFailure(outcome.output) === ACTING_REFUSED && !cardStepId;
+  if (outcome.code === 'approval_mismatch' || wayRefused) {
+    row = await updateStep(stepId, {
+      status: 'waiting',
+      // Its card's Approve is the person's: not a change made by itself (History's mode).
+      ...(wayRefused ? { debug: { input, toolCallId: call.toolCallId } } : {}),
+    });
     rc.sink.emit('step.updated', { step: clientStep(row) });
     const digest = cardDigest(tool, input);
+    const notes = cardNotes(tool);
+    if (wayRefused) notes.note = [t('card.noSession'), notes.note].filter(Boolean).join(' ');
     rc.sink.emit('confirm.required', {
       n: row.position,
       action: toolWords(tool, 'name'),
       target,
       digest,
       canDontAskAgain: false,
-      ...cardNotes(tool),
+      ...notes,
       ...(await cardDetailsOf(tool, input)),
     });
     return {
@@ -3573,15 +3818,71 @@ async function failRun(rc: RunContext, reason?: string): Promise<void> {
   await endInError(rc.run, rc.sink, workedMs(rc), reason ?? t('error.failed'), rc.progress);
 }
 
+/** A provider's name as Settings › AI Providers shows it. */
+const providerName = (provider: AiProvider) =>
+  settingsT(`agent_providers.${provider}.name` as never);
+
+/** A run's end for what failed (AGENT-OWN-KEY §5.2): the own key, a provider that didn't answer, or anything else. */
+async function endForFailure(rc: RunContext, err: unknown): Promise<void> {
+  if (err instanceof KeyFailureError) {
+    return endOnKey(rc.run, rc.sink, workedMs(rc), err.failure, rc.progress);
+  }
+  if (err instanceof ProviderDownError) {
+    const reason = t('error.providerDown', { provider: providerName(err.provider) });
+    return endInError(rc.run, rc.sink, workedMs(rc), reason, rc.progress, 'provider_down');
+  }
+  return failRun(rc);
+}
+
+/**
+ * The run stops on the workspace's own key (AGENT-OWN-KEY §5.2): the key is
+ * marked failing (one episode however many runs fail at once), the run ends
+ * `own_key` with the class's words, and its progress keeps why, for its
+ * agent run (agentStateOf: stopped, own_key).
+ */
+async function endOnKey(
+  run: LoadedRun,
+  sink: RunEventSink,
+  workingMs: number,
+  failure: RunKeyFailure,
+  progress: RunProgress,
+  { marked = false }: { marked?: boolean } = {},
+): Promise<void> {
+  if (!marked) {
+    await markKeyFailing(run.organizationId, failure.provider, failure).catch((err) =>
+      console.error('[chat/engine] could not mark the key failing:', err),
+    );
+  }
+  const why = t(`error.key.${failure.class}`, {
+    provider: providerName(failure.provider),
+    model: failure.model ?? '',
+  });
+  const reason = `${why} ${t('error.keyStopped')}`;
+  const ended = { ...progress, keyFailure: failure };
+  await endInError(run, sink, workingMs, reason, ended, 'own_key', {
+    keyFailure: { class: failure.class, provider: failure.provider },
+  });
+}
+
+/** An answered call on a key marked failing when the run started: it works again (§5.4). */
+async function keyAnswered(rc: RunContext): Promise<void> {
+  if (!rc.models.keyFailing) return;
+  rc.models.keyFailing = false;
+  await markKeyWorking(rc.run.organizationId, rc.models.provider).catch((err) =>
+    console.error('[chat/engine] could not mark the key working:', err),
+  );
+}
+
 async function endInError(
   run: LoadedRun,
   sink: RunEventSink,
   workingMs: number,
   reason: string,
   progress: RunProgress = run.progress,
+  code: 'failed' | 'own_key' | 'provider_down' = 'failed',
+  extra: Pick<ChatEventPayloads['run.error'], 'keyFailure'> = {},
 ): Promise<void> {
-  if (!(await moveRun(run.id, OPEN_RUN_STATUSES, 'error', { error: 'failed', finished: true })))
-    return;
+  if (!(await moveRun(run.id, OPEN_RUN_STATUSES, 'error', { error: code, finished: true }))) return;
   for (const step of await openSteps(run.id)) {
     const row = await updateStep(step.id, { status: 'error', detail: t('step.failed') });
     sink.emit('step.finished', { step: clientStep(row) });
@@ -3589,7 +3890,7 @@ async function endInError(
   await saveAnswer(run.messageId, { text: progress.text });
   await saveState(run.id, { progress, workingMs, pending: null, waitingSince: null });
   await showStrip({ ...run, progress }, sink, true);
-  sink.emit('run.error', { ...summaryOf(progress, workingMs), code: 'failed', reason });
+  sink.emit('run.error', { ...summaryOf(progress, workingMs), code, reason, ...extra });
 }
 
 /** The driver's Stop: the run is marked stopped (if a Stop request hasn't already) and says so. */

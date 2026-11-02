@@ -109,6 +109,7 @@ vi.mock('@/lib/chat/legacy-import', () => legacy);
 vi.mock('@/lib/actions/chat-prefs', () => ({ saveChatPanelSize: vi.fn() }));
 const ownKey = vi.hoisted(() => ({ chatRunsOnOwnKey: vi.fn(async () => false) }));
 vi.mock('@/lib/chat/key', () => ownKey);
+vi.mock('@/lib/chat/key-health', () => ({ failingKeyFor: vi.fn(async () => null) }));
 vi.mock('@/components/providers/auth-provider', () => ({ AuthProvider: none }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({ AiUsageProvider: pass }));
 vi.mock('@/components/ai-usage/get-more', () => ({ GetMoreProvider: pass }));

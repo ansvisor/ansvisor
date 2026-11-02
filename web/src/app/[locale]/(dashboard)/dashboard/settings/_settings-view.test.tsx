@@ -13,8 +13,9 @@ vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
 }));
+let isCloud = false;
 vi.mock('@/components/providers/plan-provider', () => ({
-  usePlanContext: () => ({ isCloud: false }),
+  usePlanContext: () => ({ isCloud }),
 }));
 let canManageMenus = false;
 vi.mock('@/components/providers/menu-access-provider', () => ({
@@ -42,6 +43,7 @@ for (const [path, name] of [
   ['@/components/settings/notifications-section', 'NotificationsSection'],
   ['@/components/settings/integrations-section', 'IntegrationsSection'],
   ['@/components/settings/organization-section', 'OrganizationSection'],
+  ['@/components/settings/white-label-section', 'WhiteLabelSection'],
   ['@/components/settings/menu-access-section', 'MenuAccessSection'],
   ['@/components/settings/work-areas-card', 'WorkAreasCard'],
   ['@/components/chat-access/roles-access-section', 'RolesAccessSection'],
@@ -102,6 +104,15 @@ describe('SettingsView', () => {
     const off = await sections();
     expect(off).not.toContain('Roles & access');
     expect(off).not.toContain('Chat');
+  });
+
+  it('lists White label after Organization, on the cloud and on a self-host', async () => {
+    for (const cloud of [true, false]) {
+      isCloud = cloud;
+      const list = await sections();
+      expect(list.indexOf('White label'), String(cloud)).toBe(list.indexOf('Organization') + 1);
+    }
+    isCloud = false;
   });
 
   it("counts an Admin's waiting access requests on Roles & access", async () => {

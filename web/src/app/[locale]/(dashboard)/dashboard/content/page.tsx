@@ -85,6 +85,7 @@ import { NewContentDialog, type DialogPreset } from '@/components/content/new-co
 import { getOpportunityDrafts } from '@/lib/actions/content-drafts';
 import { getPlanPriorities, setPlanRowPriority } from '@/lib/actions/content-plan';
 import { OpportunityRowMenu } from '@/components/content/opportunity-row-menu';
+import { WriteThisDialog } from '@/components/content/write-this-dialog';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { bulkSendNotes } from '@/lib/content/bulk-send';
@@ -123,6 +124,7 @@ import { LoadingDots } from '@/components/ui/loading-dots';
 import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
 import { toCsv } from '@/lib/csv';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
+import { exportFileName } from '@/lib/white-label/export-name';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const GENERATION_STORAGE_KEY = 'aeo:content-generation';
@@ -522,6 +524,8 @@ export default function ContentPage() {
   const router = useRouter();
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const [contentPreset, setContentPreset] = useState<DialogPreset | null>(null);
+  // Write this from a row: the brief and the page in one go.
+  const [writeThis, setWriteThis] = useState<ContentOpportunity | null>(null);
   // The drafts being written for the rows on screen, which open instead. A
   // failed read is not "no draft": the rows offer to check again, so Start
   // never writes a second draft for the same opportunity.
@@ -831,7 +835,9 @@ export default function ContentPage() {
       const link = document.createElement('a');
       const date = new Date().toISOString().slice(0, 10);
       link.href = url;
-      link.download = `ansvisor_${activeBrandSlug ?? 'brand'}_content-opportunities_${date}.csv`;
+      link.download = await exportFileName(
+        `${activeBrandSlug ?? 'brand'}_content-opportunities_${date}.csv`,
+      );
       link.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -1753,6 +1759,9 @@ export default function ContentPage() {
                             onStart: guard(() => setContentPreset(opportunityStart(opp)), {
                               action: tActions('createContent'),
                             }),
+                            onWriteThis: guard(() => setWriteThis(opp), {
+                              action: tActions('createContent'),
+                            }),
                             onOpenDraft: (draftId) => router.push(contentEditorPath(draftId)),
                           }}
                           // The Plan lists owned work still open; its marks are
@@ -1827,6 +1836,11 @@ export default function ContentPage() {
           preset={contentPreset}
         />
       )}
+      <WriteThisDialog
+        opportunity={writeThis}
+        onOpenChange={(open) => !open && setWriteThis(null)}
+        siteType={siteTypeOf(activeBrand ?? {})}
+      />
       <Sheet
         open={openOpportunityId !== null}
         onOpenChange={(open) => {

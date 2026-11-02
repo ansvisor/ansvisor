@@ -3,6 +3,8 @@ import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
 import { deleteBrand } from '../lib/brand-delete.js';
 import { applySiteTypeDetection } from '../lib/site-type-detect.js';
+import { checkTrackingSnippet } from '../lib/tracking-snippet-check.js';
+import { snippetCheckLimiter } from '../middleware/rate-limiter.js';
 
 const router = Router();
 
@@ -89,6 +91,11 @@ router.post('/:id/detect-site-type', async (req, res) => {
       return res.status(403).json({ error: 'Only admins and managers can change a brand.' });
     }
 
+    // Setup's first read of the home page: the tracking snippet is looked
+    // for too, so AI Traffic knows from the start whether it's there.
+    checkTrackingSnippet(brandId).catch((err) =>
+      req.log.warn({ err }, 'tracking snippet check at setup failed'),
+    );
     const result = await applySiteTypeDetection(brandId);
     if (result.skipped) return res.json({ siteType: null, skipped: result.skipped });
     if (!result.detected) return res.json({ siteType: null });
@@ -101,6 +108,27 @@ router.post('/:id/detect-site-type', async (req, res) => {
     req.log.error({ err: error }, 'detect site type error');
     return res.status(error.status || 500).json({
       error: error.status ? error.message : 'Failed to detect the site type.',
+    });
+  }
+});
+
+/**
+ * POST /api/brands/:id/tracking-snippet/check
+ * AI Traffic's Check again: reads the brand's home page for its tracking
+ * snippet and keeps what it found (lib/tracking-snippet-check.js, 00433).
+ * Any member of the brand: it reads the brand's own site and nothing else.
+ * Returns { status, domain, checkedAt, foundAt }: status 'found',
+ * 'not_found', 'no_domain' or 'unreachable' (nothing kept).
+ */
+router.post('/:id/tracking-snippet/check', snippetCheckLimiter, async (req, res) => {
+  try {
+    const brandId = req.params.id;
+    await assertBrandAccess(brandId, req.user.id);
+    return res.json(await checkTrackingSnippet(brandId));
+  } catch (error) {
+    req.log.error({ err: error }, 'tracking snippet check error');
+    return res.status(error.status || 500).json({
+      error: error.status ? error.message : 'Failed to check the tracking snippet.',
     });
   }
 });

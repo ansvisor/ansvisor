@@ -558,6 +558,20 @@ describe('Home by focus (CHAT-24 §4)', () => {
     expect(text()).not.toContain('Start with a question');
   });
 
+  it('offers new skills for the picked areas, each starting a chat with it', async () => {
+    const onAsk = vi.fn();
+    await render(view({ focus: focus('comp', 'brand'), words: null, onAsk }));
+    const news = [...host.querySelectorAll<HTMLElement>('[data-action="dept.openNew"]')];
+    expect(news.map((item) => item.textContent)).toEqual([
+      'Skill/rivalsA one-page brief on one competitor across all AI platforms.',
+      'Skill/wrongclaimFinds AI answers with wrong facts about you and drafts the fixes.',
+    ]);
+    await act(async () => news[0].click());
+    expect(onAsk).toHaveBeenCalledWith('/rivals');
+    await render(view({ focus: focus('lead', 'growth'), words: words() }));
+    expect(text()).not.toContain('New for you');
+  });
+
   it('says a competitor’s rise under the greeting, after what needs the person', async () => {
     await render(
       view({ focus: focus('pd', 'comp'), words: words({ name: 'Kestrel CRM', points: 4 }) }),

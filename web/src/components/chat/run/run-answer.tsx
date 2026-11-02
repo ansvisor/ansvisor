@@ -7,6 +7,8 @@ import { AgentAvatar, type AgentAvatarState } from '@/components/agentic/agent-a
 import { stampParts } from '@/components/agentic/result-card';
 import { RunSteps, type RunStepsStatus } from '@/components/agentic/run-steps';
 import { Button } from '@/components/ui/button';
+import { useUserRole } from '@/hooks/use-user-role';
+import { Link } from '@/i18n/navigation';
 import type { Components } from 'react-markdown';
 import { MARKDOWN_COMPONENTS, Markdown } from '@/components/ui/markdown';
 import type { ClientRun, ClientRunStatus } from '@/lib/chat/run-state';
@@ -112,6 +114,7 @@ export function RunAnswer({
   const t = useTranslations('chatRun');
   const tStamp = useTranslations('agentic.resultCard');
   const tSteps = useTranslations('agentic.runSteps');
+  const { canAdmin } = useUserRole();
   const [opened, setOpened] = useState<number | null>(null);
   const active = ACTIVE.includes(run.status);
   const status = statusLine(run.steps, run.text.length > 0);
@@ -200,6 +203,19 @@ export function RunAnswer({
                 <p className="font-medium">{tSteps('failed')}</p>
               )}
               {run.errorReason && <p>{run.errorReason}</p>}
+              {/* The workspace's own key failed (AGENT-OWN-KEY §5.2): only an Admin can fix it. */}
+              {run.keyFailed &&
+                (canAdmin ? (
+                  <Link
+                    href="/dashboard/settings/ai-providers"
+                    data-action="run.fixKey"
+                    className="font-medium underline underline-offset-2"
+                  >
+                    {t('keyFix')}
+                  </Link>
+                ) : (
+                  <p>{t('keyAskAdmin')}</p>
+                ))}
             </div>
             {onRetry && (
               <Button

@@ -24,6 +24,9 @@ import { AIProviderAvatar } from '@/components/ai-provider-avatar';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { formatDate } from '@/lib/format';
+import { formatRelative } from '@/lib/format-relative';
+import type { KeyFailureClass } from '@/lib/agent/key-errors';
+import { cn } from '@/lib/utils';
 import {
   AI_PROVIDERS,
   DEFAULT_MODELS,
@@ -58,6 +61,85 @@ interface SavedProvider {
   active: boolean;
   setAt: string | null;
   setByEmail: string | null;
+  /** Its health (00440): when it was last tested, and why and since when it fails. */
+  health?: {
+    checkedAt: string | null;
+    failingSince: string | null;
+    failureClass: KeyFailureClass | null;
+  };
+}
+
+/** What a test, a save or a switch found on a key (/api/settings/ai-providers). */
+interface KeyCheckAnswer {
+  error?: string;
+  code?: string;
+  check?: 'working' | 'no_credit' | 'unchecked';
+  resumed?: number;
+}
+
+/** Two sentences as one message, the first ended with a full stop. */
+function sentences(first: string, second: string | null): string {
+  if (!second) return first;
+  return `${first}${/[.!?]$/.test(first) ? '' : '.'} ${second}`;
+}
+
+/** The key class a refusal names (`key_invalid` …), or null. */
+function refusedClass(code: string | undefined): KeyFailureClass | null {
+  const cls = code?.startsWith('key_') ? code.slice(4) : null;
+  return cls === 'invalid' || cls === 'no_credit' || cls === 'model' || cls === 'unreadable'
+    ? cls
+    : null;
+}
+
+/**
+ * A key's health under its details (AGENT-OWN-KEY §5.2 item 7): working and
+ * when it was checked, not working since when and why, or not checked yet.
+ */
+function KeyHealthLine({ provider, row }: { provider: AiProvider; row: SavedProvider }) {
+  const t = useTranslations('settings');
+  const tCommon = useTranslations('common');
+  const tOwnKey = useTranslations('chatAgents.ownKey');
+  const health = row.health;
+  const [tone, text] =
+    health?.failingSince && health.failureClass
+      ? ([
+          'fail',
+          t('agent_health.failing', {
+            date: formatDate(health.failingSince),
+            why: tOwnKey(`why.${health.failureClass}`, {
+              provider: t(`agent_providers.${provider}.name`),
+            }),
+          }),
+        ] as const)
+      : health?.checkedAt
+        ? ([
+            'ok',
+            t('agent_health.working', { when: formatRelative(health.checkedAt, tCommon) }),
+          ] as const)
+        : (['none', t('agent_health.unchecked')] as const);
+  return (
+    <p
+      data-slot="key-health"
+      data-tone={tone}
+      className={cn(
+        'mt-1 flex items-center gap-1.5 text-xs',
+        tone === 'ok' && 'text-emerald-700 dark:text-emerald-400',
+        tone === 'fail' && 'text-red-700 dark:text-red-400',
+        tone === 'none' && 'text-muted-foreground',
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          'size-1.5 shrink-0 rounded-full',
+          tone === 'ok' && 'bg-emerald-500',
+          tone === 'fail' && 'bg-red-500',
+          tone === 'none' && 'bg-muted-foreground/40',
+        )}
+      />
+      {text}
+    </p>
+  );
 }
 
 /** Where each provider hands out keys. */
@@ -102,6 +184,7 @@ export function AiProvidersSection() {
   const [access, setAccess] = useState<OwnKeyAccess>({ state: 'open' });
   const [editing, setEditing] = useState<AiProvider | null>(null);
   const [switching, setSwitching] = useState<AiProvider | null>(null);
+  const [testing, setTesting] = useState<AiProvider | null>(null);
   // The key the remove dialog asks about; kept while the dialog fades out.
   const [confirmRemove, setConfirmRemove] = useState<AiProvider | null>(null);
   const [removeOpen, setRemoveOpen] = useState(false);
@@ -143,14 +226,65 @@ export function AiProvidersSection() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider }),
       });
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      const body = (await res.json().catch(() => ({}))) as KeyCheckAnswer;
+      const refused = refusedClass(body.code);
+      if (refused) {
+        toast.error(keyError(provider, refused));
+        await load();
+        return;
+      }
       if (!res.ok) throw new Error(body.error || 'Failed to save');
-      toast.success(t('agent_switched', { provider: name(provider) }));
+      toast.success(withResumed(t('agent_switched', { provider: name(provider) }), body.resumed));
+      if (body.check === 'no_credit') toast.warning(keyError(provider, 'no_credit'));
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSwitching(null);
+    }
+  };
+
+  /** The words for a key class, as the key's provider and model name it. */
+  const keyError = (provider: AiProvider, cls: KeyFailureClass) =>
+    t(`agent_keyError.${cls}`, {
+      provider: name(provider),
+      model: chatModelId(provider, byProvider.get(provider)?.settings ?? {}),
+    });
+
+  /** A message, and how many paused agents started again when some did. */
+  const withResumed = (message: string, resumed = 0) =>
+    sentences(message, resumed > 0 ? t('agent_testResumed', { count: resumed }) : null);
+
+  // Test (AGENT-OWN-KEY §5.2 item 7): one tiny call on the saved key, and what it found kept.
+  const handleTest = async (provider: AiProvider) => {
+    setTesting(provider);
+    try {
+      const res = await fetch('/api/settings/ai-providers/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        outcome?: 'working' | 'failing' | 'unknown';
+        class?: KeyFailureClass;
+        resumed?: number;
+      };
+      if (!res.ok) throw new Error(body.error || 'Failed to test');
+      if (body.outcome === 'working') {
+        toast.success(
+          withResumed(t('agent_testWorks', { provider: name(provider) }), body.resumed),
+        );
+      } else if (body.outcome === 'failing' && body.class) {
+        toast.error(keyError(provider, body.class));
+      } else {
+        toast(t('agent_testUnknown'));
+      }
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to test');
+    } finally {
+      setTesting(null);
     }
   };
 
@@ -174,6 +308,8 @@ export function AiProvidersSection() {
 
   const byProvider = new Map((saved ?? []).map((row) => [row.provider, row]));
   const locked = access.state === 'locked';
+  // Chat runs on the key (Enterprise, or a kept key): its health and Test show.
+  const metered = access.state === 'plan' || access.state === 'kept';
 
   return (
     <Card>
@@ -267,6 +403,7 @@ export function AiProvidersSection() {
                               {t(`agent_providers.${provider}.about`)}
                             </p>
                           )}
+                          {row && metered && <KeyHealthLine provider={provider} row={row} />}
                         </div>
                       </div>
 
@@ -285,6 +422,22 @@ export function AiProvidersSection() {
                                 <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
                               )}
                               {t('agent_useForChat')}
+                            </Button>
+                          )}
+                          {row && metered && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              data-action="aiKey.test"
+                              disabled={testing !== null}
+                              onClick={guard(() => void handleTest(provider), {
+                                action: tActions('testAiKey'),
+                              })}
+                            >
+                              {testing === provider && (
+                                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                              )}
+                              {testing === provider ? t('agent_testing') : t('agent_test')}
                             </Button>
                           )}
                           {/* A kept key is replaced, not joined by another provider's. */}
@@ -354,7 +507,10 @@ export function AiProvidersSection() {
             <DialogHeader>
               <DialogTitle>{t('agent_removeKey')}</DialogTitle>
               <DialogDescription>
-                {confirmRemove && t('agent_removeKeyConfirm', { provider: name(confirmRemove) })}
+                {confirmRemove &&
+                  t(metered ? 'agent_removeKeyConfirmChat' : 'agent_removeKeyConfirm', {
+                    provider: name(confirmRemove),
+                  })}
               </DialogDescription>
             </DialogHeader>
 
@@ -400,6 +556,8 @@ function ProviderKeyForm({
   const [deployment, setDeployment] = useState(saved.deployment ?? '');
   const [model, setModel] = useState(saved.model ?? '');
   const [invalid, setInvalid] = useState<SettingsError | null>(null);
+  // The key's test turned it down (AGENT-OWN-KEY §11 Q8): why, under the key.
+  const [keyError, setKeyError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const id = (field: string) => `ai-provider-${provider}-${field}`;
 
@@ -418,16 +576,37 @@ function ProviderKeyForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider, apiKey: apiKey.trim(), settings: parsed.settings }),
       });
-      const body = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        field?: SettingsError;
+      const body = (await res.json().catch(() => ({}))) as KeyCheckAnswer & {
+        field?: SettingsError | 'apiKey';
       };
-      if (body.field) {
+      const providerName = t(`agent_providers.${provider}.name`);
+      const refused = refusedClass(body.code);
+      if (refused) {
+        setKeyError(
+          t(`agent_keyError.${refused}`, {
+            provider: providerName,
+            model: chatModelId(provider, parsed.settings),
+          }),
+        );
+        return;
+      }
+      if (body.field && body.field !== 'apiKey') {
         setInvalid(body.field);
         return;
       }
       if (!res.ok) throw new Error(body.error || 'Failed to save');
-      toast.success(t('agent_saved', { provider: t(`agent_providers.${provider}.name`) }));
+      if (body.check === 'no_credit') {
+        toast.warning(t('agent_savedNoCredit', { provider: providerName }));
+      } else if (body.check === 'unchecked') {
+        toast(t('agent_savedUnchecked'));
+      } else {
+        toast.success(
+          sentences(
+            t('agent_saved', { provider: providerName }),
+            body.resumed ? t('agent_testResumed', { count: body.resumed }) : null,
+          ),
+        );
+      }
       await onSaved();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save');
@@ -456,11 +635,20 @@ function ProviderKeyForm({
           spellCheck={false}
           placeholder={t(`agent_providers.${provider}.keyPlaceholder`)}
           value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
+          onChange={(e) => {
+            setApiKey(e.target.value);
+            setKeyError(null);
+          }}
           disabled={saving}
+          aria-invalid={keyError !== null}
           className="bg-card font-mono"
           autoFocus
         />
+        {keyError && (
+          <p data-slot="key-error" className="text-xs text-destructive">
+            {keyError}
+          </p>
+        )}
         <p className="text-xs text-muted-foreground">
           {t.rich(`agent_providers.${provider}.keyHint`, {
             link: (chunks) => (

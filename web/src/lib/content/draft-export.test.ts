@@ -244,6 +244,25 @@ describe('draftExportBlob and draftExportFileName', () => {
     expect(Object.keys(files)).toContain('xl/workbook.xml');
     expect(draftExportFileName('T', 'xlsx')).toBe('ansvisor_content_t.xlsx');
   });
+
+  it('starts the name with a white label kit’s word instead, or none', () => {
+    expect(draftExportFileName('T', 'docx', 'acme-agency')).toBe('acme-agency_content_t.docx');
+    expect(draftExportFileName('T', 'docx', null)).toBe('content_t.docx');
+  });
+
+  it('names a white label kit’s company as the Word file’s author, and nobody without one', async () => {
+    const core = async (author?: string) =>
+      strFromU8(
+        unzipSync(
+          await read(await draftExportBlob('docx', 'T', '<h1>T</h1>', undefined, null, author)),
+        )['docProps/core.xml'],
+      );
+    const branded = await core('Acme Agency');
+    expect(branded).toContain('<dc:creator>Acme Agency</dc:creator>');
+    expect(branded).toContain('<cp:lastModifiedBy>Acme Agency</cp:lastModifiedBy>');
+    expect(await core()).not.toContain('Acme Agency');
+    expect(await core()).not.toMatch(/ansvisor/i);
+  });
 });
 
 describe('one page as a spreadsheet row (Excel, CSV)', () => {
@@ -399,5 +418,13 @@ describe('the Library’s Export', () => {
     expect(libraryExportFileName('in_review', 'xlsx', new Date('2026-10-22T10:00:00Z'))).toBe(
       'ansvisor_content_library_in-review_2026-10-22.xlsx',
     );
+    expect(
+      libraryExportFileName('in_review', 'docx', new Date('2026-10-22T10:00:00Z'), 'acme-agency'),
+    ).toBe('acme-agency_content_library_in-review_2026-10-22.docx');
+  });
+
+  it('names a white label kit’s company as the Word file’s author', async () => {
+    const files = unzipSync(await read(await libraryDocx([item()], 'Acme Agency')));
+    expect(strFromU8(files['docProps/core.xml'])).toContain('<dc:creator>Acme Agency</dc:creator>');
   });
 });

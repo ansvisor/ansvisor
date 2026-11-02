@@ -30,6 +30,8 @@ const NOT_A_BRAND_ROW = {
   invitations: "The organization's invitations.",
   organizations: 'The organization itself.',
   profiles: "A person's own profile.",
+  white_label_kits:
+    "The organization's white-label kit (00429), shared by its brands; a brand's client logo is on brands.",
 };
 
 /**

@@ -92,6 +92,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
+import { exportFileName } from '@/lib/white-label/export-name';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -1129,7 +1130,7 @@ export default function CitationsPage() {
     [totals, domainsInScope, t],
   );
 
-  const handleExportCsv = useCallback(() => {
+  const handleExportCsv = useCallback(async () => {
     if (!brand) return;
 
     setIsExporting(true);
@@ -1159,7 +1160,7 @@ export default function CitationsPage() {
 
         const csv = toCsv(rows, DOMAIN_HEADERS);
 
-        triggerDownload(csv, `ansvisor_${slug}_citations_domains_${date}.csv`);
+        triggerDownload(csv, await exportFileName(`${slug}_citations_domains_${date}.csv`));
       } else if (sourceTab === 'urls' && data) {
         const URL_HEADERS = [
           'url',
@@ -1183,7 +1184,7 @@ export default function CitationsPage() {
 
         const csv = toCsv(rows, URL_HEADERS);
 
-        triggerDownload(csv, `ansvisor_${slug}_citations_urls_${date}.csv`);
+        triggerDownload(csv, await exportFileName(`${slug}_citations_urls_${date}.csv`));
       } else if (sourceTab === 'gaps' && gaps) {
         const GAP_HEADERS = ['domain', 'category', 'competitor_answers', 'competitors', 'strength'];
 
@@ -1197,7 +1198,7 @@ export default function CitationsPage() {
 
         const csv = toCsv(rows, GAP_HEADERS);
 
-        triggerDownload(csv, `ansvisor_${slug}_citations_gaps_${date}.csv`);
+        triggerDownload(csv, await exportFileName(`${slug}_citations_gaps_${date}.csv`));
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to export CSV');

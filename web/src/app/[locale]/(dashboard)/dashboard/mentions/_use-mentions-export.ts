@@ -11,6 +11,7 @@ import {
   type ExportFact,
 } from '@/lib/mentions-export';
 import { mentionsQuery, type MentionsFilters } from '@/lib/mentions-filters';
+import { exportFileWord } from '@/lib/white-label/export-name';
 import { mentionPlatformLabel, wholeNet } from '@/lib/mentions-headline';
 import { NO_COMPETITOR, type MentionsList, type MentionsTableState } from '@/lib/mentions-list';
 import {
@@ -165,7 +166,7 @@ export function useMentionsExport({
         new Blob([BYTE_ORDER_MARK, mentionsCsv(facts, list.rows)], {
           type: 'text/csv;charset=utf-8;',
         }),
-        mentionsExportFileName(slug),
+        mentionsExportFileName(slug, new Date(), await exportFileWord()),
       );
       if (capped) toast.warning(t('capped', shown));
     } catch {

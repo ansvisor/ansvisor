@@ -18,6 +18,9 @@ export interface OwnKeyFailure {
   since: string;
 }
 
+/** A failing own key as the browser is told it: its class and provider, no dates. */
+export type FailingKey = Pick<OwnKeyFailure, 'class' | 'provider'>;
+
 /**
  * The workspace's active own key, if it is marked failing, read without
  * decrypting it. Null when there is no active key or it works. Whether the
@@ -39,6 +42,19 @@ export async function ownKeyFailure(organizationId: string): Promise<OwnKeyFailu
     status: data.failure_status ?? null,
     since: data.failing_since,
   };
+}
+
+/**
+ * ownKeyFailure for the browser, where Chat already runs on the own key
+ * (chatRunsOnOwnKey): its class and provider, or null. A read that fails is
+ * null: a run meets the key anyway.
+ */
+export async function failingKeyFor(organizationId: string): Promise<FailingKey | null> {
+  const failure = await ownKeyFailure(organizationId).catch((err) => {
+    console.error("[chat/key-health] could not read the AI key's health:", err);
+    return null;
+  });
+  return failure ? { class: failure.class, provider: failure.provider } : null;
 }
 
 /**
@@ -101,15 +117,31 @@ export async function resumeOwnKeyAgents(
   return (data ?? []).length;
 }
 
+/** A test of the key ran (Settings › AI Providers' Test, Save, Use for Chat): when. */
+export async function markKeyChecked(
+  organizationId: string,
+  provider: AiProvider,
+  now = new Date(),
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('organization_ai_keys')
+    .update({ checked_at: now.toISOString() })
+    .eq('organization_id', organizationId)
+    .eq('provider', provider);
+  if (error) throw new Error(`Could not keep when the AI key was checked: ${error.message}`);
+}
+
 /**
  * The key works again (a passing test, or any successful call on it): clears
  * the episode and resumes the agents it paused. Writes only when the key was
- * marked failing, so a working key costs no write.
+ * marked failing, so a working key costs no write. `resume: false` for a key
+ * Chat doesn't use: its agents paused for the active key's failure.
  */
 export async function markKeyWorking(
   organizationId: string,
   provider: AiProvider,
   now = new Date(),
+  { resume = true }: { resume?: boolean } = {},
 ): Promise<{ cleared: boolean; resumed: number }> {
   const { data, error } = await supabaseAdmin
     .from('organization_ai_keys')
@@ -125,5 +157,5 @@ export async function markKeyWorking(
     .select('provider');
   if (error) throw new Error(`Could not mark the AI key working: ${error.message}`);
   if ((data ?? []).length === 0) return { cleared: false, resumed: 0 };
-  return { cleared: true, resumed: await resumeOwnKeyAgents(organizationId, now) };
+  return { cleared: true, resumed: resume ? await resumeOwnKeyAgents(organizationId, now) : 0 };
 }

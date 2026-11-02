@@ -65,6 +65,7 @@ import {
 } from '@/lib/content/opportunity-export';
 import { BYTE_ORDER_MARK } from '@/lib/action-center/export';
 import { saveBlob } from '@/lib/download';
+import { exportAuthor, exportFileWord } from '@/lib/white-label/export-name';
 import { canWriteOpportunity, opportunityStart } from '@/lib/content/opportunity-start';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { siteTypeOf } from '@/lib/content/page-types';
@@ -76,6 +77,7 @@ import { isNoPlan } from '@/lib/billing/no-plan';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { OpportunityActions } from '@/components/content/opportunity-actions';
 import { NewContentDialog, type DialogPreset } from '@/components/content/new-content-dialog';
+import { WriteThisDialog } from '@/components/content/write-this-dialog';
 import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
 import { toast } from 'sonner';
 import { suggestedDate } from '@/lib/suggested-date';
@@ -216,6 +218,8 @@ export function OpportunityDetail({
   );
   // Send to Editor: Start for this opportunity, over the panel.
   const [contentPreset, setContentPreset] = useState<DialogPreset | null>(null);
+  // Write this: the brief and the page in one go, over the panel.
+  const [writeThisOpen, setWriteThisOpen] = useState(false);
   // The draft being written for it, opened instead of starting another. A
   // failed read is not "no draft": it offers to check again.
   const [draft, setDraft] = useState<{
@@ -492,8 +496,8 @@ export function OpportunityDetail({
   // Export (the user's spec): what Copy All Data copies, as a file.
   const handleExport = async (format: OpportunityExportFormat) => {
     const doc = opportunityDocument(opportunity, brief, fanoutQueries, assetTypeLabel, volume);
-    const fileName = opportunityExportFileName(doc, format);
     try {
+      const fileName = opportunityExportFileName(doc, format, await exportFileWord());
       if (format === 'csv') {
         saveBlob(
           new Blob([BYTE_ORDER_MARK, opportunityCsv(doc)], { type: 'text/csv;charset=utf-8;' }),
@@ -503,7 +507,7 @@ export function OpportunityDetail({
         const { default: writeXlsxFile } = await import('write-excel-file/browser');
         await writeXlsxFile(opportunityWorkbook(doc)).toFile(fileName);
       } else {
-        saveBlob(await opportunityDocx(doc), fileName);
+        saveBlob(await opportunityDocx(doc, await exportAuthor()), fileName);
       }
     } catch (err) {
       console.error('Export failed:', err);
@@ -631,6 +635,9 @@ export function OpportunityDetail({
             onRetry: retryDraft,
             canStart: canWriteOpportunity(opportunity),
             onStart: guard(() => setContentPreset(opportunityStart(opportunity)), {
+              action: tActions('createContent'),
+            }),
+            onWriteThis: guard(() => setWriteThisOpen(true), {
               action: tActions('createContent'),
             }),
             onOpenDraft: (draftId) => router.push(contentEditorPath(draftId)),
@@ -1047,6 +1054,12 @@ export function OpportunityDetail({
         brandId={opportunity.brandId}
         siteType={siteTypeOf(opportunityBrand ?? {})}
         preset={contentPreset}
+      />
+      <WriteThisDialog
+        // With a brief generated here meanwhile: its suggested title names the page.
+        opportunity={writeThisOpen ? { ...opportunity, brief: brief ?? opportunity.brief } : null}
+        onOpenChange={setWriteThisOpen}
+        siteType={siteTypeOf(opportunityBrand ?? {})}
       />
     </div>
   );

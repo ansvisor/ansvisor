@@ -10,6 +10,7 @@ import type { FocusArea } from '@/lib/chat/focus';
  * picker opens once on the first Chat Home with the work areas' picks on,
  * Continue needs one, Skip for now keeps the default Home, and neither
  * brings it back by itself; Home's pill opens it again with the picks on.
+ * Focus moves into the picker as it opens and back out as it closes.
  */
 
 const prefs = vi.hoisted(() => ({
@@ -33,8 +34,8 @@ const { ChatFocusGate, useChatFocus } = await import('./focus-picker');
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 
-/** Stands in for Chat Home: its focus, and the pill's Edit. */
-function Home() {
+/** Stands in for Chat Home: its focus, the pill's Edit, and the composer. */
+function Home({ readOnly = false }: { readOnly?: boolean }) {
   const focus = useChatFocus();
   return (
     <div data-slot="home">
@@ -42,6 +43,7 @@ function Home() {
       <button type="button" data-action="dept.change" onClick={focus?.edit}>
         Edit
       </button>
+      <textarea data-action="composer.input" aria-label="Message" disabled={readOnly} />
     </div>
   );
 }
@@ -66,12 +68,17 @@ afterEach(() => {
   host.remove();
 });
 
-async function render(focus: FocusArea[] | null, ask: boolean, prefill: FocusArea[] = []) {
+async function render(
+  focus: FocusArea[] | null,
+  ask: boolean,
+  prefill: FocusArea[] = [],
+  readOnly = false,
+) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <ChatFocusGate focus={focus} ask={ask} prefill={prefill}>
-          <Home />
+          <Home readOnly={readOnly} />
         </ChatFocusGate>
       </NextIntlClientProvider>,
     );
@@ -85,6 +92,8 @@ const pressed = () =>
     b.getAttribute('data-dept'),
   );
 const homeShown = () => $('[data-slot="focus-home"]')!.className === 'contents';
+const pill = () => $('[data-slot="home"] [data-action="dept.change"]');
+const composer = () => $('[data-action="composer.input"]');
 
 describe('ChatFocusGate', () => {
   it('opens the picker once in place of Home, with the work areas’ picks on', async () => {
@@ -180,5 +189,42 @@ describe('ChatFocusGate', () => {
     await render([], false, ['pd']);
     await click('[data-slot="home"] [data-action="dept.change"]');
     expect(pressed()).toEqual(['pd']);
+  });
+
+  describe('keyboard focus', () => {
+    it('starts at the question on the first opening, and goes to the composer after Skip for now', async () => {
+      await render(null, true, ['pd']);
+      expect(document.activeElement).toBe($('h1'));
+      await click('[data-action="dept.skip"]');
+      expect(homeShown()).toBe(true);
+      expect(document.activeElement).toBe(composer());
+    });
+
+    it('goes to the composer after the first opening’s Continue', async () => {
+      await render(null, true, ['pd']);
+      await click('[data-action="dept.continue"]');
+      expect(document.activeElement).toBe(composer());
+    });
+
+    it('moves into the picker from the pill and back to it on Cancel and on Continue', async () => {
+      await render(['growth'], false);
+      pill()!.focus();
+      await click('[data-slot="home"] [data-action="dept.change"]');
+      expect(document.activeElement).toBe($('h1'));
+      expect($('h1')?.textContent).toBe('What should Chat focus on for you?');
+      await click('[data-action="dept.skip"]');
+      expect(document.activeElement).toBe(pill());
+      await click('[data-slot="home"] [data-action="dept.change"]');
+      expect(document.activeElement).toBe($('h1'));
+      await click('[data-action="dept.continue"]');
+      expect(prefs.saveChatFocus).toHaveBeenCalledWith(['growth']);
+      expect(document.activeElement).toBe(pill());
+    });
+
+    it('lands on the pill when the composer can’t be typed in', async () => {
+      await render(null, true, [], true);
+      await click('[data-action="dept.skip"]');
+      expect(document.activeElement).toBe(pill());
+    });
   });
 });

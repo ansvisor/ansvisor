@@ -85,13 +85,28 @@ export function catalogRecords(items) {
   const variants = [];
   for (const [key, group] of groups) {
     const [first] = group;
+    const productTypes = [
+      ...new Set(
+        group
+          .flatMap((item) =>
+            item.productTypes?.length
+              ? item.productTypes
+              : item.productType
+                ? [item.productType]
+                : [],
+          )
+          .map((name) => clip(name, 750))
+          .filter(Boolean),
+      ),
+    ].sort();
     const product = {
       external_id: clip(key, 300),
       title: clip(groupTitle(group.map((i) => i.title)), 1000),
       description: clip(first.description, 20000),
       product_brand: clip(first.brand, 300),
       url: httpUrl(first.link),
-      product_type: clip(first.productType, 750),
+      product_type: productTypes[0] ?? null,
+      ...(productTypes.length > 1 ? { product_types: productTypes } : {}),
     };
     products.push(product);
     for (const item of group) {
@@ -109,6 +124,7 @@ export function catalogRecords(items) {
         product_external_id: product.external_id,
         external_id: clip(item.id, 300),
         title: clip(item.title, 1000),
+        sku: clip(item.sku, 300),
         gtin: clip(item.gtin, 50),
         mpn: clip(item.mpn, 300),
         url: httpUrl(item.link),
@@ -252,10 +268,12 @@ export async function syncCatalog(
       continue;
     }
     counts.products[kept ? 'changed' : 'added']++;
+    const columns = { ...product };
+    delete columns.product_types;
     productWrites.push({
       brand_id: brandId,
       source,
-      ...product,
+      ...columns,
       content_hash,
       removed_at: null,
       updated_at: at,
@@ -342,8 +360,8 @@ export async function syncCatalog(
     const names = [
       ...new Set(
         products
-          .filter((p) => touched.has(p.external_id) && p.product_type)
-          .map((p) => p.product_type),
+          .filter((p) => touched.has(p.external_id))
+          .flatMap((p) => p.product_types ?? (p.product_type ? [p.product_type] : [])),
       ),
     ];
     const categoryIds = new Map();
@@ -356,12 +374,14 @@ export async function syncCatalog(
       for (const row of data ?? []) categoryIds.set(row.name, row.id);
     }
     const links = products
-      .filter((p) => touched.has(p.external_id) && p.product_type)
-      .map((p) => ({
-        brand_id: brandId,
-        product_id: productIds.get(p.external_id),
-        category_id: categoryIds.get(p.product_type),
-      }))
+      .filter((p) => touched.has(p.external_id))
+      .flatMap((p) =>
+        (p.product_types ?? (p.product_type ? [p.product_type] : [])).map((name) => ({
+          brand_id: brandId,
+          product_id: productIds.get(p.external_id),
+          category_id: categoryIds.get(name),
+        })),
+      )
       .filter((link) => link.product_id && link.category_id);
     await replaceIn(db, 'catalog_product_categories', touchedIds, links);
   }

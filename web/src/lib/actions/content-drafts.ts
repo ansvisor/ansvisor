@@ -9,7 +9,6 @@ import {
   DRAFT_STATUSES,
   LIBRARY_TABS,
   PAGE_TYPES,
-  WRITING_STALE_MS,
   agentRunOf,
   agentStateOf,
   libraryTabCounts,
@@ -24,21 +23,16 @@ import {
   type LibraryTab,
   type PageImportError,
   type PageType,
+  missingSchemaLeftOut,
   PAGE_IMPORT_ERRORS,
 } from '@/lib/content/drafts';
 import { escapeHtml } from '@/lib/content/attachments';
 import { IMPACT_PERIODS, type ContentImpact, type ContentResults } from '@/lib/content/impact';
 import type { ContentConversions } from '@/lib/content/conversions';
-import {
-  MAX_BODY_HTML_LENGTH,
-  MAX_TITLE_LENGTH,
-  bodyHash,
-  type SaveDraftResult,
-} from '@/lib/content/editor';
+import { MAX_TITLE_LENGTH, type SaveDraftResult } from '@/lib/content/editor';
 import { BRAND_SITE, brandSiteType, followRestoredPageType } from '@/lib/content/draft-page-type';
 import { detectPageType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
-import { matchPagePrompts } from '@/lib/content/page-prompts';
 import { pageKey, type CatalogMatch } from '@/lib/content/feed-match';
 import type { LinkCheck } from '@/lib/content/quality-checks';
 import { CLAIM_KINDS, type ClaimBlock } from '@/lib/content/claims';
@@ -93,7 +87,6 @@ import {
   type DraftHandOff,
   type DraftVersion,
   type RestoredDraft,
-  type VersionOrigin,
 } from '@/lib/content/history';
 import { RUN_STALE_MS } from '@/lib/content/agent-runs';
 import { HANDOFF_KEYS } from '@/lib/content/hand-off';
@@ -117,6 +110,18 @@ import {
   type DraftSourceKind,
   type DraftSourcesData,
 } from '@/lib/content/sources';
+import {
+  MAX_DRAFT_PROMPTS,
+  changeDraft,
+  draftChangeRefused,
+  insertDraft,
+  isDraftId,
+  keepVersion,
+  promptsFor,
+  saveDraft,
+  startInput,
+  type UpdateContentDraftResult,
+} from '@/lib/content/draft-writes';
 import { assertWritable } from '@/lib/subscription-guard';
 import { isManager } from '@/lib/session-role';
 import { refreshYears } from '@/lib/content/current-year';
@@ -268,16 +273,27 @@ const keptSource = z
   .regex(/^https?:\/\//i);
 
 /** One draft for the editor (CE-004), or null when it isn't the member's to read. */
+/** The draft as the editor reads it; before 00448, without schema_left_out. */
+const DRAFT_COLUMNS_BEFORE_00448 =
+  `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, published_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no)` as const;
+const DRAFT_COLUMNS = `${DRAFT_COLUMNS_BEFORE_00448}, schema_left_out` as const;
+
 export async function getContentDraft(id: string): Promise<ContentDraft | null> {
   if (!draftId.safeParse(id).success) return null;
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const read = await supabase
     .from('content_drafts')
-    .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, published_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no)`,
-    )
+    .select(DRAFT_COLUMNS)
     .eq('id', id)
     .maybeSingle();
+  // The web ahead of 00448: the draft without it, as not left out.
+  const { data, error } = missingSchemaLeftOut(read.error)
+    ? await supabase
+        .from('content_drafts')
+        .select(DRAFT_COLUMNS_BEFORE_00448)
+        .eq('id', id)
+        .maybeSingle()
+    : read;
   if (error) throw new Error(error.message);
   if (!data) return null;
   return {
@@ -308,6 +324,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     updatedAt: data.updated_at,
     archivedAt: data.archived_at,
     qualityHandoff: data.quality_handoff === true,
+    schemaLeftOut: 'schema_left_out' in data && data.schema_left_out === true,
   };
 }
 
@@ -328,6 +345,12 @@ export interface DraftPage {
   authorConfirmed: boolean;
   /** The language the draft's own Language rule names, or null: the brand's. */
   language: string | null;
+  /** Its page type, for the Article schema it goes out with (00448). */
+  pageType: string | null;
+  /** A new page (method create): its schema gives the published date too. */
+  isNew: boolean;
+  /** The person left out the Article schema Ansvisor adds (00448). */
+  schemaLeftOut: boolean;
 }
 
 /**
@@ -357,11 +380,21 @@ export async function getContentDraftPages(
   const parsed = z.array(z.guid()).max(DRAFT_PAGES_PER_CALL).safeParse(ids);
   if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const columns =
+    'id, title, body_html, source_url, author_id, reviewer_id, author_real_at, rules, page_type, method';
+  const read = await supabase
     .from('content_drafts')
-    .select('id, title, body_html, source_url, author_id, reviewer_id, author_real_at, rules')
+    .select(`${columns}, schema_left_out` as const)
     .eq('brand_id', brandId)
     .in('id', parsed.data);
+  // The web ahead of 00448: the pages without it, as not left out.
+  const { data, error } = missingSchemaLeftOut(read.error)
+    ? await supabase
+        .from('content_drafts')
+        .select(columns)
+        .eq('brand_id', brandId)
+        .in('id', parsed.data)
+    : read;
   if (error) throw new Error(error.message);
   const byId = new Map<string, DraftPage>(
     (data ?? []).map((row) => [
@@ -375,6 +408,9 @@ export async function getContentDraftPages(
         reviewerId: row.reviewer_id ?? null,
         authorConfirmed: row.author_real_at !== null,
         language: draftLanguage(row.rules),
+        pageType: row.page_type,
+        isNew: row.method === 'create',
+        schemaLeftOut: 'schema_left_out' in row && row.schema_left_out === true,
       },
     ]),
   );
@@ -552,105 +588,6 @@ export async function getOpportunityDrafts(
     }
   }
   return drafts;
-}
-
-const startInput = z.object({
-  method: z.enum(['create', 'optimize']),
-  // A prompt's text can run longer than a title: cut to fit, not refused.
-  title: z.string().max(5_000),
-  pageType: z.enum(PAGE_TYPES),
-  typePicked: z.boolean().default(false),
-  source: z.discriminatedUnion('kind', [
-    z.object({ kind: z.enum(['opportunity', 'prompt', 'topic']), id: z.guid() }),
-    z.object({ kind: z.literal('content') }),
-  ]),
-  bodyHtml: z.string().max(MAX_BODY_HTML_LENGTH).optional(),
-  sourceUrl: z
-    .string()
-    .max(2048)
-    .regex(/^https?:\/\//i)
-    .optional(),
-});
-
-/** The most prompt ids a draft keeps (00206). */
-const MAX_DRAFT_PROMPTS = 500;
-
-/** The brand's active prompts read to match a page brought in (matchPagePrompts). */
-const PAGE_PROMPTS_READ = 1_000;
-
-/**
- * The tracked prompts a page started from this source should answer: an
- * opportunity's (its clusters', or its one prompt), the prompt picked, a
- * topic's active prompts, or, for a page brought in (pasted, read from its
- * URL or a file), the active prompts its title and headings speak to.
- * Throws 'not_found' for one the member can't read.
- */
-async function promptsFor(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  brandId: string,
-  source: DraftStart['source'],
-  /** The page brought in; none for the overlap check, which has no page yet. */
-  page: { title: string; html: string } = { title: '', html: '' },
-): Promise<{ promptIds: string[]; opportunityId: string | null }> {
-  if (source.kind === 'content') {
-    if (!page.html) return { promptIds: [], opportunityId: null };
-    const { data, error } = await supabase
-      .from('prompts')
-      .select('id, text, prompt_sets!inner(brand_id)')
-      .eq('prompt_sets.brand_id', brandId)
-      .eq('is_active', true)
-      // The newest first, for a brand with more than are read.
-      .order('created_at', { ascending: false })
-      .limit(PAGE_PROMPTS_READ);
-    // Without them the page still starts, with its prompts to add in Sources.
-    if (error) {
-      console.error('Failed to read the prompts to match an imported page:', error);
-      return { promptIds: [], opportunityId: null };
-    }
-    return { promptIds: matchPagePrompts(page.title, page.html, data ?? []), opportunityId: null };
-  }
-
-  if (source.kind === 'opportunity') {
-    const { data, error } = await supabase
-      .from('content_opportunities')
-      .select('id, prompt_id, cluster_id, related_cluster_ids')
-      .eq('id', source.id)
-      .eq('brand_id', brandId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data) throw new Error('not_found');
-    const clusterIds = [data.cluster_id, ...(data.related_cluster_ids ?? [])].filter(
-      (id): id is string => typeof id === 'string',
-    );
-    if (!clusterIds.length) {
-      return { promptIds: data.prompt_id ? [data.prompt_id] : [], opportunityId: data.id };
-    }
-    const members = await supabase
-      .from('prompt_cluster_members')
-      .select('prompt_id')
-      .in('cluster_id', clusterIds)
-      .limit(MAX_DRAFT_PROMPTS);
-    if (members.error) throw new Error(members.error.message);
-    return { promptIds: (members.data ?? []).map((m) => m.prompt_id), opportunityId: data.id };
-  }
-
-  const query = supabase
-    .from('prompts')
-    .select('id, prompt_sets!inner(brand_id)')
-    .eq('prompt_sets.brand_id', brandId);
-  if (source.kind === 'prompt') {
-    const { data, error } = await query.eq('id', source.id).maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data) throw new Error('not_found');
-    return { promptIds: [data.id], opportunityId: null };
-  }
-  const { data, error } = await query
-    .eq('topic_id', source.id)
-    .eq('is_active', true)
-    .limit(MAX_DRAFT_PROMPTS);
-  if (error) throw new Error(error.message);
-  if (!data?.length) throw new Error('not_found');
-  return { promptIds: data.map((p) => p.id), opportunityId: null };
 }
 
 /**
@@ -1217,93 +1154,21 @@ export async function getContentOverlap(
 
 /**
  * A draft started from New content and Start (CE-003, CE-015), by the
- * signed-in member: its page type, what it is for, and its first text. A new
- * page, or an existing one Start chose to optimize, starts with its title as
- * the H1; content brought to optimize is checked against the draft
- * allow-list, as a save is. A type the person picked stays; Start's guess is
- * stored as detected, so it follows the page (CE-023).
+ * signed-in member (insertDraft: its type, what it is for, its first text).
  */
 export async function createContentDraft(brandId: string, start: DraftStart): Promise<string> {
   await assertWritable({ brandId });
-  const parsed = startInput.safeParse(start);
-  if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
-  const { method, pageType, typePicked, source, bodyHtml, sourceUrl } = parsed.data;
-  const title = parsed.data.title.trim().slice(0, MAX_TITLE_LENGTH).trim();
-
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('unauthorized');
-  const bodyHtmlKept =
-    bodyHtml !== undefined
-      ? sanitizeDraftHtml(bodyHtml)
-      : title
-        ? `<h1>${escapeHtml(title)}</h1>`
-        : '';
-  const { promptIds, opportunityId } = await promptsFor(supabase, brandId, source, {
-    title,
-    html: bodyHtml !== undefined ? bodyHtmlKept : '',
-  });
-  // A page brought in to optimize aims at its own length, not a new page's.
-  const rules = startingRules(method, bodyHtml !== undefined ? bodyHtmlKept : undefined);
-
-  const { data, error } = await supabase
-    .from('content_drafts')
-    .insert({
-      brand_id: brandId,
-      created_by: user.id,
-      method,
-      title,
-      page_type: pageType,
-      page_type_source: typePicked ? 'user' : 'detected',
-      body_html: bodyHtmlKept,
-      opportunity_id: opportunityId,
-      source_url: sourceUrl ?? null,
-      prompt_ids: [...new Set(promptIds)].slice(0, MAX_DRAFT_PROMPTS),
-      ...(rules.importLength ? { rules } : {}),
-    })
-    .select('id')
-    .single();
-  if (error) throw new Error(error.message);
-  // A page brought in from its address starts History as the live page.
-  if (sourceUrl && bodyHtml !== undefined) await keepVersion(supabase, data.id, 'import');
-  return data.id;
+  return insertDraft(supabase, brandId, user.id, start);
 }
 
-const saveInput = z.object({
-  title: z.string().max(MAX_TITLE_LENGTH),
-  bodyHtml: z.string(),
-  base: z.object({
-    updatedAt: z.string().min(1),
-    bodyHash: z.string().regex(/^[0-9a-f]{64}$/),
-    /** The page of a save whose answer never came back: it may be this editor's own write. */
-    unconfirmedHash: z
-      .string()
-      .regex(/^[0-9a-f]{64}$/)
-      .optional(),
-  }),
-});
-
-/** Saves that find the draft written meanwhile, then try again over it. */
-const SAVE_ATTEMPTS = 3;
-
 /**
- * The editor's autosave: the body, checked against the draft allow-list
- * again (sanitizeDraftHtml), and the title read from it, written only over
- * the version the editor last saw (`base`). When another write came first,
- * the page tells which kind: the same page means only the draft's other
- * columns changed (Mark ready, its type), and the save goes over them;
- * another page means someone else changed it (another tab, a teammate, the
- * Content Agent), and nothing is overwritten. A page that is the editor's
- * own last save whose answer was lost (`unconfirmedHash`) counts as the
- * same page. A save RLS refused, or of a draft that no longer exists, comes
- * back not_found rather than saved.
- *
- * Until a person picks the page type, it follows the page (CE-023): detected
- * again from what was saved, and written only while it is still detected, so
- * a pick made meanwhile stays. That second write makes the version the
- * editor goes on from.
+ * The editor's autosave, by the signed-in member: written only over the
+ * version the editor last saw (saveDraft says how a write in between is met).
  */
 export async function saveContentDraft(
   id: string,
@@ -1314,109 +1179,15 @@ export async function saveContentDraft(
   },
 ): Promise<SaveDraftResult> {
   await assertWritable();
-  if (typeof input?.bodyHtml === 'string' && input.bodyHtml.length > MAX_BODY_HTML_LENGTH) {
-    return { ok: false, reason: 'too_large' };
-  }
-  const parsed = saveInput.safeParse(input);
-  if (!draftId.safeParse(id).success || !parsed.success) return { ok: false, reason: 'invalid' };
-  const { title, base } = parsed.data;
-  const bodyHtml = sanitizeDraftHtml(parsed.data.bodyHtml);
-  const savingHash = await bodyHash(bodyHtml);
-  const supabase = await createClient();
-  let expected = base.updatedAt;
-  // While the Content Agent writes the page (CE-015), a tab left open waits:
-  // the agent's page would go over its save. A 'writing' left by a stopped
-  // server doesn't hold it.
-  const writingSince = new Date(Date.now() - WRITING_STALE_MS).toISOString();
-  for (let attempt = 0; attempt < SAVE_ATTEMPTS; attempt++) {
-    const { data, error } = await supabase
-      .from('content_drafts')
-      .update({ title, body_html: bodyHtml })
-      .eq('id', id)
-      .eq('updated_at', expected)
-      .or(`agent_state.is.null,agent_state.neq.writing,agent_state_at.lt."${writingSince}"`)
-      .select(`updated_at, page_type, page_type_source, source_url, ${BRAND_SITE}`)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (data) {
-      let updatedAt: string = data.updated_at;
-      if (data.page_type_source === 'detected') {
-        // With the existing page's address, as Start detected it.
-        const detected = detectPageType(
-          { title, html: bodyHtml, url: data.source_url },
-          brandSiteType(data.brands),
-        );
-        // A page that shows no type keeps the one it had (Start's guess).
-        if (detected && detected !== data.page_type) {
-          // Only over this save: a write in between would otherwise become
-          // the editor's base, and its next autosave would go over it.
-          const { data: typed, error: typeError } = await supabase
-            .from('content_drafts')
-            .update({ page_type: detected })
-            .eq('id', id)
-            .eq('page_type_source', 'detected')
-            .eq('updated_at', data.updated_at)
-            .select('updated_at')
-            .maybeSingle();
-          // The page is saved; its type catches up on the next save.
-          if (typeError) {
-            console.error('Failed to update the detected page type:', typeError.message);
-          } else if (typed) {
-            updatedAt = typed.updated_at;
-          }
-        }
-      }
-      return { ok: true, updatedAt, bodyHash: savingHash };
-    }
-
-    const { data: current, error: readError } = await supabase
-      .from('content_drafts')
-      .select('updated_at, body_html, agent_state, agent_state_at')
-      .eq('id', id)
-      .maybeSingle();
-    if (readError) throw new Error(readError.message);
-    if (!current) return { ok: false, reason: 'not_found' };
-    // The page is changing elsewhere: Reload opens it as the agent leaves it.
-    if (agentStateOf(current.agent_state, current.agent_state_at) === 'writing') {
-      return { ok: false, reason: 'conflict' };
-    }
-    const currentHash = await bodyHash(current.body_html);
-    // The page the editor last saw, its lost save's, or already this one:
-    // writing over any of them loses nothing.
-    if (
-      currentHash !== base.bodyHash &&
-      currentHash !== base.unconfirmedHash &&
-      currentHash !== savingHash
-    ) {
-      return { ok: false, reason: 'conflict' };
-    }
-    expected = current.updated_at;
-  }
-  return { ok: false, reason: 'conflict' };
+  return saveDraft(await createClient(), id, input);
 }
-
-export type UpdateContentDraftResult =
-  | {
-      ok: true;
-      updatedAt: string;
-      bodyHash: string;
-      /** History's version of the page before the change, which Undo restores. */
-      beforeVersionId: string;
-    }
-  | {
-      ok: false;
-      reason: 'forbidden_role' | 'not_found' | 'conflict' | 'invalid' | 'failed';
-      message: string;
-    };
 
 /**
  * A change to a draft's title or page from Chat: update_draft (CHAT-20 §9
- * row 55). Admins and Managers, checked here (DECISIONS T: an Analyst's
- * Chat creates drafts, and changes none). History keeps the page before it first ('agent_before', CE-018:
- * the page before an agent changes it), then it is saved as the editor
- * saves, over the page just read (saveContentDraft: the same allow-list,
- * the agent's lock, a conflict when it changed in between). Errors come
- * back as values (#427).
+ * row 55), by the signed-in member (changeDraft: History keeps the page
+ * before, then it is saved as the editor saves). Admins and Managers, checked
+ * here (DECISIONS T: an Analyst's Chat creates drafts, and changes none).
+ * Errors come back as values (#427).
  */
 export async function updateContentDraft(
   id: string,
@@ -1424,79 +1195,14 @@ export async function updateContentDraft(
 ): Promise<UpdateContentDraftResult> {
   try {
     await assertWritable();
-    return await updateOneDraft(id, change);
+    if (!isDraftId(id)) return draftChangeRefused('invalid');
+    const supabase = await createClient();
+    if (!(await isManager(supabase))) return draftChangeRefused('forbidden_role');
+    return await changeDraft(supabase, id, change);
   } catch (err) {
     console.error('Failed to change the draft from Chat:', err);
-    return { ok: false, reason: 'failed', message: 'The draft couldn’t be changed. Try again.' };
+    return draftChangeRefused('failed');
   }
-}
-
-async function updateOneDraft(
-  id: string,
-  change: { title?: string; bodyHtml?: string },
-): Promise<UpdateContentDraftResult> {
-  if (!draftId.safeParse(id).success) {
-    return { ok: false, reason: 'invalid', message: 'That isn’t a draft’s id.' };
-  }
-  const supabase = await createClient();
-  if (!(await isManager(supabase))) {
-    return {
-      ok: false,
-      reason: 'forbidden_role',
-      message: 'Only an admin or a manager can change a draft from Chat.',
-    };
-  }
-  const { data: current, error } = await supabase
-    .from('content_drafts')
-    .select('title, body_html, updated_at, archived_at')
-    .eq('id', id)
-    .maybeSingle();
-  if (error) return { ok: false, reason: 'failed', message: 'The draft couldn’t be read.' };
-  if (!current || current.archived_at) {
-    return { ok: false, reason: 'not_found', message: 'That draft isn’t in the Library.' };
-  }
-  // The page before goes to History first: without it, Undo couldn't bring it back.
-  const { data: version, error: versionError } = await supabase.rpc('content_draft_snapshot', {
-    p_draft_id: id,
-    p_origin: 'agent_before',
-  });
-  if (versionError || typeof version !== 'string') {
-    if (versionError) console.error('Failed to keep the draft before Chat’s change:', versionError);
-    return {
-      ok: false,
-      reason: 'failed',
-      message: 'The page before couldn’t be kept in History, so nothing was changed. Try again.',
-    };
-  }
-  const saved = await saveContentDraft(id, {
-    title: change.title ?? current.title,
-    bodyHtml: change.bodyHtml ?? current.body_html,
-    base: { updatedAt: current.updated_at, bodyHash: await bodyHash(current.body_html) },
-  });
-  if (!saved.ok) {
-    return saved.reason === 'conflict'
-      ? {
-          ok: false,
-          reason: 'conflict',
-          message: 'The page changed while Chat was saving it. Open it to see the latest.',
-        }
-      : saved.reason === 'not_found'
-        ? { ok: false, reason: 'not_found', message: 'That draft isn’t in the Library.' }
-        : {
-            ok: false,
-            reason: 'invalid',
-            message:
-              saved.reason === 'too_large'
-                ? 'The page is too long to save.'
-                : 'The page couldn’t be saved as it is.',
-          };
-  }
-  return {
-    ok: true,
-    updatedAt: saved.updatedAt,
-    bodyHash: saved.bodyHash,
-    beforeVersionId: version,
-  };
 }
 
 const pageTypeInput = z.enum(PAGE_TYPES);
@@ -1606,6 +1312,34 @@ export async function confirmDraftAuthor(
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error('not_found');
+}
+
+/**
+ * Leaves out, or adds back, the Article schema Ansvisor adds to the page it
+ * sends to a CMS and exports (customer priorities item 7, 00448): for a CMS
+ * that writes its own. Never throws; false when it couldn't be saved.
+ */
+export async function setDraftSchemaLeftOut(id: string, leftOut: boolean): Promise<boolean> {
+  if (!draftId.safeParse(id).success || typeof leftOut !== 'boolean') return false;
+  try {
+    await assertWritable();
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('content_drafts')
+      .update({ schema_left_out: leftOut })
+      .eq('id', id)
+      .select('id')
+      .maybeSingle();
+    // Not saved, the web ahead of 00448 too (missingSchemaLeftOut): the editor puts it back.
+    if (error || !data) {
+      if (error) console.error('[content-drafts] could not keep the schema choice:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[content-drafts] could not keep the schema choice:', err);
+    return false;
+  }
 }
 
 /**
@@ -1872,23 +1606,6 @@ async function reopenTasksOf(
     console.error("Failed to reopen the action's task:", err);
     return 0;
   }
-}
-
-/**
- * Keeps the draft as it is now in its History (CE-018, 00215
- * content_draft_snapshot). A failure is logged, not thrown: the step it
- * records has already happened.
- */
-async function keepVersion(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  id: string,
-  origin: Exclude<VersionOrigin, 'restore'>,
-): Promise<void> {
-  const { error } = await supabase.rpc('content_draft_snapshot', {
-    p_draft_id: id,
-    p_origin: origin,
-  });
-  if (error) console.error(`Failed to keep the draft's ${origin} version:`, error.message);
 }
 
 /** History (CE-018): the draft's versions of the last 90 days, the latest first. */
@@ -2174,16 +1891,23 @@ export async function getDraftSources(
 ): Promise<{ data: DraftSourcesData; choices: DraftSourceChoice[] } | null> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
-  const [sourcesRes, choicesRes] = await Promise.all([
+  const [sourcesRes, choicesRes, trustedRes] = await Promise.all([
     supabase.rpc('content_draft_sources', { p_draft_id: id, p_days: SOURCES_DAYS }),
     supabase.from('content_draft_sources').select('kind, ref, included, added').eq('draft_id', id),
+    // The sites the draft's brand trusts (00449). A database before it, or a
+    // read that fails, trusts none: Trust reads the page as before.
+    supabase.from('content_drafts').select('brands(trusted_sources)').eq('id', id).maybeSingle(),
   ]);
   if (sourcesRes.error) throw new Error(sourcesRes.error.message);
   if (choicesRes.error) throw new Error(choicesRes.error.message);
   if (!sourcesRes.data) return null;
   const kinds: readonly string[] = DRAFT_SOURCE_KINDS;
+  const trusted = trustedRes.error ? null : trustedRes.data?.brands?.trusted_sources;
   return {
-    data: sourcesRes.data as unknown as DraftSourcesData,
+    data: {
+      ...(sourcesRes.data as unknown as DraftSourcesData),
+      trustedDomains: Array.isArray(trusted) ? trusted : [],
+    },
     choices: (choicesRes.data ?? [])
       .filter((row) => kinds.includes(row.kind))
       .map((row) => ({

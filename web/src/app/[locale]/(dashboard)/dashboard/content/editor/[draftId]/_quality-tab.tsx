@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Check } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from '@/lib/content/authors';
 import { isPageType } from '@/lib/content/drafts';
+import type { SiteType } from '@/lib/content/page-types';
 import { BAND_CLASSES, qualityBand } from '@/lib/content/quality';
 import type { QualityProfile } from '@/lib/content/quality-profiles';
 import {
@@ -85,7 +86,7 @@ export interface QualityRead {
   /** Where the brand's facts are approved: Brand settings › Brand facts (CE-047). */
   brandFactsPath?: string | null;
   /** The brand's business type: a proof to-do's wording follows it (CE-049). */
-  siteType?: 'b2b' | 'ecommerce' | 'b2c';
+  siteType?: SiteType;
   /** The page read (proof, CE-049; AI checks, CE-050) waits: the AI budget is spent, or its reads for the day made. */
   pagePaused?: boolean;
   pageLimited?: boolean;
@@ -165,8 +166,11 @@ export function QualityTab({
   handOff = null,
   onConfirmAuthor,
   onChangeType,
+  auditEstimate = null,
 }: {
   quality: QualityRead;
+  /** Site Audit's estimate of the page (customer priorities item 9), under the scores. */
+  auditEstimate?: ReactNode;
   /** Opens the header's page type menu: the checks and weights follow the type (CE-052). */
   onChangeType?: () => void;
   /** Scrolls the draft to a passage and marks it. */
@@ -266,6 +270,7 @@ export function QualityTab({
             )}
           </p>
         )}
+        {auditEstimate}
         {quality.feed && (
           <p className="text-xs text-muted-foreground">
             {t(`feed.${quality.feed}`)}

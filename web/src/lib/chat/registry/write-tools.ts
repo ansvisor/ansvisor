@@ -1,12 +1,16 @@
 import { z } from 'zod';
 import { updateOpportunityStatus } from '@/lib/actions/content';
 import { createContentDraft } from '@/lib/actions/content-drafts';
+import { actorOf } from '@/lib/chat/actor/access';
+import { actingOpen } from '@/lib/chat/actor/api';
+import { dismissSuggestionFor, updateOpportunityStatusFor } from '@/lib/chat/actor/api-writes';
+import { createContentDraftFor } from '@/lib/chat/actor/drafts';
 import { dismissSuggestion } from '@/lib/actions/prompt-suggestions';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { ACCESS_REQUEST_RULES } from '@/lib/chat/access-requests';
 import { escapeHtml } from '@/lib/content/attachments';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
-import { PAGE_TYPES } from '@/lib/content/drafts';
+import { PAGE_TYPES, type DraftMethod, type DraftStart, type PageType } from '@/lib/content/drafts';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { contentUuid, isHttpUrl } from '@/lib/mcp/content-schemas';
 import { FIXTURE_IDS, defineTool } from './define-tool';
@@ -17,7 +21,10 @@ import { FIXTURE_IDS, defineTool } from './define-tool';
  * made through Chat is the change the page makes: as the signed-in member,
  * through their session, with the read-only workspace check those actions
  * already run. They need that session: a run with no request behind it
- * (a schedule, CHAT-12) can't call them as they are.
+ * (a schedule, CHAT-12) can't call them as they are. A sessionFree row has
+ * runFor too, the same change for that run, as its person (lib/chat/actor):
+ * a draft with the service role, an opportunity's status or a dismissed
+ * suggestion through the API server as them, while that way is open.
  *
  * minRole follows the role model of 2026-10-29: daily work (drafts, tasks,
  * audits, reports) is open to every role; settings, deleting, adding prompts
@@ -27,6 +34,27 @@ import { FIXTURE_IDS, defineTool } from './define-tool';
 
 const BRAND = FIXTURE_IDS.brand;
 const ITEM = FIXTURE_IDS.item;
+
+/** A create_draft call's start, as New content gives one. */
+function draftStart(input: {
+  method: DraftMethod;
+  title: string;
+  page_type: PageType;
+  source: DraftStart['source'];
+  body_html?: string;
+  source_url?: string;
+}): DraftStart {
+  return {
+    method: input.method,
+    title: input.title,
+    pageType: input.page_type,
+    // The model's pick is a guess, as Start's is: the type follows the page (CE-023).
+    typePicked: false,
+    source: input.source,
+    bodyHtml: input.body_html,
+    sourceUrl: input.source_url,
+  };
+}
 
 export const WRITE_TOOLS = [
   defineTool({
@@ -67,17 +95,10 @@ export const WRITE_TOOLS = [
         .optional()
         .describe('For optimize: the live page.'),
     }),
-    run: (_ctx, input) =>
-      createContentDraft(input.brand_id, {
-        method: input.method,
-        title: input.title,
-        pageType: input.page_type,
-        // The model's pick is a guess, as Start's is: the type follows the page (CE-023).
-        typePicked: false,
-        source: input.source,
-        bodyHtml: input.body_html,
-        sourceUrl: input.source_url,
-      }),
+    run: (_ctx, input) => createContentDraft(input.brand_id, draftStart(input)),
+    sessionFree: true,
+    runFor: async (ctx, input) =>
+      createContentDraftFor(actorOf(ctx), input.brand_id, draftStart(input)),
     // The page it saved (CHAT-06 item 6): a document, open in the Content Editor. Filed as the
     // draft keeps it: cleaned, so no script or handler a page it read slipped in goes out.
     deliverable: (input, output) =>
@@ -135,6 +156,15 @@ export const WRITE_TOOLS = [
         input.status,
         input.status === 'dismissed' ? input.reason : undefined,
       ),
+    sessionFree: true,
+    runFor: (ctx, input) =>
+      updateOpportunityStatusFor(
+        actorOf(ctx),
+        input.opportunity_id,
+        input.status,
+        input.status === 'dismissed' ? input.reason : undefined,
+      ),
+    runForOpen: actingOpen,
     fixture: { input: { opportunity_id: ITEM, status: 'dismissed', reason: 'not_relevant' } },
   }),
   defineTool({
@@ -159,6 +189,9 @@ export const WRITE_TOOLS = [
       suggestion_id: contentUuid.describe('Suggestion id, from list_prompt_suggestions.'),
     }),
     run: (_ctx, input) => dismissSuggestion(input.suggestion_id),
+    sessionFree: true,
+    runFor: (ctx, input) => dismissSuggestionFor(actorOf(ctx), input.suggestion_id),
+    runForOpen: actingOpen,
     fixture: { input: { suggestion_id: ITEM } },
   }),
   defineTool({

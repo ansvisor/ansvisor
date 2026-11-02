@@ -491,6 +491,7 @@ export function ChatSidePanel() {
                 fullAutoOpen={setup.fullAutoOpen}
                 fullAutoOffByAdmin={setup.fullAutoOffByAdmin}
                 onOwnKey={setup.onOwnKey}
+                keyFailure={setup.keyFailure}
                 usageNoticeSeen={setup.usageNoticeSeen}
                 skills={setup.skills}
                 onConversation={remember}

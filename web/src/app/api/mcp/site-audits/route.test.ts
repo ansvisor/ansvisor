@@ -58,4 +58,17 @@ describe('POST /api/mcp/site-audits', () => {
     const res = await post();
     expect(res.status).toBe(202);
   });
+
+  it('answers 200 with the audit of a page audited minutes ago, starting nothing', async () => {
+    runSiteAuditFor.mockResolvedValue({ id: 'audit-0', status: 'recently_audited' });
+    const res = await post();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: 'audit-0', status: 'recently_audited' });
+    expect(runSiteAuditFor).toHaveBeenCalledWith(
+      expect.anything(),
+      'brand-1',
+      'https://ansvisor.com',
+      { force: false },
+    );
+  });
 });

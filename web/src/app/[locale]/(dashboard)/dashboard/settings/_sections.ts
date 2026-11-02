@@ -1,4 +1,5 @@
 import { qualityPhase } from '@/lib/content/quality';
+import { whiteLabelOffered } from '@/lib/white-label/kit';
 
 /**
  * Settings' sections, each with its own address (/dashboard/settings/<id>),
@@ -8,6 +9,8 @@ import { qualityPhase } from '@/lib/content/quality';
 export const SETTINGS_SECTIONS = [
   'account',
   'organization',
+  // White label (00429): where a plan can have it (whiteLabelOffered).
+  'white-label',
   'team',
   // Roles & access (CHAT-20 §4a): listed only while the new Chat is on.
   'roles-access',
@@ -57,6 +60,7 @@ export function resolveSettingsSection(
 export function hasSettingsSection(section: SettingsSection, { isCloud }: { isCloud: boolean }) {
   if (section === 'authors' && !hasAuthors()) return false;
   if (section === 'content' && !hasContent()) return false;
+  if (section === 'white-label' && !whiteLabelOffered({ isCloud })) return false;
   return isCloud || !CLOUD_ONLY.includes(section);
 }
 

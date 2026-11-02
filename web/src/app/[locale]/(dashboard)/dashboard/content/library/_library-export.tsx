@@ -34,6 +34,7 @@ import {
   type LibraryTab,
 } from '@/lib/content/drafts';
 import { saveBlob } from '@/lib/download';
+import { exportAuthor, exportFileWord } from '@/lib/white-label/export-name';
 
 /**
  * The Library's Export (CE-002): the drafts listed (the tab, within the
@@ -88,7 +89,7 @@ export function useLibraryExport(brandId: string | null) {
         const page = pages.get(draft.id);
         return page ? [item(draft, page)] : [];
       });
-      const fileName = libraryExportFileName(tab, format, new Date());
+      const fileName = libraryExportFileName(tab, format, new Date(), await exportFileWord());
       if (format === 'csv') {
         saveBlob(
           new Blob([BYTE_ORDER_MARK, libraryCsv(items)], { type: 'text/csv;charset=utf-8;' }),
@@ -99,7 +100,7 @@ export function useLibraryExport(brandId: string | null) {
         const { default: writeXlsxFile } = await import('write-excel-file/browser');
         await writeXlsxFile(libraryWorkbook(items)).toFile(fileName);
       } else {
-        saveBlob(await libraryDocx(items), fileName);
+        saveBlob(await libraryDocx(items, await exportAuthor()), fileName);
       }
     } catch (err) {
       console.error('Failed to export the Library:', err);
@@ -124,8 +125,9 @@ export function useLibraryExport(brandId: string | null) {
           publishableHtml(page.bodyHtml),
           undefined,
           page.sourceUrl,
+          await exportAuthor(),
         ),
-        draftExportFileName(title, format),
+        draftExportFileName(title, format, await exportFileWord()),
       );
     } catch (err) {
       console.error('Failed to export the draft:', err);
