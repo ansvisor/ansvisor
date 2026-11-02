@@ -13,7 +13,9 @@
  * sources join it, the stronger signal stays, and the merge is recorded on it
  * (`merged`). A cluster's other prompts don't count: two opportunities whose
  * questions merely sit in one cluster are different work (on the dev
- * database that chained four distinct opportunities into one).
+ * database that chained four distinct opportunities into one). Neither does
+ * an "Another angle" opportunity (source_data.alternativeOf): it is asked for
+ * on purpose next to its original, on the same cluster and question.
  *
  * Pure on purpose: callers load the rows and write what this returns.
  */
@@ -48,6 +50,11 @@ export function isOpen(row) {
   return OPEN_OPPORTUNITY_STATUSES.includes(row?.status);
 }
 
+/** An "Another angle" opportunity: kept beside its original, never merged. */
+export function isAlternative(row) {
+  return !!row?.source_data?.alternativeOf;
+}
+
 export function clustersOf(row) {
   return [row?.cluster_id, ...(row?.related_cluster_ids || [])].filter(Boolean);
 }
@@ -59,6 +66,7 @@ export function clustersOf(row) {
  * @param {{ question?: string | null, promptId?: string | null, clusterIds?: string[] }} candidate
  */
 export function answersSameQuestion(candidate, row) {
+  if (isAlternative(row)) return false;
   const key = questionKey(questionOf(row));
   if (key && key === questionKey(candidate.question)) return true;
   if (row.prompt_id && row.prompt_id === candidate.promptId) return true;
@@ -122,12 +130,18 @@ function promptsOf(sd) {
   return Array.isArray(sd.prompts) && sd.prompts.length ? sd.prompts : [sd.promptText];
 }
 
-/** Both AI search baskets as one: times searched add up, the most searched first. */
-export function mergeQueries(a, b) {
+/**
+ * Both AI search baskets as one: times searched add up, the most searched
+ * first. With `shared` (both hold a cluster, so both baskets count its
+ * searches) a query counts once, at the higher of the two.
+ */
+export function mergeQueries(a, b, { shared = false } = {}) {
   if (!a && !b) return undefined;
   const times = new Map();
   for (const q of [...(a?.top || []), ...(b?.top || [])]) {
-    times.set(q.query, (times.get(q.query) || 0) + (q.timesSearched || 0));
+    const prev = times.get(q.query) || 0;
+    const n = q.timesSearched || 0;
+    times.set(q.query, shared ? Math.max(prev, n) : prev + n);
   }
   return {
     included: Math.max(a?.included || 0, b?.included || 0, times.size),
@@ -196,7 +210,10 @@ export function mergeOpportunity(target, incoming, entry, at = new Date().toISOS
     competitorsCited: unionTexts(t.competitorsCited, s.competitorsCited, COMPETITORS_KEPT),
     merged: recordMerge(t.merged, entry, at),
   };
-  const queries = mergeQueries(t.queries, s.queries);
+  // A cluster both already hold counts once: its searches are in both baskets.
+  const held = new Set(clustersOf(target));
+  const shared = clustersOf(incoming).some((id) => held.has(id));
+  const queries = mergeQueries(t.queries, s.queries, { shared });
   if (queries) sourceData.queries = queries;
   for (const field of SIGNAL_FIELDS) {
     if (signal[field] !== undefined) sourceData[field] = signal[field];
@@ -223,12 +240,13 @@ export function mergeOpportunity(target, incoming, entry, at = new Date().toISOS
  * question: per group, the one that stays and those merged into it, with
  * what the one that stays becomes.
  *
- * @param {object[]} rows - a brand's opportunities (full rows); only open ones are grouped
+ * @param {object[]} rows - a brand's opportunities (full rows); only open ones
+ *   are grouped, and never an "Another angle" one
  * @param {{ withDrafts?: Set<string>, at?: string }} [opts] - `withDrafts`: ids with a draft
  * @returns {{ keep: object, merge: object[], update: object }[]}
  */
 export function planSameQuestionMerges(rows, { withDrafts, at } = {}) {
-  const open = (rows || []).filter(isOpen);
+  const open = (rows || []).filter((r) => isOpen(r) && !isAlternative(r));
   const parent = open.map((_, i) => i);
   const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
   const candidates = open.map(candidateOf);

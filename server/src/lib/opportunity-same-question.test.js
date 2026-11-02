@@ -106,6 +106,16 @@ describe('answersSameQuestion', () => {
     ).toBe(true);
   });
 
+  it('never matches an "Another angle" opportunity', () => {
+    const angle = second({
+      source_data: { ...second().source_data, alternativeOf: { id: 'o1', title: 'Original' } },
+    });
+    expect(
+      answersSameQuestion({ question: QUESTION, promptId: 'p1', clusterIds: ['c2'] }, angle),
+    ).toBe(false);
+    expect(findSameQuestion({ question: QUESTION }, [angle])).toBe(null);
+  });
+
   it("doesn't match a different question in another cluster", () => {
     expect(
       answersSameQuestion(
@@ -192,6 +202,18 @@ describe('mergeOpportunity', () => {
     expect(current.source_data.merged.at(-1).n).toBe(MERGED_KEPT + 2);
   });
 
+  it('counts the AI searches of a cluster both hold once', () => {
+    // The kept one holds c2 already (merged before); the duplicate on c2 carries c2's basket again.
+    const update = mergeOpportunity(row({ related_cluster_ids: ['c2'] }), second(), {
+      source: 'system',
+      opportunityId: 'o2',
+    });
+    expect(update.source_data.queries.top).toEqual([
+      { query: 'coffee subscription reddit', timesSearched: 5 },
+      { query: 'best coffee subscription', timesSearched: 4 },
+    ]);
+  });
+
   it('adds up AI searches by query', () => {
     expect(mergeQueries(undefined, undefined)).toBeUndefined();
     expect(mergeQueries({ top: [{ query: 'a', timesSearched: 1 }] }, null)).toEqual({
@@ -243,6 +265,41 @@ describe('planSameQuestionMerges', () => {
     // Neither has work: the higher score stays.
     expect(plans[0].keep.id).toBe('o2');
     expect(plans[0].merge.map((r) => r.id)).toEqual(['o1']);
+  });
+
+  it('leaves an "Another angle" opportunity beside its original', () => {
+    const angle = row({
+      id: 'o7',
+      created_at: '2026-10-20T00:00:00Z',
+      source_data: { ...row().source_data, alternativeOf: { id: 'o1', title: 'Original' } },
+    });
+    expect(planSameQuestionMerges([row(), angle])).toEqual([]);
+    const plans = planSameQuestionMerges([row(), second(), angle]);
+    expect(plans).toHaveLength(1);
+    expect([plans[0].keep, ...plans[0].merge].map((r) => r.id).sort()).toEqual(['o1', 'o2']);
+  });
+
+  it('counts the searches of one cluster once when two rows on it merge', () => {
+    // Both made from cluster c1, so both baskets are c1's.
+    const basket = {
+      included: 1,
+      excluded: 0,
+      top: [{ query: 'best coffee subscription', timesSearched: 4 }],
+    };
+    const plans = planSameQuestionMerges([
+      row({ source_data: { ...row().source_data, queries: basket } }),
+      row({
+        id: 'o8',
+        prompt_id: 'p8',
+        created_at: '2026-10-20T00:00:00Z',
+        opportunity_score: 10,
+        source_data: { promptText: 'Coffee subscriptions, reworded', queries: basket },
+      }),
+    ]);
+    expect(plans).toHaveLength(1);
+    expect(plans[0].update.source_data.queries.top).toEqual([
+      { query: 'best coffee subscription', timesSearched: 4 },
+    ]);
   });
 
   it('chains three on one question into one group', () => {
