@@ -45,10 +45,11 @@ export interface ActionRow {
   priority_level: string | null;
   priority_reason: unknown;
   priority_updated_at: string | null;
+  stale_at?: string | null;
 }
 
 export const ACTION_COLUMNS =
-  'id, action_no, category, kind, impact, status, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, priority_updated_at';
+  'id, action_no, category, kind, impact, status, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, priority_updated_at, stale_at';
 
 export const TASK_COLUMNS =
   'id, position, task_key, title, status, skip_reason, title_params, depends_on, details, output';
@@ -85,6 +86,7 @@ export function actionItemFromRow(
     taskTotal: extra.taskTotal,
     taskCompleted: extra.taskCompleted,
     signalCount: extra.signalCount,
+    staleAt: row.stale_at ?? null,
     priorityScore: score,
     priorityLevel: storedPriorityLevel(row.priority_level, score),
     // "Lost ground on 12 prompts", as the title counts them (AC-009).

@@ -54,6 +54,8 @@ export const SKIPPED = {
     "A chat's reads kept for reuse within it (00410): the server's, from a person's own chat, never sample data.",
   chat_files:
     "Files Chat filed from a person's runs and saved answers (00411): made by their own Chat work, not sample data, and Chat's precedence refuses changes on a demo brand.",
+  chat_agent_go_live_events:
+    'What agents published or sent on their own (00443): no agent runs for a demo brand, and nothing is ever published or sent for one.',
   chat_agent_runs:
     "An agent's runs (00419): no trigger fires for a demo brand, and Chat's precedence refuses every change an agent would make on one.",
   chat_why_analyses:
