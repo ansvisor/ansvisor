@@ -3927,7 +3927,8 @@
       "opened": "Opened {page}",
       "notOpened": "Couldn't open {page}",
       "usedSkill": "Used skill: {title}",
-      "skillFromLibrary": "Ansvisor library"
+      "skillFromLibrary": "Ansvisor library",
+      "usedShortcut": "Used shortcut: {title}"
     },
     "pageRefused": {
       "no_access": "No workspace to open pages for",
@@ -4069,9 +4070,19 @@
       "noneWithSkills": "No shortcuts or skills match",
       "skills": "Skills",
       "shortcuts": {
+        "start": {
+          "name": "Get started",
+          "starter": "Help me get started. What should I set up first?"
+        },
         "analyze": { "name": "Analyze", "starter": "Analyze" },
-        "report": { "name": "Reports", "starter": "Create a report on" },
-        "create": { "name": "Create content", "starter": "Create content for" }
+        "newReport": { "name": "Reports", "starter": "Create a report on" },
+        "create": { "name": "Create content", "starter": "Create content for" },
+        "optimize": { "name": "Optimize content", "starter": "Optimize this page:" },
+        "opportunities": {
+          "name": "Find opportunities",
+          "starter": "Find content opportunities for"
+        },
+        "audit": { "name": "Improve with audit", "starter": "Run an audit on" }
       }
     },
     "reference": {
@@ -4547,7 +4558,7 @@
           "landingPages": "Landing pages to fix",
           "landingPagesMessage": "Which landing pages do AI visitors leave fastest, and what should we fix on them?",
           "auditFixes": "Site audit fixes",
-          "auditFixesMessage": "Turn our site audit findings into the fixes that matter most for AI answers, highest impact first.",
+          "auditFixesMessage": "/audit-fix Turn our site audit findings into the fixes that matter most for AI answers, highest impact first.",
           "weeklyReport": "Weekly report",
           "weeklyReportMessage": "/report Write this week's report on our AI visibility.",
           "writeNext": "What to write next",
@@ -4563,21 +4574,21 @@
           "storySources": "Sources shaping our story",
           "storySourcesMessage": "Which sources shape what AI engines say about us?",
           "buyerQuestions": "Buyer questions",
-          "buyerQuestionsMessage": "Group the questions buyers ask AI in our category by topic, with search volume and who AI recommends.",
+          "buyerQuestionsMessage": "/questions Group the questions buyers ask AI in our category by topic, with search volume and who AI recommends.",
           "howAiCompares": "How AI compares us",
-          "howAiComparesMessage": "How do AI engines compare us with each competitor, feature by feature? Quote the answers.",
+          "howAiComparesMessage": "/features How do AI engines compare us with each competitor, feature by feature? Quote the answers.",
           "unmetNeeds": "Unmet needs",
-          "unmetNeedsMessage": "Which buyer needs and use cases have no clear winner in AI answers yet?",
+          "unmetNeedsMessage": "/gaps Which buyer needs and use cases have no clear winner in AI answers yet?",
           "productDigest": "Product digest",
           "productDigestMessage": "Write a product digest: what buyers asked AI this week, how AI compared us, and the gaps for our roadmap.",
           "marketGaps": "Market gaps",
           "marketGapsMessage": "In which markets and segments does AI recommend our competitors instead of us?",
           "listingGaps": "Listing gaps",
-          "listingGapsMessage": "Which directories, marketplaces and review sites do AI engines cite in our category, and which don't list us?",
+          "listingGapsMessage": "/listings Which directories, marketplaces and review sites do AI engines cite in our category, and which don't list us?",
           "publisherSites": "Publisher sites",
           "publisherSitesMessage": "Which publisher sites do AI engines cite in our category?",
           "marketSnapshot": "Market snapshot",
-          "marketSnapshotMessage": "Give me a snapshot of who AI recommends in each of our markets."
+          "marketSnapshotMessage": "/markets Give me a snapshot of who AI recommends in each of our markets."
         },
         "starters": {
           "winning": "Are we winning in AI search this month?",

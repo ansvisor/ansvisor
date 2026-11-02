@@ -269,8 +269,14 @@ const { readPrecedenceContext } = await import('./precedence-context');
 const { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } = await import('./rules');
 const { ASK_TOOL } = await import('./asks');
 const { NEXT_MOVES_TOOL } = await import('./next-moves');
-const { MAX_LISTED_SKILLS, SKILL_LIBRARY, USE_SKILL_TOOL, enabledSkills, skillsForPrompt } =
-  await import('./skills/library');
+const {
+  MAX_LISTED_SKILLS,
+  SHORTCUT_PLAYBOOKS,
+  SKILL_LIBRARY,
+  USE_SKILL_TOOL,
+  enabledSkills,
+  skillsForPrompt,
+} = await import('./skills/library');
 
 type ChatEvent = import('./events').ChatEvent;
 type ChatActor = import('./engine').ChatActor;
@@ -5177,6 +5183,139 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
       expect(options.tools?.map((t) => t.name) ?? []).not.toContain(USE_SKILL_TOOL);
     }
     expect(skillSteps(runId)).toEqual([]);
+  });
+});
+
+describe('shortcuts (W2-09, CHAT-08 items 4, 7, 8)', () => {
+  type Sent = { role: string; content: unknown };
+  const systemsOf = (options: CallOptions) =>
+    (options.prompt as unknown as Sent[]).filter((m) => m.role === 'system');
+  const playbook = (name: string) => SHORTCUT_PLAYBOOKS.find((p) => p.name === name)!;
+  const skillSteps = (runId: string) => stepsOf(runId).filter((s) => s.kind === 'skill');
+  const toolNames = (options: CallOptions) => options.tools?.map((tool) => tool.name) ?? [];
+
+  /** A turn sent with a shortcut's id, as the composer sends it. */
+  async function shortcutTurn(message: string, shortcutId: unknown, actor = ADMIN) {
+    const started = await engine.startChatRun(actor, {
+      message,
+      brandId: BRAND,
+      mode: 'auto',
+      shortcutId,
+    });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    await engine.driveRun(actor, started.runId);
+    return started.runId;
+  }
+  const questionOf = (runId: string) =>
+    db.tables.chat_messages.find(
+      (m) => m.conversation_id === runRow(runId).conversation_id && m.role === 'user',
+    )!;
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+  });
+
+  it('keeps the shortcut on the message, loads its playbook first and reads only its data plan', async () => {
+    const { haiku, sonnet } = useModels(
+      [calls(toolCall('r1', 'list_citations', { brand_id: BRAND })), READY],
+      [text('Citations fell on two pages.')],
+    );
+    const runId = await shortcutTurn('Analyze our citations', 'analyze');
+
+    expect(questionOf(runId).shortcut_id).toBe('analyze');
+    const [first] = stepsOf(runId);
+    expect(first).toMatchObject({
+      position: 1,
+      kind: 'skill',
+      label: 'Used shortcut: Analyze',
+      detail: 'Ansvisor library',
+      debug_json: { skill: 'analyze', via: 'shortcut' },
+    });
+    // Its body below the rules, for both models; never listed as a skill to pick.
+    for (const options of [haiku.seen[0], sonnet.seen[0]]) {
+      const systems = systemsOf(options);
+      expect(String(systems[2].content)).toContain(
+        `<skill name="analyze">\n${playbook('analyze').body}\n</skill>`,
+      );
+      expect(String(systems[1].content)).not.toContain('analyze: ');
+    }
+    // The data plan's reads only: the test's own read_visibility and fetch_page are left out.
+    const reads = toolNames(haiku.seen[0]);
+    expect(reads).toEqual(
+      expect.arrayContaining(['get_visibility_summary', 'list_citations', 'explain_change']),
+    );
+    expect(reads).not.toContain('read_visibility');
+    expect(reads).not.toContain('fetch_page');
+    // The writer keeps every change; only the reads are narrowed.
+    expect(toolNames(sonnet.seen[0])).toContain('create_draft');
+    expect(toolNames(sonnet.seen[0])).not.toContain('read_visibility');
+    expect(runRow(runId).status).toBe('done');
+    expectClean(await eventsOf(runId));
+  });
+
+  it('refuses a read outside the data plan, should the model call one', async () => {
+    const { haiku } = useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Ok.')],
+    );
+    await shortcutTurn('Analyze our visibility', 'analyze');
+    expect(fakes.readRun).not.toHaveBeenCalled();
+    // Not offered, so it is never run: the call comes back as unavailable.
+    expect(JSON.stringify(haiku.seen[1].prompt)).toContain('unavailable tool');
+  });
+
+  it.each([
+    ['rewritten trigger words', 'Why did our citations drop?', 'analyze'],
+    ["an id that is no shortcut's", 'Analyze our citations', 'report'],
+    ['an id too long to be one', 'Analyze our citations', 'x'.repeat(80)],
+  ])("runs as the person's own request for %s", async (_, message, id) => {
+    const { haiku } = useModels([READY], [text('Ok.')]);
+    const runId = await shortcutTurn(message, id);
+    expect(questionOf(runId).shortcut_id ?? null).toBeNull();
+    expect(skillSteps(runId)).toEqual([]);
+    expect(toolNames(haiku.seen[0])).toContain('read_visibility');
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it("takes a Home chip's shortcut with its own words", async () => {
+    useModels([READY], [text('Ok.')]);
+    const runId = await shortcutTurn(
+      'What changed in our AI visibility this week, and why?',
+      'analyze',
+    );
+    expect(questionOf(runId).shortcut_id).toBe('analyze');
+    expect(skillSteps(runId).map((s) => s.label)).toEqual(['Used shortcut: Analyze']);
+  });
+
+  it('counts the playbook in the run’s 3 bodies, and answers no How-to question from Help', async () => {
+    const { haiku } = useModels(
+      [
+        calls(
+          toolCall('s1', USE_SKILL_TOOL, { name: 'winback' }),
+          toolCall('s2', USE_SKILL_TOOL, { name: 'refresh' }),
+          toolCall('s3', USE_SKILL_TOOL, { name: 'faq' }),
+        ),
+        READY,
+      ],
+      [text('Ok.')],
+    );
+    const runId = await shortcutTurn('Help me get started. What should I set up first?', 'start');
+    expect(skillSteps(runId).map((s) => (s.debug_json as { skill: string }).skill)).toEqual([
+      'start',
+      'winback',
+      'refresh',
+    ]);
+    expect(JSON.stringify(haiku.seen[1].prompt)).toContain('limit_reached');
+    expect(stepsOf(runId).some((s) => s.label === 'Read Ansvisor Help')).toBe(false);
+  });
+
+  it('keeps nothing of it while the new Chat is off', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    const { haiku } = useModels([READY], [text('Ok.')]);
+    const runId = await shortcutTurn('Analyze our citations', 'analyze');
+    expect(skillSteps(runId)).toEqual([]);
+    expect(toolNames(haiku.seen[0])).toContain('read_visibility');
   });
 });
 
