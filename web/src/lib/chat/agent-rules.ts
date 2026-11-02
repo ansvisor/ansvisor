@@ -516,7 +516,9 @@ export type AgentAsk =
   | 'monthCap'
   | 'fullAuto'
   | 'engines'
-  | 'runWithChat';
+  | 'runWithChat'
+  /** An agent's permission to publish and send on its own (AUTONOMOUS-GO-LIVE §7.2). */
+  | 'goLive';
 
 /** A refusal: the precedence's denial, and what was asked in words. */
 export interface AgentDenial {
@@ -584,7 +586,7 @@ export function canSeeAgent(agent: AgentFacts, viewer: AgentViewer): boolean {
 /** The acts on an existing agent (create and duplicate make a new one). */
 export type AgentAct = Exclude<
   AgentAsk,
-  'workspace' | 'monthCap' | 'fullAuto' | 'engines' | 'runWithChat'
+  'workspace' | 'monthCap' | 'fullAuto' | 'engines' | 'runWithChat' | 'goLive'
 >;
 
 /** What only an Admin may do to a workspace agent while Settings › Chat keeps them to Admins. */

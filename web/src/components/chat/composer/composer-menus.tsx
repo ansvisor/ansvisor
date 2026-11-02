@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { useTranslations } from 'next-intl';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import type { ChatReference, ChatReferenceType } from '@/lib/chat/references';
+import { SHORTCUTS, shortcutCommand, type Shortcut } from '@/lib/chat/shortcuts';
 import { cn } from '@/lib/utils';
 
 /**
@@ -14,23 +15,18 @@ import { cn } from '@/lib/utils';
  */
 
 /**
- * The / menu's shortcuts in Wave 1 (CHAT-02 item 12): each fills its
- * starter text. The enabled skills follow them in their own group (W2-04).
+ * The shortcuts a "/…" filters to (CHAT-02 item 12, CHAT-08; the list is
+ * lib/chat/shortcuts.ts): those whose command, a part of it, or a word of
+ * whose name starts with it. The enabled skills follow them in their own
+ * group (W2-04).
  */
-export const SHORTCUTS = [
-  { key: 'analyze', command: '/analyze' },
-  { key: 'report', command: '/report' },
-  { key: 'create', command: '/create' },
-] as const;
-export type Shortcut = (typeof SHORTCUTS)[number];
-
-/** The shortcuts a "/…" filters to: those whose command or a word of whose name starts with it. */
 export function matchShortcuts(query: string, name: (shortcut: Shortcut) => string): Shortcut[] {
   const q = query.trim().toLowerCase();
   if (!q) return [...SHORTCUTS];
   return SHORTCUTS.filter(
     (s) =>
-      s.command.slice(1).startsWith(q) ||
+      s.id.startsWith(q) ||
+      s.id.split('-').some((part) => part.startsWith(q)) ||
       name(s)
         .toLowerCase()
         .split(/\s+/)
@@ -187,7 +183,7 @@ export function SlashMenu({
         <>
           {shortcuts.map((s, i) => (
             <button
-              key={s.key}
+              key={s.id}
               type="button"
               role="option"
               aria-selected={i === active}
@@ -196,7 +192,7 @@ export function SlashMenu({
               onClick={() => onPick(s)}
               className={row}
             >
-              <span className="font-mono text-[12.5px]">{s.command}</span>
+              <span className="font-mono text-[12.5px]">{shortcutCommand(s)}</span>
               <span>{t(`shortcuts.${s.key}.name`)}</span>
             </button>
           ))}

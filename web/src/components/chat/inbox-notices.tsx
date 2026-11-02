@@ -4,7 +4,9 @@ import { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Link } from '@/i18n/navigation';
-import { markChatNoticesRead, type ChatNotice } from '@/lib/actions/chat-notices';
+import { Send } from 'lucide-react';
+import { closeChatNotice, markChatNoticesRead, type ChatNotice } from '@/lib/actions/chat-notices';
+import { CMS_NAMES } from '@/lib/content/cms-names';
 import { cn } from '@/lib/utils';
 import { INBOX_ROW } from './inbox-suggestions';
 
@@ -13,7 +15,10 @@ import { INBOX_ROW } from './inbox-suggestions';
  * the workspace's own AI key fails, with Fix it; or its agents reached 80%
  * or all of their monthly limit on it (§4.2 item 4), with the way to the
  * limit. Admins get them; a row goes once the key works again, the month
- * renews or the limit is raised. Shown, they are marked read.
+ * renews or the limit is raised. An agent sent a page out on its own, with
+ * Open page and Open run; or an edit stopped it, with Open agent
+ * (AUTONOMOUS-GO-LIVE §6.4, §7.2, 00446): its owner and the people it
+ * notifies get them, and opening one closes it. Shown, they are marked read.
  */
 export function NoticeRows({ notices }: { notices: ChatNotice[] }) {
   const unread = notices
@@ -28,11 +33,16 @@ export function NoticeRows({ notices }: { notices: ChatNotice[] }) {
 }
 
 function NoticeRow({ notice }: { notice: ChatNotice }) {
-  return notice.kind === 'own_key_limit' ? (
-    <KeyLimitRow notice={notice} />
-  ) : (
-    <KeyFailedRow notice={notice} />
-  );
+  switch (notice.kind) {
+    case 'own_key_limit':
+      return <KeyLimitRow notice={notice} />;
+    case 'agent_went_live':
+      return <WentLiveRow notice={notice} />;
+    case 'agent_go_live_off':
+      return <GoLiveOffRow notice={notice} />;
+    default:
+      return <KeyFailedRow notice={notice} />;
+  }
 }
 
 /** Amber, as the Inbox's other needs-you rows that wait on an Admin. */
@@ -126,4 +136,120 @@ function KeyFailedRow({ notice }: { notice: Extract<ChatNotice, { kind: 'own_key
       </Link>
     </div>
   );
+}
+
+/** A row that tells, not asks: the Inbox's own card, not hovered as a link. */
+const INFO_ROW = cn(
+  INBOX_ROW,
+  'cursor-default hover:translate-y-0 hover:shadow-[0_1px_2px_rgba(10,10,10,.04)]',
+);
+
+/** Opening it closes it (00446): it leaves Needs you on the next read. */
+const closeOnOpen = (id: string) => () => void closeChatNotice(id);
+
+/**
+ * An agent sent a page out on its own (AUTONOMOUS-GO-LIVE §6.4): what, to
+ * which CMS, as a draft there; Open page, and Open run beside why it could.
+ */
+function WentLiveRow({ notice }: { notice: Extract<ChatNotice, { kind: 'agent_went_live' }> }) {
+  const t = useTranslations('chatShell.inbox.notice');
+  const cms = CMS_NAMES[notice.target];
+  // Published live (PR 9): on its site, Open page opens the live page.
+  const site = notice.url ? siteOf(notice.url) : null;
+  const words = site
+    ? t('published', { agent: notice.agent, title: notice.title, site })
+    : t('wentLive', { agent: notice.agent, title: notice.title, cms });
+  return (
+    <div
+      data-slot="inbox-notice"
+      data-kind={site ? 'agent_published' : notice.kind}
+      className={INFO_ROW}
+    >
+      <Send aria-hidden className="size-2.5 text-foreground/70" />
+      <span className="min-w-0 text-[13.5px]">
+        <span className={cn('block truncate', !notice.read && 'font-semibold')} title={words}>
+          {words}
+        </span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {/* The headline may be cut on a long title: the site it went live on stays readable. */}
+          {site ? t('publishedDetail', { site }) : t('wentLiveDetail')}
+          {notice.chatId && (
+            <>
+              {' · '}
+              <Link
+                href={`/dashboard/chat/${notice.chatId}`}
+                data-action="inbox.openGoLiveRun"
+                onClick={closeOnOpen(notice.id)}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                {t('openRun')}
+              </Link>
+            </>
+          )}
+        </span>
+      </span>
+      <span className="text-[11px] whitespace-nowrap text-muted-foreground">
+        {dayOf(notice.createdAt)}
+      </span>
+      {notice.url ? (
+        <a
+          href={notice.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          data-action="inbox.openGoLivePage"
+          onClick={closeOnOpen(notice.id)}
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-full')}
+        >
+          {t('openPage')}
+        </a>
+      ) : (
+        <Link
+          href={`/dashboard/content/editor/${notice.draftId}`}
+          data-action="inbox.openGoLivePage"
+          onClick={closeOnOpen(notice.id)}
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-full')}
+        >
+          {t('openPage')}
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/** An edit stopped an agent from going live on its own (§7.2): the Admin may turn it on again. */
+function GoLiveOffRow({ notice }: { notice: Extract<ChatNotice, { kind: 'agent_go_live_off' }> }) {
+  const t = useTranslations('chatShell.inbox.notice');
+  return (
+    <div data-slot="inbox-notice" data-kind={notice.kind} className={NOTICE_ROW}>
+      <span aria-hidden className="size-2 rounded-full bg-amber-600 dark:bg-amber-400" />
+      <span className="min-w-0 text-[13.5px]">
+        <span className={cn('block truncate', !notice.read && 'font-semibold')}>
+          {t('goLiveOff', { agent: notice.agent })}
+        </span>
+        <span className="block truncate text-xs text-amber-700 dark:text-amber-400">
+          {t('goLiveOffDetail')}
+        </span>
+      </span>
+      <span className="text-[11px] whitespace-nowrap text-muted-foreground">
+        {dayOf(notice.createdAt)}
+      </span>
+      <Link
+        href={`/dashboard/agents/${notice.agentId}`}
+        data-action="inbox.openGoLiveAgent"
+        onClick={closeOnOpen(notice.id)}
+        className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'w-full')}
+      >
+        {t('openAgent')}
+      </Link>
+    </div>
+  );
+}
+
+/** The site a live page is on, as its notice names it: its host, without www. */
+function siteOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
 }

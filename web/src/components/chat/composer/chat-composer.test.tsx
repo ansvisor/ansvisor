@@ -387,15 +387,25 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
       return copy.textContent;
     });
   const listbox = () => container.querySelector('[role="listbox"]');
+  // CHAT-08's shortcuts, as the / menu lists them (W2-09).
+  const ALL_SHORTCUTS = [
+    '/startGet started',
+    '/analyzeAnalyze',
+    '/new-reportReports',
+    '/createCreate content',
+    '/optimizeOptimize content',
+    '/opportunitiesFind opportunities',
+    '/auditImprove with audit',
+  ];
 
   it('lists the shortcuts on "/" first in an empty box, filters them, and fills the starter on Enter', async () => {
     await render();
     await type('/');
     expect(listbox()!.getAttribute('aria-label')).toBe('Skills and shortcuts');
-    expect(options()).toEqual(['/analyzeAnalyze', '/reportReports', '/createCreate content']);
+    expect(options()).toEqual(ALL_SHORTCUTS);
 
     await type('/re');
-    expect(options()).toEqual(['/reportReports']);
+    expect(options()).toEqual(['/new-reportReports']);
     await press('Enter');
     expect(box().value).toBe('Create a report on ');
     expect(listbox()).toBeNull();
@@ -406,11 +416,11 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     await render();
     await type('/');
     await press('ArrowDown');
-    expect(container.querySelector('[aria-selected="true"]')!.textContent).toBe('/reportReports');
+    expect(container.querySelector('[aria-selected="true"]')!.textContent).toBe('/analyzeAnalyze');
     await press('ArrowUp');
     await press('ArrowUp');
     expect(container.querySelector('[aria-selected="true"]')!.textContent).toBe(
-      '/createCreate content',
+      '/auditImprove with audit',
     );
     await press('Escape');
     expect(listbox()).toBeNull();
@@ -427,9 +437,63 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     await type('our pricing page');
     await act(async () => button('Skills and shortcuts')!.click());
     await act(async () =>
-      [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')][0].click(),
+      [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')][1].click(),
     );
     expect(box().value).toBe('Analyze our pricing page');
+  });
+
+  it('sends the picked shortcut with its message while the trigger words stay', async () => {
+    await render();
+    await type('/an');
+    await press('Enter');
+    await type('Analyze our citations on Perplexity');
+    await press('Enter');
+    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('Analyze our citations on Perplexity', {
+      context: [],
+      references: [],
+      attachments: [],
+      shortcutId: 'analyze',
+    });
+
+    // Picked from the / button, the text after the words: the shortcut's too.
+    handlers.onSend.mockReset();
+    await type('Q3 share of voice');
+    await act(async () => button('Skills and shortcuts')!.click());
+    await act(async () =>
+      [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')][2].click(),
+    );
+    expect(box().value).toBe('Create a report on Q3 share of voice');
+    await press('Enter');
+    expect(handlers.onSend.mock.calls[0][1]).toMatchObject({ shortcutId: 'new-report' });
+  });
+
+  it('drops the shortcut once its trigger words are rewritten, and keeps it on a refused send', async () => {
+    await render();
+    await type('/an');
+    await press('Enter');
+    await type('Why did our citations drop?');
+    await press('Enter');
+    expect(handlers.onSend.mock.calls[0][1]).not.toHaveProperty('shortcutId');
+
+    // Typed back, it doesn't come back: the person wrote it.
+    handlers.onSend.mockReset();
+    await type('Analyze our citations');
+    await press('Enter');
+    expect(handlers.onSend.mock.calls[0][1]).not.toHaveProperty('shortcutId');
+
+    // A refused send puts the text back with its shortcut.
+    handlers.onSend.mockReset();
+    handlers.onSend.mockResolvedValueOnce(false);
+    await type('/au');
+    await press('Enter');
+    await type('Run an audit on our pricing page');
+    await press('Enter');
+    expect(box().value).toBe('Run an audit on our pricing page');
+    await press('Enter');
+    expect(handlers.onSend.mock.calls.map((call) => call[1].shortcutId)).toEqual([
+      'audit',
+      'audit',
+    ]);
   });
 
   it('gives Analysts and Agency partners no shortcuts', async () => {
@@ -449,10 +513,9 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
   it("lists the skills under Skills after the shortcuts, filters both, and puts a skill's /command first", async () => {
     await render({ skills: SKILLS });
     await type('/');
-    // The /report skill takes the /report shortcut's place.
+    // Reports is /new-report: /report is the Weekly report skill's.
     expect(options()).toEqual([
-      '/analyzeAnalyze',
-      '/createCreate content',
+      ...ALL_SHORTCUTS,
       '/faqFAQ from fan-outs',
       '/reportWeekly report',
       '/compareComparison page',
@@ -465,6 +528,10 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     expect(box().value).toBe('/faq ');
     expect(listbox()).toBeNull();
     expect(handlers.onSend).not.toHaveBeenCalled();
+    // A skill's message carries no shortcut.
+    await type('/faq Our pricing page');
+    await press('Enter');
+    expect(handlers.onSend.mock.calls[0][1]).not.toHaveProperty('shortcutId');
   });
 
   it('reaches the skills with the arrows, keeps the text after one picked from the / button, and says when none match', async () => {
@@ -486,7 +553,7 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     await render();
     await type('/');
     expect(container.querySelector('[role="group"]')).toBeNull();
-    expect(options()).toHaveLength(3);
+    expect(options()).toHaveLength(ALL_SHORTCUTS.length);
   });
 
   it('references data on "@": the page’s own first, then the brand’s matches; the pick is a chip that goes with the message', async () => {

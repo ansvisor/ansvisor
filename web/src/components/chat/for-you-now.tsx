@@ -4,7 +4,14 @@ import { useId } from 'react';
 import { useTranslations } from 'next-intl';
 import { track } from '@/lib/analytics';
 import type { FocusArea } from '@/lib/chat/focus';
-import { FOCUS_SHORTCUTS, inTurn, SHORTCUT_SKILL, type FocusShortcut } from '@/lib/chat/focus-home';
+import {
+  FOCUS_SHORTCUTS,
+  inTurn,
+  SHORTCUT_PLAYBOOK,
+  SHORTCUT_SKILL,
+  type FocusShortcut,
+} from '@/lib/chat/focus-home';
+import type { ShortcutId } from '@/lib/chat/shortcuts';
 import { cn } from '@/lib/utils';
 
 /** Chips at most, Ask anything included; More ▾ after them (CHAT-08 v2: max 6 + More). */
@@ -24,8 +31,8 @@ export interface ForYouNowProps {
   canChange: boolean;
   /** A chat is starting: the chips wait. */
   starting: boolean;
-  /** Asks Chat in a new chat. */
-  onAsk: (message: string) => void;
+  /** Asks Chat in a new chat; a shortcut's chip sends its id too (W2-09). */
+  onAsk: (message: string, shortcutId?: ShortcutId) => void;
   /** The person's focus (CHAT-24 §4): its areas' shortcuts in turn, in place of the jobs. */
   focus?: readonly FocusArea[];
   /**
@@ -42,6 +49,8 @@ interface Job {
   label: string;
   count?: string;
   message: string;
+  /** The shortcut whose data plan it runs with (SHORTCUT_PLAYBOOK), when it has no skill. */
+  shortcutId?: ShortcutId;
   /** The focus area it came from. */
   area?: FocusArea;
 }
@@ -62,7 +71,9 @@ interface Job {
  * With a focus picked (CHAT-24 §4), the chips are its areas' shortcuts,
  * taken in turn so every area shows (CHAT-08 v2's six chips, Ask anything
  * included). The three jobs keep their counts and their rules; the other
- * shortcuts carry no count, as nothing counts them yet.
+ * shortcuts carry no count, as nothing counts them yet. A shortcut with a
+ * skill asks with its /name; one whose job is a / menu shortcut's (CHAT-08)
+ * sends that shortcut's id, so the run reads its data plan (W2-09).
  */
 export function ForYouNow({
   dueTasks,
@@ -120,6 +131,7 @@ export function ForYouNow({
                 skill: SHORTCUT_SKILL[shortcut] ?? shortcut,
                 label: tf(shortcut),
                 message: tf(`${shortcut}Message`),
+                shortcutId: SHORTCUT_PLAYBOOK[shortcut],
               };
     return job && { ...job, area };
   };
@@ -189,7 +201,7 @@ export function ForYouNow({
               if (job.area) {
                 track('chat_focus_shortcut_clicked', { area: job.area, skill: job.skill });
               }
-              onAsk(job.message);
+              onAsk(job.message, job.shortcutId);
             }}
           >
             {job.label}

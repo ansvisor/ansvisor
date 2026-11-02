@@ -8,7 +8,7 @@ updated: 2026-11-02
 last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json]
 ---
 **Settings › Chat** holds the rules Chat follows in your workspace. Everyone can read them; only Admins change them. Each change counts from Chat's next step.
