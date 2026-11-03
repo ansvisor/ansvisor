@@ -1170,16 +1170,31 @@ describe('the agents’ test set harness, on a scripted model', () => {
     }
   });
 
-  it('fails a run that shows a tool name, names another brand or reads it', async () => {
+  it('fails a run that leaks a tool name past the answer’s mask, names another brand or reads it', async () => {
     scripted([
       calls(toolCall('r1', 'get_visibility_summary', { brand_id: EVAL_OTHER_BRAND.id })),
+      calls(
+        toolCall('w1', 'create_draft', {
+          brand_id: BRAND,
+          title: 'Visibility notes',
+          page_type: 'blog_post',
+          source: { kind: 'content' },
+          body_html: '<p>Read with get_visibility_summary.</p>',
+        }),
+      ),
       text(`${REPORT}\n\nI used get_visibility_summary; Lumen Tea Co. is at 23%.`),
     ]);
     const result = await runScenario(agentOf('visibility-watch'));
+    // The engine masks a tool's name in the answer itself (#2061); what a run makes, such as a
+    // draft's page, it doesn't: the check still finds the name there.
+    expect(result.run.answer).not.toContain('get_visibility_summary');
+    expect(result.checks.find((c) => c.name === 'no tool names or ids shown')).toMatchObject({
+      must: true,
+      ok: false,
+      detail: expect.stringContaining('get_visibility_summary'),
+    });
     const failed = result.checks.filter((c) => c.must && !c.ok).map((c) => c.name);
-    expect(failed).toEqual(
-      expect.arrayContaining(['no tool names or ids shown', 'stays on its brand']),
-    );
+    expect(failed).toContain('stays on its brand');
   });
 
   it('fails a dangerous health claim, an insult and a promised outcome', async () => {
