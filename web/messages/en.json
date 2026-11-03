@@ -8354,8 +8354,6 @@
       },
       "header": {
         "rename": "{title} · click to rename it in the page",
-        "running": "{count, plural, one {# running} other {# running}}",
-        "runningHint": "The Content Agent is working on this page. Click to follow its steps or stop it.",
         "readyLabel": "Ready: click to move it back to review",
         "readyHint": "Marked ready. Click to move it back to review.",
         "publishedHint": "Published. Click to give the address it's live at.",
@@ -8443,10 +8441,7 @@
           "ai_budget": "This month's AI usage is spent, so the AI checks didn't run.",
           "no_subscription": "The AI checks run with an active plan.",
           "failed": "The AI checks couldn't run. Try again."
-        },
-        "chip": "Audit ≈{score}",
-        "chipReading": "Audit ≈…",
-        "chipHint": "Site Audit estimate: about where this page would score, free"
+        }
       },
       "agentWriting": {
         "title": "Content Agent is working on this page",
@@ -8509,7 +8504,7 @@
         }
       },
       "run": {
-        "about": "What Run Agent does"
+        "about": "What it does"
       },
       "data": {
         "uses": "Uses your data: {parts} · <edit>Edit sources</edit>",
@@ -8528,12 +8523,12 @@
         "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
         "placeholders": "{count, plural, one {# fact needs your input} other {# facts need your input}}",
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
-        "gain": "Rules {met, number} → {after, number} of {total, number}",
+        "gain": "{met, number} → {after, number}/{total, number} rules",
         "review": "Review",
         "reviewed": "All suggestions reviewed",
-        "reviewedLine": "{accepted, number} accepted · Rules {met, number} of {total, number}{open, plural, =0 {} other { · # still open}}",
+        "reviewedLine": "{accepted, number} accepted · {met, number}/{total, number} rules{open, plural, =0 {} other { · # still open}}",
         "more": "+{count, number} more",
-        "run": "Run Agent",
+        "run": "Fix open rules",
         "next": "Next: {action}",
         "nextTitle": "Next · {step}",
         "lastRun": "Last run: <run></run>",
@@ -8547,11 +8542,6 @@
         "stop": "Stop",
         "stopped": "Stopped · nothing was changed",
         "stopFailed": "Couldn't stop the agent. It may still finish.",
-        "drafting": "Content Agent is drafting a change here…",
-        "draftingFrom": "Drafting from {pages, plural, one {# cited page} other {# cited pages}} and {fanouts, plural, one {# fan-out} other {# fan-outs}}…",
-        "draftingFromPages": "Drafting from {pages, plural, one {# cited page} other {# cited pages}}…",
-        "draftingFromFanouts": "Drafting from {fanouts, plural, one {# fan-out} other {# fan-outs}}…",
-        "draftingRules": "Drafting from your rules…",
         "steps": {
           "readRules": "Reading {count, plural, one {# rule} other {# rules}}",
           "readRulesAny": "Reading rules",
@@ -9115,14 +9105,14 @@
         "outline": "Outline",
         "answers": "Answers “{fanout}”",
         "keywords": "Keywords",
-        "empty": "Empty. Run Agent to draft one, or add H2s yourself.",
+        "empty": "Empty. Build brief to draft one, or add H2s yourself.",
         "emptyOutline": "No H2s yet. Rebuild brief to draft them, or add H2s yourself.",
         "fromOpportunity": "From the opportunity's brief. Rebuild brief maps each H2 to a fan-out.",
         "edited": "Edited by you.",
         "builtFrom": "{count, plural, one {Built from # source} other {Built from # sources}} · {date}",
         "rebuild": "Rebuild brief",
-        "run": "Run Agent",
-        "info": "Run Agent writes the goal, audience and outline from your sources.",
+        "run": "Build brief",
+        "info": "Build brief writes the goal, audience and outline from your sources.",
         "status": {
           "empty": "No brief yet",
           "emptyDetail": "Goal, audience and outline are empty.",
@@ -9411,7 +9401,8 @@
         "sentWixUpdated": "Draft post updated in Wix",
         "wixImages": "{images, plural, one {# image wasn't sent: add it in Wix.} other {# images weren't sent: add them in Wix.}}"
       },
-      "rulesChip": "Rules {met}/{total}",
+      "rulesChip": "{met}/{total} rules",
+      "rulesChipLabel": "Rules {met}/{total} met",
       "rulesChipReading": "Rules · reading",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
       "reviewer": {
@@ -9444,7 +9435,7 @@
         "updated": "Updated {date}"
       },
       "qualityChip": "Quality {score}",
-      "qualityChipHint": "An Ansvisor estimate of this page's quality. Open Quality.",
+      "qualityChipHint": "The average of E-E-A-T, Trust and Readability: an Ansvisor estimate, not a Google score. Open Quality.",
       "qualityChipReading": "Quality · reading…",
       "qualityChipUpdating": "updating as the page is read",
       "nextStep": {
@@ -9454,15 +9445,21 @@
         "buttonStep": "· {step}",
         "stepOf": "Step {n} of {total}",
         "allDone": "Every step is done",
+        "stepsLeft": "{count, plural, one {# step} other {# steps}} still open",
         "path": "All steps",
         "skip": "Skip this step",
         "skipped": "· skipped",
-        "passed": "· yours in the Rules tab",
+        "passed": "· done by Content Agent, the rest is in Rules",
         "working": "Content Agent is working",
         "stop": "Stop",
         "marking": "Marking it ready…",
         "saving": "Saving the page first…",
         "tipsTitle": "If you see…",
+        "byAgent": "Content Agent takes this step",
+        "byYou": "Only you can take this step",
+        "raisesTitle": "What raises it",
+        "cost": "About {minutes, plural, one {# minute} other {# minutes}} · {percent} of this month's AI usage",
+        "costTime": "About {minutes, plural, one {# minute} other {# minutes}}",
         "tipLine": "{state} →",
         "states": {
           "done": "done",
@@ -9480,15 +9477,19 @@
           "fixRules": "Fix open rules",
           "proof": "Add proof and author",
           "check": "Check and mark ready",
-          "ready": "Ready to publish"
+          "ready": "Ready to publish",
+          "review": "Review {count, plural, one {# suggestion} other {# suggestions}}"
         },
         "reasons": {
           "plan": "No brief yet. I build one from your prompts, fan-outs and cited pages.",
+          "planNoSources": "No brief yet, and no prompt, fan-out or Search Console query is kept to build one from. Add one in Sources first.",
+          "review": "Content Agent left {count, plural, one {# suggestion} other {# suggestions}} on the page. Accept or reject {count, plural, one {it} other {each, or all at once}}: the next step follows from what you keep.",
           "write": "The page is empty. I write a first draft from your brief and sources; you review it before you mark it ready.",
           "writeMine": "The page is empty: write it, and the next step follows from what you write.",
           "import": "The live page didn't come in. I write a first draft from your sources, or you write it yourself.",
           "length": "{count, number} characters against a Length of {target, number}. Small fixes won't get there, so rewrite it in one go.",
-          "fixRules": "{count, plural, one {# rule is} other {# rules are}} still open for the agent. Small, reviewable changes for them.",
+          "fixRules": "{count, plural, one {# rule is} other {# rules are}} open, all for the agent. Small, reviewable changes for them.",
+          "fixRulesSplit": "{total, plural, one {# rule is} other {# rules are}} open: Content Agent can fix {count, number} in small, reviewable changes, and {others, plural, one {# is} other {# are}} yours to decide in the Rules tab.",
           "fixRulesOthers": "{count, plural, one {# more is} other {# more are}} yours to decide in the Rules tab.",
           "proofTrust": "Trust is {trust}, under {gate}. The Quality tab names what raises it.",
           "proofTrustTodo": "Trust is {trust}, under {gate}. Only you can do this first: {todo}.",
@@ -9496,10 +9497,14 @@
           "check": "Links, schema, placeholders and Trust {gate}+, before you mark it ready.",
           "checkRules": "The rules are met. Mark it ready when you are.",
           "ready": "Every step is done. Export it for your CMS, and mark it published once it's live.",
-          "published": "It's published. Export it again when the page changes."
+          "published": "It's published. Export it again when the page changes.",
+          "readyLeft": "Marked ready with {count, plural, one {# step} other {# steps}} still open: see All steps. Export it for your CMS, and mark it published once it's live.",
+          "publishedLeft": "It's published, with {count, plural, one {# step} other {# steps}} still open: see All steps. Export it again when the page changes."
         },
         "actions": {
           "buildBrief": "Build brief",
+          "addSources": "Add sources",
+          "review": "Review",
           "writeWithAgent": "Write with Agent",
           "writeMyself": "I'll write it",
           "rewritePage": "Rewrite page",
@@ -9507,6 +9512,7 @@
           "pickAuthor": "Pick author",
           "addAuthor": "Add author",
           "showTodos": "Show to-dos",
+          "showTrust": "Show what raises Trust",
           "beforePublish": "Before you publish",
           "markReady": "Mark ready",
           "export": "Export",
@@ -9654,17 +9660,23 @@
       },
       "beforePublish": {
         "title": "Before you publish",
-        "warning": "Trust {trust}, below 60. {reason}. You can mark it ready, but {count, plural, one {fixing it} other {fixing them}} first raises Trust to about {raised}.",
-        "warningNoReason": "Trust {trust}, below 60. You can mark it ready, but Quality shows what would raise it.",
-        "warningExport": "Trust {trust}, below 60. {reason}. You can export it, but {count, plural, one {fixing it} other {fixing them}} first raises Trust to about {raised}.",
-        "warningNoReasonExport": "Trust {trust}, below 60. You can export it, but Quality shows what would raise it.",
-        "warningSend": "Trust {trust}, below 60. {reason}. You can send it to your CMS, but {count, plural, one {fixing it} other {fixing them}} first raises Trust to about {raised}.",
-        "warningNoReasonSend": "Trust {trust}, below 60. You can send it to your CMS, but Quality shows what would raise it.",
+        "groups": {
+          "missing": "Fix before you publish",
+          "check": "Check yourself",
+          "ok": "In place"
+        },
+        "summary": "{fix, plural, =0 {Nothing to fix} one {# thing to fix} other {# things to fix}} and {check, plural, =0 {nothing to check} one {# to check yourself} other {# to check yourself}} before you publish.",
+        "warning": "Trust is {trust}, under 60: AI answers may lean on this page less. {reason}. Fixing {count, plural, one {it} other {them}} first could raise Trust to about {raised} (an estimate). You can still mark it ready.",
+        "warningNoReason": "Trust is {trust}, under 60: AI answers may lean on this page less. Quality shows what could raise it. You can still mark it ready.",
+        "warningExport": "Trust is {trust}, under 60: AI answers may lean on this page less. {reason}. Fixing {count, plural, one {it} other {them}} first could raise Trust to about {raised} (an estimate). You can still export it.",
+        "warningNoReasonExport": "Trust is {trust}, under 60: AI answers may lean on this page less. Quality shows what could raise it. You can still export it.",
+        "warningSend": "Trust is {trust}, under 60: AI answers may lean on this page less. {reason}. Fixing {count, plural, one {it} other {them}} first could raise Trust to about {raised} (an estimate). You can still send it to your CMS.",
+        "warningNoReasonSend": "Trust is {trust}, under 60: AI answers may lean on this page less. Quality shows what could raise it. You can still send it to your CMS.",
         "continueExport": "Continue to export",
         "continueSend": "Continue to send",
         "paste": {
-          "title": "Ready to paste",
-          "notYet": "Not ready to paste yet",
+          "title": "Ready for your CMS",
+          "notYet": "Fix before you paste",
           "ok": "No placeholders, all images have alt text, all links work.",
           "placeholders": "{count, plural, one {# placeholder} other {# placeholders}} still open",
           "alt": "{count, plural, one {# image has} other {# images have}} no alt text",
@@ -9675,7 +9687,8 @@
           "readingAndUnread": "{reading, plural, one {# link is} other {# links are}} still being read, {unread, plural, one {# wasn't} other {# weren't}} read: check {unread, plural, one {it} other {them}}",
           "fill": "Fill now"
         },
-        "logged": "Mark ready anyway is logged, with this Trust.",
+        "logged": "If you mark it ready anyway, we note it with this Trust.",
+        "openWork": "Still open: {rules, plural, =0 {} one {# rule} other {# rules}}{rules, plural, =0 {} other {{todos, plural, =0 {} other { and }}}}{todos, plural, =0 {} one {# to-do} other {# to-dos}}. You can mark it ready: they stay in Rules and Quality.",
         "author": {
           "ok": "Author for your CMS",
           "okDetail": "Set {name} as the page's author in your CMS. Its template shows the byline; nothing is added to the content.",
@@ -9683,8 +9696,8 @@
           "inContent": "Exports put \"{line}\" under the H1: this brand adds the byline to content, for a CMS with no author field.",
           "unknown": "The authors couldn't be read here, so the code below leaves the author out. Set the page's author in your CMS.",
           "none": "No author yet",
-          "noneDetail": "The page goes out as {byline}, with the brand's Organization schema. A real author raises E-E-A-T.",
-          "noneSchemaDetail": "The page goes out as {byline}: its Article schema names {brand} as the author. A real author raises E-E-A-T.",
+          "noneDetail": "The page goes out as {byline}, with your brand's search engine details. A real author raises E-E-A-T.",
+          "noneSchemaDetail": "The page goes out as {byline}: its search engine details name {brand} as the author. A real author raises E-E-A-T.",
           "inSchema": "Author: {name}",
           "inSchemaDetail": "{name} is named in the page's Article schema. Set them as the author in your CMS too, so its template shows the byline.",
           "confirmed": "Author named on your site",
@@ -9708,18 +9721,18 @@
           "detail": "Most CMSs (WordPress, Webflow, Shopify) add these for you. Check your page."
         },
         "schema": {
-          "added": "Article schema with the author",
-          "addedNoAuthor": "Article schema",
+          "added": "Search engine details (Article schema), with the author",
+          "addedNoAuthor": "Search engine details (Article schema)",
           "addedPill": "Added",
           "addedDetail": "Ansvisor adds it to the page it sends to your CMS and to exports, with {author} as the author. The page's text doesn't change. WordPress leaves it out: add it with your SEO plugin.",
           "addedDetailNoAuthor": "Ansvisor adds it to the page it sends to your CMS and to exports, without an author: your CMS names the one your site shows. The page's text doesn't change. WordPress leaves it out: add it with your SEO plugin.",
           "leaveOut": "Leave it out",
           "leaveOutFailed": "Couldn't save that. Try again.",
-          "leftOut": "Article schema left out",
-          "leftOutDetail": "You left Ansvisor's Article schema out of this page, for a CMS that adds its own. If yours doesn't, paste the code below into the page.",
+          "leftOut": "Search engine details left out",
+          "leftOutDetail": "You left Ansvisor's search engine details (Article schema) out of this page, for a CMS that adds its own. If yours doesn't, paste the code below into the page.",
           "addBack": "Add it back",
-          "own": "Article schema on the page",
-          "ownDetail": "Your page already has an Article schema, so Ansvisor leaves its own out.",
+          "own": "Search engine details on the page",
+          "ownDetail": "Your page already has its search engine details (Article schema), so Ansvisor leaves its own out.",
           "codeAdded": "The code Ansvisor adds to the page",
           "showAdded": "Show the code Ansvisor adds",
           "product": "Product schema with its price",
@@ -9782,9 +9795,9 @@
           "check": "check it",
           "missing": "missing"
         },
-        "jsonLd": "JSON-LD for this page",
+        "jsonLd": "Code for search engines (JSON-LD) for this page",
         "copy": "Copy JSON-LD",
-        "showCode": "Show the JSON-LD, for a CMS that doesn't add it",
+        "showCode": "Show the code for search engines (JSON-LD), for a CMS that doesn't add it",
         "copied": "JSON-LD copied",
         "copyFailed": "Couldn't copy the JSON-LD. Select it and copy it yourself.",
         "fixFirst": "Fix first",
@@ -9847,6 +9860,13 @@
           "needsWork": "Needs work"
         },
         "estimate": "Ansvisor estimates based on Google's published quality signals. Not a Google score.",
+        "about": {
+          "eeat": "Who stands behind the page",
+          "trust": "Sources, links and dated facts",
+          "readability": "How easily it reads"
+        },
+        "bandsLegend": "80 and up: Strong · 60 to 79: Can improve · under 60: Needs work",
+        "gainLong": "Could raise {score} by about {gain, number} (an estimate)",
         "addLine": "Add line",
         "confirmCase": "Confirm",
         "confirmCaseFailed": "Couldn't save that confirmation. Try again.",
@@ -10181,7 +10201,7 @@
           },
           "typeRules": {
             "line": "{count, plural, one {# page type rule not met} other {# page type rules not met}}: {names}",
-            "detail": "{rules}. This page type's own rules, as the Rules tab reads them: meet them there, or Run Agent in Rules."
+            "detail": "{rules}. This page type's own rules, as the Rules tab reads them: meet them there, or Fix open rules in Rules."
           }
         }
       },
@@ -10195,7 +10215,7 @@
         },
         "setName": "{type} · Ansvisor default",
         "pickSet": "Pick a page type",
-        "met": "{met} of {total} rules met",
+        "met": "{met}/{total} rules met",
         "metReading": "Reading the rules…",
         "typeGroup": "{type} rules",
         "groups": {
@@ -10319,12 +10339,11 @@
         "run": {
           "notMet": "{count, plural, one {# rule is not met} other {# rules are not met}}",
           "allMet": "All rules are met",
-          "info": "<b>Run Agent</b> fixes the open rules. You review each change. <b>▾ Rewrite page</b> rewrites the whole page. Uses more AI.",
-          "infoFix": "<b>Run Agent</b> fixes the open rules. You review each change.",
+          "info": "<b>Fix open rules</b> suggests changes for the open rules. You review each one. <b>▾ Rewrite page</b> rewrites the whole page. Uses more AI.",
+          "infoFix": "<b>Fix open rules</b> suggests changes for the open rules. You review each one.",
           "names": "{names}{more, select, yes {…} other {}}",
-          "label": "Run Agent",
+          "label": "Fix open rules",
           "rewriteLabel": "Rewrite page",
-          "working": "Working…",
           "more": "More ways to run the agent",
           "recommendedDetail": "Recommended · {detail}",
           "fix": {
@@ -10340,7 +10359,7 @@
         },
         "rewriteAdvice": {
           "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent, number}% off). A rewrite gets there in one go.",
-          "open": "Recommended: {count, number} rules are open. A rewrite meets them together."
+          "open": "Recommended: Content Agent can fix {count, number} of them, and a rewrite meets them together."
         },
         "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but a rewrite can't go much under {least, number}: {kept, number} are passages AI answers quote, tables and other blocks it keeps as they are, and each heading needs its answer. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
         "lengthOutOfReachRun": "The page is {count, number} characters for a Length of {target, number}. The last rewrite came to {least, number}, so another won't get there. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
@@ -10351,6 +10370,7 @@
         "lengthConflict": "The fan-out H2s, FAQ questions and summary these rules still ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise Length, or ask for fewer.",
         "heldAll": "What's left open is kept by AI citations, and yours to decide: the agent leaves passages AI answers quote as they are.",
         "heldLength": "Only the Length is left open, and a rewrite can't reach it. Raise the Length, or leave it.",
+        "triedNote": "Content Agent tried this and couldn't fix it. It's yours to decide: change the page yourself, or the rule.",
         "heldSentence": "Kept by AI citations · yours to decide: the long sentences are in passages AI answers quote, which the agent keeps. Shorten them yourself (Edit anyway), or leave them quoted.",
         "shopLinksLiveNote": "{list}{more, plural, =0 {} other { +# more}}: remove or replace these links on the page.",
         "shopItem": "{title} ({state, select, sold_out {not in stock} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
@@ -10630,7 +10650,7 @@
     },
     "newDialog": {
       "title": "New content opportunities",
-      "description": "Generate fresh suggestions now instead of waiting for the next scheduled run.",
+      "description": "Get suggestions now. Ansvisor also writes up to 3 a night by itself, one per topic, for needs that have no opportunity yet.",
       "focus": "Focus (optional)",
       "focusOptions": {
         "auto": "Let Ansvisor choose",
@@ -10639,6 +10659,13 @@
       },
       "pickTopic": "Choose a topic",
       "pickPrompt": "Choose a prompt",
+      "topicOpen": "{count} new",
+      "topicCovered": "All covered",
+      "promptHasOne": "Has one",
+      "needsOpen": "{open} of {needs} {needs, plural, one {need} other {needs}}{focus, select, topic { in this topic} other {}} {open, plural, one {has} other {have}} no opportunity yet.",
+      "needsNone": "Every need{focus, select, topic { in this topic} other {}} already has an opportunity{noAnswers, plural, =0 {} other {, or has no tracked answers from the last 30 days yet}}. Add prompts for new needs, or use Another angle on an opportunity.",
+      "promptExisting": "This prompt's need already has an opportunity.",
+      "openExisting": "Open existing",
       "idea": "Or describe an idea (optional)",
       "ideaPlaceholder": "e.g. a comparison page against Profound for agencies",
       "count": "How many",
