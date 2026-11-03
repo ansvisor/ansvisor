@@ -19,6 +19,7 @@ import {
   readPage,
   ruleLength,
   ruleLengthBand,
+  lengthCapFor,
   lengthSpan,
   lengthRangeValue,
   wordsForLength,
@@ -234,6 +235,18 @@ describe('length and structure', () => {
     // One number: the agent aims at it, as before.
     expect(ruleLengthBand([rule('length', 'feature_page', '3000')])).toBeUndefined();
     expect(ruleLengthBand([{ ...range, on: false }])).toBeUndefined();
+  });
+
+  it('gives a Fix the page’s characters and the most its Length allows (editor UX review 2026-11-03)', () => {
+    const at = (value: string, on = true) => [
+      { rule: { ...rule('length', 'feature_page', value), on } },
+    ];
+    expect(lengthCapFor(at('800'), 2706.4)).toEqual({ count: 2706, max: 960 });
+    expect(lengthCapFor(at('4500-5500'), 4000)).toEqual({ count: 4000, max: 5500 });
+    // Off, or no Length to read: none.
+    expect(lengthCapFor(at('800', false), 2706)).toBeUndefined();
+    expect(lengthCapFor(at('0'), 2706)).toBeUndefined();
+    expect(lengthCapFor([], 2706)).toBeUndefined();
   });
 
   it('parses a Length as one number or a range, as typed', () => {

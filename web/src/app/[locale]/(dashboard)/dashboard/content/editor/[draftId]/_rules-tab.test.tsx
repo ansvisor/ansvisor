@@ -216,7 +216,7 @@ describe('the Rules tab', () => {
       expect(notes().some((n) => n.startsWith('Recommended: the page is'))).toBe(false);
       expect(notes()).toContainEqual(
         expect.stringContaining(
-          "The page is 15,921 characters for a Length of 3,000, but a rewrite can't go much under 3,900: 2,900 are passages AI answers quote, tables and other blocks it keeps as they are, and each heading needs its answer. Raise the Length to about 4,000, or unlock passages you're fine to have reworded.",
+          "The page is 15,921 characters for a Length of 3,000, but a rewrite can't go much under 3,900: 2,900 are passages AI answers quote, tables and other blocks it keeps as they are. Unlock passages you're fine to have reworded, or raise the Length to about 4,000.",
         ),
       );
       change.mockClear();
@@ -245,6 +245,17 @@ describe('the Rules tab', () => {
       expect(container.textContent).toContain(
         'That rewrites the passages AI answers quote as well, so they may stop being quoted.',
       );
+      // The Length is the person's: the rewrite first, raising it second and quieter
+      // (editor UX review 2026-11-03, decision b).
+      const names = buttons().map((b) => b.textContent);
+      expect(names.indexOf('Rewrite, cited passages too')).toBeLessThan(
+        names.indexOf('Raise Length to 4,000'),
+      );
+      // Ghost, not outlined as the rewrite is.
+      const raise = buttons().find((b) => b.textContent === 'Raise Length to 4,000')!;
+      const rewrite = buttons().find((b) => b.textContent === 'Rewrite, cited passages too')!;
+      expect(raise.className).not.toBe(rewrite.className);
+      expect(raise.className).toContain('border-transparent');
       await act(async () =>
         buttons()
           .find((b) => b.textContent === 'Rewrite, cited passages too')!
@@ -277,7 +288,7 @@ describe('the Rules tab', () => {
       expect(notes.some((n) => n?.startsWith('Recommended: the page is'))).toBe(false);
       expect(notes).toContainEqual(
         expect.stringContaining(
-          "The page is 15,921 characters for a Length of 3,000. The last rewrite came to 9,800, so another won't get there. Raise the Length to about 10,000",
+          "The page is 15,921 characters for a Length of 3,000. The last rewrite came to 9,800, so another won't get there. Unlock passages you're fine to have reworded, or raise the Length to about 10,000",
         ),
       );
     });

@@ -1054,6 +1054,20 @@ export function overLengthFor<T extends { rule: ActiveRule; status: RuleStatus }
 }
 
 /**
+ * The page's characters now and the most its Length allows, while the
+ * Length rule is on and set (editor UX review 2026-11-03, decision b): a
+ * Fix or a hand-off never adds past it (content-agent.js capToLength).
+ */
+export function lengthCapFor<T extends { rule: ActiveRule }>(
+  rules: T[],
+  characters: number,
+): { count: number; max: number } | undefined {
+  const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
+  const span = length ? lengthSpan(length.rule.current) : null;
+  return span ? { count: Math.max(0, Math.round(characters)), max: span.max } : undefined;
+}
+
+/**
  * What to say when only held rules are left for the agent: the quoted
  * passages' (a sentence in one), else the Length's, out of a rewrite's reach.
  */

@@ -165,6 +165,28 @@ export const briefRules = z
  * draftBriefSchema): the model's output is cut to them, so a brief saved and
  * charged for is one the editor can show.
  */
+/**
+ * About how many characters an H2 section takes at its plainest: a short
+ * heading, an answer of two or three sentences and a few points.
+ */
+const SECTION_CHARS = 450;
+
+/**
+ * How many H2 sections, and key points in each, a page of this Length holds
+ * (editor UX review 2026-11-03, decision b: the Length is the person's last
+ * word, and the brief fits it): an 800-character page got an outline for
+ * twice that, and its first draft came to 1,573. At most the Length's top
+ * (a range's, or 20% over one number) over SECTION_CHARS, from 1 up to the
+ * limits the editor reads a brief with.
+ */
+export function briefFit(length, band = null) {
+  const most = band?.max ?? Math.round(length * 1.2);
+  return {
+    sections: Math.max(1, Math.min(BRIEF_LIMITS.sections, Math.floor(most / SECTION_CHARS))),
+    keyPoints: most < 1_500 ? 2 : most < 4_000 ? 3 : BRIEF_LIMITS.keyPoints,
+  };
+}
+
 export const BRIEF_LIMITS = {
   goal: 500,
   audience: 500,
@@ -760,6 +782,8 @@ function shapeWhole(
   const byId = v2 ? new Map(briefNumbered(sources, inputs).map((n) => [n.id, n])) : null;
   // Version 2's numbers (S1…) belong in a fact's source only: taken out of the words.
   const words = v2 ? (text) => stripSourceIds(text, byId.size) : (text) => text;
+  // No more than the Length holds (briefFit), the first sections first.
+  const fit = briefFit(sources.length, sources.lengthBand);
   const outline = mapOutline(
     object.outline.map((section) => ({
       ...section,
@@ -768,7 +792,9 @@ function shapeWhole(
       ...(v2 ? sectionPlan(section, guard, byId, words) : {}),
     })),
     sources.fanouts,
-  );
+  )
+    .slice(0, fit.sections)
+    .map((section) => ({ ...section, keyPoints: section.keyPoints.slice(0, fit.keyPoints) }));
   return {
     goal: clip(guard.text(words(object.goal)), BRIEF_LIMITS.goal),
     audience: clip(guard.text(words(object.audience)), BRIEF_LIMITS.audience),
@@ -1177,6 +1203,10 @@ export function buildBriefPrompt({
       ? PAGE_TYPE_SECTION_FORMATS[draft.page_type]
       : null;
   const listed = v2 ? rules.filter((r) => r.name) : [];
+  const fit = briefFit(sources.length, sources.lengthBand);
+  const length = sources.lengthBand
+    ? `between ${sources.lengthBand.min} and ${sources.lengthBand.max} characters, about ${sources.length}`
+    : `about ${sources.length} characters`;
   return `Brand: ${brand?.name || 'Unknown'}
 Industry: ${brand?.industry || 'Not specified'}
 ${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}
@@ -1184,7 +1214,7 @@ ${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}
 Page: ${draft.title || 'Untitled'}
 Page type: ${pageTypeFormat(draft.page_type)}
 ${leans ? `Its sections lean to: ${leans}.\n` : ''}${draft.method === 'optimize' && draft.source_url ? `Existing page to improve: ${draft.source_url}` : 'A new page.'}
-Length: about ${sources.length} characters.
+Length: ${length}. Fit the page to it: at most ${fit.sections} H2 ${fit.sections === 1 ? 'section' : 'sections'}, each with up to ${fit.keyPoints} key points. Leave out what doesn't fit rather than go past it.
 ${listed.length ? `\nRules the page is written to:\n${list(listed.map((r) => (r.detail ? `${r.name}: ${r.detail}` : r.name)))}\n` : ''}
 Prompts the page must answer:
 ${list(prompts)}

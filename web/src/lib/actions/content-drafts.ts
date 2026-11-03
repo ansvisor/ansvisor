@@ -2170,6 +2170,8 @@ export interface AgentFixRequest {
   sources?: RebuildSources;
   /** The page over a Length it isn't sent (rules.ts overLengthFor). */
   overLength?: { count: number; max: number };
+  /** The page's characters and the most its Length allows (rules.ts lengthCapFor). */
+  lengthCap?: { count: number; max: number };
 }
 
 /** Why a run left nothing to review (content-agent.js emptyWhy). */

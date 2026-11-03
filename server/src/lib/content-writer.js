@@ -993,7 +993,7 @@ async function cutToLength({ answer, page, length, band, brand, draft, model, mo
 function cutPrompt({ html, page, total, length, max }) {
   return `Your rewrite below is about ${total} characters of text, ${page.keptChars} of them in kept blocks, which count toward Length. Its Length is ${length} characters, up to ${max}. Cut it to about ${length}.
 
-Cut repetition, filler, long examples and the least useful detail first. Keep the H1 and every heading, a short answer under each heading, every [[${page.word} n]] line exactly as it is and on its own, the links on their words, the facts, each {{find: …}} and {{ask: …}} exactly as it is, and any placeholders in square brackets. Add nothing new. Return the whole page.
+Cut repetition, filler, long examples and the least useful detail first. Keep the H1, a short answer under each heading you keep (merge or drop the least useful sections when the Length can't hold them all), every [[${page.word} n]] line exactly as it is and on its own, the links on their words, the facts, each {{find: …}} and {{ask: …}} exactly as it is, and any placeholders in square brackets. Add nothing new. Return the whole page.
 
 ${html}
 

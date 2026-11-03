@@ -390,14 +390,6 @@ export function RulesTab({
                   )}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs"
-                    onClick={() => state.change('length', { value: String(outOfReach.suggested) })}
-                  >
-                    {t('raiseLength', { suggested: outOfReach.suggested })}
-                  </Button>
                   {/* The quoted passages kept are what holds it: rewritten too, compared first. */}
                   {citedHold && (
                     <Button
@@ -410,6 +402,16 @@ export function RulesTab({
                       {t('rewriteCitedToo')}
                     </Button>
                   )}
+                  {/* The Length is the person's: raising it is the other way, second
+                      (editor UX review 2026-11-03, decision b). */}
+                  <Button
+                    size="sm"
+                    variant={citedHold ? 'ghost' : 'outline'}
+                    className="h-7 text-xs"
+                    onClick={() => state.change('length', { value: String(outOfReach.suggested) })}
+                  >
+                    {t('raiseLength', { suggested: outOfReach.suggested })}
+                  </Button>
                 </div>
                 {citedHold && <p className="text-muted-foreground">{t('rewriteCitedTooHint')}</p>}
               </div>
