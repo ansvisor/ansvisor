@@ -117,6 +117,22 @@ describe('the Site Audit estimate', () => {
       'E-E-A-T48/100',
       'Trust72/100',
     ]);
+    // Red only for what blocks (editor UX review 2026-11-03): under 60 amber,
+    // 60 to 79 neutral, as Quality's scores; nothing here is red.
+    const bars = [...card().querySelectorAll('li span > span')].map((bar) => bar.className);
+    expect(
+      bars.map((bar) => bar.match(/bg-(amber-500|muted-foreground\/50|emerald-600)/)?.[1]),
+    ).toEqual([
+      'muted-foreground/50',
+      'amber-500',
+      'amber-500',
+      'amber-500',
+      'muted-foreground/50',
+    ]);
+    expect(bars.join(' ')).not.toMatch(/destructive|red/);
+    // The estimate itself, 62, is neutral too.
+    const score = [...card().querySelectorAll('span')].find((span) => span.textContent === '≈62')!;
+    expect(score.className).toContain('text-foreground');
     expect(text).toContain('Uses under 1% of your monthly AI usage');
   });
 

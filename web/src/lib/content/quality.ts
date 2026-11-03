@@ -28,6 +28,20 @@ export const BAND_CLASSES: Record<QualityBand, string> = {
     'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
 };
 
+/** A band's bar fill, as BAND_CLASSES: green, neutral, amber, never red. */
+export const BAND_BAR_CLASSES: Record<QualityBand, string> = {
+  strong: 'bg-emerald-600 dark:bg-emerald-500',
+  improve: 'bg-muted-foreground/50',
+  needsWork: 'bg-amber-500 dark:bg-amber-400',
+};
+
+/** A band's figure colour, as BAND_CLASSES. */
+export const BAND_TEXT_CLASSES: Record<QualityBand, string> = {
+  strong: 'text-emerald-700 dark:text-emerald-300',
+  improve: 'text-foreground',
+  needsWork: 'text-amber-700 dark:text-amber-300',
+};
+
 /** The header chip's figure: the scores that could be read, averaged; null with none. */
 export function qualityAverage(scores: (number | null)[]): number | null {
   const read = scores.filter((s): s is number => s !== null);

@@ -6,13 +6,14 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
-import { CATEGORY_META, barColor, scoreColor } from '@/components/audit/audit-report';
+import { CATEGORY_META } from '@/components/audit/audit-report';
 import {
   AI_CHECKS,
   readAuditEstimate,
   type AiVerdict,
   type AuditEstimate,
 } from '@/lib/content/audit-estimate';
+import { BAND_BAR_CLASSES, BAND_TEXT_CLASSES, qualityBand } from '@/lib/content/quality';
 import { cn } from '@/lib/utils';
 
 /** How long after the page settles the estimate is read again: a pause, not each keystroke. */
@@ -137,7 +138,7 @@ export function AuditEstimateCard({
         <span
           className={cn(
             'ml-auto text-lg font-semibold tabular-nums',
-            score === null ? 'text-muted-foreground' : scoreColor(score / 100),
+            score === null ? 'text-muted-foreground' : BAND_TEXT_CLASSES[qualityBand(score)],
           )}
         >
           {score === null ? state.failed ? '—' : <LoadingDots /> : t('score', { score })}
@@ -163,9 +164,11 @@ export function AuditEstimateCard({
                   </span>
                   <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
                     <span
+                      // Red only for what blocks (editor UX review 2026-11-03):
+                      // a low category is amber, as Quality's scores are.
                       className={cn(
                         'block h-full rounded-full',
-                        barColor(value === null ? null : value / 100),
+                        value === null ? 'bg-muted' : BAND_BAR_CLASSES[qualityBand(value)],
                       )}
                       style={{ width: `${value ?? 0}%` }}
                     />
