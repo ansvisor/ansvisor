@@ -93,6 +93,10 @@ vi.mock('@/lib/chat/actor/action-center', () => ({
 }));
 vi.mock('@/lib/actions/cms-send', () => ({
   sendDraftToCms: tracked.track('actions/cms-send.sendDraftToCms'),
+  publishDraftToCms: tracked.track('actions/cms-send.publishDraftToCms'),
+}));
+vi.mock('@/lib/actions/cms-take-down', () => ({
+  takeDownDraft: tracked.track('actions/cms-take-down.takeDownDraft'),
 }));
 vi.mock('@/lib/actions/reports', () => ({
   createReport: tracked.track('actions/reports.createReport'),
@@ -139,6 +143,7 @@ const ctx = {
   email: null,
   organizationId: 'org-1',
   apiKeyId: 'agent-internal',
+  brandAccess: 'all' as const,
   role: 'admin' as const,
 };
 const labels = (messages as Record<string, unknown>).chatTools as Record<string, unknown>;
@@ -338,6 +343,7 @@ describe('the Chat tool registry', () => {
     await runInChat('set_task_ready_for_review', { brand_id: brand, task_id: item });
     await run('update_draft', { draft_id: item, body_html: '<h1>FAQ</h1>' });
     await run('push_cms_draft', { draft_id: item, destination: 'wordpress' });
+    await run('publish_cms', { draft_id: item, destination: 'wix' });
     await run('build_report', {
       brand_id: brand,
       template: 'competitor_benchmark',
@@ -404,6 +410,7 @@ describe('the Chat tool registry', () => {
         [item, { title: undefined, bodyHtml: '<h1>FAQ</h1>' }],
       ],
       ['actions/cms-send.sendDraftToCms', [item, 'wordpress']],
+      ['actions/cms-send.publishDraftToCms', [item, 'wix']],
       [
         'actions/reports.createReport',
         [brand, { dateFrom: '2026-10-01', dateTo: '2026-10-31', template: 'competitor_benchmark' }],
@@ -653,6 +660,9 @@ describe('approval policies', () => {
       // Content, reports and Site Audit (W2-07, DECISIONS T): an Analyst only saves drafts.
       update_draft: ['admin', 'manager'],
       push_cms_draft: ['admin', 'manager'],
+      publish_cms: ['admin', 'manager'],
+      // Take down (AUTONOMOUS-GO-LIVE PR 10): as the API's route, a Manager even while publishing is off.
+      unpublish_cms: ['admin', 'manager'],
       build_report: ['admin', 'manager'],
       run_site_audit: ['admin', 'manager'],
     });
@@ -841,7 +851,17 @@ describe('approval policies', () => {
     ).toThrow(/only an execute/);
     // The registry: Send to CMS may, every other row may not.
     const onItsOwn = CHAT_TOOLS.filter((tool) => tool.flags.goLiveOnOwn).map((tool) => tool.name);
-    expect(onItsOwn).toEqual(['push_cms_draft']);
+    expect(onItsOwn).toEqual(['push_cms_draft', 'publish_cms']);
+    // Take down (PR 10): an EXECUTE outside the go-live groups, which never goes live itself.
+    expect(chatTool('unpublish_cms')).toMatchObject({ class: 'execute', executeGroup: null });
+    expect(() => defineTool({ ...execute, executeGroup: null, goLive } as never)).toThrow(
+      /outside the groups never goes live/,
+    );
+    expect(chatTool('publish_cms')?.goLive?.({ draft_id: 'd', destination: 'wordpress' })).toEqual({
+      kind: 'publish',
+      draftId: 'd',
+      target: 'wordpress',
+    });
     expect(chatTool('push_cms_draft')?.goLive?.({ draft_id: 'd', destination: 'wix' })).toEqual({
       kind: 'cms_draft',
       draftId: 'd',
@@ -965,7 +985,7 @@ describe("the model's tool list on the registry's rows", () => {
     ).map((tool) => tool.name);
 
   const reads = CHAT_TOOLS.filter((tool) => tool.class === 'read').map((tool) => tool.name);
-  // The WRITEs and the EXECUTE (push_cms_draft), in the registry's order.
+  // The WRITEs and the EXECUTEs (push_cms_draft, publish_cms), in the registry's order.
   const writes = CHAT_TOOLS.filter((tool) => tool.class !== 'read').map((tool) => tool.name);
   const starter = facts({ plan: 'starter', subscription_status: 'active' });
   const growth = facts({ plan: 'growth', subscription_status: 'active' });

@@ -57616,6 +57616,319 @@ comment on column public.chat_activity_log.auto_via is
   'Why a change ran without a card (00402): an Admin''s Always, Full auto, the person''s "Don''t ask again", or go_live (00445): an EXECUTE an allowed agent took live on its own.';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00446_chat_notices_go_live.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00446: notices when an agent goes live on its own, or stops being allowed to
+-- ============================================================================
+-- AUTONOMOUS-GO-LIVE §6.4, §7.2 (PR 8). Two new kinds of chat_notices (00441):
+--
+--   * agent_went_live: an agent an Admin allowed sent a page out on its own
+--     (a CMS draft in v1). Its owner and the people its version notifies get
+--     it at the top of their Inbox's Needs you, and an e-mail by their
+--     "Notify me when an agent needs me". It names the agent, the page and
+--     the CMS, so it carries the page's brand: brand_id.
+--   * agent_go_live_off: an edit made a new version of an agent that was
+--     allowed, so it no longer publishes on its own. The Admin who allowed it
+--     and the owner are told, once per version.
+--
+-- A notice with a brand is read only by a person who reaches that brand
+-- (user_brand_ids, 00388); one about the workspace (a key) has none. A
+-- person closes their own notice once they open it (resolved_at), as they
+-- mark it read (read_at). The server writes.
+
+alter table public.chat_notices
+  drop constraint if exists chat_notices_kind_check;
+alter table public.chat_notices
+  add constraint chat_notices_kind_check check (
+    kind in (
+      'own_key_failed',
+      'own_key_limit_80',
+      'own_key_limit_100',
+      'agent_went_live',
+      'agent_go_live_off'
+    )
+  );
+
+alter table public.chat_notices
+  add column if not exists brand_id uuid references public.brands(id) on delete cascade;
+
+create index if not exists chat_notices_brand_idx
+  on public.chat_notices (brand_id)
+  where brand_id is not null;
+
+comment on column public.chat_notices.brand_id is
+  'The brand a notice is about (00446: a page an agent sent on its own); null for one about the workspace. Read only by people who reach the brand.';
+
+comment on table public.chat_notices is
+  'Chat (00441, 00446): a note from the system to a person: their own AI key failed or reached its agents'' monthly limit, an agent went live on its own, or an agent is no longer allowed to. Theirs to read, mark read and close; the server writes.';
+
+-- A person closes their own notice once they open it.
+grant update (resolved_at) on table public.chat_notices to authenticated;
+
+-- Their own notices, and only about brands they reach.
+drop policy if exists "chat_notices: own select" on public.chat_notices;
+create policy "chat_notices: own select"
+  on public.chat_notices
+  for select
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+-- They mark read or close only notices they can read.
+drop policy if exists "chat_notices: own read" on public.chat_notices;
+create policy "chat_notices: own read"
+  on public.chat_notices
+  for update
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  )
+  with check (
+    user_id = auth.uid()
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00447_go_live_publish.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00447: a page an agent publishes on its own, in the impact ledger and its slots
+-- ============================================================================
+-- AUTONOMOUS-GO-LIVE §6.4, §10.5 (PR 9). Pages now go live from Ansvisor:
+-- a person's Publish in Chat, or an agent an Admin allowed to publish on its
+-- own (Webflow, WordPress and Wix; new pages only).
+--
+--   * ship_cms_publish (00428) takes the run, the agent and the agent run a
+--     publish came from, so "What Ansvisor did for you" and the agent's page
+--     can say "Published by {agent} on its own". The 11-argument function
+--     is dropped and the 14-argument one made in its place, so PostgREST
+--     sees one; the server passes the three (null for a person's own send)
+--     and execution_mode `automated` for an agent's.
+--   * reserve_agent_go_live (00443): a step of another kind on a page and
+--     destination already counted in the last 24 hours (a publish after its
+--     CMS draft) gets its own row, so it has its own record and notice, but
+--     takes no new slot: the pair is counted once. The same kind again is
+--     still the row it had.
+
+drop function if exists public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text, integer);
+
+create or replace function public.ship_cms_publish(
+  p_delivery_id uuid,
+  p_organization_id uuid,
+  p_brand_id uuid,
+  p_content_draft_id uuid,
+  p_title text,
+  p_url text,
+  p_action_id uuid,
+  p_shipped_at timestamptz,
+  p_shipped_by uuid,
+  p_execution_mode text,
+  p_republish_days integer,
+  p_run_id uuid,
+  p_agent_id uuid,
+  p_agent_run_id uuid
+)
+returns table (ship_event_id uuid, created boolean)
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_id uuid;
+begin
+  if p_delivery_id is null or p_shipped_at is null then
+    raise exception 'a send and its publish time are needed' using errcode = '22023';
+  end if;
+  if p_republish_days is null or p_republish_days < 1 then
+    raise exception 'a republish window of a day or more is needed' using errcode = '22023';
+  end if;
+  -- Every send of one draft waits for the one before it.
+  if p_content_draft_id is not null then
+    perform pg_advisory_xact_lock(hashtext('ship_cms_publish:' || p_content_draft_id::text));
+  end if;
+
+  -- The send's own, written before (a confirmation read twice).
+  select s.id into v_id
+  from public.ship_events s
+  where s.content_draft_delivery_id = p_delivery_id;
+  if v_id is not null then
+    return query select v_id, false;
+    return;
+  end if;
+  -- The send noted on a cms_publish before: that one, also once its draft is
+  -- deleted (content_draft_id set null), when the lookup below finds nothing.
+  select s.id into v_id
+  from public.ship_events s
+  where s.republished_delivery_ids @> array[p_delivery_id]
+  order by s.id
+  limit 1;
+  if v_id is not null then
+    return query select v_id, false;
+    return;
+  end if;
+
+  -- The same draft live again within the window: its first cms_publish goes on.
+  -- The latest shipped before the send first, else the nearest after it.
+  if p_content_draft_id is not null then
+    select s.id into v_id
+    from public.ship_events s
+    where s.brand_id = p_brand_id
+      and s.content_draft_id = p_content_draft_id
+      and s.kind = 'cms_publish'
+      and s.shipped_at >= p_shipped_at - make_interval(days => p_republish_days)
+      and s.shipped_at <= p_shipped_at + make_interval(days => p_republish_days)
+    order by s.shipped_at > p_shipped_at,
+      greatest(s.shipped_at - p_shipped_at, p_shipped_at - s.shipped_at),
+      s.id desc
+    limit 1;
+    if v_id is not null then
+      update public.ship_events s
+      set republished_at = case
+            when p_shipped_at > coalesce(s.republished_at, s.shipped_at) then p_shipped_at
+            else s.republished_at
+          end,
+          republished_delivery_ids = case
+            when p_delivery_id = any (s.republished_delivery_ids)
+              or cardinality(s.republished_delivery_ids) >= 50
+              then s.republished_delivery_ids
+            else s.republished_delivery_ids || p_delivery_id
+          end
+      where s.id = v_id;
+      return query select v_id, false;
+      return;
+    end if;
+  end if;
+
+  insert into public.ship_events (
+    organization_id, brand_id, kind, title, content_draft_id, content_draft_delivery_id,
+    url, action_id, source, change_type, shipped_at, shipped_by, execution_mode,
+    run_id, agent_id, agent_run_id
+  ) values (
+    p_organization_id, p_brand_id, 'cms_publish', p_title, p_content_draft_id, p_delivery_id,
+    p_url, p_action_id, 'content_editor', 'content', p_shipped_at, p_shipped_by, p_execution_mode,
+    p_run_id, p_agent_id, p_agent_run_id
+  )
+  on conflict (content_draft_delivery_id) do nothing
+  returning id into v_id;
+  if v_id is not null then
+    return query select v_id, true;
+    return;
+  end if;
+  -- A send without a draft, confirmed twice at once: the other call wrote it.
+  select s.id into v_id
+  from public.ship_events s
+  where s.content_draft_delivery_id = p_delivery_id;
+  return query select v_id, false;
+end;
+$$;
+
+revoke all on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text, integer, uuid, uuid, uuid)
+  from public, anon, authenticated;
+grant execute on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text, integer, uuid, uuid, uuid)
+  to service_role;
+
+comment on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text, integer, uuid, uuid, uuid) is
+  'Impact ledger (00428, 00447): a CMS-confirmed publish as a ship event, under a lock on its draft: the send''s own, else the one it is noted on, else the draft''s cms_publish within p_republish_days (the latest before it, else the nearest after) noted, else a new one, with the run, agent and agent run it came from. Says the id and whether this call wrote it. Service role only.';
+create or replace function public.reserve_agent_go_live(
+  p_organization_id uuid,
+  p_agent_id uuid,
+  p_run_id uuid,
+  p_agent_run_id uuid,
+  p_brand_id uuid,
+  p_content_draft_id uuid,
+  p_tool_key text,
+  p_kind text,
+  p_target text,
+  p_limit integer
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_id uuid;
+  v_used integer;
+  v_counted boolean;
+begin
+  if p_limit is null or p_limit < 1 or p_limit > 20 then
+    raise exception 'reserve_agent_go_live: the limit must be 1 to 20';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext('agent_go_live:' || p_agent_id::text));
+
+  -- The same step again (this page, destination and kind): its row, no second slot.
+  select e.id
+    into v_id
+    from public.chat_agent_go_live_events e
+   where e.agent_id = p_agent_id
+     and e.content_draft_id is not distinct from p_content_draft_id
+     and e.target = p_target
+     and e.kind = p_kind
+     and e.status in ('reserved', 'done', 'taken_down')
+     and e.created_at > now() - interval '24 hours'
+   order by e.created_at desc
+   limit 1;
+  if v_id is not null then
+    return v_id;
+  end if;
+
+  -- A step of another kind on a page and destination counted already: a row of its own, no new slot.
+  select exists (
+    select 1
+      from public.chat_agent_go_live_events e
+     where e.agent_id = p_agent_id
+       and e.content_draft_id is not distinct from p_content_draft_id
+       and e.target = p_target
+       and e.status in ('reserved', 'done', 'taken_down')
+       and e.created_at > now() - interval '24 hours'
+  ) into v_counted;
+
+  if not v_counted then
+    select count(*)
+      into v_used
+      from (
+        select distinct e.content_draft_id, e.target
+          from public.chat_agent_go_live_events e
+         where e.agent_id = p_agent_id
+           and e.status in ('reserved', 'done', 'taken_down')
+           and e.created_at > now() - interval '24 hours'
+      ) counted;
+    if v_used >= p_limit then
+      return null;
+    end if;
+  end if;
+
+  insert into public.chat_agent_go_live_events (
+    organization_id, agent_id, run_id, agent_run_id, brand_id,
+    content_draft_id, tool_key, kind, target
+  )
+  values (
+    p_organization_id, p_agent_id, p_run_id, p_agent_run_id, p_brand_id,
+    p_content_draft_id, p_tool_key, p_kind, p_target
+  )
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+revoke all on function public.reserve_agent_go_live(uuid, uuid, uuid, uuid, uuid, uuid, text, text, text, integer)
+  from public, anon, authenticated;
+grant execute on function public.reserve_agent_go_live(uuid, uuid, uuid, uuid, uuid, uuid, text, text, text, integer)
+  to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00448_content_drafts_schema_left_out.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -58611,6 +58924,52 @@ create policy "chat_memory_items: workspace select"
     )
     and (brand_id is null or brand_id in (select public.user_brand_ids()))
   );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00460_content_take_down.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00460: Take down a published page (AUTONOMOUS-GO-LIVE PR 10)
+-- ============================================================================
+-- A person takes a page Ansvisor published in Webflow, WordPress or Wix back
+-- down to a draft there, from the Inbox notice, Chat's Activity, the Content
+-- Library or Chat's unpublish_cms (always a person's click). The send that
+-- published it keeps the record:
+--
+--   * content_draft_deliveries.status takes 'taken_down'. A taken-down send
+--     is neither 'sent' nor 'published', so the CMS status sweeps never read
+--     it again (Webflow's would mark it published again from its old
+--     lastPublished), and the impact ledger's nightly fill never ships it
+--     again.
+--   * taken_down_at and taken_down_by: when, and who. A page someone took
+--     down never goes live on its own again: an agent's next go-live of that
+--     draft waits for a click (held `taken_down`).
+--
+-- The rest is written by the server with the take down, not here: the page's
+-- address cleared (content_drafts back to 'ready'), the agent's go-live event
+-- 'taken_down' (00443's status and columns), and the ship event's measurement
+-- Not measurable with reason 'taken_down' (00421's reason is free text).
+
+alter table public.content_draft_deliveries
+  drop constraint if exists content_draft_deliveries_status_check,
+  add constraint content_draft_deliveries_status_check
+    check (status in ('queued', 'sent', 'failed', 'published', 'taken_down'));
+
+alter table public.content_draft_deliveries
+  add column if not exists taken_down_at timestamptz,
+  add column if not exists taken_down_by uuid references public.profiles(id) on delete set null;
+
+alter table public.content_draft_deliveries
+  drop constraint if exists content_draft_deliveries_taken_down,
+  add constraint content_draft_deliveries_taken_down
+    check ((status = 'taken_down') = (taken_down_at is not null));
+
+comment on column public.content_draft_deliveries.taken_down_at is
+  'When a person took the published page down to a draft in its CMS (00460); set exactly when status is taken_down.';
+comment on column public.content_draft_deliveries.taken_down_by is
+  'Who took the page down (00460).';
 
 notify pgrst, 'reload schema';
 

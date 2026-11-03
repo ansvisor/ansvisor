@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { PLANS } from '@/config/plans';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { AgentFormSetup } from './agent-form';
+import { readGoLiveSwitch } from './agent-go-live';
 import { AGENT_ENGINES, enginesDenial, modeDenial } from './agent-rules';
 import { readAgent, readAgentContext, type AgentContext, type AgentDetail } from './agents';
 import { OwnKeyUnreadableError, resolveChatModelKey } from './key';
@@ -22,7 +23,7 @@ const TOPICS_MAX = 500;
 
 export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSetup> {
   const org = ctx.actor.organizationId;
-  const [brands, agents, ownKeyProvider] = await Promise.all([
+  const [brands, agents, ownKeyProvider, goLive] = await Promise.all([
     supabaseAdmin.from('brands').select('id, name, is_demo').eq('organization_id', org),
     supabaseAdmin
       .from('chat_agents')
@@ -36,6 +37,7 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
         console.error('[chat/agents] could not read whose key Chat runs on:', err);
         return null;
       }),
+    readGoLiveSwitch(org),
   ]);
   if (brands.error) throw new Error(`Could not read the brands: ${brands.error.message}`);
   if (agents.error) throw new Error(`Could not read the agents' names: ${agents.error.message}`);
@@ -90,6 +92,7 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
     runShareDefault: ctx.settings.runShareDefault,
     takenNames: seen,
     ownKeyProvider,
+    goLive,
   };
 }
 

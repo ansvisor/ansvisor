@@ -8,6 +8,7 @@ import {
   Bot,
   Check,
   Clock,
+  CloudOff,
   ExternalLink,
   FileText,
   MoreHorizontal,
@@ -75,7 +76,12 @@ export interface LibraryRowActions {
   onExport: (draft: ContentDraftListItem, format: DraftExportFormat) => void;
   /** Send to CMS (#1331), for admins and managers. */
   onSend: (draft: ContentDraftListItem) => void;
+  /** Take down a page published through Ansvisor (AUTONOMOUS-GO-LIVE PR 10), for admins and managers. */
+  onTakeDown: (draft: ContentDraftListItem, sent: CmsStatus) => void;
 }
+
+/** Where a page published through Ansvisor can be taken down from its row. */
+const TAKE_DOWN_TARGETS: readonly CmsStatus['target'][] = ['webflow', 'wordpress', 'wix'];
 
 /** The rows picked for a bulk Send to CMS (#1331): admins and managers, drafts not archived. */
 export interface LibrarySelection {
@@ -226,7 +232,7 @@ export function LibraryTable({
                 </time>
               </TableCell>
               <TableCell className="pl-0 pr-4">
-                <RowMenu draft={draft} actions={actions} />
+                <RowMenu draft={draft} sent={sent} actions={actions} />
               </TableCell>
             </TableRow>
           );
@@ -236,8 +242,20 @@ export function LibraryTable({
   );
 }
 
-/** A row's menu: its status, then archive or restore, and delete (admins and managers). */
-function RowMenu({ draft, actions }: { draft: ContentDraftListItem; actions: LibraryRowActions }) {
+/**
+ * A row's menu: its status, then archive or restore, and delete (admins and
+ * managers); Take down too while its last send is live in Webflow, WordPress
+ * or Wix.
+ */
+function RowMenu({
+  draft,
+  sent,
+  actions,
+}: {
+  draft: ContentDraftListItem;
+  sent: CmsStatus | undefined;
+  actions: LibraryRowActions;
+}) {
   const t = useTranslations('contentEditor.library.rowMenu');
   const tStatus = useTranslations('contentEditor.status');
   const tExport = useTranslations('contentEditor.editor.export');
@@ -282,6 +300,16 @@ function RowMenu({ draft, actions }: { draft: ContentDraftListItem; actions: Lib
               <DropdownMenuItem onClick={() => actions.onSend(draft)}>
                 <Send className="h-4 w-4" />
                 {t('sendToCms')}
+              </DropdownMenuItem>
+            )}
+            {sent?.status === 'published' && TAKE_DOWN_TARGETS.includes(sent.target) && (
+              <DropdownMenuItem
+                variant="destructive"
+                data-action="library.takeDown"
+                onClick={() => actions.onTakeDown(draft, sent)}
+              >
+                <CloudOff className="h-4 w-4" />
+                {t('takeDown')}
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
@@ -410,6 +438,7 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
     sent: <Send className="h-3.5 w-3.5" />,
     failed: <AlertTriangle className="h-3.5 w-3.5" />,
     published: <ExternalLink className="h-3.5 w-3.5" />,
+    taken_down: <CloudOff className="h-3.5 w-3.5" />,
   }[status.status];
   const tone =
     status.status === 'failed'
@@ -440,11 +469,19 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
       >
         {icon}
         <span aria-hidden className="hidden whitespace-nowrap text-xs font-medium xl:inline">
-          {tShort(`${status.target}.${status.status}`)}
+          {status.status === 'taken_down'
+            ? tShort('takenDown')
+            : tShort(`${status.target}.${status.status}`)}
         </span>
       </TooltipTrigger>
       <TooltipContent className="max-w-72 space-y-1">
         <p>{label}</p>
+        {/* Sent by an agent without a click (AUTONOMOUS-GO-LIVE §6.4). */}
+        {status.agent && (
+          <p data-slot="cms-sent-on-its-own" className="opacity-80">
+            {status.agent.name ? t('onItsOwn', { agent: status.agent.name }) : t('onItsOwnUnnamed')}
+          </p>
+        )}
         {live && <p className="opacity-80 [overflow-wrap:anywhere]">{live}</p>}
         {status.status === 'failed' && (status.httpStatus || status.error) && (
           <p className="opacity-80 [overflow-wrap:anywhere]">

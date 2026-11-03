@@ -46,7 +46,7 @@ import {
   startAgentWriting,
 } from '@/lib/actions/content-drafts';
 import { assignAction } from '@/lib/actions/action-center';
-import { listMembers, type TeamMember } from '@/lib/actions/team';
+import { listBrandMembers, type TeamMember } from '@/lib/actions/team';
 import { memberLabel } from '@/lib/action-center/display';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import { MAX_ATTACHMENT_BYTES, textToHtml } from '@/lib/content/attachments';
@@ -225,8 +225,10 @@ export function NewContentDialog({
   const [start, setStart] = useState<StartChoice | null>(null);
   const [opening, setOpening] = useState(false);
   const [who, setWho] = useState<Who>('me');
-  // Team's assignee: the task goes to this teammate once it is sent.
-  const [members, setMembers] = useState<TeamMember[]>([]);
+  // Team's assignee: the task goes to this teammate once it is sent. The
+  // teammates are the people who can see the brand, read for it.
+  const [team, setTeam] = useState<{ brandId: string; members: TeamMember[] } | null>(null);
+  const members = team && team.brandId === brandId ? team.members : [];
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [overlapRead, setOverlapRead] = useState<OverlapRead | null>(null);
   const [overlapAttempt, setOverlapAttempt] = useState(0);
@@ -251,15 +253,15 @@ export function NewContentDialog({
     };
   }, [open, brandId, attempt]);
 
-  // The team, for Team's assignee: read once, when Team is first chosen.
-  const membersRead = useRef(false);
+  // The team, for Team's assignee: read once per brand, when Team is first chosen.
+  const membersRead = useRef<string | null>(null);
   useEffect(() => {
-    if (who !== 'team' || membersRead.current) return;
-    membersRead.current = true;
-    listMembers()
-      .then(setMembers)
+    if (who !== 'team' || membersRead.current === brandId) return;
+    membersRead.current = brandId;
+    listBrandMembers(brandId)
+      .then((list) => setTeam({ brandId, members: list }))
       .catch((err) => console.error('Failed to load the team:', err));
-  }, [who]);
+  }, [who, brandId]);
 
   // From the Content plan: Start for its opportunity once the options are in
   // (one no longer open is left to pick), or its page read to optimize.

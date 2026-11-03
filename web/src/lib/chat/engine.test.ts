@@ -158,6 +158,7 @@ const fakes = vi.hoisted(() => ({
   markWorking: vi.fn(async () => ({ cleared: true, resumed: 0 })),
   openPage: vi.fn(),
   explain: vi.fn(),
+  fit: vi.fn(),
   goLiveFacts: vi.fn(),
 }));
 // Step 4b's guards' facts, as their reads would give them (go-live-facts.test.ts reads them).
@@ -166,7 +167,7 @@ vi.mock('./go-live-facts', () => ({ readGoLiveFacts: fakes.goLiveFacts }));
 vi.mock('@/lib/mcp/pages', () => ({ openPageFor: fakes.openPage }));
 // explain_change as it is, reading through a fake of its data layer.
 vi.mock('@/lib/mcp/why', () => ({ explainChangeFor: fakes.explain }));
-vi.mock('./budget', () => ({ reserveChatStep: fakes.reserve }));
+vi.mock('./budget', () => ({ reserveChatStep: fakes.reserve, fitChatUnits: fakes.fit }));
 vi.mock('./key-health', () => ({
   markKeyFailing: fakes.markFailing,
   markKeyWorking: fakes.markWorking,
@@ -269,8 +270,15 @@ const { readPrecedenceContext } = await import('./precedence-context');
 const { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } = await import('./rules');
 const { ASK_TOOL } = await import('./asks');
 const { NEXT_MOVES_TOOL } = await import('./next-moves');
-const { MAX_LISTED_SKILLS, SKILL_LIBRARY, USE_SKILL_TOOL, enabledSkills, skillsForPrompt } =
-  await import('./skills/library');
+const { PARTS_TOOL } = await import('./partial-limit');
+const {
+  MAX_LISTED_SKILLS,
+  SHORTCUT_PLAYBOOKS,
+  SKILL_LIBRARY,
+  USE_SKILL_TOOL,
+  enabledSkills,
+  skillsForPrompt,
+} = await import('./skills/library');
 
 type ChatEvent = import('./events').ChatEvent;
 type ChatActor = import('./engine').ChatActor;
@@ -455,6 +463,12 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   seed();
   budgetHolds();
+  // The AI limit left covers every part of a job, unless a test says otherwise.
+  fakes.fit.mockImplementation(async ({ units }: { units: number }) => ({
+    ok: true,
+    fits: units,
+    limit: 'month',
+  }));
   fakes.readRun.mockResolvedValue({
     rows: [{ prompt: 'best crm' }, { prompt: 'crm for teams' }, { prompt: 'crm pricing' }],
     change_pct: 12,
@@ -500,6 +514,7 @@ function expectClean(events: ChatEvent[]) {
   expect(json).not.toContain(ASK_TOOL);
   expect(json).not.toContain(NEXT_MOVES_TOOL);
   expect(json).not.toContain(USE_SKILL_TOOL);
+  expect(json).not.toContain(PARTS_TOOL);
   expect(json).not.toContain('continues_this_run');
   expect(json).not.toMatch(UUID);
   expect(json).not.toMatch(/"(id|brand_id|brandId|tool|toolName|input|output)"\s*:/);
@@ -3018,6 +3033,229 @@ describe('the AI budget', () => {
   });
 });
 
+describe('a request bigger than the AI limit left (W2-03, CHAT-04 item 17a)', () => {
+  const parts = (n: number, unit = 'drafts') =>
+    calls(toolCall('p1', PARTS_TOOL, { parts: n, unit }));
+  const fitsOnly = (fits: number, limit: 'run' | 'month' = 'month') =>
+    fakes.fit.mockImplementation(async ({ units }: { units: number }) => ({
+      ok: true,
+      fits: Math.min(fits, units),
+      limit,
+    }));
+  const lastResult = (options: CallOptions) => JSON.stringify(options.prompt.at(-1));
+  /** Answers the parts card and drives on. */
+  async function pick(runId: string, body: Record<string, unknown>) {
+    const n = ofType(await eventsOf(runId), 'ask.created').at(-1)!.data.n;
+    const prepared = await engine.prepareResume(ADMIN, runId, 'answer', { n, ...body });
+    if (prepared.ok) await engine.driveRun(ADMIN, runId, prepared.resume);
+    return prepared;
+  }
+
+  it('offers the parts check while writing, and goes on when the limit covers every part', async () => {
+    const { haiku, sonnet } = useModels([READY], [parts(3), text('Three drafts.')]);
+    const runId = await turn(ADMIN, 'Write three FAQ drafts');
+    expect(haiku.seen[0].tools?.map((tool) => tool.name) ?? []).not.toContain(PARTS_TOOL);
+    expect(sonnet.seen[0].tools?.map((tool) => tool.name)).toContain(PARTS_TOOL);
+    expect(fakes.fit).toHaveBeenCalledWith({
+      organizationId: ORG,
+      model: 'anthropic/claude-sonnet-5.5',
+      perUnit: { inputTokens: expect.any(Number), maxOutputTokens: 16_000 },
+      units: 3,
+      source: 'ansvisor',
+      agentRunId: null,
+    });
+    expect(lastResult(sonnet.seen[1])).toContain('"covered":3');
+    expect(runRow(runId).status).toBe('done');
+    expect(db.tables.chat_asks).toEqual([]);
+    expectClean(await eventsOf(runId));
+  });
+
+  it('pauses at the AI limit when it covers none of them, with no more model steps', async () => {
+    fitsOnly(0);
+    const { sonnet } = useModels([READY], [parts(4)]);
+    const runId = await turn(ADMIN, 'Write four drafts');
+    expect(runRow(runId).status).toBe('paused_cap');
+    expect(ofType(await eventsOf(runId), 'run.paused_cap')[0].data).toMatchObject({
+      limit: 'month',
+    });
+    expect(sonnet.seen).toHaveLength(1);
+  });
+
+  it('asks the person when it covers some: Do the first k now (Recommended), Get more AI credits, Cancel', async () => {
+    fitsOnly(2);
+    const { sonnet } = useModels([READY], [parts(5), text('Two drafts; three are left.')]);
+    const runId = await turn(ADMIN, 'Write five drafts');
+    expect(runRow(runId).status).toBe('waiting');
+    expect(ofType(await eventsOf(runId), 'ask.created').map((e) => e.data)).toEqual([
+      {
+        n: 1,
+        question: 'Your remaining AI limit covers about 2 of the 5 drafts.',
+        options: [
+          {
+            label: 'Do the first 2 now',
+            detail: 'The rest waits until there is more AI limit',
+            recommended: true,
+          },
+          {
+            label: 'Get more AI credits',
+            detail: 'Chat stops here, where you can add AI credits',
+            recommended: false,
+          },
+          { label: 'Cancel', recommended: false },
+        ],
+        allowOther: false,
+        multi: false,
+      },
+    ]);
+    expect(sonnet.seen).toHaveLength(1);
+
+    expect(await pick(runId, { selected: [0] })).toMatchObject({ ok: true });
+    const told = lastResult(sonnet.seen[1]);
+    expect(told).toContain('"do_now":2');
+    expect(told).toContain('Do only the first 2 now');
+    expect(stepsOf(runId)[0]).toMatchObject({
+      kind: 'ask',
+      status: 'done',
+      label: 'Your remaining AI limit covers about 2 of the 5 drafts.',
+      detail: 'Do the first 2 now',
+    });
+    expect(runRow(runId).status).toBe('done');
+    expectClean(await eventsOf(runId));
+  });
+
+  it('goes on with the first parts when the card is skipped', async () => {
+    fitsOnly(1);
+    const { sonnet } = useModels([READY], [parts(3, 'pages'), text('One page.')]);
+    const runId = await turn(ADMIN, 'Rewrite three pages');
+    expect(await pick(runId, { skipped: true })).toMatchObject({ ok: true });
+    expect(lastResult(sonnet.seen[1])).toContain('"do_now":1');
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it('pauses at the AI limit on Get more AI credits, and stops on Cancel, with no model step', async () => {
+    fitsOnly(2);
+    const credits = useModels([READY], [parts(5)]);
+    const first = await turn(ADMIN, 'Write five drafts');
+    await pick(first, { selected: [1] });
+    expect(runRow(first).status).toBe('paused_cap');
+    expect(credits.sonnet.seen).toHaveLength(1);
+
+    const cancel = useModels([READY], [parts(5)]);
+    const second = await turn(ADMIN, 'Write five drafts');
+    await pick(second, { selected: [2] });
+    expect(runRow(second).status).toBe('stopped');
+    expect(cancel.sonnet.seen).toHaveLength(1);
+  });
+
+  it('does what fits with no one there, files it, and stops at the AI limit as it ends', async () => {
+    const AGENT_RUN = '77777777-7777-4777-8777-777777777777';
+    fitsOnly(2);
+    const { sonnet } = useModels([READY], [parts(5), text('Two drafts; three are left.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Write five drafts',
+      brandId: BRAND,
+    });
+    if (!started.ok) throw new Error('not started');
+    const convo = db.tables.chat_conversations.find((c) => c.id === started.conversationId)!;
+    convo.agent_run_id = AGENT_RUN;
+    await engine.driveRun(ADMIN, started.runId, undefined, { sessionUserId: null });
+
+    expect(fakes.fit).toHaveBeenCalledWith(expect.objectContaining({ agentRunId: AGENT_RUN }));
+    expect(db.tables.chat_asks).toEqual([]);
+    expect(lastResult(sonnet.seen[1])).toContain('"do_now":2');
+    expect(runRow(started.runId).status).toBe('paused_cap');
+    const events = await eventsOf(started.runId);
+    expect(ofType(events, 'run.paused_cap')[0].data).toMatchObject({ limit: 'month' });
+    expect(
+      db.tables.chat_messages.find((m) => m.id === runRow(started.runId).message_id),
+    ).toMatchObject({
+      content_md: 'Two drafts; three are left.',
+    });
+  });
+
+  /** An agent run's chat with no one there, driven to its end. */
+  async function agentRun() {
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Write ten drafts',
+      brandId: BRAND,
+    });
+    if (!started.ok) throw new Error('not started');
+    const convo = db.tables.chat_conversations.find((c) => c.id === started.conversationId)!;
+    convo.agent_run_id = '77777777-7777-4777-8777-777777777777';
+    await engine.driveRun(ADMIN, started.runId, undefined, { sessionUserId: null });
+    const state = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
+    return {
+      runId: started.runId,
+      capHit: (state.progress as { capHit?: string }).capHit,
+      paused: ofType(await eventsOf(started.runId), 'run.paused_cap')[0]?.data,
+    };
+  }
+
+  it('stops at the agent run’s own cap, not the month’s, when its cap is what binds', async () => {
+    // A 1% cap covers 7 of the 10 drafts, though the month has more left.
+    fitsOnly(7, 'run');
+    const { sonnet } = useModels([READY], [parts(10), text('Seven drafts; three are left.')]);
+    const some = await agentRun();
+    expect(lastResult(sonnet.seen[1])).toContain('"do_now":7');
+    expect(runRow(some.runId).status).toBe('paused_cap');
+    expect(some.paused).toMatchObject({ limit: 'run' });
+    expect(some.capHit).toBe('run');
+
+    // None fits under the run's cap: it pauses at the run's limit, with no more model steps.
+    fitsOnly(0, 'run');
+    const none = useModels([READY], [parts(10)]);
+    const ended = await agentRun();
+    expect(none.sonnet.seen).toHaveLength(1);
+    expect(ended.paused).toMatchObject({ limit: 'run' });
+    expect(ended.capHit).toBe('run');
+  });
+
+  it('pauses at the agent run’s cap on Get more AI credits when its cap is what binds', async () => {
+    fitsOnly(2, 'run');
+    const { sonnet } = useModels([READY], [parts(5)]);
+    const runId = await turn(ADMIN, 'Write five drafts');
+    await pick(runId, { selected: [1] });
+    expect(runRow(runId).status).toBe('paused_cap');
+    expect(ofType(await eventsOf(runId), 'run.paused_cap')[0].data).toMatchObject({
+      limit: 'run',
+    });
+    expect(sonnet.seen).toHaveLength(1);
+  });
+
+  it('pauses a skill’s run at the agent run’s cap when that is what covers none of it', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    fitsOnly(0, 'run');
+    const { sonnet } = useModels([READY], [text('never')]);
+    const runId = await turn(ADMIN, '/faq Write an FAQ for our pricing page');
+    expect(sonnet.seen).toHaveLength(0);
+    expect(runRow(runId).status).toBe('paused_cap');
+    const state = db.tables.chat_run_state.find((s) => s.run_id === runId)!;
+    expect((state.progress as { capHit?: string }).capHit).toBe('run');
+  });
+
+  it('checks a skill’s run as it starts: one it can’t answer pauses before anything is read', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    fitsOnly(0);
+    const { haiku, sonnet } = useModels([READY], [text('never')]);
+    const runId = await turn(ADMIN, '/faq Write an FAQ for our pricing page');
+    expect(fakes.fit).toHaveBeenCalledWith(expect.objectContaining({ units: 1 }));
+    expect(haiku.seen).toHaveLength(0);
+    expect(sonnet.seen).toHaveLength(0);
+    expect(runRow(runId).status).toBe('paused_cap');
+
+    // Covered, it starts as before; a plain question isn't checked.
+    fakes.fit.mockClear();
+    fitsOnly(1);
+    useModels([READY], [text('Ok.')]);
+    expect(runRow(await turn(ADMIN, '/faq Write an FAQ')).status).toBe('done');
+    useModels([READY], [text('Ok.')]);
+    await turn(ADMIN, 'How are we doing?');
+    expect(fakes.fit).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('the own AI key (AGENT-OWN-KEY §5.2)', () => {
   /** A provider's answer the call fails with; not retried, so the test needn't wait. */
   const failing = (statusCode: number, body: object) => () => {
@@ -3278,6 +3516,8 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     // W2-07's content rows: Admins and Managers only.
     'update_draft',
     'push_cms_draft',
+    'publish_cms',
+    'unpublish_cms',
     'build_report',
     'run_site_audit',
   ];
@@ -5180,6 +5420,139 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
   });
 });
 
+describe('shortcuts (W2-09, CHAT-08 items 4, 7, 8)', () => {
+  type Sent = { role: string; content: unknown };
+  const systemsOf = (options: CallOptions) =>
+    (options.prompt as unknown as Sent[]).filter((m) => m.role === 'system');
+  const playbook = (name: string) => SHORTCUT_PLAYBOOKS.find((p) => p.name === name)!;
+  const skillSteps = (runId: string) => stepsOf(runId).filter((s) => s.kind === 'skill');
+  const toolNames = (options: CallOptions) => options.tools?.map((tool) => tool.name) ?? [];
+
+  /** A turn sent with a shortcut's id, as the composer sends it. */
+  async function shortcutTurn(message: string, shortcutId: unknown, actor = ADMIN) {
+    const started = await engine.startChatRun(actor, {
+      message,
+      brandId: BRAND,
+      mode: 'auto',
+      shortcutId,
+    });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    await engine.driveRun(actor, started.runId);
+    return started.runId;
+  }
+  const questionOf = (runId: string) =>
+    db.tables.chat_messages.find(
+      (m) => m.conversation_id === runRow(runId).conversation_id && m.role === 'user',
+    )!;
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+  });
+
+  it('keeps the shortcut on the message, loads its playbook first and reads only its data plan', async () => {
+    const { haiku, sonnet } = useModels(
+      [calls(toolCall('r1', 'list_citations', { brand_id: BRAND })), READY],
+      [text('Citations fell on two pages.')],
+    );
+    const runId = await shortcutTurn('Analyze our citations', 'analyze');
+
+    expect(questionOf(runId).shortcut_id).toBe('analyze');
+    const [first] = stepsOf(runId);
+    expect(first).toMatchObject({
+      position: 1,
+      kind: 'skill',
+      label: 'Used shortcut: Analyze',
+      detail: 'Ansvisor library',
+      debug_json: { skill: 'analyze', via: 'shortcut' },
+    });
+    // Its body below the rules, for both models; never listed as a skill to pick.
+    for (const options of [haiku.seen[0], sonnet.seen[0]]) {
+      const systems = systemsOf(options);
+      expect(String(systems[2].content)).toContain(
+        `<skill name="analyze">\n${playbook('analyze').body}\n</skill>`,
+      );
+      expect(String(systems[1].content)).not.toContain('analyze: ');
+    }
+    // The data plan's reads only: the test's own read_visibility and fetch_page are left out.
+    const reads = toolNames(haiku.seen[0]);
+    expect(reads).toEqual(
+      expect.arrayContaining(['get_visibility_summary', 'list_citations', 'explain_change']),
+    );
+    expect(reads).not.toContain('read_visibility');
+    expect(reads).not.toContain('fetch_page');
+    // The writer keeps every change; only the reads are narrowed.
+    expect(toolNames(sonnet.seen[0])).toContain('create_draft');
+    expect(toolNames(sonnet.seen[0])).not.toContain('read_visibility');
+    expect(runRow(runId).status).toBe('done');
+    expectClean(await eventsOf(runId));
+  });
+
+  it('refuses a read outside the data plan, should the model call one', async () => {
+    const { haiku } = useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Ok.')],
+    );
+    await shortcutTurn('Analyze our visibility', 'analyze');
+    expect(fakes.readRun).not.toHaveBeenCalled();
+    // Not offered, so it is never run: the call comes back as unavailable.
+    expect(JSON.stringify(haiku.seen[1].prompt)).toContain('unavailable tool');
+  });
+
+  it.each([
+    ['rewritten trigger words', 'Why did our citations drop?', 'analyze'],
+    ["an id that is no shortcut's", 'Analyze our citations', 'report'],
+    ['an id too long to be one', 'Analyze our citations', 'x'.repeat(80)],
+  ])("runs as the person's own request for %s", async (_, message, id) => {
+    const { haiku } = useModels([READY], [text('Ok.')]);
+    const runId = await shortcutTurn(message, id);
+    expect(questionOf(runId).shortcut_id ?? null).toBeNull();
+    expect(skillSteps(runId)).toEqual([]);
+    expect(toolNames(haiku.seen[0])).toContain('read_visibility');
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it("takes a Home chip's shortcut with its own words", async () => {
+    useModels([READY], [text('Ok.')]);
+    const runId = await shortcutTurn(
+      'What changed in our AI visibility this week, and why?',
+      'analyze',
+    );
+    expect(questionOf(runId).shortcut_id).toBe('analyze');
+    expect(skillSteps(runId).map((s) => s.label)).toEqual(['Used shortcut: Analyze']);
+  });
+
+  it('counts the playbook in the run’s 3 bodies, and answers no How-to question from Help', async () => {
+    const { haiku } = useModels(
+      [
+        calls(
+          toolCall('s1', USE_SKILL_TOOL, { name: 'winback' }),
+          toolCall('s2', USE_SKILL_TOOL, { name: 'refresh' }),
+          toolCall('s3', USE_SKILL_TOOL, { name: 'faq' }),
+        ),
+        READY,
+      ],
+      [text('Ok.')],
+    );
+    const runId = await shortcutTurn('Help me get started. What should I set up first?', 'start');
+    expect(skillSteps(runId).map((s) => (s.debug_json as { skill: string }).skill)).toEqual([
+      'start',
+      'winback',
+      'refresh',
+    ]);
+    expect(JSON.stringify(haiku.seen[1].prompt)).toContain('limit_reached');
+    expect(stepsOf(runId).some((s) => s.label === 'Read Ansvisor Help')).toBe(false);
+  });
+
+  it('keeps nothing of it while the new Chat is off', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    const { haiku } = useModels([READY], [text('Ok.')]);
+    const runId = await shortcutTurn('Analyze our citations', 'analyze');
+    expect(skillSteps(runId)).toEqual([]);
+    expect(toolNames(haiku.seen[0])).toContain('read_visibility');
+  });
+});
+
 describe('the /tasks task strip (W2-11, CHAT-09 §B)', () => {
   // The mocked registry's own list: the aliases join it for these tests only.
   const tools = CHAT_TOOLS as (typeof CHAT_TOOLS)[number][];
@@ -5413,6 +5786,7 @@ describe('going live on its own (AUTONOMOUS-GO-LIVE §5.4)', () => {
     page: 'ready',
     text: { hold: null },
     liveItem: false,
+    takenDown: false,
     gate: { pass: true, scores: { eeat: 81, trust: 80, readability: 79, average: 80 } },
     usage: { used: 1, counted: false, nextAt: '2026-11-02T15:30:00.000Z' },
   };
