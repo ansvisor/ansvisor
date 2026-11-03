@@ -7,10 +7,13 @@ import { readAssignees } from '@/lib/action-center/assignees';
 import {
   DRAFT_PAGES_PER_CALL,
   DRAFT_STATUSES,
+  DRAFT_CHAT,
   LIBRARY_TABS,
   PAGE_TYPES,
   agentRunOf,
   agentStateOf,
+  draftConversationOf,
+  draftOriginOf,
   libraryTabCounts,
   type ContentDraft,
   type ContentDraftListItem,
@@ -213,7 +216,7 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
     supabase
       .from('content_drafts')
       .select(
-        'id, title, page_type, method, status, author, created_by, agent_state, agent_state_at, created_at, updated_at, archived_at, shopping_built:shopping_path->>builtAt',
+        `id, title, page_type, method, status, author, created_by, agent_state, agent_state_at, created_at, updated_at, archived_at, shopping_built:shopping_path->>builtAt, origin, ${DRAFT_CHAT}` as const,
       )
       .eq('brand_id', brandId)
       .order('updated_at', { ascending: false })
@@ -252,6 +255,8 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
       updatedAt: row.updated_at,
       archivedAt: row.archived_at,
       shopping: draftShopping(row.shopping_built, checks.get(row.id) ?? null),
+      origin: draftOriginOf(row.origin),
+      conversation: draftConversationOf(row.conversation),
     }),
   );
   // Under the cap the rows are every draft; at it, each tab is counted on its own.
@@ -276,7 +281,7 @@ const keptSource = z
 /** One draft for the editor (CE-004), or null when it isn't the member's to read. */
 /** The draft as the editor reads it; before 00448, without schema_left_out. */
 const DRAFT_COLUMNS_BEFORE_00448 =
-  `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, published_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no)` as const;
+  `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, published_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no), ${DRAFT_CHAT}` as const;
 const DRAFT_COLUMNS = `${DRAFT_COLUMNS_BEFORE_00448}, schema_left_out` as const;
 
 export async function getContentDraft(id: string): Promise<ContentDraft | null> {
@@ -319,6 +324,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
       data.action_id && data.actions
         ? { id: data.action_id, number: data.actions.action_no }
         : null,
+    conversation: draftConversationOf(data.conversation),
     agentState: agentStateOf(data.agent_state, data.agent_state_at),
     agentSince: data.agent_state_at,
     agentRun: agentRunOf(data.agent_run),
@@ -1011,6 +1017,8 @@ export async function startDraftFromAction(
         action_id: actionId,
         // A page brought in to optimize aims at its own length, not a new page's.
         ...(rules.importLength ? { rules } : {}),
+        // Made from an Action Center task (00463, W4-10).
+        origin: 'action_center',
       })
       .select('id')
       .single();

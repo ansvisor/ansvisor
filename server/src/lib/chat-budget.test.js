@@ -757,6 +757,98 @@ describe('each agent’s share of the AI limit', () => {
   });
 });
 
+describe('a scheduled job’s step (CHAT-12 item 14)', () => {
+  it('passes the job to the hold, which names the row with the chat’s job; no run cap', async () => {
+    const JOB = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0b';
+    await budget.reserveChatStep('o1', step({ feature: 'schedule', scheduleId: JOB }));
+    expect(rpcCalls.at(-1).args).toMatchObject({ p_feature: 'schedule', p_schedule_id: JOB });
+    expect(rpcCalls.at(-1).args).not.toHaveProperty('p_run_cap');
+    await budget.reserveChatStep('o1', step());
+    expect(rpcCalls.at(-1).args).not.toHaveProperty('p_schedule_id');
+  });
+});
+
+describe('how many parts of a job the budget left covers (CHAT-04 item 17a)', () => {
+  // One part: 2,000 tokens in at $1/M and 1,000 out at $5/M, $0.007 at worst.
+  const job = (over = {}) => ({
+    modelId: MODEL,
+    perUnit: { inputTokens: 2000, maxOutputTokens: 1000 },
+    units: 5,
+    ...over,
+  });
+
+  it('counts the parts what is left of the budget holds, holds in flight and credits included', async () => {
+    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 5, limit: 'month' });
+    // $0.02 left of Starter's $5: two parts, not three.
+    spent(4.98);
+    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 2, limit: 'month' });
+    // A step held in flight counts as spent.
+    await budget.reserveChatStep('o1', step());
+    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 1, limit: 'month' });
+    // Credits bought add to what is left.
+    grants.push({
+      id: 'g1',
+      organization_id: 'o1',
+      usd_total: 1,
+      usd_used: 0,
+      expires_at: '2027-10-29T00:00:00.000Z',
+      created_at: '2026-10-25T00:00:00.000Z',
+    });
+    expect((await budget.fitChatUnits('o1', job())).fits).toBe(5);
+    // It holds nothing.
+    expect(ledger.filter((r) => r.feature === 'chat')).toHaveLength(1);
+  });
+
+  it('says none fits once a part’s worst case is past what is left', async () => {
+    spent(4.995);
+    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 0, limit: 'month' });
+    spent(1);
+    expect(await budget.fitChatUnits('o1', job())).toEqual({ fits: 0, limit: 'month' });
+  });
+
+  it('fits every part on the workspace’s own key, and without a budget (self-hosted)', async () => {
+    spent(5);
+    expect(await budget.fitChatUnits('o1', job({ ownKey: true }))).toEqual({
+      fits: 5,
+      limit: 'month',
+    });
+    vi.stubEnv('IS_CLOUD', 'false');
+    vi.resetModules();
+    const selfHosted = await import('./chat-budget.js');
+    expect(await selfHosted.fitChatUnits('o1', job())).toEqual({ fits: 5, limit: 'month' });
+  });
+
+  it('keeps an agent run’s chat within its own cap too', async () => {
+    const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0a';
+    agentRuns = [{ id: AGENT_RUN, organization_id: 'o1', max_share: 0.01, usage_share: 0 }];
+    // 1% of $5 is $0.05: seven parts of $0.007, though the month has $5 left.
+    expect(await budget.fitChatUnits('o1', job({ units: 10, agentRunId: AGENT_RUN }))).toEqual({
+      fits: 7,
+      limit: 'run',
+    });
+    // With less left of the month than of the run's cap, the month binds.
+    spent(4.98);
+    expect(await budget.fitChatUnits('o1', job({ units: 10, agentRunId: AGENT_RUN }))).toEqual({
+      fits: 2,
+      limit: 'month',
+    });
+    agentRuns[0].organization_id = 'o2';
+    await expect(budget.fitChatUnits('o1', job({ agentRunId: AGENT_RUN }))).rejects.toMatchObject({
+      code: 'not_found',
+      statusCode: 404,
+    });
+  });
+
+  it('checks no more than 100 parts, and nothing while Chat is off', async () => {
+    expect(await budget.fitChatUnits('o1', job({ units: 500 }))).toEqual({
+      fits: 100,
+      limit: 'month',
+    });
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    await expect(budget.fitChatUnits('o1', job())).rejects.toMatchObject({ code: 'chat_off' });
+  });
+});
+
 describe('the key guard: all agents on the workspace’s own key (AGENT-OWN-KEY §4.2)', () => {
   /** A step already charged this period. */
   const row = (over) =>
@@ -927,6 +1019,39 @@ describe('an agent run’s step on purchased AI credits', () => {
     expect(parts.find((r) => r.grant_id === 'g1')).toMatchObject({ agent_run_id: AGENT_RUN });
     // Its use is the whole step over the plan's $5: 4%.
     expect(agentRuns[0].usage_share).toBe(0.04);
+  });
+});
+
+describe('about how much of the limit a Chat run uses (CHAT-12 item 7)', () => {
+  const row = (run, usd, over = {}) =>
+    ledger.push({
+      id: `e${nextId++}`,
+      organization_id: 'o1',
+      feature: 'chat',
+      cost_usd: usd,
+      own_key: false,
+      chat_run_id: run,
+      used_at: '2026-10-28T09:00:00.000Z',
+      ...over,
+    });
+
+  it('averages the last 30 days’ runs over the included budget, own-key and other features left out', async () => {
+    // Starter's included budget is $5: runs of $0.10 and $0.30 average $0.20, 4%.
+    row('r1', 0.04);
+    row('r1', 0.06);
+    row('r2', 0.3, { feature: 'schedule' });
+    row('r3', 9, { own_key: true });
+    row('r4', 9, { feature: 'content' });
+    row('r5', 9, { used_at: '2026-09-01T00:00:00.000Z' });
+    expect(await budget.chatRunEstimate('o1')).toEqual({ unlimited: false, share: 0.04, runs: 2 });
+  });
+
+  it('has no figure with no run to go on, none without a budget, and nothing while Chat is off', async () => {
+    expect(await budget.chatRunEstimate('o1')).toEqual({ unlimited: false, share: null, runs: 0 });
+    vi.stubEnv('IS_CLOUD', 'false');
+    expect(await budget.chatRunEstimate('o1')).toEqual({ unlimited: true, share: null, runs: 0 });
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    await expect(budget.chatRunEstimate('o1')).rejects.toMatchObject({ code: 'chat_off' });
   });
 });
 

@@ -16,6 +16,7 @@ const {
   listCollections,
   listSites,
   publishItem,
+  unpublishItem,
   suggestFieldMap,
   updateItem,
 } = await import('./webflow.js');
@@ -414,5 +415,17 @@ describe('publishItem (AUTONOMOUS-GO-LIVE PR 9)', () => {
     executeWebflowTool.mockRejectedValueOnce(new Error('403 Forbidden'));
     await expect(publishItem(account, 'col_1', 'item_1')).rejects.toBeInstanceOf(WebflowError);
     expect(executeWebflowTool).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('unpublishItem (AUTONOMOUS-GO-LIVE PR 10)', () => {
+  it('unpublishes the one live item', async () => {
+    executeWebflowTool.mockResolvedValue({});
+    expect(await unpublishItem(account, 'col_1', 'item_1')).toBe('item_1');
+    expect(executeWebflowTool.mock.calls.map(([slug, , args]) => [slug, args])).toEqual([
+      ['WEBFLOW_UNPUBLISH_LIVE_COLLECTION_ITEM', { collection_id: 'col_1', item_id: 'item_1' }],
+    ]);
+    executeWebflowTool.mockRejectedValueOnce(new Error('403 Forbidden'));
+    await expect(unpublishItem(account, 'col_1', 'item_1')).rejects.toBeInstanceOf(WebflowError);
   });
 });

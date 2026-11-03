@@ -55,7 +55,67 @@ async function viewer(): Promise<Viewer | null> {
 }
 
 const COLUMNS =
-  'id, created_at, user_id, surface, kind, tool_key, class, mode, approval_kind, auto_via, denial_code, summary_key, summary_params, status, undo_until, undone_at';
+  'id, created_at, user_id, surface, kind, tool_key, class, mode, approval_kind, auto_via, target_type, target_id, denial_code, summary_key, summary_params, status, undo_until, undone_at';
+
+/** How long a published page's row offers Take down (§6.4); the Library does after. */
+const TAKE_DOWN_MS = 30 * 24 * 60 * 60 * 1000;
+
+type LivePage = NonNullable<ActivityRow['takeDown']>;
+
+/** A row that published a page in the last 30 days: its page may be taken down from it. */
+const publishedLately = (row: Awaited<ReturnType<typeof readRows>>[number], now: number) =>
+  row.kind === 'change' &&
+  row.status === 'done' &&
+  row.tool_key === 'publishToCms' &&
+  row.target_type === 'content_draft' &&
+  !!row.target_id &&
+  now - Date.parse(row.created_at) < TAKE_DOWN_MS;
+
+/**
+ * The pages the page's publish rows put live, still live through Ansvisor,
+ * by draft: what Take down needs (PR 10). Only for an Admin or a Manager,
+ * and only rows of the last 30 days; a read that fails offers none.
+ */
+async function livePagesOf(
+  rows: Awaited<ReturnType<typeof readRows>>,
+  who: Viewer,
+  now: number,
+): Promise<Map<string, LivePage>> {
+  const live = new Map<string, LivePage>();
+  if (who.role !== 'admin' && who.role !== 'manager') return live;
+  const ids = [
+    ...new Set(
+      rows.filter((row) => publishedLately(row, now)).map((row) => row.target_id as string),
+    ),
+  ];
+  if (ids.length === 0) return live;
+  const { data, error } = await supabaseAdmin
+    .from('content_draft_deliveries')
+    .select('draft_id, target, published_url, content_drafts(title)')
+    .eq('organization_id', who.organizationId)
+    .eq('status', 'published')
+    .in('draft_id', ids);
+  if (error) {
+    console.error('Failed to read the pages Chat published:', error.message);
+    return live;
+  }
+  for (const send of data ?? []) {
+    const target = send.target;
+    if (!send.draft_id || (target !== 'webflow' && target !== 'wordpress' && target !== 'wix')) {
+      continue;
+    }
+    const draft = (
+      Array.isArray(send.content_drafts) ? send.content_drafts[0] : send.content_drafts
+    ) as { title?: string | null } | null;
+    live.set(send.draft_id, {
+      draftId: send.draft_id,
+      title: draft?.title?.trim() || 'Untitled',
+      url: send.published_url,
+      target,
+    });
+  }
+  return live;
+}
 
 /** The label keys of an area's tools, for the Area filter. */
 const keysOf = (area: ToolArea) =>
@@ -109,6 +169,7 @@ function toRow(
   who: Viewer,
   names: Map<string, string>,
   now: number,
+  live: Map<string, LivePage>,
 ): ActivityRow {
   const tool = row.tool_key ? chatToolByKey(row.tool_key) : undefined;
   const mine = row.user_id === who.userId;
@@ -138,6 +199,7 @@ function toRow(
       Date.parse(row.undo_until) > now &&
       (mine || who.role === 'admin'),
     undoneAt: row.undone_at,
+    takeDown: publishedLately(row, now) ? (live.get(row.target_id as string) ?? null) : null,
   };
 }
 
@@ -177,10 +239,11 @@ export async function listActivity(filters: ActivityFilters = {}): Promise<
         .sort((a, b) => a.name.localeCompare(b.name));
     }
     const now = Date.now();
+    const live = await livePagesOf(page, who, now);
     return {
       ok: true,
       isAdmin,
-      rows: page.map((row) => toRow(row, who, names, now)),
+      rows: page.map((row) => toRow(row, who, names, now, live)),
       hasMore: read.length > ACTIVITY_PAGE_SIZE,
       people,
     };
@@ -231,7 +294,7 @@ export async function exportActivityCsv(
     return {
       ok: true,
       csv: activityCsv(
-        rows.map((row) => toRow(row, who, names, now)),
+        rows.map((row) => toRow(row, who, names, now, new Map())),
         (key, params) => activitySummary(key, params),
       ),
     };

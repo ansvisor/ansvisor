@@ -67,7 +67,7 @@ const EFFORT_SCALE: Record<ChatEffort, number> = { normal: 1, high: 2, max: 3 };
 
 /** What one run may read: CHAT-04 item 5, in characters (about 4 to a token). */
 export interface ReadBudget {
-  /** Reads per run (Normal 6). */
+  /** Reads per run (Normal 6; an agent's run 10). */
   reads: number;
   /** One tool result, before the model sees it (Normal 3k tokens). */
   resultChars: number;
@@ -77,12 +77,24 @@ export interface ReadBudget {
   historyChars: number;
 }
 
-export function readBudget(effort: ChatEffort = 'normal'): ReadBudget {
+/**
+ * An agent's run reads more (CHAT-21): its skills, up to three, each list
+ * the reads their task needs ("What to read", 4 to 7 each), and a run that
+ * stops reading before them answers without the change it was for (the
+ * agents' test set, 2026-11-03: 19 of 20 runs used all 6 reads).
+ */
+export const AGENT_READS = 10;
+const AGENT_DATA_CHARS = 80_000;
+
+export function readBudget(
+  effort: ChatEffort = 'normal',
+  { agent = false }: { agent?: boolean } = {},
+): ReadBudget {
   const scale = EFFORT_SCALE[effort] ?? 1;
   return {
-    reads: 6 * scale,
+    reads: (agent ? AGENT_READS : 6) * scale,
     resultChars: 12_000 * scale,
-    dataChars: 48_000 * scale,
+    dataChars: (agent ? AGENT_DATA_CHARS : 48_000) * scale,
     historyChars: 24_000 * scale,
   };
 }

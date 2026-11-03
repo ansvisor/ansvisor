@@ -102,6 +102,17 @@ describe('the minute tick', () => {
     expect(typeof fetchCalls[0].init.signal?.aborted).toBe('boolean');
   });
 
+  it('calls the scheduled jobs’ tick endpoint with the secret (CHAT-12)', async () => {
+    expect(await agents.tickChatSchedules()).toEqual({ status: 200, body: { ok: true } });
+    expect(fetchCalls).toHaveLength(1);
+    expect(fetchCalls[0].url).toBe('https://app.example.com/api/internal/chat/schedules/tick');
+    expect(fetchCalls[0].init.headers.Authorization).toBe('Bearer shh');
+    expect(fetchCalls[0].body).toEqual({});
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await agents.tickChatSchedules()).toBeNull();
+    expect(fetchCalls).toHaveLength(1);
+  });
+
   it('sends nothing with the new Chat off or without the secret', async () => {
     vi.stubEnv('CHAT_INTERNAL_SECRET', '');
     expect(await agents.tickChatAgents()).toBeNull();
@@ -133,11 +144,36 @@ describe('the minute tick', () => {
     const first = job();
     await job();
     await vi.waitFor(() => expect(fetchCalls).toHaveLength(1));
+    fetchAnswer = () => answer(200);
     finish();
     await first;
-    fetchAnswer = () => answer(200);
+    // The agents' tick, then the scheduled jobs' in the same minute.
+    expect(fetchCalls.map((c) => c.url)).toEqual([
+      'https://app.example.com/api/internal/chat/agents/tick',
+      'https://app.example.com/api/internal/chat/schedules/tick',
+    ]);
     await job();
-    expect(fetchCalls).toHaveLength(2);
+    expect(fetchCalls).toHaveLength(4);
+  });
+
+  it('runs the scheduled jobs’ tick even when the agents’ tick fails or gets no answer', async () => {
+    const schedule = vi.fn(() => ({ stop: vi.fn() }));
+    agents.startChatAgentTicks(schedule);
+    const job = schedule.mock.calls[0][1];
+    let calls = 0;
+    fetchAnswer = () => {
+      calls += 1;
+      if (calls === 1) throw new TypeError('fetch failed');
+      return answer(200, { ok: true });
+    };
+    await job();
+    expect(fetchCalls.map((c) => c.url)).toEqual([
+      'https://app.example.com/api/internal/chat/agents/tick',
+      'https://app.example.com/api/internal/chat/schedules/tick',
+    ]);
+    fetchAnswer = () => answer(500, { ok: false });
+    await job();
+    expect(fetchCalls).toHaveLength(4);
   });
 
   it('doesn’t start with the new Chat off or without the secret', () => {
