@@ -83,6 +83,9 @@ describe('chatRows', () => {
         .filter((r) => r.conversation_id === c.id)
         .map((r) => Date.parse(r.finished_at));
       expect(Date.parse(c.last_message_at)).toBe(Math.max(...ends));
+      // Already read: the menu lists it with the chats, not as news in the Inbox.
+      expect(Date.parse(c.last_read_at)).toBeGreaterThan(Date.parse(c.last_message_at));
+      expect(Date.parse(c.last_read_at)).toBeLessThanOrEqual(NOW.getTime());
     }
   });
 

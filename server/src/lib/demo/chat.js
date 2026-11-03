@@ -551,6 +551,8 @@ export async function chatRows({ brandId, now, organizationId, userIds }) {
         origin_page: chat.originPage ?? '/dashboard/chat',
         touched_brand_ids: [brandId],
         last_message_at: lastAt.toISOString(),
+        // Read a minute after its answer: an answer read is no news for the Inbox.
+        last_read_at: new Date(lastAt.getTime() + 60_000).toISOString(),
         created_at: chat.turns[0].at.toISOString(),
         updated_at: lastAt.toISOString(),
       });
