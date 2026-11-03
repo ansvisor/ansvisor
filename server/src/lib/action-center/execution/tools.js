@@ -31,6 +31,7 @@
  */
 
 import supabaseAdmin from '../../../config/supabase.js';
+import { brandConnection, composioTarget } from '../../brand-integrations.js';
 import { runGaReport } from '../../composio.js';
 import { resolve } from '../../../config/action-engine.js';
 import { analyzeCompetitorPages } from '../competitor-pages.js';
@@ -42,11 +43,6 @@ const { validation } = resolve();
 
 function utcDay(date) {
   return date.toISOString().slice(0, 10);
-}
-
-/** One connection per organization per provider (#577). */
-function entityIdFor(organizationId) {
-  return `org_${organizationId}`;
 }
 
 const tool = (id, spec) => Object.freeze({ id, version: 1, writesExternally: false, ...spec });
@@ -145,11 +141,14 @@ export const TOOLS = Object.freeze({
     async run({ brandId, payload, now }) {
       const { data: brand, error } = await supabaseAdmin
         .from('brands')
-        .select('organization_id, ga_property_id')
+        .select('ga_property_id')
         .eq('id', brandId)
         .single();
       if (error) throw new Error(error.message);
       if (!brand?.ga_property_id) throw new Error('brand has no analytics property configured');
+      // The Google sign-in the brand uses (00470).
+      const connection = await brandConnection(brandId, 'google-analytics');
+      if (!connection?.connected) throw new Error('brand has no analytics connection');
 
       const length = validation.windowDays;
       const startDate = utcDay(new Date(now.getTime() - (length - 1) * DAY_MS));
@@ -157,7 +156,7 @@ export const TOOLS = Object.freeze({
       const previousEnd = utcDay(new Date(Date.parse(startDate) - DAY_MS));
       const previousStart = utcDay(new Date(Date.parse(startDate) - length * DAY_MS));
 
-      const report = await runGaReport(entityIdFor(brand.organization_id), brand.ga_property_id, {
+      const report = await runGaReport(composioTarget(connection), brand.ga_property_id, {
         dateRanges: [
           { startDate, endDate, name: 'current' },
           { startDate: previousStart, endDate: previousEnd, name: 'previous' },

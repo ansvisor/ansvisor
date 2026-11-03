@@ -2,7 +2,7 @@ import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from './access.js';
 import { logger } from './logger.js';
 import { onBrandDomain } from './audit/host.js';
-import { shipCmsPublish } from './impact-ledger/ship.js';
+import { closeTakenDown, shipCmsPublish } from './impact-ledger/ship.js';
 
 /**
  * A sent page now live at `url` (Send to CMS #1331), as a webhook's
@@ -56,6 +56,93 @@ export async function markDeliveryPublished(delivery, url, { externalId = null }
   // A shipped change for the impact ledger (CHAT-22 §2), measured at 7, 14,
   // 30 and 90 days: behind CHAT_AGENTIC, once per send, and never throws.
   await shipCmsPublish({ deliveryId: delivery.id, url, publishedAt: now });
+}
+
+/**
+ * A published send taken down to a draft in its CMS (AUTONOMOUS-GO-LIVE PR
+ * 10), once the CMS did it: the send is taken_down (00460: the status sweeps
+ * and the nightly ship fill leave it), then, each logged and never thrown, as
+ * the page is down whatever they do:
+ *   * the page's address cleared, back to Ready, when it is this send's;
+ *   * an agent's go-live of that page and CMS taken_down (00443), which its
+ *     agent page shows;
+ *   * the open notices of that go-live closed: there is nothing left to take down;
+ *   * its ship events' measurements Not measurable, taken_down.
+ * A page someone took down never goes live on its own again (the send's
+ * status, read by Chat and the internal go-live route).
+ *
+ * @param {{ id: string, draft_id: string|null, target: string, published_url: string|null }} delivery
+ * @param {{ userId: string, at?: string }} options
+ */
+export async function markDeliveryTakenDown(delivery, { userId, at = new Date().toISOString() }) {
+  const { data: taken, error } = await supabaseAdmin
+    .from('content_draft_deliveries')
+    .update({ status: 'taken_down', taken_down_at: at, taken_down_by: userId })
+    .eq('id', delivery.id)
+    .eq('status', 'published')
+    .select('id');
+  if (error) throw new Error(error.message);
+  if (!taken?.length) return false;
+  if (!delivery.draft_id) return true;
+  const draftId = delivery.draft_id;
+  const steps = [
+    [
+      'page address',
+      async () => {
+        const { data: draft, error: readError } = await supabaseAdmin
+          .from('content_drafts')
+          .select('published_url')
+          .eq('id', draftId)
+          .maybeSingle();
+        if (readError) throw new Error(readError.message);
+        if (!draft?.published_url || draft.published_url !== delivery.published_url) return;
+        const { error: writeError } = await supabaseAdmin
+          .from('content_drafts')
+          .update({ status: 'ready', published_url: null, published_at: null })
+          .eq('id', draftId)
+          .eq('published_url', draft.published_url);
+        if (writeError) throw new Error(writeError.message);
+      },
+    ],
+    [
+      'go-live step',
+      async () => {
+        const { error: stepError } = await supabaseAdmin
+          .from('chat_agent_go_live_events')
+          .update({ status: 'taken_down', taken_down_at: at, taken_down_by: userId })
+          .eq('content_draft_id', draftId)
+          .eq('target', delivery.target)
+          .eq('kind', 'publish')
+          .eq('status', 'done');
+        if (stepError) throw new Error(stepError.message);
+      },
+    ],
+    ['notices', () => tellTakenDown(draftId, at)],
+  ];
+  for (const [what, step] of steps) {
+    try {
+      await step();
+    } catch (err) {
+      logger.warn(
+        { err: { name: err?.name, message: err?.message }, draftId },
+        `[content-published] taken down, ${what} not updated`,
+      );
+    }
+  }
+  await closeTakenDown({ draftId, at });
+  return true;
+}
+
+/** The open went-live notices of a page published on its own: closed, as it is down. */
+async function tellTakenDown(draftId, at) {
+  const { error } = await supabaseAdmin
+    .from('chat_notices')
+    .update({ resolved_at: at })
+    .eq('kind', 'agent_went_live')
+    .eq('payload->>draftId', draftId)
+    .eq('payload->>kind', 'publish')
+    .is('resolved_at', null);
+  if (error) throw new Error(error.message);
 }
 
 const MAX_URL = 2048;

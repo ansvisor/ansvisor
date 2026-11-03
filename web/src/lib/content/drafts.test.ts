@@ -7,8 +7,11 @@ import {
   agentRunOf,
   agentStateOf,
   contentEditorPath,
+  draftConversationOf,
+  draftOriginOf,
   draftsCreatedIn,
   draftsLastSent,
+  draftsMadeIn,
   draftsInTab,
   isPageType,
   libraryTabCounts,
@@ -29,6 +32,8 @@ const draft = (id: string, status: DraftStatus): ContentDraftListItem => ({
   createdAt: '2026-10-18T09:00:00Z',
   updatedAt: '2026-10-20T10:00:00Z',
   archivedAt: null,
+  origin: 'editor',
+  conversation: null,
 });
 
 const drafts = [
@@ -76,6 +81,12 @@ describe('the Library’s Last send filter (#1331)', () => {
     expect(ids('sent')).toEqual(['sent']);
     expect(ids('failed')).toEqual(['failed']);
     expect(ids('published')).toEqual(['live']);
+  });
+
+  it('lists a page taken down under Sent: a draft in its CMS again (PR 10)', () => {
+    const down = new Map([...sends, ['live', { status: 'taken_down' }]]);
+    expect(draftsLastSent(list, down, 'sent').map((d) => d.id)).toEqual(['sent', 'live']);
+    expect(draftsLastSent(list, down, 'published')).toEqual([]);
   });
 });
 
@@ -149,5 +160,36 @@ describe('agentRunOf', () => {
     expect(agentRunOf('rewrite')).toBe('rewrite');
     expect(agentRunOf(null)).toBeNull();
     expect(agentRunOf('brief')).toBeNull();
+  });
+});
+
+describe('where a draft was made (00463, W4-10)', () => {
+  it('reads a row’s origin, and the editor’s for anything else', () => {
+    for (const origin of ['editor', 'chat', 'action_center', 'agent', 'mcp'] as const) {
+      expect(draftOriginOf(origin)).toBe(origin);
+    }
+    expect(draftOriginOf(null)).toBe('editor');
+    expect(draftOriginOf('somewhere')).toBe('editor');
+  });
+
+  it('reads the chat it was made in, or none when the member can’t read it', () => {
+    expect(draftConversationOf({ id: 'c1', title: 'Pricing FAQ' })).toEqual({
+      id: 'c1',
+      title: 'Pricing FAQ',
+    });
+    expect(draftConversationOf([{ id: 'c1', title: null }])).toEqual({ id: 'c1', title: '' });
+    expect(draftConversationOf(null)).toBeNull();
+    expect(draftConversationOf([])).toBeNull();
+  });
+
+  it('lists the drafts made where the Made in filter says', () => {
+    const made = [
+      { ...draft('a', 'draft'), origin: 'chat' as const },
+      { ...draft('b', 'draft'), origin: 'editor' as const },
+      { ...draft('c', 'ready'), origin: 'action_center' as const },
+    ];
+    expect(draftsMadeIn(made, 'all').map((d) => d.id)).toEqual(['a', 'b', 'c']);
+    expect(draftsMadeIn(made, 'chat').map((d) => d.id)).toEqual(['a']);
+    expect(draftsMadeIn(made, 'mcp')).toEqual([]);
   });
 });
