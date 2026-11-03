@@ -114,6 +114,8 @@ export interface GenerationJobStatus {
     sameQuestion?: number;
     /** What the request could draw on, so the toast can say why fewer came back. */
     scope?: NewRequestScope;
+    /** Needs written as another angle once the open ones ran out: the need, and what it had. */
+    angles?: { need: string; of: string }[];
   } | null;
   failedReason: string | null;
 }
@@ -331,6 +333,8 @@ export interface NeedCounts {
   covered: number;
   /** No tracked answers in the last 30 days yet: nothing to write from. */
   noAnswers: number;
+  /** Covered needs New may write another angle on once the open ones run out. */
+  angles: number;
 }
 
 /** What "+ New" can still write for, read when its dialog opens. */

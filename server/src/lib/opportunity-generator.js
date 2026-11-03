@@ -46,6 +46,7 @@ import {
   pickPageCluster,
 } from './opportunity-page-focus.js';
 import { reopenStrengthened } from './opportunity-reopen.js';
+import { angleCandidates, angleLine } from './opportunity-angles.js';
 import {
   claimOpportunitySlots,
   linkOpportunitySlots,
@@ -303,6 +304,21 @@ export async function mergeSameQuestion(
   return into;
 }
 
+/** The fan-out baskets of the given clusters. */
+async function loadBaskets(clusterIds) {
+  const { data, error } = await selectInChunks(
+    clusterIds,
+    (chunk) =>
+      supabaseAdmin
+        .from('prompt_cluster_queries')
+        .select('cluster_id, query, times_searched, included')
+        .in('cluster_id', chunk),
+    BASKET_CHUNK,
+  );
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
 async function loadPromptTexts(promptIds) {
   const { data, error } = await selectInChunks(promptIds, (chunk) =>
     supabaseAdmin.from('prompts').select('id, text').in('id', chunk),
@@ -371,7 +387,10 @@ export const IDEA_MAX_LENGTH = 500;
  *   opportunity already answers to that one instead (opportunity-same-question.js).
  *   `scope` (every request but `alternativeOf`) says what the request could
  *   draw on (requestScope), so the page can say why fewer came back.
- * @returns {Promise<{ generated: number, merged: number, reopened?: number, duplicates?: number, sameQuestion?: number, limited?: boolean, noMatch?: boolean, opportunityIds?: string[], existingId?: string, scope?: { focus: string, requested: number, needs: number, covered: number, noAnswers: number } }>}
+ *   A New request (`count`, no prompt or page) that runs out of needs with
+ *   no opportunity writes the rest as another angle on needs the brand is
+ *   still barely seen for (opportunity-angles.js); `angles` names them.
+ * @returns {Promise<{ generated: number, merged: number, reopened?: number, duplicates?: number, sameQuestion?: number, limited?: boolean, noMatch?: boolean, opportunityIds?: string[], existingId?: string, angles?: { need: string, of: string }[], scope?: { focus: string, requested: number, needs: number, covered: number, noAnswers: number } }>}
  */
 export async function generateContentOpportunities(
   brandId,
@@ -512,6 +531,9 @@ export async function generateContentOpportunities(
     (!promptId || clusterById.get(c.id).prompt_ids.includes(promptId)) &&
     (!focusIds || focusIds.includes(c.id));
   const open = openCandidates(candidates, { covered, inFocus, alternativeOf });
+  // Coverage before this run's own checks merge anything: another angle is
+  // only for needs whose opportunity has had its chance.
+  const coveredBefore = new Set(covered);
   // What the request could draw on, so the page can say why fewer came back
   // than were asked for. Another angle is for one known need.
   const scope = alternativeOf
@@ -533,16 +555,7 @@ export async function generateContentOpportunities(
     }
     open.splice(0, open.length, ...open.filter((c) => c.id === pick?.write));
   }
-  const { data: basketRows, error: basketErr } = await selectInChunks(
-    open.map((c) => c.id),
-    (chunk) =>
-      supabaseAdmin
-        .from('prompt_cluster_queries')
-        .select('cluster_id, query, times_searched, included')
-        .in('cluster_id', chunk),
-    BASKET_CHUNK,
-  );
-  if (basketErr) throw new Error(basketErr.message);
+  const basketRows = await loadBaskets(open.map((c) => c.id));
 
   // A cluster whose question an open opportunity answers joins it. An asked-
   // for one too: a prompt's or a page's request then points at it. Only
@@ -571,11 +584,25 @@ export async function generateContentOpportunities(
         covered,
       });
 
-  const wanted = targeted
+  const fresh = targeted
     ? open.slice(0, count ?? 1)
     : pickClusters(open, covered, count ?? OPPORTUNITIES_PER_RUN, {
         fill: count !== undefined,
       });
+  // A New request that runs out of needs without an opportunity writes the
+  // rest as another angle on needs the brand is still barely seen for
+  // (opportunity-angles.js). A prompt's or a page's request is for its need.
+  const angleRoom = !targeted && count !== undefined && !promptId ? count - fresh.length : 0;
+  const angles =
+    angleRoom > 0
+      ? angleCandidates(candidates, existing, { covered: coveredBefore, inFocus }).slice(
+          0,
+          angleRoom,
+        )
+      : [];
+  const wanted = [...fresh, ...angles];
+  // Their own baskets, for the prompt and the new opportunity's searches.
+  if (angles.length) basketRows.push(...(await loadBaskets(angles.map((c) => c.id))));
   if (!wanted.length) {
     logger.info(
       {
@@ -667,7 +694,7 @@ ${c.promptTexts
 Searches AI engines ran for these prompts: ${basket.top.map((q) => q.query).join('; ') || 'none recorded'}
 Est. AI volume: ${m.demand}/mo | Brand visibility: ${m.visibility}% | Strongest competitor: ${m.topCompetitorVisibility}% | Competitors visible: ${m.competitorsCited.join(', ') || 'none'}
 Brand pages that may cover this need:
-${pages.map(pageLine).join('\n') || 'none found'}`;
+${pages.map(pageLine).join('\n') || 'none found'}${cand.angleOf ? `\n${angleLine(cand.angleOf)}` : ''}`;
   };
 
   // The content types follow the brand's kind of site, as the Content Editor's
@@ -744,7 +771,8 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
       title: clean(a.title),
     }));
 
-    const target = Number.isInteger(opp.sameAs) ? shown[opp.sameAs] : null;
+    // Another angle is its own opportunity, never folded into one.
+    const target = !cand.angleOf && Number.isInteger(opp.sameAs) ? shown[opp.sameAs] : null;
     if (target) {
       // Related clusters deleted by a re-clustering since are dropped here.
       const ids = [target.cluster_id, ...(target.related_cluster_ids || []), cand.id].filter((id) =>
@@ -814,8 +842,13 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
         }),
         targetPages: primary.pages,
         assets,
-        ...(alternativeOf
-          ? { alternativeOf: { id: alternativeOf.id, title: alternativeOf.title } }
+        ...(alternativeOf || cand.angleOf
+          ? {
+              alternativeOf: {
+                id: (alternativeOf || cand.angleOf).id,
+                title: (alternativeOf || cand.angleOf).title,
+              },
+            }
           : {}),
         // Asked for from AI Traffic's Pages section, for this page.
         ...(focus ? { forPage: { path: pagePath, url: focus.page.url } } : {}),
@@ -862,6 +895,10 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
     duplicates,
     sameQuestion: sameQuestion.size,
     ...scope,
+    // The needs written as another angle, for the toast to name.
+    angles: picked
+      .filter((p) => p.angleOf && inserts.some((row) => row.cluster_id === p.id))
+      .map((p) => ({ need: clusterById.get(p.id).label, of: p.angleOf.title })),
     opportunityIds: created.map((row) => row.id),
   };
 }

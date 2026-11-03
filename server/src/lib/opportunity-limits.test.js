@@ -122,7 +122,9 @@ describe('cluster selection', () => {
   });
 
   it('reads the date coverage needs with the opportunities', () => {
-    expect(source('./open-opportunities.js')).toMatch(/'id, title, status, updated_at,/);
+    expect(source('./open-opportunities.js')).toMatch(
+      /'id, title, status, created_at, updated_at,/,
+    );
   });
 
   it("holds a prompt's own request back only with an open opportunity (PROMPT-006)", () => {

@@ -70,8 +70,9 @@ interface Option {
  *
  * Each need (prompt group) gets one opportunity, so the dialog reads what is
  * still open (getOpportunityAvailability): it caps the count at the focus's
- * needs without one, says when there are none, and offers a prompt's open
- * opportunity instead of a request that would write nothing.
+ * needs without one plus those that may get another angle, says when there
+ * are none, and offers a prompt's open opportunity instead of a request that
+ * would write nothing.
  */
 export function NewOpportunitiesDialog({
   open,
@@ -156,13 +157,16 @@ function NewOpportunitiesForm({
     : focus === 'auto'
       ? availability
       : focus === 'topic' && topicId
-        ? (availability.topics[topicId] ?? { open: 0, covered: 0, noAnswers: 0 })
+        ? (availability.topics[topicId] ?? { open: 0, covered: 0, noAnswers: 0, angles: 0 })
         : null;
   // The prompt's need already has an open opportunity: offer that one.
   const existingId =
     focus === 'prompt' && prompt ? availability?.promptOpportunity[prompt.value] : undefined;
 
-  const cap = focus === 'prompt' ? Math.min(1, max) : needs ? Math.min(max, needs.open) : max;
+  // Past the needs without one, New writes another angle on needs the brand
+  // is still barely seen for (opportunity-angles.js on the server).
+  const cap =
+    focus === 'prompt' ? Math.min(1, max) : needs ? Math.min(max, needs.open + needs.angles) : max;
   // Kept as chosen, so leaving the prompt focus brings the count back.
   const count = Math.min(chosenCount, Math.max(1, cap));
 
@@ -218,13 +222,17 @@ function NewOpportunitiesForm({
               </SelectTrigger>
               <SelectContent>
                 {topics.map((tp) => {
-                  const open = availability ? (availability.topics[tp.value]?.open ?? 0) : null;
+                  const counts = availability?.topics[tp.value];
                   return (
                     <SelectItem key={tp.value} value={tp.value}>
                       <span className="min-w-0 flex-1 truncate">{tp.label}</span>
-                      {open !== null && (
+                      {availability && (
                         <span className="ml-2 shrink-0 text-muted-foreground">
-                          {open ? t('topicOpen', { count: open }) : t('topicCovered')}
+                          {counts?.open
+                            ? t('topicOpen', { count: counts.open })
+                            : counts?.angles
+                              ? t('topicAngles', { count: counts.angles })
+                              : t('topicCovered')}
                         </span>
                       )}
                     </SelectItem>
@@ -270,6 +278,11 @@ function NewOpportunitiesForm({
                   needs: needs.open + needs.covered + needs.noAnswers,
                   focus,
                 })}
+                {needs.angles > 0 && ` ${t('needsMoreAngles', { angles: needs.angles })}`}
+              </p>
+            ) : needs.angles > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {t('needsAngles', { focus, angles: needs.angles })}
               </p>
             ) : (
               <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">

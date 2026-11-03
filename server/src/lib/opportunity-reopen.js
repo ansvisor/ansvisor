@@ -125,6 +125,8 @@ export async function reopenStrengthened(brandId, opportunities, measure, { skip
       .eq('id', opp.id)
       .eq('status', 'done');
     if (writeErr) throw new Error(writeErr.message);
+    // The run reads its rows on: this one is open again (another angle skips it).
+    opp.status = 'new';
     reopened += 1;
     logger.info(
       { brandId, opportunityId: opp.id, reason, previousScore, score: current.score },
