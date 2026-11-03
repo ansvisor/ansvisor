@@ -334,6 +334,8 @@ export interface ChatEventPayloads {
   'step.finished': { step: ChatStep };
   /** A chunk of the answer's markdown. */
   'text.delta': { text: string };
+  /** The whole answer so far, in place of what streamed: rewritten in the question's language. */
+  'text.replaced': { text: string };
   'ask.created': ChatAsk;
   'deliverable.created': ChatDeliverable;
   /** A Why did it move analysis the run kept (CHAT-22 §1, "why.ready"): its card's numbers. */
@@ -396,6 +398,7 @@ const EVENT_TYPES: Record<ChatEventType, true> = {
   'step.updated': true,
   'step.finished': true,
   'text.delta': true,
+  'text.replaced': true,
   'ask.created': true,
   'deliverable.created': true,
   'why.ready': true,

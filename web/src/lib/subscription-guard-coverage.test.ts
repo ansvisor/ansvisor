@@ -137,6 +137,8 @@ const OPEN_ROUTES: Record<string, string> = {
     "turning your own Use memory off or on stays open; the store answers 402 for the workspace's switch",
   'chat/conversations/[id]/read:POST': 'marking your own chat read starts no cost',
   'chat/home-seen:POST': "the person's own record of leaving Chat Home starts no cost",
+  'chat/whats-new/read:POST':
+    "marking What's new read is the person's own record and starts no cost",
   'chat/conversations/[id]/restore:POST': 'undoing a delete starts no cost',
   'chat/runs:POST': 'the engine refuses a read-only workspace with the 402 body (startChatRun)',
   'chat/runs/[id]/approve:POST': 'the engine answers 402 (prepareResume), but for Ask your Admin',
