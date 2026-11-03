@@ -150,7 +150,8 @@ export function ChatSkills() {
     const started = await startChatRun(`/${name}`, brandId ?? null);
     if (!started.ok) {
       setStarting(null);
-      if (started.code === 'subscription_inactive') openUpgrade();
+      // A read-only workspace, or a skill run on the demo brand: the plans.
+      if (started.code === 'subscription_inactive' || started.code === 'demo_brand') openUpgrade();
       else toast.error(started.error ?? t('runFailed'));
       return;
     }
