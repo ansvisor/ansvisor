@@ -13,7 +13,7 @@ export const WHATS_NEW_READS = [
     class: 'read',
     area: 'account',
     description:
-      "What's new in Ansvisor for the person's plan: up to 3 updates, the feature they named first, then the ones new for them, then the newest. Each has the feature, its lines (why it was built, what it does, how it helps, what to do), the page to try it, and on_plans when their plan doesn't include it. The updates show as cards under your answer: don't repeat their lines; add at most one sentence tying an update to what the person asked, and when they write in another language give the lines in it. Benefit only: never add a price or a technical detail. Next moves: \"Try it on my brand\" and, when older_updates is true, \"Show older updates\" (call again with older_than set to the oldest update's published day).",
+      'What\'s new in Ansvisor for the person\'s plan: up to 3 updates, the feature they named first, then the ones new for them, then the newest. Each has the feature, its lines (why it was built, what it does, how it helps, what to do), the page to try it, and on_plans when their plan doesn\'t include it. The updates show as cards under your answer: don\'t repeat their lines; add at most one sentence tying an update to what the person asked, and when they write in another language give the lines in it. Benefit only: never add a price or a technical detail. Next moves: "Try it on my brand" and, when older_updates is true, "Show older updates" (call again with shown listing the feature of every update already shown in this conversation).',
     minRole: 'analyst',
     planGate: null,
     brandOf: null,
@@ -29,17 +29,17 @@ export const WHATS_NEW_READS = [
         .max(80)
         .optional()
         .describe('The feature the person named, e.g. "Agent Center".'),
-      older_than: z
-        .string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/)
+      shown: z
+        .array(z.string().trim().max(80))
+        .max(50)
         .optional()
-        .describe('Only updates published before this day (YYYY-MM-DD), for older ones.'),
+        .describe('The features of the updates already shown, left out for the next ones.'),
       limit: z.number().int().min(1).max(10).optional().describe('Updates, 3 at most.'),
     }),
     run: (ctx, input) =>
       getWhatsNewFor(ctx, {
         feature: input.feature,
-        olderThan: input.older_than,
+        shown: input.shown,
         limit: input.limit,
       }),
     fixture: { input: { feature: 'Agent Center' } },
