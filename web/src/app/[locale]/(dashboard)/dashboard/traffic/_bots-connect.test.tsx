@@ -142,6 +142,11 @@ describe('BotsSource', () => {
     expect(createBotConnection).toHaveBeenCalledWith('b1', 'vercel_drain');
     expect(page()).toContain("the secret in them isn't shown again");
     expect(page()).toContain('Authorization: Bearer abot_s3cret');
+    // Left out of session replays (SEC-10a).
+    const secret = [...document.querySelectorAll('pre')].find((pre) =>
+      pre.textContent?.includes('abot_s3cret'),
+    );
+    expect(secret?.closest('.ph-no-capture')).not.toBeNull();
     expect(page()).toContain('Format: JSON. Log sources: static, lambda.');
     expect(getBotConnections).toHaveBeenCalledTimes(2);
   });

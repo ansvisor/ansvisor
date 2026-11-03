@@ -7,10 +7,10 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
  * Merchant Center issues and its page's AI visits and orders.
  */
 
-const brandInOrg = vi.hoisted(() => vi.fn());
+const brandAllowed = vi.hoisted(() => vi.fn());
 // The shopping reads' plan check: whether the plan has shopping analytics.
 const planIncludes = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/mcp/data', () => ({ brandInOrg, planIncludes }));
+vi.mock('@/lib/mcp/data', () => ({ brandAllowed, planIncludes }));
 // The REST mirror's key: the organization's.
 vi.mock('@/lib/mcp-auth', () => ({
   authenticateMcpRequest: vi.fn(async () => ({
@@ -18,6 +18,7 @@ vi.mock('@/lib/mcp-auth', () => ({
     email: null,
     organizationId: 'org-1',
     apiKeyId: 'key-1',
+    brandAccess: 'all',
     role: 'admin',
   })),
 }));
@@ -119,6 +120,7 @@ const auth: McpAuthContext = {
   email: null,
   organizationId: 'org-1',
   apiKeyId: 'key-1',
+  brandAccess: 'all',
   role: 'admin',
 };
 
@@ -159,7 +161,7 @@ function expectBrandScoped(brandId: string) {
 }
 
 beforeEach(() => {
-  brandInOrg.mockReset().mockResolvedValue(true);
+  brandAllowed.mockReset().mockResolvedValue(true);
   planIncludes.mockReset().mockResolvedValue(true);
   read.readCatalogSources.mockReset();
   read.readCatalogProducts.mockReset();
@@ -206,7 +208,7 @@ describe('getCatalogSourcesFor', () => {
   });
 
   it("answers null for another organization's brand, without reading it", async () => {
-    brandInOrg.mockResolvedValue(false);
+    brandAllowed.mockResolvedValue(false);
     expect(await getCatalogSourcesFor(auth, 'brand-2')).toBeNull();
     expect(read.readCatalogSources).not.toHaveBeenCalled();
   });
@@ -336,7 +338,7 @@ describe('listCatalogProductsFor', () => {
     });
 
     it("checks the plan only for the key's own brand", async () => {
-      brandInOrg.mockResolvedValue(false);
+      brandAllowed.mockResolvedValue(false);
       expect(await listCatalogProductsFor(auth, { brandId: 'brand-2' })).toBeNull();
       expect(planIncludes).not.toHaveBeenCalled();
     });
@@ -410,7 +412,7 @@ describe('listCatalogProductsFor', () => {
   });
 
   it("answers null for another organization's brand, without reading it", async () => {
-    brandInOrg.mockResolvedValue(false);
+    brandAllowed.mockResolvedValue(false);
     expect(await listCatalogProductsFor(auth, { brandId: 'brand-2' })).toBeNull();
     expect(filters).toEqual([]);
     expect(read.readCatalogProducts).not.toHaveBeenCalled();

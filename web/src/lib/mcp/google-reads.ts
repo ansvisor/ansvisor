@@ -1,7 +1,7 @@
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { getTrafficGoogleTotals } from '@/lib/actions/traffic';
-import { brandInOrg } from './data';
+import { brandAllowed } from './data';
 import { asService } from './chat-facts';
 
 /**
@@ -65,7 +65,7 @@ export async function getGscSummaryFor(
   auth: McpAuthContext,
   params: { brandId: string; days?: number },
 ) {
-  if (!(await brandInOrg(auth, params.brandId))) return null;
+  if (!(await brandAllowed(auth, params.brandId))) return null;
   const days = params.days ?? 28;
   if (!(await sourcesOf(auth, params.brandId)).gsc) {
     return { connected: false, days, data_as_of: null, source_lag: '2–3 days' };
@@ -98,7 +98,7 @@ export async function getGaSummaryFor(
   auth: McpAuthContext,
   params: { brandId: string; days?: number },
 ) {
-  if (!(await brandInOrg(auth, params.brandId))) return null;
+  if (!(await brandAllowed(auth, params.brandId))) return null;
   const days = params.days ?? 28;
   if (!(await sourcesOf(auth, params.brandId)).ga) {
     return { connected: false, days, data_as_of: null, source_lag: '1 day' };

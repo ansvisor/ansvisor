@@ -29,7 +29,7 @@ const readCmsSources = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/cms-sources', () => ({ readCmsSources }));
 
 const { createFakeSupabase } = await import('@/lib/chat/testing/fake-supabase');
-const { sendDraftToCms } = await import('./cms-send');
+const { publishDraftToCms, sendDraftToCms } = await import('./cms-send');
 const { startSiteAudits } = await import('./audits');
 const { updateContentDraft } = await import('./content-drafts');
 
@@ -80,6 +80,20 @@ beforeEach(() => {
                 author: null,
                 teamByline: '',
                 byline: null,
+                reviewer: null,
+                // Not an article: no Article schema (00448).
+                schema: {
+                  input: {
+                    title: draft.title,
+                    author: null,
+                    authorUrl: null,
+                    brandName: 'Acme',
+                    brandUrl: null,
+                    isNew: false,
+                  },
+                  pageType: null,
+                  leftOut: false,
+                },
               },
             ],
           ]
@@ -228,6 +242,65 @@ describe('sendDraftToCms', () => {
     expect(await sendDraftToCms(DRAFT, 'webflow')).toMatchObject({ ok: false, reason: 'failed' });
     fake.db.failures.profiles = { message: 'db down' };
     expect(await sendDraftToCms(DRAFT, 'webflow')).toMatchObject({ ok: false, reason: 'failed' });
+    expect(requests).toEqual([]);
+  });
+});
+
+describe('publishDraftToCms (AUTONOMOUS-GO-LIVE PR 9)', () => {
+  it('publishes the page made as Send to CMS makes it, through the API’s publish, and says where', async () => {
+    answer = {
+      status: 200,
+      body: {
+        delivery: { id: 'd1', draftId: DRAFT, status: 'published' },
+        url: 'https://acme.example/blog/pricing-faq',
+      },
+    };
+    expect(await publishDraftToCms(DRAFT, 'webflow')).toEqual({
+      ok: true,
+      target: 'webflow',
+      url: 'https://acme.example/blog/pricing-faq',
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0].url).toMatch(/\/api\/content-drafts\/publish-cms$/);
+    expect(requests[0].body).toMatchObject({
+      brandId: BRAND,
+      target: 'webflow',
+      page: { draftId: DRAFT, title: 'Pricing FAQ', slug: 'pricing-faq' },
+    });
+  });
+
+  it('says the API’s refusals as Chat’s codes, the CMS’s own words kept', async () => {
+    for (const [status, code, reason] of [
+      [409, 'live_item', 'live_item'],
+      [502, 'publish_refused', 'publish_refused'],
+      [403, 'execute_off', 'execute_off'],
+      [400, 'no_wix', 'not_connected'],
+    ] as const) {
+      answer = { status, body: { code, error: `Refused: ${code}` } };
+      expect(await publishDraftToCms(DRAFT, 'wix')).toEqual({
+        ok: false,
+        reason,
+        message: `Refused: ${code}`,
+      });
+    }
+  });
+
+  it('publishes nothing over a live page, nor in Framer, nor for a Manager while publishing is off', async () => {
+    fake.db.tables.content_drafts[0].published_url = 'https://acme.example/pricing-faq';
+    expect(await publishDraftToCms(DRAFT, 'wordpress')).toMatchObject({
+      ok: false,
+      reason: 'live_item',
+    });
+    fake.db.tables.content_drafts[0].published_url = null;
+    expect(await publishDraftToCms(DRAFT, 'framer' as never)).toMatchObject({
+      ok: false,
+      reason: 'invalid',
+    });
+    managersCantGoLive(['publishing']);
+    expect(await publishDraftToCms(DRAFT, 'wordpress')).toMatchObject({
+      ok: false,
+      reason: 'execute_off',
+    });
     expect(requests).toEqual([]);
   });
 });

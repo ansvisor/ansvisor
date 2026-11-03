@@ -83,8 +83,17 @@ vi.mock('@/lib/chat/actor/drafts', () => ({
   createContentDraftFor: tracked.track('chat/actor/drafts.createContentDraftFor'),
   updateContentDraftFor: tracked.track('chat/actor/drafts.updateContentDraftFor'),
 }));
+vi.mock('@/lib/chat/actor/api-writes', () => ({
+  updateOpportunityStatusFor: tracked.track('chat/actor/api-writes.updateOpportunityStatusFor'),
+  dismissSuggestionFor: tracked.track('chat/actor/api-writes.dismissSuggestionFor'),
+}));
+vi.mock('@/lib/chat/actor/action-center', () => ({
+  createChatActionFor: tracked.track('chat/actor/action-center.createChatActionFor'),
+  checkChatActionCoverFor: tracked.track('chat/actor/action-center.checkChatActionCoverFor'),
+}));
 vi.mock('@/lib/actions/cms-send', () => ({
   sendDraftToCms: tracked.track('actions/cms-send.sendDraftToCms'),
+  publishDraftToCms: tracked.track('actions/cms-send.publishDraftToCms'),
 }));
 vi.mock('@/lib/actions/reports', () => ({
   createReport: tracked.track('actions/reports.createReport'),
@@ -127,7 +136,8 @@ vi.mock('@/lib/actions/chat-action-center', () => ({
 
 const { CHAT_TOOLS, chatTool, chatToolByKey, registryCatalog } = await import('./tools');
 const chatTool_ = (name: string) => chatTool(name)!;
-const { BRAND_LOOKUP_TABLES, FIXTURE_IDS, defineTool } = await import('./define-tool');
+const { BRAND_LOOKUP_TABLES, FIXTURE_IDS, defineTool, runsWithoutSession } =
+  await import('./define-tool');
 const { DEFAULT_CHAT_SETTINGS, allowedRoles, allowedTools } = await import('../precedence');
 const { planFactsFromOrgRow } = await import('../plan-facts');
 
@@ -136,9 +146,25 @@ const ctx = {
   email: null,
   organizationId: 'org-1',
   apiKeyId: 'agent-internal',
+  brandAccess: 'all' as const,
   role: 'admin' as const,
 };
 const labels = (messages as Record<string, unknown>).chatTools as Record<string, unknown>;
+/** The rows that make their change for a run with no session (sessionFree), in the registry's order. */
+const SESSION_FREE = [
+  'create_draft',
+  'update_opportunity',
+  'dismiss_prompt_suggestion',
+  'create_action',
+  'update_draft',
+];
+/** A run's place, as runLoggedWrite gives a write. */
+const place = {
+  conversationId: 'chat-1',
+  runId: 'run-1',
+  approvalKey: 'step-1',
+  executionMode: 'automated' as const,
+};
 
 /** What keeps a row out of the registry: a missing label, a fixture its schema refuses. */
 function rowProblems(tool: ChatTool, chatTools: Record<string, unknown> = labels): string[] {
@@ -320,6 +346,7 @@ describe('the Chat tool registry', () => {
     await runInChat('set_task_ready_for_review', { brand_id: brand, task_id: item });
     await run('update_draft', { draft_id: item, body_html: '<h1>FAQ</h1>' });
     await run('push_cms_draft', { draft_id: item, destination: 'wordpress' });
+    await run('publish_cms', { draft_id: item, destination: 'wix' });
     await run('build_report', {
       brand_id: brand,
       template: 'competitor_benchmark',
@@ -391,6 +418,7 @@ describe('the Chat tool registry', () => {
         [item, { title: undefined, bodyHtml: '<h1>FAQ</h1>' }],
       ],
       ['actions/cms-send.sendDraftToCms', [item, 'wordpress']],
+      ['actions/cms-send.publishDraftToCms', [item, 'wix']],
       [
         'actions/reports.createReport',
         [brand, { dateFrom: '2026-10-01', dateTo: '2026-10-31', template: 'competitor_benchmark' }],
@@ -409,11 +437,13 @@ describe('the Chat tool registry', () => {
     ]);
   });
 
-  it('makes the drafts’ changes for a run without a session as its person, and no other row’s', async () => {
-    expect(CHAT_TOOLS.filter((tool) => tool.sessionFree).map((tool) => tool.name)).toEqual([
-      'create_draft',
-      'update_draft',
-    ]);
+  it('makes the drafts’ changes for a run without a session as its person, always', async () => {
+    expect(CHAT_TOOLS.filter((tool) => tool.sessionFree).map((tool) => tool.name)).toEqual(
+      SESSION_FREE,
+    );
+    for (const name of ['create_draft', 'update_draft']) {
+      expect(runsWithoutSession(chatTool_(name)), name).toBe(true);
+    }
     const brand = FIXTURE_IDS.brand;
     const item = FIXTURE_IDS.item;
     const create = chatTool_('create_draft');
@@ -437,6 +467,62 @@ describe('the Chat tool registry', () => {
     await expect(create.runFor!({ ...ctx, organizationId: null }, start)).rejects.toThrow(
       /workspace/,
     );
+  });
+
+  it('writes through the API server for a run without a session as its person, while that way is open', async () => {
+    const through = ['update_opportunity', 'dismiss_prompt_suggestion', 'create_action'];
+    // Closed: no CHAT_ACTING_SECRET, or one shorter than the server takes.
+    for (const secret of ['', 'x'.repeat(31)]) {
+      vi.stubEnv('CHAT_ACTING_SECRET', secret);
+      for (const name of through) expect(runsWithoutSession(chatTool_(name)), name).toBe(false);
+    }
+    vi.stubEnv('CHAT_ACTING_SECRET', 'x'.repeat(32));
+    for (const name of through) expect(runsWithoutSession(chatTool_(name)), name).toBe(true);
+    vi.unstubAllEnvs();
+
+    const item = FIXTURE_IDS.item;
+    const brand = FIXTURE_IDS.brand;
+    const run = async (name: string, input: unknown) => {
+      const tool = chatTool_(name);
+      await tool.runFor!(ctx, tool.inputSchema.parse(input));
+    };
+    await run('update_opportunity', {
+      opportunity_id: item,
+      status: 'dismissed',
+      reason: 'wrong_angle',
+    });
+    await run('update_opportunity', {
+      opportunity_id: item,
+      status: 'reviewed',
+      reason: 'wrong_angle',
+    });
+    await run('dismiss_prompt_suggestion', { suggestion_id: item });
+    const send = chatTool_('create_action');
+    const proposal = send.inputSchema.parse(send.fixture.input);
+    await send.runFor!({ ...ctx, chat: place }, proposal);
+    await send.precheckFor!(ctx, proposal);
+
+    // The run's person, from its context: never the input's.
+    const person = { userId: 'user-1', organizationId: 'org-1' };
+    expect(calls.map((call) => [call.from, call.args])).toEqual([
+      [
+        'chat/actor/api-writes.updateOpportunityStatusFor',
+        [person, item, 'dismissed', 'wrong_angle'],
+      ],
+      // A reason goes only with a dismissal, as the session's call has it.
+      ['chat/actor/api-writes.updateOpportunityStatusFor', [person, item, 'reviewed', undefined]],
+      ['chat/actor/api-writes.dismissSuggestionFor', [person, item]],
+      [
+        'chat/actor/action-center.createChatActionFor',
+        [person, brand, expect.objectContaining({ title: proposal.title }), place, false],
+      ],
+      [
+        'chat/actor/action-center.checkChatActionCoverFor',
+        [person, brand, expect.objectContaining({ pages: ['/pricing'] }), 'recover'],
+      ],
+    ]);
+    // Never the session's actions.
+    expect(calls.some((call) => call.from.startsWith('actions/'))).toBe(false);
   });
 
   it("checks Send to Action Center's duplicate before its card, and lets Create anyway go only where it may", async () => {
@@ -592,6 +678,7 @@ describe('approval policies', () => {
       // Content, reports and Site Audit (W2-07, DECISIONS T): an Analyst only saves drafts.
       update_draft: ['admin', 'manager'],
       push_cms_draft: ['admin', 'manager'],
+      publish_cms: ['admin', 'manager'],
       build_report: ['admin', 'manager'],
       run_site_audit: ['admin', 'manager'],
       // A skill of one's own (W3-06, CHAT-13 v2): Admins and Managers save skills.
@@ -646,6 +733,24 @@ describe('approval policies', () => {
     );
   });
 
+  it('marks the reads about no brand that list every brand the person can access (00436)', () => {
+    // A chat they run in has touched each of those brands (touched-brands.ts).
+    expect(
+      CHAT_TOOLS.filter((tool) => tool.namesBrands)
+        .map((tool) => tool.name)
+        .sort(),
+    ).toEqual(['list_brands', 'list_connections']);
+    expect(() =>
+      defineTool({
+        ...readRow,
+        inputSchema: z.object({ brand_id: z.string() }),
+        brandOf: { input: 'brand_id' },
+        namesBrands: true,
+        fixture: { input: { brand_id: 'x' } },
+      }),
+    ).toThrow(/doesn't name every brand/);
+  });
+
   it('leaves roles out only of a row open to every role, and never an Admin', () => {
     const write = { ...readRow, class: 'write' as const, defaultPolicy: 'ask', maxPolicy: 'ask' };
     expect(
@@ -685,6 +790,27 @@ describe('approval policies', () => {
     const write = { ...readRow, class: 'write' as const, defaultPolicy: 'ask', maxPolicy: 'ask' };
     const runFor = async () => null;
     expect(defineTool({ ...write, sessionFree: true, runFor } as never).sessionFree).toBe(true);
+    // Its way, and a check of its own for such a run, only with it; that check beside the row's.
+    const precheck = async () => null;
+    const open = () => true;
+    expect(() => defineTool({ ...write, runForOpen: open } as never)).toThrow(/session-free/);
+    expect(() => defineTool({ ...write, precheck, precheckFor: precheck } as never)).toThrow(
+      /session-free/,
+    );
+    expect(() =>
+      defineTool({ ...write, sessionFree: true, runFor, precheckFor: precheck } as never),
+    ).toThrow(/its precheck/);
+    const closed = defineTool({
+      ...write,
+      sessionFree: true,
+      runFor,
+      runForOpen: () => false,
+    } as never);
+    expect(runsWithoutSession(closed)).toBe(false);
+    expect(runsWithoutSession(defineTool({ ...write, sessionFree: true, runFor } as never))).toBe(
+      true,
+    );
+    expect(runsWithoutSession(defineTool(write as never))).toBe(false);
     expect(() => defineTool({ ...write, sessionFree: true } as never)).toThrow(/runFor/);
     expect(() => defineTool({ ...write, runFor } as never)).toThrow(/runFor/);
     // A read reads as the person already; an execute waits for their click.
@@ -698,6 +824,64 @@ describe('approval policies', () => {
         runFor,
       }),
     ).toThrow(/only a write/);
+  });
+
+  it('lets only an execute go live on its own, and only one whose input names no outside target (AUTONOMOUS-GO-LIVE §6.3)', () => {
+    const goLive = () => ({ kind: 'cms_draft' as const, draftId: 'd', target: 'webflow' as const });
+    const execute = {
+      ...readRow,
+      name: 'publish_test',
+      class: 'execute' as const,
+      executeGroup: 'publishing' as const,
+    };
+    // Ids and fixed choices only: a draft, the CMS the brand connected, a switch.
+    const own = defineTool({
+      ...execute,
+      inputSchema: z.object({
+        draft_id: z.string().regex(/^[0-9a-f-]{36}$/),
+        guid: z.guid().optional(),
+        destination: z.enum(['webflow', 'wordpress']),
+        live: z.boolean().default(false),
+      }),
+      fixture: { input: { draft_id: FIXTURE_IDS.item, destination: 'webflow' } },
+      goLive,
+    });
+    expect(own.flags.goLiveOnOwn).toBe(true);
+    // A field that takes an address, a mail address, a site, free text or a list of them.
+    for (const field of [
+      z.string(),
+      z.string().url(),
+      z.email(),
+      z.string().max(300).optional(),
+      z.array(z.guid()),
+      z.object({ url: z.string() }),
+    ]) {
+      expect(() =>
+        defineTool({
+          ...execute,
+          inputSchema: z.object({ draft_id: z.guid(), to: field }),
+          goLive,
+        } as never),
+      ).toThrow(/takes no free text \(to\)/);
+    }
+    // Never a read or a write, which aren't clicks to lift.
+    expect(() => defineTool({ ...readRow, goLive })).toThrow(/only an execute/);
+    expect(() =>
+      defineTool({ ...readRow, class: 'write', defaultPolicy: 'ask', maxPolicy: 'ask', goLive }),
+    ).toThrow(/only an execute/);
+    // The registry: Send to CMS may, every other row may not.
+    const onItsOwn = CHAT_TOOLS.filter((tool) => tool.flags.goLiveOnOwn).map((tool) => tool.name);
+    expect(onItsOwn).toEqual(['push_cms_draft', 'publish_cms']);
+    expect(chatTool('publish_cms')?.goLive?.({ draft_id: 'd', destination: 'wordpress' })).toEqual({
+      kind: 'publish',
+      draftId: 'd',
+      target: 'wordpress',
+    });
+    expect(chatTool('push_cms_draft')?.goLive?.({ draft_id: 'd', destination: 'wix' })).toEqual({
+      kind: 'cms_draft',
+      draftId: 'd',
+      target: 'wix',
+    });
   });
 
   it("refuses a write's policy past what its flags allow", () => {
@@ -717,7 +901,7 @@ describe('approval policies', () => {
     expect(
       defineTool({ ...write, defaultPolicy: 'ask', maxPolicy: 'ask', flags: { alwaysCard: true } })
         .flags,
-    ).toEqual({ alwaysCard: true, costCard: false, adminMayTurnOff: false });
+    ).toEqual({ alwaysCard: true, costCard: false, adminMayTurnOff: false, goLiveOnOwn: false });
     expect(() => defineTool({ ...write, defaultPolicy: 'on', maxPolicy: 'on' } as never)).toThrow(
       /asked/,
     );
@@ -776,7 +960,7 @@ describe('registryCatalog', () => {
       class: 'read',
       defaultPolicy: 'on',
       planGate: { feature: 'prompt_volumes' },
-      flags: { alwaysCard: false, costCard: false, adminMayTurnOff: false },
+      flags: { alwaysCard: false, costCard: false, adminMayTurnOff: false, goLiveOnOwn: false },
     });
     expect(entry.planGate).not.toBe(row.planGate);
     expect(entry.flags).not.toBe(row.flags);
@@ -816,7 +1000,7 @@ describe("the model's tool list on the registry's rows", () => {
     ).map((tool) => tool.name);
 
   const reads = CHAT_TOOLS.filter((tool) => tool.class === 'read').map((tool) => tool.name);
-  // The WRITEs and the EXECUTE (push_cms_draft), in the registry's order.
+  // The WRITEs and the EXECUTEs (push_cms_draft, publish_cms), in the registry's order.
   const writes = CHAT_TOOLS.filter((tool) => tool.class !== 'read').map((tool) => tool.name);
   const starter = facts({ plan: 'starter', subscription_status: 'active' });
   const growth = facts({ plan: 'growth', subscription_status: 'active' });

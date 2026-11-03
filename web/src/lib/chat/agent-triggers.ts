@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { readBrandAccess } from '@/lib/brand-access';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
@@ -16,6 +17,7 @@ import { readAgentShares } from './agent-shares';
 import { nextScheduleFire } from './agent-schedule';
 import { pauseAgentForSystem, runnableBrands } from './agents';
 import { chatAgenticEnabled } from './flag';
+import { ownKeyCapReached } from './own-key-cap';
 import { planFactsFromOrgRow, type OrgPlanRow, type PlanFacts } from './plan-facts';
 
 /**
@@ -266,6 +268,19 @@ async function enabledTriggers(
 }
 
 /**
+ * Whether all agents reached the month's limit on the workspace's own key
+ * (AGENT-OWN-KEY §4.2): the firing agent pauses (own_key_cap) and its runs
+ * aren't queued; it starts again by itself once the period renews or an
+ * Admin raises the limit (the sweep). A guard that can't be read lets it
+ * fire: each run stays within its own cap.
+ */
+async function keyCapUsed(agent: FiringAgent): Promise<boolean> {
+  if (!(await ownKeyCapReached(agent.organizationId))) return false;
+  await pauseAgentForSystem(agent.organizationId, agent.id, 'own_key_cap');
+  return true;
+}
+
+/**
  * Whether the agent's monthly cap (CHAT-27 item 23) is used: its share this
  * period, own-key steps included, at or past it. The agent pauses (cap)
  * until the next period then; it resumes by itself (the sweep). Shares
@@ -486,6 +501,30 @@ export interface FireCounts {
 const noFires = (): FireCounts => ({ fired: 0, queued: 0, coalesced: 0, skipped: 0, failed: 0 });
 
 /**
+ * The brands a fire queues runs on: its scope's that the owner may use now,
+ * since a triggered run acts as them (all_brands is all of theirs,
+ * BRAND-ACCESS §5.3); the run checks again when it starts. When its scope
+ * still has brands but the owner may use none of them, nothing is queued
+ * and the agent pauses, as for brands gone (brand_gone). An agent with no
+ * owner, or one no longer in the workspace, queues on its scope's brands as
+ * before: its run stops before it starts and pauses it (owner_role).
+ */
+async function fireBrands(agent: FiringAgent): Promise<{ id: string; name: string }[]> {
+  const access = agent.ownerId
+    ? ((await readBrandAccess(agent.ownerId, agent.organizationId)) ?? 'all')
+    : 'all';
+  const brands = await runnableBrands(agent.organizationId, agent.data.scope, access);
+  if (
+    brands.length === 0 &&
+    access !== 'all' &&
+    (await runnableBrands(agent.organizationId, agent.data.scope, 'all')).length > 0
+  ) {
+    await pauseAgentForSystem(agent.organizationId, agent.id, 'brand_gone');
+  }
+  return brands;
+}
+
+/**
  * Queues a fire on each brand, one brand's failure apart from the others':
  * it is logged and counted. Answers whether any brand's run was queued.
  */
@@ -619,7 +658,7 @@ async function fireSchedule(
   if ((claimed ?? []).length === 0) return false;
   counts.fired += 1;
 
-  if (await monthCapUsed(agent)) return false;
+  if ((await keyCapUsed(agent)) || (await monthCapUsed(agent))) return false;
   const config = trigger.input.config;
   const fire: AgentFire = {
     kind: 'schedule',
@@ -627,7 +666,7 @@ async function fireSchedule(
     at: now.toISOString(),
     ...(config.type === 'recurring' ? { timezone: config.timezone } : {}),
   };
-  const brands = await runnableBrands(agent.organizationId, agent.data.scope);
+  const brands = await fireBrands(agent);
   // Claimed: a brand that fails doesn't stop the others.
   return queueOnBrands(
     agent,
@@ -776,10 +815,10 @@ export async function fireSignals(
     if (matched.length === 0) continue;
     // One trigger's failure is its own: the others still fire.
     try {
-      const brands = await runnableBrands(agent.organizationId, agent.data.scope);
+      const brands = await fireBrands(agent);
       if (!brands.some((b) => b.id === brandRow.id)) continue;
       counts.fired += 1;
-      if (await monthCapUsed(agent)) continue;
+      if ((await keyCapUsed(agent)) || (await monthCapUsed(agent))) continue;
       const fires: AgentFire[] = matched.slice(0, MAX_FIRES).map((signal) => ({
         kind: 'signal',
         ref: signal.id,

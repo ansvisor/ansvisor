@@ -174,10 +174,15 @@ describe('the registry as "What Chat can do" shows it', () => {
       approvalMark({
         class: 'read',
         defaultPolicy: 'on',
-        flags: { alwaysCard: false, costCard: false, adminMayTurnOff: false },
+        flags: { alwaysCard: false, costCard: false, adminMayTurnOff: false, goLiveOnOwn: false },
       }),
     ).toBe('none');
-    const flags = { alwaysCard: false, costCard: false, adminMayTurnOff: false };
+    const flags = {
+      alwaysCard: false,
+      costCard: false,
+      adminMayTurnOff: false,
+      goLiveOnOwn: false,
+    };
     expect(approvalMark({ class: 'write', defaultPolicy: 'ask', flags })).toBe('card');
     expect(approvalMark({ class: 'write', defaultPolicy: 'ask_full_auto', flags })).toBe('auto');
     expect(

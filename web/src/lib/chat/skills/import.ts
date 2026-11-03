@@ -35,6 +35,9 @@ export const MAX_UNPACKED = 5 * 1024 * 1024;
 export const MAX_FILES = 200;
 /** The longest license text kept (00458). */
 export const MAX_LICENSE_TEXT = 30_000;
+/** The longest line of the removed list, and the list's most bytes as JSON (00458 keeps 16,000). */
+export const MAX_REMOVED_ITEM = 200;
+export const MAX_REMOVED_BYTES = 15_000;
 
 /** The licenses an import may carry (Wave 3 decision 6), as SPDX ids. */
 export const IMPORT_LICENSES = [
@@ -111,7 +114,10 @@ const u32 = (b: Uint8Array, at: number) =>
 /**
  * A .zip's entries as its central directory lists them, without
  * unpacking: names, unpacked sizes and symlinks. Null when it isn't one
- * this reads (no end record, ZIP64, a directory past the file).
+ * this reads (no end record, ZIP64, a directory past the file), or when
+ * fflate could read other entries than these: its count is the one on this
+ * disk (+8) and a ZIP64 locator before the end record moves its directory,
+ * so both counts must agree, no locator, and the entries fill the directory.
  */
 function zipEntries(bytes: Uint8Array): ZipEntry[] | null {
   // The end record: 22 bytes, then a comment of up to 65,535.
@@ -125,6 +131,8 @@ function zipEntries(bytes: Uint8Array): ZipEntry[] | null {
   }
   if (end < 0) return null;
   const count = u16(bytes, end + 10);
+  if (u16(bytes, end + 8) !== count) return null;
+  if (end >= 20 && u32(bytes, end - 20) === 0x07064b50) return null;
   const size = u32(bytes, end + 12);
   const offset = u32(bytes, end + 16);
   // ZIP64 isn't read: a skill never needs it.
@@ -151,6 +159,7 @@ function zipEntries(bytes: Uint8Array): ZipEntry[] | null {
     });
     at += 46 + nameLength + extraLength + commentLength;
   }
+  if (at !== offset + size) return null;
   return entries;
 }
 
@@ -191,10 +200,24 @@ export function readZip(
     total += entry.size;
   }
   if (total > MAX_UNPACKED) return { ok: false, refusal: { code: 'too_large' } };
-  const wanted = new Set(files.map((f) => f.name));
+  // Only what was checked unpacks: each name once, at the size checked, MAX_UNPACKED in all.
+  const wanted = new Map(files.map((f) => [f.name, f.size]));
+  const seen = new Set<string>();
+  let inflated = 0;
   let unpacked: Record<string, Uint8Array>;
   try {
-    unpacked = unzipSync(bytes, { filter: (file) => wanted.has(file.name) });
+    unpacked = unzipSync(bytes, {
+      filter: (file) => {
+        const size = wanted.get(file.name);
+        if (size === undefined) return false;
+        inflated += file.originalSize;
+        if (seen.has(file.name) || file.originalSize !== size || inflated > MAX_UNPACKED) {
+          throw new Error('the archive unpacks other than its directory says');
+        }
+        seen.add(file.name);
+        return true;
+      },
+    });
   } catch {
     return { ok: false, refusal: { code: 'not_zip' } };
   }
@@ -379,7 +402,8 @@ export function parseSkillImport(input: ImportFile[]): ImportParse {
     const text = file.bytes ? textOf(file.bytes) : null;
     if (file.bytes && text === null) return refuse('binary_file', { path: file.path });
     if (file.path === 'SKILL.md') skillText = text;
-    else if (LICENSE_FILE.test(file.path) && text !== null) licenseText = text;
+    // An empty LICENSE file is no text (00458 keeps 1 to 30,000 characters).
+    else if (LICENSE_FILE.test(file.path) && text !== null) licenseText = text || null;
     else leftOut.push(file.path);
   }
   if (skillText === null) return refuse('no_skill_file');
@@ -410,6 +434,10 @@ export function parseSkillImport(input: ImportFile[]): ImportParse {
   }
   if (body.comments > 0) {
     removed.push(body.comments === 1 ? '1 HTML comment' : `${body.comments} HTML comments`);
+  }
+  const removedList = fitRemoved(removed);
+  if (!removedList) {
+    return refuse('invalid', { problems: 'it holds too many files to list what was removed' });
   }
   const { skill, problems: formProblems } = parseSkillFile(`---\n${front.text}\n---\n${body.text}`);
   if (formProblems.length > 0) return refuse('invalid', { problems: formProblems.join('; ') });
@@ -445,10 +473,26 @@ export function parseSkillImport(input: ImportFile[]): ImportParse {
       licenseText,
       checksum: skillChecksum(parts),
       scan,
-      removed,
+      removed: removedList,
       status: scan.blocks.length > 0 ? 'blocked' : 'pending_review',
     },
   };
+}
+
+/**
+ * The removed list as it is kept: each line at most MAX_REMOVED_ITEM
+ * characters, and null when the list is still over MAX_REMOVED_BYTES as
+ * JSON (the database's text adds a space after each comma).
+ */
+function fitRemoved(removed: string[]): string[] | null {
+  const fitted = removed.map((line) => {
+    const chars = [...line];
+    return chars.length > MAX_REMOVED_ITEM
+      ? `${chars.slice(0, MAX_REMOVED_ITEM - 1).join('')}…`
+      : line;
+  });
+  const bytes = new TextEncoder().encode(JSON.stringify(fitted)).length + fitted.length;
+  return bytes > MAX_REMOVED_BYTES ? null : fitted;
 }
 
 /** The scan of a skill as it is kept: its file, and its values as they read (as checkSkillFile). */

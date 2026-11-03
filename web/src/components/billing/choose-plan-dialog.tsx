@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { aiUsageMultiple } from '@/components/settings/plan-features';
+import { aiUsageMultiple, usePlanCardsChatMetered } from '@/components/settings/plan-features';
 import {
   CONTACT_SALES_URL,
   CUSTOM_PLAN_STARTING_PRICE,
@@ -95,6 +95,7 @@ export function ChoosePlanDialog({
   const t = useTranslations('readOnly');
   const tPlans = useTranslations('readOnly.plans');
   const tSettings = useTranslations('settings');
+  const chatMetered = usePlanCardsChatMetered();
   const tOffer = useTranslations('planOffer');
   const { canAdmin } = useUserRole();
   // The workspace's own brand, named in the demo's and a new brand's pitch.
@@ -196,14 +197,17 @@ export function ChoosePlanDialog({
 
   const aiMultiple = aiUsageMultiple('enterprise');
   const customPoints = tSettings.raw('customPlanPoints') as string[];
+  // With the new Chat on, its points follow the AI usage they draw on.
+  const customChatPoints = chatMetered ? (tSettings.raw('customPlanPointsChat') as string[]) : [];
   // Custom's list as the pricing page has it: its AI usage after the data points.
   const customFeatures = aiMultiple
     ? [
         ...customPoints.slice(0, 4),
         tPlans('customAiUsage', { count: aiMultiple }),
+        ...customChatPoints,
         ...customPoints.slice(4),
       ]
-    : customPoints;
+    : [...customChatPoints, ...customPoints];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

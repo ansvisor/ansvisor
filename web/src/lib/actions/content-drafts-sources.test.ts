@@ -79,14 +79,21 @@ describe('getDraftSources', () => {
       { kind: 'fanout', ref: 'espresso', included: false, added: false },
       { kind: 'file', ref: 'x', included: true, added: true },
     ];
+    // The sites the draft's brand trusts (00449) come with them.
+    reads.content_drafts = { brands: { trusted_sources: ['sca.coffee'] } };
     expect(await getDraftSources(DRAFT)).toEqual({
-      data,
+      data: { ...data, trustedDomains: ['sca.coffee'] },
       choices: [{ kind: 'fanout', ref: 'espresso', included: false, added: false }],
     });
     expect(rpcCalls).toEqual([
       { fn: 'content_draft_sources', args: { p_draft_id: DRAFT, p_days: 30 } },
     ]);
     expect(calls[0].filters).toEqual([['draft_id', DRAFT]]);
+  });
+
+  it('trusts no site before 00449, or when the brand’s can’t be read', async () => {
+    rpcResult = { data: { brandDomains: [], competitorDomains: [] }, error: null };
+    expect((await getDraftSources(DRAFT))!.data.trustedDomains).toEqual([]);
   });
 
   it('returns null for a draft the member can’t read, and throws on a failed read', async () => {
