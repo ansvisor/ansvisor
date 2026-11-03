@@ -90,8 +90,9 @@ export function maskToolNames(
     .join('```');
 }
 
-/** Naming the instructions: "instructions", "told me", "asked", "talimat". */
-const NAMES_INSTRUCTIONS = /instruct|\btold\b|\basked\b|\bcommand|talimat|yönerge/i;
+/** Naming the instructions: "instructions", "told me", "a line telling", "asked", "talimat". */
+const NAMES_INSTRUCTIONS =
+  /instruct|\btold\b|\btell(s|ing)?\b|\basked\b|\basking\b|\bcommand|talimat|yönerge/i;
 /** Saying they weren't followed: "ignored", "won't follow", "weren't followed", "yok saydım". */
 const NOT_FOLLOWED = new RegExp(
   [
