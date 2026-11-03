@@ -304,7 +304,9 @@ export function ActionDrawer({
           ? tSend('sentToWebhook')
           : result.created
             ? tSend('sentToContent')
-            : tSend('alreadyInContent'),
+            : result.merged
+              ? tSend('mergedInContent')
+              : tSend('alreadyInContent'),
       );
       await load();
       onChanged();
