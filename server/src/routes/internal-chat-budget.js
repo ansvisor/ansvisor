@@ -6,6 +6,8 @@
  *
  * POST /api/internal/chat/budget/reserve
  *   { orgId, runId, stepId?, feature?, model, inputTokens, maxOutputTokens, ownKey?, agentRunId? }
+ *   An image request (feature 'image', W4-07) sends { images } (1–10) in place
+ *   of the token counts: each image is held at the model's image price.
  *   → 201 { usageId }: the step's row, its worst case held (on Ansvisor's key).
  *   → 429 ai_limit { trial }: the budget can't cover the step; it doesn't start.
  *   → 429 run_cap: the chat's agent run (agentRunId) can't take the step
@@ -14,13 +16,16 @@
  *     workspace's. 403 chat_off: Chat is off for the workspace.
  * POST /api/internal/chat/budget/charge
  *   { orgId, usageId, model, usage: { inputTokens, outputTokens, cacheReadTokens?,
- *     cacheWriteTokens? }, latencyMs? }
+ *     cacheWriteTokens? }, latencyMs?, images?: { produced, costUsd? } }
  *   → 200: the row holds the step's real cost, its prompt cache's reads and
- *     writes priced at their own rates. 404 when it is gone.
+ *     writes priced at their own rates. An image request's is the provider's
+ *     own cost as it reported it (costUsd), no markup; without one, the
+ *     model's image price per image produced. 404 when it is gone.
  * POST /api/internal/chat/budget/release { orgId, usageId }
  *   → 200: the hold went (nothing was billed). Safe to repeat.
  * POST /api/internal/chat/budget/fit
- *   { orgId, model, perUnit: { inputTokens, maxOutputTokens }, units, ownKey?, agentRunId? }
+ *   { orgId, model, perUnit: { inputTokens, maxOutputTokens } | image: true, units, ownKey?,
+ *     agentRunId? }
  *   → 200 { fits, limit }: how many of the job's `units` like parts (1–100)
  *     the AI budget left covers, each one model step's worst case, before the
  *     job starts (CHAT-04 item 17a); all of them on the workspace's own key.
@@ -28,6 +33,10 @@
  *     Holds nothing. 402 plan_limit, 403 chat_off, 404 not_found (an agent
  *     run that isn't the workspace's).
  * A step a Stop aborted calls neither: its hold stays as its cost.
+ * GET /api/internal/chat/budget/image-shares?orgId=&models=a,b
+ *   → 200 { unlimited, shares: [{ model, percent }] }: each image model's one
+ *     image as a percent of the plan's monthly AI limit (W4-07), for the
+ *     model question. Never dollars. 402 plan_limit, 403 chat_off.
  * GET /api/internal/chat/budget/agent-shares?orgId=&days=
  *   → 200 { unlimited, since, shares: [{ agentId, share, ownKeyShare, runs }] }:
  *     each agent's share of the AI limit this period, or over the last
@@ -53,9 +62,11 @@ import {
   CHAT_BUDGET_FEATURES,
   ChatBudgetError,
   MAX_FIT_UNITS,
+  MAX_IMAGES,
   agentUsageShares,
   chargeChatStep,
   fitChatUnits,
+  imageShares,
   ownKeyAgentSpend,
   releaseChatStep,
   reserveChatStep,
@@ -80,18 +91,31 @@ router.use((req, res, next) => {
 const tokens = z.number().int().min(0).max(10_000_000);
 const model = z.string().trim().min(1).max(200);
 
-const reserveSchema = z.strictObject({
-  orgId: z.guid(),
-  runId: z.guid(),
-  stepId: z.guid().nullish(),
-  feature: z.enum(CHAT_BUDGET_FEATURES).default('chat'),
-  model,
-  inputTokens: tokens,
-  maxOutputTokens: tokens.min(1),
-  ownKey: z.boolean().default(false),
-  // The chat's agent run: the step is held within its cap too (CHAT-27 item 21).
-  agentRunId: z.guid().nullish(),
-});
+/** How many images one request makes (00462 units). */
+const imageCount = z.number().int().min(1).max(MAX_IMAGES);
+
+const reserveSchema = z
+  .strictObject({
+    orgId: z.guid(),
+    runId: z.guid(),
+    stepId: z.guid().nullish(),
+    feature: z.enum(CHAT_BUDGET_FEATURES).default('chat'),
+    model,
+    inputTokens: tokens.optional(),
+    maxOutputTokens: tokens.min(1).optional(),
+    // An image request: how many images it may make, each held at the model's image price.
+    images: imageCount.optional(),
+    ownKey: z.boolean().default(false),
+    // The chat's agent run: the step is held within its cap too (CHAT-27 item 21).
+    agentRunId: z.guid().nullish(),
+  })
+  .refine(
+    (body) =>
+      body.images !== undefined
+        ? body.feature === 'image'
+        : body.inputTokens !== undefined && body.maxOutputTokens !== undefined,
+    { message: 'images for an image request, else the token counts' },
+  );
 
 const chargeSchema = z.strictObject({
   orgId: z.guid(),
@@ -106,18 +130,50 @@ const chargeSchema = z.strictObject({
   }),
   // How long the model call took, for staff; an hour at most.
   latencyMs: z.number().int().min(0).max(3_600_000).optional(),
+  // An image request's outcome: the images made, and the provider's own cost if it said.
+  images: z
+    .strictObject({
+      produced: z.number().int().min(0).max(MAX_IMAGES),
+      costUsd: z.number().min(0).max(100).optional(),
+    })
+    .optional(),
 });
 
 const releaseSchema = z.strictObject({ orgId: z.guid(), usageId: z.guid() });
 
-const fitSchema = z.strictObject({
+const fitSchema = z
+  .strictObject({
+    orgId: z.guid(),
+    model,
+    // One part's model step: its prompt and the most it may write.
+    perUnit: z.strictObject({ inputTokens: tokens, maxOutputTokens: tokens.min(1) }).optional(),
+    // Or: each part is one image, at the model's image price (W4-07).
+    image: z.literal(true).optional(),
+    units: z.number().int().min(1).max(MAX_FIT_UNITS),
+    ownKey: z.boolean().default(false),
+    agentRunId: z.guid().nullish(),
+  })
+  .refine((body) => (body.image === true) !== (body.perUnit !== undefined), {
+    message: 'perUnit, or image: true',
+  });
+
+const imageSharesSchema = z.strictObject({
   orgId: z.guid(),
-  model,
-  // One part's model step: its prompt and the most it may write.
-  perUnit: z.strictObject({ inputTokens: tokens, maxOutputTokens: tokens.min(1) }),
-  units: z.number().int().min(1).max(MAX_FIT_UNITS),
-  ownKey: z.boolean().default(false),
-  agentRunId: z.guid().nullish(),
+  // Model ids, comma-separated: at most 10.
+  models: z
+    .string()
+    .trim()
+    .min(1)
+    .max(2000)
+    .transform((value) => [
+      ...new Set(
+        value
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean),
+      ),
+    ])
+    .pipe(z.array(model).min(1).max(10)),
 });
 
 const sharesSchema = z.strictObject({
@@ -171,6 +227,7 @@ router.post('/reserve', async (req, res) => {
       stepId: body.stepId ?? null,
       ownKey: body.ownKey,
       agentRunId: body.agentRunId ?? null,
+      ...(body.images ? { images: body.images } : {}),
     });
     return res.status(201).json({ success: true, usageId });
   } catch (err) {
@@ -186,6 +243,7 @@ router.post('/charge', async (req, res) => {
       modelId: body.model,
       usage: body.usage,
       latencyMs: body.latencyMs,
+      ...(body.images ? { images: body.images } : {}),
     });
     return res.json({ success: true });
   } catch (err) {
@@ -214,10 +272,30 @@ router.post('/fit', async (req, res) => {
       units: body.units,
       ownKey: body.ownKey,
       agentRunId: body.agentRunId ?? null,
+      ...(body.image ? { image: true } : {}),
     });
     return res.json({ success: true, fits, limit });
   } catch (err) {
     return fail(err, req, res, 'fit');
+  }
+});
+
+router.get('/image-shares', async (req, res) => {
+  const query = imageSharesSchema.safeParse(req.query ?? {});
+  if (!query.success) {
+    return res
+      .status(400)
+      .json({ success: false, error: 'invalid_request', message: 'Invalid request' });
+  }
+  try {
+    const shares = await imageShares(query.data.orgId, query.data.models);
+    return res.json({
+      success: true,
+      unlimited: shares.every((share) => share.percent === null),
+      shares,
+    });
+  } catch (err) {
+    return fail(err, req, res, 'image shares');
   }
 });
 
