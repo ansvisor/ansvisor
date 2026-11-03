@@ -1,11 +1,11 @@
 ---
 title: Pick the model and effort Chat uses
 route: /dashboard/chat
-keywords: [model, choose model, pick model, model menu, auto, haiku, sonnet, effort, normal effort, high effort, max effort, multiplier, 2.3x, uses your limit faster, own api key, your key, your api keys, add api key, use for, images key, use ansvisor's limit]
+keywords: [model, choose model, pick model, model menu, auto, haiku, sonnet, gpt, openai, gemini, google, effort, normal effort, high effort, max effort, multiplier, 2.3x, uses your limit faster, own api key, your key, your api keys, add api key, use for, images key, use ansvisor's limit]
 synonyms: [ai model, llm, which model, switch model, thinking effort]
 plan: starter
-updated: 2026-11-02
-last_checked: 2026-11-02
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -15,7 +15,7 @@ Chat runs on **Auto** unless you pick a model: Haiku 5.5 reads your data and Son
 
 ## Pick a model
 
-The menu lists **Auto** first, marked **Default**, then the models Chat is tested with. Each shows how fast it uses your monthly AI limit compared with Auto: **1x** is Auto, **2.3x** uses it a bit over twice as fast, **0.1x** a tenth as fast. Under 1x shows in green, 3x and more in amber. A model whose price changes by the hour says so.
+The menu lists **Auto** first, marked **Default**, then the models Chat is tested with: Claude's, and models from OpenAI and Google that passed Chat's test set twice in a row. An Admin can turn a provider's models off in **Settings › Chat**. Each shows how fast it uses your monthly AI limit compared with Auto: **1x** is Auto, **2.3x** uses it a bit over twice as fast, **0.1x** a tenth as fast. Under 1x shows in green, 3x and more in amber. A model whose price changes by the hour says so.
 
 Your pick goes with every message in that chat. When you open the chat later, the menu starts on the model its last answer used. A new chat starts on Auto.
 
