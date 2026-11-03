@@ -1808,6 +1808,27 @@ describe('question cards (CHAT-07)', () => {
   });
 });
 
+describe('"Thought for N s" (Settings › Chat)', () => {
+  it('keeps how long the run worked before its first words, on by default', async () => {
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Up 12%.')],
+    );
+    const runId = await turn(ADMIN, 'How are we doing?');
+    const end = ofType(await eventsOf(runId), 'run.finished')[0].data;
+    expect(end.thoughtMs).toEqual(expect.any(Number));
+    expect(end.thoughtMs).toBeGreaterThanOrEqual(0);
+    expect(end.thoughtMs).toBeLessThanOrEqual(end.workingMs);
+  });
+
+  it('keeps none for a person who turned it off', async () => {
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, show_thought: false }];
+    useModels([READY], [text('Up 12%.')]);
+    const runId = await turn(ADMIN, 'How are we doing?');
+    expect(ofType(await eventsOf(runId), 'run.finished')[0].data).not.toHaveProperty('thoughtMs');
+  });
+});
+
 describe('next moves (CHAT-07 §C)', () => {
   /** The final answer and its next moves, in one model step. */
   const answerWithMoves = (answer: string, moves: unknown) => [

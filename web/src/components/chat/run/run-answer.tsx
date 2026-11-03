@@ -183,6 +183,12 @@ export function RunAnswer({
           </div>
         )}
         {openedStep?.detail && <p className="text-xs text-muted-foreground">{openedStep.detail}</p>}
+        {run.text && run.summary?.thoughtMs !== undefined && (
+          // "Thought for N s": only when the person shows it (Settings › Chat).
+          <p data-slot="run-thought" className="text-xs text-muted-foreground">
+            {t('thoughtFor', { seconds: Math.max(1, Math.round(run.summary.thoughtMs / 1000)) })}
+          </p>
+        )}
         {run.text && (
           // Styled as the app's other AI answers (headings, lists, table cells).
           <div data-slot="run-text" className="prose prose-sm dark:prose-invert max-w-none">

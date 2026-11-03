@@ -1194,6 +1194,8 @@
         "chat settings",
         "default mode",
         "your focus",
+        "thought for",
+        "thinking time",
         "ask chat on every page",
         "full auto"
       ],
@@ -1203,7 +1205,7 @@
         "run mode default"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1216,6 +1218,10 @@
         {
           "heading": "Your focus",
           "text": "**Your focus** lists the eight areas Chat can focus on for you, such as **Competitors** or **Content**. Tick the ones you work on: Chat Home and its suggestions follow them. Your focus doesn't change what you can do; your role decides that."
+        },
+        {
+          "heading": "Thought for N s",
+          "text": "**Show “Thought for N s”** puts a short line above each answer, such as \"Thought for 12 s\": how long Chat worked, reading your data, before it started writing. It is on by default; turn it off to hide the line on new answers."
         },
         {
           "heading": "Chat on every page",

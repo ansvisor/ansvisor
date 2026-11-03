@@ -224,10 +224,19 @@ export function ChatSettings({
             </span>
           </Row>
 
-          {/* Answer language, "Notify me when an agent needs me" and "Show Thought
-              for N s" are kept on the person but nothing reads them yet (Chat
-              answers in the question's language), so they stay hidden until
-              they're wired up; their saved values and schema stay. */}
+          {/* Answer language and "Notify me when an agent needs me" are kept on
+              the person but nothing reads them yet (Chat answers in the
+              question's language), so they stay hidden until they're wired up;
+              their saved values and schema stay. */}
+
+          <Row label={t('thought.label')} note={t('thought.note')}>
+            <Switch
+              checked={settings.showThought}
+              label={t('thought.label')}
+              action="chatSettings.toggleThinking"
+              onChange={(next) => void change({ showThought: next })}
+            />
+          </Row>
 
           <Row label={t('everyPage.label')} note={t('everyPage.note')}>
             <Switch

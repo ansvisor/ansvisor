@@ -104,14 +104,22 @@ describe('ChatSettings', () => {
     expect(action('policy.open')[0].getAttribute('href')).toBe('/dashboard/settings/chat');
   });
 
-  it("hides the settings nothing reads yet: answer language, notifications, 'Thought for N s'", async () => {
+  it('hides the settings nothing reads yet: answer language, notifications', async () => {
     await render();
     expect(action('chatSettings.answerLanguage')).toHaveLength(0);
     expect(action('chatSettings.notifyChannel')).toHaveLength(0);
-    expect(action('chatSettings.toggleThinking')).toHaveLength(0);
     expect(host.textContent).not.toContain('Answer language');
     expect(host.textContent).not.toContain('Notify me when an agent needs me');
-    expect(host.textContent).not.toContain('Thought for');
+  });
+
+  it('shows "Thought for N s" as a switch, on by default, and keeps a change at once', async () => {
+    await render();
+    const toggle = () => action('chatSettings.toggleThinking')[0];
+    expect(toggle().getAttribute('aria-checked')).toBe('true');
+    expect(host.textContent).toContain('Show “Thought for N s”');
+    await act(async () => toggle().click());
+    expect(saved.patches).toEqual([{ showThought: false }]);
+    expect(toggle().getAttribute('aria-checked')).toBe('false');
   });
 
   it('keeps each pick at once', async () => {

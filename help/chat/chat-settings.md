@@ -1,11 +1,11 @@
 ---
 title: Change your Chat settings
 route: /dashboard/chat/settings
-keywords: [chat settings, default mode, your focus, ask chat on every page, full auto]
+keywords: [chat settings, default mode, your focus, thought for, thinking time, ask chat on every page, full auto]
 synonyms: [chat preferences, chat options, run mode default]
 plan: all
-updated: 2026-11-02
-last_checked: 2026-11-02
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -20,6 +20,10 @@ sources: [web/messages/en.json]
 ## Your focus
 
 **Your focus** lists the eight areas Chat can focus on for you, such as **Competitors** or **Content**. Tick the ones you work on: Chat Home and its suggestions follow them. Your focus doesn't change what you can do; your role decides that.
+
+## Thought for N s
+
+**Show “Thought for N s”** puts a short line above each answer, such as "Thought for 12 s": how long Chat worked, reading your data, before it started writing. It is on by default; turn it off to hide the line on new answers.
 
 ## Chat on every page
 

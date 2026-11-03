@@ -93,6 +93,11 @@ export type ChatStopReason = 'person' | 'expired' | 'limit' | 'action_closed';
 /** A run's phase, counters and what it read so far (CHAT-04 item 5, CHAT-20 §14). */
 export interface RunProgress {
   phase: ChatPhase;
+  /**
+   * How long the run worked before the answer's first words, for "Thought
+   * for N s" above it; kept only for a person who shows it (Settings › Chat).
+   */
+  thoughtMs?: number;
   modelSteps: number;
   reads: number;
   dataChars: number;

@@ -3994,6 +3994,7 @@
     }
   },
   "chatRun": {
+    "thoughtFor": "Thought for {seconds, plural, one {# s} other {# s}}",
     "keyFix": "Open AI Providers",
     "keyAskAdmin": "An Admin can fix it in Settings › AI Providers.",
     "tasks": {
@@ -4994,7 +4995,7 @@
       },
       "thought": {
         "label": "Show “Thought for N s”",
-        "note": "A short summary of the agent’s reasoning under answers"
+        "note": "How long Chat worked before writing, above each answer"
       },
       "everyPage": {
         "label": "Open Chat on every page",
