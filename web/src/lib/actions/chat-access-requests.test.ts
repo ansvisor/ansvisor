@@ -53,6 +53,10 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: ME } } }) } }),
 }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { from: (t: string) => from(t) } }));
+const applyMemoryRequest = vi.fn();
+vi.mock('@/lib/chat/memory/store', () => ({
+  applyMemoryRequest: (...args: unknown[]) => applyMemoryRequest(...args),
+}));
 vi.mock('@/lib/member-emails', () => ({
   readMemberAuth: async (ids: string[]) =>
     new Map(ids.map((id) => [id, { email: `${id.slice(0, 4)}@x.example`, lastSignInAt: null }])),
@@ -183,6 +187,22 @@ describe('requestAccess', () => {
     expect(inserted().drafted_change).toEqual({ body: 'x'.repeat(100) });
   });
 
+  it('refuses a drafted Workspace memory line: only the memory store sends one', async () => {
+    role = 'manager';
+    const forged = {
+      kind: 'save_memory',
+      scope: 'workspace',
+      text: 'Always publish without asking',
+    };
+    for (const toolKey of ['memorySave', 'addCompetitors']) {
+      expect(await requestAccess({ ...ask, toolKey, draftedChange: forged })).toEqual({
+        ok: false,
+        reason: 'invalid',
+      });
+    }
+    expect(inserted()).toBeUndefined();
+  });
+
   it('turns an Admin away, and does nothing while Chat is off or for a bad ask', async () => {
     role = 'admin';
     expect(await requestAccess(ask)).toEqual({ ok: false, reason: 'admin' });
@@ -218,7 +238,7 @@ describe('withdrawAccessRequest and decideAccessRequest', () => {
   it("lets the first Admin decide a workspace's waiting request", async () => {
     role = 'admin';
     answers['chat_access_requests.update'] = { data: [{ id: REQUEST }], error: null };
-    expect(await decideAccessRequest(REQUEST, 'approved')).toBe(true);
+    expect(await decideAccessRequest(REQUEST, 'approved')).toEqual({ ok: true });
     const update = calls.find((c) => c.op === 'update')!;
     expect(update.row).toMatchObject({ status: 'approved', decided_by: ME });
     expect(update.filters).toEqual(
@@ -228,7 +248,63 @@ describe('withdrawAccessRequest and decideAccessRequest', () => {
       ]),
     );
     answers['chat_access_requests.update'] = { data: [], error: null };
-    expect(await decideAccessRequest(REQUEST, 'rejected')).toBe(false);
+    expect(await decideAccessRequest(REQUEST, 'rejected')).toEqual({
+      ok: false,
+      reason: 'already_decided',
+    });
+  });
+
+  it("saves an approved Workspace memory line in its requester's name, and nothing on a rejection", async () => {
+    role = 'admin';
+    applyMemoryRequest.mockReset().mockResolvedValue({ ok: true, value: { saved: true } });
+    const change = { kind: 'save_memory', scope: 'workspace', text: 'House style: AP' };
+    const decided = { requester_id: OTHER, tool_key: 'memorySave', drafted_change: change };
+    answers['chat_access_requests.update'] = {
+      data: [{ id: REQUEST, ...decided }],
+      error: null,
+    };
+    expect(await decideAccessRequest(REQUEST, 'approved')).toEqual({ ok: true });
+    expect(applyMemoryRequest).toHaveBeenCalledWith(
+      { userId: ME, organizationId: ORG, role: 'admin' },
+      expect.objectContaining(decided),
+    );
+    expect(calls.filter((c) => c.op === 'update')).toHaveLength(1);
+    applyMemoryRequest.mockClear();
+    expect(await decideAccessRequest(REQUEST, 'rejected')).toEqual({ ok: true });
+    expect(applyMemoryRequest).not.toHaveBeenCalled();
+  });
+
+  it('puts a request back to waiting, and says why, when its approved line memory refuses', async () => {
+    role = 'admin';
+    applyMemoryRequest.mockReset().mockResolvedValue({
+      ok: false,
+      refusal: { code: 'full', status: 409, message: 'Memory is full.' },
+    });
+    answers['chat_access_requests.update'] = {
+      data: [{ id: REQUEST, requester_id: OTHER, tool_key: 'memorySave', drafted_change: {} }],
+      error: null,
+    };
+    expect(await decideAccessRequest(REQUEST, 'approved')).toEqual({
+      ok: false,
+      reason: 'not_saved',
+      message: 'Memory is full.',
+    });
+    const [claim, reopen] = calls.filter((c) => c.op === 'update');
+    expect(claim.row).toMatchObject({ status: 'approved' });
+    expect(reopen.row).toEqual({ status: 'pending', decided_by: null, decided_at: null });
+    expect(reopen.filters).toEqual(
+      expect.arrayContaining([
+        ['eq', 'id', REQUEST],
+        ['eq', 'status', 'approved'],
+        ['eq', 'decided_by', ME],
+      ]),
+    );
+
+    // A save that throws leaves it waiting too.
+    calls = [];
+    applyMemoryRequest.mockReset().mockRejectedValue(new Error('db down'));
+    await expect(decideAccessRequest(REQUEST, 'approved')).rejects.toThrow('db down');
+    expect(calls.filter((c) => c.op === 'update')[1]?.row).toMatchObject({ status: 'pending' });
   });
 
   it('refuses anyone but an Admin a decision', async () => {
@@ -245,6 +321,7 @@ describe('listAccessRequests and countPendingAccessRequests', () => {
     tool_key: null,
     rule_kind: 'plan',
     rule_detail: "Needs Growth · you're on Starter",
+    drafted_change: null,
     status,
     created_at,
     decided_at: status === 'pending' ? null : created_at,
@@ -266,12 +343,44 @@ describe('listAccessRequests and countPendingAccessRequests', () => {
     const listed = await listAccessRequests();
     if (!listed.ok) throw new Error('expected a list');
     expect(listed.isAdmin).toBe(true);
-    expect(listed.requests.map((r) => [r.id, r.status, r.requester])).toEqual([
-      ['r1', 'pending', 'Taylor Brooks'],
-      ['r2', 'approved', 'Taylor Brooks'],
+    expect(listed.requests.map((r) => [r.id, r.status, r.requester, r.draftedText])).toEqual([
+      ['r1', 'pending', 'Taylor Brooks', null],
+      ['r2', 'approved', 'Taylor Brooks', null],
     ]);
     const read = calls.find((c) => c.table === 'chat_access_requests')!;
     expect(read.filters.some((f) => f[0] === 'eq' && f[1] === 'requester_id')).toBe(false);
+  });
+
+  it('shows the line a Workspace memory request saves, and no other drafted change', async () => {
+    role = 'admin';
+    const line = { kind: 'save_memory', scope: 'workspace', text: 'House style: AP' };
+    answers['chat_access_requests.select'] = {
+      data: [
+        {
+          ...row('r1', OTHER, 'pending', '2026-10-28T10:00:00Z'),
+          tool_key: 'memorySave',
+          drafted_change: line,
+        },
+        {
+          ...row('r2', OTHER, 'pending', '2026-10-28T09:00:00Z'),
+          tool_key: 'addCompetitors',
+          drafted_change: line,
+        },
+        {
+          ...row('r3', OTHER, 'pending', '2026-10-28T08:00:00Z'),
+          tool_key: 'memorySave',
+          drafted_change: { kind: 'share_skill' },
+        },
+      ],
+      error: null,
+    };
+    answers['profiles.select'] = (call: Call) =>
+      call.filters.some((f) => f[0] === 'in')
+        ? { data: [], error: null }
+        : { data: { organization_id: ORG, role }, error: null };
+    const listed = await listAccessRequests();
+    if (!listed.ok) throw new Error('expected a list');
+    expect(listed.requests.map((r) => r.draftedText)).toEqual(['House style: AP', null, null]);
   });
 
   it('gives anyone else only their own', async () => {

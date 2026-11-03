@@ -1,7 +1,7 @@
 ---
 title: Skills in Chat
 route: /dashboard/chat
-keywords: [skills, skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps]
+keywords: [skills, skill, slash menu, ansvisor skills, used skill, save a skill, my skills, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps, skills page, turn off a skill, schedule a skill]
 synonyms: [slash commands, playbooks, how-tos, templates]
 plan: all
 updated: 2026-11-02
