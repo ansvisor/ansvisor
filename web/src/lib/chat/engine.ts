@@ -5,7 +5,6 @@ import messages from '../../../messages/en.json';
 import { PLANS } from '@/config/plans';
 import type { AiProvider } from '@/lib/agent/providers';
 import { hasBrandAccess } from '@/lib/brand-access';
-import type { McpAuthContext } from '@/lib/mcp-auth';
 import { searchHelp } from '@/lib/help/search';
 import { platformName } from '@/lib/signals/names';
 import { SUBSCRIPTION_INACTIVE } from '@/lib/subscription-guard';
@@ -205,16 +204,23 @@ import {
   MAX_SKILL_BODIES,
   USE_SKILL_TOOL,
   availableSkillsBlock,
-  enabledSkills,
   loadedSkillsBlock,
   shortcutPlaybook,
   skillsForPrompt,
   typedSkills,
-  type LibrarySkill,
   type ShortcutPlaybook,
 } from './skills/library';
+import {
+  enabledSkillsFor,
+  loadSkillBodies,
+  skillSourceWords,
+  type EnabledSkill,
+} from './skills/store';
 import { MAX_UPLOADS } from './uploads';
 import { answerUnattended, withAssumptions } from './schedule/unattended';
+import { cardFormOf, cardFormValuesInput, editedInput } from './card-form';
+import { memoryChoseTarget } from './memory/rules';
+import { memoryStep, runMemory, type RunMemory } from './memory/store';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -822,7 +828,8 @@ export async function startChatRun(
 
 /** What picks a waiting run up again: the card's Approve (or the click), or Skip. */
 export type ResumeAction =
-  | { kind: 'approve'; dontAskAgain: boolean }
+  /** input: what an editable card's edits made, checked (card-form.ts); else the call's own. */
+  | { kind: 'approve'; dontAskAgain: boolean; input?: Record<string, unknown> }
   | { kind: 'skip' }
   /** A question card's answer (CHAT-07 §A), already kept on its row. */
   | { kind: 'answer'; answer: AskAnswer };
@@ -845,6 +852,8 @@ type Progress = RunProgress & {
   stepRetried?: boolean;
   /** A reply had no words for the person, and the model was asked for them (ANSWER_NOTE). */
   answerAsked?: boolean;
+  /** The lines its "Used memory" step listed, once it has one (CHAT-14 item 17). */
+  memoryItems?: number;
 };
 
 interface RunContext {
@@ -874,14 +883,15 @@ interface RunContext {
   offered: Map<string, ChatTool>;
   refused: { tool: ChatTool; denial: ToolDenial }[];
   /**
-   * The skills the person may use (CHAT-13 items 3–4): every enabled one,
-   * and the ones the prompt lists. None while the new Chat is off. With the
-   * message's shortcut (W2-09), its playbook, and the line on what the plan
-   * leaves out of its data plan, if anything.
+   * The skills the person may use (CHAT-13 items 3–4): every enabled one
+   * (the library's and the workspace's, skills/store.ts), and the ones the
+   * prompt lists. None while the new Chat is off. With the message's
+   * shortcut (W2-09), its playbook, and the line on what the plan leaves out
+   * of its data plan, if anything.
    */
   skills: {
-    enabled: readonly LibrarySkill[];
-    listed: readonly LibrarySkill[];
+    enabled: readonly EnabledSkill[];
+    listed: readonly EnabledSkill[];
     playbook: ShortcutPlaybook | null;
     planNote: string | null;
   };
@@ -909,6 +919,8 @@ interface RunContext {
    * for its person without one (sessionFree: its runFor makes it).
    */
   sessionUserId: string | null;
+  /** What the person's memory gives this run (CHAT-14, memory/store.ts): its lines and block. */
+  memory: RunMemory;
 }
 
 /** No session of the run's person is behind it: an agent run on its own, or in another's request. */
@@ -1122,10 +1134,11 @@ async function openContext(
     scheduleId: progress.scheduled ? scheduleId : null,
     sessionUserId,
     skills: {
-      ...runSkills(actor.organizationId, progress, history.plan),
+      ...(await runSkills(actor, progress, history.plan)),
       playbook,
       planNote: playbook ? playbookPlanNote(playbook, refused, ctx.plan.planName) : null,
     },
+    memory: await runMemory(actor, brand),
   };
 }
 
@@ -1160,14 +1173,16 @@ const messageText = (message: ModelMessage) =>
  * lists. Past 20 enabled, the list keeps the ones this message calls by
  * /name, then the ones used in this chat (called in its recent turns, or
  * loaded in this run), then the best match to the question and the page.
+ * A workspace skill this run loaded before has its body read again (W3-06).
  */
-function runSkills(
-  organizationId: string,
+async function runSkills(
+  actor: ChatActor,
   progress: Progress,
   history: HistoryPlan,
-): Pick<RunContext['skills'], 'enabled' | 'listed'> {
-  const enabled = enabledSkills(organizationId);
+): Promise<Pick<RunContext['skills'], 'enabled' | 'listed'>> {
+  const enabled = await enabledSkillsFor(actor.organizationId, actor.userId);
   if (enabled.length === 0) return { enabled, listed: [] };
+  await loadSkillBodies(actor, enabled, progress.skills ?? []);
   const question = progress.question ?? '';
   const names = (text: string) => typedSkills(text, enabled).map((skill) => skill.name);
   const earlier = history.recent
@@ -1386,29 +1401,52 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
   return 'ended';
 }
 
+// ─── Memory ─────────────────────────────────────────────────────────────────
+
+/**
+ * "Used memory" (CHAT-14 item 17): once a run, when its first model step
+ * carries saved notes, a step listing them, and "Memory · n items" under
+ * Data used (memory/store.ts memoryStep).
+ */
+async function noteMemory(rc: RunContext): Promise<void> {
+  if (rc.memory.lines.length === 0 || rc.progress.memoryItems !== undefined) return;
+  const step = memoryStep(rc.memory.lines);
+  rc.progress.memoryItems = rc.memory.lines.length;
+  rc.progress.sources[step.subject] = rc.memory.lines.length;
+  const row = await insertStep(rc.run.id, { position: ++rc.progress.steps, ...step.write });
+  rc.sink.emit('step.finished', { step: clientStep(row) });
+}
+
 // ─── Skills ─────────────────────────────────────────────────────────────────
 
 /**
  * A skill's body for the rest of the run (CHAT-13 item 4): its step, "Used
  * skill: {title}" with where it comes from under it, and its name kept, so
- * every later step gets its text (loadedSkills).
+ * every later step gets its text (loadedSkills). A workspace skill's body is
+ * read from its row now: false when it can't be (off since, or changed).
+ * An imported skill was written outside the workspace (CHAT-20 §16a): from
+ * it on the run is tainted, so a change shows its card even in Full auto.
  */
 async function loadSkill(
   rc: RunContext,
-  skill: LibrarySkill,
+  skill: EnabledSkill,
   via: 'typed' | 'model' | 'shortcut',
-): Promise<void> {
+): Promise<boolean> {
+  await loadSkillBodies(rc.actor, [skill], [skill.name]);
+  if (skill.body === null) return false;
   rc.progress.skills = [...(rc.progress.skills ?? []), skill.name];
+  if (skill.source === 'import') rc.progress.tainted = true;
   const row = await insertStep(rc.run.id, {
     position: ++rc.progress.steps,
     kind: 'skill',
     status: 'done',
     label: t(via === 'shortcut' ? 'step.usedShortcut' : 'step.usedSkill', { title: skill.title }),
-    detail: t('step.skillFromLibrary'),
+    detail: skillSourceWords(skill, rc.actor.userId),
     tool: USE_SKILL_TOOL,
     debug: { skill: skill.name, via },
   });
   rc.sink.emit('step.finished', { step: clientStep(row) });
+  return true;
 }
 
 /**
@@ -1416,9 +1454,17 @@ async function loadSkill(
  * a skill: one of the run's 3 bodies. Its count.
  */
 async function loadShortcut(rc: RunContext): Promise<number> {
-  if (!rc.skills.playbook) return 0;
-  await loadSkill(rc, rc.skills.playbook, 'shortcut');
-  return 1;
+  const playbook = rc.skills.playbook;
+  if (!playbook) return 0;
+  // Ansvisor's own, its body always there: loaded as a library skill is.
+  const skill: EnabledSkill = {
+    ...playbook,
+    source: 'library',
+    id: null,
+    createdBy: null,
+    sourceUrl: null,
+  };
+  return (await loadSkill(rc, skill, 'shortcut')) ? 1 : 0;
 }
 
 /**
@@ -1433,8 +1479,9 @@ async function loadTypedSkills(rc: RunContext): Promise<number> {
     0,
     MAX_SKILL_BODIES - (rc.progress.skills?.length ?? 0),
   );
-  for (const skill of typed) await loadSkill(rc, skill, 'typed');
-  return typed.length;
+  let loaded = 0;
+  for (const skill of typed) if (await loadSkill(rc, skill, 'typed')) loaded += 1;
+  return loaded;
 }
 
 /**
@@ -1466,14 +1513,24 @@ async function pickSkill(rc: RunContext, call: PendingCall): Promise<CallOutcome
       true,
     );
   }
-  await loadSkill(rc, skill, 'model');
+  if (!(await loadSkill(rc, skill, 'model'))) {
+    return result(
+      call,
+      { code: 'not_available', message: 'This skill is off now: go on without it.' },
+      true,
+    );
+  }
   return result(call, { ok: true, note: 'Its text is below the rules from your next step.' });
 }
 
 /** The skills this run loaded, a shortcut's playbook among them. */
-function loadedSkillList(rc: RunContext): LibrarySkill[] {
+function loadedSkillList(rc: RunContext) {
   const { enabled, playbook } = rc.skills;
-  const loadable = playbook ? [playbook, ...enabled] : enabled;
+  // A workspace skill has its body once the run loaded it (W3-06).
+  const bodied = enabled.flatMap((skill) =>
+    skill.body !== null ? [{ ...skill, body: skill.body }] : [],
+  );
+  const loadable = [...(playbook ? [playbook] : []), ...bodied];
   return (rc.progress.skills ?? []).flatMap((name) =>
     loadable.filter((skill) => skill.name === name),
   );
@@ -1602,6 +1659,7 @@ function stepInput(rc: RunContext, phase: ChatPhase, claude: boolean) {
 
 async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepResult> {
   const choice = rc.models.pick(phase);
+  await noteMemory(rc);
   const { system, messages } = stepInput(rc, phase, choice.claude);
   const tools = toolSet(rc, phase);
   const reservation = await reserveChatStep({
@@ -1927,7 +1985,7 @@ function coreRules(rc: Pick<RunContext, 'budget'>, phase: ChatPhase): string {
  * not between turns.
  */
 function workspaceBlock(
-  rc: Pick<RunContext, 'role' | 'planName' | 'brand' | 'refused' | 'offered' | 'skills'>,
+  rc: Pick<RunContext, 'role' | 'planName' | 'brand' | 'refused' | 'offered' | 'skills' | 'memory'>,
   phase: ChatPhase,
 ): string {
   const lines = [
@@ -1959,6 +2017,8 @@ function workspaceBlock(
   }
   // Names and descriptions only (CHAT-13 item 3): a body loads when it is used.
   if (rc.skills.listed.length > 0) lines.push(availableSkillsBlock(rc.skills.listed));
+  // Saved notes, as data (CHAT-14 item 14): after the skills list, cached with the block.
+  if (rc.memory.block) lines.push(rc.memory.block);
   return lines.join('\n\n');
 }
 
@@ -2267,7 +2327,9 @@ async function callFacts(rc: RunContext, tool: ChatTool, input: Record<string, u
         ctx,
         tool,
         input,
-        rc.progress.tainted === true,
+        // A target only memory named is data's choice, not the person's (CHAT-20 §16a).
+        rc.progress.tainted === true ||
+          (tool.area !== 'memory' && memoryChoseTarget(rc.memory.lines, input, personWords(rc))),
         rc.progress.writes[tool.name] ?? 0,
       )
     : { brandId: null, brandIsDemo: false, tainted: false };
@@ -2664,11 +2726,15 @@ const cardText = (text: string, max: number) => {
 async function cardDetailsOf(
   tool: ChatTool,
   input: Record<string, unknown>,
-  organizationId: string,
+  place: { timezone: string; organizationId: string },
 ) {
-  if (!tool.cardDetails) return {};
+  // An editable card's form (W3-02: a schedule's), as the change would be made.
+  const form = await cardFormOf(tool, input, { ...place, now: new Date() });
+  if (!tool.cardDetails) return form;
   try {
-    const details = await tool.cardDetails(input as never, { organizationId });
+    const details = await tool.cardDetails(input as never, {
+      organizationId: place.organizationId,
+    });
     const items = (details.items ?? []).slice(0, 8).map((item) => ({
       title: cardText(item.title, 200),
       ...(item.detail ? { detail: cardText(item.detail, 300) } : {}),
@@ -2685,10 +2751,11 @@ async function cardDetailsOf(
       ...(details.why ? { why: cardText(details.why, 600) } : {}),
       ...(details.goal ? { goal: cardText(details.goal, 300) } : {}),
       ...(targets.length ? { targets } : {}),
+      ...form,
     };
   } catch (err) {
     console.error('[chat/engine] could not read a card’s details:', err);
-    return {};
+    return form;
   }
 }
 
@@ -2756,6 +2823,12 @@ function cardNotes(tool: ChatTool): { noUndo?: true; note?: string } {
   return { ...(noUndo ? { noUndo: true as const } : {}), ...(note ? { note } : {}) };
 }
 
+/** Where a card's form reads its times: the run's zone and workspace. */
+const placeOf = (rc: RunContext) => ({
+  timezone: rc.progress.timezone,
+  organizationId: rc.actor.organizationId,
+});
+
 /** The hash of the arguments a card shows: what an approval is bound to (CHAT-20 §6). */
 export function cardDigest(tool: Pick<ChatTool, 'labelKey'>, input: unknown): string {
   return requestHash(tool.labelKey, input).slice(0, 32);
@@ -2775,7 +2848,7 @@ async function openCard(
   const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor.organizationId);
   const row = await insertStep(rc.run.id, {
     position: n,
-    kind: execute ? 'execute' : 'write',
+    kind: execute ? 'execute' : (tool.stepKind ?? 'write'),
     status: 'waiting',
     label: toolWords(tool, 'name'),
     detail: target || null,
@@ -2803,7 +2876,7 @@ async function openCard(
     canDontAskAgain: offerDontAskAgain,
     // A WRITE whose change can't be undone once made (§9) says so on its card.
     ...notes,
-    ...(await cardDetailsOf(tool, input, rc.actor.organizationId)),
+    ...(await cardDetailsOf(tool, input, placeOf(rc))),
   });
   return {
     kind: 'pause',
@@ -3228,13 +3301,15 @@ function toolContext(
   rc: RunContext,
   role: PrecedenceContext['role'],
   brandAccess?: PrecedenceContext['brandAccess'],
-): McpAuthContext {
+): ChatToolContext {
   return {
     userId: rc.actor.userId,
     email: rc.actor.email,
     organizationId: rc.actor.organizationId,
     role: role as UserRole,
     apiKeyId: 'agent-internal',
+    // A schedule's date phrase reads on the person's clock (CHAT-12 item 2).
+    timezone: rc.progress.timezone,
     ...(brandAccess !== undefined ? { brandAccess } : {}),
   };
 }
@@ -3674,7 +3749,7 @@ async function writeCall(
   } else {
     row = await insertStep(rc.run.id, {
       position: ++rc.progress.steps,
-      kind: tool.class === 'execute' ? 'execute' : 'write',
+      kind: tool.class === 'execute' ? 'execute' : (tool.stepKind ?? 'write'),
       status: 'running',
       label: toolWords(tool, 'name'),
       detail: target || null,
@@ -3783,6 +3858,19 @@ async function writeCall(
   });
 }
 
+/** A row's step once its change is made (its doneStep), or null for the row's own words. */
+function doneStepOf(tool: ChatTool, input: Record<string, unknown>, output: unknown) {
+  try {
+    const done = tool.doneStep?.(input as never, output) ?? null;
+    return done
+      ? { label: cardText(done.label, 200), detail: done.detail && cardText(done.detail, 300) }
+      : null;
+  } catch (err) {
+    console.error('[chat/engine] could not name a change’s step:', err);
+    return null;
+  }
+}
+
 /**
  * The step's card again, waiting on the person: an approval used for other
  * arguments (approval_mismatch), a run with no session whose write the API
@@ -3814,7 +3902,7 @@ async function cardAgain(
     digest,
     canDontAskAgain: false,
     ...notes,
-    ...(await cardDetailsOf(tool, input, rc.actor.organizationId)),
+    ...(await cardDetailsOf(tool, input, placeOf(rc))),
   });
   return {
     kind: 'pause',
@@ -3826,19 +3914,6 @@ async function cardAgain(
       offerDontAskAgain: false,
     },
   };
-}
-
-/** A row's step once its change is made (its doneStep), or null for the row's own words. */
-function doneStepOf(tool: ChatTool, input: Record<string, unknown>, output: unknown) {
-  try {
-    const done = tool.doneStep?.(input as never, output) ?? null;
-    return done
-      ? { label: cardText(done.label, 200), detail: done.detail && cardText(done.detail, 300) }
-      : null;
-  } catch (err) {
-    console.error('[chat/engine] could not name a change’s step:', err);
-    return null;
-  }
 }
 
 /** What a change made, as a card with its Open (its row's resultCard, CHAT-09 item 19). */
@@ -3992,8 +4067,10 @@ async function resumePending(
   // What runs is what the card showed: the call's arguments as its schema
   // reads them (defaults filled in, text trimmed), bound to the card's digest.
   const parsed = tool?.inputSchema.safeParse(call.input ?? {});
-  const input = (parsed?.success ? parsed.data : {}) as Record<string, unknown>;
-  const bound = !!tool && !!parsed?.success && cardDigest(tool, input) === pending.digest;
+  const asked = (parsed?.success ? parsed.data : {}) as Record<string, unknown>;
+  const bound = !!tool && !!parsed?.success && cardDigest(tool, asked) === pending.digest;
+  // The card's edits, checked when the Approve came (prepareResume), are what runs.
+  const input = action.kind === 'approve' && action.input ? action.input : asked;
   rc.run.pending = null;
   await saveState(rc.run.id, { pending: null, waitingSince: null });
   let answer: CallResult;
@@ -4141,6 +4218,8 @@ export const approveInput = z.object({
   n: z.number().int().min(1),
   digest: z.string().min(8).max(128),
   dontAskAgain: z.boolean().optional(),
+  /** An editable card's values (W3-02), by field name. */
+  form: cardFormValuesInput.optional(),
 });
 export const skipInput = z.object({ n: z.number().int().min(1) });
 
@@ -4238,7 +4317,12 @@ export async function prepareResume(
   if (!parsed.success) {
     return failure(400, 'invalid', t(kind === 'answer' ? 'error.answerInvalid' : 'error.failed'));
   }
-  const body = parsed.data as { n: number; digest?: string; dontAskAgain?: boolean };
+  const body = parsed.data as {
+    n: number;
+    digest?: string;
+    dontAskAgain?: boolean;
+    form?: Record<string, string | boolean>;
+  };
   const run = await loadRun(runId);
   if (!run || run.userId !== actor.userId || run.organizationId !== actor.organizationId) {
     return failure(404, 'not_found', t('error.notFound'));
@@ -4273,7 +4357,10 @@ export async function prepareResume(
         digest: pending.digest,
         canDontAskAgain: pending.offerDontAskAgain,
         ...cardNotes(tool),
-        ...(await cardDetailsOf(tool, input, actor.organizationId)),
+        ...(await cardDetailsOf(tool, input, {
+          timezone: progress.timezone,
+          organizationId: actor.organizationId,
+        })),
       });
       await sink.flush();
       publishRunEnd(runId);
@@ -4282,6 +4369,20 @@ export async function prepareResume(
   }
   if (kind === 'skip' && body.n !== pending.n) {
     return failure(409, 'not_waiting', t('error.notWaiting'));
+  }
+  // An editable card's values make the change's input, checked now: a refusal keeps the card.
+  let edited: Record<string, unknown> | undefined;
+  if (kind === 'approve' && body.form && tool?.form) {
+    const asked = tool.inputSchema.safeParse(call.input ?? {});
+    const made = asked.success
+      ? editedInput(tool, asked.data as Record<string, unknown>, body.form, {
+          timezone: (run.progress as Progress).timezone,
+          organizationId: actor.organizationId,
+          now: new Date(),
+        })
+      : { ok: false as const, error: null };
+    if (!made.ok) return failure(400, 'invalid', made.error ?? t('error.formInvalid'));
+    edited = made.input;
   }
   const ctx = await readPrecedenceContext({
     userId: actor.userId,
@@ -4302,7 +4403,11 @@ export async function prepareResume(
     ok: true,
     resume:
       kind === 'approve'
-        ? { kind: 'approve', dontAskAgain: !!body.dontAskAgain }
+        ? {
+            kind: 'approve',
+            dontAskAgain: !!body.dontAskAgain,
+            ...(edited ? { input: edited } : {}),
+          }
         : { kind: 'skip' },
   };
 }

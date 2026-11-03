@@ -1081,6 +1081,39 @@ describe('an agent run’s step on purchased AI credits', () => {
   });
 });
 
+describe('about how much of the limit a Chat run uses (CHAT-12 item 7)', () => {
+  const row = (run, usd, over = {}) =>
+    ledger.push({
+      id: `e${nextId++}`,
+      organization_id: 'o1',
+      feature: 'chat',
+      cost_usd: usd,
+      own_key: false,
+      chat_run_id: run,
+      used_at: '2026-10-28T09:00:00.000Z',
+      ...over,
+    });
+
+  it('averages the last 30 days’ runs over the included budget, own-key and other features left out', async () => {
+    // Starter's included budget is $5: runs of $0.10 and $0.30 average $0.20, 4%.
+    row('r1', 0.04);
+    row('r1', 0.06);
+    row('r2', 0.3, { feature: 'schedule' });
+    row('r3', 9, { own_key: true });
+    row('r4', 9, { feature: 'content' });
+    row('r5', 9, { used_at: '2026-09-01T00:00:00.000Z' });
+    expect(await budget.chatRunEstimate('o1')).toEqual({ unlimited: false, share: 0.04, runs: 2 });
+  });
+
+  it('has no figure with no run to go on, none without a budget, and nothing while Chat is off', async () => {
+    expect(await budget.chatRunEstimate('o1')).toEqual({ unlimited: false, share: null, runs: 0 });
+    vi.stubEnv('IS_CLOUD', 'false');
+    expect(await budget.chatRunEstimate('o1')).toEqual({ unlimited: true, share: null, runs: 0 });
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    await expect(budget.chatRunEstimate('o1')).rejects.toMatchObject({ code: 'chat_off' });
+  });
+});
+
 describe('a Content Quality read for an agent run (AUTONOMOUS-GO-LIVE §6.2)', () => {
   const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0b';
 

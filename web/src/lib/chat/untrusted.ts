@@ -47,8 +47,17 @@ export const TRUSTED_READS: ReadonlySet<string> = new Set([
 /** Whether a read's result may carry text written outside the workspace. */
 export const isUntrustedRead = (toolName: string) => !TRUSTED_READS.has(toolName);
 
-/** The block names the model reads data in; never left whole inside the data. */
-export const DATA_TAGS = ['untrusted_data', 'app_data', 'read_results', 'page_context'] as const;
+/**
+ * The block names the model reads data in; never left whole inside the data.
+ * saved_notes: the person's, brand's and workspace's memory (memory/rules.ts).
+ */
+export const DATA_TAGS = [
+  'untrusted_data',
+  'app_data',
+  'read_results',
+  'page_context',
+  'saved_notes',
+] as const;
 
 // Zero-width, soft hyphen, direction marks and isolates, word joiners, BOM.
 const INVISIBLE = /[­​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;
