@@ -267,6 +267,50 @@ describe('ChatComposer', () => {
   });
 });
 
+describe('ChatComposer: a pasted API key (W4-05)', () => {
+  const KEY = `sk-proj-${'Xy9_'.repeat(12)}`;
+  const keyLine = () => container.querySelector('[data-slot="composer-key-paste"]');
+  const action = (name: string) =>
+    container.querySelector<HTMLButtonElement>(`[data-action="${name}"]`);
+
+  it('never sends text that holds a key: the line says why, and Remove takes the key out', async () => {
+    await render();
+    await type(`Use my OpenAI key ${KEY}`);
+    expect(keyLine()?.textContent).toContain(
+      'This looks like an API key. Save it securely instead of sending it?',
+    );
+    expect(button('Send')!.disabled).toBe(true);
+    await press('Enter');
+    expect(handlers.onSend).not.toHaveBeenCalled();
+    // Save securely waits for the page's key form.
+    expect(action('composer.saveKey')).toBeNull();
+
+    await act(async () => action('composer.removeKey')!.click());
+    expect(box().value).toBe('Use my OpenAI key');
+    expect(keyLine()).toBeNull();
+    await press('Enter');
+    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('Use my OpenAI key', expect.anything());
+  });
+
+  it('steers no key into a running run either', async () => {
+    await render({ running: true, onSteer: handlers.onSteer, onStop: handlers.onStop });
+    await type(KEY);
+    await press('Enter');
+    expect(handlers.onSteer).not.toHaveBeenCalled();
+    expect(handlers.onStop).not.toHaveBeenCalled();
+    expect(keyLine()).not.toBeNull();
+  });
+
+  it('hands the text to the page’s key form on Save securely, where the page offers it', async () => {
+    const onSaveKey = vi.fn();
+    await render({ onSaveKey });
+    await type(`key ${KEY}`);
+    await act(async () => action('composer.saveKey')!.click());
+    expect(onSaveKey).toHaveBeenCalledExactlyOnceWith(`key ${KEY}`);
+    expect(handlers.onSend).not.toHaveBeenCalled();
+  });
+});
+
 describe('ChatComposer: context chips and the ghost suggestion (W1-11)', () => {
   const chips = [
     { key: 'brand', label: 'Ansvisor' },

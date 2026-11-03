@@ -138,6 +138,45 @@ export interface ContentDraftListItem {
   archivedAt: string | null;
   /** Its shopping path's links as the last catalog sync left them (00352); none when absent. */
   shopping?: DraftShopping;
+  /** Where it was made (00463, W4-10): the Library's Made in. */
+  origin: DraftOrigin;
+  /** The chat it was made in, when the member may open it; null otherwise. */
+  conversation: DraftConversation | null;
+}
+
+/**
+ * Where a draft was made (00463, W4-10): the Content Editor, Chat's
+ * create_draft, an Action Center task, an agent's run or an MCP client.
+ * Set once, when it is made.
+ */
+export const DRAFT_ORIGINS = ['editor', 'chat', 'action_center', 'agent', 'mcp'] as const;
+export type DraftOrigin = (typeof DRAFT_ORIGINS)[number];
+
+/** The chat a draft was made in, as its title reads. */
+export interface DraftConversation {
+  id: string;
+  title: string;
+}
+
+/**
+ * The embed that reads a draft's chat (00463's conversation_id), named by
+ * its foreign key: through the member's session, another's chat reads as none.
+ */
+export const DRAFT_CHAT =
+  'conversation:chat_conversations!content_drafts_conversation_id_fkey(id, title)';
+
+/** A row's origin: one of DRAFT_ORIGINS, else the editor's (the column's default). */
+export const draftOriginOf = (value: unknown): DraftOrigin =>
+  (DRAFT_ORIGINS as readonly unknown[]).includes(value) ? (value as DraftOrigin) : 'editor';
+
+/**
+ * The chat an embed of chat_conversations (00463's conversation_id) gives,
+ * or null: none, or one the member's session can't read (another's chat).
+ */
+export function draftConversationOf(row: unknown): DraftConversation | null {
+  const chat = (Array.isArray(row) ? row[0] : row) as { id?: unknown; title?: unknown } | null;
+  if (!chat || typeof chat.id !== 'string') return null;
+  return { id: chat.id, title: typeof chat.title === 'string' && chat.title ? chat.title : '' };
 }
 
 /**
@@ -188,6 +227,8 @@ export interface ContentDraft {
   authorConfirmed: { real: boolean; profile: boolean };
   /** The Action Center action the draft is the work of (CE-022), shown as "from Action AC-214". */
   action: { id: string; number: number } | null;
+  /** The chat it was made in (W4-10), shown as "From chat: {title}"; null for none or another's. */
+  conversation: DraftConversation | null;
   /** Where the Content Agent is on it (CE-015): the editor waits while it writes. */
   agentState: AgentState;
   /** When the agent's state last changed: while it writes, when it started. */
@@ -243,6 +284,10 @@ export interface DraftStart {
   bodyHtml?: string;
   /** The existing page to optimize instead of writing a new one (overlap check). */
   sourceUrl?: string;
+  /** Where it is made (00463): the editor's unless said; a member's own write is editor or chat. */
+  origin?: DraftOrigin;
+  /** The chat it is made in (Chat's create_draft). */
+  conversationId?: string | null;
 }
 
 /** A page of the brand's brought in by its URL (CE-003): main content, title and schema. */
@@ -323,6 +368,18 @@ export function draftsCreatedIn(
   return drafts.filter((d) => new Date(d.createdAt).getTime() >= since);
 }
 
+/** The Library's Made in filter (W4-10): any, or one place a draft was made. */
+export const MADE_IN_FILTERS = ['all', ...DRAFT_ORIGINS] as const;
+export type MadeInFilter = (typeof MADE_IN_FILTERS)[number];
+
+/** The drafts made where the filter says. */
+export function draftsMadeIn(
+  drafts: ContentDraftListItem[],
+  filter: MadeInFilter,
+): ContentDraftListItem[] {
+  return filter === 'all' ? drafts : drafts.filter((d) => d.origin === filter);
+}
+
 /**
  * The Library's Last send filter (#1331): any, never sent, or how the last
  * send to the CMS stands, as the row's mark shows it.
@@ -332,7 +389,8 @@ export type SendFilter = (typeof SEND_FILTERS)[number];
 
 /**
  * The drafts whose last send is as picked, read from each draft's last send
- * (readCmsStatuses: one left queued past its half hour reads as failed).
+ * (readCmsStatuses: one left queued past its half hour reads as failed). A
+ * page taken down (AUTONOMOUS-GO-LIVE PR 10) is a draft in its CMS again: Sent.
  */
 export function draftsLastSent(
   drafts: ContentDraftListItem[],
@@ -341,7 +399,10 @@ export function draftsLastSent(
 ): ContentDraftListItem[] {
   if (filter === 'all') return drafts;
   if (filter === 'never') return drafts.filter((d) => !sends.has(d.id));
-  return drafts.filter((d) => sends.get(d.id)?.status === filter);
+  return drafts.filter((d) => {
+    const status = sends.get(d.id)?.status;
+    return status === filter || (filter === 'sent' && status === 'taken_down');
+  });
 }
 
 export function draftsInTab(drafts: ContentDraftListItem[], tab: LibraryTab) {
