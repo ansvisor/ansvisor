@@ -27,6 +27,16 @@ describe('aiEstimateCosts', () => {
     expect((writeThis * 100) / 5).toBeLessThan(5);
   });
 
+  it('prices the Content Editor’s runs, as the Next step window says before one starts (the user, 2026-11-03)', () => {
+    const { editorBrief, editorFix, editorRewrite, editorWrite } = aiEstimateCosts();
+    for (const usd of [editorBrief, editorFix, editorRewrite, editorWrite]) {
+      expect(usd).toBeGreaterThan(0);
+    }
+    // A brief reads, on the cheaper model; a page written whole takes the most.
+    expect(editorBrief).toBeLessThan(editorFix);
+    expect(editorRewrite).toBeLessThan(editorWrite);
+  });
+
   it('follows the write model a server runs on', () => {
     vi.stubEnv('CONTENT_READ_MODEL', 'anthropic/claude-haiku-5-5');
     vi.stubEnv('CONTENT_WRITE_MODEL', 'anthropic/claude-haiku-5-5');

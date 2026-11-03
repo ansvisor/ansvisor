@@ -4,6 +4,7 @@ import { TableKit } from '@tiptap/extension-table';
 import { DOMParser as PmDOMParser, type Node as PmNode } from '@tiptap/pm/model';
 import StarterKit from '@tiptap/starter-kit';
 import { EDITOR_STARTER_KIT } from './editor';
+import { contentDom } from './dom';
 import { HtmlBlockNode } from './html-block-node';
 import { JsonLd } from './json-ld-node';
 import type { ProofSpot } from './page-read';
@@ -90,7 +91,7 @@ export function pageDoc(html: string): PmNode {
     JsonLd,
     HtmlBlockNode,
   ]);
-  const holder = document.createElement('div');
+  const holder = contentDom().document.createElement('div');
   holder.innerHTML = html;
   return PmDOMParser.fromSchema(schema).parse(holder);
 }

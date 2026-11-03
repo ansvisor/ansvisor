@@ -422,6 +422,7 @@ describe('Requests', () => {
     toolKey: 'addCompetitors',
     ruleKind: 'role',
     ruleDetail: 'Your role is Analyst.',
+    draftedText: null,
     status: 'pending',
     createdAt: '2026-10-29T11:00:00Z',
     decidedAt: null,
@@ -436,7 +437,7 @@ describe('Requests', () => {
       isAdmin: true,
       requests: [request(), request({ id: 'r2', status: 'approved' })],
     });
-    decideAccessRequest.mockResolvedValue(true);
+    decideAccessRequest.mockResolvedValue({ ok: true });
     const changed = vi.fn();
     await render(<RolesAccessSection onRequestsChanged={changed} />);
     const section = container.querySelector('[aria-labelledby="chat-access-requests"]')!;
@@ -452,9 +453,41 @@ describe('Requests', () => {
     await act(async () => button('Approve', section)!.click());
     expect(decideAccessRequest).toHaveBeenCalledWith('r1', 'approved');
     expect(changed).toHaveBeenCalled();
-    decideAccessRequest.mockResolvedValue(false);
+    decideAccessRequest.mockResolvedValue({ ok: false, reason: 'already_decided' });
     await act(async () => button('Dismiss', section)!.click());
     expect(toast.info).toHaveBeenCalledWith('Another Admin already decided it.');
+  });
+
+  it('shows an Admin the line a Workspace memory request saves, and why an approval saved nothing', async () => {
+    getChatAccess.mockResolvedValue({ ok: true, access: access({ role: 'admin' }) });
+    listRoleMembers.mockResolvedValue({ ok: true, members: [] });
+    listAccessRequests.mockResolvedValue({
+      ok: true,
+      isAdmin: true,
+      requests: [
+        request({
+          asked: 'Add to Workspace memory: “House style: AP”',
+          toolKey: 'memorySave',
+          draftedText: 'House style: AP',
+        }),
+      ],
+    });
+    decideAccessRequest.mockResolvedValue({
+      ok: false,
+      reason: 'not_saved',
+      message: 'Memory is full. Delete or shorten an item first.',
+    });
+    await render(<RolesAccessSection />);
+    const section = container.querySelector('[aria-labelledby="chat-access-requests"]')!;
+    expect(section.textContent).toContain('Approving saves: “House style: AP”');
+    await act(async () => button('Approve', section)!.click());
+    expect(toast.error).toHaveBeenCalledWith(
+      'Not saved, so it still waits: Memory is full. Delete or shorten an item first.',
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    decideAccessRequest.mockResolvedValue({ ok: true });
+    await act(async () => button('Approve', section)!.click());
+    expect(toast.success).toHaveBeenCalledWith('Approved. The line is in Workspace memory now.');
   });
 
   it('lets anyone else withdraw their own waiting request', async () => {

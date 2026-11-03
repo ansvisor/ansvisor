@@ -54,13 +54,16 @@ export interface DataUsedChip {
   label: string;
   /** Rows read, when the step counted them. */
   rows?: number;
+  /** What `rows` counts when it isn't rows: saved notes ("Memory · 3 items"). */
+  unit?: 'items';
 }
 
 /**
  * "Data used" (items 13–14): one chip per source a read step read, and per
  * page a step opened, in the order first read; a source read twice is one
  * chip, with its largest count. Skills, thinking and checks are no source,
- * nor a read whose words aren't "Read …" (a page of the app it went to).
+ * nor a read whose words aren't "Read …" (a page of the app it went to);
+ * memory is ("Used memory": "Memory · 3 items", CHAT-14 item 17).
  */
 export function dataUsed(steps: readonly ChatStep[]): DataUsedChip[] {
   const chips = new Map<string, DataUsedChip>();
@@ -72,6 +75,15 @@ export function dataUsed(steps: readonly ChatStep[]): DataUsedChip[] {
       continue;
     }
     if (step.kind !== 'read') continue;
+    if (step.scope?.unit === 'items' && step.scope.subject) {
+      const key = `items:${step.scope.subject}`;
+      chips.set(key, {
+        label: step.scope.subject,
+        ...(step.rowCount === undefined ? {} : { rows: step.rowCount }),
+        unit: 'items',
+      });
+      continue;
+    }
     const source = readSource(step.label);
     if (source === null) continue;
     const key = `read:${source}`;
