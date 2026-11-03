@@ -179,6 +179,66 @@ export async function reserveChatStep(
   return data;
 }
 
+/** The most like parts one check sizes (fitChatUnits): a batch past it is checked as this many. */
+export const MAX_FIT_UNITS = 100;
+
+/**
+ * What the period's Chat and other AI calls spent so far, holds in flight
+ * included and own-key steps left out (ai_usage_by_feature, 00405): the sum
+ * reserve_chat_ai_usage checks a hold against.
+ */
+async function periodSpentUsd(orgId, since) {
+  const { data, error } = await supabaseAdmin.rpc('ai_usage_by_feature', {
+    p_organization_id: orgId,
+    p_since: since,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []).reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
+}
+
+/**
+ * How many of `units` like parts of one job (drafts, tasks, pages) the AI
+ * budget left covers, each sized as one model step's worst case (`perUnit`:
+ * its prompt and its max output, stepWorstCaseUsd), before the job starts
+ * (CHAT-04 item 17a). What is left is the budget, purchased credits
+ * included, less the period's spend and holds; for an agent run's chat
+ * (`agentRunId`), also what its own cap leaves (CHAT-27 item 21). A count,
+ * never dollars: the web asks the person what to do when it is under
+ * `units`, and pauses at the cap when it is 0. `limit` says which limit
+ * binds: 'run' when the agent run's own cap leaves no more than the month
+ * does, so the web pauses the run at its cap, not the agent at the month's. Every part fits on the
+ * workspace's own key (ownKey: the provider bills it), without a budget to
+ * hold against (self-hosted), and for a model priced at nothing. Only a
+ * check: each step is still held on its own (reserveChatStep).
+ */
+export async function fitChatUnits(
+  orgId,
+  { modelId, perUnit, units, ownKey = false, agentRunId = null },
+) {
+  assertChatOn(orgId);
+  const count = Math.max(0, Math.min(MAX_FIT_UNITS, Math.floor(units)));
+  const unitUsd = stepWorstCaseUsd(modelId, perUnit);
+  if (ownKey || !(unitUsd > 0)) return { fits: count, limit: 'month' };
+  const { budgetUsd, includedUsd, since } = await aiBudgetOf(orgId);
+  let room = Infinity;
+  if (budgetUsd !== null) room = budgetUsd - (await periodSpentUsd(orgId, since));
+  let limit = 'month';
+  if (agentRunId) {
+    const cap = await agentRunCapUsd(orgId, agentRunId, includedUsd);
+    if (cap !== null) {
+      const runRoom = cap - (await agentRunSpentUsd(agentRunId));
+      // Its own cap binds when it leaves no more than the month, as reserveChatStep's run_cap.
+      if (runRoom <= room) limit = 'run';
+      room = Math.min(room, runRoom);
+    }
+  }
+  return { fits: room === Infinity ? count : fitsIn(room, unitUsd, count), limit };
+}
+
+/** The parts of `unitUsd` each that `roomUsd` holds, at most `count`; float noise doesn't take one. */
+const fitsIn = (roomUsd, unitUsd, count) =>
+  Math.max(0, Math.min(count, Math.floor(roomUsd / unitUsd + 1e-9)));
+
 /**
  * A meter for Content Quality's reads made for an agent run (the go-live
  * gate, AUTONOMOUS-GO-LIVE §6.2): the same { charge, release, keep } as

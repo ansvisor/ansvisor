@@ -29,15 +29,23 @@ vi.mock('../config/supabase.js', () => ({
         lt: filter('lt'),
         in: filter('in'),
         not: filter('not'),
+        limit: () => chain,
+        upsert: async () => ({ error: null }),
         then: (resolve) => resolve({ data: tables[table] ?? [], error: deleteError }),
       };
       return chain;
     },
   },
 }));
-vi.mock('./composio.js', () => ({ isComposioConfigured: () => true, runGaReport: vi.fn() }));
+const runGaReport = vi.hoisted(() => vi.fn());
+vi.mock('./composio.js', () => ({ isComposioConfigured: () => true, runGaReport }));
 const activeOrgFilter = vi.hoisted(() => vi.fn());
 vi.mock('./active-subscriptions.js', () => ({ activeOrgFilter }));
+const connectedBrands = vi.hoisted(() => vi.fn());
+vi.mock('./brand-integrations.js', () => ({
+  connectedBrands,
+  composioTarget: (c) => ({ entityId: c.entityId, accountId: c.composioAccountId }),
+}));
 
 import { AI_SOURCES_VERSION } from './ai-sources.js';
 import { GA_AI_SOURCE_PATTERN, classifyGaSource, gaAiPlatform } from './ga-sources.js';
@@ -600,36 +608,78 @@ describe('unclassifiedSources', () => {
 });
 
 /**
- * Once an organization's plan has ended (2026-10-27), the nightly sync
- * leaves it out: nothing is read from Analytics for it.
+ * The brands whose Google sign-in is live (00470: the one each brand uses,
+ * the Account's for every brand until one picks its own). Once an
+ * organization's plan has ended (2026-10-27), the nightly sync leaves it
+ * out: nothing is read from Analytics for it.
  */
 describe('runGaSync', () => {
+  const uses = (brandId, organizationId) => ({
+    brandId,
+    organizationId,
+    entityId: `org_${organizationId}`,
+    composioAccountId: `ca_${organizationId}`,
+    connected: true,
+  });
+
   beforeEach(() => {
     calls.length = 0;
     deleteError = null;
-    tables = {
-      integration_connections: [
-        { organization_id: 'paying' },
-        { organization_id: 'lapsed' },
-        { organization_id: 'paying' },
-      ],
-      brands: [],
-    };
+    tables = { brands: [] };
+    runGaReport.mockReset();
+    connectedBrands
+      .mockReset()
+      .mockResolvedValue([uses('b1', 'paying'), uses('b2', 'lapsed'), uses('b3', 'paying')]);
     activeOrgFilter.mockReset().mockResolvedValue((orgId) => orgId === 'paying');
   });
 
-  it('syncs only the organizations still on a plan', async () => {
+  it('syncs only the brands of organizations still on a plan', async () => {
     await runGaSync();
 
+    expect(connectedBrands).toHaveBeenCalledWith('google-analytics', {
+      organizationId: undefined,
+      brandId: undefined,
+    });
     expect(activeOrgFilter).toHaveBeenCalledWith(['paying', 'lapsed']);
     const brands = calls.find((call) => call.table === 'brands');
-    expect(brands.filters).toContainEqual(['in', 'organization_id', ['paying']]);
+    expect(brands.filters).toContainEqual(['in', 'id', ['b1', 'b3']]);
     // Never a demo brand (00380).
     expect(brands.filters).toContainEqual(['eq', 'is_demo', false]);
   });
 
+  it('passes on the organization or brand it was asked for', async () => {
+    await runGaSync({ organizationId: 'paying' });
+    expect(connectedBrands).toHaveBeenLastCalledWith('google-analytics', {
+      organizationId: 'paying',
+      brandId: undefined,
+    });
+    await runGaSync({ brandId: 'b1' });
+    expect(connectedBrands).toHaveBeenLastCalledWith('google-analytics', {
+      organizationId: undefined,
+      brandId: 'b1',
+    });
+  });
+
+  it('reads Analytics with the sign-in the brand uses, by its connected account', async () => {
+    tables.brands = [{ id: 'b1', organization_id: 'paying', ga_property_id: '123' }];
+    runGaReport.mockResolvedValue({ rows: [], rowCount: 0 });
+    await runGaSync({ brandId: 'b1' });
+    expect(runGaReport).toHaveBeenCalled();
+    for (const [target, property] of runGaReport.mock.calls) {
+      expect(target).toEqual({ entityId: 'org_paying', accountId: 'ca_paying' });
+      expect(property).toBe('123');
+    }
+  });
+
   it('reads no brand when no connected organization is on a plan', async () => {
     activeOrgFilter.mockResolvedValue(() => false);
+
+    expect(await runGaSync()).toEqual({ synced: 0, skipped: 0, results: [] });
+    expect(calls.some((call) => call.table === 'brands')).toBe(false);
+  });
+
+  it('reads no brand when no brand’s sign-in is live', async () => {
+    connectedBrands.mockResolvedValue([]);
 
     expect(await runGaSync()).toEqual({ synced: 0, skipped: 0, results: [] });
     expect(calls.some((call) => call.table === 'brands')).toBe(false);

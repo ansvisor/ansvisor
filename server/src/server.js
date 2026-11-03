@@ -23,12 +23,14 @@ import {
 } from './middleware/demo-brand.js';
 import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
+import publicReportCardRoutes from './routes/public-report-card.js';
 import botIngestRoutes from './routes/bot-ingest.js';
 import cloroCallbackRoutes from './routes/cloro-callback.js';
 import internalTriggerTrackingRoutes from './routes/internal-trigger-tracking.js';
 import internalChatBudgetRoutes from './routes/internal-chat-budget.js';
 import internalChatNoticesRoutes from './routes/internal-chat-notices.js';
 import internalChatPagesRoutes from './routes/internal-chat-pages.js';
+import internalChatModelsRoutes from './routes/internal-chat-models.js';
 import internalChatGoLiveRoutes from './routes/internal-chat-go-live.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
 import { pruneContentVersions } from './lib/content-history.js';
@@ -116,6 +118,11 @@ app.use('/', botIngestRoutes);
 // its own limiter runs first and its body is read only up to its own 64 KB,
 // whatever its content type, never by the 50 MB parsers below.
 app.use('/', trafficRoutes);
+
+// --- The free report card's form on www.ansvisor.com (routes/public-report-card.js) ---
+// Public like /track: its own CORS (REPORT_CARD_ORIGINS), limiter and 16 KB
+// body, before the dashboard's CORS and the 50 MB parsers below.
+app.use('/public/report-card', publicReportCardRoutes);
 
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
@@ -666,6 +673,11 @@ app.use('/api/internal/chat/notices', internalChatNoticesRoutes);
 // fetch_page (CHAT-10 §B): a public page opened through safe-fetch's rules and
 // read on the server; only what Chat reads of it goes back (routes/internal-chat-pages.js).
 app.use('/api/internal/chat/pages', internalChatPagesRoutes);
+
+// --- Internal Chat model menu (CRON_SECRET auth, called by the web's Chat) ---
+// Each offered model's multiplier against Auto and whether the catalog still
+// lists it, from the daily price sync; never a price (routes/internal-chat-models.js).
+app.use('/api/internal/chat/models', internalChatModelsRoutes);
 
 // --- Internal Chat go-live (CRON_SECRET auth, called by the web's Chat engine) ---
 // An agent's going-live step on its own (AUTONOMOUS-GO-LIVE §5.4): every

@@ -14,6 +14,7 @@ import {
   sendInput,
 } from '../lib/content-delivery.js';
 import { publishContentPage } from '../lib/cms-publish.js';
+import { takeDownContentPage } from '../lib/cms-take-down.js';
 import { checkFramerPublished } from '../lib/cms/framer-status.js';
 import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
 import { checkWordPressPublished } from '../lib/cms/wordpress-status.js';
@@ -165,6 +166,51 @@ router.post('/publish-cms', async (req, res) => {
     }
     req.log.error({ err }, 'content draft publish error');
     return res.status(502).json({ error: 'The page could not be published', code: 'failed' });
+  }
+});
+
+/**
+ * POST /api/content-drafts/:draftId/take-down
+ * A person takes the page down to a draft in the CMS it was published in
+ * (AUTONOMOUS-GO-LIVE PR 10, Chat's unpublish_cms; never an agent on its
+ * own): Webflow, WordPress or Wix (lib/cms-take-down.js). Admins and
+ * Managers, a Manager even while publishing is off for Managers: it only
+ * lowers exposure. 409 not_live (no send of the page is live) or
+ * take_down_unavailable (Framer, a webhook); 502 take_down_refused (the CMS
+ * said no, with its words). Answers { delivery, target }.
+ */
+router.post('/:draftId/take-down', async (req, res) => {
+  const id = z.guid().safeParse(req.params.draftId);
+  if (!id.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  try {
+    const { data: draft, error } = await supabaseAdmin
+      .from('content_drafts')
+      .select('id, brand_id')
+      .eq('id', id.data)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!draft) return res.status(404).json({ error: 'Not found', code: 'not_found' });
+    const { orgId } = await assertBrandAccess(draft.brand_id, req.user.id);
+    await assertSender(req.user.id);
+    return res.json(
+      await takeDownContentPage({
+        orgId,
+        brandId: draft.brand_id,
+        userId: req.user.id,
+        draftId: draft.id,
+      }),
+    );
+  } catch (err) {
+    if (err instanceof DeliveryError) {
+      return res.status(err.status).json({ error: err.message, code: err.code });
+    }
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error({ err: { name: err?.name } }, 'content draft take down error');
+    return res.status(502).json({ error: 'The page could not be taken down', code: 'failed' });
   }
 });
 

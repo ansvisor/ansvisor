@@ -106,6 +106,7 @@ describe('readGoLiveFacts', () => {
       page: 'ready',
       text: { hold: null },
       liveItem: false,
+      takenDown: false,
       gate: PASSED,
       usage: { used: 0, counted: false, nextAt: null },
     });
@@ -231,6 +232,14 @@ describe('readGoLiveFacts', () => {
     const live = await readGoLiveFacts(read());
     expect(live.facts.liveItem).toBe(true);
     expect(live.facts).not.toHaveProperty('gate');
+    expect(goLiveGate).not.toHaveBeenCalled();
+  });
+
+  it('holds a page someone took down before its gate: never on its own again (PR 10)', async () => {
+    db.tables.content_draft_deliveries = [{ id: 'd1', draft_id: DRAFT, status: 'taken_down' }];
+    const { facts } = await readGoLiveFacts(read());
+    expect(facts).toMatchObject({ liveItem: false, takenDown: true });
+    expect(facts).not.toHaveProperty('gate');
     expect(goLiveGate).not.toHaveBeenCalled();
   });
 

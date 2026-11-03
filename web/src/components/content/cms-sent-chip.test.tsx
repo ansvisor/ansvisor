@@ -59,6 +59,31 @@ describe('CmsSentChip', () => {
     );
   });
 
+  it('says a page taken down is taken down, with when and where in its tip', async () => {
+    const errors: unknown[] = [];
+    const onError = (error: unknown) => errors.push(error);
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC" onError={onError}>
+          <CmsSentChip last={{ status: 'taken_down', target: 'webflow', at, error: null }} />
+        </NextIntlClientProvider>,
+      );
+    });
+    const chip = container.querySelector('span')!;
+    expect(chip.textContent).toBe('Taken down');
+    expect(chip.getAttribute('title')).toContain('a draft item in Webflow again');
+    expect(chip.className).not.toContain('bg-blue-50');
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC" onError={onError}>
+          <CmsSentChip last={{ status: 'taken_down', target: 'wordpress', at, error: null }} />
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(container.textContent).toBe('Taken down');
+    expect(errors).toEqual([]);
+  });
+
   it('leaves a published page to its status', async () => {
     await render({ status: 'published', target: 'webflow', at, error: null });
     expect(container.textContent).toBe('');

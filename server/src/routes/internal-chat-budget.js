@@ -19,6 +19,14 @@
  *     writes priced at their own rates. 404 when it is gone.
  * POST /api/internal/chat/budget/release { orgId, usageId }
  *   → 200: the hold went (nothing was billed). Safe to repeat.
+ * POST /api/internal/chat/budget/fit
+ *   { orgId, model, perUnit: { inputTokens, maxOutputTokens }, units, ownKey?, agentRunId? }
+ *   → 200 { fits, limit }: how many of the job's `units` like parts (1–100)
+ *     the AI budget left covers, each one model step's worst case, before the
+ *     job starts (CHAT-04 item 17a); all of them on the workspace's own key.
+ *     `limit` is the one that binds: 'run' (the agent run's cap) or 'month'.
+ *     Holds nothing. 402 plan_limit, 403 chat_off, 404 not_found (an agent
+ *     run that isn't the workspace's).
  * A step a Stop aborted calls neither: its hold stays as its cost.
  * GET /api/internal/chat/budget/agent-shares?orgId=&days=
  *   → 200 { unlimited, since, shares: [{ agentId, share, ownKeyShare, runs }] }:
@@ -44,8 +52,10 @@ import { z } from 'zod';
 import {
   CHAT_BUDGET_FEATURES,
   ChatBudgetError,
+  MAX_FIT_UNITS,
   agentUsageShares,
   chargeChatStep,
+  fitChatUnits,
   ownKeyAgentSpend,
   releaseChatStep,
   reserveChatStep,
@@ -99,6 +109,16 @@ const chargeSchema = z.strictObject({
 });
 
 const releaseSchema = z.strictObject({ orgId: z.guid(), usageId: z.guid() });
+
+const fitSchema = z.strictObject({
+  orgId: z.guid(),
+  model,
+  // One part's model step: its prompt and the most it may write.
+  perUnit: z.strictObject({ inputTokens: tokens, maxOutputTokens: tokens.min(1) }),
+  units: z.number().int().min(1).max(MAX_FIT_UNITS),
+  ownKey: z.boolean().default(false),
+  agentRunId: z.guid().nullish(),
+});
 
 const sharesSchema = z.strictObject({
   orgId: z.guid(),
@@ -181,6 +201,23 @@ router.post('/release', async (req, res) => {
     return res.json({ success: true });
   } catch (err) {
     return fail(err, req, res, 'release');
+  }
+});
+
+router.post('/fit', async (req, res) => {
+  const body = parse(fitSchema, req, res);
+  if (!body) return undefined;
+  try {
+    const { fits, limit } = await fitChatUnits(body.orgId, {
+      modelId: body.model,
+      perUnit: body.perUnit,
+      units: body.units,
+      ownKey: body.ownKey,
+      agentRunId: body.agentRunId ?? null,
+    });
+    return res.json({ success: true, fits, limit });
+  } catch (err) {
+    return fail(err, req, res, 'fit');
   }
 });
 

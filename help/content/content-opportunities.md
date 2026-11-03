@@ -70,6 +70,8 @@ Titles leave years out unless the need is about one. A year that has passed in a
 
 Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped. If nothing new is written, the message says so and counts any duplicates it skipped.
 
+A question also gets only one open opportunity. When a new one would answer the same question as an open one, in the same words (years aside) or from the same group of prompts, it's added to the open one. That holds for automatic suggestions, **New**, a prompt's suggestion and a task sent from the Action Center. Its prompts, AI searches and sources join the open one, which keeps the stronger score and counts what was added. The task's History says where it went.
+
 For a second take on the same need, use **Another angle** on the opportunity.
 
 ## How many you get

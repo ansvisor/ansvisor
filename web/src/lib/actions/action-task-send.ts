@@ -25,7 +25,7 @@ export async function hasActiveWebhook(brandId: string): Promise<boolean> {
  * webhook refused it — instead of the masked production digest.
  */
 export type SendTaskResult =
-  | { to: 'content'; opportunityId: string; created: boolean }
+  | { to: 'content'; opportunityId: string; created: boolean; merged: boolean }
   | { to: 'webhook'; delivered: number; failed: number }
   | { error: 'server'; code: string | null; message: string }
   | { error: 'timeout' | 'unreachable' | 'unauthenticated' };
@@ -66,7 +66,13 @@ export async function sendActionTask(
       };
     }
     return to === 'content'
-      ? { to, opportunityId: String(data.opportunityId), created: Boolean(data.created) }
+      ? {
+          to,
+          opportunityId: String(data.opportunityId),
+          created: Boolean(data.created),
+          // Added to the open opportunity on its question.
+          merged: Boolean(data.merged),
+        }
       : { to, delivered: Number(data.delivered ?? 0), failed: Number(data.failed ?? 0) };
   } catch (err) {
     return {
