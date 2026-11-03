@@ -4,6 +4,7 @@ import {
   nextStep,
   rulesForNext,
   stepState,
+  stepsLeft,
   thirdPassOf,
   thirdPassesToRead,
   thirdStepPasses,
@@ -157,6 +158,62 @@ describe('nextStep', () => {
         state({ quality: { trust: 80, trustLow: false, todos: [todo({ action: 'addAuthor' })] } }),
       ).step.primary,
     ).toBe('addAuthor');
+  });
+
+  it('asks to review the agent’s suggestions while they wait, the path on the step they’re for (editor UX review 2026-11-03)', () => {
+    const fixing = state({ openRules: ['faq'], waiting: 3 });
+    expect(nextStep(fixing).step).toEqual({
+      id: 'review',
+      primary: 'review',
+      alternative: null,
+      skippable: false,
+    });
+    expect(ids(fixing)).toEqual([
+      'plan:done',
+      'write:done',
+      'fixRules:now',
+      'proof:ahead',
+      'check:ahead',
+    ]);
+    // No tip to run anything else meanwhile.
+    expect(nextStep({ ...fixing, quality: { trust: 40, trustLow: true, todos: [] } }).tips).toEqual(
+      [],
+    );
+    // Decided: the step is the page's again.
+    expect(nextStep({ ...fixing, waiting: 0 }).step.id).toBe('fixRules');
+    // A page marked ready has nothing to review from Next.
+    expect(nextStep({ ...fixing, open: false }).step.id).toBe('ready');
+  });
+
+  it('asks for sources first when the brief has nothing to build from (editor UX review 2026-11-03)', () => {
+    const none = state({ hasBrief: false, briefSources: false });
+    expect(nextStep(none).step).toMatchObject({ id: 'plan', primary: 'addSources' });
+    expect(nextStep({ ...none, briefSources: true }).step.primary).toBe('buildBrief');
+    // Not read yet: Build brief, as before.
+    expect(nextStep({ ...none, briefSources: null }).step.primary).toBe('buildBrief');
+  });
+
+  it('shows a step marked ready past as skipped, not done, and counts it left (editor UX review 2026-11-03)', () => {
+    const ready = state({
+      open: false,
+      openRules: ['faq'],
+      quality: { trust: 40, trustLow: true, todos: [todo({ id: 'placeholders' })] },
+    });
+    expect(nextStep(ready).step.id).toBe('ready');
+    expect(ids(ready)).toEqual([
+      'plan:done',
+      'write:done',
+      'fixRules:skipped',
+      'proof:skipped',
+      'check:done',
+    ]);
+    expect(stepsLeft(nextStep(ready).path)).toBe(2);
+    // The agent took Fix open rules: ticked, its rest still the person's, so left too.
+    const taken = { ...ready, thirdPasses: { fixRules: thirdPassOf(ready) } };
+    expect(ids(taken)[2]).toBe('fixRules:passed');
+    expect(stepsLeft(nextStep(taken).path)).toBe(2);
+    // Nothing open: every step done.
+    expect(stepsLeft(nextStep(state({ open: false })).path)).toBe(0);
   });
 
   it('checks before marking ready, and exports once ready', () => {

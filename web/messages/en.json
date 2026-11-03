@@ -9032,6 +9032,7 @@
         "buttonStep": "· {step}",
         "stepOf": "Step {n} of {total}",
         "allDone": "Every step is done",
+        "stepsLeft": "{count, plural, one {# step} other {# steps}} still open",
         "path": "All steps",
         "skip": "Skip this step",
         "skipped": "· skipped",
@@ -9058,10 +9059,13 @@
           "fixRules": "Fix open rules",
           "proof": "Add proof and author",
           "check": "Check and mark ready",
-          "ready": "Ready to publish"
+          "ready": "Ready to publish",
+          "review": "Review {count, plural, one {# suggestion} other {# suggestions}}"
         },
         "reasons": {
           "plan": "No brief yet. I build one from your prompts, fan-outs and cited pages.",
+          "planNoSources": "No brief yet, and no prompt, fan-out or Search Console query is kept to build one from. Add one in Sources first.",
+          "review": "Content Agent left {count, plural, one {# suggestion} other {# suggestions}} on the page. Accept or reject {count, plural, one {it} other {each, or all at once}}: the next step follows from what you keep.",
           "write": "The page is empty. I write a first draft from your brief and sources; you review it before you mark it ready.",
           "writeMine": "The page is empty: write it, and the next step follows from what you write.",
           "import": "The live page didn't come in. I write a first draft from your sources, or you write it yourself.",
@@ -9074,10 +9078,14 @@
           "check": "Links, schema, placeholders and Trust {gate}+, before you mark it ready.",
           "checkRules": "The rules are met. Mark it ready when you are.",
           "ready": "Every step is done. Export it for your CMS, and mark it published once it's live.",
-          "published": "It's published. Export it again when the page changes."
+          "published": "It's published. Export it again when the page changes.",
+          "readyLeft": "Marked ready with {count, plural, one {# step} other {# steps}} still open: see All steps. Export it for your CMS, and mark it published once it's live.",
+          "publishedLeft": "It's published, with {count, plural, one {# step} other {# steps}} still open: see All steps. Export it again when the page changes."
         },
         "actions": {
           "buildBrief": "Build brief",
+          "addSources": "Add sources",
+          "review": "Review",
           "writeWithAgent": "Write with Agent",
           "writeMyself": "I'll write it",
           "rewritePage": "Rewrite page",
@@ -9255,6 +9263,7 @@
           "fill": "Fill now"
         },
         "logged": "Mark ready anyway is logged, with this Trust.",
+        "openWork": "Still open: {rules, plural, =0 {} one {# rule} other {# rules}}{rules, plural, =0 {} other {{todos, plural, =0 {} other { and }}}}{todos, plural, =0 {} one {# to-do} other {# to-dos}}. You can mark it ready: they stay in Rules and Quality.",
         "author": {
           "ok": "Author for your CMS",
           "okDetail": "Set {name} as the page's author in your CMS. Its template shows the byline; nothing is added to the content.",

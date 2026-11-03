@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/compone
 import type { AgentRun } from '@/lib/content/agent-runs';
 import {
   FEW_OPEN_RULES,
+  stepsLeft,
   type NextAction,
   type NextPath,
   type NextStep,
@@ -120,6 +121,7 @@ export type T = ReturnType<typeof useTranslations<'contentEditor.editor.nextStep
 
 /** A step's name: the Length step says which way the page is off. */
 export function stepName(t: T, id: NextStepId, state: NextStepState): string {
+  if (id === 'review') return t('steps.review', { count: state.waiting ?? 0 });
   if (id === 'length' && state.rewrite?.reason === 'length') {
     return state.rewrite.count > state.rewrite.target
       ? t('steps.lengthLong')
@@ -156,9 +158,15 @@ export function stepReason(
   step: NextStep,
   state: NextStepState,
   todoLine: string | null,
+  /** The path, for a page marked ready with steps left: "Every step is done" only with none. */
+  path?: NextPath['path'],
 ): string {
   const { id } = step;
   switch (id) {
+    case 'review':
+      return t('reasons.review', { count: state.waiting ?? 0 });
+    case 'plan':
+      return step.primary === 'addSources' ? t('reasons.planNoSources') : t('reasons.plan');
     case 'length':
       return state.rewrite?.reason === 'length'
         ? t('reasons.length', { count: state.rewrite.count, target: state.rewrite.target })
@@ -180,10 +188,13 @@ export function stepReason(
     }
     case 'check':
       return state.quality ? t('reasons.check', { gate: TRUST_GATE }) : t('reasons.checkRules');
-    case 'ready':
+    case 'ready': {
+      const left = path ? stepsLeft(path) : 0;
+      if (left > 0) {
+        return t(state.published ? 'reasons.publishedLeft' : 'reasons.readyLeft', { count: left });
+      }
       return state.published ? t('reasons.published') : t('reasons.ready');
-    default:
-      return t(`reasons.${id}`);
+    }
   }
 }
 
@@ -294,7 +305,11 @@ export function NextStepButton({
           </span>
           <Bars path={path} className="ml-auto" />
           <span className="sr-only">
-            {now >= 0 ? t('stepOf', { n: now + 1, total: path.length }) : t('allDone')}
+            {now >= 0
+              ? t('stepOf', { n: now + 1, total: path.length })
+              : stepsLeft(path) > 0
+                ? t('stepsLeft', { count: stepsLeft(path) })
+                : t('allDone')}
           </span>
         </div>
 
@@ -321,7 +336,7 @@ export function NextStepButton({
           <div className="space-y-2" aria-live="polite">
             <PopoverTitle>{name}</PopoverTitle>
             <p className="text-[13px] text-muted-foreground [overflow-wrap:anywhere]">
-              {stepReason(t, step, state, todoLine)}
+              {stepReason(t, step, state, todoLine, path)}
             </p>
             <div className="flex flex-wrap items-center gap-1.5">
               <Button

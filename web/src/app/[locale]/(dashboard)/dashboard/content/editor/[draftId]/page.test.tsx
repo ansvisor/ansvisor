@@ -14,6 +14,7 @@ import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
 import { encodeHtmlBlock } from '@/lib/content/html-allowlist';
+import { activeRules, ruleSet } from '@/lib/content/rules';
 import { CLAIMS_EVERY_MS } from './_use-claims';
 import { PROOF_READ_EVERY_MS, PROOF_READ_SLACK_MS } from './_use-page-read';
 import ContentEditorPage from './page';
@@ -1230,6 +1231,36 @@ describe('the content editor', () => {
       expect(container.querySelector('.ProseMirror')).not.toBeNull();
       await act(async () => button('Close')!.click());
       expect(container.querySelector('[role="alert"]')).toBeNull();
+    });
+
+    it('takes the band away once another run starts here (editor UX review 2026-11-03)', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          status: 'draft',
+          agentState: 'failed',
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftSuggestions.mockResolvedValue([]);
+      fixDraftRules.mockResolvedValue({ count: 0 });
+      await renderPage();
+      const failed = () =>
+        [...container.querySelectorAll('[role="alert"]')].find((a) =>
+          a.textContent?.includes("The Content Agent couldn't finish this page."),
+        );
+      expect(failed()).toBeDefined();
+      // Fix open rules from Rules: the run before it is behind the page now.
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!.click(),
+      );
+      await act(async () =>
+        [...container.querySelectorAll<HTMLButtonElement>('aside button')]
+          .find((b) => b.textContent === 'Run Agent')!
+          .click(),
+      );
+      await act(async () => {});
+      expect(fixDraftRules).toHaveBeenCalled();
+      expect(failed()).toBeUndefined();
     });
   });
 
@@ -5565,6 +5596,15 @@ describe('the side panel', () => {
     beforeEach(() => {
       sessionStorage.clear();
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      // The agent's steps taken (every rule passed, the page short of its
+      // Length as it is): Next is on the person's step, which the nudge
+      // shows beside (editor UX review 2026-11-03: never beside the agent's).
+      const all = activeRules(ruleSet('feature_page'), { overrides: {} }).map((r) => r.key);
+      const pass = { rules: all, length: 'short', batch: null };
+      localStorage.setItem(
+        'aeo:next-step-third-try:d1',
+        JSON.stringify({ attempt: null, passes: { length: pass, fixRules: pass } }),
+      );
       getContentAuthors.mockResolvedValue({
         authors: [ada],
         brands: [{ id: 'b1', name: 'Acme' }],
@@ -5697,7 +5737,7 @@ describe('the side panel', () => {
       expect(nudge()).toBeNull();
     });
 
-    it('names it when Run Agent leaves its batch', async () => {
+    it('names it once Run Agent’s batch is decided, not beside Review (editor UX review 2026-11-03)', async () => {
       getContentDraft.mockResolvedValue(
         draft({
           authorId: null,
@@ -5733,6 +5773,17 @@ describe('the side panel', () => {
       );
       await act(async () => {});
       expect(fixDraftRules).toHaveBeenCalled();
+      // Its batch waits: Next's step is to review it, and the nudge doesn't name another.
+      expect(
+        container.querySelector('header button[aria-label^="Next ·"]')!.getAttribute('aria-label'),
+      ).toBe('Next · Review 1 suggestion');
+      expect(nudge()).toBeNull();
+      // Decided: the person's step, and the nudge with it.
+      const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+      await act(async () =>
+        [...card.querySelectorAll('button')].find((b) => b.textContent === 'Accept all')!.click(),
+      );
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 700)));
       expect(nudge()!.textContent).toContain("Next for you: pick the page's author · 1 of 2");
     });
 
@@ -6706,7 +6757,8 @@ describe('the side panel', () => {
       getDraftSources.mockResolvedValue({
         data: {
           prompts: [],
-          fanouts: [],
+          // Something to build the brief from (with none, the step asks for sources).
+          fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
           citedPages: [],
           gscQueries: [],
           brandDomains: [],
@@ -7088,8 +7140,8 @@ describe('the side panel', () => {
         ]);
         fixDraftRules.mockResolvedValue({ count: 1 });
         await runFix();
-        // Its change waits for a decision: the step stays.
-        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        // Its change waits for a decision: the step is to review it (editor UX review 2026-11-03).
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Review 1 suggestion');
         const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
         await act(async () =>
           [...card.querySelectorAll('button')].find((b) => b.textContent === 'Reject all')!.click(),
@@ -8051,7 +8103,12 @@ describe('the side panel', () => {
         'Content Agent is already working on this page. Wait for it to finish.',
       );
       await act(async () => answer({ count: 0 }));
-      expect(button('Rebuild with selection')!.disabled).toBe(false);
+      // Free of the run, it's held only for want of a prompt, fan-out or query to build from.
+      expect(panel()!.textContent).not.toContain('Content Agent is already working on this page.');
+      expect(button('Rebuild with selection')!.disabled).toBe(true);
+      expect(panel()!.textContent).toContain(
+        'Keep at least one prompt, fan-out or Search Console query to build from.',
+      );
     });
 
     it('shows no steps of a run that has ended', async () => {

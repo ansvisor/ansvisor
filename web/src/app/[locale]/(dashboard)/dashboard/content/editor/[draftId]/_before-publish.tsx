@@ -122,7 +122,14 @@ export function BeforePublish({
   reviewer = null,
   reviewerRequired = false,
   reviewerLd = null,
+  openWork = null,
 }: {
+  /**
+   * What is still open as it is marked ready (editor UX review 2026-11-03,
+   * decision a): the rules not met, the to-dos not done. Counted, never
+   * "all done"; Mark ready stays open.
+   */
+  openWork?: { rules: number; todos: number } | null;
   /**
    * The page's shopping links against the catalog now (shopping path, part
    * 6): the products that no longer sell, the category page, the products
@@ -528,6 +535,11 @@ export function BeforePublish({
               {mode === 'markReady' && <p className="text-xs opacity-80">{t('logged')}</p>}
             </div>
           </div>
+        )}
+        {mode === 'markReady' && openWork && openWork.rules + openWork.todos > 0 && (
+          <p role="status" className="text-xs text-muted-foreground">
+            {t('openWork', openWork)}
+          </p>
         )}
         {linksPending > 0 && (
           <p role="status" className="text-xs text-muted-foreground">

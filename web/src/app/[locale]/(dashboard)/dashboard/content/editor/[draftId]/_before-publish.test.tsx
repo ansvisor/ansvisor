@@ -117,6 +117,7 @@ async function render(
     reviewer = null as ContentAuthor | null,
     reviewerRequired = false,
     reviewerLd = null as string | null,
+    openWork = null as { rules: number; todos: number } | null,
   } = {},
 ) {
   // As the editor makes it (00448): the author it names, the site's pages Site trust found.
@@ -167,6 +168,7 @@ async function render(
             disclosureLine={disclosureLine}
             disclosureAdded={disclosureAdded}
             onAddDisclosure={onAddDisclosure}
+            openWork={openWork}
           />
         </NextIntlClientProvider>
       </Wrap>,
@@ -412,6 +414,29 @@ describe('BeforePublish', () => {
     expect(dialog().querySelector('[role="status"]')!.textContent).toBe(
       "Still reading 2 of the page's links, so Trust may change.",
     );
+  });
+
+  it('counts what is still open as it is marked ready, never that all is done (editor UX review 2026-11-03)', async () => {
+    const said = () =>
+      [...dialog().querySelectorAll('[role="status"]')].map((p) => p.textContent).join(' ');
+    await render(quality({ trust: null }), { openWork: { rules: 2, todos: 1 } });
+    expect(said()).toContain(
+      'Still open: 2 rules and 1 to-do. You can mark it ready: they stay in Rules and Quality.',
+    );
+    // Mark ready stays open.
+    expect(
+      [...dialog().querySelectorAll('button')].find((b) => b.textContent === 'Mark ready')!
+        .disabled,
+    ).toBe(false);
+    await render(quality({ trust: null }), { openWork: { rules: 1, todos: 0 } });
+    expect(said()).toContain('Still open: 1 rule. You can mark it ready');
+    await render(quality({ trust: null }), { openWork: { rules: 0, todos: 3 } });
+    expect(said()).toContain('Still open: 3 to-dos. You can mark it ready');
+    // Nothing open, or on the way to Export: nothing said.
+    await render(quality({ trust: null }), { openWork: { rules: 0, todos: 0 } });
+    expect(said()).not.toContain('Still open');
+    await render(quality({ trust: null }), { mode: 'export', openWork: { rules: 2, todos: 1 } });
+    expect(said()).not.toContain('Still open');
   });
 
   it('says what the CMS does: the author, the dates and the Article schema', async () => {

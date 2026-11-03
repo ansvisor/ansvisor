@@ -2577,6 +2577,7 @@ export function DraftEditor({
   // suggestions, each with what it names on the page; the disclosure only
   // with its line in the page's language.
   const tQuality = useTranslations('contentEditor.editor.quality');
+  const tBrief = useTranslations('contentEditor.editor.brief');
   const handOffSuggestions = sourcesOn && quality ? qualitySuggestions(tQuality, quality) : [];
   const handOffList = handOffItems(handOffSuggestions, {
     // Added, and not read again yet: never a second one.
@@ -2642,6 +2643,14 @@ export function DraftEditor({
   useEffect(() => {
     if (agentWorking) setLastRunFailed(false);
   }, [agentWorking]);
+  // Another run started here (Fix, a hand-off, the brief): the band of the
+  // one that couldn't finish goes (editor UX review 2026-11-03: it stayed over
+  // a brief built since). Its own Try again keeps it until the page is left
+  // for the agent's: a start refused says so under it.
+  const otherRun = fixing || briefRebuilding;
+  useEffect(() => {
+    if (otherRun) setAgentFailed(false);
+  }, [otherRun]);
   const agentRun = useAgentRun(draft.id, agentWorking, fixing ? FIX_RUNS : BRIEF_RUNS);
   const stopAgent = async () => {
     if (!agentRun) return;
@@ -3295,6 +3304,19 @@ export function DraftEditor({
     [qualityOn, pageHtml],
   );
   const trustNow = quality?.trust?.score ?? null;
+  // Something kept the brief can be built from (the server's no_sources
+  // check): a prompt, a fan-out or a Search Console query; null until read.
+  const briefSources = useMemo(() => {
+    const read = reads.sources;
+    if (!read || read.failed || !read.data) return null;
+    const kept = rebuildSources(read.data, read.choices, {
+      title,
+      sourceUrl: draft.sourceUrl,
+      html: '',
+      length: 0,
+    });
+    return kept.promptIds.length + kept.fanouts.length + kept.queries.length > 0;
+  }, [reads.sources, title, draft.sourceUrl]);
   // Trust low is a step only while Quality names what raises it, or is still
   // reading what may (editor test 2026-11-03: Trust 55 with nothing named
   // left only Skip).
@@ -3317,6 +3339,9 @@ export function DraftEditor({
     open: canMarkReady,
     published: status === 'published',
     hasBrief: reads.brief.status === 'ready' ? reads.brief.brief !== null : null,
+    briefSources,
+    // The agent's suggestions waiting: Review them, the one step (a rewrite counts one).
+    waiting: agentWorking ? 0 : openSuggestions,
     empty: !pageHasWords,
     rewrite: rewriteAdvice(rules.rules, reach, heldRules),
     openRules: rulesForNext(rules.rules, heldRules),
@@ -3337,6 +3362,8 @@ export function DraftEditor({
     nextStepNow.current = next.step.id;
   });
   const firstTodo = todos.find((todo) => !todo.done);
+  // The bottom nudge names a to-do: only while Next's step is the person's too.
+  const nudgeFits = stepActor(next.step) === 'you' && next.step.id !== 'review';
   const todoLine = firstTodo && quality ? todoCopy(firstTodo, quality).next : null;
   const skipStep = (id: NextStepId) => {
     const skips = { ...liveSkips(nextState), [id]: stepState(id, nextState) };
@@ -3552,6 +3579,17 @@ export function DraftEditor({
   const runNext = (action: NextAction) => {
     setNextOpen(false);
     switch (action) {
+      case 'addSources':
+        openPanelTab('sources');
+        return;
+      case 'review':
+        // A rewrite waits in the card above the page, a fix in the page.
+        if (pageSuggestion?.status === 'open') {
+          document
+            .querySelector<HTMLElement>(`[role="region"][aria-label="${t('rewrite.bar')}"] button`)
+            ?.focus({ preventScroll: false });
+        } else reviewFirst();
+        return;
       case 'buildBrief':
         if (!panelOpen) togglePanel();
         setTabRequest((prev) => ({ tab: 'brief', n: (prev?.n ?? 0) + 1, build: true }));
@@ -4235,7 +4273,7 @@ export function DraftEditor({
                       blocked: nextBlocked(next.step.primary),
                       // The card heads with the step and who takes it (Next step spec §3).
                       title: stepName(tNext, next.step.id, nextState),
-                      reason: stepReason(tNext, next.step, nextState, todoLine),
+                      reason: stepReason(tNext, next.step, nextState, todoLine, next.path),
                       actor: stepActor(next.step),
                     }
                   : null
@@ -4306,7 +4344,9 @@ export function DraftEditor({
             {dragging && <DropOverlay />}
             {quality && (
               <NextNudge
-                shown={nudge.shown}
+                // Only while Next's step is the person's: never a second step
+                // beside the agent's (editor UX review 2026-11-03).
+                shown={nudgeFits ? nudge.shown : null}
                 quality={quality}
                 onShowPlaceholder={showFirstPlaceholder}
                 onPickAuthor={() => setAuthorMenuOpen(true)}
@@ -4351,7 +4391,15 @@ export function DraftEditor({
             }
             onBriefRebuilding={onBriefRebuilding}
             briefBlocked={
-              briefRebuilding ? null : (aiUsedUp ?? (agentBusy ? t('suggestions.agentBusy') : null))
+              briefRebuilding
+                ? null
+                : (aiUsedUp ??
+                  (agentBusy
+                    ? t('suggestions.agentBusy')
+                    : // Said where Run Agent is, before it fails (editor UX review 2026-11-03).
+                      briefSources === false
+                      ? tBrief('rebuildErrors.no_sources')
+                      : null))
             }
             quality={quality}
             qualityScore={shownScore}
@@ -4513,6 +4561,12 @@ export function DraftEditor({
           onMarkReady={(anyway) => {
             setPublishOpen(null);
             void markReady(anyway ?? undefined);
+          }}
+          // Decision (a), editor UX review 2026-11-03: Mark ready stays open with work
+          // left, and the window counts it rather than saying all is done.
+          openWork={{
+            rules: rulesSettled ? Math.max(0, rules.total - rules.met) : 0,
+            todos: todos.filter((todo) => !todo.done).length,
           }}
           onFixFirst={(show) => {
             setPublishOpen(null);

@@ -38,13 +38,13 @@ In **Settings › Content**, admins and managers can have each brand's new pages
 
 ## Next step
 
-With Quality on, the header shows the page's **Next step**: plan the page, write the first draft or bring in your page, fix its length or open rules, add proof and author, or check and mark ready. It comes with a button to take the step, **Skip this step** and **All steps**.
+With Quality on, the header's **Next step** names one step: plan the page, write or bring it in, fix its length or open rules, add proof and author, or check and mark ready, with **Skip this step** and **All steps**. While the Content Agent's suggestions wait, it's **Review** them. Without a prompt, fan-out or Search Console query to build the brief from, it's **Add sources**.
 
-Once you've decided the Content Agent's suggestions for **Fix open rules**, the step is ticked and Next moves on. Rules its later suggestions leave open don't bring it back; a rule your own edits open does.
+Once you've decided the agent's **Fix open rules** suggestions, the step is ticked. Rules its later suggestions leave open don't bring it back; your edits can.
 
-**Add proof and author**: **Show to-dos** scrolls Quality to your to-dos, or, with none left, **Show what raises Trust** to what would raise it. Trust under 60 is a step only while Quality names something that raises it.
+**Show to-dos** scrolls Quality to your to-dos, or **Show what raises Trust** to what would raise it. The nudge at the bottom shows only on your own steps.
 
-Once the page is ready, **Next step** also offers **Mark published**.
+Marked ready with steps skipped, it says how many are still open. **Next step** then offers **Export** and **Mark published**.
 
 ## The page's author
 
@@ -59,7 +59,8 @@ The header shows the page's author, picked from **Settings › Authors**, or you
 - the qualified reviewer on pages that advise on health, money or the law;
 - visible dates;
 - the Article schema Ansvisor adds;
-- a warning when Trust is under 60.
+- a warning when Trust is under 60;
+- how many rules and to-dos are still open. You can still mark it ready.
 
 Copy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about.
 

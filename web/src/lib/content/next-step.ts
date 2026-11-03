@@ -24,11 +24,17 @@ export type NextStepId =
   | 'fixRules'
   | 'proof'
   | 'check'
-  | 'ready';
+  | 'ready'
+  // The agent's suggestions wait for a decision: every other step waits on them.
+  | 'review';
 
 /** What a step's buttons do: each is a button the editor already has. */
 export type NextAction =
   | 'buildBrief'
+  // No prompt, fan-out or Search Console query kept: the brief has nothing to build from.
+  | 'addSources'
+  // The first suggestion still to decide, in the page (or the rewrite's card).
+  | 'review'
   | 'writeWithAgent'
   | 'writeMyself'
   | 'rewritePage'
@@ -81,6 +87,19 @@ export interface NextStepState {
   published: boolean;
   /** Whether the draft has a brief; null while it isn't read, or couldn't be. */
   hasBrief: boolean | null;
+  /**
+   * Whether a prompt, fan-out or Search Console query is kept to build the
+   * brief from (the server's no_sources check); null while the sources
+   * aren't read. With none, Plan the page asks for sources first (editor UX
+   * review 2026-11-03: Build brief failed with a toast that went away).
+   */
+  briefSources?: boolean | null;
+  /**
+   * The agent's suggestions on the page still to decide (a rewrite counts
+   * one): while any wait, the step is to review them, and the path shows
+   * the step they're for.
+   */
+  waiting?: number;
   /** No words under the page's title. */
   empty: boolean;
   /** Why rewriting the page whole is recommended (rewriteAdvice), or null. */
@@ -287,7 +306,7 @@ function steps(s: NextStepState): NextStep[] {
       ? [
           {
             id: 'plan' as const,
-            primary: 'buildBrief' as const,
+            primary: s.briefSources === false ? ('addSources' as const) : ('buildBrief' as const),
             alternative: null,
             skippable: true,
           },
@@ -344,14 +363,20 @@ function steps(s: NextStepState): NextStep[] {
   ];
 }
 
+/** The agent's suggestions waiting: the step until each is decided. */
+const REVIEW: NextStep = { id: 'review', primary: 'review', alternative: null, skippable: false };
+
 /**
  * The step to take now (the first whose state calls for it and that wasn't
  * skipped at that state), the path, and the tips. A page marked ready or
  * published is ready to publish: Export; marked ready, Mark published beside
- * it, for its live address (CE-013).
+ * it, for its live address (CE-013). Its path still shows a step it was
+ * marked ready past as skipped, not done (editor UX review 2026-11-03).
+ * While the agent's suggestions wait, the step is to review them; the path
+ * stays on the step they're for.
  */
 export function nextStep(s: NextStepState): NextPath {
-  const due = s.open ? steps(s) : [];
+  const due = steps(s);
   const check: NextStep = s.open
     ? {
         id: 'check',
@@ -367,15 +392,18 @@ export function nextStep(s: NextStepState): NextPath {
       };
   const passes = thirdStepPasses(s);
   const tried = (id: NextStepId) => passes.has(id as ThirdStepId);
-  const step =
-    due.find((d) => !tried(d.id) && (!d.skippable || s.skipped[d.id] !== stepState(d.id, s))) ??
-    check;
+  const under = s.open
+    ? (due.find((d) => !tried(d.id) && (!d.skippable || s.skipped[d.id] !== stepState(d.id, s))) ??
+      check)
+    : check;
+  const reviewing = s.open && (s.waiting ?? 0) > 0;
+  const step = reviewing ? REVIEW : under;
 
   // The third step is the one the page needs: its Length, or its open rules
   // (an empty page, its title alone, isn't read against its Length).
   const third: NextStepId =
-    step.id === 'length' || step.id === 'fixRules'
-      ? step.id
+    under.id === 'length' || under.id === 'fixRules'
+      ? under.id
       : !s.empty && s.rewrite?.reason === 'length'
         ? 'length'
         : 'fixRules';
@@ -386,7 +414,7 @@ export function nextStep(s: NextStepState): NextPath {
     ...(s.quality ? (['proof'] as const) : []),
     'check',
   ];
-  const now = step.id === 'ready' ? ids.length : ids.indexOf(step.id);
+  const now = under.id === 'ready' ? ids.length : ids.indexOf(under.id);
   const calledFor = new Set(due.map((d) => d.id));
   const path = ids.map((id, i) => ({
     id,
@@ -404,7 +432,7 @@ export function nextStep(s: NextStepState): NextPath {
   }));
 
   const tips: NextPath['tips'] =
-    s.open && !s.empty
+    s.open && !s.empty && !reviewing
       ? [
           ...(s.rewrite?.reason === 'length'
             ? [
@@ -432,4 +460,12 @@ export function nextStep(s: NextStepState): NextPath {
       : [];
 
   return { step, path, tips };
+}
+
+/**
+ * The steps passed with something still open: skipped, or taken by the agent
+ * with what's left the person's. "Every step is done" only with none.
+ */
+export function stepsLeft(path: NextPath['path']): number {
+  return path.filter((p) => p.state === 'skipped' || p.state === 'passed').length;
 }

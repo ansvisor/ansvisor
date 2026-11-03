@@ -250,6 +250,50 @@ describe('NextStepButton', () => {
   });
 });
 
+describe('the step’s words (editor UX review 2026-11-03)', () => {
+  it('names the suggestions to review, and Review is the person’s', async () => {
+    await render(state({ openRules: ['faq'], waiting: 2 }));
+    expect(popup()!.textContent).toContain('Review 2 suggestions');
+    expect(popup()!.textContent).toContain('Content Agent left 2 suggestions on the page.');
+    const review = [...popup()!.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Review',
+    )!;
+    await act(async () => review.click());
+    expect(onAction).toHaveBeenCalledWith('review');
+    expect(
+      stepActor({ id: 'review', primary: 'review', alternative: null, skippable: false }),
+    ).toBe('you');
+  });
+
+  it('says a page marked ready has steps left, never that every step is done', async () => {
+    await render(
+      state({
+        open: false,
+        openRules: ['faq'],
+      }),
+    );
+    expect(popup()!.textContent).toContain('Marked ready with 1 step still open: see All steps.');
+    expect(popup()!.textContent).not.toContain('Every step is done');
+    expect(popup()!.textContent).toContain('1 step still open');
+    const fix = [...popup()!.querySelectorAll('ol li')].find((li) =>
+      li.textContent?.includes('Fix open rules'),
+    )!;
+    expect(fix.textContent).toContain('skipped');
+    expect(fix.querySelector('svg')).toBeNull();
+    // Nothing left: as before.
+    await render(state({ open: false }));
+    expect(popup()!.textContent).toContain('Every step is done.');
+  });
+
+  it('asks for sources when the brief has nothing to build from', async () => {
+    await render(state({ hasBrief: false, briefSources: false }));
+    expect(popup()!.textContent).toContain('Add one in Sources first.');
+    expect([...popup()!.querySelectorAll('button')].map((b) => b.textContent)).toContain(
+      'Add sources',
+    );
+  });
+});
+
 describe('stepActor', () => {
   it('gives the agent its runs and the person the rest', () => {
     const actor = (primary: Parameters<typeof stepActor>[0]['primary']) =>
