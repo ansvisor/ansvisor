@@ -7644,11 +7644,23 @@
         "type": "Type",
         "method": "Method",
         "by": "By",
+        "madeIn": "Made in",
         "status": "Status",
         "created": "Created",
         "updated": "Updated",
         "menu": "Row actions",
         "shopping": "Shopping path"
+      },
+      "madeIn": {
+        "label": "Made in",
+        "all": "All",
+        "editor": "Content Editor",
+        "chat": "Chat",
+        "action_center": "Action Center",
+        "agent": "Agent",
+        "mcp": "MCP",
+        "openChat": "Open chat",
+        "in": "in {place}"
       },
       "rowMenu": {
         "label": "Actions for {title}",
@@ -8223,6 +8235,8 @@
       },
       "actionBar": "This draft is the work of <link>Action AC-{no}</link>. Mark ready completes its task there.",
       "actionBarDone": "This draft is the work of <link>Action AC-{no}</link>.",
+      "chatBar": "From chat: <link>{title}</link>",
+      "chatBarUntitled": "Untitled chat",
       "suggestions": {
         "bar": "Agent suggestions",
         "agent": "Content Agent",
