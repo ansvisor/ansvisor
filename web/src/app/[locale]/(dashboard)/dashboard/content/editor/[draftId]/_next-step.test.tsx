@@ -109,6 +109,11 @@ describe('NextStepButton', () => {
     expect(popup()!.textContent).toContain(
       '3 rules are open: Content Agent can fix 1 in small, reviewable changes, and 2 are yours to decide in the Rules tab.',
     );
+    // As many as a Fix is sent, its Length among them: as Rules counts them.
+    await render(state({ method: 'optimize', openRules: ['faq'], openTotal: 3, fixable: 2 }));
+    expect(popup()!.textContent).toContain(
+      '3 rules are open: Content Agent can fix 2 in small, reviewable changes, and 1 is yours',
+    );
     // All of them the agent's.
     await render(state({ method: 'optimize', openRules: ['faq', 'summary'], openTotal: 2 }));
     expect(popup()!.textContent).toContain(

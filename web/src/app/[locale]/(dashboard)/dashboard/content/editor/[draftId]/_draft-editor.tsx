@@ -3307,6 +3307,7 @@ export function DraftEditor({
     empty: !pageHasWords,
     rewrite: rewriteAdvice(rules.rules, reach, heldRules),
     openRules: rulesForNext(rules.rules, heldRules),
+    fixable: openRulesForAgent(rules.rules, undefined, heldRules).forAgent.length,
     openTotal: rules.rules.filter(({ rule, status }) => rule.on && status.state === 'bad').length,
     quality: quality
       ? {

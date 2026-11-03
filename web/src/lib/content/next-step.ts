@@ -109,6 +109,12 @@ export interface NextStepState {
   /** Every rule on that the page doesn't meet, as the Rules tab counts them. */
   openTotal?: number;
   /**
+   * The open rules a Fix run is sent (openRulesForAgent), as Rules says the
+   * agent can fix them: the step's words count these (editor UX review
+   * 2026-11-03), its pass the openRules above.
+   */
+  fixable?: number;
+  /**
    * Quality's reads (Quality spec, CE-040/041): Trust under its gate (60)
    * while Quality names something that raises it (a Trust with nothing to
    * raise it is no step the person can take: editor test 2026-11-03), and

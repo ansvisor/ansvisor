@@ -153,8 +153,8 @@ export function stepActor(step: NextStep): 'agent' | 'you' {
  * held by quoted passages), so the two never seem to disagree.
  */
 function fixRulesReason(t: T, state: NextStepState): string {
-  const count = state.openRules.length;
-  const total = state.openTotal ?? count;
+  const count = state.fixable ?? state.openRules.length;
+  const total = Math.max(state.openTotal ?? count, count);
   // The open rules counted once, as Rules counts them (editor UX review
   // 2026-11-03: "9 rules" here beside "10 open" there read as two numbers).
   return total > count
