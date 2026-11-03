@@ -122,7 +122,7 @@ import {
 } from './touched-brands';
 import type { ExplainChangeOutput } from '@/lib/mcp/why';
 import { stepPrompt, todayLine } from './prompt';
-import { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
+import { ANSWER_NOTE, INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
 import { whyView } from './why/view';
 import { WHATS_NEW_TOOL, whatsNewStepDetail } from './whats-new/run';
 import {
@@ -775,7 +775,12 @@ const STOP_POLL_MS = 1_500;
 const READ_TIMEOUT_MS = 20_000;
 const READ_RETRY_MS = 2_000;
 
-type Progress = RunProgress & { question?: string; scope?: MessageScope };
+type Progress = RunProgress & {
+  question?: string;
+  scope?: MessageScope;
+  /** A reply had no words for the person, and the model was asked for them (ANSWER_NOTE). */
+  answerAsked?: boolean;
+};
 
 interface RunContext {
   actor: ChatActor;
@@ -1419,7 +1424,8 @@ async function modelLoop(rc: RunContext): Promise<void> {
     if (rc.progress.modelSteps >= MAX_MODEL_STEPS) return finish(rc);
     const phase: ChatPhase = rc.models.phases === 'single' ? 'write' : rc.progress.phase;
     // Next moves belong to the answer they came with: a later step suggests its own, or none.
-    if (phase === 'write') rc.progress.nextMoves = undefined;
+    // Once the answer was asked for, the moves of the reply that had none stay.
+    if (phase === 'write' && !rc.progress.answerAsked) rc.progress.nextMoves = undefined;
     const step = await modelStep(rc, phase);
     if (step.kind === 'ended') return;
     rc.progress.modelSteps += 1;
@@ -1442,10 +1448,24 @@ async function modelLoop(rc: RunContext): Promise<void> {
       continue;
     }
 
+    const onlyMoves = step.toolCalls.every((call) => call.toolName === NEXT_MOVES_TOOL);
+    if (onlyMoves && !rc.progress.answerAsked && rc.progress.text.trim() === '') {
+      // The run's last reply, next moves alone or nothing, and no words for the person in the
+      // whole run (GPT-6 Luna and Gemini 3.8 Flash answer "hi" so): its moves are kept, and one
+      // more step, told so and without the next moves tool, writes the answer. Once a run.
+      rc.progress.answerAsked = true;
+      if (step.toolCalls.length > 0) {
+        rc.messages.push(...withoutEmptyText(step.responseMessages));
+        if (calls.length > 0 && (await handleCalls(rc, calls, 0, [])) !== 'continue') return;
+      }
+      rc.messages.push({ role: 'user', content: [{ type: 'text', text: ANSWER_NOTE }] });
+      await saveState(rc.run.id, { messages: rc.messages, progress: rc.progress });
+      continue;
+    }
     rc.messages.push(...step.responseMessages);
     if (step.toolCalls.length === 0) return finish(rc);
     // Only next moves: the answer is done, without another model step (CHAT-07 §C item 6).
-    if (step.toolCalls.every((call) => call.toolName === NEXT_MOVES_TOOL)) {
+    if (onlyMoves) {
       if (calls.length > 0 && (await handleCalls(rc, calls, 0, [])) !== 'continue') return;
       return finish(rc);
     }
@@ -1555,6 +1575,18 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
   } finally {
     await budget.release();
   }
+}
+
+/**
+ * A step's messages without empty text: a reply that opened a text and wrote
+ * nothing in it (Anthropic's API turns an empty text block away).
+ */
+function withoutEmptyText(messages: ModelMessage[]): ModelMessage[] {
+  return messages.flatMap((message) => {
+    if (message.role !== 'assistant' || typeof message.content === 'string') return [message];
+    const content = message.content.filter((part) => part.type !== 'text' || part.text.trim());
+    return content.length > 0 ? [{ ...message, content }] : [];
+  });
 }
 
 /** The calls a step's own messages already answered (a call the SDK found invalid). */
@@ -1699,8 +1731,9 @@ function toolSet(rc: RunContext, phase: ChatPhase): ToolSet {
   if (phase === 'write') {
     set[PARTS_TOOL] = aiTool({ description: PARTS_TOOL_DESCRIPTION, inputSchema: partsToolInput });
   }
-  // Next moves (CHAT-07 §C): with the final answer, in the same model step.
-  if (phase === 'write') {
+  // Next moves (CHAT-07 §C): with the final answer, in the same model step. Not in the step that
+  // writes an answer its reply left out: that reply's moves are kept (modelLoop).
+  if (phase === 'write' && !rc.progress.answerAsked) {
     set[NEXT_MOVES_TOOL] = aiTool({
       description:
         'With your final answer, in the same reply: 2–3 things the person could do next, best first. A click sends the prompt as their next message.',
