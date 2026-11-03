@@ -67,6 +67,8 @@ const SAMPLES: { [K in ChatEventType]: () => Extract<ChatEvent, { type: K }> } =
   'step.updated': () => chatEvent('step.updated', 2, { step: { ...STEP, status: 'running' } }),
   'step.finished': () => chatEvent('step.finished', 3, { step: STEP }),
   'text.delta': () => chatEvent('text.delta', 4, { text: 'Citations on Perplexity fell **18%**' }),
+  'text.replaced': () =>
+    chatEvent('text.replaced', 5, { text: "Perplexity'deki atıflar **%18** düştü" }),
   'ask.created': () =>
     chatEvent('ask.created', 5, {
       n: 3,
