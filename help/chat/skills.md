@@ -1,7 +1,7 @@
 ---
 title: Skills in Chat
 route: /dashboard/chat
-keywords: [skills, skill, slash menu, ansvisor skills, used skill, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps]
+keywords: [skills, skill, slash menu, ansvisor skills, used skill, save a skill, my skills, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps]
 synonyms: [slash commands, playbooks, how-tos, templates]
 plan: all
 updated: 2026-11-02
@@ -21,9 +21,13 @@ You can also type a skill's command yourself, at the start of your message. One 
 
 ## When Chat picks a skill
 
-Chat also picks a skill by itself when one fits your question. Either way, the steps above the answer show **Used skill:** with the skill's name, and **Ansvisor library** under it. A shortcut shows **Used shortcut:** with its name.
+Chat also picks a skill by itself when one fits your question. Either way, the steps above the answer show **Used skill:** with the skill's name, and where it comes from under it: **Ansvisor library**, or **You** for a skill you saved. A shortcut shows **Used shortcut:** with its name.
 
 Analysts and Agency partners have no **/** menu, but Chat still uses a skill for them when one fits.
+
+## Save your own skill
+
+Admins and Managers can ask Chat to keep steps they repeat as a skill of their own, for example: "Save this as a skill called /pricing-brief: open with the answer, then three short sections." Chat shows the skill's name, what it does and its steps on a card, and saves it when you approve, or by itself in Full auto. The skill is private to you and joins your **/** menu right away. It can't take the name of an Ansvisor skill or a shortcut, such as **/analyze**, and your plan sets how many skills your workspace keeps.
 
 ## What a skill can't change
 

@@ -205,14 +205,18 @@ import {
   MAX_SKILL_BODIES,
   USE_SKILL_TOOL,
   availableSkillsBlock,
-  enabledSkills,
   loadedSkillsBlock,
   shortcutPlaybook,
   skillsForPrompt,
   typedSkills,
-  type LibrarySkill,
   type ShortcutPlaybook,
 } from './skills/library';
+import {
+  enabledSkillsFor,
+  loadSkillBodies,
+  skillSourceWords,
+  type EnabledSkill,
+} from './skills/store';
 import { MAX_UPLOADS } from './uploads';
 import { answerUnattended, withAssumptions } from './schedule/unattended';
 
@@ -848,14 +852,15 @@ interface RunContext {
   offered: Map<string, ChatTool>;
   refused: { tool: ChatTool; denial: ToolDenial }[];
   /**
-   * The skills the person may use (CHAT-13 items 3–4): every enabled one,
-   * and the ones the prompt lists. None while the new Chat is off. With the
-   * message's shortcut (W2-09), its playbook, and the line on what the plan
-   * leaves out of its data plan, if anything.
+   * The skills the person may use (CHAT-13 items 3–4): every enabled one
+   * (the library's and the workspace's, skills/store.ts), and the ones the
+   * prompt lists. None while the new Chat is off. With the message's
+   * shortcut (W2-09), its playbook, and the line on what the plan leaves out
+   * of its data plan, if anything.
    */
   skills: {
-    enabled: readonly LibrarySkill[];
-    listed: readonly LibrarySkill[];
+    enabled: readonly EnabledSkill[];
+    listed: readonly EnabledSkill[];
     playbook: ShortcutPlaybook | null;
     planNote: string | null;
   };
@@ -1095,7 +1100,7 @@ async function openContext(
     scheduleId: progress.scheduled ? scheduleId : null,
     sessionUserId,
     skills: {
-      ...runSkills(actor.organizationId, progress, history.plan),
+      ...(await runSkills(actor, progress, history.plan)),
       playbook,
       planNote: playbook ? playbookPlanNote(playbook, refused, ctx.plan.planName) : null,
     },
@@ -1133,14 +1138,16 @@ const messageText = (message: ModelMessage) =>
  * lists. Past 20 enabled, the list keeps the ones this message calls by
  * /name, then the ones used in this chat (called in its recent turns, or
  * loaded in this run), then the best match to the question and the page.
+ * A workspace skill this run loaded before has its body read again (W3-06).
  */
-function runSkills(
-  organizationId: string,
+async function runSkills(
+  actor: ChatActor,
   progress: Progress,
   history: HistoryPlan,
-): Pick<RunContext['skills'], 'enabled' | 'listed'> {
-  const enabled = enabledSkills(organizationId);
+): Promise<Pick<RunContext['skills'], 'enabled' | 'listed'>> {
+  const enabled = await enabledSkillsFor(actor.organizationId, actor.userId);
   if (enabled.length === 0) return { enabled, listed: [] };
+  await loadSkillBodies(actor, enabled, progress.skills ?? []);
   const question = progress.question ?? '';
   const names = (text: string) => typedSkills(text, enabled).map((skill) => skill.name);
   const earlier = history.recent
@@ -1364,24 +1371,31 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
 /**
  * A skill's body for the rest of the run (CHAT-13 item 4): its step, "Used
  * skill: {title}" with where it comes from under it, and its name kept, so
- * every later step gets its text (loadedSkills).
+ * every later step gets its text (loadedSkills). A workspace skill's body is
+ * read from its row now: false when it can't be (off since, or changed).
+ * An imported skill was written outside the workspace (CHAT-20 §16a): from
+ * it on the run is tainted, so a change shows its card even in Full auto.
  */
 async function loadSkill(
   rc: RunContext,
-  skill: LibrarySkill,
+  skill: EnabledSkill,
   via: 'typed' | 'model' | 'shortcut',
-): Promise<void> {
+): Promise<boolean> {
+  await loadSkillBodies(rc.actor, [skill], [skill.name]);
+  if (skill.body === null) return false;
   rc.progress.skills = [...(rc.progress.skills ?? []), skill.name];
+  if (skill.source === 'import') rc.progress.tainted = true;
   const row = await insertStep(rc.run.id, {
     position: ++rc.progress.steps,
     kind: 'skill',
     status: 'done',
     label: t(via === 'shortcut' ? 'step.usedShortcut' : 'step.usedSkill', { title: skill.title }),
-    detail: t('step.skillFromLibrary'),
+    detail: skillSourceWords(skill, rc.actor.userId),
     tool: USE_SKILL_TOOL,
     debug: { skill: skill.name, via },
   });
   rc.sink.emit('step.finished', { step: clientStep(row) });
+  return true;
 }
 
 /**
@@ -1389,9 +1403,17 @@ async function loadSkill(
  * a skill: one of the run's 3 bodies. Its count.
  */
 async function loadShortcut(rc: RunContext): Promise<number> {
-  if (!rc.skills.playbook) return 0;
-  await loadSkill(rc, rc.skills.playbook, 'shortcut');
-  return 1;
+  const playbook = rc.skills.playbook;
+  if (!playbook) return 0;
+  // Ansvisor's own, its body always there: loaded as a library skill is.
+  const skill: EnabledSkill = {
+    ...playbook,
+    source: 'library',
+    id: null,
+    createdBy: null,
+    sourceUrl: null,
+  };
+  return (await loadSkill(rc, skill, 'shortcut')) ? 1 : 0;
 }
 
 /**
@@ -1406,8 +1428,9 @@ async function loadTypedSkills(rc: RunContext): Promise<number> {
     0,
     MAX_SKILL_BODIES - (rc.progress.skills?.length ?? 0),
   );
-  for (const skill of typed) await loadSkill(rc, skill, 'typed');
-  return typed.length;
+  let loaded = 0;
+  for (const skill of typed) if (await loadSkill(rc, skill, 'typed')) loaded += 1;
+  return loaded;
 }
 
 /**
@@ -1439,14 +1462,24 @@ async function pickSkill(rc: RunContext, call: PendingCall): Promise<CallOutcome
       true,
     );
   }
-  await loadSkill(rc, skill, 'model');
+  if (!(await loadSkill(rc, skill, 'model'))) {
+    return result(
+      call,
+      { code: 'not_available', message: 'This skill is off now: go on without it.' },
+      true,
+    );
+  }
   return result(call, { ok: true, note: 'Its text is below the rules from your next step.' });
 }
 
 /** The skills this run loaded, a shortcut's playbook among them. */
-function loadedSkillList(rc: RunContext): LibrarySkill[] {
+function loadedSkillList(rc: RunContext) {
   const { enabled, playbook } = rc.skills;
-  const loadable = playbook ? [playbook, ...enabled] : enabled;
+  // A workspace skill has its body once the run loaded it (W3-06).
+  const bodied = enabled.flatMap((skill) =>
+    skill.body !== null ? [{ ...skill, body: skill.body }] : [],
+  );
+  const loadable = [...(playbook ? [playbook] : []), ...bodied];
   return (rc.progress.skills ?? []).flatMap((name) =>
     loadable.filter((skill) => skill.name === name),
   );

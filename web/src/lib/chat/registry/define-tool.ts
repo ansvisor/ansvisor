@@ -86,7 +86,9 @@ export type ToolArea =
   /** Opening a page of the app (CHAT-19 §2). */
   | 'navigation'
   /** Opening a page on the web (CHAT-10 §B). */
-  | 'web';
+  | 'web'
+  /** The workspace's own skills (CHAT-13). */
+  | 'skills';
 
 /**
  * What the plan decides about a call (CHAT-20 §7), null when nothing. The

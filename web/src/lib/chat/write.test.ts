@@ -72,6 +72,8 @@ vi.mock('@/lib/actions/chat-action-center', () => ({
   checkChatActionCover: vi.fn(),
 }));
 
+vi.mock('@/lib/actions/chat-skills', () => ({ saveChatSkill: vi.fn() }));
+
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft, updateContentDraft } = await import('@/lib/actions/content-drafts');
@@ -86,6 +88,8 @@ const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/promp
 const { addBrandTopic, renameBrandTopic } = await import('@/lib/actions/topic');
 const { addCompetitors, removeBrandCompetitor } = await import('@/lib/actions/competitor');
 const chatActionCenter = await import('@/lib/actions/chat-action-center');
+const { saveChatSkill } = await import('@/lib/actions/chat-skills');
+const skillStore = await import('./skills/store');
 const acFixtures = await import('./testing/action-center-fixtures');
 const { runLoggedWrite } = await import('./write');
 const { activitySummary, approvalFor, logActivity, recordActivity } = await import('./activity');
@@ -157,6 +161,11 @@ const INPUTS: Record<string, unknown> = {
     date_to: '2026-10-07',
   },
   run_site_audit: { brand_id: BRAND, urls: ['https://acme.example/pricing'] },
+  save_skill: {
+    name: 'pricing-faq',
+    description: 'Writes a pricing FAQ in our tone.',
+    instructions: 'Read the pricing page first. Answer in two sentences.',
+  },
 };
 /** The rows that change or send a Library draft find one. */
 const NEEDS_DRAFT = new Set(['update_draft', 'push_cms_draft', 'publish_cms']);
@@ -200,6 +209,13 @@ beforeEach(() => {
   );
   vi.mocked(chatActionCenter.setTaskReadyForReview).mockImplementation(
     acFixtures.fakeSetTaskReadyForReview(db) as never,
+  );
+  // The session's person is the test's Admin; the store's rules are the real ones.
+  vi.mocked(saveChatSkill).mockImplementation(async (input) =>
+    skillStore.saveSkill(
+      (await skillStore.readSkillViewer({ userId: PEOPLE.admin, organizationId: ORG }))!,
+      input,
+    ),
   );
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -254,7 +270,8 @@ describe('every WRITE that ran is in the Activity log (§21)', () => {
       expect(row).toMatchObject({
         organization_id: ORG,
         user_id: PEOPLE.admin,
-        brand_id: BRAND,
+        // A skill is the workspace's, not a brand's.
+        brand_id: tool.brandOf ? BRAND : null,
         surface: 'chat',
         tool_key: tool.labelKey,
         class: 'write',
@@ -1285,5 +1302,64 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
     for (const destination of ['framer', 'webhook']) {
       expect(publish.inputSchema.safeParse({ draft_id: DRAFT, destination }).success).toBe(false);
     }
+  });
+});
+
+describe('saving a skill, by role and mode (W3-06, CHAT-20 §9 row 75)', () => {
+  const AGENCY = 'aaaaaaaa-0000-4000-8000-000000000005';
+  async function decide(userId: string, mode: ChatMode, tainted = false) {
+    const tool = chatTool('save_skill')!;
+    const ctx = await readPrecedenceContext({ userId, organizationId: ORG, mode, surface: 'chat' });
+    const call = await readToolCall(ctx!, tool, INPUTS.save_skill as never, tainted);
+    return decideToolCall(tool, ctx!, call);
+  }
+
+  it('Admins and Managers, from a card unless Full auto; Analysts and Agency partners are refused', async () => {
+    db.tables.profiles.push({ id: AGENCY, role: 'agency_partner', organization_id: ORG });
+    for (const userId of [PEOPLE.admin, PEOPLE.manager]) {
+      expect(await decide(userId, 'ask_first')).toMatchObject({ kind: 'ask' });
+      expect(await decide(userId, 'auto')).toMatchObject({ kind: 'ask' });
+      expect(await decide(userId, 'full_auto')).toEqual({ kind: 'run', via: 'full_auto' });
+    }
+    for (const userId of [PEOPLE.analyst, AGENCY]) {
+      for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+        expect(await decide(userId, mode)).toMatchObject({
+          kind: 'deny',
+          denial: { code: 'forbidden_role', roles: ['admin', 'manager'] },
+        });
+      }
+    }
+  });
+
+  it('shows its card even in Full auto once outside text, an imported skill too, shaped it (§16a)', async () => {
+    expect(await decide(PEOPLE.admin, 'full_auto', true)).toMatchObject({
+      kind: 'ask',
+      reason: 'tainted',
+    });
+  });
+
+  it('is in the Activity log, and Undo deletes it while it is still private and as saved', async () => {
+    const tool = chatTool('save_skill')!;
+    await runAs(PEOPLE.admin, tool, 'full_auto');
+    const [log] = db.tables.chat_activity_log;
+    const [saved] = db.tables.chat_skills;
+    expect(log).toMatchObject({
+      target_type: 'chat_skill',
+      target_id: saved.id,
+      summary_params: { name: '/pricing-faq' },
+    });
+    expect(activitySummary(log.summary_key as string, log.summary_params as never)).toBe(
+      'Saved the skill /pricing-faq',
+    );
+    const undo = (id: string) =>
+      UNDO_RULES.save_skill.inverse({ id, brandId: null, data: log.undo_json as never });
+
+    // Shared with the workspace since: someone else's to keep.
+    saved.visibility = 'workspace';
+    expect(await undo(saved.id as string)).toBe('changed');
+    saved.visibility = 'private';
+    expect(await undo(saved.id as string)).toBe('ok');
+    expect(db.tables.chat_skills).toEqual([]);
+    expect(await undo(saved.id as string)).toBe('gone');
   });
 });

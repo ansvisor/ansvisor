@@ -3522,6 +3522,7 @@
     "webPage": { "name": "Open web pages", "step": "Open page" },
     "whyChange": { "name": "Explain why a number changed", "step": "Read why it changed" },
     "agents": { "name": "Create and run agents", "step": "Changed an agent" },
+    "newSkill": { "name": "Save skills", "step": "Saved skill" },
     "whatsNew": {
       "name": "Read What’s new",
       "step": "Read What’s new"
@@ -3938,6 +3939,10 @@
       "notOpened": "Couldn't open {page}",
       "usedSkill": "Used skill: {title}",
       "skillFromLibrary": "Ansvisor library",
+      "skillFromYou": "You",
+      "skillFromWorkspace": "Your workspace",
+      "skillFromRepo": "{owner} on GitHub",
+      "skillImported": "Imported",
       "usedShortcut": "Used shortcut: {title}"
     },
     "answer": {
@@ -5478,7 +5483,8 @@
         "content": "Content",
         "reports": "Reports",
         "navigation": "Navigation",
-        "web": "Web"
+        "web": "Web",
+        "skills": "Skills"
       }
     }
   },
@@ -5533,6 +5539,8 @@
       "agentTakenOver": "Took over the agent “{name}”",
       "agentRunQueued": "Asked the agent “{name}” to run for {brand}",
       "agentRunOnAction": "Asked the agent “{name}” to run on the action AC-{action}",
+      "newSkill": "Saved the skill {name}",
+      "newSkillUndo": "Deleted the skill {name}",
       "agentGoLiveOn": "Let the agent “{name}” publish and send on its own, up to {limit} a day",
       "agentGoLiveOff": "Stopped the agent “{name}” publishing and sending on its own"
     },
@@ -5591,6 +5599,7 @@
       "queue_full": "{count, plural, one {# run already waits} other {# runs already wait}} for this agent on this brand. Try again once one has started.",
       "connection_missing": "This agent needs {name}, and {brand} doesn’t have it connected. Connect it for that brand, then run the agent again.",
       "own_key_failed": "{why} An Admin can fix it in Settings › AI Providers, then run the agent again.",
+      "skill_off": "The skill /{skill} is off or no longer available. Turn it on again, or pick another skill for this agent.",
       "failed": "Something went wrong with this agent. Try again.",
       "go_live_off": "An Admin hasn’t allowed agents to publish on their own in Settings › Chat.",
       "go_live_mode": "This agent isn’t in Full auto. Pick Full auto first."
@@ -6554,6 +6563,27 @@
         "untitled": "Untitled page",
         "takenDown": "Taken down"
       }
+    }
+  },
+  "chatSkills": {
+    "refusal": {
+      "invalid": "This skill isn't valid: {problems}.",
+      "not_found": "This skill isn't available.",
+      "role": "Only Admins and Managers save skills.",
+      "role_manage": "Only an Admin or the person who made this skill can change it.",
+      "role_library": "Only Admins turn Ansvisor skills on or off for the workspace.",
+      "read_only": "Your workspace is read-only, so skills can't be changed.",
+      "library_name": "/{name} is an Ansvisor skill or shortcut. Pick another name.",
+      "name_taken": "A skill named /{name} already exists in this workspace. Pick another name.",
+      "skill_limit": "Your plan keeps up to {limit, plural, one {# skill} other {# skills}} in My skills. Delete one to save another.",
+      "not_approved": "This skill isn't approved yet, so it can't be turned on or shared.",
+      "checksum": "This skill changed since it was approved, so it stays off. Save it again to use it.",
+      "request_limit": "You have too many requests waiting for your Admins. Try again once they answer.",
+      "failed": "Something went wrong with this skill. Try again."
+    },
+    "share": {
+      "asked": "Share the skill /{name} with the workspace",
+      "rule": "Sharing a skill with the workspace is for Admins."
     }
   },
   "chatSchedules": {
