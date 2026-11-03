@@ -9,7 +9,9 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { Link } from '@/i18n/navigation';
 import type { PresetLock } from '@/lib/chat/agents/catalog';
 import { AGENT_CENTER_TABS, writesAgents, type AgentCenterTab } from '@/lib/chat/agent-view';
+import { isDemoSelected } from '@/lib/demo/demo-brand';
 import { cn } from '@/lib/utils';
+import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentsList } from './agents-list';
 import { useAgentWords } from './agent-words';
 import { ReadyAgents } from './ready-agents';
@@ -50,6 +52,9 @@ export function AgentCenter({
   const [summary, setSummary] = useState<{ active: number; activeLimit: number | null } | null>(
     null,
   );
+  // The demo brand's sample agents never count toward the plan (00475): beside
+  // them its count would read 0, so on the demo brand there is none.
+  const demoSelected = useBrandStore(isDemoSelected);
   // The cards' triggers read the same on any clock: one for the page.
   const now = useMemo(() => nowProp ?? new Date(), [nowProp]);
   const words = useAgentWords(now, timeZone);
@@ -69,7 +74,7 @@ export function AgentCenter({
     <div className="max-w-[1100px]">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold tracking-[-.4px]">{tList('title')}</h1>
-        {summary && (
+        {summary && !demoSelected && (
           <span
             data-slot="agents-count"
             title={tList('activeTip', {
