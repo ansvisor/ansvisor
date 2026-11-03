@@ -452,7 +452,15 @@ async function chatScripts({ brandId, now }) {
 
 /** The rows of chats, by table, written in this order (each row after the one it points at). */
 export function emptyChatRows() {
-  return { conversations: [], messages: [], runs: [], steps: [], events: [], moves: [] };
+  return {
+    conversations: [],
+    messages: [],
+    runs: [],
+    states: [],
+    steps: [],
+    events: [],
+    moves: [],
+  };
 }
 
 /**
@@ -565,6 +573,21 @@ export function addChat(rows, { id, conversation, turns, moves = [], read = fals
         { n: stepRows.length, ...waiting.confirm },
         finishedAt.toISOString(),
       );
+      // Its run state names whose run it is (the events route reads it). No
+      // waiting_since: the engine's sweep stops a card left a week from it,
+      // so it never stops this one; a click on the card is refused before
+      // anything resumes (demo_brand).
+      rows.states.push({
+        run_id: runId,
+        organization_id: conversation.organization_id,
+        user_id: conversation.user_id,
+        mode: 'auto',
+        progress: {},
+        working_ms: turn.workingMs,
+        last_seq: seq,
+        waiting_since: null,
+        heartbeat_at: finishedAt.toISOString(),
+      });
     } else {
       rows.events.push({
         run_id: runId,
@@ -677,6 +700,7 @@ export async function writeChatRows(write, rows) {
   await write('chat_messages', rows.messages);
   await write('chat_runs', rows.runs);
   await Promise.all([
+    write('chat_run_state', rows.states),
     write('chat_run_steps', rows.steps),
     write('chat_run_events', rows.events),
     write('chat_next_moves', rows.moves),
@@ -687,7 +711,7 @@ export const chat = {
   name: 'chat',
   // Cleared just before it is built (index.js): its rows hang off its chats, deleted with them.
   tables: ['chat_conversations'],
-  keys: { chat_run_events: 'run_id,seq' },
+  keys: { chat_run_events: 'run_id,seq', chat_run_state: 'run_id' },
 
   /**
    * Through the build's writer (a writer over `db` for a first build without one).

@@ -103,6 +103,17 @@ describe('agentRows', () => {
     expect(events.at(-1).data).toMatchObject({ n: 2, action: 'Save a draft in Content' });
     const steps = rows.chats.steps.filter((s) => s.run_id === chatRun.id);
     expect(steps.at(-1)).toMatchObject({ kind: 'write', status: 'waiting', finished_at: null });
+    // Its run state says whose it is (the events route reads it), with no
+    // waiting_since: the engine's sweep never stops it.
+    expect(rows.chats.states).toEqual([
+      expect.objectContaining({
+        run_id: chatRun.id,
+        user_id: OWNER,
+        organization_id: ORG_ID,
+        waiting_since: null,
+        last_seq: events.length,
+      }),
+    ]);
     // News in the Inbox until opened: no last_read_at.
     expect(chat.last_read_at).toBeUndefined();
     // Every other run ended, its end kept as a reload reads it.
@@ -172,6 +183,9 @@ describe('agents.build', () => {
     );
     expect(db.log.indexOf('write chat_conversations')).toBeGreaterThan(
       db.log.indexOf('write chat_agent_runs'),
+    );
+    expect(db.log.indexOf('write chat_run_state')).toBeGreaterThan(
+      db.log.indexOf('write chat_runs'),
     );
     const ids = tables.chat_agents.map((a) => a.id);
     expect(ids).toContain('someones-own');

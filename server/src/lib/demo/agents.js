@@ -9,8 +9,9 @@
  * brand they show (chat_agents.demo_brand_id, 00475), and the web leaves
  * them out of whatever runs, counts or pauses agents. None of them ever
  * runs: their brand is the demo brand, every change to them is refused
- * (demo_brand), and their waiting run has no run state for the engine or
- * its sweep to pick up. Their owner is the organization's first person, who
+ * (demo_brand), their waiting run's state has no waiting_since (the
+ * engine's sweep never stops it), and a click on its card is refused
+ * (demo_brand) before anything resumes. Their owner is the organization's first person, who
  * gets the runs' chats; everyone else sees them as workspace agents.
  */
 
@@ -441,7 +442,11 @@ export const agents = {
   after: 'chat',
   // Cleared just before it is built (index.js); the agents themselves go by their demo brand.
   tables: ['chat_agent_runs'],
-  keys: { chat_agent_versions: 'agent_id,version', chat_run_events: 'run_id,seq' },
+  keys: {
+    chat_agent_versions: 'agent_id,version',
+    chat_run_events: 'run_id,seq',
+    chat_run_state: 'run_id',
+  },
 
   /**
    * Through the build's writer (a writer over `db` for a first build without one).
