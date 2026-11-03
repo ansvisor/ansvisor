@@ -835,7 +835,7 @@
         },
         {
           "heading": "Let an agent run other agents",
-          "text": "On Growth and up, an agent can run up to 5 of your other agents. Pick them under **Can call** on the agent's last step. A paused agent isn't run until you resume it.\n\nA run may run other agents up to 3 times and asks you first each time: the card names the agent, what it asks and how much of your monthly AI limit it may use. The other agent works on the same brand, in a chat of its own, and asks before most changes. It gets only what is left of the first run's **Max per run**, and can't run agents itself. It stops when the first run stops, or after 10 minutes.\n\nIn **Run history**, its run shows **Called by** and the first agent. The first run says how many agents it ran: click it for each one's result and AI use."
+          "text": "On Growth and up, an agent can run up to 5 of your other agents. Pick them under **Can call** on the agent's last step. A paused agent isn't run until you resume it.\n\nA run may run other agents up to 3 times and asks you first each time: the card names the agent, what it asks and how much of your monthly AI limit it may use. The other agent works on the same brand, in a chat of its own, and asks before most changes. It gets only what is left of the first run's **Max per run**, and can't run agents itself. It stops when the first run stops, or after 4 minutes.\n\nIn **Run history**, its run shows **Called by** and the first agent. The first run says how many agents it ran: click it for each one's result and AI use."
         },
         {
           "heading": "When a run asks before a change",

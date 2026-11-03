@@ -85,7 +85,7 @@ describe('run_agent', () => {
       row.doneStep!(input, { ok: true, agent: 'FAQ writer', status: 'timed_out', used_share: 0 }),
     ).toEqual({
       label: 'Ran FAQ writer',
-      detail: 'Stopped after 10 minutes · 0% of the monthly AI limit',
+      detail: 'Stopped after 4 minutes · 0% of the monthly AI limit',
     });
     expect(row.doneStep!(input, { ok: false, reason: 'not_found' })).toBeNull();
   });

@@ -14,7 +14,7 @@ import { dataBlock, guardData } from './untrusted';
  * the agents A's Can call names; once the person approves the card, the
  * called agent B runs as its own agent run (trigger agent,
  * called_by_run_id: 00466) in a chat of its own, and A's step waits for it,
- * at most 10 minutes. What B answered comes back to A as untrusted data.
+ * at most 4 minutes. What B answered comes back to A as untrusted data.
  *
  *   - Who: only a run of an agent, never a person's own chat, and only for
  *     the agents its version's Can call names that are still on (active).
@@ -37,8 +37,13 @@ const t = createTranslator({ locale: 'en', messages, namespace: 'chatAgents.call
 
 /** Calls one run makes at most (Technical T3; 00466's trigger). */
 export const MAX_CALLS_PER_RUN = 3;
-/** How long a caller's step waits for the agent it ran (Technical T3). */
-export const CALL_WAIT_MS = 10 * 60_000;
+/**
+ * How long a caller's step waits for the agent it ran. Technical T3 says 10
+ * minutes, but the wait runs inside the request that approved the card
+ * (approve's maxDuration: 300 s): 4 minutes leaves the caller a minute to
+ * finish its answer. A longer wait needs a longer maxDuration first.
+ */
+export const CALL_WAIT_MS = 4 * 60_000;
 /** How often the wait looks for the caller's Stop, and keeps the caller's run alive. */
 const POLL_MS = 3_000;
 /** The called agent's answer, as the caller reads it, at most. */

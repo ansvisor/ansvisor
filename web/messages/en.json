@@ -5554,7 +5554,7 @@
         "needs_you": "Waiting for your OK in its chat",
         "paused_cap": "Paused at the AI limit",
         "running": "Still working",
-        "timed_out": "Stopped after 10 minutes"
+        "timed_out": "Stopped after 4 minutes"
       },
       "calledBy": "Called by {agent}",
       "canCall": {

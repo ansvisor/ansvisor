@@ -290,7 +290,7 @@ describe('runCalledAgent', () => {
     expect(calleeRuns()).toEqual([]);
   });
 
-  it('stops the called agent when the caller is stopped, and after 10 minutes', async () => {
+  it('stops the called agent when the caller is stopped, and after 4 minutes', async () => {
     callerRun();
     let release: () => void = () => {};
     const hanging = () =>
@@ -310,7 +310,7 @@ describe('runCalledAgent', () => {
     await calls.runCalledAgent(ctx, { agent: CALLEE, ask: 'x' }, stopOnCaller);
     expect(stopOnCaller.stop).toHaveBeenCalledWith(expect.anything(), 'r-callee');
 
-    // Long enough: it is stopped at 10 minutes, and says so.
+    // Long enough: it is stopped at 4 minutes, and says so.
     db.tables.chat_runs.find((r) => r.id === CALLER_CHAT_RUN)!.status = 'running';
     db.tables.chat_agent_runs = db.tables.chat_agent_runs.filter((r) => r.id === CALLER_RUN);
     db.tables.chat_conversations = db.tables.chat_conversations.filter((c) => c.id === 'c-caller');
@@ -324,7 +324,7 @@ describe('runCalledAgent', () => {
       }),
       now: () => new Date(clock),
       sleep: vi.fn(async (ms: number) => {
-        clock += ms * 100;
+        clock += ms * 20;
       }),
     });
     const result = await calls.runCalledAgent(ctx, { agent: CALLEE, ask: 'x' }, slow);
