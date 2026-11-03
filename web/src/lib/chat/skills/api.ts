@@ -37,7 +37,7 @@ export function skillRefusalResponse(refusal: SkillRefusal): NextResponse {
         ? 'subscription'
         : refusal.code === 'skill_limit'
           ? 'limit'
-          : refusal.code === 'request_limit'
+          : refusal.code === 'request_limit' || refusal.code === 'github_busy'
             ? 'busy'
             : 'failed';
   return NextResponse.json(
