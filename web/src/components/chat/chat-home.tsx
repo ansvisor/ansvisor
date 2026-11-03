@@ -511,7 +511,8 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
         code?: string;
         error?: string;
       } | null;
-      if (body?.code === 'subscription_inactive') openUpgrade();
+      // A read-only workspace, or a chat on the demo brand: the plans.
+      if (body?.code === 'subscription_inactive' || body?.code === 'demo_brand') openUpgrade();
       else toast.error(body?.error ?? t('startFailed'));
       return;
     }
