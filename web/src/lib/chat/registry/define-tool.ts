@@ -88,7 +88,9 @@ export type ToolArea =
   /** Opening a page on the web (CHAT-10 §B). */
   | 'web'
   /** The workspace's own skills (CHAT-13). */
-  | 'skills';
+  | 'skills'
+  /** What Chat remembers between chats (CHAT-14). */
+  | 'memory';
 
 /**
  * What the plan decides about a call (CHAT-20 §7), null when nothing. The
@@ -160,6 +162,11 @@ export interface ToolCardItem {
   detail?: string;
   /** Its new text in full (a task's change.after): the card shortens it, with Show all. */
   body?: string;
+}
+
+/** The run a card is read for: its workspace, the only one its words may come from. */
+export interface ToolCardRun {
+  organizationId: string;
 }
 
 /** What a card's targets are, by kind: the browser names each kind from en.json. */
@@ -264,8 +271,9 @@ interface ToolFields<S extends z.ZodObject> {
    * What its card and step name as the target when the input's own words
    * don't (a list, an id): read from the data if need be, in the person's
    * words. Without it the engine reads the input's title, name or text.
+   * `run`: the run's workspace, the only one it may read from.
    */
-  target?(input: z.output<S>): string | null | Promise<string | null>;
+  target?(input: z.output<S>, run: ToolCardRun): string | null | Promise<string | null>;
   /**
    * What a call made, for the answer's output card and Files (CHAT-06
    * items 1, 9): filed as it is made. Null when the call made nothing to
@@ -282,9 +290,10 @@ interface ToolFields<S extends z.ZodObject> {
   precheck?(ctx: ChatToolContext, input: z.output<S>): Promise<unknown>;
   /**
    * What its card shows beyond the target, read in the person's words where
-   * the input has ids: an action's tasks, why, goal and targets.
+   * the input has ids: an action's tasks, why, goal and targets. `run` as
+   * for `target`.
    */
-  cardDetails?(input: z.output<S>): ToolCardDetails | Promise<ToolCardDetails>;
+  cardDetails?(input: z.output<S>, run: ToolCardRun): ToolCardDetails | Promise<ToolCardDetails>;
   /**
    * A call this input makes shows its card in every mode, Full auto too:
    * a choice that is the person's (Create anyway, CHAT-09 item 18a).
