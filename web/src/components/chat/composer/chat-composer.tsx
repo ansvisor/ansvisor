@@ -288,6 +288,8 @@ export function ChatComposer({
   const [keyCard, setKeyCard] = useState<{ provider?: PastedKeyProvider; key?: string } | null>(
     null,
   );
+  // The message the card was last offered for: sent again, it goes to Chat as typed.
+  const [keyOfferedFor, setKeyOfferedFor] = useState<string | null>(null);
   const chosenLabel = useModelLabel(modelChoice ?? AUTO_CHOICE);
   // The shortcut picked from the / menu, and the trigger words it put in the box.
   const [shortcut, setShortcut] = useState<{ id: ShortcutId; trigger: string } | null>(null);
@@ -606,9 +608,10 @@ export function ChatComposer({
     const message = text.trim();
     if (!message || sending || disabled || uploading || looksLikeApiKey(message)) return;
     // "Use my OpenAI key": the card answers it, and the key never goes to Chat (W4-06).
-    if (keyForm && asksToAddKey(message)) {
+    // The message stays in the box, and a second send sends it, so a misread loses nothing.
+    if (keyForm && asksToAddKey(message) && keyOfferedFor !== message) {
+      setKeyOfferedFor(message);
       setKeyCard({});
-      setText('');
       return;
     }
     const handler = steer ? onSteer : onSend;

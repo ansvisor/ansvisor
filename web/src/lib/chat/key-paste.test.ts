@@ -73,6 +73,11 @@ describe('asksToAddKey (W4-06)', () => {
       'What is the key takeaway from last week?',
       'Use the key metrics from my report',
       'How do API keys work in Ansvisor?',
+      // "Key" as a word of the question, not a key to add.
+      'Add our key competitors to the brief',
+      'Use our key topics to write an outline',
+      'Use my key prompts and key pages for the report.',
+      'Add my key takeaways.',
     ]) {
       expect(asksToAddKey(text), text).toBe(false);
     }

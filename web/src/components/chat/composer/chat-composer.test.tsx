@@ -917,9 +917,26 @@ describe('ChatComposer: own keys (W4-06)', () => {
     await press('Enter');
     expect(handlers.onSend).not.toHaveBeenCalled();
     expect(container.querySelector('[data-slot="add-key-card"]')).not.toBeNull();
-    expect(box().value).toBe('');
+    // The message stays: a misread loses nothing, and a second send sends it.
+    expect(box().value).toBe('Please use my OpenAI key for Chat');
     await act(async () => action('addKey.close')!.click());
     expect(container.querySelector('[data-slot="add-key-card"]')).toBeNull();
+    await press('Enter');
+    expect(handlers.onSend).toHaveBeenCalledWith(
+      'Please use my OpenAI key for Chat',
+      expect.anything(),
+    );
+  });
+
+  it('sends a question that only says "key", as "our key competitors"', async () => {
+    await render({ keyForm: true });
+    await type('Add our key competitors to the brief');
+    await press('Enter');
+    expect(container.querySelector('[data-slot="add-key-card"]')).toBeNull();
+    expect(handlers.onSend).toHaveBeenCalledWith(
+      'Add our key competitors to the brief',
+      expect.anything(),
+    );
   });
 
   it('opens the card with a pasted key on Save securely, for an Admin, the key out of the box', async () => {
