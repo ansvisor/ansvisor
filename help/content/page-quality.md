@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author, qualified reviewer, reviewer, reviewed by, trusted sources]
 synonyms: [content quality, quality check, page score, eeat score, ready to publish checklist, content reviewer, regulated page review]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -39,6 +39,10 @@ In **Settings › Content**, admins and managers can have each brand's new pages
 ## Next step
 
 With Quality on, the header shows the page's **Next step**: plan the page, write the first draft or bring in your page, fix its length or open rules, add proof and author, or check and mark ready. It comes with a button to take the step, **Skip this step** and **All steps**.
+
+Once you've decided the Content Agent's suggestions for **Fix open rules**, the step is ticked and Next moves on. Rules its later suggestions leave open don't bring it back; a rule your own edits open does.
+
+**Add proof and author**: **Show to-dos** scrolls Quality to your to-dos, or, with none left, **Show what raises Trust** to what would raise it. Trust under 60 is a step only while Quality names something that raises it.
 
 Once the page is ready, **Next step** also offers **Mark published**.
 

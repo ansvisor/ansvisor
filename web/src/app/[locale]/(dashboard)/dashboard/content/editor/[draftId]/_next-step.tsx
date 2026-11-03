@@ -187,6 +187,13 @@ export function stepReason(
   }
 }
 
+/**
+ * Done, or taken by the agent with what's left the person's: either reads
+ * as behind the page (editor test 2026-11-03: a step the agent took, shown
+ * like one ahead, read as never done).
+ */
+const behind = (state: PathState) => state === 'done' || state === 'passed';
+
 /** The path as small bars: done, the one now, and those ahead. */
 function Bars({ path, className }: { path: NextPath['path']; className?: string }) {
   return (
@@ -196,7 +203,7 @@ function Bars({ path, className }: { path: NextPath['path']; className?: string 
           key={p.id}
           className={cn(
             'block h-1.5 w-2.5 rounded-full',
-            p.state === 'done'
+            behind(p.state)
               ? 'bg-foreground'
               : p.state === 'now'
                 ? 'bg-foreground/60'
@@ -212,7 +219,7 @@ const PATH_DOT: Record<PathState, string> = {
   done: 'bg-foreground text-background',
   now: 'bg-foreground/10 text-foreground ring-1 ring-foreground',
   skipped: 'bg-muted text-muted-foreground',
-  passed: 'bg-muted text-muted-foreground',
+  passed: 'bg-foreground text-background',
   ahead: 'bg-muted text-muted-foreground',
 };
 
@@ -383,7 +390,7 @@ export function NextStepButton({
                   PATH_DOT[p.state],
                 )}
               >
-                {p.state === 'done' ? <Check className="h-2.5 w-2.5" /> : i + 1}
+                {behind(p.state) ? <Check className="h-2.5 w-2.5" /> : i + 1}
               </span>
               <span className="min-w-0 [overflow-wrap:anywhere]">
                 {/* A step the agent took is crossed out as a done one is; its

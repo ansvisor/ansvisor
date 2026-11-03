@@ -35,6 +35,8 @@ export type NextAction =
   | 'pickAuthor'
   | 'addAuthor'
   | 'showTodos'
+  // No to-do left, Trust still low: what Quality names that raises it.
+  | 'showTrust'
   | 'beforePublish'
   | 'markReady'
   | 'export'
@@ -87,8 +89,10 @@ export interface NextStepState {
   /** Every rule on that the page doesn't meet, as the Rules tab counts them. */
   openTotal?: number;
   /**
-   * Quality's reads (Quality spec, CE-040/041): Trust under its gate (60),
-   * and the to-dos only the person can do. Null while Quality is off.
+   * Quality's reads (Quality spec, CE-040/041): Trust under its gate (60)
+   * while Quality names something that raises it (a Trust with nothing to
+   * raise it is no step the person can take: editor test 2026-11-03), and
+   * the to-dos only the person can do. Null while Quality is off.
    */
   quality: { trust: number | null; trustLow: boolean; todos: QualityTodo[] } | null;
   /** The steps skipped, each with the state it was skipped at (stepState). */
@@ -100,6 +104,12 @@ export interface NextStepState {
    * Rules tab.
    */
   thirdPasses?: ThirdPasses;
+  /**
+   * The agent's latest batch on the page (a Fix, a hand-off, a rewrite):
+   * one a pass hasn't read yet holds it until it is read again
+   * (thirdStepPasses, thirdPassesToRead).
+   */
+  batch?: string | null;
 }
 
 export interface NextStep {
@@ -179,11 +189,14 @@ export interface ThirdTry {
 
 /**
  * A third-step step the agent took, with what the page read then: the open
- * rules a Fix run can close (rulesForNext) and the Length's state.
+ * rules a Fix run can close (rulesForNext), the Length's state, and the
+ * agent's latest batch on the page then (none kept by passes from before
+ * it: read as one since).
  */
 export interface ThirdPass {
   rules: string[];
   length: string;
+  batch?: string | null;
 }
 export type ThirdPasses = Partial<Record<ThirdStepId, ThirdPass>>;
 
@@ -201,8 +214,29 @@ export function thirdStepTried(
 }
 
 /** What a pass keeps of the page as it reads when the step is taken. */
-export function thirdPassOf(s: NextStepState): ThirdPass {
-  return { rules: s.openRules, length: stepState('length', s) };
+export function thirdPassOf(s: NextStepState, batch: string | null = s.batch ?? null): ThirdPass {
+  return { rules: s.openRules, length: stepState('length', s), batch };
+}
+
+/** A batch of the agent's on the page that the pass hasn't read: one since it was taken. */
+const batchSince = (pass: ThirdPass, batch: string | null | undefined) =>
+  batch !== undefined && batch !== null && pass.batch !== batch;
+
+/**
+ * The passes to read again, once the agent's batch since them is decided
+ * (editor test 2026-11-03): what its own changes left open is no rule it
+ * never saw, so they never bring the step back. Fix open rules passed, a
+ * hand-off or another Fix from the Rules tab that opened a rule sent the
+ * person round Fix again and again; only Skip moved on.
+ */
+export function thirdPassesToRead(
+  passes: ThirdPasses,
+  now: { batch: string | null; open: number; busy: boolean },
+): ThirdStepId[] {
+  if (now.busy || now.open > 0) return [];
+  return (Object.entries(passes) as [ThirdStepId, ThirdPass | undefined][])
+    .filter(([, pass]) => pass && batchSince(pass, now.batch))
+    .map(([id]) => id);
 }
 
 /**
@@ -211,13 +245,19 @@ export function thirdPassOf(s: NextStepState): ThirdPass {
  * never saw brings the step back, one it couldn't close doesn't). A step
  * whose page has moved on is the agent's again. Fix open rules holds while
  * the person brings the page within its Length (#1556 review): only a
- * Length far off now, and not as it was, brings it back.
+ * Length far off now, and not as it was, brings it back. While a batch of
+ * the agent's since the pass waits to be decided and read
+ * (thirdPassesToRead), it holds: what that batch opens is the agent's own.
  */
 export function thirdStepPasses(s: NextStepState): Set<ThirdStepId> {
   const held = new Set<ThirdStepId>();
   const length = stepState('length', s);
   for (const [id, pass] of Object.entries(s.thirdPasses ?? {}) as [ThirdStepId, ThirdPass][]) {
     if (!pass) continue;
+    if (batchSince(pass, s.batch)) {
+      held.add(id);
+      continue;
+    }
     if (pass.length !== length && (id === 'length' || length !== '')) continue;
     if (id === 'fixRules' && !s.openRules.every((rule) => pass.rules.includes(rule))) continue;
     held.add(id);
@@ -293,7 +333,9 @@ function steps(s: NextStepState): NextStep[] {
               ? byline.action === 'addAuthor'
                 ? ('addAuthor' as const)
                 : ('pickAuthor' as const)
-              : ('showTodos' as const),
+              : todos.length > 0
+                ? ('showTodos' as const)
+                : ('showTrust' as const),
             alternative: null,
             skippable: true,
           },
@@ -382,7 +424,7 @@ export function nextStep(s: NextStepState): NextPath {
             ? [{ id: 'noBrief' as const, action: 'buildBrief' as const }]
             : []),
           ...(s.quality?.trustLow
-            ? [{ id: 'lowTrust' as const, action: 'showTodos' as const }]
+            ? [{ id: 'lowTrust' as const, action: 'showTrust' as const }]
             : []),
         ]
           .filter((tip) => tip.action !== step.primary)

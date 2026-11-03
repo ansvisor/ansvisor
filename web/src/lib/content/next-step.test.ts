@@ -5,6 +5,7 @@ import {
   rulesForNext,
   stepState,
   thirdPassOf,
+  thirdPassesToRead,
   thirdStepPasses,
   thirdStepTried,
   type NextStepState,
@@ -141,9 +142,15 @@ describe('nextStep', () => {
       'proof:now',
       'check:ahead',
     ]);
-    expect(nextStep(low).tips).toEqual([{ id: 'lowTrust', action: 'showTodos' }]);
+    expect(nextStep(low).tips).toEqual([{ id: 'lowTrust', action: 'showTrust' }]);
+    // No to-do left, Trust still low: what raises it, not to-dos (editor test 2026-11-03).
     expect(
       nextStep(state({ quality: { trust: 54, trustLow: true, todos: [] } })).step.primary,
+    ).toBe('showTrust');
+    expect(
+      nextStep(
+        state({ quality: { trust: 54, trustLow: true, todos: [todo({ id: 'placeholders' })] } }),
+      ).step.primary,
     ).toBe('showTodos');
     expect(
       nextStep(
@@ -324,6 +331,55 @@ describe('the third step, once the agent took it (editor test 2026-10-26)', () =
     const over = { ...long, thirdPasses: passes };
     expect(thirdStepPasses(over)).toEqual(new Set());
     expect(nextStep(over).step.id).toBe('length');
+  });
+
+  it("keeps a step passed through the agent's own later batch, and reads it again once decided (editor test 2026-11-03)", () => {
+    // Fix open rules taken with its batch b1: on to proof.
+    const taken = {
+      ...fix,
+      batch: 'b1',
+      thirdPasses: { fixRules: thirdPassOf({ ...fix, batch: 'b1' }) },
+    };
+    expect(taken.thirdPasses.fixRules.batch).toBe('b1');
+    expect(nextStep(taken).step.id).toBe('proof');
+    // A hand-off from Quality leaves b2; accepted, it opens a rule the Fix never saw.
+    const handedOff = { ...taken, batch: 'b2', openRules: ['faq', 'h2Answer'] };
+    // Its own change: the step holds while b2 waits and is read, never back to Fix.
+    expect(nextStep(handedOff).step.id).toBe('proof');
+    expect(thirdPassesToRead(handedOff.thirdPasses, { batch: 'b2', open: 2, busy: false })).toEqual(
+      [],
+    );
+    expect(thirdPassesToRead(handedOff.thirdPasses, { batch: 'b2', open: 0, busy: true })).toEqual(
+      [],
+    );
+    expect(thirdPassesToRead(handedOff.thirdPasses, { batch: 'b2', open: 0, busy: false })).toEqual(
+      ['fixRules'],
+    );
+    // Read again as the page reads then: the step stays passed.
+    const read = { ...handedOff, thirdPasses: { fixRules: thirdPassOf(handedOff) } };
+    expect(read.thirdPasses.fixRules).toEqual({
+      rules: ['faq', 'h2Answer'],
+      length: '',
+      batch: 'b2',
+    });
+    expect(thirdPassesToRead(read.thirdPasses, { batch: 'b2', open: 0, busy: false })).toEqual([]);
+    expect(nextStep(read).step.id).toBe('proof');
+    // The person's own edits after it still bring the step back.
+    expect(nextStep({ ...read, openRules: ['faq', 'h2Answer', 'summary'] }).step.id).toBe(
+      'fixRules',
+    );
+    // A pass kept before batches were noted is read again, as one with a batch since.
+    const kept = {
+      ...fix,
+      batch: 'b1',
+      thirdPasses: { fixRules: { rules: ['h2Answer'], length: '' } },
+    };
+    expect(nextStep({ ...kept, openRules: ['faq'] }).step.id).toBe('proof');
+    expect(thirdPassesToRead(kept.thirdPasses, { batch: 'b1', open: 0, busy: false })).toEqual([
+      'fixRules',
+    ]);
+    // No batch on the page at all: nothing to read again.
+    expect(thirdPassesToRead(kept.thirdPasses, { batch: null, open: 0, busy: false })).toEqual([]);
   });
 
   it('keeps the steps before it: an empty page is still written first', () => {

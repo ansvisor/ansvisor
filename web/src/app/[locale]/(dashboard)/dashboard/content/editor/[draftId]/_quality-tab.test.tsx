@@ -100,13 +100,18 @@ const onChangeType = vi.fn();
 const onConfirmAuthor = vi.fn();
 const onConfirmIntro = vi.fn();
 
-async function render(quality: QualityRead | Readability | null, handOff: HandOff | null = null) {
+async function render(
+  quality: QualityRead | Readability | null,
+  handOff: HandOff | null = null,
+  focusRequest: { to: 'todos' | 'trust'; n: number } | null = null,
+) {
   const q = quality && 'eeat' in quality ? quality : read(quality as Readability | null);
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <QualityTab
           quality={q}
+          focusRequest={focusRequest}
           onShow={onShow}
           onShowPlaceholder={onShowPlaceholder}
           onPickAuthor={onPickAuthor}
@@ -295,6 +300,40 @@ describe('QualityTab', () => {
     ]);
     await act(async () => suggestions.querySelector<HTMLButtonElement>('li button')!.click());
     expect(onShow).toHaveBeenCalledWith('A very long sentence.');
+  });
+
+  it('shows the part the Next step names, scrolled in and marked, Quality open or not (editor test 2026-11-03)', async () => {
+    vi.useFakeTimers();
+    const scrolled: string[] = [];
+    // jsdom has no scrolling: noted per element instead.
+    const had = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) {
+      scrolled.push(this.getAttribute('aria-label') ?? '');
+    };
+    try {
+      // To-dos open: Show to-dos goes to them.
+      await render(read(result, null), null, { to: 'todos', n: 1 });
+      const todos = container.querySelector<HTMLElement>('[aria-label="Your to-dos"]')!;
+      expect(scrolled).toEqual(['Your to-dos']);
+      expect(todos.tabIndex).toBe(-1);
+      expect(todos.className).toContain('ring-2');
+      // The same request again (a render) does nothing; a new one, with Quality open, does.
+      await render(read(result, null), null, { to: 'todos', n: 1 });
+      expect(scrolled).toHaveLength(1);
+      await render(read(result, null), null, { to: 'trust', n: 2 });
+      expect(scrolled).toEqual(['Your to-dos', 'What would raise it']);
+      // The mark goes after a moment.
+      await act(async () => vi.advanceTimersByTime(2_000));
+      expect(
+        container.querySelector('[aria-label="What would raise it"]')!.className,
+      ).not.toContain('ring-2');
+      // No to-do left: Show to-dos goes to what raises the scores instead.
+      await render(result, null, { to: 'todos', n: 3 });
+      expect(scrolled.at(-1)).toBe('What would raise it');
+    } finally {
+      HTMLElement.prototype.scrollIntoView = had;
+      vi.useRealTimers();
+    }
   });
 
   it('asks for shorter words and sentences under English’s band', async () => {

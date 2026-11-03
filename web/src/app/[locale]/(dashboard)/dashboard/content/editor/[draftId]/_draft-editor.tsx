@@ -165,6 +165,7 @@ import {
   rulesForNext,
   stepState,
   thirdPassOf,
+  thirdPassesToRead,
   thirdStepPasses,
   thirdStepTried,
   type NextAction,
@@ -258,7 +259,13 @@ import {
   writeSkips,
   writeThirdStep,
 } from './_next-step';
-import { qualitySuggestions, useTodoCopy, type HandOff, type QualityRead } from './_quality-tab';
+import {
+  qualitySuggestions,
+  useTodoCopy,
+  type HandOff,
+  type QualityFocus,
+  type QualityRead,
+} from './_quality-tab';
 import { AuditEstimateCard, AuditEstimateChip, useAuditEstimate } from './_audit-estimate';
 import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
@@ -589,6 +596,8 @@ export function DraftEditor({
     build?: boolean;
     /** Brief › Your input to show: Quality's Add (CE-048). */
     input?: boolean;
+    /** Quality's part to show, from the Next step basket: its to-dos, or what raises Trust. */
+    focus?: QualityFocus;
   } | null>(null);
   const openPanelTab = (tab: PanelTarget, source?: { kind: DraftSourceKind; ref: string }) => {
     if (!panelOpen) togglePanel();
@@ -3247,13 +3256,23 @@ export function DraftEditor({
     [qualityOn, pageHtml],
   );
   const trustNow = quality?.trust?.score ?? null;
-  // The run's changes decided (or it found nothing): its step is passed once
-  // the steps' reads are in (below), with what the page reads then.
-  const thirdTaken = thirdStepTried(thirdStep.attempt, {
+  // Trust low is a step only while Quality names what raises it, or is still
+  // reading what may (editor test 2026-11-03: Trust 55 with nothing named
+  // left only Skip).
+  const trustRaisable =
+    !!quality &&
+    (qualitySuggestions(tQuality, quality).some((s) => s.score === 'trust') ||
+      !!quality.claimsReading ||
+      !!quality.pageReading);
+  // The agent's latest batch on the page, and whether one works or waits for a decision.
+  const batchNow = {
     batch: suggestions[0]?.batchId ?? null,
     open: openSuggestions,
     busy: agentWorking || rewriting,
-  });
+  };
+  // The run's changes decided (or it found nothing): its step is passed once
+  // the steps' reads are in (below), with what the page reads then.
+  const thirdTaken = thirdStepTried(thirdStep.attempt, batchNow);
   const nextState: NextStepState = {
     method: draft.method,
     open: canMarkReady,
@@ -3264,10 +3283,15 @@ export function DraftEditor({
     openRules: rulesForNext(rules.rules, heldRules),
     openTotal: rules.rules.filter(({ rule, status }) => rule.on && status.state === 'bad').length,
     quality: quality
-      ? { trust: trustNow, trustLow: trustNow !== null && trustNow < TRUST_GATE, todos }
+      ? {
+          trust: trustNow,
+          trustLow: trustNow !== null && trustNow < TRUST_GATE && trustRaisable,
+          todos,
+        }
       : null,
     skipped,
     thirdPasses: thirdStep.passes,
+    batch: batchNow.batch,
   };
   const next = nextStep(nextState);
   useEffect(() => {
@@ -3340,6 +3364,30 @@ export function DraftEditor({
     // pageHtml: each read of the page starts the wait again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thirdTaken, thirdRead, attemptChecked, pageHtml]);
+  // A batch of the agent's since a pass (a hand-off, a Fix from the Rules
+  // tab, a rewrite), decided: the pass reads the page again as it reads
+  // then, the same wait over, so what its own changes opened never brings
+  // the step back (thirdPassesToRead). The run Next's step began is the
+  // attempt's (above).
+  const passesToRead = thirdTaken ? '' : thirdPassesToRead(thirdStep.passes, batchNow).join(',');
+  useEffect(() => {
+    if (!passesToRead || !thirdRead || !attemptChecked) return;
+    const timer = setTimeout(() => {
+      const { attempt, passes } = thirdStepNow.current;
+      const now = nextStateNow.current;
+      const ids = passesToRead.split(',') as ThirdStepId[];
+      saveThirdStep({
+        attempt,
+        passes: {
+          ...passes,
+          ...Object.fromEntries(ids.filter((id) => passes[id]).map((id) => [id, thirdPassOf(now)])),
+        },
+      });
+    }, PAGE_READ_DELAY_MS + PASS_SETTLE_MS);
+    return () => clearTimeout(timer);
+    // pageHtml: each read of the page starts the wait again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [passesToRead, thirdRead, attemptChecked, pageHtml]);
   // A pass that no longer holds is dropped, as a stale skip is, so a page
   // that reads as it did again later doesn't bring it back to life.
   const stalePasses =
@@ -3473,7 +3521,14 @@ export function DraftEditor({
         router.push(MANAGE_AUTHORS_PATH);
         return;
       case 'showTodos':
-        openPanelTab('quality');
+      case 'showTrust':
+        // Shown even with Quality open already: the part it names scrolls in and is marked.
+        if (!panelOpen) togglePanel();
+        setTabRequest((prev) => ({
+          tab: 'quality',
+          n: (prev?.n ?? 0) + 1,
+          focus: action === 'showTodos' ? 'todos' : 'trust',
+        }));
         return;
       case 'beforePublish':
         openBeforePublish('markReady');

@@ -18,7 +18,7 @@ import { ShoppingPathSection } from './_shopping-path';
 import { BriefTab, type AgentRewrite } from './_brief-tab';
 import { DataNote, UsesYourData } from './_data-note';
 import { ImpactTab } from './_impact-tab';
-import { QualityTab, type HandOff, type QualityRead } from './_quality-tab';
+import { QualityTab, type HandOff, type QualityFocus, type QualityRead } from './_quality-tab';
 import { RulesTab, type AgentFix, type PageRewrite } from './_rules-tab';
 import { SourcesTab } from './_sources-tab';
 import { useBriefRebuild, type PageNow } from './_use-brief-rebuild';
@@ -187,6 +187,8 @@ export function EditorSidePanel({
     build?: boolean;
     /** Brief › Your input to show (Quality's Add, CE-048). */
     input?: boolean;
+    /** Quality's part to show (the Next step basket's Show to-dos, Show what raises Trust). */
+    focus?: QualityFocus;
   } | null;
   /** Run Agent's Fix open rules, for Rules (CE-018, v1.1 CE-029). */
   agentFix?: AgentFix;
@@ -510,6 +512,11 @@ export function EditorSidePanel({
             <div hidden={segment !== 'quality'}>
               <QualityTab
                 quality={quality}
+                focusRequest={
+                  tabRequest?.focus && segment === 'quality'
+                    ? { to: tabRequest.focus, n: tabRequest.n }
+                    : null
+                }
                 onShow={(text) => onShowInPage?.(text)}
                 onShowPlaceholder={() => onShowPlaceholder?.()}
                 onPickAuthor={() => onPickAuthor?.()}

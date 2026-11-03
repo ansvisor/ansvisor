@@ -7099,12 +7099,63 @@ describe('the side panel', () => {
         expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
         // The path says it was passed, not done.
         await act(async () => nextButton()!.click());
-        expect(basket()!.textContent).toContain('Fix open rules· yours in the Rules tab');
-        // Passed with what the page read then: the rule left open.
+        expect(basket()!.textContent).toContain(
+          'Fix open rules· done by Content Agent, the rest is in Rules',
+        );
+        // Passed with what the page read then: the rule left open, and its batch.
         expect(JSON.parse(localStorage.getItem('aeo:next-step-third-try:d1')!)).toEqual({
           attempt: null,
-          passes: { fixRules: { rules: expect.arrayContaining(['fanoutH2']), length: '' } },
+          passes: {
+            fixRules: { rules: expect.arrayContaining(['fanoutH2']), length: '', batch: 'b9' },
+          },
         });
+      });
+
+      it("stays passed when the agent's own later batch opens a rule, and not when the person's edits do (editor test 2026-11-03)", async () => {
+        // Fix open rules taken with batch b9, every rule then closed.
+        const passed = (batch: string) =>
+          localStorage.setItem(
+            'aeo:next-step-third-try:d1',
+            JSON.stringify({
+              attempt: null,
+              passes: { fixRules: { rules: [], length: '', batch } },
+            }),
+          );
+        const handOff = (batchId: string) => [
+          {
+            id: 'h1',
+            batchId,
+            actionId: null,
+            actionNo: null,
+            kind: 'replace' as const,
+            blockText: 'Teams trust it.',
+            beforeText: 'trust',
+            afterText: 'rely on',
+            reason: 'a Quality check (hand-off)',
+            ruleKeys: [],
+            status: 'accepted' as const,
+          },
+        ];
+        // A hand-off since (b10), decided, left rules open: its own, so Next holds.
+        passed('b9');
+        getDraftSuggestions.mockResolvedValue(handOff('b10'));
+        await renderPage();
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        // Read again with the page as it reads now, and its batch.
+        expect(stored().passes.fixRules).toEqual({
+          rules: expect.arrayContaining(['fanoutH2']),
+          length: '',
+          batch: 'b10',
+        });
+        // No batch since: the rules open now are none the agent saw, so it's the agent's again.
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        passed('b10');
+        await renderPage();
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        expect(stored()).toBeNull();
       });
 
       it('isn’t passed by a Fix of some of its rules only (#1550 review)', async () => {

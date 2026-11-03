@@ -151,7 +151,13 @@ describe('NextStepButton', () => {
     const step = [...popup()!.querySelectorAll('ol li')].find((li) =>
       li.textContent?.includes('Fix open rules'),
     )!;
-    expect(step.textContent).toContain('yours in the Rules tab');
+    expect(step.textContent).toContain('the rest is in Rules');
+    // Ticked and its bar filled, as a done step's (editor test 2026-11-03:
+    // shown like one ahead, it read as never done).
+    expect(step.querySelector('svg')).not.toBeNull();
+    const bars = [...popup()!.querySelectorAll('i')].map((bar) => bar.className);
+    expect(bars[2]).toContain('bg-foreground');
+    expect(bars[2]).not.toContain('bg-foreground/');
     const name = [...step.querySelectorAll('span')].find(
       (s) => s.textContent === 'Fix open rules',
     )!;
@@ -159,7 +165,7 @@ describe('NextStepButton', () => {
     // The note says what is still the person's: never crossed out, by
     // itself or by what holds it.
     const note = [...step.querySelectorAll('span')].find(
-      (s) => s.textContent === '· yours in the Rules tab',
+      (s) => s.textContent === '· done by Content Agent, the rest is in Rules',
     )!;
     expect(note.className).not.toContain('line-through');
     expect(name.parentElement!.className).not.toContain('line-through');
@@ -258,12 +264,13 @@ describe('stepActor', () => {
           'pickAuthor',
           'addAuthor',
           'showTodos',
+          'showTrust',
           'beforePublish',
           'markReady',
           'export',
         ] as const
       ).map(actor),
-    ).toEqual(['you', 'you', 'you', 'you', 'you', 'you', 'you']);
+    ).toEqual(['you', 'you', 'you', 'you', 'you', 'you', 'you', 'you']);
   });
 });
 
