@@ -7,6 +7,7 @@ import { apiFailure, type ApiFailure } from '@/lib/api-failure';
 import type { ContentUsage } from '@/lib/content-usage';
 import { assertWritable } from '@/lib/subscription-guard';
 import type { NoPlanMark } from '@/lib/billing/no-plan';
+import type { QuestionVolume } from '@/lib/content/question-volume';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
@@ -308,6 +309,43 @@ export async function getOpportunityTopics(brandId: string): Promise<Opportunity
   return body.topics;
 }
 
+/** Needs (prompt groups) by what "+ New" can still do for them. */
+export interface NeedCounts {
+  /** With tracked answers and no opportunity yet: New can write for these. */
+  open: number;
+  /** Already have an opportunity. */
+  covered: number;
+  /** No tracked answers in the last 30 days yet: nothing to write from. */
+  noAnswers: number;
+}
+
+/** What "+ New" can still write for, read when its dialog opens. */
+export interface OpportunityAvailability extends NeedCounts {
+  needs: number;
+  /** Per topic id, and `none` for prompts without a topic. */
+  topics: Record<string, NeedCounts>;
+  /** Prompt id → the open opportunity its need already has. */
+  promptOpportunity: Record<string, string>;
+}
+
+export async function getOpportunityAvailability(
+  brandId: string,
+): Promise<OpportunityAvailability> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/content/brand/${brandId}/availability`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error: ${res.status}`);
+  }
+
+  return res.json();
+}
+
 export async function getOpportunity(id: string): Promise<ContentOpportunity> {
   const session = await getSession();
 
@@ -338,6 +376,21 @@ export async function getOpportunityBasket(id: string): Promise<OpportunityBaske
   }
 
   return res.json();
+}
+
+/**
+ * An opportunity's volume: its question's, the prompt it is shown with
+ * (question-volume.ts). Null when the prompt isn't the brand's or has none.
+ */
+export async function getQuestionVolume(
+  brandId: string,
+  promptId: string,
+): Promise<QuestionVolume | null> {
+  const supabase = await createClient();
+  // Imported here: the admin client is created at module load and needs the
+  // service-role env, which only this read uses (as tracking.ts does).
+  const { readQuestionVolume } = await import('@/lib/content/question-volume-read');
+  return readQuestionVolume(supabase, brandId, promptId);
 }
 
 export interface BriefQuota extends NoPlanMark {

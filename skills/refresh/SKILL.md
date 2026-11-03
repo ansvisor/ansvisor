@@ -37,7 +37,7 @@ Bring an older page up to date: its dates, numbers and examples, without losing 
 2. The updated passages, ready to paste.
 3. The to-do list of what only the person can supply.
 
-When the person wants it kept, save it as a new version with `create_draft`, method optimize, with the live page's address as its source; the app asks them first when it should.
+When the person wants it kept, save it as a new version with `create_draft`, method optimize, with the live page's address as its source; the app asks them first when it should. In an agent's run nobody is there to ask: always save it with its tool, and the app holds it for approval where the agent's mode needs it.
 
 ## Don't
 

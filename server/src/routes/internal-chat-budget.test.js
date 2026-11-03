@@ -30,6 +30,7 @@ const reserveChatStep = vi.fn();
 const chargeChatStep = vi.fn();
 const releaseChatStep = vi.fn();
 const agentUsageShares = vi.fn();
+const chatRunEstimate = vi.fn();
 const fitChatUnits = vi.fn();
 const ownKeyAgentSpend = vi.fn();
 const imageShares = vi.fn();
@@ -41,6 +42,7 @@ vi.mock('../lib/chat-budget.js', () => ({
   chargeChatStep: (...args) => chargeChatStep(...args),
   releaseChatStep: (...args) => releaseChatStep(...args),
   agentUsageShares: (...args) => agentUsageShares(...args),
+  chatRunEstimate: (...args) => chatRunEstimate(...args),
   fitChatUnits: (...args) => fitChatUnits(...args),
   MAX_FIT_UNITS: 100,
   MAX_IMAGES: 10,
@@ -63,6 +65,7 @@ beforeEach(async () => {
   chargeChatStep.mockReset().mockResolvedValue(undefined);
   releaseChatStep.mockReset().mockResolvedValue(undefined);
   agentUsageShares.mockReset().mockResolvedValue({ unlimited: false, since: null, shares: [] });
+  chatRunEstimate.mockReset().mockResolvedValue({ unlimited: false, share: 0.02, runs: 12 });
   fitChatUnits.mockReset().mockResolvedValue({ fits: 3, limit: 'run' });
   ownKeyAgentSpend.mockReset();
   warnOwnKeyLimit.mockReset().mockResolvedValue({ notices: 0, emails: 0, resolved: 0 });
@@ -140,6 +143,7 @@ describe('POST /api/internal/chat/budget/*', () => {
       stepId: STEP,
       ownKey: false,
       agentRunId: null,
+      scheduleId: null,
     });
 
     await post('reserve', reserveBody({ stepId: undefined, feature: 'image', ownKey: true }));
@@ -167,6 +171,18 @@ describe('POST /api/internal/chat/budget/*', () => {
       message: 'This run reached its limit.',
     });
     expect((await post('reserve', reserveBody({ agentRunId: 'nope' }))).status).toBe(400);
+  });
+
+  it('holds a scheduled job’s step named with its job (CHAT-12 item 14)', async () => {
+    const JOB = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0b';
+    expect(
+      (await post('reserve', reserveBody({ feature: 'schedule', scheduleId: JOB }))).status,
+    ).toBe(201);
+    expect(reserveChatStep).toHaveBeenLastCalledWith(
+      ORG,
+      expect.objectContaining({ feature: 'schedule', scheduleId: JOB, agentRunId: null }),
+    );
+    expect((await post('reserve', reserveBody({ scheduleId: 'nope' }))).status).toBe(400);
   });
 
   it('refuses a body it can’t read before holding anything', async () => {
@@ -313,6 +329,33 @@ describe('GET /api/internal/chat/budget/agent-shares', () => {
     const res = await get(`orgId=${ORG}`);
     expect(res.status).toBe(402);
     expect(await res.json()).toMatchObject({ success: false, error: 'plan_limit' });
+  });
+});
+
+describe('GET /api/internal/chat/budget/run-estimate', () => {
+  const get = (query, secret = 'shh') =>
+    fetch(`${baseUrl}/run-estimate?${query}`, {
+      headers: { Authorization: `Bearer ${secret}` },
+    });
+
+  it('answers about how much of the limit a run uses, never a dollar', async () => {
+    const res = await get(`orgId=${ORG}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, unlimited: false, share: 0.02, runs: 12 });
+    expect(chatRunEstimate).toHaveBeenLastCalledWith(ORG);
+  });
+
+  it('answers only the web, and refuses a query it can’t read', async () => {
+    expect((await get(`orgId=${ORG}`, 'nope')).status).toBe(401);
+    expect((await get('orgId=nope')).status).toBe(400);
+    expect(chatRunEstimate).not.toHaveBeenCalled();
+  });
+
+  it('says when Chat is off for the workspace', async () => {
+    chatRunEstimate.mockRejectedValueOnce(new ChatBudgetError('chat_off', 403, 'Chat is off.'));
+    const res = await get(`orgId=${ORG}`);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ success: false, error: 'chat_off' });
   });
 });
 

@@ -7,7 +7,10 @@ import { CONTENT_TOOLS } from './content-tools';
 import { IMAGE_READS, IMAGE_WRITES } from './image-tools';
 import { PROMPT_TOOLS } from './prompt-tools';
 import { READ_TOOLS } from './read-tools';
+import { MEMORY_TOOLS } from './memory-tools';
 import { REPORT_TOOLS } from './report-tools';
+import { SCHEDULE_TOOLS } from './schedule-tools';
+import { SKILL_TOOLS } from './skill-tools';
 import { TOPIC_TOOLS } from './topic-tools';
 import { WHY_TOOLS } from './why-tools';
 import { WRITE_TOOLS } from './write-tools';
@@ -37,6 +40,9 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...REPORT_TOOLS,
   ...AUDIT_TOOLS,
   ...IMAGE_WRITES,
+  ...SCHEDULE_TOOLS,
+  ...SKILL_TOOLS,
+  ...MEMORY_TOOLS,
 ];
 
 /** The row of a tool, by its internal name; undefined for a name with no row. */

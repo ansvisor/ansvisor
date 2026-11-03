@@ -161,9 +161,11 @@ async function agentRunCapUsd(orgId, agentRunId, includedUsd) {
  * budget can't cover the step (the step doesn't start), 402 without an
  * active plan; ChatBudgetError 404 when the run isn't the workspace's, or the
  * step the run's. With `agentRunId` (the chat's agent run), the step is held
- * within that run's cap too: ChatBudgetError run_cap 429 past it. `holdUsd`
- * holds a set amount instead of the model's worst case, for a call much
- * smaller than a Chat step (Content Quality's reads).
+ * within that run's cap too: ChatBudgetError run_cap 429 past it. With
+ * `scheduleId` (the chat's scheduled job, CHAT-12 item 14) the database
+ * checks it is the chat's; the row is named with the chat's job either way.
+ * `holdUsd` holds a set amount instead of the model's worst case, for a call
+ * much smaller than a Chat step (Content Quality's reads).
  */
 export async function reserveChatStep(
   orgId,
@@ -176,6 +178,7 @@ export async function reserveChatStep(
     stepId = null,
     ownKey = false,
     agentRunId = null,
+    scheduleId = null,
     holdUsd = null,
     images = null,
   },
@@ -199,6 +202,7 @@ export async function reserveChatStep(
     p_since: since,
     p_budget: budgetUsd,
     ...(agentRunId ? { p_agent_run_id: agentRunId, p_run_cap: runCap } : {}),
+    ...(scheduleId ? { p_schedule_id: scheduleId } : {}),
   });
   if (error) {
     if (error.code === 'P0002') {
@@ -497,6 +501,46 @@ export async function agentUsageShares(orgId, { days = null } = {}) {
       runs: Number(row.runs) || 0,
     })),
   };
+}
+
+/** How many of the last days a run estimate reads, and how many of their rows. */
+const ESTIMATE_DAYS = 30;
+const ESTIMATE_ROWS = 5000;
+
+/**
+ * About how much of the AI limit one Chat run uses (the schedule card's
+ * "≈ 2% of monthly AI usage per run", CHAT-12 item 7): the workspace's
+ * Chat and scheduled runs over the last 30 days, each run's spend summed,
+ * averaged, over the plan's included budget (credits left out, as agent
+ * shares are). On Ansvisor's key only: own-key rows are the workspace's.
+ * Null with no run to go on. Shares only: no dollars leave the server.
+ * No budget (self-hosted): unlimited.
+ */
+export async function chatRunEstimate(orgId) {
+  assertChatOn(orgId);
+  const { includedUsd } = await aiBudgetOf(orgId, { credits: false });
+  if (includedUsd === null || !(includedUsd > 0)) return { unlimited: true, share: null, runs: 0 };
+  const since = new Date(Date.now() - ESTIMATE_DAYS * 86_400_000).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('prompt_improve_usage')
+    .select('chat_run_id, cost_usd')
+    .eq('organization_id', orgId)
+    .in('feature', ['chat', 'schedule'])
+    .eq('own_key', false)
+    .gte('used_at', since)
+    .not('chat_run_id', 'is', null)
+    .order('used_at', { ascending: false })
+    .limit(ESTIMATE_ROWS);
+  if (error) throw new Error(error.message);
+  const byRun = new Map();
+  for (const row of data ?? []) {
+    byRun.set(row.chat_run_id, (byRun.get(row.chat_run_id) ?? 0) + (Number(row.cost_usd) || 0));
+  }
+  if (byRun.size === 0) return { unlimited: false, share: null, runs: 0 };
+  const average = [...byRun.values()].reduce((sum, usd) => sum + usd, 0) / byRun.size;
+  // numeric(7, 4) as the run rows keep it: to 0.01%.
+  const share = Math.min(999.9999, Math.round((average / includedUsd) * 10_000) / 10_000);
+  return { unlimited: false, share, runs: byRun.size };
 }
 
 /**
