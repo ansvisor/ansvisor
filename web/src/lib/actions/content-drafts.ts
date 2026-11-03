@@ -2218,6 +2218,8 @@ export async function fixDraftRules(
         // Already within the server's limits (rebuildSources).
         ...(request.sources ? { sources: request.sources } : {}),
         ...(request.overLength ? { overLength: request.overLength } : {}),
+        // The room the Length leaves: what the run adds stays within it (capToLength).
+        ...(request.lengthCap ? { lengthCap: request.lengthCap } : {}),
       }),
     });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -2290,6 +2292,7 @@ export async function handOffDraft(
         locked: request.locked.slice(0, 500).map((key) => key.slice(0, 5000)),
         ...(request.sources ? { sources: request.sources } : {}),
         ...(request.overLength ? { overLength: request.overLength } : {}),
+        ...(request.lengthCap ? { lengthCap: request.lengthCap } : {}),
         origin: request.origin,
       }),
     });
