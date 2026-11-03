@@ -290,6 +290,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   keptSources: [],
   authorConfirmed: { real: false, profile: false },
   action: null,
+  conversation: null,
   agentState: null,
   agentSince: null,
   agentRun: null,
@@ -1446,6 +1447,26 @@ describe('the content editor', () => {
     expect(document.getElementById(history.getAttribute('aria-describedby')!)!.textContent).toBe(
       'Go back to the page to use History',
     );
+  });
+
+  it('links the chat it was made in, with the new Chat on (W4-10)', async () => {
+    const CHAT = 'cccccccc-0000-4000-8000-000000000001';
+    getContentDraft.mockResolvedValue(draft({ conversation: { id: CHAT, title: 'Pricing FAQ' } }));
+    await renderPage('admin', { chatOn: true });
+    const bar = container.querySelector('[data-slot="draft-chat-bar"]')!;
+    expect(bar.textContent).toBe('From chat: Pricing FAQ');
+    expect(bar.querySelector('a')!.getAttribute('href')).toBe(`/dashboard/chat/${CHAT}`);
+
+    // Not with the new Chat off, nor for a draft made elsewhere.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await renderPage('admin');
+    expect(container.querySelector('[data-slot="draft-chat-bar"]')).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+    getContentDraft.mockResolvedValue(draft());
+    await renderPage('admin', { chatOn: true });
+    expect(container.querySelector('[data-slot="draft-chat-bar"]')).toBeNull();
   });
 
   it('links the action the draft is the work of, and says Ready completed its task', async () => {
