@@ -139,6 +139,16 @@ export const rebuildSources = z.object({
     .number()
     .int()
     .transform((n) => Math.min(BRIEF_LENGTH_MAX, Math.max(BRIEF_LENGTH_MIN, n))),
+  /**
+   * A range the person set on the Length rule (editor test 2026-11-03):
+   * the page is written and cut to keep within it. One that doesn't read
+   * is dropped, and `length` alone stands.
+   */
+  lengthBand: z
+    .object({ min: z.number().int().positive(), max: z.number().int().positive() })
+    .refine((band) => band.min <= band.max)
+    .optional()
+    .catch(undefined),
 });
 
 /**
