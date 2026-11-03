@@ -104,14 +104,28 @@ describe('ChatSettings', () => {
     expect(action('policy.open')[0].getAttribute('href')).toBe('/dashboard/settings/chat');
   });
 
-  it("hides the settings nothing reads yet: answer language, notifications, 'Thought for N s'", async () => {
+  it("hides the settings nothing reads yet: answer language, 'Thought for N s'", async () => {
     await render();
     expect(action('chatSettings.answerLanguage')).toHaveLength(0);
-    expect(action('chatSettings.notifyChannel')).toHaveLength(0);
     expect(action('chatSettings.toggleThinking')).toHaveLength(0);
     expect(host.textContent).not.toContain('Answer language');
-    expect(host.textContent).not.toContain('Notify me when an agent needs me');
     expect(host.textContent).not.toContain('Thought for');
+  });
+
+  it('offers how to hear that an agent needs you, Slack only once it connects, and keeps a pick', async () => {
+    await render();
+    const select = action('chatSettings.notifyChannel')[0] as HTMLSelectElement;
+    expect([...select.options].map((option) => [option.textContent, option.disabled])).toEqual([
+      ['Inbox + email', false],
+      ['Inbox only', false],
+      ['Inbox + Slack (connect Slack first)', true],
+    ]);
+    expect(select.value).toBe('inbox_email');
+    await act(async () => {
+      select.value = 'inbox';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(saved.patches).toEqual([{ notifyVia: 'inbox' }]);
   });
 
   it('keeps each pick at once', async () => {

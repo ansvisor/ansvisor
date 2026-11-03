@@ -38,6 +38,15 @@ vi.mock('./key', () => ({
   failingOwnKey: vi.fn(async () => ownKey.failing),
 }));
 vi.mock('./agent-shares', () => ({ readAgentShares: vi.fn(async () => null) }));
+// "Notify me when an agent needs me" (00474): the server's e-mail, and the notice it closes.
+const needsYou = vi.hoisted(() => ({
+  tell: vi.fn(async () => true),
+  resolve: vi.fn(async () => {}),
+}));
+vi.mock('./agent-needs-you', () => ({
+  tellAgentNeedsYou: needsYou.tell,
+  resolveAgentNeedsYou: needsYou.resolve,
+}));
 vi.mock('./engine', () => ({
   APPROVAL_TTL_MS: 7 * 24 * 60 * 60 * 1000,
   validTimezone: (value?: string) => value ?? 'UTC',
@@ -550,6 +559,22 @@ describe('handing a started run to Chat', () => {
 });
 
 describe('keeping the agent run in step with its Chat run', () => {
+  it('tells its person once it waits, and closes the notice when it goes on', async () => {
+    needsYou.tell.mockClear();
+    needsYou.resolve.mockClear();
+    const id = queueRun();
+    const chat = chatOf(id, 'waiting');
+    expect(await driver.settleAgentRun(id, { now: NOW })).toBe('needs_you');
+    expect(needsYou.tell).toHaveBeenCalledWith(ORG, id);
+    // Settled again while it still waits: no second word.
+    expect(await driver.settleAgentRun(id, { now: NOW })).toBe('needs_you');
+    expect(needsYou.tell).toHaveBeenCalledTimes(1);
+    db.tables.chat_runs.find((r) => r.id === chat)!.status = 'running';
+    expect(await driver.settleAgentRun(id, { now: NOW })).toBe('running');
+    expect(needsYou.resolve).toHaveBeenCalledWith(id);
+    expect(needsYou.tell).toHaveBeenCalledTimes(1);
+  });
+
   it('is Needs you while its card waits, Done when it ends, and clears failures in a row', async () => {
     agentRow().fail_count = 2;
     const id = queueRun();

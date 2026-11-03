@@ -68,7 +68,11 @@ const CMS_TARGETS = ['webflow', 'wordpress', 'framer', 'wix', 'webhook'] as cons
 const isCmsTarget = (value: unknown): value is CmsTarget =>
   CMS_TARGETS.some((target) => target === value);
 
-/** The notice a row is, or null for one this Inbox can't show (another kind, a broken payload). */
+/**
+ * The notice a row is, or null for one this Inbox can't show (another kind,
+ * a broken payload) or doesn't: agent_needs_you (00474) records an e-mail,
+ * and the run's chat is in Needs you already.
+ */
 export function noticeOf(row: NoticeRow): ChatNotice | null {
   const base = { id: row.id, createdAt: row.created_at, read: row.read_at !== null };
   const payload = row.payload ?? {};

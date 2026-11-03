@@ -11,6 +11,7 @@ import type {
   ChatGeneralAccess,
   ChatGeneralSettings,
   GeneralPatch,
+  NotifyChannel,
 } from '@/lib/chat/general-settings';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,10 @@ import { useFocusLabel } from './focus-picker';
  */
 
 const MODES: ChatMode[] = ['ask_first', 'auto', 'full_auto'];
+const CHANNELS: NotifyChannel[] = ['inbox_email', 'inbox', 'inbox_slack'];
+
+const SELECT =
+  'h-7 rounded-lg border bg-background px-2 text-[12.5px] text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
 /** One setting (mockup `.srow2`): its name and a muted line, the control on the right. */
 function Row({ label, note, children }: { label: string; note: string; children: ReactNode }) {
@@ -224,10 +229,32 @@ export function ChatSettings({
             </span>
           </Row>
 
-          {/* Answer language, "Notify me when an agent needs me" and "Show Thought
-              for N s" are kept on the person but nothing reads them yet (Chat
-              answers in the question's language), so they stay hidden until
-              they're wired up; their saved values and schema stay. */}
+          {/* Answer language and "Show Thought for N s" are kept on the person
+              but nothing reads them yet (Chat answers in the question's
+              language), so they stay hidden until they're wired up; their saved
+              values and schema stay. */}
+
+          <Row label={t('notify.label')} note={t('notify.note')}>
+            <select
+              data-action="chatSettings.notifyChannel"
+              aria-label={t('notify.label')}
+              value={settings.notifyVia}
+              onChange={(event) => void change({ notifyVia: event.target.value as NotifyChannel })}
+              className={SELECT}
+            >
+              {CHANNELS.map((channel) => (
+                <option
+                  key={channel}
+                  value={channel}
+                  disabled={channel === 'inbox_slack' && !access.slack}
+                >
+                  {channel === 'inbox_slack' && !access.slack
+                    ? t('notify.slackSoon')
+                    : t(`notify.${channel}`)}
+                </option>
+              ))}
+            </select>
+          </Row>
 
           <Row label={t('everyPage.label')} note={t('everyPage.note')}>
             <Switch
