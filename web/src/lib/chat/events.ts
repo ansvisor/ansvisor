@@ -69,6 +69,8 @@ export interface ChatStepScope {
   platforms?: string[];
   /** Only when the read isn't for the chat's brand. */
   brand?: string;
+  /** What rowCount counts when it isn't rows: saved notes ("Memory · 3 items", CHAT-14 item 17). */
+  unit?: 'items';
 }
 
 /** A step as the browser sees it: the label registry's words, never the tool. */

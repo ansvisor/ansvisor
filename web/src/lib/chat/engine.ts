@@ -206,6 +206,8 @@ import {
 import { MAX_UPLOADS } from './uploads';
 import { answerUnattended, withAssumptions } from './schedule/unattended';
 import { cardFormOf, cardFormValuesInput, editedInput } from './card-form';
+import { memoryChoseTarget } from './memory/rules';
+import { memoryStep, runMemory, type RunMemory } from './memory/store';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -780,7 +782,12 @@ const STOP_POLL_MS = 1_500;
 const READ_TIMEOUT_MS = 20_000;
 const READ_RETRY_MS = 2_000;
 
-type Progress = RunProgress & { question?: string; scope?: MessageScope };
+type Progress = RunProgress & {
+  question?: string;
+  scope?: MessageScope;
+  /** The lines its "Used memory" step listed, once it has one (CHAT-14 item 17). */
+  memoryItems?: number;
+};
 
 interface RunContext {
   actor: ChatActor;
@@ -845,6 +852,8 @@ interface RunContext {
    * for its person without one (sessionFree: its runFor makes it).
    */
   sessionUserId: string | null;
+  /** What the person's memory gives this run (CHAT-14, memory/store.ts): its lines and block. */
+  memory: RunMemory;
 }
 
 /** No session of the run's person is behind it: an agent run on its own, or in another's request. */
@@ -1060,6 +1069,7 @@ async function openContext(
       playbook,
       planNote: playbook ? playbookPlanNote(playbook, refused, ctx.plan.planName) : null,
     },
+    memory: await runMemory(actor, brand),
   };
 }
 
@@ -1322,6 +1332,22 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
   return 'ended';
 }
 
+// ─── Memory ─────────────────────────────────────────────────────────────────
+
+/**
+ * "Used memory" (CHAT-14 item 17): once a run, when its first model step
+ * carries saved notes, a step listing them, and "Memory · n items" under
+ * Data used (memory/store.ts memoryStep).
+ */
+async function noteMemory(rc: RunContext): Promise<void> {
+  if (rc.memory.lines.length === 0 || rc.progress.memoryItems !== undefined) return;
+  const step = memoryStep(rc.memory.lines);
+  rc.progress.memoryItems = rc.memory.lines.length;
+  rc.progress.sources[step.subject] = rc.memory.lines.length;
+  const row = await insertStep(rc.run.id, { position: ++rc.progress.steps, ...step.write });
+  rc.sink.emit('step.finished', { step: clientStep(row) });
+}
+
 // ─── Skills ─────────────────────────────────────────────────────────────────
 
 /**
@@ -1428,19 +1454,6 @@ async function pickSkill(rc: RunContext, call: PendingCall): Promise<CallOutcome
   return result(call, { ok: true, note: 'Its text is below the rules from your next step.' });
 }
 
-/** The skills this run loaded, a shortcut's playbook among them. */
-function loadedSkillList(rc: RunContext) {
-  const { enabled, playbook } = rc.skills;
-  // A workspace skill has its body once the run loaded it (W3-06).
-  const bodied = enabled.flatMap((skill) =>
-    skill.body !== null ? [{ ...skill, body: skill.body }] : [],
-  );
-  const loadable = [...(playbook ? [playbook] : []), ...bodied];
-  return (rc.progress.skills ?? []).flatMap((name) =>
-    loadable.filter((skill) => skill.name === name),
-  );
-}
-
 /**
  * The loaded skills' block for a step's prompt (prompt.ts 2b), or none: a
  * shortcut's playbook among them, with what the plan leaves out of its data.
@@ -1534,6 +1547,7 @@ function stepInput(rc: RunContext, phase: ChatPhase, claude: boolean) {
 
 async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepResult> {
   const choice = rc.models.pick(phase);
+  await noteMemory(rc);
   const { system, messages } = stepInput(rc, phase, choice.claude);
   const tools = toolSet(rc, phase);
   const reservation = await reserveChatStep({
@@ -1831,7 +1845,7 @@ function coreRules(rc: Pick<RunContext, 'budget'>, phase: ChatPhase): string {
  * not between turns.
  */
 function workspaceBlock(
-  rc: Pick<RunContext, 'role' | 'planName' | 'brand' | 'refused' | 'offered' | 'skills'>,
+  rc: Pick<RunContext, 'role' | 'planName' | 'brand' | 'refused' | 'offered' | 'skills' | 'memory'>,
   phase: ChatPhase,
 ): string {
   const lines = [
@@ -1863,6 +1877,8 @@ function workspaceBlock(
   }
   // Names and descriptions only (CHAT-13 item 3): a body loads when it is used.
   if (rc.skills.listed.length > 0) lines.push(availableSkillsBlock(rc.skills.listed));
+  // Saved notes, as data (CHAT-14 item 14): after the skills list, cached with the block.
+  if (rc.memory.block) lines.push(rc.memory.block);
   return lines.join('\n\n');
 }
 
@@ -2147,7 +2163,9 @@ async function callFacts(rc: RunContext, tool: ChatTool, input: Record<string, u
         ctx,
         tool,
         input,
-        rc.progress.tainted === true,
+        // A target only memory named is data's choice, not the person's (CHAT-20 §16a).
+        rc.progress.tainted === true ||
+          (tool.area !== 'memory' && memoryChoseTarget(rc.memory.lines, input, personWords(rc))),
         rc.progress.writes[tool.name] ?? 0,
       )
     : { brandId: null, brandIsDemo: false, tainted: false };
@@ -2540,7 +2558,9 @@ async function cardDetailsOf(
   const form = await cardFormOf(tool, input, { ...place, now: new Date() });
   if (!tool.cardDetails) return form;
   try {
-    const details = await tool.cardDetails(input as never);
+    const details = await tool.cardDetails(input as never, {
+      organizationId: place.organizationId,
+    });
     const items = (details.items ?? []).slice(0, 8).map((item) => ({
       title: cardText(item.title, 200),
       ...(item.detail ? { detail: cardText(item.detail, 300) } : {}),
@@ -2603,11 +2623,12 @@ async function cardTarget(
   tool: ChatTool,
   input: Record<string, unknown>,
   brandId: string | null,
+  organizationId: string,
 ) {
   let own: string | null = null;
   if (tool.target) {
     try {
-      own = await tool.target(input as never);
+      own = await tool.target(input as never, { organizationId });
     } catch (err) {
       console.error('[chat/engine] could not name a card’s target:', err);
     }
@@ -2650,7 +2671,7 @@ async function openCard(
 ): Promise<CallOutcome> {
   const n = ++rc.progress.steps;
   const execute = decision.kind === 'click';
-  const target = await cardTarget(rc.brand, tool, input, facts.brandId);
+  const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor.organizationId);
   const row = await insertStep(rc.run.id, {
     position: n,
     kind: execute ? 'execute' : (tool.stepKind ?? 'write'),
@@ -3537,7 +3558,7 @@ async function writeCall(
   /** A step an allowed agent takes live on its own: its slot and page (goLiveCall). */
   goLive?: WriteRequest['goLive'],
 ): Promise<CallOutcome> {
-  const target = await cardTarget(rc.brand, tool, input, facts.brandId);
+  const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor.organizationId);
   let row;
   if (cardStepId) {
     row = await updateStep(cardStepId, { status: 'running' });
@@ -4147,7 +4168,7 @@ export async function prepareResume(
       sink.emit('confirm.required', {
         n: pending.n,
         action: toolWords(tool, 'name'),
-        target: await cardTarget(brand, tool, input, brand?.id ?? null),
+        target: await cardTarget(brand, tool, input, brand?.id ?? null, actor.organizationId),
         digest: pending.digest,
         canDontAskAgain: pending.offerDontAskAgain,
         ...cardNotes(tool),

@@ -6,6 +6,7 @@ import { COMPETITOR_TOOLS } from './competitor-tools';
 import { CONTENT_TOOLS } from './content-tools';
 import { PROMPT_TOOLS } from './prompt-tools';
 import { READ_TOOLS } from './read-tools';
+import { MEMORY_TOOLS } from './memory-tools';
 import { REPORT_TOOLS } from './report-tools';
 import { SKILL_TOOLS } from './skill-tools';
 import { SCHEDULE_TOOLS } from './schedule-tools';
@@ -36,6 +37,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...AUDIT_TOOLS,
   ...SKILL_TOOLS,
   ...SCHEDULE_TOOLS,
+  ...MEMORY_TOOLS,
 ];
 
 /** The row of a tool, by its internal name; undefined for a name with no row. */

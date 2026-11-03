@@ -15,6 +15,7 @@ import { chatToolByKey } from './registry/tools';
 import { DAY_MS, asObject, check, textOf, type Snapshot } from './undo-parts';
 import { OUTPUT_UNDO_RULES } from './undo-output';
 import { SKILL_UNDO_RULES } from './undo-skills';
+import { MEMORY_UNDO_RULES } from './undo-memory';
 import { SETUP_UNDO_RULES } from './undo-setup';
 import { ACTION_CENTER_UNDO_RULES } from './undo-action-center';
 import { scheduleUndo } from './schedule/undo';
@@ -447,6 +448,7 @@ export const UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   ...OUTPUT_UNDO_RULES,
   ...SKILL_UNDO_RULES,
   create_schedule: scheduleUndo,
+  ...MEMORY_UNDO_RULES,
 };
 
 /**

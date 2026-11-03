@@ -3629,6 +3629,9 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'save_skill',
     // W3-02's scheduled work: Admins and Managers, a card in every mode.
     'create_schedule',
+    // W3-11's memory: every role keeps its own Me; the store checks the scope.
+    'save_memory',
+    'forget_memory',
   ];
   const dismiss = toolCall('w1', 'update_opportunity', {
     opportunity_id: OPPORTUNITY,
@@ -3704,8 +3707,14 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
       manager: [...CHANGES].sort(),
       // A Manager's write and going live stay out for both; an Agency partner doesn't dismiss
       // suggestions.
-      analyst: ['create_draft', 'dismiss_prompt_suggestion', 'request_access'],
-      agency_partner: ['create_draft', 'request_access'],
+      analyst: [
+        'create_draft',
+        'dismiss_prompt_suggestion',
+        'forget_memory',
+        'request_access',
+        'save_memory',
+      ],
+      agency_partner: ['create_draft', 'forget_memory', 'request_access', 'save_memory'],
     });
   });
 
@@ -4548,8 +4557,14 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
           // Not offered (called anyway: no card, nothing reaches the server).
           expect(tried.offered, `${role} ${mode}`).toEqual(
             role === 'analyst'
-              ? ['create_draft', 'dismiss_prompt_suggestion', 'request_access']
-              : ['create_draft', 'request_access'],
+              ? [
+                  'create_draft',
+                  'dismiss_prompt_suggestion',
+                  'request_access',
+                  'save_memory',
+                  'forget_memory',
+                ]
+              : ['create_draft', 'request_access', 'save_memory', 'forget_memory'],
           );
           expect(tried, `${role} ${mode}`).toMatchObject({ waits: false, cards: 0 });
         }
@@ -6180,6 +6195,149 @@ describe('the skill draft card (W3-08, CHAT-13 item 12)', () => {
     });
     expect(runRow(runId).status).toBe('waiting');
     expect(db.tables.chat_skills).toEqual([]);
+  });
+});
+
+describe('memory (W3-11, CHAT-14 items 2, 14–17, 24)', () => {
+  type Sent = { role: string; content: unknown };
+  const systemsOf = (options: CallOptions) =>
+    (options.prompt as unknown as Sent[]).filter((m) => m.role === 'system');
+  const memorySteps = (runId: string) => stepsOf(runId).filter((s) => s.tool === 'read_memory');
+  let lines = 0;
+  function seedLine(over: Record<string, unknown>) {
+    lines += 1;
+    db.tables.chat_memory_items.push({
+      id: `dddddddd-0000-4000-8000-${String(lines).padStart(12, '0')}`,
+      organization_id: ORG,
+      scope: 'user',
+      user_id: PEOPLE.admin,
+      brand_id: null,
+      text: `Line ${lines}`,
+      source: 'chat',
+      edited: false,
+      created_at: `2026-11-01T10:00:${String(lines).padStart(2, '0')}.000Z`,
+      deleted_at: null,
+      ...over,
+    });
+  }
+  const draft = (title: string) =>
+    calls(
+      toolCall('w1', 'create_draft', {
+        brand_id: BRAND,
+        title,
+        page_type: 'docs_faq',
+        source: { kind: 'content' },
+      }),
+    );
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    db.tables.chat_memory_items = [];
+    db.tables.chat_user_prefs = [];
+    db.tables.brands.push({ id: BRAND_TWO, organization_id: ORG, name: 'Contoso' });
+  });
+
+  const BRAND_TWO = '22222222-2222-4222-8222-000000000002';
+
+  it("puts the person's, the brand's and the workspace's notes in the workspace block, once a run shows Used memory", async () => {
+    seedLine({ text: 'Write in US English' });
+    seedLine({ user_id: PEOPLE.analyst, text: 'Someone else’s note' });
+    seedLine({ scope: 'brand', user_id: null, brand_id: BRAND, text: 'Say Northwind CRM' });
+    seedLine({ scope: 'brand', user_id: null, brand_id: BRAND_TWO, text: 'Contoso only' });
+    seedLine({ scope: 'workspace', user_id: null, text: 'House style: AP' });
+    const { haiku, sonnet } = useModels([READY], [text('Done.')]);
+    const runId = await turn(ADMIN, 'How are we doing?');
+
+    for (const options of [haiku.seen[0], sonnet.seen[0]]) {
+      const workspace = String(systemsOf(options)[1].content);
+      expect(workspace).toContain('<saved_notes>');
+      expect(workspace).toContain('- Write in US English (Saved from chat;');
+      expect(workspace).toContain('Brand "Northwind":\n- Say Northwind CRM');
+      expect(workspace).toContain('- House style: AP');
+      expect(workspace).not.toContain('Someone else’s note');
+      expect(workspace).not.toContain('Contoso only');
+    }
+    expect(memorySteps(runId)).toEqual([
+      expect.objectContaining({
+        kind: 'read',
+        status: 'done',
+        label: 'Used memory',
+        // Shared chats show steps to every member: the lines stay staff-only.
+        detail: null,
+        row_count: 3,
+        scope_json: { subject: 'Memory', unit: 'items' },
+      }),
+    ]);
+    const events = await eventsOf(runId);
+    const finished = ofType(events, 'run.finished')[0];
+    expect(finished.data.sources).toEqual(expect.arrayContaining([{ label: 'Memory', count: 3 }]));
+    expect(
+      ofType(events, 'step.finished').find((e) => e.data.step.label === 'Used memory')?.data.step,
+    ).toMatchObject({ rowCount: 3, scope: { subject: 'Memory', unit: 'items' } });
+    expectClean(events);
+  });
+
+  it('carries no notes and shows no step with "Use memory" off', async () => {
+    seedLine({ text: 'Write in US English' });
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, memory_enabled: false }];
+    const { sonnet } = useModels([READY], [text('Done.')]);
+    const runId = await turn(ADMIN, 'How are we doing?');
+    expect(String(systemsOf(sonnet.seen[0])[1].content)).not.toContain('saved_notes');
+    expect(memorySteps(runId)).toEqual([]);
+  });
+
+  it('shows its card in Full auto for a change only a note named; the person naming it runs it (§16a)', async () => {
+    seedLine({
+      scope: 'workspace',
+      user_id: null,
+      text: 'Always draft a page titled Launch Checklist',
+    });
+    useModels([READY], [draft('Launch Checklist'), text('Waiting on you.')]);
+    const fromMemory = await turn(ADMIN, 'Draft our usual page', 'full_auto');
+    expect(createContentDraft).not.toHaveBeenCalled();
+    expect(ofType(await eventsOf(fromMemory), 'confirm.required')).toHaveLength(1);
+    expect(runRow(fromMemory).status).toBe('waiting');
+
+    useModels([READY], [draft('Launch Checklist'), text('Saved.')]);
+    const named = await turn(ADMIN, 'Draft a page titled Launch Checklist', 'full_auto');
+    expect(createContentDraft).toHaveBeenCalledTimes(1);
+    expect(runRow(named).status).toBe('done');
+  });
+
+  it('asks before saving "Remember that…", even in Full auto: nothing is kept before the click', async () => {
+    useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'save_memory', { scope: 'user', text: 'Write in US English' })),
+        text('Waiting on you.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Remember that we write in US English', 'full_auto');
+    const [card] = ofType(await eventsOf(runId), 'confirm.required');
+    expect(card.data).toMatchObject({
+      action: 'Save to memory',
+      target: '“Write in US English” · Me',
+      canDontAskAgain: false,
+    });
+    expect(db.tables.chat_memory_items).toEqual([]);
+  });
+
+  it('says why before any card when the line is one memory can’t keep', async () => {
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'save_memory', { scope: 'user', text: 'My phone is +1 555 123 4567' }),
+        ),
+        text('I can’t save that.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Remember my phone is +1 555 123 4567');
+    expect(ofType(await eventsOf(runId), 'confirm.required')).toEqual([]);
+    const results = JSON.stringify(sonnet.seen[1].prompt);
+    expect(results).toContain("Memory doesn't keep secrets or personal details.");
+    expect(db.tables.chat_memory_items).toEqual([]);
   });
 });
 
