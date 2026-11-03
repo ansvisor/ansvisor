@@ -120,6 +120,28 @@ export function coveredClusterIds(rows) {
   return ids;
 }
 
+/**
+ * What a request could draw on (CONTENT-003), so the page can say why fewer
+ * came back than were asked for: the needs (clusters) in its focus, how many
+ * of them already have an opportunity, and how many have no tracked answers
+ * to write from yet. Read before the run's own duplicate checks add to
+ * `covered`; the run reports those separately.
+ *
+ * @param {{ id: string, metrics: { tested: number } }[]} candidates
+ * @param {{ covered: Set<string>, inFocus: (c: object) => boolean, requested: number, focus: string }} opts
+ */
+export function requestScope(candidates, { covered, inFocus, requested, focus }) {
+  const needs = candidates.filter(inFocus);
+  const isCovered = (c) => covered.has(c.id);
+  return {
+    focus,
+    requested,
+    needs: needs.length,
+    covered: needs.filter(isCovered).length,
+    noAnswers: needs.filter((c) => !isCovered(c) && !(c.metrics.tested > 0)).length,
+  };
+}
+
 /** Statuses that still stand for a need's content work. */
 export const OPEN_OPPORTUNITY_STATUSES = ['new', 'reviewed', 'sent', 'in_progress'];
 

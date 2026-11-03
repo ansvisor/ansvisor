@@ -84,6 +84,15 @@ export async function generateOpportunitiesOnDemand(
   return { ok: true, jobId: body.jobId, count: body.count };
 }
 
+/** A "+ New" request's needs (prompt groups): in its focus, already covered, without answers yet. */
+export interface NewRequestScope {
+  focus: 'auto' | 'topic' | 'prompt' | 'page';
+  requested: number;
+  needs: number;
+  covered: number;
+  noAnswers: number;
+}
+
 export interface GenerationJobStatus {
   status: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'not_found';
   progress: { phase: string; message: string } | null;
@@ -99,6 +108,12 @@ export interface GenerationJobStatus {
     existingId?: string;
     /** A run for one page found no tracked prompts about it (AT-006 part B3). */
     noMatch?: boolean;
+    /** Needs the model folded into existing opportunities that answer the same thing. */
+    merged?: number;
+    /** Needs whose question an open opportunity already answers, added to it. */
+    sameQuestion?: number;
+    /** What the request could draw on, so the toast can say why fewer came back. */
+    scope?: NewRequestScope;
   } | null;
   failedReason: string | null;
 }

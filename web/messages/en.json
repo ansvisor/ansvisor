@@ -10023,6 +10023,15 @@
     "new": "New",
     "newDone": "{generated, plural, =0 {No new opportunities} one {1 opportunity created} other {# opportunities created}}{duplicates, plural, =0 {} one { · 1 duplicate skipped (not counted)} other { · # duplicates skipped (not counted)}}",
     "newNothing": "No new opportunities: every matching need already has one.",
+    "newNone": "No new opportunities",
+    "newPartial": "{generated} of {requested} opportunities created",
+    "newReason": {
+      "joined": "{count, plural, one {# need was} other {# needs were}} added to existing opportunities that answer the same thing.",
+      "noAnswers": "{count, plural, one {# need has} other {# needs have}} no tracked answers from the last 30 days yet, so there's nothing to write from. {count, plural, one {It's} other {They're}} suggested once tracking has answers.",
+      "covered": "{count, plural, one {# need} other {# needs}}{focus, select, topic { in this topic} other {}} already {count, plural, one {has an opportunity} other {have one}}. Add prompts for new needs, or use Another angle on an opportunity.",
+      "fewNeeds": "{count, plural, =0 {There are no prompt groups{focus, select, topic { in this topic} other {}} yet.} one {There's only # need{focus, select, topic { in this topic} other {}}.} other {There are only # needs{focus, select, topic { in this topic} other {}}.}} Add prompts for new needs.",
+      "fewerWritten": "The AI wrote fewer than asked for. Try again for the rest."
+    },
     "newExisting": "This prompt already has an opportunity",
     "openExisting": "Open existing",
     "newLimitReached": "Monthly opportunity limit reached.",

@@ -89,6 +89,7 @@ import { WriteThisDialog } from '@/components/content/write-this-dialog';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { bulkSendNotes } from '@/lib/content/bulk-send';
+import { newResultMessage } from '@/lib/content/new-result';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { canWriteOpportunity, opportunityStart } from '@/lib/content/opportunity-start';
 import { siteTypeOf } from '@/lib/content/page-types';
@@ -738,20 +739,25 @@ export default function ContentPage() {
               clearGenerationJob();
               setGenerating(false);
               setPendingCount(0);
-              const generated = status.result?.generated ?? 0;
-              const duplicates = status.result?.duplicates ?? 0;
-              const existingId = status.result?.existingId;
-              if (status.result?.limited) toast.error(t('newLimitReached'));
+              // How many were created and, when fewer than asked for, why.
+              const message = newResultMessage(status.result ?? { generated: 0 });
+              const existingId = message.existingId;
+              const title = t(message.title.key, message.title.values);
+              const description = message.reasons.map((r) => t(r.key, r.values)).join(' ');
+              if (message.tone === 'error') toast.error(title);
               // A request for one prompt that an open opportunity answers.
-              else if (generated === 0 && existingId)
-                toast(t('newExisting'), {
+              else if (existingId)
+                toast(title, {
                   action: {
                     label: t('openExisting'),
                     onClick: () => selectOpportunity(existingId),
                   },
                 });
-              else if (generated === 0 && duplicates === 0) toast(t('newNothing'));
-              else toast.success(t('newDone', { generated, duplicates }));
+              else
+                (message.tone === 'success' ? toast.success : toast)(
+                  title,
+                  description ? { description } : undefined,
+                );
               loadData();
               loadPromptOptions();
               setUsageVersion((v) => v + 1);

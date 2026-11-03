@@ -384,4 +384,31 @@ describe('A "+ New" request for one prompt', () => {
     expect(detail.id).toBe('o9');
     expect(new URL(window.location.href).searchParams.get('opportunity')).toBe('o9');
   });
+
+  it('says why fewer came back than were asked for', async () => {
+    localStorage.setItem(
+      'aeo:content-generation',
+      JSON.stringify({ brandId: 'b1', jobId: 'j1', startedAt: Date.now(), count: 3 }),
+    );
+    content.getGenerationJobStatus.mockResolvedValue({
+      status: 'completed',
+      progress: null,
+      result: {
+        generated: 1,
+        duplicates: 0,
+        scope: { focus: 'auto', requested: 3, needs: 11, covered: 10, noAnswers: 0 },
+      },
+      failedReason: null,
+    });
+    vi.useFakeTimers();
+    await render(false);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(toast.success).toHaveBeenCalledWith('1 of 3 opportunities created', {
+      description:
+        '10 needs already have one. Add prompts for new needs, or use Another angle on an opportunity.',
+    });
+  });
 });
