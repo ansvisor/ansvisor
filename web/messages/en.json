@@ -460,7 +460,8 @@
     "generateBrief": "Ask an admin or a manager to generate a brief.",
     "improvePrompt": "Ask an admin or a manager to generate or send Improve suggestions.",
     "addPrompts": "Ask an admin or a manager to add prompts.",
-    "addTopic": "Prompts are grouped under topics. Ask an admin or a manager to add a topic first."
+    "addTopic": "Prompts are grouped under topics. Ask an admin or a manager to add a topic first.",
+    "reviewBrandFacts": "Ask an admin or a manager to approve or reject these facts, or to read your site again."
   },
   "topicFirst": {
     "title": "Add a topic first",
@@ -1828,7 +1829,6 @@
           "busy": "Writing tasks…",
           "done": "{count, plural, one {# task written} other {# tasks written}}",
           "doneWithReviews": "{count, plural, one {# task written} other {# tasks written}}; {reviews, plural, one {# waits} other {# wait}} in Needs review for the page, the change or the check",
-          "doneWithReviewsMember": "{count, plural, one {# task written} other {# tasks written}}; {reviews, plural, one {# waits} other {# wait}} for an admin or a manager to review",
           "timeout": "Writing the tasks took too long. Please try again.",
           "unreachable": "Couldn't reach the server. Please try again.",
           "unauthenticated": "Your session has ended. Please sign in again.",

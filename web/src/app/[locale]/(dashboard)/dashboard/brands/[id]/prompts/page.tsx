@@ -985,19 +985,22 @@ export default function PromptsPage() {
                 <Globe className="mr-2 h-3.5 w-3.5" />
                 Locations
               </Button>
-              <Button
-                size="sm"
-                variant={unanalyzedPrompts.length > 0 ? 'default' : 'outline'}
-                onClick={guard(openAnalyzeDialog, { action: tActions('analyzePrompts') })}
-              >
-                <Search className="mr-2 h-3.5 w-3.5" />
-                Analyze Prompts
-                {unanalyzedPrompts.length > 0 && (
-                  <Badge variant="secondary" className="ml-2 text-[10px]">
-                    {unanalyzedPrompts.length} new
-                  </Badge>
-                )}
-              </Button>
+              {/* Tracking the prompts now is for admins and managers, as the server allows it. */}
+              {canManage && (
+                <Button
+                  size="sm"
+                  variant={unanalyzedPrompts.length > 0 ? 'default' : 'outline'}
+                  onClick={guard(openAnalyzeDialog, { action: tActions('analyzePrompts') })}
+                >
+                  <Search className="mr-2 h-3.5 w-3.5" />
+                  Analyze Prompts
+                  {unanalyzedPrompts.length > 0 && (
+                    <Badge variant="secondary" className="ml-2 text-[10px]">
+                      {unanalyzedPrompts.length} new
+                    </Badge>
+                  )}
+                </Button>
+              )}
             </div>
           </div>
           <div className="space-y-2">

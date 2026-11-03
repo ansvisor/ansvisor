@@ -121,7 +121,7 @@ To take a published page back down to a draft in its CMS, ask Chat, or click **T
 
 ## Your brand facts
 
-Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims a person approved on the **Brand facts** tab of the brand's settings, in your site's own words. Facts waiting for approval, rejected ones and ones no longer on your site aren't read.
+Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims an admin or a manager approved on the **Brand facts** tab of the brand's settings, in your site's own words. Facts waiting for approval, rejected ones and ones no longer on your site aren't read.
 
 **/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or to give the facts yourself. Chat never approves a fact.
 

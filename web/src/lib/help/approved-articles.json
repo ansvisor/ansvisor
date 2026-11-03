@@ -316,7 +316,7 @@
         "task checks"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -348,7 +348,7 @@
         },
         {
           "heading": "Regenerate tasks",
-          "text": "Where AI task writing is on for your workspace, **Regenerate tasks** writes the action's tasks again from its evidence, in your brand's terms, by the **Site type** in the brand settings. Done, under-way and hand-added tasks stay. It uses your plan's monthly AI allowance.\n\nThe AI also reads this brand's last three closed rounds of the same action. It builds on what improved results here, and doesn't hand out again a task that was done without effect. A task it writes without its URL, Change, Done when or How we check waits on **Needs review**."
+          "text": "Where AI task writing is on for your workspace, **Regenerate tasks** writes the action's tasks again from its evidence, in your brand's terms, by the **Site type** in the brand settings. Done, under-way and hand-added tasks stay. It uses your plan's monthly AI allowance, so it's for admins and managers.\n\nThe AI also reads this brand's last three closed rounds of the same action. It builds on what improved results here, and doesn't hand out again a task that was done without effect. A task it writes without its URL, Change, Done when or How we check waits on **Needs review**."
         },
         {
           "heading": "Tasks Ansvisor does itself",
@@ -1082,7 +1082,7 @@
         },
         {
           "heading": "Your brand facts",
-          "text": "Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims a person approved on the **Brand facts** tab of the brand's settings, in your site's own words. Facts waiting for approval, rejected ones and ones no longer on your site aren't read.\n\n**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or to give the facts yourself. Chat never approves a fact."
+          "text": "Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims an admin or a manager approved on the **Brand facts** tab of the brand's settings, in your site's own words. Facts waiting for approval, rejected ones and ones no longer on your site aren't read.\n\n**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or to give the facts yourself. Chat never approves a fact."
         },
         {
           "heading": "Open a web page",
@@ -2010,7 +2010,7 @@
         "content suggestions"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -2026,11 +2026,11 @@
         },
         {
           "heading": "Quick actions on a row",
-          "text": "Each row's **…** menu has the quick actions:\n\n- **Write this**, which has the Content Agent brief and write the page in one go for you to review, and **Send to Editor**; **Open draft** takes their place once a draft is being written for it;\n- **Send to Plan**, or **Open in Plan** once it's a priority there, for owned opportunities still open;\n- **Send to Workflow**, for a new opportunity;\n- **Open in new tab**, which opens it as a page of its own;\n- **Dismiss**, for a new one. Undo it from the message that appears.\n\nSend to Plan and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions."
+          "text": "Each row's **…** menu has the quick actions:\n\n- **Write this**, which has the Content Agent brief and write the page in one go for you to review, and **Send to Editor**; **Open draft** takes their place once a draft is being written for it;\n- **Send to Plan**, or **Open in Plan** once it's a priority there, for owned opportunities still open;\n- **Send to Workflow**, for a new opportunity;\n- **Open in new tab**, which opens it as a page of its own;\n- **Dismiss**, for a new one. Undo it from the message that appears.\n\nSend to Plan, Send to Workflow and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions."
         },
         {
           "heading": "Work on many at once",
-          "text": "Tick rows, or the box in the header for every row shown, then:\n\n- **Send All** sends each one to your workflow tool, which suits kicking off a content sprint.\n- **Done**, **Dismiss All** and **Delete** change them all at once. They're for admins and managers.\n\n**Delete** removes the opportunities for good, with any brief they have, and doesn't give back the month's opportunities or briefs. Dismissing keeps them out of your way instead."
+          "text": "Admins and managers tick rows, or the box in the header for every row shown, then:\n\n- **Send All** sends each one to your workflow tool, which suits kicking off a content sprint.\n- **Done**, **Dismiss All** and **Delete** change them all at once.\n\n**Delete** removes the opportunities for good, with any brief they have, and doesn't give back the month's opportunities or briefs. Dismissing keeps them out of your way instead."
         },
         {
           "heading": "Ask for new opportunities",
@@ -2985,7 +2985,7 @@
         "volume analysis"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -2993,7 +2993,7 @@
         },
         {
           "heading": "Run a volume analysis",
-          "text": "Volumes come from an analysis you run:\n\n- **Analyze Volumes** the first time;\n- **Analyze New Prompts** for prompts added since, shown while some have no volume;\n- **Refresh Volumes** for newer Google data;\n- **Re-analyze Keywords** to analyze every prompt again, keywords included.\n\nOn plans with a monthly analysis limit, each analysis counts against it, and the toolbar shows how many are left. **Tracked Prompts** also warns when some prompts haven't been analyzed yet."
+          "text": "Volumes come from an analysis that admins and managers run:\n\n- **Analyze Volumes** the first time;\n- **Analyze New Prompts** for prompts added since, shown while some have no volume;\n- **Refresh Volumes** for newer Google data;\n- **Re-analyze Keywords** to analyze every prompt again, keywords included.\n\nOn plans with a monthly analysis limit, each analysis counts against it, and the toolbar shows how many are left. **Tracked Prompts** also warns when some prompts haven't been analyzed yet."
         },
         {
           "heading": "What the tab shows",
@@ -3997,11 +3997,11 @@
         "score changed"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
-          "text": "Each audit has its own report. It opens right after you run an audit, or from a row on the **Pages** tab. It scores the page out of 100, breaks the score down by category and lists every signal checked. The icons at the top re-run the audit on the same page or delete it; **Delete audit** can't be undone."
+          "text": "Each audit has its own report. It opens right after you run an audit, or from a row on the **Pages** tab. It scores the page out of 100, breaks the score down by category and lists every signal checked. The icons at the top re-run the audit on the same page or, for admins and managers, delete it; **Delete audit** can't be undone."
         },
         {
           "heading": "Total score",
@@ -4124,7 +4124,7 @@
         "audit priority"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -4152,7 +4152,7 @@
         },
         {
           "heading": "The Pages tab",
-          "text": "**Pages** lists every page you audited, one row per page, most recent first, with its **First score**, **Current score**, **Issues** (signals that failed or warned), **Status** and **Last audit**. Once a page has two audits, the change since the first shows beside the current score: green up, red down. Status is **Good** (70 or more), **Improving** (below 70 but up from the previous audit), **Needs work**, **Running** or **Failed**. **Auto** marks an auto-audit's audit.\n\nClick a row to open its latest report. The arrow beside a page lists its earlier audits, each with **View report** and a delete icon. **Group by template** groups the rows under their template. **Export** downloads the list as CSV or Excel, first scores included; select pages to **Re-audit** them or export only those."
+          "text": "**Pages** lists every page you audited, one row per page, most recent first, with its **First score**, **Current score**, **Issues** (signals that failed or warned), **Status** and **Last audit**. Once a page has two audits, the change since the first shows beside the current score: green up, red down. Status is **Good** (70 or more), **Improving** (below 70 but up from the previous audit), **Needs work**, **Running** or **Failed**. **Auto** marks an auto-audit's audit.\n\nClick a row to open its latest report. The arrow beside a page lists its earlier audits, each with **View report** and, for admins and managers, a delete icon. **Group by template** groups the rows under their template. **Export** downloads the list as CSV or Excel, first scores included; select pages to **Re-audit** them or export only those."
         }
       ]
     },
@@ -4179,7 +4179,7 @@
         "visibility dashboard"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -4187,7 +4187,7 @@
         },
         {
           "heading": "The header",
-          "text": "The header shows the brand's name, when the last run finished and when the next one is due. It has these buttons:\n\n- **Formulas** explains how every number on the page is calculated.\n- **Export CSV** downloads the answers behind the page, with the current filters.\n- **Reports** opens the Reports page.\n\nA self-hosted instance also has **Test Single Prompt** and **Run All**, to start a run by hand."
+          "text": "The header shows the brand's name, when the last run finished and when the next one is due. It has these buttons:\n\n- **Formulas** explains how every number on the page is calculated.\n- **Export CSV** downloads the answers behind the page, with the current filters.\n- **Reports** opens the Reports page.\n\nA self-hosted instance also has **Test Single Prompt** and **Run All**, for admins and managers to start a run by hand."
         },
         {
           "heading": "The summary line",

@@ -4,8 +4,8 @@ route: /dashboard/action-center/actions
 keywords: [tasks, task status, check now, regenerate tasks, done when, how we check, attached from chat, ready for review]
 synonyms: [steps, subtasks, to-do items, task checks]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -66,7 +66,7 @@ Each attachment is also a line in the action's **History**, as is a task Chat se
 
 ## Regenerate tasks
 
-Where AI task writing is on for your workspace, **Regenerate tasks** writes the action's tasks again from its evidence, in your brand's terms, by the **Site type** in the brand settings. Done, under-way and hand-added tasks stay. It uses your plan's monthly AI allowance.
+Where AI task writing is on for your workspace, **Regenerate tasks** writes the action's tasks again from its evidence, in your brand's terms, by the **Site type** in the brand settings. Done, under-way and hand-added tasks stay. It uses your plan's monthly AI allowance, so it's for admins and managers.
 
 The AI also reads this brand's last three closed rounds of the same action. It builds on what improved results here, and doesn't hand out again a task that was done without effect. A task it writes without its URL, Change, Done when or How we check waits on **Needs review**.
 

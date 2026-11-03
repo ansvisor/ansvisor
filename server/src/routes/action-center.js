@@ -98,6 +98,8 @@ export async function regenerateTasks(actionId, userId) {
     .maybeSingle();
   if (!action) throw new TaskWriterError('not_found', 'Action not found', 404);
   await assertBrandAccess(action.brand_id, userId);
+  // A model writes them, on the AI budget Improve shares: admins and managers (2026-11-03).
+  await assertRole(userId, MANAGER_ROLES, 'Only admins and managers can write the tasks again.');
 
   let result;
   try {
