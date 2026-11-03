@@ -42,6 +42,8 @@ const OPEN_ACTIONS: Record<string, string> = {
   'organization.ts:updateAccountName': "the person's own profile",
   'chat-notices.ts:markChatNoticesRead':
     "the person's own record of seeing a notice (00441), nothing that runs or costs",
+  'chat-notices.ts:closeChatNotice':
+    "the person's own record of opening a notice about an agent (00446), nothing that runs or costs",
   'chat-prefs.ts:saveChatMenuOpen': "the person's own Chat layout, no cost",
   'chat-prefs.ts:saveChatRailOpen': "the person's own Chat layout, no cost",
   'chat-prefs.ts:saveChatGeneralSettings':

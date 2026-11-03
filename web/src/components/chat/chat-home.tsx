@@ -22,6 +22,7 @@ import {
 } from '@/lib/chat/focus-home';
 import { dayPartOf, endOfWeek } from '@/lib/chat/home';
 import { formatNumber } from '@/lib/format';
+import type { ShortcutId } from '@/lib/chat/shortcuts';
 import type { SinceMove, SinceYouLeft } from '@/lib/chat/since';
 import { platformName } from '@/lib/signals/names';
 import { cn } from '@/lib/utils';
@@ -49,8 +50,11 @@ export interface ChatHomeViewProps {
   readyDrafts: number | null;
   /** The person may change things: the jobs that write show, and More. */
   canChange: boolean;
-  /** Asks Chat in a new chat: the "For you now" chips, and Since you left's Why? and Which ones?. */
-  onAsk: (message: string) => void;
+  /**
+   * Asks Chat in a new chat: the "For you now" chips (a shortcut's with its
+   * id, W2-09), and Since you left's Why? and Which ones?.
+   */
+  onAsk: (message: string, shortcutId?: ShortcutId) => void;
   starting: boolean;
   /** "Since you left": null until read, or with nothing to show. */
   since?: SinceYouLeft | null;
@@ -389,7 +393,8 @@ function useHomeSeen() {
 /**
  * Chat Home's top with the person's chats, the active brand's counts for
  * "For you now" and "Since you left": a chip, Why? and Which ones? ask Chat
- * in a new chat, then open it while it works.
+ * in a new chat, then open it while it works; while the workspace is
+ * read-only or the demo brand is open, they open the upgrade dialog instead.
  */
 export function ChatHome({ firstName }: { firstName: string | null }) {
   const t = useTranslations('chatShell.home');
@@ -397,7 +402,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
   const now = useNow();
   const brandId = useBrandStore((s) => s.activeBrandId);
   const { chats } = useChatList();
-  const { openUpgrade } = useUpgradeGate();
+  const { isLocked, openUpgrade } = useUpgradeGate();
   const { canManage } = useUserRole();
   const focusCtx = useChatFocus();
   const [counts, setCounts] = useState<{
@@ -480,8 +485,14 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
 
   useHomeSeen();
 
-  async function startChat(message: string) {
+  async function startChat(message: string, shortcutId?: ShortcutId) {
     if (starting) return;
+    // A read-only workspace, or the demo brand, starts no run: the upgrade
+    // dialog opens instead, as it does for the composer's message.
+    if (isLocked) {
+      openUpgrade();
+      return;
+    }
     setStarting(true);
     const res = await fetch('/api/chat/runs', {
       method: 'POST',
@@ -490,6 +501,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
         message,
         brandId: brandId ?? undefined,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        ...(shortcutId ? { shortcutId } : {}),
       }),
     }).catch(() => null);
     const chatId = res?.ok ? res.headers.get('x-chat-conversation') : null;
@@ -520,7 +532,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
       lostPages={mine ? mine.lostPages : null}
       readyDrafts={mine ? mine.readyDrafts : null}
       canChange={canManage}
-      onAsk={(message) => void startChat(message)}
+      onAsk={(message, shortcutId) => void startChat(message, shortcutId)}
       starting={starting}
       since={since && since.brandId === brandId ? since.since : null}
       focus={focusCtx ? { areas: focusCtx.focus, onEdit: focusCtx.edit } : null}

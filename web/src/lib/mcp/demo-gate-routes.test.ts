@@ -15,6 +15,7 @@ const AUTH = {
   email: null,
   organizationId: ORG,
   apiKeyId: 'key-1',
+  brandAccess: 'all',
   role: 'admin' as const,
 };
 

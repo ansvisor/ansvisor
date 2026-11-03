@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { AgentAvatar } from '@/components/agentic/agent-avatar';
 import { ListDot } from '@/components/agentic/list-dot';
@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link, useRouter } from '@/i18n/navigation';
+import type { AgentGoLiveDetail } from '@/lib/chat/agent-go-live';
 import type { AgentDetail as Agent, AgentRunView } from '@/lib/chat/agents';
 import {
   RUN_FILTERS,
@@ -34,7 +35,7 @@ import {
   type RunFilter,
 } from '@/lib/chat/agent-view';
 import { cn } from '@/lib/utils';
-import { AgentDenial, CHIP, StatusLine, liveRunOf } from './agent-parts';
+import { AgentDenial, CHIP, GoLiveBadge, StatusLine, liveRunOf } from './agent-parts';
 import { readAgent, readAgentRuns } from './agent-requests';
 import { useAgentWords, type AgentWords } from './agent-words';
 import { useAgentActions, type AgentButton } from './use-agent-actions';
@@ -82,6 +83,65 @@ function SideCard({ title, children }: { title: string; children: ReactNode }) {
       <dl className="m-0 grid grid-cols-[104px_minmax(0,1fr)] gap-x-3 gap-y-2 px-3.5 py-3 text-[12.5px]">
         {children}
       </dl>
+    </section>
+  );
+}
+
+/**
+ * Publishing on its own (AUTONOMOUS-GO-LIVE §7.2): the permission's state
+ * (on with its limit, off in Settings › Chat, off since the agent changed),
+ * who allowed it, and the pages it took live in the last 24 hours.
+ */
+function GoLiveCard({ goLive, when }: { goLive: AgentGoLiveDetail; when: (at: string) => string }) {
+  const t = useTranslations('chatAgents.detail.goLive');
+  const format = useFormatter();
+  const given = goLive.permission;
+  const status = !given
+    ? t('statusNone')
+    : given.changed
+      ? t('statusChanged')
+      : goLive.switch === 'off'
+        ? t('statusOff')
+        : t('statusOn', { limit: given.dailyLimit });
+  return (
+    <section
+      data-slot="agent-go-live-card"
+      className="mb-3 overflow-hidden rounded-[14px] border bg-card shadow-[0_1px_2px_rgba(10,10,10,.04)]"
+    >
+      <h2 className="border-b px-3.5 py-[11px] text-[13px] font-semibold">{t('title')}</h2>
+      <dl className="m-0 grid grid-cols-[104px_minmax(0,1fr)] gap-x-3 gap-y-2 px-3.5 py-3 text-[12.5px]">
+        <Row label={t('status')} slot="goLiveStatus">
+          {status}
+        </Row>
+        {given && (
+          <Row label={t('allowedBy')} slot="goLiveBy">
+            {t('allowedByValue', {
+              name: given.by ?? t('formerMember'),
+              date: format.dateTime(new Date(given.at), { dateStyle: 'medium' }),
+            })}
+          </Row>
+        )}
+      </dl>
+      <div className="border-t px-3.5 py-3 text-[12.5px]">
+        <h3 className="mb-1.5 text-muted-foreground">{t('recent')}</h3>
+        {goLive.recent.length === 0 ? (
+          <p className="text-muted-foreground">{t('recentNone')}</p>
+        ) : (
+          <ul data-slot="agent-go-live-recent" className="grid gap-1.5">
+            {goLive.recent.map((step) => (
+              <li key={`${step.at}-${step.title}`} className="min-w-0">
+                <b className="block truncate font-medium" title={step.title}>
+                  {t('recentItem', { title: step.title || t('untitled'), target: step.target })}
+                </b>
+                <em className={EM}>
+                  {when(step.at)}
+                  {step.takenDown && ` · ${t('takenDown')}`}
+                </em>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </section>
   );
 }
@@ -351,6 +411,9 @@ export function AgentDetail({
   const filtered = shownRuns.filter((run) => runMatches(run, filter));
   const period = a.usagePeriod;
   const scope = settings?.scope;
+  // It publishes and sends on its own now (AUTONOMOUS-GO-LIVE §7.2): the switch on, the permission valid.
+  const goLiveLimit =
+    a.goLive?.switch === 'on' && a.goLive.permission?.on ? a.goLive.permission.dailyLimit : null;
 
   return (
     <div className="max-w-[1100px]">
@@ -517,7 +580,13 @@ export function AgentDetail({
                 </span>
               )),
             ],
-            ['mode', a.mode ? <span className={CHIP}>{t(`modes.${a.mode}`)}</span> : null],
+            [
+              'mode',
+              <>
+                {a.mode && <span className={CHIP}>{t(`modes.${a.mode}`)}</span>}
+                {goLiveLimit !== null && <GoLiveBadge limit={goLiveLimit} />}
+              </>,
+            ],
             [
               'connections',
               settings && settings.connections.length > 0 ? (
@@ -751,6 +820,10 @@ export function AgentDetail({
             <Row label={tDetail('side.runsAs')}>{tDetail('side.runsAsValue')}</Row>
             <Row label={tDetail('side.approvals')}>{tDetail('side.approvalsValue')}</Row>
           </SideCard>
+
+          {a.goLive && (a.goLive.permission || a.goLive.recent.length > 0) && (
+            <GoLiveCard goLive={a.goLive} when={(at) => words.when(at)} />
+          )}
 
           <SideCard title={tDetail('side.scope')}>
             <Row label={tDetail('side.brands')} slot="brands">

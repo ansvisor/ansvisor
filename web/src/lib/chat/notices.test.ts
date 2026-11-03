@@ -58,4 +58,69 @@ describe('noticeOf', () => {
     expect(noticeOf(row({ kind: 'own_key_limit_80', payload: { capUsd: 250 } }))).toBeNull();
     expect(noticeOf(row({ kind: 'something_new' }))).toBeNull();
   });
+
+  it('reads an agent’s go-live notices (AUTONOMOUS-GO-LIVE §6.4, §7.2, 00446)', () => {
+    const payload = {
+      agent: 'Publisher',
+      agentId: 'agent-1',
+      title: 'Pricing FAQ',
+      target: 'webflow',
+      kind: 'cms_draft',
+      draftId: 'draft-1',
+      chatId: 'chat-1',
+    };
+    expect(noticeOf(row({ kind: 'agent_went_live', payload }))).toEqual({
+      id: 'n1',
+      kind: 'agent_went_live',
+      agent: 'Publisher',
+      title: 'Pricing FAQ',
+      target: 'webflow',
+      draftId: 'draft-1',
+      chatId: 'chat-1',
+      url: null,
+      createdAt: '2026-11-01T09:00:00Z',
+      read: false,
+    });
+    // Published live (PR 9): its address, an http(s) one only.
+    expect(
+      noticeOf(
+        row({
+          kind: 'agent_went_live',
+          payload: { ...payload, kind: 'publish', url: 'https://acme.example/faq' },
+        }),
+      ),
+    ).toMatchObject({ url: 'https://acme.example/faq' });
+    expect(
+      noticeOf(
+        row({
+          kind: 'agent_went_live',
+          payload: { ...payload, kind: 'publish', url: 'javascript:x' },
+        }),
+      ),
+    ).toMatchObject({ url: null });
+    expect(
+      noticeOf(row({ kind: 'agent_went_live', payload: { ...payload, chatId: null } })),
+    ).toMatchObject({ chatId: null });
+    expect(
+      noticeOf(
+        row({ kind: 'agent_go_live_off', payload: { agent: 'Publisher', agentId: 'agent-1' } }),
+      ),
+    ).toEqual({
+      id: 'n1',
+      kind: 'agent_go_live_off',
+      agent: 'Publisher',
+      agentId: 'agent-1',
+      createdAt: '2026-11-01T09:00:00Z',
+      read: false,
+    });
+    // A payload the Inbox can't show is left out.
+    for (const bad of [
+      { ...payload, target: 'ftp' },
+      { ...payload, draftId: 3 },
+      { ...payload, agent: undefined },
+    ]) {
+      expect(noticeOf(row({ kind: 'agent_went_live', payload: bad }))).toBeNull();
+    }
+    expect(noticeOf(row({ kind: 'agent_go_live_off', payload: { agent: 'P' } }))).toBeNull();
+  });
 });

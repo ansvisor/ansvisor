@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
+import { mayUseBrand } from '@/lib/mcp/data';
 import { readContentAuthors } from '@/lib/content/authors-read';
 import { bulkCmsItems, cmsSource, type BulkProblem } from '@/lib/content/cms-send';
 import { missingSchemaLeftOut } from '@/lib/content/drafts';
@@ -109,7 +110,7 @@ export async function getContentDraftPackageFor(
         .maybeSingle()
     : read;
   if (error) throw new Error(error.message);
-  if (!draft || draft.archived_at) return notFound;
+  if (!draft || draft.archived_at || !(await mayUseBrand(auth, draft.brand_id))) return notFound;
   const brand = (Array.isArray(draft.brands) ? draft.brands[0] : draft.brands) as {
     name: string;
     language: string | null;

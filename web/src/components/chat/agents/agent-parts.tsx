@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
-import { X } from 'lucide-react';
+import { Send, X } from 'lucide-react';
 import { DenialCard } from '@/components/agentic/denial-card';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import type { AgentListItem } from '@/lib/chat/agents';
@@ -14,9 +14,29 @@ import type { AgentWords } from './agent-words';
 /**
  * Pieces the Agents list and an agent's detail share (governance mockup
  * `#g-agents`, `#g-agent`): the status dot and line, the formula chips
- * (skill · mode · connections · model) and the out-of-permission answer
- * a refused button brings back.
+ * (skill · mode · connections · model), the "Publishes on its own" badge
+ * and the out-of-permission answer a refused button brings back.
  */
+
+/**
+ * An agent that publishes and sends on its own, at most `limit` a day
+ * (AUTONOMOUS-GO-LIVE §7.2): its card's and its page's badge.
+ */
+export function GoLiveBadge({ limit, className }: { limit: number; className?: string }) {
+  const t = useTranslations('chatAgents.detail.goLive');
+  return (
+    <span
+      data-slot="agent-go-live-badge"
+      className={cn(
+        'inline-flex max-w-full items-center gap-1 rounded-[7px] border border-foreground/20 bg-foreground/[.06] px-[7px] py-0.5 text-[11.5px] leading-[1.35] font-medium text-foreground',
+        className,
+      )}
+    >
+      <Send aria-hidden className="size-3 shrink-0" />
+      <span className="truncate">{t('badge', { limit })}</span>
+    </span>
+  );
+}
 
 /** The mockup's `.cp` chip. */
 export const CHIP =

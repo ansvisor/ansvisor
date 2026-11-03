@@ -70,8 +70,6 @@ const NOT_BRAND_DATA = {
   ai_bot_usage: "The Account's AI bot event meter against the plan (D1).",
   api_keys: "A person's own API keys; a key carries its owner's brand access (PR 10).",
   chat_auto_choices: "A person's own Chat tool choices.",
-  chat_notices:
-    "A person's own notes from the system about the workspace's AI key (00441): no brand's data.",
   chat_settings: "The Account's Chat settings (D1).",
   chat_skills:
     "The Account's own Chat skills (00458): instructions for every brand, no brand's data.",
@@ -122,6 +120,10 @@ const OWN_ROWS_WITHOUT_BRAND = {
     'Chat’s change log: the person who acted, or an admin.',
   'chat_access_requests: chat_access_requests: own or admin select':
     'A request to the admins: the person who asked, or an admin.',
+  'chat_notices: chat_notices: own select':
+    "A person's own notes from the system (00446): one about a brand only where they reach it; one about the workspace's AI key has none.",
+  'chat_notices: chat_notices: own read':
+    "A person marks their own notice read or closes it (00441, 00446): it changes no one else's, and they read only those about brands they reach.",
   'chat_schedules: chat_schedules: own or admin select':
     'A scheduled job about the whole workspace: the person who made it (its runs act as them), or an admin.',
   'chat_memory_items: chat_memory_items: own select':

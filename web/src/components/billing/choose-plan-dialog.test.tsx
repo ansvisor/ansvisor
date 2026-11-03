@@ -749,3 +749,24 @@ describe("ChoosePlanDialog's AI usage hint", () => {
     expect(hint()).toContain('Agent Chat runs on your own AI key.');
   });
 });
+
+describe("ChoosePlanDialog's Chat points", () => {
+  it('lists Chat and Agent Center with the new Chat on, Full auto from Growth up', async () => {
+    await render({ chatAgentic: true });
+    expect(card('starter').textContent).toContain('Chat and Agent Center');
+    expect(card('starter').textContent).not.toContain('Full auto');
+    expect(card('growth').textContent).toContain(
+      'Chat and Agent CenterFull auto, with agents that publish on their own',
+    );
+    // Custom's follow its AI usage.
+    expect(card('custom').textContent).toContain(
+      'Custom AI usage, from 10xChat and Agent CenterFull auto, with agents that publish on their own',
+    );
+  });
+
+  it('leaves them out with the new Chat off', async () => {
+    await render();
+    expect(dialog().textContent).not.toContain('Chat and Agent Center');
+    expect(dialog().textContent).not.toContain('Full auto');
+  });
+});
