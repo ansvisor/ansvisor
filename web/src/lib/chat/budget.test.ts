@@ -314,8 +314,12 @@ describe('fitChatUnits (CHAT-04 item 17a)', () => {
   });
 
   it('asks the server how many parts fit, with the secret and a time limit: a count, no dollar', async () => {
-    answers.push({ status: 200, body: { success: true, fits: 2 } });
-    expect(await fitChatUnits(job({ agentRunId: AGENT_RUN }))).toEqual({ ok: true, fits: 2 });
+    answers.push({ status: 200, body: { success: true, fits: 2, limit: 'run' } });
+    expect(await fitChatUnits(job({ agentRunId: AGENT_RUN }))).toEqual({
+      ok: true,
+      fits: 2,
+      limit: 'run',
+    });
     expect(calls).toEqual([
       {
         path: 'fit',
@@ -332,10 +336,21 @@ describe('fitChatUnits (CHAT-04 item 17a)', () => {
     ]);
   });
 
+  it('reads the month’s AI limit as the one that binds unless the server names the run’s cap', async () => {
+    answers.push({ status: 200, body: { success: true, fits: 1, limit: 'month' } });
+    expect(await fitChatUnits(job())).toEqual({ ok: true, fits: 1, limit: 'month' });
+    answers.push({ status: 200, body: { success: true, fits: 1 } });
+    expect(await fitChatUnits(job())).toEqual({ ok: true, fits: 1, limit: 'month' });
+  });
+
   it('asks nothing on the workspace’s own key, or with the new Chat off: every part fits', async () => {
-    expect(await fitChatUnits(job({ source: 'own' }))).toEqual({ ok: true, fits: 4 });
+    expect(await fitChatUnits(job({ source: 'own' }))).toEqual({
+      ok: true,
+      fits: 4,
+      limit: 'month',
+    });
     vi.stubEnv('CHAT_AGENTIC', 'false');
-    expect(await fitChatUnits(job())).toEqual({ ok: true, fits: 4 });
+    expect(await fitChatUnits(job())).toEqual({ ok: true, fits: 4, limit: 'month' });
     expect(calls).toEqual([]);
   });
 

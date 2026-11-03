@@ -30,6 +30,7 @@ const auth: McpAuthContext = {
   organizationId: 'org-1',
   role: 'analyst',
   apiKeyId: 'agent-internal',
+  brandAccess: 'all',
 };
 
 beforeEach(() => {

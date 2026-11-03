@@ -467,6 +467,33 @@ describe('readCmsStatuses', () => {
     ]);
   });
 
+  it('names the agent that sent a page on its own, or "an agent" where it can’t be read (AUTONOMOUS-GO-LIVE §6.4)', async () => {
+    statusReads = [
+      {
+        data: [
+          delivery('d1', 'sent', '2026-11-02T10:00:00Z', {
+            target: 'webflow',
+            agent_run_id: 'run-1',
+          }),
+          delivery('d2', 'sent', '2026-11-02T10:00:00Z', {
+            target: 'webflow',
+            agent_run_id: 'run-2',
+          }),
+          delivery('d3', 'sent', '2026-11-02T10:00:00Z', { target: 'webflow' }),
+        ],
+        error: null,
+      },
+      // The runs the person may read, then their agents.
+      { data: [{ id: 'run-1', agent_id: 'agent-1' }], error: null },
+      { data: [{ id: 'agent-1', name: 'Publisher' }], error: null },
+    ];
+    const statuses = await readCmsStatuses(['d1', 'd2', 'd3']);
+    expect(statuses.get('d1')).toMatchObject({ agent: { name: 'Publisher' } });
+    expect(statuses.get('d2')).toMatchObject({ agent: { name: null } });
+    expect(statuses.get('d3')).not.toHaveProperty('agent');
+    expect(statusIds.slice(1)).toEqual([['run-1', 'run-2'], ['agent-1']]);
+  });
+
   it('reads a send queued for over 30 minutes as interrupted, a newer one as going', async () => {
     const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
     statusReads = [

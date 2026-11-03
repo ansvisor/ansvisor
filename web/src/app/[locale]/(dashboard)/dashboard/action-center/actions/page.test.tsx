@@ -121,7 +121,7 @@ vi.mock('@/hooks/use-first-run', () => ({
     return () => firstRun.finished.delete(listener);
   },
 }));
-vi.mock('@/lib/actions/team', () => ({ listMembers: vi.fn(async () => []) }));
+vi.mock('@/lib/actions/team', () => ({ listBrandMembers: vi.fn(async () => []) }));
 vi.mock('@/lib/download', () => ({ saveBlob }));
 vi.mock('sonner', () => ({ toast }));
 vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
@@ -204,6 +204,24 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+});
+
+describe('the Stale filter (00432)', () => {
+  it('lists only New actions no one has worked on for a month, from the URL', async () => {
+    window.history.replaceState(null, '', '/?status=stale');
+    const stale: ActionItem = { ...action, id: 'a2', staleAt: '2026-10-31T03:00:00Z' };
+    const leftNew: ActionItem = {
+      ...action,
+      id: 'a3',
+      status: 'on_hold',
+      staleAt: '2026-10-31T03:00:00Z',
+    };
+    getActions.mockResolvedValue([action, stale, leftNew]);
+    getActionsAffected.mockResolvedValue({});
+    await render();
+    await act(async () => exportButton().click());
+    expect(getActionsAffected).toHaveBeenLastCalledWith('brand-id', ['a2']);
+  });
 });
 
 describe('the From Products chip (ECOM-013)', () => {
