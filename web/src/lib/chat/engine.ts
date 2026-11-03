@@ -1474,9 +1474,13 @@ async function pickSkill(rc: RunContext, call: PendingCall): Promise<CallOutcome
 }
 
 /** The skills this run loaded, a shortcut's playbook among them. */
-function loadedSkillList(rc: RunContext): LibrarySkill[] {
+function loadedSkillList(rc: RunContext) {
   const { enabled, playbook } = rc.skills;
-  const loadable = playbook ? [playbook, ...enabled] : enabled;
+  // A workspace skill has its body once the run loaded it (W3-06).
+  const bodied = enabled.flatMap((skill) =>
+    skill.body !== null ? [{ ...skill, body: skill.body }] : [],
+  );
+  const loadable = [...(playbook ? [playbook] : []), ...bodied];
   return (rc.progress.skills ?? []).flatMap((name) =>
     loadable.filter((skill) => skill.name === name),
   );
