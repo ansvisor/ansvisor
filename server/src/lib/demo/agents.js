@@ -414,6 +414,8 @@ export function agentRows({ brandId, now, organizationId, ownerId }) {
           agent_run_id: runId,
         },
         turns: [{ ...run, question: runMessage(agent, run.trigger) }],
+        // The last day's results, and a run waiting, are news in the Inbox; older ones were read.
+        read: !run.waiting && now.getTime() - run.at.getTime() > DAY_MS,
       });
     }
   }

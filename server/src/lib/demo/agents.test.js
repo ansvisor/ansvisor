@@ -82,6 +82,14 @@ describe('agentRows', () => {
     }
   });
 
+  it('leaves the last day’s results as Inbox news, the older runs read', () => {
+    for (const run of rows.runs.filter((r) => r.status === 'done')) {
+      const chat = rows.chats.conversations.find((c) => c.agent_run_id === run.id);
+      const recent = NOW.getTime() - Date.parse(run.queued_at) <= 24 * 60 * 60 * 1000;
+      expect(chat.last_read_at === undefined, run.queued_at).toBe(recent);
+    }
+  });
+
   it('has one run waiting on its owner’s OK, as the page rebuilds one under way', () => {
     const waiting = rows.runs.filter((r) => r.status === 'needs_you');
     expect(waiting).toHaveLength(1);
@@ -95,6 +103,8 @@ describe('agentRows', () => {
     expect(events.at(-1).data).toMatchObject({ n: 2, action: 'Save a draft in Content' });
     const steps = rows.chats.steps.filter((s) => s.run_id === chatRun.id);
     expect(steps.at(-1)).toMatchObject({ kind: 'write', status: 'waiting', finished_at: null });
+    // News in the Inbox until opened: no last_read_at.
+    expect(chat.last_read_at).toBeUndefined();
     // Every other run ended, its end kept as a reload reads it.
     for (const run of rows.chats.runs.filter((r) => r !== chatRun)) {
       expect(run.status).toBe('done');
