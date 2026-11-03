@@ -3510,6 +3510,10 @@
     },
     "reviseDraft": { "name": "Change drafts in Content", "step": "Changed draft in Content" },
     "markDraftReady": { "name": "Mark drafts ready", "step": "Marked draft ready" },
+    "editorSuggestions": {
+      "name": "Suggest changes in the Content Editor",
+      "step": "Content Agent suggested changes in the editor"
+    },
     "sendToCms": { "name": "Send drafts to your CMS", "step": "Sent draft to your CMS" },
     "publishToCms": { "name": "Publish pages on your site", "step": "Published page on your site" },
     "makeReport": { "name": "Make reports", "step": "Made report" },
@@ -5534,6 +5538,7 @@
       "reviseDraft": "Changed the draft “{title}”",
       "reviseDraftUndo": "Put the draft “{title}” back as it was",
       "markDraftReady": "Marked the draft “{title}” ready",
+      "editorSuggestions": "Asked the Content Agent for suggestions on “{title}”",
       "markDraftReadyUndo": "Took the draft “{title}” back from Ready",
       "sendToCms": "Sent the draft “{title}” to {cms}",
       "publishToCms": "Published the page “{title}” through {cms}",
@@ -8248,6 +8253,7 @@
       "suggestions": {
         "bar": "Agent suggestions",
         "agent": "Content Agent",
+        "agentFromChat": "Content Agent · from your chat",
         "fromAction": "from Action AC-{no}",
         "runMax": "a run makes at most {max} changes: run it again for the rest",
         "acceptAll": "Accept all",

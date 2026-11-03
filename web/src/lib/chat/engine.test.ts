@@ -40,6 +40,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: vi.fn(),
   updateContentDraft: vi.fn(),
   setContentDraftReady: vi.fn(),
+  suggestDraftChanges: vi.fn(),
 }));
 // The drafts' writes for a run with no session (runFor): what the engine hands them is tested here,
 // their checks in actor/drafts.test.ts.
@@ -246,7 +247,8 @@ vi.mock('./registry/tools', async (importOriginal) => {
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { createContentDraft, updateContentDraft } = await import('@/lib/actions/content-drafts');
+const { createContentDraft, suggestDraftChanges, updateContentDraft } =
+  await import('@/lib/actions/content-drafts');
 const { createContentDraftFor, updateContentDraftFor } = await import('@/lib/chat/actor/drafts');
 const { updateOpportunityStatusFor } = await import('@/lib/chat/actor/api-writes');
 const { checkChatActionCoverFor, createChatActionFor } =
@@ -3291,6 +3293,7 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'set_task_ready_for_review',
     // W2-07's content rows: Admins and Managers only.
     'update_draft',
+    'suggest_draft_changes',
     'set_draft_ready',
     'push_cms_draft',
     'publish_cms',
@@ -3365,10 +3368,12 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     }
     // The explainer comes with something left out, to say why: nothing is, for Admins and Managers.
     expect(explains).toEqual({ admin: false, manager: false, analyst: true, agency_partner: true });
+    // Suggestions in the editor come only with the page open there beside the chat (W4-14).
+    const anyPage = CHANGES.filter((name) => name !== 'suggest_draft_changes');
     expect(offered).toEqual({
       // Admins have no one to ask: no request to the Admins, and nothing to explain about it.
-      admin: CHANGES.filter((name) => name !== 'request_access').sort(),
-      manager: [...CHANGES].sort(),
+      admin: anyPage.filter((name) => name !== 'request_access').sort(),
+      manager: [...anyPage].sort(),
       // A Manager's write and going live stay out for both; an Agency partner doesn't dismiss
       // suggestions.
       analyst: ['create_draft', 'dismiss_prompt_suggestion', 'request_access'],
@@ -6079,5 +6084,76 @@ describe('a page’s versions in chat (CHAT-25 §6, W4-12a)', () => {
     expect(card).not.toHaveProperty('version');
     delete db.failures.content_draft_versions;
     error.mockRestore();
+  });
+});
+
+describe('the page open in the Content Editor beside the chat (CHAT-25 §4–§5, W4-14)', () => {
+  const ROUTE = `/dashboard/content/editor/${DRAFT}`;
+  const inEditor = async (message: string, mode: Mode = 'full_auto', chip = true) => {
+    const started = await engine.startChatRun(ADMIN, {
+      message,
+      brandId: BRAND,
+      mode,
+      context: {
+        route: ROUTE,
+        chips: chip ? [{ key: 'draft', label: 'This draft', value: DRAFT }] : [],
+      },
+    });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    await engine.driveRun(ADMIN, started.runId);
+    return started.runId;
+  };
+
+  beforeEach(() => {
+    seedDraft(db);
+    vi.mocked(suggestDraftChanges).mockReset().mockResolvedValue({ ok: true, count: 2 });
+  });
+
+  it('turns a change to the open page into the Content Agent’s suggestions there', async () => {
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: '<h1>Shorter</h1>' })),
+        calls(
+          toolCall('w2', 'suggest_draft_changes', {
+            draft_id: DRAFT,
+            request: 'Make answer 3 shorter',
+          }),
+        ),
+        text('Two suggestions wait in the editor.'),
+      ],
+    );
+    const runId = await inEditor('Make answer 3 shorter');
+    expect(runRow(runId).status).toBe('done');
+    // The page itself never changed from the chat.
+    expect(updateContentDraft).not.toHaveBeenCalled();
+    expect(db.tables.content_drafts.find((d) => d.id === DRAFT)!.body_html).toBe(
+      '<h1>Pricing FAQ</h1>',
+    );
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('open_in_editor');
+    expect(suggestDraftChanges).toHaveBeenCalledWith(DRAFT, 'Make answer 3 shorter');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    expect(ofType(events, 'suggestion.created').map((e) => e.data)).toEqual([{ count: 2 }]);
+  });
+
+  it('offers suggestions only while the page is open there, and only for that page', async () => {
+    const { sonnet } = useModels([READY], [text('Done.')]);
+    await turn(ADMIN, 'Make answer 3 shorter', 'full_auto');
+    expect(sonnet.seen[0].tools?.map((t) => t.name)).not.toContain('suggest_draft_changes');
+    // The chip removed: the chat may change the page again, and doesn't suggest.
+    const without = useModels([READY], [text('Done.')]);
+    await inEditor('Make answer 3 shorter', 'full_auto', false);
+    expect(without.sonnet.seen[0].tools?.map((t) => t.name)).not.toContain('suggest_draft_changes');
+    const other = '44444444-4444-4444-8444-444444444444';
+    useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'suggest_draft_changes', { draft_id: other, request: 'Shorter' })),
+        text('Done.'),
+      ],
+    );
+    await inEditor('Make the other page shorter');
+    expect(suggestDraftChanges).not.toHaveBeenCalled();
   });
 });
