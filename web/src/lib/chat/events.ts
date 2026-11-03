@@ -154,7 +154,10 @@ export interface ChatConfirm {
   /** What it aims at. */
   goal?: string;
   /** What it is about, by kind, in the person's words: frozen once it's made. */
-  targets?: { kind: 'prompts' | 'pages' | 'competitors' | 'platforms'; values: string[] }[];
+  targets?: {
+    kind: 'prompts' | 'pages' | 'competitors' | 'platforms' | 'aiUse';
+    values: string[];
+  }[];
 }
 
 /**

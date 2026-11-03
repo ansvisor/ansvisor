@@ -163,7 +163,7 @@ export interface ToolCardItem {
 }
 
 /** What a card's targets are, by kind: the browser names each kind from en.json. */
-export type ToolCardTargetKind = 'prompts' | 'pages' | 'competitors' | 'platforms';
+export type ToolCardTargetKind = 'prompts' | 'pages' | 'competitors' | 'platforms' | 'aiUse';
 
 /**
  * What a card shows of a change beyond its target (CHAT-09 item 18: what is

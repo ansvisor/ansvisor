@@ -54,7 +54,7 @@ describe('run_agent', () => {
     expect(calls.callShareOf).not.toHaveBeenCalled();
     expect(await row.cardDetails!(input, run)).toEqual({
       why: 'Draft the FAQ for /pricing',
-      goal: 'Uses up to 7% of the monthly AI limit',
+      targets: [{ kind: 'aiUse', values: ['Up to 7% of the monthly AI limit'] }],
     });
     calls.callShareOf.mockResolvedValueOnce(null);
     expect(await row.cardDetails!(input, run)).toEqual({ why: 'Draft the FAQ for /pricing' });

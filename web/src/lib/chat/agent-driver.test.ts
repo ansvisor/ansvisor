@@ -310,8 +310,9 @@ describe('handing a started run to Chat', () => {
     const caller = queueRun();
     await driver.openAgentRun(caller, ORG, NOW);
     const callerAsk = db.tables.chat_messages[0].content_md as string;
-    expect(callerAsk).toContain('run these agents with run_agent');
-    expect(callerAsk).toContain('FAQ writer');
+    // In the person's words: no tool name, no instruction about ids (they are in the scope).
+    expect(callerAsk).toContain('It may run FAQ writer if the task needs it.');
+    expect(callerAsk).not.toMatch(/run_agent|scope/);
     expect(callerAsk).not.toContain(CALLEE);
     expect(JSON.stringify(db.tables.chat_run_state[0].progress)).toContain(CALLEE);
 

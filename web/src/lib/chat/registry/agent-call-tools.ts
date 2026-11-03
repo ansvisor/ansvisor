@@ -10,7 +10,7 @@ import { FIXTURE_IDS, defineTool } from './define-tool';
  * of the agents its Can call setting names, as that agent's own run, and
  * waits for what it answers (lib/chat/agent-calls.ts). A WRITE: it starts
  * work that spends the budget. Growth and up, Admins and Managers (as
- * agents are). A card in every mode: "Run {agent}? Uses up to {N}% of the
+ * agents are). A card in every mode: "Run {agent}? AI use: up to {N}% of the
  * monthly AI limit"; an agent's run has no session behind it anyway, so
  * the person approves it in their Inbox. Offered only in an agent's run
  * that has an agent to call, never in a person's own chat. No MCP tool.
@@ -28,7 +28,7 @@ export const AGENT_CALL_TOOLS = [
     class: 'write',
     area: 'agents',
     description:
-      "Run another of the workspace's agents, one this agent's run may call (they are named in the run's message), as that agent's own run on this brand, and get back what it found or made. Say what you need from it in `ask`. It runs with the stricter permissions of the two agents, out of this run's AI limit. Use it only when that agent's job is part of this task; at most 3 calls a run.",
+      "Run another of the workspace's agents, one this agent's run may call (named in the run's message; their ids are in the run's scope, can_call), as that agent's own run on this brand, and get back what it found or made. Say what you need from it in `ask`. It runs with the stricter permissions of the two agents, out of this run's AI limit. Use it only when that agent's job is part of this task; at most 3 calls a run.",
     defaultPolicy: 'ask',
     maxPolicy: 'ask',
     flags: { alwaysCard: true },
@@ -65,8 +65,16 @@ export const AGENT_CALL_TOOLS = [
       const share = await (await calls()).callShareOf(input.agent, run.organizationId);
       return {
         why: input.ask,
+        // Labelled "AI use", as the agent's page says it.
         ...(share !== null
-          ? { goal: t('card.uses', { share: `${Math.round(share * 100)}%` }) }
+          ? {
+              targets: [
+                {
+                  kind: 'aiUse' as const,
+                  values: [t('card.uses', { share: `${Math.round(share * 100)}%` })],
+                },
+              ],
+            }
           : {}),
       };
     },
