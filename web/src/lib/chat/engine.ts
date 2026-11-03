@@ -808,10 +808,14 @@ const STOP_POLL_MS = 1_500;
 /** A read's time limit, and the wait before its one retry (CHAT-20 §11b). */
 const READ_TIMEOUT_MS = 20_000;
 const READ_RETRY_MS = 2_000;
+/** The wait before a model step the provider ended in an error, with nothing in it, runs again. */
+const STEP_RETRY_MS = 1_000;
 
 type Progress = RunProgress & {
   question?: string;
   scope?: MessageScope;
+  /** A model step the provider ended in an error, with nothing in it, ran again (once a run). */
+  stepRetried?: boolean;
   /** A reply had no words for the person, and the model was asked for them (ANSWER_NOTE). */
   answerAsked?: boolean;
 };
@@ -1455,6 +1459,8 @@ type ModelStepResult =
       toolCalls: PendingCall[];
       responseMessages: ModelMessage[];
       answered: Set<string>;
+      /** The provider ended it in an error, with no text, call or output token in it. */
+      failedEmpty?: boolean;
     }
   | { kind: 'ended' };
 
@@ -1469,6 +1475,13 @@ async function modelLoop(rc: RunContext): Promise<void> {
     const step = await modelStep(rc, phase);
     if (step.kind === 'ended') return;
     rc.progress.modelSteps += 1;
+    // The provider ended the step in an error with nothing in it (Gemini through OpenRouter
+    // finished "other" with no output, W4-35): the same step once more, never as an answer.
+    if (step.failedEmpty && !rc.progress.stepRetried) {
+      rc.progress.stepRetried = true;
+      await new Promise((resolve) => setTimeout(resolve, STEP_RETRY_MS));
+      continue;
+    }
     const calls = step.toolCalls.filter((call) => !step.answered.has(call.toolCallId));
 
     if (phase === 'read') {
@@ -1489,7 +1502,13 @@ async function modelLoop(rc: RunContext): Promise<void> {
     }
 
     const onlyMoves = step.toolCalls.every((call) => call.toolName === NEXT_MOVES_TOOL);
-    if (onlyMoves && !rc.progress.answerAsked && rc.progress.text.trim() === '') {
+    // A step the provider ended in an error isn't a reply without words: it ran again once (above).
+    if (
+      onlyMoves &&
+      !step.failedEmpty &&
+      !rc.progress.answerAsked &&
+      rc.progress.text.trim() === ''
+    ) {
       // The run's last reply, next moves alone or nothing, and no words for the person in the
       // whole run (GPT-6 Luna and Gemini 3.8 Flash answer "hi" so): its moves are kept, and one
       // more step, told so and without the next moves tool, writes the answer. Once a run.
@@ -1577,11 +1596,16 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
         : {}),
     });
     const toolCalls: PendingCall[] = [];
+    let wrote = false;
+    let finished: string | undefined;
     for await (const part of result.fullStream) {
-      if (part.type === 'text-delta') text?.push(part.text);
-      else if (part.type === 'tool-call') {
+      if (part.type === 'text-delta') {
+        text?.push(part.text);
+        wrote ||= part.text.trim().length > 0;
+      } else if (part.type === 'tool-call') {
         toolCalls.push({ toolCallId: part.toolCallId, toolName: part.toolName, input: part.input });
-      } else if (part.type === 'error') throw part.error;
+      } else if (part.type === 'finish') finished = part.finishReason;
+      else if (part.type === 'error') throw part.error;
     }
     text?.close();
     if (rc.signal.aborted) {
@@ -1593,7 +1617,14 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
     await budget.charge(stepUsage(usage), Date.now() - called);
     await keyAnswered(rc);
     const responseMessages = response.messages as ModelMessage[];
-    return { kind: 'ok', toolCalls, responseMessages, answered: answeredIds(responseMessages) };
+    return {
+      kind: 'ok',
+      toolCalls,
+      responseMessages,
+      answered: answeredIds(responseMessages),
+      failedEmpty:
+        finished === 'other' && !wrote && toolCalls.length === 0 && !(usage.outputTokens ?? 0),
+    };
   } catch (err) {
     text?.close();
     if (rc.signal.aborted) {

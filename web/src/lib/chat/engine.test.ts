@@ -1120,6 +1120,33 @@ describe('guardrails (W1-20)', () => {
   });
 });
 
+describe('a step the provider ends in an error, with nothing in it', () => {
+  // Gemini 3.5 Flash Lite through OpenRouter finished a step "other" (raw "error") with no
+  // text, call or token, and the run ended with no answer (W4-35's test set, 2026-11-03).
+  const errored = [
+    { type: 'text-start', id: 't' },
+    { type: 'text-end', id: 't' },
+    { type: 'finish', finishReason: { unified: 'other', raw: 'error' }, usage: usage(0, 0) },
+  ];
+
+  it('runs again once, and is never taken as the answer', async () => {
+    const { sonnet } = useModels([READY], [errored, text('Two pages lost most of it.')]);
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    expect(sonnet.seen).toHaveLength(2);
+    expect(runRow(runId).status).toBe('done');
+    expect(runFromEvents(await eventsOf(runId)).text).toBe('Two pages lost most of it.');
+    // The second try asks the same: nothing from the failed one is in it.
+    expect(sonnet.seen[1].prompt).toEqual(sonnet.seen[0].prompt);
+  });
+
+  it('runs again only once a run', async () => {
+    const { sonnet } = useModels([READY], [errored, errored, text('Never asked.')]);
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    expect(sonnet.seen).toHaveLength(2);
+    expect(runRow(runId).status).toBe('done');
+  });
+});
+
 describe("the answer's language: the question's (CHAT-05 item 2)", () => {
   const TURKISH = "Bu hafta Perplexity'de neden düştük?";
   const answerOf = (runId: string) => {
