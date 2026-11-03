@@ -8,6 +8,7 @@ import {
   Bot,
   Check,
   Clock,
+  CloudOff,
   ExternalLink,
   FileText,
   MoreHorizontal,
@@ -75,7 +76,12 @@ export interface LibraryRowActions {
   onExport: (draft: ContentDraftListItem, format: DraftExportFormat) => void;
   /** Send to CMS (#1331), for admins and managers. */
   onSend: (draft: ContentDraftListItem) => void;
+  /** Take down a page published through Ansvisor (AUTONOMOUS-GO-LIVE PR 10), for admins and managers. */
+  onTakeDown: (draft: ContentDraftListItem, sent: CmsStatus) => void;
 }
+
+/** Where a page published through Ansvisor can be taken down from its row. */
+const TAKE_DOWN_TARGETS: readonly CmsStatus['target'][] = ['webflow', 'wordpress', 'wix'];
 
 /** The rows picked for a bulk Send to CMS (#1331): admins and managers, drafts not archived. */
 export interface LibrarySelection {
@@ -144,6 +150,8 @@ export function LibraryTable({
           <TableHead>{t('columns.type')}</TableHead>
           <TableHead>{t('columns.method')}</TableHead>
           <TableHead>{t('columns.by')}</TableHead>
+          {/* Its own column where it fits; under By below xl, so 1024px keeps its columns. */}
+          <TableHead className="hidden xl:table-cell">{t('columns.madeIn')}</TableHead>
           <TableHead>{t('columns.status')}</TableHead>
           {shopping && <TableHead>{t('columns.shopping')}</TableHead>}
           <TableHead>{t('columns.created')}</TableHead>
@@ -191,6 +199,14 @@ export function LibraryTable({
               </TableCell>
               <TableCell>
                 <DraftAuthorCell draft={draft} />
+                {draft.origin !== 'editor' && (
+                  <span className="mt-0.5 block xl:hidden">
+                    <MadeInCell draft={draft} chatOn={chatOn} compact />
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="hidden xl:table-cell">
+                <MadeInCell draft={draft} chatOn={chatOn} />
               </TableCell>
               <TableCell>
                 {/* The agent works on drafts only: its state says more than "Draft".
@@ -226,7 +242,7 @@ export function LibraryTable({
                 </time>
               </TableCell>
               <TableCell className="pl-0 pr-4">
-                <RowMenu draft={draft} actions={actions} />
+                <RowMenu draft={draft} sent={sent} actions={actions} />
               </TableCell>
             </TableRow>
           );
@@ -236,8 +252,20 @@ export function LibraryTable({
   );
 }
 
-/** A row's menu: its status, then archive or restore, and delete (admins and managers). */
-function RowMenu({ draft, actions }: { draft: ContentDraftListItem; actions: LibraryRowActions }) {
+/**
+ * A row's menu: its status, then archive or restore, and delete (admins and
+ * managers); Take down too while its last send is live in Webflow, WordPress
+ * or Wix.
+ */
+function RowMenu({
+  draft,
+  sent,
+  actions,
+}: {
+  draft: ContentDraftListItem;
+  sent: CmsStatus | undefined;
+  actions: LibraryRowActions;
+}) {
   const t = useTranslations('contentEditor.library.rowMenu');
   const tStatus = useTranslations('contentEditor.status');
   const tExport = useTranslations('contentEditor.editor.export');
@@ -282,6 +310,16 @@ function RowMenu({ draft, actions }: { draft: ContentDraftListItem; actions: Lib
               <DropdownMenuItem onClick={() => actions.onSend(draft)}>
                 <Send className="h-4 w-4" />
                 {t('sendToCms')}
+              </DropdownMenuItem>
+            )}
+            {sent?.status === 'published' && TAKE_DOWN_TARGETS.includes(sent.target) && (
+              <DropdownMenuItem
+                variant="destructive"
+                data-action="library.takeDown"
+                onClick={() => actions.onTakeDown(draft, sent)}
+              >
+                <CloudOff className="h-4 w-4" />
+                {t('takeDown')}
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
@@ -410,6 +448,7 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
     sent: <Send className="h-3.5 w-3.5" />,
     failed: <AlertTriangle className="h-3.5 w-3.5" />,
     published: <ExternalLink className="h-3.5 w-3.5" />,
+    taken_down: <CloudOff className="h-3.5 w-3.5" />,
   }[status.status];
   const tone =
     status.status === 'failed'
@@ -440,7 +479,9 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
       >
         {icon}
         <span aria-hidden className="hidden whitespace-nowrap text-xs font-medium xl:inline">
-          {tShort(`${status.target}.${status.status}`)}
+          {status.status === 'taken_down'
+            ? tShort('takenDown')
+            : tShort(`${status.target}.${status.status}`)}
         </span>
       </TooltipTrigger>
       <TooltipContent className="max-w-72 space-y-1">
@@ -467,6 +508,43 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
 }
 
 /** Who wrote it: the Content Agent, "You", or the member by name. */
+/**
+ * Where the draft was made (00463, W4-10): the Content Editor, Chat, an
+ * Action Center task, an agent or an MCP client. One made in a chat the
+ * member may open has Open chat, with the new Chat on. `compact`: the line
+ * under By below xl, "in Chat · Open chat".
+ */
+function MadeInCell({
+  draft,
+  chatOn,
+  compact = false,
+}: {
+  draft: ContentDraftListItem;
+  chatOn: boolean;
+  compact?: boolean;
+}) {
+  const t = useTranslations('contentEditor.library.madeIn');
+  return (
+    <span
+      className={`flex whitespace-nowrap text-xs text-muted-foreground ${compact ? 'items-center gap-1' : 'flex-col'}`}
+    >
+      <span data-slot={compact ? 'made-in-short' : 'made-in'} data-origin={draft.origin}>
+        {compact ? t('in', { place: t(draft.origin) }) : t(draft.origin)}
+      </span>
+      {chatOn && draft.origin !== 'editor' && draft.conversation && (
+        <Link
+          href={`/dashboard/chat/${draft.conversation.id}`}
+          data-action="library.openChat"
+          title={draft.conversation.title || undefined}
+          className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+        >
+          {t('openChat')}
+        </Link>
+      )}
+    </span>
+  );
+}
+
 function DraftAuthorCell({ draft }: { draft: ContentDraftListItem }) {
   const t = useTranslations('contentEditor.library');
   if (draft.author === 'agent') {

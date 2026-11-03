@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { TeamRole } from '@/components/providers/role-provider';
 import type { Feature, PlanId } from '@/config/plans';
 import type { McpAuthContext } from '@/lib/mcp-auth';
+import type { ChatConfirmForm } from '../events';
 
 /**
  * Chat's tool registry (CHAT-20 §9): one row per tool Chat may call, saying
@@ -87,6 +88,8 @@ export type ToolArea =
   | 'navigation'
   /** Opening a page on the web (CHAT-10 §B). */
   | 'web'
+  /** Work Chat does later or on repeat (CHAT-12). */
+  | 'scheduling'
   /** The workspace's own skills (CHAT-13). */
   | 'skills'
   /** What Chat remembers between chats (CHAT-14). */
@@ -140,6 +143,8 @@ export interface GoLiveStep {
 export interface ChatWritePlace {
   conversationId: string | null;
   runId: string | null;
+  /** The agent run the chat is (CHAT-27): its drafts are made by an agent (00463). */
+  agentRunId?: string | null;
   approvalKey: string;
   /** assisted: the person approved it (a card, a click); automated: it ran by itself. */
   executionMode: 'assisted' | 'automated';
@@ -154,7 +159,19 @@ export interface ChatWritePlace {
 export type ChatToolContext = McpAuthContext & {
   chat?: ChatWritePlace;
   pageSites?: { hosts: readonly string[]; domains: readonly string[] };
+  /** The run's time zone (the person's): what a schedule's date phrase is read in. */
+  timezone?: string;
 };
+
+/** What an editable card's fields are made and read with: the run's zone and workspace, now. */
+export interface CardFormContext {
+  timezone: string;
+  organizationId: string;
+  now: Date;
+}
+
+/** The values an editable card sends back with its Approve, by field name. */
+export type CardFormValues = Record<string, string | boolean>;
 
 /** A line of what a card's change carries (the approval card's items): a task to create. */
 export interface ToolCardItem {
@@ -301,6 +318,27 @@ interface ToolFields<S extends z.ZodObject> {
   alwaysCardWhen?(input: z.output<S>): boolean;
   /** What it made, as a card with its Open (CHAT-09 item 19); null when nothing. */
   resultCard?(input: z.output<S>, output: unknown): ToolResultCard | null;
+  /**
+   * The kind of step its card and its change are (CHAT-03): `schedule` for a
+   * job Chat schedules. Without it, a write's step is `write`.
+   */
+  stepKind?: 'schedule';
+  /**
+   * An editable card (ChatConfirm.form; W3-02): its fields, read from the
+   * input, and the input the person's edited values make, or why they make
+   * none. The engine checks what `apply` makes against the input schema
+   * again before the change runs: what runs is what the card was sent with.
+   */
+  form?: {
+    fields(input: z.output<S>, ctx: CardFormContext): ChatConfirmForm | Promise<ChatConfirmForm>;
+    apply(
+      input: z.output<S>,
+      values: CardFormValues,
+      ctx: CardFormContext,
+    ): { ok: true; input: Record<string, unknown> } | { ok: false; error: string };
+  };
+  /** Its step once the change is made ("Scheduled: Weekly report"), when its words say more than the row's. */
+  doneStep?(input: z.output<S>, output: unknown): { label: string; detail?: string } | null;
   /** A valid input, for the registry's tests and the permission fixtures (CHAT-20 §19). */
   fixture: { input: z.input<S> };
 }
@@ -331,8 +369,13 @@ type ClassFields =
     }
   | {
       class: 'execute';
-      /** Its go-live group, which the Manager switch in Settings › Chat covers. */
-      executeGroup: ExecuteGroup;
+      /**
+       * Its go-live group, which the Manager switch in Settings › Chat covers.
+       * Null for one that only takes back what went out (unpublish_cms,
+       * AUTONOMOUS-GO-LIVE PR 10): outside every group, it never goes out on
+       * its own, and a Manager may even while publishing is off for Managers.
+       */
+      executeGroup: ExecuteGroup | null;
       flags?: Partial<Pick<ToolFlags, 'costCard'>>;
     };
 
@@ -463,7 +506,9 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     ) {
       throw new Error(`${def.name}: an execute always needs the user's click`);
     }
-    if (!EXECUTE_GROUPS.includes(def.executeGroup)) {
+    if (def.executeGroup === null) {
+      if (def.goLive) throw new Error(`${def.name}: an execute outside the groups never goes live`);
+    } else if (!EXECUTE_GROUPS.includes(def.executeGroup)) {
       throw new Error(`${def.name}: an execute belongs to a go-live group`);
     }
     return { ...def, defaultPolicy: 'click', maxPolicy: 'click', flags, excludeRoles };

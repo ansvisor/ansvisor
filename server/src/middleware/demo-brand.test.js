@@ -457,12 +457,16 @@ describe('coverage of the write routes', () => {
       'internal-chat-budget.js',
       // An agent's go-live step (CRON_SECRET, called by the web's engine): refuses a demo brand itself.
       'internal-chat-go-live.js',
+      // Chat's model menu (CRON_SECRET, called by the web's Chat): a read, no brand.
+      'internal-chat-models.js',
       // Chat's notices to Admins (CRON_SECRET, called by the web): a workspace's key, no brand.
       'internal-chat-notices.js',
       // Chat's page reads (CRON_SECRET, called by the web's engine): a public URL, no brand.
       'internal-chat-pages.js',
       // The first run after a payment (CRON_SECRET): refuses a demo brand itself.
       'internal-trigger-tracking.js',
+      // The free report card's form on www.ansvisor.com: no sign-in and no brand (00472).
+      'public-report-card.js',
       'traffic.js',
       'webhook-content-callback.js',
       'webhook-content-draft-callback.js',

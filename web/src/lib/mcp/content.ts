@@ -410,6 +410,8 @@ export async function createContentDraftFor(
       source_url: input.sourceUrl ?? null,
       prompt_ids: promptIds,
       status: 'in_review',
+      // Made by an MCP client (00463, W4-10).
+      origin: 'mcp',
     })
     .select('id, status, page_type')
     .single();
