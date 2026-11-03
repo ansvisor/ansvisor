@@ -144,6 +144,8 @@ import {
   type ReadBudget,
 } from './run-limits';
 import {
+  DAYS_DEFAULTS,
+  DAYS_MAX,
   DEFAULT_RANGE_DAYS,
   brandModels,
   capRows,
@@ -1389,16 +1391,22 @@ async function pickSkill(rc: RunContext, call: PendingCall): Promise<CallOutcome
   return result(call, { ok: true, note: 'Its text is below the rules from your next step.' });
 }
 
+/** The skills this run loaded, a shortcut's playbook among them. */
+function loadedSkillList(rc: RunContext): LibrarySkill[] {
+  const { enabled, playbook } = rc.skills;
+  const loadable = playbook ? [playbook, ...enabled] : enabled;
+  return (rc.progress.skills ?? []).flatMap((name) =>
+    loadable.filter((skill) => skill.name === name),
+  );
+}
+
 /**
  * The loaded skills' block for a step's prompt (prompt.ts 2b), or none: a
  * shortcut's playbook among them, with what the plan leaves out of its data.
  */
 function loadedSkills(rc: RunContext): string | undefined {
-  const { enabled, playbook, planNote } = rc.skills;
-  const loadable = playbook ? [playbook, ...enabled] : enabled;
-  const loaded = (rc.progress.skills ?? []).flatMap((name) =>
-    loadable.filter((skill) => skill.name === name),
-  );
+  const { playbook, planNote } = rc.skills;
+  const loaded = loadedSkillList(rc);
   if (loaded.length === 0) return undefined;
   const block = loadedSkillsBlock(loaded);
   return planNote && playbook && loaded.includes(playbook) ? `${block}\n\n${planNote}` : block;
@@ -1845,10 +1853,15 @@ function workspaceBlock(
   return lines.join('\n\n');
 }
 
+/** The periods the app sets a read to, in days (scope.ts): an answer may name them. */
+const APP_PERIODS = [DEFAULT_RANGE_DAYS, ...Object.values(DAYS_DEFAULTS), DAYS_MAX];
+
 /**
  * The figures this answer may state (facts.ts): the question, the chat so
- * far, what was read and every tool result in this run, today's date.
- * Never the model's own earlier text: a figure it made up stays made up.
+ * far, what was read and every tool result in this run, today's date, the
+ * page's scope, the loaded skills' word and character targets (as lengths only)
+ * and the app's periods. Never the model's own earlier text: a figure it
+ * made up stays made up.
  */
 function runFigures(rc: RunContext): KnownFigures {
   const results: Json[] = [];
@@ -1862,6 +1875,9 @@ function runFigures(rc: RunContext): KnownFigures {
     question: `${rc.progress.question ?? ''}\n${todayLine()}`,
     history: [rc.history.summary ?? '', ...rc.history.recent.map((m) => toJson(m.content))],
     reads: [...rc.progress.readLog.map((read) => toJson(read)), ...results],
+    given: [rc.progress.scope ?? null],
+    skills: loadedSkillList(rc).map((skill) => skill.body),
+    periods: APP_PERIODS,
   });
 }
 
