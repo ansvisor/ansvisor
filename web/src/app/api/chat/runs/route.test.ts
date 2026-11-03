@@ -70,7 +70,6 @@ vi.mock('next/server', async (importOriginal) => ({
 }));
 
 const { POST } = await import('./route');
-const { POST: ANSWER } = await import('./[id]/answer/route');
 const { POST: APPROVE } = await import('./[id]/approve/route');
 const { POST: STOP } = await import('./[id]/stop/route');
 
@@ -159,26 +158,6 @@ describe('the run routes', () => {
       RUN,
       undefined,
     );
-  });
-
-  it('refuse a message or a typed answer that holds an API key, unread and unlogged', async () => {
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const key = `sk-ant-api03-${'a1B2'.repeat(10)}`;
-    const res = await POST(post({ message: `Use this key ${key}` }));
-    expect(res.status).toBe(400);
-    expect(await res.json()).toMatchObject({ ok: false, code: 'api_key' });
-    expect(engine.startChatRun).not.toHaveBeenCalled();
-
-    const answer = await ANSWER(post({ n: 1, selected: [], other: key }), params(RUN));
-    expect(answer.status).toBe(400);
-    expect(engine.prepareResume).not.toHaveBeenCalled();
-    expect(JSON.stringify(log.mock.calls)).not.toContain(key);
-    log.mockRestore();
-
-    // A message without one starts as before.
-    engine.startChatRun.mockResolvedValue({ ok: false, status: 429, code: 'busy', message: 'x' });
-    expect((await POST(post({ message: 'Why did sk-learn pages drop?' }))).status).toBe(429);
-    expect(engine.startChatRun).toHaveBeenCalledTimes(1);
   });
 
   it('refuse a run id that isn’t one', async () => {

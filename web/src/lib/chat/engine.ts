@@ -121,10 +121,8 @@ import {
 } from './touched-brands';
 import type { ExplainChangeOutput } from '@/lib/mcp/why';
 import { stepPrompt, todayLine } from './prompt';
-import { ANSWER_NOTE, INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
-import { LANGUAGES, languageLine, rewriteLanguage, type Language } from './language';
+import { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
 import { whyView } from './why/view';
-import { WHATS_NEW_TOOL, whatsNewStepDetail } from './whats-new/run';
 import {
   batchSize,
   runsWithoutSession,
@@ -132,15 +130,6 @@ import {
   type ChatToolContext,
 } from './registry/define-tool';
 import { CHAT_TOOLS, chatTool, chatToolByKey } from './registry/tools';
-import {
-  callAsTextAt,
-  fenceOpen,
-  maskToolNames,
-  saysInstructionsIgnored,
-  toolNamesOf,
-  wordHold,
-  type ToolNames,
-} from './answer-guards';
 import { abortDriver, publishRunEnd, registerDriver, unregisterDriver } from './run-hub';
 import {
   MAX_MODEL_STEPS,
@@ -153,8 +142,6 @@ import {
   type ReadBudget,
 } from './run-limits';
 import {
-  DAYS_DEFAULTS,
-  DAYS_MAX,
   DEFAULT_RANGE_DAYS,
   brandModels,
   capRows,
@@ -260,28 +247,6 @@ function toolWords(tool: Pick<ChatTool, 'labelKey'>, which: 'name' | 'step'): st
   return Object.hasOwn(messages.chatTools, tool.labelKey)
     ? toolT(`${tool.labelKey}.${which}` as never)
     : t('step.unknown');
-}
-
-let shownNames: ToolNames | null = null;
-
-/**
- * The tool names an answer may not show (answer-guards.ts): each registry
- * row's as its Settings name, the engine's own with no words (they go).
- */
-function answerToolNames(): ToolNames {
-  shownNames ??= toolNamesOf([
-    ...CHAT_TOOLS.map(
-      (tool) =>
-        [
-          tool.name,
-          Object.hasOwn(messages.chatTools, tool.labelKey) ? toolWords(tool, 'name') : null,
-        ] as const,
-    ),
-    ...[EXPLAIN_TOOL, ASK_TOOL, NEXT_MOVES_TOOL, USE_SKILL_TOOL].map(
-      (name) => [name, null] as const,
-    ),
-  ]);
-  return shownNames;
 }
 
 // ─── Who, and what can go wrong ─────────────────────────────────────────────
@@ -814,17 +779,8 @@ const STOP_POLL_MS = 1_500;
 /** A read's time limit, and the wait before its one retry (CHAT-20 §11b). */
 const READ_TIMEOUT_MS = 20_000;
 const READ_RETRY_MS = 2_000;
-/** The wait before a model step the provider ended in an error, with nothing in it, runs again. */
-const STEP_RETRY_MS = 1_000;
 
-type Progress = RunProgress & {
-  question?: string;
-  scope?: MessageScope;
-  /** A model step the provider ended in an error, with nothing in it, ran again (once a run). */
-  stepRetried?: boolean;
-  /** A reply had no words for the person, and the model was asked for them (ANSWER_NOTE). */
-  answerAsked?: boolean;
-};
+type Progress = RunProgress & { question?: string; scope?: MessageScope };
 
 interface RunContext {
   actor: ChatActor;
@@ -1072,8 +1028,7 @@ async function openContext(
   const playbook = shortcutPlaybook(actor.organizationId, progress.shortcut);
   const offered = playbook ? playbookTools(tools.offered, playbook) : tools.offered;
   const { refused } = tools;
-  // An agent's run reads what its skills list (run-limits.ts AGENT_READS).
-  const budget = readBudget(run.effort, { agent: agentRunId !== null });
+  const budget = readBudget(run.effort);
   const history = await readHistory(run, budget.historyChars);
   // One model does both on a single-model key: the run writes from the start.
   if (models.phases === 'single') progress.phase = 'write';
@@ -1509,8 +1464,6 @@ type ModelStepResult =
       toolCalls: PendingCall[];
       responseMessages: ModelMessage[];
       answered: Set<string>;
-      /** The provider ended it in an error, with no text, call or output token in it. */
-      failedEmpty?: boolean;
     }
   | { kind: 'ended' };
 
@@ -1520,18 +1473,10 @@ async function modelLoop(rc: RunContext): Promise<void> {
     if (rc.progress.modelSteps >= MAX_MODEL_STEPS) return finish(rc);
     const phase: ChatPhase = rc.models.phases === 'single' ? 'write' : rc.progress.phase;
     // Next moves belong to the answer they came with: a later step suggests its own, or none.
-    // Once the answer was asked for, the moves of the reply that had none stay.
-    if (phase === 'write' && !rc.progress.answerAsked) rc.progress.nextMoves = undefined;
+    if (phase === 'write') rc.progress.nextMoves = undefined;
     const step = await modelStep(rc, phase);
     if (step.kind === 'ended') return;
     rc.progress.modelSteps += 1;
-    // The provider ended the step in an error with nothing in it (Gemini through OpenRouter
-    // finished "other" with no output, W4-35): the same step once more, never as an answer.
-    if (step.failedEmpty && !rc.progress.stepRetried) {
-      rc.progress.stepRetried = true;
-      await new Promise((resolve) => setTimeout(resolve, STEP_RETRY_MS));
-      continue;
-    }
     const calls = step.toolCalls.filter((call) => !step.answered.has(call.toolCallId));
 
     if (phase === 'read') {
@@ -1551,30 +1496,10 @@ async function modelLoop(rc: RunContext): Promise<void> {
       continue;
     }
 
-    const onlyMoves = step.toolCalls.every((call) => call.toolName === NEXT_MOVES_TOOL);
-    // A step the provider ended in an error isn't a reply without words: it ran again once (above).
-    if (
-      onlyMoves &&
-      !step.failedEmpty &&
-      !rc.progress.answerAsked &&
-      rc.progress.text.trim() === ''
-    ) {
-      // The run's last reply, next moves alone or nothing, and no words for the person in the
-      // whole run (GPT-6 Luna and Gemini 3.8 Flash answer "hi" so): its moves are kept, and one
-      // more step, told so and without the next moves tool, writes the answer. Once a run.
-      rc.progress.answerAsked = true;
-      if (step.toolCalls.length > 0) {
-        rc.messages.push(...withoutEmptyText(step.responseMessages));
-        if (calls.length > 0 && (await handleCalls(rc, calls, 0, [])) !== 'continue') return;
-      }
-      rc.messages.push({ role: 'user', content: [{ type: 'text', text: ANSWER_NOTE }] });
-      await saveState(rc.run.id, { messages: rc.messages, progress: rc.progress });
-      continue;
-    }
     rc.messages.push(...step.responseMessages);
     if (step.toolCalls.length === 0) return finish(rc);
     // Only next moves: the answer is done, without another model step (CHAT-07 §C item 6).
-    if (onlyMoves) {
+    if (step.toolCalls.every((call) => call.toolName === NEXT_MOVES_TOOL)) {
       if (calls.length > 0 && (await handleCalls(rc, calls, 0, [])) !== 'continue') return;
       return finish(rc);
     }
@@ -1646,16 +1571,11 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
         : {}),
     });
     const toolCalls: PendingCall[] = [];
-    let wrote = false;
-    let finished: string | undefined;
     for await (const part of result.fullStream) {
-      if (part.type === 'text-delta') {
-        text?.push(part.text);
-        wrote ||= part.text.trim().length > 0;
-      } else if (part.type === 'tool-call') {
+      if (part.type === 'text-delta') text?.push(part.text);
+      else if (part.type === 'tool-call') {
         toolCalls.push({ toolCallId: part.toolCallId, toolName: part.toolName, input: part.input });
-      } else if (part.type === 'finish') finished = part.finishReason;
-      else if (part.type === 'error') throw part.error;
+      } else if (part.type === 'error') throw part.error;
     }
     text?.close();
     if (rc.signal.aborted) {
@@ -1667,14 +1587,7 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
     await budget.charge(stepUsage(usage), Date.now() - called);
     await keyAnswered(rc);
     const responseMessages = response.messages as ModelMessage[];
-    return {
-      kind: 'ok',
-      toolCalls,
-      responseMessages,
-      answered: answeredIds(responseMessages),
-      failedEmpty:
-        finished === 'other' && !wrote && toolCalls.length === 0 && !(usage.outputTokens ?? 0),
-    };
+    return { kind: 'ok', toolCalls, responseMessages, answered: answeredIds(responseMessages) };
   } catch (err) {
     text?.close();
     if (rc.signal.aborted) {
@@ -1696,18 +1609,6 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
   } finally {
     await budget.release();
   }
-}
-
-/**
- * A step's messages without empty text: a reply that opened a text and wrote
- * nothing in it (Anthropic's API turns an empty text block away).
- */
-function withoutEmptyText(messages: ModelMessage[]): ModelMessage[] {
-  return messages.flatMap((message) => {
-    if (message.role !== 'assistant' || typeof message.content === 'string') return [message];
-    const content = message.content.filter((part) => part.type !== 'text' || part.text.trim());
-    return content.length > 0 ? [{ ...message, content }] : [];
-  });
 }
 
 /** The calls a step's own messages already answered (a call the SDK found invalid). */
@@ -1791,9 +1692,6 @@ function turnMessage(rc: RunContext, phase: ChatPhase): ModelMessage {
   if (phase === 'write' && rc.progress.injection) {
     parts.push({ type: 'text', text: INJECTION_NOTE });
   }
-  // Last, after pages of English data: the question's language, named (language.ts).
-  const language = phase === 'write' ? languageLine(question) : null;
-  if (language) parts.push({ type: 'text', text: language });
   return { role: 'user', content: parts };
 }
 
@@ -1855,9 +1753,8 @@ function toolSet(rc: RunContext, phase: ChatPhase): ToolSet {
   if (phase === 'write') {
     set[PARTS_TOOL] = aiTool({ description: PARTS_TOOL_DESCRIPTION, inputSchema: partsToolInput });
   }
-  // Next moves (CHAT-07 §C): with the final answer, in the same model step. Not in the step that
-  // writes an answer its reply left out: that reply's moves are kept (modelLoop).
-  if (phase === 'write' && !rc.progress.answerAsked) {
+  // Next moves (CHAT-07 §C): with the final answer, in the same model step.
+  if (phase === 'write') {
     set[NEXT_MOVES_TOOL] = aiTool({
       description:
         'With your final answer, in the same reply: 2–3 things the person could do next, best first. A click sends the prompt as their next message.',
@@ -1969,15 +1866,10 @@ function workspaceBlock(
   return lines.join('\n\n');
 }
 
-/** The periods the app sets a read to, in days (scope.ts): an answer may name them. */
-const APP_PERIODS = [DEFAULT_RANGE_DAYS, ...Object.values(DAYS_DEFAULTS), DAYS_MAX];
-
 /**
  * The figures this answer may state (facts.ts): the question, the chat so
- * far, what was read and every tool result in this run, today's date, the
- * page's scope, the loaded skills' word and character targets (as lengths only)
- * and the app's periods. Never the model's own earlier text: a figure it
- * made up stays made up.
+ * far, what was read and every tool result in this run, today's date.
+ * Never the model's own earlier text: a figure it made up stays made up.
  */
 function runFigures(rc: RunContext): KnownFigures {
   const results: Json[] = [];
@@ -1991,9 +1883,6 @@ function runFigures(rc: RunContext): KnownFigures {
     question: `${rc.progress.question ?? ''}\n${todayLine()}`,
     history: [rc.history.summary ?? '', ...rc.history.recent.map((m) => toJson(m.content))],
     reads: [...rc.progress.readLog.map((read) => toJson(read)), ...results],
-    given: [rc.progress.scope ?? null],
-    skills: loadedSkillList(rc).map((skill) => skill.body),
-    periods: APP_PERIODS,
   });
 }
 
@@ -2008,8 +1897,6 @@ function runFigures(rc: RunContext): KnownFigures {
 class TextOut {
   private pending = '';
   private timer: ReturnType<typeof setTimeout> | null = null;
-  /** The reply wrote a tool call out as text: the rest of its text goes (answer-guards.ts). */
-  private cutOff = false;
 
   constructor(
     private readonly rc: RunContext,
@@ -2017,7 +1904,6 @@ class TextOut {
   ) {}
 
   push(delta: string) {
-    if (this.cutOff) return;
     this.pending += delta;
     if (this.pending.length >= 160) this.emit(false);
     else this.timer ??= setTimeout(() => this.emit(false), 60);
@@ -2030,28 +1916,15 @@ class TextOut {
   private emit(all: boolean) {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
-    const call = callAsTextAt(this.pending);
-    if (call !== null) {
-      this.pending = this.pending.slice(0, call);
-      this.cutOff = true;
-    }
     let cut = this.pending.length;
-    if (!all && !this.cutOff) {
+    if (!all) {
       const id = /[0-9a-fA-F-]+$/.exec(this.pending);
       if (id) cut = id.index;
-      // The last word may still grow into a tool's name, a code fence or a call written out.
-      const word = wordHold(this.pending);
-      if (word !== null) cut = Math.min(cut, word);
       const figure = figureHold(this.pending);
       if (figure !== null) cut = Math.min(cut, figure);
       cut = Math.max(cut, this.pending.length - HOLD_MAX);
     }
-    const shown = maskToolNames(maskIds(this.pending.slice(0, cut)), answerToolNames(), {
-      inFence: fenceOpen(this.rc.progress.text),
-      atSpace: /\s$/.test(this.rc.progress.text),
-      keep: this.rc.progress.question ?? '',
-    });
-    const checked = checkFigures(shown, this.known, {
+    const checked = checkFigures(maskIds(this.pending.slice(0, cut)), this.known, {
       before: this.rc.progress.text.slice(-80),
       after: this.pending.slice(cut),
     });
@@ -2339,17 +2212,7 @@ async function handleCall(
   }
   if (tool.class === 'read') {
     if (rc.progress.reads >= rc.budget.reads || rc.progress.dataChars >= rc.budget.dataChars) {
-      // Reading is over, the task isn't: "answer" alone read as "stop" and runs left their
-      // changes undone (the agents' test set, 2026-11-03).
-      return result(
-        call,
-        {
-          code: 'limit_reached',
-          message:
-            'Reading is done for this run. Go on with what was read: make the changes the task asks for with their tools, then answer.',
-        },
-        true,
-      );
+      return result(call, { code: 'limit_reached', message: 'Answer with what was read.' }, true);
     }
     const cap = readCap(tool.name);
     if (cap !== null && (rc.progress.toolReads?.[tool.name] ?? 0) >= cap) {
@@ -3471,11 +3334,7 @@ async function readCall(
         }
       : {
           status: 'done',
-          // What's new says what it found for the plan (CHAT-11 item 11).
-          detail:
-            tool.name === WHATS_NEW_TOOL
-              ? whatsNewStepDetail(read.value)
-              : scopeDetail(scope, rows),
+          detail: scopeDetail(scope, rows),
           rowCount: rows ?? null,
           dataAsOf: asOf,
           debug: {
@@ -3642,11 +3501,6 @@ const SAID_FAILURES: Record<string, string> = {
   execute_off: 'execute_off',
   // The CMS didn't put the page live: it stays a draft there, with the CMS's words (publish_cms).
   publish_refused: 'failed',
-  // A page taken down (unpublish_cms): not live through Ansvisor, Framer's or a webhook's, or
-  // the CMS said no, with its words.
-  not_live: 'not_found',
-  unavailable: 'failed',
-  refused: 'failed',
   // A run with no session, writing through the API server as its person (lib/chat/actor/api.ts):
   // Chat off for the workspace, or the server took no one to act as.
   chat_off: 'chat_off',
@@ -4364,18 +4218,6 @@ function summaryOf(progress: RunProgress, workingMs: number): ChatRunSummary {
 
 /** The answer is written: kept with when it was made and the newest data it read (CHAT-20 §15a). */
 async function finish(rc: RunContext): Promise<void> {
-  // An answer in English to a question in another language is rewritten once (language.ts).
-  const language = rewriteLanguage(rc.progress.question ?? '', rc.progress.text);
-  if (language) await rewriteAnswer(rc, language);
-  // A Stop during the rewrite ends the run as stopped, with the answer as it was.
-  if (rc.signal.aborted) return stopNow(rc);
-  // The data held instructions for AI assistants and the answer doesn't say they weren't
-  // followed: the app says so, in one line at the end (CHAT-05 item 12), whatever the model.
-  if (rc.progress.injection && !saysInstructionsIgnored(rc.progress.text)) {
-    const notice = `${rc.progress.text.trim() ? '\n\n' : ''}${t('answer.injectionNotice')}`;
-    rc.progress.text += notice;
-    rc.sink.emit('text.delta', { text: notice });
-  }
   // Written while the run still runs: a failed write ends it as an error, never "done" without its answer.
   await checkedFactsStep(rc);
   // What a job's run assumed for nobody watching leads its answer (CHAT-12 item 12),
@@ -4405,73 +4247,6 @@ async function finish(rc: RunContext): Promise<void> {
     generatedAt,
     dataAsOf: rc.progress.dataAsOf,
   });
-}
-
-/**
- * The answer, rewritten once in the question's language: the writer model,
- * told to translate the words only, held on the AI budget like any step.
- * The rewrite goes through the same id mask and fact check as streamed text,
- * and replaces it on the person's screen (text.replaced). A refused hold, a
- * failed call or a rewrite that is still English keeps the answer as it was;
- * a Stop keeps it too, and the hold (what streamed is billed).
- */
-async function rewriteAnswer(rc: RunContext, language: Language): Promise<void> {
-  const choice = rc.models.pick('write');
-  const system = `Rewrite the text you are given in ${LANGUAGES[language]}. Translate the words only: keep the Markdown, numbers, names, links, [placeholders] and line breaks exactly. Answer with the rewritten text alone.`;
-  const reservation = await reserveChatStep({
-    organizationId: rc.run.organizationId,
-    runId: rc.run.id,
-    ...(rc.agentRunId ? { feature: 'agent' as const, agentRunId: rc.agentRunId } : {}),
-    model: choice.budgetModel,
-    inputTokens: estimateInputTokens([system, rc.progress.text]),
-    maxOutputTokens: choice.maxOutputTokens,
-    source: rc.models.source,
-  });
-  if (!reservation.ok) return;
-  const { budget } = reservation;
-  const called = Date.now();
-  try {
-    const result = streamText({
-      model: choice.model,
-      system,
-      messages: [{ role: 'user', content: rc.progress.text }],
-      maxOutputTokens: choice.maxOutputTokens,
-      providerOptions: choice.providerOptions,
-      abortSignal: rc.signal,
-    });
-    const out: string[] = [];
-    for await (const part of result.fullStream) {
-      if (part.type === 'text-delta') out.push(part.text);
-      else if (part.type === 'error') throw part.error;
-    }
-    // Stopped mid-rewrite: what streamed is billed, so the hold is kept (budget.ts).
-    if (rc.signal.aborted) return budget.keep();
-    await budget.charge(stepUsage(await result.usage), Date.now() - called);
-    const rewritten = out.join('').trim();
-    if (!rewritten || rewriteLanguage(rc.progress.question ?? '', rewritten)) return;
-    // The same guards as streamed text (answer-guards.ts): no call written out, no raw tool name.
-    const call = callAsTextAt(rewritten);
-    const shown = maskToolNames(
-      maskIds(call === null ? rewritten : rewritten.slice(0, call)),
-      answerToolNames(),
-      {
-        keep: rc.progress.question ?? '',
-      },
-    );
-    const checked = checkFigures(shown, runFigures(rc));
-    if (checked.checked > 0) {
-      const facts = (rc.progress.facts ??= { checked: 0, replaced: [] });
-      facts.checked += checked.checked;
-      facts.replaced.push(...checked.replaced);
-    }
-    rc.progress.text = checked.text;
-    rc.sink.emit('text.replaced', { text: checked.text });
-  } catch (err) {
-    if (rc.signal.aborted) return budget.keep();
-    console.error('[chat/engine] the answer could not be rewritten in its language:', err);
-  } finally {
-    await budget.release();
-  }
 }
 
 /**

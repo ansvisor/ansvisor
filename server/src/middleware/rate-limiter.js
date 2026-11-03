@@ -55,10 +55,10 @@ function verifiedCaller(req) {
 }
 
 /**
- * The web's Chat engine's budget calls and page reads, and its model menu
- * (routes/internal-chat-budget.js, internal-chat-pages.js, internal-chat-models.js).
+ * The web's Chat engine's budget calls and page reads
+ * (routes/internal-chat-budget.js, routes/internal-chat-pages.js).
  */
-const CHAT_BUDGET_PATH = /^\/api\/internal\/chat\/(budget|pages|models)(\/|$)/;
+const CHAT_BUDGET_PATH = /^\/api\/internal\/chat\/(budget|pages)(\/|$)/;
 
 /**
  * Whether a request is the web's Chat engine holding or settling a model

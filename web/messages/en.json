@@ -1775,7 +1775,7 @@
           "task_deleted": "Task deleted",
           "task_edited": "Task edited",
           "tasks_generated": "{count, plural, one {# task} other {# tasks}} written from the action's evidence{reviews, plural, =0 {} one {; # waits for review} other {; # wait for review}}",
-          "task_sent": "{to, select, content {{merged, select, yes {Added to the open Content opportunity for the same question} other {Sent to Content}}} webhook {Sent to the webhook} other {Sent}}: {title}",
+          "task_sent": "{to, select, content {Sent to Content} webhook {Sent to the webhook} other {Sent}}: {title}",
           "task_checked": "Checked automatically and done: {task}{title}",
           "task_ran": "{task} — carried out automatically ({tool})",
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
@@ -1806,7 +1806,6 @@
         "send": {
           "sentToContent": "Sent to Content as an opportunity",
           "alreadyInContent": "This task is already in Content",
-          "mergedInContent": "Added to the open opportunity in Content for the same question",
           "sentToWebhook": "Sent to the webhook",
           "timeout": "Sending took too long. Please try again.",
           "unreachable": "Couldn't reach the server. Please try again.",
@@ -3415,7 +3414,6 @@
     "profile": { "name": "Read your profile", "step": "Read your profile" },
     "aiUsage": { "name": "Read AI usage", "step": "Read AI usage" },
     "brands": { "name": "Read brands", "step": "Read Brands" },
-    "brandFacts": { "name": "Read approved brand facts", "step": "Read Brand facts" },
     "visibility": { "name": "Read visibility", "step": "Read Visibility" },
     "visibilityTrend": { "name": "Read the visibility trend", "step": "Read Visibility trend" },
     "trackedPrompts": { "name": "Read tracked prompts", "step": "Read Prompts" },
@@ -3513,10 +3511,6 @@
     "reviseDraft": { "name": "Change drafts in Content", "step": "Changed draft in Content" },
     "sendToCms": { "name": "Send drafts to your CMS", "step": "Sent draft to your CMS" },
     "publishToCms": { "name": "Publish pages on your site", "step": "Published page on your site" },
-    "takeDownFromCms": {
-      "name": "Take pages down from your site",
-      "step": "Took page down from your site"
-    },
     "makeReport": { "name": "Make reports", "step": "Made report" },
     "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
     "webPage": { "name": "Open web pages", "step": "Open page" },
@@ -3887,7 +3881,6 @@
       "copied": "The page repeats a long passage from a page it read.",
       "foreign_link": "The page links to {host}, which isn’t your site or one of its sources.",
       "live_page": "The page is live already: an update stays your click.",
-      "taken_down": "Someone took this page down before.",
       "quality_off": "Content Quality is off, so the page can’t be checked.",
       "quality_unread": "The page’s Quality couldn’t be read in full.",
       "quality_unread_cap": "The page’s Quality needs AI checks, and this run reached its limit.",
@@ -4005,9 +3998,6 @@
       "formInvalid": "Some of these values don’t work. Check them and try again.",
       "notFound": "This chat isn't there any more.",
       "attachments": "A file you attached isn't ready or isn't yours any more. Attach it again and send."
-    },
-    "whatsNew": {
-      "step": "{count, plural, =0 {Nothing new for your plan} one {# update for your plan} other {# updates for your plan}}"
     }
   },
   "chatRun": {
@@ -4080,11 +4070,6 @@
     "modelAuto": "Auto",
     "modelAutoHow": "Haiku reads, Sonnet writes",
     "removeChip": "Remove {label}",
-    "keyPaste": {
-      "line": "This looks like an API key. Save it securely instead of sending it?",
-      "remove": "Remove",
-      "save": "Save securely"
-    },
     "usage": {
       "close": "Close"
     },
@@ -4769,7 +4754,6 @@
         "published": "{agent} published “{title}” on {site}",
         "wentLiveDetail": "On its own, after Quality and your brand facts",
         "publishedDetail": "Live on {site} · on its own, after Quality and your brand facts",
-        "takenDown": "Taken down · a draft in {cms} again",
         "openPage": "Open page",
         "openRun": "Open run",
         "goLiveOff": "{agent} no longer publishes on its own",
@@ -5533,7 +5517,6 @@
       "reviseDraftUndo": "Put the draft “{title}” back as it was",
       "sendToCms": "Sent the draft “{title}” to {cms}",
       "publishToCms": "Published the page “{title}” through {cms}",
-      "takeDownFromCms": "Took the page “{title}” down from {cms}",
       "makeReport": "Made the report “{title}”",
       "makeReportUndo": "Removed the report “{title}” from Reports",
       "startAudit": "Started Site Audit on {pages}",
@@ -5774,7 +5757,7 @@
       "started": "{trigger, select, schedule {It started on its schedule.} signal {It started because Action Center found {count, plural, one {a new signal} other {# new signals}}.} kpi {It started because a KPI changed.} watch_rule {It started because a watch rule fired.} action {It started from an Action Center action.} other {It started with Run now.}}",
       "earlier": "{count, plural, one {One more fire came while it waited (cooldown or daily limit): it's in the scope too.} other {# more fires came while it waited (cooldown or daily limit): they're in the scope too.}}",
       "action": "It works on one Action Center action, AC-{no} ({category}); its title and open tasks when the run was asked for are in the scope. Read it with its tasks first and keep to its targets: never add new ones. Closing tasks stays the person’s click.",
-      "background": "This run works in the background. When a question comes up, take the recommended option and list your assumptions at the top of the answer. Make the changes your task asks for by calling their tools: save drafts, send findings to Action Center, set tasks Ready for review. The app holds each change for approval where the agent's mode needs it, so never leave one out because it needs approval.",
+      "background": "This run works in the background. When a question comes up, take the recommended option and list your assumptions at the top of the answer. Changes still wait for approval as the agent's mode says.",
       "notConnected": "{name} isn’t connected for this brand. Do everything else without it, and say so in one line: “{name} isn’t connected. I can do everything else without it.”",
       "chip": {
         "agent": "Agent",
@@ -7676,17 +7659,6 @@
       "cancel": "Cancel",
       "save": "Mark published"
     },
-    "takeDown": {
-      "action": "Take down",
-      "title": "Take down “{title}”?",
-      "body": "It leaves {site} now and goes back to a draft in {cms}. Links to it, and AI answers that cited it, may still point to it for a while.",
-      "keep": "Keep it live",
-      "confirm": "Take down",
-      "working": "Taking down…",
-      "done": "Taken down. It’s a draft in {cms} again.",
-      "doneShort": "Taken down",
-      "failed": "The page couldn’t be taken down. Try again."
-    },
     "plan": {
       "title": "Content plan",
       "description": "What to create, optimize or protect next.",
@@ -7942,23 +7914,11 @@
         "type": "Type",
         "method": "Method",
         "by": "By",
-        "madeIn": "Made in",
         "status": "Status",
         "created": "Created",
         "updated": "Updated",
         "menu": "Row actions",
         "shopping": "Shopping path"
-      },
-      "madeIn": {
-        "label": "Made in",
-        "all": "All",
-        "editor": "Content Editor",
-        "chat": "Chat",
-        "action_center": "Action Center",
-        "agent": "Agent",
-        "mcp": "MCP",
-        "openChat": "Open chat",
-        "in": "in {place}"
       },
       "rowMenu": {
         "label": "Actions for {title}",
@@ -7974,15 +7934,13 @@
         "forbidden": "Only admins and managers can archive or delete content.",
         "newerDraft": "A newer draft does this task's work. Archive or delete it first, then restore this one.",
         "sendToCms": "Send to CMS",
-        "sendFailed": "Couldn't open the page to send. Try again.",
-        "takeDown": "Take down"
+        "sendFailed": "Couldn't open the page to send. Try again."
       },
       "cms": {
         "queued": "Sending to your CMS since {when}",
         "sent": "Sent to your CMS {when}",
         "failed": "The last send to your CMS failed, {when}",
         "published": "Published {when}",
-        "taken_down": "Taken down {when}",
         "openLive": "Published {when}: open the live page in a new tab",
         "answered": "The webhook answered {status}.",
         "onItsOwn": "Sent by {agent} · on its own",
@@ -7991,22 +7949,19 @@
           "queued": "Sending to Webflow since {when}",
           "sent": "In Webflow as a draft item since {when}",
           "failed": "The last send to Webflow failed, {when}",
-          "published": "Published {when}",
-          "taken_down": "Taken down {when}: a draft item in Webflow again"
+          "published": "Published {when}"
         },
         "wordpress": {
           "queued": "Sending to WordPress since {when}",
           "sent": "In WordPress as a draft post since {when}",
           "failed": "The last send to WordPress failed, {when}",
-          "published": "Published {when}",
-          "taken_down": "Taken down {when}: a draft post in WordPress again"
+          "published": "Published {when}"
         },
         "wix": {
           "queued": "Sending to Wix since {when}",
           "sent": "In Wix as a draft post since {when}",
           "failed": "The last send to Wix failed, {when}",
-          "published": "Published {when}",
-          "taken_down": "Taken down {when}: a draft post in Wix again"
+          "published": "Published {when}"
         },
         "framer": {
           "queued": "Sending to Framer since {when}",
@@ -8533,8 +8488,6 @@
       },
       "actionBar": "This draft is the work of <link>Action AC-{no}</link>. Mark ready completes its task there.",
       "actionBarDone": "This draft is the work of <link>Action AC-{no}</link>.",
-      "chatBar": "From chat: <link>{title}</link>",
-      "chatBarUntitled": "Untitled chat",
       "suggestions": {
         "bar": "Agent suggestions",
         "agent": "Content Agent",
@@ -9177,7 +9130,6 @@
         "failed": "Couldn't export the page. Try again."
       },
       "sentChip": {
-        "takenDown": "Taken down",
         "webflow": {
           "queued": "Sending to Webflow…",
           "sent": "In Webflow · draft",
@@ -10632,10 +10584,6 @@
       "sourceData": "Source Data",
       "relatedPrompt": "Related Prompt",
       "estAiVolume": "Est. AI Volume",
-      "volumeOfQuestion": "{count, plural, one {For “{question}”} other {For “{question}”, one of # prompts}}",
-      "volumeOfPrompts": "{count, plural, one {For its prompt} other {For its question, one of # prompts}}",
-      "volumeHeadTerms": "From head terms. Closest measured phrase: “{phrase}”, <range></range>",
-      "volumeHeadTermsOnly": "From head terms: the question's own words aren't measured.",
       "visibility": "Current Visibility",
       "competitorGap": "Competitor Gap",
       "intent": "Search Intent",
@@ -10756,10 +10704,6 @@
     "reviewedError": "Failed to mark as reviewed",
     "duplicatesMerged": "{count, plural, one {1 similar suggestion was merged into this one.} other {# similar suggestions were merged into this one.}}",
     "duplicatesMergedHint": "They rested on the same prompts and AI searches, so they weren't created and didn't use your quota.",
-    "sameQuestionMerged": "{count, plural, one {1 more request for the same question was added to this opportunity.} other {# more requests for the same question were added to this opportunity.}}",
-    "sameQuestionMergedHint": "A question gets one open opportunity: their prompts, AI searches and sources are counted here, and they didn't use your quota.",
-    "mergedInto": "Merged into the open opportunity for the same question.",
-    "mergedIntoOpen": "Open it",
     "newSignal": "New signal detected",
     "newSignalScoreRose": "Completed earlier, and its opportunity has grown since: the score rose from {from} to {to}.",
     "newSignalGainLost": "Completed earlier, but the gain did not hold: visibility on these prompts was {after}% after the work and is {now}% now."
@@ -11530,8 +11474,8 @@
       "averageTitle": "Avg. AI Volume",
       "averageSub": "per prompt",
       "chartCaption": "Total estimated AI-answered queries across all topic clusters (Google volume × the {rate} AI adoption rate), split by answer-engine share: Google AI Overviews, Google AI Mode and standalone chatbots.",
-      "googleColumn": "Google Vol. (head terms)",
-      "googleTip": "Monthly Google searches of the prompt's related head terms, from DataForSEO: the median of those with search data. Not its own words: a long question is searched far less as it is written.",
+      "googleColumn": "Google Vol.",
+      "googleTip": "The prompt's monthly Google searches: the median of its related keywords that have search data.",
       "aiColumn": "Est. AI Vol.",
       "aiTip": "Estimated monthly AI searches, as a range: the related keywords' Google searches × the AI adoption rate. Grey when the confidence is low.",
       "footnote": "* Est. AI Volume is an estimate, shown as a range: the median Google searches of the prompt's related keywords × the AI adoption rate. Hover a range for its sources, confidence and date. For planning, not a measured count.",
@@ -11872,7 +11816,7 @@
     "methodTotal": "The sum of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of Google searches that now get an AI answer ({rate}%).",
     "methodKeyword": "This keyword's monthly Google searches × the share of Google searches that now get an AI answer ({rate}%). Its Google volume is measured; the AI share is an estimate, so the range is ±25%.",
     "methodGuess": "An AI's estimate for a prompt you don't track yet, scaled to your tracked prompts' estimates. Track the prompt to get one from its keywords' Google searches.",
-    "methodSnapshot": "This opportunity's question's estimate when it was made. Its current estimate couldn't be read, so this one may be out of date.",
+    "methodSnapshot": "The sum of this opportunity's prompts' estimates when it was made or last updated. Their current estimates couldn't be read, so this one may be out of date.",
     "methodGuessTotal": "The sum of an AI's estimates for suggested prompts you don't track yet, each scaled to your tracked prompts' estimates. Track them to get estimates from their keywords' Google searches.",
     "methodAverage": "The average of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of Google searches that now get an AI answer ({rate}%).",
     "keywords": "{measured} of {keywords} related keywords have Google search data.",
@@ -11881,7 +11825,7 @@
     "rangeOne": "With one to go by, the range is half to twice the estimate.",
     "mix": "Confidence by prompt: {high} high, {medium} medium, {low} low.",
     "sources": "Sources: Google search volume from DataForSEO ({month}) and an AI answer share of {rate}%.",
-    "sourcesSnapshot": "Source: the opportunity's question's estimate, kept when it was made.",
+    "sourcesSnapshot": "Source: the opportunity's prompts' estimates, kept when it was made or last updated.",
     "sourcesGuess": "Source: Ansvisor's AI, from your tracked prompts' estimates.",
     "sourcesUndated": "Sources: Google search volume from DataForSEO and an AI answer share of {rate}%.",
     "confidence": "Confidence: {level} · updated {date}",
@@ -11889,7 +11833,7 @@
     "confidenceUndated": "Confidence: {level}",
     "stale": "Fetched over six months ago, so one level less sure. Refresh volumes for a newer estimate.",
     "lowNote": "Low confidence: shown in grey, and not used to rank on its own.",
-    "lowNoteSnapshot": "Low confidence: an old estimate, shown in grey.",
+    "lowNoteSnapshot": "Low confidence: an old sum, shown in grey.",
     "lowNoteGuess": "Low confidence: an AI's guess, shown in grey.",
     "measuredNote": "Measured numbers, such as your visibility or Search Console clicks, never carry this badge.",
     "level": {
@@ -14606,103 +14550,6 @@
       "prompts": {
         "title": "Prompt Volumes",
         "description": "Understand query volume trends across platforms and identify opportunities."
-      }
-    }
-  },
-  "chatConnections": {
-    "uploadedFile": "Uploaded file",
-    "tools": {
-      "google_search_console": {
-        "name": "Google Search Console",
-        "description": "Real search queries and impressions for your site."
-      },
-      "google_analytics": {
-        "name": "Google Analytics",
-        "description": "Sessions and conversions from your GA4 property, for AI traffic history."
-      },
-      "bing_webmaster_tools": {
-        "name": "Bing Webmaster Tools",
-        "description": "Bing and Copilot search data."
-      },
-      "webflow": {
-        "name": "Webflow",
-        "description": "Send pages to your Webflow site as drafts."
-      },
-      "wordpress": {
-        "name": "WordPress",
-        "description": "Send pages to your WordPress site as drafts."
-      },
-      "framer": {
-        "name": "Framer",
-        "description": "Send pages to your Framer site’s CMS."
-      },
-      "wix": {
-        "name": "Wix",
-        "description": "Send pages to your Wix site as drafts."
-      },
-      "webhook": {
-        "name": "Workflow webhook",
-        "description": "Send finished pages to your own workflow."
-      },
-      "contentful": {
-        "name": "Contentful",
-        "description": "Send pages to a Contentful content type."
-      },
-      "sanity": {
-        "name": "Sanity",
-        "description": "Send pages to Sanity as documents."
-      },
-      "merchant_center": {
-        "name": "Google Merchant Center",
-        "description": "Your products as Google Shopping sees them."
-      },
-      "woocommerce": {
-        "name": "WooCommerce",
-        "description": "Your store’s products, read with its own sign-in."
-      },
-      "product_feed": {
-        "name": "Product feed or file",
-        "description": "A product feed read every day, or a file you upload."
-      },
-      "shopify": {
-        "name": "Shopify",
-        "description": "Your Shopify products for AI shopping checks."
-      },
-      "hubspot": {
-        "name": "HubSpot",
-        "description": "Ties AI visits to deals and revenue."
-      },
-      "salesforce": {
-        "name": "Salesforce",
-        "description": "Revenue from AI-referred leads."
-      },
-      "pipedrive": {
-        "name": "Pipedrive",
-        "description": "Deals from AI-referred leads."
-      },
-      "stripe": {
-        "name": "Stripe",
-        "description": "Payments matched to AI visits."
-      },
-      "google_sheets": {
-        "name": "Google Sheets",
-        "description": "Send tables and reports to a sheet."
-      },
-      "looker_studio": {
-        "name": "Looker Studio",
-        "description": "Ansvisor data in your dashboards."
-      },
-      "slack": {
-        "name": "Slack",
-        "description": "Inbox items and reports in a channel."
-      },
-      "microsoft_teams": {
-        "name": "Microsoft Teams",
-        "description": "Inbox items and reports in a channel."
-      },
-      "zapier": {
-        "name": "Zapier",
-        "description": "Start Ansvisor skills from other tools."
       }
     }
   }
