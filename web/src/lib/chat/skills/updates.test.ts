@@ -232,6 +232,39 @@ describe('one minute of the weekly check (checkSkillUpdates)', () => {
     });
     expect(rowOf(gone.id)).toMatchObject({ enabled: true, update_sha: null });
   });
+
+  it('marks the skipped skills of workspaces where Chat is off, so the queue moves on', async () => {
+    vi.stubEnv('CHAT_AGENTIC_ORGS', ORG);
+    const off = Array.from({ length: updates.UPDATES_PER_TICK }, () =>
+      seedSkill({ organization_id: OTHER_ORG }),
+    );
+    const mine = seedSkill({
+      update_checked_at: new Date('2026-10-01T00:00:00.000Z').toISOString(),
+    });
+    github.read.mockResolvedValue(at(KEPT));
+    expect(await updates.checkSkillUpdates(IN_WINDOW)).toMatchObject({ checked: 0 });
+    for (const row of off) expect(rowOf(row.id).update_checked_at).toBe(IN_WINDOW.toISOString());
+    expect(await updates.checkSkillUpdates(IN_WINDOW)).toMatchObject({ checked: 1 });
+    expect(rowOf(mine.id).update_checked_at).toBe(IN_WINDOW.toISOString());
+  });
+
+  it('withdraws an update when the source moved back to the version kept', async () => {
+    const row = seedSkill({ update_sha: NEW });
+    github.read.mockResolvedValue(at('c'.repeat(40)));
+    expect(await updates.checkSkillUpdates(IN_WINDOW)).toMatchObject({ updates: 0 });
+    expect(rowOf(row.id)).toMatchObject({ update_sha: null, commit_sha: KEPT });
+  });
+
+  it('leaves a row an Admin updated while the check read its old commit', async () => {
+    const row = seedSkill();
+    github.read.mockImplementation(async () => {
+      // The approval lands while the source is read.
+      Object.assign(rowOf(row.id), { commit_sha: NEW, update_sha: null });
+      return at(NEW, skillFile(`${BODY}\nThen cut it by a third.`));
+    });
+    await updates.checkSkillUpdates(IN_WINDOW);
+    expect(rowOf(row.id)).toMatchObject({ commit_sha: NEW, update_sha: null });
+  });
 });
 
 describe('the update’s review and an Admin’s approval', () => {

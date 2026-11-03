@@ -117,7 +117,17 @@ export async function checkSkillUpdates(
     .limit(limit);
   if (error) throw new Error(`Could not read the skills to check: ${error.message}`);
   for (const row of (data ?? []) as CheckRow[]) {
-    if (!chatAgenticEnabled(row.organization_id)) continue;
+    if (!chatAgenticEnabled(row.organization_id)) {
+      // Not checked, but marked: else these rows stay the oldest and hold
+      // every other workspace's skills out of the queue.
+      const { error: skipError } = await supabaseAdmin
+        .from('chat_skills')
+        .update({ update_checked_at: now.toISOString() })
+        .eq('id', row.id);
+      if (skipError)
+        console.error('[chat/skills] could not mark a skipped check:', skipError.message);
+      continue;
+    }
     done.checked += 1;
     if (row.enabled && skillChecksum(row) !== row.checksum_sha256) {
       done.switchedOff += 1;
@@ -140,9 +150,13 @@ export async function checkSkillUpdates(
       .from('chat_skills')
       .update({
         update_checked_at: now.toISOString(),
+        // The source moved back to the version kept: the update it had is withdrawn.
         ...(decision.kind === 'update' ? { update_sha: decision.sha } : {}),
+        ...(decision.kind === 'same' ? { update_sha: null } : {}),
       })
-      .eq('id', row.id);
+      .eq('id', row.id)
+      // An Admin approved an update meanwhile: this check read the old commit.
+      .eq('commit_sha', row.commit_sha);
     if (keepError)
       console.error('[chat/skills] could not keep an update check:', keepError.message);
   }
