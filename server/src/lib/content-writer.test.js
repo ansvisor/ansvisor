@@ -1401,13 +1401,13 @@ describe('Rewrite the page to these rules', () => {
     expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
   });
 
-  describe('a rewrite well past its Length: one more pass cuts it', () => {
+  describe('a rewrite past its Length: one more pass cuts it', () => {
     const cutBudget = {
       charge: vi.fn(async () => {}),
       release: vi.fn(async () => {}),
       keep: vi.fn(async () => {}),
     };
-    // A Length of 100 (up to 120): a cut pass past 135.
+    // A Length of 100 (up to 120): a cut pass past 120. The first answer is 199 characters.
     const toLength = (length = 100) => ({
       rules: [{ key: 'length', name: 'Length', detail: `aim: ${length} characters` }],
       sources: { ...input().sources, length },
@@ -1526,6 +1526,17 @@ describe('Rewrite the page to these rules', () => {
       expect(
         writes.find((w) => w.table === 'content_draft_suggestions' && w.kind === 'insert'),
       ).toBeUndefined();
+    });
+
+    it('cuts a rewrite only a little past its band too (editor test 2026-11-03)', async () => {
+      // A Length of 150 (up to 180): 199 is past it, though within 15% of it.
+      answers(long, short);
+      await run(toLength(150));
+      expect(generateObject).toHaveBeenCalledTimes(2);
+      expect(generateObject.mock.calls[1][0].prompt).toContain(
+        'Its Length is 150 characters, up to 180. Cut it to about 150.',
+      );
+      expect(row().after_text).toContain('Short.');
     });
 
     it('cuts nothing within reach of the Length, or with Length off', async () => {
