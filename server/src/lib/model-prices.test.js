@@ -62,6 +62,8 @@ describe('rowOf', () => {
       image_output_per_m: null,
       overrides: [{ min_prompt_tokens: 100000, prompt: '0.0000005', completion: '0.0000025' }],
       is_batch: false,
+      supported_parameters: [],
+      context_length: null,
       synced_at: SYNCED,
     });
     expect(
@@ -75,6 +77,25 @@ describe('rowOf', () => {
         SYNCED,
       ).image_output_per_m,
     ).toBeCloseTo(60);
+  });
+
+  it('keeps what a model takes and its context window, for the model menu (00462)', () => {
+    const row = rowOf(
+      {
+        ...model('anthropic/claude-sonnet-5.5', '0.000002', '0.00001'),
+        supported_parameters: ['tools', 'reasoning', 7, 'structured_outputs'],
+        context_length: 1000000,
+      },
+      SYNCED,
+    );
+    expect(row.supported_parameters).toEqual(['tools', 'reasoning', 'structured_outputs']);
+    expect(row.context_length).toBe(1000000);
+    const odd = rowOf(
+      { ...model('x/y', '0', '0'), supported_parameters: 'tools', context_length: '12.5' },
+      SYNCED,
+    );
+    expect(odd.supported_parameters).toEqual([]);
+    expect(odd.context_length).toBeNull();
   });
 
   it('keeps no price for a variable-priced router, and no row without an id', () => {

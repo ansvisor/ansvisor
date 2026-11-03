@@ -181,17 +181,26 @@ export async function resolveChatModelKey(organizationId: string): Promise<ChatM
  * metered, and when it can't be read: the server's hold still decides a run.
  */
 export async function chatRunsOnOwnKey(organizationId: string): Promise<boolean> {
-  if (!isCloud() || !chatAgenticEnabled(organizationId)) return false;
+  return (await ownChatKeyProvider(organizationId)) !== null;
+}
+
+/**
+ * The provider of the own key the workspace's Chat runs on, as
+ * chatRunsOnOwnKey decides it; null when Chat runs on Ansvisor's key. The
+ * model menu marks that provider's models "Your key" (W4-01).
+ */
+export async function ownChatKeyProvider(organizationId: string): Promise<AiProvider | null> {
+  if (!isCloud() || !chatAgenticEnabled(organizationId)) return null;
   // Same rule as resolveChatModelKey: Enterprise, or a kept key's 30 days.
   const access = await ownKeyAccess(organizationId).catch(() => null);
-  if (access?.state !== 'plan' && access?.state !== 'kept') return false;
+  if (access?.state !== 'plan' && access?.state !== 'kept') return null;
   const { data: key } = await supabaseAdmin
     .from('organization_ai_keys')
     .select('provider, key_encrypted')
     .eq('organization_id', organizationId)
     .eq('active', true)
     .maybeSingle();
-  return !!key?.key_encrypted && isAiProvider(key.provider);
+  return key?.key_encrypted && isAiProvider(key.provider) ? key.provider : null;
 }
 
 /**
