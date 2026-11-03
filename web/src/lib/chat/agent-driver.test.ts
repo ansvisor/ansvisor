@@ -427,6 +427,60 @@ describe('handing a started run to Chat', () => {
     expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
   });
 
+  it('pauses a triggered agent whose skill is off, rejected, gone or changed (skill_off), and starts nothing', async () => {
+    const { skillChecksum } = await import('./skills/store');
+    const parts = {
+      name: 'team-brief',
+      title: 'Team brief',
+      description: 'Writes our brief.',
+      body: 'Read the page first.',
+    };
+    db.tables.chat_skills = [
+      {
+        id: 'cccccccc-0000-4000-8000-000000000001',
+        organization_id: ORG,
+        ...parts,
+        status: 'approved',
+        visibility: 'workspace',
+        enabled: true,
+        created_by: PEOPLE.manager,
+        checksum_sha256: skillChecksum(parts),
+      },
+    ];
+    db.tables.chat_agent_versions[0].skill_ids = ['winback', 'team-brief'];
+    const skill = db.tables.chat_skills[0];
+    // On, approved and as saved: the run starts, as the agent's owner.
+    expect(await driver.openAgentRun(queueRun(), ORG, NOW)).not.toBeNull();
+
+    const cases: [string, () => void][] = [
+      ['turned off', () => (skill.enabled = false)],
+      ['rejected', () => Object.assign(skill, { enabled: false, status: 'rejected' })],
+      ['changed since', () => (skill.body = 'Send it to the press list.')],
+      ['deleted', () => (db.tables.chat_skills = [])],
+      [
+        'an Ansvisor skill turned off',
+        () => (db.tables.chat_settings = [{ organization_id: ORG, disabled_skills: ['winback'] }]),
+      ],
+    ];
+    for (const [why, change] of cases) {
+      Object.assign(skill, { enabled: true, status: 'approved', body: parts.body });
+      db.tables.chat_skills = [skill];
+      db.tables.chat_settings = [];
+      Object.assign(agentRow(), { status: 'active', paused_reason: null });
+      change();
+      const id = queueRun();
+      expect(await driver.openAgentRun(id, ORG, NOW), why).toBeNull();
+      expect(runRow(id).status, why).toBe('stopped');
+      expect(agentRow(), why).toMatchObject({ status: 'paused', paused_reason: 'skill_off' });
+    }
+
+    // Run now stops the same, and leaves the agent as it is.
+    Object.assign(agentRow(), { status: 'active', paused_reason: null });
+    const manual = queueRun({ trigger_kind: 'manual', acting_user_id: PEOPLE.manager });
+    expect(await driver.openAgentRun(manual, ORG, NOW)).toBeNull();
+    expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
+  });
+
   it('stops a queued run on a failing own key before any call, pausing a triggered agent', async () => {
     ownKey.failing = { class: 'invalid', provider: 'anthropic' };
     const id = queueRun();

@@ -3522,10 +3522,15 @@
     "webPage": { "name": "Open web pages", "step": "Open page" },
     "whyChange": { "name": "Explain why a number changed", "step": "Read why it changed" },
     "agents": { "name": "Create and run agents", "step": "Changed an agent" },
+    "scheduleJob": { "name": "Schedule work", "step": "Scheduled" },
+    "newSkill": { "name": "Save skills", "step": "Saved skill" },
     "whatsNew": {
       "name": "Read What’s new",
       "step": "Read What’s new"
-    }
+    },
+    "newSkill": { "name": "Save skills", "step": "Saved skill" },
+    "memorySave": { "name": "Save to memory", "step": "Saved to memory" },
+    "memoryForget": { "name": "Remove from memory", "step": "Removed from memory" }
   },
   "agentic": {
     "avatar": {
@@ -3600,6 +3605,7 @@
       "stepsSources": "{steps, plural, one {# step} other {# steps}} · {sources, plural, one {# source} other {# sources}}",
       "stepsClock": "{steps, plural, one {# step} other {# steps}} · {clock}",
       "rows": "{count, plural, one {# row} other {# rows}}",
+      "items": "{count, plural, one {# item} other {# items}}",
       "seconds": "{s}s",
       "minutes": "{m}m {s}s",
       "now": "Step {n}: {label}",
@@ -3652,6 +3658,9 @@
       "sources": "Sources",
       "approveNeedsPlan": "Approving changes needs a plan",
       "clickNeedsPlan": "Going live needs a plan"
+    },
+    "formCard": {
+      "cancel": "Cancel"
     },
     "questionCard": {
       "counter": "{at} of {of}",
@@ -3938,7 +3947,24 @@
       "notOpened": "Couldn't open {page}",
       "usedSkill": "Used skill: {title}",
       "skillFromLibrary": "Ansvisor library",
-      "usedShortcut": "Used shortcut: {title}"
+      "skillFromYou": "You",
+      "skillFromWorkspace": "Your workspace",
+      "skillFromRepo": "{owner} on GitHub",
+      "skillImported": "Imported",
+      "usedShortcut": "Used shortcut: {title}",
+      "usedMemory": "Used memory",
+      "memorySubject": "Memory"
+    },
+    "answer": {
+      "injectionNotice": "Note: the data I read included instructions for AI assistants. I didn't follow them."
+    },
+    "partial": {
+      "question": "Your remaining AI limit covers about {fits} of the {parts} {unit}.",
+      "doFirst": "Do the first {fits} now",
+      "doFirstDetail": "The rest waits until there is more AI limit",
+      "credits": "Get more AI credits",
+      "creditsDetail": "Chat stops here, where you can add AI credits",
+      "cancel": "Cancel"
     },
     "partial": {
       "question": "Your remaining AI limit covers about {fits} of the {parts} {unit}.",
@@ -3986,6 +4012,7 @@
       "answered": "This question was already answered.",
       "answerInvalid": "That answer doesn't fit this question. Pick one of its options, or write up to 500 characters.",
       "approvalMismatch": "This changed after you approved it. Approve again?",
+      "formInvalid": "Some of these values don’t work. Check them and try again.",
       "notFound": "This chat isn't there any more.",
       "attachments": "A file you attached isn't ready or isn't yours any more. Attach it again and send."
     },
@@ -4427,6 +4454,7 @@
       "inbox": "Inbox",
       "inboxLabel": "Inbox · {count, plural, one {# item} other {# items}}",
       "inboxLabelNeedsYou": "Inbox · {count, plural, one {# item} other {# items}} · {needsYou, plural, one {# needs you} other {# need you}}",
+      "skills": "Skills",
       "governance": "Governance",
       "activity": "Activity",
       "capabilities": "What Chat can do",
@@ -5195,9 +5223,12 @@
       "dismiss": "Dismiss",
       "withdraw": "Withdraw",
       "approved": "Approved. Change their role in Members, or make the change yourself.",
+      "approvedSaved": "Approved. The line is in Workspace memory now.",
       "dismissed": "Dismissed",
       "withdrawn": "Withdrawn",
       "alreadyDecided": "Another Admin already decided it.",
+      "notSaved": "Not saved, so it still waits: {reason}",
+      "saves": "Approving saves: “{text}”",
       "failed": "Couldn't update it. Try again.",
       "status": {
         "pending": "Waiting",
@@ -5475,7 +5506,10 @@
         "content": "Content",
         "reports": "Reports",
         "navigation": "Navigation",
-        "web": "Web"
+        "web": "Web",
+        "scheduling": "Scheduling",
+        "skills": "Skills",
+        "memory": "Memory"
       }
     }
   },
@@ -5517,6 +5551,8 @@
       "makeReport": "Made the report “{title}”",
       "makeReportUndo": "Removed the report “{title}” from Reports",
       "startAudit": "Started Site Audit on {pages}",
+      "scheduleJob": "Scheduled “{title}” · {when}",
+      "scheduleJobUndo": "Deleted the schedule “{title}” (its past results stay)",
       "accessDenied": "Not allowed: {tool}",
       "agentCreated": "Created the agent “{name}”",
       "agentUpdated": "Changed the agent “{name}”",
@@ -5530,6 +5566,12 @@
       "agentTakenOver": "Took over the agent “{name}”",
       "agentRunQueued": "Asked the agent “{name}” to run for {brand}",
       "agentRunOnAction": "Asked the agent “{name}” to run on the action AC-{action}",
+      "newSkill": "Saved the skill {name}",
+      "newSkillUndo": "Deleted the skill {name}",
+      "memorySave": "Saved “{text}” to {scope} memory",
+      "memorySaveUndo": "Took “{text}” back out of {scope} memory",
+      "memoryForget": "Removed “{text}” from {scope} memory",
+      "memoryForgetUndo": "Brought “{text}” back to {scope} memory",
       "agentGoLiveOn": "Let the agent “{name}” publish and send on its own, up to {limit} a day",
       "agentGoLiveOff": "Stopped the agent “{name}” publishing and sending on its own"
     },
@@ -5588,6 +5630,7 @@
       "queue_full": "{count, plural, one {# run already waits} other {# runs already wait}} for this agent on this brand. Try again once one has started.",
       "connection_missing": "This agent needs {name}, and {brand} doesn’t have it connected. Connect it for that brand, then run the agent again.",
       "own_key_failed": "{why} An Admin can fix it in Settings › AI Providers, then run the agent again.",
+      "skill_off": "The skill /{skill} is off or no longer available. Turn it on again, or pick another skill for this agent.",
       "failed": "Something went wrong with this agent. Try again.",
       "go_live_off": "An Admin hasn’t allowed agents to publish on their own in Settings › Chat.",
       "go_live_mode": "This agent isn’t in Full auto. Pick Full auto first."
@@ -5749,7 +5792,7 @@
       "started": "{trigger, select, schedule {It started on its schedule.} signal {It started because Action Center found {count, plural, one {a new signal} other {# new signals}}.} kpi {It started because a KPI changed.} watch_rule {It started because a watch rule fired.} action {It started from an Action Center action.} other {It started with Run now.}}",
       "earlier": "{count, plural, one {One more fire came while it waited (cooldown or daily limit): it's in the scope too.} other {# more fires came while it waited (cooldown or daily limit): they're in the scope too.}}",
       "action": "It works on one Action Center action, AC-{no} ({category}); its title and open tasks when the run was asked for are in the scope. Read it with its tasks first and keep to its targets: never add new ones. Closing tasks stays the person’s click.",
-      "background": "This run works in the background. When a question comes up, take the recommended option and list your assumptions at the top of the answer. Changes still wait for approval as the agent's mode says.",
+      "background": "This run works in the background. When a question comes up, take the recommended option and list your assumptions at the top of the answer. Make the changes your task asks for by calling their tools: save drafts, send findings to Action Center, set tasks Ready for review. The app holds each change for approval where the agent's mode needs it, so never leave one out because it needs approval.",
       "notConnected": "{name} isn’t connected for this brand. Do everything else without it, and say so in one line: “{name} isn’t connected. I can do everything else without it.”",
       "chip": {
         "agent": "Agent",
@@ -6551,6 +6594,296 @@
         "untitled": "Untitled page",
         "takenDown": "Taken down"
       }
+    }
+  },
+  "chatSkills": {
+    "review": {
+      "asked": "Review the imported skill /{name}",
+      "rule": "Approving an imported skill is for Admins."
+    },
+    "refusal": {
+      "invalid": "This skill isn't valid: {problems}.",
+      "not_found": "This skill isn't available.",
+      "role": "Only Admins and Managers save skills.",
+      "role_manage": "Only an Admin or the person who made this skill can change it.",
+      "role_library": "Only Admins turn Ansvisor skills on or off for the workspace.",
+      "read_only": "Your workspace is read-only, so skills can't be changed.",
+      "library_name": "/{name} is an Ansvisor skill or shortcut. Pick another name.",
+      "name_taken": "A skill named /{name} already exists in this workspace. Pick another name.",
+      "skill_limit": "Your plan keeps up to {limit, plural, one {# skill} other {# skills}} in My skills. Delete one to save another.",
+      "not_approved": "This skill isn't approved yet, so it can't be turned on or shared.",
+      "checksum": "This skill changed since it was approved, so it stays off. Save it again to use it.",
+      "request_limit": "You have too many requests waiting for your Admins. Try again once they answer.",
+      "failed": "Something went wrong with this skill. Try again.",
+      "too_large": "The file is over 5 MB, or unpacks to more than 5 MB.",
+      "not_zip": "This file isn't a .zip that can be read. Upload a .zip of the skill's folder, or its SKILL.md.",
+      "too_many_files": "The skill holds more than {max} files.",
+      "unsafe_path": "The .zip has a path that leaves its folder ({path}), so nothing was imported.",
+      "symlink": "The skill links to another file ({path}), so nothing was imported.",
+      "nested_archive": "The .zip holds another archive ({path}), so nothing was imported.",
+      "binary_file": "{path} isn't a text file. A skill holds instructions only.",
+      "no_skill_file": "There's no SKILL.md in it. A skill is a folder with a SKILL.md.",
+      "several_skills": "It holds more than one SKILL.md. Import one skill at a time.",
+      "license": "This skill's license isn't one Ansvisor accepts: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause or ISC.",
+      "import_plan": "Importing skills starts with the Starter plan.",
+      "github_url": "Use a github.com link to a public repository, or to a folder or a SKILL.md in it.",
+      "github_not_found": "That GitHub repository or folder couldn't be found. Only public repositories can be imported.",
+      "github_busy": "GitHub is busy right now. Try again in a few minutes.",
+      "github_failed": "GitHub couldn't be reached. Try again.",
+      "github_redirect": "GitHub sent the request somewhere else, so nothing was imported.",
+      "role_review": "Only Admins approve or reject skills.",
+      "not_pending": "This skill was reviewed already.",
+      "blocked": "This skill holds something a skill may never hold, so it can't be approved."
+    },
+    "share": {
+      "asked": "Share the skill /{name} with the workspace",
+      "rule": "Sharing a skill with the workspace is for Admins."
+    },
+    "page": {
+      "title": "Skills",
+      "subtitle": "What Chat knows how to do. Run one, schedule it, or build an agent on it.",
+      "agents": "Agents",
+      "tabs": { "ansvisor": "Ansvisor skills", "mine": "My skills" },
+      "limit": "{used} of {max} in your plan",
+      "search": "Search skills",
+      "filters": {
+        "all": "All",
+        "content": "Content",
+        "visibility": "Brand Visibility",
+        "product": "Product Visibility",
+        "technical": "Technical",
+        "reports": "Reports"
+      },
+      "empty": "No skills match.",
+      "mineEmpty": "No skills of your own yet. Ask Chat to save one, and it shows here.",
+      "loadFailed": "Skills couldn't be loaded.",
+      "retry": "Retry",
+      "run": "Run",
+      "starting": "Starting…",
+      "runFailed": "Couldn't start the skill. Try again.",
+      "schedule": "Schedule",
+      "scheduleText": "Every Monday at 9:00, /{name} ",
+      "createAgent": "Create agent",
+      "connect": "Connect {name}",
+      "notConnected": "{name} · not connected",
+      "toggle": "/{name} on for the workspace",
+      "turnedOn": "/{name} is on for the workspace.",
+      "turnedOff": "/{name} is off for the workspace.",
+      "changeFailed": "Couldn't change the skill. Try again.",
+      "badges": {
+        "off": "Off",
+        "pending_review": "Waiting for review",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "blocked": "Blocked",
+        "private": "Only you",
+        "workspace": "Workspace"
+      },
+      "source": {
+        "library": "Ansvisor library",
+        "you": "Made in Chat by you",
+        "workspace": "Made in Chat by a teammate",
+        "upload": "Uploaded",
+        "repo": "Imported from {repo} on GitHub"
+      },
+      "details": {
+        "source": "From",
+        "license": "License",
+        "status": "Status",
+        "warnings": "What the review noted",
+        "close": "Close",
+        "share": "Share with workspace",
+        "askShare": "Ask an Admin to share",
+        "shared": "Shared with the workspace.",
+        "requested": "Asked your Admins to share it.",
+        "delete": "Delete",
+        "deleteConfirm": "Delete /{name}? Agents that use it pause until you pick another skill.",
+        "deleted": "Deleted /{name}."
+      },
+      "newSkill": "New skill",
+      "upload": "Upload a SKILL.md or .zip",
+      "github": "Import from GitHub",
+      "review": "Review"
+    },
+    "import": {
+      "uploadTitle": "Upload a skill",
+      "githubTitle": "Import a skill from GitHub",
+      "uploadBody": "Pick a SKILL.md, or a .zip of the skill's folder, up to 5 MB. Only its instructions come in: scripts and commands are removed, and nothing runs.",
+      "githubBody": "Paste a public github.com link to a repository, a folder or a SKILL.md. It's read at today's commit and never updates by itself.",
+      "file": "Skill file",
+      "choose": "Choose file",
+      "noFile": "No file chosen",
+      "url": "GitHub link",
+      "urlPlaceholder": "https://github.com/owner/repo/tree/main/skill-name",
+      "licenses": "MIT, Apache-2.0, BSD and ISC licenses only.",
+      "tooLarge": "This file is over 5 MB.",
+      "cancel": "Cancel",
+      "submit": "Import for review",
+      "working": "Reading the skill…",
+      "requested": "Imported. Your Admins were asked to review it.",
+      "imported": "Imported. Review it before anyone can use it.",
+      "failed": "The skill couldn't be imported. Try again."
+    },
+    "reviewPage": {
+      "title": "Review skill",
+      "back": "Skills",
+      "loadFailed": "This skill's review couldn't be loaded.",
+      "notFound": "This skill isn't available to review.",
+      "status": {
+        "pending_review": "Waiting for review",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "blocked": "Blocked"
+      },
+      "subtitle": "/{name} · {description}",
+      "cleaned": "SKILL.md · cleaned",
+      "plain": "Plain text · nothing runs",
+      "hidden": "{count, plural, one {# hidden character is} other {# hidden characters are}} marked in the text.",
+      "scan": "Safety scan",
+      "blocks": "Blocks it",
+      "warns": "Worth a look",
+      "clean": "Nothing found.",
+      "removed": "Removed before review",
+      "nothingRemoved": "Nothing was removed.",
+      "source": "Source",
+      "from": "From",
+      "upload": "Uploaded",
+      "commit": "Commit",
+      "license": "License",
+      "licenseText": "License text",
+      "approve": "Approve",
+      "reject": "Reject",
+      "approved": "Approved. /{name} is on for you; share it from Skills when it's ready for everyone.",
+      "rejected": "Rejected. /{name} stays off.",
+      "blockedNote": "The scan blocked this skill, so it can't be approved.",
+      "waitingNote": "An Admin reviews it before anyone can use it.",
+      "decided": "{status} on {date}.",
+      "failed": "The decision couldn't be saved. Try again."
+    }
+  },
+  "chatMemory": {
+    "refusal": {
+      "invalid": "There's nothing to remember in that. Say it as one short line.",
+      "too_long": "A memory is at most {line} characters. Shorten it first.",
+      "blocked": "I can't save that. Memory doesn't keep secrets or personal details.",
+      "rules": "I can't save that. Memory can't change Chat's rules, permissions or tools.",
+      "full": "Memory is full. Delete or shorten an item first.",
+      "off": "Memory is off. Turn it on in Memory.",
+      "workspace_off": "Memory is off for this workspace. An Admin can turn it on in Settings › Chat.",
+      "role_brand": "Only Admins and Managers change Brand memory. You can save it to Me instead.",
+      "role_workspace": "Only Admins change Workspace memory. You can save it to Me instead.",
+      "role_switch": "Only Admins turn memory on or off for the workspace.",
+      "no_brand": "Brand memory belongs to one brand. Pick the brand first.",
+      "not_found": "This memory isn't there any more.",
+      "undo_expired": "It's too late to undo this.",
+      "read_only": "Your workspace is read-only, so memory can't be changed.",
+      "request_limit": "You have too many requests waiting for your Admins. Try again once they answer.",
+      "requester": "The person who asked isn't a Manager of this workspace any more.",
+      "failed": "Something went wrong with memory. Try again."
+    },
+    "request": {
+      "asked": "Add to Workspace memory: “{text}”",
+      "rule": "Workspace memory is for Admins.",
+      "sent": "Sent to your Admins. It goes into Workspace memory once one of them approves."
+    },
+    "scope": {
+      "user": "Me",
+      "brand": "Brand",
+      "brandNamed": "Brand: {brand}",
+      "workspace": "Workspace"
+    },
+    "card": {
+      "replaces": "Replaces: {text}"
+    }
+  },
+  "chatSchedules": {
+    "run": {
+      "background": "This is the scheduled job “{title}”, running by itself with nobody watching. When a question comes up, take the recommended option and list your assumptions at the top of the answer. Changes wait in this chat for approval.",
+      "assumed": "Nobody was watching · used {option}",
+      "assumptions": "Assumed for this scheduled run: {list}",
+      "chip": {
+        "job": "Scheduled job",
+        "brand": "Brand",
+        "slot": "Scheduled for"
+      },
+      "reason": {
+        "readOnly": "The workspace is read-only, so it didn't run.",
+        "ownerRole": "Its creator can't run scheduled jobs any more.",
+        "brandAccess": "Its creator can't use its brand any more.",
+        "brandGone": "Its brand was deleted.",
+        "skillOff": "Its skill /{skill} is off or gone.",
+        "aiLimit": "The monthly AI limit was reached.",
+        "missed": "It couldn't start within an hour of its time.",
+        "stillOpen": "Its last run hadn't finished.",
+        "failed": "Something went wrong.",
+        "lost": "It stopped before it could start.",
+        "stopped": "It was stopped.",
+        "noAnswer": "No answer in 7 days."
+      }
+    },
+    "when": {
+      "daily": "Every day, {time}",
+      "weekdays": "Every weekday, {time}",
+      "weekly": "Every {days}, {time}",
+      "monthly": "{day, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} of every month, {time}",
+      "monthlyLast": "Last day of every month, {time}",
+      "once": "Once, {date}",
+      "readyBy": "Due {date}",
+      "zone": "{when} · {zone}",
+      "dateTime": "{date}, {time}",
+      "next": "Next: {date}",
+      "and": "and",
+      "or": "or",
+      "day": {
+        "MO": "Monday",
+        "TU": "Tuesday",
+        "WE": "Wednesday",
+        "TH": "Thursday",
+        "FR": "Friday",
+        "SA": "Saturday",
+        "SU": "Sunday"
+      },
+      "problem": {
+        "ambiguous": "That could be {options}. Say which one.",
+        "past": "That time has passed. Pick a later one.",
+        "too_far": "That’s more than a year away. Pick a sooner date.",
+        "too_often": "Scheduled jobs run at most once a day.",
+        "unreadable": "Say a day and time, like “every Monday at 9:00” or “tomorrow at 3pm”."
+      }
+    },
+    "card": {
+      "title": "Job",
+      "prompt": "What Chat does each run",
+      "when": "When",
+      "deliver": "Deliver to",
+      "changeOnly": "Notify only if the answer changed",
+      "changeOnlyHint": "Recurring jobs only. The first run always delivers.",
+      "submit": "Create schedule",
+      "model": "Runs on Auto · Normal",
+      "usage": "≈ {share} of monthly AI usage per run",
+      "usageUnknown": "Each run uses your monthly AI limit, like a chat",
+      "ownKey": "Runs on your workspace’s own AI key",
+      "emailTo": "Email goes to you"
+    },
+    "deliver": {
+      "chat": "Chat",
+      "email": "Email",
+      "both": "Chat + Email"
+    },
+    "step": {
+      "done": "Scheduled: {title}",
+      "detail": "{when} · {deliver}",
+      "detailReadyBy": "{when} · Starts now · {deliver}"
+    },
+    "tool": {
+      "ambiguous": "“{phrase}” could mean {options}. Ask the person which one with a question card, these as its options (the first recommended), then schedule again with the phrase they pick: {phrases}.",
+      "past": "“{phrase}” has passed in the person’s time zone ({zone}). Ask for a later time.",
+      "too_far": "“{phrase}” is more than a year away. Ask for a sooner date.",
+      "too_often": "A scheduled job runs at most once a day. Ask the person for a daily or less frequent time.",
+      "unreadable": "“{phrase}” isn’t a date or a repeat Chat can schedule. Ask the person for a day and time, such as “every Monday at 9:00” or “tomorrow at 3pm”.",
+      "limit": "The workspace’s plan keeps up to {limit} scheduled jobs on at once, and {count} are on. Tell the person to turn one off in Scheduled, or to upgrade.",
+      "skill": "There is no skill /{skill} on in this workspace. Schedule it with a prompt instead, or with a skill from the / menu.",
+      "role": "Only Admins and Managers can schedule work."
     }
   },
   "audit": {
@@ -7992,8 +8325,6 @@
       },
       "header": {
         "rename": "{title} · click to rename it in the page",
-        "running": "{count, plural, one {# running} other {# running}}",
-        "runningHint": "The Content Agent is working on this page. Click to follow its steps or stop it.",
         "readyLabel": "Ready: click to move it back to review",
         "readyHint": "Marked ready. Click to move it back to review.",
         "publishedHint": "Published. Click to give the address it's live at.",
@@ -8081,10 +8412,7 @@
           "ai_budget": "This month's AI usage is spent, so the AI checks didn't run.",
           "no_subscription": "The AI checks run with an active plan.",
           "failed": "The AI checks couldn't run. Try again."
-        },
-        "chip": "Audit ≈{score}",
-        "chipReading": "Audit ≈…",
-        "chipHint": "Site Audit estimate: about where this page would score, free"
+        }
       },
       "agentWriting": {
         "title": "Content Agent is working on this page",
@@ -8147,7 +8475,7 @@
         }
       },
       "run": {
-        "about": "What Run Agent does"
+        "about": "What it does"
       },
       "data": {
         "uses": "Uses your data: {parts} · <edit>Edit sources</edit>",
@@ -8166,12 +8494,12 @@
         "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
         "placeholders": "{count, plural, one {# fact needs your input} other {# facts need your input}}",
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
-        "gain": "Rules {met, number} → {after, number} of {total, number}",
+        "gain": "{met, number} → {after, number}/{total, number} rules",
         "review": "Review",
         "reviewed": "All suggestions reviewed",
-        "reviewedLine": "{accepted, number} accepted · Rules {met, number} of {total, number}{open, plural, =0 {} other { · # still open}}",
+        "reviewedLine": "{accepted, number} accepted · {met, number}/{total, number} rules{open, plural, =0 {} other { · # still open}}",
         "more": "+{count, number} more",
-        "run": "Run Agent",
+        "run": "Fix open rules",
         "next": "Next: {action}",
         "nextTitle": "Next · {step}",
         "lastRun": "Last run: <run></run>",
@@ -8185,11 +8513,6 @@
         "stop": "Stop",
         "stopped": "Stopped · nothing was changed",
         "stopFailed": "Couldn't stop the agent. It may still finish.",
-        "drafting": "Content Agent is drafting a change here…",
-        "draftingFrom": "Drafting from {pages, plural, one {# cited page} other {# cited pages}} and {fanouts, plural, one {# fan-out} other {# fan-outs}}…",
-        "draftingFromPages": "Drafting from {pages, plural, one {# cited page} other {# cited pages}}…",
-        "draftingFromFanouts": "Drafting from {fanouts, plural, one {# fan-out} other {# fan-outs}}…",
-        "draftingRules": "Drafting from your rules…",
         "steps": {
           "readRules": "Reading {count, plural, one {# rule} other {# rules}}",
           "readRulesAny": "Reading rules",
@@ -8753,14 +9076,14 @@
         "outline": "Outline",
         "answers": "Answers “{fanout}”",
         "keywords": "Keywords",
-        "empty": "Empty. Run Agent to draft one, or add H2s yourself.",
+        "empty": "Empty. Build brief to draft one, or add H2s yourself.",
         "emptyOutline": "No H2s yet. Rebuild brief to draft them, or add H2s yourself.",
         "fromOpportunity": "From the opportunity's brief. Rebuild brief maps each H2 to a fan-out.",
         "edited": "Edited by you.",
         "builtFrom": "{count, plural, one {Built from # source} other {Built from # sources}} · {date}",
         "rebuild": "Rebuild brief",
-        "run": "Run Agent",
-        "info": "Run Agent writes the goal, audience and outline from your sources.",
+        "run": "Build brief",
+        "info": "Build brief writes the goal, audience and outline from your sources.",
         "status": {
           "empty": "No brief yet",
           "emptyDetail": "Goal, audience and outline are empty.",
@@ -9049,7 +9372,8 @@
         "sentWixUpdated": "Draft post updated in Wix",
         "wixImages": "{images, plural, one {# image wasn't sent: add it in Wix.} other {# images weren't sent: add them in Wix.}}"
       },
-      "rulesChip": "Rules {met}/{total}",
+      "rulesChip": "{met}/{total} rules",
+      "rulesChipLabel": "Rules {met}/{total} met",
       "rulesChipReading": "Rules · reading",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
       "reviewer": {
@@ -9082,7 +9406,7 @@
         "updated": "Updated {date}"
       },
       "qualityChip": "Quality {score}",
-      "qualityChipHint": "An Ansvisor estimate of this page's quality. Open Quality.",
+      "qualityChipHint": "The average of E-E-A-T, Trust and Readability: an Ansvisor estimate, not a Google score. Open Quality.",
       "qualityChipReading": "Quality · reading…",
       "qualityChipUpdating": "updating as the page is read",
       "nextStep": {
@@ -9092,15 +9416,21 @@
         "buttonStep": "· {step}",
         "stepOf": "Step {n} of {total}",
         "allDone": "Every step is done",
+        "stepsLeft": "{count, plural, one {# step} other {# steps}} still open",
         "path": "All steps",
         "skip": "Skip this step",
         "skipped": "· skipped",
-        "passed": "· yours in the Rules tab",
+        "passed": "· done by Content Agent, the rest is in Rules",
         "working": "Content Agent is working",
         "stop": "Stop",
         "marking": "Marking it ready…",
         "saving": "Saving the page first…",
         "tipsTitle": "If you see…",
+        "byAgent": "Content Agent takes this step",
+        "byYou": "Only you can take this step",
+        "raisesTitle": "What raises it",
+        "cost": "About {minutes, plural, one {# minute} other {# minutes}} · {percent} of this month's AI usage",
+        "costTime": "About {minutes, plural, one {# minute} other {# minutes}}",
         "tipLine": "{state} →",
         "states": {
           "done": "done",
@@ -9118,15 +9448,19 @@
           "fixRules": "Fix open rules",
           "proof": "Add proof and author",
           "check": "Check and mark ready",
-          "ready": "Ready to publish"
+          "ready": "Ready to publish",
+          "review": "Review {count, plural, one {# suggestion} other {# suggestions}}"
         },
         "reasons": {
           "plan": "No brief yet. I build one from your prompts, fan-outs and cited pages.",
+          "planNoSources": "No brief yet, and no prompt, fan-out or Search Console query is kept to build one from. Add one in Sources first.",
+          "review": "Content Agent left {count, plural, one {# suggestion} other {# suggestions}} on the page. Accept or reject {count, plural, one {it} other {each, or all at once}}: the next step follows from what you keep.",
           "write": "The page is empty. I write a first draft from your brief and sources; you review it before you mark it ready.",
           "writeMine": "The page is empty: write it, and the next step follows from what you write.",
           "import": "The live page didn't come in. I write a first draft from your sources, or you write it yourself.",
           "length": "{count, number} characters against a Length of {target, number}. Small fixes won't get there, so rewrite it in one go.",
-          "fixRules": "{count, plural, one {# rule is} other {# rules are}} still open for the agent. Small, reviewable changes for them.",
+          "fixRules": "{count, plural, one {# rule is} other {# rules are}} open, all for the agent. Small, reviewable changes for them.",
+          "fixRulesSplit": "{total, plural, one {# rule is} other {# rules are}} open: Content Agent can fix {count, number} in small, reviewable changes, and {others, plural, one {# is} other {# are}} yours to decide in the Rules tab.",
           "fixRulesOthers": "{count, plural, one {# more is} other {# more are}} yours to decide in the Rules tab.",
           "proofTrust": "Trust is {trust}, under {gate}. The Quality tab names what raises it.",
           "proofTrustTodo": "Trust is {trust}, under {gate}. Only you can do this first: {todo}.",
@@ -9134,10 +9468,14 @@
           "check": "Links, schema, placeholders and Trust {gate}+, before you mark it ready.",
           "checkRules": "The rules are met. Mark it ready when you are.",
           "ready": "Every step is done. Export it for your CMS, and mark it published once it's live.",
-          "published": "It's published. Export it again when the page changes."
+          "published": "It's published. Export it again when the page changes.",
+          "readyLeft": "Marked ready with {count, plural, one {# step} other {# steps}} still open: see All steps. Export it for your CMS, and mark it published once it's live.",
+          "publishedLeft": "It's published, with {count, plural, one {# step} other {# steps}} still open: see All steps. Export it again when the page changes."
         },
         "actions": {
           "buildBrief": "Build brief",
+          "addSources": "Add sources",
+          "review": "Review",
           "writeWithAgent": "Write with Agent",
           "writeMyself": "I'll write it",
           "rewritePage": "Rewrite page",
@@ -9145,6 +9483,7 @@
           "pickAuthor": "Pick author",
           "addAuthor": "Add author",
           "showTodos": "Show to-dos",
+          "showTrust": "Show what raises Trust",
           "beforePublish": "Before you publish",
           "markReady": "Mark ready",
           "export": "Export",
@@ -9292,17 +9631,23 @@
       },
       "beforePublish": {
         "title": "Before you publish",
-        "warning": "Trust {trust}, below 60. {reason}. You can mark it ready, but {count, plural, one {fixing it} other {fixing them}} first raises Trust to about {raised}.",
-        "warningNoReason": "Trust {trust}, below 60. You can mark it ready, but Quality shows what would raise it.",
-        "warningExport": "Trust {trust}, below 60. {reason}. You can export it, but {count, plural, one {fixing it} other {fixing them}} first raises Trust to about {raised}.",
-        "warningNoReasonExport": "Trust {trust}, below 60. You can export it, but Quality shows what would raise it.",
-        "warningSend": "Trust {trust}, below 60. {reason}. You can send it to your CMS, but {count, plural, one {fixing it} other {fixing them}} first raises Trust to about {raised}.",
-        "warningNoReasonSend": "Trust {trust}, below 60. You can send it to your CMS, but Quality shows what would raise it.",
+        "groups": {
+          "missing": "Fix before you publish",
+          "check": "Check yourself",
+          "ok": "In place"
+        },
+        "summary": "{fix, plural, =0 {Nothing to fix} one {# thing to fix} other {# things to fix}} and {check, plural, =0 {nothing to check} one {# to check yourself} other {# to check yourself}} before you publish.",
+        "warning": "Trust is {trust}, under 60: AI answers may lean on this page less. {reason}. Fixing {count, plural, one {it} other {them}} first could raise Trust to about {raised} (an estimate). You can still mark it ready.",
+        "warningNoReason": "Trust is {trust}, under 60: AI answers may lean on this page less. Quality shows what could raise it. You can still mark it ready.",
+        "warningExport": "Trust is {trust}, under 60: AI answers may lean on this page less. {reason}. Fixing {count, plural, one {it} other {them}} first could raise Trust to about {raised} (an estimate). You can still export it.",
+        "warningNoReasonExport": "Trust is {trust}, under 60: AI answers may lean on this page less. Quality shows what could raise it. You can still export it.",
+        "warningSend": "Trust is {trust}, under 60: AI answers may lean on this page less. {reason}. Fixing {count, plural, one {it} other {them}} first could raise Trust to about {raised} (an estimate). You can still send it to your CMS.",
+        "warningNoReasonSend": "Trust is {trust}, under 60: AI answers may lean on this page less. Quality shows what could raise it. You can still send it to your CMS.",
         "continueExport": "Continue to export",
         "continueSend": "Continue to send",
         "paste": {
-          "title": "Ready to paste",
-          "notYet": "Not ready to paste yet",
+          "title": "Ready for your CMS",
+          "notYet": "Fix before you paste",
           "ok": "No placeholders, all images have alt text, all links work.",
           "placeholders": "{count, plural, one {# placeholder} other {# placeholders}} still open",
           "alt": "{count, plural, one {# image has} other {# images have}} no alt text",
@@ -9313,7 +9658,8 @@
           "readingAndUnread": "{reading, plural, one {# link is} other {# links are}} still being read, {unread, plural, one {# wasn't} other {# weren't}} read: check {unread, plural, one {it} other {them}}",
           "fill": "Fill now"
         },
-        "logged": "Mark ready anyway is logged, with this Trust.",
+        "logged": "If you mark it ready anyway, we note it with this Trust.",
+        "openWork": "Still open: {rules, plural, =0 {} one {# rule} other {# rules}}{rules, plural, =0 {} other {{todos, plural, =0 {} other { and }}}}{todos, plural, =0 {} one {# to-do} other {# to-dos}}. You can mark it ready: they stay in Rules and Quality.",
         "author": {
           "ok": "Author for your CMS",
           "okDetail": "Set {name} as the page's author in your CMS. Its template shows the byline; nothing is added to the content.",
@@ -9321,8 +9667,8 @@
           "inContent": "Exports put \"{line}\" under the H1: this brand adds the byline to content, for a CMS with no author field.",
           "unknown": "The authors couldn't be read here, so the code below leaves the author out. Set the page's author in your CMS.",
           "none": "No author yet",
-          "noneDetail": "The page goes out as {byline}, with the brand's Organization schema. A real author raises E-E-A-T.",
-          "noneSchemaDetail": "The page goes out as {byline}: its Article schema names {brand} as the author. A real author raises E-E-A-T.",
+          "noneDetail": "The page goes out as {byline}, with your brand's search engine details. A real author raises E-E-A-T.",
+          "noneSchemaDetail": "The page goes out as {byline}: its search engine details name {brand} as the author. A real author raises E-E-A-T.",
           "inSchema": "Author: {name}",
           "inSchemaDetail": "{name} is named in the page's Article schema. Set them as the author in your CMS too, so its template shows the byline.",
           "confirmed": "Author named on your site",
@@ -9346,18 +9692,18 @@
           "detail": "Most CMSs (WordPress, Webflow, Shopify) add these for you. Check your page."
         },
         "schema": {
-          "added": "Article schema with the author",
-          "addedNoAuthor": "Article schema",
+          "added": "Search engine details (Article schema), with the author",
+          "addedNoAuthor": "Search engine details (Article schema)",
           "addedPill": "Added",
           "addedDetail": "Ansvisor adds it to the page it sends to your CMS and to exports, with {author} as the author. The page's text doesn't change. WordPress leaves it out: add it with your SEO plugin.",
           "addedDetailNoAuthor": "Ansvisor adds it to the page it sends to your CMS and to exports, without an author: your CMS names the one your site shows. The page's text doesn't change. WordPress leaves it out: add it with your SEO plugin.",
           "leaveOut": "Leave it out",
           "leaveOutFailed": "Couldn't save that. Try again.",
-          "leftOut": "Article schema left out",
-          "leftOutDetail": "You left Ansvisor's Article schema out of this page, for a CMS that adds its own. If yours doesn't, paste the code below into the page.",
+          "leftOut": "Search engine details left out",
+          "leftOutDetail": "You left Ansvisor's search engine details (Article schema) out of this page, for a CMS that adds its own. If yours doesn't, paste the code below into the page.",
           "addBack": "Add it back",
-          "own": "Article schema on the page",
-          "ownDetail": "Your page already has an Article schema, so Ansvisor leaves its own out.",
+          "own": "Search engine details on the page",
+          "ownDetail": "Your page already has its search engine details (Article schema), so Ansvisor leaves its own out.",
           "codeAdded": "The code Ansvisor adds to the page",
           "showAdded": "Show the code Ansvisor adds",
           "product": "Product schema with its price",
@@ -9420,9 +9766,9 @@
           "check": "check it",
           "missing": "missing"
         },
-        "jsonLd": "JSON-LD for this page",
+        "jsonLd": "Code for search engines (JSON-LD) for this page",
         "copy": "Copy JSON-LD",
-        "showCode": "Show the JSON-LD, for a CMS that doesn't add it",
+        "showCode": "Show the code for search engines (JSON-LD), for a CMS that doesn't add it",
         "copied": "JSON-LD copied",
         "copyFailed": "Couldn't copy the JSON-LD. Select it and copy it yourself.",
         "fixFirst": "Fix first",
@@ -9485,6 +9831,13 @@
           "needsWork": "Needs work"
         },
         "estimate": "Ansvisor estimates based on Google's published quality signals. Not a Google score.",
+        "about": {
+          "eeat": "Who stands behind the page",
+          "trust": "Sources, links and dated facts",
+          "readability": "How easily it reads"
+        },
+        "bandsLegend": "80 and up: Strong · 60 to 79: Can improve · under 60: Needs work",
+        "gainLong": "Could raise {score} by about {gain, number} (an estimate)",
         "addLine": "Add line",
         "confirmCase": "Confirm",
         "confirmCaseFailed": "Couldn't save that confirmation. Try again.",
@@ -9819,7 +10172,7 @@
           },
           "typeRules": {
             "line": "{count, plural, one {# page type rule not met} other {# page type rules not met}}: {names}",
-            "detail": "{rules}. This page type's own rules, as the Rules tab reads them: meet them there, or Run Agent in Rules."
+            "detail": "{rules}. This page type's own rules, as the Rules tab reads them: meet them there, or Fix open rules in Rules."
           }
         }
       },
@@ -9833,7 +10186,7 @@
         },
         "setName": "{type} · Ansvisor default",
         "pickSet": "Pick a page type",
-        "met": "{met} of {total} rules met",
+        "met": "{met}/{total} rules met",
         "metReading": "Reading the rules…",
         "typeGroup": "{type} rules",
         "groups": {
@@ -9957,12 +10310,11 @@
         "run": {
           "notMet": "{count, plural, one {# rule is not met} other {# rules are not met}}",
           "allMet": "All rules are met",
-          "info": "<b>Run Agent</b> fixes the open rules. You review each change. <b>▾ Rewrite page</b> rewrites the whole page. Uses more AI.",
-          "infoFix": "<b>Run Agent</b> fixes the open rules. You review each change.",
+          "info": "<b>Fix open rules</b> suggests changes for the open rules. You review each one. <b>▾ Rewrite page</b> rewrites the whole page. Uses more AI.",
+          "infoFix": "<b>Fix open rules</b> suggests changes for the open rules. You review each one.",
           "names": "{names}{more, select, yes {…} other {}}",
-          "label": "Run Agent",
+          "label": "Fix open rules",
           "rewriteLabel": "Rewrite page",
-          "working": "Working…",
           "more": "More ways to run the agent",
           "recommendedDetail": "Recommended · {detail}",
           "fix": {
@@ -9978,7 +10330,7 @@
         },
         "rewriteAdvice": {
           "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent, number}% off). A rewrite gets there in one go.",
-          "open": "Recommended: {count, number} rules are open. A rewrite meets them together."
+          "open": "Recommended: Content Agent can fix {count, number} of them, and a rewrite meets them together."
         },
         "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but a rewrite can't go much under {least, number}: {kept, number} are passages AI answers quote, tables and other blocks it keeps as they are, and each heading needs its answer. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
         "lengthOutOfReachRun": "The page is {count, number} characters for a Length of {target, number}. The last rewrite came to {least, number}, so another won't get there. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
@@ -9989,6 +10341,7 @@
         "lengthConflict": "The fan-out H2s, FAQ questions and summary these rules still ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise Length, or ask for fewer.",
         "heldAll": "What's left open is kept by AI citations, and yours to decide: the agent leaves passages AI answers quote as they are.",
         "heldLength": "Only the Length is left open, and a rewrite can't reach it. Raise the Length, or leave it.",
+        "triedNote": "Content Agent tried this and couldn't fix it. It's yours to decide: change the page yourself, or the rule.",
         "heldSentence": "Kept by AI citations · yours to decide: the long sentences are in passages AI answers quote, which the agent keeps. Shorten them yourself (Edit anyway), or leave them quoted.",
         "shopLinksLiveNote": "{list}{more, plural, =0 {} other { +# more}}: remove or replace these links on the page.",
         "shopItem": "{title} ({state, select, sold_out {not in stock} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
@@ -10268,7 +10621,7 @@
     },
     "newDialog": {
       "title": "New content opportunities",
-      "description": "Generate fresh suggestions now instead of waiting for the next scheduled run.",
+      "description": "Get suggestions now. Ansvisor also writes up to 3 a night by itself, one per topic, for needs that have no opportunity yet.",
       "focus": "Focus (optional)",
       "focusOptions": {
         "auto": "Let Ansvisor choose",
@@ -10277,6 +10630,13 @@
       },
       "pickTopic": "Choose a topic",
       "pickPrompt": "Choose a prompt",
+      "topicOpen": "{count} new",
+      "topicCovered": "All covered",
+      "promptHasOne": "Has one",
+      "needsOpen": "{open} of {needs} {needs, plural, one {need} other {needs}}{focus, select, topic { in this topic} other {}} {open, plural, one {has} other {have}} no opportunity yet.",
+      "needsNone": "Every need{focus, select, topic { in this topic} other {}} already has an opportunity{noAnswers, plural, =0 {} other {, or has no tracked answers from the last 30 days yet}}. Add prompts for new needs, or use Another angle on an opportunity.",
+      "promptExisting": "This prompt's need already has an opportunity.",
+      "openExisting": "Open existing",
       "idea": "Or describe an idea (optional)",
       "ideaPlaceholder": "e.g. a comparison page against Profound for agencies",
       "count": "How many",
@@ -10335,6 +10695,10 @@
       "sourceData": "Source Data",
       "relatedPrompt": "Related Prompt",
       "estAiVolume": "Est. AI Volume",
+      "volumeOfQuestion": "{count, plural, one {For “{question}”} other {For “{question}”, one of # prompts}}",
+      "volumeOfPrompts": "{count, plural, one {For its prompt} other {For its question, one of # prompts}}",
+      "volumeHeadTerms": "From head terms. Closest measured phrase: “{phrase}”, <range></range>",
+      "volumeHeadTermsOnly": "From head terms: the question's own words aren't measured.",
       "visibility": "Current Visibility",
       "competitorGap": "Competitor Gap",
       "intent": "Search Intent",
@@ -11229,8 +11593,8 @@
       "averageTitle": "Avg. AI Volume",
       "averageSub": "per prompt",
       "chartCaption": "Total estimated AI-answered queries across all topic clusters (Google volume × the {rate} AI adoption rate), split by answer-engine share: Google AI Overviews, Google AI Mode and standalone chatbots.",
-      "googleColumn": "Google Vol.",
-      "googleTip": "The prompt's monthly Google searches: the median of its related keywords that have search data.",
+      "googleColumn": "Google Vol. (head terms)",
+      "googleTip": "Monthly Google searches of the prompt's related head terms, from DataForSEO: the median of those with search data. Not its own words: a long question is searched far less as it is written.",
       "aiColumn": "Est. AI Vol.",
       "aiTip": "Estimated monthly AI searches, as a range: the related keywords' Google searches × the AI adoption rate. Grey when the confidence is low.",
       "footnote": "* Est. AI Volume is an estimate, shown as a range: the median Google searches of the prompt's related keywords × the AI adoption rate. Hover a range for its sources, confidence and date. For planning, not a measured count.",
@@ -11571,7 +11935,7 @@
     "methodTotal": "The sum of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of Google searches that now get an AI answer ({rate}%).",
     "methodKeyword": "This keyword's monthly Google searches × the share of Google searches that now get an AI answer ({rate}%). Its Google volume is measured; the AI share is an estimate, so the range is ±25%.",
     "methodGuess": "An AI's estimate for a prompt you don't track yet, scaled to your tracked prompts' estimates. Track the prompt to get one from its keywords' Google searches.",
-    "methodSnapshot": "The sum of this opportunity's prompts' estimates when it was made or last updated. Their current estimates couldn't be read, so this one may be out of date.",
+    "methodSnapshot": "This opportunity's question's estimate when it was made. Its current estimate couldn't be read, so this one may be out of date.",
     "methodGuessTotal": "The sum of an AI's estimates for suggested prompts you don't track yet, each scaled to your tracked prompts' estimates. Track them to get estimates from their keywords' Google searches.",
     "methodAverage": "The average of {count, plural, one {# prompt's estimate} other {# prompts' estimates}}. Each is the median monthly Google searches for its related keywords × the share of Google searches that now get an AI answer ({rate}%).",
     "keywords": "{measured} of {keywords} related keywords have Google search data.",
@@ -11580,7 +11944,7 @@
     "rangeOne": "With one to go by, the range is half to twice the estimate.",
     "mix": "Confidence by prompt: {high} high, {medium} medium, {low} low.",
     "sources": "Sources: Google search volume from DataForSEO ({month}) and an AI answer share of {rate}%.",
-    "sourcesSnapshot": "Source: the opportunity's prompts' estimates, kept when it was made or last updated.",
+    "sourcesSnapshot": "Source: the opportunity's question's estimate, kept when it was made.",
     "sourcesGuess": "Source: Ansvisor's AI, from your tracked prompts' estimates.",
     "sourcesUndated": "Sources: Google search volume from DataForSEO and an AI answer share of {rate}%.",
     "confidence": "Confidence: {level} · updated {date}",
@@ -11588,7 +11952,7 @@
     "confidenceUndated": "Confidence: {level}",
     "stale": "Fetched over six months ago, so one level less sure. Refresh volumes for a newer estimate.",
     "lowNote": "Low confidence: shown in grey, and not used to rank on its own.",
-    "lowNoteSnapshot": "Low confidence: an old sum, shown in grey.",
+    "lowNoteSnapshot": "Low confidence: an old estimate, shown in grey.",
     "lowNoteGuess": "Low confidence: an AI's guess, shown in grey.",
     "measuredNote": "Measured numbers, such as your visibility or Search Console clicks, never carry this badge.",
     "level": {

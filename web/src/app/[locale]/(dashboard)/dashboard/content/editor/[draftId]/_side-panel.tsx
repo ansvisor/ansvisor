@@ -18,7 +18,7 @@ import { ShoppingPathSection } from './_shopping-path';
 import { BriefTab, type AgentRewrite } from './_brief-tab';
 import { DataNote, UsesYourData } from './_data-note';
 import { ImpactTab } from './_impact-tab';
-import { QualityTab, type HandOff, type QualityRead } from './_quality-tab';
+import { QualityTab, type HandOff, type QualityFocus, type QualityRead } from './_quality-tab';
 import { RulesTab, type AgentFix, type PageRewrite } from './_rules-tab';
 import { SourcesTab } from './_sources-tab';
 import { useBriefRebuild, type PageNow } from './_use-brief-rebuild';
@@ -187,6 +187,8 @@ export function EditorSidePanel({
     build?: boolean;
     /** Brief › Your input to show (Quality's Add, CE-048). */
     input?: boolean;
+    /** Quality's part to show (the Next step basket's Show to-dos, Show what raises Trust). */
+    focus?: QualityFocus;
   } | null;
   /** Run Agent's Fix open rules, for Rules (CE-018, v1.1 CE-029). */
   agentFix?: AgentFix;
@@ -277,6 +279,10 @@ export function EditorSidePanel({
   };
   // None said while the count is still read (the header's chip says so).
   const rulesOpen = rules.settled === false ? 0 : Math.max(0, rules.total - rules.met);
+  // Every rule open is the person's to decide (tried by the agent, or held): amber, not red.
+  const rulesYours = rules.rules
+    .filter(({ rule, status }) => rule.on && status.state === 'bad')
+    .every(({ rule }) => agentFix?.tried?.has(rule.key) || agentFix?.held?.has(rule.key));
   // Quality shows once its first phase is live (NEXT_PUBLIC_CONTENT_QUALITY_PHASE).
   const segments = SEGMENTS.filter((value) => value !== 'quality' || qualityPhase() >= 1);
 
@@ -405,7 +411,8 @@ export function EditorSidePanel({
           ))}
         </TabsList>
       </Tabs>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      {/* The panel's own scroll: a part shown in it scrolls here, never the page (scrollInPanel). */}
+      <div data-panel-scroll className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div hidden={tab !== 'instructions'} className="space-y-4">
           <DataNote />
           <div
@@ -439,7 +446,15 @@ export function EditorSidePanel({
               >
                 {t(`segments.${value}`)}
                 {value === 'rules' && rulesOpen > 0 && (
-                  <span className="rounded-md bg-red-50 px-1.5 text-[10.5px] font-medium text-red-700 dark:bg-red-950 dark:text-red-400">
+                  <span
+                    className={cn(
+                      'rounded-md px-1.5 text-[10.5px] font-medium',
+                      // Red only for what blocks: open rules don't (editor UX review 2026-11-03).
+                      rulesYours
+                        ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                        : 'border border-amber-200 text-amber-700 dark:border-amber-900 dark:text-amber-300',
+                    )}
+                  >
                     {t('segments.open', { count: rulesOpen })}
                   </span>
                 )}
@@ -510,6 +525,11 @@ export function EditorSidePanel({
             <div hidden={segment !== 'quality'}>
               <QualityTab
                 quality={quality}
+                focusRequest={
+                  tabRequest?.focus && segment === 'quality'
+                    ? { to: tabRequest.focus, n: tabRequest.n }
+                    : null
+                }
                 onShow={(text) => onShowInPage?.(text)}
                 onShowPlaceholder={() => onShowPlaceholder?.()}
                 onPickAuthor={() => onPickAuthor?.()}
