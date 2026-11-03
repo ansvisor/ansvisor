@@ -7,7 +7,9 @@ import { isAiProvider, parseProviderSettings, type AiProvider } from '@/lib/agen
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { ownKeyAccess, type OwnKeyAccess } from '@/lib/chat/key';
 import { readProviderKey } from '@/lib/agent/key';
-import { resumeOwnKeyAgents } from '@/lib/chat/key-health';
+import { resolveOwnKeyNotices, resumeOwnKeyAgents } from '@/lib/chat/key-health';
+import { readOwnKeyGuard } from '@/lib/chat/own-key-cap';
+import type { OwnKeyGuard } from '@/lib/chat/own-key-guard';
 import {
   keepKeyCheck,
   keyCheckOf,
@@ -170,6 +172,19 @@ async function keyChangeRefusal(
   }
 }
 
+/**
+ * The key guard as the Admins' card shows it: dollars at list prices, to
+ * Admins only (the owner, 2026-11-01: other roles don't see it at all), and
+ * only where Chat runs on own keys (`plan`, or a key `kept` after the plan).
+ */
+async function guardFor(
+  profile: { role: string; organization_id: string },
+  access: OwnKeyAccess,
+): Promise<{ guard?: OwnKeyGuard | null }> {
+  if (profile.role !== 'admin' || (access.state !== 'plan' && access.state !== 'kept')) return {};
+  return { guard: await readOwnKeyGuard(profile.organization_id) };
+}
+
 export async function GET() {
   const ctx = await getCallerAndOrg();
   if ('error' in ctx) {
@@ -215,6 +230,9 @@ export async function GET() {
   const rows = (data ?? []).filter((row) => isAiProvider(row.provider));
   return NextResponse.json({
     access,
+    // The key guard (AGENT-OWN-KEY §4.3, PR 9): Admins only, where own keys
+    // are allowed; null when the server didn't answer.
+    ...(await guardFor(ctx.profile, access)),
     // Whether Chat has a key to use — what the sidebar badge and Chat ask.
     configured: rows.some((row) => row.active),
     providers: rows.map((row) => ({
@@ -303,6 +321,11 @@ export async function PUT(req: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  // A new key ends the old one's failure (00440's trigger clears it), so the
+  // Admins' notices about it close, before this key's own check is kept.
+  await resolveOwnKeyNotices(organizationId, provider).catch((err) =>
+    console.error("[ai-providers] could not close the key's notices:", err),
+  );
 
   // The first key saved is the one Chat uses: decided under the lock, so a
   // switch at the same time can't be overridden.
@@ -416,5 +439,9 @@ export async function DELETE(req: Request) {
       console.error('[ai-providers] could not resume the agents:', err),
     );
   }
+  // A removed key fails no more: the Admins' notices about it close (00441).
+  await resolveOwnKeyNotices(organizationId, provider).catch((err) =>
+    console.error("[ai-providers] could not close the key's notices:", err),
+  );
   return NextResponse.json({ ok: true });
 }

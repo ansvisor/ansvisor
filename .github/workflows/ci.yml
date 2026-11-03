@@ -41,6 +41,10 @@ jobs:
         run: yarn lint
       - name: TypeScript typecheck
         run: yarn typecheck
+        env:
+          # tsc --noEmit over the whole app sits at Node's default heap limit
+          # and has run out of memory here once; 6 GB fits the hosted runner.
+          NODE_OPTIONS: --max-old-space-size=6144
       - name: Vitest tests
         run: yarn test
       - name: Next.js production build
