@@ -1775,7 +1775,7 @@
           "task_deleted": "Task deleted",
           "task_edited": "Task edited",
           "tasks_generated": "{count, plural, one {# task} other {# tasks}} written from the action's evidence{reviews, plural, =0 {} one {; # waits for review} other {; # wait for review}}",
-          "task_sent": "{to, select, content {Sent to Content} webhook {Sent to the webhook} other {Sent}}: {title}",
+          "task_sent": "{to, select, content {{merged, select, yes {Added to the open Content opportunity for the same question} other {Sent to Content}}} webhook {Sent to the webhook} other {Sent}}: {title}",
           "task_checked": "Checked automatically and done: {task}{title}",
           "task_ran": "{task} — carried out automatically ({tool})",
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
@@ -1806,6 +1806,7 @@
         "send": {
           "sentToContent": "Sent to Content as an opportunity",
           "alreadyInContent": "This task is already in Content",
+          "mergedInContent": "Added to the open opportunity in Content for the same question",
           "sentToWebhook": "Sent to the webhook",
           "timeout": "Sending took too long. Please try again.",
           "unreachable": "Couldn't reach the server. Please try again.",
@@ -3511,6 +3512,10 @@
     "reviseDraft": { "name": "Change drafts in Content", "step": "Changed draft in Content" },
     "sendToCms": { "name": "Send drafts to your CMS", "step": "Sent draft to your CMS" },
     "publishToCms": { "name": "Publish pages on your site", "step": "Published page on your site" },
+    "takeDownFromCms": {
+      "name": "Take pages down from your site",
+      "step": "Took page down from your site"
+    },
     "makeReport": { "name": "Make reports", "step": "Made report" },
     "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
     "webPage": { "name": "Open web pages", "step": "Open page" },
@@ -3872,6 +3877,7 @@
       "copied": "The page repeats a long passage from a page it read.",
       "foreign_link": "The page links to {host}, which isn’t your site or one of its sources.",
       "live_page": "The page is live already: an update stays your click.",
+      "taken_down": "Someone took this page down before.",
       "quality_off": "Content Quality is off, so the page can’t be checked.",
       "quality_unread": "The page’s Quality couldn’t be read in full.",
       "quality_unread_cap": "The page’s Quality needs AI checks, and this run reached its limit.",
@@ -3932,6 +3938,14 @@
       "usedSkill": "Used skill: {title}",
       "skillFromLibrary": "Ansvisor library",
       "usedShortcut": "Used shortcut: {title}"
+    },
+    "partial": {
+      "question": "Your remaining AI limit covers about {fits} of the {parts} {unit}.",
+      "doFirst": "Do the first {fits} now",
+      "doFirstDetail": "The rest waits until there is more AI limit",
+      "credits": "Get more AI credits",
+      "creditsDetail": "Chat stops here, where you can add AI credits",
+      "cancel": "Cancel"
     },
     "pageRefused": {
       "no_access": "No workspace to open pages for",
@@ -4055,6 +4069,11 @@
     "modelAuto": "Auto",
     "modelAutoHow": "Haiku reads, Sonnet writes",
     "removeChip": "Remove {label}",
+    "keyPaste": {
+      "line": "This looks like an API key. Save it securely instead of sending it?",
+      "remove": "Remove",
+      "save": "Save securely"
+    },
     "usage": {
       "close": "Close"
     },
@@ -4745,6 +4764,7 @@
         "published": "{agent} published “{title}” on {site}",
         "wentLiveDetail": "On its own, after Quality and your brand facts",
         "publishedDetail": "Live on {site} · on its own, after Quality and your brand facts",
+        "takenDown": "Taken down · a draft in {cms} again",
         "openPage": "Open page",
         "openRun": "Open run",
         "goLiveOff": "{agent} no longer publishes on its own",
@@ -5506,6 +5526,7 @@
       "reviseDraftUndo": "Put the draft “{title}” back as it was",
       "sendToCms": "Sent the draft “{title}” to {cms}",
       "publishToCms": "Published the page “{title}” through {cms}",
+      "takeDownFromCms": "Took the page “{title}” down from {cms}",
       "makeReport": "Made the report “{title}”",
       "makeReportUndo": "Removed the report “{title}” from Reports",
       "startAudit": "Started Site Audit on {pages}",
@@ -7371,6 +7392,17 @@
       "cancel": "Cancel",
       "save": "Mark published"
     },
+    "takeDown": {
+      "action": "Take down",
+      "title": "Take down “{title}”?",
+      "body": "It leaves {site} now and goes back to a draft in {cms}. Links to it, and AI answers that cited it, may still point to it for a while.",
+      "keep": "Keep it live",
+      "confirm": "Take down",
+      "working": "Taking down…",
+      "done": "Taken down. It’s a draft in {cms} again.",
+      "doneShort": "Taken down",
+      "failed": "The page couldn’t be taken down. Try again."
+    },
     "plan": {
       "title": "Content plan",
       "description": "What to create, optimize or protect next.",
@@ -7646,13 +7678,15 @@
         "forbidden": "Only admins and managers can archive or delete content.",
         "newerDraft": "A newer draft does this task's work. Archive or delete it first, then restore this one.",
         "sendToCms": "Send to CMS",
-        "sendFailed": "Couldn't open the page to send. Try again."
+        "sendFailed": "Couldn't open the page to send. Try again.",
+        "takeDown": "Take down"
       },
       "cms": {
         "queued": "Sending to your CMS since {when}",
         "sent": "Sent to your CMS {when}",
         "failed": "The last send to your CMS failed, {when}",
         "published": "Published {when}",
+        "taken_down": "Taken down {when}",
         "openLive": "Published {when}: open the live page in a new tab",
         "answered": "The webhook answered {status}.",
         "onItsOwn": "Sent by {agent} · on its own",
@@ -7661,19 +7695,22 @@
           "queued": "Sending to Webflow since {when}",
           "sent": "In Webflow as a draft item since {when}",
           "failed": "The last send to Webflow failed, {when}",
-          "published": "Published {when}"
+          "published": "Published {when}",
+          "taken_down": "Taken down {when}: a draft item in Webflow again"
         },
         "wordpress": {
           "queued": "Sending to WordPress since {when}",
           "sent": "In WordPress as a draft post since {when}",
           "failed": "The last send to WordPress failed, {when}",
-          "published": "Published {when}"
+          "published": "Published {when}",
+          "taken_down": "Taken down {when}: a draft post in WordPress again"
         },
         "wix": {
           "queued": "Sending to Wix since {when}",
           "sent": "In Wix as a draft post since {when}",
           "failed": "The last send to Wix failed, {when}",
-          "published": "Published {when}"
+          "published": "Published {when}",
+          "taken_down": "Taken down {when}: a draft post in Wix again"
         },
         "framer": {
           "queued": "Sending to Framer since {when}",
@@ -8842,6 +8879,7 @@
         "failed": "Couldn't export the page. Try again."
       },
       "sentChip": {
+        "takenDown": "Taken down",
         "webflow": {
           "queued": "Sending to Webflow…",
           "sent": "In Webflow · draft",
@@ -10416,6 +10454,10 @@
     "reviewedError": "Failed to mark as reviewed",
     "duplicatesMerged": "{count, plural, one {1 similar suggestion was merged into this one.} other {# similar suggestions were merged into this one.}}",
     "duplicatesMergedHint": "They rested on the same prompts and AI searches, so they weren't created and didn't use your quota.",
+    "sameQuestionMerged": "{count, plural, one {1 more request for the same question was added to this opportunity.} other {# more requests for the same question were added to this opportunity.}}",
+    "sameQuestionMergedHint": "A question gets one open opportunity: their prompts, AI searches and sources are counted here, and they didn't use your quota.",
+    "mergedInto": "Merged into the open opportunity for the same question.",
+    "mergedIntoOpen": "Open it",
     "newSignal": "New signal detected",
     "newSignalScoreRose": "Completed earlier, and its opportunity has grown since: the score rose from {from} to {to}.",
     "newSignalGainLost": "Completed earlier, but the gain did not hold: visibility on these prompts was {after}% after the work and is {now}% now."
@@ -14262,6 +14304,103 @@
       "prompts": {
         "title": "Prompt Volumes",
         "description": "Understand query volume trends across platforms and identify opportunities."
+      }
+    }
+  },
+  "chatConnections": {
+    "uploadedFile": "Uploaded file",
+    "tools": {
+      "google_search_console": {
+        "name": "Google Search Console",
+        "description": "Real search queries and impressions for your site."
+      },
+      "google_analytics": {
+        "name": "Google Analytics",
+        "description": "Sessions and conversions from your GA4 property, for AI traffic history."
+      },
+      "bing_webmaster_tools": {
+        "name": "Bing Webmaster Tools",
+        "description": "Bing and Copilot search data."
+      },
+      "webflow": {
+        "name": "Webflow",
+        "description": "Send pages to your Webflow site as drafts."
+      },
+      "wordpress": {
+        "name": "WordPress",
+        "description": "Send pages to your WordPress site as drafts."
+      },
+      "framer": {
+        "name": "Framer",
+        "description": "Send pages to your Framer site’s CMS."
+      },
+      "wix": {
+        "name": "Wix",
+        "description": "Send pages to your Wix site as drafts."
+      },
+      "webhook": {
+        "name": "Workflow webhook",
+        "description": "Send finished pages to your own workflow."
+      },
+      "contentful": {
+        "name": "Contentful",
+        "description": "Send pages to a Contentful content type."
+      },
+      "sanity": {
+        "name": "Sanity",
+        "description": "Send pages to Sanity as documents."
+      },
+      "merchant_center": {
+        "name": "Google Merchant Center",
+        "description": "Your products as Google Shopping sees them."
+      },
+      "woocommerce": {
+        "name": "WooCommerce",
+        "description": "Your store’s products, read with its own sign-in."
+      },
+      "product_feed": {
+        "name": "Product feed or file",
+        "description": "A product feed read every day, or a file you upload."
+      },
+      "shopify": {
+        "name": "Shopify",
+        "description": "Your Shopify products for AI shopping checks."
+      },
+      "hubspot": {
+        "name": "HubSpot",
+        "description": "Ties AI visits to deals and revenue."
+      },
+      "salesforce": {
+        "name": "Salesforce",
+        "description": "Revenue from AI-referred leads."
+      },
+      "pipedrive": {
+        "name": "Pipedrive",
+        "description": "Deals from AI-referred leads."
+      },
+      "stripe": {
+        "name": "Stripe",
+        "description": "Payments matched to AI visits."
+      },
+      "google_sheets": {
+        "name": "Google Sheets",
+        "description": "Send tables and reports to a sheet."
+      },
+      "looker_studio": {
+        "name": "Looker Studio",
+        "description": "Ansvisor data in your dashboards."
+      },
+      "slack": {
+        "name": "Slack",
+        "description": "Inbox items and reports in a channel."
+      },
+      "microsoft_teams": {
+        "name": "Microsoft Teams",
+        "description": "Inbox items and reports in a channel."
+      },
+      "zapier": {
+        "name": "Zapier",
+        "description": "Start Ansvisor skills from other tools."
       }
     }
   }

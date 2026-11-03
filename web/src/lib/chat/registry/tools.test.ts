@@ -98,6 +98,9 @@ vi.mock('@/lib/actions/cms-send', () => ({
   sendDraftToCms: tracked.track('actions/cms-send.sendDraftToCms'),
   publishDraftToCms: tracked.track('actions/cms-send.publishDraftToCms'),
 }));
+vi.mock('@/lib/actions/cms-take-down', () => ({
+  takeDownDraft: tracked.track('actions/cms-take-down.takeDownDraft'),
+}));
 vi.mock('@/lib/actions/reports', () => ({
   createReport: tracked.track('actions/reports.createReport'),
 }));
@@ -661,6 +664,8 @@ describe('approval policies', () => {
       update_draft: ['admin', 'manager'],
       push_cms_draft: ['admin', 'manager'],
       publish_cms: ['admin', 'manager'],
+      // Take down (AUTONOMOUS-GO-LIVE PR 10): as the API's route, a Manager even while publishing is off.
+      unpublish_cms: ['admin', 'manager'],
       build_report: ['admin', 'manager'],
       run_site_audit: ['admin', 'manager'],
     });
@@ -850,6 +855,11 @@ describe('approval policies', () => {
     // The registry: Send to CMS may, every other row may not.
     const onItsOwn = CHAT_TOOLS.filter((tool) => tool.flags.goLiveOnOwn).map((tool) => tool.name);
     expect(onItsOwn).toEqual(['push_cms_draft', 'publish_cms']);
+    // Take down (PR 10): an EXECUTE outside the go-live groups, which never goes live itself.
+    expect(chatTool('unpublish_cms')).toMatchObject({ class: 'execute', executeGroup: null });
+    expect(() => defineTool({ ...execute, executeGroup: null, goLive } as never)).toThrow(
+      /outside the groups never goes live/,
+    );
     expect(chatTool('publish_cms')?.goLive?.({ draft_id: 'd', destination: 'wordpress' })).toEqual({
       kind: 'publish',
       draftId: 'd',
