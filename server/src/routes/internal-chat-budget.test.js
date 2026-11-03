@@ -33,6 +33,7 @@ const agentUsageShares = vi.fn();
 const fitChatUnits = vi.fn();
 const ownKeyAgentSpend = vi.fn();
 const imageShares = vi.fn();
+const reserveDraftImages = vi.fn();
 vi.mock('../lib/plan-guard.js', () => ({ PlanLimitError }));
 vi.mock('../lib/chat-budget.js', () => ({
   CHAT_BUDGET_FEATURES: ['chat', 'agent', 'schedule', 'image'],
@@ -46,6 +47,7 @@ vi.mock('../lib/chat-budget.js', () => ({
   MAX_IMAGES: 10,
   ownKeyAgentSpend: (...args) => ownKeyAgentSpend(...args),
   imageShares: (...args) => imageShares(...args),
+  reserveDraftImages: (...args) => reserveDraftImages(...args),
 }));
 const warnOwnKeyLimit = vi.fn();
 vi.mock('../lib/chat-notices/own-key-limit.js', () => ({
@@ -60,6 +62,7 @@ let baseUrl;
 beforeEach(async () => {
   vi.stubEnv('CRON_SECRET', 'shh');
   reserveChatStep.mockReset().mockResolvedValue(USAGE);
+  reserveDraftImages.mockReset().mockResolvedValue(USAGE);
   chargeChatStep.mockReset().mockResolvedValue(undefined);
   releaseChatStep.mockReset().mockResolvedValue(undefined);
   agentUsageShares.mockReset().mockResolvedValue({ unlimited: false, since: null, shares: [] });
@@ -505,5 +508,48 @@ describe('an image request (W4-07)', () => {
     expect(imageShares).toHaveBeenCalledWith(ORG, [IMAGE]);
     expect((await get({ orgId: ORG, models: IMAGE }, 'nope')).status).toBe(401);
     expect((await get({ orgId: ORG })).status).toBe(400);
+  });
+});
+
+describe('an image request in the Content Editor (W4-09)', () => {
+  const IMAGE = 'google/gemini-3.1-flash-lite-image';
+  const DRAFT = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c04';
+  const body = (over = {}) => ({ orgId: ORG, draftId: DRAFT, model: IMAGE, images: 3, ...over });
+
+  it('holds the images on the draft, with no run, and answers its row', async () => {
+    const res = await post('reserve-draft-images', body());
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ success: true, usageId: USAGE });
+    expect(reserveDraftImages).toHaveBeenCalledWith(ORG, {
+      modelId: IMAGE,
+      images: 3,
+      draftId: DRAFT,
+      ownKey: false,
+    });
+    await post('reserve-draft-images', body({ ownKey: true }));
+    expect(reserveDraftImages).toHaveBeenLastCalledWith(
+      ORG,
+      expect.objectContaining({ ownKey: true }),
+    );
+  });
+
+  it('refuses a bad body, another secret, a spent budget and a draft not the workspace’s', async () => {
+    for (const bad of [
+      body({ images: 0 }),
+      body({ images: 11 }),
+      body({ draftId: 'nope' }),
+      body({ runId: RUN }),
+      { orgId: ORG, model: IMAGE, images: 2 },
+    ]) {
+      expect((await post('reserve-draft-images', bad)).status, JSON.stringify(bad)).toBe(400);
+    }
+    expect((await post('reserve-draft-images', body(), 'nope')).status).toBe(401);
+    reserveDraftImages.mockRejectedValueOnce(new PlanLimitError('AI limit', 429));
+    expect((await post('reserve-draft-images', body())).status).toBe(429);
+    reserveDraftImages.mockRejectedValueOnce(
+      new ChatBudgetError('not_found', 404, 'Draft not found.'),
+    );
+    expect((await post('reserve-draft-images', body())).status).toBe(404);
+    expect(reserveChatStep).not.toHaveBeenCalled();
   });
 });

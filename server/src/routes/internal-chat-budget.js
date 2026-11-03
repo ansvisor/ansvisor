@@ -14,6 +14,14 @@
  *     within its own cap (CHAT-27 item 21); it doesn't start.
  *   → 402 plan_limit: no active plan. 404 not_found: the run isn't the
  *     workspace's. 403 chat_off: Chat is off for the workspace.
+ * POST /api/internal/chat/budget/reserve-draft-images
+ *   { orgId, draftId, model, images, ownKey? }
+ *   An image request made in the Content Editor (W4-09): no Chat run, the
+ *   row tied to the draft, each image held at the model's image price (on
+ *   the workspace's own key, written as its own and held at nothing).
+ *   → 201 { usageId }, charged and released as below.
+ *   → 429 ai_limit { trial }, 402 plan_limit, 403 chat_off, 404 not_found
+ *     (a draft that isn't the workspace's).
  * POST /api/internal/chat/budget/charge
  *   { orgId, usageId, model, usage: { inputTokens, outputTokens, cacheReadTokens?,
  *     cacheWriteTokens? }, latencyMs?, images?: { produced, costUsd? } }
@@ -70,6 +78,7 @@ import {
   ownKeyAgentSpend,
   releaseChatStep,
   reserveChatStep,
+  reserveDraftImages,
 } from '../lib/chat-budget.js';
 import { warnOwnKeyLimit } from '../lib/chat-notices/own-key-limit.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
@@ -116,6 +125,14 @@ const reserveSchema = z
         : body.inputTokens !== undefined && body.maxOutputTokens !== undefined,
     { message: 'images for an image request, else the token counts' },
   );
+
+const draftImagesSchema = z.strictObject({
+  orgId: z.guid(),
+  draftId: z.guid(),
+  model,
+  images: imageCount,
+  ownKey: z.boolean().default(false),
+});
 
 const chargeSchema = z.strictObject({
   orgId: z.guid(),
@@ -232,6 +249,22 @@ router.post('/reserve', async (req, res) => {
     return res.status(201).json({ success: true, usageId });
   } catch (err) {
     return fail(err, req, res, 'reserve');
+  }
+});
+
+router.post('/reserve-draft-images', async (req, res) => {
+  const body = parse(draftImagesSchema, req, res);
+  if (!body) return undefined;
+  try {
+    const usageId = await reserveDraftImages(body.orgId, {
+      modelId: body.model,
+      images: body.images,
+      draftId: body.draftId,
+      ownKey: body.ownKey,
+    });
+    return res.status(201).json({ success: true, usageId });
+  } catch (err) {
+    return fail(err, req, res, 'reserve-draft-images');
   }
 });
 

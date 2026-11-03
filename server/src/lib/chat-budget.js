@@ -225,6 +225,78 @@ export async function reserveChatStep(
   return data;
 }
 
+/** Whether a draft is one of the workspace's: its brand's. */
+async function draftOfOrg(orgId, draftId) {
+  const { data: draft, error } = await supabaseAdmin
+    .from('content_drafts')
+    .select('brand_id')
+    .eq('id', draftId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!draft?.brand_id) return false;
+  const { data: brand, error: brandError } = await supabaseAdmin
+    .from('brands')
+    .select('organization_id')
+    .eq('id', draft.brand_id)
+    .maybeSingle();
+  if (brandError) throw new Error(brandError.message);
+  return brand?.organization_id === orgId;
+}
+
+/**
+ * Holds an image request made in the Content Editor (W4-09) on the AI
+ * budget, for one of the workspace's drafts: there is no Chat run, so the
+ * hold goes through the budget's own reservation (reserve_ai_usage, as the
+ * editor's other AI), each image at the model's image price, the row tied
+ * to the draft and its images as its units. On the workspace's own key the
+ * row is written as its own (own_key, nothing held): the limit doesn't
+ * move. Charged and released as a Chat step is (chargeChatStep with
+ * `images`, releaseChatStep). Returns the row's id; PlanLimitError 429 when
+ * the budget is spent, 402 without an active plan; ChatBudgetError 404 for
+ * a draft that isn't the workspace's.
+ */
+export async function reserveDraftImages(orgId, { modelId, images, draftId, ownKey = false }) {
+  assertChatOn(orgId);
+  const count = Math.max(1, Math.min(MAX_IMAGES, Math.floor(images)));
+  if (!(await draftOfOrg(orgId, draftId))) {
+    throw new ChatBudgetError('not_found', 404, 'Draft not found.');
+  }
+
+  const row = { feature: 'image', model: modelId, content_draft_id: draftId, units: count };
+  const cost = imageUnitUsd(modelId) * count;
+  const { plan, budgetUsd, since } = ownKey
+    ? { plan: null, budgetUsd: null, since: null }
+    : await aiBudgetOf(orgId);
+  if (ownKey || budgetUsd === null) {
+    // Its own key bills the workspace; an unlimited budget holds nothing: the row only records.
+    const { data, error } = await supabaseAdmin
+      .from('prompt_improve_usage')
+      .insert({ organization_id: orgId, ...row, cost_usd: ownKey ? 0 : cost, own_key: ownKey })
+      .select('id')
+      .single();
+    if (error) throw new Error(error.message);
+    return data.id;
+  }
+  const { data, error } = await supabaseAdmin.rpc('reserve_ai_usage', {
+    p_organization_id: orgId,
+    p_since: since,
+    p_budget: budgetUsd,
+    p_cost: cost,
+    p_feature: 'image',
+    p_model: modelId,
+    p_content_draft_id: draftId,
+  });
+  if (error) throw new Error(error.message);
+  if (!data) throw aiBudgetUsedUp(plan);
+  const { error: unitsError } = await supabaseAdmin
+    .from('prompt_improve_usage')
+    .update({ units: count })
+    .eq('id', data)
+    .eq('organization_id', orgId);
+  if (unitsError) throw new Error(unitsError.message);
+  return data;
+}
+
 /** The most like parts one check sizes (fitChatUnits): a batch past it is checked as this many. */
 export const MAX_FIT_UNITS = 100;
 
