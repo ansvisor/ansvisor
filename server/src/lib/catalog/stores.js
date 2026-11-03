@@ -5,7 +5,7 @@ import { connectorFor, isSignIn, isStore } from '../../connectors/index.js';
 import { isComposioConfigured } from '../composio.js';
 import { logger } from '../logger.js';
 import { credentialsConfigured, readCredentials, saveCredentials } from './credentials.js';
-import { signInRequest as workspaceSignIn, workspaceEntity } from './sign-in.js';
+import { brandSignIn, signInRequest as workspaceSignIn } from './sign-in.js';
 
 /**
  * Connecting a brand's store as a catalog source (#1263, 00282): the
@@ -195,7 +195,8 @@ async function signedIn(kind, brandId, { db, connectors, signInRequest, callsMs 
       `${connector.label} isn't set up on this server yet.`,
     );
   }
-  const signed = signInRequest(connector.signIn, await workspaceEntity(brandId, { db }), {
+  const signIn = await brandSignIn(brandId, connector.signIn, { db });
+  const signed = signInRequest(connector.signIn, signIn, {
     hosts: connector.hosts,
   });
   // Every call stops at one deadline, however many the listing takes.

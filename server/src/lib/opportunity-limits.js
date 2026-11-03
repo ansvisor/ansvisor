@@ -87,7 +87,11 @@ export function clusterMetrics(promptIds, prompts) {
       tested.flatMap((m) => m.metrics.competitors || []),
       5,
     ),
-    representative: representative ? { id: representative.id, text: representative.text } : null,
+    // The question an opportunity is shown with, and its own volume: what the
+    // opportunity's volume reads as, where demand above adds up its members.
+    representative: representative
+      ? { id: representative.id, text: representative.text, volume: volume(representative) }
+      : null,
   };
 }
 
