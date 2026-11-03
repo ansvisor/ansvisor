@@ -56,7 +56,7 @@ From a task you can:
 
 - **Create content** or **Optimize page**: open a draft in the Content Editor for this task. **Open draft** returns to it, and marking the draft ready completes the task.
 - **Send to Content**: send a content task to Content as an opportunity, where a brief can be written for it.
-- **Send to webhook**: post the task to the brand's webhook, for a workflow outside Ansvisor. Set it up under **Content › Webhook Settings** with the **Action Center task sent** event selected.
+- **Send to webhook**: post the task to the brand's webhook, for a workflow outside Ansvisor. Set it up under **Content › Webhook Settings** with the **Action Center task sent** event selected. It's for admins and managers.
 
 ## Files attached from Chat
 

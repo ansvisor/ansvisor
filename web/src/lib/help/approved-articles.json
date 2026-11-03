@@ -340,7 +340,7 @@
         },
         {
           "heading": "Hand a task on",
-          "text": "From a task you can:\n\n- **Create content** or **Optimize page**: open a draft in the Content Editor for this task. **Open draft** returns to it, and marking the draft ready completes the task.\n- **Send to Content**: send a content task to Content as an opportunity, where a brief can be written for it.\n- **Send to webhook**: post the task to the brand's webhook, for a workflow outside Ansvisor. Set it up under **Content › Webhook Settings** with the **Action Center task sent** event selected."
+          "text": "From a task you can:\n\n- **Create content** or **Optimize page**: open a draft in the Content Editor for this task. **Open draft** returns to it, and marking the draft ready completes the task.\n- **Send to Content**: send a content task to Content as an opportunity, where a brief can be written for it.\n- **Send to webhook**: post the task to the brand's webhook, for a workflow outside Ansvisor. Set it up under **Content › Webhook Settings** with the **Action Center task sent** event selected. It's for admins and managers."
         },
         {
           "heading": "Files attached from Chat",
