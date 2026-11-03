@@ -988,6 +988,10 @@
         "attach to task and mark done",
         "attach only",
         "mark task done",
+        "ai limit",
+        "part of a job",
+        "remaining ai usage",
+        "do the first now",
         "shortcuts",
         "slash menu",
         "/start",
@@ -1119,6 +1123,10 @@
         {
           "heading": "AI usage",
           "text": "Chat draws on your workspace's monthly AI usage, shared by every seat. The meter under the box shows how much is used; click it for what used it and when it resets. From 80% it turns amber, and a line above the box says so once a month, on whichever device you are on; **×** closes it.\n\nOnce the usage is used up, Chat pauses: the box is off, and a red line above it says until when. **Get more AI credits** there opens a window with your plan and the credit packs, and it opens once by itself the first time Chat stops. Admins buy packs; everyone else sees them and can **Ask your Admin**. On Enterprise, admins can also use their own AI key. In the free trial, starting the plan gives its full monthly AI usage."
+        },
+        {
+          "heading": "When only part of a job fits",
+          "text": "Before work in several parts, such as five drafts, Chat checks that your remaining AI usage covers them all. When it covers only some, Chat asks first, for example \"Your remaining AI limit covers about 2 of the 5 drafts.\": **Do the first 2 now** (recommended), **Get more AI credits**, which stops there so you can add credits, or **Cancel**. When it covers none, Chat stops at the AI limit before starting. A skill's answer is checked the same way before Chat reads anything.\n\nAn agent's run, with no one there to ask, does the parts that fit, keeps what it made, and stops at the AI limit. A workspace on its own AI key isn't checked."
         },
         {
           "heading": "Inbox",
