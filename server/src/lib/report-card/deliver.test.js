@@ -55,6 +55,16 @@ describe('renderReportCardEmail', () => {
     expect(html).not.toMatch(/guarantee/i);
   });
 
+  it('speaks of a publisher’s readers', () => {
+    const { html } = renderReportCardEmail({
+      firstName: 'Ayşe',
+      payload: { ...payload, audience: 'readers' },
+      kind: 'new',
+      madeAt: '2026-11-03T10:00:00Z',
+    });
+    expect(html).toContain('25 questions your readers ask');
+  });
+
   it('says when a card sent again was made, and when a new one can be', () => {
     const { html } = renderReportCardEmail({
       firstName: 'Mehmet',

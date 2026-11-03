@@ -117,8 +117,27 @@ describe('ReportCardPdfDocument', () => {
     expect(outcomes).toContain('Not enough ad data for your topics in the United States.');
     expect(outcomes).not.toContain('Google Ads a month');
     expect(outcomes).not.toContain('A revenue scenario');
+    expect(outcomes).toContain('How to get the revenue line');
     expect(outcomes).toContain('Ansvisor Growth');
     expect(outcomes).toContain('Scenarios, not a forecast or a guarantee.');
+  });
+
+  it('has no value table when fewer than five keywords had a cost per click', () => {
+    const [, , outcomes] = draw({ ...SAMPLE_REPORT_CARD, cpc: { usd: 28.27, keywords: 2 } });
+    expect(outcomes).toContain('Not enough ad data for your topics in the United States.');
+    expect(outcomes).not.toContain('$28.27');
+  });
+
+  it('shows how to get the revenue line only without a deal value', () => {
+    const [, , withDeal] = draw(SAMPLE_REPORT_CARD);
+    expect(withDeal).not.toContain('How to get the revenue line');
+  });
+
+  it('speaks of a publisher’s readers in the method note', () => {
+    const [results] = draw({ ...SAMPLE_REPORT_CARD, audience: 'readers' });
+    expect(results).toContain('questions a reader might ask');
+    const [buyers] = draw(SAMPLE_REPORT_CARD);
+    expect(buyers).toContain('questions a buyer might ask');
   });
 
   it('speaks of deals, in their currency, for a B2B site', () => {

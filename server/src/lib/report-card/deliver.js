@@ -89,7 +89,7 @@ export function renderReportCardEmail({
   const intro =
     kind === 'resent'
       ? `<p style="font-size:14px;margin:0 0 16px 0;">Here is ${site}’s report card again: we made it on ${escapeHtml(formatDate(madeAt))}, and a new one can be made from ${escapeHtml(formatDate(new Date(new Date(madeAt).getTime() + repeatDays * DAY_MS).toISOString()))}.</p>`
-      : `<p style="font-size:14px;margin:0 0 16px 0;">We asked ${escapeHtml(engines)} ${payload.questionCount} questions your buyers ask, in ${escapeHtml(countryInSentence(payload.country.code, payload.country.name))}. Here is what came back for ${site}.</p>`;
+      : `<p style="font-size:14px;margin:0 0 16px 0;">We asked ${escapeHtml(engines)} ${payload.questionCount} questions your ${payload.audience === 'readers' ? 'readers' : 'buyers'} ask, in ${escapeHtml(countryInSentence(payload.country.code, payload.country.name))}. Here is what came back for ${site}.</p>`;
 
   const html =
     shell(`  <h1 style="font-size:20px;margin:0 0 16px 0;">Your AI visibility report card</h1>

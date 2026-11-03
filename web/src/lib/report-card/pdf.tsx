@@ -328,12 +328,12 @@ function ResultsPage({ card }: { card: ReportCardPayload }) {
 
       <View style={[styles.box, { marginTop: 'auto' }]} wrap={false}>
         <Text style={styles.small}>
-          How we measured: we wrote {card.questionCount} questions a buyer might ask, from your
-          site, and asked each one once in{' '}
-          {card.engines.map((e) => engineLabel(e.engine)).join(', ')} in {countryName(card.country)}
-          , in {card.language}, on {date}. AI answers change from day to day, so this is a snapshot.
-          Visibility here is the share of answers that name you; the AI Visibility Score in Ansvisor
-          also weighs citations and how early you’re named.
+          How we measured: we wrote {card.questionCount} questions a{' '}
+          {card.audience === 'readers' ? 'reader' : 'buyer'} might ask, from your site, and asked
+          each one once in {card.engines.map((e) => engineLabel(e.engine)).join(', ')} in{' '}
+          {countryName(card.country)}, in {card.language}, on {date}. AI answers change from day to
+          day, so this is a snapshot. Visibility here is the share of answers that name you; the AI
+          Visibility Score in Ansvisor also weighs citations and how early you’re named.
         </Text>
       </View>
       <Footer />
@@ -501,6 +501,19 @@ function OutcomesPage({ card }: { card: ReportCardPayload }) {
           </View>
         ))}
       </View>
+
+      {!card.dealValue && (
+        <View style={[styles.box, styles.section]} wrap={false}>
+          <Text style={[styles.paragraph, styles.bold, { marginBottom: 2 }]}>
+            How to get the revenue line
+          </Text>
+          <Text style={[styles.paragraph, styles.muted]}>
+            Give your average order or deal value when you ask for your next report card, and this
+            page adds a revenue scenario. In Ansvisor, AI Traffic counts the signups, demo requests
+            and orders that AI visits bring, once conversions are on.
+          </Text>
+        </View>
+      )}
 
       {revenue && card.dealValue && (
         <View style={styles.section} wrap={false}>

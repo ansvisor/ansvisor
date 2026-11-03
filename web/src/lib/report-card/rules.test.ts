@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PLANS } from '@/config/plans';
 import type { ReportCardPayload } from './payload';
 import {
+  MIN_CPC_KEYWORDS,
   PLAN_STEPS_MAX,
   PLAN_STEPS_MIN,
   actionPlan,
@@ -61,18 +62,62 @@ describe('quickWins', () => {
     expect(wins[2].title).toBe('Make your own pages easy to cite');
   });
 
-  it('skips a missed question no competitor won, and never suggests the own site as a place to get onto', () => {
+  it('falls back to the question most engines answered when no main competitor wins one', () => {
     const wins = quickWins(
       card({
-        missedQuestions: [{ text: 'how long do beans stay fresh', textEn: null, competitors: [] }],
+        missedQuestions: [
+          { text: 'how long do beans stay fresh', textEn: null, competitors: [], answers: 2 },
+          {
+            text: 'is a burr grinder worth it',
+            textEn: null,
+            competitors: ['Tiny Mill'],
+            answers: 4,
+          },
+        ],
         citedSites: [{ domain: 'brewlinecoffee.example', answers: 30, own: true }],
       }),
     );
     expect(wins.map((w) => w.title)).toEqual([
+      'Answer “is a burr grinder worth it” on your site',
       'Make your own pages easy to cite',
       'Close the gap on Ridgeline Roasters',
-      'Look at what Google AI Mode says about your market',
     ]);
+    expect(wins[0].detail).toContain('AI names Tiny Mill for it, and not Brewline Coffee.');
+  });
+
+  it('says so when the question picked names no competitor', () => {
+    const wins = quickWins(
+      card({
+        missedQuestions: [
+          { text: 'how long do beans stay fresh', textEn: null, competitors: [], answers: 3 },
+        ],
+      }),
+    );
+    expect(wins[0].detail).toContain('None of the answers to it names Brewline Coffee.');
+  });
+
+  it('picks a question the main competitors win over one with more minor names', () => {
+    const wins = quickWins(
+      card({
+        missedQuestions: [
+          {
+            text: 'enterprise search platform pricing',
+            textEn: null,
+            competitors: ['Glean', 'GoSearch', 'Iternal', 'Moveworks'],
+            answers: 4,
+          },
+          {
+            text: 'best coffee subscription',
+            textEn: null,
+            competitors: ['Tiny Mill', 'Copper Kettle Coffee'],
+            answers: 4,
+          },
+        ],
+      }),
+    );
+    expect(wins[0].title).toBe('Answer “best coffee subscription” on your site');
+    // The main competitor is named first.
+    expect(wins[0].detail).toContain('AI names Copper Kettle Coffee and Tiny Mill for it');
   });
 
   it('still gives the weakest engine when the company leads everywhere', () => {
@@ -220,8 +265,12 @@ describe('valueRows', () => {
     ]);
   });
 
-  it('is null without a cost per click', () => {
+  it('is null without a cost per click, or with fewer than five keywords behind it', () => {
     expect(valueRows(card({ cpc: null }))).toBeNull();
+    expect(MIN_CPC_KEYWORDS).toBe(5);
+    expect(valueRows(card({ cpc: { usd: 28.27, keywords: 2 } }))).toBeNull();
+    expect(valueRows(card({ cpc: { usd: 28.27, keywords: 4 } }))).toBeNull();
+    expect(valueRows(card({ cpc: { usd: 1.85, keywords: 5 } }))?.[0].monthly).toBe(185);
   });
 });
 

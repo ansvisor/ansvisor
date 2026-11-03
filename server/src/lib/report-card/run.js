@@ -102,7 +102,12 @@ export async function buildReportCard(
       .map((a) => ({ index: a.question, question: questions[a.question].text, text: a.text }));
     if (!rows.length) continue;
     try {
-      const found = await competitors(rows, { companyName, site, about });
+      const found = await competitors(rows, {
+        companyName,
+        site,
+        about,
+        audience: written.audience ?? 'buyers',
+      });
       meter.models += found.costUsd;
       for (const [index, names] of found.byAnswer) named.set(`${index}:${engine}`, names);
     } catch (err) {
@@ -129,6 +134,7 @@ export async function buildReportCard(
     domain: site,
     country: { code: country, name: countryName(country) },
     language: languageName(language),
+    audience: written.audience ?? 'buyers',
     siteType,
     generatedAt: now().toISOString(),
     questionCount: questions.length,
