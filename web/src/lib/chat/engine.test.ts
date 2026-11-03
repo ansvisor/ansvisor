@@ -167,7 +167,11 @@ vi.mock('./go-live-facts', () => ({ readGoLiveFacts: fakes.goLiveFacts }));
 vi.mock('@/lib/mcp/pages', () => ({ openPageFor: fakes.openPage }));
 // explain_change as it is, reading through a fake of its data layer.
 vi.mock('@/lib/mcp/why', () => ({ explainChangeFor: fakes.explain }));
-vi.mock('./budget', () => ({ reserveChatStep: fakes.reserve, fitChatUnits: fakes.fit }));
+vi.mock('./budget', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./budget')>()),
+  reserveChatStep: fakes.reserve,
+  fitChatUnits: fakes.fit,
+}));
 vi.mock('./key-health', () => ({
   markKeyFailing: fakes.markFailing,
   markKeyWorking: fakes.markWorking,
@@ -491,6 +495,13 @@ async function turn(actor: ChatActor, message: string, mode: Mode = 'auto') {
   if (!started.ok) throw new Error(`not started: ${started.code}`);
   await engine.driveRun(actor, started.runId);
   return started.runId;
+}
+
+/** A started run made a scheduled job's own run, as its worker writes it (CHAT-12 item 11). */
+function scheduledRun(started: { runId: string; conversationId: string }, jobId: string) {
+  db.tables.chat_conversations.find((c) => c.id === started.conversationId)!.schedule_id = jobId;
+  const state = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
+  state.progress = { ...(state.progress as object), scheduled: true };
 }
 
 const eventsOf = (runId: string) => readRunEvents(runId, 0);
@@ -1740,6 +1751,47 @@ describe('question cards (CHAT-07)', () => {
       detail: 'Skipped · used /pricing',
     });
     expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('"skipped":true,"use":"/pricing"');
+  });
+
+  it('takes the Recommended option by itself in a scheduled job’s run, and lists it at the top (CHAT-12 item 12)', async () => {
+    const JOB = '88888888-8888-4888-8888-888888888888';
+    const { sonnet } = useModels(
+      [READY],
+      [calls(toolCall('q1', ASK_TOOL, ask('Which page?'))), text('Here is the FAQ.')],
+    );
+    const started = await engine.startChatRun(ADMIN, { message: 'Write a FAQ', brandId: BRAND });
+    if (!started.ok) throw new Error('not started');
+    scheduledRun(started, JOB);
+    await engine.driveRun(ADMIN, started.runId, undefined, { sessionUserId: null });
+
+    // Nobody watches it: no card, the run goes on to its end.
+    expect(runRow(started.runId).status).toBe('done');
+    expect(ofType(await eventsOf(started.runId), 'ask.created')).toEqual([]);
+    expect(stepsOf(started.runId)[0]).toMatchObject({
+      kind: 'ask',
+      status: 'done',
+      label: 'Which page?',
+      detail: 'Nobody was watching · used /pricing',
+    });
+    expect(asksOf(started.runId)[0]).toMatchObject({
+      answer_json: { selected: [0], other: null, skipped: false, via: 'card' },
+    });
+    expect(asksOf(started.runId)[0].answered_at).toEqual(expect.any(String));
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('"unattended":true,"use":"/pricing"');
+    // The model didn't list it: the answer starts with it all the same.
+    const answer = db.tables.chat_messages.find((m) => m.id === runRow(started.runId).message_id)!;
+    expect(answer.content_md).toBe('Assumed for this scheduled run: /pricing\n\nHere is the FAQ.');
+  });
+
+  it('shows the card for a person’s own message in a job’s chat: they watch it', async () => {
+    useModels([READY], [calls(toolCall('q1', ASK_TOOL, ask('Which page?'))), text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, { message: 'Write a FAQ', brandId: BRAND });
+    if (!started.ok) throw new Error('not started');
+    db.tables.chat_conversations.find((c) => c.id === started.conversationId)!.schedule_id =
+      '88888888-8888-4888-8888-888888888888';
+    await engine.driveRun(ADMIN, started.runId);
+    expect(runRow(started.runId).status).toBe('waiting');
+    expect(ofType(await eventsOf(started.runId), 'ask.created')).toHaveLength(1);
   });
 
   it('takes the composer’s text as the answer to any question', async () => {
@@ -3285,12 +3337,43 @@ describe('the AI budget', () => {
     expect(await engine.endHeldRun(started.runId, 'paused_cap', 'limit')).toBe(false);
   });
 
+  it('holds a scheduled job’s steps as the job’s (CHAT-12 item 14)', async () => {
+    const JOB = '88888888-8888-4888-8888-888888888888';
+    budgetHolds();
+    useModels([READY], [text('Weekly report.')]);
+    const started = await engine.startChatRun(ADMIN, { message: 'Report', brandId: BRAND });
+    if (!started.ok) throw new Error('not started');
+    scheduledRun(started, JOB);
+    await engine.driveRun(ADMIN, started.runId, undefined, { sessionUserId: null });
+    expect(fakes.reserve.mock.calls.length).toBeGreaterThan(0);
+    for (const [step] of fakes.reserve.mock.calls) {
+      expect(step).toMatchObject({ feature: 'schedule', scheduleId: JOB });
+      expect(step).not.toHaveProperty('agentRunId');
+    }
+    expect(runRow(started.runId).status).toBe('done');
+
+    // The person's own message in the job's chat is a chat's, not the job's.
+    fakes.reserve.mockClear();
+    useModels([READY], [text('Sure.')]);
+    const own = await engine.startChatRun(ADMIN, {
+      message: 'And the week before?',
+      conversationId: started.conversationId,
+    });
+    if (!own.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, own.runId);
+    for (const [step] of fakes.reserve.mock.calls) {
+      expect(step).not.toHaveProperty('feature');
+      expect(step).not.toHaveProperty('scheduleId');
+    }
+  });
+
   it('holds a person’s own chat’s steps as Chat’s, with no agent run', async () => {
     budgetHolds();
     useModels([READY], [text('Hi.')]);
     await turn(ADMIN, 'Hello');
     for (const [step] of fakes.reserve.mock.calls) {
       expect(step).not.toHaveProperty('agentRunId');
+      expect(step).not.toHaveProperty('scheduleId');
       expect(step).not.toHaveProperty('feature');
     }
   });

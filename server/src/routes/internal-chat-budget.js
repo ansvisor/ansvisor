@@ -5,8 +5,12 @@
  * checked the person against.
  *
  * POST /api/internal/chat/budget/reserve
- *   { orgId, runId, stepId?, feature?, model, inputTokens, maxOutputTokens, ownKey?, agentRunId? }
- *   → 201 { usageId }: the step's row, its worst case held (on Ansvisor's key).
+ *   { orgId, runId, stepId?, feature?, model, inputTokens, maxOutputTokens, ownKey?, agentRunId?,
+ *     scheduleId? }
+ *   → 201 { usageId }: the step's row, its worst case held (on Ansvisor's key),
+ *     named with the chat's agent run and scheduled job (reserve_chat_ai_usage
+ *     finds both from the run's chat, and refuses a scheduleId or an
+ *     agentRunId that isn't the chat's).
  *   → 429 ai_limit { trial }: the budget can't cover the step; it doesn't start.
  *   → 429 run_cap: the chat's agent run (agentRunId) can't take the step
  *     within its own cap (CHAT-27 item 21); it doesn't start.
@@ -91,6 +95,8 @@ const reserveSchema = z.strictObject({
   ownKey: z.boolean().default(false),
   // The chat's agent run: the step is held within its cap too (CHAT-27 item 21).
   agentRunId: z.guid().nullish(),
+  // The chat's scheduled job (CHAT-12 item 14): its row is named with the job.
+  scheduleId: z.guid().nullish(),
 });
 
 const chargeSchema = z.strictObject({
@@ -171,6 +177,7 @@ router.post('/reserve', async (req, res) => {
       stepId: body.stepId ?? null,
       ownKey: body.ownKey,
       agentRunId: body.agentRunId ?? null,
+      scheduleId: body.scheduleId ?? null,
     });
     return res.status(201).json({ success: true, usageId });
   } catch (err) {

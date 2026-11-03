@@ -6556,6 +6556,32 @@
       }
     }
   },
+  "chatSchedules": {
+    "run": {
+      "background": "This is the scheduled job “{title}”, running by itself with nobody watching. When a question comes up, take the recommended option and list your assumptions at the top of the answer. Changes wait in this chat for approval.",
+      "assumed": "Nobody was watching · used {option}",
+      "assumptions": "Assumed for this scheduled run: {list}",
+      "chip": {
+        "job": "Scheduled job",
+        "brand": "Brand",
+        "slot": "Scheduled for"
+      },
+      "reason": {
+        "readOnly": "The workspace is read-only, so it didn't run.",
+        "ownerRole": "Its creator can't run scheduled jobs any more.",
+        "brandAccess": "Its creator can't use its brand any more.",
+        "brandGone": "Its brand was deleted.",
+        "skillOff": "Its skill /{skill} is off or gone.",
+        "aiLimit": "The monthly AI limit was reached.",
+        "missed": "It couldn't start within an hour of its time.",
+        "stillOpen": "Its last run hadn't finished.",
+        "failed": "Something went wrong.",
+        "lost": "It stopped before it could start.",
+        "stopped": "It was stopped.",
+        "noAnswer": "No answer in 7 days."
+      }
+    }
+  },
   "audit": {
     "title": "Site Audit",
     "description": "Score any page against the 48-signal AEO/GEO",

@@ -757,6 +757,17 @@ describe('each agent’s share of the AI limit', () => {
   });
 });
 
+describe('a scheduled job’s step (CHAT-12 item 14)', () => {
+  it('passes the job to the hold, which names the row with the chat’s job; no run cap', async () => {
+    const JOB = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0b';
+    await budget.reserveChatStep('o1', step({ feature: 'schedule', scheduleId: JOB }));
+    expect(rpcCalls.at(-1).args).toMatchObject({ p_feature: 'schedule', p_schedule_id: JOB });
+    expect(rpcCalls.at(-1).args).not.toHaveProperty('p_run_cap');
+    await budget.reserveChatStep('o1', step());
+    expect(rpcCalls.at(-1).args).not.toHaveProperty('p_schedule_id');
+  });
+});
+
 describe('how many parts of a job the budget left covers (CHAT-04 item 17a)', () => {
   // One part: 2,000 tokens in at $1/M and 1,000 out at $5/M, $0.007 at worst.
   const job = (over = {}) => ({

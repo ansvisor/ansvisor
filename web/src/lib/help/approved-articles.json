@@ -988,6 +988,10 @@
         "attach to task and mark done",
         "attach only",
         "mark task done",
+        "ai limit",
+        "part of a job",
+        "remaining ai usage",
+        "do the first now",
         "shortcuts",
         "slash menu",
         "/start",
@@ -1009,11 +1013,7 @@
         "fact check",
         "api key in message",
         "paste api key",
-        "remove key",
-        "ai limit",
-        "part of a job",
-        "remaining ai usage",
-        "do the first now"
+        "remove key"
       ],
       "synonyms": [
         "assistant",
