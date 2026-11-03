@@ -15,7 +15,7 @@ sources: [web/messages/en.json, docs/guides/send-to-cms.mdx]
 
 ## In the chat menu
 
-Under **Agents** in the chat menu, the **Connections** row has **Manage** and an arrow. Click the arrow to open the list under the row: connected tools first, with a green dot and ✓, then the ones you can connect, then the ones coming soon. With more than 20 tools, a **Search connections** box shows above the list. The menu remembers whether you left the list open. **Manage** opens the Connections page.
+Under **Skills** in the chat menu, the **Connections** row has **Manage** and an arrow. Click the arrow to open the list under the row: connected tools first, with a green dot and ✓, then the ones you can connect, then the ones coming soon. With more than 20 tools, a **Search connections** box shows above the list. The menu remembers whether you left the list open. **Manage** opens the Connections page.
 
 ## The Connections page
 

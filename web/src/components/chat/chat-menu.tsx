@@ -391,12 +391,6 @@ export function ChatMenuView({
             {t('agents')}
             {agentsNew && <NewPill className="ml-auto" />}
           </MenuItem>
-          <ConnectionsMenu
-            open={!folded.connections}
-            onToggle={() => fold('connections')}
-            active={pathname === '/dashboard/chat/connections'}
-            onNavigate={onNavigate}
-          />
           <MenuItem
             href="/dashboard/chat/skills"
             action="chatMenu.openSkills"
@@ -405,6 +399,13 @@ export function ChatMenuView({
           >
             {t('skills')}
           </MenuItem>
+          {/* Connections right under Skills (agentic plan §6). */}
+          <ConnectionsMenu
+            open={!folded.connections}
+            onToggle={() => fold('connections')}
+            active={pathname === '/dashboard/chat/connections'}
+            onNavigate={onNavigate}
+          />
           <MenuItem
             href="/dashboard/chat/settings"
             action="chatMenu.openSettings"

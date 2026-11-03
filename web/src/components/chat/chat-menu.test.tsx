@@ -144,10 +144,10 @@ function menu(chats: ChatListItem[], extra: Partial<Parameters<typeof ChatMenuVi
 }
 
 describe('ChatMenuView', () => {
-  it('puts the Connections row under Agent Center, its list closed until opened (W4-25)', async () => {
+  it('puts the Connections row under Skills, its list closed until opened (W4-25)', async () => {
     await render(menu([]));
-    const agents = action('chatMenu.openAgents')[0];
-    const row = agents.nextElementSibling as HTMLElement;
+    const skills = action('chatMenu.openSkills')[0];
+    const row = skills.nextElementSibling as HTMLElement;
     expect(row.textContent).toBe('ConnectionsManage▾');
     expect(
       row.querySelector('[data-action="chatMenu.manageConnections"]')?.getAttribute('href'),
