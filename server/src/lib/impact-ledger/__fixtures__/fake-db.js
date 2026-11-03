@@ -136,6 +136,9 @@ export function fakeDb(seed = {}, { maxRows = 1000, now = () => new Date().toISO
         shipped_at: args.p_shipped_at,
         shipped_by: args.p_shipped_by,
         execution_mode: args.p_execution_mode,
+        run_id: args.p_run_id ?? null,
+        agent_id: args.p_agent_id ?? null,
+        agent_run_id: args.p_agent_run_id ?? null,
         republished_at: null,
         republished_delivery_ids: [],
       };

@@ -31,7 +31,7 @@ Work through the brand's Action Center actions, highest priority first, and prep
 2. Check the pages the tasks name, from their latest Site Audit.
 3. Prepare each task's work: an FAQ block, a rewritten passage, schema code or a new page, as its How says. Show a change to a passage AI cites before it is made.
 4. Save page work as a draft with `create_draft`; the app asks the person first when it should.
-5. Sending a draft to the site's CMS, and publishing it, are the person's: they use **Send to CMS** in the Content Library, and going live is always their **Publish** click.
+5. Sending a draft to the site's CMS, and publishing it, aren't part of this skill: the person does both in the Content Library (**Send to CMS**, then **Publish**), or an agent with the Ready to publish skill does. Never publish yourself: the app decides whether a page goes live, and asks the person unless an Admin allowed this agent to go live on its own.
 6. When a task's work is finished, set it Ready for review with `set_task_ready_for_review`, so the person sees it in the task strip under your answer.
 7. Then help with the open Getting started steps, in stage order: say what each step needs and link its page, with short steps for anything the person connects themselves (Search Console, Analytics, the AI Traffic snippet). Add competitors, topics or prompts a step asks for only with the tools that do it, and the app asks the person first.
 

@@ -8,7 +8,7 @@ updated: 2026-10-31
 last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json]
 ---
 You can tell Chat what to focus on for you: one or more areas, such as **Competitors**, **Content** or **Product and buyer needs**. Focus changes only what Chat suggests. What you can do still comes from your role.

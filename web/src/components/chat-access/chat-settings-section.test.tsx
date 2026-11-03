@@ -51,7 +51,7 @@ afterEach(() => {
   container.remove();
 });
 
-const flags = { alwaysCard: false, costCard: false, adminMayTurnOff: false };
+const flags = { alwaysCard: false, costCard: false, adminMayTurnOff: false, goLiveOnOwn: false };
 const rows: PolicyRow[] = [
   {
     key: 'trackedPrompts',

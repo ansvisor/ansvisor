@@ -167,16 +167,21 @@ describe('Chat on a read-only workspace', () => {
   });
 });
 
+// The demo brand's Chat is the real one, locked as the rest of the demo
+// (useUpgradeGate's isLocked): with the new Chat off, this page, as on a
+// read-only workspace.
 describe('Chat on the demo brand', () => {
-  it('shows the Chat v2 preview, next week, and reads or sends nothing', async () => {
+  it('opens the Agent Chat, which starts and sends nothing: each opens the upgrade dialog', async () => {
     await render(true, true);
-    expect(container.textContent).toContain('Soon (next week)');
-    expect(container.textContent).toContain('Chat arrives next week. This is a preview of it.');
-    const frame = container.querySelector('iframe')!;
-    expect(frame.getAttribute('src')).toBe('/demo/chat/CHAT-mockup-v2.html#s-home');
-    expect(frame.getAttribute('title')).toBe('Chat preview');
-    expect(frame.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin');
-    expect(container.querySelector('textarea')).toBeNull();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Pricing questions');
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(container.textContent).not.toContain('Soon');
+
+    await act(async () => button('New chat').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Starting a chat needs a plan');
+    await send('How do we rank?');
+    expect(openUpgrade).toHaveBeenLastCalledWith('Chatting with the agent needs a plan');
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+    expect(writes()).toEqual([]);
   });
 });

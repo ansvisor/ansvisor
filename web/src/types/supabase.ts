@@ -2808,6 +2808,60 @@ export type Database = {
           },
         ]
       }
+      chat_notices: {
+        Row: {
+          brand_id: string | null
+          created_at: string
+          dedupe_key: string
+          id: string
+          kind: string
+          organization_id: string
+          payload: Json
+          read_at: string | null
+          resolved_at: string | null
+          user_id: string
+        }
+        Insert: {
+          brand_id?: string | null
+          created_at?: string
+          dedupe_key: string
+          id?: string
+          kind: string
+          organization_id: string
+          payload?: Json
+          read_at?: string | null
+          resolved_at?: string | null
+          user_id: string
+        }
+        Update: {
+          brand_id?: string | null
+          created_at?: string
+          dedupe_key?: string
+          id?: string
+          kind?: string
+          organization_id?: string
+          payload?: Json
+          read_at?: string | null
+          resolved_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_notices_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_notices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_outbound_emails: {
         Row: {
           approved_by: string | null
@@ -3371,6 +3425,7 @@ export type Database = {
           memory_enabled: boolean
           model_providers: Json
           organization_id: string
+          own_key_agent_month_usd: number
           tool_policies: Json
           updated_at: string
           updated_by: string | null
@@ -3390,6 +3445,7 @@ export type Database = {
           memory_enabled?: boolean
           model_providers?: Json
           organization_id: string
+          own_key_agent_month_usd?: number
           tool_policies?: Json
           updated_at?: string
           updated_by?: string | null
@@ -3409,6 +3465,7 @@ export type Database = {
           memory_enabled?: boolean
           model_providers?: Json
           organization_id?: string
+          own_key_agent_month_usd?: number
           tool_policies?: Json
           updated_at?: string
           updated_by?: string | null
@@ -8513,6 +8570,7 @@ export type Database = {
       content_draft_last_deliveries: {
         Args: { p_draft_ids: string[] }
         Returns: {
+          agent_run_id: string | null
           batch_id: string | null
           brand_id: string
           created_at: string
