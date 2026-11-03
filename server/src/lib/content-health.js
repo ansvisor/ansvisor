@@ -121,10 +121,11 @@ const HEALTH_CLAIM = new RegExp(
  * An English disclaimer before a claim: "does not help", "not intended to
  * diagnose, treat, cure or prevent", within its clause ("…, but it helps"
  * is a claim again). A comma ends the clause unless a list of claim verbs
- * goes on past it: "If you can't sleep, it helps you relax" is a claim.
+ * goes on past it ("treat, cure, or prevent"): "If you can't sleep, it helps
+ * you relax" is a claim.
  */
 const NEGATED_BEFORE = new RegExp(
-  String.raw`\b(?:not intended to|not meant to|does not|do not|did not|is not|are not|doesn['’]t|don['’]t|didn['’]t|isn['’]t|aren['’]t|won['’]t|can['’]t|cannot|never|not(?!\s+only))\b(?:(?!\b(?:but|however|although|though|yet|while|whereas)\b)(?:[^.!?\n:;—–,]|,\s*(?=(?:diagnos\p{L}*|${VERB_EN})(?!\p{L})))){0,40}$`,
+  String.raw`\b(?:not intended to|not meant to|does not|do not|did not|is not|are not|doesn['’]t|don['’]t|didn['’]t|isn['’]t|aren['’]t|won['’]t|can['’]t|cannot|never|not(?!\s+only))\b(?:(?!\b(?:but|however|although|though|yet|while|whereas)\b)(?:[^.!?\n:;—–,]|,\s*(?=(?:(?:and|or|nor)\s+)?(?:diagnos\p{L}*|${VERB_EN})(?!\p{L})))){0,40}$`,
   'iu',
 );
 /** A Turkish claim's verb said in the negative: "yardımcı olmaz", "azaltmaz", "önlemediği". */
@@ -136,10 +137,11 @@ const NEGATED_AFTER_TR =
 /**
  * A question a buyer asks, with or without its "?": "Does it help you sleep",
  * "uykuya yardımcı olur mu". A verb or an adverb after the modal makes it a
- * list item's claim instead: "May also help", "Is clinically proven".
+ * list item's claim instead: "May also help", "Is clinically proven"; an -ly
+ * or -ed word counts only before a verb or "to": "Can elderly people take".
  */
 const QUESTION_START = new RegExp(
-  String.raw`^\s*["“'‘(]*(?:(?:how|what|why|when|which|who|where)\s+)?(?:does|do|did|can|could|is|are|was|were|will|would|should|may|might|has|have)\s+(?!(?:help|be|been|${VERB_EN}|also|even|still|further|often|actually|naturally|gently|proven|shown|known|made|(?!(?:daily|family|early|only|weekly|monthly)\b)\p{L}{3,}ly|\p{L}{3,}ed)\b)`,
+  String.raw`^\s*["“'‘(]*(?:(?:how|what|why|when|which|who|where)\s+)?(?:does|do|did|can|could|is|are|was|were|will|would|should|may|might|has|have)\s+(?!(?:help|be|been|${VERB_EN}|also|even|still|further|often|actually|naturally|gently|proven|shown|known|made|(?!(?:daily|family|early|only|weekly|monthly)\b)\p{L}{3,}ly\s+(?:help|be|been|${VERB_EN}|proven|shown|known|made|\p{L}{3,}ed)|\p{L}{3,}ed\s+(?:to|by|for|with|in))\b)`,
   'iu',
 );
 /** Turkish asks with its particle after a word: "olur mu", "güvenli midir" (never "5 mi", miles). */

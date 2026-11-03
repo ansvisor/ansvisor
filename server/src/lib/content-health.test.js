@@ -146,10 +146,15 @@ describe('healthClaimsIn', () => {
       'clinically proven',
       'reduce anxiety',
     ]);
+    expect(healthClaimsIn('Is specially formulated to support restful sleep.')).toEqual([
+      'support restful sleep',
+    ]);
   });
 
   it('reads no claim in a question a buyer asks, nor in a disclaimer or a safety line', () => {
     expect(healthClaimsIn('Does magnesium glycinate help you sleep')).toEqual([]);
+    expect(healthClaimsIn('Can elderly people take magnesium to improve sleep')).toEqual([]);
+    expect(healthClaimsIn('Can stressed adults use it to reduce anxiety')).toEqual([]);
     expect(healthClaimsIn('Can magnesium help you relax?')).toEqual([]);
     expect(healthClaimsIn('Talk to your doctor. It does not help you sleep.')).toEqual([]);
     expect(healthClaimsIn(DISCLAIMER)).toEqual([]);
@@ -166,6 +171,12 @@ describe('healthClaimsIn', () => {
       healthClaimsIn('When you don’t get enough rest, our formula supports deeper sleep.'),
     ).toEqual(['supports deeper sleep']);
     expect(healthClaimsIn('It does not cure, treat or prevent insomnia.')).toEqual([]);
+    expect(
+      healthClaimsIn(
+        'This product is not intended to diagnose, treat, cure, or prevent any disease.',
+      ),
+    ).toEqual([]);
+    expect(healthClaimsIn('It does not cure, treat, and prevent insomnia.')).toEqual([]);
   });
 
   it('reads Turkish: a claim, a question and a disclaimer', () => {
